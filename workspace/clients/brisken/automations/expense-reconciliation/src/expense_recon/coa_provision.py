@@ -64,6 +64,28 @@ def load_provisioning(path: str | Path) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def provisioned_entity_labels(path: str | Path | None = None) -> list[str]:
+    """The legal-entity labels defined in the provisioning file, sorted.
+
+    This is the authoritative entity list the chart of accounts is keyed on
+    ("Corporate Services" / "Cloud Services" for Brisken). It is the source
+    that fills the reviewer's entity picker when ``settings['entities']`` is
+    empty (the real hosted case: the entities live here on ``/data``, not in
+    the settings blob). ``path`` defaults to the ``EXPENSE_RECON_COA_PROVISION``
+    env var; unset or unreadable yields an empty list (fail-open).
+    """
+    import os
+
+    if path is None:
+        path = os.environ.get(PROVISION_ENV)
+    if not path:
+        return []
+    entities = (load_provisioning(path) or {}).get("entities")
+    if not isinstance(entities, dict):
+        return []
+    return sorted({str(k).strip() for k in entities if str(k).strip()})
+
+
 def coa_validation_for(entity_label: str, provisioning: dict) -> dict | None:
     """Build a ``coa_validation`` block for ``entity_label`` from a loaded
     provisioning dict, or None when the entity is not provisioned.

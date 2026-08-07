@@ -85,6 +85,7 @@ from .service import (
     add_receipts_to_expense_batch,
     apply_expense_edits,
     attach_emailed_receipt,
+    available_entities,
     build_expense_view,
     build_memory_view,
     build_view,
@@ -1100,10 +1101,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     def api_get_settings():
         # `categories` is the fixed 8, surfaced read-only (Phase 5) so the
         # settings screen can show them; PUT ignores the key entirely.
+        # `entity_options` is the real legal-entity list (CoA provisioning +
+        # card->entity targets + registry) so the create form and the entity
+        # editor can offer a dropdown instead of a free-text field; also
+        # read-only (derived), PUT ignores it.
         with open_store() as store:
+            settings = store.get_settings()
             return JSONResponse({
-                **store.get_settings(),
+                **settings,
                 "categories": list(EXPENSE_CATEGORIES),
+                "entity_options": available_entities(settings),
             })
 
     @app.put("/api/settings")

@@ -233,6 +233,9 @@ def test_chart_provisioning_drives_account_options(client, monkeypatch, tmp_path
     grid = client.get(f"/api/expense-batches/{batch_id}").json()
     # The scoped postable leaf, labelled exactly as the categorizer saw it.
     assert grid["account_options"] == ["E500 Office Supplies"]
+    # The provisioned entity fills the picker even with an empty
+    # settings['entities'] registry (the real Brisken case).
+    assert "Corporate Services" in grid["entity_options"]
 
 
 def test_no_chart_and_no_picks_gives_empty_account_options(client, monkeypatch):
