@@ -350,6 +350,28 @@ def prepare_run(
     )
 
 
+def _card_key_matches(account_id: str, key: str) -> bool:
+    """True when the card-map `key` identifies this `account_id` label.
+
+    Exact match, a trailing "...-2838" suffix, OR the key's card number
+    appearing anywhere in the label as a digit token, using the SAME
+    digit-token extraction the matcher uses (`_card_keys`). The token path is
+    what a card-FIRST statement label needs: Criss's Chase statements name the
+    account "2838 - May 2026" (card number, then the month), so a plain
+    `endswith("2838")` misses it (the label ends in the year) and the run
+    silently came back `has_coa: false` with everything correctly configured
+    (2026-08-06). Exact/suffix are kept so nothing that resolved before
+    changes.
+    """
+    if not (account_id and key):
+        return False
+    if key == account_id or account_id.endswith(key):
+        return True
+    from ..matching.deterministic import _card_keys
+
+    return bool(_card_keys(key) & _card_keys(account_id))
+
+
 def resolve_entity(form: RunForm, settings: dict | None) -> str:
     """The run's legal entity: the settings `card_entities` map first, then
     the form's own account -> entity mapping.
@@ -359,15 +381,17 @@ def resolve_entity(form: RunForm, settings: dict | None) -> str:
     hosted run: an operator types the card number ("2838"), which matches no
     entity key in the COA provisioning ("Corporate Services"), so the run
     came back `has_coa: false` with no warning. The settings map is the home
-    for that association. Matching is exact on the account id, then on its
-    trailing digits, so "2838" and "card-2838" resolve the same way.
+    for that association. Matching (see `_card_key_matches`) is exact on the
+    account id, on a trailing "...-2838" suffix, or on the card number as a
+    digit token anywhere in the label, so "2838", "card-2838", and
+    "2838 - May 2026" all resolve the same way.
     """
     mapped = (settings or {}).get("card_entities") or {}
     account_id = (form.account_id or "").strip()
     if mapped and account_id:
         for key, entity in mapped.items():
             key = str(key).strip()
-            if key and (key == account_id or account_id.endswith(key)) and entity:
+            if key and entity and _card_key_matches(account_id, key):
                 return str(entity)
     return form.resolve_legal_entity()
 
@@ -407,7 +431,7 @@ def apply_master_data(
                 str(v)
                 for k, v in accounts.items()
                 if str(k).strip()
-                and (str(k).strip() == account_id or account_id.endswith(str(k).strip()))
+                and _card_key_matches(account_id, str(k).strip())
                 and v
             ),
             None,
