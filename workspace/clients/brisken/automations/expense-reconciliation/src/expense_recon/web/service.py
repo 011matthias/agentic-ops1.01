@@ -372,6 +372,32 @@ def _card_key_matches(account_id: str, key: str) -> bool:
     return bool(_card_keys(key) & _card_keys(account_id))
 
 
+def available_entities(settings: dict | None, extra: str | None = None) -> list[str]:
+    """The legal entities a reviewer can pick, deduped and sorted.
+
+    Unions four sources so the picker is never empty: the CoA provisioning
+    file (authoritative, `/data`), the `card_entities` map's TARGETS (the
+    entities cards resolve to), the Phase-5 `settings['entities']` registry,
+    and an optional run default. The provisioning + card_entities sources are
+    what populate the dropdown in the real Brisken case, where
+    `settings['entities']` is empty but the entities do exist on `/data` and
+    in the card map.
+    """
+    from ..coa_provision import provisioned_entity_labels
+
+    s = settings or {}
+    opts: set[str] = set(provisioned_entity_labels())
+    opts |= {str(k).strip() for k in (s.get("entities") or {}) if str(k).strip()}
+    opts |= {
+        str(v).strip()
+        for v in (s.get("card_entities") or {}).values()
+        if str(v).strip()
+    }
+    if extra and extra.strip():
+        opts.add(extra.strip())
+    return sorted(opts)
+
+
 def resolve_entity(form: RunForm, settings: dict | None) -> str:
     """The run's legal entity: the settings `card_entities` map first, then
     the form's own account -> entity mapping.
@@ -3935,16 +3961,10 @@ def build_expense_view(
         "upload_issues": run.summary.get("upload_issues", []),
     }
 
-    # Phase 5 pickers: entities the reviewer can assign (the registry's
-    # labels plus this batch's own default), and the curated account list.
-    entity_options = sorted(
-        {
-            str(k).strip()
-            for k in ((settings or {}).get("entities") or {})
-            if str(k).strip()
-        }
-        | ({default_entity} if default_entity else set())
-    )
+    # Phase 5 pickers: entities the reviewer can assign (the real entities
+    # from the CoA provisioning + the card->entity map + the settings
+    # registry, plus this batch's own default), and the curated account list.
+    entity_options = available_entities(settings, default_entity)
 
     return {
         "run_id": run.run_id,

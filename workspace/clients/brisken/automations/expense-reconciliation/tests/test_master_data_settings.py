@@ -16,6 +16,7 @@ from decimal import Decimal
 from expense_recon.web.service import (
     RunForm,
     apply_master_data,
+    available_entities,
     resolve_entity,
 )
 
@@ -82,6 +83,37 @@ def test_entity_does_not_match_an_unrelated_card_in_a_label():
     carries other digit tokens (the month/year)."""
     settings = {"card_entities": {"9999": "Other Entity"}}
     assert resolve_entity(_form("2838 - May 2026"), settings) == "2838 - May 2026"
+
+
+# ── available_entities: the reviewer's entity-picker list (2026-08-07) ──
+
+
+def test_available_entities_from_card_entity_targets(monkeypatch):
+    """The picker fills from the card->entity map's TARGETS even when the
+    settings['entities'] registry is empty (the real Brisken case: the
+    dropdown was blank because it only read the empty registry)."""
+    monkeypatch.delenv("EXPENSE_RECON_COA_PROVISION", raising=False)
+    settings = {"card_entities": {"2838": "Corporate Services",
+                                  "9693": "Cloud Services"}}
+    assert available_entities(settings) == ["Cloud Services", "Corporate Services"]
+
+
+def test_available_entities_unions_and_dedupes(monkeypatch):
+    """Registry keys + card targets + the run default, deduped and sorted."""
+    monkeypatch.delenv("EXPENSE_RECON_COA_PROVISION", raising=False)
+    settings = {
+        "entities": {"Corporate Services": {}},
+        "card_entities": {"2838": "Corporate Services", "1": "Cloud Services"},
+    }
+    assert available_entities(settings, extra="Corporate Services") == [
+        "Cloud Services", "Corporate Services"
+    ]
+
+
+def test_available_entities_empty_when_nothing_configured(monkeypatch):
+    monkeypatch.delenv("EXPENSE_RECON_COA_PROVISION", raising=False)
+    assert available_entities(None) == []
+    assert available_entities({}, extra="  ") == []
 
 
 # ── FX reference rates (the 0-of-94 cause) ─────────────────────────────
