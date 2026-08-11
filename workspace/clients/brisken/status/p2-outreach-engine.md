@@ -4,8 +4,8 @@ workstream: p2-outreach-engine
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-07-29
-build_progress: "Phase 1 increments 1-4 SHIPPED. 1-3 (PRs #473/#474/#475): send-safety guards, start_not_before, spaced sending. 4 (PRs #477/#478): step_no-keyed cadence progress + live sequence-delta editing. Engine suite 325 passing, still dormant. Next: Dirk-wave release action + arming drill (both gated). Migrations v7-v10 merged, NOT yet deployed to Fly prod."
+updated: 2026-08-11
+build_progress: "Phase 1 increments 1-4 SHIPPED. 1-3 (PRs #473/#474/#475): send-safety guards, start_not_before, spaced sending. 4 (PRs #477/#478): step_no-keyed cadence progress + live sequence-delta editing. Engine suite 325 passing, still dormant. OWNER TARGET 2026-08-11: all Brisken campaigns run entirely on Lead Desk from September. That makes Phase 3 (in-thread createReply) critical path, not post-Phase-2, and puts the whole plan behind one unsent Dirk mail. Prod verified pinned to the 2026-07-25 build (v34): migrations v7-v10 NOT applied."
 general_ref: status/p2-lead-gen-general.md
 ---
 
@@ -35,15 +35,44 @@ sheet status cols are an upgrades-only projection out.
 | Phase 1/2: step_no-keyed progress | done | SHIPPED PR #477 (merged). enrollment_progress view exposes sent_steps (v10); enrollment_state picks first UNSENT step by identity, not a positional count; due_items/project_schedule/service pass the set. Append-only unchanged. Foundation for the delta path. 9 tests | none | none | plan §Phase 2(a); branch client/brisken/lead-desk-sequence-editing |
 | Phase 2: live sequence editing (delta approval) | done | SHIPPED PR #478 (merged). Append/insert/swap FUTURE steps on an approved/sending campaign WITHOUT demote to draft; sent step_nos frozen (immutable history); future steps get fresh step_nos above every attempted one; re-pin only changed/new keys; recipient pins + hash untouched so increment-1 guards hold. store.frozen_step_nos, cadence.sequence_delta_report/apply_sequence_delta, POST /campaigns/{cid}/sequences/{degree}/delta, "Edit live" UI. 10 tests. Interim pause->edit->re-approve path kept working | none | none | plan §Phase 2(b); branch client/brisken/lead-desk-sequence-delta |
 | Phase 1: Dirk-wave release action | pending | Waves in Dirk's name: engine stages enumerated drafts in his Drafts, gated action releases exactly those ids on his single per-wave yes; continuous auto-send as Dirk stays impossible | Awaits Dirk's sender-policy answer (open question 1) | Dirk answer | plan §Phase 1.3 |
-| Deploy migrations v7-v10 to Fly prod | pending | Additive (columns + a view refresh), safe. Not yet on the brisken-lead-desk.fly.dev volume; nothing sends so no urgency | Deploy from a clean origin/main worktree just before the arming drill | owner order (Fly deploys pre-authorized, but sequenced with arming) | checkpoint 2026-07-29 |
-| Phase 1: arm the sender | pending | kill_switch=1; no real send ever fired via engine | Watched send drill (draft-to-self, real self-send, Zoho BCC filing verify) + Dirk greenlight, then kill_switch off | drill session with Dirk | `project_lead_desk_4d_graph_send` memory; rule_instantly_invasive |
+| Deploy migrations v7-v10 to Fly prod | pending | Additive (columns + a view refresh), safe. VERIFIED ABSENT 2026-08-11: prod is release v34 (Jul 25 09:20) and its schema has `campaign_template_pins` but no `campaign_recipient_pins` (v7), so the Phase 1 recipient-pin guards do not exist on the running machine. The old "nothing sends so no urgency" premise is weaker now that Dirk is a live user | Deploy from a clean origin/main worktree in the 08-18 week, ahead of the drill | owner order (Fly deploys pre-authorized, but sequenced with arming) | checkpoint 2026-07-29; prod read 2026-08-11 |
+| Phase 1: arm the sender | pending | VERIFIED DORMANT 2026-08-11 on prod: `kill_switch=1`, `send_attempts` 0 rows. Cloud worker alive (heartbeat 2026-08-11T21:02Z, counters sent/drafted/failed all 0) so capture runs and sending cannot | Watched send drill (draft-to-self, real self-send, Zoho BCC filing verify) + Dirk greenlight, then kill_switch off | drill session with Dirk | `project_lead_desk_4d_graph_send` memory; rule_instantly_invasive |
+| Dirk on the Lead Desk | done | VERIFIED 2026-08-11: `users.last_login_at = 2026-08-07T07:00:22Z`, 69s after the magic-link mail at 06:59:13Z. He is admin+approved and has actually signed in. The tool he saw is the Jul 25 build | none | none | prod `users` table; magic-link login PR #443 |
+| Pending access request: owner@maintainiq.com | open | Self-registered 2026-08-03, status `pending`, unapproved 8 days. Not a Brisken or UnpauseAI address. Expected behaviour of the request/approve design, but it is an unactioned access decision on a client lead system | Approve or reject; ask Dirk if the address is his invite | owner decision | prod `users` table |
 | Phase 2: GA non-responder follow-up | pending | First engine-native wave, start_not_before ~08-18/08-25 (vacation returns); responders auto-excluded by reply-halt | Enroll GA non-responders once armed | Phase 1 arm + Dirk timing answer | `context/lead-generation/rome-ga-wave.md` |
 | Phase 2: OOO hold_until | pending | Per-enrollment deferral from captured OOO (parsed return date, else +14d) | Build after first engine wave | none | plan §Phase 2 |
-| Phase 3: in-thread createReply steps | pending | Retires the last script dependency (follow-up steps as replies in-thread) | Design after Phase 2 | none | plan §Phase 3 |
+| Phase 3: in-thread createReply steps | pending | CRITICAL PATH for the September target, promoted 2026-08-11 from "design after Phase 2". Continuing a campaign means writing into threads that already exist; `graph_mail.py` today exposes only send_auto / create_draft / poll_sent / search_sent_for / readback_sent, with no reply primitive, so every follow-up still goes out through a `.scratch/` script. Until this ships, "entirely on Lead Desk" is not true no matter what else is armed | Build in parallel with Phase 1.3 in the 08-18 week, not after the first wave | none | plan §Phase 3; `graph_mail.py` read 2026-08-11 |
 | Reply draft to Dirk | done | Staged 2026-07-29, nothing sent | User shapes + sends | none | `context/drafts/outreach-engine-plan-to-dirk.md` |
+
+## Target: all campaigns on Lead Desk from September (owner, 2026-08-11)
+
+Four things stand between here and that. Two are built-and-undeployed, two are
+not built at all:
+
+| Need | State on 2026-08-11 |
+|---|---|
+| Guards, scheduling, ramp, delta editing running in prod | merged + CI-green, NOT deployed (prod = Jul 25 build) |
+| Sender armed | dormant; needs the watched drill + Dirk greenlight |
+| Send in Dirk's name at wave scale (Phase 1.3) | not built; design blocked on Dirk's sender-policy answer |
+| Follow-ups as in-thread replies (Phase 3) | not built; no reply primitive in `graph_mail.py` |
+
+The long pole is a conversation, not code. Every row above sits behind Dirk's
+answers, and `context/drafts/outreach-engine-plan-to-dirk.md` has been staged
+since 2026-07-29 without going out. Working schedule if it goes this week:
+08-18 week builds Phase 1.3 + Phase 3 in parallel and deploys everything to
+prod; 08-25 week runs the drill and arms; first fully engine-native wave from
+2026-09-01. If the mail slips two more weeks the drill lands in September and
+the target moves with it.
+
+Zoho BCC filing is still UNVERIFIED and has to be proven in the drill, or the
+CRM record breaks on the first live wave.
 
 ## Open decisions / gates
 
+- T3 touch-2 fork (decide now, not in September): it is 9 days past its ~08-02
+  date. Waiting for the armed engine puts it ~7 weeks after touch-1, which is
+  dead air. Either it goes by script this week, or those 24 fold into the
+  September motion and touch-2 is dropped. Drifting picks the worst of both.
 - Dirk: sender policy for his-name waves (per-wave release vs per-mail clicks);
   Instantly-off confirm; Zoho-as-record confirm (+ optional read-scope grant);
   drill scheduling; GA follow-up week (08-18 vs 08-25).
