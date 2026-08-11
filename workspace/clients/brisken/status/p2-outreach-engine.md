@@ -28,7 +28,7 @@ sheet status cols are an upgrades-only projection out.
 
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
-| Phase 0: T3 touch-2 (script path) | in-progress | Due ~2026-08-02 as in-thread replies from Dirk's mailbox (engine has no createReply, no Dirk auto-send). Non-responders from mailbox truth; ga_send_wave guard shape; then stop, no third email | Build non-responder list + drafts for Dirk's look before 08-02; per-wave Dirk yes to send | Dirk per-wave yes | `context/lead-generation/rome-t3-wave-rebuilt.md`; `.scratch/ga_send_wave.py` pattern |
+| Phase 0: T3 touch-2 (script path) | in-progress | LIST BUILT 2026-08-11 from both-mailbox truth (all folders, since 07-20). All 24 touch-1 mails confirmed sent 2026-07-21 from dirk.neumann. **Zero human replies at three weeks.** 3 out-of-office only (ana.matos@ / miguel.carvalho@adidas.com, line.ehlers@dsv.com; return dates not captured by the tool, check before sending to those). 21 non-responders are the touch-2 set. Goes as in-thread replies from Dirk's mailbox (engine has no createReply, no Dirk auto-send); ga_send_wave guard shape; then stop, no third email | Decide send-this-week vs drop. Touch-2 copy is NOT written. Needs per-wave Dirk yes | Dirk per-wave yes; copy unwritten | `context/lead-generation/rome-t3-wave-rebuilt.md`; `.scratch/t3-touch2-truth.json`; `.scratch/ga_send_wave.py` pattern |
 | Phase 1: guard port | done | SHIPPED PR #473 (merged). campaign_recipient_pins (v7); approval pins (contact_id,email); claim-time recipient-drift + domain-deny (sap.com/brisken.com floor + send_deny_domains state) + unpinned-template guards -> send_guard_alert; worker execute-time denied-domain backstop. 10 tests | Suppression-list.csv import still a small follow-up (data-ops, not code) | none | `rule_brisken_graph_send_by_id` |
 | Phase 1: start_not_before | done | SHIPPED PR #474 (merged). Nullable campaigns.start_not_before (v8); claim skips before it; first step anchors on max(approved_at, start_not_before); scope text; POST /campaigns/{cid}/schedule + Schedule card. 5 tests | none | none | plan §Phase 1.2 |
 | Phase 1: spaced sending | done | SHIPPED PR #475 (merged). ramp_per_day (v9) per-day new-contact ramp; per-mailbox daily cap across campaigns (mailbox_daily_cap state); project_schedule preview on the confirm page. 7 tests | none | none | plan §Phase 1.6 |
@@ -69,10 +69,19 @@ CRM record breaks on the first live wave.
 
 ## Open decisions / gates
 
-- T3 touch-2 fork (decide now, not in September): it is 9 days past its ~08-02
-  date. Waiting for the armed engine puts it ~7 weeks after touch-1, which is
-  dead air. Either it goes by script this week, or those 24 fold into the
-  September motion and touch-2 is dropped. Drifting picks the worst of both.
+- T3 touch-2 fork (decide now, not in September): 9 days past its ~08-02 date,
+  but a send this week is still only three weeks behind touch-1, an ordinary
+  second-touch interval. Waiting for the armed engine makes it seven weeks,
+  which is too long to be worth sending. So it goes by script this week or it
+  is dropped; drifting picks the worst of both. Copy for touch-2 does not exist
+  yet and has to be written and approved either way.
+- Touch-1 returned **0 human replies from 24** at three weeks (verified
+  2026-08-11, both mailboxes, all folders). T3 is the coldest Rome tier
+  (attended, never spoke to us), so this is not a system fault, and capture,
+  pacing and guards all behaved. It is still a real signal about copy and
+  segment worth weighing before the September motion scales the same shape:
+  compare against the GA wave's reply rate (19 sent 2026-07-27) before assuming
+  the engine's throughput is the binding constraint.
 - Dirk: sender policy for his-name waves (per-wave release vs per-mail clicks);
   Instantly-off confirm; Zoho-as-record confirm (+ optional read-scope grant);
   drill scheduling; GA follow-up week (08-18 vs 08-25).
