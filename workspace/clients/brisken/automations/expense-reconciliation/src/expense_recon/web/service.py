@@ -29,7 +29,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from .. import inspect as stmt_inspect
-from ..cli import ConfigError, generate_expenses, reconcile
+from ..cli import NON_RECEIPT_LABELS, ConfigError, generate_expenses, reconcile
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
 from ..duplicates import (
@@ -4186,6 +4186,18 @@ def add_receipts_to_expense_batch(
                 detected_vendor=display,
                 receipt_name=display,
             )
+        # Non-receipt quarantine (2026-08-13): mirror generate_expenses —
+        # a statement page / report-summary page added mid-month must not
+        # join the expense pool. The exclusion reaches the reviewer via the
+        # ingest summary's issues list; the stored file stays on disk (its
+        # hash also keeps a re-upload from costing another OCR call).
+        label = NON_RECEIPT_LABELS.get(receipt.document_type)
+        if label is not None:
+            issues.append(
+                f"{display}: looks like {label}, not a purchase receipt — "
+                "excluded (no expense created)"
+            )
+            continue
         new_receipts.append(receipt)
 
     if new_receipts:

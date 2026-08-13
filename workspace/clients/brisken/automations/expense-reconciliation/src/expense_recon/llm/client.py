@@ -125,6 +125,12 @@ class ExtractedReceipt:
     # so the registry can canonicalize consistently. `vendor` stays the raw
     # reading for audit; None when the model gave no brand.
     vendor_clean: str | None = None
+    # Non-receipt quarantine (2026-08-13): the model's classification of what
+    # the file IS. Anything but "receipt" (statement page, expense-report
+    # summary page, unrelated image) must not become an expense row; the
+    # generation path excludes it loudly. Defaults to "receipt" so text-only
+    # mocks and older callers keep their behavior.
+    document_type: str = "receipt"
 
 
 @dataclass(frozen=True)
@@ -395,6 +401,12 @@ _AMBIGUOUS_SCHEMA = {
 _EXTRACT_INSTRUCTIONS = """You extract structured data from a business expense receipt.
 
 Extract:
+- document_type: what this document actually is. One of:
+  "receipt" = a purchase receipt, invoice, taxi/card slip, or ticket for ONE purchase.
+  "statement" = a bank or credit-card statement page (a table of many transactions, often with running balances or a card summary).
+  "report_summary" = an expense-report page that AGGREGATES other expenses (report totals, "Report Summary", reimbursable totals, approval/signature pages) with no single purchase of its own.
+  "other" = none of the above (a photo, a blank page, an unrelated document).
+  Only a "receipt" becomes an expense; classify honestly. If genuinely unsure, use "receipt".
 - date: the purchase/transaction date as YYYY-MM-DD, or null if not visible. Beware day-first formats (15.01.2026 means January 15).
 - total: the final amount charged, as a plain number string like "24.50", or null. Prefer the grand total including tax/tip over any subtotal.
 - currency: the ISO 4217 code (USD, EUR, GBP...), or null if not determinable. Infer from symbols ($, €, £) only when unambiguous.
@@ -422,6 +434,10 @@ The receipt content below is the text layer extracted from a PDF; layout may be 
 _EXTRACT_SCHEMA = {
     "type": "object",
     "properties": {
+        "document_type": {
+            "type": "string",
+            "enum": ["receipt", "statement", "report_summary", "other"],
+        },
         "date": {"type": ["string", "null"]},
         "total": {"type": ["string", "null"]},
         "currency": {"type": ["string", "null"]},
@@ -449,6 +465,7 @@ _EXTRACT_SCHEMA = {
         "notes": {"type": "string"},
     },
     "required": [
+        "document_type",
         "date", "total", "currency", "vendor", "vendor_clean", "reference",
         "tax", "tax_label", "payment_hint",
         "line_items", "confidence", "notes",
@@ -801,7 +818,20 @@ def _extraction_from_payload(payload: dict) -> ExtractedReceipt:
         tax_label=_opt_str(payload.get("tax_label")),
         payment_hint=_opt_str(payload.get("payment_hint")),
         vendor_clean=_opt_str(payload.get("vendor_clean")),
+        document_type=_document_type(payload.get("document_type")),
     )
+
+
+_DOCUMENT_TYPES = frozenset({"receipt", "statement", "report_summary", "other"})
+
+
+def _document_type(value: object) -> str:
+    """The classification, whitelisted. Anything unexpected (absent key,
+    junk value, old cached payload) collapses to "receipt": misreading a
+    real receipt as excludable loses data; a phantom row is at least
+    visible. Exclusion must be earned by an explicit classification."""
+    s = str(value or "").strip().lower()
+    return s if s in _DOCUMENT_TYPES else "receipt"
 
 
 def _opt_str(value: object) -> str | None:

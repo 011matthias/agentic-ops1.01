@@ -176,6 +176,8 @@ def receipt_to_dict(r: Receipt) -> dict:
         "vendor_clean": r.vendor_clean,
         "canonical_vendor": r.canonical_vendor,
         "vendor_source": r.vendor_source,
+        # Non-receipt quarantine (2026-08-13).
+        "document_type": r.document_type,
     }
 
 
@@ -210,6 +212,8 @@ def receipt_from_dict(d: dict) -> Receipt:
         vendor_clean=d.get("vendor_clean"),
         canonical_vendor=d.get("canonical_vendor"),
         vendor_source=d.get("vendor_source"),
+        # .get keeps pre-2026-08-13 snapshots loadable (no quarantine key).
+        document_type=d.get("document_type") or "receipt",
     )
 
 

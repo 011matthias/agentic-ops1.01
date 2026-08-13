@@ -308,6 +308,15 @@ class Receipt:
     canonical_vendor: str | None = None
     vendor_source: str | None = None
 
+    # Non-receipt quarantine (2026-08-13): what the vision extractor decided
+    # this file IS ("receipt" | "statement" | "report_summary" | "other").
+    # Criss's real uploads mix statement PDFs and expense-report summary
+    # pages in with the receipts (May 2026: 7 of 27 files); anything but
+    # "receipt" is excluded from expense generation with a loud parse issue
+    # instead of becoming a phantom expense. Statement-mode reconcile()
+    # ignores this field entirely.
+    document_type: str = "receipt"
+
     @property
     def has_receipt_image(self) -> bool:
         """True when the expense carries any receipt-image reference (a

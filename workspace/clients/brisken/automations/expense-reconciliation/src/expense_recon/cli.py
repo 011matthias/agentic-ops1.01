@@ -828,6 +828,41 @@ def reconcile(
     )
 
 
+NON_RECEIPT_LABELS: dict[str, str] = {
+    "statement": "a bank/card statement page",
+    "report_summary": "an expense-report summary page",
+    "other": "not an expense document",
+}
+
+
+def split_non_receipt_documents(
+    receipts: list[Receipt],
+) -> tuple[list[Receipt], list[ParseIssue]]:
+    """Partition the pool into real receipts and files the vision extractor
+    explicitly classified as something else (statement page, expense-report
+    summary page, unrelated image). Each excluded file becomes a WARNING
+    ParseIssue naming the file, so the exclusion is visible in the grid's
+    parse_issues and the CLI output — quarantined, never silently dropped.
+    An unclassified file (document_type "receipt", the default) always
+    stays: a phantom row is visible; a silently dropped receipt is not.
+    """
+    kept: list[Receipt] = []
+    issues: list[ParseIssue] = []
+    for r in receipts:
+        label = NON_RECEIPT_LABELS.get(r.document_type)
+        if label is None:
+            kept.append(r)
+            continue
+        issues.append(ParseIssue(
+            r.document_id, 0,
+            f"looks like {label}, not a purchase receipt — excluded from "
+            "expenses (no row exported; if this is wrong, re-upload the "
+            "file cropped to the receipt)",
+            severity="warning",
+        ))
+    return kept, issues
+
+
 def generate_expenses(
     cfg: dict, config_dir: Path, *, learned=None, llm_client=None,
     on_stage=None, expense_memory=None, registry=None,
@@ -897,11 +932,20 @@ def generate_expenses(
     # downstream. Provenance lands on data_quality_note (grid-visible).
     if expense_memory is not None:
         receipts = expense_memory.apply(receipts)
+
+    # Non-receipt quarantine (2026-08-13), before the categorizer spends a
+    # call on them: statement pages and report-summary pages that arrive in
+    # the upload (Criss's May folder: 7 Chase statement PDFs among 27 files;
+    # ER-00215's own summary page became an 8,796.35 BRL phantom expense)
+    # must not become expense rows. Exclusion is loud — each file lands in
+    # parse_errors (grid `parse_issues` + CLI output) — and only fires on an
+    # explicit non-receipt classification; anything unclassified stays.
+    receipts, non_receipt_issues = split_non_receipt_documents(receipts)
     logger.info("ingested %d receipt(s) (no statement)", len(receipts))
 
     parse_errors: list[tuple[str, int, str, str]] = [
         (issue.file_name, issue.line_number, issue.message, issue.severity)
-        for issue in (*receipt_issues, *vision_issues)
+        for issue in (*receipt_issues, *vision_issues, *non_receipt_issues)
     ]
 
     chart_of_accounts, zoho_cfg = _build_chart_of_accounts(cfg, config_dir)
@@ -1138,6 +1182,11 @@ def _run_expense_generation(
     expense mode; the statement-mode `run()` body is untouched.
     """
     result = generate_expenses(cfg, config_dir)
+    # Parse issues (unreadable files, quarantined non-receipts) have no
+    # Errors sheet in expense mode — the CSV is the only artifact — so they
+    # print here or they are invisible to a CLI run.
+    for fname, _line, msg, severity in result.parse_errors:
+        print(f"  [{severity}] {fname}: {msg}")
     if dry_run:
         print(
             f"Expense generation (dry run): {len(result.receipts)} expense(s) "
