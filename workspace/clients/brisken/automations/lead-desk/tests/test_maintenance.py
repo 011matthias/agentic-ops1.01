@@ -1,12 +1,15 @@
 """P0: clean-orphan-state deletes only lifecycle state rows for campaigns that
-no longer exist, never protected keys, and is idempotent."""
+no longer exist, never protected keys, and is idempotent. T3 adds
+suppression-import (external list -> ledger + contact flags) and the
+truth-audit report."""
 from __future__ import annotations
 
 from lead_desk.identity import contact_id_for
 from lead_desk.maintenance import (
     clean_orphan_state, find_orphan_state_keys, rekey_anon_contacts,
+    suppression_import, truth_audit,
 )
-from lead_desk.web.store import ContactStore
+from lead_desk.web.store import ContactStore, event_hash
 
 NOW = "2026-07-15T00:00:00+00:00"
 
@@ -147,3 +150,86 @@ def test_rekey_leaves_distinct_people_alone(tmp_path):
         # both re-key (drop the old key) but neither merges into the other
         assert report["contacts_removed"] == 0
         assert store.count_contacts() == 2
+
+
+# --- suppression-import: external list -> ledger + contact flags --------------
+
+SUPPRESSION_CSV = """value,kind,reason,source
+blocked@x.com,email,opt-out,external-list
+heldco.com,domain,customer-domain,zoho-crm
+"""
+
+
+def _seed_suppression(store: ContactStore, tmp_path):
+    for cid, email in [("c1", "blocked@x.com"), ("c2", "b@heldco.com"),
+                       ("c3", "ok@other.com")]:
+        store.upsert_contact({"contact_id": cid, "natural_key": email,
+                              "email": email}, now=NOW)
+    csv_path = tmp_path / "list.csv"
+    csv_path.write_text(SUPPRESSION_CSV, encoding="utf-8")
+    return csv_path
+
+
+def test_suppression_import_idempotent_and_sets_contacts(tmp_path):
+    with ContactStore(tmp_path / "t.sqlite") as store:
+        csv_path = _seed_suppression(store, tmp_path)
+        # dry-run (default): counts only, nothing written
+        dry = suppression_import(store, csv_path)
+        assert dry["dry_run"] is True
+        assert dry["entries_new"] == 2 and dry["contacts_suppressed"] == 2
+        assert store.conn.execute(
+            "SELECT COUNT(*) FROM suppression_entries").fetchone()[0] == 0
+        assert store.get_contact("c1")["suppressed"] == 0
+        # apply: ledger rows land (domains as '@domain'), contacts flagged
+        rep = suppression_import(store, csv_path, apply=True)
+        assert rep["entries_new"] == 2 and rep["entries_existing"] == 0
+        assert rep["contacts_suppressed"] == 2
+        entries = {r["entry"]: r["kind"] for r in store.conn.execute(
+            "SELECT entry, kind FROM suppression_entries").fetchall()}
+        assert entries == {"blocked@x.com": "email", "@heldco.com": "domain"}
+        for cid in ("c1", "c2"):
+            c = store.get_contact(cid)
+            assert c["suppressed"] == 1
+            assert c["suppress_reason"] == "external-suppression-list"
+            assert c["suppressed_by"] == "suppression-import"
+        assert store.get_contact("c3")["suppressed"] == 0
+        # second apply: everything existing, nothing left to suppress
+        again = suppression_import(store, csv_path, apply=True)
+        assert again["entries_new"] == 0 and again["entries_existing"] == 2
+        assert again["contacts_suppressed"] == 0
+
+
+# --- truth-audit: provenance report (never a gate) ----------------------------
+
+def test_truth_audit_reports_nonimid_events(tmp_path):
+    with ContactStore(tmp_path / "t.sqlite") as store:
+        store.upsert_contact({"contact_id": "c1", "natural_key": "a@x.com",
+                              "email": "a@x.com"}, now=NOW)
+        # ext_key NULL (manual), synthetic de-* (graph), real imid (truth-sweep)
+        store.add_event(contact_id="c1", ts=NOW, channel="email",
+                        direction="outbound", type="sent", detail="hand-logged",
+                        source="manual", now=NOW)
+        store.add_event(contact_id="c1", ts=NOW, channel="email",
+                        direction="outbound", type="sent", ext_key="de-E1-c1",
+                        source="graph", now=NOW)
+        store.add_event(contact_id="c1", ts=NOW, channel="email",
+                        direction="outbound", type="sent", ext_key="<m1@x.com>",
+                        source="truth-sweep", now=NOW)
+        # inbound non-imid events are out of scope for the outbound audit
+        store.add_event(contact_id="c1", ts=NOW, channel="email",
+                        direction="inbound", type="reply", detail="reply",
+                        source="manual", now=NOW)
+        store.record_unmatched("stranger@new.com", "{}",
+                               event_hash("stranger@new.com", NOW, "email",
+                                          "sent", None, "<u1@x.com>"), NOW)
+        store.add_suppression_entry("@heldco.com", "domain", "test", NOW)
+        store.insert_truth_run(run_id="r1", kind="backfill", started_at=NOW,
+                               finished_at=NOW, window_since="2026-05-01",
+                               corpus_messages=1, folders_scanned=0,
+                               folders_failed="[]", events_added=1, report="{}")
+        rep = truth_audit(store)
+        assert rep["non_imid_outbound"]["total"] == 2
+        assert rep["non_imid_outbound"]["by_source"] == {"manual": 1, "graph": 1}
+        assert rep["unmatched_open"] == 1
+        assert rep["suppression_entries"] == 1
+        assert [r["run_id"] for r in rep["recent_truth_runs"]] == ["r1"]
