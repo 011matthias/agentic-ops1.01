@@ -905,6 +905,35 @@ class ContactStore:
     def count_events(self) -> int:
         return self.conn.execute("SELECT COUNT(*) FROM outreach_events").fetchone()[0]
 
+    def query_events(
+        self, *, since: str | None = None, campaign: str | None = None,
+        contact_id: str | None = None, ext_key: str | None = None,
+        direction: str | None = None, type: str | None = None,
+        limit: int = 200, offset: int = 0,
+    ) -> tuple[list[sqlite3.Row], int]:
+        """Filtered slice of the event log for the read API. Every filter
+        maps to an already-indexed column (ix_events_contact /
+        ix_events_type / ix_events_extkey), so no migration is needed.
+        Returns (rows, total) where total counts ALL matches, so a caller
+        can page with limit/offset."""
+        where: list[str] = []
+        params: list[str] = []
+        for clause, val in (
+            ("ts >= ?", since), ("campaign = ?", campaign),
+            ("contact_id = ?", contact_id), ("ext_key = ?", ext_key),
+            ("direction = ?", direction), ("type = ?", type),
+        ):
+            if val:
+                where.append(clause)
+                params.append(val)
+        cond = (" WHERE " + " AND ".join(where)) if where else ""
+        total = self.conn.execute(
+            f"SELECT COUNT(*) FROM outreach_events{cond}", params).fetchone()[0]
+        rows = self.conn.execute(
+            f"SELECT * FROM outreach_events{cond} ORDER BY ts, event_id "
+            "LIMIT ? OFFSET ?", (*params, limit, offset)).fetchall()
+        return rows, total
+
     # -- unmatched capture events -----------------------------------------
 
     def record_unmatched(self, email: str, payload_json: str,

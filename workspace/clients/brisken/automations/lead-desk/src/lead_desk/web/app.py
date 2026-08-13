@@ -24,6 +24,7 @@ Routes (cookie gate):
 Machine APIs (own bearer secrets, outside the cookie gate):
 
     POST /events                  event sink for capture workers (ingest secret)
+    GET  /api/events              read slice of the event log (ingest secret or session)
     GET  /api/worker/status       kill switch + per-campaign window/cap state (worker secret)
     POST /api/outbox/claim        lease due sends, rendered with pinned copy
     POST /api/outbox/result       ack/nack a leased send (emits the 'sent' event)
@@ -1055,6 +1056,33 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 results.append(ingest_event(store, ev))
         inserted = sum(1 for r in results if r.get("inserted"))
         return JSONResponse({"ok": True, "inserted": inserted, "results": results})
+
+    # --- event log read API (capture-adequacy audits, tooling) ----------
+    @app.get("/api/events")
+    def api_events(request: Request, since: str = "", campaign: str = "",
+                   contact_id: str = "", ext_key: str = "",
+                   direction: str = "", type: str = "",
+                   limit: int = 200, offset: int = 0):
+        """Filtered read slice of ``outreach_events``. Self-guards like
+        /sync: a logged-in session (the browser) or the ingest bearer (the
+        machine callers that already hold the capture secret)."""
+        authed = bool(auth.read_user(request.cookies.get(auth.COOKIE_NAME))) \
+            or auth.ingest_authorized(request.headers.get("authorization"))
+        if auth.gate_enabled() and not authed:
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        limit = max(1, min(limit, 1000))
+        offset = max(0, offset)
+        with open_store() as store:
+            rows, total = store.query_events(
+                since=since.strip() or None,
+                campaign=campaign.strip() or None,
+                contact_id=contact_id.strip() or None,
+                ext_key=ext_key.strip() or None,
+                direction=direction.strip() or None,
+                type=type.strip() or None,
+                limit=limit, offset=offset)
+        return JSONResponse({"events": [dict(r) for r in rows],
+                             "total": total})
 
     # --- sheet sync (Graph app-only, sheet -> DB) -----------------------
     @app.post("/sync")

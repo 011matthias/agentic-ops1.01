@@ -48,6 +48,20 @@ Usage:
   uv run tools/brisken-truth-sweep.py --since 2026-05-01 --out <dir> \
       [--main-repo <primary-clone>] [--mailbox both] [--resume] \
       [--skip-corpus] [--ledger-only] [--leaddesk-db <sqlite>] [--skip-leaddesk]
+
+Capture-adequacy verify mode (no Graph calls; reads the EXISTING corpus
+cache under <out>/corpus-cache and diffs the window's outbound
+internetMessageIds against the Lead Desk DB):
+
+  uv run tools/brisken-truth-sweep.py --verify-live-capture \
+      --window 2026-07-18..2026-08-01 --out <dir> \
+      (--db <local lead-desk.sqlite copy> [--write-run] \
+       | --base-url https://... [--secret <ingest secret>])
+
+Prints total / present / missing (imid, to, subject, folder) and a verdict
+line: CAPTURE-ADEQUATE (0 missing) or CAPTURE-GAPS (N). Read-only; the one
+exception is --write-run, which appends a truth_runs row
+(kind='capture-verify') to the LOCAL --db copy.
 """
 from __future__ import annotations
 
@@ -515,6 +529,183 @@ def recipients_of(rows: list[dict]) -> dict[str, list[dict]]:
 
 
 # ---------------------------------------------------------------------------
+# Capture-adequacy verify (--verify-live-capture): did every real outbound
+# send in the window land in the Lead Desk DB?
+# ---------------------------------------------------------------------------
+
+def window_outbound(corpus: dict, start: str, end: str) -> list[dict]:
+    """Outbound corpus rows sent inside the window (dates inclusive) with at
+    least one EXTERNAL to/cc recipient. Internal-only mail is invisible to
+    the Lead Desk by design (capture builds payloads from to+cc and its
+    filter drops own-domain recipients), so it never counts as a gap.
+    Deduped by imid: folder copies of one message are one send."""
+    lo, hi = f"{start}T00:00:00Z", f"{end}T23:59:59Z"
+    rows, seen = [], set()
+    for m in corpus["outbound"]:
+        sent = m.get("sent") or ""
+        if not (lo <= sent <= hi):
+            continue
+        ext = sorted({a for a in (clean_addr(x) for x in
+                                  (m["to"] + m["cc"]) if x)
+                      if "@" in a and not is_internal(a)})
+        if not ext:
+            continue
+        key = m.get("imid") or m.get("id")
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append({**m, "external": ext})
+    return rows
+
+
+def diff_capture(rows: list[dict], present: dict[str, str]) -> dict:
+    """Pure diff: windowed corpus outbound rows vs the imid->source map of
+    what the DB already knows. Returns totals, per-source presence counts,
+    and the missing rows (imid, to, subject, folder)."""
+    missing: list[dict] = []
+    by_source: dict[str, int] = {}
+    for m in rows:
+        src = present.get(m.get("imid") or "")
+        if src:
+            by_source[src] = by_source.get(src, 0) + 1
+        else:
+            missing.append({"imid": m.get("imid"),
+                            "to": m.get("external") or m.get("to"),
+                            "subject": (m.get("subject") or "")[:90],
+                            "folder": m.get("folder"),
+                            "sent": m.get("sent"),
+                            "mailbox": m.get("mailbox")})
+    return {"total": len(rows), "present": len(rows) - len(missing),
+            "present_by_source": by_source, "missing": missing}
+
+
+def db_imid_sources(db_path: Path) -> dict[str, str]:
+    """imid -> where the local DB copy knows it from: an outreach_events row
+    (captured send: ext_key IS the internetMessageId), a worker send
+    (send_attempts carries the imid; its event's ext_key is the cadence
+    key), or a parked unmatched payload (captured, awaiting operator
+    link)."""
+    con = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
+    try:
+        out: dict[str, str] = {}
+        for (k,) in con.execute(
+                "SELECT DISTINCT ext_key FROM outreach_events "
+                "WHERE ext_key IS NOT NULL AND direction = 'outbound'"):
+            out.setdefault(k, "events")
+        for (k,) in con.execute(
+                "SELECT DISTINCT internet_message_id FROM send_attempts "
+                "WHERE internet_message_id IS NOT NULL"):
+            out.setdefault(k, "send_attempts")
+        for (p,) in con.execute("SELECT payload FROM unmatched_events"):
+            try:
+                imid = (json.loads(p).get("internet_message_id") or "").strip()
+            except (ValueError, AttributeError):
+                continue
+            if imid:
+                out.setdefault(imid, "unmatched")
+        return out
+    finally:
+        con.close()
+
+
+def api_imid_sources(base_url: str, secret: str) -> dict[str, str]:
+    """Page GET /api/events for outbound ext_keys. Only the event log is
+    visible over the API (send_attempts / unmatched_events are not), so a
+    worker send whose event carries the cadence ext_key reads as missing
+    here; use --db for the authoritative diff."""
+    hdrs = {"Authorization": f"Bearer {secret}"}
+    out: dict[str, str] = {}
+    offset, page = 0, 1000
+    while True:
+        r = requests.get(f"{base_url.rstrip('/')}/api/events", headers=hdrs,
+                         params={"direction": "outbound",
+                                 "limit": page, "offset": offset},
+                         timeout=60)
+        r.raise_for_status()
+        body = r.json()
+        for ev in body["events"]:
+            if ev.get("ext_key"):
+                out.setdefault(ev["ext_key"], "events")
+        offset += len(body["events"])
+        if not body["events"] or offset >= body["total"]:
+            return out
+
+
+def write_verify_run(db_path: Path, window: str, corpus: dict,
+                     rep: dict, started_at: str) -> str:
+    """Record the verify pass as a truth_runs row (kind='capture-verify') in
+    the LOCAL DB copy. Never runs in --base-url mode."""
+    run_id = f"capture-verify-{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%SZ}"
+    finished = dt.datetime.now(dt.timezone.utc).isoformat()
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            "INSERT INTO truth_runs (run_id, kind, started_at, finished_at, "
+            "window_since, corpus_messages, folders_scanned, folders_failed, "
+            "events_added, anomalies, report) "
+            "VALUES (?, 'capture-verify', ?, ?, ?, ?, ?, ?, 0, NULL, ?)",
+            (run_id, started_at, finished, window, rep["total"],
+             corpus["folders_ok"], json.dumps(corpus["folders_failed"]),
+             json.dumps({"present": rep["present"],
+                         "present_by_source": rep["present_by_source"],
+                         "missing": [m["imid"] for m in rep["missing"]]})))
+        con.commit()
+    finally:
+        con.close()
+    return run_id
+
+
+def run_verify_live_capture(args) -> int:
+    if not args.window or ".." not in args.window:
+        sys.exit("ERROR: --verify-live-capture needs --window START..END "
+                 "(YYYY-MM-DD..YYYY-MM-DD)")
+    if not (args.db or args.base_url):
+        sys.exit("ERROR: pass --db <local lead-desk.sqlite copy> or "
+                 "--base-url <lead-desk origin>")
+    if args.write_run and not args.db:
+        sys.exit("ERROR: --write-run needs --db (the run row is written to "
+                 "the local copy only, never over the API)")
+    start, end = args.window.split("..", 1)
+    started_at = dt.datetime.now(dt.timezone.utc).isoformat()
+
+    cache_root = Path(args.out) / "corpus-cache"
+    corpus = load_corpus(cache_root)
+    if not corpus["outbound"]:
+        sys.exit(f"ERROR: no cached outbound messages under {cache_root}; "
+                 "run the corpus phase first")
+    rows = window_outbound(corpus, start, end)
+
+    if args.db:
+        present = db_imid_sources(Path(args.db))
+    else:
+        secret = args.secret or os.environ.get("LEAD_DESK_INGEST_SECRET", "")
+        if not secret:
+            sys.exit("ERROR: --base-url needs --secret or "
+                     "LEAD_DESK_INGEST_SECRET")
+        present = api_imid_sources(args.base_url, secret)
+
+    rep = diff_capture(rows, present)
+    print(f"window {start}..{end}: {rep['total']} corpus sends "
+          f"(external to/cc recipients, deduped by imid)")
+    print(f"present in db: {rep['present']} {rep['present_by_source']}")
+    if corpus["folders_failed"]:
+        print(f"NOTE: {len(corpus['folders_failed'])} corpus folders failed "
+              "to pull; the corpus side may undercount", file=sys.stderr)
+    for m in rep["missing"]:
+        print(f"  MISSING {m['imid']}  to={','.join(m['to'])}  "
+              f"[{m['sent']}]  {m['subject']!r}  "
+              f"({m['mailbox']}: {m['folder']})")
+    n = len(rep["missing"])
+    print("CAPTURE-ADEQUATE (0 missing)" if n == 0
+          else f"CAPTURE-GAPS ({n})")
+    if args.write_run:
+        run_id = write_verify_run(Path(args.db), args.window, corpus, rep,
+                                  started_at)
+        print(f"truth_runs row written: {run_id}")
+    return 0 if n == 0 else 1
+
+
+# ---------------------------------------------------------------------------
 # Input loaders (existence-verified; misses recorded with the real listing)
 # ---------------------------------------------------------------------------
 
@@ -812,7 +1003,27 @@ def main() -> int:  # noqa: C901  (one linear ledger assembly, kept in order)
                          "sftp get)")
     ap.add_argument("--skip-leaddesk", action="store_true",
                     help="skip the Lead Desk DB section entirely")
+    ap.add_argument("--verify-live-capture", action="store_true",
+                    help="capture-adequacy verify mode: diff the cached "
+                         "corpus window against the Lead Desk DB, no Graph")
+    ap.add_argument("--window", default=None,
+                    help="verify window START..END (YYYY-MM-DD..YYYY-MM-DD)")
+    ap.add_argument("--db", default=None,
+                    help="verify mode: local copy of lead-desk.sqlite to "
+                         "diff against (direct read)")
+    ap.add_argument("--base-url", default=None,
+                    help="verify mode: Lead Desk origin; diff via GET "
+                         "/api/events pages instead of --db")
+    ap.add_argument("--secret", default=None,
+                    help="verify mode: ingest bearer for --base-url "
+                         "(default: LEAD_DESK_INGEST_SECRET)")
+    ap.add_argument("--write-run", action="store_true",
+                    help="verify mode + --db only: append a truth_runs row "
+                         "(kind='capture-verify') to the local copy")
     args = ap.parse_args()
+
+    if args.verify_live_capture:
+        return run_verify_live_capture(args)
 
     main_repo = Path(args.main_repo) if args.main_repo else truth.repo_root()
     ctx = main_repo / "workspace" / "clients" / "brisken" / "context"
