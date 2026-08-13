@@ -2,6 +2,7 @@
 project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
+state: active
 updated: 2026-08-13
 ---
 
