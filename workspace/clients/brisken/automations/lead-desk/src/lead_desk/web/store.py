@@ -300,6 +300,62 @@ CREATE TABLE IF NOT EXISTS campaign_recipient_pins (
 CREATE INDEX IF NOT EXISTS ix_events_extkey  ON outreach_events(ext_key);
 CREATE INDEX IF NOT EXISTS ix_enroll_camp    ON enrollments(campaign_id);
 CREATE INDEX IF NOT EXISTS ix_attempts_enrl  ON send_attempts(enrollment_id, step_no);
+
+-- Captured events that matched no contact, parked for operator review (link
+-- to an existing contact or dismiss). Never auto-creates a contact - that is
+-- an owner decision (2026-07-14). event_hash dedupes a re-poll of the same
+-- message into one row (seen_count bumps instead).
+CREATE TABLE IF NOT EXISTS unmatched_events (
+    id                  INTEGER PRIMARY KEY,
+    email               TEXT NOT NULL,
+    payload             TEXT NOT NULL,
+    first_seen          TEXT NOT NULL,
+    last_seen           TEXT NOT NULL,
+    seen_count          INTEGER NOT NULL DEFAULT 1,
+    status              TEXT NOT NULL DEFAULT 'open',
+    resolved_contact_id TEXT,
+    resolved_at         TEXT,
+    resolved_by         TEXT,
+    event_hash          TEXT NOT NULL UNIQUE
+);
+
+CREATE INDEX IF NOT EXISTS ix_unmatched_status ON unmatched_events(status, email);
+
+-- Mailbox-truth scaffolding (v11): suppression ledger, truth-scan run log,
+-- and the per-mailbox folder cache the scanner walks. Written by the truth
+-- pipeline; no store methods yet.
+CREATE TABLE IF NOT EXISTS suppression_entries (
+    entry    TEXT PRIMARY KEY,
+    kind     TEXT NOT NULL,
+    source   TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    note     TEXT
+);
+
+CREATE TABLE IF NOT EXISTS truth_runs (
+    run_id          TEXT PRIMARY KEY,
+    kind            TEXT NOT NULL,
+    started_at      TEXT,
+    finished_at     TEXT,
+    window_since    TEXT,
+    corpus_messages INTEGER,
+    folders_scanned INTEGER,
+    folders_failed  TEXT,
+    events_added    INTEGER,
+    anomalies       TEXT,
+    report          TEXT
+);
+
+CREATE TABLE IF NOT EXISTS folder_cache (
+    mailbox          TEXT NOT NULL,
+    folder_id        TEXT NOT NULL,
+    path             TEXT,
+    total_item_count INTEGER,
+    last_scanned     TEXT,
+    last_hit         TEXT,
+    skip             INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (mailbox, folder_id)
+);
 """
 
 # ---------------------------------------------------------------------------
@@ -531,6 +587,54 @@ _MIGRATIONS: dict[int, list] = {
     # mid-sequence INSERT/REORDER safe (no re-send of old copy, no skipped new
     # step). A pure view-definition change; refresh so the prod volume picks it up.
     10: _refresh_views_sql("enrollment_progress"),
+    # v11: truth ingest. unmatched_events parks captured events that matched no
+    # contact for operator link/dismiss (no auto-created contacts - owner
+    # 2026-07-14); suppression_entries / truth_runs / folder_cache back the
+    # mailbox-truth pipeline. Tables are in _SCHEMA for a fresh DB and here for
+    # the existing prod volume - one user_version guard covers both (v7 pattern).
+    11: [
+        "CREATE TABLE IF NOT EXISTS unmatched_events ("
+        "id INTEGER PRIMARY KEY, "
+        "email TEXT NOT NULL, "
+        "payload TEXT NOT NULL, "
+        "first_seen TEXT NOT NULL, "
+        "last_seen TEXT NOT NULL, "
+        "seen_count INTEGER NOT NULL DEFAULT 1, "
+        "status TEXT NOT NULL DEFAULT 'open', "
+        "resolved_contact_id TEXT, "
+        "resolved_at TEXT, "
+        "resolved_by TEXT, "
+        "event_hash TEXT NOT NULL UNIQUE)",
+        "CREATE INDEX IF NOT EXISTS ix_unmatched_status "
+        "ON unmatched_events(status, email)",
+        "CREATE TABLE IF NOT EXISTS suppression_entries ("
+        "entry TEXT PRIMARY KEY, "
+        "kind TEXT NOT NULL, "
+        "source TEXT NOT NULL, "
+        "added_at TEXT NOT NULL, "
+        "note TEXT)",
+        "CREATE TABLE IF NOT EXISTS truth_runs ("
+        "run_id TEXT PRIMARY KEY, "
+        "kind TEXT NOT NULL, "
+        "started_at TEXT, "
+        "finished_at TEXT, "
+        "window_since TEXT, "
+        "corpus_messages INTEGER, "
+        "folders_scanned INTEGER, "
+        "folders_failed TEXT, "
+        "events_added INTEGER, "
+        "anomalies TEXT, "
+        "report TEXT)",
+        "CREATE TABLE IF NOT EXISTS folder_cache ("
+        "mailbox TEXT NOT NULL, "
+        "folder_id TEXT NOT NULL, "
+        "path TEXT, "
+        "total_item_count INTEGER, "
+        "last_scanned TEXT, "
+        "last_hit TEXT, "
+        "skip INTEGER NOT NULL DEFAULT 0, "
+        "PRIMARY KEY (mailbox, folder_id))",
+    ],
 }
 
 # Highest applied migration. On a fresh DB the runner applies 1..N in order;
@@ -788,6 +892,52 @@ class ContactStore:
 
     def count_events(self) -> int:
         return self.conn.execute("SELECT COUNT(*) FROM outreach_events").fetchone()[0]
+
+    # -- unmatched capture events -----------------------------------------
+
+    def record_unmatched(self, email: str, payload_json: str,
+                         event_hash: str, now: str) -> None:
+        """Park a captured event that matched no contact. Idempotent per
+        event_hash: a re-poll of the same message bumps last_seen/seen_count
+        on the existing row instead of inserting a duplicate."""
+        self.conn.execute(
+            "INSERT INTO unmatched_events "
+            "(email, payload, first_seen, last_seen, event_hash) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(event_hash) DO UPDATE SET "
+            "last_seen = excluded.last_seen, seen_count = seen_count + 1",
+            (email, payload_json, now, now, event_hash),
+        )
+        self.conn.commit()
+
+    def get_unmatched(self, unmatched_id: int) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM unmatched_events WHERE id = ?", (unmatched_id,)
+        ).fetchone()
+
+    def list_unmatched(self, status: str = "open") -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM unmatched_events WHERE status = ? "
+            "ORDER BY last_seen DESC, id",
+            (status,),
+        ).fetchall()
+
+    def resolve_unmatched(self, unmatched_id: int, contact_id: str | None,
+                          by: str | None, now: str,
+                          dismiss_reason: str | None = None) -> None:
+        """Close an unmatched row: linked (contact_id given) or dismissed.
+        ``dismiss_reason``, when given, is kept in resolved_by alongside who
+        dismissed it, so the queue shows WHY without another column."""
+        status = "linked" if contact_id else "dismissed"
+        resolved_by = by
+        if status == "dismissed" and dismiss_reason:
+            resolved_by = f"{by or 'unknown'}: {dismiss_reason}"
+        self.conn.execute(
+            "UPDATE unmatched_events SET status = ?, resolved_contact_id = ?, "
+            "resolved_at = ?, resolved_by = ? WHERE id = ?",
+            (status, contact_id, now, resolved_by, unmatched_id),
+        )
+        self.conn.commit()
 
     # -- state (delta tokens etc.) ---------------------------------------
 
