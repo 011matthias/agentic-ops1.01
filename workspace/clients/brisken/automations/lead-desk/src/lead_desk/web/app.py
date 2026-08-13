@@ -663,12 +663,24 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             wave = (cadence.enumerate_wave(store, cid)
                     if any(a["status"] == "drafted" and a["entry_id"]
                            for a in attempts) else None)
+            # Engine telemetry card: worker liveness (freshness helpers, same
+            # thresholds as the board strip) + outbox aggregates + capture-
+            # grounded inbound. All indexed reads; no migration.
+            today = cadence._campaign_today(campaign, cadence.now_utc()).isoformat()
+            engine = {
+                "freshness": freshness_report(store, data_root_path),
+                "attempts": store.attempt_status_counts(cid),
+                "sends_today": store.cadence_sends_today(cid, today),
+                "first_steps_today": store.first_step_sends_today(cid, today),
+                "inbound": store.campaign_inbound_counts(
+                    cid, campaign.get("approved_at")),
+            }
         return templates.TemplateResponse(
             request, "campaign.html",
             {"campaign": campaign, "report": report, "rules": rules,
              "sequences": sequences, "templates_": all_templates,
              "enrollments": enrollments, "attempts": attempts, "pins": pins,
-             "wave": wave, "guard_alert": guard_alert,
+             "wave": wave, "guard_alert": guard_alert, "engine": engine,
              "degrees": DEGREES, "send_modes": SEND_MODES,
              "kill_switch": kill_switch,
              "user": current_user(request)},

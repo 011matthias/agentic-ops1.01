@@ -27,17 +27,40 @@
   </div>
 </div>
 
-{% if guard_alert %}
-<div class="card" style="border:1px solid var(--red); background:var(--red-bg);">
-  <div style="color:var(--red);"><strong>Send guard alert</strong>{% if guard_alert.at %} ({{ guard_alert.at[:16] }}){% endif %}: {{ guard_alert.count or guard_alert.raw or '?' }} send(s) blocked by the pre-send guards; they stay queued/parked until resolved (usually a re-approve).</div>
-  {% if guard_alert.blocked %}
-  <div class="mono" style="font-size:11.5px; margin-top:6px;">
-    {% for b in guard_alert.blocked[:10] %}<div>{{ b.kind }}: {{ b.detail }}</div>{% endfor %}
-    {% if guard_alert.blocked|length > 10 %}<div>... +{{ guard_alert.blocked|length - 10 }} more</div>{% endif %}
+<div class="card" id="engine">
+  <h2>Engine</h2>
+  <p class="muted">What the engine is doing for this campaign right now: worker liveness, the outbox by status, and capture-grounded inbound from the live mailboxes.</p>
+  {% set fr = engine.freshness %}
+  <div class="muted" style="font-size:12px; display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center;">
+    <span class="badge {% if fr.heartbeat_fresh %}stage-booked{% else %}suppressed{% endif %}" title="Cloud worker heartbeat: the tick loop that claims, sends and captures. Fresh under 2 hours.">worker tick {{ fr.heartbeat_age }}{% if fr.heartbeat_age != 'never' %} ago{% endif %}</span>
+    {% if fr.heartbeat and fr.heartbeat.counters %}<span title="Counters the worker reported on its last tick.">last tick:{% for k, n in fr.heartbeat.counters.items() %} {{ k }} {{ n }}{% if not loop.last %},{% endif %}{% endfor %}</span>{% endif %}
+    <span title="Today's landed cadence sends plus outstanding leases, against this campaign's daily cap.">sends today {{ engine.sends_today }}/{{ campaign.daily_cap }}</span>
+    {% if campaign.ramp_per_day %}<span title="Step-1 (new-contact) sends started today, against the per-day ramp.">new contacts today {{ engine.first_steps_today }}/{{ campaign.ramp_per_day }}</span>{% endif %}
+    <span title="Inbound events captured from the live mailboxes for enrolled contacts{% if campaign.approved_at %} since approval{% endif %}: mailbox truth, not log assertions.">inbound{% if campaign.approved_at %} since approval{% endif %}: {{ engine.inbound.get('reply', 0) }} reply, {{ engine.inbound.get('bounce', 0) }} bounce</span>
+  </div>
+  <div class="inline" style="margin-top:10px; flex-wrap:wrap;">
+    {% for st in ('queued', 'leased', 'drafted', 'sent', 'stalled', 'parked', 'failed') %}
+    <span class="badge {% if st == 'sent' %}stage-booked{% elif st in ('stalled', 'parked', 'failed') %}suppressed{% else %}stage-sent{% endif %}" title="send attempts in status '{{ st }}'">{{ st }} {{ engine.attempts.get(st, 0) }}</span>
+    {% endfor %}
+    {% if attempts %}<a class="muted" href="#attempts" style="font-size:12px;">attempt detail &darr;</a>{% endif %}
+  </div>
+  {% if wave %}
+  <div class="muted" style="margin-top:10px; font-size:12px;">
+    Staged wave: {{ wave.count }} draft(s) in Dirk's Drafts{% if wave.oldest_staged_days is not none %}, oldest {{ wave.oldest_staged_days }}d{% endif %} &middot; <a href="#staged-wave">review the wave &darr;</a>
+  </div>
+  {% endif %}
+  {% if guard_alert %}
+  <div style="margin-top:10px; padding:10px 14px; border:1px solid var(--red); border-radius:10px; background:var(--red-bg);">
+    <div style="color:var(--red);"><strong>Send guard alert</strong>{% if guard_alert.at %} ({{ guard_alert.at[:16] }}){% endif %}: {{ guard_alert.count or guard_alert.raw or '?' }} send(s) blocked by the pre-send guards; they stay queued/parked until resolved (usually a re-approve).</div>
+    {% if guard_alert.blocked %}
+    <div class="mono" style="font-size:11.5px; margin-top:6px;">
+      {% for b in guard_alert.blocked[:10] %}<div>{{ b.kind }}: {{ b.detail }}</div>{% endfor %}
+      {% if guard_alert.blocked|length > 10 %}<div>... +{{ guard_alert.blocked|length - 10 }} more</div>{% endif %}
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 </div>
-{% endif %}
 
 <div class="card">
   <h2>1. Upload contacts (CSV / XLSX)</h2>

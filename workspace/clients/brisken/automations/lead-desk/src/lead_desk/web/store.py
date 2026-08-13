@@ -934,6 +934,24 @@ class ContactStore:
             "LIMIT ? OFFSET ?", (*params, limit, offset)).fetchall()
         return rows, total
 
+    def campaign_inbound_counts(self, campaign_id: str,
+                                since: str | None = None) -> dict[str, int]:
+        """Capture-grounded inbound over one campaign's ENROLLED cohort:
+        {'reply': N, 'bounce': N} (absent types omitted), optionally since an
+        ISO ts (the approval stamp). Joins through enrollments because inbound
+        capture stamps the contact's campaign TAG, not the engine campaign
+        that mailed them. Indexed (ix_enroll_camp + ix_events_contact)."""
+        q = ("SELECT e.type, COUNT(*) AS n FROM outreach_events e "
+             "JOIN enrollments en ON en.contact_id = e.contact_id "
+             "WHERE en.campaign_id = ? AND e.direction = 'inbound' "
+             "AND e.type IN ('reply', 'bounce')")
+        params: list = [campaign_id]
+        if since:
+            q += " AND e.ts >= ?"
+            params.append(since)
+        rows = self.conn.execute(q + " GROUP BY e.type", params).fetchall()
+        return {r["type"]: int(r["n"]) for r in rows}
+
     # -- unmatched capture events -----------------------------------------
 
     def record_unmatched(self, email: str, payload_json: str,
@@ -1552,6 +1570,18 @@ class ContactStore:
             q += f" AND sa.status IN ({', '.join('?' for _ in statuses)})"
             args.extend(statuses)
         return self.conn.execute(q + " ORDER BY sa.claimed_at", args).fetchall()
+
+    def attempt_status_counts(self, campaign_id: str) -> dict[str, int]:
+        """Outbox attempts by status for one campaign (the Engine telemetry
+        card): {'queued': N, 'sent': N, ...}, absent statuses omitted. Joins
+        through enrollments (ix_enroll_camp); no migration."""
+        rows = self.conn.execute(
+            "SELECT sa.status, COUNT(*) AS n FROM send_attempts sa "
+            "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
+            "WHERE en.campaign_id = ? GROUP BY sa.status",
+            (campaign_id,),
+        ).fetchall()
+        return {r["status"]: int(r["n"]) for r in rows}
 
     def try_lease(self, *, attempt_key: str, enrollment_id: int, step_no: int,
                   send_mode: str, lease_id: str, lease_expires: str, worker_id: str,
