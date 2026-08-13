@@ -951,6 +951,51 @@ class ContactStore:
         )
         self.conn.commit()
 
+    # -- truth scan (folder cache + run log) ------------------------------
+
+    def get_folder_cache(self, mailbox: str) -> dict[str, sqlite3.Row]:
+        """The mailbox's cached folder rows, keyed by folder_id."""
+        rows = self.conn.execute(
+            "SELECT * FROM folder_cache WHERE mailbox = ?", (mailbox,)
+        ).fetchall()
+        return {r["folder_id"]: r for r in rows}
+
+    def upsert_folder_cache(self, mailbox: str, folder_id: str,
+                            path: str | None, total_item_count: int,
+                            now: str, *, hit: bool = False) -> None:
+        """Record a scanned folder's count. ``hit`` stamps last_hit (the
+        folder yielded an event the DB did not know). The operator-set
+        ``skip`` flag is never touched here."""
+        self.conn.execute(
+            "INSERT INTO folder_cache "
+            "(mailbox, folder_id, path, total_item_count, last_scanned, last_hit) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(mailbox, folder_id) DO UPDATE SET "
+            "path = excluded.path, "
+            "total_item_count = excluded.total_item_count, "
+            "last_scanned = excluded.last_scanned, "
+            "last_hit = COALESCE(excluded.last_hit, last_hit)",
+            (mailbox, folder_id, path, total_item_count, now,
+             now if hit else None),
+        )
+        self.conn.commit()
+
+    def insert_truth_run(self, *, run_id: str, kind: str, started_at: str,
+                         finished_at: str, window_since: str,
+                         corpus_messages: int, folders_scanned: int,
+                         folders_failed: str, events_added: int,
+                         report: str, anomalies: str | None = None) -> None:
+        self.conn.execute(
+            "INSERT INTO truth_runs (run_id, kind, started_at, finished_at, "
+            "window_since, corpus_messages, folders_scanned, folders_failed, "
+            "events_added, anomalies, report) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (run_id, kind, started_at, finished_at, window_since,
+             corpus_messages, folders_scanned, folders_failed, events_added,
+             anomalies, report),
+        )
+        self.conn.commit()
+
     # -- state (delta tokens etc.) ---------------------------------------
 
     def get_state(self, key: str) -> str | None:
