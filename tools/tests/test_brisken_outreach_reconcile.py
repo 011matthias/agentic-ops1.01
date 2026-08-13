@@ -173,6 +173,59 @@ def test_stale_draft_ready_surfaced():
     assert f["kind"] == "surface"
 
 
+# ---- build_indexes corpus composition (the pull_corpus -> three-pulls fix)
+
+def _msg(mid, sender, to, subject="s", date="2026-07-12T09:00:00Z",
+         drafts=False):
+    return {
+        "id": mid,
+        "internetMessageId": f"<{mid}@x>",
+        "from": {"emailAddress": {"address": sender}},
+        "toRecipients": [{"emailAddress": {"address": a}} for a in to],
+        "subject": subject,
+        "sentDateTime": None if drafts else date,
+    }
+
+
+def test_build_indexes_composes_three_pulls_with_dedup(monkeypatch):
+    """build_indexes must compose pull_outbound + pull_inbound + pull_drafts
+    (truth.pull_corpus no longer exists) and dedup a message returned by both
+    the all-folders outbound sweep and the aggregate inbound pull."""
+    dirk, matt = MOD.MAILBOXES
+    send = _msg("m1", dirk, ["a@x.com"], "hello")
+    reply = _msg("m2", "a@x.com", [dirk], "RE: hello",
+                 date="2026-07-13T08:00:00Z")
+    ooo = _msg("m3", "b@y.com", [dirk], "Automatic reply: hello",
+               date="2026-07-13T09:00:00Z")
+    draft = _msg("m4", dirk, ["c@z.com"], "prepared", drafts=True)
+
+    monkeypatch.setattr(MOD.truth, "pull_outbound",
+                        lambda mbx, token, since:
+                        [send] if mbx == dirk else [])
+    # aggregate inbound also returns the outbound message (same id) -> dedup
+    monkeypatch.setattr(MOD.truth, "pull_inbound",
+                        lambda mbx, token, since:
+                        [send, reply, ooo] if mbx == dirk else [])
+    monkeypatch.setattr(MOD.truth, "pull_drafts",
+                        lambda mbx, token:
+                        [draft] if mbx == dirk else [])
+    monkeypatch.setattr(MOD, "pull_calendar",
+                        lambda mbx, token, start, end: [])
+
+    idx = MOD.build_indexes("2026-06-01", "2026-12-01", token="fake")
+    assert set(idx) == {"sends", "replies", "ooo", "drafts", "meetings"}
+    # exactly ONE send hit despite the message arriving via both pulls
+    assert len(idx["sends"]["a@x.com"]) == 1
+    assert idx["sends"]["a@x.com"][0]["date"] == "2026-07-12T09:00:00Z"
+    assert len(idx["replies"]["a@x.com"]) == 1
+    assert "a@x.com" not in idx["ooo"]
+    assert len(idx["ooo"]["b@y.com"]) == 1
+    assert "b@y.com" not in idx["replies"]
+    assert len(idx["drafts"]["c@z.com"]) == 1
+    # the premise of the fix: the removed helper is genuinely gone
+    assert not hasattr(MOD.truth, "pull_corpus")
+
+
 # ---- window split + A1 helpers
 
 def test_split_window_cutoffs():

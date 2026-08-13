@@ -320,7 +320,17 @@ def build_indexes(since: str, cal_end: str, token: str) -> dict:
     mbx_set = {m.lower() for m in MAILBOXES}
 
     for mbx in MAILBOXES:
-        real, draft_msgs = truth.pull_corpus(mbx, token, since)
+        # truth.pull_corpus() was split into three pulls (2026-07-22 rework):
+        # compose them here, preserving the old (real, drafts) shape. The
+        # all-folders outbound sweep and the aggregate inbound pull can both
+        # return the same message, so dedup by id before indexing.
+        real_by_id: dict[str, dict] = {}
+        for msg in (truth.pull_outbound(mbx, token, since)
+                    + truth.pull_inbound(mbx, token, since)):
+            real_by_id[msg.get("id") or msg.get("internetMessageId")
+                       or repr(msg)] = msg
+        real = list(real_by_id.values())
+        draft_msgs = truth.pull_drafts(mbx, token)
         for msg in real:
             sender, rcpt = truth.addrs(msg)
             hit = {"mailbox": mbx, "date": msg.get("sentDateTime"),
