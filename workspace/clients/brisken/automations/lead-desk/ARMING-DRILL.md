@@ -166,3 +166,4 @@ can only go to the test address.
 
 | Date | Step | Result | Evidence |
 |------|------|--------|----------|
+| 2026-08-13 | 1 (dry run) | PASS | `lead-desk-drill step1` on prod: kill_switch_reported_true, zero_leases_taken, watermarks_unchanged all PASS; `paused: true`, `claimed: 0`, empty due_preview |
