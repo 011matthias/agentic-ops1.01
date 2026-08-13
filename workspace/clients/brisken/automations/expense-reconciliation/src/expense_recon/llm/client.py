@@ -575,8 +575,8 @@ class OpenAIClient:
                 continue
             out.append(
                 ClassificationResult(
-                    category=r.get("category"),
-                    zoho_account=r.get("zoho_account"),
+                    category=_opt_label(r.get("category")),
+                    zoho_account=_opt_label(r.get("zoho_account")),
                     confidence=float(r.get("confidence", 0.0)),
                     reasoning=str(r.get("reasoning", "")),
                 )
@@ -613,8 +613,8 @@ class OpenAIClient:
 
         payload = json.loads(response.choices[0].message.content or "{}")
         return ClassificationResult(
-            category=payload.get("category"),
-            zoho_account=payload.get("zoho_account"),
+            category=_opt_label(payload.get("category")),
+            zoho_account=_opt_label(payload.get("zoho_account")),
             confidence=float(payload.get("confidence", 0.0)),
             reasoning=str(payload.get("reasoning", "")),
         )
@@ -839,6 +839,24 @@ def _opt_str(value: object) -> str | None:
         return None
     s = str(value).strip()
     return s or None
+
+
+_LABEL_SENTINELS = frozenset({"null", "none", "n/a", "na", "nil", "-", "(none)"})
+
+
+def _opt_label(value: object) -> str | None:
+    """A category / GL-account label from a raw LLM payload, or None.
+
+    The json-schema allows JSON null, but gpt-4o-mini intermittently
+    returns the STRING "null" instead. That string is truthy, so it
+    slipped past every no-category guard and reached the export as a
+    literal "null" Expense Account (caught live 2026-08-13, PagBank
+    receipt). Sentinel spellings of "no value" collapse to real None; the
+    downstream `(uncategorized - assign)` path handles it from there."""
+    s = _opt_str(value)
+    if s is None or s.lower() in _LABEL_SENTINELS:
+        return None
+    return s
 
 
 def _ambiguous_result_from_payload(payload: dict) -> AmbiguousJudgmentResult:

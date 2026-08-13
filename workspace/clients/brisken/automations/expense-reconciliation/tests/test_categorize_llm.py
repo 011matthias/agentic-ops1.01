@@ -655,3 +655,62 @@ def test_adjudicate_scope_filters_static_fallback():
     )[0].line_items[0].categorization
     assert cat.decision == DECISION_REVIEW_UNRESOLVED
     assert cat.zoho_account == "E100-31 - Travel: Food"
+
+
+# ── "null"-string sanitization at the payload parse (2026-08-13) ─────
+#
+# The classification json-schema allows JSON null, but gpt-4o-mini
+# intermittently returns the STRING "null" instead. That string is
+# truthy, so it slipped past every no-category guard and reached the
+# Zoho Expenses export as a literal "null" Expense Account (caught live
+# 2026-08-13 on the PagBank receipt, sets NEW/NEW2). The parse layer now
+# collapses sentinel spellings of "no value" to real None.
+
+
+def test_opt_label_collapses_sentinel_strings():
+    from expense_recon.llm.client import _opt_label
+
+    for raw in ("null", "NULL", "None", "n/a", "NA", "nil", "-", "(none)", "", "  "):
+        assert _opt_label(raw) is None, raw
+    assert _opt_label(None) is None
+    assert _opt_label("Meals & Entertainment") == "Meals & Entertainment"
+    # A real label that merely CONTAINS a sentinel word survives.
+    assert _opt_label("Null Island Consulting") == "Null Island Consulting"
+
+
+def test_openai_parse_turns_null_string_category_into_review():
+    """End-to-end through the real OpenAIClient payload parse: a
+    payload with the string "null" must come back as category=None
+    (-> the (uncategorized - assign) path), never the literal string."""
+    import json as _json
+    from types import SimpleNamespace
+
+    pytest.importorskip("openai")
+    from expense_recon.llm.client import OpenAIClient
+
+    client = OpenAIClient(api_key="sk-test-not-real")
+
+    def _fake_create(**kwargs):
+        body = _json.dumps({
+            "results": [{
+                "index": 1, "category": "null", "zoho_account": "null",
+                "confidence": 0.9, "reasoning": "model said null as a string",
+            }]
+        })
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=body))],
+            usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+        )
+
+    client._client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=_fake_create))
+    )
+
+    from expense_recon.llm.client import LineItemInput
+
+    [result] = client.classify_line_items(
+        [LineItemInput(description="PagBank charge", line_total=Decimal("68"))],
+        categories=list(EXPENSE_CATEGORIES),
+    )
+    assert result.category is None
+    assert result.zoho_account is None
