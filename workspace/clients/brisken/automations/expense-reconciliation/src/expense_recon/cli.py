@@ -1614,7 +1614,7 @@ def _print_dry_run_summary(
     outcome: MatchOutcome,
     transactions: list[Transaction],
     receipts: list[Receipt],
-    parse_errors: list[tuple[str, int, str]],
+    parse_errors: list[tuple[str, int, str, str]],
     cost_tracker: CostTracker | None,
     charge_categorizations: dict[str, Categorization] | None = None,
 ) -> None:
@@ -1651,7 +1651,11 @@ def _print_dry_run_summary(
     if parse_errors:
         print()
         print("First parse errors (max 5):")
-        for file_name, line_no, msg in parse_errors[:5]:
+        # Star-unpack: issues carry a 4th `severity` field since the
+        # advisory/error split, and pre-split snapshots still hold
+        # 3-tuples. Same tolerance as the logger loop above; unpacking
+        # exactly three here crashed every dry run that had an issue.
+        for file_name, line_no, msg, *_ in parse_errors[:5]:
             print(f"  {file_name}:{line_no}  {msg}")
 
 

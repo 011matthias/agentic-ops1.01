@@ -532,3 +532,29 @@ def test_dry_run_skips_xlsx_and_prints_summary(tmp_path: Path, capsys):
     assert "DRY RUN" in captured.out
     assert "Transactions:" in captured.out
     assert "Matched:" in captured.out
+
+
+def test_dry_run_summary_prints_parse_issues_of_both_shapes(capsys):
+    """A dry run that HAS parse issues must still print them.
+
+    Issues carry a 4th `severity` field since the advisory/error split,
+    while snapshots written before it hold 3-tuples. `_print_dry_run_summary`
+    unpacked exactly three, so every real run with an issue died with
+    `ValueError: too many values to unpack` AFTER printing the counts —
+    swallowing the issue detail, which is the part a tester needs.
+    """
+    from expense_recon.cli import _print_dry_run_summary
+    from expense_recon.matching.types import MatchOutcome
+
+    parse_errors = [
+        ("statement.csv", 3, "amount is not a number", "error"),  # 4-tuple
+        ("old-snapshot.csv", 7, "legacy shape", ),                # 3-tuple
+    ]
+    _print_dry_run_summary(
+        MatchOutcome(), [], [], parse_errors, None,
+    )
+
+    out = capsys.readouterr().out
+    assert "Parse errors: 2" in out
+    assert "statement.csv:3  amount is not a number" in out
+    assert "old-snapshot.csv:7  legacy shape" in out
