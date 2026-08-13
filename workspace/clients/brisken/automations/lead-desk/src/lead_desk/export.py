@@ -24,6 +24,10 @@ EXPORT_COLUMNS = [
     "last_out", "last_in", "demo_date", "dirk_verdict",
     "bant_need", "bant_authority", "bant_timeline", "bant_budget",
     "source", "tier_reason", "dirk_notes",
+    # Appended only, never inserted (downstream consumers key on column
+    # order): the contact's campaign and the master sheet's display-only
+    # status column, so the export covers the /sheet view's column set.
+    "campaign", "outreach_status",
 ]
 
 

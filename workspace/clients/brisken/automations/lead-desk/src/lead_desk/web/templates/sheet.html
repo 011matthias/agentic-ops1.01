@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Sheet - Brisken Lead Desk{% endblock %}
+{% block content %}
+{% macro th(col, label, title='') -%}
+<th{% if title %} title="{{ title }}"{% endif %}><a href="/sheet?sort={{ col }}{% if sort == col and not desc %}&amp;dir=desc{% endif %}" style="color:inherit;">{{ label }}{% if sort == col %} {% if desc %}&darr;{% else %}&uarr;{% endif %}{% endif %}</a></th>
+{%- endmacro %}
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1>All contacts</h1>
+      <div class="muted">{{ rows|length }} contacts across every campaign, suppressed included (muted). This is the full sheet view; click a column header to sort.</div>
+    </div>
+    <div class="inline">
+      <a class="btn btn-secondary btn-small" href="/sheet.csv">Export CSV</a>
+      <a class="btn btn-secondary btn-small" href="/sheet.xlsx">Export XLSX</a>
+    </div>
+  </div>
+</div>
+
+<div class="card scroll-x">
+  <table>
+    <thead><tr>
+      {{ th('name', 'Name') }}{{ th('company', 'Company') }}{{ th('email', 'Email') }}{{ th('tier', 'Tier', 'Priority tier: H5 highest, then T1>T2>T3, GA general audience') }}{{ th('campaign', 'Campaign') }}{{ th('stage', 'Stage', 'Derived from the outreach log') }}{{ th('outreach_status', 'Sheet status', "The master sheet's own status column (display only)") }}{{ th('last_out', 'Last out') }}{{ th('last_in', 'Last in') }}{{ th('suppressed', 'Suppressed', 'Off-board contacts stay listed here, with the reason') }}{{ th('next_step_due', 'Next step', 'Your manual note on what to do next, with its due date') }}
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr class="{% if r.suppressed %}suppressed{% endif %}">
+        <td><a href="/contacts/{{ r.contact_id }}">{{ r.first_name }} {{ r.last_name }}</a>
+            {% if r.job_title %}<div class="muted" style="font-size:12px;">{{ r.job_title }}</div>{% endif %}</td>
+        <td>{{ r.company or '' }}</td>
+        <td class="mono" style="font-size:11.5px;">{{ r.email or '' }}</td>
+        <td>{% if r.tier %}<span class="badge tier">{{ r.tier }}</span>{% endif %}</td>
+        <td class="mono" style="font-size:11.5px;">{{ r.campaign }}</td>
+        <td><span class="badge stage-{{ r.stage }}" title="{{ r.status }}">{{ r.stage }}</span></td>
+        <td>{% if r.outreach_status %}<span class="muted" style="font-size:12px;">{{ r.outreach_status }}</span>{% endif %}</td>
+        <td class="mono" style="font-size:11.5px;">{{ (r.last_out or '')[:10] or '-' }}</td>
+        <td class="mono" style="font-size:11.5px;">{{ (r.last_in or '')[:10] or '-' }}</td>
+        <td>{% if r.suppressed %}<span class="badge suppressed">{{ r.suppress_reason or 'suppressed' }}</span>{% endif %}</td>
+        <td>{{ r.next_step or '' }}{% if r.next_step_due %}<div class="muted mono" style="font-size:11px;">due {{ (r.next_step_due or '')[:10] }}</div>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="11" class="muted">No contacts.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

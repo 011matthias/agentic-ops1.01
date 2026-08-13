@@ -297,7 +297,7 @@
         <td>{{ e.channel }}</td>
         <td>{{ e.direction }}</td>
         <td><span class="badge {% if e.type in ['reply','accepted','held','booked'] %}stage-booked{% elif e.type=='bounce' %}suppressed{% else %}stage-sent{% endif %}">{{ e.type }}</span></td>
-        <td>{% if e.subject %}<strong>{{ e.subject }}</strong>{% endif %}{% if e.detail %}<div class="muted" style="font-size:12px;">{{ e.detail }}</div>{% endif %}</td>
+        <td>{% if e.subject %}<strong>{{ e.subject }}</strong>{% endif %}{% if e.evidence %}<div class="inline" style="margin-top:2px; gap:4px; flex-wrap:wrap;">{% if e.evidence.folder %}<span class="badge tier" style="font-size:10.5px; padding:0 6px; color:var(--muted);" title="mailbox folder">{{ e.evidence.folder }}</span>{% endif %}{% if e.evidence.cohort %}<span class="badge tier" style="font-size:10.5px; padding:0 6px; color:var(--muted);" title="cohort">{{ e.evidence.cohort }}</span>{% endif %}{% if e.evidence.imid %}<span class="badge tier" style="font-size:10.5px; padding:0 6px; color:var(--muted);" title="{{ e.evidence.imid }}">&#9679; imid</span>{% endif %}</div>{% elif e.detail %}<div class="muted" style="font-size:12px;">{{ e.detail }}</div>{% endif %}</td>
         <td class="muted">{{ e.source }}</td>
         <td class="muted">{{ e.created_by or '' }}</td>
       </tr>
