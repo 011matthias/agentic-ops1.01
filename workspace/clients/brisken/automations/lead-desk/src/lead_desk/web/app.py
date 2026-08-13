@@ -558,11 +558,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             attempts = [dict(a) for a in store.attempts_for_campaign(cid)]
             pins = store.get_pins(cid)
             kill_switch = (store.get_state("kill_switch") or "0") == "1"
+            # Staged draft-dirk wave: only pay the enumeration when something
+            # is actually staged (visibility only; no release action exists).
+            wave = (cadence.enumerate_wave(store, cid)
+                    if any(a["status"] == "drafted" and a["entry_id"]
+                           for a in attempts) else None)
         return templates.TemplateResponse(
             request, "campaign.html",
             {"campaign": campaign, "report": report, "rules": rules,
              "sequences": sequences, "templates_": all_templates,
              "enrollments": enrollments, "attempts": attempts, "pins": pins,
+             "wave": wave,
              "degrees": DEGREES, "send_modes": SEND_MODES,
              "kill_switch": kill_switch,
              "user": current_user(request)},

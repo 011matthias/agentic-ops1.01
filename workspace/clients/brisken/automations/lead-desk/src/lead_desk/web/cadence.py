@@ -630,6 +630,81 @@ def confirm_draft_sent(store: ContactStore, payload: dict) -> dict:
     return {"ok": True, "event_inserted": inserted}
 
 
+def enumerate_wave(store: ContactStore, campaign_id: str) -> dict:
+    """Enumerate one campaign's staged draft-dirk wave from journaled attempts:
+    every send_attempt with status 'drafted' AND a correlated Outlook entry_id.
+    Read-only visibility - this NEVER sends or releases anything (the gated
+    release action is a separate, later decision).
+
+    Each candidate re-runs the claim-time send-safety guards
+    (rule_brisken_graph_send_by_id) as PRE-checks, because the world can move
+    between staging and Dirk's click: the recipient must still equal its
+    approval-frozen ``campaign_recipient_pins`` address, its domain must not be
+    denied, and the contact must not be suppressed. Failures land in
+    ``blocks`` (with reason), never in ``items``.
+
+    Returns {items, blocks, count, ids_hash, oldest_staged_at,
+    oldest_staged_days}; ``ids_hash`` is the sha256 of the newline-joined
+    SORTED entry_id list, so two enumerations of the same staged set match
+    regardless of row order - the fingerprint a later release step must
+    re-derive and compare before acting."""
+    today = now_utc().date()
+    enrollments = {int(e["enrollment_id"]): dict(e)
+                   for e in store.enrollments_for_campaign(campaign_id)}
+    recipient_pins = store.get_recipient_pins(campaign_id)
+    denied = deny_domains(store)
+    items: list[dict] = []
+    blocks: list[dict] = []
+    for a in store.attempts_for_campaign(campaign_id, statuses=("drafted",)):
+        if not a["entry_id"]:
+            continue  # staged without a correlated Outlook draft: not part of a wave
+        e = enrollments.get(int(a["enrollment_id"]))
+        to_addr = (a["to_addr"] or "").strip()
+        staged_at = a["resolved_at"] or a["claimed_at"]
+        staged_date = date.fromisoformat(str(staged_at)[:10]) if staged_at else None
+        item = {
+            "attempt_key": a["attempt_key"], "entry_id": a["entry_id"],
+            "to": to_addr, "subject": a["rendered_subject"],
+            "contact_id": e["contact_id"] if e else None,
+            "contact_name": (f"{e.get('first_name') or ''} "
+                             f"{e.get('last_name') or ''}").strip() if e else "?",
+            "staged_at": staged_at,
+            "staged_days": (today - staged_date).days if staged_date else None,
+            "step_no": int(a["step_no"]),
+        }
+        if e is None:
+            blocks.append({**item, "kind": "orphan_attempt",
+                           "detail": "no enrollment/contact row for this attempt"})
+            continue
+        pinned_to = recipient_pins.get(e["contact_id"])
+        if pinned_to is None:
+            blocks.append({**item, "kind": "recipient_not_approved",
+                           "detail": f"{to_addr}: no approval-frozen address; re-approve"})
+            continue
+        if to_addr.lower() != pinned_to:
+            blocks.append({**item, "kind": "recipient_drift",
+                           "detail": f"approved {pinned_to!r}, now {to_addr.lower()!r}; re-approve"})
+            continue
+        if _recipient_domain(to_addr) in denied:
+            blocks.append({**item, "kind": "domain_denied",
+                           "detail": f"{to_addr}: hard-denied recipient domain"})
+            continue
+        if e.get("suppressed"):
+            blocks.append({**item, "kind": "suppressed",
+                           "detail": f"{to_addr}: contact suppressed after staging"})
+            continue
+        items.append(item)
+    ids = sorted(i["entry_id"] for i in items)
+    staged = [i["staged_at"] for i in items if i["staged_at"]]
+    ages = [i["staged_days"] for i in items if i["staged_days"] is not None]
+    return {
+        "items": items, "blocks": blocks, "count": len(items),
+        "ids_hash": hashlib.sha256("\n".join(ids).encode("utf-8")).hexdigest(),
+        "oldest_staged_at": min(staged) if staged else None,
+        "oldest_staged_days": max(ages) if ages else None,
+    }
+
+
 def mark_manual_done(store: ContactStore, enrollment_id: int, step_no: int,
                      user: str | None) -> dict:
     """A human executed a LinkedIn (manual) step. Same idempotent ext_key
