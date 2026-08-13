@@ -88,25 +88,29 @@ the CRM record breaks on the first live wave.
   which is too long to be worth sending. So it goes by script this week or it
   is dropped; drifting picks the worst of both. Copy for touch-2 does not exist
   yet and has to be written and approved either way.
-- **0 human replies across all 43 post-Rome sends** (verified 2026-08-11, both
-  mailboxes, all folders). T3: 24 sent 07-21, 0 replies at three weeks, 3
-  out-of-office. GA: 19 sent 07-27, 0 replies at two weeks, 2 out-of-office
-  (annikalanz@kpmg.com, magdalena.makoudi@pl.ey.com; their auto-replies also
-  confirm both were delivered). The only inbound either wave produced was five
-  vacation notices.
+- **CORRECTED 2026-08-13: 1 human reply across the 43 post-Rome sends, not 0.**
+  Stiaan Scheepers (Global Payments) replied to the GA send at
+  2026-07-27T10:59Z, ~2.5h after it landed, and **Dirk answered him
+  personally the same day** (his answer BCC'd matthias.silva, not the Zoho
+  dropbox, so that reply is not in CRM). The 2026-08-11 "0 human replies"
+  check missed it: its inbound pull was page-capped and it matched the sent
+  alias, not the sheet-primary address. The full-corpus sweep caught it; the
+  live capture had the reply event all along (`ss50866@globalpayments.com`,
+  source graph-auto). T3 stands at 24 sent, 0 replies, 3 out-of-office; GA is
+  19 sent, 1 reply (handled), 2 out-of-office.
 - What that does and does not mean. Both cohorts are the deliberately cold end
   of Rome: T3 attended without speaking to us, GA is ecosystem rather than
   buyers (`Tier_reason = "general awareness, not a warm lead"`). The warm
   conversations went to Dirk personally and are not in this sample. Delivery,
   pacing, capture and the guards all behaved correctly, so this is not a system
   fault. But it is the entire body of engine-eligible outreach to date, and it
-  returned nothing.
-- Consequence for September, worth deciding before the build lands: the plan
-  currently treats sending mechanics as the binding constraint. On this
-  evidence the offer, copy and segment are the likelier constraint, and an
-  armed engine would scale a shape that has 0/43 behind it. The first
+  returned one reply.
+- Consequence for September, worth deciding before arming: 1/43 (~2.3%) is
+  thin evidence for the current copy shape. The offer, copy and segment remain
+  the likelier binding constraint than sending mechanics, and the first
   engine-native wave should probably test a different angle rather than repeat
-  the TreasuryCentral note at higher throughput.
+  the TreasuryCentral note at higher throughput. (The one reply came from the
+  plainer Sequence-A note within hours, for what one data point is worth.)
 - Dirk: sender policy for his-name waves (per-wave release vs per-mail clicks);
   Instantly-off confirm; Zoho-as-record confirm (+ optional read-scope grant);
   drill scheduling; GA follow-up week (08-18 vs 08-25).
