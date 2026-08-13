@@ -212,6 +212,40 @@
 </div>
 {% endif %}
 
+{% if wave %}
+<div class="card scroll-x" id="staged-wave">
+  <h2>Staged in Dirk's Drafts ({{ wave.count }}) <span class="mono muted" style="font-weight:400; font-size:12px;">wave {{ wave.ids_hash[-8:] }}</span></h2>
+  <p class="muted">Ready drafts the engine staged in Dirk's mailbox; his click is the send gate. Visibility only: nothing on this page releases or sends.</p>
+  {% if wave.oldest_staged_days is not none and wave.oldest_staged_days > 5 %}
+  <div style="padding:10px 14px; border:1px solid var(--orange); border-radius:10px; background:var(--orange-bg); margin-bottom:10px;">
+    Oldest staged draft is {{ wave.oldest_staged_days }} days old; Dirk may be sitting on this wave.
+  </div>
+  {% endif %}
+  {% if wave.blocks %}
+  <div style="padding:10px 14px; border:1px solid var(--orange); border-radius:10px; background:var(--orange-bg); margin-bottom:10px;">
+    <strong>{{ wave.blocks|length }} staged draft(s) fail the send guards and are excluded from the wave:</strong>
+    <ul style="margin:6px 0 0;">{% for b in wave.blocks %}<li>{{ b.contact_name }}: <span class="mono">{{ b.kind }}</span> {{ b.detail }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if wave['items'] %}
+  <table>
+    <thead><tr><th>Contact</th><th>To</th><th>Subject</th><th>Staged</th><th>Step</th></tr></thead>
+    <tbody>
+    {% for i in wave['items'] %}
+      <tr>
+        <td><a href="/contacts/{{ i.contact_id }}">{{ i.contact_name }}</a></td>
+        <td class="mono" style="font-size:11.5px;">{{ i.to }}</td>
+        <td>{{ i.subject or '' }}</td>
+        <td class="muted">{% if i.staged_days == 0 %}today{% else %}{{ i.staged_days }}d ago{% endif %}</td>
+        <td>{{ i.step_no }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="card">
   <h2>6. Approval {% if campaign.status == 'approved' %}<span class="badge stage-booked">approved {{ (campaign.approved_at or '')[:10] }} by {{ campaign.approved_by }}</span>{% elif campaign.status == 'done' %}<span class="badge stage-sourced">closed record</span>{% endif %}</h2>
 
