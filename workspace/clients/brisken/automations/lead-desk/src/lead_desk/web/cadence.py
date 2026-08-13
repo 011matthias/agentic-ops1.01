@@ -32,6 +32,7 @@ import secrets
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from ..graph_mail import DEFAULT_DENY_DOMAINS
 from .store import CADENCE_PREFIX, DEGREES, ContactStore, attempt_key_for
 
 LEASE_MINUTES = 30
@@ -39,11 +40,12 @@ MAX_SEND_ATTEMPTS = 3
 
 # Recipient domains that must NEVER receive a campaign send, regardless of
 # approval (a competitor we hold, and our own internal domain). This is the
-# immutable floor; the claim path unions it with any operator-configured extras
-# in the 'send_deny_domains' state key, and the worker re-checks the floor
-# before the Graph POST. Mirrors the hard @sap.com deny in the ga_send_wave.py
-# guard pattern (rule_brisken_graph_send_by_id).
-DEFAULT_DENY_DOMAINS = ("sap.com", "brisken.com")
+# immutable floor; canonical in graph_mail.DEFAULT_DENY_DOMAINS (re-exported
+# above, beside the send primitives that enforce it). The claim path unions it
+# with any operator-configured extras in the 'send_deny_domains' state key,
+# and the worker re-checks the floor before the Graph POST. Mirrors the hard
+# @sap.com deny in the ga_send_wave.py guard pattern
+# (rule_brisken_graph_send_by_id).
 
 # Merge variables a template may reference. Deliberately a whitelist over
 # contact columns (regex substitution, NOT Jinja - no template injection).
