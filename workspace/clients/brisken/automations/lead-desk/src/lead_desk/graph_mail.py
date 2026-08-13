@@ -59,6 +59,17 @@ class DraftGuardError(RuntimeError):
     transient."""
 
 
+class GraphRetryError(RuntimeError):
+    """Graph throttled or was briefly unavailable (429/503) on a
+    truth-scan read. Distinct from GraphSendError so the caller can apply
+    retry POLICY (the deep scan's bounded backoff) without swallowing
+    genuine failures."""
+
+    def __init__(self, status_code: int, message: str):
+        super().__init__(message)
+        self.status_code = status_code
+
+
 def assert_allowlisted(mailbox: str) -> str:
     mbx = (mailbox or "").strip().lower()
     if mbx not in ALLOWED_MAILBOXES:
@@ -362,3 +373,59 @@ class GraphMailer:
             if found is not None or _time.monotonic() >= deadline:
                 return found
             sleep(5)
+
+    # -- folder-walk truth scan (read-only) ---------------------------------
+
+    def list_mail_folders(self, mailbox: str) -> list[dict]:
+        """The full recursive folder tree (slash-joined display paths),
+        empty folders skipped. Ported from tools/brisken-outreach-truth.py
+        list_folders: the ALL-FOLDERS walk is what finds a send Dirk FILED
+        out of Sent Items into a per-company folder (the aggregate
+        /messages endpoint false-negatived 21/24 real 2026-07-21 sends)."""
+        mbx = assert_allowlisted(mailbox)
+        out: list[dict] = []
+
+        def walk(fid: str | None, prefix: str) -> None:
+            base = (f"{GRAPH}/users/{mbx}/mailFolders/{fid}/childFolders"
+                    if fid else f"{GRAPH}/users/{mbx}/mailFolders")
+            for f in self._get_all(
+                    f"{base}?$top=100"
+                    "&$select=id,displayName,totalItemCount,childFolderCount"):
+                path = f"{prefix}{f.get('displayName', '?')}"
+                if f.get("totalItemCount"):
+                    out.append({"id": f["id"], "path": path,
+                                "total_item_count": f["totalItemCount"]})
+                if f.get("childFolderCount", 0):
+                    walk(f["id"], f"{path} / ")
+
+        walk(None, "")
+        return out
+
+    def pull_folder_outbound(self, mailbox: str, folder_id: str,
+                             since_iso: str) -> list[dict]:
+        """Messages in ONE folder sent BY the mailbox owner since the bound
+        (``isDraft eq false``), $select minimal. The per-folder from==owner
+        filter keeps each response tiny, so the full-tree walk stays cheap
+        (tools/brisken-outreach-truth.py pull_outbound). 429/503 surface as
+        GraphRetryError; the retry POLICY lives in the caller."""
+        mbx = assert_allowlisted(mailbox)
+        try:
+            items = self._get_all(
+                f"{GRAPH}/users/{mbx}/mailFolders/{folder_id}/messages"
+                f"?$filter=from/emailAddress/address eq '{mbx}' "
+                f"and sentDateTime ge {since_iso} and isDraft eq false"
+                "&$select=id,internetMessageId,subject,toRecipients,"
+                "ccRecipients,sentDateTime&$top=100")
+        except GraphSendError as exc:
+            if exc.status_code in (429, 503):
+                raise GraphRetryError(exc.status_code, str(exc)) from exc
+            raise
+        return [{
+            "id": m.get("id"),
+            "internet_message_id": m.get("internetMessageId"),
+            "to": _addrs_of(m.get("toRecipients")),
+            "cc": _addrs_of(m.get("ccRecipients")),
+            "subject": m.get("subject"),
+            "sent_at": m.get("sentDateTime"),
+            "folder_id": folder_id,
+        } for m in items]

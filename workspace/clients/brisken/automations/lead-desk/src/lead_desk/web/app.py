@@ -1146,4 +1146,44 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
         asyncio.create_task(_loop())
 
+    # --- deep truth reconcile scheduler (read-only Graph; no sends) -------
+    @app.on_event("startup")
+    async def _start_truth_scan_scheduler():
+        import asyncio
+        if os.environ.get("LEAD_DESK_TRUTH_SCAN_DISABLED"):
+            return
+        if not have_creds():
+            print("[truth-scan] Graph credentials absent; scheduler disabled")
+            return
+        interval = int(os.environ.get("LEAD_DESK_TRUTH_SCAN_INTERVAL", "86400"))
+        if interval <= 0:
+            print("[truth-scan] interval <= 0; scheduler disabled")
+            return
+
+        async def _loop():
+            from ..graph_mail import GraphMailer
+            from ..truth_scan import run_scan
+
+            def _pass():
+                # Fresh mailer per pass: the app-only token expires ~1h.
+                with open_store() as store:
+                    return run_scan(store, GraphMailer())
+
+            backoff = 60
+            while True:
+                try:
+                    rep = await asyncio.to_thread(_pass)
+                    print(f"[truth-scan] pass ok: "
+                          f"{rep.get('folders_scanned')} folder(s) scanned, "
+                          f"+{rep.get('inserted')} event(s), "
+                          f"{len(rep.get('folders_failed') or [])} failed")
+                    sleep_for, backoff = interval, 60
+                except Exception as exc:  # noqa: BLE001 - the loop must survive
+                    print(f"[truth-scan] pass failed: {exc}")
+                    sleep_for = min(backoff, interval)
+                    backoff = min(backoff * 2, 3600)
+                await asyncio.sleep(sleep_for)
+
+        asyncio.create_task(_loop())
+
     return app
