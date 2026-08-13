@@ -35,6 +35,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import cloud_worker
+from .freshness import age_minutes, capture_watermark_ages, guard_alerts, \
+    state_json
 from .graph_mail import DEFAULT_DENY_DOMAINS, SEND_FROM, GraphMailer
 from .sync import have_creds
 from .web.service import now_iso
@@ -72,18 +74,6 @@ def _leased_count(store: ContactStore) -> int:
 def _drill_contact_id(addr: str) -> str:
     return DRILL_CONTACT_PREFIX + hashlib.sha1(
         addr.encode("utf-8")).hexdigest()[:10]
-
-
-def _age_minutes(ts: str | None, at: datetime) -> float | None:
-    if not ts:
-        return None
-    try:
-        then = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if then.tzinfo is None:
-        then = then.replace(tzinfo=timezone.utc)
-    return round((at - then).total_seconds() / 60, 1)
 
 
 # -- steps --------------------------------------------------------------------
@@ -246,14 +236,7 @@ def status_report(data_dir: str | Path, at: datetime | None = None) -> dict:
     out: dict = {"at": at.isoformat(timespec="seconds")}
     with _open_store(data_dir) as store:
         out["kill_switch"] = (store.get_state("kill_switch") or "0") == "1"
-        alerts: dict[str, dict] = {}
-        for key in store.state_keys_with_prefix("send_guard_alert:"):
-            raw = store.get_state(key) or "{}"
-            try:
-                alerts[key.split(":", 1)[1]] = json.loads(raw)
-            except json.JSONDecodeError:
-                alerts[key.split(":", 1)[1]] = {"raw": raw}
-        out["guard_alerts"] = alerts
+        out["guard_alerts"] = guard_alerts(store)
         counts = {r["status"]: r["n"] for r in store.conn.execute(
             "SELECT status, COUNT(*) AS n FROM send_attempts GROUP BY status")}
         out["attempts"] = counts
@@ -262,21 +245,9 @@ def status_report(data_dir: str | Path, at: datetime | None = None) -> dict:
         out["sending_campaigns"] = [
             r["campaign_id"] for r in store.list_campaigns()
             if r["status"] == "sending"]
-        heartbeat: dict = {}
-        raw = store.get_state("worker_heartbeat")
-        if raw:
-            try:
-                heartbeat = json.loads(raw)
-            except json.JSONDecodeError:
-                heartbeat = {}
-        out["heartbeat_age_minutes"] = _age_minutes(heartbeat.get("ts"), at)
-    try:
-        marks = (json.loads(cloud_worker._capture_state_path(data_dir)
-                            .read_text(encoding="utf-8"))
-                 .get("watermarks") or {})
-    except (OSError, json.JSONDecodeError):
-        marks = {}
-    ages = {mbx: _age_minutes(ts, at) for mbx, ts in marks.items()}
+        out["heartbeat_age_minutes"] = age_minutes(
+            state_json(store, "worker_heartbeat").get("ts"), at)
+    ages = capture_watermark_ages(data_dir, at)
     out["capture_watermark_ages_minutes"] = ages
     known = [a for a in ages.values() if a is not None]
     out["capture_watermark_age_minutes"] = max(known) if known else None

@@ -139,7 +139,9 @@
     </a>
     <div class="nav-right">
       <a class="nav-tab" href="/">Board</a>
+      <a class="nav-tab" href="/sheet">Sheet</a>
       <a class="nav-tab" href="/campaigns">Campaigns</a>
+      <a class="nav-tab" href="/unmatched">Unmatched</a>
       {% if is_admin %}<a class="nav-tab" href="/admin/users">Users</a>{% endif %}
       <span class="nav-user">{{ user }}</span>
       <button class="nav-theme" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle theme">Theme</button>

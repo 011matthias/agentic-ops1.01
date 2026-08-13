@@ -12,6 +12,11 @@ Routes (cookie gate):
     POST /contacts/{id}/suppress  do-not-contact toggle
     POST /contacts/{id}/fields    BANT / demo / verdict / next-step update
     GET  /export.csv /export.xlsx regenerate the master sheet from the db
+    GET  /sheet                   all-contacts sheet view (?sort=&dir=)
+    GET  /sheet.csv /sheet.xlsx   aliases of /export.csv /export.xlsx
+    GET  /unmatched               unmatched capture events, grouped by email
+    POST /unmatched/link          replay a group onto an existing contact
+    POST /unmatched/dismiss       close a group with a reason (required)
     GET  /campaigns               campaign list + create
     GET  /campaigns/{cid}         campaign admin (upload, rules, sequences, approval)
     POST /campaigns/{cid}/...     upload / rules / reclassify / sequences / approve / pause / resume
@@ -47,13 +52,15 @@ from fastapi.templating import Jinja2Templates
 from . import accounts, auth, cadence, uploads
 from .service import (
     EDITABLE_FLAGS, EDITABLE_TEXT, StaleWriteError, apply_fields, build_board,
-    build_contact_view, create_contact, ingest_event, log_touch, now_iso,
+    build_contact_view, build_sheet, build_unmatched_groups, create_contact,
+    ingest_event, link_unmatched, log_touch, now_iso, sort_sheet,
     toggle_suppress,
 )
 from .store import (
     CHANNELS, DEGREES, DIRECTIONS, EVENT_TYPES, SEND_MODES, USER_ROLES,
     ContactStore,
 )
+from ..freshness import freshness_report, guard_alerts
 from ..sync import have_creds, run_all, run_sync
 
 # Login-page banners, keyed by ?notice= / ?err= so a POST can 303-redirect
@@ -368,8 +375,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 first = store.list_campaigns()
                 cid = first[0]["campaign_id"] if first else "rome-2026"
             view = build_board(store, filters, campaign=cid)
+            fresh = freshness_report(store, data_root_path)
+            guards = guard_alerts(store)
         return templates.TemplateResponse(
-            request, "board.html", {"view": view, "user": current_user(request)}
+            request, "board.html",
+            {"view": view, "freshness": fresh, "guard_alerts": guards,
+             "user": current_user(request)}
         )
 
     @app.get("/contacts/{contact_id}", response_class=HTMLResponse)
@@ -507,6 +518,93 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             headers={"Content-Disposition": "attachment; filename=lead-desk-rome-2026.xlsx"},
         )
 
+    # --- sheet view -------------------------------------------------------
+    @app.get("/sheet", response_class=HTMLResponse)
+    def sheet(request: Request, sort: str = "", dir: str = ""):
+        """The all-contacts sheet: every contact of every campaign, suppressed
+        included (muted), sortable per column. Completeness beats prettiness -
+        this replaces the frozen SharePoint status columns."""
+        desc = dir.strip().lower() == "desc"
+        with open_store() as store:
+            rows = sort_sheet(build_sheet(store), sort.strip(), desc)
+        return templates.TemplateResponse(
+            request, "sheet.html",
+            {"rows": rows, "sort": sort.strip(), "desc": desc,
+             "user": current_user(request)},
+        )
+
+    # Aliases: the extended export column set covers the sheet view, so these
+    # reuse the one exporter rather than growing a second one.
+    @app.get("/sheet.csv")
+    def sheet_csv():
+        return export_csv()
+
+    @app.get("/sheet.xlsx")
+    def sheet_xlsx():
+        return export_xlsx()
+
+    # --- unmatched capture review ----------------------------------------
+    @app.get("/unmatched", response_class=HTMLResponse)
+    def unmatched_page(request: Request):
+        with open_store() as store:
+            groups = build_unmatched_groups(store)
+            contacts = [dict(r) for r in store.conn.execute(
+                "SELECT contact_id, first_name, last_name, company, email "
+                "FROM contacts WHERE merged_into IS NULL "
+                "ORDER BY company, last_name").fetchall()]
+        return templates.TemplateResponse(
+            request, "unmatched.html",
+            {"groups": groups, "contacts": contacts,
+             "user": current_user(request)},
+        )
+
+    @app.post("/unmatched/link")
+    def unmatched_link(request: Request, email: str = Form(...),
+                       contact_id: str = Form(...),
+                       set_alt_email: str = Form("")):
+        """Link EVERY open unmatched row for this address onto one EXISTING
+        contact (each parked payload replays through the sink pinned to that
+        contact), optionally recording the address as the contact's alt_email
+        so the next capture matches on its own. Never creates a contact."""
+        contact_id = contact_id.strip()
+        addr = email.strip().lower()
+        with open_store() as store:
+            if store.get_contact(contact_id) is None:
+                return HTMLResponse("Contact not found", status_code=404)
+            if set_alt_email.strip() in ("1", "true", "on"):
+                apply_fields(store, contact_id, {"alt_email": addr},
+                             current_user(request))
+            linked = 0
+            for row in store.list_unmatched("open"):
+                if (row["email"] or "").strip().lower() != addr:
+                    continue
+                res = link_unmatched(store, row["id"], contact_id,
+                                     current_user(request), now_iso())
+                if res.get("ok"):
+                    linked += 1
+        return RedirectResponse(url=f"/unmatched?linked={linked}",
+                                status_code=303)
+
+    @app.post("/unmatched/dismiss")
+    def unmatched_dismiss(request: Request, email: str = Form(...),
+                          reason: str = Form("")):
+        """Dismiss every open unmatched row for this address. A reason is
+        required: the queue keeps WHY (resolved_by carries it)."""
+        if not reason.strip():
+            return HTMLResponse("A dismiss reason is required.", status_code=400)
+        addr = email.strip().lower()
+        with open_store() as store:
+            dismissed = 0
+            for row in store.list_unmatched("open"):
+                if (row["email"] or "").strip().lower() != addr:
+                    continue
+                store.resolve_unmatched(row["id"], None, current_user(request),
+                                        now_iso(),
+                                        dismiss_reason=reason.strip())
+                dismissed += 1
+        return RedirectResponse(url=f"/unmatched?dismissed={dismissed}",
+                                status_code=303)
+
     # --- campaigns --------------------------------------------------------
     def _campaign_or_404(store: ContactStore, cid: str):
         row = store.get_campaign(cid)
@@ -558,6 +656,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             attempts = [dict(a) for a in store.attempts_for_campaign(cid)]
             pins = store.get_pins(cid)
             kill_switch = (store.get_state("kill_switch") or "0") == "1"
+            guard_alert = guard_alerts(store).get(cid)
             # Staged draft-dirk wave: only pay the enumeration when something
             # is actually staged (visibility only; no release action exists).
             wave = (cadence.enumerate_wave(store, cid)
@@ -568,7 +667,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             {"campaign": campaign, "report": report, "rules": rules,
              "sequences": sequences, "templates_": all_templates,
              "enrollments": enrollments, "attempts": attempts, "pins": pins,
-             "wave": wave,
+             "wave": wave, "guard_alert": guard_alert,
              "degrees": DEGREES, "send_modes": SEND_MODES,
              "kill_switch": kill_switch,
              "user": current_user(request)},
