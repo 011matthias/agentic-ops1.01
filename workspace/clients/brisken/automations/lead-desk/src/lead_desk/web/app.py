@@ -18,6 +18,7 @@ Routes (cookie gate):
     POST /templates               save a template (new version)
     POST /enrollments/{eid}/...   degree override / remove / manual step done
     POST /attempts/retry          re-queue a stalled/parked send (human decision)
+    POST /attempts/send-fresh     re-queue a parked reply step as a fresh send
     POST /worker/kill             global kill switch toggle
 
 Machine APIs (own bearer secrets, outside the cookie gate):
@@ -606,32 +607,51 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             cadence.classify_enrollments(store, cid, current_user(request), now_iso())
         return RedirectResponse(url=f"/campaigns/{cid}", status_code=303)
 
+    def _parse_step_line(i: int, raw: str) -> dict | HTMLResponse:
+        """One sequence-form step line: 'channel template_key day_offset
+        [reply]'. The optional literal 'reply' token flags the step as an
+        in-thread reply to the prior step (wire subject RE: <prior subject>)."""
+        parts = raw.split()
+        if len(parts) not in (3, 4) or parts[0] not in ("email", "linkedin"):
+            return HTMLResponse(
+                f"bad step line {i + 1!r}: want 'channel template_key day_offset [reply]'",
+                status_code=400)
+        try:
+            off = int(parts[2])
+        except ValueError:
+            return HTMLResponse(f"bad day_offset on line {i + 1}", status_code=400)
+        reply = 0
+        if len(parts) == 4:
+            if parts[3].lower() != "reply":
+                return HTMLResponse(
+                    f"bad step line {i + 1}: 4th token must be 'reply'",
+                    status_code=400)
+            reply = 1
+        return {"channel": parts[0], "template_key": parts[1],
+                "day_offset": off, "reply_to_prior": reply}
+
     @app.post("/campaigns/{cid}/sequences")
     def campaign_sequences(request: Request, cid: str, degree: str = Form(...),
                            name: str = Form(""), send_mode: str = Form("auto-matthias"),
                            steps: str = Form("")):
-        """Steps: one per line, 'channel template_key day_offset'."""
+        """Steps: one per line, 'channel template_key day_offset [reply]'."""
         parsed = []
         for i, raw in enumerate(s for s in steps.splitlines() if s.strip()):
-            parts = raw.split()
-            if len(parts) != 3 or parts[0] not in ("email", "linkedin"):
-                return HTMLResponse(
-                    f"bad step line {i + 1!r}: want 'channel template_key day_offset'",
-                    status_code=400)
-            try:
-                off = int(parts[2])
-            except ValueError:
-                return HTMLResponse(f"bad day_offset on line {i + 1}", status_code=400)
-            parsed.append({"step_no": i + 1, "channel": parts[0],
-                           "template_key": parts[1], "day_offset": off})
+            step = _parse_step_line(i, raw)
+            if isinstance(step, HTMLResponse):
+                return step
+            parsed.append({**step, "step_no": i + 1})
         if send_mode not in SEND_MODES:
             return HTMLResponse("bad send_mode", status_code=400)
         with open_store() as store:
             if store.get_campaign(cid) is None:
                 return HTMLResponse("Campaign not found", status_code=404)
             if parsed:
-                store.upsert_sequence(cid, degree.strip(), name.strip() or degree,
-                                      send_mode, parsed)
+                try:
+                    store.upsert_sequence(cid, degree.strip(), name.strip() or degree,
+                                          send_mode, parsed)
+                except ValueError as exc:  # reply flag on step 1
+                    return HTMLResponse(str(exc), status_code=400)
             else:
                 store.delete_sequence(cid, degree.strip())
             # Structure changed: a frozen approval no longer matches reality.
@@ -645,20 +665,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         approved-or-sending campaign WITHOUT demoting it to draft. Already-sent
         steps are immutable; the delta refuses any change to them (the operator
         pauses and re-approves for that). Steps: one per line,
-        'channel template_key day_offset'."""
+        'channel template_key day_offset [reply]'."""
         parsed = []
         for i, raw in enumerate(s for s in steps.splitlines() if s.strip()):
-            parts = raw.split()
-            if len(parts) != 3 or parts[0] not in ("email", "linkedin"):
-                return HTMLResponse(
-                    f"bad step line {i + 1!r}: want 'channel template_key day_offset'",
-                    status_code=400)
-            try:
-                off = int(parts[2])
-            except ValueError:
-                return HTMLResponse(f"bad day_offset on line {i + 1}", status_code=400)
-            parsed.append({"channel": parts[0], "template_key": parts[1],
-                           "day_offset": off})
+            step = _parse_step_line(i, raw)
+            if isinstance(step, HTMLResponse):
+                return step
+            parsed.append(step)
         with open_store() as store:
             if store.get_campaign(cid) is None:
                 return HTMLResponse("Campaign not found", status_code=404)
@@ -852,6 +865,26 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # without this. An operator-initiated retry is a fresh start.
             store.update_attempt(attempt_key.strip(), {
                 "status": "queued", "failure_reason": None, "attempt_count": 0,
+            })
+        target = f"/campaigns/{campaign}" if campaign.strip() else "/"
+        return RedirectResponse(url=target, status_code=303)
+
+    @app.post("/attempts/send-fresh")
+    def attempt_send_fresh(request: Request, attempt_key: str = Form(...),
+                           campaign: str = Form("")):
+        """Operator escape hatch for a parked reply step whose thread anchor
+        is unrecoverable: re-queue it with force_fresh so the claim drops the
+        reply-to-thread flag and sends it as a plain fresh mail. Same requeue
+        mechanics as /attempts/retry."""
+        with open_store() as store:
+            attempt = store.get_attempt(attempt_key.strip())
+            if attempt is None:
+                return HTMLResponse("Attempt not found", status_code=404)
+            if attempt["status"] not in ("stalled", "parked", "failed"):
+                return HTMLResponse("Not retryable", status_code=400)
+            store.update_attempt(attempt_key.strip(), {
+                "status": "queued", "failure_reason": None, "attempt_count": 0,
+                "force_fresh": 1,
             })
         target = f"/campaigns/{campaign}" if campaign.strip() else "/"
         return RedirectResponse(url=target, status_code=303)
