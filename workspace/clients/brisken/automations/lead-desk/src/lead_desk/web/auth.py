@@ -110,6 +110,9 @@ OPEN_PATHS = frozenset({
     # /sync self-guards: its handler checks cookie OR ingest bearer. Without
     # this the cookie gate rejected the documented external-cron ingest path.
     "/sync",
+    # GET /api/events self-guards the same way (session cookie OR ingest
+    # bearer), so machine callers holding the capture secret can read.
+    "/api/events",
     "/api/outbox/claim", "/api/outbox/result", "/api/outbox/draft-sent",
     "/api/worker/status", "/api/worker/watchlist", "/api/worker/heartbeat",
 })
