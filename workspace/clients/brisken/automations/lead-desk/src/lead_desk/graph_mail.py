@@ -336,9 +336,13 @@ class GraphMailer:
 
     def search_sent_for(self, mailbox: str, to_addr: str, subject: str,
                         since: datetime) -> dict | None:
-        """Crash-reconcile evidence search: was this mail actually sent?"""
+        """Crash-reconcile evidence search: was this mail actually sent?
+        Subjects compare via _norm_subject (a superset of the old exact
+        match) so a reply step's 'RE: '-prefixed wire subject still matches
+        the journaled subject."""
+        want = _norm_subject(subject)
         for m in self.poll_sent(mailbox, since):
-            if m["subject"].strip() == subject.strip() and \
+            if _norm_subject(m["subject"]) == want and \
                     any(to_addr.lower() in a for a in m["to_addrs"]):
                 return m
         return None

@@ -31,6 +31,27 @@ def test_outreach_status_column_added(tmp_path):
         assert store.get_contact("c1")["outreach_status"] == "In conversation"
 
 
+def test_v12_adds_reply_and_force_fresh_columns(tmp_path):
+    # v12: reply steps (sequence_steps.reply_to_prior) + the operator
+    # send-fresh escape hatch (send_attempts.force_fresh).
+    db = tmp_path / "t.sqlite"
+    with ContactStore(db) as store:
+        step_cols = {r[1] for r in store.conn.execute(
+            "PRAGMA table_info(sequence_steps)").fetchall()}
+        assert "reply_to_prior" in step_cols
+        att_cols = {r[1] for r in store.conn.execute(
+            "PRAGMA table_info(send_attempts)").fetchall()}
+        assert "force_fresh" in att_cols
+    # Replay-safe: a DB rolled back to v11 re-applies the guarded ALTERs
+    # without erroring on the already-present columns.
+    raw = sqlite3.connect(db)
+    raw.execute("PRAGMA user_version = 11")
+    raw.commit()
+    raw.close()
+    with ContactStore(db) as store:
+        assert store.conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+
+
 def test_views_derive_stage(tmp_path):
     # Exercises contact_stage + contact_activity end to end.
     with ContactStore(tmp_path / "t.sqlite") as store:

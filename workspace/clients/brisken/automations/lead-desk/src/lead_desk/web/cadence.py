@@ -368,6 +368,9 @@ def due_items(store: ContactStore, campaign_id: str, at: datetime) -> dict:
             "campaign": campaign, "attempt_key": akey,
             "due": st["next_due"], "steps_done": st["steps_done"],
             "steps_total": st["steps_total"],
+            # Operator escape hatch (a re-queued 'queued' row): claim drops
+            # the step's reply-to-thread flag and sends fresh.
+            "force_fresh": bool(attempt["force_fresh"]) if attempt is not None else False,
         }
         if step["channel"] == "email":
             emails.append(item)
@@ -520,6 +523,12 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
                 "template_key": step["template_key"],
                 "template_version": int(tpl["version"]),
                 "thread_ext_key": prior,
+                # In-thread reply step: the worker sends this as a Graph reply
+                # anchored on the prior step's sent mail. An operator
+                # force_fresh (send-fresh escape hatch) overrides it back to a
+                # plain fresh send.
+                "reply_to_prior": bool(step.get("reply_to_prior"))
+                and not item.get("force_fresh"),
                 "throttle_seconds": int(campaign["throttle_seconds"]),
                 "jitter_seconds": int(campaign["jitter_seconds"]),
             })
@@ -1007,7 +1016,8 @@ def sequence_delta_report(store: ContactStore, campaign_id: str, degree: str,
     for i, s in enumerate(submitted_steps[k:]):
         new_steps.append({"step_no": frozen_max + 1 + i, "channel": s["channel"],
                           "template_key": s["template_key"],
-                          "day_offset": int(s["day_offset"])})
+                          "day_offset": int(s["day_offset"]),
+                          "reply_to_prior": int(s.get("reply_to_prior") or 0)})
     future = new_steps[k:]
 
     # Validate every future template exists and channel matches (mirror approval).
@@ -1019,6 +1029,8 @@ def sequence_delta_report(store: ContactStore, campaign_id: str, degree: str,
         elif tpl["channel"] != st["channel"]:
             errors.append(f"template '{st['template_key']}' is {tpl['channel']}, "
                           f"step is {st['channel']}")
+        if int(st["step_no"]) == 1 and st.get("reply_to_prior"):
+            errors.append("step 1 cannot be a reply: no prior step to reply to")
     if errors:
         return {"ok": False, "errors": errors}
 

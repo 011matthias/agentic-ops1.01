@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import json
 import os
 import random
@@ -39,8 +40,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import capture as graph_capture
-from .graph_mail import DIRK_SMTP, SEND_FROM, GraphMailer, GraphSendError, \
-    NotAllowlisted, OWN_DOMAIN
+from .graph_mail import DIRK_SMTP, SEND_FROM, DraftGuardError, GraphMailer, \
+    GraphSendError, NotAllowlisted, OWN_DOMAIN
 from .sync import _load_creds, have_creds
 from .web import cadence
 from .web.service import ingest_event, now_iso
@@ -171,11 +172,41 @@ def run_capture(store: ContactStore, data_dir: Path, poll_fn, mailer,
 
 # -- send execution -------------------------------------------------------------
 
+def _body_as_html(text: str) -> str:
+    """The claim's rendered plain-text body (what send_auto sends verbatim as
+    contentType Text) carried as HTML for create_reply_draft: entities
+    escaped, newlines as <br>. Same rendering, different wire encoding."""
+    return html.escape(text or "").replace("\n", "<br>\n")
+
+
+def _resolve_anchor(store: ContactStore, mailer, send: dict) -> dict | None:
+    """The Graph message a reply step threads onto: the PRIOR step's sent
+    mail, resolved via the internetMessageId on its attempt row
+    (send['thread_ext_key'] is the prior step's attempt_key). Returns None -
+    park, never fresh-send - when the prior attempt or its imid is missing,
+    or the message cannot be resolved in the mailbox. The anchor lives in
+    the mailbox the prior step was sent FROM: SEND_FROM for auto-matthias,
+    DIRK_SMTP for draft-dirk."""
+    prior_key = send.get("thread_ext_key")
+    prior = store.get_attempt(prior_key) if prior_key else None
+    if prior is None or not prior["internet_message_id"]:
+        return None
+    mailbox = DIRK_SMTP if send["send_mode"] == "draft-dirk" else SEND_FROM
+    try:
+        return mailer.find_message_by_imid(mailbox, prior["internet_message_id"])
+    except Exception:  # noqa: BLE001 - a failed lookup parks; it never fresh-sends
+        return None
+
+
 def execute_one(store: ContactStore, mailer, send: dict, journal: Journal,
-                *, draft_to_self: bool = False, now: datetime) -> str:
+                *, draft_to_self: bool = False, now: datetime,
+                alerts: list[str] | None = None) -> str:
     """Execute one claimed send. Returns the outcome string for counters.
-    Mirrors worker/sender.execute_one with resolve_result called in-process."""
+    Mirrors worker/sender.execute_one with resolve_result called in-process.
+    ``alerts`` (run_tick's list) collects the human-readable lines that land
+    in the cloud_worker_alert state key at tick end."""
     akey = send["attempt_key"]
+    alerts = alerts if alerts is not None else []
 
     # Copy tamper check (same as worker/sender.body_hash, inlined so the web
     # app's import of this module never pulls the COM worker's httpx client).
@@ -192,10 +223,23 @@ def execute_one(store: ContactStore, mailer, send: dict, journal: Journal,
     journal.write(akey, "claimed", to=send["to"], lease_id=send["lease_id"],
                   mode=send["send_mode"])
 
+    # In-thread reply step: resolve the anchor (the prior step's sent mail)
+    # up front. Read-only, so the drill mode below exercises it for real.
+    reply_to_prior = bool(send.get("reply_to_prior"))
+    anchor = _resolve_anchor(store, mailer, send) if reply_to_prior else None
+
     if draft_to_self:
         # Test mode: full pipeline, but the mail lands as a draft in OUR
-        # mailbox and nothing is acked (repeatable, human-inspectable).
-        mailer.create_draft(SEND_FROM, dict(send, to=SEND_FROM))
+        # mailbox and nothing is acked (repeatable, human-inspectable). A
+        # reply step stages a real threaded reply, recipient rewritten to
+        # self; with no resolvable anchor it degrades to a plain self-draft.
+        if reply_to_prior and anchor is not None:
+            mailer.create_reply_draft(
+                SEND_FROM, anchor["id"], to=SEND_FROM,
+                html_body=_body_as_html(send["body"]),
+                cc=send.get("cc"), bcc=send.get("bcc"))
+        else:
+            mailer.create_draft(SEND_FROM, dict(send, to=SEND_FROM))
         journal.write(akey, "nacked", reason="draft-to-self test mode")
         return "draft_to_self"
 
@@ -212,9 +256,32 @@ def execute_one(store: ContactStore, mailer, send: dict, journal: Journal,
             "failure_reason": f"recipient domain hard-denied: {send['to']}"[:300]})
         return "recipient_denied"
 
+    if reply_to_prior and anchor is None:
+        # A reply step with no resolvable anchor NEVER silently falls back
+        # to a fresh send (that would break the thread promise). Park it for
+        # a human: Retry re-runs the resolution; Send fresh (force_fresh)
+        # re-queues it as a plain fresh send.
+        reason = f"reply anchor not found: {akey}"
+        journal.write(akey, "nacked", reason=reason)
+        cadence.resolve_result(store, {
+            "attempt_key": akey, "lease_id": send["lease_id"],
+            "status": "failed", "error_class": "permanent",
+            "failure_reason": reason[:300]})
+        alerts.append(reason)
+        return "reply_anchor_missing"
+
     if send["send_mode"] == "draft-dirk":
         try:
-            res = mailer.create_draft(DIRK_SMTP, send)
+            if reply_to_prior:
+                # Stage the threaded reply into Dirk's Drafts; his click (or
+                # a wave release) sends it and the existing match_drafted
+                # correlation completes the step.
+                res = mailer.create_reply_draft(
+                    DIRK_SMTP, anchor["id"], to=send["to"],
+                    html_body=_body_as_html(send["body"]),
+                    cc=send.get("cc"), bcc=send.get("bcc"))
+            else:
+                res = mailer.create_draft(DIRK_SMTP, send)
         except Exception as exc:  # noqa: BLE001 - draft creation is safely retryable
             journal.write(akey, "nacked", reason=str(exc)[:200])
             cadence.resolve_result(store, {
@@ -228,6 +295,76 @@ def execute_one(store: ContactStore, mailer, send: dict, journal: Journal,
             "status": "drafted", "entry_id": res.get("entry_id")})
         journal.write(akey, "acked", outcome="drafted")
         return "drafted"
+
+    if reply_to_prior:
+        # auto-matthias reply: a two-phase send-by-id
+        # (rule_brisken_graph_send_by_id). Staging the threaded reply draft
+        # is retryable (nothing has left); the /send POST is the
+        # irreversible moment, so graph_issued lands between the two.
+        try:
+            draft = mailer.create_reply_draft(
+                SEND_FROM, anchor["id"], to=send["to"],
+                html_body=_body_as_html(send["body"]),
+                cc=send.get("cc"), bcc=send.get("bcc"))
+        except Exception as exc:  # noqa: BLE001 - nothing sent yet: safe to retry
+            journal.write(akey, "nacked", reason=str(exc)[:200])
+            cadence.resolve_result(store, {
+                "attempt_key": akey, "lease_id": send["lease_id"],
+                "status": "failed", "error_class": "transient",
+                "failure_reason": f"reply draft: {exc}"[:300]})
+            return "draft_failed"
+        # The wire subject is the draft's RE:-prefixed one; the reconcile
+        # evidence search must look for THAT in Sent Items.
+        wire_subject = draft.get("subject") or send["subject"]
+        try:
+            journal.write(akey, "graph_issued", to=send["to"],
+                          subject=wire_subject, lease_id=send["lease_id"])
+            snapshot = mailer.send_draft_by_id(
+                SEND_FROM, draft["entry_id"], expect_to=send["to"],
+                expect_subject=draft.get("subject"))
+        except (NotAllowlisted, DraftGuardError) as exc:
+            # Guard refused BEFORE the POST: the send did not happen.
+            journal.write(akey, "nacked", reason=str(exc)[:200])
+            cadence.resolve_result(store, {
+                "attempt_key": akey, "lease_id": send["lease_id"],
+                "status": "failed", "error_class": "config",
+                "failure_reason": str(exc)[:300]})
+            return "reply_guard_refused"
+        except GraphSendError as exc:
+            # Graph answered non-2xx on /send: the send did not happen.
+            journal.write(akey, "nacked", reason=str(exc)[:200])
+            cadence.resolve_result(store, {
+                "attempt_key": akey, "lease_id": send["lease_id"],
+                "status": "failed",
+                "error_class": "transient" if exc.status_code >= 500 else "permanent",
+                "failure_reason": str(exc)[:300]})
+            return "graph_rejected"
+        except Exception as exc:
+            # Network error inside the send window: may or may not have
+            # reached Graph. Same ambiguity contract as send_auto - do NOT
+            # nack; next tick's reconcile searches Sent Items for evidence
+            # (search_sent_for normalizes the RE: prefix).
+            journal.write(akey, "graph_error", reason=str(exc)[:200],
+                          to=send["to"], subject=wire_subject,
+                          lease_id=send["lease_id"])
+            return "graph_error"
+        journal.write(akey, "graph_sent")
+        # THREADING VERIFY: the reply must still sit in the anchor's
+        # conversation. On a mismatch the mail DID go (ack it), but flag it.
+        conv = draft.get("conversation_id") or snapshot.get("conversation_id")
+        if conv != anchor.get("conversationId"):
+            alerts.append(f"thread_verify_failed: {akey}")
+        ack = {"attempt_key": akey, "lease_id": send["lease_id"],
+               "status": "sent",
+               "internet_message_id": snapshot.get("internet_message_id")}
+        res = cadence.resolve_result(store, ack)
+        if res.get("ok"):
+            journal.write(akey, "acked", outcome="sent",
+                          imid=snapshot.get("internet_message_id"))
+        else:
+            journal.write(akey, "ack_failed", reason=str(res)[:200], ack=ack)
+            return "ack_pending"
+        return "sent"
 
     # auto-matthias via Graph sendMail
     issued_at = now
@@ -393,7 +530,8 @@ def run_tick(data_dir: str | Path, *, mailer=None, poll_fn=None,
 
         for i, send in enumerate(sends):
             outcome = execute_one(store, mailer, send, journal,
-                                  draft_to_self=draft_to_self, now=at)
+                                  draft_to_self=draft_to_self, now=at,
+                                  alerts=alerts)
             if outcome in ("sent", "ack_pending"):
                 counters["sent"] += 1
             elif outcome == "drafted":

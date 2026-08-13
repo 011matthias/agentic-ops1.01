@@ -113,9 +113,9 @@ def _tables(store) -> set[str]:
 
 def test_migration_v11_from_v10(tmp_path):
     db = tmp_path / "t.sqlite"
-    with ContactStore(db) as store:                     # fresh DB runs 1..11
-        assert SCHEMA_VERSION == 11
-        assert store.conn.execute("PRAGMA user_version").fetchone()[0] == 11
+    with ContactStore(db) as store:                     # fresh DB runs 1..N
+        assert SCHEMA_VERSION >= 11
+        assert store.conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
         assert V11_TABLES <= _tables(store)
     # simulate a v10 prod DB: new tables absent, user_version rolled to 10
     raw = sqlite3.connect(db)
@@ -128,9 +128,9 @@ def test_migration_v11_from_v10(tmp_path):
     )
     raw.commit()
     raw.close()
-    with ContactStore(db) as store:                     # next open applies v11
-        assert store.conn.execute("PRAGMA user_version").fetchone()[0] == 11
+    with ContactStore(db) as store:                     # next open applies v11+
+        assert store.conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
         assert V11_TABLES <= _tables(store)
     with ContactStore(db) as store:                     # second open is a no-op
-        assert store.conn.execute("PRAGMA user_version").fetchone()[0] == 11
+        assert store.conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
         assert V11_TABLES <= _tables(store)

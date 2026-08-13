@@ -228,6 +228,7 @@ CREATE TABLE IF NOT EXISTS sequence_steps (
     channel       TEXT NOT NULL CHECK (channel IN ('email', 'linkedin')),
     template_key  TEXT NOT NULL,
     day_offset    INTEGER NOT NULL,
+    reply_to_prior INTEGER NOT NULL DEFAULT 0,
     UNIQUE(sequence_id, step_no)
 );
 
@@ -276,7 +277,8 @@ CREATE TABLE IF NOT EXISTS send_attempts (
     entry_id      TEXT,
     claimed_at    TEXT,
     resolved_at   TEXT,
-    failure_reason TEXT
+    failure_reason TEXT,
+    force_fresh   INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS campaign_template_pins (
@@ -634,6 +636,16 @@ _MIGRATIONS: dict[int, list] = {
         "last_hit TEXT, "
         "skip INTEGER NOT NULL DEFAULT 0, "
         "PRIMARY KEY (mailbox, folder_id))",
+    ],
+    # v12: in-thread reply steps. A sequence step flagged reply_to_prior sends
+    # as a Graph reply threaded onto the PRIOR step's sent mail (wire subject
+    # 'RE: <prior subject>'). force_fresh is the operator escape hatch on a
+    # parked reply attempt: re-queue it as a plain fresh send when the anchor
+    # is unrecoverable. Columns are in _SCHEMA for a fresh DB and here for the
+    # existing prod volume - one user_version guard covers both (v2 pattern).
+    12: [
+        _add_column("sequence_steps", "reply_to_prior", "INTEGER NOT NULL DEFAULT 0"),
+        _add_column("send_attempts", "force_fresh", "INTEGER NOT NULL DEFAULT 0"),
     ],
 }
 
@@ -1179,8 +1191,14 @@ class ContactStore:
     def upsert_sequence(self, campaign_id: str, degree: str, name: str,
                         send_mode: str, steps: list[dict]) -> int:
         """Replace the sequence definition for (campaign, degree) atomically.
-        ``steps``: [{step_no, channel, template_key, day_offset}]. Allowed only
-        pre-approval (service enforces)."""
+        ``steps``: [{step_no, channel, template_key, day_offset,
+        reply_to_prior?}]. Allowed only pre-approval (service enforces).
+        Validation runs BEFORE any write so a raise leaves the stored
+        sequence untouched."""
+        for s in steps:
+            if int(s["step_no"]) == 1 and int(s.get("reply_to_prior") or 0):
+                raise ValueError(
+                    "step 1 cannot be a reply: no prior step to reply to")
         cur = self.conn.execute(
             "INSERT INTO sequences (campaign_id, degree, name, send_mode) VALUES (?, ?, ?, ?) "
             "ON CONFLICT(campaign_id, degree) DO UPDATE SET name = excluded.name, "
@@ -1195,9 +1213,11 @@ class ContactStore:
         self.conn.execute("DELETE FROM sequence_steps WHERE sequence_id = ?", (seq_id,))
         for s in steps:
             self.conn.execute(
-                "INSERT INTO sequence_steps (sequence_id, step_no, channel, template_key, day_offset) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (seq_id, s["step_no"], s["channel"], s["template_key"], s["day_offset"]),
+                "INSERT INTO sequence_steps "
+                "(sequence_id, step_no, channel, template_key, day_offset, reply_to_prior) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (seq_id, s["step_no"], s["channel"], s["template_key"],
+                 s["day_offset"], int(s.get("reply_to_prior") or 0)),
             )
         self.conn.commit()
         return seq_id
@@ -1471,6 +1491,7 @@ class ContactStore:
         cols = [c for c in fields if c in (
             "status", "lease_id", "lease_expires", "worker_id", "attempt_count",
             "internet_message_id", "entry_id", "resolved_at", "failure_reason",
+            "force_fresh",
         )]
         if not cols:
             return

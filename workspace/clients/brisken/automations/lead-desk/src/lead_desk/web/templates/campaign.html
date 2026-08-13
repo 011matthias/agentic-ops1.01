@@ -62,7 +62,7 @@
 
 <div class="card">
   <h2>3. Sequences per degree</h2>
-  <p class="muted">Steps, one per line: <span class="mono">channel template_key day_offset</span> (offset = days after the previous step actually completed; step 1 counts from approval). LinkedIn steps become manual board tasks. Editing a sequence on an approved campaign revokes the approval.</p>
+  <p class="muted">Steps, one per line: <span class="mono">channel template_key day_offset [reply]</span> (offset = days after the previous step actually completed; step 1 counts from approval). Add <span class="mono">reply</span> to send the step inside the previous step's thread; its wire subject becomes RE: &lt;prior subject&gt;. LinkedIn steps become manual board tasks. Editing a sequence on an approved campaign revokes the approval.</p>
   <div class="grid2">
   {% for degree in degrees %}
     {% set seq = (sequences | selectattr('degree', 'equalto', degree) | list | first) %}
@@ -80,7 +80,7 @@
           {% endfor %}
         </select>
         <label>Steps</label>
-        <textarea name="steps" rows="4" placeholder="email {{ degree }}-e1 0&#10;email {{ degree }}-e2 4&#10;linkedin {{ degree }}-li1 2">{% if seq %}{% for s in seq.steps %}{{ s.channel }} {{ s.template_key }} {{ s.day_offset }}
+        <textarea name="steps" rows="4" placeholder="email {{ degree }}-e1 0&#10;email {{ degree }}-e2 4 reply&#10;linkedin {{ degree }}-li1 2">{% if seq %}{% for s in seq.steps %}{{ s.channel }} {{ s.template_key }} {{ s.day_offset }}{% if s.reply_to_prior %} reply{% endif %}
 {% endfor %}{% endif %}</textarea>
         <div style="margin-top:8px;"><button class="btn btn-small" type="submit">Save sequence</button></div>
       </form>
@@ -90,7 +90,7 @@
         <p class="muted" style="font-size:12px;">Append, insert, or swap the copy of steps not yet sent. Already-sent steps stay locked and must be kept unchanged at the top; the campaign keeps sending. To change a sent step, pause and re-approve.</p>
         <form method="post" action="/campaigns/{{ campaign.campaign_id }}/sequences/{{ degree }}/delta">
           <label>Steps</label>
-          <textarea name="steps" rows="4">{% if seq %}{% for s in seq.steps %}{{ s.channel }} {{ s.template_key }} {{ s.day_offset }}
+          <textarea name="steps" rows="4">{% if seq %}{% for s in seq.steps %}{{ s.channel }} {{ s.template_key }} {{ s.day_offset }}{% if s.reply_to_prior %} reply{% endif %}
 {% endfor %}{% endif %}</textarea>
           <div style="margin-top:8px;"><button class="btn btn-small" type="submit">Apply delta</button></div>
         </form>
@@ -192,6 +192,11 @@
             <input type="hidden" name="attempt_key" value="{{ a.attempt_key }}">
             <input type="hidden" name="campaign" value="{{ campaign.campaign_id }}">
             <button class="btn btn-secondary btn-small" type="submit">Retry</button>
+          </form>
+          <form method="post" action="/attempts/send-fresh" style="margin:0;">
+            <input type="hidden" name="attempt_key" value="{{ a.attempt_key }}">
+            <input type="hidden" name="campaign" value="{{ campaign.campaign_id }}">
+            <button class="btn btn-secondary btn-small" type="submit" title="re-queue as a plain fresh send (drop the reply-to-thread anchor)">Send fresh</button>
           </form>
           <form method="post" action="/attempts/mark-sent" style="margin:0;">
             <input type="hidden" name="attempt_key" value="{{ a.attempt_key }}">
