@@ -12,12 +12,23 @@ is NOT in ``campaigns``. ``kill_switch``, ``worker_heartbeat``, ``source:*``
 and ``approval-superseded:*`` are never touched. Idempotent: a second run
 finds nothing and is a no-op.
 
+``suppression-import`` loads an external suppression list (CSV cols
+value,kind,reason,source) into the ``suppression_entries`` ledger the send
+guards check, and suppresses any matching CONTACT that is not already
+suppressed. ``truth-audit`` reports event-provenance health (non-imid
+ext_keys, open unmatched, suppression size, recent truth runs) - a report,
+never a gate.
+
     lead-desk-maint clean-orphan-state --data /data --dry-run
     lead-desk-maint clean-orphan-state --data /data
+    lead-desk-maint suppression-import --data /data --csv list.csv [--apply]
+    lead-desk-maint truth-audit --data /data
 """
 from __future__ import annotations
 
 import argparse
+import csv
+import json
 import os
 from collections import defaultdict
 from pathlib import Path
@@ -178,6 +189,93 @@ def rekey_anon_contacts(store: ContactStore, dry_run: bool = False) -> dict:
     }
 
 
+def _suppression_entry(row: dict) -> tuple[str, str, str, str] | None:
+    """(entry, kind, source, note) for one CSV row, normalized to the
+    suppression_entries convention (emails bare lowercase, domains as
+    '@domain' lowercase), or None for a blank value."""
+    value = (row.get("value") or "").strip().lower()
+    if not value:
+        return None
+    kind = (row.get("kind") or "").strip().lower()
+    if kind not in ("email", "domain"):
+        kind = "email" if "@" in value.lstrip("@") else "domain"
+    entry = value if kind == "email" else "@" + value.lstrip("@")
+    return (entry, kind, (row.get("source") or "").strip() or "external",
+            (row.get("reason") or "").strip() or None)
+
+
+def suppression_import(store: ContactStore, csv_path: Path,
+                       apply: bool = False) -> dict:
+    """Load an external suppression list (cols value,kind,reason,source)
+    into ``suppression_entries`` (INSERT OR IGNORE) and suppress every
+    matching, not-yet-suppressed contact (email exact for email rows; email
+    domain for domain rows). Dry-run (default) counts, writes nothing.
+    Idempotent: a second apply finds every entry existing and no contact
+    left to suppress."""
+    now = now_iso()
+    rows = skipped = entries_new = entries_existing = 0
+    contacts_suppressed = 0
+    with open(csv_path, newline="", encoding="utf-8-sig") as fh:
+        for row in csv.DictReader(fh):
+            rows += 1
+            norm = _suppression_entry(row)
+            if norm is None:
+                skipped += 1
+                continue
+            entry, kind, source, note = norm
+            if apply:
+                new = store.add_suppression_entry(entry, kind, source, now, note)
+            else:
+                new = store.conn.execute(
+                    "SELECT 1 FROM suppression_entries WHERE entry = ?",
+                    (entry,)).fetchone() is None
+            entries_new += int(new)
+            entries_existing += int(not new)
+            if kind == "email":
+                c = store.find_by_email(entry)
+                hits = [c] if c is not None and not c["suppressed"] else []
+            else:
+                hits = store.conn.execute(
+                    "SELECT * FROM contacts WHERE suppressed = 0 "
+                    "AND merged_into IS NULL AND lower(email) LIKE ?",
+                    ("%" + entry,)).fetchall()
+            for contact in hits:
+                if apply:
+                    store.set_suppressed(contact["contact_id"], True,
+                                         "external-suppression-list",
+                                         "suppression-import", now)
+                contacts_suppressed += 1
+    return {"dry_run": not apply, "csv": str(csv_path), "rows": rows,
+            "skipped_blank": skipped, "entries_new": entries_new,
+            "entries_existing": entries_existing,
+            "contacts_suppressed": contacts_suppressed}
+
+
+def truth_audit(store: ContactStore) -> dict:
+    """Event-provenance health report: outbound events not keyed on an
+    internetMessageId ('<...@...>'), the open unmatched queue, the
+    suppression ledger size, and the last truth runs. A report, not a gate."""
+    non_imid = store.conn.execute(
+        "SELECT source, COUNT(*) AS n FROM outreach_events "
+        "WHERE direction = 'outbound' "
+        "AND (ext_key IS NULL OR ext_key NOT LIKE '<%@%>') "
+        "GROUP BY source ORDER BY n DESC").fetchall()
+    runs = store.conn.execute(
+        "SELECT run_id, kind, finished_at, events_added FROM truth_runs "
+        "ORDER BY finished_at DESC LIMIT 5").fetchall()
+    return {
+        "non_imid_outbound": {"total": sum(r["n"] for r in non_imid),
+                              "by_source": {r["source"]: r["n"]
+                                            for r in non_imid}},
+        "unmatched_open": store.conn.execute(
+            "SELECT COUNT(*) FROM unmatched_events WHERE status = 'open'"
+        ).fetchone()[0],
+        "suppression_entries": store.conn.execute(
+            "SELECT COUNT(*) FROM suppression_entries").fetchone()[0],
+        "recent_truth_runs": [dict(r) for r in runs],
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lead-desk-maint")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -191,6 +289,16 @@ def main(argv: list[str] | None = None) -> int:
     rk.add_argument("--data", default=os.environ.get("LEAD_DESK_DATA", "lead-desk-data"))
     rk.add_argument("--dry-run", action="store_true",
                     help="report the merge plan without changing anything")
+    si = sub.add_parser("suppression-import",
+                        help="load an external suppression CSV into the "
+                             "ledger + suppress matching contacts")
+    si.add_argument("--data", default=os.environ.get("LEAD_DESK_DATA", "lead-desk-data"))
+    si.add_argument("--csv", required=True, help="CSV with value,kind,reason,source")
+    si.add_argument("--apply", action="store_true",
+                    help="write (default is a dry-run count)")
+    ta = sub.add_parser("truth-audit",
+                        help="event-provenance health report (never a gate)")
+    ta.add_argument("--data", default=os.environ.get("LEAD_DESK_DATA", "lead-desk-data"))
     args = p.parse_args(argv)
 
     db = Path(args.data).resolve() / "lead-desk.sqlite"
@@ -200,8 +308,15 @@ def main(argv: list[str] | None = None) -> int:
     with ContactStore(db) as store:
         if args.cmd == "clean-orphan-state":
             report = clean_orphan_state(store, dry_run=args.dry_run)
-        else:
+        elif args.cmd == "rekey-anon":
             report = rekey_anon_contacts(store, dry_run=args.dry_run)
+        elif args.cmd == "suppression-import":
+            report = suppression_import(store, Path(args.csv), apply=args.apply)
+        else:
+            report = truth_audit(store)
+    if args.cmd == "truth-audit":
+        print(json.dumps(report, indent=1, default=str))
+        return 0
     for k, v in report.items():
         print(f"{k}: {v}")
     if args.cmd == "rekey-anon" and not args.dry_run and not report["events_unchanged"]:

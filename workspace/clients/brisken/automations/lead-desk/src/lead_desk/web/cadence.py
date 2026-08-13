@@ -465,6 +465,12 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
                 blocks.append({"contact_id": cid, "kind": "domain_denied",
                                "detail": f"{to_addr}: hard-denied recipient domain"})
                 continue
+            sup = store.suppression_hit(to_addr)
+            if sup is not None:
+                blocks.append({"contact_id": cid, "kind": "suppression-list",
+                               "detail": f"{to_addr}: on the suppression list "
+                                         f"({sup['kind']} {sup['entry']})"})
+                continue
             if step["template_key"] not in pins:
                 blocks.append({"contact_id": cid, "kind": "unpinned_template",
                                "detail": f"step {step['step_no']} template "

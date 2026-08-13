@@ -951,6 +951,34 @@ class ContactStore:
         )
         self.conn.commit()
 
+    # -- suppression ledger (v11 table; import + send-guard lookup) --------
+
+    def add_suppression_entry(self, entry: str, kind: str, source: str,
+                              now: str, note: str | None = None) -> bool:
+        """INSERT OR IGNORE one ledger row; True when newly inserted.
+        Convention: emails stored bare lowercase, domains stored as
+        '@domain' lowercase, so the send-guard lookup is one indexed
+        (PK) IN (addr, '@domain') SELECT."""
+        cur = self.conn.execute(
+            "INSERT OR IGNORE INTO suppression_entries "
+            "(entry, kind, source, added_at, note) VALUES (?, ?, ?, ?, ?)",
+            (entry, kind, source, now, note),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def suppression_hit(self, addr: str) -> sqlite3.Row | None:
+        """The suppression_entries row blocking this recipient - the exact
+        email or its '@domain' row - or None. One indexed SELECT."""
+        addr = (addr or "").strip().lower()
+        if not addr or "@" not in addr:
+            return None
+        domain = "@" + addr.rsplit("@", 1)[1]
+        return self.conn.execute(
+            "SELECT * FROM suppression_entries WHERE entry IN (?, ?) LIMIT 1",
+            (addr, domain),
+        ).fetchone()
+
     # -- truth scan (folder cache + run log) ------------------------------
 
     def get_folder_cache(self, mailbox: str) -> dict[str, sqlite3.Row]:

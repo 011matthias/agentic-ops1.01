@@ -256,6 +256,18 @@ def execute_one(store: ContactStore, mailer, send: dict, journal: Journal,
             "failure_reason": f"recipient domain hard-denied: {send['to']}"[:300]})
         return "recipient_denied"
 
+    # Suppression-list backstop, same shape: an entry imported between claim
+    # and execution (or a claim-time guard regression) never reaches Graph.
+    sup = store.suppression_hit(send["to"])
+    if sup is not None:
+        journal.write(akey, "nacked", reason=f"recipient suppressed: {send['to']}")
+        cadence.resolve_result(store, {
+            "attempt_key": akey, "lease_id": send["lease_id"],
+            "status": "failed", "error_class": "config",
+            "failure_reason": f"suppression-list ({sup['kind']} {sup['entry']}): "
+                              f"{send['to']}"[:300]})
+        return "recipient_suppressed"
+
     if reply_to_prior and anchor is None:
         # A reply step with no resolvable anchor NEVER silently falls back
         # to a fresh send (that would break the thread promise). Park it for

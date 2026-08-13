@@ -135,6 +135,21 @@ def test_malformed_deny_state_falls_back_to_floor(tmp_path):
     assert cadence.deny_domains(store) == {"sap.com", "brisken.com"}
 
 
+# -- suppression list (imported ledger) ---------------------------------------
+
+def test_claim_blocks_suppression_list_email_and_domain(tmp_path):
+    store = _store(tmp_path)
+    make_campaign(store, emails=["blocked@x.com", "b@heldco.com",
+                                 "ok@example.com"])
+    store.add_suppression_entry("blocked@x.com", "email", "test", BASE)
+    store.add_suppression_entry("@heldco.com", "domain", "test", BASE)
+    res = cadence.claim_sends(store, WORKER_ID, 5, at=IN_WINDOW)
+    assert [c["to"] for c in res["claims"]] == ["ok@example.com"]
+    alert = _alert(store)
+    assert alert["count"] == 2
+    assert {b["kind"] for b in alert["blocked"]} == {"suppression-list"}
+
+
 # -- unpinned template leak ---------------------------------------------------
 
 def test_unpinned_template_blocks(tmp_path):
@@ -177,4 +192,25 @@ def test_worker_backstop_denies_sap_recipient(tmp_path):
     send = dict(claims[0], to="treasury@sap.com")
     out = execute_one(store, m, send, Journal(tmp_path / "j.jsonl"), now=IN_WINDOW)
     assert out == "recipient_denied"
+    assert m.sent == []
+
+
+def test_worker_backstop_denies_suppressed_recipient(tmp_path):
+    store = _store(tmp_path)
+    make_campaign(store, emails=["a@example.com"])
+    claims = cadence.claim_sends(store, WORKER_ID, 5, at=IN_WINDOW)["claims"]
+
+    class Mailer:
+        def __init__(self):
+            self.sent = []
+
+        def send_auto(self, send):
+            self.sent.append(send)
+
+    m = Mailer()
+    # An entry imported between claim and execution still never reaches Graph.
+    store.add_suppression_entry("a@example.com", "email", "test", BASE)
+    out = execute_one(store, m, claims[0], Journal(tmp_path / "j.jsonl"),
+                      now=IN_WINDOW)
+    assert out == "recipient_suppressed"
     assert m.sent == []
