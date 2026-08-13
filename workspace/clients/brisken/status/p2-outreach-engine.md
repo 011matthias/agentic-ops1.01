@@ -70,12 +70,19 @@ Backfill CLI is built (PR #521) and its prod run waits on the owner signing
 the ledger. Suppression list is live in-engine: 2,454 entries, 91 contacts
 flipped, claim + execute guards check the table directly.
 
-The long pole is still the conversation:
-`context/drafts/outreach-engine-plan-to-dirk.md`, staged 2026-07-29, revised
-2026-08-11, unsent. With code done early, the schedule compresses: drill steps
-1-4 can run solo immediately; the moment Dirk gives a 45-minute slot, step 7
-arms the engine, and the first engine-native wave can go with
-`start_not_before` 2026-09-01.
+**Sequencing directive (owner, 2026-08-13): Dirk is introduced to the engine
+only once it is actually ready and verified.** The mail
+(`context/drafts/outreach-engine-plan-to-dirk.md`) HOLDS until the solo drill
+steps have PASS evidence; verification precedes introduction. Consequence
+accepted: the T3 touch-2 window closes unactioned (a late-August second touch
+on a July event is past its window); the 21 non-responders fold into the
+September motion. Drill step 1 PASSED on prod 2026-08-13 (evidence log in
+ARMING-DRILL.md). Steps 2-4 are Graph writes/sends (draft-stage, self-send,
+NDR probe) and sit behind the per-action send gate; steps 5-6 additionally
+need an external test address enrolled and a Zoho test Lead (UI-only, Zoho
+API is read-only). Once 1-6 are green, the Dirk conversation covers only
+step 7 (arming) + sender policy + GA week, against a demonstrably working
+tool.
 
 Zoho BCC filing is still UNVERIFIED and has to be proven in drill step 6, or
 the CRM record breaks on the first live wave.
