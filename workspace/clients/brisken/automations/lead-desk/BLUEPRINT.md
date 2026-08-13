@@ -161,11 +161,10 @@ ingest). New scripts: `lead-desk-adopt` (Rome 290 -> enrollments under a
 `status='done'` campaign that can never auto-send), `lead-desk-reconcile`,
 `lead-desk-worker` (`worker` extra: httpx + pywin32, Windows-only).
 
-Before the first real campaign: run the TEST-campaign gate (enroll
-ourselves + one external address, cap 10; verify reply-halt, NDR ->
-bounce -> suppress, Zoho dropbox filing, crash drill, kill switches,
-catch-up). The COM worker passed this gate 2026-07-13; the Graph cloud
-sender must pass its own watched drill before it is ever armed.
+Before the first real campaign: run the arming drill in `ARMING-DRILL.md`
+(runbook + `lead-desk-drill` CLI; the COM worker passed the equivalent
+gate 2026-07-13, and the Graph cloud sender must pass its own watched
+drill before it is ever armed).
 
 ## Iteration 2, stage reflects real status (shipped 2026-07-12)
 
