@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-08-13
+updated: 2026-08-15
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
@@ -12,23 +12,33 @@ Load the Brisken expense-reconciliation project (p1). We are continuing the
 test-and-fix loop on the receipt-first pipeline until the tool is genuinely
 usable for Brisken. Read this whole brief before touching anything.
 
-## Where the loop stands (2026-08-13, after round 1+2)
+## Where the loop stands (2026-08-15, after round 3)
 
-Two fixes are live on Fly release v58 (app `brisken-expense-recon`):
+Four fixes are live on the deployed app (`brisken-expense-recon`):
 
-1. **Non-receipt quarantine (PR #516).** The tool now recognizes when an
-   upload is not a receipt (a bank-statement page, an expense-report summary
-   sheet) and sets it aside with a visible warning instead of inventing an
-   expense from it. Verified on Criss's real May folder: 7 of 7 statement
-   PDFs set aside, 20 of 20 real receipts kept.
-2. **No more literal "null" accounts (PR #518).** When the AI answers "no
-   category" as the word "null", the export now shows the honest
-   "(uncategorized - assign)" placeholder instead.
+1. **Non-receipt quarantine (PR #516, Fly v58).** Statement pages and
+   report-summary sheets among the uploads are set aside with a visible
+   warning instead of becoming phantom expenses. Verified on Criss's real
+   May folder: 7 of 7 statement PDFs set aside, 20 of 20 receipts kept.
+2. **No more literal "null" accounts (PR #518, Fly v58).**
+3. **Same photo, same answer (PR #536).** Once a photo has been read, the
+   raw reading is stored keyed on the photo's content hash and reused;
+   re-runs are byte-identical by construction and cost nothing. Verified:
+   smoke10 run twice, the two CSVs diff-clean, second run made zero
+   extraction calls. Hosted app caches at `/data/extraction-cache.sqlite`
+   (env `EXPENSE_RECON_EXTRACTION_CACHE`); local runs via
+   `llm.extraction_cache_path` in the run config.
+4. **CLI runs use the merchant name book (PR #536).** A run config can
+   carry `expense.merchants` (inline) or `expense.merchants_path` (bare
+   map or a full settings dump), and the exported CSV shows the canonical
+   merchant name over the raw OCR spelling. Offline checks now judge the
+   same pipeline Criss gets.
 
 **The single source of truth for what to do next is the backlog file
 beside this one: `p1-improvement-backlog.md`. Pick the top OPEN item
-(currently: "Same photo, same answer" — the extraction cache — with "test
-runs should use the merchant name book" as its small companion). Every new
+(currently: "Show set-aside files in the review screen" — mostly a
+Lovable/owner prompt plus one backend override endpoint; also re-check
+backlog item 4, the category-flip watch, on your first diff). Every new
 improvement idea you have during the session gets APPENDED to that backlog
 file, never left in chat or scattered into checkpoint notes.**
 
@@ -57,7 +67,7 @@ Root: `C:\Users\neuma_p1qrsic\Repo\agentic-ops1\`
 |---|---|---|
 | 1 | `.scratch\criss-recon-may\` | Criss's real May month: 27 files in `receipts\` (20 receipts + 7 Chase statement PDFs), `May2026.xlsx`, `run.local.json`, `run.llm.json` (added 2026-08-13), `expenses.csv` from the verified quarantine run |
 | 2 | `.scratch\criss-recon-runs\7d2fea33d39a\` | 37 receipts, largest set, `run.local.json` |
-| 3 | `.scratch\criss-recon-runs\05d3db59b225\` | 10 receipts + `run.llm.json` (**start here**). Outputs kept: `expenses-BASELINE.csv` (July 28 code), `expenses-NEW.csv` + `expenses-NEW2.csv` (2026-08-13 pre-fix, the drift/null evidence), `expenses-QUARANTINE-RUN3.csv` (post-fix, verified) |
+| 3 | `.scratch\criss-recon-runs\05d3db59b225\` | 10 receipts + `run.llm.json` (**start here**; config now carries `extraction_cache_path`, and `extraction-cache.sqlite` beside it holds the 10 pinned readings — delete it to force fresh readings). Outputs kept: `expenses-BASELINE.csv` (July 28 code), `expenses-NEW.csv`/`expenses-NEW2.csv` (2026-08-13 pre-fix drift/null evidence), `expenses-QUARANTINE-RUN3.csv` (2026-08-13 post-quarantine), `expenses-R4-PRECACHE.csv` (2026-08-15 pre-cache: the BRL→EUR + tax-drift evidence), `expenses-R5-CACHED1.csv` + `expenses-R6-CACHED2.csv` (2026-08-15 post-cache, byte-identical pair) |
 | 4 | `.scratch\test-receipts-ER-00215\` | 37 loose receipt PNGs, no config (same images as set 2) |
 | 5 | `.scratch\test-receipts-ER-00215-smoke10\` | 10 PNGs, no config (same images as set 3) |
 | 6 | `workspace\clients\brisken\context\expense-reconciliation\receipts\` | 13 real receipts, different vendor mix: Uber email-forwards, MBTA ticket, ZE scans |
@@ -113,17 +123,24 @@ modules fail to import. Full suite baseline: **1043 passed, 2 skipped**.
 - **receipt_01 is RESOLVED.** The "1,837.51 USD vs 8,796.35 BRL flip" was
   never a money bug: the image is page 7 of a Zoho expense report, a
   summary page that carries BOTH totals. It is now quarantined.
-- **Money fields are stable run-to-run on the same code** (verified twice
-  on set 3). The live defect class is TEXT drift: vendor spellings (MEGA
-  CENTER / CENTRO / CENTRE from one image), reference numbers, tax labels,
-  line-item descriptions — all at temperature 0.
-- **The CLI never loads the merchant registry.** `_run_expense_generation`
-  calls `generate_expenses(cfg, dir)` bare (`registry=None`,
-  `expense_memory=None`); only the web path consults the registry. Backlog
-  item 2 closes this.
+- **Extraction drift is CLOSED for re-runs (PR #536).** Pre-fix it was
+  worse than "text only": the 2026-08-15 baseline (R4) drifted vs
+  2026-08-13 on 8 of 9 rows, including a BRL→EUR currency flip and a
+  50.50→50.00 tax drift. With the cache, identical content is answered
+  from the store; only NEW photos get a fresh (and still drift-prone
+  single) reading, which the merchant name book then canonicalizes.
+- **Categorize calls are NOT cached** (backlog item 4, watch): with
+  pinned inputs the post-fix back-to-back pair was byte-identical, but
+  the same PagBank receipt was filed three ways on three days pre-fix.
+  Check the category columns in your first diff.
+- **The CLI loads the merchant registry from the run config now**
+  (`expense.merchants` / `expense.merchants_path`, PR #536). The smoke10
+  config does NOT yet carry one — for a prod-parity run, pull
+  `settings["merchants"]` from the live `/api/settings` into a local JSON
+  and point `merchants_path` at it.
 - **A receipt can legitimately split into two CSV rows** (one per Zoho
   account, same Reference#, sums exact). Whether Criss wants that is
-  backlog item 4 — an owner conversation, not code.
+  backlog item 2 — an owner conversation, not code.
 - **Learned memory** (`/data/learning.sqlite`, 103 seeded rows) self-heals
   as Criss corrects. Do NOT loosen its exact-match lookup to fuzzy; that
   cross-wires merchants.
@@ -157,7 +174,7 @@ Stop and ask only for: a design decision that changes behavior Criss
 depends on, anything touching her live runs or published data, or a real
 send.
 
-## Definition of done (scorecard as of 2026-08-13)
+## Definition of done (scorecard as of 2026-08-15)
 
 The tool is usable when a month of her real receipts produces a CSV she
 can post with judgment-level edits only:
@@ -166,8 +183,11 @@ can post with judgment-level edits only:
 - No phantom rows from non-receipts: **done, verified on May**
 - Honest "(uncategorized)"/"(illegible)" instead of guesses: **done**
 - Amounts, currencies, dates match the receipt: **holding, keep checking**
-- Same receipts run twice → same VENDOR, so learning compounds: **open —
-  this is the current target**
+- Same receipts run twice → same VENDOR, so learning compounds: **done for
+  re-runs (byte-identical pair verified 2026-08-15); cross-month new
+  photos are the registry's job — keep checking on set 1/6 material**
+- Criss can SEE what was set aside and why, in her own screen: **open —
+  this is the current target (backlog item 1)**
 
 ## Standing constraints
 
