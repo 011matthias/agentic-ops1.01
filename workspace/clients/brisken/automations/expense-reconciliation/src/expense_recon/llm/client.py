@@ -19,12 +19,16 @@ LD-2 invariants the LLM call must honour:
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Protocol
 
 from .cost import CostTracker, TokenUsage
+from .extraction_cache import ExtractionCache, extraction_cache_key, prompt_fingerprint
+
+logger = logging.getLogger("expense_recon")
 
 
 @dataclass(frozen=True)
@@ -474,6 +478,15 @@ _EXTRACT_SCHEMA = {
 }
 
 
+# Extraction-cache fingerprint: any edit to the extraction prompt(s) or
+# response schema changes this value, making previously cached readings
+# unreachable (they answer a prompt that no longer exists). The file name
+# placeholder stays UNformatted here on purpose — the cache key excludes it.
+_EXTRACT_FINGERPRINT = prompt_fingerprint(
+    _EXTRACT_INSTRUCTIONS + _EXTRACT_TEXT_SUFFIX, _EXTRACT_SCHEMA
+)
+
+
 def _accounts_block(chart_of_accounts: list[str] | None) -> str:
     """Render the in-scope GL account list for the prompt, or '' when no
     chart of accounts was supplied (the model then returns zoho_account
@@ -504,6 +517,7 @@ class OpenAIClient:
         vision_model: str | None = None,
         api_key: str | None = None,
         cost_tracker: CostTracker | None = None,
+        extraction_cache: ExtractionCache | None = None,
     ):
         try:
             from openai import OpenAI
@@ -524,6 +538,9 @@ class OpenAIClient:
         # defaults to the text model when not set (BLUEPRINT 2.2).
         self.vision_model = vision_model or model
         self.cost_tracker = cost_tracker or CostTracker()
+        # "Same photo, same answer": optional raw-payload store consulted by
+        # extract_receipt only. None = every call goes to the API (unchanged).
+        self.extraction_cache = extraction_cache
 
     def classify_line_items(
         self,
@@ -713,14 +730,31 @@ class OpenAIClient:
         if (images is None) == (text is None):
             raise ValueError("extract_receipt needs exactly one of images= or text=")
 
+        model = self.model if text is not None else self.vision_model
+
+        # Same photo, same answer: identical document content (under the same
+        # model + prompt fingerprint) is answered from the raw-payload cache
+        # instead of the API. The payload is re-parsed live below, so parser
+        # fixes apply to cached readings too. A cache hit records no usage —
+        # it costs nothing.
+        cache = self.extraction_cache
+        cache_key: str | None = None
+        if cache is not None:
+            cache_key = extraction_cache_key(
+                fingerprint=_EXTRACT_FINGERPRINT, model=model,
+                images=images, text=text,
+            )
+            cached = cache.get(cache_key)
+            if cached is not None:
+                logger.debug("extraction cache hit: %s", file_name)
+                return _extraction_from_payload(cached)
+
         instructions = _EXTRACT_INSTRUCTIONS.format(file_name=file_name)
         if text is not None:
-            model = self.model
             content: object = instructions + _EXTRACT_TEXT_SUFFIX.format(text=text)
         else:
             import base64
 
-            model = self.vision_model
             parts: list[dict] = [{"type": "text", "text": instructions}]
             for raw, mime in images or []:
                 b64 = base64.b64encode(raw).decode("ascii")
@@ -746,8 +780,13 @@ class OpenAIClient:
             temperature=0,
         )
         self._record_usage(response, model=model)
-        payload = json.loads(response.choices[0].message.content or "{}")
-        return _extraction_from_payload(payload)
+        raw_payload = response.choices[0].message.content or "{}"
+        extraction = _extraction_from_payload(json.loads(raw_payload))
+        # Store only after a successful parse: a payload the parser rejects
+        # must not be pinned as this document's answer forever.
+        if cache is not None and cache_key is not None:
+            cache.put(cache_key, raw_payload, model=model, file_name=file_name)
+        return extraction
 
     def _record_usage(self, response, model: str | None = None) -> None:
         try:

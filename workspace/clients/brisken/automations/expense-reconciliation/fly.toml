@@ -15,6 +15,11 @@ primary_region = "fra"
   # so this is safe to ship ahead of the upload. Upload coa-provision.json +
   # zoho-books-coa.json to /data to activate; the next run picks them up.
   EXPENSE_RECON_COA_PROVISION = "/data/coa-provision.json"
+  # "Same photo, same answer": content-hash cache of raw vision-extraction
+  # payloads (llm/extraction_cache.py). A re-uploaded or re-run document is
+  # answered from the store — deterministic and free. Delete the file to
+  # force fresh readings; prompt/schema edits invalidate it automatically.
+  EXPENSE_RECON_EXTRACTION_CACHE = "/data/extraction-cache.sqlite"
 
 [http_service]
   internal_port = 8080

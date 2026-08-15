@@ -212,7 +212,10 @@ def build_expense_rows(
 
         date_str = r.detected_date.isoformat() if r.detected_date else ""
         ref = r.detected_reference or r.document_id
-        vendor = r.detected_vendor or ""
+        # Same display rule as the web grid: the registry's canonical merchant
+        # name wins over the raw OCR reading, so the Zoho import carries ONE
+        # spelling per merchant instead of whatever the extractor saw today.
+        vendor = r.canonical_vendor or r.detected_vendor or ""
         ccy = (r.detected_currency or "").upper()
         rate = _amount(r.exchange_rate) if r.exchange_rate is not None else ""
         tax_amt = _amount(r.detected_tax) if r.detected_tax is not None else ""
