@@ -101,6 +101,8 @@ from .ingest.statement_pdf import parse_statement_pdf_tolerant
 from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from .llm.client import LLMClient, OpenAIClient
 from .llm.cost import CostTracker
+from .llm.extraction_cache import ExtractionCache
+from .merchant_registry import MerchantRegistry
 from .matching.deterministic import MatchingConfig, match_month
 from .matching.judgment import judge_ambiguous, judge_fx_match, judge_unmatched
 from .matching.types import Categorization, Match, MatchOutcome, Receipt, Transaction
@@ -1022,6 +1024,15 @@ def run(
     config_dir = config_path.parent
     logger.info("run started: config=%s", config_path)
 
+    # Resolve a relative extraction-cache path against the config dir HERE,
+    # where the config dir is known — `_build_llm_client` keeps its single-arg
+    # signature (a patch seam the web tests replace with a 1-arg lambda).
+    llm_cfg = cfg.get("llm")
+    if isinstance(llm_cfg, dict) and llm_cfg.get("extraction_cache_path"):
+        cache_p = Path(llm_cfg["extraction_cache_path"])
+        if not cache_p.is_absolute():
+            llm_cfg["extraction_cache_path"] = str(config_dir / cache_p)
+
     # Receipt-first branch (Dirk's note #1): generate one expense per
     # receipt with no statement, write the Zoho Expenses CSV. Separate from
     # the statement-mode body below so no transaction-anchored writer runs.
@@ -1181,7 +1192,11 @@ def _run_expense_generation(
     reconciled CSV, sheet writeback, subscription derivation) fires in
     expense mode; the statement-mode `run()` body is untouched.
     """
-    result = generate_expenses(cfg, config_dir)
+    # A CLI run consults the same merchant name book the web app builds from
+    # settings["merchants"] — without this, offline quality checks judge the
+    # tool WITHOUT the canonicalization Criss actually gets (backlog item 2).
+    registry = _build_cli_merchant_registry(cfg, config_dir)
+    result = generate_expenses(cfg, config_dir, registry=registry)
     # Parse issues (unreadable files, quarantined non-receipts) have no
     # Errors sheet in expense mode — the CSV is the only artifact — so they
     # print here or they are invisible to a CLI run.
@@ -1214,6 +1229,56 @@ def _run_expense_generation(
     logger.info("wrote Zoho Expenses export: %s", export_path)
     print(f"Wrote Zoho Expenses export: {export_path}")
     return export_path
+
+
+def _build_cli_merchant_registry(
+    cfg: dict, config_dir: Path
+) -> MerchantRegistry | None:
+    """Build the merchant registry for a CLI expense-generation run.
+
+    The hosted app builds it from `settings["merchants"]`; a local run has
+    no settings store, so the config carries the merchants instead:
+
+        "expense": {
+          "merchants": { "Canonical": {"aliases": [...], ...} },  # inline, or
+          "merchants_path": "merchants.json"   # relative to the config dir;
+        }                                      #   either a bare merchants map
+                                               #   or a full settings dict
+                                               #   with a "merchants" key
+
+    Neither key present = None (unchanged: registry-free run). A configured
+    but unreadable/malformed source raises ConfigError LOUDLY — a test run
+    silently dropping the name book would judge the tool without the very
+    feature built to fix naming, which is the failure this closes.
+    """
+    exp = cfg.get("expense") or {}
+    merchants = exp.get("merchants")
+    merchants_path = exp.get("merchants_path")
+    if merchants is None and not merchants_path:
+        return None
+    if merchants is None:
+        p = Path(merchants_path)
+        if not p.is_absolute():
+            p = config_dir / p
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ConfigError(
+                f"expense.merchants_path {str(p)!r} unreadable: {exc}"
+            ) from exc
+        merchants = (
+            data.get("merchants")
+            if isinstance(data, dict) and "merchants" in data
+            else data
+        )
+    if not isinstance(merchants, dict):
+        raise ConfigError(
+            "expense.merchants must be a map of canonical merchant -> entry "
+            "(the settings['merchants'] shape)"
+        )
+    registry = MerchantRegistry(merchants)
+    logger.info("merchant registry: %d merchant(s) loaded from config", len(merchants))
+    return registry
 
 
 def _derive_subscriptions(
@@ -1443,9 +1508,19 @@ def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
             "model": "gpt-4o-mini",          # optional, defaults shown
             "vision_model": "gpt-4o-mini",   # optional; OCR calls (2.2);
                                              #   defaults to `model`
-            "api_key_env": "OPENAI_API_KEY"  # optional, defaults shown
-          }
-        }
+            "api_key_env": "OPENAI_API_KEY", # optional, defaults shown
+            "extraction_cache_path":         # optional; content-hash cache
+              "extraction-cache.sqlite"      #   for receipt extraction
+          }                                  #   ("same photo, same answer");
+        }                                    #   relative to the config dir
+
+    The extraction cache also turns on via the EXPENSE_RECON_EXTRACTION_CACHE
+    env var (the hosted app sets it to /data/extraction-cache.sqlite in
+    fly.toml); the config key wins when both are present. Neither set = no
+    cache, behaviour unchanged. A relative config path is absolutized against
+    the config dir by `run()` BEFORE this builder sees it (this function's
+    single-arg signature is a patch seam for the web tests — do not widen it);
+    a still-relative path here resolves against the process CWD.
     """
     llm_cfg = cfg.get("llm")
     if not isinstance(llm_cfg, dict):
@@ -1475,6 +1550,17 @@ def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
         api_key=api_key,
         cost_tracker=tracker,
     )
+
+    # "Same photo, same answer": attach the content-hash extraction cache
+    # when configured. Attribute assignment (not a constructor kwarg) so a
+    # test-patched OpenAIClient factory keeps its narrow signature.
+    cache_path = llm_cfg.get("extraction_cache_path") or os.environ.get(
+        "EXPENSE_RECON_EXTRACTION_CACHE"
+    )
+    if cache_path:
+        client.extraction_cache = ExtractionCache(Path(cache_path))
+        logger.info("extraction cache: %s", cache_path)
+
     return client, tracker
 
 
