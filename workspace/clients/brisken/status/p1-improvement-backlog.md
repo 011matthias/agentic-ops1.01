@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -20,26 +20,6 @@ that stop the tool from learning beat cosmetics, and anything Criss would
 have to hand-fix every month beats a one-off.
 
 ## Open
-
-### 1. Show set-aside files in the review screen (NEXT UP)
-
-**What happens today:** when the tool decides an upload is not a receipt
-(a bank-statement page, a report summary sheet), it sets the file aside
-and notes it in a technical issues list. That is loud enough for us, but
-Criss will not read an issues list.
-
-**Why it matters:** trust. A tool that silently ignores something she
-uploaded reads as broken. A tool that says "I set these 7 files aside,
-they look like bank statements, tap here if I'm wrong" reads as careful.
-This is the difference between her adopting the tool and her double-
-checking it forever.
-
-**The fix:** a small "set aside" strip in the review screen: file name,
-reason in Portuguese, and a one-click "this really is a receipt" override
-that re-adds it. Backend already exposes everything needed; this is a
-Lovable (UI) prompt for the owner.
-
-**Size:** small UI change + one backend override endpoint. **Status:** open.
 
 ### 2. One receipt, one row? (needs a human call, not code)
 
@@ -83,6 +63,8 @@ filed three ways on three days (no category, "Professional Services",
 "Software & Subscriptions") while its money never moved. In the two
 back-to-back runs after the cache shipped, categories came out identical
 both times, so with pinned inputs the wobble may be rare in practice.
+2026-08-16 check: a third smoke10 run (R7) came out byte-identical to
+R6, categories included; the watch stays quiet.
 
 **Why it might matter:** a category that flips between runs creates the
 same trust problem as a vendor spelling that flips. But the merchant name
@@ -95,6 +77,19 @@ on the line-item descriptions + the account list). Only build this if a
 flip is actually observed on cache-pinned inputs.
 
 **Status:** watching; re-check the diff on the next loop iteration.
+
+### 5. Stale "excluded" warning after a restore (cosmetic)
+
+**What happens today:** when a reviewer restores a set-aside file, the
+strip entry flips to "restored" but the original technical parse warning
+("excluded from expenses, no row exported") stays in the issues list,
+now contradicting the grid.
+
+**Why it barely matters:** the strip is the surface Criss reads; the
+issues list is ours. Fix only if the contradiction confuses someone in
+practice.
+
+**Status:** open, cosmetic, low priority.
 
 ## Related but tracked elsewhere (do not duplicate here)
 
@@ -116,3 +111,4 @@ flip is actually observed on cache-pinned inputs.
 | 2 | The word "null" can no longer appear as an expense account in the export; those rows now show the honest "(uncategorized - assign)" placeholder | The AI sometimes answers "no category" as the literal word "null", which Zoho cannot import and Criss would trip over monthly | PR #518, Fly v58, 2026-08-13 |
 | 3 | Same photo, same answer: once a photo has been read, the reading is stored keyed on the photo's content fingerprint and reused instead of asking the AI again; re-runs are identical by construction and cost nothing | The identical image had come back MEGA CENTER / CENTRO / CENTRE across runs, and the 2026-08-15 baseline added a BRL-to-EUR currency flip and a tax drift; every new spelling fragmented learned memory. Verified: smoke10 run twice on the fixed code, the two CSVs byte-identical, second run made zero extraction calls | PR #536, 2026-08-15 |
 | 3b | Test runs use the merchant name book too: a run config can carry expense.merchants (inline) or expense.merchants_path (JSON file or full settings dump), and the exported CSV now shows the canonical merchant name over the raw OCR spelling | Offline quality runs were judging the tool WITHOUT the canonicalization Criss actually gets, so the loop was steering on the wrong signal | PR #536, 2026-08-15 |
+| 4 | Set-aside strip: the review screen now gets a first-class list of what the quarantine set aside (file, reason code for PT wording, restored state) plus a one-click "this is a receipt" restore that reuses the stored reading (no second AI read) and runs the normal categorize pass. Mid-month exclusions survive later adds; the May run derives its strip from the old warnings. Lovable UI half handed to the owner (`docs/lovable-set-aside-prompt.md` in the module) | Trust: a tool that silently ignores an upload reads as broken; one that says "I set these aside, tap here if I'm wrong" reads as careful. Also closed a real hole: a mid-month exclusion vanished from view on the NEXT add | PR #538, 2026-08-16 |

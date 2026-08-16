@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
@@ -12,9 +12,20 @@ Load the Brisken expense-reconciliation project (p1). We are continuing the
 test-and-fix loop on the receipt-first pipeline until the tool is genuinely
 usable for Brisken. Read this whole brief before touching anything.
 
-## Where the loop stands (2026-08-15, after round 3)
+## Where the loop stands (2026-08-16, after round 4)
 
-Four fixes are live on the deployed app (`brisken-expense-recon`):
+Round 4 (PR #538): **set-aside strip + restore.** The batch API now
+exposes what the quarantine set aside (`view.set_aside` +
+`summary.n_set_aside`, reason as a machine code for PT wording) and
+`POST /api/expense-batches/{id}/set-aside/restore` re-adds a file the
+tool got wrong, reusing the stored reading (no second AI read). Mid-month
+exclusions survive later adds now; the May run derives its strip from the
+old warnings. The visible strip in Criss's screen is the OWNER's Lovable
+half: prompt at `automations/expense-reconciliation/docs/
+lovable-set-aside-prompt.md`, not yet applied. Verify the strip on her
+screen once published (Lovable merge != live; DOM probe).
+
+From round 3 and earlier, live on the deployed app (`brisken-expense-recon`):
 
 1. **Non-receipt quarantine (PR #516, Fly v58).** Statement pages and
    report-summary sheets among the uploads are set aside with a visible
@@ -35,12 +46,16 @@ Four fixes are live on the deployed app (`brisken-expense-recon`):
    same pipeline Criss gets.
 
 **The single source of truth for what to do next is the backlog file
-beside this one: `p1-improvement-backlog.md`. Pick the top OPEN item
-(currently: "Show set-aside files in the review screen" — mostly a
-Lovable/owner prompt plus one backend override endpoint; also re-check
-backlog item 4, the category-flip watch, on your first diff). Every new
-improvement idea you have during the session gets APPENDED to that backlog
-file, never left in chat or scattered into checkpoint notes.**
+beside this one: `p1-improvement-backlog.md`. As of round 4 no open item
+is a code task: item 2 needs an owner/Criss conversation, item 3 is
+deliberately unscheduled, item 4 is a watch (re-check the category
+columns on your first diff; quiet through three identical runs), item 5
+is cosmetic. The productive next moves are running the UNTESTED material
+(set 1 May with the strip in place, set 6 different vendors) and
+verifying cross-month vendor stability — new defects found there get
+appended to the backlog and become the next round. Every new improvement
+idea you have during the session gets APPENDED to that backlog file,
+never left in chat or scattered into checkpoint notes.**
 
 ## What the tool is, and the one mode that matters
 
@@ -186,8 +201,10 @@ can post with judgment-level edits only:
 - Same receipts run twice → same VENDOR, so learning compounds: **done for
   re-runs (byte-identical pair verified 2026-08-15); cross-month new
   photos are the registry's job — keep checking on set 1/6 material**
-- Criss can SEE what was set aside and why, in her own screen: **open —
-  this is the current target (backlog item 1)**
+- Criss can SEE what was set aside and why, in her own screen: **backend
+  done (round 4: strip data + restore endpoint, verified by test); the
+  visible strip waits on the owner applying the Lovable prompt — confirm
+  on her screen once published**
 
 ## Standing constraints
 
