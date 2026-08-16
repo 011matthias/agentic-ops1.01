@@ -187,6 +187,7 @@ def _patch_ocr(monkeypatch, *extractions):
     monkeypatch.setattr(
         "expense_recon.cli._build_llm_client", lambda cfg: (mock, None)
     )
+    return mock
 
 
 def test_web_batch_create_quarantines_statement_page(web_client, monkeypatch):
@@ -245,6 +246,176 @@ def test_web_incremental_add_quarantines_statement_page(web_client, monkeypatch)
     ingest = grid["expense_ingest"]
     assert ingest["n_added"] == 0
     assert any("not a purchase receipt" in i for i in ingest["issues"])
+
+
+# ── set-aside strip + restore (backlog item 1) ───────────────────────
+
+
+def test_generate_expenses_returns_set_aside_receipts(tmp_path):
+    """The excluded receipts ride on the result with their extraction
+    intact, so the web layer can record them restorably."""
+    _folder(tmp_path, ["a_receipt.jpg", "b_statement.jpg"])
+    client = MockLLMClient(extraction_responses=[
+        _extraction(vendor="Uber"),
+        _extraction(vendor=None, total="8796.35", document_type="statement"),
+    ])
+
+    result = generate_expenses(CFG, tmp_path, llm_client=client)
+
+    assert [r.document_id for r in result.set_aside_receipts] == ["b_statement.jpg"]
+    excluded = result.set_aside_receipts[0]
+    assert excluded.document_type == "statement"
+    assert str(excluded.detected_total) == "8796.35"
+
+
+def _make_batch_with_set_aside(web_client, monkeypatch):
+    """One real receipt + one quarantined summary page; returns
+    (batch_id, set_aside_file)."""
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="Staples", total="42.50"),
+        _extraction(vendor=None, total="8796.35", document_type="report_summary"),
+    )
+    resp = web_client.post(
+        "/api/expense-batches",
+        files=[
+            ("files", ("a.jpg", JPG, "application/octet-stream")),
+            ("files", ("summary.jpg", JPG + b"2", "application/octet-stream")),
+        ],
+        data={"legal_entity": "Corporate Services"},
+    )
+    assert resp.status_code == 200, resp.text
+    job = web_client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    batch_id = resp.json()["batch_id"]
+    grid = web_client.get(f"/api/expense-batches/{batch_id}").json()
+    assert len(grid["set_aside"]) == 1
+    return batch_id, grid["set_aside"][0]["file"]
+
+
+def test_web_batch_grid_shows_set_aside_strip(web_client, monkeypatch):
+    """The grid carries a first-class set-aside strip: file, display name
+    (spool prefix stripped), machine reason code, human label, restored
+    flag — and the summary counts it."""
+    batch_id, _file = _make_batch_with_set_aside(web_client, monkeypatch)
+
+    grid = web_client.get(f"/api/expense-batches/{batch_id}").json()
+    entry = grid["set_aside"][0]
+    assert entry["display"] == "summary.jpg"
+    assert entry["file"].endswith("summary.jpg")
+    assert entry["reason"] == "report_summary"
+    assert entry["reason_label"] == "an expense-report summary page"
+    assert entry["restored"] is False
+    assert grid["summary"]["n_set_aside"] == 1
+
+
+def test_web_restore_set_aside_makes_expense(web_client, monkeypatch):
+    """The one-click override: restore moves the file into the expense
+    pool WITHOUT a fresh vision call (stored extraction reused), the strip
+    entry flips to restored, and a second restore is refused."""
+    batch_id, file = _make_batch_with_set_aside(web_client, monkeypatch)
+    # Fresh mock with an EMPTY extraction queue: if restore tried to
+    # re-extract, extract_receipt would show up in mock.calls.
+    mock = _patch_ocr(monkeypatch)
+
+    resp = web_client.post(
+        f"/api/expense-batches/{batch_id}/set-aside/restore",
+        json={"file": file},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["n_expenses"] == 2
+    assert body["n_set_aside"] == 0
+    assert not any(name == "extract_receipt" for name, _ in mock.calls)
+
+    grid = body["batch"]
+    assert {e["document_id"] for e in grid["expenses"]} >= {file}
+    entry = grid["set_aside"][0]
+    assert entry["restored"] is True
+    assert grid["summary"]["n_set_aside"] == 0
+    assert grid["summary"]["n_expenses"] == 2
+
+    # Idempotency + unknown file: both plain 400s, nothing changes.
+    again = web_client.post(
+        f"/api/expense-batches/{batch_id}/set-aside/restore",
+        json={"file": file},
+    )
+    assert again.status_code == 400
+    unknown = web_client.post(
+        f"/api/expense-batches/{batch_id}/set-aside/restore",
+        json={"file": "nope.jpg"},
+    )
+    assert unknown.status_code == 400
+
+
+def test_web_add_set_aside_survives_next_add(web_client, monkeypatch):
+    """A mid-month exclusion stays visible after a LATER add — before the
+    strip, it lived only in the last add's ingest summary and vanished."""
+    _patch_ocr(monkeypatch, _extraction(vendor="Staples"))
+    resp = web_client.post(
+        "/api/expense-batches",
+        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
+        data={"legal_entity": "Corporate Services"},
+    )
+    batch_id = resp.json()["batch_id"]
+    assert web_client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor=None, total="1234.00", document_type="statement"),
+    )
+    resp = web_client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("chase_page.jpg", JPG + b"3", "application/octet-stream"))],
+    )
+    assert web_client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+
+    _patch_ocr(monkeypatch, _extraction(vendor="Uber", total="9.99"))
+    resp = web_client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("b.jpg", JPG + b"4", "application/octet-stream"))],
+    )
+    assert web_client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+
+    grid = web_client.get(f"/api/expense-batches/{batch_id}").json()
+    assert grid["summary"]["n_expenses"] == 2
+    assert [e["display"] for e in grid["set_aside"]] == ["chase_page.jpg"]
+    assert grid["set_aside"][0]["reason"] == "statement"
+    assert grid["summary"]["n_set_aside"] == 1
+
+
+def test_web_legacy_snapshot_derives_and_restores(web_client, monkeypatch):
+    """A batch recorded BEFORE the snapshot carried set-aside entries (the
+    May run) still shows the strip — derived from the quarantine's own
+    parse warnings — and restore re-extracts the file from disk."""
+    from expense_recon.web.store import RunStore
+
+    batch_id, file = _make_batch_with_set_aside(web_client, monkeypatch)
+    db_path = web_client.app.state.db_path
+    with RunStore(db_path) as store:
+        run = store.get_run(batch_id)
+        legacy = dict(run.snapshot)
+        legacy.pop("set_aside")
+        store.update_run_snapshot(batch_id, legacy)
+
+    grid = web_client.get(f"/api/expense-batches/{batch_id}").json()
+    entry = grid["set_aside"][0]
+    assert entry["file"] == file
+    assert entry["reason"] == "report_summary"
+    assert entry["restored"] is False
+    assert grid["summary"]["n_set_aside"] == 1
+
+    mock = _patch_ocr(monkeypatch, _extraction(vendor="Padaria", total="15.00"))
+    resp = web_client.post(
+        f"/api/expense-batches/{batch_id}/set-aside/restore",
+        json={"file": file},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["n_expenses"] == 2
+    assert any(name == "extract_receipt" for name, _ in mock.calls)
+    grid = resp.json()["batch"]
+    assert {e["vendor"]["display"] for e in grid["expenses"]} >= {"Padaria"}
+    assert grid["set_aside"][0]["restored"] is True
 
 
 # ── snapshot round-trip ──────────────────────────────────────────────

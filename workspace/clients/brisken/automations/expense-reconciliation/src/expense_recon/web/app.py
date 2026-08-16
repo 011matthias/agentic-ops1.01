@@ -112,6 +112,7 @@ from .service import (
     regenerate_zoho,
     replace_intake_files,
     reset_memory,
+    restore_set_aside_file,
     run_mode,
     validate_expense_field,
     validate_manual_match,
@@ -1760,6 +1761,38 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             staging, app.state.learning_db_path,
         )
         return JSONResponse({"ok": True, "job_id": job_id, "n_files": saved})
+
+    @app.post("/api/expense-batches/{run_id}/set-aside/restore")
+    async def post_restore_set_aside(run_id: str, request: Request):
+        """The set-aside strip's one-click override ("this really is a
+        receipt"): body {"file": <stored name>} moves that file from the
+        set-aside list into the expense pool. The stored extraction is
+        reused (no fresh vision call), then the usual memory + registry +
+        categorize pass runs — fast enough to answer synchronously with
+        the refreshed batch view."""
+        if not _receipt_first_on():
+            return _flag_off()
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body is a plain 400
+            body = None
+        file = str(((body or {}).get("file")) or "").strip()
+        if not file:
+            return JSONResponse({"error": "file is required"}, status_code=400)
+        with open_store() as store:
+            run, err = _mutable_expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            try:
+                result = restore_set_aside_file(
+                    store, run, file, _now_iso(),
+                    learning_db_path=app.state.learning_db_path,
+                )
+            except RunInputError as exc:
+                return JSONResponse({"error": exc.message}, status_code=400)
+            run = store.get_run(run_id)
+            view = _expense_view(store, run)
+        return JSONResponse(jsonable_encoder({**result, "batch": view}))
 
     @app.post("/api/expense-batches/{run_id}/statement")
     async def post_batch_statement(

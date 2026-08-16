@@ -69,6 +69,7 @@ from .serialize import (
     categorization_from_dict,
     categorization_to_dict,
     outcome_to_dict,
+    receipt_from_dict,
     receipt_to_dict,
     snapshot_from_dict,
     snapshot_to_dict,
@@ -3591,12 +3592,17 @@ def execute_expense_batch(
         and all(li.categorization and li.categorization.category for li in r.line_items)
     )
     counts = count_parse_issues(result.parse_errors)
+    set_aside = [
+        _set_aside_entry(r, prepared.now_iso)
+        for r in result.set_aside_receipts
+    ]
     summary = {
         "mode": MODE_EXPENSE_GENERATION,
         "n_expenses": len(receipts),
         "n_receipts": len(receipts),
         "n_categorized": n_categorized,
         "n_uncategorized": len(receipts) - n_categorized,
+        "n_set_aside": len(set_aside),
         "n_parse_errors": counts["errors"],
         "n_parse_notes": counts["notes"],
         "llm_cost_usd": (
@@ -3606,6 +3612,8 @@ def execute_expense_batch(
         "upload_issues": prepared.upload_issues,
     }
     snapshot = snapshot_to_dict([], receipts, result.outcome, result.parse_errors)
+    if set_aside:
+        snapshot["set_aside"] = set_aside
 
     if on_stage is not None:
         try:
@@ -3934,10 +3942,12 @@ def build_expense_view(
         })
 
     has_image_info = any(r.has_receipt_image for r in receipts)
+    set_aside = set_aside_view(run.snapshot or {})
     summary = {
         "mode": MODE_EXPENSE_GENERATION,
         "n_expenses": len(expenses),
         "n_receipts": len(expenses),
+        "n_set_aside": sum(1 for e in set_aside if not e["restored"]),
         "n_categorized": n_categorized,
         "n_uncategorized": len(expenses) - n_categorized,
         "n_review": sum(
@@ -3982,6 +3992,9 @@ def build_expense_view(
         "expense_ingest": run.snapshot.get("expense_ingest"),
         "summary": summary,
         "expenses": expenses,
+        # The set-aside strip (backlog item 1): what the quarantine
+        # excluded, why, and whether the reviewer restored it.
+        "set_aside": set_aside,
         "duplicate_groups": duplicate_groups,
         "category_options": list(EXPENSE_CATEGORIES),
         "account_options": _expense_account_options(run, settings),
@@ -4081,6 +4094,221 @@ def _batch_llm_client(cfg: dict):
     return llm_client, tracker, source
 
 
+# ── Set-aside strip (backlog item 1) ────────────────────────────────────
+# The quarantine's reviewer-facing half: every excluded file is a snapshot
+# `set_aside` entry {file, display, reason, at, receipt?, restored?} that
+# the grid renders as a visible strip, with a one-click restore. The entry
+# keeps the excluded receipt's full extraction so a restore is a categorize
+# pass, never a second vision call.
+
+
+def _display_name(stored: str) -> str:
+    """The upload's own filename, without the `NNNN__` spool prefix the
+    receipts dir adds for ordering."""
+    return re.sub(r"^\d{4}__", "", stored)
+
+
+def _set_aside_entry(r: Receipt, now_iso: str) -> dict:
+    return {
+        "file": r.document_id,
+        "display": r.receipt_name or _display_name(r.document_id),
+        "reason": r.document_type,
+        "at": now_iso,
+        "receipt": receipt_to_dict(r),
+    }
+
+
+def _derive_legacy_set_aside(parse_errors: list) -> list[dict]:
+    """Set-aside entries for a run recorded before the snapshot carried
+    them (e.g. the May batch): recover file + reason from the quarantine's
+    own warning messages. No stored receipt — a restore re-extracts from
+    the file on disk (extraction-cache hit when the reading is cached)."""
+    entries: list[dict] = []
+    for issue in parse_errors:
+        file, _line, msg = issue[0], issue[1], issue[2]
+        if "not a purchase receipt" not in msg or "excluded" not in msg:
+            continue
+        reason = next(
+            (code for code, label in NON_RECEIPT_LABELS.items()
+             if f"looks like {label}" in msg),
+            "other",
+        )
+        entries.append({
+            "file": file,
+            "display": _display_name(file),
+            "reason": reason,
+            "at": None,
+        })
+    return entries
+
+
+def set_aside_entries(snapshot: dict) -> list[dict]:
+    """The canonical set-aside list for a batch: the snapshot's own record,
+    falling back to legacy derivation from the quarantine parse issues."""
+    stored = snapshot.get("set_aside")
+    if stored is not None:
+        return [dict(e) for e in stored]
+    return _derive_legacy_set_aside(snapshot.get("parse_errors", []))
+
+
+def set_aside_view(snapshot: dict) -> list[dict]:
+    """The SPA-facing shape: reason label resolved, internal receipt dict
+    withheld. `reason` is the machine code ("statement" | "report_summary"
+    | "other") the SPA keys its own wording (EN/PT) on."""
+    return [
+        {
+            "file": e["file"],
+            "display": e.get("display") or _display_name(e["file"]),
+            "reason": e.get("reason") or "other",
+            "reason_label": NON_RECEIPT_LABELS.get(
+                e.get("reason"), NON_RECEIPT_LABELS["other"]
+            ),
+            "restored": bool(e.get("restored")),
+            "at": e.get("at"),
+        }
+        for e in set_aside_entries(snapshot)
+    ]
+
+
+def restore_set_aside_file(
+    store: RunStore,
+    run: RunRow,
+    file: str,
+    now_iso: str,
+    *,
+    learning_db_path: Path | None = None,
+) -> dict:
+    """The reviewer's "this really is a receipt" override: move one
+    set-aside file into the expense pool. Uses the entry's stored
+    extraction when present (no vision call); a legacy entry re-extracts
+    from the file on disk. The receipt is re-marked `document_type
+    "receipt"` — the human's classification outranks the model's — then
+    runs the same memory + registry + categorize pass a mid-month add
+    gets. The set-aside entry stays, flagged `restored`, so the strip
+    keeps showing what happened."""
+    from ..categorize import categorize_receipts_with_registry
+    from ..cli import _resolve_categorizer_chart
+    from ..ingest.receipts_folder import parse_receipt_file
+
+    snapshot = dict(run.snapshot)
+    entries = set_aside_entries(snapshot)
+    entry = next((e for e in entries if e["file"] == file), None)
+    if entry is None:
+        raise RunInputError(f"{file} is not in this batch's set-aside list.")
+    if entry.get("restored"):
+        raise RunInputError(f"{file} was already restored.")
+
+    _, receipts, outcome, _parse_errors = snapshot_from_dict(snapshot)
+    if any(r.document_id == file for r in receipts):
+        raise RunInputError(f"{file} is already an expense in this batch.")
+
+    cfg = run.config or {}
+    if entry.get("receipt"):
+        restored = receipt_from_dict(entry["receipt"])
+    else:
+        # Legacy entry (recorded before the snapshot kept the extraction):
+        # re-extract from the stored file. Cheap when the reading is in the
+        # extraction cache; honest bare receipt when no LLM is available.
+        source = Path(run.work_dir) / "receipts" / file
+        if not source.is_file():
+            raise RunInputError(
+                f"{file} is no longer on disk; re-upload it instead."
+            )
+        llm_client, _tracker, _src = _batch_llm_client(cfg)
+        restored = None
+        if llm_client is not None:
+            try:
+                restored = parse_receipt_file(
+                    source,
+                    legal_entity_id=(
+                        (cfg.get("expense") or {}).get("legal_entity_id", "")
+                    ),
+                    client=llm_client,
+                    default_currency=(
+                        (cfg.get("receipts") or {}).get("default_currency")
+                    ),
+                )
+            except Exception:  # noqa: BLE001 - extraction is best-effort
+                restored = None
+        if restored is None:
+            restored = Receipt(
+                document_id=file,
+                legal_entity_id=(
+                    (cfg.get("expense") or {}).get("legal_entity_id", "")
+                ),
+                detected_date=None,
+                detected_total=None,
+                detected_currency=None,
+                detected_vendor=_display_name(file),
+                receipt_name=_display_name(file),
+            )
+
+    note = "restored from set-aside by reviewer"
+    restored = replace(
+        restored,
+        document_type="receipt",
+        data_quality_note=(
+            f"{restored.data_quality_note}; {note}"
+            if restored.data_quality_note else note
+        ),
+    )
+
+    # The same enrichment a mid-month add gets: learned memory, merchant
+    # registry, categorization. The quarantine skipped all of it.
+    memory = ExpenseMemory.from_db_path(learning_db_path)
+    batch = memory.apply([restored])
+    learned = (
+        MerchantCategoryLookup.from_db_path(learning_db_path)
+        if learning_db_path is not None else None
+    )
+    registry = MerchantRegistry.from_settings(store.get_settings())
+    llm_client, _tracker, _src = _batch_llm_client(cfg)
+    try:
+        _, account_labels, _scope = _resolve_categorizer_chart(
+            cfg, Path(run.work_dir), None, {}
+        )
+    except Exception:  # noqa: BLE001 - labels degrade, restore never breaks
+        account_labels = None
+    batch, _ = categorize_receipts_with_registry(
+        batch,
+        registry=registry,
+        client=llm_client,
+        chart_of_accounts=account_labels,
+        learned=learned,
+    )
+    restored = batch[0]
+
+    pool = receipts + [restored]
+    outcome.unmatched_receipts.append(restored.document_id)
+    entry["restored"] = True
+    entry["restored_at"] = now_iso
+    n_categorized = sum(
+        1
+        for r in pool
+        if r.line_items
+        and all(li.categorization and li.categorization.category for li in r.line_items)
+    )
+    snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
+    snapshot["outcome"] = outcome_to_dict(outcome)
+    snapshot["set_aside"] = entries
+    store.update_run_snapshot(run.run_id, snapshot)
+    n_set_aside = sum(1 for e in entries if not e.get("restored"))
+    store.update_run_summary(run.run_id, {
+        **run.summary,
+        "n_expenses": len(pool),
+        "n_receipts": len(pool),
+        "n_categorized": n_categorized,
+        "n_uncategorized": len(pool) - n_categorized,
+        "n_set_aside": n_set_aside,
+    })
+    return {
+        "ok": True,
+        "file": file,
+        "n_expenses": len(pool),
+        "n_set_aside": n_set_aside,
+    }
+
+
 def add_receipts_to_expense_batch(
     store: RunStore,
     run: RunRow,
@@ -4134,6 +4362,7 @@ def add_receipts_to_expense_batch(
     _stage("ingesting")
     issues: list[str] = []
     new_receipts: list[Receipt] = []
+    new_set_aside: list[dict] = []
     n_seen = 0
     n_index = len(existing_files)
     for name, data in _folder_receipt_files(staging_dir):
@@ -4189,14 +4418,17 @@ def add_receipts_to_expense_batch(
         # Non-receipt quarantine (2026-08-13): mirror generate_expenses —
         # a statement page / report-summary page added mid-month must not
         # join the expense pool. The exclusion reaches the reviewer via the
-        # ingest summary's issues list; the stored file stays on disk (its
-        # hash also keeps a re-upload from costing another OCR call).
+        # ingest summary's issues list AND the snapshot's set-aside strip
+        # (which survives later adds and carries the restore path); the
+        # stored file stays on disk (its hash also keeps a re-upload from
+        # costing another OCR call).
         label = NON_RECEIPT_LABELS.get(receipt.document_type)
         if label is not None:
             issues.append(
                 f"{display}: looks like {label}, not a purchase receipt — "
                 "excluded (no expense created)"
             )
+            new_set_aside.append(_set_aside_entry(receipt, now_iso))
             continue
         new_receipts.append(receipt)
 
@@ -4247,6 +4479,11 @@ def add_receipts_to_expense_batch(
     new_snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
     new_snapshot["outcome"] = outcome_to_dict(outcome)
     new_snapshot["expense_ingest"] = summary
+    # Merge, don't replace: creation-time entries (and a legacy run's
+    # derived ones, normalized here on first add) stay restorable.
+    all_set_aside = set_aside_entries(run.snapshot) + new_set_aside
+    if all_set_aside:
+        new_snapshot["set_aside"] = all_set_aside
     store.update_run_snapshot(run.run_id, new_snapshot)
     store.update_run_summary(run.run_id, {
         **run.summary,
@@ -4254,6 +4491,9 @@ def add_receipts_to_expense_batch(
         "n_receipts": len(pool),
         "n_categorized": n_categorized,
         "n_uncategorized": len(pool) - n_categorized,
+        "n_set_aside": sum(
+            1 for e in all_set_aside if not e.get("restored")
+        ),
     })
     return summary
 

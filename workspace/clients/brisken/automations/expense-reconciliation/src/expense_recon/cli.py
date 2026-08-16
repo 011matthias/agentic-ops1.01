@@ -560,6 +560,10 @@ class ReconcileResult:
     # field, so Tier 1's frozen types stay untouched; annotation only —
     # bucket membership never changes.
     charge_categorizations: dict[str, Categorization] = field(default_factory=dict)
+    # Non-receipt quarantine (set-aside strip): the files generate_expenses
+    # excluded, with their extraction intact, so the web layer can record
+    # them restorably. Always empty for reconcile().
+    set_aside_receipts: list[Receipt] = field(default_factory=list)
 
 
 def _load_learned(cfg: dict, config_dir: Path):
@@ -839,7 +843,7 @@ NON_RECEIPT_LABELS: dict[str, str] = {
 
 def split_non_receipt_documents(
     receipts: list[Receipt],
-) -> tuple[list[Receipt], list[ParseIssue]]:
+) -> tuple[list[Receipt], list[Receipt], list[ParseIssue]]:
     """Partition the pool into real receipts and files the vision extractor
     explicitly classified as something else (statement page, expense-report
     summary page, unrelated image). Each excluded file becomes a WARNING
@@ -847,14 +851,21 @@ def split_non_receipt_documents(
     parse_issues and the CLI output — quarantined, never silently dropped.
     An unclassified file (document_type "receipt", the default) always
     stays: a phantom row is visible; a silently dropped receipt is not.
+
+    Returns (kept, excluded, issues). The excluded receipts keep their full
+    extraction: the web layer records them in the snapshot's set-aside list
+    so the reviewer can see WHY each file was set aside and restore one
+    without a fresh vision call.
     """
     kept: list[Receipt] = []
+    excluded: list[Receipt] = []
     issues: list[ParseIssue] = []
     for r in receipts:
         label = NON_RECEIPT_LABELS.get(r.document_type)
         if label is None:
             kept.append(r)
             continue
+        excluded.append(r)
         issues.append(ParseIssue(
             r.document_id, 0,
             f"looks like {label}, not a purchase receipt — excluded from "
@@ -862,7 +873,7 @@ def split_non_receipt_documents(
             "file cropped to the receipt)",
             severity="warning",
         ))
-    return kept, issues
+    return kept, excluded, issues
 
 
 def generate_expenses(
@@ -942,7 +953,7 @@ def generate_expenses(
     # must not become expense rows. Exclusion is loud — each file lands in
     # parse_errors (grid `parse_issues` + CLI output) — and only fires on an
     # explicit non-receipt classification; anything unclassified stays.
-    receipts, non_receipt_issues = split_non_receipt_documents(receipts)
+    receipts, set_aside, non_receipt_issues = split_non_receipt_documents(receipts)
     logger.info("ingested %d receipt(s) (no statement)", len(receipts))
 
     parse_errors: list[tuple[str, int, str, str]] = [
@@ -1000,6 +1011,7 @@ def generate_expenses(
         chart_of_accounts=chart_of_accounts,
         zoho_cfg=zoho_cfg,
         charge_categorizations={},
+        set_aside_receipts=set_aside,
     )
 
 
