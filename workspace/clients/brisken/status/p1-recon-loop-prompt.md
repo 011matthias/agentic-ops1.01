@@ -100,7 +100,8 @@ uv run --directory <worktree>\workspace\clients\brisken\automations\expense-reco
 ```
 
 `--all-extras` matters: without it `rapidfuzz` is missing and 9 test
-modules fail to import. Full suite baseline: **1043 passed, 2 skipped**.
+modules fail to import. Full suite baseline: **1063 passed, 2 skipped**
+(as of PR #536).
 
 ### Traps that will waste your time
 
