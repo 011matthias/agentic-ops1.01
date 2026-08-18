@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-08-16
+updated: 2026-08-18
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
@@ -12,7 +12,20 @@ Load the Brisken expense-reconciliation project (p1). We are continuing the
 test-and-fix loop on the receipt-first pipeline until the tool is genuinely
 usable for Brisken. Read this whole brief before touching anything.
 
-## Where the loop stands (2026-08-16, after round 4)
+## Where the loop stands (2026-08-18, after round 5)
+
+Round 5 was a discovery pass over the genuinely untested material, and it
+found **no money defects**: set 6 (13 never-tested receipts) summed exact
+against every spot-checked source total, and a May fresh-read pair taken
+5 days apart kept all 20 rows' amounts/currencies/dates identical with
+the quarantine holding 7/7 both times. All residual drift is text-field
+(vendor names, tax labels, references) — recorded as backlog items 6/7.
+**The proactive loop is paused as of this round:** the next code round
+fires on evidence (Criss's real usage, the item-4 watch, or a defect in
+her next month), not on a schedule. Set 6 now has a run config +
+extraction cache at `.scratch/criss-recon-set6/`.
+
+## Where the loop stood (2026-08-16, after round 4)
 
 Round 4 (PR #538): **set-aside strip + restore.** The batch API now
 exposes what the quarantine set aside (`view.set_aside` +
@@ -80,12 +93,12 @@ Root: `C:\Users\neuma_p1qrsic\Repo\agentic-ops1\`
 
 | Set | Path | Contents |
 |---|---|---|
-| 1 | `.scratch\criss-recon-may\` | Criss's real May month: 27 files in `receipts\` (20 receipts + 7 Chase statement PDFs), `May2026.xlsx`, `run.local.json`, `run.llm.json` (added 2026-08-13), `expenses.csv` from the verified quarantine run |
+| 1 | `.scratch\criss-recon-may\` | Criss's real May month: 27 files in `receipts\` (20 receipts + 7 Chase statement PDFs), `May2026.xlsx`, `run.local.json`, `run.llm.json` (added 2026-08-13, NO cache — every run is a fresh read). Outputs kept: `expenses-QUARANTINE-20260813.csv` and `expenses.csv` (2026-08-18 fresh read) — the round-5 drift-evidence pair: money identical, text wobbled (backlog items 6/7) |
 | 2 | `.scratch\criss-recon-runs\7d2fea33d39a\` | 37 receipts, largest set, `run.local.json` |
 | 3 | `.scratch\criss-recon-runs\05d3db59b225\` | 10 receipts + `run.llm.json` (**start here**; config now carries `extraction_cache_path`, and `extraction-cache.sqlite` beside it holds the 10 pinned readings — delete it to force fresh readings). Outputs kept: `expenses-BASELINE.csv` (July 28 code), `expenses-NEW.csv`/`expenses-NEW2.csv` (2026-08-13 pre-fix drift/null evidence), `expenses-QUARANTINE-RUN3.csv` (2026-08-13 post-quarantine), `expenses-R4-PRECACHE.csv` (2026-08-15 pre-cache: the BRL→EUR + tax-drift evidence), `expenses-R5-CACHED1.csv` + `expenses-R6-CACHED2.csv` (2026-08-15 post-cache, byte-identical pair) |
 | 4 | `.scratch\test-receipts-ER-00215\` | 37 loose receipt PNGs, no config (same images as set 2) |
 | 5 | `.scratch\test-receipts-ER-00215-smoke10\` | 10 PNGs, no config (same images as set 3) |
-| 6 | `workspace\clients\brisken\context\expense-reconciliation\receipts\` | 13 real receipts, different vendor mix: Uber email-forwards, MBTA ticket, ZE scans |
+| 6 | `workspace\clients\brisken\context\expense-reconciliation\receipts\` | 13 real receipts, different vendor mix: Uber email-forwards, MBTA ticket, DB tickets, ZE scans. Run config + live-merchants snapshot + pinned extraction cache + `expenses.csv` (round 5, sums source-verified) at `.scratch\criss-recon-set6\` |
 
 Genuinely distinct material: set 1 (May), set 2 (ER-00215), set 6
 (different vendors). Sets 3/4/5 are draws from the same 37 images.

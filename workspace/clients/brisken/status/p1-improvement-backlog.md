@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-08-16
+updated: 2026-08-18
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -64,7 +64,11 @@ filed three ways on three days (no category, "Professional Services",
 back-to-back runs after the cache shipped, categories came out identical
 both times, so with pinned inputs the wobble may be rare in practice.
 2026-08-16 check: a third smoke10 run (R7) came out byte-identical to
-R6, categories included; the watch stays quiet.
+R6, categories included; the watch stays quiet. 2026-08-18 (round 5):
+the May fresh-read pair showed one category change, but it was caused by
+the item-6 vendor flip (bank-as-vendor carries no category signal), not
+by categorize-call wobble on a pinned input — the watch condition has
+still never fired.
 
 **Why it might matter:** a category that flips between runs creates the
 same trust problem as a vendor spelling that flips. But the merchant name
@@ -91,12 +95,54 @@ practice.
 
 **Status:** open, cosmetic, low priority.
 
+### 6. Vendor must be the merchant, never the card-terminal bank
+
+**What happens today (round-5 evidence, 2026-08-18):** on a French card
+slip that prints both the shop and the acquiring bank, a fresh read
+returned the BANK as the vendor (CREDIT AGRICOLE NORMANDIE) where the
+2026-08-13 read of the same photo had returned the shop (ANNADA ROUEN).
+Money, date, and currency were identical both times; the category also
+degraded (Meals became uncategorized) because the bank name carries no
+category signal.
+
+**Why it matters:** a bank-as-vendor row teaches the merchant book the
+wrong name and reads as obviously wrong to Criss. The extraction cache
+already pins whichever answer the FIRST read lands on, so on the hosted
+app this only bites once per photo; this item is about making that first
+read land right.
+
+**The fix:** one line in the extraction prompt ("when a receipt shows
+both the merchant and a card-terminal/acquiring bank, the vendor is the
+merchant, never the bank"), which bumps the cache fingerprint. Cheap;
+bundle it with the next code round rather than shipping alone.
+
+**Status:** open, small, waiting to ride along with the next code change.
+
+### 7. Round-5 fresh-read drift record (evidence, no action)
+
+Two fresh reads of Criss's May folder 5 days apart (2026-08-13 vs
+2026-08-18, no cache in the local config): all 20 rows kept identical
+amounts, currencies, and dates, and the statement quarantine held 7 of 7
+both times. All drift was in text fields: the item-6 vendor flip, one
+vendor spelling (Enimove vs Enilive, real brand Enilive), tax-label and
+reference noise, and one row that lost its card-hint Paid-Through
+resolution. Set 6 (13 never-tested receipts: Uber email-forwards, MBTA,
+DB tickets, BRL service invoices) produced exact sums against every
+source total spot-checked (three Uber trips to the cent, DB 6.65 EUR);
+its misses were vendor names only ("CIV" instead of DB AG, "Uber
+Receipts" instead of Uber). Conclusion: money is stable across fresh
+reads; residual noise is text-field-only and shrinks as the merchant
+book grows.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
   entries, fix the mislabeled construction-materials category): an owner
   task in the Merchants editor; noted in the status file row "Canonical
-  merchant registry".
+  merchant registry". Round 5 adds the non-BRL vendor families the book
+  does not know yet: DB AG (one ticket read the "CIV" tariff marker as
+  the vendor), Uber (email-forwards read as "Uber Receipts"), Enilive
+  (read once as "Enimove").
 - Three parked design questions from the r1 feedback round (entity from an
   upload column, currency guessing, one merchant with different categories
   per entity): status file row "Zoho import headers + card-first fix".
