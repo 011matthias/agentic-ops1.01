@@ -160,9 +160,14 @@ def _receipt_first_on() -> bool:
 
 
 def _run_id_from_path(page: str) -> str | None:
-    """The run id when a feedback note was left on a run page, else None."""
+    """The run id when a feedback note was left on a run page, else None.
+
+    The SPA routes statement runs as /runs/{id} and expense batches as
+    /expenses/{id} (an expense batch IS a run row); both attribute. The
+    /expenses/new create form carries no id.
+    """
     parts = page.strip("/").split("/")
-    if len(parts) >= 2 and parts[0] == "runs" and parts[1]:
+    if len(parts) >= 2 and parts[0] in ("runs", "expenses") and parts[1] and parts[1] != "new":
         return parts[1][:64]
     return None
 
