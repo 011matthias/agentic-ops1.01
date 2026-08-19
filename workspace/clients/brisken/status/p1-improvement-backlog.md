@@ -21,26 +21,6 @@ have to hand-fix every month beats a one-off.
 
 ## Open
 
-### 2. Split receipts: behavior SETTLED (truth wins); depiction is the open half
-
-**Owner ruling (2026-08-19):** the process may not change the truth. When
-one receipt's contents genuinely belong to two expense accounts, two
-bookings ARE the truth, and the tool keeps exporting one row per account
-(sums exact, shared reference number). Collapsing to one
-dominant-account row was considered and rejected: presentation must
-never alter the books.
-
-**What needs building instead:** depict the split neatly, so it reads as
-ONE receipt booking to N accounts rather than N duplicate-looking rows.
-Candidate shape: the grid's receipt row shows a "books as" breakdown
-(account + amount per part, receipt total stated once); export rows keep
-the shared reference number, plus a part marker in the description if
-Zoho-side neatness needs it. Get Criss's read on which depiction is
-clearest; her answer plus the Lovable half become the next code round,
-riding with item 6.
-
-**Status:** behavior settled; depiction design open, Criss input pending.
-
 ### 3. Put the set-aside statement pages to work (later)
 
 **What happens today:** statement pages found among the receipts are set
@@ -98,29 +78,6 @@ practice.
 
 **Status:** open, cosmetic, low priority.
 
-### 6. Vendor must be the merchant, never the card-terminal bank
-
-**What happens today (round-5 evidence, 2026-08-18):** on a French card
-slip that prints both the shop and the acquiring bank, a fresh read
-returned the BANK as the vendor (CREDIT AGRICOLE NORMANDIE) where the
-2026-08-13 read of the same photo had returned the shop (ANNADA ROUEN).
-Money, date, and currency were identical both times; the category also
-degraded (Meals became uncategorized) because the bank name carries no
-category signal.
-
-**Why it matters:** a bank-as-vendor row teaches the merchant book the
-wrong name and reads as obviously wrong to Criss. The extraction cache
-already pins whichever answer the FIRST read lands on, so on the hosted
-app this only bites once per photo; this item is about making that first
-read land right.
-
-**The fix:** one line in the extraction prompt ("when a receipt shows
-both the merchant and a card-terminal/acquiring bank, the vendor is the
-merchant, never the bank"), which bumps the cache fingerprint. Cheap;
-bundle it with the next code round rather than shipping alone.
-
-**Status:** open, small, waiting to ride along with the next code change.
-
 ### 7. Round-5 fresh-read drift record (evidence, no action)
 
 Two fresh reads of Criss's May folder 5 days apart (2026-08-13 vs
@@ -137,7 +94,16 @@ Receipts" instead of Uber). Conclusion: money is stable across fresh
 reads; residual noise is text-field-only and shrinks as the merchant
 book grows.
 
-### 8. Multi-category vendors: variance chip + vendor drill-down + book flag
+### 8. Cross-month vendor history in the drill-down (build on demand)
+
+The shipped variance chip (row 6 below) covers THIS batch. The richer
+half — "this vendor was Meals in May, Software in June" — needs a small
+backend endpoint over run history. Build it only when Criss confirms the
+within-batch drill-down is something she uses.
+
+**Status:** deliberately deferred; evidence-gated.
+
+### 9. Multi-category vendors (SHIPPED as row 6 — design record)
 
 **The situation (owner direction, 2026-08-19):** the same vendor can
 legitimately produce receipts in different categories (reality), or the
@@ -164,12 +130,9 @@ can. Criss raised the underlying problem in her r1 feedback
   Decouples name stability from category flexibility; no global
   precedence reversal.
 
-**Needed from Criss:** which vendors are genuinely multi-category, and
-what tells her the category on such a receipt (items? card? entity?).
-
-**Status:** design proposed; waiting on Criss's example (2026-08-19
-conversation) to calibrate; then rides with items 2-depiction and 6 in
-the next code round.
+**Still needed from Criss:** which vendors actually get the flag turned
+on, and what tells her the category on such a receipt (items? card?
+entity?) — that answer is Merchants-editor data entry now, not code.
 
 ## Related but tracked elsewhere (do not duplicate here)
 
@@ -182,8 +145,8 @@ the next code round.
   (read once as "Enimove").
 - Two parked design questions from the r1 feedback round (entity from an
   upload column, currency guessing): status file row "Zoho import headers
-  + card-first fix". The third (one merchant, different categories) is
-  now backlog item 8 above.
+  + card-first fix". The third (one merchant, different categories)
+  shipped as row 6 below.
 - Remaining Lovable halves (confirm-all queue rendering, folder-attach
   picker, paid-through cell): each named in its status file row.
 
@@ -196,3 +159,6 @@ the next code round.
 | 3 | Same photo, same answer: once a photo has been read, the reading is stored keyed on the photo's content fingerprint and reused instead of asking the AI again; re-runs are identical by construction and cost nothing | The identical image had come back MEGA CENTER / CENTRO / CENTRE across runs, and the 2026-08-15 baseline added a BRL-to-EUR currency flip and a tax drift; every new spelling fragmented learned memory. Verified: smoke10 run twice on the fixed code, the two CSVs byte-identical, second run made zero extraction calls | PR #536, 2026-08-15 |
 | 3b | Test runs use the merchant name book too: a run config can carry expense.merchants (inline) or expense.merchants_path (JSON file or full settings dump), and the exported CSV now shows the canonical merchant name over the raw OCR spelling | Offline quality runs were judging the tool WITHOUT the canonicalization Criss actually gets, so the loop was steering on the wrong signal | PR #536, 2026-08-15 |
 | 4 | Set-aside strip: the review screen now gets a first-class list of what the quarantine set aside (file, reason code for PT wording, restored state) plus a one-click "this is a receipt" restore that reuses the stored reading (no second AI read) and runs the normal categorize pass. Mid-month exclusions survive later adds; the May run derives its strip from the old warnings. Lovable UI half handed to the owner (`docs/lovable-set-aside-prompt.md` in the module) | Trust: a tool that silently ignores an upload reads as broken; one that says "I set these aside, tap here if I'm wrong" reads as careful. Also closed a real hole: a mid-month exclusion vanished from view on the NEXT add | PR #538, 2026-08-16 |
+| 6 | Multi-category vendors: a merchant-book entry can carry multi_category: true — the book still corrects the vendor's NAME everywhere but stops auto-applying its category, so each of that vendor's receipts is judged on its own contents; and every grid row carries category_variance (does this vendor have receipts in other categories in this batch), powering a "Mixed categories" chip + vendor drill-down in the UI | Her own r1 feedback: one vendor legitimately books to different categories, but the book's default silently overrode that; variance was invisible whether right or wrong. Owner direction 2026-08-19: surface it, let a human judge | PR #543, 2026-08-19 |
+| 6b | Split depiction ("Lançado como"): every grid row carries books_as — the exact per-account fan-out the Zoho export writes (same shared code path, so grid and export cannot disagree) + an is_split flag; the UI renders one receipt booking to N accounts instead of N mystery rows | Owner ruling: splits ARE the truth and must not be collapsed; what was missing was seeing the fan-out ON the receipt instead of discovering it in the export | PR #543, 2026-08-19 |
+| 6c | Vendor is the merchant, never the card-terminal bank: one extraction-prompt line (backlog item 6) so a card slip showing both the shop and the acquiring bank reads the SHOP; invalidates the reading cache by design (fingerprint bump) | Round-5 evidence: the same French card slip read ANNADA ROUEN one day and CREDIT AGRICOLE NORMANDIE another; the bank name teaches the merchant book garbage | PR #543, 2026-08-19 |
