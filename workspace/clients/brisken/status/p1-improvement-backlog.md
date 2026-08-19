@@ -137,6 +137,40 @@ Receipts" instead of Uber). Conclusion: money is stable across fresh
 reads; residual noise is text-field-only and shrinks as the merchant
 book grows.
 
+### 8. Multi-category vendors: variance chip + vendor drill-down + book flag
+
+**The situation (owner direction, 2026-08-19):** the same vendor can
+legitimately produce receipts in different categories (reality), or the
+same kind of purchase can flip categories by AI wobble (error). No rule
+distinguishes them; a human seeing the vendor's receipts side by side
+can. Criss raised the underlying problem in her r1 feedback
+(vendor→multi-category, previously parked in the status file).
+
+**The design (pending Criss's concrete example):**
+
+- **Variance chip:** a receipt row whose vendor carries different
+  categories within the batch gets an indicator; click →
+  **vendor drill-down** (all of that vendor's receipts). Within-batch
+  half is nearly free (SPA already holds the rows, Lovable-only);
+  cross-month history needs a small backend endpoint over run history —
+  add when she confirms she'd use it.
+- **Blind spot this fixes:** a vendor with a merchant-book default
+  category is auto-stamped and the LLM never runs, so registry-covered
+  vendors can never show variance, right or wrong — exactly Criss's
+  complaint. Resolution: a per-vendor **multi-category flag** in the
+  merchant book — the book keeps canonicalizing the NAME (spelling
+  stability) but stops auto-stamping the CATEGORY for flagged vendors;
+  each receipt judged on contents, variance auditable via the chip.
+  Decouples name stability from category flexibility; no global
+  precedence reversal.
+
+**Needed from Criss:** which vendors are genuinely multi-category, and
+what tells her the category on such a receipt (items? card? entity?).
+
+**Status:** design proposed; waiting on Criss's example (2026-08-19
+conversation) to calibrate; then rides with items 2-depiction and 6 in
+the next code round.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
@@ -146,9 +180,10 @@ book grows.
   does not know yet: DB AG (one ticket read the "CIV" tariff marker as
   the vendor), Uber (email-forwards read as "Uber Receipts"), Enilive
   (read once as "Enimove").
-- Three parked design questions from the r1 feedback round (entity from an
-  upload column, currency guessing, one merchant with different categories
-  per entity): status file row "Zoho import headers + card-first fix".
+- Two parked design questions from the r1 feedback round (entity from an
+  upload column, currency guessing): status file row "Zoho import headers
+  + card-first fix". The third (one merchant, different categories) is
+  now backlog item 8 above.
 - Remaining Lovable halves (confirm-all queue rendering, folder-attach
   picker, paid-through cell): each named in its status file row.
 
