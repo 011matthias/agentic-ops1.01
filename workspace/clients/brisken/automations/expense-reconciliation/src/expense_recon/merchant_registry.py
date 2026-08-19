@@ -20,9 +20,17 @@ Shape:
             "aliases": ["raw pattern", ...],   # extra strings to match on
             "category": "<one of EXPENSE_CATEGORIES>" | None,
             "zoho_account": "<chart label>" | None,
+            "multi_category": True,            # optional (2026-08-19)
         },
         ...
     }
+
+A `multi_category` merchant (backlog item 8) decouples the registry's two
+facts: the canonical NAME still resolves (spelling stability), but no
+default category/account is stamped — the vendor legitimately books to
+different categories, so each receipt is judged on its own contents
+(learned/LLM path) and the grid's variance chip makes the outcome
+auditable.
 
 Matching (`resolve`): normalized-exact on the canonical name or any alias,
 then rapidfuzz `token_set_ratio >= threshold` over the same strings, else
@@ -156,6 +164,20 @@ class MerchantRegistry:
         self, canonical: str, original: str, score: float, kind: str
     ) -> MerchantMatch:
         entry = self._entries.get(canonical, {})
+        # A multi-category merchant resolves its NAME but never a default
+        # category/account: the categorize pass keys the registry stamp on
+        # `match.category`, so a None here routes the receipt to the
+        # per-receipt judgment (learned/LLM) while the display name stays
+        # canonical.
+        if entry.get("multi_category"):
+            return MerchantMatch(
+                canonical_name=canonical,
+                category=None,
+                zoho_account=None,
+                matched_alias=original,
+                score=float(score),
+                kind=kind,
+            )
         category = (entry.get("category") or None)
         return MerchantMatch(
             canonical_name=canonical,
@@ -208,9 +230,14 @@ def normalize_merchants_setting(raw: object) -> dict:
                 "expense categories"
             )
         zoho_account = str(entry.get("zoho_account") or "").strip() or None
-        out[canonical] = {
+        cleaned: dict = {
             "aliases": aliases,
             "category": category,
             "zoho_account": zoho_account,
         }
+        # Optional multi-category flag (backlog item 8): stored only when
+        # truthy so existing entries keep their exact shape.
+        if entry.get("multi_category"):
+            cleaned["multi_category"] = True
+        out[canonical] = cleaned
     return out

@@ -60,6 +60,7 @@ from ..learning import (
 from ..output.reconciled_csv import write_reconciled_csv
 from ..output.report_xlsx import write_report
 from ..output.zoho_expense_export import (
+    expense_posting_parts,
     resolve_paid_through,
     write_zoho_expense_export,
 )
@@ -3855,6 +3856,10 @@ def build_expense_view(
         category_overrides=overrides, default_entity=default_entity,
     )
     receipts_dir = Path(run.work_dir) / "receipts"
+    # Override-applied twins for the `books_as` fan-out (backlog item 2):
+    # the export applies category overrides before splitting, so the grid's
+    # depiction must too, or the two would disagree after a reclassify.
+    ov_by_doc = {x.document_id: x for x in apply_overrides(receipts, overrides)}
 
     n_learned_lines = 0
     for r in receipts:
@@ -3898,6 +3903,12 @@ def build_expense_view(
             rv["receipt_image_available"]
             or (receipts_dir / r.document_id).is_file()
         )
+        books_as = [
+            {"account": account, "amount": _fmt_amount(amt)}
+            for account, amt, _descs in expense_posting_parts(
+                ov_by_doc.get(r.document_id, r)
+            )
+        ]
         if review["state"] == "ready":
             n_categorized += 1
         ccy = r.detected_currency or "?"
@@ -3924,6 +3935,38 @@ def build_expense_view(
             "review": review,
             "is_manual": r.document_id.startswith("manual:"),
             "edited_fields": sorted(field_overrides.get(r.document_id, {})),
+            # Split depiction (backlog item 2): how THIS receipt will book
+            # in the Zoho export — one part per account, sums exact, the
+            # same fan-out `build_expense_rows` writes (shared helper).
+            "books_as": books_as,
+            "is_split": len(books_as) > 1,
+        })
+
+    # Category-variance chip (backlog item 8): a vendor whose receipts in
+    # THIS batch carry different (non-null) posting categories gets flagged
+    # on every one of its rows, so the SPA renders the chip + the vendor
+    # drill-down with no client-side judgment. Grouping keys on the DISPLAY
+    # vendor (canonical when the registry knows it), case-insensitive.
+    by_vendor: dict[str, list[dict]] = {}
+    for e in expenses:
+        display = str((e.get("vendor") or {}).get("display") or "").strip()
+        if display:
+            by_vendor.setdefault(display.casefold(), []).append(e)
+    for group in by_vendor.values():
+        cats = sorted({
+            (e.get("posting_category") or {}).get("category")
+            for e in group
+            if (e.get("posting_category") or {}).get("category")
+        })
+        for e in group:
+            e["category_variance"] = {
+                "varies": len(cats) > 1,
+                "categories": cats,
+                "n_vendor_receipts": len(group),
+            }
+    for e in expenses:
+        e.setdefault("category_variance", {
+            "varies": False, "categories": [], "n_vendor_receipts": 1,
         })
 
     # §18 duplicate flags, receipt-kind only (no charges in an expense

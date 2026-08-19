@@ -237,46 +237,11 @@ def build_expense_rows(
             card_accounts,
         )
 
-        charged = r.detected_total or Decimal("0")
-        items = r.line_items or ()
-
-        # Resolve each line to its Zoho account + posted amount, then
-        # aggregate by account so a single-account expense is one row and a
-        # genuinely multi-account receipt splits cleanly. The receipt's own
-        # currency is the expense currency (no statement to convert against),
-        # so line totals and detected_total share a currency and the
-        # allocation only absorbs rounding / line-sum mismatch.
-        if not items:
-            pairs = [(_UNCATEGORIZED, charged, vendor)]
-        else:
-            posting = _posting_amounts([i.line_total for i in items], charged)
-            pairs = [
-                (
-                    _debit_account_and_note(item.categorization, chart_of_accounts)[0],
-                    posted,
-                    item.description,
-                )
-                for item, posted in zip(items, posting)
-            ]
-
-        amounts: dict[str, Decimal] = {}
-        descs: dict[str, list[str]] = {}
-        order: list[str] = []
-        for account, amount, desc in pairs:
-            if account not in amounts:
-                amounts[account] = Decimal("0")
-                descs[account] = []
-                order.append(account)
-            amounts[account] += amount
-            if desc:
-                descs[account].append(desc)
-
         first = True
-        for account in order:
-            amt = amounts[account]
-            if amt == 0:
-                continue
-            description = "; ".join(descs[account]) or vendor
+        for account, amt, part_descs in expense_posting_parts(
+            r, chart_of_accounts=chart_of_accounts, fallback_desc=vendor
+        ):
+            description = "; ".join(part_descs) or vendor
             rows.append([
                 date_str,
                 account,
@@ -295,6 +260,59 @@ def build_expense_rows(
             ])
             first = False
     return rows
+
+
+def expense_posting_parts(
+    receipt: "Receipt",
+    *,
+    chart_of_accounts: "ChartOfAccounts | None" = None,
+    fallback_desc: str = "",
+) -> list[tuple[str, Decimal, list[str]]]:
+    """The per-account fan-out for ONE expense: `[(account, amount,
+    descriptions)]` in first-appearance order, zero-amount groups dropped.
+
+    Resolve each line to its Zoho account + posted amount, then aggregate
+    by account so a single-account expense is one part and a genuinely
+    multi-account receipt splits cleanly. The receipt's own currency is
+    the expense currency (no statement to convert against), so line totals
+    and detected_total share a currency and the allocation only absorbs
+    rounding / line-sum mismatch.
+
+    This is the exact split `build_expense_rows` writes; the web grid's
+    `books_as` depiction (backlog item 2) calls the same function so the
+    grid and the export agree by construction.
+    """
+    charged = receipt.detected_total or Decimal("0")
+    items = receipt.line_items or ()
+    if not items:
+        pairs = [(_UNCATEGORIZED, charged, fallback_desc)]
+    else:
+        posting = _posting_amounts([i.line_total for i in items], charged)
+        pairs = [
+            (
+                _debit_account_and_note(item.categorization, chart_of_accounts)[0],
+                posted,
+                item.description,
+            )
+            for item, posted in zip(items, posting)
+        ]
+
+    amounts: dict[str, Decimal] = {}
+    descs: dict[str, list[str]] = {}
+    order: list[str] = []
+    for account, amount, desc in pairs:
+        if account not in amounts:
+            amounts[account] = Decimal("0")
+            descs[account] = []
+            order.append(account)
+        amounts[account] += amount
+        if desc:
+            descs[account].append(desc)
+    return [
+        (account, amounts[account], descs[account])
+        for account in order
+        if amounts[account] != 0
+    ]
 
 
 def write_zoho_expense_export(
