@@ -88,6 +88,27 @@ def test_explicit_run_id_beats_path_and_is_bounded(client, data_root):
     assert entry["run_id"] == "x" * 64
 
 
+def test_expenses_path_derives_run_id_without_explicit_field(client, data_root):
+    # The published widget sends only the path; the SPA's batch route is
+    # /expenses/{id} (live note 2026-08-19 landed run_id null on it).
+    client.post(
+        "/api/feedback",
+        json={"comment": "batch note", "path": "/expenses/7d2fea33d39a"},
+    )
+    entry = json.loads(
+        (data_root / "feedback.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
+    assert entry["run_id"] == "7d2fea33d39a"
+
+
+def test_expenses_new_form_has_no_run_id(client, data_root):
+    client.post("/api/feedback", json={"comment": "form note", "path": "/expenses/new"})
+    entry = json.loads(
+        (data_root / "feedback.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
+    assert entry["run_id"] is None
+
+
 def test_non_run_page_has_no_run_id(client, data_root):
     client.post("/api/feedback", json={"comment": "nav note", "path": "/memory"})
     entry = json.loads(
