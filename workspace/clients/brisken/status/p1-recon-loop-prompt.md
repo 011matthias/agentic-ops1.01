@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-08-18
+updated: 2026-08-19
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
@@ -12,7 +12,23 @@ Load the Brisken expense-reconciliation project (p1). We are continuing the
 test-and-fix loop on the receipt-first pipeline until the tool is genuinely
 usable for Brisken. Read this whole brief before touching anything.
 
-## Where the loop stands (2026-08-18, after round 5)
+## Where the loop stands (2026-08-19, after round 6)
+
+Round 6 (PR #543, owner-directed): **multi-category vendors + split
+depiction.** The merchant book accepts `multi_category: true` (name
+still canonicalized, category no longer auto-stamped — flagged vendors
+are judged per receipt); every grid row carries `category_variance`
+(the "Mixed categories" chip + vendor drill-down data) and `books_as` +
+`is_split` (the exact per-account fan-out the export writes, shared
+code path, so grid and export cannot disagree). Item 6 rode along: the
+extraction prompt now forbids reading the card-terminal bank as the
+vendor (cache fingerprint bumped — hosted readings re-read once).
+Lovable half handed: `automations/expense-reconciliation/docs/
+lovable-variance-books-as-prompt.md`. Owner rulings behind it
+(2026-08-19): splits ARE the truth, never collapsed, depict them; and
+category variance is surfaced for human judgment, not suppressed.
+
+## Where the loop stood (2026-08-18, after round 5)
 
 Round 5 was a discovery pass over the genuinely untested material, and it
 found **no money defects**: set 6 (13 never-tested receipts) summed exact

@@ -414,7 +414,7 @@ Extract:
 - date: the purchase/transaction date as YYYY-MM-DD, or null if not visible. Beware day-first formats (15.01.2026 means January 15).
 - total: the final amount charged, as a plain number string like "24.50", or null. Prefer the grand total including tax/tip over any subtotal.
 - currency: the ISO 4217 code (USD, EUR, GBP...), or null if not determinable. Infer from symbols ($, €, £) only when unambiguous.
-- vendor: the merchant/issuer name as printed, or null.
+- vendor: the merchant/issuer name as printed, or null. When the document shows both the merchant and a card-terminal / acquiring bank or payment processor (CREDIT AGRICOLE, SumUp, Cielo, PagSeguro...), the vendor is the MERCHANT being paid, never the bank or processor operating the terminal.
 - vendor_clean: the short storefront brand for that merchant, or null. Strip legal-entity suffixes (LTDA, S.A., GmbH, Inc, LLC, Ltd, Co) and distributor/trading tails ("COMERCIO DE X LTDA" -> "X", "X INDUSTRIA E COMERCIO" -> "X"); prefer the storefront/brand a person would recognize. Keep it faithful to `vendor`; do not invent a brand that is not on the receipt.
 - reference: an invoice/ticket/booking/order number if one is printed, else null.
 - line_items: every purchased line item with description, quantity, unit_price, line_total (all amounts as plain number strings, quantity/unit_price null when not shown). If the receipt shows only a final total with NO itemization (taxi slips, card slips, simple tickets), return an empty array. NEVER invent line items. If a line item is illegible, include it with description "(illegible)" and line_total null.
