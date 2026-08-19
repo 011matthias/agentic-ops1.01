@@ -946,11 +946,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     continue
                 pos[key] = int(value)
         page = str(data.get("path", ""))[:300]
+        # The SPA sends the run/batch id explicitly when its current view has
+        # one; the path parse stays as the fallback so old widget builds (and
+        # /runs/{id} routes) keep attributing without it.
+        explicit_run_id = str(data.get("run_id", "")).strip()[:64]
         entry = {
             "ts": _now_iso(),
             "role": request.state.role,
             "page": page,
-            "run_id": _run_id_from_path(page),
+            "run_id": explicit_run_id or _run_id_from_path(page),
             "title": str(data.get("title", ""))[:300],
             "section": str(data.get("section", "")).strip()[:200],
             "selector": str(data.get("selector", "")).strip()[:480],

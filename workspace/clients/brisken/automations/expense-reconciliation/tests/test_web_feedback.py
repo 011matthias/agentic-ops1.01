@@ -64,6 +64,30 @@ def test_post_lands_in_jsonl_with_session_attribution(client, data_root):
     assert entry["ts"]
 
 
+def test_explicit_run_id_attributes_on_any_page(client, data_root):
+    # The SPA's batch pages don't route as /runs/{id}; the widget sends the
+    # id explicitly and it must win over (absent) path derivation.
+    client.post(
+        "/api/feedback",
+        json={"comment": "wrong category here", "path": "/batches", "run_id": "13b5605012f9"},
+    )
+    entry = json.loads(
+        (data_root / "feedback.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
+    assert entry["run_id"] == "13b5605012f9"
+
+
+def test_explicit_run_id_beats_path_and_is_bounded(client, data_root):
+    client.post(
+        "/api/feedback",
+        json={"comment": "note", "path": "/runs/abc123", "run_id": "x" * 200},
+    )
+    entry = json.loads(
+        (data_root / "feedback.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
+    assert entry["run_id"] == "x" * 64
+
+
 def test_non_run_page_has_no_run_id(client, data_root):
     client.post("/api/feedback", json={"comment": "nav note", "path": "/memory"})
     entry = json.loads(
