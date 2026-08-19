@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-19 | Brisken Lead Desk Arming Drill Solo Complete | client-dev | [→](docs/2026-08-19%20-%20Brisken%20Lead%20Desk%20Arming%20Drill%20Solo%20Complete/Checkpoint.md) |
 | 2026-08-13 | Brisken Expense-Recon Usability Loop R1-R2 | client-dev | [→](docs/2026-08-13%20-%20Brisken%20Expense-Recon%20Usability%20Loop%20R1-R2/Checkpoint.md) |
 | 2026-08-13 | Brisken Lead Desk Truth + Engine Sprint | client-dev | [→](docs/2026-08-13%20-%20Brisken%20Lead%20Desk%20Truth%20%2B%20Engine%20Sprint/Checkpoint.md) |
 | 2026-08-07 | Machine fTPM Recovery + Brisken Enrollment CNAME Defect | misc | [→](docs/2026-08-07%20-%20Machine%20fTPM%20Recovery%20%2B%20Brisken%20Enrollment%20CNAME%20Defect/Checkpoint.md) |
