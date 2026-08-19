@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-08-18
+updated: 2026-08-19
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -21,22 +21,25 @@ have to hand-fix every month beats a one-off.
 
 ## Open
 
-### 2. One receipt, one row? (needs a human call, not code)
+### 2. Split receipts: behavior SETTLED (truth wins); depiction is the open half
 
-**What happens today:** a receipt whose items belong to two different
-expense accounts (the bakery run that was half beer, half sweets) becomes
-TWO rows in the export, sharing one reference number, sums exact. That is
-accounting-correct, and Zoho wants one account per expense row.
+**Owner ruling (2026-08-19):** the process may not change the truth. When
+one receipt's contents genuinely belong to two expense accounts, two
+bookings ARE the truth, and the tool keeps exporting one row per account
+(sums exact, shared reference number). Collapsing to one
+dominant-account row was considered and rejected: presentation must
+never alter the books.
 
-**Why it matters:** if Criss expects one row per piece of paper, two rows
-will look like a duplicate and she will "fix" it. Nobody has asked her.
+**What needs building instead:** depict the split neatly, so it reads as
+ONE receipt booking to N accounts rather than N duplicate-looking rows.
+Candidate shape: the grid's receipt row shows a "books as" breakdown
+(account + amount per part, receipt total stated once); export rows keep
+the shared reference number, plus a part marker in the description if
+Zoho-side neatness needs it. Get Criss's read on which depiction is
+clearest; her answer plus the Lovable half become the next code round,
+riding with item 6.
 
-**The decision needed:** ask Criss (or Dirk) whether split rows are fine
-or whether the tool should force one account per receipt (biggest item
-wins, rest noted for her). Five-line change either way; the point is to
-match her mental model, not to be cleverer than her.
-
-**Status:** parked for an owner/Criss conversation.
+**Status:** behavior settled; depiction design open, Criss input pending.
 
 ### 3. Put the set-aside statement pages to work (later)
 
