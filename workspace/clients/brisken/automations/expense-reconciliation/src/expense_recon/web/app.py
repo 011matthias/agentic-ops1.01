@@ -360,9 +360,43 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 _store.set_intake_status(
                     _intake_id, INTAKE_RECEIVED, updated_at=_now_iso()
                 )
+    # Mail-intake companion sweep: an inbound archive whose ingest job the
+    # sweep above just marked interrupted flips back to a replayable held
+    # status, so a Fly stop mid-OCR never leaves mail stranded as pending.
+    try:
+        from .intake_mail import reconcile_interrupted
+
+        reconcile_interrupted(db_path, data_root_path)
+    except Exception:  # noqa: BLE001 - reconcile must never block startup
+        pass
 
     def open_store() -> RunStore:
         return RunStore(db_path)
+
+    # --- Mail intake (the app's own mailbox) -----------------------------
+    # Enabled only when EXPENSE_RECON_INTAKE_SMTP=1 (fly.toml). The SMTP
+    # listener runs in this same machine so it shares /data and the store;
+    # start/stop ride the app lifecycle. Fail-open: a listener that cannot
+    # start never blocks the web app (senders' mail systems retry).
+    app.state.intake_smtp = None
+
+    @app.on_event("startup")
+    async def _start_intake() -> None:
+        from .smtp_server import start_intake_smtp
+
+        app.state.intake_smtp = start_intake_smtp(
+            db_path, app.state.learning_db_path, data_root_path
+        )
+
+    @app.on_event("shutdown")
+    async def _stop_intake() -> None:
+        controller = app.state.intake_smtp
+        if controller is not None:
+            try:
+                controller.stop()
+            except Exception:  # noqa: BLE001 - shutdown is best-effort
+                pass
+            app.state.intake_smtp = None
 
     # --- Password gate (hosted only) -------------------------------------
     # Active iff the operator code is set. Loopback/local use leaves it
@@ -989,6 +1023,32 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     rows.append(row)
         return rows
 
+    # ── Mail intake triage: what arrived, what was held, and the one-click
+    # drain for mail that arrived before a month batch existed.
+    @app.get("/api/inbound/log")
+    def inbound_log(limit: int = 100) -> JSONResponse:
+        from .intake_mail import read_log
+
+        rows = read_log(app.state.data_root, limit=max(1, min(limit, 500)))
+        held = [
+            r for r in rows
+            if str(r.get("status", "")).startswith("held_")
+        ]
+        return JSONResponse({
+            "entries": rows,
+            "n_held": len(held),
+        })
+
+    @app.post("/api/inbound/replay-held")
+    def inbound_replay_held() -> JSONResponse:
+        from .intake_mail import replay_held
+
+        result = replay_held(
+            app.state.db_path, app.state.learning_db_path,
+            app.state.data_root,
+        )
+        return JSONResponse({"ok": True, **result})
+
     @app.get("/feedback.jsonl")
     def feedback_raw() -> PlainTextResponse:
         text = feedback_file.read_text(encoding="utf-8") if feedback_file.exists() else ""
@@ -1213,6 +1273,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if "merchants" in body:
             try:
                 patch["merchants"] = normalize_merchants_setting(body["merchants"])
+            except ValueError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+        # Mail-intake config (aliases -> person names, sender allowlist,
+        # daily caps). Validated at the edge like merchants.
+        if "intake" in body:
+            from .intake_mail import normalize_intake_setting
+
+            try:
+                patch["intake"] = normalize_intake_setting(body["intake"])
             except ValueError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=400)
         with open_store() as store:
