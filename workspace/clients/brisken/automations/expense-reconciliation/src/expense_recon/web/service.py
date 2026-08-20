@@ -22,6 +22,7 @@ import hashlib
 import json
 import os
 import re
+import threading
 import uuid
 from dataclasses import dataclass, replace
 from datetime import date
@@ -4357,6 +4358,12 @@ def restore_set_aside_file(
     }
 
 
+# One writer at a time on a batch snapshot: mail-intake threads, the SPA
+# add job, and replay-held all funnel through add_receipts_to_expense_batch,
+# whose read-modify-write on the snapshot is only safe serialized.
+_BATCH_ADD_LOCK = threading.Lock()
+
+
 def add_receipts_to_expense_batch(
     store: RunStore,
     run: RunRow,
@@ -4374,9 +4381,6 @@ def add_receipts_to_expense_batch(
     bytes (within this upload or vs an already-stored file) are skipped.
     Refused once a statement is attached — the pool is then the
     reconciliation's provenance and must not shift under it."""
-    from ..categorize import categorize_receipts_with_registry
-    from ..cli import _resolve_categorizer_chart
-    from ..ingest.receipts_folder import parse_receipt_file
 
     def _stage(name: str) -> None:
         if on_stage is not None:
@@ -4384,6 +4388,39 @@ def add_receipts_to_expense_batch(
                 on_stage(name)
             except Exception:  # noqa: BLE001 - progress is best-effort
                 pass
+
+    # Serialize the whole read-modify-write span: mail intake, the SPA add
+    # job, and replay-held can all land concurrently on one batch, and an
+    # unserialized pair loses the first writer's receipts (last-write-wins
+    # on the snapshot; adversarial review 2026-08-20). One writer at a time
+    # is the intended operating mode — volume is a shared mailbox's trickle.
+    with _BATCH_ADD_LOCK:
+        fresh = store.get_run(run.run_id)
+        if fresh is not None:
+            run = fresh
+        return _add_receipts_locked(
+            store, run, staging_dir, now_iso,
+            learning_db_path=learning_db_path,
+            on_stage=on_stage,
+            provenance_by_digest=provenance_by_digest,
+            _stage=_stage,
+        )
+
+
+def _add_receipts_locked(
+    store: RunStore,
+    run: RunRow,
+    staging_dir: str | Path,
+    now_iso: str,
+    *,
+    learning_db_path: Path | None,
+    on_stage,
+    provenance_by_digest: dict[str, dict] | None,
+    _stage,
+) -> dict:
+    from ..categorize import categorize_receipts_with_registry
+    from ..cli import _resolve_categorizer_chart
+    from ..ingest.receipts_folder import parse_receipt_file
 
     if has_statement(run):
         raise RunInputError(
@@ -4402,9 +4439,19 @@ def add_receipts_to_expense_batch(
     llm_client, tracker, llm_source = _batch_llm_client(cfg)
 
     # Existing content hashes: a re-upload of a file already in the pool is
-    # a no-op, not a duplicate expense.
+    # a no-op, not a duplicate expense. Keyed on the files the SNAPSHOT
+    # references (pool + set-aside), never the raw directory listing: a
+    # killed job can leave orphan files on disk that no snapshot knows, and
+    # disk-keyed dedupe would then block re-adding those receipts forever
+    # (adversarial review 2026-08-20).
+    referenced = {r.document_id for r in receipts} | {
+        str(e.get("file", "")) for e in set_aside_entries(run.snapshot)
+    }
     existing_hashes = set()
-    existing_files = [p for p in sorted(receipts_dir.iterdir()) if p.is_file()]
+    existing_files = [
+        p for p in sorted(receipts_dir.iterdir())
+        if p.is_file() and p.name in referenced
+    ]
     for p in existing_files:
         existing_hashes.add(hashlib.sha1(p.read_bytes()).hexdigest()[:16])
 
@@ -4414,7 +4461,14 @@ def add_receipts_to_expense_batch(
     new_set_aside: list[dict] = []
     new_provenance: dict[str, dict] = {}
     n_seen = 0
-    n_index = len(existing_files)
+    # Next free index from EVERYTHING on disk (referenced or orphan), so a
+    # new dest name can never overwrite a referenced file across index gaps
+    # left by deletions, nor an orphan another job wrote before dying.
+    n_index = 0
+    for p in receipts_dir.iterdir():
+        m = re.match(r"^(\d{4})__", p.name)
+        if m:
+            n_index = max(n_index, int(m.group(1)) + 1)
     for name, data in _folder_receipt_files(staging_dir):
         n_seen += 1
         if n_seen > FOLDER_MAX_FILES:

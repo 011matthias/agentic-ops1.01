@@ -360,6 +360,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 _store.set_intake_status(
                     _intake_id, INTAKE_RECEIVED, updated_at=_now_iso()
                 )
+    # Mail-intake companion sweep: an inbound archive whose ingest job the
+    # sweep above just marked interrupted flips back to a replayable held
+    # status, so a Fly stop mid-OCR never leaves mail stranded as pending.
+    try:
+        from .intake_mail import reconcile_interrupted
+
+        reconcile_interrupted(db_path, data_root_path)
+    except Exception:  # noqa: BLE001 - reconcile must never block startup
+        pass
 
     def open_store() -> RunStore:
         return RunStore(db_path)

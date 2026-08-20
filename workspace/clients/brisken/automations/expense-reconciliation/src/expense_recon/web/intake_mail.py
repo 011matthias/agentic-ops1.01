@@ -1,26 +1,33 @@
 """Mail-intake core: the app's own mailbox (expenses.brisken.com).
 
 Faculty (or Criss forwarding on their behalf) mail receipts to the intake
-address; the SMTP listener (`smtp_server.py`) hands the raw RFC822 bytes to
-`process_message` here, which:
+address; the SMTP listener (`smtp_server.py`) drives this module:
 
-  1. parses the MIME (attachments incl. inline images; body-only detected),
-  2. enforces the sender allowlist (deny-by-default; the SMTP layer turns a
+  1. `parse_inbound` reads the MIME (attachments incl. inline images;
+     body-only detected; zips REFUSED at this boundary — the authenticated
+     operator upload is the zip path; a mailed zip would count as one file
+     against the spend budget while expanding to up to 80 vision calls),
+  2. the sender allowlist is deny-by-default (the SMTP layer turns a
      refusal into an in-protocol 550, so the sender's own mail system
      generates the bounce and we never send anything),
-  3. archives the raw message + parts under ``/data/inbound/<stamp>/`` (the
-     app is the system of record for the original),
-  4. resolves WHO submitted it (To-alias beats From-sender; the alias map
-     lives in settings["intake"]["aliases"]),
-  5. routes the attachments into the newest OPEN expense batch via the
-     existing incremental-add machinery (dedupe, quarantine, categorize all
-     unchanged) stamping per-file intake provenance,
-  6. appends one line per message to ``/data/inbound/log.jsonl``.
+  3. `archive_incoming` writes the raw message + parts under
+     ``/data/inbound/<stamp>/`` and the acceptance log row BEFORE the SMTP
+     250 is answered (the ack means custody: a crash after 250 can no
+     longer lose acknowledged mail),
+  4. `route_archived` resolves WHO submitted it (To-alias beats
+     From-sender), picks the newest OPEN expense batch, and runs the
+     existing incremental add (dedupe, quarantine, categorize unchanged)
+     stamping per-file intake provenance; the archive's status flips to
+     ``ingested`` only when the job actually succeeded, else
+     ``held_failed`` so replay can drain it,
+  5. spend/abuse guards: an in-memory day budget reserved at acceptance
+     time (raceproof within the process), an in-flight route ceiling, and
+     a free-disk floor — each refusal is a 4xx/5xx SMTP answer, never a
+     silent drop.
 
-No open batch, body-only mail, or a tripped daily cap never drops mail:
-the message is archived with a held status and surfaces via
-``GET /api/inbound/log``; ``POST /api/inbound/replay-held`` re-routes held
-mail once a batch exists.
+Held mail (no open batch, body-only, no valid files, failed/interrupted
+jobs) is archived + visible via ``GET /api/inbound/log``;
+``POST /api/inbound/replay-held`` re-routes it once a batch exists.
 
 Decision logic is pure/sync (testable without asyncio); only the SMTP
 transport in `smtp_server.py` is async.
@@ -31,6 +38,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -53,16 +61,25 @@ from .store import JOB_DONE, JOB_ERROR, RunStore
 DEFAULT_INTAKE_DOMAIN = "expenses.brisken.com"
 DEFAULT_SENDER_ALLOWLIST = ("@brisken.com",)
 # Cost guard on the vision spend a runaway/compromised sender could cause.
+# Units = max(1, attachment count) per accepted message, so zero-file spam
+# consumes budget too.
 DEFAULT_SENDER_DAILY_CAP = 40
 DEFAULT_GLOBAL_DAILY_CAP = 200
 MAX_ATTACHMENTS_PER_MAIL = 30
+MAX_INFLIGHT_ROUTES = 8
+MIN_FREE_DISK_BYTES = 500 * 1024 * 1024
 
-# Held statuses (archived, not ingested, replayable where noted).
-HELD_NO_BATCH = "held_no_batch"        # replayable
-HELD_BODY_ONLY = "held_body_only"      # needs body->PDF rendering (round 2)
-HELD_NO_VALID_FILES = "held_no_valid_files"
+# Archive statuses. "received" = custody taken, routing pending;
+# a stale "received" (crashed router) is replayable like held_no_batch.
+STATUS_RECEIVED = "received"
 STATUS_INGESTED = "ingested"
 STATUS_REPLAYED = "replayed"
+HELD_NO_BATCH = "held_no_batch"        # replayable
+HELD_FAILED = "held_failed"            # job errored/interrupted; replayable
+HELD_BODY_ONLY = "held_body_only"      # needs body->PDF rendering (round 2)
+HELD_NO_VALID_FILES = "held_no_valid_files"
+REPLAYABLE = {HELD_NO_BATCH, HELD_FAILED}
+STALE_RECEIVED_SECONDS = 600
 
 
 @dataclass(frozen=True)
@@ -129,7 +146,16 @@ def normalize_intake_setting(raw) -> dict:
             raise ValueError(
                 "intake.senders must be a list of addresses or @domains"
             )
-        cleaned["senders"] = [s.strip().lower() for s in senders]
+        entries = [s.strip().lower() for s in senders]
+        # An entry with no '@' anywhere can never match sender_allowed and
+        # would silently 550 ALL mail — refuse it at the edge instead.
+        bad = [s for s in entries if "@" not in s]
+        if bad:
+            raise ValueError(
+                "intake.senders entries must be full addresses or start "
+                f"with '@' (got: {bad[0]!r})"
+            )
+        cleaned["senders"] = entries
     aliases = raw.get("aliases")
     if aliases is not None:
         if not isinstance(aliases, dict) or not all(
@@ -168,26 +194,35 @@ class InboundMessage:
     body_only: bool               # no usable attachments but there IS a body
 
 
-def parse_inbound(raw: bytes, domain: str) -> InboundMessage:
-    msg = BytesParser(policy=policy.default).parsebytes(raw)
-    from_addr = parseaddr(str(msg.get("From", "")))[1].strip().lower()
-    to_locals: list[str] = []
-    # NOTE: 3.12's strict getaddresses (CVE-2023-27043 fix) answers the
-    # WHOLE call with the [('','')] failure sentinel if ANY element is
-    # unparseable — an empty string from an absent header poisons it.
-    header_values = [
-        str(msg.get(h, ""))
-        for h in ("To", "Cc", "X-Original-To", "Delivered-To")
-    ]
-    for _label, addr in getaddresses([v for v in header_values if v.strip()]):
-        addr = addr.strip().lower()
+def _locals_from_addrs(addrs, domain: str, out: list[str]) -> None:
+    for addr in addrs:
+        addr = (addr or "").strip().lower()
         if addr.endswith("@" + domain):
             local = addr.split("@", 1)[0]
             # plus-addressing: receipts+dirk@ -> tag "dirk" is the signal
             if "+" in local:
                 local = local.split("+", 1)[1]
-            if local and local not in to_locals:
-                to_locals.append(local)
+            if local and local not in out:
+                out.append(local)
+
+
+def parse_inbound(
+    raw: bytes, domain: str, envelope_rcpts: list[str] | None = None
+) -> InboundMessage:
+    msg = BytesParser(policy=policy.default).parsebytes(raw)
+    from_addr = parseaddr(str(msg.get("From", "")))[1].strip().lower()
+    to_locals: list[str] = []
+    # Envelope recipients first: our own listener IS the receiving MTA, so
+    # they are authoritative and cover Bcc'd aliases the headers never show.
+    _locals_from_addrs(envelope_rcpts or [], domain, to_locals)
+    # NOTE: 3.12's strict getaddresses (CVE-2023-27043 fix) answers the
+    # WHOLE call with the [('','')] failure sentinel if ANY element is
+    # unparseable — an empty string from an absent header poisons it.
+    header_values = [str(msg.get(h, "")) for h in ("To", "Cc")]
+    _locals_from_addrs(
+        (a for _l, a in getaddresses([v for v in header_values if v.strip()])),
+        domain, to_locals,
+    )
 
     attachments: list[tuple[str, bytes]] = []
     skipped: list[str] = []
@@ -200,10 +235,10 @@ def parse_inbound(raw: bytes, domain: str) -> InboundMessage:
         is_attachment = part.get_content_disposition() == "attachment"
         is_receipt_media = ctype in {
             "application/pdf", "image/png", "image/jpeg", "image/webp",
-            "application/zip",
         }
         # Inline receipt images (cid-embedded) count too; plain text/html
-        # bodies and signature furniture (tiny images) do not.
+        # bodies and signature furniture (tiny images) do not. Zips are
+        # refused here by design (see module docstring).
         if not is_attachment and not is_receipt_media:
             continue
         try:
@@ -215,13 +250,12 @@ def parse_inbound(raw: bytes, domain: str) -> InboundMessage:
             ext = {
                 "application/pdf": ".pdf", "image/png": ".png",
                 "image/jpeg": ".jpg", "image/webp": ".webp",
-                "application/zip": ".zip",
             }.get(ctype, "")
             if not ext:
                 continue
             fname = f"inline-{len(attachments) + 1}{ext}"
         suffix = Path(fname).suffix.lower()
-        if suffix not in FOLDER_RECEIPT_SUFFIXES and suffix != ".zip":
+        if suffix not in FOLDER_RECEIPT_SUFFIXES or suffix == ".zip":
             skipped.append(fname)
             continue
         if len(data) < 4096 and suffix in {".png", ".jpg", ".jpeg", ".webp"}:
@@ -269,12 +303,88 @@ def resolve_person(
     to_locals: list[str], from_addr: str, cfg: IntakeConfig
 ) -> dict:
     """To-alias beats From-sender: the alias survives Criss forwarding on
-    someone's behalf, where From degrades to the forwarder."""
+    someone's behalf, where From degrades to the forwarder. The alias is a
+    routing CLAIM, not authentication — `address` always records the real
+    sender, and the reviewer sees both."""
     for local in to_locals:
         person = cfg.aliases.get(local)
         if person:
             return {"person": person, "source": "alias", "address": from_addr}
     return {"person": from_addr, "source": "sender", "address": from_addr}
+
+
+# ------------------------------------------------------- abuse guards ----
+
+class DayBudget:
+    """In-memory per-day spend budget, reserved at acceptance time BEFORE
+    the SMTP 250, so concurrent connections cannot race past the caps the
+    way a read-the-log-later design would. Seeded from the acceptance log
+    once per process (restart forgiveness is bounded by the log)."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._day = ""
+        self._per_sender: dict[str, int] = {}
+        self._global = 0
+        self._seeded_from: Path | None = None
+
+    def _roll(self, data_root: Path) -> None:
+        today = _now_iso()[:10]
+        if self._day != today:
+            self._day = today
+            self._per_sender = {}
+            self._global = 0
+            self._seeded_from = None
+        if self._seeded_from != data_root:
+            self._seeded_from = data_root
+            for row in read_log(data_root, limit=5000, overlay=False):
+                if str(row.get("at", ""))[:10] != today:
+                    continue
+                units = max(1, int(row.get("n_files") or 0))
+                sender = str(row.get("from", ""))
+                self._per_sender[sender] = self._per_sender.get(sender, 0) + units
+                self._global += units
+
+    def reserve(self, data_root: Path, sender: str, units: int,
+                cfg: IntakeConfig) -> bool:
+        units = max(1, units)
+        with self._lock:
+            self._roll(data_root)
+            if self._per_sender.get(sender, 0) + units > cfg.sender_daily_cap:
+                return False
+            if self._global + units > cfg.global_daily_cap:
+                return False
+            self._per_sender[sender] = self._per_sender.get(sender, 0) + units
+            self._global += units
+            return True
+
+
+DAY_BUDGET = DayBudget()
+
+_INFLIGHT_LOCK = threading.Lock()
+_INFLIGHT = 0
+
+
+def try_begin_route() -> bool:
+    global _INFLIGHT
+    with _INFLIGHT_LOCK:
+        if _INFLIGHT >= MAX_INFLIGHT_ROUTES:
+            return False
+        _INFLIGHT += 1
+        return True
+
+
+def end_route() -> None:
+    global _INFLIGHT
+    with _INFLIGHT_LOCK:
+        _INFLIGHT = max(0, _INFLIGHT - 1)
+
+
+def disk_low(data_root: Path) -> bool:
+    try:
+        return shutil.disk_usage(str(data_root)).free < MIN_FREE_DISK_BYTES
+    except OSError:
+        return False
 
 
 # ---------------------------------------------------------------- archive --
@@ -298,7 +408,11 @@ def _append_log(data_root: Path, entry: dict) -> None:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def read_log(data_root: Path, limit: int = 100) -> list[dict]:
+def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[dict]:
+    """Acceptance log rows, oldest->newest. With `overlay` (the default)
+    each row's status is replaced by the archive meta's CURRENT status, so
+    readers see the truth after routing/replay, not the acceptance-time
+    snapshot."""
     path = _log_path(data_root)
     if not path.exists():
         return []
@@ -313,23 +427,24 @@ def read_log(data_root: Path, limit: int = 100) -> list[dict]:
             continue
         if isinstance(row, dict):
             rows.append(row)
-    return rows[-limit:]
-
-
-def today_counts(data_root: Path) -> tuple[dict[str, int], int]:
-    """(per-sender file counts today, global file count today) from the
-    log — cheap at this volume, no schema."""
-    today = _now_iso()[:10]
-    per: dict[str, int] = {}
-    total = 0
-    for row in read_log(data_root, limit=2000):
-        if str(row.get("at", ""))[:10] != today:
-            continue
-        n = int(row.get("n_files") or 0)
-        sender = str(row.get("from", ""))
-        per[sender] = per.get(sender, 0) + n
-        total += n
-    return per, total
+    rows = rows[-limit:]
+    if overlay:
+        for row in rows:
+            arch = row.get("archive")
+            if not arch:
+                continue
+            meta_path = inbound_root(data_root) / str(arch) / "meta.json"
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001 - overlay is best-effort
+                continue
+            row["status"] = meta.get("status", row.get("status"))
+            person = meta.get("person")
+            if isinstance(person, dict) and person.get("person"):
+                row["person"] = person["person"]
+            if meta.get("batch_id"):
+                row["batch_id"] = meta["batch_id"]
+    return rows
 
 
 def archive_message(
@@ -364,16 +479,39 @@ def archive_message(
     return arch
 
 
-def _update_meta(arch: Path, patch: dict) -> None:
-    meta_path = arch / "meta.json"
+def _read_meta(arch: Path) -> dict:
     try:
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001 - a corrupt meta must not block replay
-        meta = {}
+        return json.loads((arch / "meta.json").read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - corrupt meta reads as empty
+        return {}
+
+
+def _update_meta(arch: Path, patch: dict) -> None:
+    meta = _read_meta(arch)
     meta.update(patch)
-    meta_path.write_text(
+    (arch / "meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8"
     )
+
+
+def archive_incoming(
+    data_root: Path, raw: bytes, parsed: InboundMessage, peer: str = "",
+) -> Path:
+    """Custody step: archive + acceptance log row, called INLINE in the
+    SMTP DATA handler before the 250 goes out. Raises on failure (the
+    caller answers 451 so the sender's MTA retries)."""
+    arch = archive_message(
+        data_root, raw, parsed, STATUS_RECEIVED, extra={"peer": peer}
+    )
+    _append_log(data_root, {
+        "at": _now_iso(),
+        "from": parsed.from_addr,
+        "subject": parsed.subject,
+        "n_files": len(parsed.attachments),
+        "status": STATUS_RECEIVED,
+        "archive": arch.name,
+    })
+    return arch
 
 
 # ---------------------------------------------------------------- routing --
@@ -391,9 +529,8 @@ def open_batch(store: RunStore):
 def _ingest_job(
     db_path: Path, job_id: str, run_id: str, staging: Path,
     learning_db_path: Path | None, provenance: dict[str, dict],
+    arch: Path | None,
 ) -> None:
-    import shutil
-
     try:
         with RunStore(db_path) as store:
             run = store.get_run(run_id)
@@ -402,6 +539,9 @@ def _ingest_job(
                     job_id, JOB_ERROR, error="run not found",
                     updated_at=_now_iso(),
                 )
+                if arch is not None:
+                    _update_meta(arch, {"status": HELD_FAILED,
+                                        "error": "run not found"})
                 return
             add_receipts_to_expense_batch(
                 store, run, staging, _now_iso(),
@@ -412,11 +552,16 @@ def _ingest_job(
             store.set_job_status(
                 job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
             )
-    except Exception as exc:  # noqa: BLE001 - job errors surface via poller
+        # Status truth: "ingested" only after the job ACTUALLY succeeded.
+        if arch is not None:
+            _update_meta(arch, {"status": STATUS_INGESTED})
+    except Exception as exc:  # noqa: BLE001 - job errors surface via meta+log
         with RunStore(db_path) as store:
             store.set_job_status(
                 job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
             )
+        if arch is not None:
+            _update_meta(arch, {"status": HELD_FAILED, "error": str(exc)[:400]})
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
@@ -428,6 +573,7 @@ def _start_ingest(
     attachments: list[tuple[str, bytes]],
     person: dict,
     received_at: str,
+    arch: Path | None,
     *,
     synchronous: bool = False,
 ) -> str:
@@ -446,32 +592,31 @@ def _start_ingest(
         store.create_job(job_id, None, _now_iso())
     if synchronous:
         _ingest_job(db_path, job_id, run.run_id, staging,
-                    learning_db_path, provenance)
+                    learning_db_path, provenance, arch)
     else:
         threading.Thread(
             target=_ingest_job,
             args=(db_path, job_id, run.run_id, staging,
-                  learning_db_path, provenance),
+                  learning_db_path, provenance, arch),
             daemon=True,
         ).start()
     return job_id
 
 
-def process_message(
+def route_archived(
     db_path: Path,
     learning_db_path: Path | None,
     data_root: Path,
-    raw: bytes,
+    arch: Path,
+    parsed: InboundMessage,
     *,
-    peer: str = "",
     synchronous: bool = False,
 ) -> dict:
-    """The accepted-mail pipeline (allowlist already passed at the SMTP
-    layer). Archive first — nothing that reached here is ever lost — then
-    route. Returns {status, ...} for the SMTP reply + log."""
+    """Routing step for an archived message: resolve person, pick the open
+    batch, hand off to the ingest job (which owns the ingested/held_failed
+    status flip). Every non-ingest outcome lands in meta as a held status."""
     with RunStore(db_path) as store:
         cfg = IntakeConfig.from_settings(store.get_settings())
-    parsed = parse_inbound(raw, cfg.domain)
     person = resolve_person(parsed.to_locals, parsed.from_addr, cfg)
     received_at = _now_iso()
 
@@ -487,52 +632,85 @@ def process_message(
         else:
             status, extra = STATUS_INGESTED, {"batch_id": run.run_id}
 
-    arch = archive_message(
-        data_root, raw, parsed, status,
-        extra={**extra, "person": person, "peer": peer},
-    )
-    if status == STATUS_INGESTED:
-        job_id = _start_ingest(
-            db_path, learning_db_path, run, parsed.attachments, person,
-            received_at, synchronous=synchronous,
-        )
-        _update_meta(arch, {"job_id": job_id})
-        extra = {**extra, "job_id": job_id}
+    if status != STATUS_INGESTED:
+        _update_meta(arch, {"status": status, "person": person})
+        return {"status": status, "archive": arch.name, "person": person}
 
-    _append_log(data_root, {
-        "at": received_at,
-        "from": parsed.from_addr,
-        "person": person.get("person"),
-        "subject": parsed.subject,
-        "n_files": len(parsed.attachments),
-        "status": status,
-        "archive": arch.name,
-        **extra,
-    })
-    return {"status": status, "archive": arch.name, "person": person, **extra}
+    # The job flips the meta to ingested/held_failed when it finishes.
+    _update_meta(arch, {"person": person, "batch_id": run.run_id})
+    job_id = _start_ingest(
+        db_path, learning_db_path, run, parsed.attachments, person,
+        received_at, arch, synchronous=synchronous,
+    )
+    _update_meta(arch, {"job_id": job_id})
+    final = _read_meta(arch).get("status", STATUS_RECEIVED)
+    return {
+        "status": final if synchronous else STATUS_INGESTED,
+        "archive": arch.name, "person": person,
+        "batch_id": run.run_id, "job_id": job_id,
+    }
+
+
+def process_message(
+    db_path: Path,
+    learning_db_path: Path | None,
+    data_root: Path,
+    raw: bytes,
+    *,
+    peer: str = "",
+    synchronous: bool = False,
+) -> dict:
+    """Archive + route in one call (tests, and any non-SMTP intake). The
+    SMTP handler calls the two halves separately so the archive happens
+    before the 250."""
+    with RunStore(db_path) as store:
+        cfg = IntakeConfig.from_settings(store.get_settings())
+    parsed = parse_inbound(raw, cfg.domain)
+    arch = archive_incoming(data_root, raw, parsed, peer=peer)
+    return route_archived(
+        db_path, learning_db_path, data_root, arch, parsed,
+        synchronous=synchronous,
+    )
+
+
+def _is_replayable(meta: dict, now: datetime) -> bool:
+    status = str(meta.get("status", ""))
+    if status in REPLAYABLE:
+        return True
+    if status == STATUS_RECEIVED:
+        # A "received" that never routed = the router died before/during
+        # routing (crash, scale-to-zero stop). Old enough => replayable.
+        try:
+            at = datetime.fromisoformat(str(meta.get("at", "")))
+        except ValueError:
+            return True
+        age = (now - at).total_seconds()
+        return age > STALE_RECEIVED_SECONDS
+    return False
 
 
 def replay_held(
     db_path: Path, learning_db_path: Path | None, data_root: Path,
 ) -> dict:
-    """Re-route mail archived as held_no_batch into the (now) open batch.
-    Body-only holds stay held (they need the round-2 body renderer)."""
+    """Re-route archived mail that is held (no batch at arrival, failed or
+    interrupted jobs, stale never-routed receipts) into the now-open batch.
+    Body-only holds stay held (they need the round-2 body renderer). An
+    archive counts as replayed ONLY when its ingest job reported done."""
     root = inbound_root(data_root)
     if not root.exists():
-        return {"replayed": 0, "still_held": 0}
-    with RunStore(db_path) as store:
-        run = open_batch(store)
-    replayed = still_held = 0
+        return {"replayed": 0, "still_held": 0, "failed": 0}
+    now = datetime.now(timezone.utc)
+    replayed = still_held = failed = 0
     for arch in sorted(root.iterdir()):
-        meta_path = arch / "meta.json"
-        if not meta_path.is_file():
+        if not (arch / "meta.json").is_file():
             continue
-        try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001 - unreadable meta is not replayable
+        meta = _read_meta(arch)
+        if not _is_replayable(meta, now):
             continue
-        if meta.get("status") != HELD_NO_BATCH:
-            continue
+        # Re-resolve per archive: a statement attach mid-drain closes the
+        # batch and later archives must hold, not error into the void.
+        with RunStore(db_path) as store:
+            run = open_batch(store)
         if run is None:
             still_held += 1
             continue
@@ -543,6 +721,7 @@ def replay_held(
             if p.is_file()
         ] if parts_dir.is_dir() else []
         if not attachments:
+            _update_meta(arch, {"status": HELD_NO_VALID_FILES})
             still_held += 1
             continue
         person = meta.get("person") or {
@@ -551,17 +730,54 @@ def replay_held(
         }
         job_id = _start_ingest(
             db_path, learning_db_path, run, attachments, person,
-            _now_iso(), synchronous=True,
+            _now_iso(), arch, synchronous=True,
         )
-        _update_meta(arch, {
-            "status": STATUS_REPLAYED, "job_id": job_id,
-            "batch_id": run.run_id,
-        })
-        _append_log(data_root, {
-            "at": _now_iso(), "from": meta.get("from", ""),
-            "person": person.get("person"), "subject": meta.get("subject", ""),
-            "n_files": len(attachments), "status": STATUS_REPLAYED,
-            "archive": arch.name, "batch_id": run.run_id, "job_id": job_id,
-        })
-        replayed += 1
-    return {"replayed": replayed, "still_held": still_held}
+        with RunStore(db_path) as store:
+            job = store.get_job(job_id) or {}
+        if job.get("status") == JOB_DONE:
+            _update_meta(arch, {
+                "status": STATUS_REPLAYED, "job_id": job_id,
+                "batch_id": run.run_id,
+            })
+            _append_log(data_root, {
+                "at": _now_iso(), "from": meta.get("from", ""),
+                "person": person.get("person"),
+                "subject": meta.get("subject", ""),
+                "n_files": len(attachments), "status": STATUS_REPLAYED,
+                "archive": arch.name, "batch_id": run.run_id,
+                "job_id": job_id,
+            })
+            replayed += 1
+        else:
+            # _ingest_job already stamped held_failed + the error.
+            failed += 1
+    return {"replayed": replayed, "still_held": still_held, "failed": failed}
+
+
+def reconcile_interrupted(db_path: Path, data_root: Path) -> int:
+    """Startup sweep companion: an archive whose meta says ingested but
+    whose job row ended error/interrupted was killed mid-ingest (Fly stop).
+    Flip it back to held_failed so replay can drain it. Returns the count."""
+    root = inbound_root(data_root)
+    if not root.exists():
+        return 0
+    flipped = 0
+    with RunStore(db_path) as store:
+        for arch in root.iterdir():
+            meta = _read_meta(arch)
+            job_id = meta.get("job_id")
+            # A kill mid-ingest leaves status "received" (the job owns the
+            # flip and never got there) with the job row marked interrupted
+            # by the startup sweep; "ingested" with a bad job is belt+braces.
+            if not job_id or meta.get("status") not in (
+                STATUS_RECEIVED, STATUS_INGESTED
+            ):
+                continue
+            job = store.get_job(str(job_id))
+            if job is None:
+                continue
+            if job.get("status") != JOB_DONE:
+                _update_meta(arch, {"status": HELD_FAILED,
+                                    "error": "job interrupted"})
+                flipped += 1
+    return flipped

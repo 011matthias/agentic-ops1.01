@@ -20,8 +20,11 @@ from expense_recon.web.app import create_app  # noqa: E402
 from expense_recon.web.intake_mail import (  # noqa: E402
     HELD_BODY_ONLY,
     HELD_NO_BATCH,
+    HELD_NO_VALID_FILES,
     STATUS_INGESTED,
+    DayBudget,
     IntakeConfig,
+    normalize_intake_setting,
     parse_inbound,
     process_message,
     read_log,
@@ -29,7 +32,7 @@ from expense_recon.web.intake_mail import (  # noqa: E402
     resolve_person,
     sender_allowed,
 )
-from expense_recon.web.smtp_server import data_decision, rcpt_decision  # noqa: E402
+from expense_recon.web.smtp_server import rcpt_decision, sender_decision  # noqa: E402
 
 JPG = b"\xff\xd8\xff\xe0" + b"x" * 5000  # big enough to not read as a logo
 DOMAIN = "expenses.brisken.com"
@@ -161,26 +164,77 @@ def test_rcpt_decision_relay_denied():
     assert rcpt_decision(f"receipts@{DOMAIN}", DOMAIN, 10).startswith("452")
 
 
-def test_data_decision_sender_and_caps():
-    cfg = IntakeConfig(sender_daily_cap=2, global_daily_cap=5)
-    ok = data_decision(
-        "dirk.neumann@brisken.com", "dirk.neumann@brisken.com", cfg, {}, 0
+def test_sender_decision_envelope_and_header_must_both_pass():
+    cfg = IntakeConfig()
+    ok = sender_decision(
+        "dirk.neumann@brisken.com", "dirk.neumann@brisken.com", cfg
     )
     assert ok is None
     # envelope passes but header sender does not -> refused
-    spoofed = data_decision(
-        "dirk.neumann@brisken.com", "evil@gmail.com", cfg, {}, 0
+    spoofed = sender_decision(
+        "dirk.neumann@brisken.com", "evil@gmail.com", cfg
     )
     assert spoofed.startswith("550")
-    capped = data_decision(
-        "dirk.neumann@brisken.com", "dirk.neumann@brisken.com", cfg,
-        {"dirk.neumann@brisken.com": 2}, 2,
+
+
+def test_day_budget_reserves_at_accept_and_charges_zero_file_mail(tmp_path):
+    cfg = IntakeConfig(sender_daily_cap=3, global_daily_cap=4)
+    budget = DayBudget()
+    a = "a@brisken.com"
+    # 2 files reserve 2 units; a zero-file mail still costs 1 unit
+    assert budget.reserve(tmp_path, a, 2, cfg)
+    assert budget.reserve(tmp_path, a, 0, cfg)
+    # sender cap (3) is now exhausted
+    assert not budget.reserve(tmp_path, a, 1, cfg)
+    # a different sender still fits under the global cap (4): 1 unit left
+    assert budget.reserve(tmp_path, "b@brisken.com", 1, cfg)
+    assert not budget.reserve(tmp_path, "c@brisken.com", 1, cfg)
+
+
+def test_day_budget_seeds_from_acceptance_log(tmp_path):
+    from expense_recon.web.intake_mail import _append_log, _now_iso
+
+    _append_log(tmp_path, {
+        "at": _now_iso(), "from": "a@brisken.com", "n_files": 2,
+        "status": "received", "archive": "x",
+    })
+    cfg = IntakeConfig(sender_daily_cap=3, global_daily_cap=10)
+    budget = DayBudget()
+    # 2 units already spent today by the log -> only 1 left for this sender
+    assert budget.reserve(tmp_path, "a@brisken.com", 1, cfg)
+    assert not budget.reserve(tmp_path, "a@brisken.com", 1, cfg)
+
+
+def test_zip_attachments_are_refused_at_the_mail_boundary():
+    msg = EmailMessage()
+    msg["From"] = "a@brisken.com"
+    msg["To"] = f"receipts@{DOMAIN}"
+    msg["Subject"] = "zipped"
+    msg.set_content("here")
+    msg.add_attachment(
+        b"PK\x03\x04zipbytes", maintype="application", subtype="zip",
+        filename="receipts.zip",
     )
-    assert capped.startswith("452")
-    global_capped = data_decision(
-        "dirk.neumann@brisken.com", "dirk.neumann@brisken.com", cfg, {}, 5
+    parsed = parse_inbound(msg.as_bytes(), DOMAIN)
+    assert parsed.attachments == []
+    assert "receipts.zip" in parsed.skipped
+
+
+def test_envelope_rcpts_feed_alias_resolution():
+    # Bcc'd alias: headers show nothing, the envelope knows the recipient.
+    raw = _mail("a@brisken.com", to_addr="someone@else.example",
+                attachments=[("r.jpg", JPG)])
+    parsed = parse_inbound(raw, DOMAIN, [f"receipts+dirk@{DOMAIN}"])
+    assert parsed.to_locals == ["dirk"]
+
+
+def test_intake_settings_reject_matchless_sender_entry():
+    with pytest.raises(ValueError):
+        normalize_intake_setting({"senders": ["brisken.com"]})
+    ok = normalize_intake_setting(
+        {"senders": ["@brisken.com", "helper@gmail.com"]}
     )
-    assert global_capped.startswith("452")
+    assert ok["senders"] == ["@brisken.com", "helper@gmail.com"]
 
 
 # ---------------------------------------------------------- end to end --
