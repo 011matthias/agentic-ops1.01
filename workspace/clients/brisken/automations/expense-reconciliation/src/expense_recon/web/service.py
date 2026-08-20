@@ -3856,6 +3856,7 @@ def build_expense_view(
         category_overrides=overrides, default_entity=default_entity,
     )
     receipts_dir = Path(run.work_dir) / "receipts"
+    intake_provenance = (run.snapshot or {}).get("intake_provenance") or {}
     # Override-applied twins for the `books_as` fan-out (backlog item 2):
     # the export applies category overrides before splitting, so the grid's
     # depiction must too, or the two would disagree after a reclassify.
@@ -3940,6 +3941,10 @@ def build_expense_view(
             # same fan-out `build_expense_rows` writes (shared helper).
             "books_as": books_as,
             "is_split": len(books_as) > 1,
+            # Mail-intake provenance (who submitted this receipt): present
+            # only for receipts that arrived via the intake mailbox —
+            # {person, source: alias|sender, address, received_at}.
+            "submitted_by": intake_provenance.get(r.document_id),
         })
 
     # Category-variance chip (backlog item 8): a vendor whose receipts in
@@ -4360,6 +4365,7 @@ def add_receipts_to_expense_batch(
     *,
     learning_db_path: Path | None = None,
     on_stage=None,
+    provenance_by_digest: dict[str, dict] | None = None,
 ) -> dict:
     """Add receipts to an EXISTING expense batch (they arrive gradually all
     month). Only the new files are OCR'd (never a re-read of the pool),
@@ -4406,6 +4412,7 @@ def add_receipts_to_expense_batch(
     issues: list[str] = []
     new_receipts: list[Receipt] = []
     new_set_aside: list[dict] = []
+    new_provenance: dict[str, dict] = {}
     n_seen = 0
     n_index = len(existing_files)
     for name, data in _folder_receipt_files(staging_dir):
@@ -4436,6 +4443,8 @@ def add_receipts_to_expense_batch(
         dest = receipts_dir / f"{n_index:04d}__{fs_name}"
         n_index += 1
         dest.write_bytes(data)
+        if provenance_by_digest and digest in provenance_by_digest:
+            new_provenance[dest.name] = provenance_by_digest[digest]
         receipt = None
         if llm_client is not None:
             try:
@@ -4527,6 +4536,14 @@ def add_receipts_to_expense_batch(
     all_set_aside = set_aside_entries(run.snapshot) + new_set_aside
     if all_set_aside:
         new_snapshot["set_aside"] = all_set_aside
+    # Intake provenance (who mailed this in): merge, first-write wins per
+    # stored file, so a direct-alias submission is never overwritten by a
+    # later bulk re-upload of the same bytes under a new name.
+    all_provenance = dict(run.snapshot.get("intake_provenance") or {})
+    for k, v in new_provenance.items():
+        all_provenance.setdefault(k, v)
+    if all_provenance:
+        new_snapshot["intake_provenance"] = all_provenance
     store.update_run_snapshot(run.run_id, new_snapshot)
     store.update_run_summary(run.run_id, {
         **run.summary,
