@@ -284,6 +284,36 @@ def test_entity_and_account_helpers():
     assert entity_for("unknown", _CARDS) is None
 
 
+# ── resolve_account_map: the conservative money-path resolver ──────────
+
+
+def test_resolve_account_map_semantics():
+    """Exact key first; bare-digit keys match a label printing their
+    number; label-shaped keys are exact-only; ambiguity denies (R2
+    adversarial review: a money path never guesses)."""
+    from expense_recon.cards import resolve_account_map
+
+    assert resolve_account_map("amex-usd", {"amex-usd": "A200"}) == "A200"
+    assert resolve_account_map("2838 - May 2026", {"2838": "A200"}) == "A200"
+    assert resolve_account_map("0340 - June", {"340": "A300"}) == "A300"
+    # Label-shaped key: exact only — no token bleed across labels.
+    assert resolve_account_map(
+        "0340 - June 2026", {"2838 - May 2026": "A200"}
+    ) is None
+    # Two bare-digit hits on one label: deny.
+    assert resolve_account_map(
+        "2838 - May 2026", {"2838": "A200", "2026": "A300"}
+    ) is None
+    # Same account under both hits is not ambiguous.
+    assert resolve_account_map(
+        "2838 - May 2026", {"2838": "A200", "2026": "A200"}
+    ) == "A200"
+    # Word keys never wildcard; empties resolve nothing.
+    assert resolve_account_map("0340 - Chase", {"chase": "A200"}) is None
+    assert resolve_account_map("", {"2838": "A200"}) is None
+    assert resolve_account_map("2838", None) is None
+
+
 # ── legacy_card_accounts: the snapshot flatten (cfg compat) ────────────
 
 

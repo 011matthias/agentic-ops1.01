@@ -553,21 +553,42 @@ def _setup_advisories(
 
     if not has_coa:
         out.append({
-            "setting": "card_entities",
+            "setting": "cards",
             "message": (
                 "No chart of accounts was resolved for this run, so posting "
                 "accounts are not validated and the journal exports "
                 "placeholder accounts. Map this card to its legal entity in "
-                "Settings."
+                "Settings > Cards."
             ),
         })
 
-    if not ((cfg.get("zoho") or {}).get("card_accounts") or {}):
+    # Per-card and Zoho-optional (Cards R2, 2026-08-21, feedback notes
+    # 9/11): name the actual card, say the account is optional, and say
+    # what the gap costs. The old advisory fired only on an EMPTY map and
+    # called the account required ("This card has no Zoho bank account"),
+    # which is the wording the owner pushed back on.
+    acct = ""
+    stmt = cfg.get("statement")
+    if isinstance(stmt, dict):
+        acct = str(stmt.get("account_id") or "").strip()
+    if not acct and transactions:
+        acct = str(transactions[0].account_id or "").strip()
+    mapped = (cfg.get("zoho") or {}).get("card_accounts") or {}
+    # The exact resolver the journal export applies (Cards R2:
+    # `resolve_account_map`, exact + bare-digit-unique), so the advisory
+    # is silent precisely when the export resolves and fires precisely
+    # when it placeholders.
+    from ..cards import resolve_account_map
+
+    resolvable = bool(resolve_account_map(acct, dict(mapped)))
+    if acct and not resolvable:
         out.append({
-            "setting": "card_accounts",
+            "setting": "cards",
             "message": (
-                "This card has no Zoho bank account, so every journal entry "
-                "balances to a 'Card: ...' placeholder. Map it in Settings."
+                f"Card '{acct}' has no Zoho paid-through account set "
+                "(optional: only the Zoho journal export uses it). Journal "
+                "entries balance to a visible 'Card: ...' placeholder until "
+                "one is set in Settings > Cards."
             ),
         })
     return out

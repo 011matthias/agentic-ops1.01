@@ -83,21 +83,42 @@ def _card_account(
     payment_mode: str | None, card_accounts: "Mapping[str, str] | None"
 ) -> str | None:
     """The Zoho "Paid Through" account for the card a receipt was paid on,
-    via the `card_accounts` last4 -> account map (the same map the journal
+    via the `card_accounts` digit -> account map (the same map the journal
     export credits against). None when the receipt names no card, or names
     a card the map does not know: an unknown card falls through to the
     default rather than posting to a wrong account (B4).
+
+    The trailing digit group keeps its historic fuzzy comparison; the
+    EARLIER runs are also tried (Cards R2, 2026-08-21) because a Zoho
+    payment-mode label prints BOTH of a card's digit identities
+    ("1 - CorpServ 2838/1672 (Chase)": statement marker 2838, plastic
+    last-4 1672) and the map may know the card under either — but an
+    earlier run matches EXACTLY only, and two distinct account hits deny.
+    A masked-PAN BIN fragment ("5412 75** **** 3456") must never
+    endswith-wildcard its way onto an unrelated card: this is a money
+    path, so a visible gap beats a guessed account (R2 adversarial
+    review).
     """
-    if not card_accounts:
+    if not payment_mode or not card_accounts:
         return None
-    last4 = _card_last4(payment_mode)
-    if not last4:
+    runs = re.findall(r"\d{4}", payment_mode)
+    if not runs:
         return None
+    last4 = runs[-1]
     for key, account in card_accounts.items():
         k = str(key).strip()
-        if k and account and (k == last4 or last4.endswith(k) or k.endswith(last4)):
+        if k and account and (
+            k == last4 or last4.endswith(k) or k.endswith(last4)
+        ):
             return str(account)
-    return None
+    hits: list[str] = []
+    for run in runs[:-1]:
+        norm = run.lstrip("0") or "0"
+        for key, account in card_accounts.items():
+            k = str(key).strip()
+            if k and account and (k.lstrip("0") or "0") == norm:
+                hits.append(str(account))
+    return hits[0] if len(set(hits)) == 1 else None
 
 
 def _resolve_or(

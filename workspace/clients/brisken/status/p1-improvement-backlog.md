@@ -43,8 +43,9 @@ Zoho labels print both). The last4-keyed map could never resolve
 
 **Rounds:** R1 registry + read-time composition (settings `cards` key,
 GET /api/cards, zero behavior change) — SHIPPED PR #555; R2 Zoho decoupling
-(per-card warning rewrite, both exports resolve via the registry,
-merchants editor inert-hint, dropdown relabels answering notes 5/7); R3
+(per-card OPTIONAL warning wording, conservative export resolution:
+bare-digit keys resolve labels, ambiguity placeholders, merchants
+inert-hint, dropdown relabels answering notes 5/7) — SHIPPED PR #556; R3
 entity-less batch + card-review strip + hint-to-card assignment that
 persists ("learning") + refresh-master-data endpoint (fixes the
 snapshot trap: settings edits reach existing batches); R4 mixed-entity

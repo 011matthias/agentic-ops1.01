@@ -311,3 +311,17 @@ def test_batch_snapshot_flattens_settings_cards(client, monkeypatch):
         "2838": "1010 Chase Corporate",
         "1672": "1010 Chase Corporate",
     }
+
+
+def test_merchants_inert_names_account_without_category(client):
+    """Cards R2 (feedback note 11): a merchant zoho_account without a
+    category is a no-op (apply_registry_category skips it), which is why
+    'the importance of zoho account is not evident'. GET names the inert
+    entries so the UI can say so instead of showing a silently dead field."""
+    client.put("/api/settings", json={"merchants": {
+        "Uber": {"aliases": [], "zoho_account": "E100 Travel"},
+        "Enilive": {"aliases": [], "category": "Travel & Transport",
+                    "zoho_account": "E100 Travel"},
+    }})
+    got = client.get("/api/settings").json()
+    assert got["merchants_inert"] == ["Uber"]

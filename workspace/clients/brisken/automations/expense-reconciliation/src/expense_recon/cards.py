@@ -414,6 +414,44 @@ def zoho_account_for(observed: str | None, cards: dict[str, Card]) -> str | None
     return card.zoho_account if card else None
 
 
+def resolve_account_map(
+    observed: str | None, mapping: dict | None
+) -> str | None:
+    """Conservative ``{key: account}`` resolution for MONEY paths (the
+    journal's balancing credit and its advisories): exact key first, then
+    BARE-DIGIT keys only, matching iff exactly one mapping key's digit
+    form appears among the observed label's digit tokens.
+
+    Deliberately narrower than `resolve_card` (Cards R2 adversarial
+    review, 2026-08-21, all three scenarios executed): composing cards
+    from a label-keyed map merged unrelated cards on incidental shared
+    year tokens, first-match ambiguity guessed between cards, and
+    single-word keys acted as wildcards — each turning the old VISIBLE
+    ``Card: ...`` placeholder into a silently wrong posting. Here a
+    label-shaped key keeps the exact-only semantics it always had, a
+    bare-digit key ("2838") matches the label that prints its number
+    ("2838 - May 2026"), and ANY ambiguity returns None so the export
+    keeps the placeholder: a visible gap beats silent wrong money (B4).
+    """
+    if not observed or not observed.strip() or not mapping:
+        return None
+    exact = mapping.get(observed)
+    if exact:
+        return str(exact)
+    obs_keys = _card_keys(observed)
+    if not obs_keys:
+        return None
+    hits: list[str] = []
+    for key, account in mapping.items():
+        k = str(key).strip()
+        if not (k and account and k.isdigit()):
+            continue
+        variants = {k.lstrip("0") or "0", k[-4:].lstrip("0") or "0"}
+        if variants & obs_keys:
+            hits.append(str(account))
+    return hits[0] if len(set(hits)) == 1 else None
+
+
 def legacy_card_accounts(cards: dict[str, Card]) -> dict[str, str]:
     """The composed registry flattened back to the ``{digit: zoho_account}``
     map shape the exports consume (`cfg["expense"]["card_accounts"]`).
