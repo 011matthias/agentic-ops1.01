@@ -145,3 +145,50 @@ def test_cors_reflects_lovable_origin_only(gated_client):
                  "Access-Control-Request-Method": "POST"},
     )
     assert evil.headers.get("access-control-allow-origin") is None
+
+
+# ------------------------------------------------------------ named codes --
+
+def test_named_codes_identity_and_labelled_token(monkeypatch):
+    monkeypatch.delenv("EXPENSE_RECON_OPERATOR_CODE", raising=False)
+    monkeypatch.setenv(
+        "EXPENSE_RECON_OPERATOR_CODES",
+        "alpha123:criss, beta456:matthias, bad-pair, nolabel:",
+    )
+    assert auth.operator_codes() == {
+        "criss": "alpha123", "matthias": "beta456"
+    }
+    assert auth.gate_enabled()
+    assert auth.code_identity("alpha123") == "criss"
+    assert auth.code_identity("beta456") == "matthias"
+    assert auth.code_identity("wrong") is None
+    tok = auth.issue_token(auth.ROLE_OPERATOR, "criss")
+    assert auth.token_role(tok) == auth.ROLE_OPERATOR
+    assert auth.token_label(tok) == "criss"
+    # A relabelled token fails the mac: the label is signed, not advisory.
+    forged = tok.replace(".criss:", ".matthias:")
+    assert auth.token_role(forged) is None
+
+
+def test_legacy_code_keeps_working_beside_named(monkeypatch):
+    monkeypatch.setenv("EXPENSE_RECON_OPERATOR_CODE", OP_CODE)
+    monkeypatch.setenv("EXPENSE_RECON_OPERATOR_CODES", "alpha123:criss")
+    assert auth.code_identity(OP_CODE) == "operator"
+    assert auth.code_identity("alpha123") == "criss"
+    # Removing one named code revokes only that person.
+    monkeypatch.setenv("EXPENSE_RECON_OPERATOR_CODES", "")
+    assert auth.code_identity("alpha123") is None
+    assert auth.code_identity(OP_CODE) == "operator"
+
+
+def test_login_reports_operator_label(tmp_path, monkeypatch):
+    monkeypatch.delenv("EXPENSE_RECON_OPERATOR_CODE", raising=False)
+    monkeypatch.setenv("EXPENSE_RECON_OPERATOR_CODES", "alpha123:criss")
+    with TestClient(create_app(tmp_path)) as c:
+        body = c.post("/api/login", json={"code": "alpha123"}).json()
+        assert body["operator"] == "criss"
+        r2 = c.get(
+            "/api/operator/state",
+            headers={"Authorization": f"Bearer {body['token']}"},
+        )
+        assert r2.status_code == 200

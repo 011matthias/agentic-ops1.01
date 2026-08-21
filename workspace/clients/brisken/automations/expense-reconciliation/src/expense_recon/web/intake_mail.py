@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -48,6 +49,7 @@ from email.parser import BytesParser
 from email.utils import getaddresses, parseaddr
 from pathlib import Path
 
+from . import graph_notify
 from .service import (
     FOLDER_RECEIPT_SUFFIXES,
     MODE_EXPENSE_GENERATION,
@@ -55,6 +57,8 @@ from .service import (
     has_statement,
 )
 from .store import JOB_DONE, JOB_ERROR, RunStore
+
+log = logging.getLogger("expense_recon.intake")
 
 # ---------------------------------------------------------------- config --
 
@@ -65,6 +69,11 @@ DEFAULT_SENDER_ALLOWLIST = ("@brisken.com",)
 # consumes budget too.
 DEFAULT_SENDER_DAILY_CAP = 40
 DEFAULT_GLOBAL_DAILY_CAP = 200
+DEFAULT_ALERT_RECIPIENTS = ("matthias.silva@brisken.com",)
+# German AO paragraph 147 keeps accounting records (Belege) 10 years; the
+# archive IS the system of record for mailed receipts, so that is the
+# default floor. Owner-adjustable via settings intake.retention_years.
+DEFAULT_RETENTION_YEARS = 10
 MAX_ATTACHMENTS_PER_MAIL = 30
 MAX_INFLIGHT_ROUTES = 8
 MIN_FREE_DISK_BYTES = 500 * 1024 * 1024
@@ -89,11 +98,15 @@ class IntakeConfig:
     aliases: dict = field(default_factory=dict)  # local-part -> person name
     sender_daily_cap: int = DEFAULT_SENDER_DAILY_CAP
     global_daily_cap: int = DEFAULT_GLOBAL_DAILY_CAP
+    auto_ack: bool = True
+    alert_recipients: tuple[str, ...] = DEFAULT_ALERT_RECIPIENTS
+    retention_years: int = DEFAULT_RETENTION_YEARS
 
     @classmethod
     def from_settings(cls, settings: dict | None) -> "IntakeConfig":
         """Settings key ``intake``: {domain, senders: [...], aliases: {...},
-        sender_daily_cap, global_daily_cap}. Env overrides the domain
+        sender_daily_cap, global_daily_cap, auto_ack, alert_recipients,
+        retention_years}. Env overrides the domain
         (EXPENSE_RECON_INTAKE_DOMAIN) so fly.toml stays the deploy truth."""
         raw = (settings or {}).get("intake") or {}
         senders = tuple(
@@ -118,12 +131,23 @@ class IntakeConfig:
             except (TypeError, ValueError):
                 return default
 
+        # Alert recipients keep only internal-looking addresses; the Graph
+        # layer re-asserts @brisken.com per send regardless.
+        alerts = tuple(
+            a.strip().lower()
+            for a in (raw.get("alert_recipients") or DEFAULT_ALERT_RECIPIENTS)
+            if isinstance(a, str) and "@" in a.strip()
+        ) or DEFAULT_ALERT_RECIPIENTS
+
         return cls(
             domain=domain,
             sender_allowlist=senders,
             aliases=aliases,
             sender_daily_cap=_cap("sender_daily_cap", DEFAULT_SENDER_DAILY_CAP),
             global_daily_cap=_cap("global_daily_cap", DEFAULT_GLOBAL_DAILY_CAP),
+            auto_ack=bool(raw.get("auto_ack", True)),
+            alert_recipients=alerts,
+            retention_years=_cap("retention_years", DEFAULT_RETENTION_YEARS),
         )
 
 
@@ -169,7 +193,7 @@ def normalize_intake_setting(raw) -> dict:
         cleaned["aliases"] = {
             k.strip().lower(): v.strip() for k, v in aliases.items()
         }
-    for cap in ("sender_daily_cap", "global_daily_cap"):
+    for cap in ("sender_daily_cap", "global_daily_cap", "retention_years"):
         if cap in raw:
             try:
                 v = int(raw[cap])
@@ -178,6 +202,21 @@ def normalize_intake_setting(raw) -> dict:
             if v <= 0:
                 raise ValueError(f"intake.{cap} must be a positive integer")
             cleaned[cap] = v
+    if "auto_ack" in raw:
+        if not isinstance(raw["auto_ack"], bool):
+            raise ValueError("intake.auto_ack must be true or false")
+        cleaned["auto_ack"] = raw["auto_ack"]
+    alerts = raw.get("alert_recipients")
+    if alerts is not None:
+        if not isinstance(alerts, list) or not all(
+            isinstance(a, str) and a.strip().lower().endswith("@brisken.com")
+            and a.strip().count("@") == 1
+            for a in alerts
+        ):
+            raise ValueError(
+                "intake.alert_recipients must be @brisken.com addresses"
+            )
+        cleaned["alert_recipients"] = [a.strip().lower() for a in alerts]
     return cleaned
 
 
@@ -514,6 +553,99 @@ def archive_incoming(
     return arch
 
 
+# ---------------------------------------------------------- notifications --
+# Acks + held alerts ride graph_notify (internal-only, hard-guarded).
+# Both are best-effort side effects: a failed notification never changes
+# an archive's status or breaks ingest, and both are idempotent per
+# archive via meta stamps (ack_at / alert_at).
+
+_NO_REPLY_LOCALS = ("no-reply", "noreply", "do-not-reply", "postmaster",
+                    "mailer-daemon", "bounce")
+
+
+def _inbound_is_auto_generated(arch: Path) -> bool:
+    """True when the archived mail is itself an automatic message (OOF,
+    bounce, list mail) — acking those risks loops, so we never do."""
+    try:
+        msg = BytesParser(policy=policy.default).parsebytes(
+            (arch / "message.eml").read_bytes(), headersonly=True
+        )
+    except Exception:  # noqa: BLE001 - unreadable => be safe, treat as auto
+        return True
+    auto = str(msg.get("Auto-Submitted", "")).strip().lower()
+    if auto and auto != "no":
+        return True
+    if msg.get("X-Auto-Response-Suppress"):
+        return True
+    if str(msg.get("Precedence", "")).strip().lower() in ("bulk", "junk", "list"):
+        return True
+    local = parseaddr(str(msg.get("From", "")))[1].split("@")[0].lower()
+    return any(t in local for t in _NO_REPLY_LOCALS)
+
+
+def _maybe_ack(db_path: Path, arch: Path) -> None:
+    """Confirmation to the submitting sender after a SUCCESSFUL ingest.
+    Recipient = the real envelope/header sender recorded at custody time
+    (never the alias), which the allowlist already proved is internal."""
+    try:
+        with RunStore(db_path) as store:
+            cfg = IntakeConfig.from_settings(store.get_settings())
+        if not cfg.auto_ack or not graph_notify.enabled():
+            return
+        meta = _read_meta(arch)
+        if meta.get("ack_at") or _inbound_is_auto_generated(arch):
+            return
+        recipient = str(meta.get("from", "")).strip().lower()
+        n = int(meta.get("n_files") or 0)
+        subject = str(meta.get("subject") or "").strip()
+        body = (
+            f"{n} file(s) from your email"
+            + (f' "{subject}"' if subject else "")
+            + " landed in the open expense month in the Brisken expense "
+            "tool. Nothing else to do; Criss reviews them with the "
+            "monthly run.\n\nAutomated confirmation from "
+            f"receipts@{cfg.domain}."
+        )
+        if graph_notify.send_mail(
+            recipient, "Receipt received" + (f": {subject}" if subject else ""),
+            body,
+        ):
+            _update_meta(arch, {"ack_at": _now_iso()})
+    except Exception as exc:  # noqa: BLE001 - notifications never break ingest
+        log.warning("ack skipped for %s: %s", arch.name, exc)
+
+
+def _maybe_alert(db_path: Path, arch: Path, status: str) -> None:
+    """Operator alert the first time an archive lands in a held status.
+    Without this, held mail is only visible when someone opens the app."""
+    try:
+        with RunStore(db_path) as store:
+            cfg = IntakeConfig.from_settings(store.get_settings())
+        if not graph_notify.enabled():
+            return
+        meta = _read_meta(arch)
+        if meta.get("alert_at"):
+            return
+        body = (
+            f"Inbound mail is held ({status}).\n"
+            f"From: {meta.get('from', '?')}\n"
+            f"Subject: {meta.get('subject', '')}\n"
+            f"Archive: {arch.name}\n"
+            f"Error: {meta.get('error', '-')}\n\n"
+            "Open the tool and use 'Retry held emails' once the cause is "
+            "fixed (a held_no_batch drains itself when a month is open)."
+        )
+        sent = False
+        for rcpt in cfg.alert_recipients:
+            sent = graph_notify.send_mail(
+                rcpt, f"Expense intake: mail held ({status})", body
+            ) or sent
+        if sent:
+            _update_meta(arch, {"alert_at": _now_iso()})
+    except Exception as exc:  # noqa: BLE001 - notifications never break ingest
+        log.warning("held alert skipped for %s: %s", arch.name, exc)
+
+
 # ---------------------------------------------------------------- routing --
 
 def open_batch(store: RunStore):
@@ -555,6 +687,7 @@ def _ingest_job(
         # Status truth: "ingested" only after the job ACTUALLY succeeded.
         if arch is not None:
             _update_meta(arch, {"status": STATUS_INGESTED})
+            _maybe_ack(db_path, arch)
     except Exception as exc:  # noqa: BLE001 - job errors surface via meta+log
         with RunStore(db_path) as store:
             store.set_job_status(
@@ -562,6 +695,7 @@ def _ingest_job(
             )
         if arch is not None:
             _update_meta(arch, {"status": HELD_FAILED, "error": str(exc)[:400]})
+            _maybe_alert(db_path, arch, HELD_FAILED)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
@@ -634,6 +768,7 @@ def route_archived(
 
     if status != STATUS_INGESTED:
         _update_meta(arch, {"status": status, "person": person})
+        _maybe_alert(db_path, arch, status)
         return {"status": status, "archive": arch.name, "person": person}
 
     # The job flips the meta to ingested/held_failed when it finishes.
@@ -779,5 +914,38 @@ def reconcile_interrupted(db_path: Path, data_root: Path) -> int:
             if job.get("status") != JOB_DONE:
                 _update_meta(arch, {"status": HELD_FAILED,
                                     "error": "job interrupted"})
+                _maybe_alert(db_path, arch, HELD_FAILED)
                 flipped += 1
     return flipped
+
+
+def sweep_retention(db_path: Path, data_root: Path) -> int:
+    """Delete inbound archives older than the configured retention floor
+    (settings intake.retention_years, default 10 per AO paragraph 147).
+    Runs at startup, fail-open; the archive-name stamp is the age source
+    so nothing outside the inbound naming pattern is ever touched."""
+    root = inbound_root(data_root)
+    if not root.exists():
+        return 0
+    with RunStore(db_path) as store:
+        cfg = IntakeConfig.from_settings(store.get_settings())
+    cutoff = datetime.now(timezone.utc).timestamp() - (
+        cfg.retention_years * 365.25 * 86400
+    )
+    removed = 0
+    for arch in list(root.iterdir()):
+        m = re.match(r"^(\d{8}T\d{6})-[0-9a-f]{8}$", arch.name)
+        if not m or not arch.is_dir():
+            continue
+        try:
+            stamp = datetime.strptime(m.group(1), "%Y%m%dT%H%M%S").replace(
+                tzinfo=timezone.utc
+            )
+        except ValueError:
+            continue
+        if stamp.timestamp() < cutoff:
+            shutil.rmtree(arch, ignore_errors=True)
+            removed += 1
+    if removed:
+        log.info("retention sweep removed %d expired inbound archives", removed)
+    return removed

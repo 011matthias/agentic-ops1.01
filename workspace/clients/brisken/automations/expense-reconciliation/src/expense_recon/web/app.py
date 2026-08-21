@@ -364,9 +364,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # sweep above just marked interrupted flips back to a replayable held
     # status, so a Fly stop mid-OCR never leaves mail stranded as pending.
     try:
-        from .intake_mail import reconcile_interrupted
+        from .intake_mail import reconcile_interrupted, sweep_retention
 
         reconcile_interrupted(db_path, data_root_path)
+        # Retention floor (settings intake.retention_years, default 10y per
+        # AO paragraph 147): expired inbound archives are deleted at boot,
+        # which scale-to-zero makes a near-daily event.
+        sweep_retention(db_path, data_root_path)
     except Exception:  # noqa: BLE001 - reconcile must never block startup
         pass
 
@@ -405,20 +409,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # authenticated session has the full surface. See auth.py.
     @app.middleware("http")
     async def require_login(request: Request, call_next):
+        label = auth.DEFAULT_LABEL
         if auth.gate_enabled() and not auth.path_is_open(request.url.path):
-            role = auth.token_role(request.cookies.get(auth.COOKIE_NAME))
+            token = request.cookies.get(auth.COOKIE_NAME)
+            role = auth.token_role(token)
             # The SPA has no cookie; it authenticates with the same signed
             # token in an Authorization: Bearer header. A 401 tells it to
             # clear the token and show its own login screen.
             if role is None:
-                role = auth.token_role(
-                    auth.bearer_token(request.headers.get("authorization"))
-                )
+                token = auth.bearer_token(request.headers.get("authorization"))
+                role = auth.token_role(token)
             if role is None:
                 return JSONResponse(
                     {"error": "authentication required"}, status_code=401
                 )
+            label = auth.token_label(token) or auth.DEFAULT_LABEL
         request.state.role = auth.ROLE_OPERATOR
+        # Which named operator code this session logged in with; "operator"
+        # for the legacy shared code and the gate-off local case.
+        request.state.operator = label
         return await call_next(request)
 
     # Cross-origin access for the SPA front end (Lovable-built React app)
@@ -444,9 +453,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         `Authorization: Bearer`. When the gate is disabled (local dev) every
         caller is the operator, mirroring the cookie login flow."""
         if not auth.gate_enabled():
-            return JSONResponse(
-                {"token": auth.issue_token(auth.ROLE_OPERATOR), "role": auth.ROLE_OPERATOR}
-            )
+            return JSONResponse({
+                "token": auth.issue_token(auth.ROLE_OPERATOR),
+                "role": auth.ROLE_OPERATOR,
+                "operator": auth.DEFAULT_LABEL,
+            })
         # One shared code is this app's entire security boundary, so an
         # attempt is throttled BEFORE the code is checked: per-caller with
         # a doubling lockout (bucketed by IPv6 /64, so one end site cannot
@@ -467,15 +478,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         except Exception:  # noqa: BLE001 - a malformed body is a client error
             body = {}
         code = str((body or {}).get("code", ""))
-        role = auth.code_role(code)
+        label = auth.code_identity(code)
         with open_store() as store:
-            if role is None:
+            if label is None:
                 ratelimit.register_failure(store, caller, now)
             else:
                 ratelimit.register_success(store, caller)
-        if role is None:
+        if label is None:
             return JSONResponse({"error": "invalid code"}, status_code=401)
-        return JSONResponse({"token": auth.issue_token(role), "role": role})
+        return JSONResponse({
+            "token": auth.issue_token(auth.ROLE_OPERATOR, label),
+            "role": auth.ROLE_OPERATOR,
+            "operator": label,
+        })
 
     @app.get("/healthz")
     def healthz():
@@ -992,6 +1007,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         entry = {
             "ts": _now_iso(),
             "role": request.state.role,
+            "operator": getattr(request.state, "operator", auth.DEFAULT_LABEL),
             "page": page,
             "run_id": explicit_run_id or _run_id_from_path(page),
             "title": str(data.get("title", ""))[:300],
