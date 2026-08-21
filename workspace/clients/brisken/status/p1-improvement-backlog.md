@@ -101,24 +101,25 @@ Shipped: PUT/DELETE per row, validation stamps + unvalidated filter,
 reset confirm gate. NOTE: the live SPA's Reset button is a silent no-op
 until `docs/lovable-memory-edit-prompt.md` is applied (fails closed).
 
-### 14. Language contract: stable codes, SPA localizes (note 4)
+### 14+15. Language contract + honest receipt column (SHIPPED — see Shipped row 12)
 
-The note's trigger ("Taxa de entrega") is extracted receipt DATA — right
-to stay in receipt language. The real leaks: two reason codes with no
-i18n key fall through to English prose, missing_fields interpolates
-English field names server-side, parse/upload/restore sentences are
-un-localizable free text, "(uncategorized - assign)" renders inside PT
-lines. Fix: codes + structured payloads beside the prose; SPA maps them;
-mark extracted-data fields visually.
+Shipped: structured missing list, books_as sentinel, reason_label
+dropped, honest receipt_image_available + source_file. The tile and the
+i18n keys are SPA work in `docs/lovable-language-receipt-prompt.md`
+(item 1 there is APPLY FIRST — the deployed split depiction shows a
+blank account label on uncategorized parts until applied). The
+parse/upload-issue prose piece moved to item 20.
 
-### 15. Receipt column tells the truth (note 8)
+### 20. Issue codes on upload/parse-issue prose (parked from round 7)
 
-`receipt_image_available` is True for every `manual:` id — a manual
-expense with no file renders a View button that 404s; the empty state
-says "No image" (reads as preview-broken, not receipt-missing); the
-missing-receipt tile is computed and never displayed. Fix: honest
-`receipt: {has_document, image_available}` contract + the tile + row
-source-file identity.
+`expense_ingest.issues` and the upload-validation reply are lists of
+English strings at three emission sites (password-protected /
+unsupported type / empty-unreadable / too-large). Localizing them means
+a string-to-object contract change the SPA must absorb in lockstep, for
+a rare operational surface. Parked with a shape suggestion: keep
+`issues` and add a parallel `issue_details: [{code, file}]` at the same
+sites, SPA prefers details when present. Do it when a round already
+touches those sites.
 
 ### 16. Rejected matches need a "what now" (2026-07-27 note, untracked)
 
@@ -289,6 +290,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 | 6b | Split depiction ("Lançado como"): every grid row carries books_as — the exact per-account fan-out the Zoho export writes (same shared code path, so grid and export cannot disagree) + an is_split flag; the UI renders one receipt booking to N accounts instead of N mystery rows | Owner ruling: splits ARE the truth and must not be collapsed; what was missing was seeing the fan-out ON the receipt instead of discovering it in the export | PR #543, 2026-08-19 |
 | 7 | Feedback capture on every page (owner directive 2026-08-19): the double-click location-specific note widget becomes a single global mount across all SPA pages; `POST /api/feedback` now accepts an explicit `run_id` so notes on expense-batch pages attribute to the batch regardless of route shape (path parse stays as fallback) | The existing widget captured exact click locations and produced Criss's r1 notes, but only on the home/run/memory pages; the receipt-first batch pages — the surface she actually reviews — had no capture at all (0 notes ever) | PRs #544+#545, 2026-08-19; Lovable half `docs/lovable-feedback-capture-prompt.md` published + live-verified end-to-end (batch note attributed run_id 7d2fea33d39a) |
 | 6c | Vendor is the merchant, never the card-terminal bank: one extraction-prompt line (backlog item 6) so a card slip showing both the shop and the acquiring bank reads the SHOP; invalidates the reading cache by design (fingerprint bump) | Round-5 evidence: the same French card slip read ANNADA ROUEN one day and CREDIT AGRICOLE NORMANDIE another; the bank name teaches the merchant book garbage | PR #543, 2026-08-19 |
+| 12 | Language contract + honest receipt column: review reasons ride as stable codes with structured data (the missing-fields list as data, the SPA composes localized sentences), the grid's split depiction gets a sentinel instead of the export's English placeholder, dead English labels dropped; and the receipt column stops lying — a typed-in expense with no document says so instead of rendering a View button that 404s, attached receipts keep their preview, every file-backed row names which upload/mail it came from | Her notes 4 ("language should not difer from what is set by user") and 8 ("if there is no receipt, please let that be known"); the review carry fixed a false-negative that would have hidden real attached receipts on graduated batches | PR #567, 2026-08-21; Lovable half `docs/lovable-language-receipt-prompt.md` (item 1 APPLY FIRST) |
 | 11 | Learned memory validate + adjust: the 103 learned categories are editable (single-row PUT, count-preserving — an operator correction is not another confirmation; category-only edits never wipe the learned Zoho account), deletable one row at a time (aliases/FX stay), and reviewable (validated stamps + a "needs review" filter; ANY value change clears the stamp so machine re-teaches can never wear an old sign-off); reset now previews what it would delete and requires typed-through confirmation | Her note 10 ("this must be validated and adjustable") on the /memory page; the review caught stale sign-off stamps, a migration race on the live store, and a silent account-wipe before they shipped | PR #565, 2026-08-21; Lovable half `docs/lovable-memory-edit-prompt.md` (REQUIRED — old Reset button becomes a safe no-op until applied) |
 | 10 | Body-only mail handling: held mail with no attachment (Uber forwards, credit notices) gets three per-mail actions — view the body (sanitized text off the custody eml, never the raw archive), render it to a PDF and add it to the open month through the NORMAL pipeline (same vision reading and quarantine as any scanned receipt; deterministic bytes so a retry can never double-ingest), and dismiss as junk (terminal, custody untouched, held strip can reach zero). Transient `rendering` status makes render/dismiss/replay mutually exclusive; replay now rescues body-only mail a router crash left as "received"; interrupted renders reconcile to retryable at startup; container gets a full-Latin font so German bodies ("Gebühr", "27,90 €") render legibly for extraction | Her note 12 ("where can user handle this?") + Dirk's first real organic mail sat stuck in held_body_only with no path; adversarial review caught a Pillow timestamp defect that would have let retries create duplicate expense rows | PR #563, 2026-08-21; Lovable half `docs/lovable-body-only-prompt.md` |
 | 9 | Intake quick-wins: the Email-intake log shows WHICH files each mail delivered (recorded at accept time; legacy archives derived from parts/) and an honest Month column (batch_label resolved for every routed row, held rows say held, deleted months say "month deleted" instead of misreporting each expense as operator-removed); and Delete month exists behind a typed confirm phrase — cascade under the batch writer lock, job rows purged, mail archives stamped batch_deleted but NEVER deleted (custody/retention), response reports where inbound mail routes next + that learned memory is kept. 3-lens adversarial review pre-commit: sync handler (async version froze the event loop on the OCR-held lock), deleted-run refusal at every locked batch writer, DONE-stamp re-check, replay clears stale stamps, atomic serialized meta writes | Her notes 2/3/13: "need to see which files were delivered", "month says no date", "there needs to be some kind of delete month option" — plus the review closing a real freeze + three race defects before they shipped | PR #561, 2026-08-21; Lovable half `docs/lovable-intake-quickwins-prompt.md` |
