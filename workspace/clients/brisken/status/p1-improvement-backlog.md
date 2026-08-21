@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-08-19
+updated: 2026-08-21
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -20,6 +20,96 @@ that stop the tool from learning beat cosmetics, and anything Criss would
 have to hand-fix every month beats a one-off.
 
 ## Open
+
+### The 2026-08-21 feedback wave (14 notes, sequencing decided)
+
+The operator walked the whole tool on 2026-08-21 and left 14 notes via the
+in-app widget (the first full wave since capture went global, iteration 7).
+Every note maps to a planned PR round; the user picked cards-first
+sequencing the same day. Items 10-17 below are that wave; the cards
+program is item 10. Full design: the 2026-08-21 plan (checkpoint folder).
+
+### 10. Cards as first-class identities, Zoho-independent (notes 1/6/9/11)
+
+**Owner direction:** "cards do not need zoho accounts... we must create
+our own identification system"; stop asking for the legal entity at batch
+creation — lay out the card identities, let the user assign each to an
+entity once, learn it.
+
+**The design fact that drove the model:** one physical card carries TWO
+digit identities (Chase statement marker "2838", plastic last-4 "1672";
+Zoho labels print both). The last4-keyed map could never resolve
+"Visa ...1672" — the January batch's 13 unassigned rows are this bug.
+
+**Rounds:** R1 registry + read-time composition (settings `cards` key,
+GET /api/cards, zero behavior change) — SHIPPING; R2 Zoho decoupling
+(per-card warning rewrite, both exports resolve via the registry,
+merchants editor inert-hint, dropdown relabels answering notes 5/7); R3
+entity-less batch + card-review strip + hint-to-card assignment that
+persists ("learning") + refresh-master-data endpoint (fixes the
+snapshot trap: settings edits reach existing batches); R4 mixed-entity
+export + persisted migration (pending owner answers: per-entity export
+files? cash/personal tenders as cards? per-entity zoho_account?).
+
+**Export policy (user ruling 2026-08-21):** unresolved card/entity never
+blocks an export — placeholders, adjustable later, re-export folds it in.
+
+### 11. Intake: show delivered files + fix the Month column (notes 3/13)
+
+Delivered attachment names are written to disk but never recorded in the
+mail meta (only REJECTED names surface); the Month column has no backing
+field at all (batch_label only under detail=1, skipped for all-duplicate
+mail, absent for held mail). Fix: record `files` in meta at accept time +
+derive for legacy archives from parts/ at read time; always resolve
+batch_label per batch_id; held rows say held, not "no date".
+
+### 12. Body-only mail: give the operator a handling path (note 12)
+
+Dirk's first real mail is stuck `held_body_only` — not replayable by
+design, no view/render/attach action exists. Fix: sanitized body view
+endpoint, body-to-PDF render + normal ingest (quarantine still applies),
+and per-mail dismiss for junk. Evidence-gated round now evidence-backed;
+Dirk's mail is the acceptance test.
+
+### 13. Learned memory: validate + adjust (note 10)
+
+103 learned categories, no way to edit or vet one: no single-row upsert
+over HTTP (CLI `memory set` has no twin), no per-row delete (forget wipes
+a vendor across all 5 tables), no validated concept in the schema, and
+HTTP reset has no dry-run though the CLI defaults to one. Fix: PUT/DELETE
+per row (count-preserving manual writes), `validated_at` migration + bulk
+validate + unvalidated filter, reset confirm.
+
+### 14. Language contract: stable codes, SPA localizes (note 4)
+
+The note's trigger ("Taxa de entrega") is extracted receipt DATA — right
+to stay in receipt language. The real leaks: two reason codes with no
+i18n key fall through to English prose, missing_fields interpolates
+English field names server-side, parse/upload/restore sentences are
+un-localizable free text, "(uncategorized - assign)" renders inside PT
+lines. Fix: codes + structured payloads beside the prose; SPA maps them;
+mark extracted-data fields visually.
+
+### 15. Receipt column tells the truth (note 8)
+
+`receipt_image_available` is True for every `manual:` id — a manual
+expense with no file renders a View button that 404s; the empty state
+says "No image" (reads as preview-broken, not receipt-missing); the
+missing-receipt tile is computed and never displayed. Fix: honest
+`receipt: {has_document, image_available}` contract + the tile + row
+source-file identity.
+
+### 16. Rejected matches need a "what now" (2026-07-27 note, untracked)
+
+STATUS_REJECTED sends the transaction back to unmatched and is reversible
+pre-export, but no rejected bucket exists in the API and no affordance
+answers "what happens to rejected matches?". Spec fresh.
+
+### 17. Workbench filter/sort (2026-07-27 note, untracked)
+
+"There should be a filter somewhere: alphabetic, unmatched elements."
+Natural home: the grouped-queue render (PR #454/#455's remaining Lovable
+half). Spec with it.
 
 ### 3. Put the set-aside statement pages to work (later)
 

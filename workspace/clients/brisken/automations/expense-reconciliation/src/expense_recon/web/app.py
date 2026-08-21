@@ -70,6 +70,7 @@ from fastapi.responses import (
     Response,
 )
 
+from ..cards import card_to_dict, effective_cards, normalize_cards_setting
 from ..cards_provision import card_by_key, load_cards
 from ..ingest.expense_report_images import render_receipt_page
 from .serialize import receipt_from_dict
@@ -1242,13 +1243,34 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # card->entity targets + registry) so the create form and the entity
         # editor can offer a dropdown instead of a free-text field; also
         # read-only (derived), PUT ignores it.
+        # `cards_effective` is the composed card registry (settings cards +
+        # legacy maps + /data presets, `cards.effective_cards`) so the
+        # Settings screen can render the one merged view; read-only
+        # (derived), PUT ignores it — edits go to the `cards` key.
         with open_store() as store:
             settings = store.get_settings()
             return JSONResponse({
                 **settings,
                 "categories": list(EXPENSE_CATEGORIES),
                 "entity_options": available_entities(settings),
+                "cards_effective": [
+                    card_to_dict(c)
+                    for c in effective_cards(settings, load_cards()).values()
+                ],
             })
+
+    @app.get("/api/cards")
+    def api_get_cards():
+        # The composed card enumeration (owner ask 2026-08-21: "laying out
+        # all card identities"). Same payload family as cards_effective,
+        # plus the entity options the assignment UI needs.
+        with open_store() as store:
+            settings = store.get_settings()
+        composed = effective_cards(settings, load_cards())
+        return JSONResponse({
+            "cards": [card_to_dict(c) for c in composed.values()],
+            "entity_options": available_entities(settings),
+        })
 
     @app.put("/api/settings")
     async def api_put_settings(request: Request):
@@ -1340,6 +1362,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if "merchants" in body:
             try:
                 patch["merchants"] = normalize_merchants_setting(body["merchants"])
+            except ValueError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+        # Card registry (2026-08-21): {slug: {label, digits, aliases,
+        # entity, zoho_account?, currency, active}}. Whole-map replace,
+        # validated + cleaned by the cards module (blank slug dropped,
+        # digits constrained to digit strings, aliases de-duped on their
+        # normalized key). The legacy card_entities/card_accounts maps
+        # stay writable unchanged; composition happens at read time.
+        if "cards" in body:
+            try:
+                patch["cards"] = normalize_cards_setting(body["cards"])
             except ValueError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=400)
         # Mail-intake config (aliases -> person names, sender allowlist,

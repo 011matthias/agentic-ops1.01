@@ -128,6 +128,14 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 #     UI (like `entities`); the highest-priority deterministic source for a
 #     receipt's canonical vendor + default category in generate_expenses
 #     (expense_recon.merchant_registry). Empty => no canonicalization.
+#   cards (2026-08-21, owner directive: Zoho independence) — the CARD
+#     REGISTRY: {"corp-2838": {label, digits: ["2838","1672"], aliases,
+#     entity, zoho_account?, currency, active}}. The tool's own card
+#     identity; `zoho_account` is optional (export-only attribute). Read
+#     through `cards.effective_cards`, which folds the legacy
+#     `card_entities`/`card_accounts` maps + the /data presets file in at
+#     read time — the legacy keys stay authoritative until an explicit
+#     card entry exists (no write migration).
 SETTINGS_DEFAULTS: dict = {
     "export_approved_only": False,
     "fx_reference_rates": {},
@@ -135,6 +143,7 @@ SETTINGS_DEFAULTS: dict = {
     "card_accounts": {},
     "entities": {},
     "merchants": {},
+    "cards": {},
 }
 
 # Settings keys holding a {str: str} map. Values are kept as STRINGS: a
