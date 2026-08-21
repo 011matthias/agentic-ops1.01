@@ -473,3 +473,89 @@ def test_delete_run_purges_expense_tables(client, monkeypatch):
     with RunStore(db_path) as db:
         assert db.get_expense_field_overrides(batch_id) == {}
         assert db.get_expense_edits(batch_id) == []
+
+
+# ---------------- language + receipt visibility round (notes 4/8) --------
+
+def test_manual_add_has_honest_receipt_state(client, monkeypatch):
+    """Note 8: a manual expense with no file must not render a View
+    button that 404s. File-backed rows keep availability and gain their
+    source_file identity."""
+    _patch_ocr(monkeypatch, _extraction())
+    batch_id = _create_batch(client)
+    resp = client.post(
+        f"/api/runs/{batch_id}/expenses",
+        json={"vendor": "Cash Kiosk", "total": "5.00", "currency": "EUR",
+              "date": "2026-07-04", "category": "Travel & Transport"},
+    )
+    assert resp.status_code == 200, resp.text
+    manual_doc = resp.json()["document_id"]
+
+    rows = {e["document_id"]: e for e in _grid(client, batch_id)["expenses"]}
+    manual = rows[manual_doc]
+    assert manual["receipt_image_available"] is False  # pre-fix: True
+    assert manual["source_file"] == ""
+    uploaded = next(e for e in rows.values() if e["document_id"] != manual_doc)
+    assert uploaded["receipt_image_available"] is True
+    assert uploaded["source_file"]  # which upload the row came from
+
+
+def test_missing_fields_review_is_structured(client, monkeypatch):
+    """Note 4: the missing-field LIST rides as data so the SPA composes
+    the sentence from its own localized field names."""
+    _patch_ocr(monkeypatch, _extraction(date=None, total=None))
+    batch_id = _create_batch(client)
+    row = _grid(client, batch_id)["expenses"][0]
+    assert row["review"]["reason_code"] == "missing_fields"
+    assert row["review"]["missing"] == ["date", "amount"]
+
+
+def test_books_as_uncategorized_is_a_sentinel(client, monkeypatch):
+    """Note 4: the grid never shows the export's English placeholder;
+    the SPA maps {account: null, unassigned: true} to its own wording."""
+    _patch_ocr(monkeypatch, _extraction())
+    batch_id = _create_batch(client)
+    resp = client.post(
+        f"/api/runs/{batch_id}/expenses",
+        json={"vendor": "Mystery Vendor", "total": "9.99",
+              "currency": "EUR", "date": "2026-07-05"},
+    )
+    assert resp.status_code == 200, resp.text
+    doc = resp.json()["document_id"]
+    row = {e["document_id"]: e for e in
+           _grid(client, batch_id)["expenses"]}[doc]
+    assert row["books_as"] == [
+        {"account": None, "unassigned": True, "amount": "9.99"}
+    ]
+    assert "(uncategorized" not in str(row["books_as"])
+
+
+def test_attached_manual_receipt_keeps_view_button(client, monkeypatch):
+    """Review carry: a workbench-attached manual receipt (file under
+    manual-receipts/, id manual:{tx}) keeps availability — the honest
+    rule must not wrongly hide real documents on a graduated batch."""
+    from pathlib import Path
+
+    from expense_recon.web.store import RunStore
+
+    _patch_ocr(monkeypatch, _extraction())
+    batch_id = _create_batch(client)
+    resp = client.post(
+        f"/api/runs/{batch_id}/expenses",
+        json={"vendor": "Attached Later", "total": "7.00",
+              "currency": "EUR", "date": "2026-07-06",
+              "category": "Travel & Transport"},
+    )
+    manual_doc = resp.json()["document_id"]
+    tx_key = manual_doc[len("manual:"):]
+
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        work_dir = Path(store.get_run(batch_id).work_dir)
+    folder = work_dir / "manual-receipts"
+    folder.mkdir(exist_ok=True)
+    (folder / f"{tx_key}__hotel-bill.jpg").write_bytes(JPG)
+
+    row = {e["document_id"]: e for e in
+           _grid(client, batch_id)["expenses"]}[manual_doc]
+    assert row["receipt_image_available"] is True
+    assert row["source_file"] == "hotel-bill.jpg"

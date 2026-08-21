@@ -61,6 +61,7 @@ from ..learning import (
 from ..output.reconciled_csv import write_reconciled_csv
 from ..output.report_xlsx import write_report
 from ..output.zoho_expense_export import (
+    _UNCATEGORIZED,
     expense_posting_parts,
     resolve_paid_through,
     write_zoho_expense_export,
@@ -3969,12 +3970,18 @@ def _expense_review(r: Receipt, overrides: dict, *, entity: str | None = None) -
         if value is None
     ]
     if missing:
-        return _review(
-            "check",
-            "Missing " + ", ".join(missing) + ". Fill these in before this "
-            "expense can export cleanly.",
-            "missing_fields",
-        )
+        # `missing` rides as structured data so the SPA composes the
+        # sentence from its own localized field names; the English prose
+        # stays as the fallback (language-contract round, note 4).
+        return {
+            **_review(
+                "check",
+                "Missing " + ", ".join(missing) + ". Fill these in before "
+                "this expense can export cleanly.",
+                "missing_fields",
+            ),
+            "missing": missing,
+        }
     if entity is not None and not entity:
         return _review(
             "check",
@@ -4091,13 +4098,36 @@ def build_expense_view(
         )
         rv = _receipt_view(r, overrides)
         # An expense batch's receipt files live under the run's receipts
-        # dir named `<document_id>`; the view flag drives the SPA preview.
+        # dir named `<document_id>`. HONEST availability: a manual expense
+        # add has a `manual:` id and NO file — the generic prefix claim
+        # rendered a View button that 404s (note 8). A real document has a
+        # mapped page, a file in receipts/, or (post-graduation attach) a
+        # glob hit where the image endpoint actually serves it from.
+        source_name = r.document_id
+        has_file = (receipts_dir / r.document_id).is_file()
+        if not has_file:
+            hit = _attached_receipt_file(
+                receipts_dir.parent, r.document_id
+            )
+            if hit is not None:
+                has_file = True
+                # attach files are stored `{key}__{original-name}`
+                source_name = hit.name.split("__", 1)[-1]
         rv["receipt_image_available"] = (
-            rv["receipt_image_available"]
-            or (receipts_dir / r.document_id).is_file()
+            r.receipt_image_page is not None or has_file
         )
+        # Which upload/mail this row came from (spool prefix stripped);
+        # empty for rows the operator typed in with no document.
+        rv["source_file"] = _display_name(source_name) if has_file else ""
         books_as = [
-            {"account": account, "amount": _fmt_amount(amt)}
+            {
+                # `(uncategorized - assign)` is the EXPORT artifact's
+                # placeholder (English is the CSV's contract); the grid
+                # gets a sentinel the SPA localizes instead.
+                "account": None if account == _UNCATEGORIZED else account,
+                "unassigned": account == _UNCATEGORIZED,
+                "amount": _fmt_amount(amt),
+            }
             for account, amt, _descs in expense_posting_parts(
                 ov_by_doc.get(r.document_id, r)
             )
@@ -4765,6 +4795,22 @@ def _display_name(stored: str) -> str:
     return re.sub(r"^\d{4}__", "", stored)
 
 
+def _attached_receipt_file(work_dir: Path, document_id: str) -> Path | None:
+    """The on-disk file behind a workbench-attached `manual:`/`folder:`
+    receipt, resolved with the SAME glob the image endpoint serves from
+    (manual-receipts/{tx}__*, folder-receipts/{digest}__*). None for ids
+    with no attached file — a typed-in manual expense."""
+    for prefix, folder in (("manual:", "manual-receipts"),
+                           ("folder:", "folder-receipts")):
+        if not document_id.startswith(prefix):
+            continue
+        key = re.sub(r"[^A-Za-z0-9._-]", "_", document_id[len(prefix):])
+        d = work_dir / folder
+        hits = sorted(d.glob(f"{key}__*")) if d.is_dir() else []
+        return hits[0] if hits else None
+    return None
+
+
 def _set_aside_entry(r: Receipt, now_iso: str) -> dict:
     return {
         "file": r.document_id,
@@ -4809,17 +4855,15 @@ def set_aside_entries(snapshot: dict) -> list[dict]:
 
 
 def set_aside_view(snapshot: dict) -> list[dict]:
-    """The SPA-facing shape: reason label resolved, internal receipt dict
-    withheld. `reason` is the machine code ("statement" | "report_summary"
-    | "other") the SPA keys its own wording (EN/PT) on."""
+    """The SPA-facing shape: internal receipt dict withheld. `reason` is
+    the machine code ("statement" | "report_summary" | "other") the SPA
+    keys its own wording (EN/PT) on — the English reason_label was dead
+    weight the prompt already forbade showing (language-contract round)."""
     return [
         {
             "file": e["file"],
             "display": e.get("display") or _display_name(e["file"]),
             "reason": e.get("reason") or "other",
-            "reason_label": NON_RECEIPT_LABELS.get(
-                e.get("reason"), NON_RECEIPT_LABELS["other"]
-            ),
             "restored": bool(e.get("restored")),
             "at": e.get("at"),
         }

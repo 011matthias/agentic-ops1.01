@@ -304,7 +304,8 @@ def test_web_batch_grid_shows_set_aside_strip(web_client, monkeypatch):
     assert entry["display"] == "summary.jpg"
     assert entry["file"].endswith("summary.jpg")
     assert entry["reason"] == "report_summary"
-    assert entry["reason_label"] == "an expense-report summary page"
+    assert entry["reason"] == "report_summary"  # SPA localizes from the code
+    assert "reason_label" not in entry  # English label dropped (note 4)
     assert entry["restored"] is False
     assert grid["summary"]["n_set_aside"] == 1
 
