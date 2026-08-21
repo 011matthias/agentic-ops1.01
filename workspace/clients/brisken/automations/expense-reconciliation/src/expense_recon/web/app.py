@@ -85,6 +85,7 @@ from .service import (
     RunInputError,
     add_receipts_to_expense_batch,
     apply_expense_edits,
+    assign_batch_cards,
     attach_emailed_receipt,
     available_entities,
     build_expense_view,
@@ -106,6 +107,7 @@ from .service import (
     ready_confirm_pairs,
     prepare_intake_run,
     prepare_run,
+    refresh_batch_master_data,
     regenerate_expense_export,
     regenerate_reconciled,
     regenerate_report,
@@ -1976,6 +1978,74 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 result = restore_set_aside_file(
                     store, run, file, _now_iso(),
                     learning_db_path=app.state.learning_db_path,
+                )
+            except RunInputError as exc:
+                return JSONResponse({"error": exc.message}, status_code=400)
+            run = store.get_run(run_id)
+            view = _expense_view(store, run)
+        return JSONResponse(jsonable_encoder({**result, "batch": view}))
+
+    @app.post("/api/expense-batches/{run_id}/cards")
+    async def post_batch_cards(run_id: str, request: Request):
+        """Cards R3: operator hint -> card assignments for a batch. Body
+        {"assignments": [{"hint", "card"}], "new_cards": {slug: {...}}?,
+        "learn": bool} — assignments apply to THIS batch (exact hint
+        strings, recorded in the batch config); `learn` additionally
+        persists the hint's identifying tokens into settings["cards"] so
+        the next batch resolves on its own. Generic tender words assign
+        batch-only and are never learned (they identify a network, not a
+        card). Answers with the refreshed batch view."""
+        if not _receipt_first_on():
+            return _flag_off()
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body is a plain 400
+            body = None
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "body must be an object"}, status_code=400)
+        assignments = body.get("assignments") or []
+        if not isinstance(assignments, list):
+            return JSONResponse(
+                {"error": "assignments must be a list"}, status_code=400
+            )
+        new_cards = body.get("new_cards")
+        if new_cards is not None and not isinstance(new_cards, dict):
+            return JSONResponse(
+                {"error": "new_cards must be an object"}, status_code=400
+            )
+        with open_store() as store:
+            run, err = _mutable_expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            try:
+                result = assign_batch_cards(
+                    store, run,
+                    assignments=assignments,
+                    new_cards=new_cards,
+                    learn=bool(body.get("learn")),
+                    now_iso=_now_iso(),
+                )
+            except RunInputError as exc:
+                return JSONResponse({"error": exc.message}, status_code=400)
+            run = store.get_run(run_id)
+            view = _expense_view(store, run)
+        return JSONResponse(jsonable_encoder({**result, "batch": view}))
+
+    @app.post("/api/expense-batches/{run_id}/refresh-master-data")
+    def post_batch_refresh_master_data(run_id: str):
+        """Cards R3: re-derive this batch's snapshotted master data (cards,
+        card -> account map, entity default, CoA block) from the CURRENT
+        stored settings — the explicit, audited fix for the snapshot trap.
+        Answers with the changes made and the refreshed batch view."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            run, err = _mutable_expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            try:
+                result = refresh_batch_master_data(
+                    store, run, now_iso=_now_iso(), operator=_operator()
                 )
             except RunInputError as exc:
                 return JSONResponse({"error": exc.message}, status_code=400)

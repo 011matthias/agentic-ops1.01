@@ -65,6 +65,10 @@ EXPENSE_COLUMNS = (
 )
 
 _PAID_THROUGH_PLACEHOLDER = "(paid-through - assign)"
+# Cards R3: an unresolved legal entity NEVER blocks an export (owner
+# ruling 2026-08-21) — the row ships with a visible placeholder, the
+# reviewer assigns the card/entity later, and a re-export folds it in.
+_ENTITY_PLACEHOLDER = "(entity - assign)"
 
 
 def _card_last4(payment_mode: str | None) -> str | None:
@@ -88,16 +92,19 @@ def _card_account(
     a card the map does not know: an unknown card falls through to the
     default rather than posting to a wrong account (B4).
 
-    The trailing digit group keeps its historic fuzzy comparison; the
-    EARLIER runs are also tried (Cards R2, 2026-08-21) because a Zoho
+    The trailing digit group compares on leading-zero-stripped EQUALITY
+    (R3 adversarial review tightened the historic endswith fuzz: a
+    3-digit key acted as a wildcard matching any "...N340" hint, and a
+    5-digit key cross-matched an unrelated card's last-4 — both posted
+    money to a guessed account. Equal-length keys behave exactly as
+    before). The EARLIER runs are also tried (Cards R2) because a Zoho
     payment-mode label prints BOTH of a card's digit identities
     ("1 - CorpServ 2838/1672 (Chase)": statement marker 2838, plastic
     last-4 1672) and the map may know the card under either — but an
     earlier run matches EXACTLY only, and two distinct account hits deny.
     A masked-PAN BIN fragment ("5412 75** **** 3456") must never
-    endswith-wildcard its way onto an unrelated card: this is a money
-    path, so a visible gap beats a guessed account (R2 adversarial
-    review).
+    wildcard its way onto an unrelated card: this is a money path, so a
+    visible gap beats a guessed account.
     """
     if not payment_mode or not card_accounts:
         return None
@@ -105,10 +112,11 @@ def _card_account(
     if not runs:
         return None
     last4 = runs[-1]
+    last4_norm = last4.lstrip("0") or "0"
     for key, account in card_accounts.items():
         k = str(key).strip()
         if k and account and (
-            k == last4 or last4.endswith(k) or k.endswith(last4)
+            k == last4 or (k.lstrip("0") or "0") == last4_norm
         ):
             return str(account)
     hits: list[str] = []
@@ -141,6 +149,9 @@ def resolve_paid_through(
     reimbursable_account: str | None,
     coa: "ChartOfAccounts | None",
     card_accounts: "Mapping[str, str] | None" = None,
+    *,
+    card_hint_account: str | None = None,
+    card_map_blocked: bool = False,
 ) -> tuple[str, str]:
     """Resolve the "Paid Through" account AND how it was chosen, so the
     review grid can show the same account the export will post plus its
@@ -149,11 +160,19 @@ def resolve_paid_through(
     Order: a reimbursable_personal expense (§17) redirects to the
     reimbursement clearing account; otherwise per-expense override ->
     the receipt's own Zoho "Paid Through" (ER path) -> the card the
-    receipt was paid on (its OCR'd last4 mapped through `card_accounts`)
-    -> the run-level default -> a visible placeholder (never guessed, B4).
-    The card step reads the last4 the receipt prints and translates it to
-    a real Zoho account via `card_accounts`; a card the map does not know
-    falls through rather than posting to a wrong account.
+    receipt was paid on -> the run-level default -> a visible placeholder
+    (never guessed, B4). The card step takes `card_hint_account` first
+    (Cards R3: the resolved card's own Zoho account, covering digitless
+    hints the operator assigned explicitly), then the OCR'd last4 mapped
+    through `card_accounts`; a card neither knows falls through rather
+    than posting to a wrong account.
+
+    ``card_map_blocked`` (R3 adversarial review): the card registry chain
+    RESOLVED the hint's identity question with an answer the flat map
+    must not second-guess — the hint was ambiguous between cards (review,
+    not guess), or it resolved to a card that has no Zoho account set
+    (Zoho-optional by design). Skips the card step entirely; override /
+    receipt / default still apply.
 
     Returns (account, source) where source is one of: reimbursable,
     override, receipt, card, default, unassigned.
@@ -167,7 +186,10 @@ def resolve_paid_through(
         return _resolve_or(override, coa, _PAID_THROUGH_PLACEHOLDER), "override"
     if receipt.paid_through:
         return _resolve_or(receipt.paid_through, coa, _PAID_THROUGH_PLACEHOLDER), "receipt"
-    card = _card_account(receipt.payment_mode, card_accounts)
+    card = card_hint_account or (
+        None if card_map_blocked
+        else _card_account(receipt.payment_mode, card_accounts)
+    )
     if card:
         return _resolve_or(card, coa, _PAID_THROUGH_PLACEHOLDER), "card"
     if default:
@@ -183,12 +205,15 @@ def _paid_through(
     reimbursable_account: str | None,
     coa: "ChartOfAccounts | None",
     card_accounts: "Mapping[str, str] | None" = None,
+    card_hint_account: str | None = None,
+    card_map_blocked: bool = False,
 ) -> str:
     """The exported Paid Through account (the account half of
     `resolve_paid_through`)."""
     return resolve_paid_through(
         receipt, override, default, disposition, reimbursable_account, coa,
-        card_accounts,
+        card_accounts, card_hint_account=card_hint_account,
+        card_map_blocked=card_map_blocked,
     )[0]
 
 
@@ -205,6 +230,8 @@ def build_expense_rows(
     receipt_urls: "Mapping[str, str | None] | None" = None,
     customer_by_doc: "Mapping[str, str] | None" = None,
     card_accounts: "Mapping[str, str] | None" = None,
+    card_hint_accounts: "Mapping[str, str] | None" = None,
+    card_map_blocked_docs: "set[str] | None" = None,
 ) -> list[list[str]]:
     """Build the Zoho Expenses rows (no header), one row per expense.
 
@@ -241,7 +268,13 @@ def build_expense_rows(
         rate = _amount(r.exchange_rate) if r.exchange_rate is not None else ""
         tax_amt = _amount(r.detected_tax) if r.detected_tax is not None else ""
         tax_label = r.tax_label or ""
-        entity = (entity_by_doc or {}).get(r.document_id) or r.legal_entity_id or ""
+        # Cards R3: an unresolved entity exports a VISIBLE placeholder —
+        # never a blank the importer silently accepts, never a block.
+        entity = (
+            (entity_by_doc or {}).get(r.document_id)
+            or r.legal_entity_id
+            or _ENTITY_PLACEHOLDER
+        )
         customer = (customer_by_doc or {}).get(r.document_id, "")
         url = (
             receipt_urls.get(r.document_id)
@@ -256,6 +289,8 @@ def build_expense_rows(
             reimbursable_account,
             chart_of_accounts,
             card_accounts,
+            (card_hint_accounts or {}).get(r.document_id),
+            r.document_id in (card_map_blocked_docs or ()),
         )
 
         first = True
@@ -350,6 +385,8 @@ def write_zoho_expense_export(
     receipt_urls: "Mapping[str, str | None] | None" = None,
     customer_by_doc: "Mapping[str, str] | None" = None,
     card_accounts: "Mapping[str, str] | None" = None,
+    card_hint_accounts: "Mapping[str, str] | None" = None,
+    card_map_blocked_docs: "set[str] | None" = None,
 ) -> Path:
     """Write the Zoho Books Expenses import CSV (one row per expense).
     Returns the path."""
@@ -367,6 +404,8 @@ def write_zoho_expense_export(
         receipt_urls=receipt_urls,
         customer_by_doc=customer_by_doc,
         card_accounts=card_accounts,
+        card_hint_accounts=card_hint_accounts,
+        card_map_blocked_docs=card_map_blocked_docs,
     )
     with out_path.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh)

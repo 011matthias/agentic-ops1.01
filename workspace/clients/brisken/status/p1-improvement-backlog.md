@@ -47,10 +47,26 @@ GET /api/cards, zero behavior change) — SHIPPED PR #555; R2 Zoho decoupling
 bare-digit keys resolve labels, ambiguity placeholders, merchants
 inert-hint, dropdown relabels answering notes 5/7) — SHIPPED PR #556; R3
 entity-less batch + card-review strip + hint-to-card assignment that
-persists ("learning") + refresh-master-data endpoint (fixes the
-snapshot trap: settings edits reach existing batches); R4 mixed-entity
+persists ("learning") + refresh-master-data endpoint (snapshot-trap fix)
+— SHIPPED PR #559 (3-lens adversarial review; every HIGH fixed + pinned:
+single-digit-run learn rule, compound/DE generic tenders, ambiguity
+blocks the paid-through flat map, graduation bakes chain entities —
+pre-fix an assigned entity-less batch reconciled 0 silently; restore +
+attach final-write now serialized under the batch lock. Lovable half:
+`docs/lovable-cards-r3-prompt.md`, owner applies); R4 mixed-entity
 export + persisted migration (pending owner answers: per-entity export
 files? cash/personal tenders as cards? per-entity zoho_account?).
+
+**R3 review residue (logged, not built):** re-stamp semantics after a
+registry correction (stale ingest-stamped entity shows source "learned";
+chain + provenance make it visible, operator overrides per row — design
+call whether refresh should re-stamp, vs memory-origin stamps);
+settings PUT whole-map RMW race (single-operator, cosmetic); GET->PUT
+settings round-trip 400s if a generic alias was stored PRE-R3 behind the
+API (read-side the alias is inert; verify prod settings clean at
+deploy); assignment during an in-flight attach match window is not baked
+into that match (assignments happen on the batch page pre-attach in
+practice; the pool-based mismatch warning fires on a 0-match outcome).
 
 **Export policy (user ruling 2026-08-21):** unresolved card/entity never
 blocks an export — placeholders, adjustable later, re-export folds it in.

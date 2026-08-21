@@ -3444,9 +3444,13 @@ def create_expense_batch(
     member-by-member (`_folder_receipt_files`). Invalid entries (wrong type,
     empty, oversized) become `upload_issues`, mirroring the folder-ingest
     tolerance; zero valid files raises `RunInputError`.
+
+    `legal_entity` is OPTIONAL since Cards R3 (2026-08-21, owner ruling:
+    the tool takes receipts from ANY entity): each receipt's entity
+    resolves from its paying card (the registry snapshotted into the
+    config below), the batch value is only a fallback, and an unresolved
+    entity is a review state (`needs_entity`) that never blocks an export.
     """
-    if not legal_entity.strip():
-        raise RunInputError("Pick the legal entity these expenses belong to.")
     if not files:
         raise RunInputError("No receipt files uploaded.")
 
@@ -3531,11 +3535,19 @@ def create_expense_batch(
     # `card_accounts`, `cards.effective_cards`) — with no settings cards
     # this reproduces the legacy map exactly. Snapshotted, so a run
     # reproduces its mapping (incl. the local no-API replay).
-    from ..cards import effective_cards, legacy_card_accounts
+    from ..cards import cards_to_setting, effective_cards, legacy_card_accounts
+    from ..cards_provision import load_cards
 
-    card_accts = legacy_card_accounts(effective_cards(settings))
+    composed = effective_cards(settings, load_cards())
+    card_accts = legacy_card_accounts(composed)
     if card_accts:
         cfg["expense"]["card_accounts"] = card_accts
+    # Cards R3: snapshot the COMPOSED card registry into the run config, so
+    # per-receipt entity resolution reads a fixed, replayable state (the
+    # same snapshot discipline as card_accounts). Settings edits reach an
+    # existing batch only through the explicit refresh-master-data pass.
+    if composed:
+        cfg["expense"]["cards"] = cards_to_setting(composed)
     if use_llm_effective:
         cfg["llm"] = {"provider": "openai", "model": "gpt-4o-mini"}
     # Per-entity chart provisioning (the same gate a statement run gets):
@@ -3556,7 +3568,12 @@ def create_expense_batch(
         run_id=run_id,
         work_dir=work_dir,
         cfg=cfg,
-        label=(label.strip() or f"Expenses {legal_entity.strip()} {now_iso[:10]}"),
+        label=(
+            label.strip()
+            or " ".join(
+                p for p in ("Expenses", legal_entity.strip(), now_iso[:10]) if p
+            )
+        ),
         learned=learned,
         ai_unavailable=not have_key,
         use_llm_effective=use_llm_effective,
@@ -3784,10 +3801,155 @@ def apply_expense_edits(
     return out
 
 
-def _expense_review(r: Receipt, overrides: dict) -> dict:
+# ── Cards R3 (2026-08-21): per-receipt card + entity resolution ─────
+# The batch-level legal entity became optional; each receipt's entity
+# resolves from its paying card via ONE chain used by BOTH the grid and
+# the export (grid == export by construction, the books_as pattern):
+#   field override -> batch hint assignment / card registry -> the
+#   receipt's own stamped entity (batch default or learned) -> "" (review
+#   state `needs_entity`). Cards come from the batch CONFIG snapshot, so
+#   an existing batch's rows never move because settings drifted; the
+#   explicit refresh-master-data pass is how settings reach a batch.
+
+
+def _batch_cards(cfg: dict | None) -> dict:
+    """The batch's snapshotted card registry, as Card objects."""
+    from ..cards import cards_from_setting
+
+    return cards_from_setting(((cfg or {}).get("expense") or {}).get("cards"))
+
+
+def _batch_card_hints(cfg: dict | None) -> dict[str, str]:
+    """The batch's operator-confirmed hint -> card-key assignments."""
+    raw = ((cfg or {}).get("expense") or {}).get("card_hints")
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        str(k).strip(): str(v).strip()
+        for k, v in raw.items()
+        if str(k).strip() and str(v).strip()
+    }
+
+
+def resolve_batch_row_cards(
+    receipts: "list[Receipt]",
+    cfg: dict | None,
+    field_overrides: dict[str, dict[str, str]],
+) -> dict[str, dict]:
+    """Per-document card + entity resolution for an expense batch:
+    ``{document_id: {hint, card: Card|None, entity, entity_source}}``.
+
+    `receipts` are the POST-overlay pool (edits applied), so the entity
+    fallback step reads what the reviewer sees; the override step reads
+    `field_overrides` directly so an explicit edit is labeled as such.
+    `entity_source` is override | card | batch | learned | none — "learned"
+    meaning the stamped value differs from the batch default (memory or an
+    earlier card stamp), so the UI can say why without guessing.
+
+    `card_map_blocked` (per doc) tells the paid-through resolver the
+    registry chain already ANSWERED the identity question in a way the
+    flat digit->account map must not second-guess: the hint was ambiguous
+    between cards, or it resolved to a card with no Zoho account set
+    (R3 adversarial review — the flat map's fuzzy fallback was guessing a
+    wrong account exactly where the chain had refused to).
+    """
+    from ..cards import resolve_hinted_card_ex
+
+    cards = _batch_cards(cfg)
+    hints_map = _batch_card_hints(cfg)
+    batch_entity = ((cfg or {}).get("expense") or {}).get("legal_entity_id", "")
+    out: dict[str, dict] = {}
+    for r in receipts:
+        hint = (r.payment_mode or "").strip()
+        card, ambiguous = resolve_hinted_card_ex(hint, cards, hints_map)
+        override = (field_overrides.get(r.document_id) or {}).get("legal_entity", "")
+        if override.strip():
+            entity, source = override.strip(), "override"
+        elif card is not None and card.entity:
+            entity, source = card.entity, "card"
+        elif (r.legal_entity_id or "").strip():
+            entity = r.legal_entity_id.strip()
+            source = "batch" if entity == (batch_entity or "").strip() else "learned"
+        else:
+            entity, source = "", "none"
+        out[r.document_id] = {
+            "hint": hint,
+            "card": card,
+            "entity": entity,
+            "entity_source": source,
+            "ambiguous": ambiguous,
+            "card_map_blocked": ambiguous
+            or (card is not None and not card.zoho_account),
+        }
+    return out
+
+
+def build_card_review(resolution: dict[str, dict]) -> dict:
+    """The batch's card-review strip, grouped server-side (the SPA renders,
+    never judges): unresolved hints (with the rows they cover, generic
+    tenders marked — those never auto-resolve BY DESIGN and can only be
+    assigned explicitly), resolved cards with their hit counts, and the
+    no-hint rest."""
+    from ..cards import is_generic_tender
+
+    unresolved: dict[str, dict] = {}
+    resolved: dict[str, dict] = {}
+    n_no_hint = 0
+    for doc, res in resolution.items():
+        hint, card = res["hint"], res["card"]
+        if card is not None:
+            entry = resolved.setdefault(card.key, {
+                "card": {
+                    "key": card.key,
+                    "label": card.display_label,
+                    "entity": card.entity,
+                    "zoho_account": card.zoho_account,
+                },
+                "n_rows": 0,
+                "hints": set(),
+            })
+            entry["n_rows"] += 1
+            if hint:
+                entry["hints"].add(hint)
+        elif hint:
+            entry = unresolved.setdefault(hint, {
+                "hint": hint,
+                "n_rows": 0,
+                "documents": [],
+                "generic": is_generic_tender(hint),
+                # True = two or more cards claim this hint; assigning it
+                # explicitly is the only resolution path.
+                "ambiguous": bool(res.get("ambiguous")),
+            })
+            entry["n_rows"] += 1
+            entry["documents"].append(doc)
+        else:
+            n_no_hint += 1
+    return {
+        "unresolved_hints": sorted(
+            unresolved.values(), key=lambda e: (-e["n_rows"], e["hint"])
+        ),
+        "resolved": [
+            {**e, "hints": sorted(e["hints"])}
+            for e in sorted(
+                resolved.values(), key=lambda e: (-e["n_rows"], e["card"]["key"])
+            )
+        ],
+        "n_resolved_rows": sum(e["n_rows"] for e in resolved.values()),
+        "n_unresolved_rows": sum(e["n_rows"] for e in unresolved.values()),
+        "n_no_hint": n_no_hint,
+        "n_needs_entity": sum(
+            1 for res in resolution.values() if not res["entity"]
+        ),
+    }
+
+
+def _expense_review(r: Receipt, overrides: dict, *, entity: str | None = None) -> dict:
     """Review-by-exception for one expense (receipt-spine). Missing core
     fields first (an expense cannot export cleanly without date / amount /
-    currency), then the shared category judgment — the same
+    currency), then a missing legal entity (Cards R3 — resolves from the
+    paying card; unresolved = review, and the export still runs with a
+    visible placeholder), then the shared category judgment — the same
     ready / check / pick vocabulary the statement workbench uses."""
     missing = [
         label
@@ -3804,6 +3966,14 @@ def _expense_review(r: Receipt, overrides: dict) -> dict:
             "Missing " + ", ".join(missing) + ". Fill these in before this "
             "expense can export cleanly.",
             "missing_fields",
+        )
+    if entity is not None and not entity:
+        return _review(
+            "check",
+            "No legal entity yet. Assign this expense's paying card (or set "
+            "the entity directly) so it posts to the right company; the "
+            "export shows a placeholder until then.",
+            "needs_entity",
         )
     return _matched_category_review(r, overrides)
 
@@ -3885,8 +4055,17 @@ def build_expense_view(
     exp_cfg = (run.config or {}).get("expense") or {}
     default_pt = exp_cfg.get("default_paid_through")
     card_accts = exp_cfg.get("card_accounts")
+    # Cards R3: one resolution pass feeds the rows' card/entity, the
+    # review states, the paid-through card step, and the card_review
+    # strip — the same pass the export runs, so they cannot disagree.
+    card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
     for r in receipts:
-        review = _expense_review(r, overrides)
+        res = card_res.get(r.document_id) or {
+            "hint": "", "card": None, "entity": r.legal_entity_id or "",
+            "entity_source": "batch", "ambiguous": False,
+            "card_map_blocked": False,
+        }
+        review = _expense_review(r, overrides, entity=res["entity"])
         posting = _row_posting_category(r, overrides, None)
         # Expense grid shows WHY the category is what it is in the reviewer's
         # coarse vocabulary (registry | learned | llm | override); the fine
@@ -3897,6 +4076,10 @@ def build_expense_view(
             r,
             field_overrides.get(r.document_id, {}).get("paid_through") or None,
             default_pt, None, None, None, card_accts,
+            card_hint_account=(
+                res["card"].zoho_account if res["card"] is not None else None
+            ),
+            card_map_blocked=res["card_map_blocked"],
         )
         rv = _receipt_view(r, overrides)
         # An expense batch's receipt files live under the run's receipts
@@ -3918,6 +4101,23 @@ def build_expense_view(
             totals[ccy] = totals.get(ccy, Decimal("0")) + r.detected_total
         expenses.append({
             **rv,
+            # Cards R3: the row's entity is the RESOLVED chain value
+            # (override -> card -> stamped), with its provenance beside it;
+            # the paying-card object renders the assignment state and the
+            # raw hint stays visible for the review strip.
+            "legal_entity_id": res["entity"],
+            "entity_source": res["entity_source"],
+            "payment_hint": res["hint"],
+            "card": (
+                {
+                    "key": res["card"].key,
+                    "label": res["card"].display_label,
+                    "entity": res["card"].entity,
+                    "hint": res["hint"],
+                }
+                if res["card"] is not None
+                else None
+            ),
             # Canonical vendor provenance (2026-07-29): replace the bare
             # `vendor` string from _receipt_view with {display, raw, source}
             # so the grid shows the canonical name AND why it differs. This is
@@ -4003,6 +4203,11 @@ def build_expense_view(
             1 for e in expenses if e["review"]["state"] in ("check", "pick")
         ),
         "n_unknown_currency": sum(1 for r in receipts if r.detected_currency is None),
+        # Cards R3: rows whose entity the chain could not resolve — the
+        # `needs_entity` review population (never an export blocker).
+        "n_needs_entity": sum(
+            1 for res in card_res.values() if not res["entity"]
+        ),
         "n_learned_lines": n_learned_lines,
         "has_image_info": has_image_info,
         "n_missing_receipt_image": (
@@ -4041,6 +4246,11 @@ def build_expense_view(
         "expense_ingest": run.snapshot.get("expense_ingest"),
         "summary": summary,
         "expenses": expenses,
+        # Cards R3: the card-review strip — unresolved payment hints
+        # grouped server-side (generic tenders marked: assignable, never
+        # auto-resolved), resolved cards with hit counts, and the
+        # needs-entity population.
+        "card_review": build_card_review(card_res),
         # The set-aside strip (backlog item 1): what the quarantine
         # excluded, why, and whether the reviewer restored it.
         "set_aside": set_aside,
@@ -4087,6 +4297,10 @@ def regenerate_expense_export(
         for doc, fields in field_overrides.items()
         if fields.get("customer")
     }
+    # Cards R3: the export runs the SAME card/entity resolution pass the
+    # grid renders (assign a card after an export, re-export, and the new
+    # file carries it — exports are regenerable, never stale by design).
+    card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
     out_path = Path(run.work_dir) / "expenses.csv"
     write_zoho_expense_export(
         receipts,
@@ -4100,8 +4314,392 @@ def regenerate_expense_export(
             (run.config or {}).get("expense") or {}
         ).get("card_accounts"),
         customer_by_doc=customer_by_doc,
+        entity_by_doc={
+            doc: res["entity"] for doc, res in card_res.items() if res["entity"]
+        },
+        card_hint_accounts={
+            doc: res["card"].zoho_account
+            for doc, res in card_res.items()
+            if res["card"] is not None and res["card"].zoho_account
+        },
+        card_map_blocked_docs={
+            doc for doc, res in card_res.items() if res["card_map_blocked"]
+        },
     )
     return out_path
+
+
+def assign_batch_cards(
+    store: RunStore,
+    run: RunRow,
+    *,
+    assignments: "list[dict]",
+    new_cards: dict | None,
+    learn: bool,
+    now_iso: str,
+) -> dict:
+    """Apply operator hint -> card assignments to a batch (Cards R3), and
+    optionally persist what they teach into ``settings["cards"]``.
+
+    Deterministic persistence, never inference: an assignment records the
+    EXACT hint string in the batch config (``expense.card_hints``) and
+    folds the hint's identifying tokens into the card entry — its last
+    digit run, or the digitless hint as an alias. Generic tender words
+    ("Visa", "Cartão de crédito") assign for THIS batch only and are
+    refused as learned tokens (owner ruling: they never auto-resolve).
+    ``learn`` additionally writes the same tokens into the stored settings
+    registry, so the NEXT batch resolves the hint on its own.
+
+    Raises RunInputError on an unknown card key, an inactive card, a hint
+    not present in the batch, or a malformed new-card payload.
+    """
+    from ..cards import normalize_cards_setting
+
+    if not assignments and not new_cards:
+        raise RunInputError("Nothing to apply: no assignments and no new cards.")
+    try:
+        new_cards_clean = normalize_cards_setting(new_cards or {})
+    except ValueError as exc:
+        raise RunInputError(str(exc)) from exc
+
+    # Same serialization as add_receipts_to_expense_batch: the config /
+    # snapshot read-modify-write below must not interleave with a
+    # concurrent ingest, assignment, or refresh on this batch (an
+    # unserialized pair is last-write-wins). Re-fetch inside the lock so
+    # the RMW starts from the current row.
+    with _BATCH_ADD_LOCK:
+        fresh = store.get_run(run.run_id)
+        if fresh is not None:
+            run = fresh
+        if has_statement(run):
+            raise RunInputError(
+                "A statement is already attached to this batch; its receipt "
+                "pool and master data are fixed."
+            )
+        return _assign_batch_cards_locked(
+            store, run,
+            assignments=assignments,
+            new_cards_clean=new_cards_clean,
+            learn=learn,
+            now_iso=now_iso,
+        )
+
+
+def _assign_batch_cards_locked(
+    store: RunStore,
+    run: RunRow,
+    *,
+    assignments: "list[dict]",
+    new_cards_clean: dict,
+    learn: bool,
+    now_iso: str,
+) -> dict:
+    from ..cards import (
+        cards_from_setting,
+        cards_to_setting,
+        effective_cards,
+        learnable_hint_tokens,
+        legacy_card_accounts,
+        normalize_cards_setting,
+    )
+    from ..cards_provision import load_cards
+
+    _, receipts, _, _ = snapshot_from_dict(run.snapshot)
+    batch_hints = {
+        (r.payment_mode or "").strip()
+        for r in receipts
+        if (r.payment_mode or "").strip()
+    }
+
+    cfg = dict(run.config or {})
+    exp = dict(cfg.get("expense") or {})
+    cards_map = dict(exp.get("cards") or {})
+    hints_map = dict(exp.get("card_hints") or {})
+
+    settings = store.get_settings()
+    composed_live = effective_cards(settings, load_cards())
+
+    # A new card must actually be NEW: silently replacing an existing
+    # entry through this endpoint would overwrite money-path master data
+    # (digits, zoho_account) with a partial payload (adversarial review).
+    for slug in new_cards_clean:
+        if (
+            slug in cards_map
+            or slug in composed_live
+            or slug in (settings.get("cards") or {})
+        ):
+            raise RunInputError(
+                f"card {slug!r} already exists; edit it in Settings > Cards "
+                "instead of re-creating it here"
+            )
+    for slug, entry in new_cards_clean.items():
+        cards_map[slug] = dict(entry)
+
+    parsed: list[tuple[str, str]] = []
+    seen_hints: set[str] = set()
+    for a in assignments:
+        if not isinstance(a, dict):
+            raise RunInputError("each assignment must be an object")
+        hint = str(a.get("hint") or "").strip()
+        card_key = str(a.get("card") or "").strip()
+        if not hint or not card_key:
+            raise RunInputError("each assignment needs a hint and a card key")
+        if hint in seen_hints:
+            # Two assignments for one hint would teach BOTH cards the
+            # hint's tokens and leave it permanently ambiguous — refuse
+            # the contradiction instead of last-wins.
+            raise RunInputError(f"hint {hint!r} is assigned more than once")
+        seen_hints.add(hint)
+        if hint not in batch_hints:
+            raise RunInputError(
+                f"hint {hint!r} does not appear in this batch's receipts"
+            )
+        if card_key not in cards_map:
+            # Materialize the batch-config entry from the live registry the
+            # assignment UI offered (GET /api/cards). Unknown = typo, 400.
+            live = composed_live.get(card_key)
+            if live is None:
+                raise RunInputError(f"unknown card {card_key!r}")
+            cards_map[card_key] = cards_to_setting({card_key: live})[card_key]
+        if cards_map[card_key].get("active") is False:
+            raise RunInputError(
+                f"card {card_key!r} is inactive; reactivate it before "
+                "assigning receipts to it"
+            )
+        parsed.append((hint, card_key))
+
+    results: list[dict] = []
+    settings_cards = dict(settings.get("cards") or {})
+    settings_dirty = bool(new_cards_clean) and learn
+    if learn:
+        for slug, entry in new_cards_clean.items():
+            settings_cards[slug] = dict(entry)
+
+    def _fold_tokens(entry: dict, digit: str | None, alias: str | None) -> dict:
+        out = dict(entry)
+        if digit:
+            digits = [str(d) for d in (out.get("digits") or [])]
+            if digit not in digits:
+                digits.append(digit)
+            out["digits"] = digits
+        if alias:
+            aliases = [str(x) for x in (out.get("aliases") or [])]
+            if alias not in aliases:
+                aliases.append(alias)
+            out["aliases"] = aliases
+        return out
+
+    for hint, card_key in parsed:
+        hints_map[hint] = card_key
+        digit, alias, refusal = learnable_hint_tokens(hint)
+        cards_map[card_key] = _fold_tokens(cards_map[card_key], digit, alias)
+        learned = False
+        if learn and refusal is None:
+            base = settings_cards.get(card_key)
+            if base is None:
+                # First explicit persistence of a composed/legacy card:
+                # materialize exactly this one entry into settings.
+                live = composed_live.get(card_key)
+                base = (
+                    cards_to_setting({card_key: live})[card_key]
+                    if live is not None
+                    else dict(cards_map[card_key])
+                )
+            settings_cards[card_key] = _fold_tokens(base, digit, alias)
+            settings_dirty = True
+            learned = True
+        n_rows = sum(
+            1 for r in receipts if (r.payment_mode or "").strip() == hint
+        )
+        results.append({
+            "hint": hint,
+            "card": card_key,
+            "n_rows": n_rows,
+            "learned": learned,
+            **({"note": refusal} if refusal else {}),
+        })
+
+    if settings_dirty:
+        # Validate ONLY the entries this request touched, then merge over
+        # the stored map: re-normalizing unrelated stored entries would
+        # 400 the whole request on pre-existing state this operator never
+        # touched (adversarial review — a legacy generic alias elsewhere
+        # in settings must not block learning on a clean card; stored-but-
+        # invalid aliases are already inert at read time in resolve_card).
+        touched = {
+            k: settings_cards[k]
+            for k in (set(new_cards_clean) | {ck for _, ck in parsed})
+            if k in settings_cards
+        }
+        try:
+            normalized = normalize_cards_setting(touched)
+        except ValueError as exc:  # defense in depth; tokens are pre-filtered
+            raise RunInputError(str(exc)) from exc
+        merged = dict(settings.get("cards") or {})
+        merged.update(normalized)
+        store.set_settings({"cards": merged}, now_iso)
+
+    # The card -> Zoho account flat map the paid-through/export paths read:
+    # grow it with the newly-taught digits, never shrink or repoint an
+    # existing digit (money path; a full re-derive is refresh-master-data).
+    flat = legacy_card_accounts(cards_from_setting(cards_map))
+    merged_accounts = {**flat, **(exp.get("card_accounts") or {})}
+    exp["cards"] = cards_map
+    exp["card_hints"] = hints_map
+    if merged_accounts:
+        exp["card_accounts"] = merged_accounts
+    cfg["expense"] = exp
+    store.update_run_config(run.run_id, cfg)
+    return {"ok": True, "results": results, "learned_to_settings": learn}
+
+
+def refresh_batch_master_data(
+    store: RunStore, run: RunRow, *, now_iso: str, operator: str | None
+) -> dict:
+    """Re-derive a batch's snapshotted master data from the CURRENT stored
+    settings (Cards R3 — the explicit, audited fix for the snapshot trap:
+    config is stamped at batch creation, so a later settings edit never
+    reached an existing batch).
+
+    Replaces `expense.cards` and `expense.card_accounts` with the freshly
+    composed registry, re-resolves `expense.default_paid_through` from the
+    entity registry, and injects a `coa_validation` block when the batch
+    entity is provisioned and none exists. The batch's own operator
+    assignments (`expense.card_hints`) are preserved — they are batch
+    facts, not settings state. Every change is returned AND appended to
+    the snapshot's `master_data_refreshes` audit trail. FX rates are
+    statement-mode master data and have no expense-mode consumer.
+    """
+    # Same serialization + re-fetch as add_receipts_to_expense_batch: the
+    # snapshot append below must not clobber a concurrent ingest's write.
+    with _BATCH_ADD_LOCK:
+        fresh = store.get_run(run.run_id)
+        if fresh is not None:
+            run = fresh
+        if has_statement(run):
+            raise RunInputError(
+                "A statement is already attached to this batch; its master "
+                "data is fixed."
+            )
+        return _refresh_batch_master_data_locked(
+            store, run, now_iso=now_iso, operator=operator
+        )
+
+
+def _refresh_batch_master_data_locked(
+    store: RunStore, run: RunRow, *, now_iso: str, operator: str | None
+) -> dict:
+    from ..cards import cards_to_setting, effective_cards, legacy_card_accounts
+    from ..cards_provision import load_cards
+    from ..coa_provision import entity_from_settings
+
+    settings = store.get_settings()
+    composed = effective_cards(settings, load_cards())
+    cfg = dict(run.config or {})
+    exp = dict(cfg.get("expense") or {})
+    changes: list[dict] = []
+
+    old_cards = exp.get("cards") or {}
+    new_cards = cards_to_setting(composed)
+    # Operator assignment TARGETS survive the refresh: a card created for
+    # this batch (`new_cards` + learn:false) exists only here, and
+    # replacing the map wholesale would undo the operator's confirmed
+    # work — rows flip back to needs_entity with a dangling hint mapping
+    # (adversarial review). Batch-local entries NOT referenced by an
+    # assignment are settings-derived and re-derive freely.
+    hint_targets = set(_batch_card_hints(cfg).values())
+    preserved = sorted(
+        k for k in hint_targets if k in old_cards and k not in new_cards
+    )
+    for k in preserved:
+        new_cards[k] = old_cards[k]
+    if new_cards != old_cards:
+        changed_keys = sorted(
+            k
+            for k in (set(old_cards) | set(new_cards))
+            if old_cards.get(k) != new_cards.get(k)
+        )
+        entry: dict = {
+            "field": "cards",
+            "n_before": len(old_cards),
+            "n_after": len(new_cards),
+            "changed_keys": changed_keys,
+        }
+        if preserved:
+            entry["preserved_assignment_targets"] = preserved
+        changes.append(entry)
+        if new_cards:
+            exp["cards"] = new_cards
+        else:
+            exp.pop("cards", None)
+
+    old_accounts = exp.get("card_accounts") or {}
+    new_accounts = legacy_card_accounts(composed)
+    if new_accounts != old_accounts:
+        changes.append({
+            "field": "card_accounts",
+            "added": sorted(set(new_accounts) - set(old_accounts)),
+            "removed": sorted(set(old_accounts) - set(new_accounts)),
+            "changed": sorted(
+                k
+                for k in (set(old_accounts) & set(new_accounts))
+                if old_accounts[k] != new_accounts[k]
+            ),
+        })
+        if new_accounts:
+            exp["card_accounts"] = new_accounts
+        else:
+            exp.pop("card_accounts", None)
+
+    batch_entity = str(exp.get("legal_entity_id") or "")
+    ent = entity_from_settings(settings, batch_entity) if batch_entity else None
+    old_dpt = exp.get("default_paid_through")
+    new_dpt = str(ent.get("default_paid_through") or "") if ent else ""
+    # Only replace when the entity registry states one: an absent registry
+    # entry keeps the creation-time value rather than silently clearing it.
+    if new_dpt and new_dpt != (old_dpt or ""):
+        changes.append({
+            "field": "default_paid_through", "before": old_dpt, "after": new_dpt,
+        })
+        exp["default_paid_through"] = new_dpt
+
+    cfg["expense"] = exp
+    if cfg.get("coa_validation") is None and batch_entity:
+        with_coa = apply_coa_provisioning(cfg, batch_entity, settings=settings)
+        if with_coa.get("coa_validation") is not None:
+            changes.append({
+                "field": "coa_validation",
+                "before": None,
+                "after": with_coa["coa_validation"].get("entity_label"),
+            })
+            cfg = with_coa
+
+    if changes:
+        # Row impact: how many rows' RESOLVED entity this refresh moves —
+        # the registry-level diff alone hides that one click can flip a
+        # whole reviewed batch (adversarial review). Same chain the grid
+        # and export run.
+        try:
+            _, receipts, _, _ = snapshot_from_dict(run.snapshot)
+            fo = store.get_expense_field_overrides(run.run_id)
+            before = resolve_batch_row_cards(receipts, run.config, fo)
+            after = resolve_batch_row_cards(receipts, cfg, fo)
+            n_moved = sum(
+                1
+                for doc in before
+                if before[doc]["entity"] != after.get(doc, before[doc])["entity"]
+            )
+            if n_moved:
+                changes.append({"field": "row_entities", "n_rows_changed": n_moved})
+        except Exception:  # noqa: BLE001 - impact count must not break refresh
+            pass
+        store.update_run_config(run.run_id, cfg)
+        snapshot = dict(run.snapshot or {})
+        audit = list(snapshot.get("master_data_refreshes") or [])
+        audit.append({"at": now_iso, "operator": operator, "changes": changes})
+        snapshot["master_data_refreshes"] = audit
+        store.update_run_snapshot(run.run_id, snapshot)
+    return {"ok": True, "changes": changes}
 
 
 # --------------------------------------------------------------------------
@@ -4234,7 +4832,33 @@ def restore_set_aside_file(
     "receipt"` — the human's classification outranks the model's — then
     runs the same memory + registry + categorize pass a mid-month add
     gets. The set-aside entry stays, flagged `restored`, so the strip
-    keeps showing what happened."""
+    keeps showing what happened.
+
+    Serialized under the batch-mutation lock with a fresh re-read (R3
+    adversarial review A1: an unlocked restore working from a stale row
+    clobbered a concurrent mid-month add's receipt out of the pool)."""
+    with _BATCH_ADD_LOCK:
+        fresh = store.get_run(run.run_id)
+        if fresh is not None:
+            run = fresh
+        if has_statement(run):
+            raise RunInputError(
+                "A statement is already attached to this batch; its receipt "
+                "pool is fixed."
+            )
+        return _restore_set_aside_locked(
+            store, run, file, now_iso, learning_db_path=learning_db_path
+        )
+
+
+def _restore_set_aside_locked(
+    store: RunStore,
+    run: RunRow,
+    file: str,
+    now_iso: str,
+    *,
+    learning_db_path: Path | None = None,
+) -> dict:
     from ..categorize import categorize_receipts_with_registry
     from ..cli import _resolve_categorizer_chart
     from ..ingest.receipts_folder import parse_receipt_file
@@ -4302,10 +4926,15 @@ def restore_set_aside_file(
         ),
     )
 
-    # The same enrichment a mid-month add gets: learned memory, merchant
+    # The same enrichment a mid-month add gets: learned memory, card
+    # entity stamping (Cards R3 — the paying card resolves the entity
+    # before categorization, so learned lookups see it), merchant
     # registry, categorization. The quarantine skipped all of it.
+    from ..cards import stamp_card_entities as _stamp
+
     memory = ExpenseMemory.from_db_path(learning_db_path)
     batch = memory.apply([restored])
+    batch = _stamp(batch, _batch_cards(cfg), _batch_card_hints(cfg))
     learned = (
         MerchantCategoryLookup.from_db_path(learning_db_path)
         if learning_db_path is not None else None
@@ -4542,6 +5171,15 @@ def _add_receipts_locked(
         _stage("categorizing")
         memory = ExpenseMemory.from_db_path(learning_db_path)
         new_receipts = memory.apply(new_receipts)
+        # Cards R3: same post-OCR entity stamping as generate_expenses —
+        # the paying card (batch config snapshot + explicit assignments)
+        # resolves each added receipt's entity before categorization, so
+        # learned (entity, vendor) lookups see the card-resolved entity.
+        from ..cards import stamp_card_entities
+
+        new_receipts = stamp_card_entities(
+            new_receipts, _batch_cards(cfg), _batch_card_hints(cfg)
+        )
         learned = (
             MerchantCategoryLookup.from_db_path(learning_db_path)
             if learning_db_path is not None else None
@@ -4704,6 +5342,22 @@ def execute_statement_attach(
         category_overrides=overrides, default_entity=batch_entity,
     )
     receipts = apply_overrides(receipts, overrides)
+    # Cards R3: bake the SAME per-receipt entity the grid and the export
+    # showed (override -> hint assignment -> card registry -> stamped
+    # value) into the pool the matcher sees. Matching is entity-scoped
+    # (`match_month` drops cross-entity pairs), so without this a card
+    # assignment made after ingest never reaches the matcher and the
+    # month silently reconciles 0 (adversarial review F1).
+    card_res_bake = resolve_batch_row_cards(receipts, cfg, field_overrides)
+    receipts = [
+        (
+            replace(r, legal_entity_id=res["entity"])
+            if (res := card_res_bake.get(r.document_id)) is not None
+            and res["entity"] != r.legal_entity_id
+            else r
+        )
+        for r in receipts
+    ]
 
     entity = resolve_entity(form, settings)
     stmt_block: dict = {
@@ -4771,72 +5425,120 @@ def execute_statement_attach(
         (i.file_name, i.line_number, i.message, i.severity) for i in stmt_issues
     ]
     base = snapshot_to_dict(transactions, receipts, outcome, all_issues)
-    new_snapshot = {**dict(run.snapshot), **base}
-    if charge_categorizations:
-        new_snapshot["charge_categorizations"] = {
-            tx_id: categorization_to_dict(c)
-            for tx_id, c in charge_categorizations.items()
-        }
-    else:
-        new_snapshot.pop("charge_categorizations", None)
 
-    n_tx = len(transactions)
-    n_review = len(
-        {m.transaction_id for m in outcome.judgment_required}
-        | {m.transaction_id for m in outcome.ambiguous}
-    )
-    counts = count_parse_issues(all_issues)
-    summary = {
-        **run.summary,
-        "n_transactions": n_tx,
-        "n_receipts": len(receipts),
-        "n_expenses": len(receipts),
-        "n_matched": len(outcome.matches),
-        "n_review": n_review,
-        "n_unmatched_tx": len(outcome.unmatched_transactions),
-        "n_refunds": len(outcome.refunds),
-        "n_unmatched_rec": len(outcome.unmatched_receipts),
-        "n_parse_errors": counts["errors"],
-        "n_parse_notes": counts["notes"],
-        "match_rate": (
-            round(len(outcome.matches) / n_tx * 100, 1) if n_tx else 0.0
-        ),
-        "n_receipts_matched": max(
-            len(receipts) - len(outcome.unmatched_receipts), 0
-        ),
-        "receipt_match_rate": (
-            round(
-                (len(receipts) - len(outcome.unmatched_receipts))
-                / len(receipts) * 100, 1
+    # The match ran for minutes on a row read before it started; commit
+    # under the SAME lock the other batch writers hold, against a fresh
+    # re-read (adversarial review B1/C1: an unlocked final write erased a
+    # mid-match card assignment / refresh, and a racing refresh erased the
+    # attach). Non-owned keys come from the FRESH row: the expense config
+    # block (cards / hints / accounts an assignment wrote mid-match) and
+    # every snapshot key outside the matcher's own four. Receipts mailed
+    # in mid-match join the pool as unmatched rather than vanishing.
+    with _BATCH_ADD_LOCK:
+        fresh = store.get_run(run.run_id)
+        if fresh is None:
+            raise RunInputError("this batch was deleted while it reconciled")
+        if has_statement(fresh):
+            raise RunInputError(
+                "another statement attach completed on this batch first"
             )
-            if receipts else 0.0
-        ),
-        "llm_cost_usd": (
-            str(tracker.total_cost_usd) if tracker else
-            run.summary.get("llm_cost_usd", "0")
-        ),
-        "has_statement": True,
-    }
-    summary["setup_advisories"] = _setup_advisories(
-        new_cfg, transactions, receipts,
-        has_coa=bool(new_cfg.get("coa_validation")),
-    )
-    store.update_run_config(run.run_id, new_cfg)
-    store.update_run_snapshot(run.run_id, new_snapshot)
-    store.update_run_summary(run.run_id, summary)
+        fresh_cfg = fresh.config or {}
+        if fresh_cfg.get("expense") is not None:
+            new_cfg = {**new_cfg, "expense": fresh_cfg["expense"]}
+        known_ids = {r.document_id for r in receipts0}
+        extra = [
+            rd
+            for rd in (fresh.snapshot or {}).get("receipts") or []
+            if rd.get("document_id") and rd["document_id"] not in known_ids
+        ]
+        if extra:
+            base["receipts"] = list(base.get("receipts") or []) + extra
+            out_dict = dict(base.get("outcome") or {})
+            out_dict["unmatched_receipts"] = list(
+                out_dict.get("unmatched_receipts") or []
+            ) + [rd["document_id"] for rd in extra]
+            base["outcome"] = out_dict
+            receipts = receipts + [
+                r
+                for r in snapshot_from_dict(fresh.snapshot)[1]
+                if r.document_id in {rd["document_id"] for rd in extra}
+            ]
+            outcome.unmatched_receipts.extend(rd["document_id"] for rd in extra)
+        new_snapshot = {**dict(fresh.snapshot), **base}
+        if charge_categorizations:
+            new_snapshot["charge_categorizations"] = {
+                tx_id: categorization_to_dict(c)
+                for tx_id, c in charge_categorizations.items()
+            }
+        else:
+            new_snapshot.pop("charge_categorizations", None)
+        n_tx = len(transactions)
+        n_review = len(
+            {m.transaction_id for m in outcome.judgment_required}
+            | {m.transaction_id for m in outcome.ambiguous}
+        )
+        counts = count_parse_issues(all_issues)
+        summary = {
+            **fresh.summary,
+            "n_transactions": n_tx,
+            "n_receipts": len(receipts),
+            "n_expenses": len(receipts),
+            "n_matched": len(outcome.matches),
+            "n_review": n_review,
+            "n_unmatched_tx": len(outcome.unmatched_transactions),
+            "n_refunds": len(outcome.refunds),
+            "n_unmatched_rec": len(outcome.unmatched_receipts),
+            "n_parse_errors": counts["errors"],
+            "n_parse_notes": counts["notes"],
+            "match_rate": (
+                round(len(outcome.matches) / n_tx * 100, 1) if n_tx else 0.0
+            ),
+            "n_receipts_matched": max(
+                len(receipts) - len(outcome.unmatched_receipts), 0
+            ),
+            "receipt_match_rate": (
+                round(
+                    (len(receipts) - len(outcome.unmatched_receipts))
+                    / len(receipts) * 100, 1
+                )
+                if receipts else 0.0
+            ),
+            "llm_cost_usd": (
+                str(tracker.total_cost_usd) if tracker else
+                fresh.summary.get("llm_cost_usd", "0")
+            ),
+            "has_statement": True,
+        }
+        summary["setup_advisories"] = _setup_advisories(
+            new_cfg, transactions, receipts,
+            has_coa=bool(new_cfg.get("coa_validation")),
+        )
+        store.update_run_config(run.run_id, new_cfg)
+        store.update_run_snapshot(run.run_id, new_snapshot)
+        store.update_run_summary(run.run_id, summary)
 
+    # Matching is entity-scoped, so a card/entity mapping gap yields a
+    # silent 0-match month. Judge against the POOL's actual entities
+    # (post-bake, R3: a batch can legitimately mix entities), not just
+    # the batch-level default — an entity-less batch has no default and
+    # the old check never fired for it. Loud, never silent.
     entity_mismatch = None
-    if (
-        batch_entity
-        and entity
-        and batch_entity.strip().lower() != entity.strip().lower()
-    ):
-        # Matching is entity-scoped, so a mismatched card mapping yields a
-        # silent 0-match month. Loud, never silent.
+    pool_entities = {
+        e for e in ((r.legal_entity_id or "").strip() for r in receipts) if e
+    }
+    stmt_entity = (entity or "").strip()
+    if receipts and stmt_entity and stmt_entity.lower() not in {
+        e.lower() for e in pool_entities
+    }:
+        described = (
+            f"this batch's expenses belong to {sorted(pool_entities)!r}"
+            if pool_entities
+            else "this batch's expenses have no legal entity assigned yet"
+        )
         entity_mismatch = (
-            f"The statement's card resolves to legal entity {entity!r} but "
-            f"this batch's expenses belong to {batch_entity!r}; nothing "
-            "will match across entities. Check the card / entity mapping."
+            f"The statement's card resolves to legal entity {stmt_entity!r} "
+            f"but {described}; nothing will match across entities. Check "
+            "the card / entity mapping."
         )
     return {
         "n_transactions": n_tx,

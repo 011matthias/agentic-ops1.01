@@ -89,6 +89,7 @@ from .categorize import (
     categorize_receipts,
     categorize_receipts_with_registry,
 )
+from .cards import cards_from_setting, stamp_card_entities
 from .categorize_charges import categorize_charges, derive_subscription_status
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
@@ -924,13 +925,14 @@ def generate_expenses(
     else:
         cost_tracker = getattr(llm_client, "cost_tracker", None)
 
-    expense_block = cfg.get("expense")
-    if not isinstance(expense_block, dict) or not expense_block.get("legal_entity_id"):
-        raise ConfigError(
-            "expense.legal_entity_id is required for receipt-first expense "
-            "generation (the statement-free analogue of statement.legal_entity_id)"
-        )
-    legal_entity_id = expense_block["legal_entity_id"]
+    # Cards R3 (2026-08-21): the legal entity is OPTIONAL at batch level.
+    # The operator ruling behind it: the tool serves receipts from ANY
+    # entity, so the entity resolves PER RECEIPT from the paying card
+    # (post-OCR, `cards.stamp_card_entities`), with the batch-level value
+    # only a fallback. An unresolved entity is a review state, never an
+    # error — and never blocks the export (visible placeholder instead).
+    expense_block = cfg.get("expense") if isinstance(cfg.get("expense"), dict) else {}
+    legal_entity_id = str(expense_block.get("legal_entity_id") or "")
 
     _stage("receipts")
     receipts, receipt_issues = _load_receipts(
@@ -945,6 +947,20 @@ def generate_expenses(
     # downstream. Provenance lands on data_quality_note (grid-visible).
     if expense_memory is not None:
         receipts = expense_memory.apply(receipts)
+
+    # Cards R3: each receipt's paying card resolves its legal entity (the
+    # card registry snapshotted into this run's config + the batch's
+    # explicit hint assignments). Runs AFTER memory (a card is physical
+    # evidence of the paying entity; it outranks the learned merchant ->
+    # entity heuristic, matching the view/export chain) and BEFORE
+    # categorization (learned category lookups key on the entity).
+    receipts = stamp_card_entities(
+        receipts,
+        cards_from_setting(expense_block.get("cards")),
+        expense_block.get("card_hints") if isinstance(
+            expense_block.get("card_hints"), dict
+        ) else None,
+    )
 
     # Non-receipt quarantine (2026-08-13), before the categorizer spends a
     # call on them: statement pages and report-summary pages that arrive in

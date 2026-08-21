@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from expense_recon.cli import ConfigError, generate_expenses
+from expense_recon.cli import generate_expenses
 from expense_recon.llm.client import (
     ExtractedLineItem,
     ExtractedReceipt,
@@ -51,14 +51,18 @@ def test_generate_expenses_needs_no_statement(tmp_path):
     assert all(f in ("a.jpg", "b.jpg") for f, *_ in result.parse_errors)
 
 
-def test_generate_expenses_requires_legal_entity(tmp_path):
-    """The receipt-first analogue of the statement's legal-entity guard."""
+def test_generate_expenses_accepts_missing_legal_entity(tmp_path):
+    """Cards R3 (2026-08-21): the legal entity is optional at batch level —
+    the old guard is gone. Receipts run through with entity "" (per-receipt
+    card resolution / the needs_entity review state take over downstream);
+    the batch is generated, never refused."""
     _folder(tmp_path, ["a.jpg"])
     client = MockLLMClient(extraction_responses=[_extraction()])
     cfg = {"receipts": {"path": "receipts", "default_currency": "USD"}}  # no expense
 
-    with pytest.raises(ConfigError, match="legal_entity_id"):
-        generate_expenses(cfg, tmp_path, llm_client=client)
+    result = generate_expenses(cfg, tmp_path, llm_client=client)
+    assert len(result.receipts) == 1
+    assert result.receipts[0].legal_entity_id == ""
 
 
 def test_generate_expenses_categorizes_into_predetermined_set(tmp_path):
