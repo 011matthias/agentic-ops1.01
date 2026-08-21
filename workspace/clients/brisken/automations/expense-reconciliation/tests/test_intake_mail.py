@@ -529,3 +529,48 @@ def test_intake_settings_validate_ack_alerts_retention():
         normalize_intake_setting({"alert_recipients": ["x@gmail.com"]})
     with pytest.raises(ValueError):
         normalize_intake_setting({"retention_years": 0})
+
+
+def test_inbound_log_detail_joins_created_expenses(client, monkeypatch):
+    batch_id = _create_batch(client, monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(vendor="Trenitalia", total="89.00"))
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("train.jpg", JPG + b"tren")]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_INGESTED
+
+    entries = client.get("/api/inbound/log?detail=1").json()["entries"]
+    mine = [e for e in entries if e.get("subject") == "July taxi"]
+    assert len(mine) == 1
+    row = mine[0]
+    assert row["batch_id"] == batch_id
+    assert row.get("batch_label")
+    assert len(row["expenses"]) == 1
+    exp = row["expenses"][0]
+    assert exp["vendor"] == "Trenitalia"
+    assert exp["total"] == "89.00"
+    doc_id = exp["document_id"]
+
+    # A resend of the same bytes dedupes: ingested, zero rows created.
+    _patch_ocr(monkeypatch, _extraction(vendor="Trenitalia"))
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("train.jpg", JPG + b"tren")],
+              subject="resend"),
+        synchronous=True,
+    )
+    entries = client.get("/api/inbound/log?detail=1").json()["entries"]
+    resend = [e for e in entries if e.get("subject") == "resend"][0]
+    assert resend["status"] == STATUS_INGESTED
+    assert resend["expenses"] == []
+
+    # Deleting the row keeps the mail's story honest: deleted flag, not
+    # a vanished document.
+    del_resp = client.delete(f"/api/runs/{batch_id}/expenses/{doc_id}")
+    assert del_resp.status_code == 200, del_resp.text
+    entries = client.get("/api/inbound/log?detail=1").json()["entries"]
+    row = [e for e in entries if e.get("subject") == "July taxi"][0]
+    assert row["expenses"] == [{"document_id": doc_id, "deleted": True}]
