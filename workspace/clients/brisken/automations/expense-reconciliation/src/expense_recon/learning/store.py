@@ -63,6 +63,8 @@ class MerchantCategory:
     decision_count: int
     last_confirmed_at: str | None
     source_run: str | None
+    validated_at: str | None = None
+    validated_by: str | None = None
 
 
 @dataclass(frozen=True)
@@ -162,6 +164,8 @@ class LearningStore:
                 decision_count    INTEGER NOT NULL DEFAULT 1,
                 last_confirmed_at TEXT,
                 source_run        TEXT,
+                validated_at      TEXT,
+                validated_by      TEXT,
                 PRIMARY KEY (legal_entity_id, vendor_norm)
             );
             CREATE TABLE IF NOT EXISTS vendor_alias (
@@ -202,6 +206,27 @@ class LearningStore:
             );
             """
         )
+        # Idempotent migration for stores created before the validation
+        # columns existed (the live 103-row learning.sqlite): CREATE IF NOT
+        # EXISTS never alters an existing table, so add what is missing.
+        cols = {
+            r[1] for r in self.conn.execute(
+                "PRAGMA table_info(merchant_category)"
+            )
+        }
+        for col in ("validated_at", "validated_by"):
+            if col not in cols:
+                try:
+                    self.conn.execute(
+                        f"ALTER TABLE merchant_category ADD COLUMN {col} TEXT"
+                    )
+                except sqlite3.OperationalError as exc:
+                    # Two connections can race the PRAGMA check on the
+                    # store's first post-deploy open (threadpool + intake
+                    # threads); the loser's duplicate ALTER is a no-op,
+                    # anything else is real.
+                    if "duplicate column" not in str(exc).lower():
+                        raise
         self.conn.commit()
 
     # -- merchant_category ------------------------------------------------
@@ -222,6 +247,18 @@ class LearningStore:
             "category, zoho_account, decision_count, last_confirmed_at, source_run) "
             "VALUES (?, ?, ?, ?, 1, ?, ?) "
             "ON CONFLICT(legal_entity_id, vendor_norm) DO UPDATE SET "
+            # A human's validation stamp certifies the VALUE they saw:
+            # any write that changes category/account clears it, so the
+            # unvalidated review queue resurfaces the row (a seed-zoho
+            # re-run or a run's re-teach must never wear an old sign-off).
+            "validated_at = CASE WHEN "
+            "merchant_category.category IS NOT excluded.category "
+            "OR merchant_category.zoho_account IS NOT excluded.zoho_account "
+            "THEN NULL ELSE merchant_category.validated_at END, "
+            "validated_by = CASE WHEN "
+            "merchant_category.category IS NOT excluded.category "
+            "OR merchant_category.zoho_account IS NOT excluded.zoho_account "
+            "THEN NULL ELSE merchant_category.validated_by END, "
             "category = excluded.category, "
             "zoho_account = excluded.zoho_account, "
             "decision_count = merchant_category.decision_count + 1, "
@@ -230,6 +267,83 @@ class LearningStore:
             (legal_entity_id, vendor_norm, category, zoho_account, now_iso, source_run),
         )
         self.conn.commit()
+
+    def set_merchant_category_manual(
+        self,
+        legal_entity_id: str,
+        vendor_norm: str,
+        category: str | None,
+        zoho_account: str | None,
+        now_iso: str,
+        *,
+        keep_account: bool = False,
+    ) -> None:
+        """Operator-authored upsert (the HTTP twin of CLI `memory set`).
+        Unlike record_merchant_category it does NOT inflate
+        decision_count: an operator correction changes WHAT is learned,
+        it is not another independent confirmation of it.
+
+        ``keep_account=True`` leaves the stored zoho_account untouched (a
+        category-only edit must not silently wipe the learned posting
+        account the COA gate depends on). A value change clears the
+        validation stamp per the same rule as record_merchant_category.
+        """
+        account_sql = (
+            "merchant_category.zoho_account" if keep_account
+            else "excluded.zoho_account"
+        )
+        self.conn.execute(
+            "INSERT INTO merchant_category (legal_entity_id, vendor_norm, "
+            "category, zoho_account, decision_count, last_confirmed_at, source_run) "
+            "VALUES (?, ?, ?, ?, 1, ?, 'manual-set') "
+            "ON CONFLICT(legal_entity_id, vendor_norm) DO UPDATE SET "
+            "validated_at = CASE WHEN "
+            "merchant_category.category IS NOT excluded.category "
+            f"OR merchant_category.zoho_account IS NOT {account_sql} "
+            "THEN NULL ELSE merchant_category.validated_at END, "
+            "validated_by = CASE WHEN "
+            "merchant_category.category IS NOT excluded.category "
+            f"OR merchant_category.zoho_account IS NOT {account_sql} "
+            "THEN NULL ELSE merchant_category.validated_by END, "
+            "category = excluded.category, "
+            f"zoho_account = {account_sql}, "
+            "last_confirmed_at = excluded.last_confirmed_at, "
+            "source_run = 'manual-set'",
+            (legal_entity_id, vendor_norm, category, zoho_account, now_iso),
+        )
+        self.conn.commit()
+
+    def delete_merchant_category(
+        self, legal_entity_id: str, vendor_norm: str
+    ) -> bool:
+        """Drop ONE learned category row. Aliases / FX / entity rows for
+        the same vendor stay — that selectivity is the point (forget_vendor
+        is the sweep-everything sibling). Returns True when a row existed."""
+        cur = self.conn.execute(
+            "DELETE FROM merchant_category WHERE legal_entity_id = ? "
+            "AND vendor_norm = ?",
+            (legal_entity_id, vendor_norm),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def validate_merchant_categories(
+        self, pairs: list[tuple[str, str]], now_iso: str,
+        validated_by: str | None,
+    ) -> int:
+        """Stamp validated_at/validated_by on the given (entity, vendor)
+        rows. Returns how many DISTINCT rows actually matched."""
+        n = 0
+        for legal_entity_id, vendor_norm in dict.fromkeys(pairs):
+            cur = self.conn.execute(
+                "UPDATE merchant_category SET validated_at = ?, "
+                "validated_by = ? WHERE legal_entity_id = ? "
+                "AND vendor_norm = ?",
+                (now_iso, validated_by, legal_entity_id, vendor_norm),
+            )
+            n += cur.rowcount
+        self.conn.commit()
+        return n
 
     def get_merchant_category(
         self, legal_entity_id: str, vendor_norm: str
@@ -266,6 +380,8 @@ class LearningStore:
             decision_count=row["decision_count"],
             last_confirmed_at=row["last_confirmed_at"],
             source_run=row["source_run"],
+            validated_at=row["validated_at"],
+            validated_by=row["validated_by"],
         )
 
     # -- vendor_alias -----------------------------------------------------

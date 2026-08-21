@@ -3238,9 +3238,13 @@ def commit_to_memory(
 # --------------------------------------------------------------------------
 
 
-def build_memory_view(learning_db_path: Path | None) -> dict:
+def build_memory_view(
+    learning_db_path: Path | None, unvalidated_only: bool = False,
+) -> dict:
     """Render model for the /memory page: everything the tool has learned,
-    grouped by table. Read-only; an absent store yields an empty view."""
+    grouped by table. Read-only; an absent store yields an empty view.
+    ``unvalidated_only`` filters the categories table to rows no human has
+    validated yet (the review-the-103 workflow)."""
     empty = {
         "categories": [], "aliases": [], "fx": [],
         "entities": [], "field_corrections": [],
@@ -3261,11 +3265,15 @@ def build_memory_view(learning_db_path: Path | None) -> dict:
         corrections = s.all_field_corrections()
         counts = s.count_rows()
 
+    if unvalidated_only:
+        cats = [c for c in cats if not c.validated_at]
     categories = [
         {
             "entity": c.legal_entity_id, "vendor": c.vendor_norm,
             "category": c.category or "", "zoho_account": c.zoho_account or "",
             "count": c.decision_count, "last": (c.last_confirmed_at or "")[:10],
+            "validated": (c.validated_at or "")[:10],
+            "validated_by": c.validated_by or "",
         }
         for c in cats
     ]

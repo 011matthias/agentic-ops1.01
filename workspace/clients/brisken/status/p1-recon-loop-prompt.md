@@ -74,18 +74,24 @@ rounds are SHIPPED:
   `docs/lovable-body-only-prompt.md`. Leftover design call = backlog
   item 19 (re-ingest for attachment mail after a month delete).
 
+- **Memory validate/adjust (PR #565, 2026-08-21):** PUT/DELETE
+  /api/memory/categories (count-preserving; absent zoho_account key
+  preserves the learned account), validated_at/by migration
+  (race-tolerant on the live store) + bulk validate + ?unvalidated=1,
+  reset confirm gate (bare POST = side-effect-free preview). Review
+  fixes pinned: value changes CLEAR validation stamps — machine
+  re-teaches never wear an old sign-off. NOTE: the SPA Reset button is
+  a safe no-op until `docs/lovable-memory-edit-prompt.md` is applied.
+
 **Remaining rounds, in order (design in the plan file; each ships like
 steps 5-8 below, with an adversarial review pass before commit):**
 
-1. **Memory validate/adjust (M):** PUT/DELETE /api/memory/categories
-   (single row, count-preserving manual writes), `validated_at` schema
-   migration + bulk validate + unvalidated filter, reset confirm gate.
-3. **Language + receipt visibility (M):** missing i18n reason codes,
+1. **Language + receipt visibility (M):** missing i18n reason codes,
    structured missing-fields, issue codes beside English prose,
    books_as unassigned sentinel; fix `receipt_image_available` true for
    manual: ids (phantom View button 404), honest per-row receipt state +
    the never-rendered missing-image tile.
-4. **Cards R4 (pending owner answers in the backlog):** mixed-entity
+2. **Cards R4 (pending owner answers in the backlog):** mixed-entity
    export (per-entity CoaGate), persisted cards migration, intake
    dropdown unification. Backlog item 18 (async endpoints on the batch
    lock, pre-existing freeze class) rides with whichever code round
@@ -99,11 +105,13 @@ at creation, row card/entity chips, card-review strip, assign + refresh
 actions), `docs/lovable-intake-quickwins-prompt.md` (Files + Month
 columns, guarded delete-month dialog, job-poll 404 edge) and
 `docs/lovable-body-only-prompt.md` (held-mail actions: view body /
-render as PDF / dismiss, `rendering` + `dismissed` statuses) — all
-backends live. After the owner publishes, DOM-probe the SPA (Lovable
-merge != live).
+render as PDF / dismiss, `rendering` + `dismissed` statuses) and
+`docs/lovable-memory-edit-prompt.md` (Memory page edit/delete/validate +
+the REQUIRED reset-confirm flow — the old Reset button is a safe no-op
+until applied) — all backends live. After the owner publishes, DOM-probe
+the SPA (Lovable merge != live).
 
-Suite baseline is now **1199 passed / 2 skipped**; `calibrate
+Suite baseline is now **1210 passed / 2 skipped**; `calibrate
 --config examples/run.example.json` green. Advisories are SNAPSHOTTED
 into each run's summary — existing runs keep old wording by design.
 
