@@ -1548,14 +1548,137 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         })
 
     @app.get("/api/memory")
-    def api_memory():
+    def api_memory(unvalidated: int = 0):
         """Everything the tool has learned (merchant categories, vendor
         aliases, FX means) grouped by table, for the SPA memory screen.
-        build_memory_view is already a JSON-safe dict; jsonable_encoder is
-        kept for symmetry with the other render-model routes."""
+        ?unvalidated=1 filters the categories table to rows no human has
+        validated yet. build_memory_view is already a JSON-safe dict;
+        jsonable_encoder is kept for symmetry with the other routes."""
         return JSONResponse(
-            jsonable_encoder(build_memory_view(app.state.learning_db_path))
+            jsonable_encoder(build_memory_view(
+                app.state.learning_db_path,
+                unvalidated_only=bool(unvalidated),
+            ))
         )
+
+    def _memory_row_key(body: dict) -> tuple[str, str]:
+        """(entity, vendor_norm) for the per-row memory endpoints; an
+        empty vendor_norm means the input failed normalization."""
+        from ..learning import normalize_vendor
+
+        legal_entity_id = str((body or {}).get("legal_entity_id") or "").strip()
+        vendor_norm = normalize_vendor(str((body or {}).get("vendor") or ""))
+        return legal_entity_id, vendor_norm
+
+    @app.put("/api/memory/categories")
+    async def api_memory_set_category(request: Request):
+        """Single-row upsert — the HTTP twin of CLI `memory set` (note 10:
+        "this must be validated and adjustable"). Same validation, and the
+        write is count-preserving (an operator correction is not another
+        independent confirmation)."""
+        from ..learning import LearningStore
+        from ..matching.types import EXPENSE_CATEGORIES
+
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body is a client error
+            return JSONResponse({"error": "invalid json"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "body must be an object"},
+                                status_code=400)
+        legal_entity_id, vendor_norm = _memory_row_key(body)
+        category = str(body.get("category") or "").strip()
+        # Absent key = leave the stored posting account alone (a category-
+        # only edit must not silently wipe what the COA gate depends on);
+        # an explicit empty value clears it.
+        keep_account = "zoho_account" not in body
+        zoho_account = str(body.get("zoho_account") or "").strip() or None
+        if not legal_entity_id or not vendor_norm:
+            return JSONResponse(
+                {"error": "legal_entity_id and a non-empty vendor are "
+                          "required"}, status_code=400)
+        if category not in EXPENSE_CATEGORIES:
+            return JSONResponse(
+                {"error": f"category must be one of the tool's "
+                          f"{len(EXPENSE_CATEGORIES)} categories",
+                 "categories": sorted(EXPENSE_CATEGORIES)},
+                status_code=400)
+        with LearningStore(app.state.learning_db_path) as s:
+            s.set_merchant_category_manual(
+                legal_entity_id, vendor_norm, category, zoho_account,
+                _now_iso(), keep_account=keep_account,
+            )
+            row = s.get_merchant_category(legal_entity_id, vendor_norm)
+        return JSONResponse({
+            "ok": True, "entity": legal_entity_id, "vendor": vendor_norm,
+            "category": row.category, "zoho_account": row.zoho_account or "",
+            "count": row.decision_count, "source_run": row.source_run,
+        })
+
+    @app.delete("/api/memory/categories")
+    async def api_memory_delete_category(request: Request):
+        """Drop ONE learned category row; the vendor's aliases / FX rows
+        stay (forget is the sweep-everything sibling)."""
+        from ..learning import LearningStore
+
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            return JSONResponse({"error": "invalid json"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "body must be an object"},
+                                status_code=400)
+        legal_entity_id, vendor_norm = _memory_row_key(body)
+        if not legal_entity_id or not vendor_norm:
+            return JSONResponse(
+                {"error": "legal_entity_id and a non-empty vendor are "
+                          "required"}, status_code=400)
+        with LearningStore(app.state.learning_db_path) as s:
+            existed = s.delete_merchant_category(legal_entity_id, vendor_norm)
+        if not existed:
+            return JSONResponse(
+                {"error": "no learned category for that entity + vendor"},
+                status_code=404)
+        return JSONResponse({
+            "ok": True, "entity": legal_entity_id, "vendor": vendor_norm,
+            "deleted": True,
+        })
+
+    @app.post("/api/memory/categories/validate")
+    async def api_memory_validate_categories(request: Request):
+        """Bulk human sign-off: stamp validated_at/validated_by on the
+        given {legal_entity_id, vendor} rows."""
+        from ..learning import LearningStore, normalize_vendor
+
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            return JSONResponse({"error": "invalid json"}, status_code=400)
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "body must be an object"},
+                                status_code=400)
+        rows = body.get("rows")
+        if not isinstance(rows, list) or not rows:
+            return JSONResponse(
+                {"error": "rows must be a non-empty list of "
+                          "{legal_entity_id, vendor}"}, status_code=400)
+        pairs: list[tuple[str, str]] = []
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            entity = str(r.get("legal_entity_id") or "").strip()
+            vendor = normalize_vendor(str(r.get("vendor") or ""))
+            if entity and vendor:
+                pairs.append((entity, vendor))
+        if not pairs:
+            return JSONResponse(
+                {"error": "no valid rows in the list"}, status_code=400)
+        with LearningStore(app.state.learning_db_path) as s:
+            n = s.validate_merchant_categories(
+                pairs, _now_iso(), _operator()
+            )
+        return JSONResponse({"ok": True, "validated": n,
+                             "requested": len(pairs)})
 
     @app.post("/api/memory/forget")
     async def api_memory_forget(request: Request):
@@ -2553,12 +2676,34 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
 
     # Memory reset: the destructive counterpart of /api/memory/forget
-    # (whole tables / whole entities instead of one merchant).
+    # (whole tables / whole entities instead of one merchant). Confirm
+    # gate mirrors the CLI's dry-run default: without {"confirm": true}
+    # the reply is a would-delete preview and NOTHING is deleted.
     @app.post("/api/memory/reset")
     async def api_memory_reset(request: Request):
+        from ..learning import LearningStore
+
         body = await request.json() if await request.body() else {}
         table = (body.get("table") or "").strip() or None
         legal_entity_id = (body.get("legal_entity_id") or "").strip() or None
+        if body.get("confirm") is not True:
+            # Preview must not create the store as a side effect.
+            if Path(app.state.learning_db_path).exists():
+                with LearningStore(app.state.learning_db_path) as s:
+                    counts = s.count_rows(legal_entity_id)
+            else:
+                counts = {
+                    "merchant_category": 0, "vendor_alias": 0,
+                    "merchant_fx": 0, "merchant_entity": 0,
+                    "field_correction": 0,
+                }
+            preview = (
+                {table: counts.get(table, 0)} if table else counts
+            )
+            return JSONResponse({
+                "ok": False, "confirm_required": True, "preview": preview,
+                "table": table, "legal_entity_id": legal_entity_id,
+            })
         reset_memory(app.state.learning_db_path, table, legal_entity_id)
         return JSONResponse(
             {"ok": True, "table": table, "legal_entity_id": legal_entity_id}
