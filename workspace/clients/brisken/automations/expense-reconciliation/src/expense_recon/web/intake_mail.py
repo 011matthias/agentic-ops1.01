@@ -87,6 +87,8 @@ HELD_NO_BATCH = "held_no_batch"        # replayable
 HELD_FAILED = "held_failed"            # job errored/interrupted; replayable
 HELD_BODY_ONLY = "held_body_only"      # needs body->PDF rendering (round 2)
 HELD_NO_VALID_FILES = "held_no_valid_files"
+STATUS_DISMISSED = "dismissed"         # operator judged it junk; terminal
+STATUS_RENDERING = "rendering"         # body->PDF ingest in flight (C2)
 REPLAYABLE = {HELD_NO_BATCH, HELD_FAILED}
 STALE_RECEIVED_SECONDS = 600
 
@@ -580,6 +582,39 @@ def _update_meta(arch: Path, patch: dict) -> None:
         os.replace(tmp, arch / "meta.json")
 
 
+def _transition_meta(
+    arch: Path, allowed, patch: dict,
+) -> tuple[bool, dict]:
+    """Compare-and-set on the archive status: under the meta lock, apply
+    ``patch`` only when the CURRENT status satisfies ``allowed`` (a callable
+    over the meta). Returns (applied, meta-as-read). This is what keeps
+    dismiss/render/replay from racing each other into contradictory
+    terminal states (adversarial review 2026-08-21 finding 2)."""
+    with _META_LOCK:
+        meta = _read_meta(arch)
+        if not allowed(meta):
+            return False, meta
+        meta.update(patch)
+        tmp = arch / "meta.json.tmp"
+        tmp.write_text(
+            json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
+        os.replace(tmp, arch / "meta.json")
+        return True, meta
+
+
+# Archive dir names are our own stamp-digest shape; anything else in the
+# URL path segment (traversal, weird casing) resolves to nothing.
+_ARCHIVE_NAME_RE = re.compile(r"^\d{8}T\d{6}-[0-9a-f]{8}$")
+
+
+def _archive_dir(data_root: Path, name: str) -> Path | None:
+    if not _ARCHIVE_NAME_RE.fullmatch(str(name or "")):
+        return None
+    d = inbound_root(data_root) / str(name)
+    return d if d.is_dir() else None
+
+
 def mark_batch_deleted(data_root: Path, batch_id: str) -> int:
     """Stamp ``batch_deleted`` on every inbound archive whose mail routed
     into ``batch_id`` (the delete-month cascade). The mail archives
@@ -958,7 +993,20 @@ def replay_held(
             if p.is_file()
         ] if parts_dir.is_dir() else []
         if not attachments:
-            _update_meta(arch, {"status": HELD_NO_VALID_FILES})
+            # A partless archive with a readable BODY is body-only mail
+            # (router crashed before classifying it, or a failed render):
+            # flip it to the renderable state, not the terminal one, or
+            # the exact mail class the render path rescues would strand
+            # (adversarial review 2026-08-21 finding 3).
+            from .body_render import extract_body_text
+
+            has_body = False
+            eml = arch / "message.eml"
+            if eml.is_file():
+                has_body = bool(extract_body_text(eml.read_bytes()).strip())
+            _update_meta(arch, {
+                "status": HELD_BODY_ONLY if has_body else HELD_NO_VALID_FILES
+            })
             still_held += 1
             continue
         person = meta.get("person") or {
@@ -1003,6 +1051,17 @@ def reconcile_interrupted(db_path: Path, data_root: Path) -> int:
         for arch in root.iterdir():
             meta = _read_meta(arch)
             job_id = meta.get("job_id")
+            # A kill mid-RENDER leaves the transient "rendering" status
+            # (the sync ingest owned the flip and never got there). Flip
+            # to held_failed; the rendered stamp keeps it retryable.
+            if meta.get("status") == STATUS_RENDERING:
+                job = store.get_job(str(job_id)) if job_id else None
+                if job is None or job.get("status") != JOB_DONE:
+                    _update_meta(arch, {"status": HELD_FAILED,
+                                        "error": "render interrupted"})
+                    _maybe_alert(db_path, arch, HELD_FAILED)
+                    flipped += 1
+                continue
             # A kill mid-ingest leaves status "received" (the job owns the
             # flip and never got there) with the job row marked interrupted
             # by the startup sweep; "ingested" with a bad job is belt+braces.
@@ -1051,3 +1110,134 @@ def sweep_retention(db_path: Path, data_root: Path) -> int:
     if removed:
         log.info("retention sweep removed %d expired inbound archives", removed)
     return removed
+
+
+# ------------------------------------------- body-only mail handling (C2) --
+# held_body_only was terminal: no view, no ingest path, no way to clear
+# the held strip. Three per-archive actions fix that: read the body
+# (sanitized text off the custody eml), render it to a PDF and run the
+# NORMAL ingest path (vision + quarantine judge it like any scanned
+# receipt), or dismiss it as junk.
+
+
+def read_body_view(data_root: Path, archive: str) -> dict | None:
+    """Sanitized body view of an archived mail: plain text (HTML stripped),
+    never the raw archive. None when the archive does not exist."""
+    from .body_render import extract_body_text
+
+    arch = _archive_dir(data_root, archive)
+    if arch is None or not (arch / "message.eml").exists():
+        return None
+    meta = _read_meta(arch)
+    text = extract_body_text((arch / "message.eml").read_bytes())
+    return {
+        "archive": arch.name,
+        "from": meta.get("from", ""),
+        "subject": meta.get("subject", ""),
+        "at": meta.get("at", ""),
+        "status": meta.get("status", ""),
+        "text": text,
+    }
+
+
+def render_ingest(
+    db_path: Path, learning_db_path: Path | None, data_root: Path,
+    archive: str, operator: str | None = None,
+) -> dict:
+    """Render a held body-only mail's body to a PDF and ingest it into the
+    open month via the normal path (document-type quarantine and vision
+    extraction apply unchanged). Deny-by-default guards; the rendered PDF
+    is kept at the archive ROOT (parts/ stays exactly what was delivered,
+    so the Files column never lists a derived artifact)."""
+    from .body_render import extract_body_text, render_body_pdf
+
+    arch = _archive_dir(data_root, archive)
+    if arch is None or not (arch / "message.eml").exists():
+        return {"error": "not found", "code": 404}
+    text = extract_body_text((arch / "message.eml").read_bytes())
+    if not text.strip():
+        return {"error": "no readable body in this mail", "code": 409}
+    with RunStore(db_path) as store:
+        run = open_batch(store)
+    if run is None:
+        return {"error": "no open month to ingest into", "code": 409}
+
+    def _renderable(meta: dict) -> bool:
+        status = meta.get("status")
+        # Body-only held mail, plus RETRY after a failed render ingest
+        # (the failure flipped it to held_failed; a replay pass with no
+        # parts/ flips that to held_no_valid_files — the `rendered` stamp
+        # marks both as render history, not a delivery state).
+        return status == HELD_BODY_ONLY or (
+            bool(meta.get("rendered"))
+            and status in {HELD_FAILED, HELD_NO_VALID_FILES}
+        )
+
+    # CAS to the transient "rendering" status: a concurrent second render,
+    # a dismiss, or a replay pass all see it and refuse — no interleaving
+    # can reverse an acknowledged action or double-start the ingest.
+    applied, meta = _transition_meta(arch, _renderable, {
+        "status": STATUS_RENDERING,
+        "rendered": True, "rendered_at": _now_iso(),
+        "rendered_by": operator or "",
+        "batch_id": run.run_id, "batch_deleted": False,
+    })
+    if not applied:
+        return {"error": "only body-only held mail can be rendered "
+                         f"(status: {meta.get('status', '')})", "code": 409}
+
+    header = [
+        f"From: {meta.get('from', '')}",
+        f"Subject: {meta.get('subject', '')}",
+        f"Received: {meta.get('at', '')}",
+        "Rendered from e-mail body (no attachment was delivered)",
+    ]
+    created = None
+    try:
+        created = datetime.strptime(
+            arch.name.split("-", 1)[0], "%Y%m%dT%H%M%S"
+        ).timetuple()
+    except ValueError:
+        pass
+    pdf = render_body_pdf(header, text, created=created)
+    (arch / "rendered-body.pdf").write_bytes(pdf)
+    person = meta.get("person") or {
+        "person": meta.get("from", ""), "source": "sender",
+        "address": meta.get("from", ""),
+    }
+    job_id = _start_ingest(
+        db_path, learning_db_path, run, [("rendered-body.pdf", pdf)],
+        person, _now_iso(), arch, synchronous=True,
+    )
+    final = _read_meta(arch)
+    return {
+        "status": final.get("status", ""),
+        "archive": arch.name,
+        "batch_id": run.run_id,
+        "job_id": job_id,
+        "documents": final.get("documents", []),
+    }
+
+
+def dismiss_archive(
+    data_root: Path, archive: str, operator: str | None = None,
+) -> dict:
+    """Mark a held mail dismissed (operator judged it junk). Terminal by
+    design: not replayable, not renderable, drops out of n_held. The
+    custody archive itself is untouched."""
+    arch = _archive_dir(data_root, archive)
+    if arch is None:
+        return {"error": "not found", "code": 404}
+    applied, meta = _transition_meta(
+        arch,
+        lambda m: str(m.get("status", "")).startswith("held_"),
+        {
+            "status": STATUS_DISMISSED,
+            "dismissed_at": _now_iso(),
+            "dismissed_by": operator or "",
+        },
+    )
+    if not applied:
+        return {"error": "only held mail can be dismissed "
+                         f"(status: {meta.get('status', '')})", "code": 409}
+    return {"status": STATUS_DISMISSED, "archive": arch.name}

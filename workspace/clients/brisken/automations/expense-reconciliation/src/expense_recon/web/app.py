@@ -1200,6 +1200,43 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
         return JSONResponse({"ok": True, **result})
 
+    # ── Body-only mail actions (C2): view the body, render+ingest it as a
+    # PDF through the normal pipeline, or dismiss it as junk. All sync:
+    # render-ingest does vision work and must run in the threadpool.
+    @app.get("/api/inbound/{archive}/body")
+    def inbound_body(archive: str) -> JSONResponse:
+        from .intake_mail import read_body_view
+
+        view = read_body_view(app.state.data_root, archive)
+        if view is None:
+            return _not_found("Archive not found")
+        return JSONResponse(view)
+
+    @app.post("/api/inbound/{archive}/render-ingest")
+    def inbound_render_ingest(archive: str) -> JSONResponse:
+        from .intake_mail import render_ingest
+
+        result = render_ingest(
+            app.state.db_path, app.state.learning_db_path,
+            app.state.data_root, archive, operator=_operator(),
+        )
+        if "error" in result:
+            code = result.pop("code", 400)
+            return JSONResponse(result, status_code=code)
+        return JSONResponse({"ok": True, **result})
+
+    @app.post("/api/inbound/{archive}/dismiss")
+    def inbound_dismiss(archive: str) -> JSONResponse:
+        from .intake_mail import dismiss_archive
+
+        result = dismiss_archive(
+            app.state.data_root, archive, operator=_operator(),
+        )
+        if "error" in result:
+            code = result.pop("code", 400)
+            return JSONResponse(result, status_code=code)
+        return JSONResponse({"ok": True, **result})
+
     @app.get("/feedback.jsonl")
     def feedback_raw() -> PlainTextResponse:
         text = feedback_file.read_text(encoding="utf-8") if feedback_file.exists() else ""

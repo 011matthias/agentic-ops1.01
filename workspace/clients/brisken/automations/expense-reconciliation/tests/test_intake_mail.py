@@ -794,3 +794,357 @@ def test_ingest_refuses_deleted_batch(client, monkeypatch, tmp_path):
             add_receipts_to_expense_batch(
                 store, stale, staging, "2026-08-21T12:00:00+00:00"
             )
+
+
+# --------------------------------------------- body-only handling (C2) --
+
+def _html_mail(from_addr: str, subject: str = "Uber forward") -> bytes:
+    msg = EmailMessage()
+    msg["From"] = from_addr
+    msg["To"] = f"receipts@{DOMAIN}"
+    msg["Subject"] = subject
+    msg["Message-ID"] = "<html-test@brisken.com>"
+    msg.set_content("Total: 27,90 € — Uber trip")
+    msg.add_alternative(
+        "<html><head><style>p{color:red}</style>"
+        "<script>alert('x')</script></head><body>"
+        "<p>Your Uber trip</p><table><tr><td>Total</td>"
+        "<td>27,90&nbsp;&euro;</td></tr></table></body></html>",
+        subtype="html",
+    )
+    return msg.as_bytes()
+
+
+def test_body_view_returns_sanitized_text(client):
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail("criss@brisken.com"), synchronous=True,
+    )
+    assert res["status"] == HELD_BODY_ONLY
+    entries = client.get("/api/inbound/log").json()["entries"]
+    archive = entries[-1]["archive"]
+
+    resp = client.get(f"/api/inbound/{archive}/body")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["subject"] == "Uber forward"
+    assert "27,90" in body["text"]
+    assert "<" not in body["text"] and "script" not in body["text"].lower()
+
+    assert client.get("/api/inbound/nope/body").status_code == 404
+
+
+def test_render_ingest_creates_expense_via_normal_path(client, monkeypatch):
+    batch_id = _create_batch(client, monkeypatch)
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail("criss@brisken.com", subject="render me"),
+        synchronous=True,
+    )
+    assert res["status"] == HELD_BODY_ONLY
+    entries = client.get("/api/inbound/log").json()["entries"]
+    archive = [e for e in entries if e.get("subject") == "render me"][0]["archive"]
+
+    _patch_ocr(monkeypatch, _extraction(vendor="Uber", total="27.90",
+                                        currency="EUR"))
+    resp = client.post(f"/api/inbound/{archive}/render-ingest")
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    assert out["status"] == STATUS_INGESTED
+    assert out["batch_id"] == batch_id
+    assert len(out["documents"]) == 1
+
+    # The rendered PDF lives at the archive ROOT (custody: parts/ stays
+    # exactly what was delivered; the Files column never lists it).
+    arch = state.data_root / "inbound" / archive
+    assert (arch / "rendered-body.pdf").exists()
+    assert not (arch / "parts").exists()
+    meta = json.loads((arch / "meta.json").read_text(encoding="utf-8"))
+    assert meta["rendered"] is True
+    assert meta["files"] == []
+
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    mailed = [e for e in grid["expenses"] if e.get("submitted_by")]
+    assert len(mailed) == 1
+    assert mailed[0]["submitted_by"]["address"] == "criss@brisken.com"
+
+    # Now ingested: a second render is refused (no double-charge path).
+    again = client.post(f"/api/inbound/{archive}/render-ingest")
+    assert again.status_code == 409
+
+
+def test_render_ingest_guards(client, monkeypatch):
+    state = client.app.state
+    # No open batch -> 409, mail stays held (deny-by-default).
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail("criss@brisken.com", subject="no batch yet"),
+        synchronous=True,
+    )
+    archive = [
+        e for e in client.get("/api/inbound/log").json()["entries"]
+        if e.get("subject") == "no batch yet"
+    ][0]["archive"]
+    resp = client.post(f"/api/inbound/{archive}/render-ingest")
+    assert resp.status_code == 409
+    assert "open month" in resp.json()["error"]
+
+    # A mail with attachments (ingested) is never renderable.
+    batch_id = _create_batch(client, monkeypatch)
+    _patch_ocr(monkeypatch, _extraction(vendor="DB"))
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("db.jpg", JPG + b"c2")],
+              subject="normal ingest"),
+        synchronous=True,
+    )
+    ing = [
+        e for e in client.get("/api/inbound/log").json()["entries"]
+        if e.get("subject") == "normal ingest"
+    ][0]["archive"]
+    assert client.post(f"/api/inbound/{ing}/render-ingest").status_code == 409
+    assert client.post("/api/inbound/nope/render-ingest").status_code == 404
+    assert batch_id  # silence unused warning
+
+
+def test_dismiss_held_mail(client, monkeypatch):
+    from expense_recon.web.intake_mail import STATUS_DISMISSED as DISMISSED
+
+    state = client.app.state
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail("criss@brisken.com", subject="junk forward"),
+        synchronous=True,
+    )
+    log1 = client.get("/api/inbound/log").json()
+    archive = [
+        e for e in log1["entries"] if e.get("subject") == "junk forward"
+    ][0]["archive"]
+    assert log1["n_held"] == 1
+
+    resp = client.post(f"/api/inbound/{archive}/dismiss")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == DISMISSED
+
+    log2 = client.get("/api/inbound/log").json()
+    assert log2["n_held"] == 0  # the held strip can reach zero now
+    row = [e for e in log2["entries"] if e.get("subject") == "junk forward"][0]
+    assert row["status"] == DISMISSED
+    # Custody untouched; terminal: not replayable, not renderable.
+    arch = state.data_root / "inbound" / archive
+    assert (arch / "message.eml").exists()
+    assert replay_held(
+        state.db_path, state.learning_db_path, state.data_root
+    )["replayed"] == 0
+    assert client.post(f"/api/inbound/{archive}/render-ingest").status_code == 409
+
+    # Only held mail can be dismissed.
+    batch_id = _create_batch(client, monkeypatch)
+    _patch_ocr(monkeypatch, _extraction(vendor="DB"))
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("db.jpg", JPG + b"dm")],
+              subject="landed"),
+        synchronous=True,
+    )
+    ing = [
+        e for e in client.get("/api/inbound/log").json()["entries"]
+        if e.get("subject") == "landed"
+    ][0]["archive"]
+    assert client.post(f"/api/inbound/{ing}/dismiss").status_code == 409
+    assert batch_id
+
+
+def test_body_render_pdf_is_valid_pdf():
+    pytest.importorskip("PIL")
+    pypdf = pytest.importorskip("pypdf")
+    from expense_recon.web.body_render import html_to_text, render_body_pdf
+
+    text = html_to_text(
+        "<div>Fare<script>x()</script></div><p>Total 12,50&nbsp;&euro;</p>"
+        "<p>" + "verylongtokenwithoutspaces" * 20 + "</p>"
+    )
+    assert "x()" not in text and "Total 12,50" in text
+    pdf = render_body_pdf(["From: a@b.com", "Subject: t"], text)
+    reader = pypdf.PdfReader(__import__("io").BytesIO(pdf))
+    assert len(reader.pages) >= 1
+
+
+def test_render_ingest_retry_after_failure(client, monkeypatch):
+    """A failed render ingest (held_failed) stays renderable: without the
+    retry rule the mail would be stuck (replay flips a partless archive
+    to held_no_valid_files, and the render guard would 409 forever)."""
+    import expense_recon.web.intake_mail as im
+
+    _create_batch(client, monkeypatch)
+    state = client.app.state
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail("criss@brisken.com", subject="retry me"),
+        synchronous=True,
+    )
+    archive = [
+        e for e in client.get("/api/inbound/log").json()["entries"]
+        if e.get("subject") == "retry me"
+    ][0]["archive"]
+
+    def _boom(*a, **k):
+        raise RuntimeError("vision transient")
+    with monkeypatch.context() as mp:
+        mp.setattr(im, "add_receipts_to_expense_batch", _boom)
+        first = client.post(f"/api/inbound/{archive}/render-ingest")
+    assert first.status_code == 200  # render ran; the INGEST failed
+    assert first.json()["status"] == "held_failed"
+
+    # Replay drains held_failed but finds no parts/ -> held_no_valid_files.
+    replay_held(state.db_path, state.learning_db_path, state.data_root)
+
+    _patch_ocr(monkeypatch, _extraction(vendor="Uber", total="27.90"))
+    second = client.post(f"/api/inbound/{archive}/render-ingest")
+    assert second.status_code == 200, second.text
+    assert second.json()["status"] == STATUS_INGESTED
+
+
+def test_render_pdf_bytes_deterministic():
+    pytest.importorskip("PIL")
+    import time as _time
+
+    from expense_recon.web.body_render import render_body_pdf
+
+    a = render_body_pdf(["From: x"], "Gebühr 27,90 €")
+    _time.sleep(1.1)  # Pillow default stamps wall-clock into the PDF
+    b = render_body_pdf(["From: x"], "Gebühr 27,90 €")
+    assert a == b  # digest dedupe depends on byte-stable re-renders
+    stamp = _time.gmtime(1_000_000)
+    assert render_body_pdf(["h"], "t", created=stamp) == \
+        render_body_pdf(["h"], "t", created=stamp)
+
+
+def test_render_retry_after_commit_failure_does_not_duplicate(
+    client, monkeypatch,
+):
+    """Finding 1: rows commit, then the job's tail fails -> held_failed.
+    The retry re-renders the SAME bytes, dedupe eats them, and the month
+    keeps exactly one row for the mail."""
+    import expense_recon.web.intake_mail as im
+
+    batch_id = _create_batch(client, monkeypatch)
+    state = client.app.state
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail("criss@brisken.com", subject="commit then fail"),
+        synchronous=True,
+    )
+    archive = [
+        e for e in client.get("/api/inbound/log").json()["entries"]
+        if e.get("subject") == "commit then fail"
+    ][0]["archive"]
+
+    def _ack_boom(*a, **k):
+        raise RuntimeError("tail failure after commit")
+    _patch_ocr(monkeypatch, _extraction(vendor="Uber", total="27.90"))
+    with monkeypatch.context() as mp:
+        mp.setattr(im, "_maybe_ack", _ack_boom)
+        first = client.post(f"/api/inbound/{archive}/render-ingest")
+    assert first.status_code == 200
+    assert first.json()["status"] == "held_failed"  # but the row committed
+
+    _patch_ocr(monkeypatch, _extraction(vendor="Uber", total="27.90"))
+    second = client.post(f"/api/inbound/{archive}/render-ingest")
+    assert second.status_code == 200, second.text
+    assert second.json()["status"] == STATUS_INGESTED
+    assert second.json()["documents"] == []  # dedupe: no second row
+
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    mailed = [e for e in grid["expenses"] if e.get("submitted_by")]
+    assert len(mailed) == 1  # exactly one row for the mail, not two
+
+
+def test_dismiss_refused_while_render_in_flight(client, monkeypatch):
+    """Finding 2: the transient rendering status makes dismiss/render
+    mutually exclusive — an acknowledged dismissal can no longer be
+    silently reversed by a completing ingest."""
+    import expense_recon.web.intake_mail as im
+    from expense_recon.web.intake_mail import dismiss_archive
+
+    _create_batch(client, monkeypatch)
+    state = client.app.state
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail("criss@brisken.com", subject="race me"),
+        synchronous=True,
+    )
+    archive = [
+        e for e in client.get("/api/inbound/log").json()["entries"]
+        if e.get("subject") == "race me"
+    ][0]["archive"]
+
+    seen: dict = {}
+    real_add = im.add_receipts_to_expense_batch
+
+    def _add_with_midflight_dismiss(store, run, *a, **k):
+        seen["dismiss"] = dismiss_archive(state.data_root, archive)
+        return real_add(store, run, *a, **k)
+    _patch_ocr(monkeypatch, _extraction(vendor="Uber"))
+    with monkeypatch.context() as mp:
+        mp.setattr(im, "add_receipts_to_expense_batch",
+                   _add_with_midflight_dismiss)
+        resp = client.post(f"/api/inbound/{archive}/render-ingest")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == STATUS_INGESTED
+    assert seen["dismiss"]["code"] == 409  # refused mid-flight, not queued
+
+
+def test_replay_rescues_stranded_body_only(client, monkeypatch):
+    """Finding 3: a body-only mail whose router died before classifying
+    it (stale 'received', no parts/) replays into the RENDERABLE state,
+    not the terminal held_no_valid_files."""
+    from expense_recon.web.intake_mail import (
+        archive_incoming,
+        parse_inbound,
+    )
+
+    _create_batch(client, monkeypatch)
+    state = client.app.state
+    raw = _html_mail("criss@brisken.com", subject="stranded")
+    parsed = parse_inbound(raw, DOMAIN)
+    arch = archive_incoming(state.data_root, raw, parsed)
+    meta_path = arch / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["at"] = "2026-08-21T00:00:00+00:00"  # stale-received threshold
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    replay_held(state.db_path, state.learning_db_path, state.data_root)
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert meta["status"] == HELD_BODY_ONLY
+
+    _patch_ocr(monkeypatch, _extraction(vendor="Uber"))
+    resp = client.post(f"/api/inbound/{arch.name}/render-ingest")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == STATUS_INGESTED
+
+
+def test_reconcile_flips_interrupted_render(client):
+    from expense_recon.web.intake_mail import (
+        STATUS_RENDERING,
+        archive_incoming,
+        parse_inbound,
+        reconcile_interrupted,
+    )
+
+    state = client.app.state
+    raw = _html_mail("criss@brisken.com", subject="killed mid-render")
+    parsed = parse_inbound(raw, DOMAIN)
+    arch = archive_incoming(state.data_root, raw, parsed)
+    meta_path = arch / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta.update({"status": STATUS_RENDERING, "rendered": True})
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    flipped = reconcile_interrupted(state.db_path, state.data_root)
+    assert flipped == 1
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert meta["status"] == "held_failed"
+    assert meta["rendered"] is True  # stays retryable

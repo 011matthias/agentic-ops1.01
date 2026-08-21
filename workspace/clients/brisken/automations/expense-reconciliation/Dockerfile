@@ -4,6 +4,12 @@
 # and receipt files on a mounted volume at /data.
 FROM python:3.12-slim
 
+# DejaVu carries the full Latin set (umlauts, euro sign) the body-only
+# mail renderer needs; Pillow's embedded default font does not.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir uv
 
 WORKDIR /app
