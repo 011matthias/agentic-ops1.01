@@ -483,6 +483,12 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
                 row["person"] = person["person"]
             if meta.get("batch_id"):
                 row["batch_id"] = meta["batch_id"]
+            if meta.get("documents") is not None:
+                row["documents"] = meta["documents"]
+            if meta.get("skipped"):
+                row["skipped"] = meta["skipped"]
+            if meta.get("error"):
+                row["error"] = meta["error"]
     return rows
 
 
@@ -675,7 +681,7 @@ def _ingest_job(
                     _update_meta(arch, {"status": HELD_FAILED,
                                         "error": "run not found"})
                 return
-            add_receipts_to_expense_batch(
+            summary = add_receipts_to_expense_batch(
                 store, run, staging, _now_iso(),
                 learning_db_path=learning_db_path,
                 on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
@@ -686,7 +692,12 @@ def _ingest_job(
             )
         # Status truth: "ingested" only after the job ACTUALLY succeeded.
         if arch is not None:
-            _update_meta(arch, {"status": STATUS_INGESTED})
+            # documents = the expense rows THIS mail created (empty when
+            # every file was a duplicate) — the intake overview joins on it.
+            _update_meta(arch, {
+                "status": STATUS_INGESTED,
+                "documents": list((summary or {}).get("documents") or []),
+            })
             _maybe_ack(db_path, arch)
     except Exception as exc:  # noqa: BLE001 - job errors surface via meta+log
         with RunStore(db_path) as store:

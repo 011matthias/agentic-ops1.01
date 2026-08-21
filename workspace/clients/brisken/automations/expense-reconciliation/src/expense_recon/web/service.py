@@ -4574,6 +4574,9 @@ def _add_receipts_locked(
         "at": now_iso,
         "n_files": n_seen,
         "n_added": len(new_receipts),
+        # The rows THIS add created, so mail intake can stamp its archive
+        # with the resulting expenses (empty = everything was a duplicate).
+        "documents": [r.document_id for r in new_receipts],
         "llm_source": llm_source,
         # float(): CostTracker.total_cost_usd is a Decimal, and this summary
         # goes straight into json.dumps via update_run_snapshot (caught live

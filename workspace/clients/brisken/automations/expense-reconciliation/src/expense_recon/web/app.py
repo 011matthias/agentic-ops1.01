@@ -1042,7 +1042,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # ── Mail intake triage: what arrived, what was held, and the one-click
     # drain for mail that arrived before a month batch existed.
     @app.get("/api/inbound/log")
-    def inbound_log(limit: int = 100) -> JSONResponse:
+    def inbound_log(limit: int = 100, detail: int = 0) -> JSONResponse:
         from .intake_mail import read_log
 
         rows = read_log(app.state.data_root, limit=max(1, min(limit, 500)))
@@ -1050,6 +1050,57 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             r for r in rows
             if str(r.get("status", "")).startswith("held_")
         ]
+        if detail:
+            # Intake overview: each ingested entry gains the expense rows
+            # its mail created. One view build per distinct referenced
+            # batch (entries cluster on the open month, so this is 1-2
+            # builds, not one per entry); a build failure degrades that
+            # batch's entries to ids-only rather than sinking the log.
+            views: dict[str, dict] = {}
+            labels: dict[str, str] = {}
+            with open_store() as store:
+                for r in rows:
+                    bid = str(r.get("batch_id") or "")
+                    if not bid or bid in views or not r.get("documents"):
+                        continue
+                    run = store.get_run(bid)
+                    if run is None:
+                        views[bid] = {}
+                        continue
+                    labels[bid] = run.label or bid
+                    try:
+                        views[bid] = {
+                            e["document_id"]: e
+                            for e in _expense_view(store, run).get("expenses", [])
+                        }
+                    except Exception:  # noqa: BLE001 - degrade, don't 500
+                        views[bid] = {}
+            for r in rows:
+                docs = r.get("documents")
+                bid = str(r.get("batch_id") or "")
+                if docs is None or not bid:
+                    continue
+                if bid in labels:
+                    r["batch_label"] = labels[bid]
+                idx = views.get(bid, {})
+                out = []
+                for doc in docs:
+                    e = idx.get(doc)
+                    if e is None:
+                        # Created by this mail but no longer in the batch
+                        # (operator deleted it) — still part of the story.
+                        out.append({"document_id": doc, "deleted": True})
+                        continue
+                    def _disp(v):
+                        return v.get("display") if isinstance(v, dict) else v
+                    out.append({
+                        "document_id": doc,
+                        "vendor": _disp(e.get("vendor")),
+                        "date": _disp(e.get("date")),
+                        "total": _disp(e.get("total")),
+                        "currency": e.get("currency"),
+                    })
+                r["expenses"] = out
         return JSONResponse({
             "entries": rows,
             "n_held": len(held),
