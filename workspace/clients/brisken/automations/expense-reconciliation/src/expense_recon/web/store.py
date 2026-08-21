@@ -446,7 +446,10 @@ class RunStore:
         """Drop a run and its per-run edit rows. Returns True when the run
         existed. The on-disk work_dir is removed by the caller (the store
         owns the db, not the volume); dropping the edit rows here keeps the
-        db from carrying orphaned decisions/overrides for a gone run (F9)."""
+        db from carrying orphaned decisions/overrides for a gone run (F9).
+        Jobs that finished into this run go too: a /jobs poll on a deleted
+        month must answer 404, not hand the SPA a run_id that no longer
+        resolves."""
         cur = self.conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
         self.conn.execute("DELETE FROM decisions WHERE run_id = ?", (run_id,))
         self.conn.execute(
@@ -461,6 +464,7 @@ class RunStore:
         self.conn.execute(
             "DELETE FROM expense_edits WHERE run_id = ?", (run_id,)
         )
+        self.conn.execute("DELETE FROM jobs WHERE run_id = ?", (run_id,))
         self.conn.commit()
         return cur.rowcount > 0
 
