@@ -78,23 +78,22 @@ the quick-wins round; see the Shipped table row 9. Review residue worth
 knowing: item 18 below (pre-existing async lock acquirers), and the
 stranded-mail design call folded into item 12.
 
-### 12. Body-only mail: give the operator a handling path (note 12)
+### 12. Body-only mail handling (SHIPPED — see Shipped row 10)
 
-Dirk's first real mail is stuck `held_body_only` — not replayable by
-design, no view/render/attach action exists. Fix: sanitized body view
-endpoint, body-to-PDF render + normal ingest (quarantine still applies),
-and per-mail dismiss for junk. Evidence-gated round now evidence-backed;
-Dirk's mail is the acceptance test.
+Shipped: sanitized body view, body-to-PDF render through the normal
+pipeline, per-mail dismiss. The leftover design call moved to item 19.
 
-**Design call folded in from the delete-month review (2026-08-21):** a
-mail already INGESTED into a month that is later deleted has no
-re-ingest path if the operator recreates the month — replay skips
-status `ingested`, and its job row went with the cascade. The bytes
-survive in the custody archive (`parts/`), so this is stranding, not
-loss. The per-archive actions this round adds are the natural home: a
-per-archive "re-ingest into the open month" action (explicit, so
-receipts never drain into an unintended month) alongside view/render/
-dismiss. Decide with the owner when scoping this round.
+### 19. Re-ingest for attachment mail stranded by a deleted month (owner call)
+
+From the delete-month review (2026-08-21): a mail with ATTACHMENTS
+already ingested into a month that is later deleted has no re-ingest
+path if the operator recreates the month — replay skips status
+`ingested`. The bytes survive in the custody archive (`parts/`), so
+this is stranding, not loss. Natural fix: a per-archive "re-ingest into
+the open month" action beside the shipped view/render/dismiss (explicit,
+so receipts never drain into an unintended month). Needs an owner
+ruling on whether the case is worth the surface; body-only mail already
+recovers via render.
 
 ### 13. Learned memory: validate + adjust (note 10)
 
@@ -293,4 +292,5 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 | 6b | Split depiction ("Lançado como"): every grid row carries books_as — the exact per-account fan-out the Zoho export writes (same shared code path, so grid and export cannot disagree) + an is_split flag; the UI renders one receipt booking to N accounts instead of N mystery rows | Owner ruling: splits ARE the truth and must not be collapsed; what was missing was seeing the fan-out ON the receipt instead of discovering it in the export | PR #543, 2026-08-19 |
 | 7 | Feedback capture on every page (owner directive 2026-08-19): the double-click location-specific note widget becomes a single global mount across all SPA pages; `POST /api/feedback` now accepts an explicit `run_id` so notes on expense-batch pages attribute to the batch regardless of route shape (path parse stays as fallback) | The existing widget captured exact click locations and produced Criss's r1 notes, but only on the home/run/memory pages; the receipt-first batch pages — the surface she actually reviews — had no capture at all (0 notes ever) | PRs #544+#545, 2026-08-19; Lovable half `docs/lovable-feedback-capture-prompt.md` published + live-verified end-to-end (batch note attributed run_id 7d2fea33d39a) |
 | 6c | Vendor is the merchant, never the card-terminal bank: one extraction-prompt line (backlog item 6) so a card slip showing both the shop and the acquiring bank reads the SHOP; invalidates the reading cache by design (fingerprint bump) | Round-5 evidence: the same French card slip read ANNADA ROUEN one day and CREDIT AGRICOLE NORMANDIE another; the bank name teaches the merchant book garbage | PR #543, 2026-08-19 |
+| 10 | Body-only mail handling: held mail with no attachment (Uber forwards, credit notices) gets three per-mail actions — view the body (sanitized text off the custody eml, never the raw archive), render it to a PDF and add it to the open month through the NORMAL pipeline (same vision reading and quarantine as any scanned receipt; deterministic bytes so a retry can never double-ingest), and dismiss as junk (terminal, custody untouched, held strip can reach zero). Transient `rendering` status makes render/dismiss/replay mutually exclusive; replay now rescues body-only mail a router crash left as "received"; interrupted renders reconcile to retryable at startup; container gets a full-Latin font so German bodies ("Gebühr", "27,90 €") render legibly for extraction | Her note 12 ("where can user handle this?") + Dirk's first real organic mail sat stuck in held_body_only with no path; adversarial review caught a Pillow timestamp defect that would have let retries create duplicate expense rows | PR #563, 2026-08-21; Lovable half `docs/lovable-body-only-prompt.md` |
 | 9 | Intake quick-wins: the Email-intake log shows WHICH files each mail delivered (recorded at accept time; legacy archives derived from parts/) and an honest Month column (batch_label resolved for every routed row, held rows say held, deleted months say "month deleted" instead of misreporting each expense as operator-removed); and Delete month exists behind a typed confirm phrase — cascade under the batch writer lock, job rows purged, mail archives stamped batch_deleted but NEVER deleted (custody/retention), response reports where inbound mail routes next + that learned memory is kept. 3-lens adversarial review pre-commit: sync handler (async version froze the event loop on the OCR-held lock), deleted-run refusal at every locked batch writer, DONE-stamp re-check, replay clears stale stamps, atomic serialized meta writes | Her notes 2/3/13: "need to see which files were delivered", "month says no date", "there needs to be some kind of delete month option" — plus the review closing a real freeze + three race defects before they shipped | PR #561, 2026-08-21; Lovable half `docs/lovable-intake-quickwins-prompt.md` |

@@ -62,13 +62,22 @@ rounds are SHIPPED:
   fixed here, the pre-existing twin is backlog item 18. Lovable half:
   `docs/lovable-intake-quickwins-prompt.md`.
 
+- **Body-only mail (PR #563, 2026-08-21):** GET /api/inbound/{archive}/
+  body (sanitized text, never the raw archive), POST .../render-ingest
+  (body->PDF through the NORMAL pipeline — vision + quarantine judge it
+  like any scanned receipt; byte-deterministic render so retries dedupe,
+  transient `rendering` status makes render/dismiss/replay mutually
+  exclusive, container ships a full-Latin font for German bodies),
+  POST .../dismiss (terminal junk path; held strip can reach zero).
+  Replay now rescues stranded body-only mail; interrupted renders
+  reconcile to retryable. Lovable half:
+  `docs/lovable-body-only-prompt.md`. Leftover design call = backlog
+  item 19 (re-ingest for attachment mail after a month delete).
+
 **Remaining rounds, in order (design in the plan file; each ships like
 steps 5-8 below, with an adversarial review pass before commit):**
 
-1. **Body-only mail (M):** GET /api/inbound/{archive}/body (sanitized),
-   POST .../render-ingest (body->PDF -> normal ingest), POST .../dismiss.
-   Dirk's real held mail (held_body_only) is the acceptance test.
-2. **Memory validate/adjust (M):** PUT/DELETE /api/memory/categories
+1. **Memory validate/adjust (M):** PUT/DELETE /api/memory/categories
    (single row, count-preserving manual writes), `validated_at` schema
    migration + bulk validate + unvalidated filter, reset confirm gate.
 3. **Language + receipt visibility (M):** missing i18n reason codes,
@@ -87,11 +96,14 @@ prompts `docs/lovable-cards-prompt.md` (Settings > Cards editor),
 `docs/lovable-zoho-decoupling-prompt.md` (merchants relabel + inert hint
 + dropdown fixes), `docs/lovable-cards-r3-prompt.md` (optional entity
 at creation, row card/entity chips, card-review strip, assign + refresh
-actions) and `docs/lovable-intake-quickwins-prompt.md` (Files + Month
-columns, guarded delete-month dialog, job-poll 404 edge) — all backends
-live. After the owner publishes, DOM-probe the SPA (Lovable merge != live).
+actions), `docs/lovable-intake-quickwins-prompt.md` (Files + Month
+columns, guarded delete-month dialog, job-poll 404 edge) and
+`docs/lovable-body-only-prompt.md` (held-mail actions: view body /
+render as PDF / dismiss, `rendering` + `dismissed` statuses) — all
+backends live. After the owner publishes, DOM-probe the SPA (Lovable
+merge != live).
 
-Suite baseline is now **1188 passed / 2 skipped**; `calibrate
+Suite baseline is now **1199 passed / 2 skipped**; `calibrate
 --config examples/run.example.json` green. Advisories are SNAPSHOTTED
 into each run's summary — existing runs keep old wording by design.
 
