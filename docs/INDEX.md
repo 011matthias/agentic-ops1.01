@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-21 | Brisken Recon Intake Quick-Wins | client-dev | [Mini-Checkpoint-2](docs/2026-08-21%20-%20Brisken%20Recon%20Intake%20Quick-Wins/Mini-Checkpoint-2.md) |
 | 2026-08-21 | Brisken Cards R3 Entity-Less Batches | client-dev | [→](docs/2026-08-21%20-%20Brisken%20Cards%20R3%20Entity-Less%20Batches/Checkpoint.md) |
 | 2026-08-21 | Brisken Recon Feedback Wave Cards R1-R2 | client-dev | [→](docs/2026-08-21%20-%20Brisken%20Recon%20Feedback%20Wave%20Cards%20R1-R2/Checkpoint.md) |
 | 2026-08-19 | Brisken Recon Feedback Everywhere + Criss July Run | client-dev | [Mini-Checkpoint-2](docs/2026-08-19%20-%20Brisken%20Recon%20Feedback%20Everywhere%20%2B%20Criss%20July%20Run/Mini-Checkpoint-2.md) |
