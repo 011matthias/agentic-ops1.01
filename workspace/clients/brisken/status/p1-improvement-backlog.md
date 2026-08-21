@@ -42,7 +42,7 @@ Zoho labels print both). The last4-keyed map could never resolve
 "Visa ...1672" — the January batch's 13 unassigned rows are this bug.
 
 **Rounds:** R1 registry + read-time composition (settings `cards` key,
-GET /api/cards, zero behavior change) — SHIPPING; R2 Zoho decoupling
+GET /api/cards, zero behavior change) — SHIPPED PR #555; R2 Zoho decoupling
 (per-card warning rewrite, both exports resolve via the registry,
 merchants editor inert-hint, dropdown relabels answering notes 5/7); R3
 entity-less batch + card-review strip + hint-to-card assignment that
