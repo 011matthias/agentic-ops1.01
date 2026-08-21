@@ -358,3 +358,174 @@ def test_archive_preserves_raw_message(client):
     meta = json.loads((arch_dirs[0] / "meta.json").read_text(encoding="utf-8"))
     assert meta["from"] == "criss@brisken.com"
     assert meta["status"] == HELD_BODY_ONLY
+
+
+# ---------------------------------------------------------- notifications --
+# Acks + held alerts (graph_notify) are hard-disabled in tests (no Graph
+# creds in the env); these tests patch the module seam and assert the
+# decision logic + idempotency, never a real send.
+
+def _patch_notify(monkeypatch):
+    from expense_recon.web import graph_notify
+    calls: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(graph_notify, "enabled", lambda: True)
+    monkeypatch.setattr(
+        graph_notify, "send_mail",
+        lambda r, s, b: calls.append((r, s, b)) or True,
+    )
+    return calls
+
+
+def test_ingest_ack_goes_to_real_sender_once(client, monkeypatch):
+    calls = _patch_notify(monkeypatch)
+    _create_batch(client, monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(vendor="Uber"))
+    raw = _mail(
+        "dirk.neumann@brisken.com",
+        to_addr=f"receipts+criss@{DOMAIN}",  # alias claims criss
+        attachments=[("r.jpg", JPG + b"ack")],
+    )
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root, raw,
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_INGESTED
+    # The ack goes to the SENDER address, never the alias person.
+    assert [c[0] for c in calls] == ["dirk.neumann@brisken.com"]
+    assert calls[0][1].startswith("Receipt received")
+    # Idempotent per archive: the meta stamp blocks a second ack.
+    from expense_recon.web.intake_mail import _maybe_ack, inbound_root
+    _maybe_ack(state.db_path, inbound_root(state.data_root) / res["archive"])
+    assert len(calls) == 1
+
+
+def test_no_ack_for_auto_generated_or_disabled(client, monkeypatch):
+    calls = _patch_notify(monkeypatch)
+    _create_batch(client, monkeypatch)
+    state = client.app.state
+    # (a) an auto-generated inbound (OOF-style) ingests but is never acked
+    _patch_ocr(monkeypatch, _extraction(vendor="OOF"))
+    msg = EmailMessage()
+    msg["From"] = "dirk.neumann@brisken.com"
+    msg["To"] = f"receipts@{DOMAIN}"
+    msg["Subject"] = "auto"
+    msg["Auto-Submitted"] = "auto-replied"
+    msg.set_content("x")
+    msg.add_attachment(JPG + b"oof", maintype="image", subtype="jpeg",
+                       filename="a.jpg")
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        msg.as_bytes(), synchronous=True,
+    )
+    assert res["status"] == STATUS_INGESTED
+    assert calls == []
+    # (b) intake.auto_ack=false switches acks off for normal mail too
+    resp = client.put("/api/settings", json={"intake": {"auto_ack": False}})
+    assert resp.status_code == 200, resp.text
+    _patch_ocr(monkeypatch, _extraction(vendor="DB"))
+    res2 = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("b.jpg", JPG + b"db")]),
+        synchronous=True,
+    )
+    assert res2["status"] == STATUS_INGESTED
+    assert calls == []
+
+
+def test_held_mail_alerts_operator_once(client, monkeypatch):
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("t.jpg", JPG + b"t")]),
+        synchronous=True,
+    )
+    assert res["status"] == HELD_NO_BATCH
+    assert [c[0] for c in calls] == ["matthias.silva@brisken.com"]
+    assert "held_no_batch" in calls[0][1]
+    # Idempotent per archive.
+    from expense_recon.web.intake_mail import _maybe_alert, inbound_root
+    _maybe_alert(
+        state.db_path, inbound_root(state.data_root) / res["archive"],
+        HELD_NO_BATCH,
+    )
+    assert len(calls) == 1
+    # Recipients follow settings intake.alert_recipients.
+    resp = client.put("/api/settings", json={
+        "intake": {"alert_recipients": ["dirk.neumann@brisken.com"]}
+    })
+    assert resp.status_code == 200, resp.text
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("u.jpg", JPG + b"u")],
+              subject="second"),
+        synchronous=True,
+    )
+    assert calls[-1][0] == "dirk.neumann@brisken.com"
+
+
+def test_send_mail_guards_refuse_external_and_malformed(monkeypatch):
+    from expense_recon.web import graph_notify
+    for k in ("BRISKEN_TENANT_ID", "BRISKEN_GRAPH_CLIENT_ID",
+              "BRISKEN_GRAPH_CLIENT_SECRET"):
+        monkeypatch.delenv(k, raising=False)
+    # No creds -> disabled, even for an internal recipient.
+    assert graph_notify.send_mail(
+        "matthias.silva@brisken.com", "s", "b") is False
+    # Creds present: every non-internal/malformed recipient is refused
+    # BEFORE any network traffic (urlopen patched to explode).
+    for k in ("BRISKEN_TENANT_ID", "BRISKEN_GRAPH_CLIENT_ID",
+              "BRISKEN_GRAPH_CLIENT_SECRET"):
+        monkeypatch.setenv(k, "test-cred")
+    def _no_network(*a, **kw):
+        raise AssertionError("guard let a refused recipient reach the network")
+    monkeypatch.setattr(
+        "expense_recon.web.graph_notify.urllib.request.urlopen", _no_network
+    )
+    for bad in (
+        "victim@gmail.com",
+        "victim@gmail.com,x@brisken.com",
+        "a@b@brisken.com",
+        "@brisken.com",
+        "two words@brisken.com",
+        "",
+    ):
+        assert graph_notify.send_mail(bad, "s", "b") is False
+
+
+def test_retention_sweep_deletes_only_expired(client):
+    from datetime import datetime, timezone
+    from expense_recon.web.intake_mail import inbound_root, sweep_retention
+    state = client.app.state
+    root = inbound_root(state.data_root)
+    root.mkdir(parents=True, exist_ok=True)
+    old = root / "20100101T000000-deadbeef"
+    old.mkdir()
+    (old / "meta.json").write_text("{}", encoding="utf-8")
+    keep = root / (
+        datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "-cafecafe"
+    )
+    keep.mkdir()
+    odd = root / "not-an-archive"
+    odd.mkdir()
+    removed = sweep_retention(state.db_path, state.data_root)
+    assert removed == 1
+    assert not old.exists() and keep.exists() and odd.exists()
+
+
+def test_intake_settings_validate_ack_alerts_retention():
+    ok = normalize_intake_setting({
+        "auto_ack": False,
+        "alert_recipients": ["Dirk.Neumann@brisken.com"],
+        "retention_years": 10,
+    })
+    assert ok["auto_ack"] is False
+    assert ok["alert_recipients"] == ["dirk.neumann@brisken.com"]
+    assert ok["retention_years"] == 10
+    with pytest.raises(ValueError):
+        normalize_intake_setting({"auto_ack": "yes"})
+    with pytest.raises(ValueError):
+        normalize_intake_setting({"alert_recipients": ["x@gmail.com"]})
+    with pytest.raises(ValueError):
+        normalize_intake_setting({"retention_years": 0})
