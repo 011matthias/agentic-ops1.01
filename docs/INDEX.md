@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-21 | Brisken Recon Memory Validate Adjust | client-dev | [Mini-Checkpoint-1](docs/2026-08-21%20-%20Brisken%20Recon%20Memory%20Validate%20Adjust/Mini-Checkpoint-1.md) |
 | 2026-08-21 | Brisken Recon Body-Only Mail | client-dev | [Mini-Checkpoint-2](docs/2026-08-21%20-%20Brisken%20Recon%20Body-Only%20Mail/Mini-Checkpoint-2.md) |
 | 2026-08-21 | Brisken Recon Intake Quick-Wins | client-dev | [Mini-Checkpoint-2](docs/2026-08-21%20-%20Brisken%20Recon%20Intake%20Quick-Wins/Mini-Checkpoint-2.md) |
 | 2026-08-21 | Brisken Cards R3 Entity-Less Batches | client-dev | [→](docs/2026-08-21%20-%20Brisken%20Cards%20R3%20Entity-Less%20Batches/Checkpoint.md) |
