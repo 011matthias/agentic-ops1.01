@@ -286,5 +286,6 @@ def test_grid_variance_chip_and_books_as(web_client, monkeypatch):
     first = rows[staples_docs[0]]
     assert first["is_split"] is False
     assert first["books_as"] == [
-        {"account": "Meals & Entertainment", "amount": "42.50"}
+        {"account": "Meals & Entertainment", "amount": "42.50",
+         "unassigned": False}
     ]

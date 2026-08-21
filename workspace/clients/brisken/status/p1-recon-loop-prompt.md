@@ -83,15 +83,21 @@ rounds are SHIPPED:
   re-teaches never wear an old sign-off. NOTE: the SPA Reset button is
   a safe no-op until `docs/lovable-memory-edit-prompt.md` is applied.
 
+- **Language + receipt visibility (PR #567, 2026-08-21):** structured
+  missing list, books_as `{account: null, unassigned: true}` sentinel
+  (export CSV literal unchanged — grid==export amounts hold),
+  reason_label dropped, honest `receipt_image_available` (+ attached
+  manual/folder receipts keep availability via the endpoint's glob —
+  review carry, pinned) + `source_file` per row. Issue-code prose piece
+  parked as backlog item 20. Lovable half:
+  `docs/lovable-language-receipt-prompt.md` — item 1 APPLY FIRST (the
+  deployed split depiction shows a blank account label on uncategorized
+  parts until applied).
+
 **Remaining rounds, in order (design in the plan file; each ships like
 steps 5-8 below, with an adversarial review pass before commit):**
 
-1. **Language + receipt visibility (M):** missing i18n reason codes,
-   structured missing-fields, issue codes beside English prose,
-   books_as unassigned sentinel; fix `receipt_image_available` true for
-   manual: ids (phantom View button 404), honest per-row receipt state +
-   the never-rendered missing-image tile.
-2. **Cards R4 (pending owner answers in the backlog):** mixed-entity
+1. **Cards R4 (pending owner answers in the backlog):** mixed-entity
    export (per-entity CoaGate), persisted cards migration, intake
    dropdown unification. Backlog item 18 (async endpoints on the batch
    lock, pre-existing freeze class) rides with whichever code round
@@ -108,10 +114,12 @@ columns, guarded delete-month dialog, job-poll 404 edge) and
 render as PDF / dismiss, `rendering` + `dismissed` statuses) and
 `docs/lovable-memory-edit-prompt.md` (Memory page edit/delete/validate +
 the REQUIRED reset-confirm flow — the old Reset button is a safe no-op
-until applied) — all backends live. After the owner publishes, DOM-probe
-the SPA (Lovable merge != live).
+until applied) and `docs/lovable-language-receipt-prompt.md` (i18n keys,
+books_as mapping — its item 1 is APPLY FIRST, missing-image tile, No
+receipt state, source_file) — all backends live. After the owner
+publishes, DOM-probe the SPA (Lovable merge != live).
 
-Suite baseline is now **1210 passed / 2 skipped**; `calibrate
+Suite baseline is now **1214 passed / 2 skipped**; `calibrate
 --config examples/run.example.json` green. Advisories are SNAPSHOTTED
 into each run's summary — existing runs keep old wording by design.
 
