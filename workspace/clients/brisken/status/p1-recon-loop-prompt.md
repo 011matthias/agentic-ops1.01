@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-08-19
+updated: 2026-08-21
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
@@ -12,7 +12,74 @@ Load the Brisken expense-reconciliation project (p1). We are continuing the
 test-and-fix loop on the receipt-first pipeline until the tool is genuinely
 usable for Brisken. Read this whole brief before touching anything.
 
-## Where the loop stands (2026-08-19, after round 6)
+## Where the loop stands (2026-08-21: the feedback wave, an 8-PR program)
+
+The operator walked the whole tool on 2026-08-21 and left 14 in-app notes
+(the first full wave since feedback capture went global). The full design
+lives in the approved plan `~/.claude/plans/looks-like-there-is-keen-aurora.md`
+and in backlog items 10-17; the user picked CARDS-FIRST sequencing. Two
+rounds are SHIPPED + deployed + live-verified:
+
+- **Cards R1 (PR #555):** `settings["cards"]` registry (multi-digit card
+  identity: the statement marker "2838" and the plastic last-4 "1672" are
+  the SAME card), `GET /api/cards`, read-time composition over the legacy
+  `card_entities`/`card_accounts` maps + `/data` presets (no write
+  migration), one resolver in `src/expense_recon/cards.py`.
+- **Cards R2 (PR #556):** Zoho demoted to an optional card attribute.
+  Per-card Zoho-OPTIONAL setup advisories (`setting: "cards"`); journal
+  credit + expense Paid-Through resolve via the CONSERVATIVE
+  `cards.resolve_account_map` (bare-digit keys match labels; label-shaped
+  keys exact-only; ANY ambiguity keeps the visible placeholder — two
+  adversarial-review rounds executed wrong-money scenarios and every one
+  is pinned as a test); `merchants_inert` on GET /api/settings.
+
+**Remaining rounds, in order (design in the plan file; each ships like
+steps 5-8 below, with an adversarial review pass before commit):**
+
+1. **Cards R3 (the headline, L):** drop the legal-entity ask at batch
+   creation (ONE guard, service.py `create_expense_batch`); entity
+   resolves per-receipt from the card (field-override -> card.entity ->
+   optional batch entity -> review state `needs_entity`); rows gain
+   `card`, batch view gains `card_review` (unresolved hints grouped
+   server-side); `POST /api/expense-batches/{id}/cards` assignment with
+   `learn: true` persisting to settings; `POST .../refresh-master-data`
+   (the snapshot-trap fix). Export policy RULED by the user: placeholders,
+   never block, adjustable after export (re-export folds it in) — pin
+   that as a test. Live evidence: batch 8f8ccac0bafc has 13 rows with
+   raw hints ('Visa', 'Cartão de crédito', 'brisken', 'Visa ...1672')
+   and only card 2838 of 5 has an entity mapped.
+2. **Quick wins (S):** intake delivered-files (record `files` in
+   meta.json at intake_mail.py ~:517 + derive legacy from parts/ at read
+   time) + Month column (resolve batch_label for every batch_id; held
+   rows say held) + delete-month (extend the existing
+   POST /api/runs/{id}/delete cascade: jobs rows, inbound meta
+   batch_deleted stamps, next_open_batch warning).
+3. **Body-only mail (M):** GET /api/inbound/{archive}/body (sanitized),
+   POST .../render-ingest (body->PDF -> normal ingest), POST .../dismiss.
+   Dirk's real held mail (held_body_only) is the acceptance test.
+4. **Memory validate/adjust (M):** PUT/DELETE /api/memory/categories
+   (single row, count-preserving manual writes), `validated_at` schema
+   migration + bulk validate + unvalidated filter, reset confirm gate.
+5. **Language + receipt visibility (M):** missing i18n reason codes,
+   structured missing-fields, issue codes beside English prose,
+   books_as unassigned sentinel; fix `receipt_image_available` true for
+   manual: ids (phantom View button 404), honest per-row receipt state +
+   the never-rendered missing-image tile.
+6. **Cards R4 (pending owner answers in the backlog):** mixed-entity
+   export (per-entity CoaGate), persisted cards migration, intake
+   dropdown unification.
+
+**Waiting on the OWNER (hand these when asked, do not re-send):** Lovable
+prompts `docs/lovable-cards-prompt.md` (Settings > Cards editor) and
+`docs/lovable-zoho-decoupling-prompt.md` (merchants relabel + inert hint
++ dropdown fixes) — both backends live. After the owner publishes,
+DOM-probe the SPA (Lovable merge != live).
+
+Suite baseline is now **1148 passed / 2 skipped**; `calibrate
+--config examples/run.example.json` green. Advisories are SNAPSHOTTED
+into each run's summary — existing runs keep old wording by design.
+
+## Where the loop stood (2026-08-19, after round 6)
 
 Round 6 (PR #543, owner-directed): **multi-category vendors + split
 depiction.** The merchant book accepts `multi_category: true` (name
