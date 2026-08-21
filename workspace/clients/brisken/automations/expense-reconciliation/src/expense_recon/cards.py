@@ -59,6 +59,7 @@ where none of them fire):
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, replace
 
 from .cards_provision import CardPreset
@@ -75,6 +76,47 @@ _DIGIT_MIN, _DIGIT_MAX = 3, 8
 SOURCE_SETTINGS = "settings"
 SOURCE_LEGACY = "legacy"
 SOURCE_PRESET = "preset"
+
+# Generic tender vocabulary (EN + PT + DE, the extractor's observed
+# languages): a payment hint built ONLY of network / tender-type words
+# identifies no specific card, so it must never resolve one and must
+# never be stored as a card alias — that would auto-resolve every future
+# "Visa" (or "Visa Credit", or "Kreditkarte") receipt onto one arbitrary
+# card (owner ruling 2026-08-21: generic tender words never auto-resolve;
+# review, not guess). The check is word-subset, not exact-phrase, so
+# compound tenders ("Visa Credit", "cartao visa") stay generic while any
+# distinctive word ("CorpServ") makes the hint identifying. A digit-
+# bearing hint ("Visa ...1672") is never generic — its digits identify.
+GENERIC_TENDER_WORDS = frozenset({
+    # networks
+    "visa", "mastercard", "master", "amex", "american", "express", "elo",
+    "maestro", "discover", "diners", "club", "girocard",
+    # EN tender types
+    "credit", "debit", "card", "cash", "check", "cheque", "paypal",
+    "pix", "wire", "transfer", "bank", "apple", "google", "pay",
+    "contactless", "chip",
+    # PT
+    "cartao", "credito", "debito", "dinheiro", "boleto",
+    "transferencia", "de",
+    # DE
+    "kreditkarte", "karte", "ec", "bar", "lastschrift", "girokarte",
+    "uberweisung", "ueberweisung", "zahlung", "kredit",
+})
+
+
+def is_generic_tender(text: str | None) -> bool:
+    """True when a hint names only a tender type / card network: no digit
+    token, and EVERY word is generic tender vocabulary. Diacritics fold
+    first ("Cartão de crédito" -> "cartao de credito"): `_normalize` is
+    ASCII-alnum and would split accented letters."""
+    if not text or not text.strip():
+        return False
+    if _card_keys(text):
+        return False
+    folded = unicodedata.normalize("NFKD", text)
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    words = _normalize(folded).split()
+    return bool(words) and all(w in GENERIC_TENDER_WORDS for w in words)
 
 
 @dataclass(frozen=True)
@@ -175,6 +217,12 @@ def normalize_cards_setting(raw: object) -> dict:
             norm = _normalize(alias)
             if not alias or not norm or norm in seen_alias:
                 continue
+            if is_generic_tender(alias):
+                raise ValueError(
+                    f"cards[{slug!r}].aliases: {alias!r} is a generic tender "
+                    "word and cannot identify one card (it would auto-resolve "
+                    "every receipt paying by that tender)"
+                )
             seen_alias.add(norm)
             aliases.append(alias)
         if aliases:
@@ -183,6 +231,147 @@ def normalize_cards_setting(raw: object) -> dict:
             out["active"] = False
         cleaned[slug] = out
     return cleaned
+
+
+def cards_to_setting(cards: dict[str, Card]) -> dict:
+    """Serialize a composed registry into the stored settings/config map
+    shape (the inverse of `cards_from_setting`). Field storage matches
+    `normalize_cards_setting`'s cleaned output: empty fields omitted,
+    `active` stored only when False. Used to SNAPSHOT the composed registry
+    into a batch's run config, so the batch resolves cards from a fixed,
+    replayable state (settings edits reach it only via the explicit
+    refresh-master-data pass)."""
+    out: dict[str, dict] = {}
+    for key, card in cards.items():
+        entry: dict = {}
+        if card.label:
+            entry["label"] = card.label
+        if card.label_pt:
+            entry["label_pt"] = card.label_pt
+        if card.digits:
+            entry["digits"] = list(card.digits)
+        if card.aliases:
+            entry["aliases"] = list(card.aliases)
+        if card.entity:
+            entry["entity"] = card.entity
+        if card.zoho_account:
+            entry["zoho_account"] = card.zoho_account
+        if card.currency:
+            entry["currency"] = card.currency
+        if not card.active:
+            entry["active"] = False
+        out[key] = entry
+    return out
+
+
+def cards_from_setting(raw: object) -> dict[str, Card]:
+    """Build Card objects from a stored cards map (settings or a batch
+    config snapshot). Tolerant of a malformed blob (returns {}), because a
+    stored config must never be able to break a view."""
+    if not isinstance(raw, dict):
+        return {}
+    cards: dict[str, Card] = {}
+    for slug, entry in raw.items():
+        key = str(slug).strip()
+        if key and isinstance(entry, dict):
+            cards[key] = _card_from_setting(key, entry)
+    return cards
+
+
+def learnable_hint_tokens(hint: str) -> tuple[str | None, str | None, str | None]:
+    """How an observed payment hint may be persisted onto a card entry:
+    ``(digit, alias, refusal_reason)``.
+
+    An operator assigning "this hint is that card" teaches the registry the
+    hint's IDENTIFYING tokens — deterministic persistence, never inference:
+
+    * A hint with exactly ONE digit run contributes that run as a card
+      digit ("Visa ...1672" teaches 1672). A hint with SEVERAL runs never
+      teaches a digit: there is no deterministic way to tell the card
+      number from expiry / auth / BIN noise ("Visa 1672 exp 12/2026"
+      would have taught 2026 and mis-resolved every future hint printing
+      that year; masked-PAN BIN fragments cross-match unrelated cards —
+      R3 adversarial review). Such a hint is learned as an EXACT-string
+      alias instead, so the same printed hint resolves next month while
+      nothing else does.
+    * A digitless, non-generic hint ("CorpServ") becomes an alias.
+    * A generic tender word or phrase ("Visa", "Cartão de crédito") is
+      REFUSED: persisting it would auto-resolve every future receipt
+      paying by that tender onto one card (owner ruling 2026-08-21). The
+      batch-scoped exact assignment still applies; only the learning is
+      withheld.
+    """
+    text = (hint or "").strip()
+    if not text:
+        return None, None, "empty hint"
+    if is_generic_tender(text):
+        return None, None, (
+            "generic tender word; identifies a payment network, not one "
+            "card, so the assignment applies to this batch only"
+        )
+    runs = re.findall(r"\d{3,8}", text)
+    if len(runs) == 1:
+        return runs[0], None, None
+    return None, text, None
+
+
+def stamp_card_entities(
+    receipts: list, cards: dict[str, Card], hints: dict | None = None
+) -> list:
+    """Receipts with each one's legal entity resolved from its own payment
+    hint, where a card identifies it: an exact hint assignment
+    (``hints``, the batch's operator-confirmed hint -> card key map) wins,
+    then `resolve_card` on the hint with ambiguity REFUSED (two matching
+    cards = review, not guess). A receipt whose card carries no entity, or
+    whose hint resolves no card, keeps its current entity. Runs post-OCR
+    (hints only exist after extraction), before categorization, so learned
+    (entity, vendor) lookups see the card-resolved entity."""
+    if not cards and not hints:
+        return receipts
+    out = []
+    for r in receipts:
+        card = resolve_hinted_card(r.payment_mode, cards, hints)
+        if card is not None and card.entity and card.entity != r.legal_entity_id:
+            out.append(replace(r, legal_entity_id=card.entity))
+        else:
+            out.append(r)
+    return out
+
+
+def resolve_hinted_card_ex(
+    observed: str | None, cards: dict[str, Card], hints: dict | None = None
+) -> "tuple[Card | None, bool]":
+    """``(card, ambiguous)`` for a batch payment hint: the batch's exact
+    hint->card assignment first (operator-confirmed, matches the exact
+    stored string — the only path a generic tender word can take), then
+    `resolve_card` in the strict R3 contract (ambiguity refused; an alias
+    cannot override contradicting digits). ``ambiguous`` is True when two
+    or more cards matched and the refusal is WHY there is no card — the
+    money paths use it to also refuse their own fallback guessing."""
+    text = (observed or "").strip()
+    if not text:
+        return None, False
+    key = (hints or {}).get(text)
+    if key:
+        card = cards.get(str(key))
+        if card is not None and card.active:
+            return card, False
+    resolved = resolve_card(
+        text, cards, on_ambiguity="none", strict_alias_with_digits=True
+    )
+    if resolved is not None:
+        return resolved, False
+    loose = resolve_card(
+        text, cards, on_ambiguity="first", strict_alias_with_digits=True
+    )
+    return None, loose is not None
+
+
+def resolve_hinted_card(
+    observed: str | None, cards: dict[str, Card], hints: dict | None = None
+) -> Card | None:
+    """The card half of `resolve_hinted_card_ex` (None = unresolved)."""
+    return resolve_hinted_card_ex(observed, cards, hints)[0]
 
 
 def _card_from_setting(slug: str, entry: dict) -> Card:
@@ -285,7 +474,13 @@ def effective_cards(
         updates = dict(
             updates,
             digits=tuple(re.findall(r"\d{3,}", key)),
-            aliases=() if key.isdigit() else (key,),
+            # A generic-tender legacy key ("Visa") must not become a
+            # matchable alias — the owner ruling applies to the legacy
+            # maps too (its entity/account fields still compose; only the
+            # word loses identifying power).
+            aliases=(
+                () if key.isdigit() or is_generic_tender(key) else (key,)
+            ),
         )
         digit_keys = _card_keys(key)
         alias_norm = "" if key.isdigit() else _normalize(key)
@@ -316,9 +511,14 @@ def effective_cards(
             entity=preset.legal_entity,
             currency=preset.currency,
             # "card-2838" carries its digit runs as digit identity AND the
-            # full label as an alias (exact/suffix observed strings).
+            # full label as an alias (exact/suffix observed strings) —
+            # unless the label is a bare generic tender word.
             digits=tuple(re.findall(r"\d{3,}", acct)),
-            aliases=(acct,) if acct and not acct.isdigit() else (),
+            aliases=(
+                (acct,)
+                if acct and not acct.isdigit() and not is_generic_tender(acct)
+                else ()
+            ),
         )
         if existing is not None:
             cards[existing] = _fill(cards[existing], **updates)
@@ -337,6 +537,7 @@ def resolve_card(
     cards: dict[str, Card],
     *,
     on_ambiguity: str = "first",
+    strict_alias_with_digits: bool = False,
 ) -> Card | None:
     """The card an observed string identifies, or None.
 
@@ -345,42 +546,61 @@ def resolve_card(
     ("1 - CorpServ 2838/1672 (Chase)"), or an OCR payment hint
     ("Visa ...1672"). Two tiers, digit tokens first:
 
-    1. digit-token intersection (`_card_keys`, the matcher's own extractor)
-    2. alias match: normalized equality, suffix, or whole-word token
+    1. digit-token intersection (`_card_keys`, the matcher's own
+       extractor). A masked PAN ("5412 75** **** 3456") contributes ONLY
+       its last digit run: the earlier runs are BIN/middle fragments that
+       cross-match unrelated cards (R3 adversarial review).
+    2. alias match: normalized equality, suffix, or whole-word token.
+       A generic-tender alias never matches, wherever it was stored —
+       the write paths reject them, and this read-side skip keeps a
+       legacy/pre-existing stored one from resolving anyway.
 
     Generic tender words ("Visa", "Cartão de crédito", "cash") carry no
-    digit token and should never be card aliases, so they resolve to None
+    digit token and are never matchable aliases, so they resolve to None
     by design: review, not guess. Inactive cards never resolve.
 
     ``on_ambiguity``: "first" keeps the legacy first-match-in-order
     semantics the old per-map loops had (used by the R1 compat shims);
     "none" returns None when 2+ distinct cards match at the winning tier
     (the review-flow contract: ambiguity surfaces instead of guessing).
+
+    ``strict_alias_with_digits`` (the R3 hint-chain contract): when the
+    observed string CARRIES digit runs but none matched a card, only an
+    exact normalized-equality alias may resolve — a word-token alias must
+    not override the contradicting digits ("CorpServ 2222" with card
+    CorpServ=1111 is a different physical card; review, not guess).
     """
     if not observed or not observed.strip():
         return None
     live = {k: c for k, c in cards.items() if c.active}
     if not live:
         return None
-    obs_keys = _card_keys(observed)
+    if "*" in observed:
+        runs = re.findall(r"\d{3,8}", observed)
+        obs_keys = _card_keys(runs[-1]) if runs else set()
+    else:
+        obs_keys = _card_keys(observed)
     if obs_keys:
         digit_hits = [c for c in live.values() if c.digit_keys() & obs_keys]
         if len(digit_hits) == 1:
             return digit_hits[0]
         if digit_hits:
             return digit_hits[0] if on_ambiguity == "first" else None
+    exact_only = strict_alias_with_digits and bool(obs_keys)
     obs_norm = _normalize(observed)
     obs_tokens = set(obs_norm.split())
     alias_hits: list[Card] = []
     for card in live.values():
         for alias in card.aliases:
             a = _normalize(alias)
-            if not a:
+            if not a or is_generic_tender(alias):
                 continue
-            if (
-                obs_norm == a
-                or obs_norm.endswith(" " + a)
-                or (" " not in a and a in obs_tokens)
+            if obs_norm == a or (
+                not exact_only
+                and (
+                    obs_norm.endswith(" " + a)
+                    or (" " not in a and a in obs_tokens)
+                )
             ):
                 alias_hits.append(card)
                 break

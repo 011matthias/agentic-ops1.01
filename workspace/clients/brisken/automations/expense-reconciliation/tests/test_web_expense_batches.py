@@ -182,14 +182,8 @@ def test_batch_create_validation(client):
         "/api/expense-batches", data={"legal_entity": "Corporate Services"}
     )
     assert resp.status_code == 400
-    # No legal entity -> 400.
-    resp = client.post(
-        "/api/expense-batches",
-        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
-        data={"legal_entity": ""},
-    )
-    assert resp.status_code == 400
-    # Only unreadable files -> 400.
+    # Only unreadable files -> 400. (No legal entity is VALID since Cards
+    # R3 — entity resolves per receipt; see test_cards_r3_entity_flow.)
     resp = client.post(
         "/api/expense-batches",
         files=[("files", ("a.txt", b"nope", "text/plain"))],
