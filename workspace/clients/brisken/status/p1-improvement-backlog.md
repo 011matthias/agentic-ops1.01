@@ -71,14 +71,12 @@ practice; the pool-based mismatch warning fires on a 0-match outcome).
 **Export policy (user ruling 2026-08-21):** unresolved card/entity never
 blocks an export — placeholders, adjustable later, re-export folds it in.
 
-### 11. Intake: show delivered files + fix the Month column (notes 3/13)
+### 11. Intake: delivered files + Month column + delete month (SHIPPED — PR #561)
 
-Delivered attachment names are written to disk but never recorded in the
-mail meta (only REJECTED names surface); the Month column has no backing
-field at all (batch_label only under detail=1, skipped for all-duplicate
-mail, absent for held mail). Fix: record `files` in meta at accept time +
-derive for legacy archives from parts/ at read time; always resolve
-batch_label per batch_id; held rows say held, not "no date".
+Shipped with the delete-month cascade (note 2, which had no own item) as
+the quick-wins round; see the Shipped table row 9. Review residue worth
+knowing: item 18 below (pre-existing async lock acquirers), and the
+stranded-mail design call folded into item 12.
 
 ### 12. Body-only mail: give the operator a handling path (note 12)
 
@@ -87,6 +85,16 @@ design, no view/render/attach action exists. Fix: sanitized body view
 endpoint, body-to-PDF render + normal ingest (quarantine still applies),
 and per-mail dismiss for junk. Evidence-gated round now evidence-backed;
 Dirk's mail is the acceptance test.
+
+**Design call folded in from the delete-month review (2026-08-21):** a
+mail already INGESTED into a month that is later deleted has no
+re-ingest path if the operator recreates the month — replay skips
+status `ingested`, and its job row went with the cascade. The bytes
+survive in the custody archive (`parts/`), so this is stranding, not
+loss. The per-archive actions this round adds are the natural home: a
+per-archive "re-ingest into the open month" action (explicit, so
+receipts never drain into an unintended month) alongside view/render/
+dismiss. Decide with the owner when scoping this round.
 
 ### 13. Learned memory: validate + adjust (note 10)
 
@@ -127,6 +135,20 @@ answers "what happens to rejected matches?". Spec fresh.
 "There should be a filter somewhere: alphabetic, unmatched elements."
 Natural home: the grouped-queue render (PR #454/#455's remaining Lovable
 half). Spec with it.
+
+### 18. Async endpoints acquire the batch lock on the event loop (pre-existing)
+
+Found by the delete-month adversarial review (2026-08-21): the delete
+handler was fixed (kept sync), but `restore-set-aside` and the cards
+assignment endpoint are `async def` and take `_BATCH_ADD_LOCK` directly —
+while an OCR ingest holds that lock for minutes, either call parks the
+EVENT LOOP and freezes every endpoint including `/healthz` (Fly health
+checks fail, machine restart kills the in-flight ingest). Fix is
+mechanical: make them sync (threadpool) or wrap the locked span in
+`run_in_threadpool`. Small, ship with the next code round. Also worth a
+one-line comment at `_BATCH_ADD_LOCK` that scale-out past one process
+breaks the serialization model (single-machine volume pin makes it safe
+today).
 
 ### 3. Put the set-aside statement pages to work (later)
 
@@ -271,3 +293,4 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 | 6b | Split depiction ("Lançado como"): every grid row carries books_as — the exact per-account fan-out the Zoho export writes (same shared code path, so grid and export cannot disagree) + an is_split flag; the UI renders one receipt booking to N accounts instead of N mystery rows | Owner ruling: splits ARE the truth and must not be collapsed; what was missing was seeing the fan-out ON the receipt instead of discovering it in the export | PR #543, 2026-08-19 |
 | 7 | Feedback capture on every page (owner directive 2026-08-19): the double-click location-specific note widget becomes a single global mount across all SPA pages; `POST /api/feedback` now accepts an explicit `run_id` so notes on expense-batch pages attribute to the batch regardless of route shape (path parse stays as fallback) | The existing widget captured exact click locations and produced Criss's r1 notes, but only on the home/run/memory pages; the receipt-first batch pages — the surface she actually reviews — had no capture at all (0 notes ever) | PRs #544+#545, 2026-08-19; Lovable half `docs/lovable-feedback-capture-prompt.md` published + live-verified end-to-end (batch note attributed run_id 7d2fea33d39a) |
 | 6c | Vendor is the merchant, never the card-terminal bank: one extraction-prompt line (backlog item 6) so a card slip showing both the shop and the acquiring bank reads the SHOP; invalidates the reading cache by design (fingerprint bump) | Round-5 evidence: the same French card slip read ANNADA ROUEN one day and CREDIT AGRICOLE NORMANDIE another; the bank name teaches the merchant book garbage | PR #543, 2026-08-19 |
+| 9 | Intake quick-wins: the Email-intake log shows WHICH files each mail delivered (recorded at accept time; legacy archives derived from parts/) and an honest Month column (batch_label resolved for every routed row, held rows say held, deleted months say "month deleted" instead of misreporting each expense as operator-removed); and Delete month exists behind a typed confirm phrase — cascade under the batch writer lock, job rows purged, mail archives stamped batch_deleted but NEVER deleted (custody/retention), response reports where inbound mail routes next + that learned memory is kept. 3-lens adversarial review pre-commit: sync handler (async version froze the event loop on the OCR-held lock), deleted-run refusal at every locked batch writer, DONE-stamp re-check, replay clears stale stamps, atomic serialized meta writes | Her notes 2/3/13: "need to see which files were delivered", "month says no date", "there needs to be some kind of delete month option" — plus the review closing a real freeze + three race defects before they shipped | PR #561, 2026-08-21; Lovable half `docs/lovable-intake-quickwins-prompt.md` |

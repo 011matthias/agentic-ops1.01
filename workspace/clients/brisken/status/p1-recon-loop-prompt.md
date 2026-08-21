@@ -51,39 +51,47 @@ rounds are SHIPPED:
   attach final-write now under the batch lock. Review residue logged in
   the backlog item-10 tail.
 
+- **Intake quick-wins (PR #561, 2026-08-21):** delivered-files in mail
+  meta (+ legacy derive from parts/), Month column truth (batch_label
+  for every routed row, held says held, deleted months say so instead
+  of per-expense misattribution), delete-month behind a typed confirm
+  phrase (cascade under the batch lock, jobs purged, inbound metas
+  stamped batch_deleted — archives NEVER deleted, custody holds;
+  response: next_open_batch + learned_memory kept). 3-lens adversarial
+  review pre-commit; the async-handler event-loop freeze it caught is
+  fixed here, the pre-existing twin is backlog item 18. Lovable half:
+  `docs/lovable-intake-quickwins-prompt.md`.
+
 **Remaining rounds, in order (design in the plan file; each ships like
 steps 5-8 below, with an adversarial review pass before commit):**
 
-1. **Quick wins (S):** intake delivered-files (record `files` in
-   meta.json at intake_mail.py ~:517 + derive legacy from parts/ at read
-   time) + Month column (resolve batch_label for every batch_id; held
-   rows say held) + delete-month (extend the existing
-   POST /api/runs/{id}/delete cascade: jobs rows, inbound meta
-   batch_deleted stamps, next_open_batch warning).
-2. **Body-only mail (M):** GET /api/inbound/{archive}/body (sanitized),
+1. **Body-only mail (M):** GET /api/inbound/{archive}/body (sanitized),
    POST .../render-ingest (body->PDF -> normal ingest), POST .../dismiss.
    Dirk's real held mail (held_body_only) is the acceptance test.
-3. **Memory validate/adjust (M):** PUT/DELETE /api/memory/categories
+2. **Memory validate/adjust (M):** PUT/DELETE /api/memory/categories
    (single row, count-preserving manual writes), `validated_at` schema
    migration + bulk validate + unvalidated filter, reset confirm gate.
-4. **Language + receipt visibility (M):** missing i18n reason codes,
+3. **Language + receipt visibility (M):** missing i18n reason codes,
    structured missing-fields, issue codes beside English prose,
    books_as unassigned sentinel; fix `receipt_image_available` true for
    manual: ids (phantom View button 404), honest per-row receipt state +
    the never-rendered missing-image tile.
-5. **Cards R4 (pending owner answers in the backlog):** mixed-entity
+4. **Cards R4 (pending owner answers in the backlog):** mixed-entity
    export (per-entity CoaGate), persisted cards migration, intake
-   dropdown unification.
+   dropdown unification. Backlog item 18 (async endpoints on the batch
+   lock, pre-existing freeze class) rides with whichever code round
+   comes first.
 
 **Waiting on the OWNER (hand these when asked, do not re-send):** Lovable
 prompts `docs/lovable-cards-prompt.md` (Settings > Cards editor),
 `docs/lovable-zoho-decoupling-prompt.md` (merchants relabel + inert hint
-+ dropdown fixes) and `docs/lovable-cards-r3-prompt.md` (optional entity
++ dropdown fixes), `docs/lovable-cards-r3-prompt.md` (optional entity
 at creation, row card/entity chips, card-review strip, assign + refresh
-actions) — all backends live. After the owner publishes,
-DOM-probe the SPA (Lovable merge != live).
+actions) and `docs/lovable-intake-quickwins-prompt.md` (Files + Month
+columns, guarded delete-month dialog, job-poll 404 edge) — all backends
+live. After the owner publishes, DOM-probe the SPA (Lovable merge != live).
 
-Suite baseline is now **1178 passed / 2 skipped**; `calibrate
+Suite baseline is now **1188 passed / 2 skipped**; `calibrate
 --config examples/run.example.json` green. Advisories are SNAPSHOTTED
 into each run's summary — existing runs keep old wording by design.
 
