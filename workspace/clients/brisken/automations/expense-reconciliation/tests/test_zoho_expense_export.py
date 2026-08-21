@@ -147,6 +147,31 @@ def test_unknown_card_without_default_is_placeholder():
     assert _row(rows[0])["Paid Through"] == "(paid-through - assign)"
 
 
+def test_dual_identity_label_resolves_any_digit_run():
+    """Cards R2: a Zoho payment-mode label prints BOTH of a card's digit
+    identities ("1 - CorpServ 2838/1672 (Chase)"). The old trailing-group
+    read tried only "1672" and left the receipt unassigned when the map
+    was keyed on the statement marker "2838". Earlier runs are tried too,
+    exact-match only."""
+    rows = build_expense_rows(
+        [_receipt(payment_mode="1 - CorpServ 2838/1672 (Chase)")],
+        card_accounts=_CARD_MAP,
+    )
+    assert _row(rows[0])["Paid Through"] == "CHASE VISA - 2838 - TRAVEL"
+
+
+def test_masked_pan_bin_fragment_never_resolves():
+    """R2 adversarial review: a masked-PAN BIN fragment ("5412" in
+    "5412 75** **** 3456") must not endswith-wildcard onto an unrelated
+    3-digit key. Earlier runs match exactly or not at all; the receipt
+    falls through to the visible placeholder."""
+    rows = build_expense_rows(
+        [_receipt(payment_mode="Mastercard 5412 75** **** 3456")],
+        card_accounts={"412": "3030 Other Card"},
+    )
+    assert _row(rows[0])["Paid Through"] == "(paid-through - assign)"
+
+
 def test_cash_receipt_falls_through_to_default():
     rows = build_expense_rows(
         [_receipt(payment_mode="Cash")],

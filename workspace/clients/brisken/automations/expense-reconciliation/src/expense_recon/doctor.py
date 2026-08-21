@@ -235,7 +235,7 @@ def _check_receipts(report: _Report, cfg: dict, config_dir: Path) -> None:
         if missing_cols:
             report.fail("receipts", f"CSV missing required columns: {', '.join(missing_cols)}")
         else:
-            report.ok("receipts", f"csv mode: required columns present")
+            report.ok("receipts", "csv mode: required columns present")
     elif source == "expense_csv":
         if path.is_dir():
             report.fail("receipts", f"source 'expense_csv' but {path} is a directory")
@@ -411,16 +411,22 @@ def _check_zoho(report: _Report, cfg: dict, config_dir: Path) -> None:
             report.fail("zoho", f"export_path directory does not exist: {export_parent}")
         else:
             report.ok("zoho", "journal export will be written")
-        # The balancing credit needs the statement's account_id in card_accounts.
+        # The balancing credit wants a card->account mapping; exact key or
+        # digit-token resolution through the card registry (Cards R2), the
+        # same order the export applies. Optional: entries still balance
+        # to a visible placeholder without one.
         stmt = cfg.get("statement")
         card_accounts = z.get("card_accounts") or {}
         if isinstance(stmt, dict) and stmt.get("account_id"):
             acct = stmt["account_id"]
-            if acct not in card_accounts:
+            from .cards import resolve_account_map
+
+            if not resolve_account_map(acct, dict(card_accounts)):
                 report.warn(
                     "zoho",
-                    f"statement account_id {acct!r} not in card_accounts; "
-                    f"its balancing credit will be flagged unmapped",
+                    f"statement account_id {acct!r} matches no card with a "
+                    f"Zoho account (optional); its balancing credit will be "
+                    f"flagged unmapped",
                 )
 
 

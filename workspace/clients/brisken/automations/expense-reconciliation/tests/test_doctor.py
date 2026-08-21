@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
 from expense_recon.doctor import run_doctor
 
@@ -180,7 +179,8 @@ def test_zoho_export_card_account_uncovered_warns(tmp_path, capsys, monkeypatch)
     out = capsys.readouterr().out
     # WARN does not change exit code
     assert rc == 0
-    assert "not in card_accounts" in out
+    # Cards R2 wording: per-card, token-resolution aware, Zoho-optional.
+    assert "matches no card with a Zoho account" in out
 
 
 def test_doctor_routes_through_cli_main(tmp_path, capsys):

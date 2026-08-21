@@ -1247,6 +1247,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # legacy maps + /data presets, `cards.effective_cards`) so the
         # Settings screen can render the one merged view; read-only
         # (derived), PUT ignores it — edits go to the `cards` key.
+        # `merchants_inert` (Cards R2) names the merchants whose
+        # zoho_account can never fire because no category is set
+        # (apply_registry_category is a no-op without one) — the Settings
+        # screen shows the hint instead of a silently dead field.
         with open_store() as store:
             settings = store.get_settings()
             return JSONResponse({
@@ -1257,6 +1261,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     card_to_dict(c)
                     for c in effective_cards(settings, load_cards()).values()
                 ],
+                "merchants_inert": sorted(
+                    name
+                    for name, entry in (settings.get("merchants") or {}).items()
+                    if isinstance(entry, dict)
+                    and str(entry.get("zoho_account") or "").strip()
+                    and not str(entry.get("category") or "").strip()
+                ),
             })
 
     @app.get("/api/cards")

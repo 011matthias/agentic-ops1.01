@@ -81,7 +81,8 @@ def test_same_currency_receipts_need_no_rate():
 
 def test_absent_coa_is_announced():
     out = _setup_advisories(_settings_for(), [_tx()], [], has_coa=False)
-    assert "card_entities" in _settings(out)
+    assert "cards" in _settings(out)
+    assert any("Settings > Cards" in a["message"] for a in out)
 
 
 def test_resolved_coa_and_card_account_are_silent():
@@ -91,9 +92,27 @@ def test_resolved_coa_and_card_account_are_silent():
     assert out == []
 
 
-def test_unmapped_card_account_is_announced():
+def test_unmapped_card_account_is_announced_per_card_and_optional():
+    """Cards R2 (feedback notes 9/11): the advisory names the actual card
+    and says the Zoho account is OPTIONAL — the old wording ("This card
+    has no Zoho bank account ... Map it") read as a requirement and fired
+    only on an empty map."""
     out = _setup_advisories(_settings_for(), [_tx()], [], has_coa=True)
-    assert "card_accounts" in _settings(out)
+    msgs = [a["message"] for a in out if a["setting"] == "cards"]
+    assert any("'2838'" in m and "optional" in m for m in msgs)
+
+
+def test_token_resolvable_card_account_is_silent():
+    """A map keyed "2838" resolves a statement labeled "2838 - May 2026"
+    at export (token resolution), so the advisory must not contradict the
+    export by firing."""
+    from dataclasses import replace as _replace
+
+    tx = _replace(_tx(), account_id="2838 - May 2026")
+    out = _setup_advisories(
+        _settings_for(card_account=True), [tx], [], has_coa=True
+    )
+    assert out == []
 
 
 def test_each_missing_currency_is_counted_once():
