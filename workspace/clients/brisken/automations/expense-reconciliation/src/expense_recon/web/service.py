@@ -353,48 +353,25 @@ def prepare_run(
     )
 
 
-def _card_key_matches(account_id: str, key: str) -> bool:
-    """True when the card-map `key` identifies this `account_id` label.
-
-    Exact match, a trailing "...-2838" suffix, OR the key's card number
-    appearing anywhere in the label as a digit token, using the SAME
-    digit-token extraction the matcher uses (`_card_keys`). The token path is
-    what a card-FIRST statement label needs: Criss's Chase statements name the
-    account "2838 - May 2026" (card number, then the month), so a plain
-    `endswith("2838")` misses it (the label ends in the year) and the run
-    silently came back `has_coa: false` with everything correctly configured
-    (2026-08-06). Exact/suffix are kept so nothing that resolved before
-    changes.
-    """
-    if not (account_id and key):
-        return False
-    if key == account_id or account_id.endswith(key):
-        return True
-    from ..matching.deterministic import _card_keys
-
-    return bool(_card_keys(key) & _card_keys(account_id))
-
-
 def available_entities(settings: dict | None, extra: str | None = None) -> list[str]:
     """The legal entities a reviewer can pick, deduped and sorted.
 
     Unions four sources so the picker is never empty: the CoA provisioning
-    file (authoritative, `/data`), the `card_entities` map's TARGETS (the
-    entities cards resolve to), the Phase-5 `settings['entities']` registry,
-    and an optional run default. The provisioning + card_entities sources are
-    what populate the dropdown in the real Brisken case, where
-    `settings['entities']` is empty but the entities do exist on `/data` and
-    in the card map.
+    file (authoritative, `/data`), the card registry's entity TARGETS (the
+    composed `cards.effective_cards`, which folds the legacy `card_entities`
+    map in), the Phase-5 `settings['entities']` registry, and an optional
+    run default. The provisioning + card sources are what populate the
+    dropdown in the real Brisken case, where `settings['entities']` is
+    empty but the entities do exist on `/data` and in the card map.
     """
+    from ..cards import effective_cards
     from ..coa_provision import provisioned_entity_labels
 
     s = settings or {}
     opts: set[str] = set(provisioned_entity_labels())
     opts |= {str(k).strip() for k in (s.get("entities") or {}) if str(k).strip()}
     opts |= {
-        str(v).strip()
-        for v in (s.get("card_entities") or {}).values()
-        if str(v).strip()
+        card.entity for card in effective_cards(s).values() if card.entity
     }
     if extra and extra.strip():
         opts.add(extra.strip())
@@ -409,19 +386,24 @@ def resolve_entity(form: RunForm, settings: dict | None) -> str:
     mapping exists, which is what silently disabled the COA gate on every
     hosted run: an operator types the card number ("2838"), which matches no
     entity key in the COA provisioning ("Corporate Services"), so the run
-    came back `has_coa: false` with no warning. The settings map is the home
-    for that association. Matching (see `_card_key_matches`) is exact on the
-    account id, on a trailing "...-2838" suffix, or on the card number as a
-    digit token anywhere in the label, so "2838", "card-2838", and
-    "2838 - May 2026" all resolve the same way.
+    came back `has_coa: false` with no warning. The card registry is the
+    home for that association (composed via `cards.effective_cards`, which
+    folds the legacy `card_entities` map in). Matching (`cards.resolve_card`)
+    is on the card number as a digit token anywhere in the label, so
+    "2838", "card-2838", and "2838 - May 2026" all resolve the same way;
+    the 2026-08-06 card-first Chase label case stays covered.
     """
-    mapped = (settings or {}).get("card_entities") or {}
+    from ..cards import effective_cards, entity_for
+
     account_id = (form.account_id or "").strip()
-    if mapped and account_id:
-        for key, entity in mapped.items():
-            key = str(key).strip()
-            if key and entity and _card_key_matches(account_id, key):
-                return str(entity)
+    if account_id:
+        # The composed card registry (settings `cards` first, legacy
+        # `card_entities` folded in at read time) is the association's home
+        # since 2026-08-21; resolution semantics match the old
+        # `_card_key_matches` loop (digit-token first, first match wins).
+        resolved = entity_for(account_id, effective_cards(settings))
+        if resolved:
+            return resolved
     return form.resolve_legal_entity()
 
 
@@ -438,14 +420,20 @@ def apply_master_data(
     also carries them into `run.local.json`, so pulling a run off the volume
     reproduces the hosted match exactly. Empty settings => `cfg` unchanged.
     """
+    from ..cards import effective_cards, zoho_account_for
+
     settings = settings or {}
     rates = {
         str(k).strip(): str(v).strip()
         for k, v in (settings.get("fx_reference_rates") or {}).items()
         if str(k).strip() and str(v).strip()
     }
-    accounts = settings.get("card_accounts") or {}
-    if not rates and not accounts:
+    # Card -> Zoho account resolution reads the composed card registry
+    # (settings `cards` + legacy `card_accounts`, `cards.effective_cards`)
+    # since 2026-08-21; same digit-token matching as before.
+    cards = effective_cards(settings)
+    have_accounts = any(c.zoho_account for c in cards.values() if c.active)
+    if not rates and not have_accounts:
         return cfg
 
     out = dict(cfg)
@@ -454,17 +442,8 @@ def apply_master_data(
         matching.setdefault("fx_reference_rates", rates)
         out["matching"] = matching
     account_id = (form.account_id or "").strip()
-    if accounts and account_id:
-        resolved = next(
-            (
-                str(v)
-                for k, v in accounts.items()
-                if str(k).strip()
-                and _card_key_matches(account_id, str(k).strip())
-                and v
-            ),
-            None,
-        )
+    if have_accounts and account_id:
+        resolved = zoho_account_for(account_id, cards)
         if resolved:
             zoho = dict(out.get("zoho") or {})
             card_accounts = dict(zoho.get("card_accounts") or {})
@@ -3524,16 +3503,16 @@ def create_expense_batch(
         cfg["expense"]["default_paid_through"] = str(
             entity_entry["default_paid_through"]
         )
-    # The card-number -> Zoho account map (settings `card_accounts`, keyed
-    # by last4) rides in the run config too, so the export resolves each
-    # receipt's Paid Through from the card it prints, ahead of the entity
-    # default. Snapshotted, so a run reproduces its mapping (incl. the
-    # local no-API replay).
-    card_accts = {
-        str(k).strip(): str(v).strip()
-        for k, v in (settings.get("card_accounts") or {}).items()
-        if str(k).strip() and str(v).strip()
-    }
+    # The card-number -> Zoho account map rides in the run config too, so
+    # the export resolves each receipt's Paid Through from the card it
+    # prints, ahead of the entity default. Since 2026-08-21 it flattens
+    # from the composed card registry (settings `cards` + legacy
+    # `card_accounts`, `cards.effective_cards`) — with no settings cards
+    # this reproduces the legacy map exactly. Snapshotted, so a run
+    # reproduces its mapping (incl. the local no-API replay).
+    from ..cards import effective_cards, legacy_card_accounts
+
+    card_accts = legacy_card_accounts(effective_cards(settings))
     if card_accts:
         cfg["expense"]["card_accounts"] = card_accts
     if use_llm_effective:

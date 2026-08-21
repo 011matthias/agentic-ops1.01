@@ -244,3 +244,70 @@ def test_no_chart_and_no_picks_gives_empty_account_options(client, monkeypatch):
     grid = client.get(f"/api/expense-batches/{batch_id}").json()
     assert grid["account_options"] == []
     assert grid["entity_options"] == ["Corporate Services"]  # batch default
+
+
+# ── card registry over the API (Cards R1, 2026-08-21) ──────────────────
+
+
+def test_settings_put_cards_roundtrip(client):
+    resp = client.put("/api/settings", json={"cards": {
+        "corp-2838": {
+            "label": "Corporate card (Chase)",
+            "digits": ["2838", "1672"],
+            "aliases": ["CorpServ"],
+            "entity": "Corporate Services",
+            "zoho_account": "1010 Chase Corporate",
+            "currency": "usd",
+        },
+    }})
+    assert resp.status_code == 200
+    stored = resp.json()["cards"]["corp-2838"]
+    assert stored["digits"] == ["2838", "1672"]
+    assert stored["currency"] == "USD"
+    # GET surfaces the composed view, read-only.
+    got = client.get("/api/settings").json()
+    keys = [c["key"] for c in got["cards_effective"]]
+    assert keys == ["corp-2838"]
+    assert got["cards_effective"][0]["source"] == "settings"
+
+
+def test_settings_put_cards_rejects_malformed(client):
+    resp = client.put("/api/settings", json={"cards": {"a": {"digits": ["x"]}}})
+    assert resp.status_code == 400
+    assert "digits" in resp.json()["error"]
+
+
+def test_api_cards_composes_legacy_maps(client):
+    """GET /api/cards lays out every card identity, legacy maps included —
+    the enumeration surface the SPA never had."""
+    client.put("/api/settings", json={
+        "card_entities": {"2838": "Corporate Services"},
+        "card_accounts": {"2838": "1010 Chase Corporate"},
+    })
+    resp = client.get("/api/cards")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["cards"]) == 1
+    card = body["cards"][0]
+    assert card["key"] == "card-2838"
+    assert card["source"] == "legacy"
+    assert card["entity"] == "Corporate Services"
+    assert card["zoho_account"] == "1010 Chase Corporate"
+    assert "Corporate Services" in body["entity_options"]
+
+
+def test_batch_snapshot_flattens_settings_cards(client, monkeypatch):
+    """A dual-digit settings card reaches the batch snapshot as both digit
+    keys, so the export can resolve either identity of the card."""
+    client.put("/api/settings", json={"cards": {
+        "corp-2838": {"digits": ["2838", "1672"],
+                      "zoho_account": "1010 Chase Corporate"},
+    }})
+    _patch_ocr(monkeypatch, _extraction())
+    batch_id = _create_batch(client)
+    cfg_path = (client._data_root / "runs" / batch_id / "run.local.json")
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert cfg["expense"]["card_accounts"] == {
+        "2838": "1010 Chase Corporate",
+        "1672": "1010 Chase Corporate",
+    }
