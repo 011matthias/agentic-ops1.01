@@ -59,7 +59,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, Form, Request, UploadFile
+from fastapi import BackgroundTasks, Body, FastAPI, Form, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
@@ -285,6 +285,16 @@ def _run_batch_receipts_job(
             store.set_job_status(
                 job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
             )
+            if store.get_run(run_id) is None:
+                # The month was deleted between our locked write and this
+                # stamp (the delete cascade purges jobs by run_id, which
+                # was NULL until now). Don't leave a done-job pointing at
+                # a gone run; if the delete lands after this check instead,
+                # its cascade removes the row we just stamped.
+                store.set_job_status(
+                    job_id, JOB_ERROR, error="batch deleted",
+                    updated_at=_now_iso(),
+                )
     except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
         with RunStore(db_path) as store:
             store.set_job_status(
@@ -888,19 +898,56 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({"ok": True, "run_id": run_id, "label": label})
 
     @app.post("/api/runs/{run_id}/delete")
-    def delete_run(run_id: str):
+    def delete_run(run_id: str, payload: dict | None = Body(None)):
+        # Sync on purpose: this handler blocks on the batch writer lock,
+        # which an OCR ingest can hold for minutes. A sync def runs in the
+        # threadpool; an async def would park the EVENT LOOP on the lock
+        # and freeze every endpoint including /healthz (adversarial review
+        # 2026-08-21, delete-during-ingest is the designed contention).
+        from .intake_mail import mark_batch_deleted, open_batch
+        from .service import batch_write_lock
+
         with open_store() as store:
-            run = store.get_run(run_id)
-            if run is None:
+            if store.get_run(run_id) is None:
                 return _not_found("Run not found")
-            store.delete_run(run_id)
-            # A deleted run must not leave its intake pointing at a gone run;
-            # put the intake back in the queue so it can be re-run.
-            if run.intake_id is not None:
-                store.set_intake_status(
-                    run.intake_id, INTAKE_RECEIVED, run_id=None,
-                    updated_at=_now_iso(),
-                )
+        # Destructive-action gate: the caller repeats the month's label
+        # (or the run id) in the body. A bare POST deletes nothing.
+        confirm = (
+            str(payload.get("confirm", "")).strip()
+            if isinstance(payload, dict) else ""
+        )
+        if not confirm:
+            return JSONResponse(
+                {"error": "confirm is required: repeat the month label "
+                          "(or run id) to delete"},
+                status_code=400,
+            )
+        # Serialize with the batch writers: rows must not vanish under an
+        # in-flight ingest RMW, and a writer entering after us re-fetches
+        # None and refuses (mail goes held_failed, stays replayable).
+        with batch_write_lock():
+            with open_store() as store:
+                run = store.get_run(run_id)
+                if run is None:
+                    return _not_found("Run not found")
+                if confirm not in {(run.label or "").strip(), run.run_id}:
+                    return JSONResponse(
+                        {"error": "confirm label mismatch"}, status_code=409
+                    )
+                store.delete_run(run_id)
+                # A deleted run must not leave its intake pointing at a gone
+                # run; put the intake back in the queue so it can be re-run.
+                if run.intake_id is not None:
+                    store.set_intake_status(
+                        run.intake_id, INTAKE_RECEIVED, run_id=None,
+                        updated_at=_now_iso(),
+                    )
+                # Where does inbound mail land now? Label of the newest
+                # remaining open batch, or null = mail will be held.
+                next_open = open_batch(store)
+        # Mail custody holds: archives are stamped, NEVER deleted — the
+        # intake log then says "month deleted" instead of misattributing.
+        n_inbound = mark_batch_deleted(app.state.data_root, run_id)
         # Remove the on-disk work tree, but only inside data_root/runs — never
         # follow a stored path outside the volume.
         try:
@@ -909,7 +956,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 shutil.rmtree(work_dir, ignore_errors=True)
         except (OSError, ValueError):
             pass
-        return JSONResponse({"ok": True, "run_id": run_id, "deleted": True})
+        return JSONResponse({
+            "ok": True, "run_id": run_id, "deleted": True,
+            "inbound_marked": n_inbound,
+            "next_open_batch": (
+                (next_open.label or next_open.run_id)
+                if next_open is not None else None
+            ),
+            # Learned memory (categories/aliases/fx) is deliberately NOT
+            # part of the cascade: months come and go, learned facts stay.
+            "learned_memory": "kept",
+        })
 
     # ── Operator state API: polled by the dev-side notifier (server stays
     # API-free per the One Assessment precedent; mail is sent from a dev
@@ -1053,24 +1110,36 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             r for r in rows
             if str(r.get("status", "")).startswith("held_")
         ]
+        # Month column truth: resolve the label for EVERY referenced batch
+        # (one get_run per distinct id, plain and detail alike). A batch
+        # that no longer resolves marks its rows batch_deleted — the UI
+        # says "month deleted" — instead of the pre-fix detail join
+        # misreporting every document as operator-removed. Held rows have
+        # no batch_id; their held_* status IS the Month cell.
+        need_view: set[str] = set()
         if detail:
             # Intake overview: each ingested entry gains the expense rows
             # its mail created. One view build per distinct referenced
             # batch (entries cluster on the open month, so this is 1-2
             # builds, not one per entry); a build failure degrades that
             # batch's entries to ids-only rather than sinking the log.
-            views: dict[str, dict] = {}
-            labels: dict[str, str] = {}
-            with open_store() as store:
-                for r in rows:
-                    bid = str(r.get("batch_id") or "")
-                    if not bid or bid in views or not r.get("documents"):
-                        continue
-                    run = store.get_run(bid)
-                    if run is None:
-                        views[bid] = {}
-                        continue
-                    labels[bid] = run.label or bid
+            need_view = {
+                str(r["batch_id"]) for r in rows
+                if r.get("batch_id") and r.get("documents")
+            }
+        views: dict[str, dict] = {}
+        labels: dict[str, str | None] = {}
+        with open_store() as store:
+            for r in rows:
+                bid = str(r.get("batch_id") or "")
+                if not bid or bid in labels:
+                    continue
+                run = store.get_run(bid)
+                if run is None:
+                    labels[bid] = None
+                    continue
+                labels[bid] = run.label or bid
+                if bid in need_view:
                     try:
                         views[bid] = {
                             e["document_id"]: e
@@ -1078,32 +1147,44 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         }
                     except Exception:  # noqa: BLE001 - degrade, don't 500
                         views[bid] = {}
-            for r in rows:
-                docs = r.get("documents")
-                bid = str(r.get("batch_id") or "")
-                if docs is None or not bid:
+        for r in rows:
+            bid = str(r.get("batch_id") or "")
+            if not bid:
+                continue
+            label = labels.get(bid)
+            if label is None:
+                r["batch_deleted"] = True
+            else:
+                r["batch_label"] = label
+            if not detail:
+                continue
+            docs = r.get("documents")
+            if docs is None:
+                continue
+            if label is None:
+                # The whole month is gone — batch_deleted carries the
+                # story; per-document "deleted" rows would misattribute.
+                r["expenses"] = []
+                continue
+            idx = views.get(bid, {})
+            out = []
+            for doc in docs:
+                e = idx.get(doc)
+                if e is None:
+                    # Created by this mail but no longer in the batch
+                    # (operator deleted it) — still part of the story.
+                    out.append({"document_id": doc, "deleted": True})
                     continue
-                if bid in labels:
-                    r["batch_label"] = labels[bid]
-                idx = views.get(bid, {})
-                out = []
-                for doc in docs:
-                    e = idx.get(doc)
-                    if e is None:
-                        # Created by this mail but no longer in the batch
-                        # (operator deleted it) — still part of the story.
-                        out.append({"document_id": doc, "deleted": True})
-                        continue
-                    def _disp(v):
-                        return v.get("display") if isinstance(v, dict) else v
-                    out.append({
-                        "document_id": doc,
-                        "vendor": _disp(e.get("vendor")),
-                        "date": _disp(e.get("date")),
-                        "total": _disp(e.get("total")),
-                        "currency": e.get("currency"),
-                    })
-                r["expenses"] = out
+                def _disp(v):
+                    return v.get("display") if isinstance(v, dict) else v
+                out.append({
+                    "document_id": doc,
+                    "vendor": _disp(e.get("vendor")),
+                    "date": _disp(e.get("date")),
+                    "total": _disp(e.get("total")),
+                    "currency": e.get("currency"),
+                })
+            r["expenses"] = out
         return JSONResponse({
             "entries": rows,
             "n_held": len(held),

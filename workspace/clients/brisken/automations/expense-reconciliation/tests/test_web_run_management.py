@@ -97,9 +97,13 @@ def test_delete_run_removes_db_and_disk(client):
         work_dir = Path(store.get_run(run_id).work_dir)
     assert work_dir.is_dir()
 
-    resp = client.post(f"/api/runs/{run_id}/delete")
+    resp = client.post(f"/api/runs/{run_id}/delete", json={"confirm": run_id})
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True, "run_id": run_id, "deleted": True}
+    body = resp.json()
+    assert body["ok"] is True and body["deleted"] is True
+    assert body["run_id"] == run_id
+    # Learned memory is never part of the cascade — the API says so.
+    assert body["learned_memory"] == "kept"
 
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         assert store.get_run(run_id) is None
@@ -114,6 +118,58 @@ def test_delete_unknown_run_404(client):
     resp = client.post("/api/runs/nope/delete")
     assert resp.status_code == 404
     assert resp.json() == {"error": "run not found"}
+
+
+def test_delete_requires_confirm_phrase(client):
+    """The destructive-action gate: a bare POST (the pre-gate call shape)
+    deletes nothing, and a wrong phrase is refused with 409."""
+    _, run_id = _make_run(client)
+
+    resp = client.post(f"/api/runs/{run_id}/delete")
+    assert resp.status_code == 400
+    assert "confirm" in resp.json()["error"]
+
+    resp = client.post(
+        f"/api/runs/{run_id}/delete", json={"confirm": "wrong label"}
+    )
+    assert resp.status_code == 409
+    assert resp.json() == {"error": "confirm label mismatch"}
+
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        assert store.get_run(run_id) is not None
+
+
+def test_delete_accepts_label_as_confirm(client):
+    _, run_id = _make_run(client)
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        label = store.get_run(run_id).label
+    assert label
+    resp = client.post(f"/api/runs/{run_id}/delete", json={"confirm": label})
+    assert resp.status_code == 200
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        assert store.get_run(run_id) is None
+
+
+def test_delete_run_drops_its_job_rows(client):
+    """Jobs that finished into the deleted run go with it: a /jobs poll on
+    a deleted month answers 404, not a run_id that no longer resolves."""
+    _, run_id = _make_run(client)
+    db_path = client._data_root / "recon-web.sqlite"
+    with RunStore(db_path) as store:
+        store.create_job("jobgone", None, "2026-08-21T00:00:00+00:00")
+        store.set_job_status(
+            "jobgone", JOB_DONE, run_id=run_id,
+            updated_at="2026-08-21T00:00:01+00:00",
+        )
+        store.create_job("jobkept", None, "2026-08-21T00:00:00+00:00")
+        store.set_job_status(
+            "jobkept", JOB_DONE, run_id="other-run",
+            updated_at="2026-08-21T00:00:01+00:00",
+        )
+    resp = client.post(f"/api/runs/{run_id}/delete", json={"confirm": run_id})
+    assert resp.status_code == 200
+    assert client.get("/jobs/jobgone").status_code == 404
+    assert client.get("/jobs/jobkept").status_code == 200
 
 
 def test_delete_does_not_escape_runs_dir(client, tmp_path):
@@ -135,7 +191,7 @@ def test_delete_does_not_escape_runs_dir(client, tmp_path):
             llm_enabled=False,
             has_coa=False,
         )
-    resp = client.post("/api/runs/danger/delete")
+    resp = client.post("/api/runs/danger/delete", json={"confirm": "x"})
     assert resp.status_code == 200
     assert outside.exists() and (outside / "keep.txt").exists()
 

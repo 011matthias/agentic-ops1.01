@@ -33,6 +33,7 @@ from expense_recon.web.intake_mail import (  # noqa: E402
     sender_allowed,
 )
 from expense_recon.web.smtp_server import rcpt_decision, sender_decision  # noqa: E402
+from expense_recon.web.store import RunStore  # noqa: E402
 
 JPG = b"\xff\xd8\xff\xe0" + b"x" * 5000  # big enough to not read as a logo
 DOMAIN = "expenses.brisken.com"
@@ -574,3 +575,222 @@ def test_inbound_log_detail_joins_created_expenses(client, monkeypatch):
     entries = client.get("/api/inbound/log?detail=1").json()["entries"]
     row = [e for e in entries if e.get("subject") == "July taxi"][0]
     assert row["expenses"] == [{"document_id": doc_id, "deleted": True}]
+
+
+# ------------------------------------------- intake quick-wins (C1 + B) --
+
+def test_inbound_log_lists_delivered_files(client, monkeypatch):
+    """Note 3: the operator needs to see WHICH files a mail delivered.
+    New mail records the sender's original names in meta; a legacy
+    archive (no files key) derives sanitized names from parts/."""
+    _create_batch(client, monkeypatch)
+    state = client.app.state
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="Uber"), _extraction(vendor="Hotel"),
+    )
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[
+            ("uber trip.jpg", JPG + b"u1"),
+            ("hotel münchen.pdf", b"%PDF-1.4 " + JPG + b"h1"),
+        ]),
+        synchronous=True,
+    )
+    entries = client.get("/api/inbound/log").json()["entries"]
+    row = entries[-1]
+    assert row["files"] == ["uber trip.jpg", "hotel münchen.pdf"]
+
+    # Legacy archive: strip the files key from meta -> derived from the
+    # parts/ listing, NNN__ prefix stripped, sanitized names remain.
+    arch = state.data_root / "inbound" / row["archive"]
+    meta = json.loads((arch / "meta.json").read_text(encoding="utf-8"))
+    del meta["files"]
+    (arch / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    entries = client.get("/api/inbound/log").json()["entries"]
+    assert entries[-1]["files"] == ["uber_trip.jpg", "hotel_m_nchen.pdf"]
+
+
+def test_inbound_log_month_column_everywhere(client, monkeypatch):
+    """Note 13 ("month says no date"): the PLAIN log resolves batch_label
+    for every routed row; held rows carry their held status instead."""
+    state = client.app.state
+    held = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("t.jpg", JPG + b"t1")],
+              subject="held one"),
+        synchronous=True,
+    )
+    assert held["status"] == HELD_NO_BATCH
+
+    batch_id = _create_batch(client, monkeypatch)
+    _patch_ocr(monkeypatch, _extraction(vendor="DB"))
+    ok = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("db.jpg", JPG + b"d1")],
+              subject="routed one"),
+        synchronous=True,
+    )
+    assert ok["status"] == STATUS_INGESTED
+
+    entries = client.get("/api/inbound/log").json()["entries"]
+    routed = [e for e in entries if e.get("subject") == "routed one"][0]
+    assert routed["batch_id"] == batch_id
+    assert routed.get("batch_label")  # pre-fix: absent outside ?detail=1
+    held_row = [e for e in entries if e.get("subject") == "held one"][0]
+    assert held_row["status"] == HELD_NO_BATCH
+    assert "batch_label" not in held_row
+    assert "batch_deleted" not in held_row
+
+
+def test_delete_month_stamps_inbound_and_reports_routing(client, monkeypatch):
+    """Note 2 (delete month): the cascade stamps the mail metas (archives
+    NEVER deleted - custody holds), the log says "month deleted" instead
+    of misreporting rows as operator-removed, and the response carries
+    the new routing target + the learned-memory statement."""
+    batch_id = _create_batch(client, monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(vendor="Trenitalia"))
+    ok = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("tren.jpg", JPG + b"tr")],
+              subject="into the month"),
+        synchronous=True,
+    )
+    assert ok["status"] == STATUS_INGESTED
+
+    with RunStore(state.db_path) as store:
+        label = store.get_run(batch_id).label
+
+    resp = client.post(
+        f"/api/runs/{batch_id}/delete", json={"confirm": label}
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["deleted"] is True
+    assert body["inbound_marked"] >= 1
+    assert body["next_open_batch"] is None  # no batch left: mail will hold
+    assert body["learned_memory"] == "kept"
+
+    # The mail archive survives with its stamp; the log tells the truth.
+    entries = client.get("/api/inbound/log?detail=1").json()["entries"]
+    row = [e for e in entries if e.get("subject") == "into the month"][0]
+    arch = state.data_root / "inbound" / row["archive"]
+    assert (arch / "message.eml").exists()
+    assert row["batch_deleted"] is True
+    assert "batch_label" not in row
+    # Pre-fix shape was [{document_id, deleted: True}] - operator-removed
+    # misattribution. The month is gone; batch_deleted carries the story.
+    assert row["expenses"] == []
+
+
+def test_delete_month_reports_next_open_batch(client, monkeypatch):
+    first_id = _create_batch(client, monkeypatch)
+    second_id = _create_batch(client, monkeypatch)
+    resp = client.post(
+        f"/api/runs/{second_id}/delete", json={"confirm": second_id}
+    )
+    assert resp.status_code == 200, resp.text
+    with RunStore(client.app.state.db_path) as store:
+        first_label = store.get_run(first_id).label or first_id
+    assert resp.json()["next_open_batch"] == first_label
+
+
+def test_replay_into_new_batch_clears_delete_stamp(client, monkeypatch):
+    """A mail whose original month was deleted, replayed into a live
+    month, must not keep saying "month deleted" (stale batch_deleted
+    stamp; adversarial review 2026-08-21 finding 2)."""
+    import expense_recon.web.intake_mail as im
+
+    first_id = _create_batch(client, monkeypatch)
+    state = client.app.state
+
+    # The ingest fails AFTER routing stamped batch_id -> held_failed.
+    def _boom(*a, **k):
+        raise RuntimeError("simulated ingest failure")
+    with monkeypatch.context() as mp:
+        mp.setattr(im, "add_receipts_to_expense_batch", _boom)
+        res = process_message(
+            state.db_path, state.learning_db_path, state.data_root,
+            _mail("criss@brisken.com", attachments=[("t.jpg", JPG + b"rp")],
+                  subject="stamped mail"),
+            synchronous=True,
+        )
+    assert res["status"] == "held_failed"
+
+    resp = client.post(
+        f"/api/runs/{first_id}/delete", json={"confirm": first_id}
+    )
+    assert resp.status_code == 200
+    entries = client.get("/api/inbound/log").json()["entries"]
+    row = [e for e in entries if e.get("subject") == "stamped mail"][0]
+    assert row["batch_deleted"] is True  # stamped while its month is gone
+
+    second_id = _create_batch(client, monkeypatch)
+    _patch_ocr(monkeypatch, _extraction(vendor="Taxi"))
+    replay = client.post("/api/inbound/replay-held").json()
+    assert replay["replayed"] == 1
+    entries = client.get("/api/inbound/log").json()["entries"]
+    row = [e for e in entries if e.get("subject") == "stamped mail"][0]
+    assert row["batch_id"] == second_id
+    assert not row.get("batch_deleted")  # the stamp is cleared
+    assert row.get("batch_label")
+
+
+def test_done_stamp_guard_flips_job_when_batch_vanishes(client, monkeypatch):
+    """The delete/ingest ordering where the ingest wins the lock: the DONE
+    stamp lands after the cascade purged jobs (run_id was NULL until
+    then). The guard re-checks and flips the job to error + the mail to
+    held_failed instead of leaving a done-job pointing at a gone run
+    (adversarial review 2026-08-21 finding 4)."""
+    import expense_recon.web.intake_mail as im
+    from expense_recon.web.store import JOB_ERROR
+
+    batch_id = _create_batch(client, monkeypatch)
+    state = client.app.state
+
+    def _add_then_batch_vanishes(store, run, *a, **k):
+        # Simulate the delete cascade landing right after our locked
+        # write: by the time the DONE stamp runs, the run row is gone.
+        store.delete_run(run.run_id)
+        return {"documents": []}
+    monkeypatch.setattr(
+        im, "add_receipts_to_expense_batch", _add_then_batch_vanishes
+    )
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("t.jpg", JPG + b"gv")],
+              subject="raced mail"),
+        synchronous=True,
+    )
+    assert res["batch_id"] == batch_id
+    with RunStore(state.db_path) as store:
+        job = store.get_job(res["job_id"])
+    assert job["status"] == JOB_ERROR
+    assert job["error"] == "batch deleted"
+    entries = client.get("/api/inbound/log").json()["entries"]
+    row = [e for e in entries if e.get("subject") == "raced mail"][0]
+    assert row["status"] == "held_failed"  # replayable into the next month
+
+
+def test_ingest_refuses_deleted_batch(client, monkeypatch, tmp_path):
+    """The delete/ingest race, resolved deny-by-default: a writer whose
+    batch vanished while it waited on the lock refuses (the mail then
+    goes held_failed and stays replayable) instead of reporting receipts
+    ingested into a batch that no longer exists."""
+    from expense_recon.web.service import (
+        RunInputError,
+        add_receipts_to_expense_batch,
+    )
+
+    batch_id = _create_batch(client, monkeypatch)
+    state = client.app.state
+    with RunStore(state.db_path) as store:
+        stale = store.get_run(batch_id)
+        store.delete_run(batch_id)
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        with pytest.raises(RunInputError, match="no longer exists"):
+            add_receipts_to_expense_batch(
+                store, stale, staging, "2026-08-21T12:00:00+00:00"
+            )

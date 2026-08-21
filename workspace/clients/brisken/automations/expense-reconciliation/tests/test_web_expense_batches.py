@@ -467,7 +467,9 @@ def test_delete_run_purges_expense_tables(client, monkeypatch):
     with RunStore(db_path) as db:
         assert db.get_expense_field_overrides(batch_id)
         assert db.get_expense_edits(batch_id)
-    assert client.post(f"/api/runs/{batch_id}/delete").status_code == 200
+    assert client.post(
+        f"/api/runs/{batch_id}/delete", json={"confirm": batch_id}
+    ).status_code == 200
     with RunStore(db_path) as db:
         assert db.get_expense_field_overrides(batch_id) == {}
         assert db.get_expense_edits(batch_id) == []

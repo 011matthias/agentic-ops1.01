@@ -472,9 +472,11 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
             arch = row.get("archive")
             if not arch:
                 continue
-            meta_path = inbound_root(data_root) / str(arch) / "meta.json"
+            arch_dir = inbound_root(data_root) / str(arch)
             try:
-                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                meta = json.loads(
+                    (arch_dir / "meta.json").read_text(encoding="utf-8")
+                )
             except Exception:  # noqa: BLE001 - overlay is best-effort
                 continue
             row["status"] = meta.get("status", row.get("status"))
@@ -483,13 +485,39 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
                 row["person"] = person["person"]
             if meta.get("batch_id"):
                 row["batch_id"] = meta["batch_id"]
+            if meta.get("batch_deleted"):
+                row["batch_deleted"] = True
             if meta.get("documents") is not None:
                 row["documents"] = meta["documents"]
+            files = meta.get("files")
+            if files is None:
+                # Legacy archive (pre files-in-meta): the delivered names
+                # live only as sanitized parts/ copies — derive, no rewrite.
+                files = _files_from_parts(arch_dir)
+            if files is not None:
+                row["files"] = files
             if meta.get("skipped"):
                 row["skipped"] = meta["skipped"]
             if meta.get("error"):
                 row["error"] = meta["error"]
     return rows
+
+
+def _files_from_parts(arch_dir: Path) -> list[str] | None:
+    """Delivered filenames for a legacy archive, from the parts/ listing
+    (``NNN__`` prefix stripped, so the sender's sanitized name remains).
+    None when there is no parts dir (body-only or pre-parts archive)."""
+    parts = arch_dir / "parts"
+    if not parts.is_dir():
+        return None
+    try:
+        return [
+            re.sub(r"^\d{3}__", "", p.name)
+            for p in sorted(parts.iterdir())
+            if p.is_file()
+        ]
+    except OSError:
+        return None
 
 
 def archive_message(
@@ -515,6 +543,9 @@ def archive_message(
         "message_id": parsed.message_id,
         "status": status,
         "n_files": len(parsed.attachments),
+        # The delivered filenames as the sender named them (the parts/
+        # copies get sanitized names); the intake log's Files column.
+        "files": [name for name, _ in parsed.attachments],
         "skipped": parsed.skipped,
         **(extra or {}),
     }
@@ -531,12 +562,49 @@ def _read_meta(arch: Path) -> dict:
         return {}
 
 
+# Meta patches come from several threads at once (SMTP router, ingest
+# jobs, replay, and the delete-month sweep): serialize the read-merge-
+# write and land it atomically so patches never clobber each other and a
+# crash mid-write cannot tear the custody meta.
+_META_LOCK = threading.Lock()
+
+
 def _update_meta(arch: Path, patch: dict) -> None:
-    meta = _read_meta(arch)
-    meta.update(patch)
-    (arch / "meta.json").write_text(
-        json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8"
-    )
+    with _META_LOCK:
+        meta = _read_meta(arch)
+        meta.update(patch)
+        tmp = arch / "meta.json.tmp"
+        tmp.write_text(
+            json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
+        os.replace(tmp, arch / "meta.json")
+
+
+def mark_batch_deleted(data_root: Path, batch_id: str) -> int:
+    """Stamp ``batch_deleted`` on every inbound archive whose mail routed
+    into ``batch_id`` (the delete-month cascade). The mail archives
+    themselves are NEVER deleted — custody and retention hold regardless
+    of what happens to the month; the stamp lets the intake log say "month
+    deleted" instead of misreporting the mail's rows as operator-removed.
+    Returns the number of archives stamped."""
+    root = inbound_root(data_root)
+    if not root.is_dir():
+        return 0
+    n = 0
+    for arch in root.iterdir():
+        if not arch.is_dir():
+            continue
+        meta = _read_meta(arch)
+        if str(meta.get("batch_id") or "") != str(batch_id):
+            continue
+        if meta.get("batch_deleted"):
+            continue
+        _update_meta(arch, {
+            "batch_deleted": True,
+            "batch_deleted_at": _now_iso(),
+        })
+        n += 1
+    return n
 
 
 def archive_incoming(
@@ -690,15 +758,33 @@ def _ingest_job(
             store.set_job_status(
                 job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
             )
+            # The month can be deleted between our locked write and this
+            # stamp (the delete cascade purges jobs by run_id, which was
+            # NULL until now). Re-check: if it is gone, flip the job to
+            # error and hold the mail — replayable into the next open
+            # month — instead of acking receipts into a deleted batch.
+            # If the delete lands after this check instead, its cascade
+            # removes the row we just stamped.
+            batch_gone = store.get_run(run_id) is None
+            if batch_gone:
+                store.set_job_status(
+                    job_id, JOB_ERROR, error="batch deleted",
+                    updated_at=_now_iso(),
+                )
         # Status truth: "ingested" only after the job ACTUALLY succeeded.
         if arch is not None:
-            # documents = the expense rows THIS mail created (empty when
-            # every file was a duplicate) — the intake overview joins on it.
-            _update_meta(arch, {
-                "status": STATUS_INGESTED,
-                "documents": list((summary or {}).get("documents") or []),
-            })
-            _maybe_ack(db_path, arch)
+            if batch_gone:
+                _update_meta(arch, {"status": HELD_FAILED,
+                                    "error": "batch deleted"})
+            else:
+                # documents = the expense rows THIS mail created (empty when
+                # every file was a duplicate) — the intake overview joins
+                # on it.
+                _update_meta(arch, {
+                    "status": STATUS_INGESTED,
+                    "documents": list((summary or {}).get("documents") or []),
+                })
+                _maybe_ack(db_path, arch)
     except Exception as exc:  # noqa: BLE001 - job errors surface via meta+log
         with RunStore(db_path) as store:
             store.set_job_status(
@@ -783,7 +869,12 @@ def route_archived(
         return {"status": status, "archive": arch.name, "person": person}
 
     # The job flips the meta to ingested/held_failed when it finishes.
-    _update_meta(arch, {"person": person, "batch_id": run.run_id})
+    # batch_deleted: False clears a stale delete stamp when a held mail
+    # re-routes into a live batch — without it the row would keep saying
+    # "month deleted" about receipts alive in the new month.
+    _update_meta(arch, {
+        "person": person, "batch_id": run.run_id, "batch_deleted": False,
+    })
     job_id = _start_ingest(
         db_path, learning_db_path, run, parsed.attachments, person,
         received_at, arch, synchronous=synchronous,
@@ -883,7 +974,7 @@ def replay_held(
         if job.get("status") == JOB_DONE:
             _update_meta(arch, {
                 "status": STATUS_REPLAYED, "job_id": job_id,
-                "batch_id": run.run_id,
+                "batch_id": run.run_id, "batch_deleted": False,
             })
             _append_log(data_root, {
                 "at": _now_iso(), "from": meta.get("from", ""),

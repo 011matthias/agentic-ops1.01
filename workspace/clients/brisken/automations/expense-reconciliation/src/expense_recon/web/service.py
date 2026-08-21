@@ -4369,8 +4369,9 @@ def assign_batch_cards(
     # the RMW starts from the current row.
     with _BATCH_ADD_LOCK:
         fresh = store.get_run(run.run_id)
-        if fresh is not None:
-            run = fresh
+        if fresh is None:
+            raise RunInputError("This batch no longer exists (it was deleted).")
+        run = fresh
         if has_statement(run):
             raise RunInputError(
                 "A statement is already attached to this batch; its receipt "
@@ -4574,8 +4575,9 @@ def refresh_batch_master_data(
     # snapshot append below must not clobber a concurrent ingest's write.
     with _BATCH_ADD_LOCK:
         fresh = store.get_run(run.run_id)
-        if fresh is not None:
-            run = fresh
+        if fresh is None:
+            raise RunInputError("This batch no longer exists (it was deleted).")
+        run = fresh
         if has_statement(run):
             raise RunInputError(
                 "A statement is already attached to this batch; its master "
@@ -4839,8 +4841,9 @@ def restore_set_aside_file(
     clobbered a concurrent mid-month add's receipt out of the pool)."""
     with _BATCH_ADD_LOCK:
         fresh = store.get_run(run.run_id)
-        if fresh is not None:
-            run = fresh
+        if fresh is None:
+            raise RunInputError("This batch no longer exists (it was deleted).")
+        run = fresh
         if has_statement(run):
             raise RunInputError(
                 "A statement is already attached to this batch; its receipt "
@@ -4993,6 +4996,14 @@ def _restore_set_aside_locked(
 _BATCH_ADD_LOCK = threading.Lock()
 
 
+def batch_write_lock() -> threading.Lock:
+    """The batch-snapshot writer lock, for callers outside this module
+    whose mutation must not interleave with an in-flight RMW (the
+    delete-month cascade: rows must not vanish under a writer, and a
+    writer entering after the delete re-fetches None and refuses)."""
+    return _BATCH_ADD_LOCK
+
+
 def add_receipts_to_expense_batch(
     store: RunStore,
     run: RunRow,
@@ -5025,8 +5036,14 @@ def add_receipts_to_expense_batch(
     # is the intended operating mode — volume is a shared mailbox's trickle.
     with _BATCH_ADD_LOCK:
         fresh = store.get_run(run.run_id)
-        if fresh is not None:
-            run = fresh
+        if fresh is None:
+            # The month was deleted while this mail/upload waited on the
+            # lock. Refuse honestly (the ingest job goes held_failed and
+            # the mail stays replayable) instead of writing a snapshot
+            # UPDATE that matches zero rows and reporting the receipts
+            # as ingested into a batch that no longer exists.
+            raise RunInputError("This batch no longer exists (it was deleted).")
+        run = fresh
         return _add_receipts_locked(
             store, run, staging_dir, now_iso,
             learning_db_path=learning_db_path,
