@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-21 | Brisken Recon Feedback Wave Cards R1-R2 | client-dev | [→](docs/2026-08-21%20-%20Brisken%20Recon%20Feedback%20Wave%20Cards%20R1-R2/Checkpoint.md) |
 | 2026-08-19 | Brisken Recon Feedback Everywhere + Criss July Run | client-dev | [Mini-Checkpoint-2](docs/2026-08-19%20-%20Brisken%20Recon%20Feedback%20Everywhere%20%2B%20Criss%20July%20Run/Mini-Checkpoint-2.md) |
 | 2026-08-19 | Brisken Lead Desk Arming Drill Solo Complete | client-dev | [→](docs/2026-08-19%20-%20Brisken%20Lead%20Desk%20Arming%20Drill%20Solo%20Complete/Checkpoint.md) |
 | 2026-08-13 | Brisken Expense-Recon Usability Loop R1-R2 | client-dev | [→](docs/2026-08-13%20-%20Brisken%20Expense-Recon%20Usability%20Loop%20R1-R2/Checkpoint.md) |
