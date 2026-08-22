@@ -128,14 +128,17 @@ shows 36 table rows plus the quarantine note, no error boundary, zero
 console errors. The recurrence-kill shipped the same day:
 `tests/test_view_contract.py` + `docs/api-contract.md` pin the element type
 of every list field on BOTH view payloads (backlog item 21, Shipped row
-13). A separate hosting bug the same day is
+13). Backlog item 18 shipped in the same session (PR #572, deployed Fly
+v74): the set-aside-restore and cards endpoints no longer block the event
+loop on the batch writer lock, and a static AST guard fails CI on the next
+`async def` route that does. A separate hosting bug the same day is
 already fixed and live: Lovable's host 404s chunk files whose names begin
 with `_` (route-derived `_batchId`/`_runId`/`_intakeId`) plus `new-*`, so
 `vite.config.ts` now pins `chunkFileNames: "assets/chunk-[name]-[hash].js"`
 — never remove that override, and if pages 404 again, sweep the published
 bundle's asset list before suspecting the backend.
 
-Suite baseline is now **1218 passed / 2 skipped**; `calibrate
+Suite baseline is now **1221 passed / 2 skipped**; `calibrate
 --config examples/run.example.json` green. Advisories are SNAPSHOTTED
 into each run's summary — existing runs keep old wording by design.
 
