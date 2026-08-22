@@ -147,6 +147,26 @@ prose the Lovable prompts cite. Proven by regressing both emission sites to
 `string[]`: 3 of the 4 tests fail. Scalar-type flips are NOT covered by
 design (see the doc); lists are where the crash class lives.
 
+### 22. "Categorized" meant two different things (SHIPPED - see Shipped row 15)
+
+Operator note, 2026-08-22 13:34 on /expenses: "it sayz 35 categorized but
+when you click on open it says only 5 categorized". Both numbers came from
+`n_categorized` on the same batch (April 2026, ae61e122a505): the list
+screen counted expenses that carry a category (35 of 36 — true), the batch
+page counted rows whose review state was `ready`, so the 30 rows that were
+categorized but had no legal entity yet were reported as uncategorized. The
+NEEDS CATEGORY tile claimed 31 rows when exactly 1 needed a category, right
+beside a MISSING ENTITY tile already saying 30.
+
+The page's count was `ready`-based since Phase 4; Cards R3's `needs_entity`
+review state turned a small discrepancy into a 30-row one. Fixed by giving
+each count one question (`service.categorized_counts` is the single rule,
+readiness keeps its own `n_ready`) and by deriving the list screen's counts
+from the same live overlay the batch page renders, so a reviewer's edit
+moves both. Sibling class to item 21: not a type flip, a MEANING flip, which
+no type contract could have caught — `docs/api-contract.md` now carries the
+counts table and the one-name-one-question rule.
+
 ### 16. Rejected matches need a "what now" (2026-07-27 note, untracked)
 
 STATUS_REJECTED sends the transaction back to unmatched and is reversible
@@ -310,6 +330,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 15 | One meaning per count: `n_categorized` / `n_uncategorized` answer "how many still need a category" on BOTH screens (one implementation, `service.categorized_counts`), readiness moves to its own `n_ready`, and the batch list derives its counts from the live overlay instead of the summary frozen at ingest — so a category edit or a manual add moves the landing screen too | The operator saw "35 categorized" on the list and "5" on the batch page for the same April batch, with NEEDS CATEGORY claiming 31 rows when 1 needed a category: the page was counting export-readiness under the categorized label, so every Cards-R3 row awaiting an entity read as uncategorized. A count that contradicts itself across two screens costs exactly the trust the loop is buying. Both tests fail on the pre-fix code (page said 0 where 1 was categorized; list stayed 1 after an edit made it 2) | this round, 2026-08-22; suite 1223 passed / 2 skipped; SPA needs no change, optional READY tile in `docs/lovable-ready-tile-prompt.md` |
 | 14 | The batch writer lock never blocks the event loop: `set-aside/restore` and the cards-assignment endpoint hand their locked span to the threadpool, and a static AST guard fails CI on any future `async def` route that calls a lock-taking service function outside a sync closure (locked set derived from `service.py`, so a new one joins for free) | Pre-existing since Cards R3, found by the delete-month adversarial review. An OCR ingest holds that lock for MINUTES; an `async def` blocking on it parks the loop, so every endpoint including `/healthz` stops answering, Fly's health check fails, and the machine restart kills the very ingest that held the lock. Reproduced as a real freeze (/healthz never answered while the lock was held), fixed, re-run: 42s of timeouts became 2.2s. Guard proven by regressing the cards handler back inline | this round, 2026-08-22; suite 1221 passed / 2 skipped |
 | 13 | View-shape contract test: every list field on the expense-batch and run payloads has its ELEMENT type pinned in CI, probed over HTTP so the pin is what actually ships. A new list field fails until pinned (the moment to decide whether the SPA needs a prompt); a str->object flip fails at once; and a MUST_COVER set keeps the fixtures from passing vacuously by covering nothing. `docs/api-contract.md` carries the same table in prose plus the change rules (enrich via a PARALLEL field, never retype under a live renderer; ship the SPA half in the same round; render defensively) | The 2026-08-22 crash: `parse_issues` had been objects since 2026-07-22, the SPA typed it `string[]`, and Criss's batch page went blank behind the root error boundary for every batch carrying an issue. Nothing in either repo could see the mismatch. Proven by regressing both emission sites back to strings: 3 of 4 tests fail | this round, 2026-08-22; suite 1218 passed / 2 skipped |
 | 8 | Mail intake (the app's own mailbox): faculty mail receipts to any-name@expenses.brisken.com and they land in the open month batch automatically — in-app SMTP listener on Fly port 25, raw mail archived on the volume as system of record, per-file "submitted by" provenance (To-alias beats From-sender), deny-by-default sender allowlist answered in-protocol (550, we send nothing), day spend budget + disk/in-flight guards, held-mail strip + one-click replay. Hardened pre-ship by a 3-lens adversarial review (6 highs fixed: archive-before-250 custody, batch-mutation lock killing a silent receipt-loss race, snapshot-keyed dedupe so killed jobs can't make loss resend-proof, raceproof caps, zip refusal, replay/status truth) | Dirk's directive (2026-08-20): one address collects expenses and their paraphernalia; Criss's workload shrinks to review + reconcile. Direct faculty mail also removes her relay role and attributes each expense to a person | PR #548, 2026-08-20; Lovable half `docs/lovable-mail-intake-prompt.md` |

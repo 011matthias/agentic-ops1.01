@@ -1135,6 +1135,33 @@ def apply_overrides(
     return out
 
 
+def categorized_counts(receipts: list[Receipt]) -> tuple[int, int]:
+    """`(categorized, uncategorized)` for an expense pool under ONE rule,
+    used by every screen: an expense is categorized when every line item on
+    it carries a category. An expense with no line items at all is not
+    categorized (it exports as `(uncategorized - assign)`).
+
+    The rule answers exactly one question — "how many expenses still need
+    someone to pick a category" — and nothing else. It deliberately ignores
+    whether the row is otherwise ready to export (entity, currency, a
+    vendor guess worth a look); those are their own counts. Pass receipts
+    with the reviewer's category overrides already applied
+    (`apply_overrides`), or an edit will not move the number.
+
+    Was open-coded at five sites with two different meanings; the batch
+    page counted `review == "ready"` and so reported 30 categorized-but-
+    entity-less rows as uncategorized while the list screen counted the
+    same batch honestly (operator note, 2026-08-22).
+    """
+    n = sum(
+        1
+        for r in receipts
+        if r.line_items
+        and all(li.categorization and li.categorization.category for li in r.line_items)
+    )
+    return n, len(receipts) - n
+
+
 def apply_decisions(
     outcome: MatchOutcome,
     transactions: list[Transaction],
@@ -3613,12 +3640,7 @@ def execute_expense_batch(
         raise RunInputError(str(exc)) from exc
 
     receipts = result.receipts
-    n_categorized = sum(
-        1
-        for r in receipts
-        if r.line_items
-        and all(li.categorization and li.categorization.category for li in r.line_items)
-    )
+    n_categorized, n_uncategorized = categorized_counts(receipts)
     counts = count_parse_issues(result.parse_errors)
     set_aside = [
         _set_aside_entry(r, prepared.now_iso)
@@ -3629,7 +3651,7 @@ def execute_expense_batch(
         "n_expenses": len(receipts),
         "n_receipts": len(receipts),
         "n_categorized": n_categorized,
-        "n_uncategorized": len(receipts) - n_categorized,
+        "n_uncategorized": n_uncategorized,
         "n_set_aside": len(set_aside),
         "n_parse_errors": counts["errors"],
         "n_parse_notes": counts["notes"],
@@ -4015,6 +4037,53 @@ def _expense_account_options(run: RunRow, settings: dict | None) -> list[str]:
         return []
 
 
+def batch_list_summary(store: RunStore, run: RunRow) -> dict:
+    """The batch-list row's summary, with the counts the operator compares
+    against the batch page derived from the SAME live state that page
+    renders — the stored summary is frozen at ingest, so before this a
+    reviewer's category edit or manual add never moved the list screen.
+
+    Only the derivable counts are replaced; everything else (cost, parse
+    issues, upload issues, statement figures) stays as stored. A batch whose
+    summary predates expense counts, or whose snapshot cannot be read, keeps
+    exactly what it had: the landing screen must render regardless.
+    """
+    summary = dict(run.summary or {})
+    snapshot = run.snapshot or {}
+    # A run whose summary predates expense counts, or whose snapshot has no
+    # receipts block yet (created, ingest still running or failed), keeps
+    # what it stored: deriving from an empty snapshot would report a real
+    # batch as 0 expenses, which is worse than a slightly stale count.
+    if "n_categorized" not in summary or "receipts" not in snapshot:
+        return summary
+    try:
+        _, receipts, _, _ = snapshot_from_dict(snapshot)
+        overrides = store.get_category_overrides(run.run_id)
+        receipts = apply_expense_edits(
+            receipts,
+            store.get_expense_field_overrides(run.run_id),
+            store.get_expense_edits(run.run_id),
+            category_overrides=overrides,
+            default_entity=(
+                ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+            ),
+        )
+        n_categorized, n_uncategorized = categorized_counts(
+            apply_overrides(receipts, overrides)
+        )
+    except (KeyError, TypeError, ValueError):
+        # A malformed snapshot hides ONE batch's counts (it keeps the stored
+        # pair) rather than breaking the landing screen. Deliberately narrow:
+        # a blind `except Exception` here swallowed a closed-store bug in
+        # this very function and served stale numbers that looked fine.
+        return summary
+    summary["n_expenses"] = len(receipts)
+    summary["n_receipts"] = len(receipts)
+    summary["n_categorized"] = n_categorized
+    summary["n_uncategorized"] = n_uncategorized
+    return summary
+
+
 def build_expense_view(
     run: RunRow,
     overrides: dict,
@@ -4062,7 +4131,12 @@ def build_expense_view(
 
     expenses = []
     totals: dict[str, Decimal] = {}
-    n_categorized = 0
+    # Two different questions, two counters: `n_ready` is "needs nothing
+    # from the reviewer", `n_categorized` is "has a category" (computed
+    # after the loop over the same override-applied receipts the rows and
+    # the export are built from).
+    n_ready = 0
+    posted: list[Receipt] = []
     # Master data the export uses to resolve Paid Through, so the grid shows
     # the same account (and how it was chosen). coa is None here, matching
     # posting_category above: the grid renders raw names, the export resolves
@@ -4133,7 +4207,8 @@ def build_expense_view(
             )
         ]
         if review["state"] == "ready":
-            n_categorized += 1
+            n_ready += 1
+        posted.append(ov_by_doc.get(r.document_id, r))
         ccy = r.detected_currency or "?"
         if r.detected_total is not None:
             totals[ccy] = totals.get(ccy, Decimal("0")) + r.detected_total
@@ -4229,6 +4304,7 @@ def build_expense_view(
         })
 
     has_image_info = any(r.has_receipt_image for r in receipts)
+    n_categorized, n_uncategorized = categorized_counts(posted)
     set_aside = set_aside_view(run.snapshot or {})
     summary = {
         "mode": MODE_EXPENSE_GENERATION,
@@ -4236,7 +4312,11 @@ def build_expense_view(
         "n_receipts": len(expenses),
         "n_set_aside": sum(1 for e in set_aside if not e["restored"]),
         "n_categorized": n_categorized,
-        "n_uncategorized": len(expenses) - n_categorized,
+        "n_uncategorized": n_uncategorized,
+        # Rows the reviewer can leave alone entirely (category AND entity
+        # AND the core fields). The batch page's headline count until
+        # 2026-08-22, when it was mislabelled as "categorized".
+        "n_ready": n_ready,
         "n_review": sum(
             1 for e in expenses if e["review"]["state"] in ("check", "pick")
         ),
@@ -5015,12 +5095,7 @@ def _restore_set_aside_locked(
     outcome.unmatched_receipts.append(restored.document_id)
     entry["restored"] = True
     entry["restored_at"] = now_iso
-    n_categorized = sum(
-        1
-        for r in pool
-        if r.line_items
-        and all(li.categorization and li.categorization.category for li in r.line_items)
-    )
+    n_categorized, n_uncategorized = categorized_counts(pool)
     snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
     snapshot["outcome"] = outcome_to_dict(outcome)
     snapshot["set_aside"] = entries
@@ -5031,7 +5106,7 @@ def _restore_set_aside_locked(
         "n_expenses": len(pool),
         "n_receipts": len(pool),
         "n_categorized": n_categorized,
-        "n_uncategorized": len(pool) - n_categorized,
+        "n_uncategorized": n_uncategorized,
         "n_set_aside": n_set_aside,
     })
     return {
@@ -5279,12 +5354,7 @@ def _add_receipts_locked(
     _stage("saving")
     pool = receipts + new_receipts
     outcome.unmatched_receipts.extend(r.document_id for r in new_receipts)
-    n_categorized = sum(
-        1
-        for r in pool
-        if r.line_items
-        and all(li.categorization and li.categorization.category for li in r.line_items)
-    )
+    n_categorized, n_uncategorized = categorized_counts(pool)
     summary = {
         "at": now_iso,
         "n_files": n_seen,
@@ -5322,7 +5392,7 @@ def _add_receipts_locked(
         "n_expenses": len(pool),
         "n_receipts": len(pool),
         "n_categorized": n_categorized,
-        "n_uncategorized": len(pool) - n_categorized,
+        "n_uncategorized": n_uncategorized,
         "n_set_aside": sum(
             1 for e in all_set_aside if not e.get("restored")
         ),
