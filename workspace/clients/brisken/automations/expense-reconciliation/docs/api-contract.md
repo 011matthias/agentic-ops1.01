@@ -48,7 +48,8 @@ receives after `jsonable_encoder`.
 | `card_review.unresolved_hints[].documents[]` | string |
 | `card_review.resolved[]` | object |
 | `card_review.resolved[].hints[]` | string |
-| `summary.upload_issues[]` | string |
+| `summary.upload_issues[]` | string (English prose; unchanged by design) |
+| `summary.upload_issue_details[]` | object `{code, file, suffix, limit}` |
 | `account_options[]` · `category_options[]` · `entity_options[]` | string |
 
 ### Run
@@ -91,6 +92,30 @@ is the only place the SPA maps over elements it did not individually type,
 which is the shape the crash took. Widening the pin to every leaf is a
 several-hundred-row table that churns every round; if a scalar flip ever bites,
 that is the moment to widen it, not before.
+
+## Upload rejections: prose plus a code
+
+A file the upload refused (`upload_cap`, `unsupported_type`,
+`empty_or_unreadable`, `too_large`) surfaces twice, on purpose:
+
+```json
+"upload_issues": ["notes.txt: unsupported type .txt (skipped)"],
+"upload_issue_details": [
+  { "code": "unsupported_type", "file": "notes.txt", "suffix": ".txt", "limit": null }
+]
+```
+
+`issues` / `upload_issues` keep their English sentences and their `string[]`
+type forever; the SPA localizes from `*_details` and falls back to the prose
+when the list is empty (every run created before 2026-08-22 has no details).
+Every detail object carries the same four keys, `suffix` and `limit` null
+where the code does not use them, so a consumer maps over them without shape
+checks. `service.upload_issue()` builds the sentence and the code in one
+call, so a reworded message cannot drift from what the SPA translates.
+
+This is rule 1 below in practice: the richer data arrives as a PARALLEL
+field. The same three emission sites feed `expense_ingest.issues` (batch
+create), the folder-ingest reply, and the add-receipts job summary.
 
 ## Summary counts: one name, one question
 

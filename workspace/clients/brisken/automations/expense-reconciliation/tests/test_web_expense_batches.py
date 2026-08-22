@@ -636,3 +636,50 @@ def test_batch_list_counts_agree_with_the_batch_page(client, monkeypatch):
     page, listed = counts()
     assert listed["n_categorized"] == page["n_categorized"] == 2
     assert listed["n_uncategorized"] == page["n_uncategorized"] == 0
+
+
+def test_upload_rejections_carry_a_code_beside_the_prose(client, monkeypatch):
+    """Item 20: every upload rejection ships a stable code the SPA can say in
+    the reviewer's language, WITHOUT retyping the prose list underneath a live
+    renderer (the 2026-08-22 crash class). Prose and code are built together,
+    so a reworded sentence cannot drift from its code."""
+    _patch_ocr(monkeypatch, _extraction())
+    batch_id = _create_batch(client, files=[
+        ("a.jpg", JPG),
+        ("notes.txt", b"not a receipt"),
+        ("empty.jpg", b""),
+    ])
+
+    summary = _grid(client, batch_id)["summary"]
+    assert summary["upload_issues"] == [
+        "notes.txt: unsupported type .txt (skipped)",
+        "empty.jpg: empty or unreadable (skipped)",
+    ]
+    assert summary["upload_issue_details"] == [
+        {"code": "unsupported_type", "file": "notes.txt",
+         "suffix": ".txt", "limit": None},
+        {"code": "empty_or_unreadable", "file": "empty.jpg",
+         "suffix": None, "limit": None},
+    ]
+
+
+def test_upload_issue_prose_and_code_come_from_one_place(client):
+    """The sentence a reviewer reads and the code the SPA localizes are the
+    same call. An unknown code raises rather than shipping a silent blank."""
+    from expense_recon.web.service import (
+        UPLOAD_ISSUE_CAP,
+        UPLOAD_ISSUE_TOO_LARGE,
+        upload_issue,
+    )
+
+    prose, detail = upload_issue(UPLOAD_ISSUE_TOO_LARGE, "huge.pdf", limit=15)
+    assert prose == "huge.pdf: too large (15 MB max) (skipped)"
+    assert detail == {"code": "too_large", "file": "huge.pdf",
+                      "suffix": None, "limit": 15}
+
+    prose, detail = upload_issue(UPLOAD_ISSUE_CAP, "n81.jpg", limit=80)
+    assert prose == "upload cap 80 reached; n81.jpg and later skipped"
+    assert detail["code"] == "upload_cap"
+
+    with pytest.raises(ValueError):
+        upload_issue("brand_new_code", "x.jpg")
