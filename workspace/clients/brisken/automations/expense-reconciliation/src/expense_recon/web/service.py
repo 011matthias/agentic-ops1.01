@@ -5045,6 +5045,14 @@ def _restore_set_aside_locked(
 # One writer at a time on a batch snapshot: mail-intake threads, the SPA
 # add job, and replay-held all funnel through add_receipts_to_expense_batch,
 # whose read-modify-write on the snapshot is only safe serialized.
+#
+# Two constraints ride on this being an in-process lock. It serializes writers
+# WITHIN one process only, so scaling the app past a single machine breaks the
+# model outright (today the Fly volume pins us to one); and an OCR ingest holds
+# it for minutes, so no `async def` handler may block on it — that parks the
+# event loop and takes /healthz down with everything else. Handlers either run
+# sync (delete_run) or hand the locked span to run_in_threadpool
+# (set-aside/restore, cards). See tests/test_web_batch_lock_threadpool.py.
 _BATCH_ADD_LOCK = threading.Lock()
 
 
