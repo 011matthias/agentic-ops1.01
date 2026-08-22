@@ -29,7 +29,7 @@
 
   "zoho": {
     "_": "Chart source for the categorizer + export account resolution. 'api' pulls live (creds from env); 'csv' reads a local export. Separate from coa_validation below, which is the pre-write postability gate.",
-    "coa_source": "api",
+    "coa_source": "none",
     "export_path": "zoho-journal.csv"
   },
 

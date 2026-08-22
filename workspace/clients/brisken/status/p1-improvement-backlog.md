@@ -172,6 +172,35 @@ moves both. Sibling class to item 21: not a type flip, a MEANING flip, which
 no type contract could have caught — `docs/api-contract.md` now carries the
 counts table and the one-name-one-question rule.
 
+### 23. Cut every tie to Zoho (owner directive 2026-08-22)
+
+**Owner direction:** "zoho does not matter anymore, the app should have no
+connection or ties to zoho anymore" (answering the Cards R4 question about
+per-entity Zoho accounts).
+
+The surface splits into four layers, and they do NOT ship together:
+
+1. **The live connection — DONE (Shipped row 17).** The API client, the
+   journal-posting CLI, the `coa_source: "api"` live chart pull, and the
+   `seed-zoho` importer are deleted. ~1,600 lines plus their tests. Nothing
+   hosted ever used them (the Fly app has no `ZOHO_*` env and the web layer
+   never imported the client), so hosted behavior is unchanged.
+   `tests/test_no_zoho_connection.py` keeps them gone.
+2. **The field names** (`zoho_account` on cards, merchants, learned memory,
+   `posting_category.zoho_account`). The SPA reads these, so the rename is a
+   parallel-field migration plus a Lovable prompt, per the api-contract
+   rules. Not started.
+3. **The chart-of-accounts gate** (`coa_gate.py`, `coa_provision.py`,
+   `has_coa`, the `/data` chart file). The mechanism is "validate categories
+   against the operator's account list" and is worth keeping; what it needs
+   is a rename and a chart source that is not a Books export. Not started.
+4. **The export artifact** (`output/zoho_expense_export.py`, the
+   `EXPENSE_COLUMNS` Zoho-import headers, the `/runs/{id}/zoho.csv` route,
+   the SPA's "Download Zoho Expenses CSV" button). **Blocked on one answer:
+   what does the CSV get imported into now?** Keeping the current headers
+   costs nothing and still works; changing them without knowing the target
+   would be guesswork. Ask when the destination is known.
+
 ### 16. Rejected matches need a "what now" (2026-07-27 note, untracked)
 
 STATUS_REJECTED sends the transaction back to unmatched and is reversible
@@ -335,6 +364,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 17 | The live Zoho connection is gone: API client, journal-posting CLI (`zoho-post`), the `coa_source: "api"` chart pull and the `seed-zoho` importer deleted, with a guard test that fails on any Zoho host, `ZOHO_*` credential read, or re-added subcommand | Owner directive: the app should have no connection or ties to Zoho. This layer was the actual connection — roughly 1,600 lines that could authenticate against and post into the live books. Nothing hosted used it (no `ZOHO_*` env on Fly, the web layer never imported the client), so removal is behavior-neutral where Criss works, and the credentials now have nowhere to be read. Doctor gained a real fix on the way: it rejected `coa_source: "none"`, which is the default | this round, 2026-08-22; suite 1158 passed / 2 skipped (65 tests of the deleted code went with it), calibrate green |
 | 16 | Upload rejections carry a stable code beside the English sentence (`issue_details` / `upload_issue_details`: `{code, file, suffix, limit}`) at all three emission sites, so the SPA can say "not a supported file type" in Portuguese without the backend ever retyping the prose list | The prose was English-only on a surface Criss meets when an upload goes wrong, and the obvious fix (enrich `issues` in place) is precisely the move that blanked the batch page on 2026-08-22. Parallel field instead, pinned in the contract test — proven by regressing both ways: an unpopulated details list fails the non-vacuity guard, and retyping `upload_issues` into objects fails the element check | this round, 2026-08-22; SPA half `docs/lovable-issue-codes-prompt.md` (optional, prose unchanged until applied) |
 | 15 | One meaning per count: `n_categorized` / `n_uncategorized` answer "how many still need a category" on BOTH screens (one implementation, `service.categorized_counts`), readiness moves to its own `n_ready`, and the batch list derives its counts from the live overlay instead of the summary frozen at ingest — so a category edit or a manual add moves the landing screen too | The operator saw "35 categorized" on the list and "5" on the batch page for the same April batch, with NEEDS CATEGORY claiming 31 rows when 1 needed a category: the page was counting export-readiness under the categorized label, so every Cards-R3 row awaiting an entity read as uncategorized. A count that contradicts itself across two screens costs exactly the trust the loop is buying. Both tests fail on the pre-fix code (page said 0 where 1 was categorized; list stayed 1 after an edit made it 2) | this round, 2026-08-22; suite 1223 passed / 2 skipped; SPA needs no change, optional READY tile in `docs/lovable-ready-tile-prompt.md` |
 | 14 | The batch writer lock never blocks the event loop: `set-aside/restore` and the cards-assignment endpoint hand their locked span to the threadpool, and a static AST guard fails CI on any future `async def` route that calls a lock-taking service function outside a sync closure (locked set derived from `service.py`, so a new one joins for free) | Pre-existing since Cards R3, found by the delete-month adversarial review. An OCR ingest holds that lock for MINUTES; an `async def` blocking on it parks the loop, so every endpoint including `/healthz` stops answering, Fly's health check fails, and the machine restart kills the very ingest that held the lock. Reproduced as a real freeze (/healthz never answered while the lock was held), fixed, re-run: 42s of timeouts became 2.2s. Guard proven by regressing the cards handler back inline | this round, 2026-08-22; suite 1221 passed / 2 skipped |

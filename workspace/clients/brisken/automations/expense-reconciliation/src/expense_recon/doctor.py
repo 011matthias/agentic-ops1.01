@@ -385,14 +385,16 @@ def _check_zoho(report: _Report, cfg: dict, config_dir: Path) -> None:
         report.ok("zoho", "no `zoho:` block; no chart-of-accounts / journal export")
         return
 
-    source = z.get("coa_source", "api")
+    source = z.get("coa_source", "none")
     if source == "api":
-        creds = ("ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REFRESH_TOKEN", "ZOHO_ORG_ID")
-        missing = [c for c in creds if not os.environ.get(c)]
-        if missing:
-            report.fail("zoho", f"coa_source 'api' but env vars unset: {', '.join(missing)}")
-        else:
-            report.ok("zoho", "API creds present (not validated against Zoho)")
+        # Removed 2026-08-22: the app holds no connection to an accounting
+        # API. An old config asking for a live pull fails loudly rather than
+        # silently running without the chart it expected.
+        report.fail(
+            "chart",
+            "coa_source 'api' no longer exists; export the chart to a file "
+            "and use coa_source 'csv' with coa_csv_path",
+        )
     elif source == "csv":
         if "coa_csv_path" not in z:
             report.fail("zoho", "coa_source 'csv' requires coa_csv_path")
@@ -402,8 +404,12 @@ def _check_zoho(report: _Report, cfg: dict, config_dir: Path) -> None:
                 report.fail("zoho", f"chart-of-accounts CSV not found: {coa}")
             else:
                 report.ok("zoho", f"chart-of-accounts CSV present: {coa.name}")
+    elif source == "none":
+        # The default. The block still carries run config (card_accounts,
+        # export flags); categories are simply not validated against a chart.
+        report.ok("chart", "no chart source; categories are not chart-validated")
     else:
-        report.fail("zoho", f"coa_source {source!r} not supported (use 'api' or 'csv')")
+        report.fail("chart", f"coa_source {source!r} not supported (use 'csv' or 'none')")
 
     if z.get("export_path"):
         export_parent = (config_dir / z["export_path"]).resolve().parent

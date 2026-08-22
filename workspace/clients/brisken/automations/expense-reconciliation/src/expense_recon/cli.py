@@ -121,7 +121,6 @@ from .store import (
     group_by_report,
 )
 from .hosting import DEFAULT_URL_TEMPLATE, ReceiptStore, resolve_receipt_urls
-from .zoho.client import ZohoClient, ZohoConfig
 
 
 logger = logging.getLogger("expense_recon")
@@ -1624,24 +1623,22 @@ def _build_chart_of_accounts(
           }
         }
 
-    Credentials for the API source come from the environment
-    (`ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`,
-    `ZOHO_ORG_ID`), never the config file. Brisken's real chart of
-    accounts is sensitive client data and is pulled live; it is never
-    committed to this repo.
+    The chart comes from a file the operator controls (`coa_source: "csv"`)
+    or not at all (`"none"`). There is no live pull: the app holds no
+    connection to any accounting API (owner directive 2026-08-22). The
+    chart file is sensitive client data and is never committed to this repo.
     """
     z = cfg.get("zoho")
     if not isinstance(z, dict) or not z.get("enabled", True):
         return None, {}
 
-    source = z.get("coa_source", "api")
+    source = z.get("coa_source", "none")
     if source == "none":
-        # The zoho block carries run config (card_accounts, export flags)
-        # but explicitly no chart source. The hosted upload path fabricates
-        # such a block from stored master data; its categorizer chart comes
-        # from the coa_validation fallback in _resolve_categorizer_chart,
-        # and a live API pull would demand ZOHO_* env vars the hosted
-        # environment does not have.
+        # The block carries run config (card_accounts, export flags) but no
+        # chart source; this is the default. The hosted upload path
+        # fabricates such a block from stored master data, and its
+        # categorizer chart comes from the coa_validation fallback in
+        # _resolve_categorizer_chart.
         return None, z
     if source == "csv":
         if "coa_csv_path" not in z:
@@ -1650,15 +1647,12 @@ def _build_chart_of_accounts(
         if not coa_path.exists():
             raise ConfigError(f"chart-of-accounts CSV not found: {coa_path}")
         coa = ChartOfAccounts.from_csv(coa_path, column_map=z.get("coa_column_map"))
-    elif source == "api":
-        try:
-            client = ZohoClient(ZohoConfig.from_env())
-        except ValueError as exc:
-            raise ConfigError(str(exc)) from exc
-        coa = ChartOfAccounts.from_api(client.list_chart_of_accounts())
     else:
         raise ConfigError(
-            f"config.zoho.coa_source {source!r} not supported (use 'api', 'csv' or 'none')"
+            f"config.zoho.coa_source {source!r} not supported (use 'csv' or 'none'). "
+            "The live 'api' source was removed 2026-08-22: the app holds no "
+            "connection to an accounting API. Export the chart to a file and "
+            "point coa_csv_path at it."
         )
     return coa, z
 
@@ -1860,11 +1854,6 @@ def main(argv: list[str] | None = None) -> int:
         from .learning_cli import main as memory_main
 
         return memory_main(argv[1:])
-
-    if argv and argv[0] == "zoho-post":
-        from .zoho_post_cli import main as zoho_post_main
-
-        return zoho_post_main(argv[1:])
 
     parser = argparse.ArgumentParser(
         prog="expense-recon",
