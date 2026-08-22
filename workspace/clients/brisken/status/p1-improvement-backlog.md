@@ -159,19 +159,23 @@ answers "what happens to rejected matches?". Spec fresh.
 Natural home: the grouped-queue render (PR #454/#455's remaining Lovable
 half). Spec with it.
 
-### 18. Async endpoints acquire the batch lock on the event loop (pre-existing)
+### 18. Async endpoints acquire the batch lock on the event loop (SHIPPED - see Shipped row 14)
 
 Found by the delete-month adversarial review (2026-08-21): the delete
 handler was fixed (kept sync), but `restore-set-aside` and the cards
 assignment endpoint are `async def` and take `_BATCH_ADD_LOCK` directly —
 while an OCR ingest holds that lock for minutes, either call parks the
 EVENT LOOP and freezes every endpoint including `/healthz` (Fly health
-checks fail, machine restart kills the in-flight ingest). Fix is
-mechanical: make them sync (threadpool) or wrap the locked span in
-`run_in_threadpool`. Small, ship with the next code round. Also worth a
-one-line comment at `_BATCH_ADD_LOCK` that scale-out past one process
-breaks the serialization model (single-machine volume pin makes it safe
-today).
+checks fail, machine restart kills the in-flight ingest). Shipped 2026-08-22: both
+handlers read a JSON body first, so they stay `async def` and hand the
+locked span to `run_in_threadpool`. Reproduced first (hold the lock from
+another thread, call the endpoint against a REAL batch id, probe /healthz:
+it never answered), then fixed, then re-run: 42s of timeouts became 2.2s.
+A static AST guard now flags any `async def` route that calls a
+lock-taking service function outside a sync closure, with the locked set
+derived from `service.py` so a new one joins for free; proven by
+regressing the cards handler back inline. `_BATCH_ADD_LOCK` carries the
+in-process-only + no-async-blocking note.
 
 ### 3. Put the set-aside statement pages to work (later)
 
@@ -306,6 +310,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 14 | The batch writer lock never blocks the event loop: `set-aside/restore` and the cards-assignment endpoint hand their locked span to the threadpool, and a static AST guard fails CI on any future `async def` route that calls a lock-taking service function outside a sync closure (locked set derived from `service.py`, so a new one joins for free) | Pre-existing since Cards R3, found by the delete-month adversarial review. An OCR ingest holds that lock for MINUTES; an `async def` blocking on it parks the loop, so every endpoint including `/healthz` stops answering, Fly's health check fails, and the machine restart kills the very ingest that held the lock. Reproduced as a real freeze (/healthz never answered while the lock was held), fixed, re-run: 42s of timeouts became 2.2s. Guard proven by regressing the cards handler back inline | this round, 2026-08-22; suite 1221 passed / 2 skipped |
 | 13 | View-shape contract test: every list field on the expense-batch and run payloads has its ELEMENT type pinned in CI, probed over HTTP so the pin is what actually ships. A new list field fails until pinned (the moment to decide whether the SPA needs a prompt); a str->object flip fails at once; and a MUST_COVER set keeps the fixtures from passing vacuously by covering nothing. `docs/api-contract.md` carries the same table in prose plus the change rules (enrich via a PARALLEL field, never retype under a live renderer; ship the SPA half in the same round; render defensively) | The 2026-08-22 crash: `parse_issues` had been objects since 2026-07-22, the SPA typed it `string[]`, and Criss's batch page went blank behind the root error boundary for every batch carrying an issue. Nothing in either repo could see the mismatch. Proven by regressing both emission sites back to strings: 3 of 4 tests fail | this round, 2026-08-22; suite 1218 passed / 2 skipped |
 | 8 | Mail intake (the app's own mailbox): faculty mail receipts to any-name@expenses.brisken.com and they land in the open month batch automatically — in-app SMTP listener on Fly port 25, raw mail archived on the volume as system of record, per-file "submitted by" provenance (To-alias beats From-sender), deny-by-default sender allowlist answered in-protocol (550, we send nothing), day spend budget + disk/in-flight guards, held-mail strip + one-click replay. Hardened pre-ship by a 3-lens adversarial review (6 highs fixed: archive-before-250 custody, batch-mutation lock killing a silent receipt-loss race, snapshot-keyed dedupe so killed jobs can't make loss resend-proof, raceproof caps, zip refusal, replay/status truth) | Dirk's directive (2026-08-20): one address collects expenses and their paraphernalia; Criss's workload shrinks to review + reconcile. Direct faculty mail also removes her relay role and attributes each expense to a person | PR #548, 2026-08-20; Lovable half `docs/lovable-mail-intake-prompt.md` |
 | 1 | Non-receipt quarantine: the tool now recognizes bank-statement pages and report summary sheets among the uploads and sets them aside loudly instead of inventing an expense from them | Criss's real May folder had 7 statement PDFs among 27 files; a report summary page had become a phantom 8,796.35 BRL "expense" | PR #516, Fly v58, 2026-08-13 |

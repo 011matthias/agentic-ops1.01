@@ -69,6 +69,7 @@ from fastapi.responses import (
     PlainTextResponse,
     Response,
 )
+from starlette.concurrency import run_in_threadpool
 
 from ..cards import card_to_dict, effective_cards, normalize_cards_setting
 from ..cards_provision import card_by_key, load_cards
@@ -2211,20 +2212,31 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         file = str(((body or {}).get("file")) or "").strip()
         if not file:
             return JSONResponse({"error": "file is required"}, status_code=400)
-        with open_store() as store:
-            run, err = _mutable_expense_run_or_error(store, run_id)
-            if err is not None:
-                return err
-            try:
-                result = restore_set_aside_file(
-                    store, run, file, _now_iso(),
-                    learning_db_path=app.state.learning_db_path,
-                )
-            except RunInputError as exc:
-                return JSONResponse({"error": exc.message}, status_code=400)
-            run = store.get_run(run_id)
-            view = _expense_view(store, run)
-        return JSONResponse(jsonable_encoder({**result, "batch": view}))
+
+        # Off the event loop: restore_set_aside_file takes the batch writer
+        # lock, which an OCR ingest can hold for MINUTES. Blocking on it here
+        # would park the loop and stop every endpoint including /healthz, so
+        # Fly's health check fails and the restart kills that same ingest.
+        # The body read above has to be awaited, so the handler stays async
+        # and hands the locked span to the threadpool instead of going sync
+        # like delete_run. See tests/test_web_batch_lock_threadpool.py.
+        def _work():
+            with open_store() as store:
+                run, err = _mutable_expense_run_or_error(store, run_id)
+                if err is not None:
+                    return err
+                try:
+                    result = restore_set_aside_file(
+                        store, run, file, _now_iso(),
+                        learning_db_path=app.state.learning_db_path,
+                    )
+                except RunInputError as exc:
+                    return JSONResponse({"error": exc.message}, status_code=400)
+                run = store.get_run(run_id)
+                view = _expense_view(store, run)
+            return JSONResponse(jsonable_encoder({**result, "batch": view}))
+
+        return await run_in_threadpool(_work)
 
     @app.post("/api/expense-batches/{run_id}/cards")
     async def post_batch_cards(run_id: str, request: Request):
@@ -2254,23 +2266,28 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return JSONResponse(
                 {"error": "new_cards must be an object"}, status_code=400
             )
-        with open_store() as store:
-            run, err = _mutable_expense_run_or_error(store, run_id)
-            if err is not None:
-                return err
-            try:
-                result = assign_batch_cards(
-                    store, run,
-                    assignments=assignments,
-                    new_cards=new_cards,
-                    learn=bool(body.get("learn")),
-                    now_iso=_now_iso(),
-                )
-            except RunInputError as exc:
-                return JSONResponse({"error": exc.message}, status_code=400)
-            run = store.get_run(run_id)
-            view = _expense_view(store, run)
-        return JSONResponse(jsonable_encoder({**result, "batch": view}))
+        # Off the event loop, same reason as set-aside/restore above:
+        # assign_batch_cards takes the batch writer lock.
+        def _work():
+            with open_store() as store:
+                run, err = _mutable_expense_run_or_error(store, run_id)
+                if err is not None:
+                    return err
+                try:
+                    result = assign_batch_cards(
+                        store, run,
+                        assignments=assignments,
+                        new_cards=new_cards,
+                        learn=bool(body.get("learn")),
+                        now_iso=_now_iso(),
+                    )
+                except RunInputError as exc:
+                    return JSONResponse({"error": exc.message}, status_code=400)
+                run = store.get_run(run_id)
+                view = _expense_view(store, run)
+            return JSONResponse(jsonable_encoder({**result, "batch": view}))
+
+        return await run_in_threadpool(_work)
 
     @app.post("/api/expense-batches/{run_id}/refresh-master-data")
     def post_batch_refresh_master_data(run_id: str):
