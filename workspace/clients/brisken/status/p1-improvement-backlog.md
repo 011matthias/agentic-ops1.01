@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-08-21
+updated: 2026-08-22
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -121,7 +121,7 @@ a rare operational surface. Parked with a shape suggestion: keep
 sites, SPA prefers details when present. Do it when a round already
 touches those sites.
 
-### 21. Backend view shapes reach the SPA unverified (parse_issues crash)
+### 21. Backend view shapes reach the SPA unverified (SHIPPED - see Shipped row 13)
 
 2026-08-22, found live: the batch page died on React error #31 for every
 batch that HAS a parse issue. `parse_issues` ships as objects
@@ -136,12 +136,16 @@ richer parallel field is only safe if something CHECKS that the SPA
 absorbed it. Nothing does — the SPA is a separate repo with no type-check
 against the live API, and our tests assert the backend's shape only.
 
-Recurrence-kill worth building: a contract test that walks the documented
-view payloads (expense-batch view, run view) and asserts every field the
-SPA renders as text is a scalar, plus a short `docs/api-contract.md` the
-Lovable prompts can cite. Cheap version first: a test that pins the
-element type of every list field on both views, so a str->dict change
-fails in CI instead of on Criss's screen.
+The SPA fix is PUBLISHED and live-verified 2026-08-22 (bundle handles
+`ParseIssue[]` with a string-tolerant fallback; batch ae61e122a505 renders
+36 rows and shows the quarantine note, zero console errors). The
+recurrence-kill shipped the same day: `tests/test_view_contract.py` pins the
+element type of every list field on BOTH view payloads, probed over HTTP so
+`jsonable_encoder` is included, with a non-vacuity guard (a MUST_COVER set
+the fixtures have to actually populate) and `docs/api-contract.md` as the
+prose the Lovable prompts cite. Proven by regressing both emission sites to
+`string[]`: 3 of the 4 tests fail. Scalar-type flips are NOT covered by
+design (see the doc); lists are where the crash class lives.
 
 ### 16. Rejected matches need a "what now" (2026-07-27 note, untracked)
 
@@ -302,6 +306,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 13 | View-shape contract test: every list field on the expense-batch and run payloads has its ELEMENT type pinned in CI, probed over HTTP so the pin is what actually ships. A new list field fails until pinned (the moment to decide whether the SPA needs a prompt); a str->object flip fails at once; and a MUST_COVER set keeps the fixtures from passing vacuously by covering nothing. `docs/api-contract.md` carries the same table in prose plus the change rules (enrich via a PARALLEL field, never retype under a live renderer; ship the SPA half in the same round; render defensively) | The 2026-08-22 crash: `parse_issues` had been objects since 2026-07-22, the SPA typed it `string[]`, and Criss's batch page went blank behind the root error boundary for every batch carrying an issue. Nothing in either repo could see the mismatch. Proven by regressing both emission sites back to strings: 3 of 4 tests fail | this round, 2026-08-22; suite 1218 passed / 2 skipped |
 | 8 | Mail intake (the app's own mailbox): faculty mail receipts to any-name@expenses.brisken.com and they land in the open month batch automatically — in-app SMTP listener on Fly port 25, raw mail archived on the volume as system of record, per-file "submitted by" provenance (To-alias beats From-sender), deny-by-default sender allowlist answered in-protocol (550, we send nothing), day spend budget + disk/in-flight guards, held-mail strip + one-click replay. Hardened pre-ship by a 3-lens adversarial review (6 highs fixed: archive-before-250 custody, batch-mutation lock killing a silent receipt-loss race, snapshot-keyed dedupe so killed jobs can't make loss resend-proof, raceproof caps, zip refusal, replay/status truth) | Dirk's directive (2026-08-20): one address collects expenses and their paraphernalia; Criss's workload shrinks to review + reconcile. Direct faculty mail also removes her relay role and attributes each expense to a person | PR #548, 2026-08-20; Lovable half `docs/lovable-mail-intake-prompt.md` |
 | 1 | Non-receipt quarantine: the tool now recognizes bank-statement pages and report summary sheets among the uploads and sets them aside loudly instead of inventing an expense from them | Criss's real May folder had 7 statement PDFs among 27 files; a report summary page had become a phantom 8,796.35 BRL "expense" | PR #516, Fly v58, 2026-08-13 |
 | 2 | The word "null" can no longer appear as an expense account in the export; those rows now show the honest "(uncategorized - assign)" placeholder | The AI sometimes answers "no category" as the literal word "null", which Zoho cannot import and Criss would trip over monthly | PR #518, Fly v58, 2026-08-13 |

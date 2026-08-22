@@ -119,21 +119,23 @@ books_as mapping — its item 1 is APPLY FIRST, missing-image tile, No
 receipt state, source_file) — all backends live. After the owner
 publishes, DOM-probe the SPA (Lovable merge != live).
 
-**LIVE BLOCKER (2026-08-22, diagnosed, fix handed):** the expenses batch
-page crashes for any batch that has a parse issue. `parse_issues` is a
-list of objects (`{file, line, message, severity}`) and the SPA typed it
-`string[]` and rendered items directly, so React error #31 takes the page
-down through the root error boundary; backlog item 21 has the detail and
-the contract-test recurrence-kill. A Lovable fix prompt (type
-`ParseIssue[]`, render the fields, string-tolerant fallback) is with the
-owner and NOT yet published. A separate hosting bug the same day is
+**BLOCKER CLEARED (2026-08-22).** The batch page no longer crashes on a
+parse issue. The owner published the Lovable fix; the served bundle
+(`chunk-expenses._batchId`) renders `file`/`line`/`message` with a
+`typeof item === "string"` fallback, and a DOM probe of batch
+`ae61e122a505` (which really does carry one object-shaped parse issue)
+shows 36 table rows plus the quarantine note, no error boundary, zero
+console errors. The recurrence-kill shipped the same day:
+`tests/test_view_contract.py` + `docs/api-contract.md` pin the element type
+of every list field on BOTH view payloads (backlog item 21, Shipped row
+13). A separate hosting bug the same day is
 already fixed and live: Lovable's host 404s chunk files whose names begin
 with `_` (route-derived `_batchId`/`_runId`/`_intakeId`) plus `new-*`, so
 `vite.config.ts` now pins `chunkFileNames: "assets/chunk-[name]-[hash].js"`
 — never remove that override, and if pages 404 again, sweep the published
 bundle's asset list before suspecting the backend.
 
-Suite baseline is now **1214 passed / 2 skipped**; `calibrate
+Suite baseline is now **1218 passed / 2 skipped**; `calibrate
 --config examples/run.example.json` green. Advisories are SNAPSHOTTED
 into each run's summary — existing runs keep old wording by design.
 
