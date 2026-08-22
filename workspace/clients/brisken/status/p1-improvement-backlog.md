@@ -71,6 +71,25 @@ practice; the pool-based mismatch warning fires on a 0-match outcome).
 **Export policy (user ruling 2026-08-21):** unresolved card/entity never
 blocks an export — placeholders, adjustable later, re-export folds it in.
 
+**R4 owner answers (2026-08-22):**
+
+1. *Mixed-entity export:* **one file with the entity as a column.** Shipped
+   (Shipped row 18). The export already wrote per-row entities after R3, so
+   the work was pinning the ruling and closing the gate gap beside it: an
+   entity-less batch was provisioned against NO chart, and now every row is
+   validated against the chart of the entity that pays it.
+2. *Cash and personal tenders as cards:* **no, handled at end of month.** No
+   code: the per-batch "assign this hint, this month only" path from R3 is
+   exactly that, and generic tenders are already refused as learned tokens so
+   they cannot silently become permanent.
+3. *Per-entity `zoho_account`:* moot. "Zoho does not matter anymore, the app
+   should have no connection or ties to zoho anymore" became item 23, and
+   layer 1 shipped the same day.
+
+**Still open in item 10:** persisted cards migration (the registry still
+composes read-time from the legacy maps; every card reads `source: "legacy"`)
+and intake dropdown unification.
+
 ### 11. Intake: delivered files + Month column + delete month (SHIPPED — PR #561)
 
 Shipped with the delete-month cascade (note 2, which had no own item) as
@@ -364,6 +383,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 18 | Cards R4, export half: a month whose receipts belong to different companies exports as ONE file with the entity as a column (owner ruling), and the chart gate became per-entity — `MultiEntityCoaGate` judges each row against the chart of the entity that actually pays it | The export half already worked after R3 and is now pinned by tests, but the gate beside it had a live hole: `CoaGate` was built when "a run targets ONE legal entity" was true, and provisioning looked up that one entity, so every entity-less batch (which is every Cards R3 batch) got NO `coa_validation` block and exported completely un-gated — exactly the batches most able to post an account to the wrong company. Proven both ways: the e2e test fails without the provisioning fix, and forcing one gate for all rows fails the per-entity test | this round, 2026-08-22; suite 1163 passed / 2 skipped, calibrate green |
 | 17 | The live Zoho connection is gone: API client, journal-posting CLI (`zoho-post`), the `coa_source: "api"` chart pull and the `seed-zoho` importer deleted, with a guard test that fails on any Zoho host, `ZOHO_*` credential read, or re-added subcommand | Owner directive: the app should have no connection or ties to Zoho. This layer was the actual connection — roughly 1,600 lines that could authenticate against and post into the live books. Nothing hosted used it (no `ZOHO_*` env on Fly, the web layer never imported the client), so removal is behavior-neutral where Criss works, and the credentials now have nowhere to be read. Doctor gained a real fix on the way: it rejected `coa_source: "none"`, which is the default | this round, 2026-08-22; suite 1158 passed / 2 skipped (65 tests of the deleted code went with it), calibrate green |
 | 16 | Upload rejections carry a stable code beside the English sentence (`issue_details` / `upload_issue_details`: `{code, file, suffix, limit}`) at all three emission sites, so the SPA can say "not a supported file type" in Portuguese without the backend ever retyping the prose list | The prose was English-only on a surface Criss meets when an upload goes wrong, and the obvious fix (enrich `issues` in place) is precisely the move that blanked the batch page on 2026-08-22. Parallel field instead, pinned in the contract test — proven by regressing both ways: an unpopulated details list fails the non-vacuity guard, and retyping `upload_issues` into objects fails the element check | this round, 2026-08-22; SPA half `docs/lovable-issue-codes-prompt.md` (optional, prose unchanged until applied) |
 | 15 | One meaning per count: `n_categorized` / `n_uncategorized` answer "how many still need a category" on BOTH screens (one implementation, `service.categorized_counts`), readiness moves to its own `n_ready`, and the batch list derives its counts from the live overlay instead of the summary frozen at ingest — so a category edit or a manual add moves the landing screen too | The operator saw "35 categorized" on the list and "5" on the batch page for the same April batch, with NEEDS CATEGORY claiming 31 rows when 1 needed a category: the page was counting export-readiness under the categorized label, so every Cards-R3 row awaiting an entity read as uncategorized. A count that contradicts itself across two screens costs exactly the trust the loop is buying. Both tests fail on the pre-fix code (page said 0 where 1 was categorized; list stayed 1 after an edit made it 2) | this round, 2026-08-22; suite 1223 passed / 2 skipped; SPA needs no change, optional READY tile in `docs/lovable-ready-tile-prompt.md` |

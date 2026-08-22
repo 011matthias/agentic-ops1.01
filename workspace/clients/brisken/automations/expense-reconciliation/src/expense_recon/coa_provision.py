@@ -176,6 +176,40 @@ def coa_validation_from_settings(
     return None
 
 
+def coa_validation_for_all_entities(
+    settings: dict | None, provisioning: dict | None
+) -> dict | None:
+    """A `coa_validation` block covering EVERY known entity, for a batch that
+    does not target one (Cards R4).
+
+    Since Cards R3 a batch can carry receipts from several companies, and the
+    owner ruled 2026-08-22 that it exports as one file with the entity as a
+    column. Such a batch has no single `legal_entity_id`, so the per-entity
+    lookup returned None and the run went out completely un-validated — the
+    gate silently did not exist for exactly the batches most likely to post an
+    account to the wrong company. This block carries one entry per entity;
+    `cli._build_coa_gate` turns it into a gate that judges each row against
+    the chart of the entity that actually pays it.
+
+    None when nothing is provisioned (fail-open, same as before).
+    """
+    labels: set[str] = set()
+    for key in ((settings or {}).get("entities") or {}):
+        if str(key).strip():
+            labels.add(str(key).strip())
+    for key in ((provisioning or {}).get("entities") or {}):
+        if str(key).strip():
+            labels.add(str(key).strip())
+    entries = []
+    for label in sorted(labels):
+        block = coa_validation_from_settings(label, settings, provisioning)
+        if block is not None:
+            entries.append(block)
+    if not entries:
+        return None
+    return {"enabled": True, "entities": entries}
+
+
 def apply_to_config(
     cfg: dict,
     entity_label: str,
@@ -200,7 +234,12 @@ def apply_to_config(
             return cfg  # respect an explicit block; don't clobber
         prov_path = path if path is not None else os.environ.get(PROVISION_ENV)
         provisioning = load_provisioning(prov_path) if prov_path else None
-        block = coa_validation_from_settings(entity_label, settings, provisioning)
+        if entity_label.strip():
+            block = coa_validation_from_settings(entity_label, settings, provisioning)
+        else:
+            # Entity-less batch (Cards R3): entity resolves per receipt, so
+            # gate against every entity's chart rather than none.
+            block = coa_validation_for_all_entities(settings, provisioning)
         if block is None:
             logger.info(
                 "COA provisioning: no chart for legal entity %r; run left "
@@ -210,11 +249,19 @@ def apply_to_config(
             return cfg
         new_cfg = dict(cfg)
         new_cfg["coa_validation"] = block
-        logger.info(
-            "COA provisioning: run validated against entity %r (org %s)",
-            block["entity_label"],
-            block["org_id"],
-        )
+        if block.get("entities"):
+            logger.info(
+                "COA provisioning: run validated per receipt against %d entity "
+                "charts (%s)",
+                len(block["entities"]),
+                ", ".join(e["entity_label"] for e in block["entities"]),
+            )
+        else:
+            logger.info(
+                "COA provisioning: run validated against entity %r (org %s)",
+                block["entity_label"],
+                block["org_id"],
+            )
         return new_cfg
     except Exception:  # noqa: BLE001 - never let provisioning break a run
         logger.debug("COA provisioning failed; leaving config unchanged", exc_info=True)

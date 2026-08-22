@@ -1737,8 +1737,27 @@ def _build_coa_gate(cfg: dict, config_dir: Path):
     if not isinstance(block, dict) or not block.get("enabled", True):
         return None
 
-    from .coa_gate import CoaGate, load_entity_chart
+    from .coa_gate import CoaGate, gate_for_entities, load_entity_chart
     from .ingest.chart_of_accounts import EXPENSE_ACCOUNT_TYPES
+
+    # Cards R4: a batch that mixes legal entities carries one entry per
+    # entity, and each row is gated against the chart of the entity that
+    # actually pays it. An entry that cannot be built is skipped rather than
+    # failing the batch (fail-open, like the rest of the provisioning chain);
+    # if none can be built there is nothing to gate against.
+    entries = block.get("entities")
+    if isinstance(entries, list):
+        gates: dict[str, CoaGate] = {}
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            try:
+                gate = _build_coa_gate({"coa_validation": entry}, config_dir)
+            except ConfigError:
+                continue
+            if gate is not None and isinstance(gate, CoaGate):
+                gates[gate.entity] = gate
+        return gate_for_entities(gates) if gates else None
 
     chart_path = block.get("chart_path")
     if not chart_path:
