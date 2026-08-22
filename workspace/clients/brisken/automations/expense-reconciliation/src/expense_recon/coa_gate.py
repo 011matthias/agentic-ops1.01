@@ -43,7 +43,7 @@ run.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
@@ -361,6 +361,86 @@ class CoaGate:
         the report (counts for logging / surfacing)."""
         report = self.validate(receipts)
         return apply_gate(receipts, report), report
+
+
+# ── many entities in one batch (Cards R4) ───────────────────────────
+
+
+@dataclass(frozen=True)
+class MultiEntityCoaGate:
+    """One `CoaGate` per legal entity, dispatched per receipt.
+
+    `CoaGate` was written when a run targeted ONE entity. Since Cards R3 a
+    batch legitimately mixes them (entity resolves per receipt from the
+    paying card), and the owner ruled 2026-08-22 that such a month exports as
+    ONE file with the entity as a column. Validating that file against a
+    single chart would be wrong in both directions: a row would be diverted
+    for an account that is perfectly postable under ITS entity, and another
+    would sail through on the strength of a chart it never posts to.
+
+    A receipt whose entity has no gate (unresolved, or an entity nobody
+    provisioned) passes through UNVALIDATED rather than being diverted — the
+    same fail-open the rest of the provisioning chain uses, and consistent
+    with the export ruling that an unresolved entity never blocks an export.
+    """
+
+    gates: Mapping[str, CoaGate]
+
+    def _partition(
+        self, receipts: Sequence[Receipt]
+    ) -> tuple[dict[str, list[Receipt]], list[Receipt]]:
+        """Receipts grouped by the entity that will gate them, plus the ones
+        no gate covers."""
+        by_entity: dict[str, list[Receipt]] = {}
+        ungated: list[Receipt] = []
+        for r in receipts:
+            entity = (r.legal_entity_id or "").strip()
+            if entity in self.gates:
+                by_entity.setdefault(entity, []).append(r)
+            else:
+                ungated.append(r)
+        return by_entity, ungated
+
+    def validate(self, receipts: Sequence[Receipt]) -> CoaGateReport:
+        merged: list[LineVerdict] = []
+        counts: dict[str, int] = {}
+        by_entity, _ungated = self._partition(receipts)
+        for entity, group in by_entity.items():
+            report = self.gates[entity].validate(group)
+            merged.extend(report.verdicts)
+            for verdict, n in report.counts.items():
+                counts[verdict] = counts.get(verdict, 0) + n
+        return CoaGateReport(
+            entity=", ".join(sorted(by_entity)), verdicts=tuple(merged), counts=counts
+        )
+
+    def run(self, receipts: Sequence[Receipt]) -> tuple[list[Receipt], CoaGateReport]:
+        """Validate + divert per entity, then restore the caller's order.
+
+        Diversion runs per entity so each review note names the entity the row
+        actually failed under; a merged report could only name one of them.
+        """
+        by_entity, ungated = self._partition(receipts)
+        gated_by_doc: dict[str, Receipt] = {r.document_id: r for r in ungated}
+        merged: list[LineVerdict] = []
+        counts: dict[str, int] = {}
+        for entity, group in by_entity.items():
+            gated, report = self.gates[entity].run(group)
+            for r in gated:
+                gated_by_doc[r.document_id] = r
+            merged.extend(report.verdicts)
+            for verdict, n in report.counts.items():
+                counts[verdict] = counts.get(verdict, 0) + n
+        out = [gated_by_doc.get(r.document_id, r) for r in receipts]
+        return out, CoaGateReport(
+            entity=", ".join(sorted(by_entity)), verdicts=tuple(merged), counts=counts
+        )
+
+
+def gate_for_entities(gates: Mapping[str, CoaGate]) -> MultiEntityCoaGate:
+    """The export seam takes anything with `.run(receipts)`; this is the
+    many-entity implementation of it."""
+    return MultiEntityCoaGate(gates=dict(gates))
 
 
 # ── entity chart loader ─────────────────────────────────────────────
