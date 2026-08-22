@@ -89,6 +89,7 @@ from .service import (
     assign_batch_cards,
     attach_emailed_receipt,
     available_entities,
+    batch_list_summary,
     build_expense_view,
     build_memory_view,
     build_view,
@@ -2116,24 +2117,26 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         SPA's batch landing screen."""
         if not _receipt_first_on():
             return _flag_off()
+        # The rows are composed INSIDE the store context: the summary is
+        # derived from each batch's live overlay, which needs a live store.
         with open_store() as store:
-            runs = store.list_runs()
-        return JSONResponse({
-            "batches": [
+            batches = [
                 {
                     "batch_id": r.run_id,
                     "run_id": r.run_id,
                     "label": r.label,
                     "created_at": r.created_at,
-                    "summary": r.summary,
+                    # Derived, not the frozen ingest summary: the list and
+                    # the batch page must show one number (2026-08-22).
+                    "summary": batch_list_summary(store, r),
                     # Lifecycle: False = still collecting receipts; True =
                     # statement attached, review lives in the workbench.
                     "has_statement": has_statement(r),
                 }
-                for r in runs
+                for r in store.list_runs()
                 if (r.config or {}).get("mode") == MODE_EXPENSE_GENERATION
             ]
-        })
+        return JSONResponse({"batches": batches})
 
     @app.get("/api/expense-batches/{run_id}")
     def get_expense_batch(run_id: str):

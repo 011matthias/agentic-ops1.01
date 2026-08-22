@@ -559,3 +559,80 @@ def test_attached_manual_receipt_keeps_view_button(client, monkeypatch):
            _grid(client, batch_id)["expenses"]}[manual_doc]
     assert row["receipt_image_available"] is True
     assert row["source_file"] == "hotel-bill.jpg"
+
+
+# ── one meaning per count, on both screens ──────────────────────────
+
+
+def _entity_less_pair(client, monkeypatch) -> tuple[str, list[dict]]:
+    """An entity-less batch of two receipts where exactly ONE carries a
+    category out of ingest. No cards are configured, so BOTH rows sit in
+    `needs_entity` review — the shape the live April batch had (30 of 36)."""
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="Staples"),
+        _extraction(vendor="Cafe Lisboa", total="18.00"),
+    )
+    batch_id = _create_batch(
+        client, files=[("a.jpg", JPG), ("b.jpg", JPG + b"2")], legal_entity=""
+    )
+    rows = _grid(client, batch_id)["expenses"]
+    categorized = [r for r in rows if (r["posting_category"] or {}).get("category")]
+    # Precondition, asserted so a categorizer change fails here and not in
+    # an unrelated-looking count assertion below.
+    assert len(categorized) == 1, [r["posting_category"] for r in rows]
+    assert all(r["review"]["reason_code"] == "needs_entity" for r in rows)
+    return batch_id, rows
+
+
+def test_categorized_counts_the_category_not_the_readiness(client, monkeypatch):
+    """`n_categorized` answers one question: how many expenses still need a
+    category. Found live 2026-08-22 — the batch page counted rows whose
+    review state was `ready`, so a row that WAS categorized but had no
+    entity yet (Cards R3's `needs_entity`, 30 of the April batch's 36 rows)
+    was reported as uncategorized: the list screen said 35 categorized and
+    the batch page said 5 for the same batch. Readiness is a real signal
+    and keeps its own count."""
+    batch_id, _ = _entity_less_pair(client, monkeypatch)
+
+    summary = _grid(client, batch_id)["summary"]
+    assert summary["n_categorized"] == 1
+    assert summary["n_uncategorized"] == 1
+    # The number the old n_categorized actually carried, under its own name.
+    assert summary["n_ready"] == 0
+    assert summary["n_needs_entity"] == 2
+    assert summary["n_review"] == 2
+
+
+def test_batch_list_counts_agree_with_the_batch_page(client, monkeypatch):
+    """Both screens read one number, at ingest and after every edit. The
+    list served the summary frozen at ingest, so a reviewer's category
+    edits never moved it; it is derived from the same live state the batch
+    page renders."""
+    batch_id, rows = _entity_less_pair(client, monkeypatch)
+
+    def counts() -> tuple[dict, dict]:
+        page = _grid(client, batch_id)["summary"]
+        (listed,) = [
+            b for b in client.get("/api/expense-batches").json()["batches"]
+            if b["batch_id"] == batch_id
+        ]
+        return page, listed["summary"]
+
+    page, listed = counts()
+    assert listed["n_categorized"] == page["n_categorized"] == 1
+    assert listed["n_uncategorized"] == page["n_uncategorized"] == 1
+    assert listed["n_expenses"] == page["n_expenses"] == 2
+
+    uncategorized = next(
+        r for r in rows if not (r["posting_category"] or {}).get("category")
+    )
+    resp = client.put(
+        f"/api/runs/{batch_id}/expenses/{uncategorized['document_id']}",
+        json={"field": "category", "value": "Office Supplies & Consumables"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    page, listed = counts()
+    assert listed["n_categorized"] == page["n_categorized"] == 2
+    assert listed["n_uncategorized"] == page["n_uncategorized"] == 0

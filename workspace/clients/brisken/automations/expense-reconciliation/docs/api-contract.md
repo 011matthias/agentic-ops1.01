@@ -92,6 +92,32 @@ which is the shape the crash took. Widening the pin to every leaf is a
 several-hundred-row table that churns every round; if a scalar flip ever bites,
 that is the moment to widen it, not before.
 
+## Summary counts: one name, one question
+
+Types are not the only contract a payload carries. `n_categorized` shipped on
+both the batch list and the batch page with two different meanings — the list
+counted expenses that had a category, the page counted rows whose review state
+was `ready` — so April 2026 read "35 categorized" on one screen and "5" on the
+other (operator note, 2026-08-22). Nothing failed; the number was just false.
+
+Each count answers exactly one question, and every payload that carries the
+name answers the same one:
+
+| Key | Question |
+|---|---|
+| `n_expenses` · `n_receipts` | how many expenses are in the batch |
+| `n_categorized` · `n_uncategorized` | how many still need a category |
+| `n_ready` | how many need NOTHING from the reviewer (category, entity, core fields) |
+| `n_review` | how many are flagged for a look (`check` or `pick`) |
+| `n_needs_entity` | how many could not resolve a legal entity |
+| `n_set_aside` | how many files the quarantine is still holding back |
+
+`service.categorized_counts` is the single implementation of the categorized
+rule; `service.batch_list_summary` derives the list screen's counts from the
+same live overlay the batch page renders, so a reviewer's edit moves both. A
+new count gets a row here and its own name — never a second meaning on an
+existing one.
+
 ## Rules for changing a list field
 
 1. **Enriching a field in place is the dangerous move.** Adding keys to an
