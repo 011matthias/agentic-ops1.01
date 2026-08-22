@@ -99,6 +99,10 @@ EXPENSE_BATCH_CONTRACT = {
     "parse_issues[]": "object",
     "set_aside[]": "object",
     "summary.upload_issues[]": "string",
+    # Item 20: the same rejections with a stable code beside the prose. The
+    # prose list stays `string[]` on purpose — enriching it in place is the
+    # move that took the batch page down (see docs/api-contract.md).
+    "summary.upload_issue_details[]": "object",
 }
 
 RUN_CONTRACT = {
@@ -140,6 +144,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "card_review.resolved[]",
     "card_review.resolved[].hints[]",
     "summary.upload_issues[]",
+    "summary.upload_issue_details[]",
     "account_options[]",
     "category_options[]",
     "entity_options[]",

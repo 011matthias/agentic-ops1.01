@@ -110,16 +110,21 @@ i18n keys are SPA work in `docs/lovable-language-receipt-prompt.md`
 blank account label on uncategorized parts until applied). The
 parse/upload-issue prose piece moved to item 20.
 
-### 20. Issue codes on upload/parse-issue prose (parked from round 7)
+### 20. Issue codes on upload/parse-issue prose (SHIPPED - see Shipped row 16)
 
-`expense_ingest.issues` and the upload-validation reply are lists of
-English strings at three emission sites (password-protected /
-unsupported type / empty-unreadable / too-large). Localizing them means
-a string-to-object contract change the SPA must absorb in lockstep, for
-a rare operational surface. Parked with a shape suggestion: keep
-`issues` and add a parallel `issue_details: [{code, file}]` at the same
-sites, SPA prefers details when present. Do it when a round already
-touches those sites.
+Shipped 2026-08-22 exactly as the parked shape proposed: `issues` /
+`upload_issues` keep their English prose and their `string[]` type, and a
+parallel `issue_details` / `upload_issue_details` carries
+`{code, file, suffix, limit}` at the same three emission sites (batch
+create, folder ingest, add receipts). Four codes: `unsupported_type`,
+`empty_or_unreadable`, `too_large`, `upload_cap` (the backlog's
+"password-protected" case does not exist in the code). `service.upload_issue`
+builds the sentence and the code in one call, so a reworded message cannot
+drift from what the SPA localizes. Pinned in `tests/test_view_contract.py`
+(the pin bites: an empty details list fails the non-vacuity guard, and
+retyping `upload_issues` into objects fails the element check). SPA half:
+`docs/lovable-issue-codes-prompt.md` — optional, the English sentences render
+unchanged until it is applied.
 
 ### 21. Backend view shapes reach the SPA unverified (SHIPPED - see Shipped row 13)
 
@@ -330,6 +335,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 16 | Upload rejections carry a stable code beside the English sentence (`issue_details` / `upload_issue_details`: `{code, file, suffix, limit}`) at all three emission sites, so the SPA can say "not a supported file type" in Portuguese without the backend ever retyping the prose list | The prose was English-only on a surface Criss meets when an upload goes wrong, and the obvious fix (enrich `issues` in place) is precisely the move that blanked the batch page on 2026-08-22. Parallel field instead, pinned in the contract test — proven by regressing both ways: an unpopulated details list fails the non-vacuity guard, and retyping `upload_issues` into objects fails the element check | this round, 2026-08-22; SPA half `docs/lovable-issue-codes-prompt.md` (optional, prose unchanged until applied) |
 | 15 | One meaning per count: `n_categorized` / `n_uncategorized` answer "how many still need a category" on BOTH screens (one implementation, `service.categorized_counts`), readiness moves to its own `n_ready`, and the batch list derives its counts from the live overlay instead of the summary frozen at ingest — so a category edit or a manual add moves the landing screen too | The operator saw "35 categorized" on the list and "5" on the batch page for the same April batch, with NEEDS CATEGORY claiming 31 rows when 1 needed a category: the page was counting export-readiness under the categorized label, so every Cards-R3 row awaiting an entity read as uncategorized. A count that contradicts itself across two screens costs exactly the trust the loop is buying. Both tests fail on the pre-fix code (page said 0 where 1 was categorized; list stayed 1 after an edit made it 2) | this round, 2026-08-22; suite 1223 passed / 2 skipped; SPA needs no change, optional READY tile in `docs/lovable-ready-tile-prompt.md` |
 | 14 | The batch writer lock never blocks the event loop: `set-aside/restore` and the cards-assignment endpoint hand their locked span to the threadpool, and a static AST guard fails CI on any future `async def` route that calls a lock-taking service function outside a sync closure (locked set derived from `service.py`, so a new one joins for free) | Pre-existing since Cards R3, found by the delete-month adversarial review. An OCR ingest holds that lock for MINUTES; an `async def` blocking on it parks the loop, so every endpoint including `/healthz` stops answering, Fly's health check fails, and the machine restart kills the very ingest that held the lock. Reproduced as a real freeze (/healthz never answered while the lock was held), fixed, re-run: 42s of timeouts became 2.2s. Guard proven by regressing the cards handler back inline | this round, 2026-08-22; suite 1221 passed / 2 skipped |
 | 13 | View-shape contract test: every list field on the expense-batch and run payloads has its ELEMENT type pinned in CI, probed over HTTP so the pin is what actually ships. A new list field fails until pinned (the moment to decide whether the SPA needs a prompt); a str->object flip fails at once; and a MUST_COVER set keeps the fixtures from passing vacuously by covering nothing. `docs/api-contract.md` carries the same table in prose plus the change rules (enrich via a PARALLEL field, never retype under a live renderer; ship the SPA half in the same round; render defensively) | The 2026-08-22 crash: `parse_issues` had been objects since 2026-07-22, the SPA typed it `string[]`, and Criss's batch page went blank behind the root error boundary for every batch carrying an issue. Nothing in either repo could see the mismatch. Proven by regressing both emission sites back to strings: 3 of 4 tests fail | this round, 2026-08-22; suite 1218 passed / 2 skipped |

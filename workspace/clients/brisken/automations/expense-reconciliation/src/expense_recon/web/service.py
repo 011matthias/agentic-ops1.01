@@ -1511,6 +1511,9 @@ def attach_emailed_receipt(
 
 FOLDER_RECEIPT_SUFFIXES = frozenset({".pdf", ".png", ".jpg", ".jpeg", ".webp"})
 FOLDER_RECEIPT_MAX_BYTES = 15 * 1024 * 1024
+# The same number the reviewer reads in the rejection sentence, so the
+# prose and the machine-readable `limit` cannot disagree.
+FOLDER_RECEIPT_MAX_MB = FOLDER_RECEIPT_MAX_BYTES // (1024 * 1024)
 # One bulk upload is one operator action on one run; a receipts-folder month
 # is ~20-40 files. The cap bounds vision cost and a zip's blast radius.
 FOLDER_MAX_FILES = 80
@@ -1519,6 +1522,43 @@ FOLDER_MAX_FILES = 80
 _FOLDER_TERMINAL = frozenset(
     {STATUS_CONFIRMED, STATUS_REJECTED, STATUS_ALREADY_POSTED}
 )
+
+
+# Upload rejections carry a stable CODE beside the English sentence, so the
+# SPA can say it in the reviewer's language (backlog item 20). The prose is
+# unchanged and `issues` stays `list[str]`: retyping a live list field in
+# place is what took the batch page down on 2026-08-22 (see
+# docs/api-contract.md). Every detail object carries the same four keys —
+# `suffix` and `limit` are null where the code does not use them — so a
+# consumer can map over the list without shape checks.
+UPLOAD_ISSUE_CAP = "upload_cap"
+UPLOAD_ISSUE_UNSUPPORTED = "unsupported_type"
+UPLOAD_ISSUE_EMPTY = "empty_or_unreadable"
+UPLOAD_ISSUE_TOO_LARGE = "too_large"
+
+
+def upload_issue(
+    code: str, file: str, *, suffix: str | None = None, limit: float | None = None
+) -> tuple[str, dict]:
+    """`(prose, detail)` for one rejected upload, from ONE place: the English
+    sentence and its code are built together, so a reworded message can never
+    drift from what the SPA localizes.
+
+    Callers append the prose to `issues` (unchanged contract) and the detail
+    to the parallel `issue_details`. `file` is the display name the reviewer
+    uploaded, never the spooled path.
+    """
+    if code == UPLOAD_ISSUE_CAP:
+        prose = f"upload cap {int(limit or 0)} reached; {file} and later skipped"
+    elif code == UPLOAD_ISSUE_UNSUPPORTED:
+        prose = f"{file}: unsupported type {suffix or '(none)'} (skipped)"
+    elif code == UPLOAD_ISSUE_EMPTY:
+        prose = f"{file}: empty or unreadable (skipped)"
+    elif code == UPLOAD_ISSUE_TOO_LARGE:
+        prose = f"{file}: too large ({int(limit or 0)} MB max) (skipped)"
+    else:  # pragma: no cover - a new code must add its sentence above
+        raise ValueError(f"unknown upload issue code: {code!r}")
+    return prose, {"code": code, "file": file, "suffix": suffix, "limit": limit}
 
 
 def _folder_receipt_files(staging_dir: Path):
@@ -1627,24 +1667,29 @@ def ingest_receipts_folder_into_run(
     new_receipts: list[Receipt] = []
     seen_hashes: set[str] = set()
     issues: list[str] = []
+    issue_details: list[dict] = []
+
+    def _issue(code: str, file: str, **kw) -> None:
+        prose, detail = upload_issue(code, file, **kw)
+        issues.append(prose)
+        issue_details.append(detail)
+
     n_seen = 0
     for name, data in _folder_receipt_files(staging_dir):
         n_seen += 1
         if n_seen > FOLDER_MAX_FILES:
-            issues.append(
-                f"upload cap {FOLDER_MAX_FILES} reached; {name} and later skipped"
-            )
+            _issue(UPLOAD_ISSUE_CAP, name, limit=FOLDER_MAX_FILES)
             break
         safe_name = Path(name or "").name
         suffix = Path(safe_name or "receipt").suffix.lower()
         if suffix not in FOLDER_RECEIPT_SUFFIXES:
-            issues.append(f"{safe_name}: unsupported type {suffix or '(none)'} (skipped)")
+            _issue(UPLOAD_ISSUE_UNSUPPORTED, safe_name, suffix=suffix or None)
             continue
         if not data:
-            issues.append(f"{safe_name}: empty or unreadable (skipped)")
+            _issue(UPLOAD_ISSUE_EMPTY, safe_name)
             continue
         if len(data) > FOLDER_RECEIPT_MAX_BYTES:
-            issues.append(f"{safe_name}: too large (15 MB max) (skipped)")
+            _issue(UPLOAD_ISSUE_TOO_LARGE, safe_name, limit=FOLDER_RECEIPT_MAX_MB)
             continue
         digest = hashlib.sha1(data).hexdigest()[:16]
         if digest in seen_hashes:
@@ -1783,6 +1828,9 @@ def ingest_receipts_folder_into_run(
         # add path (caught live 2026-07-28); a real tracker returns Decimal.
         "cost_usd": float(round(tracker.total_cost_usd, 4)) if tracker else 0.0,
         "issues": issues,
+        # Same rejections, machine-readable (item 20). `issues` keeps the
+        # English prose for any existing reader.
+        "issue_details": issue_details,
     }
 
     new_snapshot = dict(run.snapshot)
@@ -3451,6 +3499,7 @@ class PreparedExpenseBatch:
     now_iso: str
     operator: str | None
     upload_issues: list[str]
+    upload_issue_details: list[dict]
     # Phase 6: learned merchant->entity + field corrections, consulted by
     # generate_expenses only (never reconcile).
     expense_memory: object | None = None
@@ -3504,28 +3553,31 @@ def create_expense_batch(
         (staging / f"{i:04d}__{safe}").write_bytes(data or b"")
 
     issues: list[str] = []
+    issue_details: list[dict] = []
+
+    def _issue(code: str, file: str, **kw) -> None:
+        prose, detail = upload_issue(code, file, **kw)
+        issues.append(prose)
+        issue_details.append(detail)
+
     seen_hashes: set[str] = set()
     n_saved = n_seen = 0
     for name, data in _folder_receipt_files(staging):
         n_seen += 1
-        if n_seen > FOLDER_MAX_FILES:
-            issues.append(
-                f"upload cap {FOLDER_MAX_FILES} reached; {name} and later skipped"
-            )
-            break
         # Staged files carry the spool prefix; strip it for the stored name.
         display = re.sub(r"^\d{4}__", "", Path(name).name)
+        if n_seen > FOLDER_MAX_FILES:
+            _issue(UPLOAD_ISSUE_CAP, display, limit=FOLDER_MAX_FILES)
+            break
         suffix = Path(display or "receipt").suffix.lower()
         if suffix not in FOLDER_RECEIPT_SUFFIXES:
-            issues.append(
-                f"{display}: unsupported type {suffix or '(none)'} (skipped)"
-            )
+            _issue(UPLOAD_ISSUE_UNSUPPORTED, display, suffix=suffix or None)
             continue
         if not data:
-            issues.append(f"{display}: empty or unreadable (skipped)")
+            _issue(UPLOAD_ISSUE_EMPTY, display)
             continue
         if len(data) > FOLDER_RECEIPT_MAX_BYTES:
-            issues.append(f"{display}: too large (15 MB max) (skipped)")
+            _issue(UPLOAD_ISSUE_TOO_LARGE, display, limit=FOLDER_RECEIPT_MAX_MB)
             continue
         digest = hashlib.sha1(data).hexdigest()[:16]
         if digest in seen_hashes:
@@ -3616,6 +3668,7 @@ def create_expense_batch(
         now_iso=now_iso,
         operator=operator,
         upload_issues=issues,
+        upload_issue_details=issue_details,
         expense_memory=expense_memory,
         registry=registry,
     )
@@ -3660,6 +3713,7 @@ def execute_expense_batch(
         ),
         "ai_unavailable": prepared.ai_unavailable,
         "upload_issues": prepared.upload_issues,
+        "upload_issue_details": prepared.upload_issue_details,
     }
     snapshot = snapshot_to_dict([], receipts, result.outcome, result.parse_errors)
     if set_aside:
@@ -4341,6 +4395,9 @@ def build_expense_view(
         "llm_cost_usd": run.summary.get("llm_cost_usd", "0"),
         "ai_unavailable": run.summary.get("ai_unavailable", False),
         "upload_issues": run.summary.get("upload_issues", []),
+        # Absent on every run created before item 20; the SPA falls back to
+        # the prose whenever this list is empty.
+        "upload_issue_details": run.summary.get("upload_issue_details", []),
     }
 
     # Phase 5 pickers: entities the reviewer can assign (the real entities
@@ -5238,6 +5295,13 @@ def _add_receipts_locked(
 
     _stage("ingesting")
     issues: list[str] = []
+    issue_details: list[dict] = []
+
+    def _issue(code: str, file: str, **kw) -> None:
+        prose, detail = upload_issue(code, file, **kw)
+        issues.append(prose)
+        issue_details.append(detail)
+
     new_receipts: list[Receipt] = []
     new_set_aside: list[dict] = []
     new_provenance: dict[str, dict] = {}
@@ -5252,23 +5316,19 @@ def _add_receipts_locked(
             n_index = max(n_index, int(m.group(1)) + 1)
     for name, data in _folder_receipt_files(staging_dir):
         n_seen += 1
-        if n_seen > FOLDER_MAX_FILES:
-            issues.append(
-                f"upload cap {FOLDER_MAX_FILES} reached; {name} and later skipped"
-            )
-            break
         display = re.sub(r"^\d{4}__", "", Path(name).name)
+        if n_seen > FOLDER_MAX_FILES:
+            _issue(UPLOAD_ISSUE_CAP, display, limit=FOLDER_MAX_FILES)
+            break
         suffix = Path(display or "receipt").suffix.lower()
         if suffix not in FOLDER_RECEIPT_SUFFIXES:
-            issues.append(
-                f"{display}: unsupported type {suffix or '(none)'} (skipped)"
-            )
+            _issue(UPLOAD_ISSUE_UNSUPPORTED, display, suffix=suffix or None)
             continue
         if not data:
-            issues.append(f"{display}: empty or unreadable (skipped)")
+            _issue(UPLOAD_ISSUE_EMPTY, display)
             continue
         if len(data) > FOLDER_RECEIPT_MAX_BYTES:
-            issues.append(f"{display}: too large (15 MB max) (skipped)")
+            _issue(UPLOAD_ISSUE_TOO_LARGE, display, limit=FOLDER_RECEIPT_MAX_MB)
             continue
         digest = hashlib.sha1(data).hexdigest()[:16]
         if digest in existing_hashes:
@@ -5368,6 +5428,8 @@ def _add_receipts_locked(
         # 2026-07-28: the add job died at "saving" with a real tracker).
         "cost_usd": float(round(tracker.total_cost_usd, 4)) if tracker else 0.0,
         "issues": issues,
+        # Same rejections, machine-readable (item 20); prose unchanged.
+        "issue_details": issue_details,
     }
     new_snapshot = dict(run.snapshot)
     new_snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
