@@ -840,8 +840,8 @@ loop into the posting system.
 | 4.4 | Output rewrite for 5+N tab structure (LD-3) — Summary + per-card tabs + Needs Review + Unmatched + Errors | `output/report_xlsx.py` |
 | 4.5 | Row coloring per Source tier (LD-4) | `output/report_xlsx.py` |
 | 4.6 | Zoho journal-entry export — one entry per categorized line item (LD-2: one receipt → N entries) | `src/expense_recon/output/zoho_export.py` |
-| 4.7 | Optional: direct Zoho Books API client (slice 4b) — **read path BUILT 2026-06; write path (`create_journal` + `list_journals`) BUILT 2026-07-28, reachable only via `zoho-post`** | `src/expense_recon/zoho/client.py` |
-| 4.8 | Idempotency: don't double-post same line item — **BUILT 2026-07-28, OFF by default.** `PostLedger` (sqlite, runlog conventions + privacy: refs/hashes/journal-ids, never amounts) with write-ahead intent (`inflight`→`posted`), content-hash conflict detection, ambiguous-failure quarantine (network/5xx → batch abort → `--verify` reconciles against Zoho by reference_number). `expense-recon zoho-post` posts the REVIEWED export CSV (send-by-id), dry-run default, `--go` gated on config `zoho.post.enabled` AND env `EXPENSE_RECON_ZOHO_POST=1` AND hard org allowlist (822741658/697686691) AND a clean plan (`--expect N` count assert; conflicts/unresolved always refuse). Journals post as `draft`. Adversarially reviewed pre-ship (16 findings fixed: confirm-only verify + grace window, UPSERT marks, cross-org refusal, COA-verdict blockers, narrow-only allowlist — detail in ANNEALING resolved-2026-07-28). 53 tests | `src/expense_recon/zoho/idempotent.py`, `zoho_post_cli.py` |
+| 4.7 | Optional: direct Zoho Books API client (slice 4b) — **BUILT 2026-06/07, DELETED 2026-08-22** (owner directive: the app holds no connection to Zoho; guard: `tests/test_no_zoho_connection.py`) | `src/expense_recon/zoho/client.py` |
+| 4.8 | Idempotency: don't double-post same line item — **BUILT 2026-07-28, never enabled, DELETED 2026-08-22 with the API client.** `PostLedger` (sqlite, runlog conventions + privacy: refs/hashes/journal-ids, never amounts) with write-ahead intent (`inflight`→`posted`), content-hash conflict detection, ambiguous-failure quarantine (network/5xx → batch abort → `--verify` reconciles against Zoho by reference_number). `expense-recon zoho-post` posts the REVIEWED export CSV (send-by-id), dry-run default, `--go` gated on config `zoho.post.enabled` AND env `EXPENSE_RECON_ZOHO_POST=1` AND hard org allowlist (822741658/697686691) AND a clean plan (`--expect N` count assert; conflicts/unresolved always refuse). Journals post as `draft`. Adversarially reviewed pre-ship (16 findings fixed: confirm-only verify + grace window, UPSERT marks, cross-org refusal, COA-verdict blockers, narrow-only allowlist — detail in ANNEALING resolved-2026-07-28). 53 tests | `src/expense_recon/zoho/idempotent.py`, `zoho_post_cli.py` |
 | 4.9 | Config extension: `zoho:` block (export path OR API creds) | `cli.py` |
 | 4.10 | End-to-end tests on Zoho export format | `tests/test_zoho_export.py` |
 | 4.11 | Pre-write COA validation gate + provisioning | `src/expense_recon/coa_gate.py`, `coa_provision.py` |
@@ -996,7 +996,7 @@ Slice 5b shipped with 11 tests (`tests/test_runlog.py`). 4.8 line-item idempoten
 4. Run `expense-recon doctor --config runs/<this-month>.json`; confirms her setup.
 5. Monthly: copy `template.json`, fill in the month's statement + receipts folder, run `expense-recon --config runs/2026-05-amex.json`.
 6. Open the report.xlsx, review the Needs Review sheet, accept/edit categories on the Matches sheet, run the Zoho export.
-7. Upload Zoho CSV in Zoho Books import interface (or `expense-recon zoho-post` if 4b shipped).
+7. Upload the exported CSV into the accounting system (the `zoho-post` direct-posting path was deleted 2026-08-22).
 
 **Acceptance criteria:**
 

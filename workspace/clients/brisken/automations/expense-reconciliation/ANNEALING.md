@@ -34,7 +34,12 @@ hashes exclude Notes/provenance so an LLM-confidence string change
 reads as a skip, not a conflict; an amount/account change reads as a
 conflict and refuses.
 
-**Why entries come from the CSV, not a rebuild.** `zoho-post` consumes
+**REMOVED 2026-08-22.** `zoho-post` and the whole accounting-API
+connection were deleted on the owner's directive ("the app should have no
+connection or ties to zoho anymore"). The reasoning below is kept because
+the send-by-id principle it records still governs any future posting path.
+
+**Why entries come from the CSV, not a rebuild.** `zoho-post` consumed
 the reviewed export artifact (`read_journal_csv`, header-validated,
 grouped by Reference#) — send-by-id: what posts is byte-for-byte what
 a human reviewed. Freshness is on the operator: regenerate the CSV
@@ -53,7 +58,8 @@ reviewable in Zoho. Fly carries no ZOHO_* creds and never sets the
 env, so the hosted path is structurally inert. Live posting to the
 real tenant additionally stays behind the invasive-action per-action
 owner yes; the OAuth token also still lacks the Books journal write
-scope until the owner re-consents (same gate as `memory seed-zoho`).
+scope until the owner re-consents (same gate as the removed `memory
+seed-zoho` importer).
 
 **Adversarially reviewed before ship (26-agent find→refute workflow),
 16 confirmed findings fixed same-session.** The load-bearing ones:
