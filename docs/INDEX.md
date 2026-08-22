@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-22 | Brisken Recon Zoho Decoupling + Cards R4 | client-dev | [Mini-Checkpoint-2](docs/2026-08-22%20-%20Brisken%20Recon%20Zoho%20Decoupling%20%2B%20Cards%20R4/Mini-Checkpoint-2.md) |
 | 2026-08-22 | Brisken Recon Count Semantics + Issue Codes | client-dev | [→](docs/2026-08-22%20-%20Brisken%20Recon%20Count%20Semantics%20%2B%20Issue%20Codes/Checkpoint.md) |
 | 2026-08-22 | Brisken Recon SPA Contract Test + Batch-Lock Threadpool | client-dev | [→](docs/2026-08-22%20-%20Brisken%20Recon%20SPA%20Contract%20Test%20%2B%20Batch-Lock%20Threadpool/Checkpoint.md) |
 | 2026-08-22 | Brisken Recon SPA Crash Diagnosis | client-dev | [Mini-Checkpoint-2](docs/2026-08-22%20-%20Brisken%20Recon%20SPA%20Crash%20Diagnosis/Mini-Checkpoint-2.md) |
