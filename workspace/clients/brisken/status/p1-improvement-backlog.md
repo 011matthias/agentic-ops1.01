@@ -121,6 +121,28 @@ a rare operational surface. Parked with a shape suggestion: keep
 sites, SPA prefers details when present. Do it when a round already
 touches those sites.
 
+### 21. Backend view shapes reach the SPA unverified (parse_issues crash)
+
+2026-08-22, found live: the batch page died on React error #31 for every
+batch that HAS a parse issue. `parse_issues` ships as objects
+(`{file, line, message, severity}`, service.py:2745 and :4300, added
+2026-07-22 beside the raw `parse_errors`); the SPA typed the field
+`string[]` and rendered each item directly, so React threw and the root
+error boundary ate the whole page. Latent from the 2026-08-21 SPA commit
+that added the block until a batch finally carried an issue.
+
+This is item 20's proposed pattern already having failed once: adding a
+richer parallel field is only safe if something CHECKS that the SPA
+absorbed it. Nothing does — the SPA is a separate repo with no type-check
+against the live API, and our tests assert the backend's shape only.
+
+Recurrence-kill worth building: a contract test that walks the documented
+view payloads (expense-batch view, run view) and asserts every field the
+SPA renders as text is a scalar, plus a short `docs/api-contract.md` the
+Lovable prompts can cite. Cheap version first: a test that pins the
+element type of every list field on both views, so a str->dict change
+fails in CI instead of on Criss's screen.
+
 ### 16. Rejected matches need a "what now" (2026-07-27 note, untracked)
 
 STATUS_REJECTED sends the transaction back to unmatched and is reversible
