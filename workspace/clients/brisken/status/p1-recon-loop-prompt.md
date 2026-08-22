@@ -138,7 +138,32 @@ with `_` (route-derived `_batchId`/`_runId`/`_intakeId`) plus `new-*`, so
 — never remove that override, and if pages 404 again, sweep the published
 bundle's asset list before suspecting the backend.
 
-Suite baseline is now **1221 passed / 2 skipped**; `calibrate
+**Round 8 of the wave is still the only wave item left, and it is still
+gated on the owner (backlog item 10: per-entity export files? cash/personal
+tenders as cards? per-entity zoho_account?). Nothing in the repo or the app
+answers it as of 2026-08-22; do not re-ask.** Two rounds shipped instead the
+same day, both from the live app rather than the plan:
+
+- **Count semantics (PR #575, backlog item 22, deployed).** An operator note
+  at 13:34 UTC: "it sayz 35 categorized but when you click on open it says
+  only 5 categorized". Same batch, same key, two meanings — the list counted
+  expenses carrying a category (35 of 36, true), the batch page counted rows
+  whose review state was `ready`, so the 30 Cards-R3 rows awaiting an entity
+  read as uncategorized and NEEDS CATEGORY claimed 31 when 1 needed a
+  category. `service.categorized_counts` is now the single rule behind every
+  payload, readiness has its own `n_ready`, and `service.batch_list_summary`
+  derives the list screen from the same live overlay the batch page renders
+  (the stored summary is frozen at ingest, so an edit never moved it).
+  DOM-verified after deploy: the tiles read CATEGORIZED 35 / NEEDS CATEGORY 1.
+  The SPA needed no change; optional READY tile in
+  `docs/lovable-ready-tile-prompt.md`.
+- **Issue codes (PR #576, backlog item 20, deployed).** Upload rejections now
+  carry `{code, file, suffix, limit}` in a PARALLEL `issue_details` /
+  `upload_issue_details` at all three emission sites; `issues` keeps its
+  English prose and its `string[]` type. Pinned in `test_view_contract.py`.
+  SPA half `docs/lovable-issue-codes-prompt.md` is optional.
+
+Suite baseline is now **1225 passed / 2 skipped**; `calibrate
 --config examples/run.example.json` green. Advisories are SNAPSHOTTED
 into each run's summary — existing runs keep old wording by design.
 
