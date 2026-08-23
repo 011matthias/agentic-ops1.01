@@ -1,12 +1,17 @@
-"""Mail intake (the app's own mailbox): parse -> allowlist -> archive ->
-route into the open expense batch with per-file submitter provenance.
-Decision logic is pure/sync; the SMTP transport is exercised through its
-decision functions, never a real socket. See web/intake_mail.py +
-web/smtp_server.py."""
+"""Mail intake (the app's own mailbox): parse -> archive -> route into the
+open expense batch with per-file submitter provenance.
+
+Submission is open to any sender (owner directive 2026-08-23); the
+boundaries that remain are the recipient domain (no relaying) and the spend
+guards. Decision logic is pure/sync; the SMTP transport is exercised
+through its decision functions and its handler, never a real socket. See
+web/intake_mail.py + web/smtp_server.py."""
 from __future__ import annotations
 
+import asyncio
 import json
 from email.message import EmailMessage
+from types import SimpleNamespace
 
 import pytest
 
@@ -30,9 +35,8 @@ from expense_recon.web.intake_mail import (  # noqa: E402
     read_log,
     replay_held,
     resolve_person,
-    sender_allowed,
 )
-from expense_recon.web.smtp_server import rcpt_decision, sender_decision  # noqa: E402
+from expense_recon.web.smtp_server import IntakeHandler, rcpt_decision  # noqa: E402
 from expense_recon.web.store import RunStore  # noqa: E402
 
 JPG = b"\xff\xd8\xff\xe0" + b"x" * 5000  # big enough to not read as a logo
@@ -136,17 +140,6 @@ def test_parse_body_only_mail():
     assert parsed.attachments == []
 
 
-# ------------------------------------------------------------- allowlist --
-
-def test_sender_allowlist_domain_and_exact():
-    allow = ("@brisken.com", "assistant@gmail.com")
-    assert sender_allowed("dirk.neumann@brisken.com", allow)
-    assert sender_allowed("ASSISTANT@GMAIL.COM".lower(), allow)
-    assert not sender_allowed("evil@gmail.com", allow)
-    assert not sender_allowed("", allow)
-    assert not sender_allowed("brisken.com", allow)
-
-
 def test_resolve_person_alias_beats_sender():
     cfg = IntakeConfig(aliases={"dirk": "Dirk Neumann"})
     by_alias = resolve_person(["dirk"], "criss@brisken.com", cfg)
@@ -165,17 +158,82 @@ def test_rcpt_decision_relay_denied():
     assert rcpt_decision(f"receipts@{DOMAIN}", DOMAIN, 10).startswith("452")
 
 
-def test_sender_decision_envelope_and_header_must_both_pass():
-    cfg = IntakeConfig()
-    ok = sender_decision(
-        "dirk.neumann@brisken.com", "dirk.neumann@brisken.com", cfg
+def _deliver(client, monkeypatch, raw: bytes, mail_from: str,
+             rcpt: str = f"receipts@{DOMAIN}") -> str:
+    """Drive the SMTP handler's acceptance path and return its reply line.
+
+    Routing is stubbed: everything under test here happens BEFORE the 250
+    (custody + the guards), and the real router would race the assertions.
+    """
+    from expense_recon.web import smtp_server as ss
+
+    def fake_route(self, arch, parsed):  # noqa: ARG001 - signature match
+        ss.end_route()
+
+    monkeypatch.setattr(IntakeHandler, "_route", fake_route)
+    monkeypatch.setattr(ss, "DAY_BUDGET", DayBudget())  # hermetic budget
+    state = client.app.state
+    handler = IntakeHandler(state.db_path, state.learning_db_path,
+                            state.data_root)
+    envelope = SimpleNamespace(content=raw, rcpt_tos=[rcpt],
+                               mail_from=mail_from)
+    session = SimpleNamespace(peer=("203.0.113.9", 51000))
+    return asyncio.run(handler.handle_DATA(None, session, envelope))
+
+
+def test_an_outside_sender_may_submit(client, monkeypatch):
+    """The allowlist is gone (owner directive 2026-08-23). A hotel mailing
+    an invoice, or a faculty member mailing from a private address, used to
+    get a 550 at this exact point; now the mail is taken into custody."""
+    raw = _mail("guest@gmail.com", attachments=[("hotel.pdf", b"%PDF-1.4 x")])
+    reply = _deliver(client, monkeypatch, raw, "guest@gmail.com")
+    assert reply.startswith("250")
+    log = read_log(client.app.state.data_root)
+    assert log[-1]["from"] == "guest@gmail.com"
+
+
+def test_a_forged_header_sender_is_no_longer_a_refusal(client, monkeypatch):
+    """Envelope and header sender used to have to agree, which is what
+    refused forwarded and relayed mail. Attribution still records both."""
+    raw = _mail("someone.else@example.org", attachments=[("r.jpg", JPG)])
+    reply = _deliver(client, monkeypatch, raw, "bounces@mailer.example")
+    assert reply.startswith("250")
+
+
+def test_the_listener_is_still_not_an_open_relay(client, monkeypatch):
+    """Opening the SENDER must not open the RECIPIENT: mail addressed
+    anywhere but our own domain is still refused, or the app becomes a
+    spam relay wearing Brisken's IP."""
+    assert rcpt_decision("victim@gmail.com", DOMAIN, 0).startswith("550")
+    raw = _mail("guest@gmail.com", attachments=[("r.jpg", JPG)])
+    reply = _deliver(client, monkeypatch, raw, "guest@gmail.com",
+                     rcpt=f"receipts@{DOMAIN}")
+    assert reply.startswith("250")
+
+
+def test_an_outside_submitter_gets_no_acknowledgement(monkeypatch):
+    """The ack now has an untrusted recipient, so the Graph guard is the
+    only thing between us and mailing confirmations to strangers as
+    Brisken. Pin it with the sender ENABLED, or the test passes for the
+    wrong reason (no creds in CI => every send is already False)."""
+    from expense_recon.web import graph_notify
+
+    for key in ("BRISKEN_TENANT_ID", "BRISKEN_GRAPH_CLIENT_ID",
+                "BRISKEN_GRAPH_CLIENT_SECRET"):
+        monkeypatch.setenv(key, "test")
+    # Token minting stands in for "reached the network"; returning None
+    # stops the send there, so no test ever talks to Graph.
+    reached_network: list[str] = []
+    monkeypatch.setattr(
+        graph_notify, "_get_token", lambda: reached_network.append("token")
     )
-    assert ok is None
-    # envelope passes but header sender does not -> refused
-    spoofed = sender_decision(
-        "dirk.neumann@brisken.com", "evil@gmail.com", cfg
-    )
-    assert spoofed.startswith("550")
+
+    assert graph_notify.send_mail("guest@gmail.com", "s", "b") is False
+    assert reached_network == []  # refused BEFORE any Graph call
+    # ...and an internal recipient does get past the guard, so the line
+    # above is the recipient rule and not some other early return.
+    graph_notify.send_mail("criss@brisken.com", "s", "b")
+    assert reached_network == ["token"]
 
 
 def test_day_budget_reserves_at_accept_and_charges_zero_file_mail(tmp_path):
@@ -229,13 +287,20 @@ def test_envelope_rcpts_feed_alias_resolution():
     assert parsed.to_locals == ["dirk"]
 
 
-def test_intake_settings_reject_matchless_sender_entry():
-    with pytest.raises(ValueError):
-        normalize_intake_setting({"senders": ["brisken.com"]})
+def test_intake_settings_drop_the_retired_senders_key():
+    """A stored blob or an older client may still send `senders`. It is
+    dropped, not rejected: a 400 on a dead key would block edits to the
+    live ones sitting beside it."""
     ok = normalize_intake_setting(
-        {"senders": ["@brisken.com", "helper@gmail.com"]}
+        {"senders": ["@brisken.com"], "aliases": {"dirk": "Dirk Neumann"}}
     )
-    assert ok["senders"] == ["@brisken.com", "helper@gmail.com"]
+    assert "senders" not in ok
+    assert ok["aliases"] == {"dirk": "Dirk Neumann"}
+
+
+def test_a_stored_senders_list_no_longer_gates_anything():
+    cfg = IntakeConfig.from_settings({"intake": {"senders": ["@brisken.com"]}})
+    assert not hasattr(cfg, "sender_allowlist")
 
 
 # ---------------------------------------------------------- end to end --
