@@ -239,6 +239,27 @@ def _flagged(rows):
     return [r for r in rows if r["review"]["reason_code"] == "date_outside_period"]
 
 
+def _pdf_text(raw: bytes) -> str:
+    """The report's text with whitespace collapsed.
+
+    reportlab wraps the prepared note, and WHERE it wraps depends on which TTF
+    `register_fonts` finds -- Arial on a Windows box, the Helvetica fallback on
+    the Linux CI runner. A raw substring check therefore passes locally and
+    fails in CI (it did, on this PR's first push, with the line break landing
+    inside the phrase), and the ABSENCE check below would pass vacuously for
+    the same reason. Collapse the whitespace so both read the sentence rather
+    than the line breaks.
+    """
+    import io
+
+    from pypdf import PdfReader
+
+    return " ".join(
+        " ".join((p.extract_text() or "").split())
+        for p in PdfReader(io.BytesIO(raw)).pages
+    )
+
+
 def test_the_live_april_batch_flags_exactly_its_eleven_misreads(client, monkeypatch):
     """The defect, end to end. Eleven expenses are dated years away from the
     month they were filed under, and every one of them now reaches the
@@ -319,16 +340,10 @@ def test_the_month_report_names_the_dates_it_distrusts(client, monkeypatch):
     live April report showed a 2023 date and said nothing about it. The
     report now names the expense numbers whose dates fall outside the month,
     so a reader sees the doubt without cross-checking a screen."""
-    import io
-
-    from pypdf import PdfReader
-
     batch_id = _batch(client, monkeypatch, APRIL_2026_READINGS)
     pdf = client.get(f"/runs/{batch_id}/expense-report.pdf")
     assert pdf.status_code == 200, pdf.text
-    text = "\n".join(
-        p.extract_text() or "" for p in PdfReader(io.BytesIO(pdf.content)).pages
-    )
+    text = _pdf_text(pdf.content)
     assert "falls outside this month" in text
     # The misread rows are listed by expense number, and the note is plural
     # because eleven of them are wrong.
@@ -336,16 +351,9 @@ def test_the_month_report_names_the_dates_it_distrusts(client, monkeypatch):
 
 
 def test_the_month_report_stays_quiet_when_every_date_fits(client, monkeypatch):
-    import io
-
-    from pypdf import PdfReader
-
     clean = tuple(r for r in APRIL_2026_READINGS if r[1] not in MISREAD)
     batch_id = _batch(client, monkeypatch, clean)
-    pdf = client.get(f"/runs/{batch_id}/expense-report.pdf").content
-    text = "\n".join(
-        p.extract_text() or "" for p in PdfReader(io.BytesIO(pdf)).pages
-    )
+    text = _pdf_text(client.get(f"/runs/{batch_id}/expense-report.pdf").content)
     assert "falls outside this month" not in text
 
 
