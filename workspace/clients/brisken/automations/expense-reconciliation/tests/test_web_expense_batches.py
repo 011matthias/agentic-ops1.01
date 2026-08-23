@@ -736,3 +736,28 @@ def test_the_report_names_an_expense_that_has_no_receipt(client, monkeypatch):
     text = "\n".join(p.extract_text() or "" for p in PdfReader(io.BytesIO(pdf)).pages)
     assert "Typed by hand" in text
     assert "No receipt document" in text
+
+
+def test_a_statement_run_downloads_as_a_reconciliation_document(client):
+    """The other half of the 2026-08-23 directive: the reconciliation is not
+    exported into any application either, so it comes out as a document —
+    what needs attention first, then every charge with its receipt."""
+    import io
+
+    from pypdf import PdfReader
+
+    run_id = _create_statement_run(client)
+    resp = client.get(f"/runs/{run_id}/reconciliation-report.pdf")
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"] == "application/pdf"
+    assert "reconciliation-" in resp.headers["content-disposition"]
+
+    text = "\n".join(
+        p.extract_text() or "" for p in PdfReader(io.BytesIO(resp.content)).pages
+    )
+    assert "Reconciliation" in text
+    assert "What needs attention" in text
+    assert "All charges" in text
+    # It states the same reconciliation the workbench shows.
+    view = client.get(f"/api/runs/{run_id}").json()
+    assert f"{view['summary']['n_transactions']} charges" in " ".join(text.split())

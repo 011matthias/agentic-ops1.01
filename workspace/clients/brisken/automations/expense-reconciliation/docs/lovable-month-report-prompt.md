@@ -1,4 +1,4 @@
-# Lovable prompt - the month's expense report (PDF)
+# Lovable prompt - the two report documents (PDF)
 
 Paste this into the `brisken-expense-review` Lovable project (production:
 `brisken-reconcile-dash.lovable.app`). It calls the existing FastAPI backend
@@ -58,7 +58,25 @@ The report reads every receipt off the volume and stitches them, so a large
 month is not instant. Disable the button while the request is in flight and
 show a spinner; do not add a timeout shorter than 60 seconds.
 
-## 5. Do not change
+## 5. The reconciliation document (statement runs)
+
+`GET /runs/{run_id}/reconciliation-report.pdf` — the same treatment for a run
+that has a statement attached. Add it to the workbench page as the primary
+action, labelled **"Download reconciliation (PDF)"** (PT: "Baixar
+reconciliacao (PDF)").
+
+What it contains, in this order: the header (charges, how many matched, what
+is still unreconciled per currency), **what needs attention** (charges with
+no receipt, receipts with no charge, possible duplicate groups), then every
+charge with its matched receipt and status, then the receipts themselves —
+matched ones captioned with the charge they settle, unmatched ones captioned
+as unmatched.
+
+The existing XLSX download stays as the working sidecar; keep it visible and
+secondary. The reconciled CSV stays available and demoted, same treatment as
+the expenses CSV.
+
+## 6. Do not change
 
 No payload shapes changed in this round. The grid, the summary counts, and
 the CSV are all untouched.

@@ -31,21 +31,16 @@ where this client's receipts live.
 from __future__ import annotations
 
 import io
-import os
 from collections.abc import Sequence
-from pathlib import Path
 
-# Same reasoning as body_render._FONT_CANDIDATES: the container installs
-# fonts-dejavu-core, a dev box usually has Arial, and only then do we fall
-# back to a Latin-1 core font (with the accents folded, never as tofu).
-_FONT_CANDIDATES = (
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    "C:/Windows/Fonts/arial.ttf",
-    "C:/Windows/Fonts/arialbd.ttf",
+from ._pdf_common import (
+    esc as _esc,
+    make_styles,
+    prepare_evidence,
+    register_fonts,
+    stitch,
+    table_style,
 )
-_FONT_NAME = "ReportBody"
-_FONT_BOLD = "ReportBold"
 
 # The listing columns, in reading order. Deliberately NOT every export
 # column: a reader wants to see what was bought, by whom, for how much, and
@@ -61,64 +56,6 @@ _LISTING = (
     ("Ccy", 34),
     ("Receipt", 54),
 )
-
-
-def _register_fonts() -> tuple[str, str]:
-    """Register a full-Latin TTF pair with reportlab, or fall back to the
-    core fonts. Returns the (body, bold) font names to use."""
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-
-    override = os.environ.get("EXPENSE_RECON_REPORT_FONT")
-    candidates = list(_FONT_CANDIDATES)
-    if override:
-        candidates = [override, override] + candidates
-    regular = bold = None
-    for path in candidates:
-        if not Path(path).is_file():
-            continue
-        if regular is None:
-            regular = path
-        elif bold is None and path != regular:
-            bold = path
-    if regular is None:
-        # Latin-1 core font: accented names still render, the euro sign and
-        # anything outside Latin-1 does not. Better than refusing to build
-        # the month's report over a missing font file.
-        return "Helvetica", "Helvetica-Bold"
-    try:
-        pdfmetrics.registerFont(TTFont(_FONT_NAME, regular))
-        pdfmetrics.registerFont(TTFont(_FONT_BOLD, bold or regular))
-    except Exception:  # noqa: BLE001 - a broken font file must not lose the report
-        return "Helvetica", "Helvetica-Bold"
-    return _FONT_NAME, _FONT_BOLD
-
-
-def _image_to_pdf(data: bytes) -> bytes | None:
-    """One image -> one A4 page, fitted inside the margins, aspect kept."""
-    from PIL import Image
-
-    try:
-        img = Image.open(io.BytesIO(data))
-        img.load()
-    except Exception:  # noqa: BLE001 - an unreadable file is reported, not fatal
-        return None
-    if img.mode in ("RGBA", "LA", "P"):
-        img = img.convert("RGB")
-    page_w, page_h = 1240, 1754  # A4 at ~150 dpi
-    margin = 60
-    box_w, box_h = page_w - 2 * margin, page_h - 2 * margin
-    scale = min(box_w / img.width, box_h / img.height, 1.0)
-    img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))))
-    page = Image.new("RGB", (page_w, page_h), "white")
-    page.paste(img, ((page_w - img.width) // 2, (page_h - img.height) // 2))
-    out = io.BytesIO()
-    page.save(out, format="PDF", resolution=150.0)
-    return out.getvalue()
-
-
-def _is_pdf(data: bytes) -> bool:
-    return data[:5] == b"%PDF-"
 
 
 def build_expense_report_pdf(
@@ -147,10 +84,7 @@ def build_expense_report_pdf(
     both expense numbers. An expense with no document keeps its caption and
     says so; nothing is silently dropped.
     """
-    from pypdf import PdfReader, PdfWriter
-    from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
     from reportlab.platypus import (
         PageBreak,
@@ -158,41 +92,16 @@ def build_expense_report_pdf(
         SimpleDocTemplate,
         Spacer,
         Table,
-        TableStyle,
     )
 
-    body_font, bold_font = _register_fonts()
+    body_font, bold_font = register_fonts()
     idx = {name: i for i, name in enumerate(columns)}
 
     def cell(row: Sequence[str], name: str) -> str:
         i = idx.get(name)
         return str(row[i]) if i is not None and i < len(row) else ""
 
-    styles = {
-        "title": ParagraphStyle(
-            "title", fontName=bold_font, fontSize=17, leading=21,
-            spaceAfter=2,
-        ),
-        "sub": ParagraphStyle(
-            "sub", fontName=body_font, fontSize=10, leading=14,
-            textColor=colors.HexColor("#444444"), spaceAfter=10,
-        ),
-        "cellhead": ParagraphStyle(
-            "cellhead", fontName=bold_font, fontSize=8, leading=10,
-            textColor=colors.white,
-        ),
-        "cell": ParagraphStyle("cell", fontName=body_font, fontSize=8, leading=10),
-        "cellr": ParagraphStyle(
-            "cellr", fontName=body_font, fontSize=8, leading=10, alignment=2,
-        ),
-        "caption": ParagraphStyle(
-            "caption", fontName=bold_font, fontSize=12, leading=15, spaceAfter=4,
-        ),
-        "capsub": ParagraphStyle(
-            "capsub", fontName=body_font, fontSize=9, leading=12,
-            textColor=colors.HexColor("#444444"),
-        ),
-    }
+    styles = make_styles(body_font, bold_font)
 
     # ── totals, computed from the rows the export writes ────────────
     totals: dict[str, float] = {}
@@ -247,17 +156,7 @@ def build_expense_report_pdf(
         colWidths=[w for _name, w in _LISTING],
         repeatRows=1,
     )
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#333333")),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
-         [colors.white, colors.HexColor("#f6f6f6")]),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-    ]))
+    table.setStyle(table_style())
     story.append(table)
     if prepared_note:
         story.append(Spacer(1, 8))
@@ -269,19 +168,7 @@ def build_expense_report_pdf(
     # of leaving a caption with nothing behind it (which reads as "the
     # receipt is here" to anyone flipping through).
     items = list(evidence or [])
-    prepared: list[tuple[dict, bytes | None]] = []
-    for item in items:
-        data = item.get("data")
-        if not data:
-            prepared.append((item, None))
-            continue
-        pdf_bytes = data if _is_pdf(data) else _image_to_pdf(data)
-        if pdf_bytes is not None:
-            try:
-                PdfReader(io.BytesIO(pdf_bytes))
-            except Exception:  # noqa: BLE001 - unreadable = not renderable
-                pdf_bytes = None
-        prepared.append((item, pdf_bytes))
+    prepared = prepare_evidence(items)
 
     for item, pdf_bytes in prepared:
         story.append(PageBreak())
@@ -320,28 +207,4 @@ def build_expense_report_pdf(
     ).build(story)
 
     # ── stitch: listing + (caption page, receipt pages) per expense ──
-    base = PdfReader(io.BytesIO(buf.getvalue()))
-    writer = PdfWriter()
-    listing_end = len(base.pages) - len(items)
-    for page in base.pages[:listing_end]:
-        writer.add_page(page)
-    for i, (_item, pdf_bytes) in enumerate(prepared):
-        writer.add_page(base.pages[listing_end + i])
-        if pdf_bytes is None:
-            continue
-        for page in PdfReader(io.BytesIO(pdf_bytes)).pages:
-            writer.add_page(page)
-    out = io.BytesIO()
-    writer.write(out)
-    return out.getvalue()
-
-
-def _esc(text: str) -> str:
-    """Paragraph text is mini-HTML; a vendor called "A & B <Ltd>" must not
-    become markup."""
-    return (
-        str(text)
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
+    return stitch(buf.getvalue(), prepared)
