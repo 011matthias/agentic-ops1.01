@@ -21,6 +21,7 @@ vendor-fallback path triggers in categorization.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -169,7 +170,6 @@ def _pdf_text(file: Path) -> str:
 def _pdf_page_images(file: Path) -> list[tuple[bytes, str]]:
     """Rasterize a scanned PDF's pages to PNG bytes (pypdfium2)."""
     import io
-
     import pypdfium2 as pdfium
 
     doc = pdfium.PdfDocument(str(file))
@@ -212,7 +212,7 @@ def _to_receipt(
         tax_label=extraction.tax_label,
         # Folder OCR has no ER "payment_mode"; the receipt's own card/tender
         # hint is the best paying-card signal for the Zoho Expenses export.
-        payment_mode=extraction.payment_hint,
+        payment_mode=_payment_mode(extraction),
         document_type=extraction.document_type or "receipt",
         ocr_text=ocr_text,
         line_items=tuple(
@@ -228,6 +228,31 @@ def _to_receipt(
             for item in extraction.line_items
         ),
     )
+
+
+def _payment_mode(extraction: ExtractedReceipt) -> str | None:
+    """The paying-card signal the entity chain resolves against.
+
+    Two readings of the same line disagree often (2026-08-24 measurement over
+    the April batch): asked to transcribe four faded digits the model lands 2
+    in 5 and invents the rest — "1234" came back three times, once for a
+    receipt that plainly prints 1672 — while asked WHICH of the payer's own
+    cards it can see it lands 4 in 5 with no false positives.
+
+    So a confirmed pick replaces whatever digits the free-text hint carried,
+    and the tender words are kept around it because they are what the receipt
+    says and Criss reads them. With no confirmed pick the hint passes through
+    untouched: an unlisted digit run resolves to no card anyway, and dropping
+    it would hide a card the registry has not been told about yet.
+    """
+    hint = (extraction.payment_hint or "").strip()
+    last4 = extraction.card_last4
+    if not last4:
+        return hint or None
+    if not hint:
+        return f"...{last4}"
+    words = re.sub(r"[\dxX*•#]{2,}", "", hint).strip(" -:.,")
+    return f"{words} ...{last4}".strip() if words else f"...{last4}"
 
 
 def _parse_date_lenient(raw: str | None) -> date | None:

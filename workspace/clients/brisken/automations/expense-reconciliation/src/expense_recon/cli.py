@@ -1576,6 +1576,11 @@ def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
         vision_model=llm_cfg.get("vision_model"),
         api_key=api_key,
         cost_tracker=tracker,
+        # The cards this payer holds, so the extractor picks among them
+        # instead of transcribing four faded digits blind (2026-08-24).
+        # Sourced from the run's own card registry snapshot, so a card added
+        # in Settings reaches the next batch's reads with no other wiring.
+        known_cards=_known_card_digits(cfg),
     )
 
     # "Same photo, same answer": attach the content-hash extraction cache
@@ -1589,6 +1594,25 @@ def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
         logger.info("extraction cache: %s", cache_path)
 
     return client, tracker
+
+
+def _known_card_digits(cfg: dict) -> list[str]:
+    """Every last-4 the payer's card registry knows, deduped, order kept.
+
+    One physical card can carry several digit identities (the statement
+    marker 2838 and the plastic 1672 are the same Chase card), and a receipt
+    prints whichever the terminal knows, so ALL of them are offered.
+    """
+    expense = cfg.get("expense") if isinstance(cfg.get("expense"), dict) else {}
+    out: list[str] = []
+    for card in cards_from_setting(expense.get("cards")).values():
+        if not card.active:
+            continue
+        for digits in card.digits:
+            text = str(digits).strip()
+            if len(text) == 4 and text.isdigit() and text not in out:
+                out.append(text)
+    return out
 
 
 def _build_chart_of_accounts(
