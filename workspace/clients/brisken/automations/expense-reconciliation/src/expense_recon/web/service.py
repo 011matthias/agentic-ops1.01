@@ -135,6 +135,13 @@ STATEMENT_MAP_FIELDS = (
 )
 REQUIRED_STATEMENT_FIELDS = ("transaction_date", "amount", "vendor")
 
+# Reading a receipt is a different call from categorizing a line of text, and
+# it is the one that was failing. Measured 2026-08-24 on the April batch's
+# problem receipts: gpt-4o-mini reads 3 of 6 dates and 2 of 5 cards; gpt-5-mini
+# reads 5 of 6 and 4 of 5, and where it cannot read a date it returns null
+# rather than a confident wrong one. Categorization stays on gpt-4o-mini.
+VISION_MODEL = os.environ.get("EXPENSE_RECON_VISION_MODEL", "gpt-5-mini")
+
 
 class RunInputError(Exception):
     """A user-fixable problem with the uploaded files or form values.
@@ -1074,7 +1081,7 @@ def _build_config(
         "output": {"path": "report.xlsx"},
     }
     if use_llm:
-        cfg["llm"] = {"provider": "openai", "model": "gpt-4o-mini"}
+        cfg["llm"] = {"provider": "openai", "model": "gpt-4o-mini", "vision_model": VISION_MODEL}
     # WS2: the tool's own category can override the report's (heavy mismatch),
     # and vision reads the report PDF's receipt images. Both need the LLM;
     # vision additionally only fires for the report-PDF receipts source (gated
@@ -1654,7 +1661,7 @@ def ingest_receipts_folder_into_run(
         llm_client = None
     if llm_client is None and _default_llm_on() and os.environ.get("OPENAI_API_KEY"):
         llm_client, tracker = _build_llm_client(
-            {"llm": {"provider": "openai", "model": "gpt-4o-mini"}}
+            {"llm": {"provider": "openai", "model": "gpt-4o-mini", "vision_model": VISION_MODEL}}
         )
         llm_source = "env-default"
 
@@ -3640,7 +3647,7 @@ def create_expense_batch(
     if composed:
         cfg["expense"]["cards"] = cards_to_setting(composed)
     if use_llm_effective:
-        cfg["llm"] = {"provider": "openai", "model": "gpt-4o-mini"}
+        cfg["llm"] = {"provider": "openai", "model": "gpt-4o-mini", "vision_model": VISION_MODEL}
     # Per-entity chart provisioning (the same gate a statement run gets):
     # the export validates posting accounts against the paying entity's
     # chart when the entity is provisioned (settings registry first, /data
@@ -5127,7 +5134,7 @@ def _batch_llm_client(cfg: dict):
         llm_client = None
     if llm_client is None and _default_llm_on() and os.environ.get("OPENAI_API_KEY"):
         llm_client, tracker = _build_llm_client(
-            {"llm": {"provider": "openai", "model": "gpt-4o-mini"}}
+            {"llm": {"provider": "openai", "model": "gpt-4o-mini", "vision_model": VISION_MODEL}}
         )
         source = "env-default"
     return llm_client, tracker, source

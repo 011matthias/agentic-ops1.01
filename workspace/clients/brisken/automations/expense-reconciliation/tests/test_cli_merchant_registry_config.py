@@ -100,7 +100,7 @@ def test_cli_run_exports_canonical_vendor(tmp_path, monkeypatch):
         ),
     ])
 
-    def fake_openai_client(*, model, api_key, cost_tracker, vision_model=None):
+    def fake_openai_client(*, model, api_key, cost_tracker, vision_model=None, **_kw):
         mock_client.cost_tracker = cost_tracker
         return mock_client
 

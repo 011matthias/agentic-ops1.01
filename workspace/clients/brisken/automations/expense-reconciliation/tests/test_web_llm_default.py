@@ -86,7 +86,13 @@ def test_build_config_injects_categorization_when_overriding(monkeypatch):
         "s.csv", "r.csv", _CMAP, _run_form(),
         use_llm=True, override_er_category=True,
     )
-    assert cfg["llm"] == {"provider": "openai", "model": "gpt-4o-mini"}
+    # Two models on purpose (2026-08-24): reading a receipt and categorizing a
+    # line of text are different calls, and only the reading was failing.
+    assert cfg["llm"] == {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "vision_model": "gpt-5-mini",
+    }
     assert cfg["categorization"] == {
         "override_er_category": True,
         "vision_receipts": True,

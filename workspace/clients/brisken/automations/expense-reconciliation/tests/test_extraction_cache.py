@@ -263,7 +263,7 @@ def test_run_resolves_relative_cache_path_against_config_dir(tmp_path, monkeypat
         ),
     ])
 
-    def fake_openai_client(*, model, api_key, cost_tracker, vision_model=None):
+    def fake_openai_client(*, model, api_key, cost_tracker, vision_model=None, **_kw):
         mock_client.cost_tracker = cost_tracker
         return mock_client
 

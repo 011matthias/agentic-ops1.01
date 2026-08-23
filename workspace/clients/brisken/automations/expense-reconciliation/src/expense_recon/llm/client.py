@@ -124,6 +124,13 @@ class ExtractedReceipt:
     tax: str | None = None
     tax_label: str | None = None
     payment_hint: str | None = None
+    # Which of the payer's OWN cards paid, as last-4 (2026-08-24). Distinct
+    # from `payment_hint`, which is whatever the receipt printed: reading four
+    # faded digits blind lands 2 in 5 and invents the rest ("1234" three times
+    # across the April batch), while choosing among the cards the payer
+    # actually holds lands 4 in 5 with no false positives. None means the model
+    # could not SEE a listed card, never that it guessed one.
+    card_last4: str | None = None
     # Merchant registry (2026-07-29): the short storefront brand with legal
     # suffixes / distributor tails stripped ("COMERCIO DE X LTDA" -> "X"),
     # so the registry can canonicalize consistently. `vendor` stays the raw
@@ -240,6 +247,14 @@ class LLMClient(Protocol):
         of (bytes, mime_type) pages) or `text` (a PDF's text layer)
         is supplied per call."""
         ...
+
+
+def _temperature_for(model: str) -> dict:
+    """`temperature=0` for models that accept it, nothing for those that do
+    not. The gpt-5 family rejects the parameter outright (400), and pinning
+    determinism is worth less than being able to use the model that reads
+    these receipts correctly."""
+    return {} if str(model).startswith("gpt-5") else {"temperature": 0}
 
 
 # ── OpenAI implementation ────────────────────────────────────────────
@@ -421,6 +436,7 @@ Extract:
 - tax: the total tax/VAT amount as a plain number string like "3.80", or null if the receipt does not show tax separately. Do NOT compute it; only report a printed tax figure.
 - tax_label: the tax name if printed (VAT, GST, Sales Tax, IVA, MwSt...), else null.
 - payment_hint: the last 4 digits of the paying card, or the tender type (Visa ...1234, Amex, Mastercard, Cash, PayPal), exactly as printed, or null.
+- card_last4: which card paid, as its last four digits.{known_cards} Return null if no card digits are printed, if they are too faded to read, or if what you can read is not one of the listed cards. A wrong card books the expense to the wrong company, so null is always better than a guess: never pick a card because it looks plausible, only because you can see it.
 - confidence: your honest 0.0-1.0 confidence that the header fields (date, total, vendor) are read correctly.
 - notes: one short sentence on anything unusual (illegible areas, multiple currencies, handwriting), or "".
 
@@ -451,6 +467,7 @@ _EXTRACT_SCHEMA = {
         "tax": {"type": ["string", "null"]},
         "tax_label": {"type": ["string", "null"]},
         "payment_hint": {"type": ["string", "null"]},
+        "card_last4": {"type": ["string", "null"]},
         "line_items": {
             "type": "array",
             "items": {
@@ -471,7 +488,7 @@ _EXTRACT_SCHEMA = {
     "required": [
         "document_type",
         "date", "total", "currency", "vendor", "vendor_clean", "reference",
-        "tax", "tax_label", "payment_hint",
+        "tax", "tax_label", "payment_hint", "card_last4",
         "line_items", "confidence", "notes",
     ],
     "additionalProperties": False,
@@ -518,6 +535,7 @@ class OpenAIClient:
         api_key: str | None = None,
         cost_tracker: CostTracker | None = None,
         extraction_cache: ExtractionCache | None = None,
+        known_cards: list[str] | None = None,
     ):
         try:
             from openai import OpenAI
@@ -541,6 +559,13 @@ class OpenAIClient:
         # "Same photo, same answer": optional raw-payload store consulted by
         # extract_receipt only. None = every call goes to the API (unchanged).
         self.extraction_cache = extraction_cache
+        # The last-4s of the cards the payer actually holds, so the extractor
+        # picks among them instead of transcribing faded digits blind. Empty
+        # = no list in the prompt and `card_last4` always null, which is the
+        # pre-2026-08-24 behavior.
+        self.known_cards = [
+            d for d in (str(c).strip() for c in (known_cards or [])) if d
+        ]
 
     def classify_line_items(
         self,
@@ -741,15 +766,32 @@ class OpenAIClient:
         cache_key: str | None = None
         if cache is not None:
             cache_key = extraction_cache_key(
-                fingerprint=_EXTRACT_FINGERPRINT, model=model,
-                images=images, text=text,
+                # The card list is part of the QUESTION, so it belongs in the
+                # key: the same photo asked against a different set of cards
+                # is a different call, and serving the old answer would pin a
+                # card the payer no longer holds. With no list the key is the
+                # bare fingerprint, exactly as before this field existed.
+                fingerprint=(
+                    _EXTRACT_FINGERPRINT + "|cards:" + ",".join(self.known_cards)
+                    if self.known_cards else _EXTRACT_FINGERPRINT
+                ),
+                model=model, images=images, text=text,
             )
             cached = cache.get(cache_key)
             if cached is not None:
                 logger.debug("extraction cache hit: %s", file_name)
                 return _extraction_from_payload(cached)
 
-        instructions = _EXTRACT_INSTRUCTIONS.format(file_name=file_name)
+        known = (
+            " The payer holds only these cards, so the answer is one of them: "
+            + ", ".join(self.known_cards)
+            + "."
+        ) if self.known_cards else (
+            " No card list was supplied for this batch, so return null."
+        )
+        instructions = _EXTRACT_INSTRUCTIONS.format(
+            file_name=file_name, known_cards=known
+        )
         if text is not None:
             content: object = instructions + _EXTRACT_TEXT_SUFFIX.format(text=text)
         else:
@@ -777,7 +819,7 @@ class OpenAIClient:
                     "strict": True,
                 },
             },
-            temperature=0,
+            **_temperature_for(model),
         )
         self._record_usage(response, model=model)
         raw_payload = response.choices[0].message.content or "{}"
@@ -856,9 +898,22 @@ def _extraction_from_payload(payload: dict) -> ExtractedReceipt:
         tax=_opt_str(payload.get("tax")),
         tax_label=_opt_str(payload.get("tax_label")),
         payment_hint=_opt_str(payload.get("payment_hint")),
+        card_last4=_card_last4(payload.get("card_last4")),
         vendor_clean=_opt_str(payload.get("vendor_clean")),
         document_type=_document_type(payload.get("document_type")),
     )
+
+
+def _card_last4(value: object) -> str | None:
+    """The four digits, or None.
+
+    Masking survives ("****0340" and "xxxxxxxxxxxx0340" both mean 0340), but
+    anything that does not reduce to exactly four digits is dropped rather
+    than parsed generously: a tender word, "none", or a partly-read number
+    like "4****0340" is not an answer to the question the model was asked,
+    and a half-read card must never reach the entity chain."""
+    text = "".join(ch for ch in str(value or "") if ch.isdigit())
+    return text if len(text) == 4 else None
 
 
 _DOCUMENT_TYPES = frozenset({"receipt", "statement", "report_summary", "other"})

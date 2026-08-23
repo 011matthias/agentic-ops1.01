@@ -427,7 +427,7 @@ def test_cli_loads_llm_config_and_uses_openai_client(tmp_path, monkeypatch):
     ])
     instantiate_calls = []
 
-    def fake_openai_client(*, model, api_key, cost_tracker, vision_model=None):
+    def fake_openai_client(*, model, api_key, cost_tracker, vision_model=None, **_kw):
         instantiate_calls.append({"model": model, "api_key": api_key})
         mock_client.cost_tracker = cost_tracker
         return mock_client
