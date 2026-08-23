@@ -89,6 +89,7 @@ HELD_BODY_ONLY = "held_body_only"      # needs body->PDF rendering (round 2)
 HELD_NO_VALID_FILES = "held_no_valid_files"
 STATUS_DISMISSED = "dismissed"         # operator judged it junk; terminal
 STATUS_RENDERING = "rendering"         # body->PDF ingest in flight (C2)
+STATUS_REINGESTING = "re_ingesting"    # stranded-mail re-ingest in flight
 REPLAYABLE = {HELD_NO_BATCH, HELD_FAILED}
 STALE_RECEIVED_SECONDS = 600
 
@@ -1208,6 +1209,93 @@ def render_ingest(
     job_id = _start_ingest(
         db_path, learning_db_path, run, [("rendered-body.pdf", pdf)],
         person, _now_iso(), arch, synchronous=True,
+    )
+    final = _read_meta(arch)
+    return {
+        "status": final.get("status", ""),
+        "archive": arch.name,
+        "batch_id": run.run_id,
+        "job_id": job_id,
+        "documents": final.get("documents", []),
+    }
+
+
+def re_ingest(
+    db_path: Path, learning_db_path: Path | None, data_root: Path,
+    archive: str, operator: str | None = None,
+) -> dict:
+    """Re-ingest ONE archive's delivered attachments into the month that is
+    open now (backlog item 19, owner-approved 2026-08-22).
+
+    The gap: a mail whose attachments were already ingested into a month that
+    is later deleted has no way back. Replay skips it (status `ingested` is
+    not replayable, and rightly so), the expenses went with the month, and the
+    bytes sit in the custody archive unreachable from the app. This is the
+    explicit way back, one archive at a time, so receipts can never drain into
+    a month nobody chose.
+
+    Deny-by-default: only mail carrying the `batch_deleted` stamp qualifies.
+    A mail whose month is alive is refused, which is what keeps this from
+    becoming a way to copy one month's receipts into another. Dismissed mail
+    and anything mid-flight are refused too. Re-ingesting a second time hits
+    the live-month refusal, because the first call cleared the stamp.
+    """
+    arch = _archive_dir(data_root, archive)
+    if arch is None:
+        return {"error": "not found", "code": 404}
+    parts_dir = arch / "parts"
+    attachments = [
+        (re.sub(r"^\d{3}__", "", f.name), f.read_bytes())
+        for f in sorted(parts_dir.iterdir())
+        if f.is_file()
+    ] if parts_dir.is_dir() else []
+    if not attachments:
+        return {
+            "error": "this mail delivered no attachment to re-ingest; a "
+                     "body-only mail is recovered with render-ingest",
+            "code": 409,
+        }
+    with RunStore(db_path) as store:
+        run = open_batch(store)
+    if run is None:
+        return {"error": "no open month to ingest into", "code": 409}
+
+    def _stranded(meta: dict) -> bool:
+        if not meta.get("batch_deleted"):
+            return False
+        return str(meta.get("status", "")) not in {
+            STATUS_DISMISSED, STATUS_RENDERING, STATUS_REINGESTING,
+        }
+
+    # CAS to a transient status for the same reason render-ingest has one: a
+    # second click, a dismiss, or a replay pass all see it and refuse rather
+    # than interleaving into a double ingest.
+    applied, meta = _transition_meta(arch, _stranded, {
+        "status": STATUS_REINGESTING,
+        "re_ingested": True, "re_ingested_at": _now_iso(),
+        "re_ingested_by": operator or "",
+        "batch_id": run.run_id, "batch_deleted": False,
+    })
+    if not applied:
+        status = str(meta.get("status", ""))
+        if not meta.get("batch_deleted"):
+            return {
+                "error": "this mail still belongs to a live month; re-ingest "
+                         "exists for mail stranded by a deleted month",
+                "code": 409,
+            }
+        return {
+            "error": f"cannot re-ingest mail in state {status!r}",
+            "code": 409,
+        }
+
+    person = meta.get("person") or {
+        "person": meta.get("from", ""), "source": "sender",
+        "address": meta.get("from", ""),
+    }
+    job_id = _start_ingest(
+        db_path, learning_db_path, run, attachments, person,
+        _now_iso(), arch, synchronous=True,
     )
     final = _read_meta(arch)
     return {

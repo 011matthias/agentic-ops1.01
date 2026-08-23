@@ -1227,6 +1227,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return JSONResponse(result, status_code=code)
         return JSONResponse({"ok": True, **result})
 
+    @app.post("/api/inbound/{archive}/re-ingest")
+    def inbound_re_ingest(archive: str) -> JSONResponse:
+        """Item 19: put a stranded mail's attachments back into the open
+        month. Sync like render-ingest — the ingest does vision work, so the
+        threadpool the sync handler already runs in is where it belongs."""
+        from .intake_mail import re_ingest
+
+        result = re_ingest(
+            app.state.db_path, app.state.learning_db_path,
+            app.state.data_root, archive, operator=_operator(),
+        )
+        if "error" in result:
+            code = result.pop("code", 400)
+            return JSONResponse(result, status_code=code)
+        return JSONResponse({"ok": True, **result})
+
     @app.post("/api/inbound/{archive}/dismiss")
     def inbound_dismiss(archive: str) -> JSONResponse:
         from .intake_mail import dismiss_archive

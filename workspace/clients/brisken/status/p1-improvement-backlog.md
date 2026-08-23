@@ -102,17 +102,15 @@ stranded-mail design call folded into item 12.
 Shipped: sanitized body view, body-to-PDF render through the normal
 pipeline, per-mail dismiss. The leftover design call moved to item 19.
 
-### 19. Re-ingest for attachment mail stranded by a deleted month (owner call)
+### 19. Re-ingest for attachment mail stranded by a deleted month (SHIPPED - see Shipped row 19)
 
-From the delete-month review (2026-08-21): a mail with ATTACHMENTS
-already ingested into a month that is later deleted has no re-ingest
-path if the operator recreates the month — replay skips status
-`ingested`. The bytes survive in the custody archive (`parts/`), so
-this is stranding, not loss. Natural fix: a per-archive "re-ingest into
-the open month" action beside the shipped view/render/dismiss (explicit,
-so receipts never drain into an unintended month). Needs an owner
-ruling on whether the case is worth the surface; body-only mail already
-recovers via render.
+Owner said build it (2026-08-22). `POST /api/inbound/{archive}/re-ingest`
+puts ONE archive's delivered attachments back into the month that is open
+now. Deny-by-default: only mail carrying the `batch_deleted` stamp
+qualifies, so it can never become a way to copy one month's receipts into
+another, and a second click hits the same live-month refusal because the
+first cleared the stamp. No bulk version, on purpose. SPA half:
+`docs/lovable-re-ingest-prompt.md`.
 
 ### 13. Learned memory: validate + adjust (SHIPPED — see Shipped row 11)
 
@@ -383,6 +381,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 19 | Stranded mail can come back: `POST /api/inbound/{archive}/re-ingest` re-ingests one archive's delivered attachments into the open month, guarded so only mail whose month was deleted qualifies | A mail whose receipts were ingested into a month that was later deleted had no path back. Replay skips it (status `ingested` is not replayable, correctly), the expenses went with the month, and the bytes sat in the custody archive unreachable from the app — stranding, not loss, but indistinguishable to the operator. Guard proven by regressing it: dropping the `batch_deleted` requirement fails exactly the two tests written for it | this round, 2026-08-23; suite 1168 passed / 2 skipped, calibrate green; SPA half `docs/lovable-re-ingest-prompt.md` |
 | 18 | Cards R4, export half: a month whose receipts belong to different companies exports as ONE file with the entity as a column (owner ruling), and the chart gate became per-entity — `MultiEntityCoaGate` judges each row against the chart of the entity that actually pays it | The export half already worked after R3 and is now pinned by tests, but the gate beside it had a live hole: `CoaGate` was built when "a run targets ONE legal entity" was true, and provisioning looked up that one entity, so every entity-less batch (which is every Cards R3 batch) got NO `coa_validation` block and exported completely un-gated — exactly the batches most able to post an account to the wrong company. Proven both ways: the e2e test fails without the provisioning fix, and forcing one gate for all rows fails the per-entity test | this round, 2026-08-22; suite 1163 passed / 2 skipped, calibrate green |
 | 17 | The live Zoho connection is gone: API client, journal-posting CLI (`zoho-post`), the `coa_source: "api"` chart pull and the `seed-zoho` importer deleted, with a guard test that fails on any Zoho host, `ZOHO_*` credential read, or re-added subcommand | Owner directive: the app should have no connection or ties to Zoho. This layer was the actual connection — roughly 1,600 lines that could authenticate against and post into the live books. Nothing hosted used it (no `ZOHO_*` env on Fly, the web layer never imported the client), so removal is behavior-neutral where Criss works, and the credentials now have nowhere to be read. Doctor gained a real fix on the way: it rejected `coa_source: "none"`, which is the default | this round, 2026-08-22; suite 1158 passed / 2 skipped (65 tests of the deleted code went with it), calibrate green |
 | 16 | Upload rejections carry a stable code beside the English sentence (`issue_details` / `upload_issue_details`: `{code, file, suffix, limit}`) at all three emission sites, so the SPA can say "not a supported file type" in Portuguese without the backend ever retyping the prose list | The prose was English-only on a surface Criss meets when an upload goes wrong, and the obvious fix (enrich `issues` in place) is precisely the move that blanked the batch page on 2026-08-22. Parallel field instead, pinned in the contract test — proven by regressing both ways: an unpopulated details list fails the non-vacuity guard, and retyping `upload_issues` into objects fails the element check | this round, 2026-08-22; SPA half `docs/lovable-issue-codes-prompt.md` (optional, prose unchanged until applied) |
