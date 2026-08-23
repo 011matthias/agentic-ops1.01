@@ -3,16 +3,84 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-08-22
+updated: 2026-08-23
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
 
 Load the Brisken expense-reconciliation project (p1). We are continuing the
 test-and-fix loop on the receipt-first pipeline until the tool is genuinely
-usable for Brisken. Read this whole brief before touching anything.
+usable for Brisken. Read this whole brief before touching anything, then
+read `p1-improvement-backlog.md` beside it — that file, not this one, is the
+list of what to do next.
 
-## Where the loop stands (2026-08-21: the feedback wave, an 8-PR program)
+## Start here (2026-08-23)
+
+The 2026-08-21 feedback wave is CLOSED. Every owner question that gated it
+has been answered and every round has shipped and deployed. Two directives
+landed on 2026-08-23 and reshaped what the tool produces:
+
+1. **There is no target application any more.** The month's output is a
+   document a person reads and an auditor accepts, not a file some system
+   imports. Both report PDFs are live: `GET /runs/{id}/expense-report.pdf`
+   (listing built from the export's own rows, then every receipt behind a
+   caption naming the expense it proves) and
+   `GET /runs/{id}/reconciliation-report.pdf` (exceptions FIRST, then every
+   charge with its receipt and status, then the pages). The CSV and the XLSX
+   survive as demoted sidecars.
+2. **Anyone can email a receipt in.** The intake's `@brisken.com` sender
+   allowlist is deleted (PR #587, Fly v83). The recipient rule and the spend
+   guards are what hold the door now.
+
+**The top open item is backlog 25: OCR read a year as 2023 on an April 2026
+receipt.** It is visible on line two of the live April report. That is a
+money-adjacent field — it decides which month an expense belongs to and
+whether a statement charge can ever match it — so it outranks every text
+item still open. It is undiagnosed; the backlog entry names the three cases
+to separate first.
+
+**Do not re-ask the owner about:** the export target (there is none), Zoho
+(no ties, deleted), mixed-entity export (one file, entity as a column),
+cash/personal tenders (per-month assignments, not cards), or the January
+credit notice (booked, my call).
+
+**Owner-side, still open** (hand the paths when asked, do not chase):
+- Lovable prompts unapplied, all backends live:
+  `docs/lovable-month-report-prompt.md` (the only one that changes what
+  Criss can DO — it puts the PDF buttons on screen),
+  `docs/lovable-re-ingest-prompt.md`, `docs/lovable-issue-codes-prompt.md`,
+  `docs/lovable-ready-tile-prompt.md`,
+  `docs/lovable-open-intake-prompt.md` (only if the "Accepted senders"
+  editor was ever built), plus the older wave prompts listed further down.
+  All under
+  `workspace/clients/brisken/automations/expense-reconciliation/docs/`
+  in the `agentic-ops1-recon` worktree.
+- Card registry data entry: entities on cards 0113/6013/9693/8311 and the
+  missing 0340 card — that is backlog item 26 and the live MISSING ENTITY
+  count, not a defect in the resolution chain.
+
+**Live findings worth the owner's attention, already surfaced:** the January
+statement run reconciles 0 of 80 charges, USD 20,228.68 unreconciled, 78
+charges with no receipt at all. That is the data, not a bug.
+
+Suite baseline: **1190 passed / 2 skipped**; `calibrate --config
+examples/run.example.json` green. Fly app at **v83**.
+
+## Reading the app without anyone's help
+
+Never ask the owner to check a screen or read a value. The operator code is
+in the local vault (`Brisken recon operator code matthias`) and the probe
+helpers read it from there, so it never enters the transcript:
+
+- `%TEMP%/claude/recon-probe/api.py` - `api.get("/api/...")` logs in and
+  returns parsed JSON.
+- `%TEMP%/claude/recon-probe/dom_probe.py` - Playwright against the live
+  SPA. Bundled chromium is absent on this machine; launch with
+  `p.chromium.launch(channel="chrome")`.
+- Endpoint tests need a REAL batch or run id; `/api/operator/state` lists
+  them (`operator_runs`, `processing`).
+
+## How the wave got here (2026-08-21, the 8-PR program)
 
 The operator walked the whole tool on 2026-08-21 and left 14 in-app notes
 (the first full wave since feedback capture went global). The full design
@@ -138,11 +206,11 @@ with `_` (route-derived `_batchId`/`_runId`/`_intakeId`) plus `new-*`, so
 — never remove that override, and if pages 404 again, sweep the published
 bundle's asset list before suspecting the backend.
 
-**Round 8 of the wave is still the only wave item left, and it is still
-gated on the owner (backlog item 10: per-entity export files? cash/personal
-tenders as cards? per-entity zoho_account?). Nothing in the repo or the app
-answers it as of 2026-08-22; do not re-ask.** Two rounds shipped instead the
-same day, both from the live app rather than the plan:
+**Round 8 was the last wave item, and the owner answered it on 2026-08-22
+(one export file with the entity as a column; cash/personal tenders stay
+per-month assignments; per-entity Zoho accounts moot). It shipped as PR
+#580.** Two rounds shipped before that answer arrived, both found in the live
+app rather than in the plan:
 
 - **Count semantics (PR #575, backlog item 22, deployed).** An operator note
   at 13:34 UTC: "it sayz 35 categorized but when you click on open it says
@@ -194,8 +262,8 @@ codes, re-ingest, plus the older ones), the card registry needs entities on
 MISSING ENTITY 30 is), and Dirk's rendered credit notice in the January
 set-aside strip needs one restore click — my call was to book it.
 
-Suite baseline is now **1168 passed / 2 skipped**; `calibrate
---config examples/run.example.json` green. Advisories are SNAPSHOTTED
+Suite baseline at that point was 1168 / 2 skipped (now 1190; see the top
+of this file); Advisories are SNAPSHOTTED
 into each run's summary — existing runs keep old wording by design.
 
 ## Where the loop stood (2026-08-19, after round 6)
@@ -330,7 +398,7 @@ uv run --directory <worktree>\workspace\clients\brisken\automations\expense-reco
 ```
 
 `--all-extras` matters: without it `rapidfuzz` is missing and 9 test
-modules fail to import. Full suite baseline: **1043 passed, 2 skipped**.
+modules fail to import. Current suite baseline: **1190 passed, 2 skipped**.
 
 ### Traps that will waste your time
 
