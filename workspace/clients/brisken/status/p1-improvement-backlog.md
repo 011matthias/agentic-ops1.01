@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-08-22
+updated: 2026-08-23
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -235,8 +235,8 @@ unrenderable documents are stated, never dropped. SPA half:
 `docs/lovable-month-report-prompt.md` (PDF primary, CSV demoted to
 "data export", the word "Zoho" leaves the button).
 
-**The reconciliation half — SHIPPED the same day (Shipped row 21),** as the
-recommendation described: the same document shape, not a CSV. A reconciliation's product
+**Both halves are shipped AND deployed (Shipped rows 20/21).** The
+reconciliation half went out the same day, as the recommendation described: the same document shape, not a CSV. A reconciliation's product
 is evidence that a month is complete: each statement charge with its matched
 receipt and status, then the exceptions (unmatched charges, unmatched
 receipts, duplicates), then the receipt pages. Keep the XLSX beside it as the
@@ -244,6 +244,33 @@ working sidecar (Criss works in Excel and her fill-colour is real data), keep
 a CSV available but demoted. This also resolves Zoho layer 4 of item 23: the
 export's column names stop mattering once nothing imports them, so
 `EXPENSE_COLUMNS` can be renamed to plain English on its own schedule.
+
+### 25. OCR reads the year wrong on some receipts (found 2026-08-23)
+
+Line two of the live April 2026 report shows a date in **2023**. The receipt
+is from April 2026; the vision read misparsed the year. This is a money-
+adjacent field (it decides which month an expense belongs to and whether a
+statement charge can ever match it), so it outranks every text-field item
+still open.
+
+Not yet diagnosed. Start by pulling the offending row's stored extraction
+out of the cache and comparing it to the receipt image: if the raw reading
+already says 2023, it is a prompt/model problem; if the reading is right and
+the row is wrong, it is a parse or normalization problem. A plausible third
+case is a receipt that genuinely PRINTS an old date (a re-issued invoice), in
+which case the fix is a sanity check against the batch month rather than a
+better read.
+
+### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
+
+Four of the five known cards (0113, 6013, 9693, 8311) carry no legal entity,
+and the 0340 card is absent from the registry entirely — the 0340 rows alone
+account for 8 of the 29 unresolved entity rows. Nine more rows are generic
+tenders (cash, personal), which by design never auto-resolve and stay
+per-month assignments.
+
+No code needed: this is data entry in Settings > Cards, plus creating the
+0340 card. Listed here so it is not mistaken for a defect in the chain.
 
 ### 16. Rejected matches need a "what now" (2026-07-27 note, untracked)
 
@@ -409,6 +436,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
 | 21 | The reconciliation downloads as a document too: `GET /runs/{id}/reconciliation-report.pdf` puts what needs attention FIRST (charges with no receipt, receipts with no charge, duplicate groups), then every charge with its matched receipt and status, then the receipts — matched ones captioned with the charge they settle, unmatched ones captioned as unmatched | Owner: the reconciliation is not exported into any application either, so the question was what actually serves the work. A CSV carries the charge list and none of the evidence, and nothing reads it. Built from `build_view` — the workbench's own payload — so the document and the review screen cannot state different reconciliations. A clean month SAYS "Nothing", because an empty section reads as a missing one | this round, 2026-08-23; suite 1187 passed / 2 skipped, calibrate green; SPA half is section 5 of `docs/lovable-month-report-prompt.md` |
+| 22 | Anyone can email a receipt in: the intake's @brisken.com sender allowlist is gone (owner directive), so a hotel sending an invoice directly, a faculty member mailing from a private address, and a supplier's billing robot all land instead of bouncing. The recipient rule stays (mail must be addressed to the intake domain, so the listener is never an open relay) and so do the spend guards; the global day cap is now the real ceiling because a rotating From evades the per-sender one. Outside submitters are ingested but never replied to — the ack's @brisken.com recipient guard is what keeps confirmations inside the tenant | PR #587, deployed Fly v83 |
 | 20 | The month downloads as a REPORT, not an import file: `GET /runs/{id}/expense-report.pdf` renders the numbered listing from the export's own rows, then appends every receipt behind a caption naming the expense it proves | Owner directive: nothing imports the output any more, so the deliverable has to stand on its own for a human and an auditor. Building the listing FROM the export rows is what keeps the document and the file from ever disagreeing about money; evidence is per document so a split receipt appears once captioned with both expense numbers, and a missing or unrenderable file is stated on its caption rather than leaving a caption with nothing behind it | this round, 2026-08-23; suite 1178 passed / 2 skipped, calibrate green; SPA half `docs/lovable-month-report-prompt.md` |
 | 19 | Stranded mail can come back: `POST /api/inbound/{archive}/re-ingest` re-ingests one archive's delivered attachments into the open month, guarded so only mail whose month was deleted qualifies | A mail whose receipts were ingested into a month that was later deleted had no path back. Replay skips it (status `ingested` is not replayable, correctly), the expenses went with the month, and the bytes sat in the custody archive unreachable from the app — stranding, not loss, but indistinguishable to the operator. Guard proven by regressing it: dropping the `batch_deleted` requirement fails exactly the two tests written for it | this round, 2026-08-23; suite 1168 passed / 2 skipped, calibrate green; SPA half `docs/lovable-re-ingest-prompt.md` |
 | 18 | Cards R4, export half: a month whose receipts belong to different companies exports as ONE file with the entity as a column (owner ruling), and the chart gate became per-entity — `MultiEntityCoaGate` judges each row against the chart of the entity that actually pays it | The export half already worked after R3 and is now pinned by tests, but the gate beside it had a live hole: `CoaGate` was built when "a run targets ONE legal entity" was true, and provisioning looked up that one entity, so every entity-less batch (which is every Cards R3 batch) got NO `coa_validation` block and exported completely un-gated — exactly the batches most able to post an account to the wrong company. Proven both ways: the e2e test fails without the provisioning fix, and forcing one gate for all rows fails the per-entity test | this round, 2026-08-22; suite 1163 passed / 2 skipped, calibrate green |
