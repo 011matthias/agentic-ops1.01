@@ -90,6 +90,7 @@ from .service import (
     attach_emailed_receipt,
     available_entities,
     batch_list_summary,
+    build_expense_report,
     build_expense_view,
     build_memory_view,
     build_view,
@@ -2594,6 +2595,33 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             path,
             filename=f"zoho-expenses-{run_id}.csv",
             media_type="text/csv",
+        )
+
+    @app.get("/runs/{run_id}/expense-report.pdf")
+    def download_expense_report(run_id: str):
+        """The month's report: the organized listing, then every receipt
+        (owner directive 2026-08-23 — the output is a document now, not an
+        import file). Sync: it reads every receipt off the volume and
+        stitches a PDF, so it belongs in the threadpool."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            run, err = _expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            overrides = store.get_category_overrides(run_id)
+            field_overrides = store.get_expense_field_overrides(run_id)
+            edits = store.get_expense_edits(run_id)
+            label = run.label or run_id
+        pdf = build_expense_report(run, overrides, field_overrides, edits)
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "-", label).strip("-") or run_id
+        return Response(
+            content=pdf,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition":
+                    f'attachment; filename="expense-report-{safe}.pdf"'
+            },
         )
 
     @app.post("/api/runs/{run_id}/forget")

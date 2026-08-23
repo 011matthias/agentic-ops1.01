@@ -10,6 +10,7 @@ dependencies = [
     "pypdfium2>=4.30", # scanned-PDF rasterization for vision fallback (2.2)
     "pillow>=10.0",    # PNG encoding of rendered PDF pages (2.2)
     "rapidfuzz>=3.0",  # token_set_ratio for the merchant-registry alias match
+    "reportlab>=4.0",  # the month's expense-report PDF (listing + receipts)
 ]
 
 [project.optional-dependencies]

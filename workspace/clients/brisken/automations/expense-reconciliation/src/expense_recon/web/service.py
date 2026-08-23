@@ -61,7 +61,9 @@ from ..learning import (
 from ..output.reconciled_csv import write_reconciled_csv
 from ..output.report_xlsx import write_report
 from ..output.zoho_expense_export import (
+    EXPENSE_COLUMNS,
     _UNCATEGORIZED,
+    build_expense_rows,
     expense_posting_parts,
     resolve_paid_through,
     write_zoho_expense_export,
@@ -4446,16 +4448,19 @@ def build_expense_view(
     }
 
 
-def regenerate_expense_export(
+def _expense_export_inputs(
     run: RunRow,
     overrides: dict,
     field_overrides: dict[str, dict[str, str]],
     edits: list[dict],
-) -> Path:
-    """Write the Zoho Expenses import CSV for an expense batch with every
-    reviewer edit applied — the SAME overlay order the view uses
-    (`apply_expense_edits` then `apply_overrides`), so the grid and the
-    export agree by construction. Returns the path."""
+) -> tuple[list, dict]:
+    """`(receipts, kwargs)` for the expense export — the overlay order the
+    view uses (`apply_expense_edits` then `apply_overrides`) plus the card /
+    entity / chart resolution the rows need.
+
+    Extracted so the CSV and the month's PDF report are built from ONE setup:
+    the report quotes the export's rows, and a change to how a row resolves
+    reaches both or neither."""
     _, receipts, _, _ = snapshot_from_dict(run.snapshot)
     default_entity = (
         ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
@@ -4476,10 +4481,7 @@ def regenerate_expense_export(
     # grid renders (assign a card after an export, re-export, and the new
     # file carries it — exports are regenerable, never stale by design).
     card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
-    out_path = Path(run.work_dir) / "expenses.csv"
-    write_zoho_expense_export(
-        receipts,
-        out_path,
+    kwargs = dict(
         chart_of_accounts=chart,
         coa_gate=coa_gate,
         default_paid_through=(
@@ -4501,7 +4503,87 @@ def regenerate_expense_export(
             doc for doc, res in card_res.items() if res["card_map_blocked"]
         },
     )
+    return receipts, kwargs
+
+
+def regenerate_expense_export(
+    run: RunRow,
+    overrides: dict,
+    field_overrides: dict[str, dict[str, str]],
+    edits: list[dict],
+) -> Path:
+    """Write the expense CSV for a batch with every reviewer edit applied.
+    Returns the path."""
+    receipts, kwargs = _expense_export_inputs(
+        run, overrides, field_overrides, edits
+    )
+    out_path = Path(run.work_dir) / "expenses.csv"
+    write_zoho_expense_export(receipts, out_path, **kwargs)
     return out_path
+
+
+def build_expense_report(
+    run: RunRow,
+    overrides: dict,
+    field_overrides: dict[str, dict[str, str]],
+    edits: list[dict],
+) -> bytes:
+    """The month's report PDF: the listing, then every receipt (owner
+    directive 2026-08-23 — nothing imports the output any more, so the
+    deliverable is a document).
+
+    The listing is the export's own rows. Evidence is per DOCUMENT: a receipt
+    that books to two accounts writes two listing rows and appears once,
+    captioned with both expense numbers. The row-to-document map comes from
+    `expense_posting_parts`, the same fan-out the export writes, and is
+    checked against the row count — if the two ever disagree the report falls
+    back to one caption per row rather than mislabelling the evidence.
+    """
+    from ..output.month_report_pdf import build_expense_report_pdf
+
+    receipts, kwargs = _expense_export_inputs(
+        run, overrides, field_overrides, edits
+    )
+    rows = build_expense_rows(receipts, **kwargs)
+
+    widths = [max(1, len(expense_posting_parts(r))) for r in receipts]
+    aligned = sum(widths) == len(rows)
+    receipts_dir = Path(run.work_dir) / "receipts"
+    evidence: list[dict] = []
+    n = 1
+    for r, width in zip(receipts, widths):
+        numbers = list(range(n, n + width)) if aligned else [n]
+        n += width if aligned else 1
+        path = receipts_dir / r.document_id
+        if not path.is_file():
+            hit = _attached_receipt_file(receipts_dir.parent, r.document_id)
+            path = hit if hit is not None else None
+        item: dict = {
+            "rows": numbers,
+            "label": r.detected_vendor or "(no vendor)",
+            "detail": "  ·  ".join(x for x in (
+                str(r.detected_date or ""),
+                (f"{r.detected_total} {r.detected_currency or ''}".strip()
+                 if r.detected_total is not None else ""),
+                r.legal_entity_id or "",
+            ) if x),
+        }
+        if path is not None:
+            item["name"] = _display_name(path.name)
+            item["data"] = path.read_bytes()
+        evidence.append(item)
+
+    label = run.label or run.run_id
+    return build_expense_report_pdf(
+        rows,
+        EXPENSE_COLUMNS,
+        title=f"Expense report — {label}",
+        evidence=evidence,
+        prepared_note=(
+            "Every amount above is the amount the CSV export writes. Each "
+            "receipt follows behind the expense number it proves."
+        ),
+    )
 
 
 def assign_batch_cards(

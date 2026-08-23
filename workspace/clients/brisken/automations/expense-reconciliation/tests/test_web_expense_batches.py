@@ -683,3 +683,56 @@ def test_upload_issue_prose_and_code_come_from_one_place(client):
 
     with pytest.raises(ValueError):
         upload_issue("brand_new_code", "x.jpg")
+
+
+def test_the_month_downloads_as_a_report_with_its_receipts(client, monkeypatch):
+    """Owner directive 2026-08-23: the deliverable is a document. One PDF per
+    month — the listing, then the receipt behind each expense — served from
+    the same rows the CSV writes."""
+    import io
+
+    from PIL import Image
+    from pypdf import PdfReader
+
+    # A REAL image: the module's JPG constant is a stub the mocked OCR never
+    # opens, but the report has to turn the file into a page.
+    buf = io.BytesIO()
+    Image.new("RGB", (400, 600), "white").save(buf, format="PNG")
+    _patch_ocr(monkeypatch, _extraction(vendor="Trenitalia", total="42.50"))
+    batch_id = _create_batch(client, files=[("tren.png", buf.getvalue())])
+
+    resp = client.get(f"/runs/{batch_id}/expense-report.pdf")
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"] == "application/pdf"
+    assert "expense-report-" in resp.headers["content-disposition"]
+
+    reader = PdfReader(io.BytesIO(resp.content))
+    # listing page + caption page + the receipt itself
+    assert len(reader.pages) == 3
+    listing = reader.pages[0].extract_text()
+    assert "Trenitalia" in listing
+    assert "42.50" in listing
+    # The listing quotes the export: same amount in both artifacts.
+    (csv_row,) = _export_rows(client, batch_id)
+    assert csv_row[COL_AMOUNT] in listing
+    assert "Expense 1" in reader.pages[1].extract_text()
+
+
+def test_the_report_names_an_expense_that_has_no_receipt(client, monkeypatch):
+    _patch_ocr(monkeypatch, _extraction(vendor="Trenitalia"))
+    batch_id = _create_batch(client)
+    resp = client.post(
+        f"/api/runs/{batch_id}/expenses",
+        json={"vendor": "Typed by hand", "total": "7.00", "currency": "EUR",
+              "date": "2026-07-06", "category": "Travel & Transport"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    import io
+
+    from pypdf import PdfReader
+
+    pdf = client.get(f"/runs/{batch_id}/expense-report.pdf").content
+    text = "\n".join(p.extract_text() or "" for p in PdfReader(io.BytesIO(pdf)).pages)
+    assert "Typed by hand" in text
+    assert "No receipt document" in text
