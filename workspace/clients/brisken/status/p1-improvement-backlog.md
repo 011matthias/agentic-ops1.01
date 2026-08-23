@@ -218,6 +218,33 @@ The surface splits into four layers, and they do NOT ship together:
    costs nothing and still works; changing them without knowing the target
    would be guesswork. Ask when the destination is known.
 
+### 24. The output is a document now (owner directive 2026-08-23)
+
+**Owner:** there is no target application at all. "The output should be first
+an expense report like in Zoho with an organized listing then all the
+receipts", and for reconciliation "we wont be specifically exporting it into
+any application, so we just need to think of what the best course of action
+is."
+
+**Shipped (Shipped row 20):** the month's report PDF —
+`GET /runs/{id}/expense-report.pdf`. Listing built from the export's own
+rows (money cannot drift between document and file), then every receipt
+behind a caption naming the expense it proves. Evidence is per DOCUMENT, so
+a split receipt appears once captioned "Expenses 3, 4". Missing and
+unrenderable documents are stated, never dropped. SPA half:
+`docs/lovable-month-report-prompt.md` (PDF primary, CSV demoted to
+"data export", the word "Zoho" leaves the button).
+
+**Open — the reconciliation half.** Recommendation, for the owner to accept
+or redirect: the same document shape, not a CSV. A reconciliation's product
+is evidence that a month is complete: each statement charge with its matched
+receipt and status, then the exceptions (unmatched charges, unmatched
+receipts, duplicates), then the receipt pages. Keep the XLSX beside it as the
+working sidecar (Criss works in Excel and her fill-colour is real data), keep
+a CSV available but demoted. This also resolves Zoho layer 4 of item 23: the
+export's column names stop mattering once nothing imports them, so
+`EXPENSE_COLUMNS` can be renamed to plain English on its own schedule.
+
 ### 16. Rejected matches need a "what now" (2026-07-27 note, untracked)
 
 STATUS_REJECTED sends the transaction back to unmatched and is reversible
@@ -381,6 +408,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 20 | The month downloads as a REPORT, not an import file: `GET /runs/{id}/expense-report.pdf` renders the numbered listing from the export's own rows, then appends every receipt behind a caption naming the expense it proves | Owner directive: nothing imports the output any more, so the deliverable has to stand on its own for a human and an auditor. Building the listing FROM the export rows is what keeps the document and the file from ever disagreeing about money; evidence is per document so a split receipt appears once captioned with both expense numbers, and a missing or unrenderable file is stated on its caption rather than leaving a caption with nothing behind it | this round, 2026-08-23; suite 1178 passed / 2 skipped, calibrate green; SPA half `docs/lovable-month-report-prompt.md` |
 | 19 | Stranded mail can come back: `POST /api/inbound/{archive}/re-ingest` re-ingests one archive's delivered attachments into the open month, guarded so only mail whose month was deleted qualifies | A mail whose receipts were ingested into a month that was later deleted had no path back. Replay skips it (status `ingested` is not replayable, correctly), the expenses went with the month, and the bytes sat in the custody archive unreachable from the app — stranding, not loss, but indistinguishable to the operator. Guard proven by regressing it: dropping the `batch_deleted` requirement fails exactly the two tests written for it | this round, 2026-08-23; suite 1168 passed / 2 skipped, calibrate green; SPA half `docs/lovable-re-ingest-prompt.md` |
 | 18 | Cards R4, export half: a month whose receipts belong to different companies exports as ONE file with the entity as a column (owner ruling), and the chart gate became per-entity — `MultiEntityCoaGate` judges each row against the chart of the entity that actually pays it | The export half already worked after R3 and is now pinned by tests, but the gate beside it had a live hole: `CoaGate` was built when "a run targets ONE legal entity" was true, and provisioning looked up that one entity, so every entity-less batch (which is every Cards R3 batch) got NO `coa_validation` block and exported completely un-gated — exactly the batches most able to post an account to the wrong company. Proven both ways: the e2e test fails without the provisioning fix, and forcing one gate for all rows fails the per-entity test | this round, 2026-08-22; suite 1163 passed / 2 skipped, calibrate green |
 | 17 | The live Zoho connection is gone: API client, journal-posting CLI (`zoho-post`), the `coa_source: "api"` chart pull and the `seed-zoho` importer deleted, with a guard test that fails on any Zoho host, `ZOHO_*` credential read, or re-added subcommand | Owner directive: the app should have no connection or ties to Zoho. This layer was the actual connection — roughly 1,600 lines that could authenticate against and post into the live books. Nothing hosted used it (no `ZOHO_*` env on Fly, the web layer never imported the client), so removal is behavior-neutral where Criss works, and the credentials now have nowhere to be read. Doctor gained a real fix on the way: it rejected `coa_source: "none"`, which is the default | this round, 2026-08-22; suite 1158 passed / 2 skipped (65 tests of the deleted code went with it), calibrate green |
