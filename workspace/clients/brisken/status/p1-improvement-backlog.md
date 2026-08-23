@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-08-23
+updated: 2026-08-24
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -245,21 +245,40 @@ a CSV available but demoted. This also resolves Zoho layer 4 of item 23: the
 export's column names stop mattering once nothing imports them, so
 `EXPENSE_COLUMNS` can be renamed to plain English on its own schedule.
 
-### 25. OCR reads the year wrong on some receipts (found 2026-08-23)
+### 25. OCR reads the year wrong on some receipts (SHIPPED - see Shipped row 23)
 
-Line two of the live April 2026 report shows a date in **2023**. The receipt
-is from April 2026; the vision read misparsed the year. This is a money-
-adjacent field (it decides which month an expense belongs to and whether a
-statement charge can ever match it), so it outranks every text-field item
-still open.
+Diagnosed and shipped 2026-08-24. It was not one row: ELEVEN of the April
+batch's 36 readings were dated 2020-2023. Of the three cases this item named,
+only the first survived. The stored extractions already held those years
+(parse is a plain `fromisoformat` on the model's ISO string, so that layer was
+innocent), and the receipts do not print old dates. Two model mechanisms, both
+readable off the images: `receipt_33` prints `Data: 2026-04-22` in its fiscal
+block and `26-04-22` (YY-MM-DD) on the card slip, and the model read the slip
+day-first as 2022-04-26; `receipt_03` prints `02/04/2026` and the model
+returned 2023-04-02, day and month right and the year invented.
 
-Not yet diagnosed. Start by pulling the offending row's stored extraction
-out of the cache and comparing it to the receipt image: if the raw reading
-already says 2023, it is a prompt/model problem; if the reading is right and
-the row is wrong, it is a parse or normalization problem. A plausible third
-case is a receipt that genuinely PRINTS an old date (a re-issued invoice), in
-which case the fix is a sanity check against the batch month rather than a
-better read.
+The prompt was tightened and MEASURED rather than assumed: six of the eleven
+move into April, 24 of the 25 already-correct readings are byte-identical, and
+the twenty-fifth changed to the value the receipt actually prints. Five stay
+wrong, so the load-bearing half is the deterministic guard beside it.
+
+### 27. The date guard catches a wrong month, not a wrong day (2026-08-24)
+
+Residue from item 25, deliberately left. `batch_period` judges a date against
+the batch's month plus its two neighbours, so a reading that lands in the
+right month with the wrong DAY passes silently: after the prompt fix
+`receipt_12` reads 2026-04-22 against a printed 02/04/2026, and `receipt_34`
+reads 2026-04-23 against a printed 21/04/2026.
+
+Lower severity on purpose, and the ranking rule says so: a wrong day does not
+change which month the expense belongs to, which was the harm item 25 named.
+It can still cost a statement match, since matching weighs date proximity.
+
+No obvious deterministic catch exists (nothing in the batch says which day a
+receipt is), so the honest options are a second read that must agree, or
+surfacing low extraction confidence. Both cost money per receipt. Worth
+picking up only if Criss reports a day error, or if the item-4 category watch
+gives us a reason to add a second-read pass anyway.
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
@@ -435,6 +454,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 23 | An implausible expense date stops being accepted quietly: a date outside the batch's month reaches the reviewer as `check` / `date_outside_period`, and the month's report PDF names the expense numbers it distrusts. The month comes from the operator's label, failing that from the batch's own dates by strict plurality, failing both from nowhere (no period = nothing is ever flagged). Extraction prompt tightened for two-digit years, year-first card slips, and fiscal-block-beats-slip | Eleven of the April batch's 36 readings were dated 2020-2023, one of them on line two of the month's report. The date decides which month an expense belongs to and whether a statement charge can ever match it. Nothing is auto-corrected: inventing the "right" date would be the same mistake with better manners, and a date the reviewer typed is believed so a genuinely old invoice can be cleared. Prompt measured, not assumed (6 of 11 fixed, 24 of 25 good readings unchanged, none worse); regressed the real source to watch all four e2e tests go red at 0 flagged of 11 | PR #590, 2026-08-24; suite 1206 passed / 2 skipped, calibrate green |
 | 21 | The reconciliation downloads as a document too: `GET /runs/{id}/reconciliation-report.pdf` puts what needs attention FIRST (charges with no receipt, receipts with no charge, duplicate groups), then every charge with its matched receipt and status, then the receipts — matched ones captioned with the charge they settle, unmatched ones captioned as unmatched | Owner: the reconciliation is not exported into any application either, so the question was what actually serves the work. A CSV carries the charge list and none of the evidence, and nothing reads it. Built from `build_view` — the workbench's own payload — so the document and the review screen cannot state different reconciliations. A clean month SAYS "Nothing", because an empty section reads as a missing one | this round, 2026-08-23; suite 1187 passed / 2 skipped, calibrate green; SPA half is section 5 of `docs/lovable-month-report-prompt.md` |
 | 22 | Anyone can email a receipt in: the intake's @brisken.com sender allowlist is gone (owner directive), so a hotel sending an invoice directly, a faculty member mailing from a private address, and a supplier's billing robot all land instead of bouncing. The recipient rule stays (mail must be addressed to the intake domain, so the listener is never an open relay) and so do the spend guards; the global day cap is now the real ceiling because a rotating From evades the per-sender one. Outside submitters are ingested but never replied to — the ack's @brisken.com recipient guard is what keeps confirmations inside the tenant | PR #587, deployed Fly v83 |
 | 20 | The month downloads as a REPORT, not an import file: `GET /runs/{id}/expense-report.pdf` renders the numbered listing from the export's own rows, then appends every receipt behind a caption naming the expense it proves | Owner directive: nothing imports the output any more, so the deliverable has to stand on its own for a human and an auditor. Building the listing FROM the export rows is what keeps the document and the file from ever disagreeing about money; evidence is per document so a split receipt appears once captioned with both expense numbers, and a missing or unrenderable file is stated on its caption rather than leaving a caption with nothing behind it | this round, 2026-08-23; suite 1178 passed / 2 skipped, calibrate green; SPA half `docs/lovable-month-report-prompt.md` |
