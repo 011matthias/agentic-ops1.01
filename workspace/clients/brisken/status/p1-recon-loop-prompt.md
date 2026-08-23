@@ -163,7 +163,38 @@ same day, both from the live app rather than the plan:
   English prose and its `string[]` type. Pinned in `test_view_contract.py`.
   SPA half `docs/lovable-issue-codes-prompt.md` is optional.
 
-Suite baseline is now **1225 passed / 2 skipped**; `calibrate
+**Then the owner answered everything (2026-08-22 evening / 08-23), and the
+wave closed.** Four more rounds shipped and deployed:
+
+- **Zoho layer 1 (PR #579).** "Zoho does not matter anymore, the app should
+  have no connection or ties to zoho anymore." The Books API client, the
+  journal poster, `zoho-post`, the `coa_source: "api"` live pull and the
+  `seed-zoho` importer are deleted (~1,600 lines + 65 tests);
+  `tests/test_no_zoho_connection.py` fails on any Zoho host, `ZOHO_*` read,
+  or re-added subcommand. Hosted behavior unchanged. Three layers remain,
+  scoped in backlog item 23: the `zoho_account` FIELD names (SPA-coordinated),
+  the chart gate (keep the mechanism, needs a non-Books chart source), and
+  the export artifact — **that one is blocked on one answer: which system the
+  CSV gets imported into now.**
+- **Cards R4 export half (PR #580).** Owner answers: one file with the entity
+  as a column (already true after R3, now pinned); cash/personal tenders stay
+  per-month assignments, no code; per-entity Zoho account moot. The find:
+  `CoaGate` assumed one entity per run, so every entity-less batch exported
+  with NO chart validation. `MultiEntityCoaGate` gates each row against its
+  own entity's chart. Left in item 10: persisted cards migration, intake
+  dropdown unification.
+- **Item 19 re-ingest (PR #582).** `POST /api/inbound/{archive}/re-ingest`
+  recovers ONE stranded archive into the open month; only mail stamped
+  `batch_deleted` qualifies, no bulk version. SPA half:
+  `docs/lovable-re-ingest-prompt.md`.
+
+**Owner-side, still open:** four Lovable prompts unapplied (ready tile, issue
+codes, re-ingest, plus the older ones), the card registry needs entities on
+0113/6013/9693/8311 and the missing 0340 card (that is what the live
+MISSING ENTITY 30 is), and Dirk's rendered credit notice in the January
+set-aside strip needs one restore click — my call was to book it.
+
+Suite baseline is now **1168 passed / 2 skipped**; `calibrate
 --config examples/run.example.json` green. Advisories are SNAPSHOTTED
 into each run's summary — existing runs keep old wording by design.
 
