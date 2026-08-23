@@ -30,6 +30,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from .. import inspect as stmt_inspect
+from ..batch_period import batch_period, outside_period
 from ..cli import NON_RECEIPT_LABELS, ConfigError, generate_expenses, reconcile
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
@@ -4031,10 +4032,18 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
     }
 
 
-def _expense_review(r: Receipt, overrides: dict, *, entity: str | None = None) -> dict:
+def _expense_review(
+    r: Receipt,
+    overrides: dict,
+    *,
+    entity: str | None = None,
+    period: tuple[date, date] | None = None,
+    date_is_human: bool = False,
+) -> dict:
     """Review-by-exception for one expense (receipt-spine). Missing core
     fields first (an expense cannot export cleanly without date / amount /
-    currency), then a missing legal entity (Cards R3 — resolves from the
+    currency), then a date that cannot belong to this month (backlog item
+    25), then a missing legal entity (Cards R3 — resolves from the
     paying card; unresolved = review, and the export still runs with a
     visible placeholder), then the shared category judgment — the same
     ready / check / pick vocabulary the statement workbench uses."""
@@ -4059,6 +4068,32 @@ def _expense_review(r: Receipt, overrides: dict, *, entity: str | None = None) -
                 "missing_fields",
             ),
             "missing": missing,
+        }
+    # A date years away from the month it was filed under is the vision
+    # read being wrong, not the month (backlog item 25). Never corrected
+    # here — the read is reported and a human decides, because inventing
+    # the "right" date would be the same mistake with better manners.
+    #
+    # `date_is_human` is the release valve: the guard questions what the
+    # MACHINE read, so once the reviewer has typed a date (or entered the
+    # whole expense by hand) her judgment stands and the flag goes quiet.
+    # Without it a genuinely old invoice could never be cleared.
+    if not date_is_human and outside_period(r.detected_date, period):
+        # `outside_period` is false for either None, so both are real here.
+        seen, (start, end) = r.detected_date, period  # type: ignore[misc]
+        return {
+            **_review(
+                "check",
+                f"Dated {seen.isoformat()}, outside this batch's "
+                "month. Receipts print the year in forms that are easy to "
+                "misread; check the receipt and correct the date, or leave "
+                "it if the receipt really is that old.",
+                "date_outside_period",
+            ),
+            # Structured beside the prose so the SPA composes its own
+            # localized sentence (the language contract, round 14+15).
+            "date": seen.isoformat(),
+            "period": {"start": start.isoformat(), "end": end.isoformat()},
         }
     if entity is not None and not entity:
         return _review(
@@ -4204,13 +4239,27 @@ def build_expense_view(
     # review states, the paid-through card step, and the card_review
     # strip — the same pass the export runs, so they cannot disagree.
     card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
+    # The month this batch is, for the date guard (backlog item 25). Derived
+    # from the operator's label first and the batch's own dates second, over
+    # the EDITED receipts, so correcting dates moves the consensus with them.
+    period = batch_period(
+        run.label, [r.detected_date for r in receipts if r.detected_date]
+    )
     for r in receipts:
         res = card_res.get(r.document_id) or {
             "hint": "", "card": None, "entity": r.legal_entity_id or "",
             "entity_source": "batch", "ambiguous": False,
             "card_map_blocked": False,
         }
-        review = _expense_review(r, overrides, entity=res["entity"])
+        review = _expense_review(
+            r, overrides, entity=res["entity"], period=period,
+            # A hand-typed date, or a whole expense entered by hand, is the
+            # reviewer's own value; the guard only questions the machine's.
+            date_is_human=(
+                "date" in field_overrides.get(r.document_id, {})
+                or r.document_id.startswith("manual:")
+            ),
+        )
         posting = _row_posting_category(r, overrides, None)
         # Expense grid shows WHY the category is what it is in the reviewer's
         # coarse vocabulary (registry | learned | llm | override); the fine
@@ -4549,11 +4598,23 @@ def build_expense_report(
     widths = [max(1, len(expense_posting_parts(r))) for r in receipts]
     aligned = sum(widths) == len(rows)
     receipts_dir = Path(run.work_dir) / "receipts"
+    # Backlog item 25: the document says which of its own dates it distrusts.
+    # Same period and same human-owns-it rule as the review grid, so the PDF
+    # and the screen cannot disagree about which rows are in question.
+    period = batch_period(
+        run.label, [r.detected_date for r in receipts if r.detected_date]
+    )
+    suspect: list[int] = []
     evidence: list[dict] = []
     n = 1
     for r, width in zip(receipts, widths):
         numbers = list(range(n, n + width)) if aligned else [n]
         n += width if aligned else 1
+        if outside_period(r.detected_date, period) and not (
+            "date" in field_overrides.get(r.document_id, {})
+            or r.document_id.startswith("manual:")
+        ):
+            suspect.extend(numbers)
         path = receipts_dir / r.document_id
         if not path.is_file():
             hit = _attached_receipt_file(receipts_dir.parent, r.document_id)
@@ -4574,15 +4635,24 @@ def build_expense_report(
         evidence.append(item)
 
     label = run.label or run.run_id
+    note = (
+        "Every amount above is the amount the CSV export writes. Each "
+        "receipt follows behind the expense number it proves."
+    )
+    if suspect:
+        listed = ", ".join(str(i) for i in suspect)
+        note += (
+            f" The date read on {'expense' if len(suspect) == 1 else 'expenses'} "
+            f"{listed} falls outside this month, so check "
+            f"{'it' if len(suspect) == 1 else 'them'} against the receipt "
+            f"{'page' if len(suspect) == 1 else 'pages'} below."
+        )
     return build_expense_report_pdf(
         rows,
         EXPENSE_COLUMNS,
         title=f"Expense report — {label}",
         evidence=evidence,
-        prepared_note=(
-            "Every amount above is the amount the CSV export writes. Each "
-            "receipt follows behind the expense number it proves."
-        ),
+        prepared_note=note,
     )
 
 

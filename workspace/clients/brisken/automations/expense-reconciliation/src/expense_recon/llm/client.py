@@ -411,7 +411,7 @@ Extract:
   "report_summary" = an expense-report page that AGGREGATES other expenses (report totals, "Report Summary", reimbursable totals, approval/signature pages) with no single purchase of its own.
   "other" = none of the above (a photo, a blank page, an unrelated document).
   Only a "receipt" becomes an expense; classify honestly. If genuinely unsure, use "receipt".
-- date: the purchase/transaction date as YYYY-MM-DD, or null if not visible. Beware day-first formats (15.01.2026 means January 15).
+- date: the purchase/transaction date as YYYY-MM-DD, or null if not visible. Read the year exactly as printed and never shift it toward a year that seems more plausible: a two-digit year NN means 20NN, so 26 is 2026. Field order varies, so decide it from the document rather than assuming: 15.01.2026 is day-first (January 15), while card-terminal slips often print year-first (26-04-22 is 22 April 2026). When a receipt shows the date twice, the full printed date in the fiscal/invoice block ("Data: 2026-04-22") outranks the compressed date on the card slip. Never read a time or a sequence number as part of the date.
 - total: the final amount charged, as a plain number string like "24.50", or null. Prefer the grand total including tax/tip over any subtotal.
 - currency: the ISO 4217 code (USD, EUR, GBP...), or null if not determinable. Infer from symbols ($, €, £) only when unambiguous.
 - vendor: the merchant/issuer name as printed, or null. When the document shows both the merchant and a card-terminal / acquiring bank or payment processor (CREDIT AGRICOLE, SumUp, Cielo, PagSeguro...), the vendor is the MERCHANT being paid, never the bank or processor operating the terminal.
