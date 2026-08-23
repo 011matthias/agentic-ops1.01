@@ -284,6 +284,20 @@ names.
 
 ### 27. The date guard catches a wrong month, not a wrong day (2026-08-24)
 
+**Narrowed, not closed, 2026-08-24 (see Shipped row 24).** The vision model
+moved to gpt-5-mini after measuring: dates went 3.0 -> 5.0 of 6 over the
+problem receipts, three runs each. Everything cheaper was tried and refuted
+first — repeat reads return the IDENTICAL wrong answer (stable, not noisy), a
+verbatim transcription beside the interpreted value agrees even when both are
+wrong, and gpt-4o is no better than gpt-4o-mini.
+
+What is left: `receipt_12` still reads a wrong DAY inside the right month
+(2026-04-27 against a printed 02/04/2026). And better year reading makes this
+class HARDER to see, not easier: an error that used to land in 2023 and trip
+the date guard now lands in the right month and passes silently. The guard
+judges the month; nothing judges the day. Still parked until Criss reports one,
+but that is the trade to know about.
+
 Residue from item 25, deliberately left. `batch_period` judges a date against
 the batch's month plus its two neighbours, so a reading that lands in the
 right month with the wrong DAY passes silently: after the prompt fix
@@ -299,6 +313,36 @@ receipt is), so the honest options are a second read that must agree, or
 surfacing low extraction confidence. Both cost money per receipt. Worth
 picking up only if Criss reports a day error, or if the item-4 category watch
 gives us a reason to add a second-read pass anyway.
+
+### 28. The paying card, read off the scan (2026-08-24)
+
+**Owner direction:** make sure the card an expense should be attributed to can
+be extracted from the receipt scan as well.
+
+It could not be. Measured over the April batch: asked to transcribe four faded
+digits the extractor landed 2 in 5 and INVENTED the rest. "1234" came back
+three separate times, once for a receipt that plainly prints 1672 and once for
+one that prints 0340. Several live hints are near-misses of a real card (9340,
+2038, 7312, 6742, 07009 against the real 0340 / 2838). Repeat reads do not help:
+three reads of each problem image returned the identical wrong answer, so the
+misreads are stable rather than noisy, and no amount of re-asking finds them.
+Nor does a second field in the same call: `date_text`/`payment_line` verbatim
+transcriptions agreed with the interpreted values even when both were wrong,
+because they come from the same look at the page.
+
+What worked was changing the QUESTION. The answer only ever has to be one of
+the handful of cards Brisken holds, so the extractor is now handed those last-4s
+(from the run's own card registry snapshot) and asked which one it can see, or
+none. Deny-by-default: no registry means no list and `card_last4` always null.
+
+**Shipped (Shipped row 24).** `card_last4` beside `payment_hint`; a confirmed
+pick replaces whatever digits the free-text hint guessed and keeps the tender
+words around it; a hint with no confirmed pick passes through untouched (an
+unlisted run resolves to no card anyway, and dropping it would hide a card the
+registry has not been told about yet — the live 0340 case); a number that does
+not reduce to exactly four digits never reaches the entity chain. The card list
+is part of the extraction-cache key, since the same photo asked against a
+different set of cards is a different question.
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
@@ -474,6 +518,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 24 | The paying card is read off the scan by CHOICE, not transcription: the extractor is handed the last-4s of the cards the payer actually holds (from the run's own registry snapshot) and asked which one it can see, or none. A confirmed pick replaces whatever digits the free-text hint guessed; a hint with no pick passes through untouched; a number that does not reduce to exactly four digits never reaches the entity chain. Vision moves to gpt-5-mini (categorization stays on gpt-4o-mini) | Owner: make sure the card an expense should be attributed to can be extracted from the receipt scan. It could not be — asked to transcribe four faded digits the extractor landed 2 in 5 and INVENTED the rest ("1234" three times, once for a receipt that prints 1672). Three cheaper fixes were refuted by measurement before anything was built: repeat reads return the identical wrong answer, a verbatim field in the same call agrees even when both are wrong, and gpt-4o reads no better than gpt-4o-mini. Measured 3 runs each over 7 problem receipts: dates 0/6 live -> 3.0/6 with the list -> 5.0/6 with the model; cards 1/5 -> 3.0/5 -> 3.7/5; ZERO false positives on the two receipts printing no readable card | PR #592, 2026-08-24, deployed; suite 1217 passed / 2 skipped, calibrate green. Live-verified with a namespaced TEST batch (deleted after): a receipt printing "VISA - ******2838" resolved date 2026-04-11 (the cache held 2023-04-11), hint "VISA ...2838", card-2838, entity Corporate Services via `card` |
 | 23 | An implausible expense date stops being accepted quietly: a date outside the batch's month reaches the reviewer as `check` / `date_outside_period`, and the month's report PDF names the expense numbers it distrusts. The month comes from the operator's label, failing that from the batch's own dates by strict plurality, failing both from nowhere (no period = nothing is ever flagged). Extraction prompt tightened for two-digit years, year-first card slips, and fiscal-block-beats-slip | Eleven of the April batch's 36 readings were dated 2020-2023, one of them on line two of the month's report. The date decides which month an expense belongs to and whether a statement charge can ever match it. Nothing is auto-corrected: inventing the "right" date would be the same mistake with better manners, and a date the reviewer typed is believed so a genuinely old invoice can be cleared. Prompt measured, not assumed (6 of 11 fixed, 24 of 25 good readings unchanged, none worse); regressed the real source to watch all four e2e tests go red at 0 flagged of 11 | PR #590, 2026-08-24; suite 1206 passed / 2 skipped, calibrate green |
 | 21 | The reconciliation downloads as a document too: `GET /runs/{id}/reconciliation-report.pdf` puts what needs attention FIRST (charges with no receipt, receipts with no charge, duplicate groups), then every charge with its matched receipt and status, then the receipts — matched ones captioned with the charge they settle, unmatched ones captioned as unmatched | Owner: the reconciliation is not exported into any application either, so the question was what actually serves the work. A CSV carries the charge list and none of the evidence, and nothing reads it. Built from `build_view` — the workbench's own payload — so the document and the review screen cannot state different reconciliations. A clean month SAYS "Nothing", because an empty section reads as a missing one | this round, 2026-08-23; suite 1187 passed / 2 skipped, calibrate green; SPA half is section 5 of `docs/lovable-month-report-prompt.md` |
 | 22 | Anyone can email a receipt in: the intake's @brisken.com sender allowlist is gone (owner directive), so a hotel sending an invoice directly, a faculty member mailing from a private address, and a supplier's billing robot all land instead of bouncing. The recipient rule stays (mail must be addressed to the intake domain, so the listener is never an open relay) and so do the spend guards; the global day cap is now the real ceiling because a rotating From evades the per-sender one. Outside submitters are ingested but never replied to — the ack's @brisken.com recipient guard is what keeps confirmations inside the tenant | PR #587, deployed Fly v83 |
