@@ -15,6 +15,13 @@ no-autonomous-send rule intact. Abuse guards fire BEFORE acceptance: the
 in-memory day budget (reserved under its lock, raceproof in-process), an
 in-flight route ceiling, and a free-disk floor.
 
+Who may submit: anyone (owner directive 2026-08-23). The two boundaries
+that remain are the recipient — mail must be addressed to our own domain,
+so the listener is not an open relay — and the spend guards above. There
+is deliberately no sender check: From is forgeable, so an allowlist bought
+tidiness rather than security, and it cost every receipt that reached us
+by any route other than a Brisken mailbox.
+
 Enabled only when EXPENSE_RECON_INTAKE_SMTP=1 (fly.toml); tests exercise
 the decision functions and handler directly, never a real socket.
 """
@@ -33,7 +40,6 @@ from .intake_mail import (
     end_route,
     parse_inbound,
     route_archived,
-    sender_allowed,
     try_begin_route,
 )
 from .store import RunStore
@@ -51,18 +57,6 @@ def rcpt_decision(address: str, domain: str, n_rcpts: int) -> str | None:
         return "452 4.5.3 too many recipients"
     if not addr.endswith("@" + domain):
         return "550 5.7.1 relay not permitted"
-    return None
-
-
-def sender_decision(
-    mail_from: str, header_from: str, cfg: IntakeConfig
-) -> str | None:
-    """None = accept; else the SMTP error line. Envelope AND header sender
-    must both pass: the envelope is what bounced mail routes to, the header
-    is what attribution reads — a mismatch on either side is refused."""
-    for candidate in (mail_from, header_from):
-        if not sender_allowed(candidate, cfg.sender_allowlist):
-            return "550 5.7.1 sender not permitted"
     return None
 
 
@@ -93,13 +87,6 @@ class IntakeHandler:
         raw = envelope.content or b""
         cfg = self._config()
         parsed = parse_inbound(raw, cfg.domain, envelope.rcpt_tos)
-        err = sender_decision(envelope.mail_from or "", parsed.from_addr, cfg)
-        if err is not None:
-            log.info(
-                "intake refused mail from %s (%s): %s",
-                envelope.mail_from, parsed.from_addr, err,
-            )
-            return err
         if disk_low(self.data_root):
             log.warning("intake refusing mail: low disk on data volume")
             return "452 4.3.1 storage low, try again later"

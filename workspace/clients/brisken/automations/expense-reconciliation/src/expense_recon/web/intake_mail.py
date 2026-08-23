@@ -7,9 +7,13 @@ address; the SMTP listener (`smtp_server.py`) drives this module:
      body-only detected; zips REFUSED at this boundary — the authenticated
      operator upload is the zip path; a mailed zip would count as one file
      against the spend budget while expanding to up to 80 vision calls),
-  2. the sender allowlist is deny-by-default (the SMTP layer turns a
-     refusal into an in-protocol 550, so the sender's own mail system
-     generates the bounce and we never send anything),
+  2. anyone may submit (owner directive 2026-08-23: the sender allowlist is
+     gone — a faculty member mailing from a private address, a hotel
+     mailing an invoice on their behalf, and a supplier's billing robot all
+     have to land). What holds the door is downstream, not at the sender:
+     the recipient must be an address at our own domain (no relaying), the
+     day budget caps the vision spend, zips are refused, and every ingested
+     file still passes quarantine + operator review before it is money,
   3. `archive_incoming` writes the raw message + parts under
      ``/data/inbound/<stamp>/`` and the acceptance log row BEFORE the SMTP
      250 is answered (the ack means custody: a crash after 250 can no
@@ -63,10 +67,12 @@ log = logging.getLogger("expense_recon.intake")
 # ---------------------------------------------------------------- config --
 
 DEFAULT_INTAKE_DOMAIN = "expenses.brisken.com"
-DEFAULT_SENDER_ALLOWLIST = ("@brisken.com",)
 # Cost guard on the vision spend a runaway/compromised sender could cause.
 # Units = max(1, attachment count) per accepted message, so zero-file spam
-# consumes budget too.
+# consumes budget too. Since the allowlist was dropped (2026-08-23) the
+# per-sender cap is only a courtesy — From is forgeable, so a determined
+# abuser rotates it — and the GLOBAL cap is the real ceiling on a day's
+# spend. Keep that in mind before raising it.
 DEFAULT_SENDER_DAILY_CAP = 40
 DEFAULT_GLOBAL_DAILY_CAP = 200
 DEFAULT_ALERT_RECIPIENTS = ("matthias.silva@brisken.com",)
@@ -97,7 +103,6 @@ STALE_RECEIVED_SECONDS = 600
 @dataclass(frozen=True)
 class IntakeConfig:
     domain: str = DEFAULT_INTAKE_DOMAIN
-    sender_allowlist: tuple[str, ...] = DEFAULT_SENDER_ALLOWLIST
     aliases: dict = field(default_factory=dict)  # local-part -> person name
     sender_daily_cap: int = DEFAULT_SENDER_DAILY_CAP
     global_daily_cap: int = DEFAULT_GLOBAL_DAILY_CAP
@@ -107,16 +112,12 @@ class IntakeConfig:
 
     @classmethod
     def from_settings(cls, settings: dict | None) -> "IntakeConfig":
-        """Settings key ``intake``: {domain, senders: [...], aliases: {...},
+        """Settings key ``intake``: {domain, aliases: {...},
         sender_daily_cap, global_daily_cap, auto_ack, alert_recipients,
         retention_years}. Env overrides the domain
-        (EXPENSE_RECON_INTAKE_DOMAIN) so fly.toml stays the deploy truth."""
+        (EXPENSE_RECON_INTAKE_DOMAIN) so fly.toml stays the deploy truth.
+        A legacy ``senders`` key is ignored: submission is open."""
         raw = (settings or {}).get("intake") or {}
-        senders = tuple(
-            s.strip().lower()
-            for s in (raw.get("senders") or DEFAULT_SENDER_ALLOWLIST)
-            if isinstance(s, str) and s.strip()
-        ) or DEFAULT_SENDER_ALLOWLIST
         aliases = {
             str(k).strip().lower(): str(v).strip()
             for k, v in (raw.get("aliases") or {}).items()
@@ -144,7 +145,6 @@ class IntakeConfig:
 
         return cls(
             domain=domain,
-            sender_allowlist=senders,
             aliases=aliases,
             sender_daily_cap=_cap("sender_daily_cap", DEFAULT_SENDER_DAILY_CAP),
             global_daily_cap=_cap("global_daily_cap", DEFAULT_GLOBAL_DAILY_CAP),
@@ -165,24 +165,10 @@ def normalize_intake_setting(raw) -> dict:
         if not isinstance(domain, str) or "@" in domain or not domain.strip():
             raise ValueError("intake.domain must be a bare domain name")
         cleaned["domain"] = domain.strip().lower()
-    senders = raw.get("senders")
-    if senders is not None:
-        if not isinstance(senders, list) or not all(
-            isinstance(s, str) and s.strip() for s in senders
-        ):
-            raise ValueError(
-                "intake.senders must be a list of addresses or @domains"
-            )
-        entries = [s.strip().lower() for s in senders]
-        # An entry with no '@' anywhere can never match sender_allowed and
-        # would silently 550 ALL mail — refuse it at the edge instead.
-        bad = [s for s in entries if "@" not in s]
-        if bad:
-            raise ValueError(
-                "intake.senders entries must be full addresses or start "
-                f"with '@' (got: {bad[0]!r})"
-            )
-        cleaned["senders"] = entries
+    # ``senders`` (the retired allowlist) is dropped rather than rejected: a
+    # stored settings blob or an older client may still carry it, and a 400
+    # on a key that no longer does anything would block edits to the keys
+    # that do.
     aliases = raw.get("aliases")
     if aliases is not None:
         if not isinstance(aliases, dict) or not all(
@@ -323,22 +309,6 @@ def parse_inbound(
         skipped=skipped,
         body_only=body_only,
     )
-
-
-def sender_allowed(from_addr: str, allowlist: tuple[str, ...]) -> bool:
-    """Deny-by-default. Entries are exact addresses or '@domain' suffixes.
-    This is a spam filter, not authentication: From is forgeable, and every
-    ingested receipt still passes through quarantine + operator review."""
-    addr = (from_addr or "").strip().lower()
-    if not addr or "@" not in addr:
-        return False
-    for entry in allowlist:
-        if entry.startswith("@"):
-            if addr.endswith(entry):
-                return True
-        elif addr == entry:
-            return True
-    return False
 
 
 def resolve_person(
@@ -696,7 +666,13 @@ def _inbound_is_auto_generated(arch: Path) -> bool:
 def _maybe_ack(db_path: Path, arch: Path) -> None:
     """Confirmation to the submitting sender after a SUCCESSFUL ingest.
     Recipient = the real envelope/header sender recorded at custody time
-    (never the alias), which the allowlist already proved is internal."""
+    (never the alias).
+
+    Since submission opened to any sender (2026-08-23), that address can be
+    external and forged — so `graph_notify.send_mail`'s own @brisken.com
+    recipient guard is what keeps this from becoming a backscatter source:
+    an outside submitter simply gets no ack. Do not "fix" that as a missing
+    confirmation; replying to unverified strangers as Brisken is the bug."""
     try:
         with RunStore(db_path) as store:
             cfg = IntakeConfig.from_settings(store.get_settings())

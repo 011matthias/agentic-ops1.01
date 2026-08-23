@@ -70,18 +70,18 @@ drain), `received` (still processing), and the held family
 
 ```json
 "intake": {
-  "aliases": { "dirk": "Dirk Neumann", "criss": "Cristiane Cavalcanti" },
-  "senders": ["@brisken.com"]
+  "aliases": { "dirk": "Dirk Neumann", "criss": "Cristiane Cavalcanti" }
 }
 ```
 
 - In Settings, add a small "Email intake" section listing the aliases as
   rows (address shown fully: `dirk@expenses.brisken.com` → "Dirk Neumann")
   with add/remove. Saving PUTs the whole `intake` object back.
-- `senders` is the allowlist of who may email the intake (addresses or
-  `@domain` entries). Render it as editable tags below the aliases with the
-  label **EN** "Accepted senders" / **PT** "Remetentes aceitos". The backend
-  rejects entries without an `@` — surface its error message on save.
+- SUPERSEDED 2026-08-23: this prompt originally specified an "Accepted
+  senders" tag editor. The sender allowlist no longer exists (anyone may
+  submit); the backend ignores a `senders` key. Do not build that editor.
+  If it was already built, remove it per
+  `docs/lovable-open-intake-prompt.md`.
 - Show the intake domain read-only: "Receipts can be emailed to
   any-name@expenses.brisken.com" / PT "Recibos podem ser enviados para
   qualquer-nome@expenses.brisken.com".
