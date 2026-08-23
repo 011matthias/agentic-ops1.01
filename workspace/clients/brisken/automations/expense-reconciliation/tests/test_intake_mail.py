@@ -1148,3 +1148,123 @@ def test_reconcile_flips_interrupted_render(client):
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     assert meta["status"] == "held_failed"
     assert meta["rendered"] is True  # stays retryable
+
+
+# ── item 19: re-ingest mail stranded by a deleted month ─────────────
+
+
+def _stranded_mail(client, monkeypatch, subject="stranded mail"):
+    """A mail whose attachments were INGESTED into a month that is then
+    deleted. Its bytes survive in the custody archive; its expenses do not.
+    Replay will not touch it (status `ingested` is not replayable), which is
+    exactly the stranding item 19 is about."""
+    batch_id = _create_batch(client, monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(vendor="Trenitalia"))
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("tren.jpg", JPG + b"i19")],
+              subject=subject),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_INGESTED
+    resp = client.post(f"/api/runs/{batch_id}/delete", json={"confirm": batch_id})
+    assert resp.status_code == 200, resp.text
+    row = [e for e in client.get("/api/inbound/log").json()["entries"]
+           if e.get("subject") == subject][0]
+    assert row["batch_deleted"] is True
+    return row["archive"]
+
+
+def test_re_ingest_puts_stranded_attachments_into_the_open_month(client, monkeypatch):
+    """The owner-approved fix: an explicit per-archive action that re-ingests
+    the delivered attachments into the month that is open now. Replay cannot
+    do it (it skips `ingested`), so before this the receipts were unreachable
+    from the app even though the bytes were never deleted."""
+    archive = _stranded_mail(client, monkeypatch)
+    # Nothing to replay: this is the gap.
+    assert client.post("/api/inbound/replay-held").json()["replayed"] == 0
+
+    new_batch = _create_batch(client, monkeypatch)
+    _patch_ocr(monkeypatch, _extraction(vendor="Trenitalia"))
+    resp = client.post(f"/api/inbound/{archive}/re-ingest")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["batch_id"] == new_batch
+    assert body["documents"], body
+
+    row = [e for e in client.get("/api/inbound/log").json()["entries"]
+           if e["archive"] == archive][0]
+    assert row["batch_id"] == new_batch
+    assert not row.get("batch_deleted")  # the stamp is cleared
+    # _create_batch seeds a receipt of its own, so the arrival is what
+    # matters, not the batch being empty beforehand.
+    grid = client.get(f"/api/expense-batches/{new_batch}").json()
+    assert "Trenitalia" in [e["vendor"]["display"] for e in grid["expenses"]]
+
+
+def test_re_ingest_refuses_mail_whose_month_still_exists(client, monkeypatch):
+    """Deny-by-default: this action exists for stranding, not for copying a
+    month's receipts into another month. A live batch keeps its mail."""
+    batch_id = _create_batch(client, monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(vendor="Trenitalia"))
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("t.jpg", JPG + b"live")],
+              subject="live mail"),
+        synchronous=True,
+    )
+    archive = [e for e in client.get("/api/inbound/log").json()["entries"]
+               if e.get("subject") == "live mail"][0]["archive"]
+
+    resp = client.post(f"/api/inbound/{archive}/re-ingest")
+    assert resp.status_code == 409, resp.text
+    assert "still" in resp.json()["error"].lower()
+    # And the batch it belongs to is untouched (its own seeded receipt
+    # plus the mailed one, unchanged by the refusal).
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    assert len(grid["expenses"]) == 2
+
+
+def test_re_ingest_without_an_open_month_says_so(client, monkeypatch):
+    archive = _stranded_mail(client, monkeypatch, subject="no target")
+    resp = client.post(f"/api/inbound/{archive}/re-ingest")
+    assert resp.status_code == 409, resp.text
+    assert "no open month" in resp.json()["error"].lower()
+
+
+def test_re_ingest_twice_does_not_duplicate_the_receipts(client, monkeypatch):
+    """A second click cannot double-add. The first call cleared the
+    `batch_deleted` stamp, so the mail now belongs to a live month and the
+    second hits the same refusal any live mail gets — a firmer guarantee than
+    relying on byte-dedupe to absorb it."""
+    archive = _stranded_mail(client, monkeypatch, subject="double click")
+    new_batch = _create_batch(client, monkeypatch)
+    _patch_ocr(monkeypatch, _extraction(vendor="Trenitalia"))
+    assert client.post(f"/api/inbound/{archive}/re-ingest").status_code == 200
+    before = len(client.get(f"/api/expense-batches/{new_batch}").json()["expenses"])
+
+    second = client.post(f"/api/inbound/{archive}/re-ingest")
+    assert second.status_code == 409, second.text
+    assert "live month" in second.json()["error"]
+
+    after = client.get(f"/api/expense-batches/{new_batch}").json()["expenses"]
+    assert len(after) == before
+
+
+def test_re_ingest_refuses_a_body_only_archive(client, monkeypatch):
+    """Body-only mail has no delivered attachment to re-ingest; its path is
+    render-ingest, and the error says so rather than silently doing nothing."""
+    state = client.app.state
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[], subject="body only",
+              body="just text"),
+        synchronous=True,
+    )
+    archive = [e for e in client.get("/api/inbound/log").json()["entries"]
+               if e.get("subject") == "body only"][0]["archive"]
+    resp = client.post(f"/api/inbound/{archive}/re-ingest")
+    assert resp.status_code == 409, resp.text
+    assert "attachment" in resp.json()["error"].lower()
