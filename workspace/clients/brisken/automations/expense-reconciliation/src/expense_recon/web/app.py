@@ -91,6 +91,7 @@ from .service import (
     available_entities,
     batch_list_summary,
     build_expense_report,
+    build_reconciliation_report,
     build_expense_view,
     build_memory_view,
     build_view,
@@ -2595,6 +2596,30 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             path,
             filename=f"zoho-expenses-{run_id}.csv",
             media_type="text/csv",
+        )
+
+    @app.get("/runs/{run_id}/reconciliation-report.pdf")
+    def download_reconciliation_report(run_id: str):
+        """The statement reconciliation as a document: what needs attention
+        first, then every charge with its receipt, then the receipts
+        themselves (owner directive 2026-08-23)."""
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return _not_found("Run not found")
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+            resolutions = store.get_duplicate_resolutions(run_id)
+            label = run.label or run_id
+        pdf = build_reconciliation_report(run, decisions, overrides, resolutions)
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "-", label).strip("-") or run_id
+        return Response(
+            content=pdf,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition":
+                    f'attachment; filename="reconciliation-{safe}.pdf"'
+            },
         )
 
     @app.get("/runs/{run_id}/expense-report.pdf")

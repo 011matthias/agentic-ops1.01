@@ -4586,6 +4586,69 @@ def build_expense_report(
     )
 
 
+def build_reconciliation_report(
+    run: RunRow,
+    decisions: dict,
+    overrides: dict,
+    resolutions: dict[str, str] | None = None,
+) -> bytes:
+    """The statement reconciliation as a document (owner directive
+    2026-08-23: nothing imports this either, so what serves the work is
+    evidence that the month is complete, not a data file).
+
+    Built from `build_view` — the workbench's OWN payload — so the document
+    and the review screen cannot state different reconciliations. Evidence is
+    every receipt the run holds: matched ones captioned with the charge they
+    settle, unmatched ones captioned as unmatched, because a receipt nobody
+    could place is exactly what a reader needs to see.
+    """
+    from ..output.reconciliation_report_pdf import build_reconciliation_report_pdf
+
+    view = build_view(run, decisions, overrides, resolutions)
+    _, receipts, _, _ = snapshot_from_dict(run.snapshot)
+    charge_by_doc: dict[str, dict] = {}
+    for row in view.get("rows") or []:
+        doc = row.get("chosen_document_id")
+        if doc:
+            charge_by_doc[doc] = row
+
+    receipts_dir = Path(run.work_dir) / "receipts"
+    evidence: list[dict] = []
+    for r in receipts:
+        path = receipts_dir / r.document_id
+        if not path.is_file():
+            hit = _attached_receipt_file(receipts_dir.parent, r.document_id)
+            path = hit if hit is not None else None
+        charge = charge_by_doc.get(r.document_id)
+        if charge is not None:
+            label = (
+                f"Charge {charge.get('date') or ''} · "
+                f"{charge.get('vendor') or ''}".strip(" ·")
+            )
+            detail = "  ·  ".join(x for x in (
+                f"{charge.get('amount') or ''} {charge.get('currency') or ''}".strip(),
+                f"receipt: {r.detected_vendor or ''}".strip(),
+            ) if x.strip())
+        else:
+            label = f"Unmatched receipt · {r.detected_vendor or '(no vendor)'}"
+            detail = "  ·  ".join(x for x in (
+                str(r.detected_date or ""),
+                (f"{r.detected_total} {r.detected_currency or ''}".strip()
+                 if r.detected_total is not None else ""),
+                "no charge on the statement settles this receipt",
+            ) if x)
+        item: dict = {"label": label, "detail": detail}
+        if path is not None:
+            item["name"] = _display_name(path.name)
+            item["data"] = path.read_bytes()
+        evidence.append(item)
+
+    label = run.label or run.run_id
+    return build_reconciliation_report_pdf(
+        view, title=f"Reconciliation — {label}", evidence=evidence,
+    )
+
+
 def assign_batch_cards(
     store: RunStore,
     run: RunRow,
