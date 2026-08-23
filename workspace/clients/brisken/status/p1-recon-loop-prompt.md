@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-08-23
+updated: 2026-08-24
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
@@ -32,12 +32,22 @@ landed on 2026-08-23 and reshaped what the tool produces:
    allowlist is deleted (PR #587, Fly v83). The recipient rule and the spend
    guards are what hold the door now.
 
-**The top open item is backlog 25: OCR read a year as 2023 on an April 2026
-receipt.** It is visible on line two of the live April report. That is a
-money-adjacent field — it decides which month an expense belongs to and
-whether a statement charge can ever match it — so it outranks every text
-item still open. It is undiagnosed; the backlog entry names the three cases
-to separate first.
+**Backlog 25 (the 2023 year on an April receipt) is CLOSED** — PR #590,
+2026-08-24. It was eleven rows, not one. The stored readings already held
+those years, so the model was wrong at the source, two ways: a card slip
+printing YY-MM-DD read day-first, and a two-digit `26` resolved to a year
+that is not 2026. The prompt was tightened and measured (6 of 11 fixed, none
+of the 25 good readings made worse), and because five stay wrong the
+load-bearing half is a deterministic guard: a date outside the batch's month
+now reaches the reviewer as `check` / `date_outside_period` and the report
+PDF names the expense numbers it distrusts. Nothing is auto-corrected, and a
+date the reviewer typed is believed.
+
+**Pick the top open item off the backlog.** Item 27 is the residue left
+behind (the guard catches a wrong month, not a wrong day inside the right
+month) and is deliberately parked until Criss reports a day error. Item 26 is
+owner-side data entry. So the productive next moves are the untested material
+and whatever Criss's next month surfaces.
 
 **Do not re-ask the owner about:** the export target (there is none), Zoho
 (no ties, deleted), mixed-entity export (one file, entity as a column),
@@ -63,7 +73,7 @@ credit notice (booked, my call).
 statement run reconciles 0 of 80 charges, USD 20,228.68 unreconciled, 78
 charges with no receipt at all. That is the data, not a bug.
 
-Suite baseline: **1190 passed / 2 skipped**; `calibrate --config
+Suite baseline: **1206 passed / 2 skipped**; `calibrate --config
 examples/run.example.json` green. Fly app at **v83**.
 
 ## Reading the app without anyone's help
@@ -398,7 +408,7 @@ uv run --directory <worktree>\workspace\clients\brisken\automations\expense-reco
 ```
 
 `--all-extras` matters: without it `rapidfuzz` is missing and 9 test
-modules fail to import. Current suite baseline: **1190 passed, 2 skipped**.
+modules fail to import. Current suite baseline: **1206 passed, 2 skipped**.
 
 ### Traps that will waste your time
 
