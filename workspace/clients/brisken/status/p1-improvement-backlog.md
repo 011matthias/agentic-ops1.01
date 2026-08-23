@@ -262,6 +262,26 @@ move into April, 24 of the 25 already-correct readings are byte-identical, and
 the twenty-fifth changed to the value the receipt actually prints. Five stay
 wrong, so the load-bearing half is the deterministic guard beside it.
 
+**Live-verified after deploy (2026-08-24), all five batches on the volume.**
+The April batch flags 13 of 38: the eleven misreads plus the two August
+receipts added by hand on 08-22/23, which really are not April expenses. The
+report PDF now names them ("The date read on expenses 2, 8, 11, ... falls
+outside this month"), and expense 2 is the 2023 row the owner spotted on line
+two. The no-noise check that matters: in Criss's REAL May month every one of
+the 20 genuine receipt rows falls inside the window and none flags. Its four
+flags are Chase STATEMENT pages that leaked in as expenses before the
+quarantine shipped, whose dates are Jan/Feb/Mar/Jul — the guard finding
+already-known phantom rows, not a date defect. The two January test batches
+are genuinely mixed-month agent fixtures spanning Nov 2025 to Aug 2026, so
+their flags are honest.
+
+**Noted behavior, not built:** a label naming a month with NO year ("January")
+is refused as a month claim, so that batch falls to its own dates and the
+consensus can pick a different month than the label's word. Real labels carry
+the year, so this only shows up on agent fixtures. The cheap fix if it ever
+matters is to take the year from the batch's dates for the month the label
+names.
+
 ### 27. The date guard catches a wrong month, not a wrong day (2026-08-24)
 
 Residue from item 25, deliberately left. `batch_period` judges a date against
