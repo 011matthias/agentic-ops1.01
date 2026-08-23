@@ -220,6 +220,14 @@ def build_expense_report_pdf(
             _esc(f"{len(rows)} expenses  ·  {totals_line}"), styles["sub"]
         ))
 
+    # Which listing rows actually have a document behind them. The column
+    # cannot promise a PAGE number (the captions are laid out after this
+    # table is built), so it states the one thing it knows for certain.
+    documented: set[int] = set()
+    for item in (evidence or []):
+        if item.get("data"):
+            documented.update(int(n) for n in item.get("rows") or [])
+
     head = [Paragraph(_esc(name), styles["cellhead"]) for name, _w in _LISTING]
     table_rows: list[list] = [head]
     for n, row in enumerate(rows, start=1):
@@ -232,7 +240,7 @@ def build_expense_report_pdf(
             Paragraph(_esc(cell(row, "Paid Through")), styles["cell"]),
             Paragraph(_esc(cell(row, "Expense Amount")), styles["cellr"]),
             Paragraph(_esc(cell(row, "Currency Code")), styles["cell"]),
-            Paragraph(f"p. {n}", styles["cell"]),
+            Paragraph("attached" if n in documented else "none", styles["cell"]),
         ])
     table = Table(
         table_rows,

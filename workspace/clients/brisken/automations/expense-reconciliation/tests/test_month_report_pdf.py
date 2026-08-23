@@ -192,3 +192,22 @@ def test_a_split_receipt_appears_once_captioned_with_both_expenses():
     # 3 listing rows but only 2 documents: 1 listing + 2 * (caption + image)
     assert len(reader.pages) == 1 + 2 * 2
     assert "Expenses 2, 3" in _text(pdf, 3)
+
+
+def test_the_receipt_column_states_attachment_not_a_page_number():
+    """The listing is laid out before the caption pages exist, so it cannot
+    know a receipt's page. It says whether a document is attached, which it
+    does know; "p. 3" next to expense 3 was a number that looked like a page
+    reference and was not one."""
+    pdf = build_expense_report_pdf(
+        ROWS, EXPENSE_COLUMNS, title="April 2026",
+        evidence=[
+            {"rows": [1], "label": "Trenitalia", "name": "tren.png",
+             "data": _png()},
+            {"rows": [2], "label": "Cafe Lisboa"},
+        ],
+    )
+    page1 = _text(pdf, 0)
+    assert "attached" in page1
+    assert "none" in page1
+    assert "p. 1" not in page1
