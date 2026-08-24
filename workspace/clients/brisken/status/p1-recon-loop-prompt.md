@@ -125,18 +125,24 @@ the owner publishes; a prompt sitting in `docs/` says nothing about whether
 it was ever pasted, and guessing from the repo is what made coordination bad
 enough for the owner to call it out.
 
-Headline from that audit: **`/months` renders only the create form.** Zero
-tables, zero rows; the page fetches `GET /api/expense-batches`, gets six
-batches, and discards them. There is no way into an existing month except
-the intake page's Month links. That is backlog item 32 and
-`docs/lovable-months-list-prompt.md`, and it blocks testing harder than
-anything else open.
+**Every prompt is applied as of 2026-08-25, verified by driving the app.**
+The three that were outstanding all landed: `/months` renders a real list
+(1 table, 6 rows, 6 `/expenses/{id}` links, real month labels), the stale
+"Accepted senders" editor is gone and "People we recognise" replaced it, and
+Status cells render the backend `status_label` with the refusals strip beside
+them. Backlog items 31 and 32 are CLOSED.
 
-Sixteen prompts ARE applied, including both report-PDF buttons, body-only
-handling, cards R3, set-aside, memory editing and the feedback widget. Three
-remain, all rewritten 2026-08-24 to open with a measured inventory of what
-the app already has, so Lovable adds the delta instead of rebuilding working
-screens.
+That last one matters for anything you ship next: because the SPA renders
+`status_label` from the backend, a NEW intake status shows correct prose
+with no SPA change. The `duplicate` status shipped the same day proved it.
+
+**Two audit traps that made applied prompts read as missing**, on top of the
+two the 2026-08-24 audit hit. `prompt_ledger.py` scores `[x]` on a FOUND
+needle, so the row "STALE editor must be GONE" passes as `[ ]` — an inverted
+check inside a checklist of positive ones. And its refusals needle is
+`"refus"` while the shipped copy says **"turned away"**, so a live feature
+reported as absent. Take needles from what the app SAYS, not from the prompt
+draft. Both are recorded in `docs/PROMPT-STATUS.md`.
 
 **Two audit traps, both of which produced a wrong answer first.** A loose
 regex matched a Cards help line and reported the known-senders editor as
@@ -151,24 +157,18 @@ backlog are small and unranked; none of them is urgent.
 
 ## Owner-side, still open (hand the paths when asked, do not chase)
 
-Unapplied Lovable prompts, all with their backends already live, under
-`workspace/clients/brisken/automations/expense-reconciliation/docs/`:
+**No unapplied Lovable prompts.** All of `docs/` is applied; re-run
+`%TEMP%/claude/recon-probe/prompt_ledger.py` after any publish and update
+`automations/expense-reconciliation/docs/PROMPT-STATUS.md`, reading its two
+known-stale rows per the traps above.
 
-Ledger with evidence: `automations/expense-reconciliation/docs/PROMPT-STATUS.md`.
-Unapplied, in the order they matter:
-
-- `lovable-months-list-prompt.md` — **THE blocker.** No way into an existing
-  month; `/months` is the create form only. Backlog item 32.
-- `lovable-known-senders-prompt.md` — Settings > Email intake: deletes the
-  dead "Accepted senders" editor (backlog item 31), rewords three stale help
-  lines, adds the `known_senders` field.
-- `lovable-inbound-status-refusals-prompt.md` — the status label + the
-  refusals strip. Supersedes month-pool §0/§12, which were REMOVED from that
-  file so it cannot be double-pasted.
-- `lovable-issue-codes-prompt.md`, `lovable-re-ingest-prompt.md` — status
-  unverifiable; no live batch or archive exercises them.
-
-Everything else in `docs/` is APPLIED; nothing to hand over.
+`intake.known_senders` is still EMPTY on production. Until an operator lists
+`dirk_.neumann@icloud.com`, every body-only forward from Dirk's personal
+address holds and he gets no ack — that address is outside the tenant, and
+`is_known_sender` recognises `@brisken.com` plus the list, nothing else. The
+Settings editor for it now exists ("People we recognise"), so this is a UI
+edit, no deploy. A session sandboxed against state-changing calls to the live
+app cannot do it; hand it over.
 
 Card registry data entry: entities for cards 0113 / 6013 / 9693 / 8311 and
 the missing 0340 card. That is backlog item 26 and the live MISSING ENTITY
