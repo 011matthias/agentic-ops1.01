@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-08-24
+updated: 2026-08-25
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -380,7 +380,35 @@ fallback for pre-2a snapshots. Related: the occurrence suffix separator is
 `-` and not `:` precisely because that fallback reads the last `:` as a row
 number, and `transaction_id` also travels as a URL path segment.
 
-**PR 2b - the living month. NEXT.** The statement stops being a closing event
+**PR 2b-1 - `rematch_month` + the judgment cache. SHIPPED.** The match that
+used to live inline in `execute_statement_attach`, fused to the one-shot
+attach, is now `service.rematch_month`: bake the reviewer's corrections into
+the pool, match, judge, categorize receiptless charges, commit under
+`_BATCH_ADD_LOCK` against a fresh re-read. The attach path is its first
+caller and did not move by a byte. Every incremental path in 2b-2 calls the
+same function rather than growing a second copy that drifts.
+
+Beside it, `web/judgment_cache.py`: the living month re-matches on every
+receipt arrival, and without a cache each one re-asks the model about pairs
+it has already judged, on Dirk's key. Both judgment entry points reach the
+model through exactly two client methods, so a proxy over those two covers
+everything without the judgment layer knowing. Keyed by the CALL's content
+plus the model that answered it, NOT by `(transaction_id, document_id)` as
+the plan said: a reviewer can correct a receipt's amount after it was
+judged, and an id key would hand back the verdict the model gave for the old
+numbers. Entries merge onto the fresh row at commit, so a concurrent
+re-match does not lose what it paid for.
+
+**Open for 2b-2, from enumerating the guard:** `has_statement` refuses at
+NINE call sites in three different classes, not one, so "lift the refusal"
+is not a single switch. Must open: `POST .../receipts`, `POST .../statement`,
+`POST .../set-aside/restore`. Should open, and only means anything once a
+re-match follows: `POST .../cards`, `POST .../refresh-master-data`. Must
+stay closed or needs a real decision: the four expense-edit overlay routes,
+because the attach BAKES edits into the snapshot receipts and reopening the
+overlay over a baked pool risks double-application.
+
+**PR 2b-2 - the living month. NEXT.** The statement stops being a closing event
 and becomes an input stream:
 
 1. **Stable transaction identity** (the prerequisite). Transaction ids are

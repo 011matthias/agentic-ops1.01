@@ -264,3 +264,38 @@ failed mail, which is what its copy should say.
 happens and the result always lands somewhere, so a 409 from that endpoint now
 means only what it always meant for the other guards: the mail is not in a
 renderable state.
+
+## The living month: fields added 2026-08-25
+
+PR 2b-1 extracted the attach path's match into `service.rematch_month`, the
+one function every incremental path will call, and gave it a judgment cache.
+Two additive fields, both numbers, both safe to ignore.
+
+### Statement attach response
+
+| Endpoint | Field | Type | Meaning |
+|---|---|---|---|
+| `POST /api/expense-batches/{run_id}/statement` | `judgments_reused` | number | LLM judgments answered from the run's own store instead of the model |
+| `POST /api/expense-batches/{run_id}/statement` | `judgments_new` | number | judgments this pass actually paid for |
+
+On a first attach `judgments_reused` is `0` by construction: nothing has been
+judged yet. A non-zero value on a later re-match is the saving, not a warning.
+
+### `llm_judgments` in the snapshot
+
+Internal, never rendered. A content-keyed map of judgments already bought for
+this run, so a re-match only pays for pairs it has not seen. Three properties
+worth knowing before touching it:
+
+- The key covers the CALL's content and the model that answered it. A
+  reviewer correcting a receipt's amount, or a deployment moving to a
+  stronger model, misses and re-judges rather than serving a stale verdict.
+- It MERGES at commit rather than replacing, so a concurrent re-match that
+  landed while this one matched does not lose the entries it paid for.
+- It is never evicted. Entries are bounded by the pairs a month actually
+  puts in front of the model, which is small; if a month ever grows one
+  large enough to matter, prune at commit rather than at read.
+
+Transaction ids became content-derived in PR 2a, so a `transaction_id` no
+longer contains an account prefix or a row number and nothing may parse
+structure out of one. Repeat charges carry a `-{n}` suffix.
