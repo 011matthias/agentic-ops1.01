@@ -71,9 +71,22 @@ def test_rename_run(client):
     _, run_id = _make_run(client)
     resp = client.post(f"/api/runs/{run_id}/rename", json={"label": "April final"})
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True, "run_id": run_id, "label": "April final"}
+    # `month` (2026-08-24) tells the SPA whether this label can receive
+    # mailed receipts. "April final" names no YEAR, so it names no month.
+    assert resp.json() == {
+        "ok": True, "run_id": run_id, "label": "April final", "month": None,
+    }
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         assert store.get_run(run_id).label == "April final"
+
+
+def test_rename_run_into_a_month_reports_it(client):
+    """A label that DOES name a month reports it, and that is the signal
+    the pool claim keys on."""
+    _, run_id = _make_run(client)
+    resp = client.post(f"/api/runs/{run_id}/rename", json={"label": "April 2026"})
+    assert resp.status_code == 200
+    assert resp.json()["month"] == "2026-04"
 
 
 def test_rename_empty_label_400(client):

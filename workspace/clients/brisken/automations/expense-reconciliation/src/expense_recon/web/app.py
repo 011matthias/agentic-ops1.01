@@ -49,10 +49,12 @@ route 404s while the flag is unset):
 from __future__ import annotations
 
 import json
+import logging
 import mimetypes
 import os
 import re
 import shutil
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -71,6 +73,7 @@ from fastapi.responses import (
 )
 from starlette.concurrency import run_in_threadpool
 
+from ..batch_period import month_from_label
 from ..cards import card_to_dict, effective_cards, normalize_cards_setting
 from ..cards_provision import card_by_key, load_cards
 from ..ingest.expense_report_images import render_receipt_page
@@ -141,6 +144,8 @@ from .store import (
     RunStore,
 )
 from . import auth, ratelimit
+
+log = logging.getLogger("expense_recon.web")
 
 
 def _now_iso() -> str:
@@ -243,12 +248,36 @@ def _run_folder_job(
         shutil.rmtree(staging_dir, ignore_errors=True)
 
 
+def _claim_pooled_quietly(
+    db_path: Path, learning_db_path: Path | None, data_root: Path,
+) -> None:
+    """Drain the month pool, never raising at the caller. Claiming is a
+    convenience on top of whatever just happened (a batch created, a month
+    renamed, a boot); a failure there must not fail that."""
+    try:
+        from .intake_mail import claim_pooled
+
+        result = claim_pooled(db_path, learning_db_path, data_root)
+        if result["claimed"] or result["failed"]:
+            log.info(
+                "pool claim: %d claimed, %d failed, %d still pooled",
+                result["claimed"], result["failed"], result["still_pooled"],
+            )
+    except Exception:  # noqa: BLE001 - a claim never breaks its trigger
+        log.warning("pool claim failed", exc_info=True)
+
+
 def _run_expense_job(
-    db_path: Path, job_id: str, prepared: PreparedExpenseBatch
+    db_path: Path, job_id: str, prepared: PreparedExpenseBatch,
+    learning_db_path: Path | None = None, data_root: Path | None = None,
 ) -> None:
     """Run a prepared expense batch (OCR + categorization) off the request,
     the receipt-first twin of `_run_job`. Same durable jobs-table contract:
-    the SPA polls GET /jobs/{id} until done/error."""
+    the SPA polls GET /jobs/{id} until done/error.
+
+    When the batch's label names a month, the pool is drained into it once
+    the rows are committed: creating "July 2026" is what makes July's
+    waiting mail arrive, with no second click."""
     try:
         with RunStore(db_path) as store:
             run_id = execute_expense_batch(
@@ -264,6 +293,11 @@ def _run_expense_job(
             store.set_job_status(
                 job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
             )
+        return
+    # Inline, not threaded: this already runs off the request, and the
+    # claim must not start before the batch rows are committed.
+    if data_root is not None and month_from_label(prepared.label) is not None:
+        _claim_pooled_quietly(db_path, learning_db_path, data_root)
 
 
 def _run_batch_receipts_job(
@@ -389,6 +423,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # which scale-to-zero makes a near-daily event.
         sweep_retention(db_path, data_root_path)
     except Exception:  # noqa: BLE001 - reconcile must never block startup
+        pass
+    # Pool sweep: a month may have been created while this machine was
+    # stopped (scale-to-zero), so mail can be waiting for a month that is
+    # already open. Pre-scan for pooled mail first and start the thread
+    # only when there is any — claiming does vision, and a boot with an
+    # empty pool must cost nothing and start nothing.
+    try:
+        from .intake_mail import has_pooled_mail
+
+        if has_pooled_mail(data_root_path):
+            log.info("mail is waiting in the pool; claiming at boot")
+            threading.Thread(
+                target=_claim_pooled_quietly,
+                args=(db_path, app.state.learning_db_path, data_root_path),
+                daemon=True,
+            ).start()
+    except Exception:  # noqa: BLE001 - a claim never blocks startup
         pass
 
     def open_store() -> RunStore:
@@ -899,7 +950,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             if not store.set_run_label(run_id, label):
                 return _not_found("Run not found")
-        return JSONResponse({"ok": True, "run_id": run_id, "label": label})
+        # Renaming a batch INTO a month is how a mis-labelled month claims
+        # the mail that has been waiting for it — the fix path for the
+        # default full-date label, which names no month and never claims.
+        # A daemon thread because claiming does vision: an async handler
+        # must never park the event loop on it.
+        month = month_from_label(label)
+        if month is not None:
+            threading.Thread(
+                target=_claim_pooled_quietly,
+                args=(app.state.db_path, app.state.learning_db_path,
+                      app.state.data_root),
+                daemon=True,
+            ).start()
+        return JSONResponse({
+            "ok": True, "run_id": run_id, "label": label,
+            "month": f"{month[0]:04d}-{month[1]:02d}" if month else None,
+        })
 
     @app.post("/api/runs/{run_id}/delete")
     def delete_run(run_id: str, payload: dict | None = Body(None)):
@@ -908,7 +975,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # threadpool; an async def would park the EVENT LOOP on the lock
         # and freeze every endpoint including /healthz (adversarial review
         # 2026-08-21, delete-during-ingest is the designed contention).
-        from .intake_mail import mark_batch_deleted, open_batch
+        from .intake_mail import open_batch, pool_deleted_batch
         from .service import batch_write_lock
 
         with open_store() as store:
@@ -949,9 +1016,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 # Where does inbound mail land now? Label of the newest
                 # remaining open batch, or null = mail will be held.
                 next_open = open_batch(store)
-        # Mail custody holds: archives are stamped, NEVER deleted — the
-        # intake log then says "month deleted" instead of misattributing.
-        n_inbound = mark_batch_deleted(app.state.data_root, run_id)
+        # Mail custody holds: archives are NEVER deleted. Month-stamped
+        # mail goes back to the POOL, so re-creating the month re-claims
+        # it; legacy mail keeps the "month deleted" stamp and its manual
+        # re-ingest path.
+        n_pooled_back, n_inbound = pool_deleted_batch(
+            app.state.data_root, run_id
+        )
         # Remove the on-disk work tree, but only inside data_root/runs — never
         # follow a stored path outside the volume.
         try:
@@ -962,7 +1033,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             pass
         return JSONResponse({
             "ok": True, "run_id": run_id, "deleted": True,
+            # inbound_marked keeps its old meaning (legacy mail stamped
+            # "month deleted"); pooled_back is the parallel field for the
+            # mail that simply went back to waiting for this month.
             "inbound_marked": n_inbound,
+            "pooled_back": n_pooled_back,
             "next_open_batch": (
                 (next_open.label or next_open.run_id)
                 if next_open is not None else None
@@ -1107,7 +1182,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # drain for mail that arrived before a month batch existed.
     @app.get("/api/inbound/log")
     def inbound_log(limit: int = 100, detail: int = 0) -> JSONResponse:
-        from .intake_mail import read_log
+        from .intake_mail import annotate_pool_state, read_log
 
         rows = read_log(app.state.data_root, limit=max(1, min(limit, 500)))
         held = [
@@ -1134,6 +1209,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         views: dict[str, dict] = {}
         labels: dict[str, str | None] = {}
         with open_store() as store:
+            # Pooled rows say WHY they are waiting: no batch for that
+            # month, one open (a claim is imminent), or one already
+            # reconciled.
+            n_pooled = annotate_pool_state(store, rows)
             for r in rows:
                 bid = str(r.get("batch_id") or "")
                 if not bid or bid in labels:
@@ -1192,17 +1271,32 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({
             "entries": rows,
             "n_held": len(held),
+            "n_pooled": n_pooled,
         })
 
     @app.post("/api/inbound/replay-held")
     def inbound_replay_held() -> JSONResponse:
-        from .intake_mail import replay_held
+        """Drain both halves in one click: held mail re-routes by month
+        (pooling what has no month open), then every pooled mail whose
+        month IS open is claimed."""
+        from .intake_mail import claim_pooled, replay_held
 
         result = replay_held(
             app.state.db_path, app.state.learning_db_path,
             app.state.data_root,
         )
-        return JSONResponse({"ok": True, **result})
+        claim = claim_pooled(
+            app.state.db_path, app.state.learning_db_path,
+            app.state.data_root,
+        )
+        return JSONResponse({
+            "ok": True, **result,
+            "claimed": claim["claimed"],
+            # replay_held's own `pooled` counts what it just parked; the
+            # claim's still_pooled is the pool's size after both halves.
+            "still_pooled": claim["still_pooled"],
+            "failed": result["failed"] + claim["failed"],
+        })
 
     # ── Body-only mail actions (C2): view the body, render+ingest it as a
     # PDF through the normal pipeline, or dismiss it as junk. All sync:
@@ -2119,15 +2213,29 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             store.create_job(job_id, None, _now_iso())
         background.add_task(
-            _run_expense_job, app.state.db_path, job_id, prepared
+            _run_expense_job, app.state.db_path, job_id, prepared,
+            app.state.learning_db_path, app.state.data_root,
         )
-        return JSONResponse({
+        month = month_from_label(prepared.label)
+        body = {
             "ok": True,
             "batch_id": prepared.run_id,
             "job_id": job_id,
             "label": prepared.label,
             "upload_issues": prepared.upload_issues,
-        })
+            "month": f"{month[0]:04d}-{month[1]:02d}" if month else None,
+        }
+        if month is None:
+            # Mailed receipts are addressed by MONTH, and this label names
+            # none — the default label is a full date, which is a timestamp,
+            # not a month. Say so at creation time; renaming claims.
+            body["advisory"] = (
+                "This batch's label does not name a month, so receipts "
+                "mailed in cannot join it. Rename it to a month "
+                '(for example "July 2026") and its waiting mail is '
+                "added automatically."
+            )
+        return JSONResponse(body)
 
     @app.get("/api/expense-batches")
     def list_expense_batches():
