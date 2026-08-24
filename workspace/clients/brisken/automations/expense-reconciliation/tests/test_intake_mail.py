@@ -39,8 +39,6 @@ from expense_recon.llm.client import ExtractedReceipt, MockLLMClient  # noqa: E4
 from expense_recon.web.app import create_app  # noqa: E402
 from expense_recon.web.intake_mail import (  # noqa: E402
     HELD_BODY_ONLY,
-    HELD_NO_BATCH,
-    HELD_NO_VALID_FILES,
     STATUS_INGESTED,
     STATUS_POOLED,
     DayBudget,
@@ -1100,7 +1098,7 @@ def test_render_ingest_guards(client, monkeypatch):
     # No batch for the rendered receipt's month: the render still happens
     # and the result RESTS in the pool. It used to 409 and leave the
     # operator with nothing to show for the click.
-    res = process_message(
+    process_message(
         state.db_path, state.learning_db_path, state.data_root,
         _html_mail("criss@brisken.com", subject="no batch yet"),
         synchronous=True,
@@ -2054,3 +2052,35 @@ def test_arrival_extraction_warms_the_batch_cache(tmp_path, monkeypatch):
         assert calls.count(arrival_call) == 1, calls
         grid = c.get(f"/api/expense-batches/{body['batch_id']}").json()
         assert len([e for e in grid["expenses"] if e.get("submitted_by")]) == 1
+
+
+def test_a_rendered_body_ack_does_not_claim_zero_files(client, monkeypatch):
+    """A body-only mail delivers no attachment, so `n_files` is 0. The ack
+    for it has to name the email rather than count files, or it reads
+    "0 file(s) from your email ... is stored for July 2026" about work
+    that really did happen."""
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail("dirk.neumann@brisken.com", subject="inline receipt"),
+        synchronous=True,
+    )
+    archive = [
+        e for e in client.get("/api/inbound/log").json()["entries"]
+        if e.get("subject") == "inline receipt"
+    ][0]["archive"]
+
+    _patch_ocr(monkeypatch, _extraction())  # the rendered PDF's month
+    resp = client.post(f"/api/inbound/{archive}/render-ingest")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == STATUS_POOLED
+
+    # calls[0] is the held_body_only alert to the operator; the ack to the
+    # sender is the one under test.
+    acks = [c for c in calls if c[0] == "dirk.neumann@brisken.com"]
+    assert len(acks) == 1
+    body = acks[0][2]
+    assert "0 file(s)" not in body
+    assert body.startswith("Your email")
+    assert MONTH_LABEL in body

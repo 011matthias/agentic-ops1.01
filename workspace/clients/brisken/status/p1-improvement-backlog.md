@@ -348,6 +348,54 @@ not reduce to exactly four digits never reaches the entity chain. The card list
 is part of the extraction-cache key, since the same photo asked against a
 different set of cards is a different question.
 
+### 29. The living month: date-pooled mail, gradual statements (2026-08-24)
+
+**Owner directives (2026-08-24), a three-PR plan.** The month stops being
+"upload everything, then sit an exam" and becomes a workspace the accountant
+works across the whole month.
+
+**PR 1 - the mail pool. SHIPPED, see Shipped row 25.** Incoming mail stopped
+filing into whatever month happened to be open (which is how Dirk's August
+receipts landed in the April 2026 batch). It now files by the month printed
+ON the receipt, and rests in a pool when that month has no batch yet.
+
+**PR 2 - the living month. NEXT.** The statement stops being a closing event
+and becomes an input stream:
+
+1. **Stable transaction identity** (the prerequisite). Transaction ids are
+   positional today (`f"{account_id}:{row_index}"`, `ingest/statement_csv.py`),
+   and operator decisions key on them, so an appended or partial upload
+   renumbers every decision onto the wrong charge. Replace with a
+   content-derived id: `sha1(account_id | card_last4 | transaction_date |
+   amount | transaction_currency | vendor_from_statement | reference)[:16]`
+   plus an occurrence counter, so two identical coffees on one day stay two
+   charges. One shared helper in `ingest/_common.py`, applied in all three
+   parsers. Stored snapshots keep their positional ids; old decisions resolve.
+2. **Gradual uploads.** `POST /api/expense-batches/{run_id}/statement` becomes
+   append-capable and repeatable (per card, several times a month): parse,
+   content-id, dedupe against the existing set, append. Snapshot gains a
+   `statements` list (parallel field). The one-shot attach is the degenerate
+   case of the same path.
+3. **The month stays open.** `has_statement` stops meaning closed; the
+   `_mutable_expense_run_or_error` refusal is lifted, so receipts join a
+   statement-bearing month freely. PR 1's `pool_month_state: "closed"` becomes
+   `"reconciling"` (parallel value).
+4. **Incremental re-match.** Every receipt add and every transaction append
+   re-runs deterministic matching over the full sets, preserving operator
+   decisions (keyed by the stable id) and persisting LLM FX/ambiguous
+   judgments by `(transaction_id, document_id)` so a re-match never re-spends
+   on a pair it already judged. `execute_statement_attach`'s bake logic
+   refactors into `rematch_month(run, ...)`, which both paths call.
+
+**PR 3 - coverage surface.** Per-card coverage in the batch view (which cards
+have statements, which periods, matched/unmatched per card), the month page's
+statement panel prompt, per-card sections in the reconciliation report.
+
+**Ruling pinned, no build needed:** statement charges with no receipt (fees,
+direct debits; January reality was 78 of 80) stay exceptions in the
+reconciliation report and are never auto-created as expense rows. Expense count
+is not expected to equal transaction count.
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
 Four of the five known cards (0113, 6013, 9693, 8311) carry no legal entity,
@@ -522,6 +570,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 25 | Emailed receipts file by the month printed ON the receipt, not by whichever month happens to be open. A receipt whose month has no batch RESTS in a pool (new status `pooled`, deliberately not `held_*`) with its month on it, and is added automatically when that month is created or renamed into. Deleting a month returns its mail to the pool, so re-creating the month re-claims it. Every attachment mail is read at ARRIVAL by the full extraction pipeline, which costs nothing extra: the cache is content-addressed and the arrival read warms it for the batch ingest | Dirk's August receipts landed in the April 2026 batch, because `route_archived` picked the newest statement-less batch and never looked at the receipt. Month identity is the operator's label read by `month_from_label`, which refuses day-bearing labels, so the DEFAULT full-date label names no month and can never claim; the create response says so and a rename is the fix path. Decisions are atomic under a new `_POOL_LOCK` held across the "is this month open?" query and the status CAS, so a batch created mid-arrival cannot leave one mail both ingested and pooled. Every new test was proven red first against a targeted regression of the real source (7 of them) | PR TBD, 2026-08-24; suite 1236 passed / 2 skipped, calibrate green; SPA half `docs/lovable-month-pool-prompt.md` |
 | 24 | The paying card is read off the scan by CHOICE, not transcription: the extractor is handed the last-4s of the cards the payer actually holds (from the run's own registry snapshot) and asked which one it can see, or none. A confirmed pick replaces whatever digits the free-text hint guessed; a hint with no pick passes through untouched; a number that does not reduce to exactly four digits never reaches the entity chain. Vision moves to gpt-5-mini (categorization stays on gpt-4o-mini) | Owner: make sure the card an expense should be attributed to can be extracted from the receipt scan. It could not be — asked to transcribe four faded digits the extractor landed 2 in 5 and INVENTED the rest ("1234" three times, once for a receipt that prints 1672). Three cheaper fixes were refuted by measurement before anything was built: repeat reads return the identical wrong answer, a verbatim field in the same call agrees even when both are wrong, and gpt-4o reads no better than gpt-4o-mini. Measured 3 runs each over 7 problem receipts: dates 0/6 live -> 3.0/6 with the list -> 5.0/6 with the model; cards 1/5 -> 3.0/5 -> 3.7/5; ZERO false positives on the two receipts printing no readable card | PR #592, 2026-08-24, deployed; suite 1217 passed / 2 skipped, calibrate green. Live-verified with a namespaced TEST batch (deleted after): a receipt printing "VISA - ******2838" resolved date 2026-04-11 (the cache held 2023-04-11), hint "VISA ...2838", card-2838, entity Corporate Services via `card` |
 | 23 | An implausible expense date stops being accepted quietly: a date outside the batch's month reaches the reviewer as `check` / `date_outside_period`, and the month's report PDF names the expense numbers it distrusts. The month comes from the operator's label, failing that from the batch's own dates by strict plurality, failing both from nowhere (no period = nothing is ever flagged). Extraction prompt tightened for two-digit years, year-first card slips, and fiscal-block-beats-slip | Eleven of the April batch's 36 readings were dated 2020-2023, one of them on line two of the month's report. The date decides which month an expense belongs to and whether a statement charge can ever match it. Nothing is auto-corrected: inventing the "right" date would be the same mistake with better manners, and a date the reviewer typed is believed so a genuinely old invoice can be cleared. Prompt measured, not assumed (6 of 11 fixed, 24 of 25 good readings unchanged, none worse); regressed the real source to watch all four e2e tests go red at 0 flagged of 11 | PR #590, 2026-08-24; suite 1206 passed / 2 skipped, calibrate green |
 | 21 | The reconciliation downloads as a document too: `GET /runs/{id}/reconciliation-report.pdf` puts what needs attention FIRST (charges with no receipt, receipts with no charge, duplicate groups), then every charge with its matched receipt and status, then the receipts — matched ones captioned with the charge they settle, unmatched ones captioned as unmatched | Owner: the reconciliation is not exported into any application either, so the question was what actually serves the work. A CSV carries the charge list and none of the evidence, and nothing reads it. Built from `build_view` — the workbench's own payload — so the document and the review screen cannot state different reconciliations. A clean month SAYS "Nothing", because an empty section reads as a missing one | this round, 2026-08-23; suite 1187 passed / 2 skipped, calibrate green; SPA half is section 5 of `docs/lovable-month-report-prompt.md` |

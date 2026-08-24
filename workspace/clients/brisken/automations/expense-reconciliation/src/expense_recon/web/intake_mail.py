@@ -776,7 +776,7 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
         subject = str(meta.get("subject") or "").strip()
         month = str(meta.get("receipt_month") or "")
         if meta.get("status") == STATUS_POOLED:
-            verb = "is" if n == 1 else "are"
+            verb = "are" if n > 1 else "is"
             landed = (
                 f" {verb} stored for {_month_human(month)} in the Brisken "
                 "expense tool, and will join that month's expense run "
@@ -792,8 +792,15 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
                 " landed in the open expense month in the Brisken "
                 "expense tool."
             )
+        # A rendered body-only mail delivered no file, so counting files
+        # would tell its sender "0 file(s) ... landed", about work that
+        # did happen. Name the email itself instead.
+        lead = (
+            f"{n} file(s) from your email" if n
+            else "Your email"
+        )
         body = (
-            f"{n} file(s) from your email"
+            lead
             + (f' "{subject}"' if subject else "")
             + landed
             + " Nothing else to do; Criss reviews them with the "
@@ -984,7 +991,13 @@ def resolve_receipt_month(
     window counts as unreadable; with no plausible date the mail files
     under its arrival month, source "implausible-receipt" when a clamp
     fired and "arrival" when nothing was readable at all."""
-    arrival = date.fromisoformat(str(arrival_iso)[:10])
+    try:
+        arrival = date.fromisoformat(str(arrival_iso)[:10])
+    except ValueError:
+        # A legacy or corrupt `at` stamp. The arrival is only the yardstick
+        # the clamp measures against, so today is a safe substitute — far
+        # better than raising through a sweep over every archive.
+        arrival = datetime.now(timezone.utc).date()
     plausible: list[date] = []
     clamped = False
     for raw in dates:
@@ -1041,6 +1054,7 @@ def _month_stamps(
         "receipt_dates": dates,
         "mixed_months": mixed,
     }
+
 
 def _ingest_job(
     db_path: Path, job_id: str, run_id: str, staging: Path,
@@ -1340,14 +1354,28 @@ def claim_pooled(
             continue
         # Vision runs outside the pool hold: a claim can take minutes and
         # arrival routing must not queue behind it.
-        attachments = _archive_attachments(arch)
-        person = _archive_person(meta)
-        job_id = _start_ingest(
-            db_path, learning_db_path, run, attachments, person,
-            _now_iso(), arch, synchronous=True,
-        )
-        with RunStore(db_path) as store:
-            job = store.get_job(job_id) or {}
+        try:
+            attachments = _archive_attachments(arch)
+            person = _archive_person(meta)
+            job_id = _start_ingest(
+                db_path, learning_db_path, run, attachments, person,
+                _now_iso(), arch, synchronous=True,
+            )
+            with RunStore(db_path) as store:
+                job = store.get_job(job_id) or {}
+        except Exception as exc:  # noqa: BLE001 - one archive, not the sweep
+            # A failure before the job existed (staging, disk) leaves the
+            # archive in the transient `claiming`. Put it back in the pool
+            # here rather than waiting for the next boot sweep to find it.
+            log.warning("claim failed for %s: %s", arch.name, exc)
+            _transition_meta(
+                arch,
+                lambda m: str(m.get("status", "")) == STATUS_CLAIMING,
+                {"status": STATUS_POOLED, "batch_id": "",
+                 "batch_deleted": False, "error": str(exc)[:400]},
+            )
+            failed += 1
+            continue
         if job.get("status") == JOB_DONE:
             # _ingest_job already stamped `ingested` + the documents.
             _update_meta(arch, {"job_id": job_id, "batch_id": run.run_id,
@@ -1469,17 +1497,22 @@ def replay_held(
         # stamp yet; read its dates now, once, reusing one client for the
         # whole sweep.
         if not meta.get("receipt_month"):
-            if settings is None:
-                with RunStore(db_path) as store:
-                    settings = store.get_settings()
-            if client is _UNSET:
-                client = _arrival_llm_client(settings)
-            stamps = _month_stamps(
-                arch, settings, str(meta.get("at") or _now_iso()),
-                client=client,
-            )
-            _update_meta(arch, stamps)
-            meta = {**meta, **stamps}
+            try:
+                if settings is None:
+                    with RunStore(db_path) as store:
+                        settings = store.get_settings()
+                if client is _UNSET:
+                    client = _arrival_llm_client(settings)
+                stamps = _month_stamps(
+                    arch, settings, str(meta.get("at") or _now_iso()),
+                    client=client,
+                )
+                _update_meta(arch, stamps)
+                meta = {**meta, **stamps}
+            except Exception as exc:  # noqa: BLE001 - skip it, not the sweep
+                log.warning("month stamp failed for %s: %s", arch.name, exc)
+                still_held += 1
+                continue
         held_status = str(meta.get("status", ""))
         with _POOL_LOCK:
             # Re-resolve per archive INSIDE the hold: a statement attach

@@ -1013,8 +1013,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         run.intake_id, INTAKE_RECEIVED, run_id=None,
                         updated_at=_now_iso(),
                     )
-                # Where does inbound mail land now? Label of the newest
-                # remaining open batch, or null = mail will be held.
+                # Where would UPLOADED work land now? Label of the newest
+                # remaining open batch, or null. Mailed receipts no longer
+                # follow this: they go to the month they print, and
+                # `pooled_back` below is their side of the story.
                 next_open = open_batch(store)
         # Mail custody holds: archives are NEVER deleted. Month-stamped
         # mail goes back to the POOL, so re-creating the month re-claims
