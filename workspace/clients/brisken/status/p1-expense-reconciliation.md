@@ -30,6 +30,7 @@ this table is the index, not a second record.
 | Element | State | Tracked in |
 |---|---|---|
 | Statement ingest (CSV + XLSX) | done | BLUEPRINT (ingest) |
+| Transaction identity (content-derived, stable under append) | done (PR 2a of the living month) | backlog item 29; `ingest/_common.assign_content_ids` |
 | Receipt OCR (vision + PDF text) | done | BLUEPRINT slice 2 |
 | LLM categorizer (gpt-4o-mini, OpenAI Brisken key) | live | BLUEPRINT "Provider Pivot" |
 | Deterministic matcher | done | BLUEPRINT slice 3 |

@@ -208,8 +208,17 @@ def transaction_content_id(
 
     Identical rows are NOT collapsed: two identical coffees on one day are
     two real charges. Pass a per-parse `seen` dict and the second and later
-    occurrences get a `:{n}` suffix, so a re-parse of the same file
+    occurrences get a `-{n}` suffix, so a re-parse of the same file
     reproduces the same set of ids while distinct charges stay distinct.
+
+    The suffix separator is `-`, deliberately NOT `:`. Two consumers care.
+    `sheet_writeback._anchor_row` still recovers a sheet row from a legacy
+    positional id by splitting on the LAST `:`, so an id ending `:2` would
+    be read as "row 2" and write an account next to the wrong charge in
+    Criss's workbook. And `transaction_id` travels as a URL path segment
+    (`/api/runs/{run_id}/transactions/{transaction_id}/receipt`), which
+    rules out `#`. A hex digest can never contain `-`, so the split stays
+    unambiguous in the other direction too.
 
     Fields are joined via `json.dumps` rather than a separator string: it
     escapes deterministically (a vendor containing the separator cannot
@@ -234,7 +243,7 @@ def transaction_content_id(
         return digest
     occurrence = seen.get(digest, 0)
     seen[digest] = occurrence + 1
-    return digest if occurrence == 0 else f"{digest}:{occurrence}"
+    return digest if occurrence == 0 else f"{digest}-{occurrence}"
 
 
 def assign_content_ids(transactions: "list") -> "list":

@@ -105,12 +105,12 @@ def test_inserting_a_row_does_not_renumber_the_rows_below(tmp_path):
 
 def test_identical_rows_stay_distinct_charges(tmp_path):
     """Two identical coffees on one day are two real charges, not one
-    charge seen twice. The second occurrence takes a `:1` suffix."""
+    charge seen twice. The second occurrence takes a `-1` suffix."""
     txs = _csv(tmp_path, "dupes.csv", ROW_COFFEE + ROW_COFFEE + ROW_COFFEE)
     ids = _ids(txs)
     assert len(set(ids)) == 3
-    assert ids[1] == f"{ids[0]}:1"
-    assert ids[2] == f"{ids[0]}:2"
+    assert ids[1] == f"{ids[0]}-1"
+    assert ids[2] == f"{ids[0]}-2"
 
 
 def test_repeat_upload_reproduces_the_same_occurrence_suffixes(tmp_path):
@@ -279,7 +279,10 @@ def test_pdf_ids_are_content_derived_and_carry_no_source_row():
     )
     assert txs, "fixture should yield charges"
     assert all(t.source_row is None for t in txs)
-    assert all(len(t.transaction_id.split(":")[0]) == 16 for t in txs)
+    assert all(len(t.transaction_id.split("-")[0]) == 16 for t in txs)
+    # No `:` anywhere: the writeback's legacy row-parsing fallback must
+    # never mistake an occurrence suffix for a spreadsheet row.
+    assert all(":" not in t.transaction_id for t in txs)
 
 
 # ── nothing at rest moves ──────────────────────────────────────────

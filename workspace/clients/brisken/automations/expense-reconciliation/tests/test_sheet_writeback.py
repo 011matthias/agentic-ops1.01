@@ -14,6 +14,7 @@ from pathlib import Path
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import PatternFill
 
+from expense_recon.ingest.statement_pdf import parse_statement_text
 from expense_recon.ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from expense_recon.matching.deterministic import match_month
 from expense_recon.matching.types import (
@@ -302,3 +303,41 @@ def test_review_charge_keeps_no_receipt_placeholder(tmp_path):
 
     ws = load_workbook(out).active
     assert ws.cell(row=2, column=4).value == "(no receipt matched)"
+
+
+def test_occurrence_suffix_is_never_mistaken_for_a_sheet_row(tmp_path):
+    """A PDF-parsed charge carries no `source_row`, so `_anchor_row` falls
+    back to reading a row off the id. Content ids suffix repeat charges,
+    and if that suffix used `:` the third identical charge would carry
+    `...:2`, which the fallback reads as "row 2" and writes an account
+    beside an unrelated charge in Chris's workbook. The ids come from the
+    real parser here, so the separator is whatever the code actually
+    produces."""
+    text = "\n".join(
+        [
+            "Opening/Closing Date 06/01/26 - 06/30/26",
+            "06/01 COFFEE SHOP 5.75",
+            "06/01 COFFEE SHOP 5.75",
+            "06/01 COFFEE SHOP 5.75",
+            "CARD 2838",
+        ]
+    )
+    txs, _issues = parse_statement_text(
+        text, file_name="stmt.pdf", legal_entity_id="le",
+        account_card_currency="USD",
+    )
+    assert len(txs) == 3, "fixture should yield three identical charges"
+    assert all(t.source_row is None for t in txs)
+    assert len({t.transaction_id for t in txs}) == 3, "occurrences stay distinct"
+
+    src = tmp_path / "chris.xlsx"
+    _write_workbook(src)
+    outcome = MatchOutcome(
+        unmatched_transactions=[t.transaction_id for t in txs]
+    )
+
+    out = write_sheet_writeback(src, tmp_path / "out.xlsx", outcome, txs, [])
+
+    ws = load_workbook(out).active
+    written = [ws.cell(row=r, column=4).value for r in range(2, ws.max_row + 1)]
+    assert written == [None, None, None]
