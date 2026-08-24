@@ -44,6 +44,7 @@ from expense_recon.web.app import create_app  # noqa: E402
 from expense_recon.web.intake_mail import (  # noqa: E402
     HELD_BODY_ONLY,
     HELD_FAILED,
+    STATUS_DISMISSED,
     STATUS_INGESTED,
     STATUS_POOLED,
     DayBudget,
@@ -2601,4 +2602,23 @@ def test_a_closed_month_reads_as_needing_a_human(client, monkeypatch):
     assert rows[1]["status_kind"] == "resting"
     assert rows[1]["status_label"] == "Joining July 2026"
     assert rows[2]["status_label"] == "Waiting for its month"
+
+
+def test_a_dismissed_mail_is_not_dragged_back_by_a_deleted_month():
+    """Dismissal is terminal: an operator judged the mail junk, and that
+    decision outranks where it used to live. Found live 2026-08-25, where
+    two dismissed archives read "The month it was added to was deleted"
+    as kind `held` while the Held badge correctly said 0 — a task on a row
+    nobody owes anything for."""
+    from expense_recon.web.intake_mail import annotate_status_view
+
+    rows = [
+        {"status": STATUS_DISMISSED, "batch_deleted": True},
+        {"status": STATUS_INGESTED, "batch_deleted": True},
+    ]
+    annotate_status_view(rows)
+    assert rows[0]["status_kind"] == "done"
+    assert rows[0]["status_label"] == "Dismissed"
+    assert rows[1]["status_kind"] == "held"
+    assert rows[1]["status_label"] == "The month it was added to was deleted"
 
