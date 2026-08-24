@@ -113,6 +113,16 @@ CANONICAL_HOOKS = {
                     "timeout": 10000,
                 },
                 {
+                    # Whole-file Write that materially shrinks an existing
+                    # file -> ask, listing the structure about to vanish.
+                    # The read-before-overwrite check cannot catch this (it
+                    # passed in both 2026-08 incidents: a 598-line test
+                    # clobber and a 504-line brief rewrite).
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/write-shrink-gate.py"),
+                    "timeout": 10000,
+                },
+                {
                     "type": "command",
                     "command": _cmd(".claude/hooks/scorer-lock-gate.py"),
                     "timeout": 10000,
@@ -155,6 +165,16 @@ CANONICAL_HOOKS = {
                 {
                     "type": "command",
                     "command": _cmd(".claude/hooks/git-stash-gate.py"),
+                    "timeout": 10000,
+                },
+                {
+                    # Worktree-overwriting git forms (checkout -- / restore /
+                    # reset --hard / clean -f) on DIRTY paths -> ask. Sibling
+                    # of git-stash-gate; uncommitted work has no object store
+                    # and therefore no `git fsck` recovery (2026-08-24
+                    # intake_mail.py).
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/git-restore-gate.py"),
                     "timeout": 10000,
                 },
                 {
@@ -212,7 +232,16 @@ CANONICAL_HOOKS = {
                     "type": "command",
                     "command": _cmd(".claude/hooks/session-pressure-meter.py"),
                     "timeout": 10000,
-                }
+                },
+                {
+                    # All-tools arm of the deploy/consumer coupling: a deploy
+                    # opens a marker, a real browser drive closes it. Needs
+                    # the "" matcher because the closing evidence arrives as
+                    # an MCP Playwright call, not a Bash command.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/deploy-consumer-gate.py"),
+                    "timeout": 10000,
+                },
             ],
         },
     ],
@@ -224,7 +253,17 @@ CANONICAL_HOOKS = {
                     "type": "command",
                     "command": _cmd(".claude/hooks/stop-b1-gate.py"),
                     "timeout": 10000,
-                }
+                },
+                {
+                    # Stop arm of the same gate: block a "verified" claim made
+                    # while a deployed payload's consumer has never been
+                    # driven (2026-08-24, six receipts misreporting behind a
+                    # green /healthz). Honors stop_hook_active: one turn, not
+                    # a wedge.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/deploy-consumer-gate.py"),
+                    "timeout": 10000,
+                },
             ],
         }
     ],
@@ -298,6 +337,9 @@ EXPECTED_HOOK_SCRIPTS = {
     "cd-guard.py",
     "heredoc-size-gate.py",
     "git-stash-gate.py",
+    "git-restore-gate.py",
+    "write-shrink-gate.py",
+    "deploy-consumer-gate.py",
     "vercel-scope-gate.py",
     "em-dash-strip-gate.py",
     "post-write-gate.py",

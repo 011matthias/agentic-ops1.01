@@ -108,6 +108,31 @@ def test_py_tag_alone_marks_python_context(tmp_path):
     assert permission_decision(_run(_heredoc("PYEOF", body), tmp_path=tmp_path).stdout) == "deny"
 
 
+def test_py_redirect_target_marks_python_context(tmp_path):
+    # `cat > probe.py <<'EOF'` -- no interpreter on the line and a generic tag,
+    # so neither the PY* nor the `python` signal fires. Measured gap: this
+    # spelling reached ALLOW while carrying the collapse-prone payload, and it
+    # is the spelling of the 2026-08-24 retry that wrote the collapsed
+    # `(?<!\)` form to disk.
+    body = "import re\nre.compile(r'(?<!" + chr(92) * 2 + ")x')"
+    p = _run(_heredoc("EOF", body, opener="cat > probe.py"), tmp_path=tmp_path)
+    assert permission_decision(p.stdout) == "deny"
+    assert "DOUBLE BACKSLASH" in _reason(p)
+
+
+def test_py_redirect_append_form_marks_python_context(tmp_path):
+    body = "y = '" + chr(92) * 2 + "w+'"
+    p = _run(_heredoc("EOF", body, opener="cat >> tests/test_pool.py"), tmp_path=tmp_path)
+    assert permission_decision(p.stdout) == "deny"
+
+
+def test_non_python_redirect_target_stays_allowed(tmp_path):
+    # The widening stops at .py: a text/config payload is not the failure class.
+    body = "path = C:" + chr(92) * 2 + "Users"
+    p = _run(_heredoc("EOF", body, opener="cat > notes.md"), tmp_path=tmp_path)
+    assert p.stdout.strip() == ""
+
+
 # ------------------------------------------------------------- silent allowals
 
 
