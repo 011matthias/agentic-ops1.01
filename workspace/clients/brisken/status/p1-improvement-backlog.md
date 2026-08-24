@@ -550,6 +550,36 @@ This blocks effective testing more than anything else open, including the
 card-registry gaps: those make a month noisy, this makes a month
 unreachable.
 
+### 33. Duplicates reached the workflow before anyone saw them (SHIPPED 2026-08-25)
+
+**Owner directive:** "we also need to be able to sort duplicates out before
+they are ingested into the tool's workflow."
+
+The only dedupe was the receipt pool's content check at ADD time. It created
+no second expense, but the intake row still said "Added" about a mail that
+added nothing, and a repeat routing to a DIFFERENT month landed in a batch the
+first copy was not in, where that check had nothing to compare against. Live
+evidence: three archives of "TEST - month pool drill (March 2026)" carrying
+one identical PNG, and then the real thing while this was being built.
+
+**Shipped:** arrival-time detection ahead of everything else, including the
+body-only branch, so a re-sent body-only receipt no longer spends a vision
+call. New `duplicate` status (kind `resting`, label names the original),
+`duplicate_of`, `n_duplicates`, `POST .../not-a-duplicate` as the
+deny-by-default escape hatch, dismiss widened. Attachments hash as
+`sha1(bytes)[:16]` -- the SAME shape the receipt pool uses, so the two layers
+cannot disagree about what "the same file" means; a body-only mail hashes its
+whitespace-collapsed, casefolded body. Only a mail that ENTERED the workflow
+owns its content, and every piece must be known before a mail is parked.
+
+**Live, and NOT cleaned up:** Dirk forwarded the same Hostinger invoice
+(H_46243348) three times at 22:50:32 / 22:50:57 / 22:51:15 on 2026-08-24,
+about six minutes BEFORE this deployed. All three are pooled for 2026-07 and
+all three will become expenses when July opens. Verified read-only that the
+detector would have caught copies 2 and 3 (identical body fingerprint
+`body:4c6f42927cd37c87`, 485 chars each). Dismissing two is terminal, so it
+waits on an owner yes.
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
 Four of the five known cards (0113, 6013, 9693, 8311) carry no legal entity,
