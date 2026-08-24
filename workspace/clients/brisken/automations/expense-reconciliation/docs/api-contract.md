@@ -176,13 +176,18 @@ renders exactly what it rendered before.
 | `entries[].receipt_month_source` | string | how that month was decided: `receipt` (a printed date), `arrival` (none readable), `implausible-receipt` (a printed date outside the plausibility window) |
 | `entries[].mixed_months` | `true` (absent otherwise) | this mail spans more than one month, and routed by its earliest |
 | `entries[].pool_month_state` | string | pooled rows only: `no_batch`, `open` (a claim is imminent), `closed` (the month is already reconciled) |
-| `n_pooled` | number | top-level, beside `n_held` |
+| `n_pooled` | number | top-level, beside `n_held`. Distinct MAILS, not log rows |
 
 `pooled` is a RESTING state, deliberately not `held_*`: nothing is wrong with
 the mail, its month simply is not open yet. It therefore does NOT count toward
 `n_held`, and the Held badge cannot be made to reach zero by fixing it. A
 pooled row carries no `batch_id` and no `expenses`, because it belongs to no
 batch yet.
+
+Both `n_pooled` and `n_held` count distinct ARCHIVES. The log holds more than
+one row per archive by design (one at acceptance, another when a replay or a
+claim ingests it), so counting rows would report two waiting mails where one
+is waiting; the 2026-08-24 live drill read exactly that.
 
 ### Other endpoints
 
