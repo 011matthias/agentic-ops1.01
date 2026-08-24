@@ -17,7 +17,7 @@ list of what to do next.
 ## Start here (2026-08-24)
 
 **The living-month plan is in flight (backlog item 29).** PR 1 (the mail
-pool) has shipped: emailed receipts now file by the month printed on the
+pool) has shipped and is deployed (#599 + #601, Fly v87): emailed receipts now file by the month printed on the
 receipt and rest in a pool until that month exists, instead of landing in
 whatever batch happened to be open. Read backlog item 29 before picking
 anything else up; PR 2 (stable content-derived transaction ids, append-able
