@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-24 | Brisken Recon Date Guard + Card From Scan | client-dev | [→](docs/2026-08-24%20-%20Brisken%20Recon%20Date%20Guard%20%2B%20Card%20From%20Scan/Checkpoint.md) |
 | 2026-08-23 | Brisken Recon Report Documents + Open Intake | client-dev | [→](docs/2026-08-23%20-%20Brisken%20Recon%20Report%20Documents%20%2B%20Open%20Intake/Checkpoint.md) |
 | 2026-08-22 | Brisken Recon Zoho Decoupling + Cards R4 | client-dev | [Mini-Checkpoint-2](docs/2026-08-22%20-%20Brisken%20Recon%20Zoho%20Decoupling%20%2B%20Cards%20R4/Mini-Checkpoint-2.md) |
 | 2026-08-22 | Brisken Recon Count Semantics + Issue Codes | client-dev | [→](docs/2026-08-22%20-%20Brisken%20Recon%20Count%20Semantics%20%2B%20Issue%20Codes/Checkpoint.md) |
