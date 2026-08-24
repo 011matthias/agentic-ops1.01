@@ -1188,9 +1188,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             annotate_pool_state,
             annotate_status_view,
             count_archives,
-            count_refusals,
             read_log,
-            read_refusals,
+            refusal_view,
         )
 
         rows = read_log(app.state.data_root, limit=max(1, min(limit, 500)))
@@ -1280,6 +1279,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     "currency": e.get("currency"),
                 })
             r["expenses"] = out
+        n_refused, refusals = refusal_view(app.state.data_root)
         # LAST: the label needs the pool state and the resolved batch
         # labels that the loops above just stamped.
         annotate_status_view(rows)
@@ -1290,8 +1290,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # Mail we turned away. Deliberately NOT rows in `entries`: a
             # refusal has no archive, and a row there carrying a status no
             # consumer knows is the exact shape of the "Arriving" bug.
-            "n_refused": count_refusals(app.state.data_root),
-            "refusals": read_refusals(app.state.data_root),
+            "n_refused": n_refused,
+            "refusals": refusals,
         })
 
     @app.post("/api/inbound/replay-held")

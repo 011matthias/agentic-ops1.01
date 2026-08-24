@@ -606,17 +606,17 @@ def record_refusal(
         log.warning("could not record intake refusal (%s)", stage)
 
 
-def read_refusals(data_root: Path, limit: int = 20) -> list[dict]:
-    """Refusal rows, oldest->newest, newest `limit` retained."""
+def _refusal_rows(data_root: Path) -> list[dict]:
+    """Every retained refusal row, oldest->newest. One read of the file."""
     path = _refusal_log_path(data_root)
     if not path.exists():
         return []
-    rows: list[dict] = []
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError:
         return []
-    for line in lines[-max(1, limit):]:
+    rows: list[dict] = []
+    for line in lines:
         line = line.strip()
         if not line:
             continue
@@ -629,6 +629,20 @@ def read_refusals(data_root: Path, limit: int = 20) -> list[dict]:
     return rows
 
 
+def _within_days(rows: list[dict], days: int) -> int:
+    # Same timespec on both sides, or a row stamped in the cutoff SECOND
+    # compares against a microsecond tail and falls out of its own window.
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=max(1, days))
+    ).isoformat(timespec="seconds")
+    return sum(1 for r in rows if str(r.get("at", "")) >= cutoff)
+
+
+def read_refusals(data_root: Path, limit: int = 20) -> list[dict]:
+    """Refusal rows, oldest->newest, newest `limit` retained."""
+    return _refusal_rows(data_root)[-max(1, limit):]
+
+
 def count_refusals(data_root: Path, days: int = REFUSAL_WINDOW_DAYS) -> int:
     """How many refusals the ledger still holds from the last `days`.
 
@@ -636,28 +650,19 @@ def count_refusals(data_root: Path, days: int = REFUSAL_WINDOW_DAYS) -> int:
     at a size cap, so "every row we kept" would answer a question about
     our own retention instead of about this week's mail.
     """
-    path = _refusal_log_path(data_root)
-    if not path.exists():
-        return 0
-    cutoff = (
-        datetime.now(timezone.utc) - timedelta(days=max(1, days))
-    ).isoformat()
-    n = 0
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return 0
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(row, dict) and str(row.get("at", "")) >= cutoff:
-            n += 1
-    return n
+    return _within_days(_refusal_rows(data_root), days)
+
+
+def refusal_view(
+    data_root: Path, limit: int = 20, days: int = REFUSAL_WINDOW_DAYS,
+) -> tuple[int, list[dict]]:
+    """(count in the window, newest rows) from ONE read of the ledger.
+
+    The intake log is polled; reading a capped-but-not-tiny file twice per
+    poll to answer two questions about the same rows is waste.
+    """
+    rows = _refusal_rows(data_root)
+    return _within_days(rows, days), rows[-max(1, limit):]
 
 
 def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[dict]:

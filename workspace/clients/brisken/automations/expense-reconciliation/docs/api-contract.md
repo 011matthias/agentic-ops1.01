@@ -159,6 +159,29 @@ existing one.
 4. **Re-pin.** `tests/test_view_contract.py` fails until the contract table and
    this file agree with the payload. That failure is the reminder, not a
    formality.
+5. **Growing an enum is the same move as retyping a field.** Rules 1-4 pin
+   list ELEMENT types and say nothing about adding a new VALUE to an
+   existing enum-ish field, which is how `status` grew three values on
+   2026-08-24 and the SPA silently mislabelled all three: its map had no
+   case for them, so `pooled`, `routing` and `claiming` all fell through to
+   its in-flight label. Six of Dirk's resting receipts read **"Arriving"**
+   with a blank Month, indefinitely. Nothing crashed and nothing was
+   unpinned; the page was simply confidently wrong, which is worse than the
+   held strip it replaced, because "Arriving" is an affirmative claim that
+   resolves itself while "held" at least looks like it needs attention.
+
+   The standing mitigation is rule 1 applied to meaning rather than type:
+   **when a status set grows, ship a parallel human-readable label**, so an
+   un-updated consumer degrades to correct text instead of somebody else's
+   copy. `status_kind` + `status_label` (below) are that field for the
+   inbound log. An enum whose values the SPA maps by hand and that has no
+   parallel label is the open version of this hole; the next one to grow
+   gets the same treatment.
+
+   Enforced for the intake statuses by `test_every_status_has_a_label`: a
+   new `STATUS_*` / `HELD_*` constant fails the suite until someone decides
+   what it SAYS. That test is the reminder, the same way the view-contract
+   pin is for element types.
 
 ## The month pool: fields added 2026-08-24
 
@@ -177,6 +200,24 @@ renders exactly what it rendered before.
 | `entries[].mixed_months` | `true` (absent otherwise) | this mail spans more than one month, and routed by its earliest |
 | `entries[].pool_month_state` | string | pooled rows only: `no_batch`, `open` (a claim is imminent), `closed` (the month is already reconciled) |
 | `n_pooled` | number | top-level, beside `n_held`. Distinct MAILS, not log rows |
+| `entries[].status_kind` | string | how to TREAT this row: `resting` (fine, waiting on something scheduled), `held` (needs a human), `working` (in flight, resolves in seconds), `done` (nothing owed), `unknown` (a status this backend build does not know). Added 2026-08-25 |
+| `entries[].status_label` | string | what to SAY, already composed in English: "Waiting for July 2026", "Needs one click to read", "Added". For an unrecognised status this is the raw status value, never a borrowed label |
+| `n_refused` | number | top-level. Mail TURNED AWAY in the last 7 days (SMTP refusals). `0` is the answer to "is anything bouncing?", and before 2026-08-25 there was none |
+| `refusals[]` | object `{at, stage, reason, from, to, peer}` | the newest refusal rows, oldest->newest. `stage` is `rcpt` (recipient refused) or `data` (accepted the envelope, then a guard turned the message away: disk floor, in-flight ceiling, day budget, archive failure) |
+
+`status_kind` / `status_label` follow the `issues` + `issue_details` pattern
+in reverse: the PROSE is the new field and the CODE rides beside it, because
+there was no prose before. Localize from `status_kind` and fall back to
+`status_label`; both are parallel, so a stale SPA renders exactly what it
+rendered before.
+
+Refusals are deliberately NOT rows in `entries`. A refusal has no archive,
+so it cannot be deduped, replayed or dismissed, and a row in `entries`
+carrying a status no consumer knows is precisely the failure rule 5
+describes. `n_refused` counts a 7-day WINDOW rather than the whole ledger,
+because the ledger is trimmed at a size cap and "every row we kept" would
+answer a question about our own retention instead of about this week's
+mail.
 
 `pooled` is a RESTING state, deliberately not `held_*`: nothing is wrong with
 the mail, its month simply is not open yet. It therefore does NOT count toward
