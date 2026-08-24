@@ -2084,3 +2084,37 @@ def test_a_rendered_body_ack_does_not_claim_zero_files(client, monkeypatch):
     assert "0 file(s)" not in body
     assert body.startswith("Your email")
     assert MONTH_LABEL in body
+
+
+def test_the_pool_count_counts_mails_not_log_rows(client, monkeypatch):
+    """A claimed mail gets a SECOND log row (acceptance, then the claim).
+    When its month is later deleted it goes back to the pool as ONE
+    waiting mail, and the badge has to say 1. The live drill on 2026-08-24
+    read 2 for one receipt, which sends the operator hunting for a mail
+    that does not exist."""
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction())
+    pooled = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("r.jpg", JPG + b"count")]),
+        synchronous=True,
+    )
+    assert pooled["status"] == STATUS_POOLED
+    assert client.get("/api/inbound/log").json()["n_pooled"] == 1
+
+    batch_id = _create_batch(client, monkeypatch, MONTH_LABEL,
+                             _extraction(vendor="Counted"))
+    entries = client.get("/api/inbound/log").json()["entries"]
+    mine = [e for e in entries if e["archive"] == pooled["archive"]]
+    assert len(mine) == 2, "the claim appends its own row"
+
+    with RunStore(state.db_path) as store:
+        label = store.get_run(batch_id).label
+    resp = client.post(f"/api/runs/{batch_id}/delete", json={"confirm": label})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["pooled_back"] == 1
+
+    log = client.get("/api/inbound/log").json()
+    assert len([e for e in log["entries"]
+                if e["archive"] == pooled["archive"]]) == 2
+    assert log["n_pooled"] == 1  # one mail, two rows

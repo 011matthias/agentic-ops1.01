@@ -915,21 +915,45 @@ def month_batch_states(store: RunStore) -> dict[tuple[int, int], str]:
     return out
 
 
+def count_archives(rows: list[dict], match) -> int:
+    """How many distinct MAILS among ``rows`` match.
+
+    The intake log holds more than one row per archive by design: one
+    written at acceptance, another when a replay or a claim ingests it
+    later. Counting rows therefore double-counts every mail that has been
+    through a claim, which is exactly the mail a delete returns to the
+    pool. The live drill on 2026-08-24 read "2 waiting" for one waiting
+    receipt. Count the archive, not the row. A row with no archive name
+    cannot be deduped and counts on its own."""
+    seen: set[str] = set()
+    anonymous = 0
+    for row in rows:
+        if not match(row):
+            continue
+        name = str(row.get("archive") or "")
+        if name:
+            seen.add(name)
+        else:
+            anonymous += 1
+    return len(seen) + anonymous
+
+
 def annotate_pool_state(store: RunStore, rows: list[dict]) -> int:
     """Stamp ``pool_month_state`` ("no_batch" | "open" | "closed") on the
-    pooled rows of a read_log listing; returns the pooled count. "open" is
-    transient — an open month claims its pool on the next trigger."""
+    pooled rows of a read_log listing; returns how many distinct mails are
+    waiting. "open" is transient — an open month claims its pool on the
+    next trigger."""
     states = month_batch_states(store)
-    n = 0
     for row in rows:
         if str(row.get("status", "")) != STATUS_POOLED:
             continue
-        n += 1
         ym = _ym(str(row.get("pool_month") or ""))
         row["pool_month_state"] = (
             states.get(ym, "no_batch") if ym else "no_batch"
         )
-    return n
+    return count_archives(
+        rows, lambda r: str(r.get("status", "")) == STATUS_POOLED
+    )
 
 
 def _arrival_llm_client(settings: dict | None):
