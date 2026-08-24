@@ -84,6 +84,14 @@ VALIDATE_PATTERNS = [
     r"\bjson\.tool\b",                       # python -m json.tool validation
     r"\b(smoke|sandbox)\w*\b",               # smoke / sandbox test phrasing
     r"\btests?[\\/]\w",                      # tests/ or test-harness path invocation
+    # F3b (2026-08-24): CI-green IS the validation gate for a merge, per
+    # rule_no_auto_commit Band 2 -- `gh pr merge` only runs once `gh pr checks`
+    # reports green. That spelling was not in this set, so two docs-only merges
+    # whose SAME command chain ran `gh pr checks --watch --fail-fast` right
+    # before `gh pr merge` still tripped the pre-publish advisory.
+    r"\bgh\s+pr\s+checks\b",                 # CI verdict polled (Band 2 gate)
+    r"\bgh\s+run\s+(watch|view|list)\b",     # workflow-run verdict polled
+    r"\bpreflight-hooks\.py\b",              # the local CI reproduction runner
 ]
 MCP_UPDATE_PATTERNS = [
     (r"scenarios_update", r"scenarios_get"),
@@ -137,9 +145,49 @@ def append_buffer(line: str):
     return buf
 
 
+# ------------------------------------------------------- streak identity (F3a)
+# The iteration-3x streak is counted over an identity hash. That hash used to
+# cover only the FIRST 200 CHARS of the normalized command, so any two commands
+# sharing a long prefix were the "same command" as far as the detector was
+# concerned. On 2026-08-24 that produced SIX false iteration-3x advisories in
+# one Brisken session: four distinct one-shot measurement scripts invoked as
+#   uv run --directory "<abs repo path>" --all-extras python <abs path>/recon-item25/<name>.py
+# collided because the 223-char prefix put the script NAME past char 200, and
+# two unrelated `python - <<'PYEOF'` heredoc edits collided on their shared
+# boilerplate. None was a fix-then-test loop. A gate that cries wolf six times
+# a session trains the agent to ignore it, which is worse than no gate.
+#
+# Identity is now the WHOLE normalized command, plus two explicit
+# discriminators -- the heredoc BODY digest and the sorted set of invoked
+# script paths -- so a future re-truncation cannot silently re-collide the two
+# shapes that actually misfired. Exact repeats (the real fix-then-test loop:
+# edit a file, re-run the identical test command) are unaffected.
+_HEREDOC_BODY = re.compile(
+    r"<<-?[ \t]*(['\"]?)(?P<tag>[A-Za-z_]\w*)\1[^\n]*\n(?P<body>.*?)^[ \t]*(?P=tag)[ \t]*$",
+    re.DOTALL | re.MULTILINE,
+)
+_SCRIPT_TOKEN = re.compile(r"[^\s'\"]*\.(?:py|sh|ps1|bash|js|mjs|cjs|ts|rb|pl)\b")
+
+
+def command_identity(cmd: str) -> str:
+    """Discriminating identity for streak counting. Never truncated."""
+    norm = re.sub(r"\s+", " ", cmd.strip())
+    parts = [norm]
+    bodies = [m.group("body") for m in _HEREDOC_BODY.finditer(cmd)]
+    if bodies:
+        digest = hashlib.sha1(
+            "\n\x00\n".join(bodies).encode("utf-8", errors="ignore")
+        ).hexdigest()
+        parts.append("HEREDOC:" + digest)
+    scripts = sorted(set(_SCRIPT_TOKEN.findall(norm)))
+    if scripts:
+        parts.append("SCRIPTS:" + ",".join(scripts))
+    return "\x00".join(parts)
+
+
 def fingerprint(cmd: str) -> str:
-    norm = re.sub(r"\s+", " ", cmd.strip())[:200]
-    return hashlib.sha1(norm.encode("utf-8", errors="ignore")).hexdigest()[:12]
+    ident = command_identity(cmd)
+    return hashlib.sha1(ident.encode("utf-8", errors="ignore")).hexdigest()[:12]
 
 
 _QUOTED = re.compile(r"\"[^\"\n]*\"|'[^'\n]*'")
@@ -204,7 +252,11 @@ def main() -> int:
 
     pub_scan = publish_residue(view)
     if pub_scan and any(re.search(p, pub_scan) for p in PUBLISH_PATTERNS):
-        recent_text = "\n".join(buf[-BUFFER_MAX:])
+        # F3b: the buffer stores each command truncated to 300 chars, so a
+        # validation step late in a long `A && B && gh pr merge` chain fell off
+        # the stored line and the advisory fired on a chain that DID validate.
+        # Scan the untruncated current command alongside the recent buffer.
+        recent_text = "\n".join(buf[-BUFFER_MAX:]) + "\n" + view
         had_validate = any(re.search(vp, recent_text) for vp in VALIDATE_PATTERNS)
         if not had_validate:
             log_fire("friction-event:gate-skip-pre-publish cmd=" + cmd[:80])

@@ -68,6 +68,24 @@ def permission_decision(stdout: str) -> str | None:
     return (obj.get("hookSpecificOutput") or {}).get("permissionDecision")
 
 
+def load_hook(script: str):
+    """Import .claude/hooks/<script> as a module for unit-level assertions.
+
+    Hook filenames are hyphenated, so `import` cannot reach them. Use this when
+    a decision helper (a fingerprint, a classifier) is worth pinning directly
+    ALONGSIDE the subprocess-level behavioral tests — never instead of them:
+    a helper-only suite cannot tell a wired fix from an unwired one
+    (rule_behaviors B2, the 2026-08-24 verification-theater row).
+    """
+    path = HOOKS / script
+    spec = importlib.util.spec_from_file_location(
+        "hook_" + path.stem.replace("-", "_"), path
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def load_wire_hooks():
     """Import tools/wire-hooks.py (hyphenated, not importable by name) as a
     module so the suite reads its EXPECTED_HOOK_SCRIPTS / CANONICAL_HOOKS as the
