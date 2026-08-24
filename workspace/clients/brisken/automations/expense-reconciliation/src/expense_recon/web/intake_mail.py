@@ -55,7 +55,7 @@ import shutil
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from email import policy
 from email.parser import BytesParser
 from email.utils import getaddresses, parseaddr
@@ -120,6 +120,48 @@ STATUS_ROUTING = "routing"
 STATUS_CLAIMING = "claiming"
 REPLAYABLE = {HELD_NO_BATCH, HELD_FAILED}
 STALE_RECEIVED_SECONDS = 600
+
+# How a status READS, shipped beside it (2026-08-25). `status` is an
+# enum-ish field that has grown three times; each time an un-updated SPA
+# mapped the new value onto whatever its own map fell through to, and on
+# 2026-08-24 that made six of Dirk's resting receipts announce
+# "Arriving" indefinitely. A confident wrong label is worse than a raw
+# one, so every row now also carries a KIND (how to treat it) and a
+# composed English LABEL (what to say), and an unrecognised status
+# degrades to kind "unknown" plus the raw value rather than to somebody
+# else's copy. Same shape as issues + issue_details: prose in English,
+# a stable code beside it for the SPA to localize.
+KIND_RESTING = "resting"    # fine, and waiting on something scheduled
+KIND_HELD = "held"          # needs a human
+KIND_WORKING = "working"    # in flight, resolves on its own in seconds
+KIND_DONE = "done"          # finished, nothing owed
+KIND_UNKNOWN = "unknown"    # a status this build does not know
+
+_STATUS_VIEW: dict[str, tuple[str, str]] = {
+    STATUS_RECEIVED: (KIND_WORKING, "Arriving"),
+    STATUS_ROUTING: (KIND_WORKING, "Filing"),
+    STATUS_CLAIMING: (KIND_WORKING, "Joining its month"),
+    STATUS_RENDERING: (KIND_WORKING, "Reading the email"),
+    STATUS_REINGESTING: (KIND_WORKING, "Re-filing"),
+    STATUS_INGESTED: (KIND_DONE, "Added"),
+    STATUS_REPLAYED: (KIND_DONE, "Added"),
+    STATUS_DISMISSED: (KIND_DONE, "Dismissed"),
+    HELD_NO_BATCH: (KIND_HELD, "Waiting for a month to open"),
+    HELD_FAILED: (KIND_HELD, "Needs a retry"),
+    HELD_BODY_ONLY: (KIND_HELD, "Needs one click to read"),
+    HELD_NO_VALID_FILES: (KIND_HELD, "No receipt file in this email"),
+    # `pooled` composes its month into the label; see annotate_status_view.
+    STATUS_POOLED: (KIND_RESTING, "Waiting for its month"),
+}
+
+# The refusal ledger (backlog item 30 b). A refused RCPT or a guard that
+# turns mail away at DATA is the one intake outcome that left no trace
+# anywhere: no archive, no log row, no counter. Bounded on disk by a
+# rewrite that keeps the newest rows, so a scanner hammering the listener
+# cannot fill the volume.
+REFUSAL_LOG_MAX_BYTES = 512 * 1024
+REFUSAL_KEEP_ROWS = 200
+REFUSAL_WINDOW_DAYS = 7
 
 # Plausibility clamp on a receipt's printed date (owner ruling 2026-08-24):
 # older than ~12 months before arrival, or in the future, counts as
@@ -513,6 +555,114 @@ def _append_log(data_root: Path, entry: dict) -> None:
     root.mkdir(parents=True, exist_ok=True)
     with _log_path(data_root).open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+_REFUSAL_LOCK = threading.Lock()
+
+
+def _refusal_log_path(data_root: Path) -> Path:
+    return inbound_root(data_root) / "refusals.jsonl"
+
+
+def record_refusal(
+    data_root: Path, *, stage: str, reason: str,
+    sender: str = "", recipient: str = "", peer: str = "",
+) -> None:
+    """Write down that mail was turned away.
+
+    Refusals are answered in-protocol (the sender's own MTA generates the
+    bounce, we send nothing), which is correct and also completely silent
+    on our side: until this ledger, "is anything being refused?" had no
+    answer anywhere in the system, and that is exactly the question an
+    owner asked on 2026-08-24 about receipts that never appeared.
+
+    Never raises: the caller is mid-SMTP and still has to answer its error
+    line. A refusal we could not write down must not become a refusal we
+    could not make.
+    """
+    row = {
+        "at": _now_iso(), "stage": stage, "reason": str(reason)[:200],
+        "from": str(sender or "")[:320], "to": str(recipient or "")[:320],
+        "peer": str(peer or "")[:64],
+    }
+    try:
+        with _REFUSAL_LOCK:
+            path = _refusal_log_path(data_root)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            # Trim BEFORE appending, and trim hard: after a rewrite the
+            # file sits well under the cap, so a sustained flood rewrites
+            # once every few hundred rows rather than on every refusal.
+            try:
+                if path.exists() and path.stat().st_size > REFUSAL_LOG_MAX_BYTES:
+                    kept = path.read_text(
+                        encoding="utf-8"
+                    ).splitlines()[-REFUSAL_KEEP_ROWS:]
+                    path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+            except OSError:
+                pass
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001 - a ledger write never blocks a refusal
+        log.warning("could not record intake refusal (%s)", stage)
+
+
+def _refusal_rows(data_root: Path) -> list[dict]:
+    """Every retained refusal row, oldest->newest. One read of the file."""
+    path = _refusal_log_path(data_root)
+    if not path.exists():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    rows: list[dict] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
+
+
+def _within_days(rows: list[dict], days: int) -> int:
+    # Same timespec on both sides, or a row stamped in the cutoff SECOND
+    # compares against a microsecond tail and falls out of its own window.
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=max(1, days))
+    ).isoformat(timespec="seconds")
+    return sum(1 for r in rows if str(r.get("at", "")) >= cutoff)
+
+
+def read_refusals(data_root: Path, limit: int = 20) -> list[dict]:
+    """Refusal rows, oldest->newest, newest `limit` retained."""
+    return _refusal_rows(data_root)[-max(1, limit):]
+
+
+def count_refusals(data_root: Path, days: int = REFUSAL_WINDOW_DAYS) -> int:
+    """How many refusals the ledger still holds from the last `days`.
+
+    A count over a WINDOW rather than over the file: the ledger is trimmed
+    at a size cap, so "every row we kept" would answer a question about
+    our own retention instead of about this week's mail.
+    """
+    return _within_days(_refusal_rows(data_root), days)
+
+
+def refusal_view(
+    data_root: Path, limit: int = 20, days: int = REFUSAL_WINDOW_DAYS,
+) -> tuple[int, list[dict]]:
+    """(count in the window, newest rows) from ONE read of the ledger.
+
+    The intake log is polled; reading a capped-but-not-tiny file twice per
+    poll to answer two questions about the same rows is waste.
+    """
+    rows = _refusal_rows(data_root)
+    return _within_days(rows, days), rows[-max(1, limit):]
 
 
 def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[dict]:
@@ -1031,6 +1181,41 @@ def annotate_pool_state(store: RunStore, rows: list[dict]) -> int:
     return count_archives(
         rows, lambda r: str(r.get("status", "")) == STATUS_POOLED
     )
+
+
+def annotate_status_view(rows: list[dict]) -> None:
+    """Stamp ``status_kind`` + ``status_label`` on every row.
+
+    Call LAST, after `annotate_pool_state` and after the endpoint has
+    resolved batch labels: the pooled label names its month and its
+    waiting reason, and a row whose month was deleted says so.
+
+    Both fields are PARALLEL (api-contract rule 1). Nothing existing
+    changes, so a stale SPA renders exactly what it rendered before; a
+    current one renders text it does not have to know the enum for. The
+    label is English prose, like `issues` / `upload_issues`, and
+    `status_kind` is the stable code an SPA localizes from.
+    """
+    for row in rows:
+        status = str(row.get("status", ""))
+        kind, label = _STATUS_VIEW.get(status, (KIND_UNKNOWN, status or "?"))
+        if status == STATUS_POOLED:
+            month = _month_human(str(row.get("pool_month") or ""))
+            state = str(row.get("pool_month_state") or "no_batch")
+            if not row.get("pool_month"):
+                label = "Waiting for its month"
+            elif state == "open":
+                label = f"Joining {month}"
+            elif state == "closed":
+                label = f"{month} is already reconciled"
+                # A closed month will not take it: that needs a human.
+                kind = KIND_HELD
+            else:
+                label = f"Waiting for {month}"
+        elif row.get("batch_deleted") and kind == KIND_DONE:
+            kind, label = KIND_HELD, "The month it was added to was deleted"
+        row["status_kind"] = kind
+        row["status_label"] = label
 
 
 def _arrival_llm_client(settings: dict | None):

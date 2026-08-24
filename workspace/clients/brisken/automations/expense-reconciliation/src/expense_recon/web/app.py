@@ -1184,7 +1184,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # drain for mail that arrived before a month batch existed.
     @app.get("/api/inbound/log")
     def inbound_log(limit: int = 100, detail: int = 0) -> JSONResponse:
-        from .intake_mail import annotate_pool_state, count_archives, read_log
+        from .intake_mail import (
+            annotate_pool_state,
+            annotate_status_view,
+            count_archives,
+            read_log,
+            refusal_view,
+        )
 
         rows = read_log(app.state.data_root, limit=max(1, min(limit, 500)))
         # Distinct MAILS, not log rows: an archive that has been replayed
@@ -1273,10 +1279,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     "currency": e.get("currency"),
                 })
             r["expenses"] = out
+        n_refused, refusals = refusal_view(app.state.data_root)
+        # LAST: the label needs the pool state and the resolved batch
+        # labels that the loops above just stamped.
+        annotate_status_view(rows)
         return JSONResponse({
             "entries": rows,
             "n_held": n_held,
             "n_pooled": n_pooled,
+            # Mail we turned away. Deliberately NOT rows in `entries`: a
+            # refusal has no archive, and a row there carrying a status no
+            # consumer knows is the exact shape of the "Arriving" bug.
+            "n_refused": n_refused,
+            "refusals": refusals,
         })
 
     @app.post("/api/inbound/replay-held")

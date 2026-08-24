@@ -22,6 +22,12 @@ is deliberately no sender check: From is forgeable, so an allowlist bought
 tidiness rather than security, and it cost every receipt that reached us
 by any route other than a Brisken mailbox.
 
+Every refusal is also WRITTEN DOWN (backlog item 30 b, 2026-08-25).
+Answering in-protocol is correct and silent; until the ledger existed,
+"is anything being turned away?" had no answer anywhere in the system,
+which is precisely the question an owner asked about receipts that never
+appeared. Recording never blocks the refusal itself.
+
 Enabled only when EXPENSE_RECON_INTAKE_SMTP=1 (fly.toml); tests exercise
 the decision functions and handler directly, never a real socket.
 """
@@ -39,6 +45,7 @@ from .intake_mail import (
     disk_low,
     end_route,
     parse_inbound,
+    record_refusal,
     route_archived,
     try_begin_route,
 )
@@ -60,6 +67,14 @@ def rcpt_decision(address: str, domain: str, n_rcpts: int) -> str | None:
     return None
 
 
+def _peer(session) -> str:
+    """Best-effort connecting IP; never raises into the SMTP path."""
+    try:
+        return session.peer[0] if session and session.peer else ""
+    except Exception:  # noqa: BLE001 - peer is best-effort metadata
+        return ""
+
+
 class IntakeHandler:
     """aiosmtpd handler. Thin: parse envelope, delegate every decision."""
 
@@ -79,6 +94,11 @@ class IntakeHandler:
             address, self._config().domain, len(envelope.rcpt_tos)
         )
         if err is not None:
+            record_refusal(
+                self.data_root, stage="rcpt", reason=err,
+                sender=getattr(envelope, "mail_from", "") or "",
+                recipient=address, peer=_peer(session),
+            )
             return err
         envelope.rcpt_tos.append(address)
         return "250 OK"
@@ -87,11 +107,26 @@ class IntakeHandler:
         raw = envelope.content or b""
         cfg = self._config()
         parsed = parse_inbound(raw, cfg.domain, envelope.rcpt_tos)
+        peer = _peer(session)
+        rcpt = (envelope.rcpt_tos or [""])[0]
+
+        def _refuse(reason: str) -> str:
+            # DATA-stage refusals matter MORE than a bad RCPT: each one is
+            # a real submission we accepted the envelope for and then
+            # turned away, so it is exactly the mail somebody will later
+            # swear they sent.
+            record_refusal(
+                self.data_root, stage="data", reason=reason,
+                sender=parsed.from_addr or (envelope.mail_from or ""),
+                recipient=rcpt, peer=peer,
+            )
+            return reason
+
         if disk_low(self.data_root):
             log.warning("intake refusing mail: low disk on data volume")
-            return "452 4.3.1 storage low, try again later"
+            return _refuse("452 4.3.1 storage low, try again later")
         if not try_begin_route():
-            return "452 4.5.3 intake busy, try again later"
+            return _refuse("452 4.5.3 intake busy, try again later")
         # Reserve spend at acceptance time, BEFORE the 250, so concurrent
         # connections cannot race past the caps (units: files, min 1 so
         # zero-file spam consumes budget too).
@@ -100,12 +135,9 @@ class IntakeHandler:
             self.data_root, sender, len(parsed.attachments), cfg
         ):
             end_route()
-            return "452 4.5.3 daily submission limit reached, try again tomorrow"
-        peer = ""
-        try:
-            peer = session.peer[0] if session.peer else ""
-        except Exception:  # noqa: BLE001 - peer is best-effort metadata
-            peer = ""
+            return _refuse(
+                "452 4.5.3 daily submission limit reached, try again tomorrow"
+            )
         # Custody BEFORE the ack: archive inline; only routing/OCR moves to
         # the worker thread. An archive failure answers 451 (sender retries).
         try:
@@ -113,7 +145,7 @@ class IntakeHandler:
         except Exception:  # noqa: BLE001 - no custody, no ack
             end_route()
             log.exception("intake archive failed")
-            return "451 4.3.0 temporary storage failure, try again"
+            return _refuse("451 4.3.0 temporary storage failure, try again")
         threading.Thread(
             target=self._route, args=(arch, parsed), daemon=True
         ).start()
