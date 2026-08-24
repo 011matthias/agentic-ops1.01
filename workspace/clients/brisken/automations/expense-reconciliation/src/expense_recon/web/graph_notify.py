@@ -12,8 +12,11 @@ Guards, all asserted per call:
   - creds present (Fly secrets BRISKEN_TENANT_ID / _GRAPH_CLIENT_ID /
     _GRAPH_CLIENT_SECRET); absent => disabled, silently
   - the sending mailbox is in the sanctioned set (matthias.silva)
-  - the recipient is EXACTLY ONE address ending @brisken.com — acks and
-    alerts never leave the tenant
+  - the recipient is EXACTLY ONE well-formed address, and either inside
+    @brisken.com or on the caller's explicit ``allow_external`` list (the
+    operator-curated ``intake.known_senders``). Alerts never pass a list,
+    so they never leave the tenant; an ack does, for the few private
+    addresses our own people mail their receipts from
   - an in-process daily cap (resets per UTC day and per boot; the intake
     day budget already caps how many acks CAN be triggered)
 
@@ -109,20 +112,43 @@ def _cap_exhausted() -> bool:
         return False
 
 
-def send_mail(recipient: str, subject: str, body: str) -> bool:
-    """One guarded internal notification. True only when Graph accepted
-    the send; every refused guard and transport error returns False."""
+def send_mail(
+    recipient: str, subject: str, body: str,
+    *, allow_external: tuple[str, ...] | frozenset[str] = (),
+) -> bool:
+    """One guarded notification. True only when Graph accepted the send;
+    every refused guard and transport error returns False.
+
+    ``allow_external`` is an EXPLICIT enumeration of outside addresses THIS
+    call may reach: the operator-curated ``intake.known_senders``, nothing
+    else. It widens the recipient rule by exactly those addresses and
+    relaxes none of the structural checks, so a stranger who mails us —
+    or forges a From we have never heard of — still gets nothing back.
+    That is the send-by-id standard applied to an automated reply: we mail
+    an address a human listed on purpose, never one that merely turned up
+    in a header."""
     if not enabled():
         return False
     recipient = (recipient or "").strip().lower()
-    # Hard recipient guard: exactly one well-formed @brisken.com address.
+    # Structural guard, asserted for every recipient before the allowlist
+    # is consulted: exactly one address, with nothing in it that could
+    # smuggle a second one past the single-recipient rule.
     if (
-        not recipient.endswith(RECIPIENT_SUFFIX)
-        or recipient.count("@") != 1
-        or len(recipient) <= len(RECIPIENT_SUFFIX)
-        or any(c in recipient for c in " ,;\r\n")
+        recipient.count("@") != 1
+        or any(c in recipient for c in " \t,;<>\r\n")
+        or recipient.startswith("@")
+        or recipient.endswith("@")
     ):
-        log.warning("notify refused: recipient %r not internal", recipient)
+        log.warning("notify refused: recipient %r malformed", recipient)
+        return False
+    listed = recipient in {
+        str(a).strip().lower() for a in (allow_external or ())
+    }
+    if not (recipient.endswith(RECIPIENT_SUFFIX) or listed):
+        log.warning(
+            "notify refused: recipient %r is neither internal nor listed",
+            recipient,
+        )
         return False
     if SEND_MAILBOX not in SANCTIONED_MAILBOXES:
         log.error("notify refused: send mailbox not sanctioned")

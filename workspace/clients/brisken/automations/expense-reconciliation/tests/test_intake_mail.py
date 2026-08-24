@@ -14,7 +14,11 @@ mock has no cache, so tests pay the queue twice. See
 
 Submission is open to any sender (owner directive 2026-08-23); the
 boundaries that remain are the recipient domain (no relaying) and the spend
-guards. Decision logic is pure/sync; the SMTP transport is exercised
+guards. Who we RECOGNISE is a narrower question than who may submit
+(2026-08-24): a known sender (inside @brisken.com, or listed in
+``intake.known_senders``) gets the acceptance ack even at a private
+address, and their body-only mail is rendered on arrival instead of
+waiting for a click. A stranger's still waits, and still alerts. Decision logic is pure/sync; the SMTP transport is exercised
 through its decision functions and its handler, never a real socket. See
 web/intake_mail.py + web/smtp_server.py."""
 from __future__ import annotations
@@ -39,11 +43,13 @@ from expense_recon.llm.client import ExtractedReceipt, MockLLMClient  # noqa: E4
 from expense_recon.web.app import create_app  # noqa: E402
 from expense_recon.web.intake_mail import (  # noqa: E402
     HELD_BODY_ONLY,
+    HELD_FAILED,
     STATUS_INGESTED,
     STATUS_POOLED,
     DayBudget,
     IntakeConfig,
     claim_pooled,
+    is_known_sender,
     normalize_intake_setting,
     parse_inbound,
     process_message,
@@ -57,6 +63,12 @@ from expense_recon.web.store import RunStore  # noqa: E402
 
 JPG = b"\xff\xd8\xff\xe0" + b"x" * 5000  # big enough to not read as a logo
 DOMAIN = "expenses.brisken.com"
+# A submitter we do not recognise. Since 2026-08-24 a KNOWN sender's
+# body-only mail renders itself on arrival, so every fixture that wants a
+# mail sitting in held_body_only has to come from outside: that is now the
+# only way body-only mail waits for a click. Tests of the auto-render path
+# use an @brisken.com sender or a listed address instead.
+OUTSIDE = "guest@example.org"
 
 # Fixture dates are relative to today, not literals, so the plausibility
 # clamp (a printed date more than ~12 months before arrival reads as
@@ -286,6 +298,14 @@ def test_an_outside_submitter_gets_no_acknowledgement(monkeypatch):
     # above is the recipient rule and not some other early return.
     graph_notify.send_mail("criss@brisken.com", "s", "b")
     assert reached_network == ["token"]
+    # The one exception is explicit and per call: an outside address the
+    # operator LISTED. The same recipient is refused without the list and
+    # passes with it, so the widening is the list and nothing else.
+    private = "dirk_.neumann@icloud.com"
+    assert graph_notify.send_mail(private, "s", "b") is False
+    assert reached_network == ["token"]
+    graph_notify.send_mail(private, "s", "b", allow_external=(private,))
+    assert reached_network == ["token", "token"]
 
 
 def test_day_budget_reserves_at_accept_and_charges_zero_file_mail(tmp_path):
@@ -478,7 +498,7 @@ def test_body_only_mail_is_held_not_dropped(client):
     state = client.app.state
     result = process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _mail("criss@brisken.com", attachments=[], body="Uber receipt inline"),
+        _mail(OUTSIDE, attachments=[], body="Uber receipt inline"),
         synchronous=True,
     )
     assert result["status"] == HELD_BODY_ONLY
@@ -492,7 +512,7 @@ def test_body_only_mail_is_held_not_dropped(client):
 
 def test_archive_preserves_raw_message(client):
     state = client.app.state
-    raw = _mail("criss@brisken.com", attachments=[], body="hello")
+    raw = _mail(OUTSIDE, attachments=[], body="hello")
     process_message(
         state.db_path, state.learning_db_path, state.data_root, raw,
         synchronous=True,
@@ -502,7 +522,7 @@ def test_archive_preserves_raw_message(client):
     assert len(arch_dirs) == 1
     assert (arch_dirs[0] / "message.eml").read_bytes() == raw
     meta = json.loads((arch_dirs[0] / "meta.json").read_text(encoding="utf-8"))
-    assert meta["from"] == "criss@brisken.com"
+    assert meta["from"] == OUTSIDE
     assert meta["status"] == HELD_BODY_ONLY
 
 
@@ -512,12 +532,23 @@ def test_archive_preserves_raw_message(client):
 # decision logic + idempotency, never a real send.
 
 def _patch_notify(monkeypatch):
+    """Record (recipient, subject, body, allow_external) per send.
+
+    The stub deliberately does NOT re-implement the recipient guard, so a
+    test that cares whether an address may be mailed AT ALL has to assert
+    against the real `graph_notify.send_mail` (see
+    `test_an_outside_submitter_gets_no_acknowledgement`). What it does
+    capture is the allowlist the caller passed, which is the other half of
+    that decision.
+    """
     from expense_recon.web import graph_notify
-    calls: list[tuple[str, str, str]] = []
+    calls: list[tuple[str, str, str, tuple]] = []
     monkeypatch.setattr(graph_notify, "enabled", lambda: True)
     monkeypatch.setattr(
         graph_notify, "send_mail",
-        lambda r, s, b: calls.append((r, s, b)) or True,
+        lambda r, s, b, **kw: calls.append(
+            (r, s, b, tuple(kw.get("allow_external") or ()))
+        ) or True,
     )
     return calls
 
@@ -585,14 +616,16 @@ def test_no_ack_for_auto_generated_or_disabled(client, monkeypatch):
 
 
 def test_held_mail_alerts_operator_once(client, monkeypatch):
-    """Body-only mail, deliberately: an ATTACHMENT mail with no month open
-    now pools, and pooling is not a problem to alert anyone about. What
-    still needs a human is mail the tool cannot read as a receipt."""
+    """Body-only mail from a STRANGER, deliberately: an attachment mail
+    with no month open now pools, and pooling is not a problem to alert
+    anyone about; a known sender's body-only mail renders itself. What is
+    left needing a human is unrecognised mail we cannot read as a
+    receipt."""
     calls = _patch_notify(monkeypatch)
     state = client.app.state
     res = process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _mail("criss@brisken.com", attachments=[], body="Uber receipt inline"),
+        _mail(OUTSIDE, attachments=[], body="Uber receipt inline"),
         synchronous=True,
     )
     assert res["status"] == HELD_BODY_ONLY
@@ -612,7 +645,7 @@ def test_held_mail_alerts_operator_once(client, monkeypatch):
     assert resp.status_code == 200, resp.text
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _mail("criss@brisken.com", attachments=[], body="another one",
+        _mail(OUTSIDE, attachments=[], body="another one",
               subject="second"),
         synchronous=True,
     )
@@ -671,6 +704,18 @@ def test_send_mail_guards_refuse_external_and_malformed(monkeypatch):
         "",
     ):
         assert graph_notify.send_mail(bad, "s", "b") is False
+    # Listing an address does not buy it past the STRUCTURAL guard: a
+    # smuggled second recipient stays refused even when the allowlist
+    # matches it byte for byte.
+    for bad in (
+        "victim@gmail.com,x@brisken.com",
+        "a@b@brisken.com",
+        "listed@example.org\nbcc: victim@gmail.com",
+        "",
+    ):
+        assert graph_notify.send_mail(
+            bad, "s", "b", allow_external=(bad,)
+        ) is False
 
 
 def test_retention_sweep_deletes_only_expired(client):
@@ -801,7 +846,7 @@ def test_inbound_log_month_column_everywhere(client, monkeypatch):
     state = client.app.state
     held = process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _mail("criss@brisken.com", attachments=[], body="inline receipt",
+        _mail(OUTSIDE, attachments=[], body="inline receipt",
               subject="held one"),
         synchronous=True,
     )
@@ -1032,7 +1077,7 @@ def test_body_view_returns_sanitized_text(client):
     state = client.app.state
     res = process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail("criss@brisken.com"), synchronous=True,
+        _html_mail(OUTSIDE), synchronous=True,
     )
     assert res["status"] == HELD_BODY_ONLY
     entries = client.get("/api/inbound/log").json()["entries"]
@@ -1053,7 +1098,7 @@ def test_render_ingest_creates_expense_via_normal_path(client, monkeypatch):
     state = client.app.state
     res = process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail("criss@brisken.com", subject="render me"),
+        _html_mail(OUTSIDE, subject="render me"),
         synchronous=True,
     )
     assert res["status"] == HELD_BODY_ONLY
@@ -1086,7 +1131,7 @@ def test_render_ingest_creates_expense_via_normal_path(client, monkeypatch):
     grid = client.get(f"/api/expense-batches/{batch_id}").json()
     mailed = [e for e in grid["expenses"] if e.get("submitted_by")]
     assert len(mailed) == 1
-    assert mailed[0]["submitted_by"]["address"] == "criss@brisken.com"
+    assert mailed[0]["submitted_by"]["address"] == OUTSIDE
 
     # Now ingested: a second render is refused (no double-charge path).
     again = client.post(f"/api/inbound/{archive}/render-ingest")
@@ -1100,7 +1145,7 @@ def test_render_ingest_guards(client, monkeypatch):
     # operator with nothing to show for the click.
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail("criss@brisken.com", subject="no batch yet"),
+        _html_mail(OUTSIDE, subject="no batch yet"),
         synchronous=True,
     )
     archive = [
@@ -1140,7 +1185,7 @@ def test_dismiss_held_mail(client, monkeypatch):
     state = client.app.state
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail("criss@brisken.com", subject="junk forward"),
+        _html_mail(OUTSIDE, subject="junk forward"),
         synchronous=True,
     )
     log1 = client.get("/api/inbound/log").json()
@@ -1236,7 +1281,7 @@ def test_render_ingest_retry_after_failure(client, monkeypatch):
     state = client.app.state
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail("criss@brisken.com", subject="retry me"),
+        _html_mail(OUTSIDE, subject="retry me"),
         synchronous=True,
     )
     archive = [
@@ -1293,7 +1338,7 @@ def test_render_retry_after_commit_failure_does_not_duplicate(
     state = client.app.state
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail("criss@brisken.com", subject="commit then fail"),
+        _html_mail(OUTSIDE, subject="commit then fail"),
         synchronous=True,
     )
     archive = [
@@ -1338,7 +1383,7 @@ def test_dismiss_refused_while_render_in_flight(client, monkeypatch):
     state = client.app.state
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail("criss@brisken.com", subject="race me"),
+        _html_mail(OUTSIDE, subject="race me"),
         synchronous=True,
     )
     archive = [
@@ -1374,7 +1419,7 @@ def test_replay_rescues_stranded_body_only(client, monkeypatch):
 
     _create_batch(client, monkeypatch, MONTH_LABEL)
     state = client.app.state
-    raw = _html_mail("criss@brisken.com", subject="stranded")
+    raw = _html_mail(OUTSIDE, subject="stranded")
     parsed = parse_inbound(raw, DOMAIN)
     arch = archive_incoming(state.data_root, raw, parsed)
     meta_path = arch / "meta.json"
@@ -1402,7 +1447,7 @@ def test_reconcile_flips_interrupted_render(client):
     )
 
     state = client.app.state
-    raw = _html_mail("criss@brisken.com", subject="killed mid-render")
+    raw = _html_mail(OUTSIDE, subject="killed mid-render")
     parsed = parse_inbound(raw, DOMAIN)
     arch = archive_incoming(state.data_root, raw, parsed)
     meta_path = arch / "meta.json"
@@ -1542,7 +1587,7 @@ def test_re_ingest_refuses_a_body_only_archive(client, monkeypatch):
     state = client.app.state
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _mail("criss@brisken.com", attachments=[], subject="body only",
+        _mail(OUTSIDE, attachments=[], subject="body only",
               body="just text"),
         synchronous=True,
     )
@@ -2058,29 +2103,23 @@ def test_a_rendered_body_ack_does_not_claim_zero_files(client, monkeypatch):
     """A body-only mail delivers no attachment, so `n_files` is 0. The ack
     for it has to name the email rather than count files, or it reads
     "0 file(s) from your email ... is stored for July 2026" about work
-    that really did happen."""
+    that really did happen.
+
+    The sender is known, so the render is the arrival path's own and this
+    ack is the FIRST thing they hear about the mail; there is no operator
+    alert beside it any more."""
     calls = _patch_notify(monkeypatch)
     state = client.app.state
-    process_message(
+    _patch_ocr(monkeypatch, _extraction())  # the rendered PDF's month
+    res = process_message(
         state.db_path, state.learning_db_path, state.data_root,
         _html_mail("dirk.neumann@brisken.com", subject="inline receipt"),
         synchronous=True,
     )
-    archive = [
-        e for e in client.get("/api/inbound/log").json()["entries"]
-        if e.get("subject") == "inline receipt"
-    ][0]["archive"]
+    assert res["status"] == STATUS_POOLED
 
-    _patch_ocr(monkeypatch, _extraction())  # the rendered PDF's month
-    resp = client.post(f"/api/inbound/{archive}/render-ingest")
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["status"] == STATUS_POOLED
-
-    # calls[0] is the held_body_only alert to the operator; the ack to the
-    # sender is the one under test.
-    acks = [c for c in calls if c[0] == "dirk.neumann@brisken.com"]
-    assert len(acks) == 1
-    body = acks[0][2]
+    assert [c[0] for c in calls] == ["dirk.neumann@brisken.com"]
+    body = calls[0][2]
     assert "0 file(s)" not in body
     assert body.startswith("Your email")
     assert MONTH_LABEL in body
@@ -2118,3 +2157,215 @@ def test_the_pool_count_counts_mails_not_log_rows(client, monkeypatch):
     assert len([e for e in log["entries"]
                 if e["archive"] == pooled["archive"]]) == 2
     assert log["n_pooled"] == 1  # one mail, two rows
+
+
+# ------------------------------------------- who we recognise (item 30) --
+# Anyone may submit; who we RECOGNISE is the narrower question, and two
+# things hang off it: the acceptance ack reaches a listed outside address,
+# and a known sender's body-only mail is read on arrival instead of
+# waiting for a click.
+
+def test_a_listed_private_address_gets_the_ack(client, monkeypatch):
+    """Dirk mails receipts from a private iCloud address as well as his
+    work one. Until an operator could list it, that send produced no ack
+    and no bounce either, so a delivered receipt and a lost one looked
+    identical from his chair. That is the question that took a whole
+    session to answer on 2026-08-24."""
+    calls = _patch_notify(monkeypatch)
+    private = "dirk_.neumann@icloud.com"
+    resp = client.put("/api/settings", json={
+        "intake": {"known_senders": [private.upper()]}
+    })
+    assert resp.status_code == 200, resp.text
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction())
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail(private, attachments=[("r.jpg", JPG + b"listed")]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_POOLED
+    assert [c[0] for c in calls] == [private]
+    # The allowlist reached the sender, which is the only thing that lets
+    # the real guard mail an address outside the tenant.
+    assert private in calls[0][3]
+
+
+def test_an_unlisted_outside_submitter_is_not_acked(client, monkeypatch):
+    """The list is narrow on purpose. A stranger's mail is still taken
+    into custody and still routed; what they do not get is a reply from
+    Brisken to an address nobody vouched for."""
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction())
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail(OUTSIDE, attachments=[("r.jpg", JPG + b"unlisted")]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_POOLED
+    # _maybe_ack still runs; the empty allowlist is what stops it, and the
+    # real send_mail refuses the recipient (pinned in the guard test).
+    assert [c[3] for c in calls] == [()]
+
+
+def test_known_senders_settings_validation():
+    from expense_recon.web.intake_mail import MAX_KNOWN_SENDERS
+
+    ok = normalize_intake_setting({"known_senders": [
+        "Dirk_.Neumann@icloud.com", "dirk_.neumann@icloud.com",
+    ]})
+    assert ok["known_senders"] == ["dirk_.neumann@icloud.com"]
+    for bad in (
+        {"known_senders": "dirk@icloud.com"},          # not a list
+        {"known_senders": ["not-an-address"]},
+        {"known_senders": ["a@b.com,c@d.com"]},        # two smuggled as one
+        {"known_senders": ["a@b.com\nbcc: x@y.com"]},  # header injection
+        {"known_senders": ["a@nodot"]},
+        {"known_senders": [f"a{i}@b.com"
+                           for i in range(MAX_KNOWN_SENDERS + 1)]},
+    ):
+        with pytest.raises(ValueError):
+            normalize_intake_setting(bad)
+
+
+def test_a_malformed_known_sender_in_stored_settings_is_ignored():
+    """The PUT edge refuses a bad list. A settings blob edited around it
+    has to degrade to "not known", never take the mailbox down."""
+    cfg = IntakeConfig.from_settings({"intake": {"known_senders": [
+        "dirk_.neumann@icloud.com", "oops", "x@y.com,z@q.com", 7,
+    ]}})
+    assert cfg.known_senders == ("dirk_.neumann@icloud.com",)
+    assert is_known_sender("Dirk_.Neumann@icloud.com", cfg)
+    assert is_known_sender("anyone@brisken.com", cfg)
+    assert not is_known_sender("oops", cfg)
+    assert not is_known_sender("stranger@example.org", cfg)
+    # A look-alike domain must not read as internal.
+    assert not is_known_sender("attacker@evil-brisken.com", cfg)
+
+
+def test_a_known_senders_body_only_mail_renders_itself(client, monkeypatch):
+    """A forwarded vendor receipt IS the email body far more often than it
+    is an attachment: all six mails held on 2026-08-24 (AWS, OpenAI twice,
+    OpenAI credits, the CIC ticket, Hostinger) delivered no file at all.
+    Holding each of them for a click is what made a receipt that HAD
+    arrived read as an error."""
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction())  # the rendered PDF's month
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail("dirk.neumann@brisken.com", subject="forwarded receipt"),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_POOLED
+    assert res["auto_rendered"] is True
+    assert res["pool_month"] == RECEIPT_MONTH
+    arch = state.data_root / "inbound" / res["archive"]
+    assert (arch / "rendered-body.pdf").exists()
+    meta = json.loads((arch / "meta.json").read_text(encoding="utf-8"))
+    assert meta["rendered"] is True and meta["rendered_by"] == "auto"
+    # Nobody is asked to click anything, and the sender is told where it
+    # went rather than nothing at all.
+    assert client.get("/api/inbound/log").json()["n_held"] == 0
+    assert [c[0] for c in calls] == ["dirk.neumann@brisken.com"]
+
+
+def test_a_listed_senders_body_only_mail_renders_itself(client, monkeypatch):
+    """One list, both halves: an address an operator listed is known for
+    the render decision too, so Dirk forwarding from his private mailbox
+    behaves exactly like Dirk forwarding from his work one."""
+    private = "dirk_.neumann@icloud.com"
+    assert client.put("/api/settings", json={
+        "intake": {"known_senders": [private]}
+    }).status_code == 200
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction())
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail(private, subject="private forward"),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_POOLED
+    assert res["auto_rendered"] is True
+
+
+def test_a_strangers_body_only_mail_still_waits_for_a_click(
+    client, monkeypatch,
+):
+    """The gate is on the RENDER, not on the submission: anyone may still
+    mail us, but we do not pay a vision call to read every stranger's
+    newsletter. An unrecognised body-only mail stays held, and alerts."""
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail(OUTSIDE, subject="stranger forward"),
+        synchronous=True,
+    )
+    assert res["status"] == HELD_BODY_ONLY
+    assert "auto_rendered" not in res
+    arch = state.data_root / "inbound" / res["archive"]
+    assert not (arch / "rendered-body.pdf").exists()
+    assert [c[0] for c in calls] == ["matthias.silva@brisken.com"]
+
+
+def test_a_failed_auto_render_alerts_the_operator(client, monkeypatch):
+    """Nobody is watching an automatic render. When the RENDER itself
+    fails there is no ingest job to raise the alarm (`_ingest_job` covers
+    the other half), so without this alert the mail would sit in
+    held_failed with the sender told nothing and the operator told
+    nothing, which is the exact silence this round exists to remove."""
+    import expense_recon.web.body_render as br
+
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    monkeypatch.setattr(
+        br, "render_body_pdf",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no fonts")),
+    )
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail("dirk.neumann@brisken.com", subject="fails to render"),
+        synchronous=True,
+    )
+    assert res["status"] == HELD_FAILED
+    assert [c[0] for c in calls] == ["matthias.silva@brisken.com"]
+    assert HELD_FAILED in calls[0][1]
+
+
+def test_an_interrupted_auto_render_does_not_strand_in_rendering(
+    client, monkeypatch,
+):
+    """`rendering` is transient and only the boot sweep clears it, so an
+    exception escaping the render path would leave the mail unreachable:
+    replay skips a transient status and the render CAS refuses a retry.
+    It has to land in held_failed instead, which both can reach."""
+    import expense_recon.web.intake_mail as im
+
+    _create_batch(client, monkeypatch, MONTH_LABEL)
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+
+    def _boom(*a, **k):
+        raise RuntimeError("staging disk gone")
+
+    _patch_ocr(monkeypatch, _extraction())  # the rendered PDF's month
+    with monkeypatch.context() as mp:
+        mp.setattr(im, "_start_ingest", _boom)
+        res = process_message(
+            state.db_path, state.learning_db_path, state.data_root,
+            _html_mail("dirk.neumann@brisken.com", subject="interrupted"),
+            synchronous=True,
+        )
+    assert res["status"] == HELD_FAILED
+    assert [c[0] for c in calls] == ["matthias.silva@brisken.com"]
+
+    # ...and it is genuinely retryable, which is the point of not leaving
+    # it in the transient state.
+    _patch_ocr(monkeypatch, _extraction(vendor="Uber"),
+               _extraction(vendor="Uber"))
+    resp = client.post(f"/api/inbound/{res['archive']}/render-ingest")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == STATUS_INGESTED
+

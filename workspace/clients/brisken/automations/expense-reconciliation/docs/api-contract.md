@@ -201,12 +201,23 @@ is waiting; the 2026-08-24 live drill read exactly that.
 | `POST /api/inbound/replay-held` | `claimed` | number | pooled mail ingested by this sweep |
 | `POST /api/inbound/replay-held` | `still_pooled` | number | pool size after both halves |
 | `POST /api/inbound/{archive}/render-ingest` | `pool_month` | string | present on both outcomes; with `status: "pooled"` the render succeeded and is waiting |
+| `PUT /api/settings` | `intake.known_senders` | string[] | outside addresses that count as our own people. They get the acceptance ack, and their body-only mail is rendered on arrival instead of holding. At most 25 plain addresses; malformed entries are a 400 naming the field |
 
 `inbound_marked` on delete keeps its OLD meaning (legacy mail stamped "month
 deleted") and is normally `0` now; `pooled_back` is the number that moves.
 Reading `inbound_marked` as "mail affected" was true before this change and is
 not any more, which is exactly the second-meaning failure the counts section
 above warns about; hence the parallel name.
+
+The `intake` object is stored EXACTLY as sent (`set_settings` merges
+shallowly at the top level), so a partial `{"intake": {"known_senders": [...]}}`
+drops the aliases and caps with it. Read, change one key, send the whole
+object back.
+
+Body-only mail from a known sender no longer reaches `held_body_only` at all:
+it renders on arrival and goes straight to `ingested` or `pooled`. No field
+changed shape, but the Held strip now holds only unrecognised or genuinely
+failed mail, which is what its copy should say.
 
 `render-ingest` no longer returns 409 when no month is open. The render always
 happens and the result always lands somewhere, so a 409 from that endpoint now
