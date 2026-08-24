@@ -396,6 +396,46 @@ direct debits; January reality was 78 of 80) stay exceptions in the
 reconciliation report and are never auto-created as expense rows. Expense count
 is not expected to equal transaction count.
 
+### 30. The intake cannot tell anyone whether a receipt arrived (2026-08-24)
+
+Surfaced by an owner question this session ("Dirk has sent way more than 2
+emails, make sure they are there") that took a full investigation to answer
+and still ended partly unanswerable. Three defects compound into one: nobody,
+inside or outside, can establish whether a mailed receipt landed.
+
+**a. Outside senders get total silence.** Dirk sends from
+`dirk_.neumann@icloud.com` as well as his work account. `graph_notify.send_mail`
+hard-refuses any recipient not ending `@brisken.com` (the anti-backscatter guard
+added when submission opened to any sender, PR #587). So an iCloud send produces
+no ack, and an accepted-but-held mail produces no bounce either. From Dirk's
+chair a delivered receipt and a lost one look identical. Fix: a narrow
+allowlist of KNOWN personal addresses that do get acked, keeping the guard for
+genuinely unknown senders. The allowlist is settings-side
+(`intake.ack_addresses`), so adding Dirk's iCloud is an operator edit, not a
+deploy.
+
+**b. A refused RCPT leaves no trace anywhere.** `rcpt_decision` returns the SMTP
+error line and nothing is written: no archive, no log row, no counter. If mail
+is being turned away (wrong domain, recipient ceiling) we cannot see it, which
+is exactly the question that could not be answered this session. Fix: log every
+refusal with the envelope sender, recipient and reason, and expose a count on
+the intake log so "did anything get turned away" is answerable.
+
+**c. Forwarded vendor receipts are body-only, and body-only needs a human.** All
+SIX mails held on 2026-08-24 carried NO attachment (`n_files: 0`, nothing
+skipped): AWS billing, two OpenAI purchases, an OpenAI credits confirmation, the
+CIC/Monetico card ticket, Hostinger. The receipt is the HTML body. That is not
+the exception the render path was built for, it is the normal shape of a
+forwarded vendor receipt, and every one of them sat held until an operator
+clicked render. Fix: consider auto-rendering body-only mail at arrival (it
+already routes to the pool safely, so nothing lands in a month unreviewed), or
+at minimum make the held strip say "this needs one click" rather than reading
+as an error.
+
+**Not in scope:** the mailbox only exists since the dedicated IPv4 was created
+2026-08-21 09:17, so anything Dirk sent before that had no MX to reach and is
+unrecoverable. Worth telling him once so he stops looking for it.
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
 Four of the five known cards (0113, 6013, 9693, 8311) carry no legal entity,
