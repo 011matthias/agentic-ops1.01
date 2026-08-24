@@ -473,6 +473,33 @@ reply when their receipts land in the open month". Receipts land in the month
 PRINTED on them, or wait in the pool; the ack says which. That copy is what
 sets a tester's expectations, so it is worth the same pass.
 
+### 32. There is no way into an existing month (2026-08-25)
+
+Found by driving the published SPA. The "Months" nav item goes to `/months`,
+which renders the "New expense batch" upload form and nothing else: **0
+tables, 0 rows, 518 characters of body text, and no batch label anywhere in
+the HTML**. `/`, `/expenses` and `/expenses/new` all render the same page.
+
+The page DOES call `GET /api/expense-batches`; it answers 200 with six
+batches. The response is fetched and discarded.
+
+So a reviewer who opens the app cannot reach last month's receipts. The only
+working paths are the `/expenses/{id}` links that happen to sit in the Email
+intake page's Month column, and typing the URL by hand. Everything else works
+once you are there: `/expenses/ae61e122a505` renders 40 expenses, the
+card-review strip, the set-aside strip and both download buttons. It is only
+the way IN that is missing.
+
+No prompt ever asked for this screen, which is presumably why it does not
+exist: every prompt since assumed a months list was already there.
+`docs/lovable-months-list-prompt.md` is written and covers the list, rename
+(the label decides which mail joins the month), delete (homeless since
+`lovable-intake-quickwins-prompt.md` section 3), and the create advisory.
+
+This blocks effective testing more than anything else open, including the
+card-registry gaps: those make a month noisy, this makes a month
+unreachable.
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
 Four of the five known cards (0113, 6013, 9693, 8311) carry no legal entity,
