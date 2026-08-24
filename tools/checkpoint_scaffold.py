@@ -296,9 +296,66 @@ def append_register_rows(root: Path, payload: dict) -> Path | None:
 
 
 DATA_ROW = re.compile(r"^\|\s*(\d{4}-\d{2}-\d{2})\s*(?<!\\)\|")
+CELL_SPLIT = re.compile(r"(?<!\\)\|")
+
+# Windows the size advisory may recommend when the default 60-day cutoff would
+# archive nothing. Floored at 14 days so an active session's own working window
+# is never archived out from under it. Longest first: the ladder is searched in
+# order, so the most conservative cutoff that does the job wins.
+ARCHIVE_LADDER = (60, 45, 30, 21, 14)
 
 
-def archive_register(root: Path, days: int) -> int:
+def _register_rows(path: Path) -> list[tuple[str, bool, int]]:
+    """(date, resolved, byte length incl. newline) for every data row."""
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        m = DATA_ROW.match(line)
+        if not m:
+            continue
+        cells = CELL_SPLIT.split(line)
+        resolved = cells[5].strip() if len(cells) > 6 else ""
+        rows.append(
+            (m.group(1), resolved.startswith("Yes"), len((line + "\n").encode("utf-8")))
+        )
+    return rows
+
+
+def plan_archive(path: Path, size: int, target: int) -> dict | None:
+    """What the archiver could ACTUALLY do, at the default cutoff or a shorter
+    sanctioned one.
+
+    Returns None when no window in the ladder moves a single row, i.e. the
+    archiver would print "nothing to archive" and change nothing. The
+    >200 KB advisory used to fire on every checkpoint regardless: on
+    2026-08-24 the register was 361 KB while `archive-register` reported
+    "nothing to archive (cutoff 2026-06-25)", because the pre-June rows had
+    already been archived and every remaining resolved row was newer than the
+    default 60-day cutoff. An advisory that fires forever and cannot be acted
+    on trains you to skip the whole block, so it now either names a cutoff
+    that works or stays silent.
+    """
+    rows = _register_rows(path)
+    today = dt.date.today()
+    options = []
+    for days in ARCHIVE_LADDER:
+        cutoff = (today - dt.timedelta(days=days)).isoformat()
+        movable = [b for (d, resolved, b) in rows if resolved and d < cutoff]
+        if movable:
+            options.append({
+                "days": days,
+                "cutoff": cutoff,
+                "rows": len(movable),
+                "after": size - sum(movable),
+            })
+    if not options:
+        return None
+    for opt in options:  # ladder order: most conservative window that clears it
+        if opt["after"] <= target:
+            return dict(opt, clears=True)
+    return dict(options[-1], clears=False)  # shortest window moves the most
+
+
+def archive_register(root: Path, days: int, dry_run: bool = False) -> int:
     path = root / "docs" / "friction-register.md"
     if not path.exists():
         print("no friction-register.md")
@@ -316,6 +373,18 @@ def archive_register(root: Path, days: int) -> int:
         keep.append(line)
     if not move:
         print(f"nothing to archive (cutoff {cutoff})")
+        # Don't dead-end: if a shorter sanctioned window WOULD move rows, name
+        # it. Running the default and being told "nothing to archive" on a
+        # 361 KB register was the 2026-08-24 dead end.
+        plan = plan_archive(path, path.stat().st_size, REGISTER_ADVISORY_BYTES)
+        if plan and plan["days"] != days:
+            print(f"  `--days {plan['days']}` would move {plan['rows']} resolved "
+                  f"rows older than {plan['cutoff']}, leaving ~{plan['after']:,} bytes")
+        return 0
+    if dry_run:
+        freed = sum(len((ln + "\n").encode("utf-8")) for ln in move)
+        print(f"DRY RUN: would archive {len(move)} resolved rows older than "
+              f"{cutoff}, leaving ~{path.stat().st_size - freed:,} bytes")
         return 0
     archive = root / "docs" / "friction-register-archive.md"
     atext = archive.read_text(encoding="utf-8") if archive.exists() else ARCHIVE_HEADER
@@ -387,8 +456,23 @@ def cmd_pre(root: Path, args: argparse.Namespace) -> int:
         size = reg.stat().st_size
         print(f"\n== register ==\nfriction-register.md: {size:,} bytes")
         if size > REGISTER_ADVISORY_BYTES:
-            print("ADVISORY: register exceeds 200 KB — run "
-                  "`uv run tools/checkpoint_scaffold.py archive-register` in this checkpoint's docs PR")
+            plan = plan_archive(reg, size, REGISTER_ADVISORY_BYTES)
+            if plan is None:
+                # Suppressed on purpose: the archiver would be a no-op, so an
+                # ADVISORY line here is an instruction to run a command that
+                # does nothing, every checkpoint, until the cutoff rolls.
+                print(f"register exceeds 200 KB, but no resolved row is older than "
+                      f"the shortest sanctioned {ARCHIVE_LADDER[-1]}-day window — "
+                      "nothing to archive this checkpoint")
+            else:
+                tail = "" if plan["clears"] else (
+                    " (still above 200 KB after: the remainder is unresolved rows, "
+                    "which the archiver never moves)")
+                print(f"ADVISORY: register exceeds 200 KB — run "
+                      f"`uv run tools/checkpoint_scaffold.py archive-register "
+                      f"--days {plan['days']}` in this checkpoint's docs PR: moves "
+                      f"{plan['rows']} resolved rows older than {plan['cutoff']}, "
+                      f"leaving ~{plan['after']:,} bytes{tail}")
         if args.register_types:
             wanted = [t.strip() for t in args.register_types.split(",") if t.strip()]
             hits = [ln for ln in reg.read_text(encoding="utf-8").splitlines()
@@ -460,6 +544,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p_arc = sub.add_parser("archive-register", help="move old resolved rows to the archive")
     p_arc.add_argument("--days", type=int, default=60)
+    p_arc.add_argument("--dry-run", action="store_true",
+                       help="report what would move; write nothing")
 
     args = ap.parse_args(argv)
     root = Path(args.root).resolve()
@@ -467,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_pre(root, args)
     if args.cmd == "finalize":
         return cmd_finalize(root, args)
-    return archive_register(root, args.days)
+    return archive_register(root, args.days, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

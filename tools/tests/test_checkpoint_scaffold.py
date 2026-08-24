@@ -155,6 +155,102 @@ class TestArchiveRegister:
         assert cs.main(["--root", str(tmp_path), "archive-register"]) == 0
         assert not (docs / "friction-register-archive.md").exists()
 
+    def test_dry_run_writes_nothing(self, tmp_path: Path):
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        old = (dt.date.today() - dt.timedelta(days=120)).isoformat()
+        reg = docs / "friction-register.md"
+        reg.write_text(f"| {old} | a | t | old resolved | Yes | f | No |\n", encoding="utf-8")
+        before = reg.read_text(encoding="utf-8")
+        assert cs.main(["--root", str(tmp_path), "archive-register", "--dry-run"]) == 0
+        assert reg.read_text(encoding="utf-8") == before
+        assert not (docs / "friction-register-archive.md").exists()
+
+    def test_default_noop_names_a_window_that_would_work(self, tmp_path, capsys):
+        # The 2026-08-24 dead end: running the default on a big register and
+        # being told only "nothing to archive".
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        d40 = (dt.date.today() - dt.timedelta(days=40)).isoformat()
+        (docs / "friction-register.md").write_text(
+            "\n".join(f"| {d40} | a | t | row {i} | Yes | f | No |" for i in range(5)) + "\n",
+            encoding="utf-8",
+        )
+        assert cs.main(["--root", str(tmp_path), "archive-register", "--days", "60"]) == 0
+        out = capsys.readouterr().out
+        assert "nothing to archive" in out
+        assert "--days 30" in out and "5 resolved rows" in out
+
+
+class TestPlanArchive:
+    """The size advisory must be actionable or absent. On 2026-08-24 it was
+    neither: 361 KB register, `archive-register` reporting "nothing to archive
+    (cutoff 2026-06-25)" because every resolved row was newer than the default
+    60-day cutoff, and the advisory firing on every checkpoint regardless."""
+
+    def _register(self, tmp_path: Path, spec: list[tuple[int, bool, int]]) -> Path:
+        """spec: (age_in_days, resolved, how_many)."""
+        docs = tmp_path / "docs"
+        docs.mkdir(exist_ok=True)
+        lines = ["# Friction Register", ""]
+        for age, resolved, count in spec:
+            day = (dt.date.today() - dt.timedelta(days=age)).isoformat()
+            flag = "Yes (fixed)" if resolved else "No"
+            pad = "x" * 600  # rows big enough to cross the 200 KB threshold
+            lines += [f"| {day} | a | t | {pad} | {flag} | structural | No |"] * count
+        reg = docs / "friction-register.md"
+        reg.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return reg
+
+    def test_none_when_the_archiver_would_be_a_noop(self, tmp_path: Path):
+        # Everything resolved is inside the newest window -> nothing to say.
+        reg = self._register(tmp_path, [(3, True, 400), (2, False, 50)])
+        assert cs.plan_archive(reg, reg.stat().st_size, 200_000) is None
+
+    def test_rolls_to_a_shorter_window_that_clears_the_threshold(self, tmp_path: Path):
+        # The real 2026-08-24 shape: nothing movable at 60 days, plenty at 30.
+        reg = self._register(tmp_path, [(40, True, 300), (2, False, 100)])
+        size = reg.stat().st_size
+        assert size > 200_000
+        plan = cs.plan_archive(reg, size, 200_000)
+        assert plan is not None
+        assert plan["days"] == 30 and plan["clears"] is True
+        assert plan["rows"] == 300 and plan["after"] <= 200_000
+
+    def test_prefers_the_most_conservative_window_that_works(self, tmp_path: Path):
+        # Movable at 60 already clears it: do not recommend a shorter cutoff.
+        reg = self._register(tmp_path, [(200, True, 400), (2, False, 100)])
+        plan = cs.plan_archive(reg, reg.stat().st_size, 200_000)
+        assert plan["days"] == 60 and plan["clears"] is True
+
+    def test_never_recommends_below_the_ladder_floor(self, tmp_path: Path):
+        assert min(cs.ARCHIVE_LADDER) == 14
+        reg = self._register(tmp_path, [(10, True, 600)])
+        assert cs.plan_archive(reg, reg.stat().st_size, 200_000) is None
+
+    def test_partial_help_is_labelled_as_not_clearing(self, tmp_path: Path):
+        # Mostly UNRESOLVED rows: no cutoff can get under the threshold, so the
+        # plan must say so rather than promise a fix it cannot deliver.
+        reg = self._register(tmp_path, [(40, True, 20), (40, False, 500)])
+        plan = cs.plan_archive(reg, reg.stat().st_size, 200_000)
+        assert plan is not None and plan["clears"] is False
+        assert plan["after"] > 200_000
+
+    def test_advisory_is_suppressed_when_nothing_is_archivable(self, tmp_path, capsys):
+        self._register(tmp_path, [(3, True, 400), (2, False, 50)])
+        assert cs.main(["--root", str(tmp_path), "pre"]) == 0
+        out = capsys.readouterr().out
+        assert "ADVISORY" not in out
+        assert "nothing to archive this checkpoint" in out
+
+    def test_advisory_names_the_working_cutoff(self, tmp_path, capsys):
+        self._register(tmp_path, [(40, True, 300), (2, False, 100)])
+        assert cs.main(["--root", str(tmp_path), "pre"]) == 0
+        out = capsys.readouterr().out
+        assert "ADVISORY: register exceeds 200 KB" in out
+        assert "archive-register --days 30" in out
+        assert "300 resolved rows" in out
+
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
 class TestContextRootWorktree:

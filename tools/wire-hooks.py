@@ -149,6 +149,11 @@ CANONICAL_HOOKS = {
                 },
                 {
                     "type": "command",
+                    "command": _cmd(".claude/hooks/heredoc-size-gate.py"),
+                    "timeout": 10000,
+                },
+                {
+                    "type": "command",
                     "command": _cmd(".claude/hooks/git-stash-gate.py"),
                     "timeout": 10000,
                 },
@@ -291,6 +296,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "no-auto-commit-gate.py",
     "ruff-push-gate.py",
     "cd-guard.py",
+    "heredoc-size-gate.py",
     "git-stash-gate.py",
     "vercel-scope-gate.py",
     "em-dash-strip-gate.py",

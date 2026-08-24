@@ -34,7 +34,8 @@ enforcement layer, which had zero automated coverage before this suite:
 | `instantly-invasive-gate` (B5) | `test_instantly_invasive_gate.py` | behavioral (incl. -Method + compound read-then-mutate pin) |
 | `_shell.normalize_command` | `test_shell_normalize.py` | unit (PowerShell/.cmd matching-view normalizer) |
 | `post-action-gate` | `test_post_action_gate.py` | behavioral (ship/B2/streak boundaries, TMP-isolated counter) |
-| `gate-skip-detector` | `test_gate_skip_detector.py` | behavioral (pre-publish / iteration-3x / residue boundaries) |
+| `gate-skip-detector` | `test_gate_skip_detector.py` | behavioral (pre-publish / iteration-3x / residue boundaries; the 2026-08-24 streak-identity + CI-green false-positive pins) |
+| `heredoc-size-gate` | `test_heredoc_size_gate.py` | behavioral (size / triple-quote / python-backslash deny classes, silent-allow set, `HEREDOC_GATE_ALLOW` seam) |
 | `em-dash-strip-gate` | `test_em_dash_strip_gate.py` | scope unit + end-to-end |
 | `session-pressure-meter` + nac capture | `test_session_state_smoke.py` | wraps existing smoke |
 | `stop-b1-gate` | `test_stop_b1_gate.py` | behavioral |
