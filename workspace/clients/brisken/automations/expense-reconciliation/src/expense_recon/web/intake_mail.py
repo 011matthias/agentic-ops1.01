@@ -1212,7 +1212,16 @@ def annotate_status_view(rows: list[dict]) -> None:
                 kind = KIND_HELD
             else:
                 label = f"Waiting for {month}"
-        elif row.get("batch_deleted") and kind == KIND_DONE:
+        elif (
+            row.get("batch_deleted")
+            and kind == KIND_DONE
+            # A DISMISSED mail is terminal: an operator judged it junk, and
+            # that decision outranks where it used to live. Saying "the
+            # month it was added to was deleted" about it puts a task back
+            # on a row nobody owes anything for (live, 2026-08-25: two
+            # dismissed archives read as held with the Held badge at 0).
+            and str(row.get("status", "")) != STATUS_DISMISSED
+        ):
             kind, label = KIND_HELD, "The month it was added to was deleted"
         row["status_kind"] = kind
         row["status_label"] = label
