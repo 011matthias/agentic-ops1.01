@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-08-24
+updated: 2026-08-25
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
@@ -14,7 +14,7 @@ usable for Brisken. Read this whole brief before touching anything, then read
 `p1-improvement-backlog.md` beside it — that file, not this one, is the list of
 what to do next.
 
-## Where things stand (2026-08-24, end of session)
+## Where things stand (2026-08-25)
 
 **Backlog item 30 is fully shipped and deployed** (PRs #607, #608, #609; Fly
 **v90**), along with the out-of-Lovable half of the "Arriving" bug:
@@ -33,10 +33,10 @@ what to do next.
   api-contract **rule 5** now covers enum growth; `test_every_status_has_a_label`
   fails the suite on a new status until someone decides what it SAYS.
 
-**Backlog item 29 PR 2a (stable transaction identity) is shipped**, the
-prerequisite the rest of the living month sits on; see direction 1 below.
+**Backlog item 29 PR 2a (stable transaction identity) and PR 2b-1
+(`rematch_month` + the judgment cache) are shipped**; see direction 1 below.
 
-Baselines: suite **1284 passed / 2 skipped**, calibrate green, ruff (E9,F)
+Baselines: suite **1297 passed / 2 skipped**, calibrate green, ruff (E9,F)
 clean on the diff. Worktree `C:\Users\neuma_p1qrsic\Repo\agentic-ops1-recon`,
 app root `workspace/clients/brisken/automations/expense-reconciliation`.
 
@@ -76,11 +76,24 @@ docstrings before touching identity — the stamp is a post-pass for a
 reason (sign canonicalization) and the `-{n}` occurrence separator is not
 a `:` for a reason (the sheet writeback reads a trailing `:N` as a row).
 
-What remains: append-capable statement uploads (per card, several times a
-month, content-id dedupe), `has_statement` no longer closing the month, and
-incremental re-match preserving operator decisions and persisting LLM
-FX/ambiguous judgments by (transaction_id, document_id) so a re-match never
-re-spends on a pair it already judged.
+**PR 2b-1 is also done.** `service.rematch_month` is the one function that
+reconciles what a month currently holds; the attach path is its first caller
+and every incremental path in 2b-2 calls it rather than growing a second
+copy. `web/judgment_cache.py` means a re-match only pays for pairs it has
+not judged before.
+
+What remains (PR 2b-2): append-capable statement uploads (per card, several
+times a month, content-id dedupe), `has_statement` no longer closing the
+month, and wiring the incremental re-match to receipt arrivals.
+
+Start 2b-2 by triaging the `has_statement` guard, NOT by lifting it. It
+refuses at nine call sites in three classes: three that must open (receipts,
+statement, set-aside restore), two that should open only because a re-match
+now follows (cards, refresh-master-data), and four expense-edit overlay
+routes that must stay closed or get a real decision, because the attach
+bakes edits into the snapshot receipts and reopening the overlay over a
+baked pool risks double-application. The plan reads as if it were one
+switch. It is not.
 
 One interaction PR 2a pinned deliberately and 2b has to handle: a file
 whose SIGN inference differs between a partial and a full upload yields

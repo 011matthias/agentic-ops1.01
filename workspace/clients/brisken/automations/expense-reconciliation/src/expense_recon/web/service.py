@@ -5728,29 +5728,24 @@ def execute_statement_attach(
     on_stage=None,
 ) -> dict:
     """Graduate an expense batch into a reconciliation: load the attached
-    statement, run the SAME matching + judgment + receiptless-charge
-    categorization primitives `reconcile()` uses over the batch's
-    reviewer-corrected receipt pool, and persist transactions + outcome
-    onto the run. From here every statement-mode surface (workbench,
-    decisions, confirm-ready, journal/report/reconciled exports) works on
-    this run unchanged; the expense pool is frozen (edits already BAKED
-    into the snapshot receipts here — the edit rows stay for learning, and
-    `apply_expense_edits`' add-guard keeps the overlay idempotent).
+    statement, then hand off to `rematch_month`, which runs the SAME
+    matching + judgment + receiptless-charge categorization primitives
+    `reconcile()` uses over the batch's reviewer-corrected receipt pool
+    and persists transactions + outcome onto the run. From here every
+    statement-mode surface (workbench, decisions, confirm-ready,
+    journal/report/reconciled exports) works on this run unchanged.
+
+    Since PR 2b-1 this function owns only the STATEMENT half: resolving
+    the statement config and reading the file. Everything after that
+    lives in `rematch_month`, because the living month re-runs exactly
+    that work whenever a receipt arrives or another statement is
+    appended, and it must be one implementation rather than two that
+    drift.
 
     `reconcile()` itself is untouched: this reuses the module-level
     pipeline pieces exactly as the folder-ingest re-match already does.
     """
-    from ..categorize import categorize_receipts  # noqa: F401 (parity import)
-    from ..categorize_charges import categorize_charges
-    from ..cli import (
-        _apply_ambiguous_judgment,
-        _apply_judgment,
-        _apply_unmatched_judgment,
-        _load_statement,
-        _resolve_categorizer_chart,
-        build_match_cfg,
-    )
-    from ..matching.deterministic import MatchingConfig, match_month
+    from ..cli import _load_statement
 
     def _stage(name: str) -> None:
         if on_stage is not None:
@@ -5761,6 +5756,97 @@ def execute_statement_attach(
 
     work_dir = Path(run.work_dir)
     cfg = run.config or {}
+
+    entity = resolve_entity(form, settings)
+    stmt_block: dict = {
+        "path": stmt_name,
+        "legal_entity_id": entity,
+        "account_card_currency": form.account_card_currency or "USD",
+    }
+    if column_map is not None:
+        stmt_block["account_id"] = form.account_id or "card"
+        stmt_block["column_map"] = column_map
+        if form.sheet_name:
+            stmt_block["sheet_name"] = form.sheet_name
+    new_cfg = {**cfg, "statement": stmt_block}
+    new_cfg = apply_master_data(new_cfg, form, settings)
+
+    _stage("reading")
+    try:
+        transactions, stmt_issues = _load_statement(new_cfg, work_dir)
+    except ConfigError as exc:
+        raise RunInputError(str(exc)) from exc
+
+    return rematch_month(
+        store,
+        run,
+        transactions=transactions,
+        cfg=new_cfg,
+        entity=entity,
+        statement_issues=stmt_issues,
+        now_iso=now_iso,
+        learning_db_path=learning_db_path,
+        on_stage=on_stage,
+        require_no_statement=True,
+    )
+
+
+def rematch_month(
+    store: RunStore,
+    run: RunRow,
+    *,
+    transactions: list,
+    cfg: dict,
+    entity: str,
+    statement_issues=(),
+    now_iso: str = "",
+    learning_db_path: Path | None = None,
+    on_stage=None,
+    require_no_statement: bool = False,
+) -> dict:
+    """Match a month's transactions against its receipt pool and commit.
+
+    Extracted from `execute_statement_attach` (PR 2b-1) so the living
+    month has ONE implementation of "reconcile what this month currently
+    holds". The attach path calls it with transactions freshly read off a
+    statement file; the incremental paths call it with the transactions
+    the snapshot already carries, after a receipt arrives or another
+    statement is appended.
+
+    The sequence is unchanged from the attach path it came from: bake the
+    reviewer's corrections into the receipt pool the matcher sees, match,
+    judge, categorize receiptless charges, then commit under
+    `_BATCH_ADD_LOCK` against a FRESH re-read of the row.
+
+    `require_no_statement` is the one thing that differs by caller. The
+    attach path must refuse if another attach won the race while it
+    matched; a re-match must not, because on that path a statement is
+    supposed to be there already.
+
+    LLM judgments are memoized in the snapshot by `JudgmentCache`, so a
+    re-match only pays for pairs it has not judged before. On the attach
+    path the cache starts empty and nothing changes.
+    """
+    from ..categorize import categorize_receipts  # noqa: F401 (parity import)
+    from ..categorize_charges import categorize_charges
+    from ..cli import (
+        _apply_ambiguous_judgment,
+        _apply_judgment,
+        _apply_unmatched_judgment,
+        _resolve_categorizer_chart,
+        build_match_cfg,
+    )
+    from ..matching.deterministic import MatchingConfig, match_month
+    from .judgment_cache import JudgmentCache
+
+    def _stage(name: str) -> None:
+        if on_stage is not None:
+            try:
+                on_stage(name)
+            except Exception:  # noqa: BLE001 - progress is best-effort
+                pass
+
+    work_dir = Path(run.work_dir)
     batch_entity = (cfg.get("expense") or {}).get("legal_entity_id", "")
 
     # Bake the reviewer's truth into the receipt pool the matcher sees.
@@ -5790,33 +5876,17 @@ def execute_statement_attach(
         for r in receipts
     ]
 
-    entity = resolve_entity(form, settings)
-    stmt_block: dict = {
-        "path": stmt_name,
-        "legal_entity_id": entity,
-        "account_card_currency": form.account_card_currency or "USD",
-    }
-    if column_map is not None:
-        stmt_block["account_id"] = form.account_id or "card"
-        stmt_block["column_map"] = column_map
-        if form.sheet_name:
-            stmt_block["sheet_name"] = form.sheet_name
-    new_cfg = {**cfg, "statement": stmt_block}
-    new_cfg = apply_master_data(new_cfg, form, settings)
-
-    llm_client, tracker, _source = _batch_llm_client(new_cfg)
-
-    _stage("reading")
-    try:
-        transactions, stmt_issues = _load_statement(new_cfg, work_dir)
-    except ConfigError as exc:
-        raise RunInputError(str(exc)) from exc
+    llm_client, tracker, _source = _batch_llm_client(cfg)
+    # Judgments already paid for on this run answer from the snapshot;
+    # only genuinely new pairs reach the model.
+    judgments = JudgmentCache.from_snapshot(run.snapshot)
+    llm_client = judgments.wrap(llm_client)
 
     match_memory = (
         MatchMemory.from_db_path(learning_db_path)
         if learning_db_path is not None else None
     )
-    match_cfg = build_match_cfg(new_cfg, work_dir, match_memory)
+    match_cfg = build_match_cfg(cfg, work_dir, match_memory)
     _stage("matching")
     outcome = match_month(transactions, receipts, match_cfg)
 
@@ -5830,7 +5900,7 @@ def execute_statement_attach(
     _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
     _apply_unmatched_judgment(
         outcome, transactions, receipts, llm_client,
-        match_cfg or MatchingConfig(), new_cfg,
+        match_cfg or MatchingConfig(), cfg,
     )
 
     learned = (
@@ -5839,7 +5909,7 @@ def execute_statement_attach(
     )
     try:
         _, account_labels, _scope = _resolve_categorizer_chart(
-            new_cfg, work_dir, None, {}
+            cfg, work_dir, None, {}
         )
     except Exception:  # noqa: BLE001 - labels degrade, attach never breaks
         account_labels = None
@@ -5853,7 +5923,8 @@ def execute_statement_attach(
 
     _stage("saving")
     all_issues = list(parse_errors) + [
-        (i.file_name, i.line_number, i.message, i.severity) for i in stmt_issues
+        (i.file_name, i.line_number, i.message, i.severity)
+        for i in statement_issues
     ]
     base = snapshot_to_dict(transactions, receipts, outcome, all_issues)
 
@@ -5869,13 +5940,13 @@ def execute_statement_attach(
         fresh = store.get_run(run.run_id)
         if fresh is None:
             raise RunInputError("this batch was deleted while it reconciled")
-        if has_statement(fresh):
+        if require_no_statement and has_statement(fresh):
             raise RunInputError(
                 "another statement attach completed on this batch first"
             )
         fresh_cfg = fresh.config or {}
         if fresh_cfg.get("expense") is not None:
-            new_cfg = {**new_cfg, "expense": fresh_cfg["expense"]}
+            cfg = {**cfg, "expense": fresh_cfg["expense"]}
         known_ids = {r.document_id for r in receipts0}
         extra = [
             rd
@@ -5903,6 +5974,20 @@ def execute_statement_attach(
             }
         else:
             new_snapshot.pop("charge_categorizations", None)
+        # Judgments MERGE onto the fresh row rather than replacing it,
+        # for the same reason the receipt pool does above: this match ran
+        # for minutes on a row read before it started, and a re-match that
+        # committed meanwhile paid for entries of its own. Overwriting
+        # would throw those away and re-buy them later. Ours win on a key
+        # collision, which is a no-op — the same key means the same call.
+        merged_judgments = dict(
+            (fresh.snapshot or {}).get("llm_judgments") or {}
+        )
+        merged_judgments.update(judgments.to_dict())
+        if merged_judgments:
+            new_snapshot["llm_judgments"] = merged_judgments
+        else:
+            new_snapshot.pop("llm_judgments", None)
         n_tx = len(transactions)
         n_review = len(
             {m.transaction_id for m in outcome.judgment_required}
@@ -5941,10 +6026,10 @@ def execute_statement_attach(
             "has_statement": True,
         }
         summary["setup_advisories"] = _setup_advisories(
-            new_cfg, transactions, receipts,
-            has_coa=bool(new_cfg.get("coa_validation")),
+            cfg, transactions, receipts,
+            has_coa=bool(cfg.get("coa_validation")),
         )
-        store.update_run_config(run.run_id, new_cfg)
+        store.update_run_config(run.run_id, cfg)
         store.update_run_snapshot(run.run_id, new_snapshot)
         store.update_run_summary(run.run_id, summary)
 
@@ -5978,4 +6063,6 @@ def execute_statement_attach(
         "n_unmatched_tx": len(outcome.unmatched_transactions),
         "n_refunds": len(outcome.refunds),
         "entity_mismatch": entity_mismatch,
+        "judgments_reused": judgments.hits,
+        "judgments_new": judgments.misses,
     }
