@@ -159,3 +159,51 @@ existing one.
 4. **Re-pin.** `tests/test_view_contract.py` fails until the contract table and
    this file agree with the payload. That failure is the reminder, not a
    formality.
+
+## The month pool: fields added 2026-08-24
+
+Mail is addressed by the receipt's PRINTED month, not by whichever batch is
+open. Mail whose month has no batch rests in the pool (status `pooled`) and
+is claimed when that month is created or renamed into. Every field below is
+PARALLEL (rule 1): nothing existing changed type or meaning, so a stale SPA
+renders exactly what it rendered before.
+
+### `GET /api/inbound/log`
+
+| Path | Type | Question it answers |
+|---|---|---|
+| `entries[].pool_month` | string `"YYYY-MM"` | which month this mail's receipts belong to |
+| `entries[].receipt_month_source` | string | how that month was decided: `receipt` (a printed date), `arrival` (none readable), `implausible-receipt` (a printed date outside the plausibility window) |
+| `entries[].mixed_months` | `true` (absent otherwise) | this mail spans more than one month, and routed by its earliest |
+| `entries[].pool_month_state` | string | pooled rows only: `no_batch`, `open` (a claim is imminent), `closed` (the month is already reconciled) |
+| `n_pooled` | number | top-level, beside `n_held` |
+
+`pooled` is a RESTING state, deliberately not `held_*`: nothing is wrong with
+the mail, its month simply is not open yet. It therefore does NOT count toward
+`n_held`, and the Held badge cannot be made to reach zero by fixing it. A
+pooled row carries no `batch_id` and no `expenses`, because it belongs to no
+batch yet.
+
+### Other endpoints
+
+| Endpoint | Field | Type | Meaning |
+|---|---|---|---|
+| `POST /api/expense-batches` | `month` | string \| null | the month this label names; `null` means it names none |
+| `POST /api/expense-batches` | `advisory` | string (only when `month` is null) | prose saying mailed receipts cannot join this batch until it is renamed |
+| `POST /api/runs/{id}/rename` | `month` | string \| null | same, after the rename; a non-null value means the pool was just claimed |
+| `POST /api/runs/{id}/delete` | `pooled_back` | number | month-stamped mail returned to the pool |
+| `POST /api/inbound/replay-held` | `pooled` | number | held mail parked in the pool by this sweep |
+| `POST /api/inbound/replay-held` | `claimed` | number | pooled mail ingested by this sweep |
+| `POST /api/inbound/replay-held` | `still_pooled` | number | pool size after both halves |
+| `POST /api/inbound/{archive}/render-ingest` | `pool_month` | string | present on both outcomes; with `status: "pooled"` the render succeeded and is waiting |
+
+`inbound_marked` on delete keeps its OLD meaning (legacy mail stamped "month
+deleted") and is normally `0` now; `pooled_back` is the number that moves.
+Reading `inbound_marked` as "mail affected" was true before this change and is
+not any more, which is exactly the second-meaning failure the counts section
+above warns about; hence the parallel name.
+
+`render-ingest` no longer returns 409 when no month is open. The render always
+happens and the result always lands somewhere, so a 409 from that endpoint now
+means only what it always meant for the other guards: the mail is not in a
+renderable state.

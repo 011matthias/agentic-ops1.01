@@ -19,25 +19,33 @@ address; the SMTP listener (`smtp_server.py`) drives this module:
      250 is answered (the ack means custody: a crash after 250 can no
      longer lose acknowledged mail),
   4. `route_archived` resolves WHO submitted it (To-alias beats
-     From-sender), picks the newest OPEN expense batch, and runs the
-     existing incremental add (dedupe, quarantine, categorize unchanged)
-     stamping per-file intake provenance; the archive's status flips to
-     ``ingested`` only when the job actually succeeded, else
-     ``held_failed`` so replay can drain it,
+     From-sender), reads the receipts' PRINTED dates at arrival (full
+     `parse_receipt_file` extraction, so the content-addressed cache is
+     already warm when the batch ingests the same bytes), and routes BY
+     MONTH (owner directive 2026-08-24): the mail ingests into the open
+     batch whose label names its month, else it rests in the pool
+     (status ``pooled``) until that month is opened — it never lands in
+     "whatever month happens to be open". `claim_pooled` is the pull
+     half: it drains matching pooled mail when a month batch is created
+     or renamed, at startup, and on the replay endpoint. The archive's
+     status flips to ``ingested`` only when the job actually succeeded,
+     else ``held_failed`` so replay can drain it,
   5. spend/abuse guards: an in-memory day budget reserved at acceptance
      time (raceproof within the process), an in-flight route ceiling, and
      a free-disk floor — each refusal is a 4xx/5xx SMTP answer, never a
      silent drop.
 
-Held mail (no open batch, body-only, no valid files, failed/interrupted
-jobs) is archived + visible via ``GET /api/inbound/log``;
-``POST /api/inbound/replay-held`` re-routes it once a batch exists.
+Held mail (body-only, no valid files, failed/interrupted jobs) and
+pooled mail are archived + visible via ``GET /api/inbound/log``;
+``POST /api/inbound/replay-held`` re-routes held mail and claims
+pooled mail whose month is open now.
 
 Decision logic is pure/sync (testable without asyncio); only the SMTP
 transport in `smtp_server.py` is async.
 """
 from __future__ import annotations
 
+import calendar
 import hashlib
 import json
 import logging
@@ -47,12 +55,13 @@ import shutil
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from email import policy
 from email.parser import BytesParser
 from email.utils import getaddresses, parseaddr
 from pathlib import Path
 
+from ..batch_period import month_from_label
 from . import graph_notify
 from .service import (
     FOLDER_RECEIPT_SUFFIXES,
@@ -89,15 +98,29 @@ MIN_FREE_DISK_BYTES = 500 * 1024 * 1024
 STATUS_RECEIVED = "received"
 STATUS_INGESTED = "ingested"
 STATUS_REPLAYED = "replayed"
-HELD_NO_BATCH = "held_no_batch"        # replayable
+HELD_NO_BATCH = "held_no_batch"        # legacy (pre-pool); replayable
 HELD_FAILED = "held_failed"            # job errored/interrupted; replayable
 HELD_BODY_ONLY = "held_body_only"      # needs body->PDF rendering (round 2)
 HELD_NO_VALID_FILES = "held_no_valid_files"
 STATUS_DISMISSED = "dismissed"         # operator judged it junk; terminal
 STATUS_RENDERING = "rendering"         # body->PDF ingest in flight (C2)
 STATUS_REINGESTING = "re_ingesting"    # stranded-mail re-ingest in flight
+# The month pool (owner directive 2026-08-24). "pooled" is a RESTING state,
+# deliberately not held_*: nothing is wrong with the mail, its month just
+# is not open yet. "routing"/"claiming" are transient CAS states that make
+# arrival routing and pool claiming single-winner.
+STATUS_POOLED = "pooled"
+STATUS_ROUTING = "routing"
+STATUS_CLAIMING = "claiming"
 REPLAYABLE = {HELD_NO_BATCH, HELD_FAILED}
 STALE_RECEIVED_SECONDS = 600
+
+# Plausibility clamp on a receipt's printed date (owner ruling 2026-08-24):
+# older than ~12 months before arrival, or in the future, counts as
+# unreadable and the mail files under its ARRIVAL month instead. One day of
+# future grace absorbs timezone skew on a same-day receipt.
+_IMPLAUSIBLE_PAST_DAYS = 366
+_FUTURE_GRACE_DAYS = 1
 
 
 @dataclass(frozen=True)
@@ -473,6 +496,14 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
                 row["skipped"] = meta["skipped"]
             if meta.get("error"):
                 row["error"] = meta["error"]
+            # Month-pool stamps (2026-08-24): which month this mail's
+            # receipts belong to, and how that month was decided.
+            if meta.get("receipt_month"):
+                row["pool_month"] = meta["receipt_month"]
+            if meta.get("receipt_month_source"):
+                row["receipt_month_source"] = meta["receipt_month_source"]
+            if meta.get("mixed_months"):
+                row["mixed_months"] = True
     return rows
 
 
@@ -586,31 +617,72 @@ def _archive_dir(data_root: Path, name: str) -> Path | None:
     return d if d.is_dir() else None
 
 
-def mark_batch_deleted(data_root: Path, batch_id: str) -> int:
-    """Stamp ``batch_deleted`` on every inbound archive whose mail routed
-    into ``batch_id`` (the delete-month cascade). The mail archives
+def _archive_attachments(arch: Path) -> list[tuple[str, bytes]]:
+    """The archive's ingestable files: parts/ as delivered (``NNN__``
+    prefix stripped), else the rendered body PDF when that is what the
+    mail's content became (a pooled body-only mail claims with it)."""
+    parts_dir = arch / "parts"
+    out = [
+        (re.sub(r"^\d{3}__", "", p.name), p.read_bytes())
+        for p in sorted(parts_dir.iterdir())
+        if p.is_file()
+    ] if parts_dir.is_dir() else []
+    if not out and (arch / "rendered-body.pdf").is_file():
+        out = [("rendered-body.pdf", (arch / "rendered-body.pdf").read_bytes())]
+    return out
+
+
+def pool_deleted_batch(data_root: Path, batch_id: str) -> tuple[int, int]:
+    """Delete-month cascade, pool-aware (2026-08-24). The mail archives
     themselves are NEVER deleted — custody and retention hold regardless
-    of what happens to the month; the stamp lets the intake log say "month
-    deleted" instead of misreporting the mail's rows as operator-removed.
-    Returns the number of archives stamped."""
+    of what happens to the month.
+
+    Mail that carries a ``receipt_month`` stamp returns to the POOL:
+    re-creating the month re-claims it automatically, which supersedes the
+    item-19 manual re-ingest path for month-stamped mail. The moment the
+    month was deleted stays recorded (``batch_deleted_at``) but the row
+    does not say "month deleted" — the mail is simply waiting again.
+
+    Legacy mail (routed before month stamps existed) keeps the
+    ``batch_deleted`` stamp and the explicit re-ingest path. Returns
+    ``(pooled_back, stamped)``."""
     root = inbound_root(data_root)
     if not root.is_dir():
-        return 0
-    n = 0
+        return 0, 0
+    pooled_back = stamped = 0
     for arch in root.iterdir():
         if not arch.is_dir():
             continue
         meta = _read_meta(arch)
         if str(meta.get("batch_id") or "") != str(batch_id):
             continue
+        if meta.get("receipt_month") and _archive_attachments(arch):
+            applied, _meta = _transition_meta(
+                arch,
+                lambda m: str(m.get("status", "")) in {
+                    STATUS_INGESTED, STATUS_REPLAYED, HELD_FAILED,
+                },
+                {
+                    "status": STATUS_POOLED, "batch_id": "",
+                    "batch_deleted": False, "batch_deleted_at": _now_iso(),
+                    # The rows this mail created went with the month; the
+                    # next claim writes the new ones.
+                    "documents": [],
+                },
+            )
+            if applied:
+                pooled_back += 1
+                continue
+            # Mid-flight states (rendering/claiming/...) fall through to
+            # the legacy stamp; their own job's delete guard flips them.
         if meta.get("batch_deleted"):
             continue
         _update_meta(arch, {
             "batch_deleted": True,
             "batch_deleted_at": _now_iso(),
         })
-        n += 1
-    return n
+        stamped += 1
+    return pooled_back, stamped
 
 
 def archive_incoming(
@@ -663,10 +735,23 @@ def _inbound_is_auto_generated(arch: Path) -> bool:
     return any(t in local for t in _NO_REPLY_LOCALS)
 
 
+def _month_human(month: str) -> str:
+    """"2026-04" -> "April 2026"; the raw string when malformed."""
+    ym = _ym(month)
+    if ym is None:
+        return month
+    return f"{calendar.month_name[ym[1]]} {ym[0]}"
+
+
 def _maybe_ack(db_path: Path, arch: Path) -> None:
-    """Confirmation to the submitting sender after a SUCCESSFUL ingest.
-    Recipient = the real envelope/header sender recorded at custody time
-    (never the alias).
+    """Confirmation to the submitting sender once the mail reached a good
+    resting place: ingested into its month, or pooled for a month that is
+    not open yet. Outcome-aware (2026-08-24): the ack NAMES the month, and
+    a pooled ack says the receipt joins that month automatically — so a
+    sender never reads "received" as "someone still has to file this".
+    Idempotent per archive via ``ack_at`` — a pooled mail that is claimed
+    later is not acked twice. Recipient = the real envelope/header sender
+    recorded at custody time (never the alias).
 
     Since submission opened to any sender (2026-08-23), that address can be
     external and forged — so `graph_notify.send_mail`'s own @brisken.com
@@ -676,19 +761,49 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
     try:
         with RunStore(db_path) as store:
             cfg = IntakeConfig.from_settings(store.get_settings())
+            meta = _read_meta(arch)
+            batch_label = ""
+            if meta.get("batch_id"):
+                run = store.get_run(str(meta["batch_id"]))
+                if run is not None:
+                    batch_label = (run.label or "").strip()
         if not cfg.auto_ack or not graph_notify.enabled():
             return
-        meta = _read_meta(arch)
         if meta.get("ack_at") or _inbound_is_auto_generated(arch):
             return
         recipient = str(meta.get("from", "")).strip().lower()
         n = int(meta.get("n_files") or 0)
         subject = str(meta.get("subject") or "").strip()
+        month = str(meta.get("receipt_month") or "")
+        if meta.get("status") == STATUS_POOLED:
+            verb = "are" if n > 1 else "is"
+            landed = (
+                f" {verb} stored for {_month_human(month)} in the Brisken "
+                "expense tool, and will join that month's expense run "
+                "automatically when the month is opened."
+            )
+        elif batch_label:
+            landed = (
+                f' landed in the "{batch_label}" expense month in the '
+                "Brisken expense tool."
+            )
+        else:
+            landed = (
+                " landed in the open expense month in the Brisken "
+                "expense tool."
+            )
+        # A rendered body-only mail delivered no file, so counting files
+        # would tell its sender "0 file(s) ... landed", about work that
+        # did happen. Name the email itself instead.
+        lead = (
+            f"{n} file(s) from your email" if n
+            else "Your email"
+        )
         body = (
-            f"{n} file(s) from your email"
+            lead
             + (f' "{subject}"' if subject else "")
-            + " landed in the open expense month in the Brisken expense "
-            "tool. Nothing else to do; Criss reviews them with the "
+            + landed
+            + " Nothing else to do; Criss reviews them with the "
             "monthly run.\n\nAutomated confirmation from "
             f"receipts@{cfg.domain}."
         )
@@ -735,13 +850,210 @@ def _maybe_alert(db_path: Path, arch: Path, status: str) -> None:
 # ---------------------------------------------------------------- routing --
 
 def open_batch(store: RunStore):
-    """Newest expense batch without a statement attached, else None."""
+    """Newest expense batch without a statement attached, else None.
+
+    LEGACY selector: month routing (2026-08-24) replaced it for mail, but
+    it still answers "where would work land now" for the delete-month
+    response and remains the target of the item-19 re-ingest path."""
     for run in store.list_runs():
         if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
             continue
         if not has_statement(run):
             return run
     return None
+
+
+# The pool's arbiter. Arrival routing, claiming, replay re-routing and the
+# render path all ask the same question — "is this month's batch open?" —
+# and then act on the answer. Holding this lock across the QUESTION and the
+# status CAS is what makes the answer still true when the CAS lands, so a
+# batch created mid-arrival cannot produce both an ingest and a pooled row.
+# Ingest itself (vision, minutes) always runs OUTSIDE the hold.
+_POOL_LOCK = threading.Lock()
+
+
+def _ym(month: str) -> tuple[int, int] | None:
+    """"YYYY-MM" -> (year, month), else None."""
+    m = re.fullmatch(r"(20\d{2})-(0[1-9]|1[0-2])", str(month or "").strip())
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2))
+
+
+def _open_batch_for_month(store: RunStore, ym: tuple[int, int] | None):
+    """Newest OPEN expense batch whose label names exactly this month.
+
+    A batch whose label names no month (the default full-date label, a
+    free-text name) can never receive pooled mail — the batch-create
+    response carries an advisory for that, and a rename claims. A
+    statement-bearing batch does not count as open (PR 2 lifts this)."""
+    if ym is None:
+        return None
+    for run in store.list_runs():
+        if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if has_statement(run):
+            continue
+        if month_from_label(run.label) == ym:
+            return run
+    return None
+
+
+def month_batch_states(store: RunStore) -> dict[tuple[int, int], str]:
+    """month -> "open" | "closed" over the month-labelled expense batches
+    (closed = statement attached). An open batch wins a same-month tie."""
+    out: dict[tuple[int, int], str] = {}
+    for run in store.list_runs():
+        if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        ym = month_from_label(run.label)
+        if ym is None:
+            continue
+        state = "closed" if has_statement(run) else "open"
+        if out.get(ym) != "open":
+            out[ym] = state
+    return out
+
+
+def annotate_pool_state(store: RunStore, rows: list[dict]) -> int:
+    """Stamp ``pool_month_state`` ("no_batch" | "open" | "closed") on the
+    pooled rows of a read_log listing; returns the pooled count. "open" is
+    transient — an open month claims its pool on the next trigger."""
+    states = month_batch_states(store)
+    n = 0
+    for row in rows:
+        if str(row.get("status", "")) != STATUS_POOLED:
+            continue
+        n += 1
+        ym = _ym(str(row.get("pool_month") or ""))
+        row["pool_month_state"] = (
+            states.get(ym, "no_batch") if ym else "no_batch"
+        )
+    return n
+
+
+def _arrival_llm_client(settings: dict | None):
+    """LLM client for arrival-time extraction, composed EXACTLY the way a
+    batch config snapshots its client (same llm block incl. vision model,
+    same card list) — so the content-addressed extraction cache warmed
+    here answers the batch ingest of the same bytes for free. None when
+    no key is configured (the caller falls back to the arrival month)."""
+    from ..cards import cards_to_setting, effective_cards
+    from ..cards_provision import load_cards
+    from .service import VISION_MODEL, _batch_llm_client
+
+    cfg: dict = {
+        "llm": {
+            "provider": "openai", "model": "gpt-4o-mini",
+            "vision_model": VISION_MODEL,
+        },
+        "expense": {},
+    }
+    try:
+        composed = effective_cards(settings, load_cards())
+        if composed:
+            cfg["expense"]["cards"] = cards_to_setting(composed)
+    except Exception:  # noqa: BLE001 - cards salt the cache key; no gate
+        pass
+    client, _tracker, _source = _batch_llm_client(cfg)
+    return client
+
+
+def _extract_receipt_dates(files: list[Path], client) -> list[str]:
+    """ISO dates read off the delivered files via the FULL extraction
+    pipeline (not a date-only prompt: a second prompt would be a second
+    cache namespace and every mail would pay vision twice). A file that
+    fails to extract contributes no date."""
+    from ..ingest.receipts_folder import parse_receipt_file
+
+    dates: list[str] = []
+    for path in files:
+        try:
+            receipt = parse_receipt_file(path, "", client)
+        except Exception as exc:  # noqa: BLE001 - per-file, keep reading
+            log.warning("arrival extraction failed for %s: %s",
+                        path.name, exc)
+            continue
+        if receipt.detected_date is not None:
+            dates.append(receipt.detected_date.isoformat())
+    return dates
+
+
+def resolve_receipt_month(
+    dates: list[str], arrival_iso: str,
+) -> tuple[str, str, bool]:
+    """(month "YYYY-MM", source, mixed) per the 2026-08-24 ruling.
+
+    The receipt's own printed date decides its month; for a multi-receipt
+    mail the EARLIEST plausible date wins (the whole mail routes as one —
+    an April+May mail routes to April, no worse than the old
+    newest-open-batch routing). A printed date outside the plausibility
+    window counts as unreadable; with no plausible date the mail files
+    under its arrival month, source "implausible-receipt" when a clamp
+    fired and "arrival" when nothing was readable at all."""
+    try:
+        arrival = date.fromisoformat(str(arrival_iso)[:10])
+    except ValueError:
+        # A legacy or corrupt `at` stamp. The arrival is only the yardstick
+        # the clamp measures against, so today is a safe substitute — far
+        # better than raising through a sweep over every archive.
+        arrival = datetime.now(timezone.utc).date()
+    plausible: list[date] = []
+    clamped = False
+    for raw in dates:
+        try:
+            value = date.fromisoformat(str(raw)[:10])
+        except ValueError:
+            continue
+        if (arrival - value).days > _IMPLAUSIBLE_PAST_DAYS or \
+                (value - arrival).days > _FUTURE_GRACE_DAYS:
+            clamped = True
+            continue
+        plausible.append(value)
+    if not plausible:
+        return (
+            f"{arrival.year:04d}-{arrival.month:02d}",
+            "implausible-receipt" if clamped else "arrival",
+            False,
+        )
+    earliest = min(plausible)
+    months = {(v.year, v.month) for v in plausible}
+    return (
+        f"{earliest.year:04d}-{earliest.month:02d}",
+        "receipt",
+        len(months) > 1,
+    )
+
+
+_UNSET = object()
+
+
+def _month_stamps(
+    arch: Path, settings: dict | None, arrival_iso: str, *, client=_UNSET,
+) -> dict:
+    """Read the archive's parts (rendered body PDF as fallback) and return
+    the month-pool meta stamps. Uses the parts already on disk so the
+    bytes are read once and the sanitized names keep their suffixes.
+
+    Pass ``client`` to reuse one extraction client across a sweep of
+    archives (an explicit ``None`` means "no client, fall back to the
+    arrival month"); omit it and one is built per call."""
+    parts_dir = arch / "parts"
+    files = sorted(
+        p for p in parts_dir.iterdir() if p.is_file()
+    ) if parts_dir.is_dir() else []
+    if not files and (arch / "rendered-body.pdf").is_file():
+        files = [arch / "rendered-body.pdf"]
+    if client is _UNSET:
+        client = _arrival_llm_client(settings)
+    dates = _extract_receipt_dates(files, client) if client is not None else []
+    month, source, mixed = resolve_receipt_month(dates, arrival_iso)
+    return {
+        "receipt_month": month,
+        "receipt_month_source": source,
+        "receipt_dates": dates,
+        "mixed_months": mixed,
+    }
 
 
 def _ingest_job(
@@ -855,48 +1167,240 @@ def route_archived(
     *,
     synchronous: bool = False,
 ) -> dict:
-    """Routing step for an archived message: resolve person, pick the open
-    batch, hand off to the ingest job (which owns the ingested/held_failed
-    status flip). Every non-ingest outcome lands in meta as a held status."""
+    """Routing step for an archived message: resolve person, read the
+    receipts' printed dates, and route BY MONTH (2026-08-24) — into the
+    open batch whose label names that month, else into the pool.
+
+    The month decision is the whole point of this function now. Mail no
+    longer files into "whatever month happens to be open"; a July receipt
+    mailed in August waits for July and joins it the moment July opens.
+    The ingest job still owns the ingested/held_failed flip; every other
+    outcome lands in meta here (held_* for mail we cannot use, ``pooled``
+    for mail that is perfectly fine and simply early)."""
     with RunStore(db_path) as store:
-        cfg = IntakeConfig.from_settings(store.get_settings())
+        settings = store.get_settings()
+    cfg = IntakeConfig.from_settings(settings)
     person = resolve_person(parsed.to_locals, parsed.from_addr, cfg)
     received_at = _now_iso()
 
-    if parsed.body_only:
-        status, extra = HELD_BODY_ONLY, {}
-    elif not parsed.attachments:
-        status, extra = HELD_NO_VALID_FILES, {}
-    else:
-        with RunStore(db_path) as store:
-            run = open_batch(store)
-        if run is None:
-            status, extra = HELD_NO_BATCH, {}
-        else:
-            status, extra = STATUS_INGESTED, {"batch_id": run.run_id}
-
-    if status != STATUS_INGESTED:
-        _update_meta(arch, {"status": status, "person": person})
-        _maybe_alert(db_path, arch, status)
-        return {"status": status, "archive": arch.name, "person": person}
-
-    # The job flips the meta to ingested/held_failed when it finishes.
-    # batch_deleted: False clears a stale delete stamp when a held mail
-    # re-routes into a live batch — without it the row would keep saying
-    # "month deleted" about receipts alive in the new month.
-    _update_meta(arch, {
-        "person": person, "batch_id": run.run_id, "batch_deleted": False,
-    })
-    job_id = _start_ingest(
-        db_path, learning_db_path, run, parsed.attachments, person,
-        received_at, arch, synchronous=synchronous,
+    # Single-winner: CAS received -> routing before doing anything. A
+    # second router (the replay sweep picking up a stale `received`, a
+    # redelivery) sees the transient status and stands down, which also
+    # closes the pre-existing double-route window on stale receiveds.
+    applied, meta = _transition_meta(
+        arch,
+        lambda m: str(m.get("status", "")) == STATUS_RECEIVED,
+        {"status": STATUS_ROUTING, "person": person},
     )
-    _update_meta(arch, {"job_id": job_id})
-    final = _read_meta(arch).get("status", STATUS_RECEIVED)
+    if not applied:
+        return {
+            "status": str(meta.get("status", "")),
+            "archive": arch.name,
+            "person": meta.get("person") or person,
+            "skipped": "already routed",
+        }
+    arrival_iso = str(meta.get("at") or received_at)
+
+    try:
+        # Mail we cannot read as receipts never pays for extraction.
+        if parsed.body_only or not parsed.attachments:
+            held = HELD_BODY_ONLY if parsed.body_only else HELD_NO_VALID_FILES
+            _update_meta(arch, {"status": held})
+            _maybe_alert(db_path, arch, held)
+            return {"status": held, "archive": arch.name, "person": person}
+
+        # Every attachment mail gets stamped, direct-ingest included: the
+        # stamp is what lets a deleted month hand its mail back to the
+        # pool instead of stranding it.
+        stamps = _month_stamps(arch, settings, arrival_iso)
+        _update_meta(arch, stamps)
+        month = str(stamps["receipt_month"])
+
+        # Decide atomically: ask whether the month is open and commit the
+        # answer under one hold, so a batch created between the two cannot
+        # leave this mail both ingested and pooled.
+        with _POOL_LOCK:
+            with RunStore(db_path) as store:
+                run = _open_batch_for_month(store, _ym(month))
+            if run is None:
+                _transition_meta(
+                    arch,
+                    lambda m: str(m.get("status", "")) == STATUS_ROUTING,
+                    {"status": STATUS_POOLED, "batch_id": "",
+                     "batch_deleted": False},
+                )
+            else:
+                # batch_deleted: False clears a stale delete stamp when
+                # mail re-routes into a live batch — without it the row
+                # would keep saying "month deleted" about live receipts.
+                _update_meta(arch, {
+                    "batch_id": run.run_id, "batch_deleted": False,
+                })
+
+        if run is None:
+            _maybe_ack(db_path, arch)
+            return {
+                "status": STATUS_POOLED, "archive": arch.name,
+                "person": person, "pool_month": month,
+                "receipt_month_source": stamps["receipt_month_source"],
+            }
+
+        job_id = _start_ingest(
+            db_path, learning_db_path, run, parsed.attachments, person,
+            received_at, arch, synchronous=synchronous,
+        )
+        _update_meta(arch, {"job_id": job_id})
+        final = _read_meta(arch).get("status", STATUS_ROUTING)
+        return {
+            "status": final if synchronous else STATUS_INGESTED,
+            "archive": arch.name, "person": person, "pool_month": month,
+            "batch_id": run.run_id, "job_id": job_id,
+        }
+    except Exception as exc:  # noqa: BLE001 - never raise past the router
+        # The SMTP transport already answered 250 and only logs what comes
+        # back; an unhandled raise here would leave the mail stuck in the
+        # transient `routing` until the next boot sweep. Hold it instead,
+        # where replay can drain it.
+        err = str(exc)[:400]
+        log.warning("routing failed for %s: %s", arch.name, exc)
+        held, current = _transition_meta(
+            arch,
+            lambda m: str(m.get("status", "")) == STATUS_ROUTING,
+            {"status": HELD_FAILED, "error": err},
+        )
+        if held:
+            _maybe_alert(db_path, arch, HELD_FAILED)
+        return {
+            "status": HELD_FAILED if held else str(current.get("status", "")),
+            "archive": arch.name, "person": person, "error": err,
+        }
+
+
+def _archive_person(meta: dict) -> dict:
+    """The submitter recorded at custody time, or the bare sender when an
+    archive predates person resolution."""
+    person = meta.get("person")
+    if isinstance(person, dict) and person.get("person"):
+        return person
     return {
-        "status": final if synchronous else STATUS_INGESTED,
-        "archive": arch.name, "person": person,
-        "batch_id": run.run_id, "job_id": job_id,
+        "person": meta.get("from", ""), "source": "sender",
+        "address": meta.get("from", ""),
+    }
+
+
+def has_pooled_mail(data_root: Path) -> bool:
+    """Is ANY mail resting in the pool? A meta-only scan, so the boot path
+    can decide whether a claim sweep is worth starting at all: a machine
+    with an empty pool must not spin up a vision-capable thread to learn
+    that it has nothing to do."""
+    root = inbound_root(data_root)
+    if not root.is_dir():
+        return False
+    for arch in root.iterdir():
+        if str(_read_meta(arch).get("status", "")) == STATUS_POOLED:
+            return True
+    return False
+
+
+def claim_pooled(
+    db_path: Path, learning_db_path: Path | None, data_root: Path,
+) -> dict:
+    """The pull half of the pool: drain every pooled mail whose month is
+    open now into that month's batch.
+
+    Fires wherever a month can become open — batch create, rename, the
+    startup sweep, and the replay endpoint — so a month claims its waiting
+    receipts without anyone clicking anything.
+
+    Exactly-once rests on three things: `_POOL_LOCK` held across the "is
+    the month open" question and the status CAS, the status itself as
+    arbiter (only one caller can move an archive out of ``pooled``), and
+    `add_receipts_to_expense_batch`'s content dedupe as the backstop. A
+    claim that fails goes BACK to the pool rather than to a held status:
+    the pool is the truthful resting place for a receipt whose month
+    exists, and the next trigger retries it."""
+    root = inbound_root(data_root)
+    if not root.is_dir():
+        return {"claimed": 0, "still_pooled": 0, "failed": 0}
+    claimed = still_pooled = failed = 0
+    for arch in sorted(root.iterdir()):
+        if not (arch / "meta.json").is_file():
+            continue
+        meta = _read_meta(arch)
+        if str(meta.get("status", "")) != STATUS_POOLED:
+            continue
+        ym = _ym(str(meta.get("receipt_month") or ""))
+        # No month stamp = nothing to match a batch against. Leave it
+        # resting and visible rather than guessing a month for it.
+        if ym is None or not (
+            (arch / "parts").is_dir() or (arch / "rendered-body.pdf").is_file()
+        ):
+            still_pooled += 1
+            continue
+        applied = False
+        with _POOL_LOCK:
+            with RunStore(db_path) as store:
+                run = _open_batch_for_month(store, ym)
+            if run is not None:
+                applied, meta = _transition_meta(
+                    arch,
+                    lambda m: str(m.get("status", "")) == STATUS_POOLED,
+                    {"status": STATUS_CLAIMING, "batch_id": run.run_id,
+                     "batch_deleted": False},
+                )
+        if run is None or not applied:
+            # The month is not open, or another claimer moved it first.
+            still_pooled += 1
+            continue
+        # Vision runs outside the pool hold: a claim can take minutes and
+        # arrival routing must not queue behind it.
+        try:
+            attachments = _archive_attachments(arch)
+            person = _archive_person(meta)
+            job_id = _start_ingest(
+                db_path, learning_db_path, run, attachments, person,
+                _now_iso(), arch, synchronous=True,
+            )
+            with RunStore(db_path) as store:
+                job = store.get_job(job_id) or {}
+        except Exception as exc:  # noqa: BLE001 - one archive, not the sweep
+            # A failure before the job existed (staging, disk) leaves the
+            # archive in the transient `claiming`. Put it back in the pool
+            # here rather than waiting for the next boot sweep to find it.
+            log.warning("claim failed for %s: %s", arch.name, exc)
+            _transition_meta(
+                arch,
+                lambda m: str(m.get("status", "")) == STATUS_CLAIMING,
+                {"status": STATUS_POOLED, "batch_id": "",
+                 "batch_deleted": False, "error": str(exc)[:400]},
+            )
+            failed += 1
+            continue
+        if job.get("status") == JOB_DONE:
+            # _ingest_job already stamped `ingested` + the documents.
+            _update_meta(arch, {"job_id": job_id, "batch_id": run.run_id,
+                                "batch_deleted": False})
+            _append_log(data_root, {
+                "at": _now_iso(), "from": meta.get("from", ""),
+                "person": person.get("person"),
+                "subject": meta.get("subject", ""),
+                "n_files": len(attachments), "status": STATUS_INGESTED,
+                "archive": arch.name, "batch_id": run.run_id,
+                "job_id": job_id,
+            })
+            claimed += 1
+        else:
+            # _ingest_job stamped held_failed + the error; the error stays
+            # in meta as the record, but the RESTING state is the pool.
+            _transition_meta(
+                arch,
+                lambda m: str(m.get("status", "")) == HELD_FAILED,
+                {"status": STATUS_POOLED, "batch_id": "",
+                 "batch_deleted": False},
+            )
+            failed += 1
+    return {
+        "claimed": claimed, "still_pooled": still_pooled, "failed": failed,
     }
 
 
@@ -926,9 +1430,10 @@ def _is_replayable(meta: dict, now: datetime) -> bool:
     status = str(meta.get("status", ""))
     if status in REPLAYABLE:
         return True
-    if status == STATUS_RECEIVED:
-        # A "received" that never routed = the router died before/during
-        # routing (crash, scale-to-zero stop). Old enough => replayable.
+    if status in {STATUS_RECEIVED, STATUS_ROUTING, STATUS_CLAIMING}:
+        # A mail stuck in a transient state = the thread that owned the
+        # flip died (crash, scale-to-zero stop) before reaching a resting
+        # status. Old enough => replayable.
         try:
             at = datetime.fromisoformat(str(meta.get("at", "")))
         except ValueError:
@@ -941,28 +1446,30 @@ def _is_replayable(meta: dict, now: datetime) -> bool:
 def replay_held(
     db_path: Path, learning_db_path: Path | None, data_root: Path,
 ) -> dict:
-    """Re-route archived mail that is held (no batch at arrival, failed or
-    interrupted jobs, stale never-routed receipts) into the now-open batch.
+    """Re-route archived mail that is held (legacy no-batch holds, failed
+    or interrupted jobs, stale never-routed receipts) BY MONTH: into the
+    open batch whose label names the mail's month, else into the pool.
+
     Body-only holds stay held (they need the round-2 body renderer). An
-    archive counts as replayed ONLY when its ingest job reported done."""
+    archive counts as replayed ONLY when its ingest job reported done.
+    Held mail that predates the month stamps is extracted lazily here —
+    in the sweep an operator asked for, never at boot."""
     root = inbound_root(data_root)
     if not root.exists():
-        return {"replayed": 0, "still_held": 0, "failed": 0}
+        return {"replayed": 0, "pooled": 0, "still_held": 0, "failed": 0}
     now = datetime.now(timezone.utc)
-    replayed = still_held = failed = 0
+    replayed = pooled = still_held = failed = 0
+    settings: dict | None = None
+    client = _UNSET
     for arch in sorted(root.iterdir()):
         if not (arch / "meta.json").is_file():
             continue
         meta = _read_meta(arch)
         if not _is_replayable(meta, now):
             continue
-        # Re-resolve per archive: a statement attach mid-drain closes the
-        # batch and later archives must hold, not error into the void.
-        with RunStore(db_path) as store:
-            run = open_batch(store)
-        if run is None:
-            still_held += 1
-            continue
+        # parts/ ONLY here, deliberately: a partless archive must keep
+        # flipping to the renderable state below, and reading a
+        # rendered-body.pdf as an attachment would rob it of that path.
         parts_dir = arch / "parts"
         attachments = [
             (re.sub(r"^\d{3}__", "", p.name), p.read_bytes())
@@ -986,10 +1493,46 @@ def replay_held(
             })
             still_held += 1
             continue
-        person = meta.get("person") or {
-            "person": meta.get("from", ""), "source": "sender",
-            "address": meta.get("from", ""),
-        }
+        # Month-route it. Held mail from before the pool existed has no
+        # stamp yet; read its dates now, once, reusing one client for the
+        # whole sweep.
+        if not meta.get("receipt_month"):
+            try:
+                if settings is None:
+                    with RunStore(db_path) as store:
+                        settings = store.get_settings()
+                if client is _UNSET:
+                    client = _arrival_llm_client(settings)
+                stamps = _month_stamps(
+                    arch, settings, str(meta.get("at") or _now_iso()),
+                    client=client,
+                )
+                _update_meta(arch, stamps)
+                meta = {**meta, **stamps}
+            except Exception as exc:  # noqa: BLE001 - skip it, not the sweep
+                log.warning("month stamp failed for %s: %s", arch.name, exc)
+                still_held += 1
+                continue
+        held_status = str(meta.get("status", ""))
+        with _POOL_LOCK:
+            # Re-resolve per archive INSIDE the hold: a statement attach
+            # mid-drain closes the month and later archives must pool, not
+            # error into the void.
+            with RunStore(db_path) as store:
+                run = _open_batch_for_month(
+                    store, _ym(str(meta.get("receipt_month") or ""))
+                )
+            if run is None:
+                _transition_meta(
+                    arch,
+                    lambda m, s=held_status: str(m.get("status", "")) == s,
+                    {"status": STATUS_POOLED, "batch_id": "",
+                     "batch_deleted": False},
+                )
+        if run is None:
+            pooled += 1
+            continue
+        person = _archive_person(meta)
         job_id = _start_ingest(
             db_path, learning_db_path, run, attachments, person,
             _now_iso(), arch, synchronous=True,
@@ -1013,7 +1556,10 @@ def replay_held(
         else:
             # _ingest_job already stamped held_failed + the error.
             failed += 1
-    return {"replayed": replayed, "still_held": still_held, "failed": failed}
+    return {
+        "replayed": replayed, "pooled": pooled,
+        "still_held": still_held, "failed": failed,
+    }
 
 
 def reconcile_interrupted(db_path: Path, data_root: Path) -> int:
@@ -1028,6 +1574,28 @@ def reconcile_interrupted(db_path: Path, data_root: Path) -> int:
         for arch in root.iterdir():
             meta = _read_meta(arch)
             job_id = meta.get("job_id")
+            # A kill mid-ROUTE or mid-CLAIM leaves those transient states
+            # behind. They differ in where the mail belongs afterwards: a
+            # half-routed mail never reached a resting place, so it holds
+            # (and alerts); a half-claimed one has a perfectly good one
+            # already, so it simply goes back to waiting — no alert, and
+            # the next claim trigger picks it up.
+            if meta.get("status") in (STATUS_ROUTING, STATUS_CLAIMING):
+                job = store.get_job(str(job_id)) if job_id else None
+                if job is not None and job.get("status") == JOB_DONE:
+                    # The ingest actually finished; the stale-state replay
+                    # and the content dedupe absorb the missing flip.
+                    continue
+                if meta.get("status") == STATUS_ROUTING:
+                    _update_meta(arch, {"status": HELD_FAILED,
+                                        "error": "routing interrupted"})
+                    _maybe_alert(db_path, arch, HELD_FAILED)
+                else:
+                    _update_meta(arch, {"status": STATUS_POOLED,
+                                        "batch_id": "",
+                                        "batch_deleted": False})
+                flipped += 1
+                continue
             # A kill mid-RENDER leaves the transient "rendering" status
             # (the sync ingest owned the flip and never got there). Flip
             # to held_failed; the rendered stamp keeps it retryable.
@@ -1121,11 +1689,17 @@ def render_ingest(
     db_path: Path, learning_db_path: Path | None, data_root: Path,
     archive: str, operator: str | None = None,
 ) -> dict:
-    """Render a held body-only mail's body to a PDF and ingest it into the
-    open month via the normal path (document-type quarantine and vision
-    extraction apply unchanged). Deny-by-default guards; the rendered PDF
-    is kept at the archive ROOT (parts/ stays exactly what was delivered,
-    so the Files column never lists a derived artifact)."""
+    """Render a held body-only mail's body to a PDF and month-route it via
+    the normal path (document-type quarantine and vision extraction apply
+    unchanged): into the batch for the date the rendered PDF prints, else
+    into the pool. Deny-by-default guards; the rendered PDF is kept at the
+    archive ROOT (parts/ stays exactly what was delivered, so the Files
+    column never lists a derived artifact).
+
+    "No open month" is no longer a refusal. The render always happens and
+    the result always lands somewhere — a month or the pool — because
+    telling an operator "try again later" about work already done is how
+    body-only mail used to strand."""
     from .body_render import extract_body_text, render_body_pdf
 
     arch = _archive_dir(data_root, archive)
@@ -1134,10 +1708,6 @@ def render_ingest(
     text = extract_body_text((arch / "message.eml").read_bytes())
     if not text.strip():
         return {"error": "no readable body in this mail", "code": 409}
-    with RunStore(db_path) as store:
-        run = open_batch(store)
-    if run is None:
-        return {"error": "no open month to ingest into", "code": 409}
 
     def _renderable(meta: dict) -> bool:
         status = meta.get("status")
@@ -1153,11 +1723,12 @@ def render_ingest(
     # CAS to the transient "rendering" status: a concurrent second render,
     # a dismiss, or a replay pass all see it and refuse — no interleaving
     # can reverse an acknowledged action or double-start the ingest.
+    # No batch_id in this patch: which month this mail belongs to is not
+    # known until the rendered PDF has been read.
     applied, meta = _transition_meta(arch, _renderable, {
         "status": STATUS_RENDERING,
         "rendered": True, "rendered_at": _now_iso(),
         "rendered_by": operator or "",
-        "batch_id": run.run_id, "batch_deleted": False,
     })
     if not applied:
         return {"error": "only body-only held mail can be rendered "
@@ -1176,12 +1747,51 @@ def render_ingest(
         ).timetuple()
     except ValueError:
         pass
-    pdf = render_body_pdf(header, text, created=created)
-    (arch / "rendered-body.pdf").write_bytes(pdf)
-    person = meta.get("person") or {
-        "person": meta.get("from", ""), "source": "sender",
-        "address": meta.get("from", ""),
-    }
+    try:
+        pdf = render_body_pdf(header, text, created=created)
+        (arch / "rendered-body.pdf").write_bytes(pdf)
+        # The rendered PDF IS this mail's content, so it is what decides
+        # the month — same reader, same cache, as a delivered attachment.
+        with RunStore(db_path) as store:
+            settings = store.get_settings()
+        stamps = _month_stamps(
+            arch, settings, str(meta.get("at") or _now_iso())
+        )
+        _update_meta(arch, stamps)
+    except Exception as exc:  # noqa: BLE001 - hold it, keep it retryable
+        # The `rendered` stamp survives, so _renderable admits a retry
+        # exactly as it does after a failed ingest.
+        _transition_meta(
+            arch,
+            lambda m: str(m.get("status", "")) == STATUS_RENDERING,
+            {"status": HELD_FAILED, "error": str(exc)[:400]},
+        )
+        log.warning("render failed for %s: %s", arch.name, exc)
+        return {"error": f"render failed: {exc}", "code": 500}
+
+    month = str(stamps["receipt_month"])
+    with _POOL_LOCK:
+        with RunStore(db_path) as store:
+            run = _open_batch_for_month(store, _ym(month))
+        if run is None:
+            _transition_meta(
+                arch,
+                lambda m: str(m.get("status", "")) == STATUS_RENDERING,
+                {"status": STATUS_POOLED, "batch_id": "",
+                 "batch_deleted": False},
+            )
+        else:
+            _update_meta(arch, {
+                "batch_id": run.run_id, "batch_deleted": False,
+            })
+    if run is None:
+        _maybe_ack(db_path, arch)
+        return {
+            "status": STATUS_POOLED, "archive": arch.name,
+            "pool_month": month,
+        }
+
+    person = _archive_person(meta)
     job_id = _start_ingest(
         db_path, learning_db_path, run, [("rendered-body.pdf", pdf)],
         person, _now_iso(), arch, synchronous=True,
@@ -1191,6 +1801,7 @@ def render_ingest(
         "status": final.get("status", ""),
         "archive": arch.name,
         "batch_id": run.run_id,
+        "pool_month": month,
         "job_id": job_id,
         "documents": final.get("documents", []),
     }
@@ -1209,6 +1820,11 @@ def re_ingest(
     bytes sit in the custody archive unreachable from the app. This is the
     explicit way back, one archive at a time, so receipts can never drain into
     a month nobody chose.
+
+    LEGACY as of 2026-08-24: month-stamped mail no longer strands, because
+    deleting a month returns it to the POOL and re-creating the month
+    re-claims it. This path remains for mail that predates the stamps,
+    which is the only mail the delete cascade still marks `batch_deleted`.
 
     Deny-by-default: only mail carrying the `batch_deleted` stamp qualifies.
     A mail whose month is alive is refused, which is what keeps this from
@@ -1286,15 +1902,22 @@ def re_ingest(
 def dismiss_archive(
     data_root: Path, archive: str, operator: str | None = None,
 ) -> dict:
-    """Mark a held mail dismissed (operator judged it junk). Terminal by
-    design: not replayable, not renderable, drops out of n_held. The
-    custody archive itself is untouched."""
+    """Mark a held or pooled mail dismissed (operator judged it junk).
+    Terminal by design: not replayable, not renderable, not claimable,
+    drops out of n_held / n_pooled. The custody archive is untouched.
+
+    Pooled mail is dismissable for the same reason held mail is: junk
+    with an attachment now RESTS in the pool waiting for a month that may
+    never come, and without this it would wait there undismissably."""
     arch = _archive_dir(data_root, archive)
     if arch is None:
         return {"error": "not found", "code": 404}
     applied, meta = _transition_meta(
         arch,
-        lambda m: str(m.get("status", "")).startswith("held_"),
+        lambda m: (
+            str(m.get("status", "")).startswith("held_")
+            or str(m.get("status", "")) == STATUS_POOLED
+        ),
         {
             "status": STATUS_DISMISSED,
             "dismissed_at": _now_iso(),
@@ -1302,6 +1925,6 @@ def dismiss_archive(
         },
     )
     if not applied:
-        return {"error": "only held mail can be dismissed "
+        return {"error": "only held or pooled mail can be dismissed "
                          f"(status: {meta.get('status', '')})", "code": 409}
     return {"status": STATUS_DISMISSED, "archive": arch.name}

@@ -14,6 +14,16 @@ usable for Brisken. Read this whole brief before touching anything, then
 read `p1-improvement-backlog.md` beside it — that file, not this one, is the
 list of what to do next.
 
+## Start here (2026-08-24)
+
+**The living-month plan is in flight (backlog item 29).** PR 1 (the mail
+pool) has shipped: emailed receipts now file by the month printed on the
+receipt and rest in a pool until that month exists, instead of landing in
+whatever batch happened to be open. Read backlog item 29 before picking
+anything else up; PR 2 (stable content-derived transaction ids, append-able
+statements, the month staying open, incremental re-match) is the next round
+and its prerequisite is the identity change, not the UI.
+
 ## Start here (2026-08-23)
 
 The 2026-08-21 feedback wave is CLOSED. Every owner question that gated it
