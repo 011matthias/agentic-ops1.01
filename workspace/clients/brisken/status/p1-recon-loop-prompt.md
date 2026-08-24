@@ -90,8 +90,9 @@ anything else open.
 
 Sixteen prompts ARE applied, including both report-PDF buttons, body-only
 handling, cards R3, set-aside, memory editing and the feedback widget. Three
-are not: months-list, known-senders, open-intake (that last one is a trap
-rather than a gap, see item 31), plus month-pool sections 0 and 12.
+remain, all rewritten 2026-08-25 to open with a measured inventory of what
+the app already has, so Lovable adds the delta instead of rebuilding working
+screens.
 
 **Two audit traps, both of which produced a wrong answer first.** A loose
 regex matched a Cards help line and reported the known-senders editor as
@@ -114,11 +115,12 @@ Unapplied, in the order they matter:
 
 - `lovable-months-list-prompt.md` — **THE blocker.** No way into an existing
   month; `/months` is the create form only. Backlog item 32.
-- `lovable-known-senders-prompt.md` — one paste, two jobs: section 0 deletes
-  the dead "Accepted senders" editor (live, and it discards what an operator
-  types — backlog item 31) and fixes the two "open month" help lines;
-  section 1 adds the `intake.known_senders` field that works.
-- `lovable-month-pool-prompt.md` sections 0 and 12 only (1-11 are live).
+- `lovable-known-senders-prompt.md` — Settings > Email intake: deletes the
+  dead "Accepted senders" editor (backlog item 31), rewords three stale help
+  lines, adds the `known_senders` field.
+- `lovable-inbound-status-refusals-prompt.md` — the status label + the
+  refusals strip. Supersedes month-pool §0/§12, which were REMOVED from that
+  file so it cannot be double-pasted.
 - `lovable-issue-codes-prompt.md`, `lovable-re-ingest-prompt.md` — status
   unverifiable; no live batch or archive exercises them.
 
