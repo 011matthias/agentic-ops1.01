@@ -449,6 +449,30 @@ created 2026-08-21 09:17, so anything Dirk sent before that had no MX to
 reach and is unrecoverable. Worth telling him once so he stops looking
 for it.
 
+### 31. A Settings control that silently discards what you type (2026-08-25)
+
+Found by driving the published SPA. The Settings > Email intake section still
+carries the **"Accepted senders — Full addresses or @domain entries"** editor.
+That is the retired `intake.senders` allowlist: submission opened to any
+sender on 2026-08-23 (PR #587) and the backend now DROPS the key on save
+rather than rejecting it, so whatever an operator types there is discarded
+without a word. A dead control that looks alive is worse than a missing one,
+and this one sits exactly where someone would go to authorise a sender during
+testing — they would get a false result and reasonably conclude the tool is
+broken.
+
+Fix is entirely SPA-side and already written twice over:
+`docs/lovable-open-intake-prompt.md` section 1 deletes the editor;
+`docs/lovable-known-senders-prompt.md` puts the field that DOES work
+(`intake.known_senders`) in its place. Applying the second makes the first
+redundant.
+
+Beside it, two stale help lines that predate the month pool: "People who can
+email receipts straight into the open month" and "the sender gets a short
+reply when their receipts land in the open month". Receipts land in the month
+PRINTED on them, or wait in the pool; the ack says which. That copy is what
+sets a tester's expectations, so it is worth the same pass.
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
 Four of the five known cards (0113, 6013, 9693, 8311) carry no legal entity,

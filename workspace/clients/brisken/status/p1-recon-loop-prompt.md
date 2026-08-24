@@ -71,27 +71,58 @@ already judged.
 
 Nothing is on fire here, which is exactly why it is now the top item.
 
-### 2. Verify the SPA once the owner applies the prompts
+### 2. The published SPA: what is live (audited 2026-08-25)
 
-The backend halves are all live; the SPA is the remaining half of three
-rounds. **Verify, do not assume**: drive the live SPA and confirm what it
-renders. Six pooled rows exist right now, so no TEST mail is needed. Use
-`%TEMP%/claude/recon-probe/` (`api.py` for authed calls; chromium
-`channel="chrome"`, dismiss the feedback modal via "Got it").
+The owner published after this round. Audited against the deployed API by
+driving the app; **do not re-derive this, and do not trust a text scan** (see
+the trap below).
 
-What to check after each prompt lands:
+The intake page is **`/inbound`**, not `/intakes`. Routes on the published
+build: `/`, `/months`, `/inbound`, `/memory`, `/compare`, `/guide`,
+`/settings`, `/expenses/new`.
 
-- A pooled row reads **"Waiting for August 2026"** and not "Arriving". The
-  backend already composes that text (`status_label`); section 0 of the
-  month-pool prompt is what makes the SPA render it.
-- The Settings screen has a "People we recognise" editor writing
-  `intake.known_senders`.
-- The two report-PDF buttons are on screen.
+LIVE, verified:
 
-A deploy that changes a payload is not verified until the SPA has been driven
-against it. The "Arriving" bug was found exactly that way, and so was the
-dismissed-row mislabel this round (#609), which an API read alone did not
-show.
+- `lovable-month-report-prompt.md` — "Download expense report (PDF)" and
+  "Download CSV (data export)" on the batch page, reconciliation PDF on the
+  workbench. This was the one that changes what Criss can DO.
+- `lovable-body-only-prompt.md` — held rows offer **View body / Add to month
+  as PDF / Dismiss**.
+- `lovable-month-pool-prompt.md` sections 1, 2, 4, 5, 6 — "Waiting: 6" badge,
+  Month column reading "August 2026 (waiting)", Dismiss on pooled rows,
+  "Retry held and add waiting mail".
+- `lovable-intake-quickwins`, `lovable-ready-tile`, `lovable-cards-r3`.
+
+**The "Arriving" bug is gone.** The SPA fixed it with its own status map
+(section 1) rather than with `status_label` (section 0); the rendering is
+correct either way. A pooled row reads "Waiting for its month" with the
+month in the column beside it.
+
+NOT applied:
+
+- month-pool **section 0** (`status_kind` / `status_label`) — not urgent, the
+  SPA's own strings are right today. It is the durability fix: the next
+  status value added mislabels again without it.
+- month-pool **section 12** (refusals strip) — `n_refused` is live and
+  unrendered.
+- `lovable-known-senders-prompt.md` — no "People we recognise" editor.
+- `lovable-open-intake-prompt.md` — **the stale "Accepted senders" editor is
+  still on the Settings screen and the backend has ignored `intake.senders`
+  since #587, so anything typed there is silently discarded.**
+- `lovable-re-ingest-prompt.md`, `lovable-issue-codes-prompt.md` —
+  UNVERIFIED, both need a state the live app does not currently have (a
+  stranded attachment archive; a batch carrying a parse issue).
+
+Stale Settings copy, unrelated to any prompt: "People who can email receipts
+straight into the open month" and "the sender gets a short reply when their
+receipts land in the open month". Both predate the month pool.
+
+**The audit trap, worth remembering.** Enumerating `button` innerText reports
+NO actions on an intake row: the per-row control is an icon-only ellipsis
+`button[aria-label="Actions"]` opening a Radix menu, and its text is empty.
+The first pass of this audit concluded body-only handling was missing
+because of exactly that. Click the Actions button and read `[role=menuitem]`.
+Probe: `%TEMP%/claude/recon-probe/held_menu.py`.
 
 ### 3. Whatever the next feedback wave surfaces
 
@@ -103,16 +134,17 @@ backlog are small and unranked; none of them is urgent.
 Unapplied Lovable prompts, all with their backends already live, under
 `workspace/clients/brisken/automations/expense-reconciliation/docs/`:
 
-- `lovable-month-pool-prompt.md` — **most urgent**; section 0 (render from
-  `status_kind` / `status_label`) is the fix for the live "Arriving"
-  mislabel, and section 12 adds the refusals strip.
-- `lovable-known-senders-prompt.md` — NEW; the Settings editor for
-  `intake.known_senders`.
-- `lovable-month-report-prompt.md` — the one that changes what Criss can DO:
-  it puts the two report-PDF buttons on screen.
-- `lovable-re-ingest-prompt.md`, `lovable-issue-codes-prompt.md`,
-  `lovable-ready-tile-prompt.md`, and `lovable-open-intake-prompt.md` (that
-  last one only if the "Accepted senders" editor was ever built).
+- `lovable-open-intake-prompt.md` — **most urgent, and it is a trap rather
+  than a gap**: the "Accepted senders" editor IS on the live Settings
+  screen and the backend ignores what it writes. Someone authorising a
+  sender there during testing gets a false result.
+- `lovable-known-senders-prompt.md` — the Settings editor for
+  `intake.known_senders`; replaces the editor above with one that works.
+- `lovable-month-pool-prompt.md` sections 0 and 12 only (1-11 are live).
+- `lovable-re-ingest-prompt.md`, `lovable-issue-codes-prompt.md` — status
+  unverified, see section 2.
+- `lovable-month-report-prompt.md` and `lovable-ready-tile-prompt.md` are
+  APPLIED; nothing to hand over.
 
 **One settings decision waiting:** listing `dirk_.neumann@icloud.com` in
 `intake.known_senders` starts sending confirmations to his private mailbox
