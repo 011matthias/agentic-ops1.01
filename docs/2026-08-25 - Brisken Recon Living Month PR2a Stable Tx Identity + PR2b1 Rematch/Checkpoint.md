@@ -187,10 +187,20 @@ live sibling sessions.
   instead of one, and the `sheet_writeback` coupling the plan never named.
 
 ### Suggestions
-- The `heredoc-size-gate.py` built 2026-08-24 did not fire on a moderate-size
-  Python payload that still suffered escape collapse (`\n` → literal newline).
-  The gate keys on size; the failure mode is escape content. Add a check for
-  backslash escapes inside a heredoc body regardless of payload size.
+- **Corrected after writing this file.** The suggestion here was originally to
+  widen `heredoc-size-gate.py`, on the reading that it keys on payload size
+  while the failure mode is escape content. That was wrong: the gate already
+  denies on a triple-quoted block and on a literal backslash in a
+  Python-context body, and would have caught the payload. It never ran,
+  because the primary clone is ~200 commits behind and does not contain the
+  file.
+
+- The real finding is worse and is now its own register row: SessionStart
+  reported "enforcement layer intact (20/20 hooks)" for a checkout with ZERO
+  hooks wired and one gate missing outright. `wire-hooks.py` validates against
+  its own checkout's `CANONICAL_HOOKS`, so a stale clone cannot tell that the
+  trunk has moved; the confident count is what hides it. Make the SessionStart
+  check compare against `origin/main` and say so when behind.
 
 ### System Health
 - The split-PR rhythm (prerequisite → prove neutral → build on it) held under a
