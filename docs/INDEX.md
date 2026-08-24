@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-25 | Brisken Recon Living Month PR2a Stable Tx Identity + PR2b1 Rematch | client-dev | [→](docs/2026-08-25%20-%20Brisken%20Recon%20Living%20Month%20PR2a%20Stable%20Tx%20Identity%20%2B%20PR2b1%20Rematch/Checkpoint.md) |
 | 2026-08-24 | Brisken Recon Intake Trust + Lovable Prompt Ledger | client-dev | [→](docs/2026-08-24%20-%20Brisken%20Recon%20Intake%20Trust%20%2B%20Lovable%20Prompt%20Ledger/Checkpoint.md) |
 | 2026-08-24 | Brisken Recon Mail Month Pool PR1 + Intake Audit | client-dev | [→](docs/2026-08-24%20-%20Brisken%20Recon%20Mail%20Month%20Pool%20PR1%20%2B%20Intake%20Audit/Checkpoint.md) |
 | 2026-08-24 | Brisken P1 Mail-Month-Pool PR1 Mid-Build Handoff | client-dev | [Mini-Checkpoint-2](docs/2026-08-24%20-%20Brisken%20P1%20Mail-Month-Pool%20PR1%20Mid-Build%20Handoff/Mini-Checkpoint-2.md) |
