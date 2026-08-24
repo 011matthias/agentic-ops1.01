@@ -1,7 +1,17 @@
 # Lovable prompt: the month pool on the inbound page
 
-Paste the block below into Lovable for the `brisken-expense-review` SPA.
-It is self-contained; it assumes no knowledge of the backend round.
+> **APPLIED 2026-08-25. DO NOT PASTE THIS FILE.**
+>
+> Sections 1 through 11 are live on the published SPA (verified: the
+> "Waiting" badge, the Month column reading "August 2026 (waiting)", Dismiss
+> on pooled rows, "Retry held and add waiting mail"). Re-running them would
+> fight the change that supersedes them.
+>
+> The two sections that were NOT applied moved out, rewritten to account for
+> everything already live: **`lovable-inbound-status-refusals-prompt.md`**.
+> Paste that one instead.
+>
+> This file is kept as the record of what the round asked for.
 
 Backend is already deployed. Every field named here is NEW and PARALLEL:
 nothing the page already renders changed type or meaning, so the page keeps
@@ -21,41 +31,7 @@ that month. Nothing is lost and nobody has to click anything.
 The inbound page has to show that waiting state honestly, because "waiting"
 is now a normal, healthy outcome rather than a problem.
 
-## 0. Render the status from `status_kind` + `status_label` (APPLY FIRST)
-
-This one section replaces the hand-written status map and is the fix for a
-bug that is live right now.
-
-`entries[].status` gained three values (`pooled`, `routing`, `claiming`).
-The page has no case for them, so all three fall through to the in-flight
-label: six of Dirk's receipts currently read **"Arriving"** with a blank
-Month, and they will keep saying so for as long as they wait. Nothing
-crashes; the page is just confidently wrong, which is worse than an error,
-because "Arriving" is a claim that resolves itself.
-
-Every row now carries two parallel fields:
-
-- `status_kind` - how to TREAT it: `resting` | `held` | `working` | `done` |
-  `unknown`
-- `status_label` - what to SAY, already composed: "Waiting for July 2026",
-  "Needs one click to read", "Added", "July 2026 is already reconciled"
-
-Render `status_label` as the text and drive colour from `status_kind`:
-
-| `status_kind` | Treatment |
-|---|---|
-| `resting` | neutral / informational (blue or grey). Fine, waiting on a schedule |
-| `held` | amber or red, as the Held strip is today. Needs a human |
-| `working` | muted, with a spinner. Resolves in seconds; never actionable |
-| `done` | quiet / success. Nothing owed |
-| `unknown` | neutral, show `status_label` verbatim. The backend is newer than this build |
-
-Localize from `status_kind` if you want Portuguese; fall back to
-`status_label` for anything you have no string for. **Never map an
-unrecognised `status` onto an existing label** - that is the bug. If you
-keep a hand-written map at all, it must fall through to `status_label`.
-
-## 1. The `pooled` status (only if you skip section 0)
+## 1. The `pooled` status
 
 `entries[].status` can now be `"pooled"`. Treat it as its own state, NOT as
 a held state and NOT as an error:
@@ -68,11 +44,6 @@ a held state and NOT as an error:
 Two other transient statuses can appear briefly: `routing` and `claiming`.
 Render them as "Working..." with a spinner if you show them at all. They
 resolve within seconds; they never need an action.
-
-One case section 0 gets right and a hand-written map does not: a pooled mail
-whose month is already CLOSED comes back with `status_kind: "held"`, because
-a reconciled month will not take it and that row is a task rather than a
-wait.
 
 ## 2. Month column
 
@@ -200,33 +171,6 @@ the receipt went: either the batch it joined, or the month it is waiting for
 plus the fact that it joins automatically. If any help text in the SPA
 describes that email, it should match.
 
-## 12. "Did anything bounce?" - the refusals strip
-
-The payload gains two top-level fields beside `n_held` / `n_pooled`:
-
-- `n_refused` - mail TURNED AWAY in the last 7 days
-- `refusals` - the newest rows, each
-  `{at, stage, reason, from, to, peer}`
-
-Until now a refused message left no trace anywhere: no archive, no log row,
-no counter. When somebody said "I sent that receipt", there was no way to
-tell whether it had been turned away. `stage` is `rcpt` (the recipient was
-refused, usually a spammer trying to relay) or `data` (we accepted the
-envelope and then a guard stopped the message: disk floor, in-flight
-ceiling, daily submission limit, storage failure).
-
-- When `n_refused` is 0, show nothing. That is the normal state and the
-  answer to the question.
-- When it is not 0, show a quiet count near the Held / Waiting badges,
-  expanding to a small table of the rows: time, from, to, reason.
-- `stage: "data"` rows deserve more weight than `rcpt` ones. A refused RCPT
-  is usually a stranger probing the listener; a DATA refusal is a real
-  submission we accepted and then turned away, which is exactly the mail
-  somebody will later swear they sent.
-
-These are NOT entries. They have no archive, so there is nothing to dismiss,
-replay or open; do not try to render them in the mail table.
-
 ## Contract rules for this round
 
 - Every field above is additive. Render defensively: check the field exists
@@ -236,10 +180,6 @@ replay or open; do not try to render them in the mail table.
   touching.
 - Do not retype or repurpose `n_held`, `inbound_marked`, or `status` values
   you already handle.
-- An unrecognised `status` renders `status_label` verbatim under
-  `status_kind: "unknown"`. It never borrows the label of a status you do
-  know. This is the whole point of section 0 and the reason the backend
-  composes the text at all.
 - Body-only mail from a recognised sender no longer reaches
   `held_body_only`: it is read on arrival. The Held strip now holds only
   mail from senders we do not recognise, plus mail that genuinely failed, so
