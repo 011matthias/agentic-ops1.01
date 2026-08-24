@@ -36,11 +36,22 @@ what to do next.
 **Backlog item 29 PR 2a (stable transaction identity) and PR 2b-1
 (`rematch_month` + the judgment cache) are shipped**; see direction 1 below.
 
-Baselines: suite **1297 passed / 2 skipped**, calibrate green, ruff (E9,F)
+**Arrival-time duplicate detection is shipped** (backlog item 33): a mail
+whose content the tool already holds is parked as `duplicate` before it
+reaches a month, and points at the mail that has it.
+
+Baselines: suite **1312 passed / 2 skipped**, calibrate green, ruff (E9,F)
 clean on the diff. Worktree `C:\Users\neuma_p1qrsic\Repo\agentic-ops1-recon`,
 app root `workspace/clients/brisken/automations/expense-reconciliation`.
 
-**Live state:** 21 inbound archives, 6 **pooled**, `n_held` 0, `n_refused` 1
+**Live state (2026-08-25):** 10 **pooled**, `n_held` 0, `n_duplicates` 0.
+Three of the pooled ten are the SAME Hostinger invoice (H_46243348),
+forwarded three times minutes before the dedupe deployed; they will
+become three expenses when July 2026 opens unless two are dismissed.
+`intake.known_senders` is still EMPTY, so Dirk's
+`dirk_.neumann@icloud.com` body-only forwards hold and go unacked.
+
+**Earlier state:** 21 inbound archives, 6 **pooled**, `n_refused` 1
 (a deliberate relay-refusal drill on 2026-08-24; it ages out of the window).
 The 6 pooled are real receipts waiting for months that do not exist, and they
 now say so on screen:
