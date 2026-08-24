@@ -118,7 +118,22 @@ STATUS_REINGESTING = "re_ingesting"    # stranded-mail re-ingest in flight
 STATUS_POOLED = "pooled"
 STATUS_ROUTING = "routing"
 STATUS_CLAIMING = "claiming"
+# Arrival-time duplicate detection (owner directive 2026-08-25: "sort
+# duplicates out before they are ingested"). A RESTING state, not held_*
+# and not dismissed: nothing is wrong with the mail and nobody has to act,
+# we simply already hold this receipt. Terminal unless an operator says it
+# is not a duplicate, which is why the mail is parked rather than dropped.
+STATUS_DUPLICATE = "duplicate"
 REPLAYABLE = {HELD_NO_BATCH, HELD_FAILED}
+
+# Only a mail that actually ENTERED the workflow owns its content. A
+# dismissed or still-held archive does not: if the first copy was judged
+# junk or never got past a hold, the tool does NOT hold that receipt, and
+# calling the next copy a duplicate would hide a receipt nobody ingested.
+OWNS_CONTENT = {
+    STATUS_INGESTED, STATUS_REPLAYED, STATUS_POOLED,
+    STATUS_ROUTING, STATUS_CLAIMING,
+}
 STALE_RECEIVED_SECONDS = 600
 
 # How a status READS, shipped beside it (2026-08-24). `status` is an
@@ -152,6 +167,8 @@ _STATUS_VIEW: dict[str, tuple[str, str]] = {
     HELD_NO_VALID_FILES: (KIND_HELD, "No receipt file in this email"),
     # `pooled` composes its month into the label; see annotate_status_view.
     STATUS_POOLED: (KIND_RESTING, "Waiting for its month"),
+    # `duplicate` composes the original's subject in; see annotate_status_view.
+    STATUS_DUPLICATE: (KIND_RESTING, "Already have this"),
 }
 
 # The refusal ledger (backlog item 30 b). A refused RCPT or a guard that
@@ -726,6 +743,15 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
                 row["receipt_month_source"] = meta["receipt_month_source"]
             if meta.get("mixed_months"):
                 row["mixed_months"] = True
+            # Duplicate stamps (2026-08-25): which earlier mail already
+            # carried this content, so the row can point at it instead of
+            # just refusing to explain itself.
+            if meta.get("duplicate_of"):
+                row["duplicate_of"] = meta["duplicate_of"]
+            if meta.get("duplicate_of_subject"):
+                row["duplicate_of_subject"] = meta["duplicate_of_subject"]
+            if meta.get("duplicate_of_at"):
+                row["duplicate_of_at"] = meta["duplicate_of_at"]
     return rows
 
 
@@ -852,6 +878,119 @@ def _archive_attachments(arch: Path) -> list[tuple[str, bytes]]:
     if not out and (arch / "rendered-body.pdf").is_file():
         out = [("rendered-body.pdf", (arch / "rendered-body.pdf").read_bytes())]
     return out
+
+
+_DEDUPE_LOCK = threading.Lock()
+
+_WHITESPACE = re.compile(r"\s+")
+
+
+def _body_fingerprint(text: str) -> str:
+    """Fingerprint for a mail whose receipt IS its body.
+
+    Whitespace-collapsed and casefolded, because a forward re-wraps lines
+    and mail clients disagree about capitalisation of headers they inject.
+    Nothing cleverer: a near-miss here MISSES, and a missed duplicate is
+    the old behavior, while a false match would hide a real receipt.
+    """
+    return "body:" + hashlib.sha1(
+        _WHITESPACE.sub(" ", (text or "")).strip().casefold().encode("utf-8")
+    ).hexdigest()[:16]
+
+
+def content_fingerprints(attachments, body_text: str = "") -> list[str]:
+    """What this mail's receipt payload IS, as content, in file order.
+
+    Attachment digests use the SAME `sha1(bytes)[:16]` shape as the
+    receipt-pool dedupe in `service._add_receipts_locked`, deliberately:
+    the two layers must agree about what "the same file" means, or a mail
+    could be called a duplicate here and still add a row there.
+
+    A body-only mail has no attachment to hash at arrival (its PDF does
+    not exist until something renders it), so its body stands in.
+    """
+    digests = [
+        hashlib.sha1(data).hexdigest()[:16] for _name, data in (attachments or [])
+    ]
+    if digests:
+        return digests
+    return [_body_fingerprint(body_text)] if (body_text or "").strip() else []
+
+
+def _archive_body_text(arch: Path) -> str:
+    """Readable body of the custody message, or "" when unreadable."""
+    from .body_render import extract_body_text
+
+    eml = arch / "message.eml"
+    if not eml.is_file():
+        return ""
+    try:
+        return extract_body_text(eml.read_bytes())
+    except Exception:  # noqa: BLE001 - a fingerprint is never worth a crash
+        return ""
+
+
+def _fingerprint_owners(data_root: Path, exclude: str = "") -> dict[str, dict]:
+    """`fingerprint -> the archive that already holds that content`.
+
+    Built by walking the archives rather than kept as an index file, for
+    the reason the working notes give about the log: the volume is the
+    system of record, and a derived index can disagree with it. At this
+    mailbox's volume that is a few dozen small reads on the worker thread
+    that already runs after the SMTP 250, so nothing a sender waits on.
+    If the archive count ever reaches the thousands, add a cache HERE and
+    rebuild it from the archives; do not move the truth.
+
+    Only statuses in `OWNS_CONTENT` claim anything. Earliest archive wins,
+    so the original keeps ownership when a copy is later dismissed.
+    """
+    owners: dict[str, dict] = {}
+    root = inbound_root(data_root)
+    if not root.is_dir():
+        return owners
+    for arch in sorted(root.iterdir()):
+        if not arch.is_dir() or arch.name == exclude:
+            continue
+        if not _ARCHIVE_NAME_RE.fullmatch(arch.name):
+            continue
+        meta = _read_meta(arch)
+        if str(meta.get("status") or "") not in OWNS_CONTENT:
+            continue
+        for fp in meta.get("fingerprints") or []:
+            owners.setdefault(str(fp), {
+                "archive": arch.name,
+                "at": str(meta.get("at") or ""),
+                "subject": str(meta.get("subject") or ""),
+            })
+    return owners
+
+
+def classify_duplicate(
+    data_root: Path, arch: Path, fingerprints: list[str],
+) -> dict | None:
+    """The original this mail duplicates, or None to carry on.
+
+    A mail counts as a duplicate only when EVERY piece of content it
+    carries is already held. A two-attachment mail where one file is new
+    is not a duplicate: it carries a receipt the tool does not have, and
+    the pool's own content dedupe drops the repeat at add time.
+
+    Known edge, deliberately not swept: a copy parked against an original
+    that LATER fails to ingest points at a mail that never landed. The
+    original shows as "Needs a retry" and the copy names it in its label,
+    so the pair is legible on one screen, and retrying the original or
+    clearing the copy with `unmark_duplicate` resolves it either way. A
+    background re-evaluation would be the alternative, and it would have
+    to re-open settled rows to earn its keep.
+    """
+    if not fingerprints:
+        return None
+    owners = _fingerprint_owners(data_root, exclude=arch.name)
+    hits = [owners.get(fp) for fp in fingerprints]
+    if not all(hits):
+        return None
+    first = min(hits, key=lambda h: h["at"] or "")
+    return dict(first)
 
 
 def pool_deleted_batch(data_root: Path, batch_id: str) -> tuple[int, int]:
@@ -1002,7 +1141,15 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
         n = int(meta.get("n_files") or 0)
         subject = str(meta.get("subject") or "").strip()
         month = str(meta.get("receipt_month") or "")
-        if meta.get("status") == STATUS_POOLED:
+        if meta.get("status") == STATUS_DUPLICATE:
+            # Say plainly that nothing was added, and that this is fine.
+            # A sender who forwards the same receipt twice needs to know
+            # the tool is not now holding it twice.
+            landed = (
+                " was already in the Brisken expense tool, so nothing was "
+                "added a second time. No action needed."
+            )
+        elif meta.get("status") == STATUS_POOLED:
             verb = "are" if n > 1 else "is"
             landed = (
                 f" {verb} stored for {_month_human(month)} in the Brisken "
@@ -1212,6 +1359,12 @@ def annotate_status_view(rows: list[dict]) -> None:
                 kind = KIND_HELD
             else:
                 label = f"Waiting for {month}"
+        elif status == STATUS_DUPLICATE:
+            subject = str(row.get("duplicate_of_subject") or "").strip()
+            label = (
+                f'Already have this, from "{subject}"' if subject
+                else "Already have this"
+            )
         elif (
             row.get("batch_deleted")
             and kind == KIND_DONE
@@ -1553,6 +1706,41 @@ def route_archived(
 
     try:
         # Mail we cannot read as receipts never pays for extraction.
+        # Duplicates are sorted out BEFORE anything else happens to the
+        # mail (owner directive 2026-08-25). Before the body-only branch
+        # specifically: a re-send of a body-only receipt would otherwise
+        # auto-render and spend a vision call reading a receipt we hold.
+        fingerprints = content_fingerprints(
+            parsed.attachments,
+            _archive_body_text(arch) if parsed.body_only else "",
+        )
+        with _DEDUPE_LOCK:
+            # An operator who already ruled "not a duplicate" outranks the
+            # detector; without this the mail would re-park on the way
+            # back in and the override would be a no-op.
+            overridden = bool(_read_meta(arch).get("duplicate_override"))
+            original = (
+                None if overridden
+                else classify_duplicate(data_root, arch, fingerprints)
+            )
+            if original is not None:
+                _update_meta(arch, {
+                    "status": STATUS_DUPLICATE,
+                    "fingerprints": fingerprints,
+                    "duplicate_of": original["archive"],
+                    "duplicate_of_subject": original["subject"],
+                    "duplicate_of_at": original["at"],
+                })
+                _maybe_ack(db_path, arch)
+                return {
+                    "status": STATUS_DUPLICATE, "archive": arch.name,
+                    "person": person, "duplicate_of": original["archive"],
+                }
+            # Claim this content while still holding the lock, and while
+            # the status is `routing` (which owns content), so two
+            # identical mails racing here cannot both come out unique.
+            _update_meta(arch, {"fingerprints": fingerprints})
+
         if parsed.body_only or not parsed.attachments:
             held = HELD_BODY_ONLY if parsed.body_only else HELD_NO_VALID_FILES
             _update_meta(arch, {"status": held})
@@ -2255,6 +2443,63 @@ def re_ingest(
     }
 
 
+def unmark_duplicate(
+    db_path: Path,
+    learning_db_path: Path | None,
+    data_root: Path,
+    archive: str,
+) -> dict:
+    """"This is not a duplicate" — route a parked mail after all.
+
+    The detector matches byte-identical content, so a false positive means
+    two genuinely different purchases produced identical bytes, which is
+    rare but not impossible (a fixed-price subscription receipt with no
+    invoice number, mailed two months running). Without a way out, a real
+    receipt would rest as a duplicate forever, and "it silently vanished"
+    is exactly the failure the intake-trust round was about.
+
+    Deny-by-default: only a mail currently parked as `duplicate` qualifies,
+    so this can never become a second, unguarded ingest path. The archive
+    keeps its fingerprints, so the NEXT copy still detects against it.
+    """
+    arch = _archive_dir(data_root, archive)
+    if arch is None:
+        return {"error": "not found", "code": 404}
+    applied, meta = _transition_meta(
+        arch,
+        lambda m: str(m.get("status", "")) == STATUS_DUPLICATE,
+        {
+            "status": STATUS_RECEIVED,
+            "duplicate_cleared_at": _now_iso(),
+            "duplicate_override": True,
+        },
+    )
+    if not applied:
+        return {
+            "error": (
+                "this mail is not parked as a duplicate"
+            ),
+            "code": 409,
+            "status": str(meta.get("status", "")),
+        }
+    eml = arch / "message.eml"
+    if not eml.is_file():
+        _update_meta(arch, {"status": HELD_FAILED})
+        return {"error": "custody message unreadable", "code": 409}
+    with RunStore(db_path) as store:
+        cfg = IntakeConfig.from_settings(store.get_settings())
+    try:
+        parsed = parse_inbound(eml.read_bytes(), cfg.domain)
+    except Exception:  # noqa: BLE001 - unreadable custody file
+        _update_meta(arch, {"status": HELD_FAILED})
+        return {"error": "custody message unreadable", "code": 409}
+    # Route it exactly as an arrival would, minus the detector: the
+    # override rides on the meta and `route_archived` honours it.
+    return route_archived(
+        db_path, learning_db_path, data_root, arch, parsed, synchronous=True,
+    )
+
+
 def dismiss_archive(
     data_root: Path, archive: str, operator: str | None = None,
 ) -> dict:
@@ -2264,7 +2509,9 @@ def dismiss_archive(
 
     Pooled mail is dismissable for the same reason held mail is: junk
     with an attachment now RESTS in the pool waiting for a month that may
-    never come, and without this it would wait there undismissably."""
+    never come, and without this it would wait there undismissably. A
+    duplicate is dismissable on the same argument: it rests forever
+    otherwise, and clearing it is the normal way to finish with one."""
     arch = _archive_dir(data_root, archive)
     if arch is None:
         return {"error": "not found", "code": 404}
@@ -2272,7 +2519,7 @@ def dismiss_archive(
         arch,
         lambda m: (
             str(m.get("status", "")).startswith("held_")
-            or str(m.get("status", "")) == STATUS_POOLED
+            or str(m.get("status", "")) in (STATUS_POOLED, STATUS_DUPLICATE)
         ),
         {
             "status": STATUS_DISMISSED,

@@ -45,6 +45,7 @@ from expense_recon.web.intake_mail import (  # noqa: E402
     HELD_BODY_ONLY,
     HELD_FAILED,
     STATUS_DISMISSED,
+    STATUS_DUPLICATE,
     STATUS_INGESTED,
     STATUS_POOLED,
     DayBudget,
@@ -783,7 +784,10 @@ def test_inbound_log_detail_joins_created_expenses(client, monkeypatch):
     assert exp["total"] == "89.00"
     doc_id = exp["document_id"]
 
-    # A resend of the same bytes dedupes: ingested, zero rows created.
+    # A resend of the same bytes is sorted out BEFORE ingestion (owner
+    # directive 2026-08-25). It used to ingest and rely on the receipt
+    # pool's own content dedupe to create nothing, which was correct but
+    # illegible: the row said "Added" about a mail that added nothing.
     _patch_ocr(monkeypatch, _extraction(vendor="Trenitalia"))
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
@@ -793,8 +797,18 @@ def test_inbound_log_detail_joins_created_expenses(client, monkeypatch):
     )
     entries = client.get("/api/inbound/log?detail=1").json()["entries"]
     resend = [e for e in entries if e.get("subject") == "resend"][0]
-    assert resend["status"] == STATUS_INGESTED
-    assert resend["expenses"] == []
+    assert resend["status"] == STATUS_DUPLICATE
+    # No expenses join at all, because the mail never reached a batch —
+    # which is the point: it is sorted out BEFORE ingestion, not after.
+    assert not resend.get("expenses")
+    # It points at the mail that already holds the receipt.
+    assert resend["duplicate_of"] == row["archive"]
+    assert resend["duplicate_of_subject"] == "July taxi"
+    assert resend["status_kind"] == "resting"
+    assert "July taxi" in resend["status_label"]
+    log = client.get("/api/inbound/log").json()
+    assert log["n_duplicates"] == 1
+    assert log["n_held"] == 0
 
     # Deleting the row keeps the mail's story honest: deleted flag, not
     # a vanished document.
