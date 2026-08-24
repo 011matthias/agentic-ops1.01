@@ -58,11 +58,20 @@ _NEEDS_REVIEW = "(needs review)"
 _NO_RECEIPT = "(no receipt matched)"
 
 
-def _anchor_row(transaction_id: str) -> int | None:
-    """The sheet row a transaction anchors to, or None when the id is
-    not the tabular ``"{account_id}:{row_index}"`` shape (PDF-parsed
-    transactions carry different id shapes — skip, never crash)."""
-    _, sep, tail = transaction_id.rpartition(":")
+def _anchor_row(tx: "Transaction") -> int | None:
+    """The sheet row a transaction anchors to, or None when it has none
+    (PDF-parsed transactions have no tabular row — skip, never crash).
+
+    `source_row` is the answer whenever the transaction carries one.
+    Transactions parsed before PR 2a do not: their ids were positional
+    (``"{account_id}:{row_index}"``) and this function recovered the row
+    by taking the id apart. Snapshots at rest still hold those ids, and a
+    run created before PR 2a can still be re-exported, so the id-parsing
+    path stays as the fallback. New parses never reach it.
+    """
+    if tx.source_row is not None:
+        return tx.source_row if tx.source_row >= 2 else None
+    _, sep, tail = tx.transaction_id.rpartition(":")
     if not sep:
         return None
     try:
@@ -201,7 +210,7 @@ def write_sheet_writeback(
             )
             if value is None:
                 continue
-            row = _anchor_row(tx.transaction_id)
+            row = _anchor_row(tx)
             if row is None:
                 continue
             ws.cell(row=row, column=col, value=value)

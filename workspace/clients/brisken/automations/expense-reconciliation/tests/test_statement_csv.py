@@ -206,8 +206,14 @@ def test_integration_parser_to_matcher_happy_path():
     assert all(m.match_type == MatchType.EXACT for m in outcome.matches)
     # 3.10 / LD-5 A5: the fixture's negative row (the Amazon return) is a
     # credit — partitioned into its own refunds bucket, never left among
-    # the unmatched purchases.
-    assert outcome.refunds == ["brisken-amex-usd:6"]
+    # the unmatched purchases. Identified by which ROW it is rather than
+    # by a literal id: ids are content-derived (PR 2a) and deliberately
+    # carry no row number.
+    by_id = {t.transaction_id: t for t in txs}
+    assert len(outcome.refunds) == 1
+    refunded = by_id[outcome.refunds[0]]
+    assert refunded.source_row == 6
+    assert refunded.amount < 0
     # The other 4 purchases in the fixture remain unmatched (no receipts
     # seeded for them), preserving the reconciliation guarantee invariant
     # (v2 spec §25.5): 2 matched + 4 unmatched + 1 refund = 7.
