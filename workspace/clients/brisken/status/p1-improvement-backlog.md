@@ -498,7 +498,9 @@ created 2026-08-21 09:17, so anything Dirk sent before that had no MX to
 reach and is unrecoverable. Worth telling him once so he stops looking
 for it.
 
-### 31. A Settings control that silently discards what you type (2026-08-24)
+### 31. A Settings control that silently discards what you type (CLOSED 2026-08-25)
+
+**Owner applied `lovable-known-senders-prompt.md`; verified live by driving the app — the stale "Accepted senders" editor is gone and "People we recognise" is in its place.**
 
 Found by driving the published SPA. The Settings > Email intake section still
 carries the **"Accepted senders — Full addresses or @domain entries"** editor.
@@ -523,7 +525,9 @@ reply when their receipts land in the open month". Receipts land in the month
 PRINTED on them, or wait in the pool; the ack says which. That copy is what
 sets a tester's expectations, so it is worth the same pass.
 
-### 32. There is no way into an existing month (2026-08-24)
+### 32. There is no way into an existing month (CLOSED 2026-08-25)
+
+**Owner applied `lovable-months-list-prompt.md`; verified live — `/months` renders 1 table, 6 rows, 6 `/expenses/{id}` links and real month labels. The blocker is gone.**
 
 Found by driving the published SPA. The "Months" nav item goes to `/months`,
 which renders the "New expense batch" upload form and nothing else: **0

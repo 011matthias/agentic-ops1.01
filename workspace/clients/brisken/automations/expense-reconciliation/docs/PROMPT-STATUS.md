@@ -1,6 +1,6 @@
 # Lovable prompt status: what is applied to the published SPA
 
-**Audited 2026-08-24 against `brisken-reconcile-dash.lovable.app`** by
+**Audited 2026-08-25 against `brisken-reconcile-dash.lovable.app`** by
 driving the app, not by reading this repo. Re-run the audit and update this
 file whenever the owner publishes; a prompt's presence in `docs/` says
 nothing about whether it was ever pasted.
@@ -37,20 +37,14 @@ are VERBATIM strings from each prompt.
 | `lovable-feedback-capture-prompt.md` | Double-click opens the popover (Feedback on "..." / Comment / Send). The footer discoverability hint is absent; the widget works |
 | `lovable-feedback-r1-prompt.md` | "Leave blank (resolve from card)"; currency under Advanced |
 | `lovable-ready-tile-prompt.md` | Stat row reads EXPENSES / CATEGORIZED / NEEDS CATEGORY / READY / TOTALS |
+| `lovable-months-list-prompt.md` | `/months` renders a table: 6 rows, 6 `/expenses/{id}` links, real labels (January 2026, May 2026, April 2026). Backlog item 32 CLOSED |
+| `lovable-known-senders-prompt.md` | "People we recognise" editor present AND the stale "Accepted senders" editor is GONE. Backlog item 31 CLOSED |
+| `lovable-inbound-status-refusals-prompt.md` | Status cells render the backend `status_label` ("Waiting for August 2026"); the refusals strip is present, worded **"turned away"** |
 
 ## Not applied
 
-These three are the whole paste list. Each was **rewritten 2026-08-24** to
-open with a measured inventory of what the published app already has, so
-Lovable adds the delta instead of rebuilding working screens. They touch
-different screens and are independent; the numbering is a suggested order,
-not a dependency.
-
-| Prompt | What is missing |
-|---|---|
-| **1. `lovable-months-list-prompt.md`** | **The blocker.** `/months` renders only the create form: 0 tables, 0 rows, no batch label in the HTML. The page calls `GET /api/expense-batches`, gets 200 with six batches, and discards them. No way into an existing month except the intake page's Month links or a hand-typed `/expenses/{id}`. Also carries Rename (no rename dialog exists anywhere today) and Delete month, homeless since `lovable-intake-quickwins-prompt.md` §3 |
-| **2. `lovable-known-senders-prompt.md`** | Settings > Email intake. Deletes the dead "Accepted senders" editor (live, and it silently discards what an operator types: backlog item 31), rewords three help lines that still say "the open month", and adds the `intake.known_senders` field. Opens with the exact live inventory of that section so nothing else in it is lost. `lovable-open-intake-prompt.md` was folded in and deleted |
-| **3. `lovable-inbound-status-refusals-prompt.md`** | The Email intake page. Renders the Status cell from `status_kind` / `status_label` instead of a local map (the durability fix: the next status value added mislabels again without it), and adds the refusals strip. **Supersedes `lovable-month-pool-prompt.md` §0 and §12**, which have been removed from that file so it cannot be double-pasted |
+None. The three that were outstanding on 2026-08-24 were all applied by the
+owner and verified live on 2026-08-25.
 
 ## Cannot verify (no live state exercises them)
 
