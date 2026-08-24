@@ -213,10 +213,14 @@ The surface splits into four layers, and they do NOT ship together:
    is a rename and a chart source that is not a Books export. Not started.
 4. **The export artifact** (`output/zoho_expense_export.py`, the
    `EXPENSE_COLUMNS` Zoho-import headers, the `/runs/{id}/zoho.csv` route,
-   the SPA's "Download Zoho Expenses CSV" button). **Blocked on one answer:
-   what does the CSV get imported into now?** Keeping the current headers
-   costs nothing and still works; changing them without knowing the target
-   would be guesswork. Ask when the destination is known.
+   the SPA's "Download Zoho Expenses CSV" button). **UNBLOCKED 2026-08-23 —
+   do not re-ask.** The question this was waiting on ("what does the CSV get
+   imported into now?") was answered by the output-is-a-document directive:
+   there is no target application at all, so nothing imports the headers and
+   they stop being a contract. `EXPENSE_COLUMNS` can be renamed to plain
+   English on its own schedule, and the button's wording is part of
+   `docs/lovable-month-report-prompt.md`. Sequence it AFTER layer 2, which
+   moves the same names on the SPA-facing payloads.
 
 ### 24. The output is a document now (owner directive 2026-08-23)
 
