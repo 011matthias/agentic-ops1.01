@@ -92,6 +92,7 @@ from .service import (
     assign_batch_cards,
     attach_emailed_receipt,
     available_entities,
+    baseline_receipts,
     batch_list_summary,
     build_expense_report,
     build_reconciliation_report,
@@ -129,7 +130,6 @@ from .service import (
 )
 from ..matching.types import EXPENSE_CATEGORIES
 from ..merchant_registry import normalize_merchants_setting
-from .serialize import snapshot_from_dict
 from .store import (
     INTAKE_PROCESSING,
     INTAKE_READY,
@@ -2617,7 +2617,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 # per line. Find the expense in the EFFECTIVE receipt set so
                 # a manual add is editable too; merge with any existing
                 # override so setting the account never clears the category.
-                _, receipts, _, _ = snapshot_from_dict(run.snapshot)
+                receipts = baseline_receipts(run)
                 field_overrides = store.get_expense_field_overrides(run_id)
                 edits = store.get_expense_edits(run_id)
                 overrides = store.get_category_overrides(run_id)
