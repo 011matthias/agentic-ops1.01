@@ -117,6 +117,11 @@ def transaction_to_dict(t: Transaction) -> dict:
         # card-scoping / card-contradiction gate that keeps FX-false-pairs out
         # would silently fall back to account_id on a multi-card statement.
         "card_last4": t.card_last4,
+        # The source spreadsheet row (PR 2a). Load-bearing for the sheet
+        # writeback, which used to recover the row by parsing it back out
+        # of the positional transaction_id; content-derived ids carry no
+        # row, so it has to survive the snapshot round trip.
+        "source_row": t.source_row,
     }
 
 
@@ -142,6 +147,10 @@ def transaction_from_dict(d: dict) -> Transaction:
         # .get keeps pre-WS3 snapshots loadable (no card_last4 key); those
         # re-match on account_id, exactly as they did before this field.
         card_last4=d.get("card_last4"),
+        # .get keeps pre-PR-2a snapshots loadable (no source_row key);
+        # those still carry positional ids, and `_anchor_row`'s legacy
+        # fallback recovers their sheet row from the id as before.
+        source_row=d.get("source_row"),
     )
 
 

@@ -198,6 +198,19 @@ class Transaction:
     # to FX-false-pair with EUR meal receipts paid on 2838.
     card_last4: str | None = None
 
+    # The 1-indexed row this charge occupies in its source spreadsheet
+    # (header is row 1, data starts at row 2); None for sources with no
+    # tabular row, such as the Chase statement PDF.
+    #
+    # Carried separately because `transaction_id` stopped encoding it.
+    # Ids were positional (`"{account_id}:{row_index}"`) and the sheet
+    # writeback (L1/L3, Criss's own workbook) recovered the row by parsing
+    # the id back apart. Content-derived ids (PR 2a of the living month)
+    # are stable under append and reorder, which is what operator
+    # decisions need, but they carry no row — so the row travels in its
+    # own field instead of being smuggled through the identity.
+    source_row: int | None = None
+
 
 @dataclass(frozen=True)
 class Receipt:

@@ -101,7 +101,12 @@ def test_already_posted_excluded_from_zoho_export(client):
     refs = {row[ref_idx] for row in body if len(row) > ref_idx}
     assert tx_id not in refs, "already_posted row must not reach the journal"
 
-    # the report + reconciled CSV still SHOW the row (nothing dropped)
+    # the report + reconciled CSV still SHOW the row (nothing dropped).
+    # Asserted against the account the run was created with, not against
+    # a slice of the transaction id: ids are content-derived (PR 2a) and
+    # no longer carry an account prefix to slice off.
     recon = client.get(f"/runs/{run_id}/reconciled.csv")
-    assert tx_id.split(":")[0] in recon.text  # account present
+    recon_rows = list(csv.reader(io.StringIO(recon.text)))
+    acct_idx = recon_rows[0].index("Account")
+    assert any(r[acct_idx] == "amex-9001" for r in recon_rows[1:] if r)
     assert resp.text  # journal file itself still has the other rows

@@ -50,7 +50,12 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from ..matching.types import Transaction
-from ._common import ParseIssue, StatementParseError, parse_amount
+from ._common import (
+    ParseIssue,
+    StatementParseError,
+    assign_content_ids,
+    parse_amount,
+)
 
 __all__ = [
     "parse_statement_pdf",
@@ -146,14 +151,11 @@ def parse_statement_text(
     issues: list[ParseIssue] = []
     pending: list[dict] = []          # charges awaiting their card marker
     pending_fx_ccy: str | None = None
-    seq = 0
 
     def flush(card: str) -> None:
-        nonlocal seq
         for p in pending:
-            seq += 1
             transactions.append(
-                _build_tx(p, card, seq, legal_entity_id, account_card_currency)
+                _build_tx(p, card, legal_entity_id, account_card_currency)
             )
         pending.clear()
 
@@ -220,7 +222,7 @@ def parse_statement_text(
             ParseIssue(file_name, 0, "No charges found; is this a Chase statement PDF?")
         )
 
-    return transactions, issues
+    return assign_content_ids(transactions), issues
 
 
 def _extract_text(path: Path) -> str:
@@ -290,10 +292,14 @@ def _attach_fx(
 
 
 def _build_tx(
-    p: dict, card: str, seq: int, legal_entity_id: str, ccy: str
+    p: dict, card: str, legal_entity_id: str, ccy: str
 ) -> Transaction:
     return Transaction(
-        transaction_id=f"{card}:{seq}",
+        # Stamped by `assign_content_ids` at the end of the parse, so
+        # CSV / Excel / PDF share one identity rule. The PDF has no
+        # tabular row, so `source_row` stays None and the sheet writeback
+        # skips these rows exactly as it always has.
+        transaction_id="",
         legal_entity_id=legal_entity_id,
         account_id=card,
         transaction_date=p["date"],

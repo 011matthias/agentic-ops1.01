@@ -359,7 +359,28 @@ filing into whatever month happened to be open (which is how Dirk's August
 receipts landed in the April 2026 batch). It now files by the month printed
 ON the receipt, and rests in a pool when that month has no batch yet.
 
-**PR 2 - the living month. NEXT.** The statement stops being a closing event
+**PR 2a - stable transaction identity. SHIPPED.** The prerequisite, split
+out of PR 2 because the other four parts sit on it and it carries no
+behavior change of its own. Transaction ids are now derived from what the
+row SAYS (sha1 over account / card / date / canonical amount / currency /
+vendor / reference, 16 hex chars, `-{n}` suffix for repeat charges) instead
+of where it sat in the file. Stamped by one shared `assign_content_ids`
+post-pass in `ingest/_common.py` that all three parsers call at the end of
+a parse, AFTER sign canonicalization, so a mapped `type` column and an
+inferred sign majority cannot give the same charge two identities. Nothing
+at rest migrates: stored snapshots keep their positional ids and their
+decisions still resolve.
+
+The find, which the plan did not name: `sheet_writeback._anchor_row`
+recovered the spreadsheet row by taking the positional id apart, so a
+content id would have silently written NOTHING into Chris's workbook (it
+degrades by design, no error). The row now travels in its own
+`Transaction.source_row` field and the id-parsing path stays only as the
+fallback for pre-2a snapshots. Related: the occurrence suffix separator is
+`-` and not `:` precisely because that fallback reads the last `:` as a row
+number, and `transaction_id` also travels as a URL path segment.
+
+**PR 2b - the living month. NEXT.** The statement stops being a closing event
 and becomes an input stream:
 
 1. **Stable transaction identity** (the prerequisite). Transaction ids are

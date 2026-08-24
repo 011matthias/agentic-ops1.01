@@ -33,7 +33,10 @@ what to do next.
   api-contract **rule 5** now covers enum growth; `test_every_status_has_a_label`
   fails the suite on a new status until someone decides what it SAYS.
 
-Baselines: suite **1257 passed / 2 skipped**, calibrate green, ruff (E9,F)
+**Backlog item 29 PR 2a (stable transaction identity) is shipped**, the
+prerequisite the rest of the living month sits on; see direction 1 below.
+
+Baselines: suite **1284 passed / 2 skipped**, calibrate green, ruff (E9,F)
 clean on the diff. Worktree `C:\Users\neuma_p1qrsic\Repo\agentic-ops1-recon`,
 app root `workspace/clients/brisken/automations/expense-reconciliation`.
 
@@ -52,22 +55,39 @@ They join automatically the moment a batch labelled "August 2026" /
 month needs at least one uploaded receipt — do NOT seed a fabricated one into
 a live month.
 
+**Owner ruling 2026-08-24: pre-creating months INTRUDES.** The open question
+from the previous checkpoint is closed. We do not open August or July on
+Criss's behalf, and we do not ask her to. The pool is the correct resting
+place and the receipts wait there until she opens the month herself in the
+course of her own work. This retires the "create the two months" step that
+sat at position 2 of the previous next-steps list.
+
 ## The directions, in the order they now rank
 
-### 1. PR 2 of the living month (backlog item 29) — the top remaining build
+### 1. PR 2b of the living month (backlog item 29) — the top remaining build
 
 Already owner-approved; the approved plan file is
 `C:\Users\neuma_p1qrsic\.claude\plans\fizzy-seeking-lagoon.md`.
 
-Stable content-derived transaction ids are the prerequisite: ids are
-positional today (`f"{account_id}:{row_index}"` in `ingest/statement_csv.py`)
-and operator decisions key on them, so any appended or partial statement
-upload renumbers every decision onto the wrong charge. Then: append-capable
-statement uploads (per card, several times a month, content-id dedupe),
-`has_statement` no longer closing the month, and incremental re-match
-preserving operator decisions and persisting LLM FX/ambiguous judgments by
-(transaction_id, document_id) so a re-match never re-spends on a pair it
-already judged.
+**PR 2a is done.** Transaction ids are content-derived and stable under
+append, insert and reorder; `assign_content_ids` in `ingest/_common.py` is
+the one definition, called at the end of every statement parse. Read its
+docstrings before touching identity — the stamp is a post-pass for a
+reason (sign canonicalization) and the `-{n}` occurrence separator is not
+a `:` for a reason (the sheet writeback reads a trailing `:N` as a row).
+
+What remains: append-capable statement uploads (per card, several times a
+month, content-id dedupe), `has_statement` no longer closing the month, and
+incremental re-match preserving operator decisions and persisting LLM
+FX/ambiguous judgments by (transaction_id, document_id) so a re-match never
+re-spends on a pair it already judged.
+
+One interaction PR 2a pinned deliberately and 2b has to handle: a file
+whose SIGN inference differs between a partial and a full upload yields
+different ids for the same printed row, because the two uploads genuinely
+disagree about whether the money went out or came back. Surfacing two rows
+beats silently deduping a contradiction. Decide in 2b whether that wants a
+visible warning.
 
 Nothing is on fire here, which is exactly why it is now the top item.
 
