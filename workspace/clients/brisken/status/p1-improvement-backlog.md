@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-08-24
+updated: 2026-08-25
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -398,43 +398,56 @@ is not expected to equal transaction count.
 
 ### 30. The intake cannot tell anyone whether a receipt arrived (2026-08-24)
 
-Surfaced by an owner question this session ("Dirk has sent way more than 2
-emails, make sure they are there") that took a full investigation to answer
-and still ended partly unanswerable. Three defects compound into one: nobody,
-inside or outside, can establish whether a mailed receipt landed.
+Surfaced by an owner question ("Dirk has sent way more than 2 emails, make
+sure they are there") that took a full investigation to answer and still
+ended partly unanswerable. Three defects compounded into one: nobody,
+inside or outside, could establish whether a mailed receipt landed. **(a)
+and (c) shipped 2026-08-25 (Shipped row 26); (b) is what is left.**
 
-**a. Outside senders get total silence.** Dirk sends from
-`dirk_.neumann@icloud.com` as well as his work account. `graph_notify.send_mail`
-hard-refuses any recipient not ending `@brisken.com` (the anti-backscatter guard
-added when submission opened to any sender, PR #587). So an iCloud send produces
-no ack, and an accepted-but-held mail produces no bounce either. From Dirk's
-chair a delivered receipt and a lost one look identical. Fix: a narrow
-allowlist of KNOWN personal addresses that do get acked, keeping the guard for
-genuinely unknown senders. The allowlist is settings-side
-(`intake.ack_addresses`), so adding Dirk's iCloud is an operator edit, not a
-deploy.
+**a. Outside senders get total silence. SHIPPED.** Dirk sends from
+`dirk_.neumann@icloud.com` as well as his work account, and
+`graph_notify.send_mail` hard-refused any recipient not ending
+`@brisken.com` (the anti-backscatter guard from PR #587), so an iCloud
+send produced no ack and an accepted-but-held mail produced no bounce
+either. Shipped as settings `intake.known_senders` (NOT the
+`ack_addresses` this entry first proposed: the same list also gates (c),
+and a name that says "ack" would have been one name answering two
+questions). `send_mail` takes an explicit per-call `allow_external` and
+asserts the structural recipient guard BEFORE consulting it, so a listed
+address widens the rule by exactly itself. Operator edit, no deploy;
+Settings editor is `docs/lovable-known-senders-prompt.md`.
 
-**b. A refused RCPT leaves no trace anywhere.** `rcpt_decision` returns the SMTP
-error line and nothing is written: no archive, no log row, no counter. If mail
-is being turned away (wrong domain, recipient ceiling) we cannot see it, which
-is exactly the question that could not be answered this session. Fix: log every
-refusal with the envelope sender, recipient and reason, and expose a count on
-the intake log so "did anything get turned away" is answerable.
+**b. A refused RCPT leaves no trace anywhere. OPEN.** `rcpt_decision`
+returns the SMTP error line and nothing is written: no archive, no log
+row, no counter. If mail is being turned away (wrong domain, recipient
+ceiling) we cannot see it, which is exactly the question that could not be
+answered. The DATA-stage refusals (disk floor, in-flight ceiling, day
+budget, archive failure) are equally silent and matter more, because a
+budget refusal turns away a real receipt. Fix: record every refusal with
+the envelope sender, recipient, stage and reason, and expose a count on
+the intake log so "did anything get turned away" is answerable. Keep it
+off the `entries` list: a refusal has no archive, and a row there with an
+unknown status is exactly the enum-growth trap that made pooled mail read
+as "Arriving".
 
-**c. Forwarded vendor receipts are body-only, and body-only needs a human.** All
-SIX mails held on 2026-08-24 carried NO attachment (`n_files: 0`, nothing
-skipped): AWS billing, two OpenAI purchases, an OpenAI credits confirmation, the
-CIC/Monetico card ticket, Hostinger. The receipt is the HTML body. That is not
-the exception the render path was built for, it is the normal shape of a
-forwarded vendor receipt, and every one of them sat held until an operator
-clicked render. Fix: consider auto-rendering body-only mail at arrival (it
-already routes to the pool safely, so nothing lands in a month unreviewed), or
-at minimum make the held strip say "this needs one click" rather than reading
-as an error.
+**c. Forwarded vendor receipts are body-only. SHIPPED.** All SIX mails
+held on 2026-08-24 carried NO attachment (`n_files: 0`, nothing skipped):
+AWS billing, two OpenAI purchases, an OpenAI credits confirmation, the
+CIC/Monetico card ticket, Hostinger. The receipt is the HTML body. That is
+not the exception the render path was built for, it is the normal shape of
+a forwarded vendor receipt, and every one sat held until an operator
+clicked render. Shipped as auto-render at arrival for KNOWN senders only,
+reusing the operator render path unchanged. The gate is the answer to the
+spend question the click was really protecting: submission is open to
+anyone, and rendering every stranger's newsletter costs a vision call and
+puts junk in the pool. Every one of the six real mails came from Dirk
+(work + iCloud) or Criss, so the gate covers the real traffic and the
+`known_senders` list widens it.
 
-**Not in scope:** the mailbox only exists since the dedicated IPv4 was created
-2026-08-21 09:17, so anything Dirk sent before that had no MX to reach and is
-unrecoverable. Worth telling him once so he stops looking for it.
+**Not in scope:** the mailbox only exists since the dedicated IPv4 was
+created 2026-08-21 09:17, so anything Dirk sent before that had no MX to
+reach and is unrecoverable. Worth telling him once so he stops looking
+for it.
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
@@ -610,6 +623,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 26 | The intake knows who its own people are. Settings `intake.known_senders` lists outside addresses that count as ours; `graph_notify.send_mail` takes an explicit per-call `allow_external` and asserts the structural recipient guard BEFORE consulting it, so a listed address widens the rule by exactly itself and a smuggled second recipient stays refused. A known sender's body-only mail is now RENDERED ON ARRIVAL instead of waiting for a click, reusing the operator render path unchanged (same CAS, same month stamps, same pool), with a failure alerting because nobody watches an automatic render | Backlog item 30 (a) + (c). Dirk mails receipts from a private iCloud address as well as his work one, and the anti-backscatter guard meant that send produced no ack and no bounce: a delivered receipt and a lost one looked identical from his chair. Meanwhile every one of the six mails held on 2026-08-24 delivered NO file at all — a forwarded vendor receipt IS the email body — so the normal shape of a forwarded receipt read as a fault and sat there. Strangers still hold: the mailbox takes mail from anyone and we do not pay a vision call to read every newsletter. Eight regressions of the real source were each proven RED first, including the two that matter most (a malformed address ON the allowlist must still be refused; a look-alike domain must not read as internal) | this round, 2026-08-25; suite 1245 passed / 2 skipped, calibrate green, ruff clean on the diff; Settings editor `docs/lovable-known-senders-prompt.md` (owner applies) |
 | 25 | Emailed receipts file by the month printed ON the receipt, not by whichever month happens to be open. A receipt whose month has no batch RESTS in a pool (new status `pooled`, deliberately not `held_*`) with its month on it, and is added automatically when that month is created or renamed into. Deleting a month returns its mail to the pool, so re-creating the month re-claims it. Every attachment mail is read at ARRIVAL by the full extraction pipeline, which costs nothing extra: the cache is content-addressed and the arrival read warms it for the batch ingest | Dirk's August receipts landed in the April 2026 batch, because `route_archived` picked the newest statement-less batch and never looked at the receipt. Month identity is the operator's label read by `month_from_label`, which refuses day-bearing labels, so the DEFAULT full-date label names no month and can never claim; the create response says so and a rename is the fix path. Decisions are atomic under a new `_POOL_LOCK` held across the "is this month open?" query and the status CAS, so a batch created mid-arrival cannot leave one mail both ingested and pooled. Every new test was proven red first against a targeted regression of the real source (7 of them) | PRs #599 + #601, 2026-08-24, deployed Fly v87; suite 1237 passed / 2 skipped, calibrate green; SPA half `docs/lovable-month-pool-prompt.md`. Live drill on the deployed app, TEST-namespaced and cleaned to zero: a receipt printing 2026-03-15 mailed in August pooled under 2026-03 (source `receipt`, state `no_batch`), opening "TEST - March 2026" claimed it with its printed date intact, deleting that month returned it to the pool, dismiss cleared it. The drill also caught the one defect v86 shipped: `n_pooled` counted log ROWS, so one waiting mail that had been through a claim read as 2 (#601) |
 | 24 | The paying card is read off the scan by CHOICE, not transcription: the extractor is handed the last-4s of the cards the payer actually holds (from the run's own registry snapshot) and asked which one it can see, or none. A confirmed pick replaces whatever digits the free-text hint guessed; a hint with no pick passes through untouched; a number that does not reduce to exactly four digits never reaches the entity chain. Vision moves to gpt-5-mini (categorization stays on gpt-4o-mini) | Owner: make sure the card an expense should be attributed to can be extracted from the receipt scan. It could not be — asked to transcribe four faded digits the extractor landed 2 in 5 and INVENTED the rest ("1234" three times, once for a receipt that prints 1672). Three cheaper fixes were refuted by measurement before anything was built: repeat reads return the identical wrong answer, a verbatim field in the same call agrees even when both are wrong, and gpt-4o reads no better than gpt-4o-mini. Measured 3 runs each over 7 problem receipts: dates 0/6 live -> 3.0/6 with the list -> 5.0/6 with the model; cards 1/5 -> 3.0/5 -> 3.7/5; ZERO false positives on the two receipts printing no readable card | PR #592, 2026-08-24, deployed; suite 1217 passed / 2 skipped, calibrate green. Live-verified with a namespaced TEST batch (deleted after): a receipt printing "VISA - ******2838" resolved date 2026-04-11 (the cache held 2023-04-11), hint "VISA ...2838", card-2838, entity Corporate Services via `card` |
 | 23 | An implausible expense date stops being accepted quietly: a date outside the batch's month reaches the reviewer as `check` / `date_outside_period`, and the month's report PDF names the expense numbers it distrusts. The month comes from the operator's label, failing that from the batch's own dates by strict plurality, failing both from nowhere (no period = nothing is ever flagged). Extraction prompt tightened for two-digit years, year-first card slips, and fiscal-block-beats-slip | Eleven of the April batch's 36 readings were dated 2020-2023, one of them on line two of the month's report. The date decides which month an expense belongs to and whether a statement charge can ever match it. Nothing is auto-corrected: inventing the "right" date would be the same mistake with better manners, and a date the reviewer typed is believed so a genuinely old invoice can be cleared. Prompt measured, not assumed (6 of 11 fixed, 24 of 25 good readings unchanged, none worse); regressed the real source to watch all four e2e tests go red at 0 flagged of 11 | PR #590, 2026-08-24; suite 1206 passed / 2 skipped, calibrate green |

@@ -2311,10 +2311,36 @@ def test_a_strangers_body_only_mail_still_waits_for_a_click(
 
 
 def test_a_failed_auto_render_alerts_the_operator(client, monkeypatch):
-    """Nobody is watching an automatic render. Without this alert an
-    arrival that rendered and then failed to ingest would sit in
+    """Nobody is watching an automatic render. When the RENDER itself
+    fails there is no ingest job to raise the alarm (`_ingest_job` covers
+    the other half), so without this alert the mail would sit in
     held_failed with the sender told nothing and the operator told
     nothing, which is the exact silence this round exists to remove."""
+    import expense_recon.web.body_render as br
+
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    monkeypatch.setattr(
+        br, "render_body_pdf",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no fonts")),
+    )
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail("dirk.neumann@brisken.com", subject="fails to render"),
+        synchronous=True,
+    )
+    assert res["status"] == HELD_FAILED
+    assert [c[0] for c in calls] == ["matthias.silva@brisken.com"]
+    assert HELD_FAILED in calls[0][1]
+
+
+def test_an_interrupted_auto_render_does_not_strand_in_rendering(
+    client, monkeypatch,
+):
+    """`rendering` is transient and only the boot sweep clears it, so an
+    exception escaping the render path would leave the mail unreachable:
+    replay skips a transient status and the render CAS refuses a retry.
+    It has to land in held_failed instead, which both can reach."""
     import expense_recon.web.intake_mail as im
 
     _create_batch(client, monkeypatch, MONTH_LABEL)
@@ -2322,16 +2348,24 @@ def test_a_failed_auto_render_alerts_the_operator(client, monkeypatch):
     state = client.app.state
 
     def _boom(*a, **k):
-        raise RuntimeError("vision transient")
+        raise RuntimeError("staging disk gone")
 
     _patch_ocr(monkeypatch, _extraction())  # the rendered PDF's month
     with monkeypatch.context() as mp:
-        mp.setattr(im, "add_receipts_to_expense_batch", _boom)
+        mp.setattr(im, "_start_ingest", _boom)
         res = process_message(
             state.db_path, state.learning_db_path, state.data_root,
-            _html_mail("dirk.neumann@brisken.com", subject="fails to ingest"),
+            _html_mail("dirk.neumann@brisken.com", subject="interrupted"),
             synchronous=True,
         )
     assert res["status"] == HELD_FAILED
     assert [c[0] for c in calls] == ["matthias.silva@brisken.com"]
-    assert HELD_FAILED in calls[0][1]
+
+    # ...and it is genuinely retryable, which is the point of not leaving
+    # it in the transient state.
+    _patch_ocr(monkeypatch, _extraction(vendor="Uber"),
+               _extraction(vendor="Uber"))
+    resp = client.post(f"/api/inbound/{res['archive']}/render-ingest")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == STATUS_INGESTED
+

@@ -1281,11 +1281,29 @@ def _auto_render(
     the click was holding back. A stranger's body-only mail still holds,
     and still alerts.
     """
-    result = render_ingest(
-        db_path, learning_db_path, data_root, arch.name,
-        operator=AUTO_RENDER_OPERATOR,
-    )
+    try:
+        result = render_ingest(
+            db_path, learning_db_path, data_root, arch.name,
+            operator=AUTO_RENDER_OPERATOR,
+        )
+    except Exception as exc:  # noqa: BLE001 - never raise past the router
+        log.warning("auto-render failed for %s: %s", arch.name, exc)
+        result = {"error": f"auto-render failed: {exc}"[:400]}
     status = str(_read_meta(arch).get("status", ""))
+    if status == STATUS_RENDERING:
+        # `rendering` is transient and only `reconcile_interrupted` clears
+        # it, so an exception that escaped the render path would strand
+        # the mail there until the next boot — and the CAS would refuse a
+        # manual retry meanwhile. Hand it to held_failed, which replay and
+        # the render endpoint can both reach (the `rendered` stamp set on
+        # the way in is what keeps it retryable).
+        _transition_meta(
+            arch,
+            lambda m: str(m.get("status", "")) == STATUS_RENDERING,
+            {"status": HELD_FAILED,
+             "error": str(result.get("error") or "auto-render interrupted")},
+        )
+        status = HELD_FAILED
     if status.startswith("held_"):
         # Nobody is watching an automatic render, so this alert is the
         # only thing that says it did not work.
