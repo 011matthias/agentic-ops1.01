@@ -90,6 +90,12 @@ DEFAULT_ALERT_RECIPIENTS = ("matthias.silva@brisken.com",)
 # default floor. Owner-adjustable via settings intake.retention_years.
 DEFAULT_RETENTION_YEARS = 10
 MAX_ATTACHMENTS_PER_MAIL = 30
+# The known-sender list is meant to stay a handful of private addresses
+# our own people mail from, not a second allowlist for submission (that
+# one is gone). A ceiling keeps it that way.
+MAX_KNOWN_SENDERS = 25
+# `rendered_by` on mail the arrival path rendered without a human.
+AUTO_RENDER_OPERATOR = "auto"
 MAX_INFLIGHT_ROUTES = 8
 MIN_FREE_DISK_BYTES = 500 * 1024 * 1024
 
@@ -123,6 +129,19 @@ _IMPLAUSIBLE_PAST_DAYS = 366
 _FUTURE_GRACE_DAYS = 1
 
 
+def _is_plain_address(value) -> bool:
+    """One bare e-mail address: no display name, no second address hiding
+    behind a separator, no header-injection characters."""
+    if not isinstance(value, str):
+        return False
+    addr = value.strip().lower()
+    if addr.count("@") != 1 or any(c in addr for c in " \t,;<>\r\n"):
+        return False
+    local, _, domain = addr.partition("@")
+    return bool(local) and "." in domain and not domain.startswith(".") \
+        and not domain.endswith(".")
+
+
 @dataclass(frozen=True)
 class IntakeConfig:
     domain: str = DEFAULT_INTAKE_DOMAIN
@@ -132,12 +151,13 @@ class IntakeConfig:
     auto_ack: bool = True
     alert_recipients: tuple[str, ...] = DEFAULT_ALERT_RECIPIENTS
     retention_years: int = DEFAULT_RETENTION_YEARS
+    known_senders: tuple[str, ...] = ()   # outside addresses that are OURS
 
     @classmethod
     def from_settings(cls, settings: dict | None) -> "IntakeConfig":
         """Settings key ``intake``: {domain, aliases: {...},
         sender_daily_cap, global_daily_cap, auto_ack, alert_recipients,
-        retention_years}. Env overrides the domain
+        retention_years, known_senders}. Env overrides the domain
         (EXPENSE_RECON_INTAKE_DOMAIN) so fly.toml stays the deploy truth.
         A legacy ``senders`` key is ignored: submission is open."""
         raw = (settings or {}).get("intake") or {}
@@ -166,6 +186,15 @@ class IntakeConfig:
             if isinstance(a, str) and "@" in a.strip()
         ) or DEFAULT_ALERT_RECIPIENTS
 
+        # Malformed entries are dropped rather than raising: the PUT edge
+        # (`normalize_intake_setting`) is where a bad list is refused, and
+        # a settings blob edited by hand must never take the mailbox down.
+        known = tuple(dict.fromkeys(
+            a.strip().lower()
+            for a in (raw.get("known_senders") or ())
+            if _is_plain_address(a)
+        ))[:MAX_KNOWN_SENDERS]
+
         return cls(
             domain=domain,
             aliases=aliases,
@@ -174,6 +203,7 @@ class IntakeConfig:
             auto_ack=bool(raw.get("auto_ack", True)),
             alert_recipients=alerts,
             retention_years=_cap("retention_years", DEFAULT_RETENTION_YEARS),
+            known_senders=known,
         )
 
 
@@ -229,6 +259,22 @@ def normalize_intake_setting(raw) -> dict:
                 "intake.alert_recipients must be @brisken.com addresses"
             )
         cleaned["alert_recipients"] = [a.strip().lower() for a in alerts]
+    known = raw.get("known_senders")
+    if known is not None:
+        if not isinstance(known, list) or not all(
+            _is_plain_address(a) for a in known
+        ):
+            raise ValueError(
+                "intake.known_senders must be a list of plain e-mail "
+                "addresses"
+            )
+        deduped = list(dict.fromkeys(a.strip().lower() for a in known))
+        if len(deduped) > MAX_KNOWN_SENDERS:
+            raise ValueError(
+                f"intake.known_senders holds at most {MAX_KNOWN_SENDERS} "
+                "addresses"
+            )
+        cleaned["known_senders"] = deduped
     return cleaned
 
 
@@ -346,6 +392,32 @@ def resolve_person(
         if person:
             return {"person": person, "source": "alias", "address": from_addr}
     return {"person": from_addr, "source": "sender", "address": from_addr}
+
+
+def is_known_sender(from_addr: str, cfg: IntakeConfig) -> bool:
+    """Is this submitter one of OUR people rather than a stranger?
+
+    Two ways to be known, both operator-controlled: the address is inside
+    the Brisken tenant, or it sits on ``intake.known_senders`` (Dirk mails
+    receipts from a private mailbox as well as his work one). Deliberately
+    NOT the To-alias: an alias is a routing claim anybody can address, so
+    treating it as identity would let a stranger nominate who we believe
+    they are.
+
+    Two things hang off the answer. A known submitter gets the acceptance
+    ack even at an outside address, and their body-only mail is rendered
+    on arrival instead of waiting for a click. Both are things we do for
+    someone a human listed on purpose and not for a stranger whose From
+    header we cannot check. From IS forgeable, so this is a courtesy
+    boundary, not a security one; what it bounds is a reply to a listed
+    address and one vision call, both already capped.
+    """
+    addr = (from_addr or "").strip().lower()
+    if not _is_plain_address(addr):
+        return False
+    if addr.endswith(graph_notify.RECIPIENT_SUFFIX):
+        return True
+    return addr in cfg.known_senders
 
 
 # ------------------------------------------------------- abuse guards ----
@@ -753,11 +825,16 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
     later is not acked twice. Recipient = the real envelope/header sender
     recorded at custody time (never the alias).
 
-    Since submission opened to any sender (2026-08-23), that address can be
-    external and forged — so `graph_notify.send_mail`'s own @brisken.com
-    recipient guard is what keeps this from becoming a backscatter source:
-    an outside submitter simply gets no ack. Do not "fix" that as a missing
-    confirmation; replying to unverified strangers as Brisken is the bug."""
+    Since submission opened to any sender (2026-08-23), that address can
+    be external and forged, so the ack cannot simply go wherever the mail
+    came from: replying to unverified strangers as Brisken is backscatter,
+    not a confirmation. The rule (2026-08-24) is that an outside address
+    is acked only when an operator has LISTED it in
+    ``intake.known_senders`` — Dirk mails receipts from his private
+    mailbox too, and until that list existed his private sends and a lost
+    mail looked identical from his chair. Everyone else still gets
+    nothing, and `graph_notify.send_mail` re-asserts the whole rule per
+    call."""
     try:
         with RunStore(db_path) as store:
             cfg = IntakeConfig.from_settings(store.get_settings())
@@ -809,7 +886,7 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
         )
         if graph_notify.send_mail(
             recipient, "Receipt received" + (f": {subject}" if subject else ""),
-            body,
+            body, allow_external=cfg.known_senders,
         ):
             _update_meta(arch, {"ack_at": _now_iso()})
     except Exception as exc:  # noqa: BLE001 - notifications never break ingest
@@ -1182,6 +1259,43 @@ def _start_ingest(
     return job_id
 
 
+def _auto_render(
+    db_path: Path, learning_db_path: Path | None, data_root: Path,
+    arch: Path, person: dict,
+) -> dict:
+    """Read a known submitter's body-only mail on arrival instead of
+    holding it for a click.
+
+    A forwarded vendor receipt IS the email body far more often than it is
+    an attachment: every one of the six mails held on 2026-08-24 (AWS,
+    OpenAI twice, an OpenAI credits confirmation, the CIC card ticket,
+    Hostinger) delivered no file at all. Holding each of them made the
+    NORMAL shape of a forwarded receipt read as a fault, and left the
+    sender with no signal either way. This reuses the operator's render
+    path unchanged — same CAS, same month stamps, same pool — so an
+    auto-rendered receipt still reaches a month only through the review
+    every other receipt passes.
+
+    Known senders only: the mailbox takes mail from anyone, and paying a
+    vision call to render every stranger's newsletter is exactly the spend
+    the click was holding back. A stranger's body-only mail still holds,
+    and still alerts.
+    """
+    result = render_ingest(
+        db_path, learning_db_path, data_root, arch.name,
+        operator=AUTO_RENDER_OPERATOR,
+    )
+    status = str(_read_meta(arch).get("status", ""))
+    if status.startswith("held_"):
+        # Nobody is watching an automatic render, so this alert is the
+        # only thing that says it did not work.
+        _maybe_alert(db_path, arch, status)
+    return {
+        **result, "status": status, "archive": arch.name,
+        "person": person, "auto_rendered": True,
+    }
+
+
 def route_archived(
     db_path: Path,
     learning_db_path: Path | None,
@@ -1230,6 +1344,12 @@ def route_archived(
         if parsed.body_only or not parsed.attachments:
             held = HELD_BODY_ONLY if parsed.body_only else HELD_NO_VALID_FILES
             _update_meta(arch, {"status": held})
+            if held == HELD_BODY_ONLY and is_known_sender(
+                parsed.from_addr, cfg
+            ):
+                return _auto_render(
+                    db_path, learning_db_path, data_root, arch, person,
+                )
             _maybe_alert(db_path, arch, held)
             return {"status": held, "archive": arch.name, "person": person}
 
