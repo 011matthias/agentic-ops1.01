@@ -2369,3 +2369,236 @@ def test_an_interrupted_auto_render_does_not_strand_in_rendering(
     assert resp.status_code == 200, resp.text
     assert resp.json()["status"] == STATUS_INGESTED
 
+
+# --------------------------------------- the intake says what it did ----
+# Two silences item 30 leaves behind: mail we turned AWAY left no trace at
+# all, and a status the SPA has never seen was rendered as whatever its
+# own map fell through to.
+
+def test_a_refused_rcpt_is_written_down(client, monkeypatch):
+    """`rcpt_decision` answers in-protocol and we send nothing, which is
+    correct and completely silent: before the ledger, "is anything being
+    turned away?" had no answer anywhere in the system. That is the
+    question an owner asked on 2026-08-24 about receipts that never
+    appeared."""
+    state = client.app.state
+    handler = IntakeHandler(state.db_path, state.learning_db_path,
+                            state.data_root)
+    envelope = SimpleNamespace(content=b"", rcpt_tos=[],
+                               mail_from="spammer@example.org")
+    session = SimpleNamespace(peer=("203.0.113.9", 51000))
+    reply = asyncio.run(handler.handle_RCPT(
+        None, session, envelope, "victim@gmail.com", {},
+    ))
+    assert reply.startswith("550")
+    assert envelope.rcpt_tos == []  # refused, not queued
+
+    log = client.get("/api/inbound/log").json()
+    assert log["n_refused"] == 1
+    row = log["refusals"][-1]
+    assert row["stage"] == "rcpt"
+    assert row["to"] == "victim@gmail.com"
+    assert row["from"] == "spammer@example.org"
+    assert "relay not permitted" in row["reason"]
+    assert row["peer"] == "203.0.113.9"
+    # A refusal is NOT an entry: it has no archive, and a row in `entries`
+    # carrying a status nothing knows is the "Arriving" bug all over.
+    assert all(e.get("stage") is None for e in log["entries"])
+
+
+def test_a_budget_refusal_at_data_is_written_down(client, monkeypatch):
+    """The DATA-stage refusals matter more than a bad RCPT: each one is a
+    real submission whose envelope we accepted and then turned away, so it
+    is exactly the mail somebody will later swear they sent."""
+    from expense_recon.web import smtp_server as ss
+
+    state = client.app.state
+    resp = client.put("/api/settings", json={
+        "intake": {"sender_daily_cap": 1, "global_daily_cap": 1}
+    })
+    assert resp.status_code == 200, resp.text
+
+    def fake_route(self, arch, parsed):  # noqa: ARG001 - signature match
+        ss.end_route()
+
+    monkeypatch.setattr(IntakeHandler, "_route", fake_route)
+    monkeypatch.setattr(ss, "DAY_BUDGET", DayBudget())
+    handler = IntakeHandler(state.db_path, state.learning_db_path,
+                            state.data_root)
+
+    def _send(subject):
+        envelope = SimpleNamespace(
+            content=_mail("dirk.neumann@brisken.com",
+                          attachments=[("r.jpg", JPG)], subject=subject),
+            rcpt_tos=[f"receipts@{DOMAIN}"],
+            mail_from="dirk.neumann@brisken.com",
+        )
+        session = SimpleNamespace(peer=("203.0.113.9", 51000))
+        return asyncio.run(handler.handle_DATA(None, session, envelope))
+
+    assert _send("first").startswith("250")
+    assert _send("over the cap").startswith("452")
+
+    log = client.get("/api/inbound/log").json()
+    assert log["n_refused"] == 1
+    row = log["refusals"][-1]
+    assert row["stage"] == "data"
+    assert "daily submission limit" in row["reason"]
+    assert row["from"] == "dirk.neumann@brisken.com"
+
+
+def test_the_refusal_ledger_stays_bounded(tmp_path):
+    """A scanner hammering the listener must not fill the volume. The
+    trim keeps the NEWEST rows and rewrites hard, so a sustained flood
+    rewrites once every few hundred rows rather than on every refusal."""
+    from expense_recon.web.intake_mail import (
+        REFUSAL_KEEP_ROWS,
+        REFUSAL_LOG_MAX_BYTES,
+        _refusal_log_path,
+        read_refusals,
+        record_refusal,
+    )
+
+    for i in range(4000):
+        record_refusal(
+            tmp_path, stage="rcpt", reason=f"550 nope {i}",
+            sender="flood@example.org", recipient="victim@gmail.com",
+        )
+    path = _refusal_log_path(tmp_path)
+    assert path.stat().st_size <= REFUSAL_LOG_MAX_BYTES
+    assert len(path.read_text(encoding="utf-8").splitlines()) >= REFUSAL_KEEP_ROWS
+    # Newest survive: the last row written is still readable.
+    assert "550 nope 3999" in read_refusals(tmp_path)[-1]["reason"]
+
+
+def test_recording_a_refusal_never_raises(tmp_path):
+    """The caller is mid-SMTP and still has to answer its error line. A
+    refusal we could not write down must not become one we could not
+    make."""
+    from expense_recon.web.intake_mail import record_refusal
+
+    # An unwritable data root is the worst case the SMTP path can hit.
+    record_refusal(
+        tmp_path / "nope" / "\0bad", stage="rcpt", reason="550 x",
+    )
+
+
+def test_refusals_are_counted_over_a_window(tmp_path):
+    """The ledger is trimmed at a size cap, so counting every retained row
+    would answer a question about our own retention rather than about
+    this week's mail."""
+    from expense_recon.web.intake_mail import (
+        _refusal_log_path,
+        count_refusals,
+        inbound_root,
+        record_refusal,
+    )
+
+    record_refusal(tmp_path, stage="rcpt", reason="550 recent")
+    old = json.dumps({
+        "at": (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+        "stage": "rcpt", "reason": "550 ancient", "from": "", "to": "",
+        "peer": "",
+    })
+    path = _refusal_log_path(tmp_path)
+    inbound_root(tmp_path).mkdir(parents=True, exist_ok=True)
+    path.write_text(old + "\n" + path.read_text(encoding="utf-8"),
+                    encoding="utf-8")
+    assert count_refusals(tmp_path) == 1
+    assert count_refusals(tmp_path, days=365) == 2
+
+
+def test_every_status_has_a_label(client):
+    """The enum-growth guard. `status` has grown three times, and each
+    time an un-updated SPA mapped the new value onto whatever its map
+    fell through to; on 2026-08-24 that made six resting receipts
+    announce "Arriving". A new status now fails this test until someone
+    decides what it SAYS."""
+    import expense_recon.web.intake_mail as im
+
+    statuses = {
+        v for k, v in vars(im).items()
+        if (k.startswith("STATUS_") or k.startswith("HELD_"))
+        and isinstance(v, str)
+    }
+    missing = sorted(statuses - set(im._STATUS_VIEW))
+    assert not missing, f"no status_label for: {missing}"
+    for kind, label in im._STATUS_VIEW.values():
+        assert kind in {im.KIND_RESTING, im.KIND_HELD, im.KIND_WORKING,
+                        im.KIND_DONE}
+        assert label and label[0].isupper()
+
+
+def test_an_unknown_status_degrades_to_the_raw_value():
+    """The whole point: a status this build does not know must NOT borrow
+    somebody else's label. "Arriving" about a mail that is resting is
+    worse than the raw word, because it is an affirmative claim that
+    resolves itself."""
+    from expense_recon.web.intake_mail import KIND_UNKNOWN, annotate_status_view
+
+    rows = [{"status": "teleported"}]
+    annotate_status_view(rows)
+    assert rows[0]["status_kind"] == KIND_UNKNOWN
+    assert rows[0]["status_label"] == "teleported"
+
+
+def test_a_pooled_row_says_which_month_it_waits_for(client, monkeypatch):
+    """The live bug this closes: six pooled rows read "Arriving" with a
+    blank Month, so Dirk's receipts told Criss they were on their way
+    indefinitely."""
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction())
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("criss@brisken.com", attachments=[("r.jpg", JPG + b"label")]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_POOLED
+    row = [e for e in client.get("/api/inbound/log").json()["entries"]
+           if e["archive"] == res["archive"]][-1]
+    assert row["status_kind"] == "resting"
+    assert row["status_label"] == f"Waiting for {MONTH_LABEL}"
+
+    # Once the month exists the mail is claimed, and the label follows the
+    # mail rather than the other way round.
+    _create_batch(client, monkeypatch, MONTH_LABEL, _extraction(vendor="X"))
+    rows = [e for e in client.get("/api/inbound/log").json()["entries"]
+            if e["archive"] == res["archive"]]
+    assert rows[-1]["status_kind"] == "done"
+    assert rows[-1]["status_label"] == "Added"
+
+
+def test_a_held_row_says_what_it_needs(client, monkeypatch):
+    """"Needs one click to read" is the whole difference between a strip
+    that reads as an error and one that reads as a task."""
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail(OUTSIDE, subject="one click please"),
+        synchronous=True,
+    )
+    assert res["status"] == HELD_BODY_ONLY
+    row = [e for e in client.get("/api/inbound/log").json()["entries"]
+           if e["archive"] == res["archive"]][-1]
+    assert row["status_kind"] == "held"
+    assert row["status_label"] == "Needs one click to read"
+
+
+def test_a_closed_month_reads_as_needing_a_human(client, monkeypatch):
+    """`pooled` is normally a resting state, but a month that already has
+    its statement will not take the mail: that one pooled row is a task,
+    not a wait, and the kind has to say so."""
+    from expense_recon.web.intake_mail import annotate_status_view
+
+    rows = [{"status": STATUS_POOLED, "pool_month": "2026-07",
+             "pool_month_state": "closed"},
+            {"status": STATUS_POOLED, "pool_month": "2026-07",
+             "pool_month_state": "open"},
+            {"status": STATUS_POOLED}]
+    annotate_status_view(rows)
+    assert rows[0]["status_kind"] == "held"
+    assert rows[0]["status_label"] == "July 2026 is already reconciled"
+    assert rows[1]["status_kind"] == "resting"
+    assert rows[1]["status_label"] == "Joining July 2026"
+    assert rows[2]["status_label"] == "Waiting for its month"
+
