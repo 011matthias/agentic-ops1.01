@@ -72,6 +72,31 @@ wrong charge), append-capable statement uploads, `has_statement` no longer
 closing the month, and incremental re-match preserving operator decisions and
 persisted LLM judgments. Nothing is on fire here.
 
+## Owner-side, still open (hand the paths when asked, do not chase)
+
+Unapplied Lovable prompts, all with their backends already live, under
+`workspace/clients/brisken/automations/expense-reconciliation/docs/`:
+
+- `lovable-month-pool-prompt.md` — NEW and the most urgent; without it pooled
+  rows render as "Arriving".
+- `lovable-month-report-prompt.md` — the one that changes what Criss can DO: it
+  puts the two report-PDF buttons on screen.
+- `lovable-re-ingest-prompt.md`, `lovable-issue-codes-prompt.md`,
+  `lovable-ready-tile-prompt.md`, and `lovable-open-intake-prompt.md` (that last
+  one only if the "Accepted senders" editor was ever built).
+
+Card registry data entry: entities for cards 0113 / 6013 / 9693 / 8311 and the
+missing 0340 card. That is backlog item 26 and the live MISSING ENTITY count,
+not a defect in the resolution chain.
+
+Live finding already surfaced, not a bug: the January statement run reconciles
+0 of 80 charges, USD 20,228.68 unreconciled, 78 charges with no receipt at all.
+
+**Do not re-ask the owner about:** the export target (there is none), Zoho (no
+ties, deleted), mixed-entity export (one file, entity as a column), cash and
+personal tenders (per-month assignments, not cards), or the January credit
+notice (booked).
+
 ## House loop (unchanged)
 
 Regression tests proven RED first by temporarily regressing the real source,
