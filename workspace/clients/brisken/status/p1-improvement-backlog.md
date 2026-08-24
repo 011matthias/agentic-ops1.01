@@ -461,11 +461,12 @@ and this one sits exactly where someone would go to authorise a sender during
 testing — they would get a false result and reasonably conclude the tool is
 broken.
 
-Fix is entirely SPA-side and already written twice over:
-`docs/lovable-open-intake-prompt.md` section 1 deletes the editor;
-`docs/lovable-known-senders-prompt.md` puts the field that DOES work
-(`intake.known_senders`) in its place. Applying the second makes the first
-redundant.
+Fix is entirely SPA-side and is now ONE paste:
+`docs/lovable-known-senders-prompt.md` section 0 deletes the dead editor and
+section 1 puts the field that DOES work (`intake.known_senders`) in its
+place. The separate `lovable-open-intake-prompt.md` was folded into it and
+deleted 2026-08-25, because two prompts for one Settings section is how the
+paste order gets lost.
 
 Beside it, two stale help lines that predate the month pool: "People who can
 email receipts straight into the open month" and "the sender gets a short
