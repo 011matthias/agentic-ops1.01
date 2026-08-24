@@ -1184,13 +1184,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # drain for mail that arrived before a month batch existed.
     @app.get("/api/inbound/log")
     def inbound_log(limit: int = 100, detail: int = 0) -> JSONResponse:
-        from .intake_mail import annotate_pool_state, read_log
+        from .intake_mail import annotate_pool_state, count_archives, read_log
 
         rows = read_log(app.state.data_root, limit=max(1, min(limit, 500)))
-        held = [
-            r for r in rows
-            if str(r.get("status", "")).startswith("held_")
-        ]
+        # Distinct MAILS, not log rows: an archive that has been replayed
+        # or claimed carries a second row, and a badge saying "2 held"
+        # about one held mail sends the operator looking for a mail that
+        # is not there.
+        n_held = count_archives(
+            rows, lambda r: str(r.get("status", "")).startswith("held_")
+        )
         # Month column truth: resolve the label for EVERY referenced batch
         # (one get_run per distinct id, plain and detail alike). A batch
         # that no longer resolves marks its rows batch_deleted — the UI
@@ -1272,7 +1275,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             r["expenses"] = out
         return JSONResponse({
             "entries": rows,
-            "n_held": len(held),
+            "n_held": n_held,
             "n_pooled": n_pooled,
         })
 
