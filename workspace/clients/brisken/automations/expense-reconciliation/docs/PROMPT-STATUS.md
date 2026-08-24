@@ -43,8 +43,7 @@ are VERBATIM strings from each prompt.
 | Prompt | What is missing |
 |---|---|
 | **`lovable-months-list-prompt.md`** | **NEW, and the blocker.** `/months` renders only the create form: 0 tables, 0 rows, no batch label in the HTML. The page calls `GET /api/expense-batches`, gets 200 with six batches, and discards them. No way into an existing month except the intake page's Month links or a hand-typed `/expenses/{id}`. Nothing else can be tested until this lands |
-| `lovable-known-senders-prompt.md` | No "People we recognise" editor. `intake.known_senders` cannot be edited from the UI, so Dirk's iCloud address cannot be listed |
-| `lovable-open-intake-prompt.md` | **The stale "Accepted senders" editor is STILL on the Settings screen.** The backend has ignored `intake.senders` since #587, so it silently discards what an operator types. §2's new intake wording ("from any address") is also absent |
+| `lovable-known-senders-prompt.md` | No "People we recognise" editor, so `intake.known_senders` cannot be edited from the UI and Dirk's iCloud address cannot be listed. **Section 0 also deletes the stale "Accepted senders" editor**, which is still live and silently discards what an operator types (backlog item 31), and fixes two help lines that still say "the open month". `lovable-open-intake-prompt.md` was folded into this one and deleted |
 | `lovable-month-pool-prompt.md` §0 | The SPA renders its own status strings ("Waiting for its month"), not the backend's `status_label` ("Waiting for August 2026"). Correct today; the durability fix is unapplied, so the next status value added mislabels again |
 | `lovable-month-pool-prompt.md` §12 | No refusals strip. `n_refused` is live and unrendered |
 | `lovable-intake-quickwins-prompt.md` §3 | Delete month has nowhere to live: there is no months list. Folded into `lovable-months-list-prompt.md` §3 |

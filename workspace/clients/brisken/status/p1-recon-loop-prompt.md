@@ -114,11 +114,10 @@ Unapplied, in the order they matter:
 
 - `lovable-months-list-prompt.md` — **THE blocker.** No way into an existing
   month; `/months` is the create form only. Backlog item 32.
-- `lovable-open-intake-prompt.md` — a trap rather than a gap: the "Accepted
-  senders" editor is live and the backend discards what it writes. Backlog
-  item 31. Applying the next one makes this redundant.
-- `lovable-known-senders-prompt.md` — the Settings editor for
-  `intake.known_senders`; replaces the dead editor above with one that works.
+- `lovable-known-senders-prompt.md` — one paste, two jobs: section 0 deletes
+  the dead "Accepted senders" editor (live, and it discards what an operator
+  types — backlog item 31) and fixes the two "open month" help lines;
+  section 1 adds the `intake.known_senders` field that works.
 - `lovable-month-pool-prompt.md` sections 0 and 12 only (1-11 are live).
 - `lovable-issue-codes-prompt.md`, `lovable-re-ingest-prompt.md` — status
   unverifiable; no live batch or archive exercises them.

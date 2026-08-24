@@ -26,6 +26,34 @@ that was lost looked exactly the same from his chair.
 The fix is a short, operator-curated list of outside addresses that count
 as ours.
 
+## 0. First, delete the "Accepted senders" editor (it is dead)
+
+The Settings > Email intake section still shows an **"Accepted senders --
+Full addresses or @domain entries"** tag editor. That is the retired
+`intake.senders` allowlist. Submission opened to any sender on 2026-08-23
+and the backend now DROPS that key on save, so whatever an operator types
+there is discarded without a word. It sits exactly where someone would go
+to authorise a sender, so it produces a false result and reads as a broken
+tool.
+
+Delete the editor and stop sending a `senders` key in the settings PUT. The
+field in section 1 replaces it with one that works.
+
+While you are in that section, two help lines predate the month pool and are
+now wrong. Receipts land in the month PRINTED on them, or wait for it; they
+do not land in "the open month".
+
+- The intake address line becomes, **EN**: "Receipts can be emailed to
+  any-name@expenses.brisken.com, from any address. Use dirk@, criss@ or
+  matthias@ to book the expense to that person." / **PT**: "Recibos podem ser
+  enviados para qualquer-nome@expenses.brisken.com, de qualquer endereco. Use
+  dirk@, criss@ ou matthias@ para atribuir a despesa a essa pessoa."
+- The section's own description and the auto-confirmation help text must stop
+  saying "the open month". **EN**: "People who can email receipts in. A
+  receipt files under the month printed on it, and waits if that month does
+  not exist yet." / **PT**: "Pessoas que podem enviar recibos por email. Um
+  recibo entra no mes impresso nele e aguarda se esse mes ainda nao existe."
+
 ## 1. Settings: "People we recognise"
 
 In the Settings screen's "Email intake" section, below the alias rows, add
