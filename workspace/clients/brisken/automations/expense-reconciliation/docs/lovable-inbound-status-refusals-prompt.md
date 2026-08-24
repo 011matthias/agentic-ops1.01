@@ -14,7 +14,7 @@ your app, and re-running them would fight the change below.
 
 ---
 
-## What the page already does (measured 2026-08-25)
+## What the page already does (measured 2026-08-24)
 
 `/inbound` works. It renders:
 

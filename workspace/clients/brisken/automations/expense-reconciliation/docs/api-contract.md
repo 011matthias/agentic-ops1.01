@@ -200,9 +200,9 @@ renders exactly what it rendered before.
 | `entries[].mixed_months` | `true` (absent otherwise) | this mail spans more than one month, and routed by its earliest |
 | `entries[].pool_month_state` | string | pooled rows only: `no_batch`, `open` (a claim is imminent), `closed` (the month is already reconciled) |
 | `n_pooled` | number | top-level, beside `n_held`. Distinct MAILS, not log rows |
-| `entries[].status_kind` | string | how to TREAT this row: `resting` (fine, waiting on something scheduled), `held` (needs a human), `working` (in flight, resolves in seconds), `done` (nothing owed), `unknown` (a status this backend build does not know). Added 2026-08-25 |
+| `entries[].status_kind` | string | how to TREAT this row: `resting` (fine, waiting on something scheduled), `held` (needs a human), `working` (in flight, resolves in seconds), `done` (nothing owed), `unknown` (a status this backend build does not know). Added 2026-08-24 |
 | `entries[].status_label` | string | what to SAY, already composed in English: "Waiting for July 2026", "Needs one click to read", "Added". For an unrecognised status this is the raw status value, never a borrowed label |
-| `n_refused` | number | top-level. Mail TURNED AWAY in the last 7 days (SMTP refusals). `0` is the answer to "is anything bouncing?", and before 2026-08-25 there was none |
+| `n_refused` | number | top-level. Mail TURNED AWAY in the last 7 days (SMTP refusals). `0` is the answer to "is anything bouncing?", and before 2026-08-24 there was none |
 | `refusals[]` | object `{at, stage, reason, from, to, peer}` | the newest refusal rows, oldest->newest. `stage` is `rcpt` (recipient refused) or `data` (accepted the envelope, then a guard turned the message away: disk floor, in-flight ceiling, day budget, archive failure) |
 
 `status_kind` / `status_label` follow the `issues` + `issue_details` pattern
