@@ -71,58 +71,33 @@ already judged.
 
 Nothing is on fire here, which is exactly why it is now the top item.
 
-### 2. The published SPA: what is live (audited 2026-08-25)
+### 2. The published SPA: what is live
 
-The owner published after this round. Audited against the deployed API by
-driving the app; **do not re-derive this, and do not trust a text scan** (see
-the trap below).
+**`automations/expense-reconciliation/docs/PROMPT-STATUS.md` is the ledger.**
+One row per Lovable prompt, applied or not, with the evidence. Audited
+2026-08-25 by driving the app. Re-run
+`%TEMP%/claude/recon-probe/prompt_ledger.py` and update that file whenever
+the owner publishes; a prompt sitting in `docs/` says nothing about whether
+it was ever pasted, and guessing from the repo is what made coordination bad
+enough for the owner to call it out.
 
-The intake page is **`/inbound`**, not `/intakes`. Routes on the published
-build: `/`, `/months`, `/inbound`, `/memory`, `/compare`, `/guide`,
-`/settings`, `/expenses/new`.
+Headline from that audit: **`/months` renders only the create form.** Zero
+tables, zero rows; the page fetches `GET /api/expense-batches`, gets six
+batches, and discards them. There is no way into an existing month except
+the intake page's Month links. That is backlog item 32 and
+`docs/lovable-months-list-prompt.md`, and it blocks testing harder than
+anything else open.
 
-LIVE, verified:
+Sixteen prompts ARE applied, including both report-PDF buttons, body-only
+handling, cards R3, set-aside, memory editing and the feedback widget. Three
+are not: months-list, known-senders, open-intake (that last one is a trap
+rather than a gap, see item 31), plus month-pool sections 0 and 12.
 
-- `lovable-month-report-prompt.md` — "Download expense report (PDF)" and
-  "Download CSV (data export)" on the batch page, reconciliation PDF on the
-  workbench. This was the one that changes what Criss can DO.
-- `lovable-body-only-prompt.md` — held rows offer **View body / Add to month
-  as PDF / Dismiss**.
-- `lovable-month-pool-prompt.md` sections 1, 2, 4, 5, 6 — "Waiting: 6" badge,
-  Month column reading "August 2026 (waiting)", Dismiss on pooled rows,
-  "Retry held and add waiting mail".
-- `lovable-intake-quickwins`, `lovable-ready-tile`, `lovable-cards-r3`.
-
-**The "Arriving" bug is gone.** The SPA fixed it with its own status map
-(section 1) rather than with `status_label` (section 0); the rendering is
-correct either way. A pooled row reads "Waiting for its month" with the
-month in the column beside it.
-
-NOT applied:
-
-- month-pool **section 0** (`status_kind` / `status_label`) — not urgent, the
-  SPA's own strings are right today. It is the durability fix: the next
-  status value added mislabels again without it.
-- month-pool **section 12** (refusals strip) — `n_refused` is live and
-  unrendered.
-- `lovable-known-senders-prompt.md` — no "People we recognise" editor.
-- `lovable-open-intake-prompt.md` — **the stale "Accepted senders" editor is
-  still on the Settings screen and the backend has ignored `intake.senders`
-  since #587, so anything typed there is silently discarded.**
-- `lovable-re-ingest-prompt.md`, `lovable-issue-codes-prompt.md` —
-  UNVERIFIED, both need a state the live app does not currently have (a
-  stranded attachment archive; a batch carrying a parse issue).
-
-Stale Settings copy, unrelated to any prompt: "People who can email receipts
-straight into the open month" and "the sender gets a short reply when their
-receipts land in the open month". Both predate the month pool.
-
-**The audit trap, worth remembering.** Enumerating `button` innerText reports
-NO actions on an intake row: the per-row control is an icon-only ellipsis
-`button[aria-label="Actions"]` opening a Radix menu, and its text is empty.
-The first pass of this audit concluded body-only handling was missing
-because of exactly that. Click the Actions button and read `[role=menuitem]`.
-Probe: `%TEMP%/claude/recon-probe/held_menu.py`.
+**Two audit traps, both of which produced a wrong answer first.** A loose
+regex matched a Cards help line and reported the known-senders editor as
+present; and per-row intake actions are an icon-only
+`button[aria-label="Actions"]` menu, so enumerating button TEXT reports no
+actions on any row. Match exact strings, and open the menu.
 
 ### 3. Whatever the next feedback wave surfaces
 
@@ -134,24 +109,21 @@ backlog are small and unranked; none of them is urgent.
 Unapplied Lovable prompts, all with their backends already live, under
 `workspace/clients/brisken/automations/expense-reconciliation/docs/`:
 
-- `lovable-open-intake-prompt.md` — **most urgent, and it is a trap rather
-  than a gap**: the "Accepted senders" editor IS on the live Settings
-  screen and the backend ignores what it writes. Someone authorising a
-  sender there during testing gets a false result.
-- `lovable-known-senders-prompt.md` — the Settings editor for
-  `intake.known_senders`; replaces the editor above with one that works.
-- `lovable-month-pool-prompt.md` sections 0 and 12 only (1-11 are live).
-- `lovable-re-ingest-prompt.md`, `lovable-issue-codes-prompt.md` — status
-  unverified, see section 2.
-- `lovable-month-report-prompt.md` and `lovable-ready-tile-prompt.md` are
-  APPLIED; nothing to hand over.
+Ledger with evidence: `automations/expense-reconciliation/docs/PROMPT-STATUS.md`.
+Unapplied, in the order they matter:
 
-**One settings decision waiting:** listing `dirk_.neumann@icloud.com` in
-`intake.known_senders` starts sending confirmations to his private mailbox
-and makes his forwarded receipts render on arrival. One PUT, and it is the
-owner's call rather than something an agent does silently. Send the WHOLE
-`intake` object: the merge is shallow at the top level, so a partial PUT
-drops the aliases with it.
+- `lovable-months-list-prompt.md` — **THE blocker.** No way into an existing
+  month; `/months` is the create form only. Backlog item 32.
+- `lovable-open-intake-prompt.md` — a trap rather than a gap: the "Accepted
+  senders" editor is live and the backend discards what it writes. Backlog
+  item 31. Applying the next one makes this redundant.
+- `lovable-known-senders-prompt.md` — the Settings editor for
+  `intake.known_senders`; replaces the dead editor above with one that works.
+- `lovable-month-pool-prompt.md` sections 0 and 12 only (1-11 are live).
+- `lovable-issue-codes-prompt.md`, `lovable-re-ingest-prompt.md` — status
+  unverifiable; no live batch or archive exercises them.
+
+Everything else in `docs/` is APPLIED; nothing to hand over.
 
 Card registry data entry: entities for cards 0113 / 6013 / 9693 / 8311 and
 the missing 0340 card. That is backlog item 26 and the live MISSING ENTITY
