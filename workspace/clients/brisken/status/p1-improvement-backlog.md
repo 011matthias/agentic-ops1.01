@@ -408,6 +408,57 @@ stay closed or needs a real decision: the four expense-edit overlay routes,
 because the attach BAKES edits into the snapshot receipts and reopening the
 overlay over a baked pool risks double-application.
 
+**PR 2b-1b - the extraction baseline. SHIPPED.** The guard triage ran first,
+as planned, and it refuted its own premise while finding something worse.
+Double-application is NOT the risk: the overlay is idempotent by
+construction, and deliberately so. `add` is guarded by an `existing_ids`
+check written for exactly this case, `delete` is set membership, and every
+header edit is an absolute assignment. Re-applying any of them is a no-op.
+
+What the bake actually does is DESTROY the audit baseline. The snapshot is
+not just the matcher's pool, it is the pre-edit record the grid composes the
+overlay on top of and reads `raw` from ("the ORIGINAL extracted name ...
+always kept for audit"). Measured on a batch whose reviewer corrected vendor
+and total, then attached:
+
+    pre-bake   snapshot {'vendor': 'OriginalVendor', 'total': '42.50'}
+    post-bake  snapshot {'vendor': 'EDITED-BY-REVIEWER', 'total': '99.99'}
+
+`raw` then echoed the reviewer's own edit, so the audit field reported the
+edit it exists to distinguish. Clearing the edit -- documented on
+`set_expense_field_override` as "the expense reverts to its extracted value"
+-- silently did nothing, because there was no longer an extracted value to
+revert to. The 42.50 the OCR read was gone from the system. Same root cause
+in the learning harvest, which keys corrections on the ORIGINAL extracted
+vendor and post-bake was keying them on the corrected one, so a month that
+had been attached taught the merchant book nothing.
+
+This is live behavior on every attached month today, not a 2b-2 regression.
+2b-2 is what makes it urgent: once a re-match runs on every receipt arrival,
+the erasure stops being a month-end event and happens continuously, minutes
+after a correction.
+
+Shipped as `extracted_receipts`, a parallel snapshot key holding the
+pre-bake receipts, first-write-wins PER DOCUMENT (a second re-match reads an
+already-baked snapshot, so refreshing would capture the baked values; growing
+per document is what lets receipts that arrive later join). The four
+overlay-composing reads -- grid, export, learning harvest, batch-list counts
+-- start from it; matching, the reports and the reconciliation views keep
+reading the baked pool, which is baseline + overlay by construction. Runs
+attached before this shipped have no baseline and fall back to what they had;
+nothing at rest migrates. Snapshot receipt bytes roughly double (the baseline
+carries `ocr_text` too), accepted rather than stripping fields the export
+composes from. Neutral against the whole suite: 1312 -> 1316, the +4 being
+these tests, no pre-existing test moved.
+
+**The overlay-route decision, now evidence-backed:** the four routes STAY
+CLOSED in 2b-2. Not because re-applying an edit is dangerous (it is not), but
+because opening a reviewer-facing edit surface is only worth doing once the
+edits it takes are reversible and honestly attributed, which is what the
+baseline restores. Reopening them is its own round, with the re-match wiring
+that has to follow an edit, and it is not on the critical path for the living
+month.
+
 **PR 2b-2 - the living month. NEXT.** The statement stops being a closing event
 and becomes an input stream:
 

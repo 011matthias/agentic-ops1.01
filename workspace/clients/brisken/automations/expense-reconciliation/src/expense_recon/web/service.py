@@ -3258,7 +3258,10 @@ def commit_to_memory(
     reclassifications teach merchant -> category. `field_overrides` /
     `edits` are the expense-mode overlays; ignored in statement mode."""
     if run_mode(run) == MODE_EXPENSE_GENERATION:
-        _, receipts, _, _ = snapshot_from_dict(run.snapshot)
+        # The baseline, because this path keys what it learns on the ORIGINAL
+        # extracted vendor: harvesting a baked pool would teach the
+        # correction against the corrected name and learn nothing.
+        receipts = baseline_receipts(run)
         default_entity = (
             ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
         )
@@ -3838,6 +3841,81 @@ def _manual_expense_receipt(
     )
 
 
+# ── The extraction baseline (2026-08-25, living-month prerequisite) ──
+# `rematch_month` bakes the reviewer's corrections into the receipt pool the
+# matcher sees and then COMMITS that pool as the run's snapshot. But the
+# snapshot is also the audit baseline: the grid lays the overlay on top of it
+# and shows its values as the vendor object's `raw` ("the ORIGINAL extracted
+# name ... always kept for audit"). Baking over it made `raw` echo the very
+# edit it exists to distinguish, and left `set_expense_field_override(None)`
+# -- documented as "the expense reverts to its extracted value" -- with
+# nothing to revert to.
+#
+# So the pre-bake receipts are preserved once, in a parallel snapshot key,
+# and every overlay-composing read (grid, export, learning harvest) starts
+# from them instead of from the baked pool. Matching, the reports and the
+# reconciliation views keep reading `receipts`: that pool is baseline +
+# overlay by construction, and it is re-derived on the next re-match.
+#
+# First write wins PER DOCUMENT, which is the whole trick. A second re-match
+# reads an ALREADY baked snapshot, so refreshing the baseline each time would
+# capture the baked values and lose the truth it holds. Growing it per
+# document is what lets a living month keep receiving receipts: each one is
+# pristine when it arrives and joins the baseline at the next bake.
+#
+# Runs whose statement was attached BEFORE this shipped have no baseline and
+# their pre-edit values are already gone; they fall back to the baked pool,
+# which is what they had. Nothing at rest migrates.
+EXTRACTED_RECEIPTS_KEY = "extracted_receipts"
+
+
+def baseline_receipts(run: RunRow) -> list[Receipt]:
+    """The run's receipts as EXTRACTION read them, before any reviewer edit
+    was baked in. Falls back to the snapshot's own receipts when no baseline
+    was captured (any run older than the key, and every statement-less run,
+    whose receipts have never been baked).
+
+    Iterates the CURRENT receipt list so membership and order follow the
+    snapshot: a baseline entry for a receipt the snapshot no longer carries
+    must not resurrect it.
+    """
+    snapshot = run.snapshot or {}
+    current = snapshot.get("receipts") or []
+    baseline = snapshot.get(EXTRACTED_RECEIPTS_KEY)
+    if not isinstance(baseline, list) or not baseline:
+        return [receipt_from_dict(d) for d in current]
+    by_id = {
+        d.get("document_id"): d
+        for d in baseline
+        if isinstance(d, dict) and d.get("document_id")
+    }
+    out: list[Receipt] = []
+    for d in current:
+        pristine = by_id.get(d.get("document_id"))
+        try:
+            out.append(receipt_from_dict(pristine if pristine else d))
+        except (KeyError, TypeError, ValueError):
+            # A corrupt baseline entry degrades to the live row rather than
+            # breaking the whole view.
+            out.append(receipt_from_dict(d))
+    return out
+
+
+def _extended_baseline(existing, receipt_dicts: list[dict]) -> list[dict]:
+    """The baseline to persist: whatever it already holds, plus a pristine
+    entry for every document it does not cover yet. Never overwrites."""
+    out: list[dict] = [
+        d for d in (existing or []) if isinstance(d, dict) and d.get("document_id")
+    ]
+    known = {d["document_id"] for d in out}
+    for d in receipt_dicts:
+        doc_id = d.get("document_id")
+        if doc_id and doc_id not in known:
+            out.append(d)
+            known.add(doc_id)
+    return out
+
+
 def apply_expense_edits(
     receipts: list[Receipt],
     field_overrides: dict[str, dict[str, str]],
@@ -4155,7 +4233,7 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
     if "n_categorized" not in summary or "receipts" not in snapshot:
         return summary
     try:
-        _, receipts, _, _ = snapshot_from_dict(snapshot)
+        receipts = baseline_receipts(run)
         overrides = store.get_category_overrides(run.run_id)
         receipts = apply_expense_edits(
             receipts,
@@ -4196,8 +4274,14 @@ def build_expense_view(
     `build_view` (which is NOT modified); the SPA renders `expenses`, never
     `rows`. `settings` (Phase 5) feeds the curated account picker and the
     entity picker options."""
-    _, orig_receipts, _, parse_errors = snapshot_from_dict(run.snapshot)
-    # Keep the pre-edit snapshot so the vendor object can always show the
+    parse_errors = [tuple(e) for e in (run.snapshot or {}).get("parse_errors", [])]
+    # Compose from the EXTRACTION BASELINE, not the stored receipt block: on
+    # a month whose statement has been attached the latter is the baked pool
+    # (overlay already folded in), so laying the overlay on it again would
+    # show a cleared edit as still-edited and report the reviewer's own value
+    # as `raw`. Pre-attach the two are identical.
+    orig_receipts = baseline_receipts(run)
+    # Keep the pre-edit receipts so the vendor object can always show the
     # ORIGINAL extracted name as `raw`, even after a reviewer vendor edit
     # folded a new spelling into `detected_vendor`.
     orig_by_id = {r.document_id: r for r in orig_receipts}
@@ -4517,7 +4601,10 @@ def _expense_export_inputs(
     Extracted so the CSV and the month's PDF report are built from ONE setup:
     the report quotes the export's rows, and a change to how a row resolves
     reaches both or neither."""
-    _, receipts, _, _ = snapshot_from_dict(run.snapshot)
+    # The extraction baseline, for the same reason the grid uses it: the
+    # export applies the overlay, and on an attached month the stored receipt
+    # block already has it baked in. Grid and export move together.
+    receipts = baseline_receipts(run)
     default_entity = (
         ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
     )
@@ -5967,6 +6054,15 @@ def rematch_month(
             ]
             outcome.unmatched_receipts.extend(rd["document_id"] for rd in extra)
         new_snapshot = {**dict(fresh.snapshot), **base}
+        # Preserve what extraction read, BEFORE this commit replaces the
+        # receipt block with the baked pool. `receipts0` is the snapshot as
+        # this match read it and `extra` arrived while it ran; both are
+        # pristine for any document the baseline does not already cover, and
+        # first-write-wins keeps an earlier bake's capture authoritative.
+        new_snapshot[EXTRACTED_RECEIPTS_KEY] = _extended_baseline(
+            (fresh.snapshot or {}).get(EXTRACTED_RECEIPTS_KEY),
+            [receipt_to_dict(r) for r in receipts0] + list(extra),
+        )
         if charge_categorizations:
             new_snapshot["charge_categorizations"] = {
                 tx_id: categorization_to_dict(c)
