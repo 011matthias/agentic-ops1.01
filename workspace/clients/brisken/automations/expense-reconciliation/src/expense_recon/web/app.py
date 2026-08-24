@@ -1200,6 +1200,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         n_held = count_archives(
             rows, lambda r: str(r.get("status", "")).startswith("held_")
         )
+        # Same distinct-MAILS rule: a duplicate parked at arrival is one
+        # mail however many log rows it accumulates.
+        n_duplicates = count_archives(
+            rows, lambda r: str(r.get("status", "")) == "duplicate"
+        )
         # Month column truth: resolve the label for EVERY referenced batch
         # (one get_run per distinct id, plain and detail alike). A batch
         # that no longer resolves marks its rows batch_deleted — the UI
@@ -1287,6 +1292,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             "entries": rows,
             "n_held": n_held,
             "n_pooled": n_pooled,
+            "n_duplicates": n_duplicates,
             # Mail we turned away. Deliberately NOT rows in `entries`: a
             # refusal has no archive, and a row there carrying a status no
             # consumer knows is the exact shape of the "Arriving" bug.
@@ -1353,6 +1359,24 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         result = re_ingest(
             app.state.db_path, app.state.learning_db_path,
             app.state.data_root, archive, operator=_operator(),
+        )
+        if "error" in result:
+            code = result.pop("code", 400)
+            return JSONResponse(result, status_code=code)
+        return JSONResponse({"ok": True, **result})
+
+    @app.post("/api/inbound/{archive}/not-a-duplicate")
+    def inbound_not_a_duplicate(archive: str) -> JSONResponse:
+        """Route a mail the detector parked as a duplicate after all.
+
+        Sync for the same reason re-ingest is: routing reads the receipts,
+        which is vision work, and belongs on the threadpool this handler
+        already runs in."""
+        from .intake_mail import unmark_duplicate
+
+        result = unmark_duplicate(
+            app.state.db_path, app.state.learning_db_path,
+            app.state.data_root, archive,
         )
         if "error" in result:
             code = result.pop("code", 400)

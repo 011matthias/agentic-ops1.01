@@ -299,3 +299,61 @@ worth knowing before touching it:
 Transaction ids became content-derived in PR 2a, so a `transaction_id` no
 longer contains an account prefix or a row number and nothing may parse
 structure out of one. Repeat charges carry a `-{n}` suffix.
+
+## Duplicates, sorted out before ingestion (2026-08-25)
+
+Owner directive: "we also need to be able to sort duplicates out before they
+are ingested into the tool's workflow." The receipt pool has always deduped
+identical files at ADD time, which created no second expense but still logged
+the mail as "Added" — a row saying it added something when it added nothing —
+and did nothing at all when a repeat routed to a different month.
+
+### New status
+
+`duplicate`, kind `resting`. Not `held_*` (nobody has to act) and not
+`dismissed` (nobody judged it junk). Per rule 5 it ships with a label, which
+names the mail it duplicates: `Already have this, from "July taxi"`.
+
+### `GET /api/inbound/log`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `n_duplicates` | number | distinct MAILS parked as duplicates, counted like `n_held` |
+| `duplicate_of` | string | archive id of the mail that already holds this content |
+| `duplicate_of_subject` | string | that mail's subject, for the label and the row |
+| `duplicate_of_at` | string | when it arrived |
+
+A duplicate row carries no `expenses` join, because it never reached a batch.
+That absence is the point, not a gap.
+
+### `POST /api/inbound/{archive}/not-a-duplicate`
+
+Routes a parked mail after all. Deny-by-default: 409 unless the mail is
+currently `duplicate`. Byte-identical content can legitimately be two
+purchases (a fixed-price subscription receipt with no invoice number, mailed
+two months running), so a parked mail is never trapped. The archive keeps its
+fingerprints, so the NEXT copy still detects against it.
+
+`POST /api/inbound/{archive}/dismiss` now also accepts a `duplicate`, on the
+same argument that let it accept a `pooled` mail: otherwise it rests forever
+with no way to finish with it.
+
+### What counts as the same
+
+Byte-identical content, nothing softer. Attachments hash as
+`sha1(bytes)[:16]` — the SAME shape the receipt pool uses, deliberately, so
+the two layers cannot disagree about what "the same file" means. A body-only
+mail has no attachment at arrival (its PDF does not exist until something
+renders it), so its whitespace-collapsed, casefolded body stands in.
+
+Two rules that decide the hard cases:
+
+- **Only a mail that ENTERED the workflow owns its content** (`ingested`,
+  `replayed`, `pooled`, and the two transient routing states). A dismissed or
+  still-held first copy does not, because the tool does not hold that receipt
+  and calling the next copy a duplicate would hide a receipt nobody ingested.
+- **Every piece must be known.** A mail carrying one held file and one new one
+  is not a duplicate; the pool's own dedupe drops the repeat at add time.
+
+A near-miss MISSES, which is the old behavior. A false match would hide a real
+receipt, which is worse than anything the detector prevents.
