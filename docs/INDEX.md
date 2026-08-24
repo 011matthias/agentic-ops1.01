@@ -232,6 +232,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-24 | Enforcement Hook Layer Fixes | system-infra | [→](docs/2026-08-24%20-%20Enforcement%20Hook%20Layer%20Fixes/Checkpoint.md) |
 | 2026-07-24 | Checkpoint Scaffold Speedup | system-infra | [→](docs/2026-07-24%20-%20Checkpoint%20Scaffold%20Speedup/Checkpoint.md) |
 | 2026-07-22 | Optimize Loop Audit + Hardening | system-infra | [→](docs/2026-07-22%20-%20Optimize%20Loop%20Audit%20+%20Hardening/Checkpoint.md) |
 | 2026-07-20 | System Development | system-infra | [→](docs/2026-07-20%20-%20System%20Development/Checkpoint.md) |
