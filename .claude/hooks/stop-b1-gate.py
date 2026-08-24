@@ -101,7 +101,15 @@ REASON = (
     "you genuinely lack a tool, frame it as 'LIMITATION: ... USER ACTION "
     "NEEDED: ...' not as a choice. If this is a genuine high-blast-radius "
     "fork or a real question (not a routine continuation), rephrase so it "
-    "reads as a decision point, acknowledge briefly, and stop."
+    "reads as a decision point, acknowledge briefly, and stop.\n"
+    "Two moves the 2026-08-23 and 2026-08-24 repeats both missed, when the "
+    "action WAS genuinely invasive and a decision point WAS correct: "
+    "(1) split it -- the read-only half (reading the records to say what they "
+    "actually are) is yours to take, so take it FIRST and stop on the "
+    "remainder; (2) put the decision as a decision, with your recommendation "
+    "and its consequence, via AskUserQuestion. An open offer ('say the word "
+    "and I'll ...') is not a decision point; it hands back the judgment you "
+    "were supposed to supply."
 )
 
 

@@ -78,6 +78,12 @@ MAX_HEREDOC_LINES = 80
 _OPENER = re.compile(r"<<-?[ \t]*(?P<q>['\"]?)(?P<tag>[A-Za-z_][\w.-]*)(?P=q)")
 _TRIPLE_QUOTE = re.compile(r"\"\"\"|'''")
 _PY_INVOKE = re.compile(r"\bpython3?\b|\bpy\b|\buv\s+run\b")
+# A heredoc REDIRECTED into a .py file is a Python payload even when no
+# interpreter appears on the line and the tag is not PY*. Without this,
+# `cat > f.py <<'EOF'` evaded the backslash rule -- which is the exact
+# spelling of the 2026-08-24 retry that wrote the collapsed `(?<!\)` form to
+# disk (register row: "the `cat > f <<'PYEOF'` retry wrote the collapsed form").
+_PY_REDIRECT = re.compile(r">>?\s*[^\s|&;<>]+\.py\b")
 
 
 def log(msg: str) -> None:
@@ -114,7 +120,11 @@ def heredocs(cmd: str) -> list[dict]:
             "body": body,
             "lines": _body_lines(body),
             "terminated": term is not None,
-            "python": bool(_PY_INVOKE.search(prefix)) or tag.upper().startswith("PY"),
+            "python": (
+                bool(_PY_INVOKE.search(prefix))
+                or bool(_PY_REDIRECT.search(prefix))
+                or tag.upper().startswith("PY")
+            ),
         })
     return found
 

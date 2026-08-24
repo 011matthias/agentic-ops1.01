@@ -39,7 +39,12 @@ B1_PRIMER = (
     "ship it. If you truly lack the tool or access, write 'LIMITATION: ... "
     "USER ACTION NEEDED: ...' as a statement, not a choice. Only a genuine "
     "high-blast-radius fork (irreversible, outward-facing, or a real "
-    "either/or the user must decide) is worth stopping on."
+    "either/or the user must decide) is worth stopping on -- and when one "
+    "IS genuine, do its read-only half first (find out what the records "
+    "actually say) and put the remainder as a decision with a recommendation "
+    "via AskUserQuestion. 'Say the word and I'll ...' is an offer, not a "
+    "decision point; it is what got blocked on 2026-08-23 and again on "
+    "2026-08-24."
 )
 
 EXPLORATORY = [
