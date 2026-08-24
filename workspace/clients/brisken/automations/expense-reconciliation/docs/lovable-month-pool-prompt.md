@@ -1,6 +1,6 @@
 # Lovable prompt: the month pool on the inbound page
 
-> **APPLIED 2026-08-25. DO NOT PASTE THIS FILE.**
+> **APPLIED 2026-08-24. DO NOT PASTE THIS FILE.**
 >
 > Sections 1 through 11 are live on the published SPA (verified: the
 > "Waiting" badge, the Month column reading "August 2026 (waiting)", Dismiss

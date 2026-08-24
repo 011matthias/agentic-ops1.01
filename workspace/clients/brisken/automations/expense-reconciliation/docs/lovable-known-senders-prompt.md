@@ -10,7 +10,7 @@ else. Independent of the other two; order does not matter.
 
 ---
 
-## What that section looks like right now (measured 2026-08-25)
+## What that section looks like right now (measured 2026-08-24)
 
 This is the exact live inventory. Everything in it stays unless this prompt
 says otherwise.

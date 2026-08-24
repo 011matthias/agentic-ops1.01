@@ -1706,7 +1706,7 @@ def test_resolve_receipt_month_boundaries():
     into the future is timezone skew and stays readable; two days is a
     wrong year. A receipt just under a year old is still readable."""
     arrival = "2026-08-24T09:00:00+00:00"
-    assert resolve_receipt_month(["2026-08-25"], arrival)[:2] == \
+    assert resolve_receipt_month(["2026-08-24"], arrival)[:2] == \
         ("2026-08", "receipt")
     assert resolve_receipt_month(["2026-08-26"], arrival)[1] == \
         "implausible-receipt"
@@ -2606,7 +2606,7 @@ def test_a_closed_month_reads_as_needing_a_human(client, monkeypatch):
 
 def test_a_dismissed_mail_is_not_dragged_back_by_a_deleted_month():
     """Dismissal is terminal: an operator judged the mail junk, and that
-    decision outranks where it used to live. Found live 2026-08-25, where
+    decision outranks where it used to live. Found live 2026-08-24, where
     two dismissed archives read "The month it was added to was deleted"
     as kind `held` while the Held badge correctly said 0 — a task on a row
     nobody owes anything for."""

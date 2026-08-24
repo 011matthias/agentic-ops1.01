@@ -1,6 +1,6 @@
 # Lovable prompt status: what is applied to the published SPA
 
-**Audited 2026-08-25 against `brisken-reconcile-dash.lovable.app`** by
+**Audited 2026-08-24 against `brisken-reconcile-dash.lovable.app`** by
 driving the app, not by reading this repo. Re-run the audit and update this
 file whenever the owner publishes; a prompt's presence in `docs/` says
 nothing about whether it was ever pasted.
@@ -40,7 +40,7 @@ are VERBATIM strings from each prompt.
 
 ## Not applied
 
-These three are the whole paste list. Each was **rewritten 2026-08-25** to
+These three are the whole paste list. Each was **rewritten 2026-08-24** to
 open with a measured inventory of what the published app already has, so
 Lovable adds the delta instead of rebuilding working screens. They touch
 different screens and are independent; the numbering is a suggested order,

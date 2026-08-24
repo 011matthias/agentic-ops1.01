@@ -22,7 +22,7 @@ is deliberately no sender check: From is forgeable, so an allowlist bought
 tidiness rather than security, and it cost every receipt that reached us
 by any route other than a Brisken mailbox.
 
-Every refusal is also WRITTEN DOWN (backlog item 30 b, 2026-08-25).
+Every refusal is also WRITTEN DOWN (backlog item 30 b, 2026-08-24).
 Answering in-protocol is correct and silent; until the ledger existed,
 "is anything being turned away?" had no answer anywhere in the system,
 which is precisely the question an owner asked about receipts that never

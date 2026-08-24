@@ -121,7 +121,7 @@ STATUS_CLAIMING = "claiming"
 REPLAYABLE = {HELD_NO_BATCH, HELD_FAILED}
 STALE_RECEIVED_SECONDS = 600
 
-# How a status READS, shipped beside it (2026-08-25). `status` is an
+# How a status READS, shipped beside it (2026-08-24). `status` is an
 # enum-ish field that has grown three times; each time an un-updated SPA
 # mapped the new value onto whatever its own map fell through to, and on
 # 2026-08-24 that made six of Dirk's resting receipts announce
@@ -1218,7 +1218,7 @@ def annotate_status_view(rows: list[dict]) -> None:
             # A DISMISSED mail is terminal: an operator judged it junk, and
             # that decision outranks where it used to live. Saying "the
             # month it was added to was deleted" about it puts a task back
-            # on a row nobody owes anything for (live, 2026-08-25: two
+            # on a row nobody owes anything for (live, 2026-08-24: two
             # dismissed archives read as held with the Held badge at 0).
             and str(row.get("status", "")) != STATUS_DISMISSED
         ):

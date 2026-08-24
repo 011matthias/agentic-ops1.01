@@ -12,7 +12,7 @@ different screens and do not depend on each other.
 
 ---
 
-## What your app already has (measured on the published build, 2026-08-25)
+## What your app already has (measured on the published build, 2026-08-24)
 
 Read this before changing anything. The app is further along than a
 first-time reader would assume, and the point of this section is that you do

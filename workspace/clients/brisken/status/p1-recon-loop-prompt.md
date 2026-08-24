@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-08-25
+updated: 2026-08-24
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
@@ -14,7 +14,7 @@ usable for Brisken. Read this whole brief before touching anything, then read
 `p1-improvement-backlog.md` beside it — that file, not this one, is the list of
 what to do next.
 
-## Where things stand (2026-08-25, end of session)
+## Where things stand (2026-08-24, end of session)
 
 **Backlog item 30 is fully shipped and deployed** (PRs #607, #608, #609; Fly
 **v90**), along with the out-of-Lovable half of the "Arriving" bug:
@@ -75,7 +75,7 @@ Nothing is on fire here, which is exactly why it is now the top item.
 
 **`automations/expense-reconciliation/docs/PROMPT-STATUS.md` is the ledger.**
 One row per Lovable prompt, applied or not, with the evidence. Audited
-2026-08-25 by driving the app. Re-run
+2026-08-24 by driving the app. Re-run
 `%TEMP%/claude/recon-probe/prompt_ledger.py` and update that file whenever
 the owner publishes; a prompt sitting in `docs/` says nothing about whether
 it was ever pasted, and guessing from the repo is what made coordination bad
@@ -90,7 +90,7 @@ anything else open.
 
 Sixteen prompts ARE applied, including both report-PDF buttons, body-only
 handling, cards R3, set-aside, memory editing and the feedback widget. Three
-remain, all rewritten 2026-08-25 to open with a measured inventory of what
+remain, all rewritten 2026-08-24 to open with a measured inventory of what
 the app already has, so Lovable adds the delta instead of rebuilding working
 screens.
 
@@ -155,7 +155,7 @@ jobs first, deploy from a clean `origin/main` worktree, then verify
 
 **A RED-proof harness must snapshot the WORKING TREE, not restore from git.**
 A `git checkout -- <path>` restore between regression cases silently destroys
-uncommitted edits to the same files; that cost two rebuilds on 2026-08-25
+uncommitted edits to the same files; that cost two rebuilds on 2026-08-24
 before the harness was changed to snapshot the file contents in memory. Commit
 early on the feature branch regardless.
 
