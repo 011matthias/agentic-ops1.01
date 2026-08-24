@@ -44,15 +44,44 @@ at least one uploaded receipt — do NOT seed a fabricated one into a live month
 
 ## The three directions, in the order they were ranked
 
-### 1. Ship the SPA half of PR 1 (owner action, blocking)
+### 1. The "Arriving" bug: ship the SPA half of PR 1
 
 `docs/lovable-month-pool-prompt.md` is written and merged but NOT applied. This
-is not polish: the live SPA renders a pooled row as status **"Arriving"** with a
-blank Month (verified against the deployed app, no crash, no console errors —
-the parallel-field contract held). So six of Dirk's real receipts currently tell
-Criss they are "arriving" indefinitely, which is worse than the held strip was,
-because held at least looked like it needed attention. The agent cannot inject
-Lovable prompts; the owner does that manually.
+is not polish. Verified against the deployed app with Playwright: the page does
+NOT crash and throws no console errors (the parallel-field contract held), but
+it renders a pooled row as status **"Arriving"** with a blank Month. The SPA
+maps an unrecognised status onto its in-flight label, so six of Dirk's real
+receipts are telling Criss they are arriving indefinitely. That is worse than
+the held strip was, because "Arriving" is an affirmative, self-resolving claim
+while "held" at least looked like it needed attention. `routing` and `claiming`
+mislabel the same way; they are transient so the impact is seconds, not days.
+
+**The primary fix is Lovable and the owner applies it** (the agent cannot inject
+Lovable prompts). Section 1 of the prompt is the whole of it: add `pooled` to
+the status map, label it "Waiting for its month", keep it out of the Held badge.
+
+**What may need work OUTSIDE Lovable — pick up in this order:**
+
+1. **Verify, do not assume.** After the prompt is applied, drive the live SPA
+   and confirm a pooled row reads "Waiting for {Month}" and not "Arriving".
+   Six pooled rows exist right now, so no TEST mail is needed. Use
+   `%TEMP%/claude/recon-probe/` (chromium `channel="chrome"`, dismiss the
+   feedback modal via "Got it"). A deploy that changes a payload is not
+   verified until the SPA has been driven against it.
+2. **If the SPA cannot cleanly extend its status map**, ship the label from the
+   backend instead: add parallel per-row `status_label` (already-composed text,
+   e.g. "Waiting for July 2026") and `status_kind`
+   (`resting` | `held` | `working` | `done`) in `read_log` /
+   `annotate_pool_state`, so the SPA renders text it does not have to know
+   about. Small change; needs the contract row and a view-contract test.
+3. **Close the contract gap that let this happen.** `docs/api-contract.md` pins
+   list ELEMENT TYPES and says nothing about adding a new VALUE to an existing
+   enum-ish field. `status` gained three values and the SPA silently mislabeled
+   all three. Extend rule 1 ("enriching a field in place is the dangerous
+   move") to cover enum growth, with the standing mitigation being option 2:
+   when a status set grows, ship a parallel human-readable label so an
+   un-updated consumer degrades to correct text rather than a confident wrong
+   label.
 
 ### 2. Intake trust (backlog item 30) — recommended next build
 
