@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-25 | Expense-Recon Statement Fold 2b-2b-1 | client-dev | [Mini-Checkpoint-2](docs/2026-08-25%20-%20Expense-Recon%20Statement%20Fold%202b-2b-1/Mini-Checkpoint-2.md) |
 | 2026-08-25 | Expense-Recon Living Month - Baseline + Open Month | client-dev | [→](docs/2026-08-25%20-%20Expense-Recon%20Living%20Month%20-%20Baseline%20%2B%20Open%20Month/Checkpoint.md) |
 | 2026-08-25 | Brisken Recon Intake Dedupe + Held-Mail Diagnosis | client-dev | [→](docs/2026-08-25%20-%20Brisken%20Recon%20Intake%20Dedupe%20%2B%20Held-Mail%20Diagnosis/Checkpoint.md) |
 | 2026-08-25 | Brisken Recon Living Month PR2a Stable Tx Identity + PR2b1 Rematch | client-dev | [→](docs/2026-08-25%20-%20Brisken%20Recon%20Living%20Month%20PR2a%20Stable%20Tx%20Identity%20%2B%20PR2b1%20Rematch/Checkpoint.md) |
