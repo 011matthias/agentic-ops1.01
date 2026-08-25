@@ -1,13 +1,19 @@
 Calvin clip: "A bank transfer, from an email"
 =============================================
 
-Two cuts of the same 90-second forwardable, silent-first, captions burned in.
+Two cuts of the same 100-second forwardable (a 10s "Meet Calvin" overview card, then
+the 90-second story), captions burned in, built to read muted.
 
   calvin-clip-16x9-1080p.mp4   1920x1080   email, landing page, the archive copy
   calvin-clip-1x1-1080.mp4     1080x1080   LinkedIn feed, where 16:9 loses half the screen
 
-Neither has an audio track. They are built to be watched muted, in a feed or an
-email client, by someone who has never heard of Brisken.
+These are the SILENT masters. The narrated distribution cuts (Kokoro am_michael male
+voice, -14 LUFS integrated / -1.5 dBTP, one connected walkthrough muxed identically
+into both ratios) are built in the video-gen repo (out/brisken-calvin/) by
+pipeline/narrate-calvin.mjs. The clip STILL reads fully muted: the captions are burned
+in and the voice only says what the frame already shows, so it works watched muted in
+a feed or an email client, or with sound on. (Note: a real Brisken voice can replace
+the synthetic one at any time.)
 
 WHAT THIS IS
 ------------
@@ -38,4 +44,11 @@ it without forwarding a sales ask.
 Brief and production runbook: repo agentic-ops1, branch leadgen/task-6,
 output/leadgen-task-6/.
 
-Prepared 2026-07-09.
+Prepared 2026-07-09. Revised 2026-07-11: workspace emphasis per Dirk's feedback
+(the manual beat, the cash beat, and the end card now name Calvin building the
+workspace around the request). Revised 2026-07-12: generated narration added
+(connected walkthrough, af_heart) and the real full-color Brisken logo swapped in
+for the earlier reverse mark; the film still reads fully muted. Revised 2026-07-14
+per Dirk's feedback (overview missing / male voice / more informative monologue):
+10s intro overview card added (film 90s -> 100s), narrator switched to the male
+am_michael, and the read/cash/book/conf lines carry more of what each frame shows.
