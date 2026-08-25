@@ -1,0 +1,96 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+:root{
+  --bg0:#081320;--text:#e8eef6;--muted:#9db0c8;--heading:#dbe8fa;
+  --line:#1e3550;--line-strong:#2e4865;
+  --cyan:#2fc6d6;--cyan-hi:#8fe6ef;--cyan-lo:#3f96a3;--teal:#3fb9c4;--brandblue:#2f6fd0;
+}
+@page{size:A4;margin:0;}
+html,body{width:210mm;height:297mm;}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+body{
+  font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+  background:
+    radial-gradient(150mm 70mm at 50% -6%, rgba(47,198,214,.16), transparent 60%),
+    radial-gradient(130mm 85mm at 108% 118%, rgba(45,111,208,.14), transparent 55%),
+    linear-gradient(160deg,#0a1728 0%, var(--bg0) 55%, #060f1c 100%);
+  color:var(--text);-webkit-font-smoothing:antialiased;
+  padding:13mm 14mm 10mm;position:relative;overflow:hidden;
+}
+body::before{content:"";position:absolute;inset:0;
+  background-image:linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
+  background-size:11mm 11mm;pointer-events:none;}
+.wrap{position:relative;z-index:1;display:flex;flex-direction:column;height:100%;}
+
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6mm;}
+.brand{display:flex;align-items:center;gap:2.5mm;}
+.logo{font-size:20pt;font-weight:700;letter-spacing:-.5px;color:#eef4fb;}
+.dia{width:3.2mm;height:3.2mm;background:linear-gradient(135deg,var(--cyan-hi),var(--cyan));transform:rotate(45deg);border-radius:.7mm;box-shadow:0 0 4mm rgba(47,198,214,.55);}
+.sap-partner{display:flex;align-items:center;gap:2mm;font-size:9.5pt;color:var(--muted);font-weight:600;letter-spacing:.03em;}
+.sapbadge{background:#0a66c2;color:#fff;font-size:8pt;font-weight:800;letter-spacing:.05em;padding:.7mm 1.6mm;border-radius:1mm;}
+
+.eyebrow{font-size:8.5pt;letter-spacing:.22em;text-transform:uppercase;color:var(--cyan-lo);font-weight:700;margin-bottom:2.5mm;}
+h1{font-size:29pt;font-weight:700;letter-spacing:-1px;color:#f2f7fd;line-height:1.02;}
+h1 .ac{color:var(--cyan);}
+.promise{font-size:13pt;color:var(--heading);margin-top:2.5mm;font-weight:400;line-height:1.3;}
+.rename{font-size:8.5pt;color:var(--muted);margin-top:2mm;font-weight:500;}
+
+.problem{margin:6mm 0 5mm;padding:3.4mm 4mm;border-left:2.5px solid var(--cyan);
+  background:rgba(47,198,214,.07);border-radius:0 2mm 2mm 0;font-size:10.5pt;color:#cdd9ea;line-height:1.4;}
+
+.flow{display:flex;flex-direction:column;align-items:stretch;margin:1mm 0 3mm;}
+.tier{border:1px solid var(--line);border-radius:3mm;
+  background:linear-gradient(180deg, rgba(20,40,66,.72), rgba(12,26,45,.72));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);padding:3.6mm 4mm;}
+.tier.named{border-color:rgba(47,198,214,.42);}
+.tier-head{display:flex;align-items:baseline;gap:3.5mm;margin-bottom:3mm;}
+.tier-name{font-size:15pt;font-weight:700;color:var(--heading);letter-spacing:-.2px;}
+.tier-name .ac{color:var(--cyan);}
+.kicker{font-size:7.5pt;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan-lo);font-weight:700;}
+.chips{display:flex;flex-wrap:wrap;gap:2.2mm;}
+.chip{padding:2mm 3mm;border-radius:2mm;background:rgba(9,20,34,.66);border:1px solid var(--line);
+  font-size:10pt;font-weight:600;color:#dbe7f6;}
+.band{border:1px solid var(--line);border-radius:3mm;padding:3mm 4mm;text-align:center;
+  background:rgba(9,20,34,.5);font-size:11pt;font-weight:600;color:#cfe0f3;letter-spacing:.2px;}
+.target{border:1px solid rgba(47,198,214,.4);border-radius:3mm;padding:3.4mm 4mm;
+  background:linear-gradient(160deg, rgba(47,198,214,.12), rgba(12,26,45,.4));
+  display:flex;align-items:center;gap:3.5mm;}
+.target .tb{font-size:13.5pt;font-weight:700;color:#eaf5f8;}
+.target .ts{font-size:9.5pt;color:var(--muted);}
+.conn{display:flex;justify-content:center;align-items:center;height:6mm;}
+.conn::before{content:"";width:1.5px;height:6mm;background:linear-gradient(var(--cyan),rgba(47,198,214,.15));}
+.conn .cv{position:absolute;color:var(--cyan);font-size:11pt;line-height:1;margin-top:4mm;}
+
+.points{list-style:none;margin:1mm 0 0;display:flex;flex-direction:column;gap:2.6mm;}
+.points li{position:relative;padding-left:6mm;font-size:10.5pt;color:#d3ddec;line-height:1.4;}
+.points li::before{content:"";position:absolute;left:1mm;top:2.2mm;width:2.2mm;height:2.2mm;
+  background:linear-gradient(135deg,var(--cyan-hi),var(--cyan));transform:rotate(45deg);border-radius:.5mm;}
+
+.content{flex:1;display:flex;flex-direction:column;justify-content:center;padding:3mm 0;}
+.caps{display:flex;gap:2.2mm;flex-wrap:wrap;margin:5mm 0 0;}
+.cap{flex:1;min-width:32mm;text-align:center;padding:2.6mm 2mm;border-radius:2mm;
+  background:linear-gradient(160deg, rgba(47,198,214,.10), rgba(12,26,45,.4));
+  border:1px solid rgba(47,198,214,.26);font-size:9pt;font-weight:700;color:#eaf5f8;letter-spacing:.02em;}
+
+footer{border-top:1px solid var(--line);padding-top:3.5mm;}
+.trust{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;}
+.tm{font-size:8pt;color:var(--muted);font-weight:500;padding:0 3mm;position:relative;}
+.tm:not(:last-child)::after{content:"";position:absolute;right:0;top:50%;transform:translateY(-50%);width:1mm;height:1mm;border-radius:50%;background:var(--cyan-lo);}
+.tm b{color:#c7d6ea;font-weight:700;}
+.foot-url{text-align:center;margin-top:2.5mm;font-size:8.5pt;color:var(--cyan-lo);font-weight:700;letter-spacing:.04em;}
+</style></head>
+<body><div class="wrap">
+<header><div class="brand"><span class="logo">brisken</span><span class="dia"></span></div>
+<div class="sap-partner"><span class="sapbadge">SAP</span> Co-Innovation Partner</div></header>
+<div class="content">
+<div class="eyebrow">The cockpit &middot; on your SAP data</div>
+<h1>Treasury<span class='ac'>Central</span></h1>
+<div class="promise">The single screen treasury works in, on your SAP data.</div>
+<div class="problem">Treasury runs across cash, investments, debt, FX and market data in separate tools, with governance bolted on after the fact.</div>
+<div class="flow"><div class="tier named"><div class="tier-head"><span class="tier-name">Treasury<span class='ac'>Central</span></span><span class="kicker">the cockpit</span></div><div class="chips"><span class="chip">Cash</span><span class="chip">Investments</span><span class="chip">Debt</span><span class="chip">FX</span><span class="chip">Market Data</span><span class="chip">Governance</span></div></div><div class="conn"><span class="cv">&#9660;</span></div><div class="target"><span class="sapbadge">SAP</span><span class="tb">On your SAP data</span><span class="ts">SAP ECC / S/4HANA, every move governed and logged</span></div></div>
+<ul class="points"><li>See the position and act on it in one place, across cash, investments, debt, FX, market data and governance.</li><li>Every move governed and logged, on your SAP data, with no separate data store to reconcile.</li></ul>
+<div class="caps"><span class="cap">one screen</span><span class="cap">six domains</span><span class="cap">governed + logged</span><span class="cap">on your SAP data</span></div>
+</div>
+<footer><div class="trust"><span class="tm"><b>SAP</b> Co-Innovation Partner</span><span class="tm">SAP Store</span><span class="tm"><b>ISO 27001</b></span><span class="tm"><b>SOC 1 Type II</b></span><span class="tm">live with customers today</span></div><div class="foot-url">www.brisken.com</div></footer>
+</div></body></html>

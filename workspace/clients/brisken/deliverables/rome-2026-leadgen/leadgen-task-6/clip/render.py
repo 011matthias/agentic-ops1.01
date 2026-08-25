@@ -21,14 +21,14 @@ HERE = pathlib.Path(__file__).parent
 PAGE = (HERE / "clip.html").as_uri()
 OUT = HERE.parent / "video"
 FPS = 30
-DURATION = 90.0
+DURATION = 100.0  # 10s intro overview card + the original 90s story
 
 RATIOS = {
     "wide": {"w": 1920, "h": 1080, "q": "", "name": "calvin-clip-16x9-1080p.mp4"},
     "square": {"w": 1080, "h": 1080, "q": "?ratio=square", "name": "calvin-clip-1x1-1080.mp4"},
 }
-# one representative frame per scene, mid-beat
-PREVIEW_TIMES = [2.5, 12.0, 18.5, 30.0, 42.0, 54.0, 57.0, 68.0, 77.0, 86.0]
+# one representative frame per scene, mid-beat (intro card + the +10s-shifted story)
+PREVIEW_TIMES = [4.0, 12.5, 22.0, 28.5, 40.0, 52.0, 64.0, 67.0, 78.0, 87.0, 96.0]
 
 
 def open_page(pw, ratio):

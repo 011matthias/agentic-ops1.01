@@ -74,10 +74,10 @@ the text does not already carry.
 | # | In | Out | What we see | On-screen text |
 |---|---|---|---|---|
 | 1 | 0:00 | 0:05 | An email sitting in an inbox. Subject line legible: a funding request with an amount and a deadline. Nothing moves. | *This lands on a Tuesday.* |
-| 2 | 0:05 | 0:14 | Fast, unglamorous: three windows open in sequence. Mail, the SAP cash position, the memo-record entry screen. A cursor keying digits. | *Today someone reads it, checks the cash position in SAP, and keys the memo record.* |
+| 2 | 0:05 | 0:14 | Fast, unglamorous: three windows open in sequence. Mail, the SAP cash position, the memo-record entry screen. A cursor keying digits. | *Today someone reads it, checks the cash position in SAP, and keys the memo record.* <br> sub: *A workspace assembled by hand.* |
 | 3 | 0:14 | 0:22 | Hard cut to the OnePilot chat box. The user types one plain sentence and hits enter. | *Or they ask.* |
 | 4 | 0:22 | 0:34 | Calvin reads the mail, returns a two-line summary, and proposes the action. | *It reads the request and proposes the action.* |
-| 5 | 0:34 | 0:47 | Calvin pulls the cash position from S/4HANA Cash Management. The figure lands in the chat, sourced and timestamped. | *It pulls the cash position from S/4HANA.* |
+| 5 | 0:34 | 0:47 | Calvin pulls the cash position from S/4HANA Cash Management. The figure lands in the chat, sourced and timestamped. | *It pulls the cash position from S/4HANA.* <br> sub: *Calvin builds the workspace around the request.* |
 | 6 | 0:47 | 1:00 | **The beat.** An approval prompt. The cursor hovers. A person clicks approve. Only then does anything move. | *Nothing is written until a person says go.* <br> sub: *Four-eye approval and segregation of duties where you want them.* |
 | 7 | 1:00 | 1:12 | The memo record is created in S/4HANA. The record ID appears. A log line writes itself underneath. | *It books the memo record. Every step is logged.* |
 | 8 | 1:12 | 1:20 | Calvin confirms in chat and suggests the next action. The user has not left the chat box. | *It confirms, and suggests what is next.* |
@@ -115,7 +115,7 @@ No em-dashes in any on-screen text.
 Three lines, in this order:
 
 > **A bank transfer, from an email.**
-> You stayed in the chat. Every step was logged.
+> Calvin built the workspace. You stayed in control. Every step was logged.
 >
 > Calvin is an agent on OnePilot, running inside your SAP landscape.
 > Brisken is an SAP Co-Innovation Partner.

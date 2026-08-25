@@ -25,6 +25,11 @@
           justify-content:space-between;}
   #brand{display:flex;align-items:center;gap:14px;}
   #brand img{display:block;}
+  /* the REAL full-color Brisken logo (navy wordmark) needs a light plate to read on the
+     dark cockpit background; replaces the reverse mark placed bare. */
+  .logochip{display:inline-flex;align-items:center;background:#f2f7fd;
+            padding:9px 13px;border-radius:11px;box-shadow:0 6px 20px rgba(0,0,0,.34);}
+  .endchip{padding:16px 22px;border-radius:16px;box-shadow:0 12px 34px rgba(0,0,0,.4);}
   #brand .sep{width:1px;background:var(--border);}
   #brand .prod{color:var(--dim);letter-spacing:.5px;}
   #illus{border:1px solid var(--border);border-radius:999px;color:var(--dim);
@@ -129,6 +134,13 @@
   #end .trust{color:var(--mut);line-height:1.6;}
   #end .url{color:var(--cyan);font-weight:600;letter-spacing:.4px;}
   #end .foot{color:var(--dim);}
+
+  /* intro overview card (Dirk, 2026-07-14: "overview is missing") — same visual
+     family as the end card; every line restates a claim the clip itself shows. */
+  #intro{position:absolute;left:0;right:0;text-align:center;}
+  #intro h1{font-weight:600;line-height:1.15;letter-spacing:-.5px;}
+  #intro .sub{color:var(--mut);line-height:1.5;}
+  #intro .kick{color:var(--dim);}
 </style>
 </head>
 <body>
@@ -136,7 +148,7 @@
 
   <div id="chrome">
     <div id="brand">
-      <img id="logo" src="brisken-logo.png">
+      <span class="logochip"><img id="logo" src="brisken-logo-fullcolor.png"></span>
       <div class="sep"></div>
       <div class="prod">OnePilot</div>
     </div>
@@ -249,9 +261,9 @@
 
   <!-- ============ STAGE C : end card ============ -->
   <div class="stage" id="end">
-    <img id="endLogo" src="brisken-logo.png">
+    <span class="logochip endchip"><img id="endLogo" src="brisken-logo-fullcolor.png"></span>
     <h1 id="endH1">A bank transfer, from an email.</h1>
-    <div class="sub" id="endSub">You stayed in the chat. Every step was logged.</div>
+    <div class="sub" id="endSub">Calvin built the workspace. You stayed in control. Every step was logged.</div>
     <div class="rule" id="endRule"></div>
     <!-- No SAP BTP: Dirk's directive is to keep BTP out of all demo material.
          "Inside your SAP landscape" carries the same trust signal, and is the
@@ -262,6 +274,14 @@
     </div>
     <div class="url" id="endUrl">brisken.com/onepilot</div>
     <div class="foot" id="endFoot">Illustration of the OnePilot Agents flow.</div>
+  </div>
+
+  <!-- ============ STAGE 0 : intro overview card ============ -->
+  <div class="stage" id="intro">
+    <span class="logochip endchip"><img id="inLogo" src="brisken-logo-fullcolor.png"></span>
+    <h1 id="inH1">Meet Calvin.</h1>
+    <div class="sub" id="inSub">An agent on OnePilot, running inside your SAP landscape.</div>
+    <div class="kick" id="inKick">A funding request, start to finish.</div>
   </div>
 
   <!-- caption last so it paints above -->
@@ -376,6 +396,13 @@ function layout(){
   px($("endTrust"), {fontSize: SQ?22:25});
   px($("endUrl"), {fontSize: SQ?30:34, marginTop: SQ?34:38});
   px($("endFoot"), {fontSize: SQ?17:19, marginTop: SQ?44:52});
+
+  /* --- intro card --- */
+  px($("intro"), {top: SQ?300:280});
+  px($("inLogo"), {width: SQ?230:260, height:"auto"});
+  px($("inH1"), {fontSize: SQ?62:80, marginTop: SQ?60:66});
+  px($("inSub"), {fontSize: SQ?28:33, marginTop: SQ?24:26});
+  px($("inKick"), {fontSize: SQ?22:25, marginTop: SQ?40:46});
 }
 
 /* ---------------- timing helpers ---------------- */
@@ -408,12 +435,16 @@ const S = {
   cash:[34,47], appr:[47,60], book:[60,72], conf:[72,80], end:[80,90]
 };
 
+/* Workspace emphasis (Dirk, 2026-07-11): the manual beat names the by-hand
+   workspace, the cash beat names Calvin building it, the end card seals it. */
 const CAPS = [
   [0.4,  4.9,  "This lands on a Tuesday.", ""],
-  [5.4,  13.7, "Today someone reads it, checks the cash position in SAP, and keys the memo record.", ""],
+  [5.4,  13.7, "Today someone reads it, checks the cash position in SAP, and keys the memo record.",
+               "A workspace assembled by hand."],
   [14.4, 21.7, "Or they ask.", ""],
   [22.4, 33.7, "It reads the request and proposes the action.", ""],
-  [34.4, 46.7, "It pulls the cash position from S/4HANA.", ""],
+  [34.4, 46.7, "It pulls the cash position from S/4HANA.",
+               "Calvin builds the workspace around the request."],
   [47.4, 59.7, "Nothing is written until a person says go.",
                "Four-eye approval and segregation of duties where you want them."],
   [60.4, 71.7, "It books the memo record. Every step is logged.", ""],
@@ -422,22 +453,40 @@ const CAPS = [
 
 const MSG_USER = "Calvin, handle the funding request from Dana.";
 
+/* The intro overview card owns [0, INTRO); the whole original 90s story plays
+   unchanged at t-INTRO (every internal timestamp stays as authored). */
+const INTRO = 10;
+
 function render(t){
+  renderIntro(t);
+  renderStory(Math.max(0, t - INTRO));
+}
+
+function renderIntro(t){
+  $("intro").style.opacity = ease(seg(t,0.3,1.4)) * (1-ease(seg(t,INTRO-1.6,INTRO-0.6)));
+  $("inH1").style.opacity = ease(seg(t,0.8,2.0));
+  $("inH1").style.transform = "translateY("+((1-ease(seg(t,0.8,2.0)))*18).toFixed(2)+"px)";
+  $("inSub").style.opacity = ease(seg(t,1.5,2.7));
+  $("inKick").style.opacity = ease(seg(t,2.6,3.8));
+}
+
+function renderStory(t){
   /* chrome: fades out under the end card */
   $("chrome").style.opacity = 1 - ease(seg(t,80.6,81.6));
 
   /* ---- caption ---- */
-  let cm="", cs="", ca=0;
+  let cm="", cs="", ca=0, cardA=0;
   for (const [a,b,m,s] of CAPS){
     if (t >= a-0.35 && t <= b+0.35){
       ca = ease(seg(t,a-0.3,a+0.1)) * (1-ease(seg(t,b-0.05,b+0.3)));
-      cm=m; cs=s;
+      cm=m; cs=s; cardA=a;
     }
   }
   $("cap").style.opacity = ca;
   $("capMain").textContent = cm;
   $("capSub").textContent = cs;
-  $("capSub").style.opacity = cs ? ease(seg(t,48.6,49.6)) : 0;
+  /* sub fades in relative to ITS card, a beat after the main line */
+  $("capSub").style.opacity = cs ? ease(seg(t,cardA+1.2,cardA+2.2)) : 0;
 
   /* ---- stage visibility ---- */
   const inA = t < 14.4, inB = t >= 13.6 && t < 81.2, inC = t >= 80.4;
