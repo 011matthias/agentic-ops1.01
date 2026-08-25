@@ -23,6 +23,29 @@ the lead.
 
 Keep and lead with: governed, governance, audit, compliance.
 
+## Additions from Dirk's NEW-Overview review (2026-07-21)
+
+Seven comments + four in-place edits on the from-scratch Overview, folded
+into the build source (full record:
+`deliverables/tc-overview-redesign/CHANGELOG-substance-pass.md`). The
+decisions that generalize to every deck:
+
+| Don't say | Say instead | Why (Dirk) |
+|---|---|---|
+| SAP OneExposure | SAP deployment types ("SAP: on-prem, private & public cloud") / "exposure & risk systems" | too specific (S9, applied S13 too) |
+| SAP postings (as a destination label) | SAP process steps | S19; "postings" narrows what the Co-Worker does |
+| Memo records | Records & notes | S19 |
+| AI Digital Workforce | Digital Co-Worker | naming lock 2026-07-21; the brisken.com name is superseded in decks |
+
+And two emphasis rules, not swaps:
+
+- **Governance carries the AI vocabulary**: grounded in SAP, not
+  free-floating; a human in the loop (HITL) on the moves that matter.
+- **Market Data Hub emphasizes SAP AND non-SAP** targets, plus the audit
+  trail ("Assembling the audit trail by hand" belongs in the freed column).
+- TreasuryCentral is "one workspace on OnePilot"; OnePilot "connects your
+  SAP and non-SAP systems alike" (S8).
+
 ## The spine (one message)
 
 We run on top of your SAP systems and data. Whatever you need to do

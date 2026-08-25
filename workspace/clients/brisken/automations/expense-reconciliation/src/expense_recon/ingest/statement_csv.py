@@ -35,6 +35,7 @@ from ._common import (
     REQUIRED_KEYS,
     ParseIssue,
     StatementParseError,
+    assign_content_ids,
     infer_sign_flip,
     is_credit_type,
     parse_amount,
@@ -178,7 +179,10 @@ def parse_statement_csv_tolerant(
 
             transactions.append(
                 Transaction(
-                    transaction_id=f"{account_id}:{row_index}",
+                    # Stamped by `assign_content_ids` once the whole file
+                    # is parsed and its signs are canonical; see there.
+                    transaction_id="",
+                    source_row=row_index,
                     legal_entity_id=legal_entity_id,
                     account_id=account_id,
                     transaction_date=txdate,
@@ -228,4 +232,4 @@ def parse_statement_csv_tolerant(
             for t in transactions
         ]
 
-    return transactions, issues
+    return assign_content_ids(transactions), issues

@@ -8,11 +8,24 @@ next, the escape hatch deliberately before any auto-consult.
 """
 from __future__ import annotations
 
-from .capture import LearnSummary, learn_from_run
-from .consult import MatchMemory, MerchantCategoryLookup
+from .capture import (
+    ExpenseLearnSummary,
+    LearnSummary,
+    learn_from_expense_run,
+    learn_from_run,
+)
+from .consult import (
+    ExpenseMemory,
+    FieldCorrectionLookup,
+    MatchMemory,
+    MerchantCategoryLookup,
+    MerchantEntityLookup,
+)
 from .store import (
+    FieldCorrection,
     LearningStore,
     MerchantCategory,
+    MerchantEntity,
     MerchantFx,
     VendorAlias,
     normalize_vendor,
@@ -21,11 +34,18 @@ from .store import (
 __all__ = [
     "LearningStore",
     "MerchantCategory",
+    "MerchantEntity",
+    "FieldCorrection",
     "VendorAlias",
     "MerchantFx",
     "normalize_vendor",
     "LearnSummary",
+    "ExpenseLearnSummary",
     "learn_from_run",
+    "learn_from_expense_run",
     "MerchantCategoryLookup",
+    "MerchantEntityLookup",
+    "FieldCorrectionLookup",
+    "ExpenseMemory",
     "MatchMemory",
 ]

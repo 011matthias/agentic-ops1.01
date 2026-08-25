@@ -108,6 +108,10 @@ def test_map_prefers_reference_over_amount():
     assert enriched[0].detected_vendor is None            # r1 untouched
     assert enriched[1].detected_vendor == "Autostrade"    # r2 got the reading
     assert enriched[1].line_items[0].description == "Toll"
+    # Receipt preview (2026-07-25): the mapped row records WHICH page its
+    # image came from; the unmapped row records none.
+    assert enriched[1].receipt_image_page == 5
+    assert enriched[0].receipt_image_page is None
 
 
 def test_map_falls_back_to_amount_currency_page_order():

@@ -222,11 +222,19 @@ def _credit_account_and_note(
     """Account + Notes for the balancing credit row.
 
     Maps the statement `account_id` to a real Zoho bank/card account via
-    the `card_accounts` config map + chart of accounts. Falls back to
-    the `Card: {account_id}` placeholder when no mapping exists, so the
-    gap is visible.
+    the `card_accounts` config map + chart of accounts. Exact key first
+    (the web path pre-resolves the map per run, so this is the live fast
+    path), then the conservative bare-digit resolution
+    (`cards.resolve_account_map`, Cards R2): a map keyed "2838" now
+    matches a statement labeled "2838 - May 2026", while label-shaped
+    keys stay exact-only and any ambiguity keeps the placeholder — this
+    is a money path, so a visible gap beats a guessed account. Falls
+    back to the `Card: {account_id}` placeholder when no mapping
+    resolves, so the gap is visible.
     """
-    ref = (card_accounts or {}).get(tx.account_id)
+    from ..cards import resolve_account_map
+
+    ref = resolve_account_map(tx.account_id, dict(card_accounts or {}))
     if not ref:
         return (
             _CARD_ACCOUNT.format(account_id=tx.account_id),
@@ -592,3 +600,38 @@ def write_zoho_export(
         writer.writerows(rows)
 
     return out_path
+
+
+def read_journal_csv(path: str | Path) -> list[list[str]]:
+    """Read a journal CSV this module wrote and return its data rows
+    (no header), validated against ZOHO_COLUMNS. The 4b posting path
+    consumes the REVIEWED export artifact rather than rebuilding rows,
+    so what gets posted is byte-for-byte what a human saw (send-by-id
+    discipline); this reader lives beside the writer so the column
+    contract cannot drift between them."""
+    path = Path(path)
+    with path.open("r", encoding="utf-8", newline="") as fh:
+        reader = csv.reader(fh)
+        try:
+            header = next(reader)
+        except StopIteration:
+            raise ValueError(f"journal CSV is empty: {path}") from None
+        if tuple(header) != ZOHO_COLUMNS:
+            raise ValueError(
+                f"journal CSV header mismatch in {path}: expected "
+                f"{list(ZOHO_COLUMNS)}, found {header}"
+            )
+        # Track real file line numbers BEFORE filtering blanks, so an
+        # error points at the line the operator will actually find.
+        numbered = [
+            (lineno, row)
+            for lineno, row in enumerate(reader, start=2)
+            if any(cell.strip() for cell in row)
+        ]
+    for lineno, row in numbered:
+        if len(row) != len(ZOHO_COLUMNS):
+            raise ValueError(
+                f"journal CSV line {lineno} has {len(row)} columns, expected "
+                f"{len(ZOHO_COLUMNS)}: {path}"
+            )
+    return [row for _, row in numbered]

@@ -26,7 +26,7 @@ CSV = (
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("LEAD_DESK_WORKER_SECRET", "wsecret")
-    monkeypatch.delenv("LEAD_DESK_ACCESS_CODES", raising=False)
+    monkeypatch.delenv("LEAD_DESK_AUTH_SECRET", raising=False)
     app = create_app(tmp_path)
     c = TestClient(app)
     c.app_state_db = tmp_path / "lead-desk.sqlite"
@@ -165,3 +165,37 @@ def test_action_needed_button_and_detail_render(client):
     assert r.status_code == 200
     assert "Action needed" in r.text                      # contact-page callout heading
     assert "Confirm the Sept 9 call slot." in r.text      # the recommended action itself
+
+
+def test_sequence_delta_route_keeps_campaign_sending(client):
+    """The live-delta route appends a step to a 'sending' campaign through the
+    real form path WITHOUT demoting it to draft, and renders the edit-live UI."""
+    from lead_desk.web.store import ContactStore
+
+    client.post("/campaigns", data={"campaign_id": "d-2026", "name": "D",
+                                    "daily_cap": "5"})
+    client.post("/campaigns/d-2026/upload", files={"file": (
+        "l.csv", io.BytesIO(b"email,first name,last name,company\n"
+                            b"zoe@acme.com,Zoe,Zed,Acme\n"), "text/csv")})
+    client.post("/templates", data={"template_key": "d-e1", "channel": "email",
+                                    "subject": "Hi {{first_name}}",
+                                    "body": "Body {{company}}", "campaign": "d-2026"})
+    client.post("/campaigns/d-2026/sequences", data={
+        "degree": "cold", "name": "c", "send_mode": "auto-matthias",
+        "steps": "email d-e1 0"})
+    client.post("/campaigns/d-2026/approve", data={"confirm": "d-2026"})
+    client.post("/campaigns/d-2026/start-sending", data={"confirm": "d-2026"})
+    # A second template, then a LIVE delta appending it (nothing sent yet).
+    client.post("/templates", data={"template_key": "d-e2", "channel": "email",
+                                    "subject": "Hi", "body": "Body2 {{company}}",
+                                    "campaign": "d-2026"})
+    r = client.post("/campaigns/d-2026/sequences/cold/delta",
+                    data={"steps": "email d-e1 0\nemail d-e2 4"},
+                    follow_redirects=True)
+    assert r.status_code == 200
+    assert "Edit live (keep sending)" in r.text            # the delta UI renders
+    with ContactStore(client.app_state_db) as s:
+        assert s.get_campaign("d-2026")["status"] == "sending"   # NOT demoted
+        seq = s.get_sequence("d-2026", "cold")
+        assert [x["template_key"] for x in seq["steps"]] == ["d-e1", "d-e2"]
+        assert "d-e2" in s.get_pins("d-2026")

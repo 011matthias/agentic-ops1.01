@@ -26,6 +26,14 @@ Idempotent: re-running against an already written-back workbook finds
 the existing ``"Zoho Account (tool)"`` header and reuses that column
 instead of appending a second one; the rows it writes are overwritten
 in place.
+
+Scoped per file: a month can hold charges from several statement uploads
+(the living month, PR 2b-2b-2), and a row number only addresses a cell in
+the file it was read from. One charge legitimately sits in several of them
+at different rows, because a mid-month partial and the closing cycle both
+print it. So the caller passes ``anchors``, that WORKBOOK's own
+transaction-id to row map, recorded when it was uploaded, and this module
+writes exactly the charges that file contains, each at its own row.
 """
 from __future__ import annotations
 
@@ -58,11 +66,34 @@ _NEEDS_REVIEW = "(needs review)"
 _NO_RECEIPT = "(no receipt matched)"
 
 
-def _anchor_row(transaction_id: str) -> int | None:
-    """The sheet row a transaction anchors to, or None when the id is
-    not the tabular ``"{account_id}:{row_index}"`` shape (PDF-parsed
-    transactions carry different id shapes — skip, never crash)."""
-    _, sep, tail = transaction_id.rpartition(":")
+def _anchor_row(
+    tx: "Transaction", anchors: "dict[str, int] | None" = None
+) -> int | None:
+    """The sheet row a transaction anchors to, or None when it has none
+    (PDF-parsed transactions have no tabular row — skip, never crash).
+
+    `anchors` is the workbook's OWN id-to-row map and wins outright when
+    given, including its absences: a charge the file does not contain has no
+    row in it and must not be written into it. This is what makes a month
+    with several statements correct in both directions. Scoping on the
+    charge's own `source_row` instead would annotate the closing cycle only
+    for the charges the cycle introduced, leaving every row the mid-month
+    partial had already printed blank in the file Criss actually works from.
+
+    Without `anchors` (the CLI path, and runs that predate the map) the
+    charge's own `source_row` is the answer, exactly as before.
+    Transactions parsed before PR 2a do not: their ids were positional
+    (``"{account_id}:{row_index}"``) and this function recovered the row
+    by taking the id apart. Snapshots at rest still hold those ids, and a
+    run created before PR 2a can still be re-exported, so the id-parsing
+    path stays as the fallback. New parses never reach it.
+    """
+    if anchors is not None:
+        row = anchors.get(tx.transaction_id)
+        return row if row is not None and row >= 2 else None
+    if tx.source_row is not None:
+        return tx.source_row if tx.source_row >= 2 else None
+    _, sep, tail = tx.transaction_id.rpartition(":")
     if not sep:
         return None
     try:
@@ -165,6 +196,7 @@ def write_sheet_writeback(
     sheet_name: str | None = None,
     chart_of_accounts: "ChartOfAccounts | None" = None,
     charge_categorizations: "dict[str, Categorization] | None" = None,
+    anchors: "dict[str, int] | None" = None,
 ) -> Path:
     """Write Chris's workbook back with the appended writeback column.
 
@@ -172,6 +204,11 @@ def write_sheet_writeback(
     docstring; ``keep_vba`` for .xlsm), annotates ONLY the writeback
     column's cells + its header on the target sheet, and saves to
     ``out_path``. Returns ``out_path``.
+
+    ``anchors`` is this workbook's own transaction-id to row map, so a month
+    holding several statements writes each file exactly the charges it
+    contains. Omit it and every charge is placed by its own ``source_row``,
+    as before.
     """
     original_path = Path(original_path)
     out_path = Path(out_path)
@@ -195,14 +232,14 @@ def write_sheet_writeback(
         ws = wb[sheet_name] if sheet_name is not None else wb.active
         col = _writeback_column(ws)
         for tx in transactions:
+            row = _anchor_row(tx, anchors)
+            if row is None:
+                continue
             value = _cell_value(
                 tx, match_by_tx, rec_by_id, review_tx, unmatched_tx,
                 chart_of_accounts, charge_categorizations,
             )
             if value is None:
-                continue
-            row = _anchor_row(tx.transaction_id)
-            if row is None:
                 continue
             ws.cell(row=row, column=col, value=value)
         wb.save(out_path)

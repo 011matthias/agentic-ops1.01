@@ -59,6 +59,7 @@ from ._common import (
     REQUIRED_KEYS,
     ParseIssue,
     StatementParseError,
+    assign_content_ids,
     parse_amount,
     parse_date,
     validate_required_map,
@@ -375,7 +376,10 @@ def parse_statement_xlsx_tolerant(
             )
             transactions.append(
                 Transaction(
-                    transaction_id=f"{account_id}:{row_index}",
+                    # Stamped by `assign_content_ids` at the end of the
+                    # parse, so CSV / Excel / PDF share one identity rule.
+                    transaction_id="",
+                    source_row=row_index,
                     legal_entity_id=legal_entity_id,
                     account_id=account_id,
                     transaction_date=txdate,
@@ -398,7 +402,7 @@ def parse_statement_xlsx_tolerant(
     issues.extend(
         _scan_formula_columns(path, sheet_name, column_map, file_name)
     )
-    return transactions, issues
+    return assign_content_ids(transactions), issues
 
 
 def _scan_formula_columns(

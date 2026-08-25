@@ -412,19 +412,24 @@ def test_fx_reference_rate_clean_match_is_deterministic():
     assert not out.judgment_required
 
 
-def test_fx_reference_rate_dcc_band_flags_review():
-    """Deviation in 3-13% (DCC markup / tip territory) still matches
-    deterministically but is review-flagged."""
+def test_fx_reference_rate_dcc_band_defers_to_judgment():
+    """Deviation in 3-13% (DCC markup / tip territory) DEFERS to the
+    judgment bucket with the rate reasoning attached (2026-07-23; it used
+    to auto-match review-flagged, which on the labelled fixture turned
+    every coincidental within-13% charge into a deterministic pairing —
+    38 of 46 no-charge receipts auto-matched)."""
     cfg = MatchingConfig(
         fx_reference_rates={("EUR", "USD"): Decimal("1.10")}
     )
     txs = [tx("t1", "118.00", date(2026, 4, 12))]      # dev 7.3%
     rs = [receipt("r1", "100.00", date(2026, 4, 12), currency="EUR")]
     out = match_month(txs, rs, cfg)
-    assert len(out.matches) == 1
-    m = out.matches[0]
-    assert m.match_type == MatchType.FX_REFERENCE
+    assert not out.matches
+    assert len(out.judgment_required) == 1
+    m = out.judgment_required[0]
+    assert m.match_type == MatchType.FX_JUDGMENT
     assert m.requires_review
+    assert "monthly reference rate" in m.reason
 
 
 def test_fx_reference_rate_large_deviation_falls_through_to_band():

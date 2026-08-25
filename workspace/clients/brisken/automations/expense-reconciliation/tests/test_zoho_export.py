@@ -228,6 +228,60 @@ def test_credit_placeholder_kept_when_card_unmapped():
     assert credit[1] == "Card: amex-usd"
 
 
+def test_credit_resolved_by_digit_token():
+    """Cards R2: the journal's exact-dict lookup was the one card matcher
+    that bypassed digit-token matching — a config-file map keyed "2838"
+    never matched a statement labeled "2838 - May 2026" (the real Chase
+    card-first label shape) and silently placeholdered every credit."""
+    tx = _tx(account="2838 - May 2026")
+    rec = _receipt([_line_acct("flight", "180", "Travel & Transport",
+                               "E100-21 Travel: Flights")])
+    rows = build_journal_rows(_matched_outcome(), {"t1": tx}, {"r1": rec},
+                              chart_of_accounts=_coa(),
+                              card_accounts={"2838": "A200"})
+    credit = next(r for r in rows if r[6])
+    assert credit[1] == "Amex Card USD"
+
+
+def _credit_for(account_label: str, card_accounts: dict) -> str:
+    tx = _tx(account=account_label)
+    rec = _receipt([_line_acct("flight", "180", "Travel & Transport",
+                               "E100-21 Travel: Flights")])
+    rows = build_journal_rows(_matched_outcome(), {"t1": tx}, {"r1": rec},
+                              chart_of_accounts=_coa(),
+                              card_accounts=card_accounts)
+    return next(r for r in rows if r[6])[1]
+
+
+def test_credit_fallback_never_guesses_across_label_keys():
+    """R2 adversarial review, executed scenario 1: two full-label map keys
+    share the incidental year token "2026". Composing cards from them
+    merged the two cards and posted next month's credit to the WRONG
+    account with a clean note. The money path resolves label-shaped keys
+    exactly or not at all: the visible placeholder stays."""
+    accounts = {"2838 - May 2026": "A200", "0340 - May 2026": "A300"}
+    assert _credit_for("0340 - June 2026", accounts) == "Card: 0340 - June 2026"
+    # The exact labels themselves still resolve, as they always did.
+    assert _credit_for("2838 - May 2026", accounts) == "Amex Card USD"
+
+
+def test_credit_fallback_denies_ambiguous_digit_hit():
+    """R2 adversarial review, scenario 2: a label whose digit tokens hit
+    TWO bare-digit keys ("2838 - May 2026" against keys "2838" AND
+    "2026") must placeholder, never first-match-guess between cards."""
+    accounts = {"2026": "A300", "2838": "A200"}
+    assert _credit_for("2838 - May 2026", accounts) == "Card: 2838 - May 2026"
+
+
+def test_credit_fallback_ignores_word_keys():
+    """R2 adversarial review, scenario 3: a single-word key ("chase") must
+    not act as a wildcard resolving every Chase-labeled card."""
+    accounts = {"chase": "A200"}
+    assert _credit_for("0340 - Chase May 2026", accounts) == (
+        "Card: 0340 - Chase May 2026"
+    )
+
+
 def test_resolution_keeps_books_balanced():
     """De-placeholdering must not disturb the double-entry invariant."""
     tx = _tx(account="amex-usd")

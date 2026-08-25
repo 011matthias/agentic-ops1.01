@@ -23,6 +23,8 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta
 
+from ..graph_mail import _norm_subject
+
 OL_MAIL_ITEM = 0
 OL_FOLDER_INBOX = 6
 OL_FOLDER_DRAFTS = 16
@@ -73,13 +75,15 @@ def bounce_payload(failed_addr: str, subject: str | None, ts_iso: str,
 
 def match_drafted(sent_items: list[dict], drafted: list[dict]) -> list[dict]:
     """Correlate Dirk's actually-sent mail with 'drafted' attempts by
-    (recipient, subject). Returns draft-sent confirmations."""
+    (recipient, subject). Subjects compare via _norm_subject (a superset of
+    the old exact match) so a staged reply step whose sent copy gained a
+    'RE: ' prefix still completes. Returns draft-sent confirmations."""
     out = []
     for d in drafted:
         want_to = (d.get("to") or "").lower()
-        want_subj = (d.get("subject") or "").strip()
+        want_subj = _norm_subject(d.get("subject") or "")
         for m in sent_items:
-            if want_subj and m.get("subject", "").strip() == want_subj and \
+            if want_subj and _norm_subject(m.get("subject", "")) == want_subj and \
                     want_to and want_to in [a.lower() for a in m.get("to_addrs", [])]:
                 out.append({"attempt_key": d["attempt_key"],
                             "occurred_at": m.get("ts"),

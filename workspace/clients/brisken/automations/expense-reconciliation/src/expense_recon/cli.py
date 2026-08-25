@@ -84,7 +84,12 @@ from pathlib import Path
 import os
 from decimal import Decimal
 
-from .categorize import adjudicate_receipts, categorize_receipts
+from .categorize import (
+    adjudicate_receipts,
+    categorize_receipts,
+    categorize_receipts_with_registry,
+)
+from .cards import cards_from_setting, stamp_card_entities
 from .categorize_charges import categorize_charges, derive_subscription_status
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
@@ -97,6 +102,8 @@ from .ingest.statement_pdf import parse_statement_pdf_tolerant
 from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from .llm.client import LLMClient, OpenAIClient
 from .llm.cost import CostTracker
+from .llm.extraction_cache import ExtractionCache
+from .merchant_registry import MerchantRegistry
 from .matching.deterministic import MatchingConfig, match_month
 from .matching.judgment import judge_ambiguous, judge_fx_match, judge_unmatched
 from .matching.types import Categorization, Match, MatchOutcome, Receipt, Transaction
@@ -105,6 +112,7 @@ from .output.report_xlsx import write_report
 from .output.sheet_writeback import write_sheet_writeback
 from .runlog import RunLog, decisions_from_outcome
 from .output.zoho_export import write_zoho_export
+from .output.zoho_expense_export import write_zoho_expense_export
 from .store import (
     ReportConflictError,
     ReportStore,
@@ -113,7 +121,6 @@ from .store import (
     group_by_report,
 )
 from .hosting import DEFAULT_URL_TEMPLATE, ReceiptStore, resolve_receipt_urls
-from .zoho.client import ZohoClient, ZohoConfig
 
 
 logger = logging.getLogger("expense_recon")
@@ -308,19 +315,26 @@ def _apply_vision_receipts(
 
 
 def _apply_judgment(
-    outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None
+    outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None,
+    *, suggest_floor: float = 0.0,
 ) -> None:
     """Replace each judgment_required entry with the judgment verdict.
 
     With an `LLMClient`, every FX case gets a real model judgment
-    (D1b); without one, `judge_fx_match` returns the stub Match. Either
-    way the entry stays in `judgment_required` with
-    `requires_review=True` — the reconciliation guarantee holds and
-    Chris reviews every FX case (call-outcomes D2).
+    (D1b); without one, `judge_fx_match` returns the stub Match and the
+    entry stays in `judgment_required` with `requires_review=True`.
+
+    A real verdict BELOW `suggest_floor` is unbound instead of kept
+    (owner call 2026-07-24): showing a pair the model itself rejected
+    at p=0.10 as "the suggested receipt" wastes the reviewer and reads
+    as a tool error. The charge and the receipt fall to the plain
+    unmatched buckets when nothing else claims them, so every id still
+    lands in a bucket and the reconciliation guarantee holds.
     """
     if not outcome.judgment_required:
         return
     judged: list = []
+    suppressed: list = []
     for m in outcome.judgment_required:
         tx = tx_by_id.get(m.transaction_id)
         rec = rec_by_id.get(m.document_id)
@@ -335,19 +349,51 @@ def _apply_judgment(
         # card, so the review queue could not sort them and the reviewer
         # could not see WHY a pair was proposed. The verdict itself
         # (match_type, confidence, reason) still comes from the judgment.
-        judged.append(
-            replace(
-                verdict,
-                score=m.score,
-                amount_score=m.amount_score,
-                date_score=m.date_score,
-                vendor_score=m.vendor_score,
-                card_score=m.card_score,
-            )
+        full = replace(
+            verdict,
+            score=m.score,
+            amount_score=m.amount_score,
+            date_score=m.date_score,
+            vendor_score=m.vendor_score,
+            card_score=m.card_score,
         )
+        # Only a REAL model verdict can be suppressed; the no-client stub
+        # (confidence 0.5) always stays, so no-LLM runs are unaffected.
+        if client is not None and full.confidence < suggest_floor:
+            suppressed.append(full)
+            continue
+        judged.append(full)
     # In-place: MatchOutcome is frozen (E6); rebinding the attribute
     # would raise. Slice-assignment revises the same list object.
     outcome.judgment_required[:] = judged
+    if suppressed:
+        logger.info(
+            "%d FX pair(s) below suggest floor %.2f unbound to unmatched",
+            len(suppressed), suggest_floor,
+        )
+        claimed_tx = (
+            {m.transaction_id for m in outcome.matches}
+            | {m.transaction_id for m in judged}
+            | {m.transaction_id for m in outcome.ambiguous}
+        )
+        claimed_rec = (
+            {m.document_id for m in outcome.matches}
+            | {m.document_id for m in judged}
+            | {m.document_id for m in outcome.ambiguous}
+        )
+        for m in suppressed:
+            if (
+                m.transaction_id not in claimed_tx
+                and m.transaction_id not in outcome.unmatched_transactions
+            ):
+                outcome.unmatched_transactions.append(m.transaction_id)
+                claimed_tx.add(m.transaction_id)
+            if (
+                m.document_id not in claimed_rec
+                and m.document_id not in outcome.unmatched_receipts
+            ):
+                outcome.unmatched_receipts.append(m.document_id)
+                claimed_rec.add(m.document_id)
 
 
 def _apply_ambiguous_judgment(
@@ -514,6 +560,10 @@ class ReconcileResult:
     # field, so Tier 1's frozen types stay untouched; annotation only —
     # bucket membership never changes.
     charge_categorizations: dict[str, Categorization] = field(default_factory=dict)
+    # Non-receipt quarantine (set-aside strip): the files generate_expenses
+    # excluded, with their extraction intact, so the web layer can record
+    # them restorably. Always empty for reconcile().
+    set_aside_receipts: list[Receipt] = field(default_factory=list)
 
 
 def _load_learned(cfg: dict, config_dir: Path):
@@ -537,6 +587,43 @@ def _load_match_memory(cfg: dict, config_dir: Path):
     from .learning import MatchMemory
 
     return MatchMemory.from_db_path((config_dir / block["path"]).resolve())
+
+
+def build_match_cfg(cfg: dict, config_dir: Path, match_memory=None) -> MatchingConfig | None:
+    """Assemble the run's `MatchingConfig` from its config + learned memory.
+
+    The single source of truth for how the `matching:` block becomes a
+    MatchingConfig: an optional `tuning_path` file, the inline tunables the
+    hosted surface passes (the month's FX reference rates etc.), and the
+    learned vendor aliases / per-merchant FX layered on top. Extracted from
+    `reconcile` so a later re-match of a stored run (the bulk receipts-folder
+    attach) reproduces the SAME config the run first matched under, instead
+    of duplicating this assembly. `match_memory` is passed already-resolved
+    (falsy => no memory layer); callers that want the config's own
+    `learning:` block resolve it via `_load_match_memory` first.
+    """
+    match_cfg = None
+    matching_block = dict(cfg.get("matching") or {})
+    tuning_path = matching_block.pop("tuning_path", None)
+    inline = {
+        k: v
+        for k, v in matching_block.items()
+        if k not in _MATCHING_NON_TUNABLE
+    }
+    if tuning_path:
+        tuning = json.loads(
+            (config_dir / tuning_path).read_text(encoding="utf-8")
+        )
+        match_cfg = MatchingConfig.from_dict({**tuning, **inline})
+    elif inline:
+        match_cfg = MatchingConfig.from_dict(inline)
+    if match_memory:
+        match_cfg = replace(
+            match_cfg or MatchingConfig(),
+            vendor_aliases=match_memory.vendor_aliases,
+            merchant_fx=dict(match_memory.merchant_fx),
+        )
+    return match_cfg
 
 
 def reconcile(
@@ -680,27 +767,7 @@ def reconcile(
     # over the file's, so a run can override one rate without copying the
     # whole file. The second-pass keys are consumed elsewhere in this module
     # and are not MatchingConfig tunables, so they never reach from_dict.
-    match_cfg = None
-    matching_block = dict(cfg.get("matching") or {})
-    tuning_path = matching_block.pop("tuning_path", None)
-    inline = {
-        k: v
-        for k, v in matching_block.items()
-        if k not in _MATCHING_NON_TUNABLE
-    }
-    if tuning_path:
-        tuning = json.loads(
-            (config_dir / tuning_path).read_text(encoding="utf-8")
-        )
-        match_cfg = MatchingConfig.from_dict({**tuning, **inline})
-    elif inline:
-        match_cfg = MatchingConfig.from_dict(inline)
-    if match_memory:
-        match_cfg = replace(
-            match_cfg or MatchingConfig(),
-            vendor_aliases=match_memory.vendor_aliases,
-            merchant_fx=dict(match_memory.merchant_fx),
-        )
+    match_cfg = build_match_cfg(cfg, config_dir, match_memory)
     _stage("matching")
     outcome = match_month(transactions, receipts, match_cfg)
     logger.info(
@@ -715,7 +782,10 @@ def reconcile(
     _stage("judging")
     tx_by_id = {tx.transaction_id: tx for tx in transactions}
     rec_by_id = {r.document_id: r for r in receipts}
-    _apply_judgment(outcome, tx_by_id, rec_by_id, llm_client)
+    _apply_judgment(
+        outcome, tx_by_id, rec_by_id, llm_client,
+        suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
+    )
     _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
     # WS3: opt-in second chance for the leftovers, after the deterministic
     # buckets are settled so it only ever sees genuinely free receipts.
@@ -764,6 +834,202 @@ def reconcile(
     )
 
 
+NON_RECEIPT_LABELS: dict[str, str] = {
+    "statement": "a bank/card statement page",
+    "report_summary": "an expense-report summary page",
+    "other": "not an expense document",
+}
+
+
+def split_non_receipt_documents(
+    receipts: list[Receipt],
+) -> tuple[list[Receipt], list[Receipt], list[ParseIssue]]:
+    """Partition the pool into real receipts and files the vision extractor
+    explicitly classified as something else (statement page, expense-report
+    summary page, unrelated image). Each excluded file becomes a WARNING
+    ParseIssue naming the file, so the exclusion is visible in the grid's
+    parse_issues and the CLI output — quarantined, never silently dropped.
+    An unclassified file (document_type "receipt", the default) always
+    stays: a phantom row is visible; a silently dropped receipt is not.
+
+    Returns (kept, excluded, issues). The excluded receipts keep their full
+    extraction: the web layer records them in the snapshot's set-aside list
+    so the reviewer can see WHY each file was set aside and restore one
+    without a fresh vision call.
+    """
+    kept: list[Receipt] = []
+    excluded: list[Receipt] = []
+    issues: list[ParseIssue] = []
+    for r in receipts:
+        label = NON_RECEIPT_LABELS.get(r.document_type)
+        if label is None:
+            kept.append(r)
+            continue
+        excluded.append(r)
+        issues.append(ParseIssue(
+            r.document_id, 0,
+            f"looks like {label}, not a purchase receipt — excluded from "
+            "expenses (no row exported; if this is wrong, re-upload the "
+            "file cropped to the receipt)",
+            severity="warning",
+        ))
+    return kept, excluded, issues
+
+
+def generate_expenses(
+    cfg: dict, config_dir: Path, *, learned=None, llm_client=None,
+    on_stage=None, expense_memory=None, registry=None,
+) -> ReconcileResult:
+    """Receipt-first expense generation: ingest -> vision -> categorize a
+    batch of receipts with NO bank statement, one "expense" per receipt.
+
+    The statement-independent sibling of `reconcile()` (Dirk's note #1,
+    "the flow is backwards"): it runs the SAME OCR + categorization
+    helpers but SKIPS `_load_statement`, `match_month`, the judgment
+    passes, and `categorize_charges` — all of which are transaction-
+    anchored. The result carries `transactions=[]` and every receipt in
+    `outcome.unmatched_receipts`, so the existing snapshot round-trips
+    unchanged; the receipt-first web view keys off the run's mode marker.
+
+    `cfg["expense"]["legal_entity_id"]` is required — the receipt-first
+    analogue of the statement's legal-entity guard. `learned` (a
+    MerchantCategoryLookup) upgrades the weak vendor-fallback path to
+    Tier-1 LEARNED, exactly as in `reconcile()`. `llm_client` may be
+    injected (tests / a pre-built client); None builds it from `cfg`.
+
+    `expense_memory` (Phase 6, an `learning.ExpenseMemory`) applies learned
+    merchant -> entity mappings and per-merchant field corrections right
+    after ingest — entity BEFORE categorization, so downstream sees the
+    corrected receipt. Consulted here ONLY; `reconcile()` never takes it.
+
+    `registry` (2026-07-29, a `merchant_registry.MerchantRegistry` built from
+    `settings["merchants"]`) is the highest-priority DETERMINISTIC source: it
+    canonicalizes each receipt's DISPLAY vendor and, when the merchant carries
+    a default category, stamps a REGISTRY categorization and SKIPS the LLM for
+    that receipt (deterministic-first; the LLM only fills gaps). Consulted
+    here ONLY; `reconcile()` never takes it.
+
+    `reconcile()` is deliberately untouched: statement-mode reconciliation
+    runs the identical path it always has.
+    """
+    def _stage(name: str) -> None:
+        if on_stage is not None:
+            try:
+                on_stage(name)
+            except Exception:  # noqa: BLE001 - progress is best-effort
+                logger.debug("on_stage(%r) callback failed", name, exc_info=True)
+
+    if llm_client is None:
+        llm_client, cost_tracker = _build_llm_client(cfg)
+    else:
+        cost_tracker = getattr(llm_client, "cost_tracker", None)
+
+    # Cards R3 (2026-08-21): the legal entity is OPTIONAL at batch level.
+    # The operator ruling behind it: the tool serves receipts from ANY
+    # entity, so the entity resolves PER RECEIPT from the paying card
+    # (post-OCR, `cards.stamp_card_entities`), with the batch-level value
+    # only a fallback. An unresolved entity is a review state, never an
+    # error — and never blocks the export (visible placeholder instead).
+    expense_block = cfg.get("expense") if isinstance(cfg.get("expense"), dict) else {}
+    legal_entity_id = str(expense_block.get("legal_entity_id") or "")
+
+    _stage("receipts")
+    receipts, receipt_issues = _load_receipts(
+        cfg, config_dir, legal_entity_id=legal_entity_id, llm_client=llm_client,
+    )
+    _stage("receipt-images")
+    receipts, vision_issues = _apply_vision_receipts(
+        cfg, config_dir, receipts, llm_client
+    )
+    # Phase 6 consult: learned merchant->entity + field corrections, applied
+    # before categorization so the corrected vendor/entity drive everything
+    # downstream. Provenance lands on data_quality_note (grid-visible).
+    if expense_memory is not None:
+        receipts = expense_memory.apply(receipts)
+
+    # Cards R3: each receipt's paying card resolves its legal entity (the
+    # card registry snapshotted into this run's config + the batch's
+    # explicit hint assignments). Runs AFTER memory (a card is physical
+    # evidence of the paying entity; it outranks the learned merchant ->
+    # entity heuristic, matching the view/export chain) and BEFORE
+    # categorization (learned category lookups key on the entity).
+    receipts = stamp_card_entities(
+        receipts,
+        cards_from_setting(expense_block.get("cards")),
+        expense_block.get("card_hints") if isinstance(
+            expense_block.get("card_hints"), dict
+        ) else None,
+    )
+
+    # Non-receipt quarantine (2026-08-13), before the categorizer spends a
+    # call on them: statement pages and report-summary pages that arrive in
+    # the upload (Criss's May folder: 7 Chase statement PDFs among 27 files;
+    # ER-00215's own summary page became an 8,796.35 BRL phantom expense)
+    # must not become expense rows. Exclusion is loud — each file lands in
+    # parse_errors (grid `parse_issues` + CLI output) — and only fires on an
+    # explicit non-receipt classification; anything unclassified stays.
+    receipts, set_aside, non_receipt_issues = split_non_receipt_documents(receipts)
+    logger.info("ingested %d receipt(s) (no statement)", len(receipts))
+
+    parse_errors: list[tuple[str, int, str, str]] = [
+        (issue.file_name, issue.line_number, issue.message, issue.severity)
+        for issue in (*receipt_issues, *vision_issues, *non_receipt_issues)
+    ]
+
+    chart_of_accounts, zoho_cfg = _build_chart_of_accounts(cfg, config_dir)
+    cat_chart, account_labels, scope_groups = _resolve_categorizer_chart(
+        cfg, config_dir, chart_of_accounts, zoho_cfg
+    )
+    chart_of_accounts = cat_chart
+
+    if learned is None:
+        learned = _load_learned(cfg, config_dir)
+    override_er_category = bool(
+        (cfg.get("categorization") or {}).get("override_er_category", False)
+    )
+
+    _stage("categorizing")
+    # Merchant-registry consult (2026-07-29), between the Phase-6 memory pass
+    # and the LLM: canonicalize each receipt's display vendor and let a
+    # registry default category preempt the LLM (deterministic-first). An
+    # empty / None registry reduces to plain categorize_receipts + adjudicate.
+    receipts, _registry_matches = categorize_receipts_with_registry(
+        receipts,
+        registry=registry,
+        client=llm_client,
+        chart_of_accounts=account_labels,
+        learned=learned,
+        override_er_category=override_er_category,
+        cat_chart=cat_chart,
+        scope_groups=scope_groups,
+    )
+
+    # No statement => no matching. Every receipt IS an expense; they live in
+    # `unmatched_receipts` so the snapshot shape is identical to a run with
+    # zero matches, and the receipt-first view reads them as the row spine.
+    outcome = MatchOutcome(
+        unmatched_receipts=[r.document_id for r in receipts]
+    )
+
+    if cost_tracker and cost_tracker.call_count:
+        logger.info(
+            "LLM: %d call(s), est. $%.4f",
+            cost_tracker.call_count, cost_tracker.total_cost_usd,
+        )
+
+    return ReconcileResult(
+        outcome=outcome,
+        transactions=[],
+        receipts=receipts,
+        parse_errors=parse_errors,
+        cost_tracker=cost_tracker,
+        chart_of_accounts=chart_of_accounts,
+        zoho_cfg=zoho_cfg,
+        charge_categorizations={},
+        set_aside_receipts=set_aside,
+    )
+
+
 def run(
     config_path: Path,
     out_override: Path | None = None,
@@ -784,6 +1050,23 @@ def run(
     cfg = json.loads(config_path.read_text(encoding="utf-8"))
     config_dir = config_path.parent
     logger.info("run started: config=%s", config_path)
+
+    # Resolve a relative extraction-cache path against the config dir HERE,
+    # where the config dir is known — `_build_llm_client` keeps its single-arg
+    # signature (a patch seam the web tests replace with a 1-arg lambda).
+    llm_cfg = cfg.get("llm")
+    if isinstance(llm_cfg, dict) and llm_cfg.get("extraction_cache_path"):
+        cache_p = Path(llm_cfg["extraction_cache_path"])
+        if not cache_p.is_absolute():
+            llm_cfg["extraction_cache_path"] = str(config_dir / cache_p)
+
+    # Receipt-first branch (Dirk's note #1): generate one expense per
+    # receipt with no statement, write the Zoho Expenses CSV. Separate from
+    # the statement-mode body below so no transaction-anchored writer runs.
+    if cfg.get("mode") == "expense_generation":
+        return _run_expense_generation(
+            cfg, config_dir, out_override, dry_run=dry_run,
+        )
 
     result = reconcile(cfg, config_dir)
     outcome = result.outcome
@@ -924,6 +1207,105 @@ def run(
     )
 
     return report_path
+
+
+def _run_expense_generation(
+    cfg: dict, config_dir: Path, out_override: Path | None, *, dry_run: bool,
+) -> Path | None:
+    """CLI entry for receipt-first expense generation (mode=expense_generation):
+    generate one expense per receipt, write the Zoho Expenses import CSV.
+
+    A separate branch of `run()` so no transaction-anchored writer (journal,
+    reconciled CSV, sheet writeback, subscription derivation) fires in
+    expense mode; the statement-mode `run()` body is untouched.
+    """
+    # A CLI run consults the same merchant name book the web app builds from
+    # settings["merchants"] — without this, offline quality checks judge the
+    # tool WITHOUT the canonicalization Criss actually gets (backlog item 2).
+    registry = _build_cli_merchant_registry(cfg, config_dir)
+    result = generate_expenses(cfg, config_dir, registry=registry)
+    # Parse issues (unreadable files, quarantined non-receipts) have no
+    # Errors sheet in expense mode — the CSV is the only artifact — so they
+    # print here or they are invisible to a CLI run.
+    for fname, _line, msg, severity in result.parse_errors:
+        print(f"  [{severity}] {fname}: {msg}")
+    if dry_run:
+        print(
+            f"Expense generation (dry run): {len(result.receipts)} expense(s) "
+            "from receipts, no statement."
+        )
+        return None
+
+    out_cfg = cfg.get("output") or {}
+    export_path = out_override or (
+        config_dir / (out_cfg.get("expenses_csv") or "expenses.csv")
+    )
+    # Same COA validation gate the journal export uses; None when no
+    # `coa_validation:` block (unguarded, no change).
+    coa_gate = _build_coa_gate(cfg, config_dir)
+    receipt_urls = _host_receipts(cfg, config_dir, result.receipts)
+    write_zoho_expense_export(
+        result.receipts,
+        export_path,
+        chart_of_accounts=result.chart_of_accounts,
+        coa_gate=coa_gate,
+        default_paid_through=(cfg.get("expense") or {}).get("default_paid_through"),
+        card_accounts=(cfg.get("expense") or {}).get("card_accounts"),
+        receipt_urls=receipt_urls,
+    )
+    logger.info("wrote Zoho Expenses export: %s", export_path)
+    print(f"Wrote Zoho Expenses export: {export_path}")
+    return export_path
+
+
+def _build_cli_merchant_registry(
+    cfg: dict, config_dir: Path
+) -> MerchantRegistry | None:
+    """Build the merchant registry for a CLI expense-generation run.
+
+    The hosted app builds it from `settings["merchants"]`; a local run has
+    no settings store, so the config carries the merchants instead:
+
+        "expense": {
+          "merchants": { "Canonical": {"aliases": [...], ...} },  # inline, or
+          "merchants_path": "merchants.json"   # relative to the config dir;
+        }                                      #   either a bare merchants map
+                                               #   or a full settings dict
+                                               #   with a "merchants" key
+
+    Neither key present = None (unchanged: registry-free run). A configured
+    but unreadable/malformed source raises ConfigError LOUDLY — a test run
+    silently dropping the name book would judge the tool without the very
+    feature built to fix naming, which is the failure this closes.
+    """
+    exp = cfg.get("expense") or {}
+    merchants = exp.get("merchants")
+    merchants_path = exp.get("merchants_path")
+    if merchants is None and not merchants_path:
+        return None
+    if merchants is None:
+        p = Path(merchants_path)
+        if not p.is_absolute():
+            p = config_dir / p
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ConfigError(
+                f"expense.merchants_path {str(p)!r} unreadable: {exc}"
+            ) from exc
+        merchants = (
+            data.get("merchants")
+            if isinstance(data, dict) and "merchants" in data
+            else data
+        )
+    if not isinstance(merchants, dict):
+        raise ConfigError(
+            "expense.merchants must be a map of canonical merchant -> entry "
+            "(the settings['merchants'] shape)"
+        )
+    registry = MerchantRegistry(merchants)
+    logger.info("merchant registry: %d merchant(s) loaded from config", len(merchants))
+    return registry
 
 
 def _derive_subscriptions(
@@ -1153,9 +1535,19 @@ def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
             "model": "gpt-4o-mini",          # optional, defaults shown
             "vision_model": "gpt-4o-mini",   # optional; OCR calls (2.2);
                                              #   defaults to `model`
-            "api_key_env": "OPENAI_API_KEY"  # optional, defaults shown
-          }
-        }
+            "api_key_env": "OPENAI_API_KEY", # optional, defaults shown
+            "extraction_cache_path":         # optional; content-hash cache
+              "extraction-cache.sqlite"      #   for receipt extraction
+          }                                  #   ("same photo, same answer");
+        }                                    #   relative to the config dir
+
+    The extraction cache also turns on via the EXPENSE_RECON_EXTRACTION_CACHE
+    env var (the hosted app sets it to /data/extraction-cache.sqlite in
+    fly.toml); the config key wins when both are present. Neither set = no
+    cache, behaviour unchanged. A relative config path is absolutized against
+    the config dir by `run()` BEFORE this builder sees it (this function's
+    single-arg signature is a patch seam for the web tests — do not widen it);
+    a still-relative path here resolves against the process CWD.
     """
     llm_cfg = cfg.get("llm")
     if not isinstance(llm_cfg, dict):
@@ -1184,8 +1576,43 @@ def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
         vision_model=llm_cfg.get("vision_model"),
         api_key=api_key,
         cost_tracker=tracker,
+        # The cards this payer holds, so the extractor picks among them
+        # instead of transcribing four faded digits blind (2026-08-24).
+        # Sourced from the run's own card registry snapshot, so a card added
+        # in Settings reaches the next batch's reads with no other wiring.
+        known_cards=_known_card_digits(cfg),
     )
+
+    # "Same photo, same answer": attach the content-hash extraction cache
+    # when configured. Attribute assignment (not a constructor kwarg) so a
+    # test-patched OpenAIClient factory keeps its narrow signature.
+    cache_path = llm_cfg.get("extraction_cache_path") or os.environ.get(
+        "EXPENSE_RECON_EXTRACTION_CACHE"
+    )
+    if cache_path:
+        client.extraction_cache = ExtractionCache(Path(cache_path))
+        logger.info("extraction cache: %s", cache_path)
+
     return client, tracker
+
+
+def _known_card_digits(cfg: dict) -> list[str]:
+    """Every last-4 the payer's card registry knows, deduped, order kept.
+
+    One physical card can carry several digit identities (the statement
+    marker 2838 and the plastic 1672 are the same Chase card), and a receipt
+    prints whichever the terminal knows, so ALL of them are offered.
+    """
+    expense = cfg.get("expense") if isinstance(cfg.get("expense"), dict) else {}
+    out: list[str] = []
+    for card in cards_from_setting(expense.get("cards")).values():
+        if not card.active:
+            continue
+        for digits in card.digits:
+            text = str(digits).strip()
+            if len(text) == 4 and text.isdigit() and text not in out:
+                out.append(text)
+    return out
 
 
 def _build_chart_of_accounts(
@@ -1201,7 +1628,7 @@ def _build_chart_of_accounts(
         {
           "zoho": {
             "enabled": true,                  // optional, default true
-            "coa_source": "api",              // "api" | "csv"
+            "coa_source": "api",              // "api" | "csv" | "none"
             "coa_csv_path": "chart.csv",      // required when source == "csv"
             "coa_column_map": { ... },        // optional, csv only
             "scope_groups": [                 // approved root-group names;
@@ -1220,17 +1647,23 @@ def _build_chart_of_accounts(
           }
         }
 
-    Credentials for the API source come from the environment
-    (`ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`,
-    `ZOHO_ORG_ID`), never the config file. Brisken's real chart of
-    accounts is sensitive client data and is pulled live; it is never
-    committed to this repo.
+    The chart comes from a file the operator controls (`coa_source: "csv"`)
+    or not at all (`"none"`). There is no live pull: the app holds no
+    connection to any accounting API (owner directive 2026-08-22). The
+    chart file is sensitive client data and is never committed to this repo.
     """
     z = cfg.get("zoho")
     if not isinstance(z, dict) or not z.get("enabled", True):
         return None, {}
 
-    source = z.get("coa_source", "api")
+    source = z.get("coa_source", "none")
+    if source == "none":
+        # The block carries run config (card_accounts, export flags) but no
+        # chart source; this is the default. The hosted upload path
+        # fabricates such a block from stored master data, and its
+        # categorizer chart comes from the coa_validation fallback in
+        # _resolve_categorizer_chart.
+        return None, z
     if source == "csv":
         if "coa_csv_path" not in z:
             raise ConfigError("config.zoho.coa_csv_path required when coa_source is 'csv'")
@@ -1238,15 +1671,12 @@ def _build_chart_of_accounts(
         if not coa_path.exists():
             raise ConfigError(f"chart-of-accounts CSV not found: {coa_path}")
         coa = ChartOfAccounts.from_csv(coa_path, column_map=z.get("coa_column_map"))
-    elif source == "api":
-        try:
-            client = ZohoClient(ZohoConfig.from_env())
-        except ValueError as exc:
-            raise ConfigError(str(exc)) from exc
-        coa = ChartOfAccounts.from_api(client.list_chart_of_accounts())
     else:
         raise ConfigError(
-            f"config.zoho.coa_source {source!r} not supported (use 'api' or 'csv')"
+            f"config.zoho.coa_source {source!r} not supported (use 'csv' or 'none'). "
+            "The live 'api' source was removed 2026-08-22: the app holds no "
+            "connection to an accounting API. Export the chart to a file and "
+            "point coa_csv_path at it."
         )
     return coa, z
 
@@ -1331,8 +1761,27 @@ def _build_coa_gate(cfg: dict, config_dir: Path):
     if not isinstance(block, dict) or not block.get("enabled", True):
         return None
 
-    from .coa_gate import CoaGate, load_entity_chart
+    from .coa_gate import CoaGate, gate_for_entities, load_entity_chart
     from .ingest.chart_of_accounts import EXPENSE_ACCOUNT_TYPES
+
+    # Cards R4: a batch that mixes legal entities carries one entry per
+    # entity, and each row is gated against the chart of the entity that
+    # actually pays it. An entry that cannot be built is skipped rather than
+    # failing the batch (fail-open, like the rest of the provisioning chain);
+    # if none can be built there is nothing to gate against.
+    entries = block.get("entities")
+    if isinstance(entries, list):
+        gates: dict[str, CoaGate] = {}
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            try:
+                gate = _build_coa_gate({"coa_validation": entry}, config_dir)
+            except ConfigError:
+                continue
+            if gate is not None and isinstance(gate, CoaGate):
+                gates[gate.entity] = gate
+        return gate_for_entities(gates) if gates else None
 
     chart_path = block.get("chart_path")
     if not chart_path:
@@ -1365,7 +1814,7 @@ def _print_dry_run_summary(
     outcome: MatchOutcome,
     transactions: list[Transaction],
     receipts: list[Receipt],
-    parse_errors: list[tuple[str, int, str]],
+    parse_errors: list[tuple[str, int, str, str]],
     cost_tracker: CostTracker | None,
     charge_categorizations: dict[str, Categorization] | None = None,
 ) -> None:
@@ -1402,7 +1851,11 @@ def _print_dry_run_summary(
     if parse_errors:
         print()
         print("First parse errors (max 5):")
-        for file_name, line_no, msg in parse_errors[:5]:
+        # Star-unpack: issues carry a 4th `severity` field since the
+        # advisory/error split, and pre-split snapshots still hold
+        # 3-tuples. Same tolerance as the logger loop above; unpacking
+        # exactly three here crashed every dry run that had an issue.
+        for file_name, line_no, msg, *_ in parse_errors[:5]:
             print(f"  {file_name}:{line_no}  {msg}")
 
 

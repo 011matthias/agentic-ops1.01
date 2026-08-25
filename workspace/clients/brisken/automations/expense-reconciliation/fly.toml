@@ -10,11 +10,21 @@ primary_region = "fra"
 
 [env]
   EXPENSE_RECON_WEB_DATA = "/data"
+  # Mail intake (the app's own mailbox): the in-app SMTP listener on :2525,
+  # published on public port 25 below (needs the app's dedicated IPv4 —
+  # MX targets can only be port 25). expenses.brisken.com MX points here.
+  EXPENSE_RECON_INTAKE_SMTP = "1"
+  EXPENSE_RECON_INTAKE_DOMAIN = "expenses.brisken.com"
   # Phase-5 COA gate: per-entity provisioning file on the /data volume
   # (coa_provision.py). Inert until the file is present (fail-open, no-op),
   # so this is safe to ship ahead of the upload. Upload coa-provision.json +
   # zoho-books-coa.json to /data to activate; the next run picks them up.
   EXPENSE_RECON_COA_PROVISION = "/data/coa-provision.json"
+  # "Same photo, same answer": content-hash cache of raw vision-extraction
+  # payloads (llm/extraction_cache.py). A re-uploaded or re-run document is
+  # answered from the store — deterministic and free. Delete the file to
+  # force fresh readings; prompt/schema edits invalidate it automatically.
+  EXPENSE_RECON_EXTRACTION_CACHE = "/data/extraction-cache.sqlite"
 
 [http_service]
   internal_port = 8080
@@ -29,6 +39,20 @@ primary_region = "fra"
     grace_period = "15s"
     method = "get"
     path = "/healthz"
+
+# Inbound SMTP (mail intake). Raw TCP pass-through: the app's aiosmtpd
+# listener speaks the protocol; the Fly proxy just forwards port 25 from
+# the dedicated IPv4 and wakes the machine on a connection (senders retry
+# per SMTP semantics if they race a cold start).
+[[services]]
+  protocol = "tcp"
+  internal_port = 2525
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    port = 25
 
 [mounts]
   source = "recon_data"

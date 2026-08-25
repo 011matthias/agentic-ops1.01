@@ -235,7 +235,7 @@ def _check_receipts(report: _Report, cfg: dict, config_dir: Path) -> None:
         if missing_cols:
             report.fail("receipts", f"CSV missing required columns: {', '.join(missing_cols)}")
         else:
-            report.ok("receipts", f"csv mode: required columns present")
+            report.ok("receipts", "csv mode: required columns present")
     elif source == "expense_csv":
         if path.is_dir():
             report.fail("receipts", f"source 'expense_csv' but {path} is a directory")
@@ -385,14 +385,16 @@ def _check_zoho(report: _Report, cfg: dict, config_dir: Path) -> None:
         report.ok("zoho", "no `zoho:` block; no chart-of-accounts / journal export")
         return
 
-    source = z.get("coa_source", "api")
+    source = z.get("coa_source", "none")
     if source == "api":
-        creds = ("ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REFRESH_TOKEN", "ZOHO_ORG_ID")
-        missing = [c for c in creds if not os.environ.get(c)]
-        if missing:
-            report.fail("zoho", f"coa_source 'api' but env vars unset: {', '.join(missing)}")
-        else:
-            report.ok("zoho", "API creds present (not validated against Zoho)")
+        # Removed 2026-08-22: the app holds no connection to an accounting
+        # API. An old config asking for a live pull fails loudly rather than
+        # silently running without the chart it expected.
+        report.fail(
+            "chart",
+            "coa_source 'api' no longer exists; export the chart to a file "
+            "and use coa_source 'csv' with coa_csv_path",
+        )
     elif source == "csv":
         if "coa_csv_path" not in z:
             report.fail("zoho", "coa_source 'csv' requires coa_csv_path")
@@ -402,8 +404,12 @@ def _check_zoho(report: _Report, cfg: dict, config_dir: Path) -> None:
                 report.fail("zoho", f"chart-of-accounts CSV not found: {coa}")
             else:
                 report.ok("zoho", f"chart-of-accounts CSV present: {coa.name}")
+    elif source == "none":
+        # The default. The block still carries run config (card_accounts,
+        # export flags); categories are simply not validated against a chart.
+        report.ok("chart", "no chart source; categories are not chart-validated")
     else:
-        report.fail("zoho", f"coa_source {source!r} not supported (use 'api' or 'csv')")
+        report.fail("chart", f"coa_source {source!r} not supported (use 'csv' or 'none')")
 
     if z.get("export_path"):
         export_parent = (config_dir / z["export_path"]).resolve().parent
@@ -411,16 +417,22 @@ def _check_zoho(report: _Report, cfg: dict, config_dir: Path) -> None:
             report.fail("zoho", f"export_path directory does not exist: {export_parent}")
         else:
             report.ok("zoho", "journal export will be written")
-        # The balancing credit needs the statement's account_id in card_accounts.
+        # The balancing credit wants a card->account mapping; exact key or
+        # digit-token resolution through the card registry (Cards R2), the
+        # same order the export applies. Optional: entries still balance
+        # to a visible placeholder without one.
         stmt = cfg.get("statement")
         card_accounts = z.get("card_accounts") or {}
         if isinstance(stmt, dict) and stmt.get("account_id"):
             acct = stmt["account_id"]
-            if acct not in card_accounts:
+            from .cards import resolve_account_map
+
+            if not resolve_account_map(acct, dict(card_accounts)):
                 report.warn(
                     "zoho",
-                    f"statement account_id {acct!r} not in card_accounts; "
-                    f"its balancing credit will be flagged unmapped",
+                    f"statement account_id {acct!r} matches no card with a "
+                    f"Zoho account (optional); its balancing credit will be "
+                    f"flagged unmapped",
                 )
 
 

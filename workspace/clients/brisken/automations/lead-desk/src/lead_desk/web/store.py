@@ -191,6 +191,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
     daily_cap     INTEGER NOT NULL DEFAULT 40,
     throttle_seconds INTEGER NOT NULL DEFAULT 12,
     jitter_seconds   INTEGER NOT NULL DEFAULT 4,
+    start_not_before TEXT,
+    ramp_per_day  INTEGER,
     approved_at   TEXT,
     approved_by   TEXT,
     approved_contacts_hash TEXT,
@@ -226,6 +228,7 @@ CREATE TABLE IF NOT EXISTS sequence_steps (
     channel       TEXT NOT NULL CHECK (channel IN ('email', 'linkedin')),
     template_key  TEXT NOT NULL,
     day_offset    INTEGER NOT NULL,
+    reply_to_prior INTEGER NOT NULL DEFAULT 0,
     UNIQUE(sequence_id, step_no)
 );
 
@@ -274,7 +277,8 @@ CREATE TABLE IF NOT EXISTS send_attempts (
     entry_id      TEXT,
     claimed_at    TEXT,
     resolved_at   TEXT,
-    failure_reason TEXT
+    failure_reason TEXT,
+    force_fresh   INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS campaign_template_pins (
@@ -284,9 +288,76 @@ CREATE TABLE IF NOT EXISTS campaign_template_pins (
     PRIMARY KEY (campaign_id, template_key)
 );
 
+-- Each approved contact's EXACT recipient address, frozen at approval. The
+-- claim path refuses to send to an address that has drifted from this value
+-- (the daily sheet-sync can overwrite a contact's email after approval), so a
+-- send only ever goes to an address a human reviewed at approval time.
+CREATE TABLE IF NOT EXISTS campaign_recipient_pins (
+    campaign_id  TEXT NOT NULL REFERENCES campaigns(campaign_id),
+    contact_id   TEXT NOT NULL REFERENCES contacts(contact_id),
+    email        TEXT NOT NULL,
+    PRIMARY KEY (campaign_id, contact_id)
+);
+
 CREATE INDEX IF NOT EXISTS ix_events_extkey  ON outreach_events(ext_key);
 CREATE INDEX IF NOT EXISTS ix_enroll_camp    ON enrollments(campaign_id);
 CREATE INDEX IF NOT EXISTS ix_attempts_enrl  ON send_attempts(enrollment_id, step_no);
+
+-- Captured events that matched no contact, parked for operator review (link
+-- to an existing contact or dismiss). Never auto-creates a contact - that is
+-- an owner decision (2026-07-14). event_hash dedupes a re-poll of the same
+-- message into one row (seen_count bumps instead).
+CREATE TABLE IF NOT EXISTS unmatched_events (
+    id                  INTEGER PRIMARY KEY,
+    email               TEXT NOT NULL,
+    payload             TEXT NOT NULL,
+    first_seen          TEXT NOT NULL,
+    last_seen           TEXT NOT NULL,
+    seen_count          INTEGER NOT NULL DEFAULT 1,
+    status              TEXT NOT NULL DEFAULT 'open',
+    resolved_contact_id TEXT,
+    resolved_at         TEXT,
+    resolved_by         TEXT,
+    event_hash          TEXT NOT NULL UNIQUE
+);
+
+CREATE INDEX IF NOT EXISTS ix_unmatched_status ON unmatched_events(status, email);
+
+-- Mailbox-truth scaffolding (v11): suppression ledger, truth-scan run log,
+-- and the per-mailbox folder cache the scanner walks. Written by the truth
+-- pipeline; no store methods yet.
+CREATE TABLE IF NOT EXISTS suppression_entries (
+    entry    TEXT PRIMARY KEY,
+    kind     TEXT NOT NULL,
+    source   TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    note     TEXT
+);
+
+CREATE TABLE IF NOT EXISTS truth_runs (
+    run_id          TEXT PRIMARY KEY,
+    kind            TEXT NOT NULL,
+    started_at      TEXT,
+    finished_at     TEXT,
+    window_since    TEXT,
+    corpus_messages INTEGER,
+    folders_scanned INTEGER,
+    folders_failed  TEXT,
+    events_added    INTEGER,
+    anomalies       TEXT,
+    report          TEXT
+);
+
+CREATE TABLE IF NOT EXISTS folder_cache (
+    mailbox          TEXT NOT NULL,
+    folder_id        TEXT NOT NULL,
+    path             TEXT,
+    total_item_count INTEGER,
+    last_scanned     TEXT,
+    last_hit         TEXT,
+    skip             INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (mailbox, folder_id)
+);
 """
 
 # ---------------------------------------------------------------------------
@@ -343,6 +414,18 @@ SELECT en.enrollment_id, en.contact_id, en.campaign_id,
   (SELECT COUNT(*) FROM outreach_events e
      WHERE e.contact_id = en.contact_id
        AND e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%') AS steps_done,
+  -- The SET of step_nos already sent, parsed from the reserved ext_key
+  -- 'cadence:{eid}:{step_no}' (comma-joined, unordered). step_no is the stable
+  -- send-identity, so keying cadence progress on this set (not the bare count
+  -- above) keeps the pointer correct across a mid-sequence INSERT/REORDER: an
+  -- unsent step is never skipped and a sent step is never re-sent. Same WHERE as
+  -- steps_done, so len(sent_steps) == steps_done always.
+  (SELECT group_concat(
+       CAST(substr(e.ext_key,
+                   length('cadence:' || en.enrollment_id || ':') + 1) AS INTEGER))
+     FROM outreach_events e
+     WHERE e.contact_id = en.contact_id
+       AND e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%') AS sent_steps,
   (SELECT MAX(e.ts) FROM outreach_events e
      WHERE e.contact_id = en.contact_id
        AND e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%') AS last_step_ts,
@@ -376,6 +459,55 @@ def _add_column(table: str, col: str, decl: str):
         if col not in existing:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
     return _step
+
+
+# v6 (passwordless auth) DDL. Kept out of _SCHEMA so a fresh DB gets these via
+# the migration and an existing prod DB via the same migration - one code path,
+# so the runner's user_version guard covers both.
+_USERS_DDL = """
+CREATE TABLE IF NOT EXISTS users (
+    email         TEXT PRIMARY KEY,
+    name          TEXT,
+    role          TEXT NOT NULL DEFAULT 'member',
+    status        TEXT NOT NULL DEFAULT 'pending',
+    created_at    TEXT NOT NULL,
+    approved_at   TEXT,
+    approved_by   TEXT,
+    last_login_at TEXT
+)
+"""
+# Single-use magic-link tokens. Only the sha256 of the raw token is stored, so
+# a DB leak never yields a live link; the raw token lives only in the email.
+_LOGIN_TOKENS_DDL = """
+CREATE TABLE IF NOT EXISTS login_tokens (
+    token_hash  TEXT PRIMARY KEY,
+    email       TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    used_at     TEXT,
+    request_ip  TEXT
+)
+"""
+
+USER_ROLES = ("admin", "member")
+USER_STATUSES = ("pending", "approved", "disabled")
+
+
+def _seed_admin_users(conn) -> None:
+    """Seed the two known operators as approved admins so the gate is never
+    left with zero approvers after cut-over. Idempotent: INSERT OR IGNORE
+    keyed on the email PK, and it never demotes an existing row."""
+    from datetime import datetime, timezone
+
+    from .auth import SEED_ADMIN_EMAILS
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for email in SEED_ADMIN_EMAILS:
+        conn.execute(
+            "INSERT OR IGNORE INTO users "
+            "(email, name, role, status, created_at, approved_at, approved_by) "
+            "VALUES (?, '', 'admin', 'approved', ?, ?, 'seed')",
+            (email, now, now),
+        )
 
 
 # Ordered schema migrations. Each key N holds the steps that move a DB from
@@ -416,6 +548,104 @@ _MIGRATIONS: dict[int, list] = {
         _add_column("contacts", "next_step_at", "TEXT"),
         "UPDATE contacts SET next_step_at = created_at "
         "WHERE next_step LIKE 'No reply yet%' AND next_step_at IS NULL",
+    ],
+    # v6: passwordless auth. A per-account registry (`users`) plus single-use
+    # magic-link tokens (`login_tokens`), and the two known operators seeded as
+    # approved admins. Access-code login stays as an admin break-glass; this
+    # only ADDS the email path and the admin-approval registry.
+    6: [
+        _USERS_DDL.strip(),
+        _LOGIN_TOKENS_DDL.strip(),
+        "CREATE INDEX IF NOT EXISTS ix_login_tokens_email ON login_tokens(email)",
+        _seed_admin_users,
+    ],
+    # v7: recipient pins. approve_campaign now snapshots each approved contact's
+    # exact email; the claim path refuses to send to an address that drifted
+    # from the approved value (the daily sheet-sync can overwrite a contact's
+    # email after approval). Table is in _SCHEMA for a fresh DB and here for the
+    # existing prod volume - one code path, both covered by the user_version
+    # guard.
+    7: [
+        "CREATE TABLE IF NOT EXISTS campaign_recipient_pins ("
+        "campaign_id TEXT NOT NULL REFERENCES campaigns(campaign_id), "
+        "contact_id TEXT NOT NULL REFERENCES contacts(contact_id), "
+        "email TEXT NOT NULL, "
+        "PRIMARY KEY (campaign_id, contact_id))",
+    ],
+    # v8: vacation-aware scheduling. A nullable 'no earlier than' date per
+    # campaign: the claim path sends nothing before it, and step 1 anchors on
+    # max(approved_at, start_not_before) so day-offset math counts from the
+    # real start. Lets a wave be approved now but held until people are back.
+    8: [_add_column("campaigns", "start_not_before", "TEXT")],
+    # v9: spaced sending. A nullable per-day NEW-contact ramp: at most
+    # ramp_per_day first-step (step 1) sends per day, so a large wave spreads
+    # over days instead of firing every step-1 at once (daily_cap alone only
+    # bounds the total, not the fresh-contact burst). Follow-up steps are not
+    # ramp-limited.
+    9: [_add_column("campaigns", "ramp_per_day", "INTEGER")],
+    # v10: step_no-keyed cadence progress. enrollment_progress now also exposes
+    # sent_steps (the SET of sent step_nos), so enrollment_state picks the first
+    # UNSENT step by identity instead of a positional count. This makes live
+    # mid-sequence INSERT/REORDER safe (no re-send of old copy, no skipped new
+    # step). A pure view-definition change; refresh so the prod volume picks it up.
+    10: _refresh_views_sql("enrollment_progress"),
+    # v11: truth ingest. unmatched_events parks captured events that matched no
+    # contact for operator link/dismiss (no auto-created contacts - owner
+    # 2026-07-14); suppression_entries / truth_runs / folder_cache back the
+    # mailbox-truth pipeline. Tables are in _SCHEMA for a fresh DB and here for
+    # the existing prod volume - one user_version guard covers both (v7 pattern).
+    11: [
+        "CREATE TABLE IF NOT EXISTS unmatched_events ("
+        "id INTEGER PRIMARY KEY, "
+        "email TEXT NOT NULL, "
+        "payload TEXT NOT NULL, "
+        "first_seen TEXT NOT NULL, "
+        "last_seen TEXT NOT NULL, "
+        "seen_count INTEGER NOT NULL DEFAULT 1, "
+        "status TEXT NOT NULL DEFAULT 'open', "
+        "resolved_contact_id TEXT, "
+        "resolved_at TEXT, "
+        "resolved_by TEXT, "
+        "event_hash TEXT NOT NULL UNIQUE)",
+        "CREATE INDEX IF NOT EXISTS ix_unmatched_status "
+        "ON unmatched_events(status, email)",
+        "CREATE TABLE IF NOT EXISTS suppression_entries ("
+        "entry TEXT PRIMARY KEY, "
+        "kind TEXT NOT NULL, "
+        "source TEXT NOT NULL, "
+        "added_at TEXT NOT NULL, "
+        "note TEXT)",
+        "CREATE TABLE IF NOT EXISTS truth_runs ("
+        "run_id TEXT PRIMARY KEY, "
+        "kind TEXT NOT NULL, "
+        "started_at TEXT, "
+        "finished_at TEXT, "
+        "window_since TEXT, "
+        "corpus_messages INTEGER, "
+        "folders_scanned INTEGER, "
+        "folders_failed TEXT, "
+        "events_added INTEGER, "
+        "anomalies TEXT, "
+        "report TEXT)",
+        "CREATE TABLE IF NOT EXISTS folder_cache ("
+        "mailbox TEXT NOT NULL, "
+        "folder_id TEXT NOT NULL, "
+        "path TEXT, "
+        "total_item_count INTEGER, "
+        "last_scanned TEXT, "
+        "last_hit TEXT, "
+        "skip INTEGER NOT NULL DEFAULT 0, "
+        "PRIMARY KEY (mailbox, folder_id))",
+    ],
+    # v12: in-thread reply steps. A sequence step flagged reply_to_prior sends
+    # as a Graph reply threaded onto the PRIOR step's sent mail (wire subject
+    # 'RE: <prior subject>'). force_fresh is the operator escape hatch on a
+    # parked reply attempt: re-queue it as a plain fresh send when the anchor
+    # is unrecoverable. Columns are in _SCHEMA for a fresh DB and here for the
+    # existing prod volume - one user_version guard covers both (v2 pattern).
+    12: [
+        _add_column("sequence_steps", "reply_to_prior", "INTEGER NOT NULL DEFAULT 0"),
+        _add_column("send_attempts", "force_fresh", "INTEGER NOT NULL DEFAULT 0"),
     ],
 }
 
@@ -675,6 +905,172 @@ class ContactStore:
     def count_events(self) -> int:
         return self.conn.execute("SELECT COUNT(*) FROM outreach_events").fetchone()[0]
 
+    def query_events(
+        self, *, since: str | None = None, campaign: str | None = None,
+        contact_id: str | None = None, ext_key: str | None = None,
+        direction: str | None = None, type: str | None = None,
+        limit: int = 200, offset: int = 0,
+    ) -> tuple[list[sqlite3.Row], int]:
+        """Filtered slice of the event log for the read API. Every filter
+        maps to an already-indexed column (ix_events_contact /
+        ix_events_type / ix_events_extkey), so no migration is needed.
+        Returns (rows, total) where total counts ALL matches, so a caller
+        can page with limit/offset."""
+        where: list[str] = []
+        params: list[str] = []
+        for clause, val in (
+            ("ts >= ?", since), ("campaign = ?", campaign),
+            ("contact_id = ?", contact_id), ("ext_key = ?", ext_key),
+            ("direction = ?", direction), ("type = ?", type),
+        ):
+            if val:
+                where.append(clause)
+                params.append(val)
+        cond = (" WHERE " + " AND ".join(where)) if where else ""
+        total = self.conn.execute(
+            f"SELECT COUNT(*) FROM outreach_events{cond}", params).fetchone()[0]
+        rows = self.conn.execute(
+            f"SELECT * FROM outreach_events{cond} ORDER BY ts, event_id "
+            "LIMIT ? OFFSET ?", (*params, limit, offset)).fetchall()
+        return rows, total
+
+    def campaign_inbound_counts(self, campaign_id: str,
+                                since: str | None = None) -> dict[str, int]:
+        """Capture-grounded inbound over one campaign's ENROLLED cohort:
+        {'reply': N, 'bounce': N} (absent types omitted), optionally since an
+        ISO ts (the approval stamp). Joins through enrollments because inbound
+        capture stamps the contact's campaign TAG, not the engine campaign
+        that mailed them. Indexed (ix_enroll_camp + ix_events_contact)."""
+        q = ("SELECT e.type, COUNT(*) AS n FROM outreach_events e "
+             "JOIN enrollments en ON en.contact_id = e.contact_id "
+             "WHERE en.campaign_id = ? AND e.direction = 'inbound' "
+             "AND e.type IN ('reply', 'bounce')")
+        params: list = [campaign_id]
+        if since:
+            q += " AND e.ts >= ?"
+            params.append(since)
+        rows = self.conn.execute(q + " GROUP BY e.type", params).fetchall()
+        return {r["type"]: int(r["n"]) for r in rows}
+
+    # -- unmatched capture events -----------------------------------------
+
+    def record_unmatched(self, email: str, payload_json: str,
+                         event_hash: str, now: str) -> None:
+        """Park a captured event that matched no contact. Idempotent per
+        event_hash: a re-poll of the same message bumps last_seen/seen_count
+        on the existing row instead of inserting a duplicate."""
+        self.conn.execute(
+            "INSERT INTO unmatched_events "
+            "(email, payload, first_seen, last_seen, event_hash) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(event_hash) DO UPDATE SET "
+            "last_seen = excluded.last_seen, seen_count = seen_count + 1",
+            (email, payload_json, now, now, event_hash),
+        )
+        self.conn.commit()
+
+    def get_unmatched(self, unmatched_id: int) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM unmatched_events WHERE id = ?", (unmatched_id,)
+        ).fetchone()
+
+    def list_unmatched(self, status: str = "open") -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM unmatched_events WHERE status = ? "
+            "ORDER BY last_seen DESC, id",
+            (status,),
+        ).fetchall()
+
+    def resolve_unmatched(self, unmatched_id: int, contact_id: str | None,
+                          by: str | None, now: str,
+                          dismiss_reason: str | None = None) -> None:
+        """Close an unmatched row: linked (contact_id given) or dismissed.
+        ``dismiss_reason``, when given, is kept in resolved_by alongside who
+        dismissed it, so the queue shows WHY without another column."""
+        status = "linked" if contact_id else "dismissed"
+        resolved_by = by
+        if status == "dismissed" and dismiss_reason:
+            resolved_by = f"{by or 'unknown'}: {dismiss_reason}"
+        self.conn.execute(
+            "UPDATE unmatched_events SET status = ?, resolved_contact_id = ?, "
+            "resolved_at = ?, resolved_by = ? WHERE id = ?",
+            (status, contact_id, now, resolved_by, unmatched_id),
+        )
+        self.conn.commit()
+
+    # -- suppression ledger (v11 table; import + send-guard lookup) --------
+
+    def add_suppression_entry(self, entry: str, kind: str, source: str,
+                              now: str, note: str | None = None) -> bool:
+        """INSERT OR IGNORE one ledger row; True when newly inserted.
+        Convention: emails stored bare lowercase, domains stored as
+        '@domain' lowercase, so the send-guard lookup is one indexed
+        (PK) IN (addr, '@domain') SELECT."""
+        cur = self.conn.execute(
+            "INSERT OR IGNORE INTO suppression_entries "
+            "(entry, kind, source, added_at, note) VALUES (?, ?, ?, ?, ?)",
+            (entry, kind, source, now, note),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def suppression_hit(self, addr: str) -> sqlite3.Row | None:
+        """The suppression_entries row blocking this recipient - the exact
+        email or its '@domain' row - or None. One indexed SELECT."""
+        addr = (addr or "").strip().lower()
+        if not addr or "@" not in addr:
+            return None
+        domain = "@" + addr.rsplit("@", 1)[1]
+        return self.conn.execute(
+            "SELECT * FROM suppression_entries WHERE entry IN (?, ?) LIMIT 1",
+            (addr, domain),
+        ).fetchone()
+
+    # -- truth scan (folder cache + run log) ------------------------------
+
+    def get_folder_cache(self, mailbox: str) -> dict[str, sqlite3.Row]:
+        """The mailbox's cached folder rows, keyed by folder_id."""
+        rows = self.conn.execute(
+            "SELECT * FROM folder_cache WHERE mailbox = ?", (mailbox,)
+        ).fetchall()
+        return {r["folder_id"]: r for r in rows}
+
+    def upsert_folder_cache(self, mailbox: str, folder_id: str,
+                            path: str | None, total_item_count: int,
+                            now: str, *, hit: bool = False) -> None:
+        """Record a scanned folder's count. ``hit`` stamps last_hit (the
+        folder yielded an event the DB did not know). The operator-set
+        ``skip`` flag is never touched here."""
+        self.conn.execute(
+            "INSERT INTO folder_cache "
+            "(mailbox, folder_id, path, total_item_count, last_scanned, last_hit) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(mailbox, folder_id) DO UPDATE SET "
+            "path = excluded.path, "
+            "total_item_count = excluded.total_item_count, "
+            "last_scanned = excluded.last_scanned, "
+            "last_hit = COALESCE(excluded.last_hit, last_hit)",
+            (mailbox, folder_id, path, total_item_count, now,
+             now if hit else None),
+        )
+        self.conn.commit()
+
+    def insert_truth_run(self, *, run_id: str, kind: str, started_at: str,
+                         finished_at: str, window_since: str,
+                         corpus_messages: int, folders_scanned: int,
+                         folders_failed: str, events_added: int,
+                         report: str, anomalies: str | None = None) -> None:
+        self.conn.execute(
+            "INSERT INTO truth_runs (run_id, kind, started_at, finished_at, "
+            "window_since, corpus_messages, folders_scanned, folders_failed, "
+            "events_added, anomalies, report) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (run_id, kind, started_at, finished_at, window_since,
+             corpus_messages, folders_scanned, folders_failed, events_added,
+             anomalies, report),
+        )
+        self.conn.commit()
+
     # -- state (delta tokens etc.) ---------------------------------------
 
     def get_state(self, key: str) -> str | None:
@@ -708,6 +1104,127 @@ class ContactStore:
         rows = self.conn.execute("SELECT campaign_id FROM campaigns").fetchall()
         return {r["campaign_id"] for r in rows}
 
+    # -- users + magic-link tokens (passwordless auth) ----------------------
+
+    def get_user(self, email: str) -> sqlite3.Row | None:
+        email = (email or "").strip().lower()
+        if not email:
+            return None
+        return self.conn.execute(
+            "SELECT * FROM users WHERE email = ?", (email,)
+        ).fetchone()
+
+    def list_users(self) -> list[sqlite3.Row]:
+        """Pending first (they need action), then by email."""
+        return self.conn.execute(
+            "SELECT * FROM users ORDER BY "
+            "CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, "
+            "email"
+        ).fetchall()
+
+    def create_pending_user(self, email: str, name: str, now: str) -> bool:
+        """Record a new access request. Idempotent (no-op if the email already
+        exists in any state). Returns True when a new pending row was created."""
+        email = (email or "").strip().lower()
+        cur = self.conn.execute(
+            "INSERT OR IGNORE INTO users (email, name, role, status, created_at) "
+            "VALUES (?, ?, 'member', 'pending', ?)",
+            (email, name.strip(), now),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def upsert_user(self, email: str, name: str, role: str, status: str,
+                    by: str | None, now: str) -> None:
+        """Admin proactively adds/updates a user (the 'invite' path). Sets
+        approved_at/by when the status is 'approved'."""
+        email = (email or "").strip().lower()
+        role = role if role in USER_ROLES else "member"
+        status = status if status in USER_STATUSES else "pending"
+        approved_at = now if status == "approved" else None
+        approved_by = by if status == "approved" else None
+        self.conn.execute(
+            "INSERT INTO users (email, name, role, status, created_at, approved_at, approved_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(email) DO UPDATE SET name = excluded.name, role = excluded.role, "
+            "status = excluded.status, "
+            "approved_at = COALESCE(approved_at, excluded.approved_at), "
+            "approved_by = COALESCE(approved_by, excluded.approved_by)",
+            (email, name.strip(), role, status, now, approved_at, approved_by),
+        )
+        self.conn.commit()
+
+    def set_user_status(self, email: str, status: str, by: str | None, now: str) -> None:
+        email = (email or "").strip().lower()
+        if status not in USER_STATUSES:
+            raise ValueError(f"bad status {status!r}")
+        if status == "approved":
+            self.conn.execute(
+                "UPDATE users SET status = 'approved', approved_at = ?, approved_by = ? "
+                "WHERE email = ?",
+                (now, by, email),
+            )
+        else:
+            self.conn.execute(
+                "UPDATE users SET status = ? WHERE email = ?", (status, email))
+        self.conn.commit()
+
+    def set_user_role(self, email: str, role: str) -> None:
+        email = (email or "").strip().lower()
+        if role not in USER_ROLES:
+            raise ValueError(f"bad role {role!r}")
+        self.conn.execute("UPDATE users SET role = ? WHERE email = ?", (role, email))
+        self.conn.commit()
+
+    def touch_user_login(self, email: str, now: str) -> None:
+        self.conn.execute(
+            "UPDATE users SET last_login_at = ? WHERE email = ?",
+            (now, (email or "").strip().lower()),
+        )
+        self.conn.commit()
+
+    def count_admins(self) -> int:
+        """Approved admins - the guard that stops the last admin disabling
+        themselves and locking everyone out."""
+        return self.conn.execute(
+            "SELECT COUNT(*) FROM users WHERE role = 'admin' AND status = 'approved'"
+        ).fetchone()[0]
+
+    def create_login_token(self, token_hash: str, email: str, now: str,
+                           expires_at: str, request_ip: str | None) -> None:
+        self.conn.execute(
+            "INSERT INTO login_tokens (token_hash, email, created_at, expires_at, request_ip) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (token_hash, (email or "").strip().lower(), now, expires_at, request_ip),
+        )
+        self.conn.commit()
+
+    def consume_login_token(self, token_hash: str, now: str) -> str | None:
+        """Single-use redemption: return the token's email iff it exists, is
+        unused, and is unexpired - and atomically mark it used so a replay (or
+        a concurrent click) cannot redeem it twice. Fail-closed on any miss."""
+        row = self.conn.execute(
+            "SELECT email, expires_at, used_at FROM login_tokens WHERE token_hash = ?",
+            (token_hash,),
+        ).fetchone()
+        if row is None or row["used_at"] is not None or row["expires_at"] < now:
+            return None
+        cur = self.conn.execute(
+            "UPDATE login_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL",
+            (now, token_hash),
+        )
+        self.conn.commit()
+        return row["email"] if cur.rowcount == 1 else None
+
+    def purge_expired_tokens(self, now: str) -> int:
+        """Drop spent/expired tokens so the table cannot grow unbounded."""
+        cur = self.conn.execute(
+            "DELETE FROM login_tokens WHERE expires_at < ? OR used_at IS NOT NULL",
+            (now,),
+        )
+        self.conn.commit()
+        return cur.rowcount
+
     # -- campaigns ---------------------------------------------------------
 
     def create_campaign(self, campaign_id: str, name: str, now: str, **opts) -> None:
@@ -739,6 +1256,7 @@ class ContactStore:
         cols = [c for c in fields if c in (
             "name", "status", "from_address", "cc_address", "bcc_address",
             "send_window", "daily_cap", "throttle_seconds", "jitter_seconds",
+            "start_not_before", "ramp_per_day",
             "approved_at", "approved_by", "approved_contacts_hash",
         )]
         if not cols:
@@ -793,8 +1311,14 @@ class ContactStore:
     def upsert_sequence(self, campaign_id: str, degree: str, name: str,
                         send_mode: str, steps: list[dict]) -> int:
         """Replace the sequence definition for (campaign, degree) atomically.
-        ``steps``: [{step_no, channel, template_key, day_offset}]. Allowed only
-        pre-approval (service enforces)."""
+        ``steps``: [{step_no, channel, template_key, day_offset,
+        reply_to_prior?}]. Allowed only pre-approval (service enforces).
+        Validation runs BEFORE any write so a raise leaves the stored
+        sequence untouched."""
+        for s in steps:
+            if int(s["step_no"]) == 1 and int(s.get("reply_to_prior") or 0):
+                raise ValueError(
+                    "step 1 cannot be a reply: no prior step to reply to")
         cur = self.conn.execute(
             "INSERT INTO sequences (campaign_id, degree, name, send_mode) VALUES (?, ?, ?, ?) "
             "ON CONFLICT(campaign_id, degree) DO UPDATE SET name = excluded.name, "
@@ -809,12 +1333,42 @@ class ContactStore:
         self.conn.execute("DELETE FROM sequence_steps WHERE sequence_id = ?", (seq_id,))
         for s in steps:
             self.conn.execute(
-                "INSERT INTO sequence_steps (sequence_id, step_no, channel, template_key, day_offset) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (seq_id, s["step_no"], s["channel"], s["template_key"], s["day_offset"]),
+                "INSERT INTO sequence_steps "
+                "(sequence_id, step_no, channel, template_key, day_offset, reply_to_prior) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (seq_id, s["step_no"], s["channel"], s["template_key"],
+                 s["day_offset"], int(s.get("reply_to_prior") or 0)),
             )
         self.conn.commit()
         return seq_id
+
+    def frozen_step_nos(self, campaign_id: str, degree: str | None) -> set[int]:
+        """step_nos that are immutable send history for this (campaign, degree):
+        any step with a send_attempt (any status: sent / drafted / leased /
+        stalled / parked / queued) OR a landed cadence 'sent' event, for an
+        enrollment of that degree. A live sequence delta must preserve these
+        unchanged - their send ext_key ``cadence:{eid}:{step_no}`` is spoken for,
+        so reusing or renumbering the step_no would corrupt an enrollment's
+        pointer. Everything past them is the free-to-edit future region."""
+        attempts = self.conn.execute(
+            "SELECT DISTINCT sa.step_no FROM send_attempts sa "
+            "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
+            "WHERE en.campaign_id = ? AND en.degree IS ?",
+            (campaign_id, degree),
+        ).fetchall()
+        frozen = {int(r["step_no"]) for r in attempts}
+        # Belt-and-suspenders: a landed cadence 'sent' event whose attempt row is
+        # somehow absent still freezes its step_no.
+        events = self.conn.execute(
+            "SELECT DISTINCT CAST(substr(e.ext_key, "
+            "  length('cadence:' || en.enrollment_id || ':') + 1) AS INTEGER) AS step_no "
+            "FROM outreach_events e "
+            "JOIN enrollments en ON e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%' "
+            "WHERE en.campaign_id = ? AND en.degree IS ? AND e.type = 'sent'",
+            (campaign_id, degree),
+        ).fetchall()
+        frozen |= {int(r["step_no"]) for r in events if r["step_no"] is not None}
+        return frozen
 
     def delete_sequence(self, campaign_id: str, degree: str) -> None:
         row = self.conn.execute(
@@ -920,7 +1474,7 @@ class ContactStore:
             SELECT en.enrollment_id, en.degree, en.degree_source, en.degree_rule,
                    en.approved_at AS enrollment_approved_at, en.enrolled_at,
                    c.*, s.stage AS stage, a.last_out, a.last_in,
-                   ep.steps_done, ep.last_step_ts,
+                   ep.steps_done, ep.sent_steps, ep.last_step_ts,
                    ep.replied AS cadence_replied, ep.bounced AS cadence_bounced
             FROM enrollments en
             JOIN contacts c        ON c.contact_id = en.contact_id
@@ -976,6 +1530,28 @@ class ContactStore:
         ).fetchall()
         return {r["template_key"]: int(r["version"]) for r in rows}
 
+    def pin_recipients(self, campaign_id: str, pins: dict[str, str]) -> None:
+        """Freeze each approved contact's exact recipient address at approval.
+        Replace-all per approval (mirrors ``pin_templates``), so an incremental
+        re-approval re-snapshots the current, human-reviewed addresses."""
+        self.conn.execute(
+            "DELETE FROM campaign_recipient_pins WHERE campaign_id = ?", (campaign_id,)
+        )
+        for contact_id, email in pins.items():
+            self.conn.execute(
+                "INSERT INTO campaign_recipient_pins (campaign_id, contact_id, email) "
+                "VALUES (?, ?, ?)",
+                (campaign_id, contact_id, email),
+            )
+        self.conn.commit()
+
+    def get_recipient_pins(self, campaign_id: str) -> dict[str, str]:
+        rows = self.conn.execute(
+            "SELECT contact_id, email FROM campaign_recipient_pins WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchall()
+        return {r["contact_id"]: r["email"] for r in rows}
+
     # -- send attempts (outbox lock table) --------------------------------------
 
     def get_attempt(self, attempt_key: str) -> sqlite3.Row | None:
@@ -994,6 +1570,18 @@ class ContactStore:
             q += f" AND sa.status IN ({', '.join('?' for _ in statuses)})"
             args.extend(statuses)
         return self.conn.execute(q + " ORDER BY sa.claimed_at", args).fetchall()
+
+    def attempt_status_counts(self, campaign_id: str) -> dict[str, int]:
+        """Outbox attempts by status for one campaign (the Engine telemetry
+        card): {'queued': N, 'sent': N, ...}, absent statuses omitted. Joins
+        through enrollments (ix_enroll_camp); no migration."""
+        rows = self.conn.execute(
+            "SELECT sa.status, COUNT(*) AS n FROM send_attempts sa "
+            "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
+            "WHERE en.campaign_id = ? GROUP BY sa.status",
+            (campaign_id,),
+        ).fetchall()
+        return {r["status"]: int(r["n"]) for r in rows}
 
     def try_lease(self, *, attempt_key: str, enrollment_id: int, step_no: int,
                   send_mode: str, lease_id: str, lease_expires: str, worker_id: str,
@@ -1035,6 +1623,7 @@ class ContactStore:
         cols = [c for c in fields if c in (
             "status", "lease_id", "lease_expires", "worker_id", "attempt_count",
             "internet_message_id", "entry_id", "resolved_at", "failure_reason",
+            "force_fresh",
         )]
         if not cols:
             return
@@ -1077,5 +1666,44 @@ class ContactStore:
             "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
             "WHERE en.campaign_id = ? AND sa.status = 'leased'",
             (campaign_id,),
+        ).fetchone()[0]
+        return int(landed) + int(outstanding)
+
+    def first_step_sends_today(self, campaign_id: str, day_prefix: str) -> int:
+        """Ramp accounting: today's landed FIRST-step (step 1) cadence sends +
+        outstanding step-1 leases. 'New contacts started today' - what the
+        per-day ramp bounds (follow-up steps are not ramp-limited)."""
+        landed = self.conn.execute(
+            "SELECT COUNT(*) FROM outreach_events e "
+            "JOIN enrollments en ON e.ext_key = 'cadence:' || en.enrollment_id || ':1' "
+            "WHERE en.campaign_id = ? AND e.type = 'sent' AND e.ts LIKE ?",
+            (campaign_id, day_prefix + "%"),
+        ).fetchone()[0]
+        outstanding = self.conn.execute(
+            "SELECT COUNT(*) FROM send_attempts sa "
+            "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
+            "WHERE en.campaign_id = ? AND sa.status = 'leased' AND sa.step_no = 1",
+            (campaign_id,),
+        ).fetchone()[0]
+        return int(landed) + int(outstanding)
+
+    def mailbox_sends_today(self, from_address: str, day_prefix: str) -> int:
+        """Per-mailbox cap accounting across ALL campaigns that send from this
+        address: today's landed cadence sends + outstanding leases. The
+        per-campaign daily_cap does not bound the mailbox's total when several
+        campaigns send from the same warm mailbox concurrently; this does."""
+        landed = self.conn.execute(
+            "SELECT COUNT(*) FROM outreach_events e "
+            "JOIN enrollments en ON e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%' "
+            "JOIN campaigns c ON c.campaign_id = en.campaign_id "
+            "WHERE c.from_address = ? AND e.type = 'sent' AND e.ts LIKE ?",
+            (from_address, day_prefix + "%"),
+        ).fetchone()[0]
+        outstanding = self.conn.execute(
+            "SELECT COUNT(*) FROM send_attempts sa "
+            "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
+            "JOIN campaigns c ON c.campaign_id = en.campaign_id "
+            "WHERE c.from_address = ? AND sa.status = 'leased'",
+            (from_address,),
         ).fetchone()[0]
         return int(landed) + int(outstanding)

@@ -5,21 +5,64 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## b2b-cold-outreach (p028 prospect)
 | Date | Topic | Type | Link |
 |------|-------|------|------|
-| 2026-06-11 | P028 B2B Cold Outreach Proposal | comms | [Mini-Checkpoint-1](docs/2026-06-11%20-%20P028%20B2B%20Cold%20Outreach%20Proposal/Mini-Checkpoint-1.md) |
-
-## upwork-independence
-| Date | Topic | Type | Link |
-|------|-------|------|------|
-| 2026-07-22 | Upwork Independence Week-1 Batch | misc | [Checkpoint](docs/2026-07-22%20-%20Upwork%20Independence%20Week-1%20Batch/Checkpoint.md) |
-| 2026-07-22 | Upwork Independence Execution Kickoff | system-infra | [Checkpoint](docs/2026-07-22%20-%20Upwork%20Independence%20Execution%20Kickoff/Checkpoint.md) |
-| 2026-07-22 | Upwork-Independence Pricing Tiers | misc | [Checkpoint](docs/2026-07-22%20-%20Upwork-Independence%20Pricing%20Tiers/Checkpoint.md) |
 | 2026-07-21 | Upwork-Independence GTM Optimize | misc | [→](docs/2026-07-21%20-%20Upwork-Independence%20GTM%20Optimize/Checkpoint.md) |
+| 2026-06-11 | P028 B2B Cold Outreach Proposal | comms | [Mini-Checkpoint-1](docs/2026-06-11%20-%20P028%20B2B%20Cold%20Outreach%20Proposal/Mini-Checkpoint-1.md) |
 
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
-| 2026-07-22 | Brisken Expense-Recon Login Hardening + Notifier Fix | client-dev | [Mini-Checkpoint](docs/2026-07-22%20-%20Brisken%20Expense-Recon%20Login%20Hardening%20+%20Notifier%20Fix/Mini-Checkpoint-1.md) |
-| 2026-07-22 | Brisken Expense-Recon Fly UI Deletion + Deploy | client-dev | [→](docs/2026-07-22%20-%20Brisken%20Expense-Recon%20Fly%20UI%20Deletion%20+%20Deploy/Checkpoint.md) |
+| 2026-08-25 | Brisken Expense-Recon Statement Append 2b-2b-2 | client-dev | [Mini-Checkpoint-1](docs/2026-08-25%20-%20Brisken%20Expense-Recon%20Statement%20Append%202b-2b-2/Mini-Checkpoint-1.md) |
+| 2026-08-25 | Expense-Recon Statement Fold 2b-2b-1 | client-dev | [Mini-Checkpoint-2](docs/2026-08-25%20-%20Expense-Recon%20Statement%20Fold%202b-2b-1/Mini-Checkpoint-2.md) |
+| 2026-08-25 | Expense-Recon Living Month - Baseline + Open Month | client-dev | [→](docs/2026-08-25%20-%20Expense-Recon%20Living%20Month%20-%20Baseline%20%2B%20Open%20Month/Checkpoint.md) |
+| 2026-08-25 | Brisken Recon Intake Dedupe + Held-Mail Diagnosis | client-dev | [→](docs/2026-08-25%20-%20Brisken%20Recon%20Intake%20Dedupe%20%2B%20Held-Mail%20Diagnosis/Checkpoint.md) |
+| 2026-08-25 | Brisken Recon Living Month PR2a Stable Tx Identity + PR2b1 Rematch | client-dev | [→](docs/2026-08-25%20-%20Brisken%20Recon%20Living%20Month%20PR2a%20Stable%20Tx%20Identity%20%2B%20PR2b1%20Rematch/Checkpoint.md) |
+| 2026-08-24 | Brisken Recon Intake Trust + Lovable Prompt Ledger | client-dev | [→](docs/2026-08-24%20-%20Brisken%20Recon%20Intake%20Trust%20%2B%20Lovable%20Prompt%20Ledger/Checkpoint.md) |
+| 2026-08-24 | Brisken Recon Mail Month Pool PR1 + Intake Audit | client-dev | [→](docs/2026-08-24%20-%20Brisken%20Recon%20Mail%20Month%20Pool%20PR1%20%2B%20Intake%20Audit/Checkpoint.md) |
+| 2026-08-24 | Brisken P1 Mail-Month-Pool PR1 Mid-Build Handoff | client-dev | [Mini-Checkpoint-2](docs/2026-08-24%20-%20Brisken%20P1%20Mail-Month-Pool%20PR1%20Mid-Build%20Handoff/Mini-Checkpoint-2.md) |
+| 2026-08-24 | Brisken Recon Date Guard + Card From Scan | client-dev | [→](docs/2026-08-24%20-%20Brisken%20Recon%20Date%20Guard%20%2B%20Card%20From%20Scan/Checkpoint.md) |
+| 2026-08-23 | Brisken Recon Report Documents + Open Intake | client-dev | [→](docs/2026-08-23%20-%20Brisken%20Recon%20Report%20Documents%20%2B%20Open%20Intake/Checkpoint.md) |
+| 2026-08-22 | Brisken Recon Zoho Decoupling + Cards R4 | client-dev | [Mini-Checkpoint-2](docs/2026-08-22%20-%20Brisken%20Recon%20Zoho%20Decoupling%20%2B%20Cards%20R4/Mini-Checkpoint-2.md) |
+| 2026-08-22 | Brisken Recon Count Semantics + Issue Codes | client-dev | [→](docs/2026-08-22%20-%20Brisken%20Recon%20Count%20Semantics%20%2B%20Issue%20Codes/Checkpoint.md) |
+| 2026-08-22 | Brisken Recon SPA Contract Test + Batch-Lock Threadpool | client-dev | [→](docs/2026-08-22%20-%20Brisken%20Recon%20SPA%20Contract%20Test%20%2B%20Batch-Lock%20Threadpool/Checkpoint.md) |
+| 2026-08-22 | Brisken Recon SPA Crash Diagnosis | client-dev | [Mini-Checkpoint-2](docs/2026-08-22%20-%20Brisken%20Recon%20SPA%20Crash%20Diagnosis/Mini-Checkpoint-2.md) |
+| 2026-08-21 | Brisken Recon Language Receipt Round | client-dev | [Mini-Checkpoint-1](docs/2026-08-21%20-%20Brisken%20Recon%20Language%20Receipt%20Round/Mini-Checkpoint-1.md) |
+| 2026-08-21 | Brisken Recon Memory Validate Adjust | client-dev | [Mini-Checkpoint-1](docs/2026-08-21%20-%20Brisken%20Recon%20Memory%20Validate%20Adjust/Mini-Checkpoint-1.md) |
+| 2026-08-21 | Brisken Recon Body-Only Mail | client-dev | [Mini-Checkpoint-2](docs/2026-08-21%20-%20Brisken%20Recon%20Body-Only%20Mail/Mini-Checkpoint-2.md) |
+| 2026-08-21 | Brisken Recon Intake Quick-Wins | client-dev | [Mini-Checkpoint-2](docs/2026-08-21%20-%20Brisken%20Recon%20Intake%20Quick-Wins/Mini-Checkpoint-2.md) |
+| 2026-08-21 | Brisken Cards R3 Entity-Less Batches | client-dev | [→](docs/2026-08-21%20-%20Brisken%20Cards%20R3%20Entity-Less%20Batches/Checkpoint.md) |
+| 2026-08-21 | Brisken Recon Feedback Wave Cards R1-R2 | client-dev | [→](docs/2026-08-21%20-%20Brisken%20Recon%20Feedback%20Wave%20Cards%20R1-R2/Checkpoint.md) |
+| 2026-08-19 | Brisken Recon Feedback Everywhere + Criss July Run | client-dev | [Mini-Checkpoint-2](docs/2026-08-19%20-%20Brisken%20Recon%20Feedback%20Everywhere%20%2B%20Criss%20July%20Run/Mini-Checkpoint-2.md) |
+| 2026-08-19 | Brisken Lead Desk Arming Drill Solo Complete | client-dev | [→](docs/2026-08-19%20-%20Brisken%20Lead%20Desk%20Arming%20Drill%20Solo%20Complete/Checkpoint.md) |
+| 2026-08-18 | Brisken Recon Loop R4 Set-Aside + R5 Discovery | client-dev | [→](docs/2026-08-18%20-%20Brisken%20Recon%20Loop%20R4%20Set-Aside%20%2B%20R5%20Discovery/Checkpoint.md) |
+| 2026-08-15 | Brisken Expense Recon Loop Round 3 Extraction Cache | client-dev | [→](docs/2026-08-15%20-%20Brisken%20Expense%20Recon%20Loop%20Round%203%20Extraction%20Cache/Checkpoint.md) |
+| 2026-08-13 | Brisken Expense-Recon Usability Loop R1-R2 | client-dev | [→](docs/2026-08-13%20-%20Brisken%20Expense-Recon%20Usability%20Loop%20R1-R2/Checkpoint.md) |
+| 2026-08-13 | Brisken Lead Desk Truth + Engine Sprint | client-dev | [→](docs/2026-08-13%20-%20Brisken%20Lead%20Desk%20Truth%20%2B%20Engine%20Sprint/Checkpoint.md) |
+| 2026-08-13 | Brisken Expense-Recon Zoho Scope + Receipt-First Test Loop | client-dev | [→](docs/2026-08-13%20-%20Brisken%20Expense-Recon%20Zoho%20Scope%20%2B%20Receipt-First%20Test%20Loop/Checkpoint.md) |
+| 2026-08-07 | Machine fTPM Recovery + Brisken Enrollment CNAME Defect | misc | [→](docs/2026-08-07%20-%20Machine%20fTPM%20Recovery%20%2B%20Brisken%20Enrollment%20CNAME%20Defect/Checkpoint.md) |
+| 2026-08-07 | Expense Recon Card-Key Fix + Feedback R1 | client-dev | [→](docs/2026-08-07%20-%20Expense%20Recon%20Card-Key%20Fix%20%2B%20Feedback%20R1/Checkpoint.md) |
+| 2026-07-29 | Lead Desk Increment 4 CI Job | system-infra | [Mini-Checkpoint-2](docs/2026-07-29%20-%20Lead%20Desk%20Increment%204%20CI%20Job/Mini-Checkpoint-2.md) |
+| 2026-07-29 | Expense-Recon Merchant Registry | client-dev | [Mini-Checkpoint-2](docs/2026-07-29%20-%20Expense-Recon%20Merchant%20Registry/Mini-Checkpoint-2.md) |
+| 2026-07-29 | Expense-Recon Merchant Registry | client-dev | [→](docs/2026-07-29%20-%20Expense-Recon%20Merchant%20Registry/Checkpoint.md) |
+| 2026-07-29 | Lead Desk Increment 4 Live Sequence Editing | client-dev | [→](docs/2026-07-29%20-%20Lead%20Desk%20Increment%204%20Live%20Sequence%20Editing/Checkpoint.md) |
+| 2026-07-29 | Brisken Expense-Recon SPA Upload Fix + Vendor Registry Design | client-dev | [Mini-Checkpoint-2](docs/2026-07-29%20-%20Brisken%20Expense-Recon%20SPA%20Upload%20Fix%20%2B%20Vendor%20Registry%20Design/Mini-Checkpoint-2.md) |
+| 2026-07-29 | Brisken Outreach Engine Strategy | client-dev | [→](docs/2026-07-29%20-%20Brisken%20Outreach%20Engine%20Strategy/Checkpoint.md) |
+| 2026-07-29 | Lead Desk Engine Hardening Phase1 Increments 1-3 | client-dev | [→](docs/2026-07-29%20-%20Lead%20Desk%20Engine%20Hardening%20Phase1%20Increments%201-3/Checkpoint.md) |
+| 2026-07-29 | Brisken Hours Log | misc | [→](docs/2026-07-29%20-%20Brisken%20Hours%20Log/Checkpoint.md) |
+| 2026-07-28 | Brisken Expense-Recon Card-Driven Paid Through | client-dev | [→](docs/2026-07-28%20-%20Brisken%20Expense-Recon%20Card-Driven%20Paid%20Through/Checkpoint.md) |
+| 2026-07-28 | Brisken Zoho Posting 4b-4.8 + Readiness Audit | client-dev | [→](docs/2026-07-28%20-%20Brisken%20Zoho%20Posting%204b-4.8%20%2B%20Readiness%20Audit/Checkpoint.md) |
+| 2026-07-28 | Brisken Receipt-First Expense Engine Live | client-dev | [→](docs/2026-07-28%20-%20Brisken%20Receipt-First%20Expense%20Engine%20Live/Checkpoint.md) |
+| 2026-07-28 | Brisken Hours Log Write | misc | [→](docs/2026-07-28%20-%20Brisken%20Hours%20Log%20Write/Checkpoint.md) |
+| 2026-07-27 | Expense-Recon Receipt-First Expense Generation | client-dev | [Mini-Checkpoint-2](docs/2026-07-27%20-%20Expense-Recon%20Receipt-First%20Expense%20Generation/Mini-Checkpoint-2.md) |
+| 2026-07-27 | Brisken Cold-Trial Suppression List | client-dev | [→](docs/2026-07-27%20-%20Brisken%20Cold-Trial%20Suppression%20List/Checkpoint.md) |
+| 2026-07-27 | Expense-Recon Categorization UX (Review-by-Exception) | client-dev | [→](docs/2026-07-27%20-%20Expense-Recon%20Categorization%20UX%20%28Review-by-Exception%29/Checkpoint.md) |
+| 2026-07-27 | Expense-Recon Review UX + Honest Match Metric | client-dev | [→](docs/2026-07-27%20-%20Expense-Recon%20Review%20UX%20%2B%20Honest%20Match%20Metric/Checkpoint.md) |
+| 2026-07-23 | Brisken Hours Log + Overlap Purge | misc | [→](docs/2026-07-23%20-%20Brisken%20Hours%20Log%20+%20Overlap%20Purge/Checkpoint.md) |
+| 2026-07-23 | Post-Rome Outreach Truth | client-dev | [→](docs/2026-07-23%20-%20Post-Rome%20Outreach%20Truth/Checkpoint.md) |
+| 2026-07-23 | Recon Matcher V2 | client-dev | [→](docs/2026-07-23%20-%20Recon%20Matcher%20V2/Checkpoint.md) |
+| 2026-07-23 | Recon Spec Gap Register | client-dev | [Mini-Checkpoint-1](docs/2026-07-23%20-%20Recon%20Spec%20Gap%20Register/Mini-Checkpoint-1.md) |
+| 2026-07-23 | Recon Spec Gap Register | client-dev | [Mini-Checkpoint-2](docs/2026-07-23%20-%20Recon%20Spec%20Gap%20Register/Mini-Checkpoint-2.md) |
+| 2026-07-23 | Expense-Recon Follow-Through | client-dev | [→](docs/2026-07-23%20-%20Expense-Recon%20Follow-Through/Checkpoint.md) |
+| 2026-07-23 | Recon Match Accuracy | client-dev | [→](docs/2026-07-23%20-%20Recon%20Match%20Accuracy/Checkpoint.md) |
 | 2026-07-22 | Brisken Expense-Recon SPA Cutover + Fly UI Deletion Attempt | client-dev | [Checkpoint](docs/2026-07-22%20-%20Brisken%20Expense-Recon%20SPA%20Cutover%20+%20Fly%20UI%20Deletion%20Attempt/Checkpoint.md) |
 | 2026-07-22 | Brisken Bank Fee Portal Dirk Review Fixes | client-dev | [→](docs/2026-07-22%20-%20Brisken%20Bank%20Fee%20Portal%20Dirk%20Review%20Fixes/Checkpoint.md) |
 | 2026-07-22 | Brisken Nestle StratiFy Contact Intelligence | comms | [→](docs/2026-07-22%20-%20Brisken%20Nestle%20StratiFy%20Contact%20Intelligence/Checkpoint.md) |
@@ -178,6 +221,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## jochen-projekt
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-29 | Nagarro ES Assessment + Ergebnisseiten-Leseführung | client-dev | [→](docs/2026-07-29%20-%20Nagarro%20ES%20Assessment%20%2B%20Ergebnisseiten-Lesef%C3%BChrung/Checkpoint.md) |
+| 2026-07-29 | One Assessment Ergebnis Download | client-dev | [→](docs/2026-07-29%20-%20One%20Assessment%20Ergebnis%20Download/Checkpoint.md) |
 | 2026-07-17 | One Assessment UI Feedback-Log Full-Width Readability | client-dev | [Checkpoint](docs/2026-07-17%20-%20One%20Assessment%20UI%20Feedback-Log%20Full-Width%20Readability/Checkpoint.md) |
 | 2026-07-17 | One Assessment Followup + Brisken Branding | client-dev | [Checkpoint](docs/2026-07-17%20-%20One%20Assessment%20Followup%20+%20Brisken%20Branding/Checkpoint.md) |
 | 2026-07-16 | One Assessment RG Calibration + Adjudication | client-dev | [Checkpoint](docs/2026-07-16%20-%20One%20Assessment%20RG%20Calibration%20+%20Adjudication/Checkpoint.md) |
@@ -204,8 +249,10 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
-| 2026-07-22 | System Health Check + Heal + Improvement Pass | system-infra | [→](docs/2026-07-22%20-%20System%20Health%20Check%20+%20Heal%20+%20Improvement%20Pass/Checkpoint.md) |
-| 2026-07-22 | Optimize Loop S-Series Implementation | system-infra | [→](docs/2026-07-22%20-%20Optimize%20Loop%20S-Series%20Implementation/Checkpoint.md) |
+| 2026-08-24 | Structural Guards for the 2026-08-24 Friction Rows | system-infra | [→](docs/2026-08-24%20-%20Structural%20Guards%20for%20the%202026-08-24%20Friction%20Rows/Checkpoint.md) |
+| 2026-08-24 | Enforcement Hook Layer Fixes | system-infra | [→](docs/2026-08-24%20-%20Enforcement%20Hook%20Layer%20Fixes/Checkpoint.md) |
+| 2026-07-28 | UnpauseAI Website Deploy Path + Content Sweep | system-infra | [→](docs/2026-07-28%20-%20UnpauseAI%20Website%20Deploy%20Path%20%2B%20Content%20Sweep/Checkpoint.md) |
+| 2026-07-24 | Checkpoint Scaffold Speedup | system-infra | [→](docs/2026-07-24%20-%20Checkpoint%20Scaffold%20Speedup/Checkpoint.md) |
 | 2026-07-22 | Optimize Loop Audit + Hardening | system-infra | [→](docs/2026-07-22%20-%20Optimize%20Loop%20Audit%20+%20Hardening/Checkpoint.md) |
 | 2026-07-20 | System Development | system-infra | [→](docs/2026-07-20%20-%20System%20Development/Checkpoint.md) |
 | 2026-07-17 | Ruff Push Gate CI Prevention | system-infra | [→](docs/2026-07-17%20-%20Ruff%20Push%20Gate%20CI%20Prevention/Checkpoint.md) |
@@ -295,6 +342,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-29 | Meji September Prep + Copy Approval | client-dev | [→](docs/2026-07-29%20-%20Meji%20September%20Prep%20%2B%20Copy%20Approval/Checkpoint.md) |
 | 2026-07-20 | Meji ROI Page Full Answer | client-dev | [Checkpoint](docs/2026-07-20%20-%20Meji%20ROI%20Page%20Full%20Answer/Checkpoint.md) |
 | 2026-07-20 | Meji Doc-Site Polish | client-dev | [Checkpoint](docs/2026-07-20%20-%20Meji%20Doc-Site%20Polish/Checkpoint.md) |
 | 2026-07-16 | Meji Media Intel Sweep + Multi-Inbox Build | - | [Checkpoint](docs/2026-07-16%20-%20Meji%20Media%20Intel%20Sweep%20+%20Multi-Inbox%20Build/Checkpoint.md) |
@@ -356,6 +404,10 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## platform
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-07 | unpauseai.com About Bio Marketing GDPR Reweight | system-infra | [Mini-Checkpoint-2](docs/2026-08-07%20-%20unpauseai.com%20About%20Bio%20Marketing%20GDPR%20Reweight/Mini-Checkpoint-2.md) |
+| 2026-08-07 | unpauseai.com Publish Session Closeout | system-infra | [Mini-Checkpoint-2](docs/2026-08-07%20-%20unpauseai.com%20Publish%20Session%20Closeout/Mini-Checkpoint-2.md) |
+| 2026-08-07 | unpauseai.com About Publish + Publish-Path Lock | system-infra | [→](docs/2026-08-07%20-%20unpauseai.com%20About%20Publish%20%2B%20Publish-Path%20Lock/Checkpoint.md) |
+| 2026-07-29 | Work Page Case Studies | misc | [→](docs/2026-07-29%20-%20Work%20Page%20Case%20Studies/Checkpoint.md) |
 | 2026-06-10 | n8n Multi-Client Ops Proposal Teardown | misc | [Checkpoint](docs/2026-06-10%20-%20n8n%20Multi-Client%20Ops%20Proposal%20Teardown/Checkpoint.md) |
 | 2026-06-10 | VolaByg Proposal Reframe and Deploy | comms | [Checkpoint](docs/2026-06-10%20-%20VolaByg%20Proposal%20Reframe%20and%20Deploy/Checkpoint.md) |
 | 2026-06-09 | VolaByg Proposal + Short-Hook Pipeline | system-infra | [Checkpoint](docs/2026-06-09%20-%20VolaByg%20Proposal%20+%20Short-Hook%20Pipeline/Checkpoint.md) |
@@ -405,3 +457,15 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 |------|-------|------|------|
 | 2026-03-20 | Arthur Project Professionalization | - | [Checkpoint](docs/2026-03-20%20-%20Arthur%20Project%20Professionalization/Checkpoint.md) |
 | 2026-03-20 | Arthur Project Folder Classification | - | [Checkpoint](docs/2026-03-20%20-%20Arthur%20Project%20Folder%20Classification/Checkpoint.md) |
+
+## upwork-independence
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-07-28 | UnpauseAI Cold-Email u1 Provisioning | misc | [→](docs/2026-07-28%20-%20UnpauseAI%20Cold-Email%20u1%20Provisioning/Checkpoint.md) |
+| 2026-07-25 | Upwork Independence Repo Move + u5 Delivery Kit | misc | [→](docs/2026-07-25%20-%20Upwork%20Independence%20Repo%20Move%20%2B%20u5%20Delivery%20Kit/Checkpoint.md) |
+
+## Brisken
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-08-21 | Brisken Intake Round 2 + Overview | client-dev | [→](docs/2026-08-21%20-%20Brisken%20Intake%20Round%202%20%2B%20Overview/Checkpoint.md) |
+| 2026-08-21 | Brisken Mail Intake Live | client-dev | [Mini-Checkpoint-2](docs/2026-08-21%20-%20Brisken%20Mail%20Intake%20Live/Mini-Checkpoint-2.md) |

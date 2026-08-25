@@ -129,6 +129,128 @@ def learn_from_run(
     )
 
 
+@dataclass(frozen=True)
+class ExpenseLearnSummary:
+    """What one finalized expense batch taught (receipt-first, Phase 6)."""
+
+    merchant_categories: int      # category mappings written (from overrides)
+    skipped_mixed_category: int   # vendors whose overrides disagreed -> skipped
+    merchant_entities: int        # vendor -> entity mappings written
+    field_corrections: int        # (vendor, field) -> value corrections written
+
+    def as_dict(self) -> dict:
+        return {
+            "merchant_categories": self.merchant_categories,
+            "skipped_mixed_category": self.skipped_mixed_category,
+            "merchant_entities": self.merchant_entities,
+            "field_corrections": self.field_corrections,
+        }
+
+
+# Header fields a reviewer edit teaches as a per-merchant correction. The
+# key is the ORIGINAL extracted vendor (what OCR will read again next
+# month); `vendor` teaches the canonical spelling itself.
+_LEARNABLE_FIELDS = ("vendor", "tax_label", "paid_through")
+
+
+def learn_from_expense_run(
+    store: LearningStore,
+    *,
+    receipts: list[Receipt],
+    effective_receipts: list[Receipt],
+    field_overrides: dict[str, dict[str, str]],
+    category_overrides: dict[tuple[str, int], dict],
+    manual_payloads: dict[str, dict] | None = None,
+    source_run: str,
+    now_iso: str,
+) -> ExpenseLearnSummary:
+    """Harvest one finalized expense batch (receipt-first, Phase 6).
+
+    Only EXPLICIT edits teach — the same finalize-gate discipline as
+    `learn_from_run`; an untouched LLM guess and the batch-level default
+    entity never do:
+
+    * **merchant_category** — explicit line reclassifications, via the
+      shared `_learn_categories`, keyed on the EFFECTIVE (post-edit)
+      vendor + entity so a corrected spelling learns under its canon.
+    * **merchant_entity** — a per-expense entity OVERRIDE, or a manual
+      add whose payload names the entity. The batch default is a bulk
+      choice, not a per-merchant judgment; it teaches nothing.
+    * **field_correction** — vendor / tax_label / paid_through edits,
+      keyed on the ORIGINAL extracted vendor (what OCR will produce
+      again) under the expense's effective entity.
+
+    `receipts` is the ORIGINAL snapshot pool (pre-overlay); the caller
+    passes `effective_receipts` (post `apply_expense_edits`) so both
+    vendor spellings are visible here without re-deriving the overlay.
+    """
+    orig_by_id = {r.document_id: r for r in receipts}
+    eff_by_id = {r.document_id: r for r in effective_receipts}
+
+    n_entity = n_field = 0
+
+    for document_id, fields in field_overrides.items():
+        eff = eff_by_id.get(document_id)
+        if eff is None:
+            continue  # edit on a deleted / unknown expense teaches nothing
+        orig = orig_by_id.get(document_id)
+        # Per-expense entity override -> merchant -> entity mapping, keyed
+        # on BOTH the original extracted vendor (what OCR will read again
+        # next month) and the effective one (the canonical spelling), so
+        # the mapping hits whether or not a vendor correction also applies.
+        if fields.get("legal_entity"):
+            keys = {
+                normalize_vendor(v)
+                for v in (
+                    (orig.detected_vendor if orig else None),
+                    eff.detected_vendor,
+                )
+                if v
+            } - {""}
+            for vnorm in keys:
+                store.record_merchant_entity(
+                    vnorm, fields["legal_entity"].strip(), now_iso, source_run
+                )
+                n_entity += 1
+        # Header corrections, keyed on the ORIGINAL extracted vendor. A
+        # manual add has no OCR original to correct — skipped by design.
+        if orig is None or not orig.detected_vendor:
+            continue
+        okey = normalize_vendor(orig.detected_vendor)
+        if not okey:
+            continue
+        for f in _LEARNABLE_FIELDS:
+            value = (fields.get(f) or "").strip()
+            if value:
+                store.record_field_correction(
+                    eff.legal_entity_id, okey, f, value, now_iso, source_run
+                )
+                n_field += 1
+
+    # A manual add that names its entity is an explicit vendor -> entity
+    # statement too.
+    for document_id, payload in (manual_payloads or {}).items():
+        entity = str(payload.get("legal_entity") or "").strip()
+        vendor = str(payload.get("vendor") or "").strip()
+        if not entity or not vendor:
+            continue
+        vnorm = normalize_vendor(vendor)
+        if vnorm:
+            store.record_merchant_entity(vnorm, entity, now_iso, source_run)
+            n_entity += 1
+
+    n_category, n_skipped = _learn_categories(
+        store, eff_by_id, category_overrides, source_run, now_iso
+    )
+
+    return ExpenseLearnSummary(
+        merchant_categories=n_category,
+        skipped_mixed_category=n_skipped,
+        merchant_entities=n_entity,
+        field_corrections=n_field,
+    )
+
+
 def _learn_categories(
     store: LearningStore,
     rec_by_id: dict[str, Receipt],

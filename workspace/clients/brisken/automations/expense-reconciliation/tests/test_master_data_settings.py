@@ -16,6 +16,7 @@ from decimal import Decimal
 from expense_recon.web.service import (
     RunForm,
     apply_master_data,
+    available_entities,
     resolve_entity,
 )
 
@@ -67,6 +68,54 @@ def test_entity_prefers_settings_over_form_mapping():
     assert resolve_entity(form, settings) == "Corporate Services"
 
 
+def test_entity_matches_card_first_month_label():
+    """The real hosted bug (2026-08-06): Criss's Chase statement labels the
+    card "2838 - May 2026" (card number FIRST, month last). A plain
+    endswith("2838") missed it (the label ends in the year "2026"), so every
+    run came back has_coa:false with the card fully mapped and the chart
+    provisioned. The digit-token match resolves it."""
+    settings = {"card_entities": {"2838": "Corporate Services"}}
+    assert resolve_entity(_form("2838 - May 2026"), settings) == "Corporate Services"
+
+
+def test_entity_does_not_match_an_unrelated_card_in_a_label():
+    """A card the map does not know still falls back, even when the label
+    carries other digit tokens (the month/year)."""
+    settings = {"card_entities": {"9999": "Other Entity"}}
+    assert resolve_entity(_form("2838 - May 2026"), settings) == "2838 - May 2026"
+
+
+# ── available_entities: the reviewer's entity-picker list (2026-08-07) ──
+
+
+def test_available_entities_from_card_entity_targets(monkeypatch):
+    """The picker fills from the card->entity map's TARGETS even when the
+    settings['entities'] registry is empty (the real Brisken case: the
+    dropdown was blank because it only read the empty registry)."""
+    monkeypatch.delenv("EXPENSE_RECON_COA_PROVISION", raising=False)
+    settings = {"card_entities": {"2838": "Corporate Services",
+                                  "9693": "Cloud Services"}}
+    assert available_entities(settings) == ["Cloud Services", "Corporate Services"]
+
+
+def test_available_entities_unions_and_dedupes(monkeypatch):
+    """Registry keys + card targets + the run default, deduped and sorted."""
+    monkeypatch.delenv("EXPENSE_RECON_COA_PROVISION", raising=False)
+    settings = {
+        "entities": {"Corporate Services": {}},
+        "card_entities": {"2838": "Corporate Services", "1": "Cloud Services"},
+    }
+    assert available_entities(settings, extra="Corporate Services") == [
+        "Cloud Services", "Corporate Services"
+    ]
+
+
+def test_available_entities_empty_when_nothing_configured(monkeypatch):
+    monkeypatch.delenv("EXPENSE_RECON_COA_PROVISION", raising=False)
+    assert available_entities(None) == []
+    assert available_entities({}, extra="  ") == []
+
+
 # ── FX reference rates (the 0-of-94 cause) ─────────────────────────────
 
 
@@ -99,12 +148,48 @@ def test_card_account_lands_in_zoho_block():
     settings = {"card_accounts": {"2838": "1010 Chase Corporate"}}
     cfg = apply_master_data({}, _form("2838"), settings)
     assert cfg["zoho"]["card_accounts"]["2838"] == "1010 Chase Corporate"
+    # The fabricated block must declare "no chart source": without it,
+    # _build_chart_of_accounts defaults to a live API pull and every hosted
+    # upload dies on missing ZOHO_* credentials (2026-07-24 regression).
+    assert cfg["zoho"]["coa_source"] == "none"
 
 
 def test_card_account_ignores_a_different_card():
     settings = {"card_accounts": {"9999": "Other card"}}
     cfg = apply_master_data({}, _form("2838"), settings)
     assert "zoho" not in cfg
+
+
+def test_card_account_matches_card_first_month_label():
+    """Same card-first fix for the balancing bank account (warning #2):
+    "2838 - May 2026" resolves card_accounts["2838"], which endswith missed."""
+    settings = {"card_accounts": {"2838": "1010 Chase Corporate"}}
+    cfg = apply_master_data({}, _form("2838 - May 2026"), settings)
+    assert cfg["zoho"]["card_accounts"]["2838 - May 2026"] == "1010 Chase Corporate"
+
+
+def test_card_account_keeps_an_explicit_chart_source():
+    settings = {"card_accounts": {"2838": "1010 Chase Corporate"}}
+    cfg = {"zoho": {"coa_source": "csv", "coa_csv_path": "chart.csv"}}
+    out = apply_master_data(cfg, _form("2838"), settings)
+    assert out["zoho"]["coa_source"] == "csv"
+
+
+def test_master_data_zoho_block_skips_chart_pull(tmp_path, monkeypatch):
+    """End-to-end pin: the settings-injected zoho block passes the chart
+    builder without demanding Zoho API credentials, and card_accounts
+    survives for the journal export."""
+    from expense_recon.cli import _build_chart_of_accounts
+
+    for var in (
+        "ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REFRESH_TOKEN", "ZOHO_ORG_ID"
+    ):
+        monkeypatch.delenv(var, raising=False)
+    settings = {"card_accounts": {"2838": "1010 Chase Corporate"}}
+    cfg = apply_master_data({}, _form("2838"), settings)
+    coa, zoho_cfg = _build_chart_of_accounts(cfg, tmp_path)
+    assert coa is None
+    assert zoho_cfg["card_accounts"]["2838"] == "1010 Chase Corporate"
 
 
 # ── the matcher actually consumes an inline block ──────────────────────

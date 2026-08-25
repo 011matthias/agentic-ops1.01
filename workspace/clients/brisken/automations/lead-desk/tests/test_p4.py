@@ -15,7 +15,7 @@ NOW = "2026-07-16T00:00:00+00:00"
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.delenv("LEAD_DESK_ACCESS_CODES", raising=False)
+    monkeypatch.delenv("LEAD_DESK_AUTH_SECRET", raising=False)
     c = TestClient(create_app(tmp_path))
     c.db = tmp_path / "lead-desk.sqlite"
     return c

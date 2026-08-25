@@ -23,7 +23,12 @@ encapsulates, from feedback_hours_tracker_format):
   - the Excel Table `ref` must be extended or the KPIs (structured refs
     LeadGenLog[...]) and the Billable dropdown miss the new rows;
   - concurrent same-day sessions shift row numbers -> the last data row is
-    re-found at write time, never assumed.
+    re-found at write time, never assumed;
+  - a wall-clock minute is billed ONCE across ALL tabs (owner directive
+    2026-07-23): --add refuses any new row that overlaps an existing row in
+    ANY tab, or another row in the same batch. Rows are not chronologically
+    ordered in the sheets, so "last logged" says nothing about free slots;
+    the gate checks every row.
 
 Modes:
   --status                 print last-logged date/time + computed totals per tab
@@ -184,6 +189,54 @@ def span_hours(start: dt.time, end: dt.time) -> float:
     return round(e - s, 2)
 
 
+def abs_interval(date_v, start_v, end_v) -> tuple[dt.datetime, dt.datetime]:
+    """Absolute [start, end) datetimes for a row; end <= start wraps midnight."""
+    day = parse_date(str(date_v)[:10])
+    s = parse_time(start_v)
+    e = parse_time(end_v)
+    st = day + dt.timedelta(hours=s.hour, minutes=s.minute)
+    en = day + dt.timedelta(hours=e.hour, minutes=e.minute)
+    if en <= st:
+        en += dt.timedelta(days=1)
+    return st, en
+
+
+def overlap_hits(wb, specs: list) -> list[str]:
+    """Cross-tab wall-clock overlap check for a batch of new rows.
+
+    A minute is billed once across ALL tabs (owner directive 2026-07-23), so a
+    new row may not overlap any existing row in any tab, nor another row in the
+    same batch. Touching endpoints are fine. Rows whose (date, start, task) key
+    already exists in their target tab are idempotent re-runs; cmd_add skips
+    them, so they are excluded here too.
+    """
+    existing = []
+    for sheet in TABS:
+        ws = wb[sheet]
+        for _r, date, task, start, end, _bill, _notes in read_rows(ws):
+            if isinstance(start, dt.time) and isinstance(end, dt.time):
+                st, en = abs_interval(date, start, end)
+                existing.append((st, en, sheet, task))
+    hits: list[str] = []
+    accepted: list[tuple] = []
+    for s in specs:
+        sheet = resolve_tab(s["tab"])
+        key = (parse_date(s["date"]).strftime("%Y-%m-%d"),
+               str(parse_time(s["start"])), s["task"].strip())
+        if key in existing_keys(wb[sheet]):
+            continue
+        st, en = abs_interval(s["date"], s["start"], s["end"])
+        for xs, xe, xsheet, xtask in existing + accepted:
+            if st < xe and xs < en:
+                hits.append(f'{key[0]} {s["start"]}-{s["end"]} "{s["task"].strip()}" '
+                            f'[{sheet}] overlaps {xs:%Y-%m-%d %H:%M}-{xe:%H:%M} '
+                            f'"{xtask}" [{xsheet}]')
+                break
+        else:
+            accepted.append((st, en, sheet, s["task"]))
+    return hits
+
+
 def read_rows(ws):
     """Return [(row_idx, date, task, start, end, billable, notes)] for data rows."""
     out = []
@@ -246,6 +299,14 @@ def cmd_status(wb) -> int:
 # ----------------------------------------------------------------------------- add
 
 def cmd_add(wb, specs: list, dry_run: bool) -> int:
+    hits = overlap_hits(wb, specs)
+    if hits:
+        print("OVERLAP: refusing rows that double-bill wall-clock time "
+              "(a minute is billed once across all tabs):", file=sys.stderr)
+        for h in hits:
+            print(f"  {h}", file=sys.stderr)
+        return 1
+
     # group by resolved tab
     by_tab: dict[str, list] = {}
     for s in specs:

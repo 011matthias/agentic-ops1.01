@@ -1,0 +1,148 @@
+# Market Data Hub — NEW-generation native deck (13 slides).
+# Copy sources, no invention: [OV] = the approved Overview build (S12 app
+# slide + functional_mdh, verbatim), [V2] = deckgen/specs/market-data-hub.yaml
+# (Dirk-reviewed use-case substance, translated to BEFORE/AFTER), [MSG] =
+# MESSAGING.md, [S30] = Dirk's Credit Data Hub edits from the Overview review.
+# Dirk S12 decisions carried: SAP AND non-SAP push, audit trail in the freed
+# column. Success story: FSI only (REF s28 + Dirk's fill); no other story is
+# sourced for MDH, so no other story ships. Badge on the functional slide is
+# a deliberate family decision: the SAP Certified mark (image12) prints on
+# Dirk's own product decks' functional diagrams (REF s13), not only the
+# platform slide.
+deck: market-data-hub
+output: "NEW - Brisken - Market Data Hub 2026-07-23"
+palette: market-data-hub
+slides:
+  - type: cover
+    eyebrow: "TreasuryCentral, powered by OnePilot"
+    title: "Market Data Hub"
+    sub: "A TreasuryCentral application"
+    tagline: "Every rate you rely on, curated once, governed end to end."
+
+  - type: short_version
+    head: "One application, in four lines."
+    focal: 2
+    cards:
+      - {label: "What it is", body: "Every rate and reference you rely on, from any source to every system. Curated once, governed end to end."}
+      - {label: "What it replaces", body: "Rates lined up by hand from a dozen places; re-keying, fixing formats, chasing bad values."}
+      - {label: "What you get", body: "One governed layer for SAP Treasury, with a full audit trail on every change."}
+      - {label: "Who it is for", body: "Treasury teams on SAP. The hub sits inside your landscape, not beside it."}
+    note: "The next page is where you are today."
+
+  - type: problem
+    kick: "The problem"
+    head: "Your rates live in a dozen places. Someone lines them up by hand."
+    bands:
+      - {label: "Your sources", body: "Bloomberg, Refinitiv, 360T, OANDA, central banks, websites, anywhere."}
+      - {label: "The manual middle", body: "Re-keying rates, fixing formats, chasing bad values, reconciling by hand, fearing month-end."}
+      - {label: "Your systems", body: "SAP, analytics, non-SAP apps, everywhere."}
+    stat: "Sound familiar? Late nights stitching rates together, a month-end everyone dreads, and reports that never stay final."
+
+  - type: hierarchy
+    focal_app: mdh
+    footnote: "Market Data Hub runs as an application inside TreasuryCentral, the shipped edition of OnePilot. OnePilot runs in production across financial services, chemicals, food & drink, oil & gas, commodity and agricultural treasuries."
+
+  - type: app
+    kick: "Market Data Hub"
+    head: "One source for every rate you rely on."
+    gloss: "Market data means the FX and interest rates, commodity prices and credit ratings a treasury runs on. Today they arrive from a dozen places."
+    problem:
+      - "Your rates live in a dozen places, lined up by hand."
+      - "Re-keying, fixing formats, chasing bad values, reconciling before month-end."
+    steps:
+      - "Pulls every rate from any source: Bloomberg, Refinitiv, 360T, OANDA, central banks."
+      - "Checks each value on arrival for anomalies, completeness and accuracy."
+      - "Calculates and shapes it: inversions, triangulation, your own formulas."
+      - "Pushes it into SAP and non-SAP systems, on schedule or on demand."
+    freed:
+      - "Re-keying rates and fixing formats."
+      - "Chasing bad values and reconciling by hand."
+      - "Assembling the audit trail by hand."
+      - "The month-end everyone dreads."
+    connects: "CONNECTS TO   Bloomberg · Refinitiv · 360T · OANDA · central banks  →  SAP ECC & S/4HANA, non-SAP systems   ·   via API, OData, SFTP, email, Excel add-in"
+
+  - type: functional
+    kick: "Market Data Hub · functional overview"
+    head: "Market data, into your SAP context."
+    product: "Market Data Hub"
+    sources: ["Bloomberg, Refinitiv, 360T", "Central banks & agencies", "Exchanges & aggregators", "Websites & internal sources"]
+    dests: ["SAP ECC & S/4HANA", "Exposure & risk systems", "Analytics & databases", "Non-SAP systems"]
+    note: "Any protocol, on a schedule or on demand. Every value checked on the way in."
+    badge: true
+
+  - type: usecase
+    kick: "Use case · FX & Interest Rates into SAP"
+    title: "FX & Interest Rates into SAP"
+    gloss: "FX: foreign exchange, the currency rates a treasury deals and values with."
+    before: "The rates SAP needs each day come from market data providers, central banks, government agencies, even websites. Today someone pulls each one, fixes the format, and lines them up by hand."
+    steps:
+      - "Pulls rates from any provider or feed, with nothing to swap out."
+      - "Calculates what you need: date shifts, inversion, triangulation, interpolation, averages, your own formula libraries."
+      - "Shapes each value exactly how the target system needs it."
+      - "Pushes the curated data into SAP ECC and S/4HANA, or any non-SAP system, on a schedule or on demand."
+    checkpoint: "Each step runs on its own or with a person in the loop; everything is logged."
+    actor: "THE MARKET DATA HUB"
+
+  - type: usecase
+    kick: "Use case · Anomaly Catch and Governance"
+    title: "Anomaly Catch and Governance"
+    gloss: "Anomaly detection: catching a value that looks wrong before it reaches a system."
+    before: "A bad rate is usually caught late, after it has already moved into reports. Someone reconciles by hand to find where it came from, and the report never stays final."
+    steps:
+      - "Checks every value as it arrives: anomaly detection, completeness, accuracy, timeliness."
+      - "Catches odd or bad data before it moves anywhere."
+      - "Requires a second person on the changes that matter (segregation of duty)."
+      - "Records every value and every change end to end, and alerts on exceptions."
+    checkpoint: "You hear about the odd one out; the rest just runs."
+    actor: "THE MARKET DATA HUB"
+
+  - type: usecase
+    kick: "Use case · Commodity Price Curves"
+    title: "Commodity Price Curves"
+    gloss: "A price curve: today's spot (the price for delivery now), then 30, 60 and 90 days, out to a year. Covered in depth in the Market Data Hub for Commodities deck."
+    before: "The same commodity differs by delivery point, as storage, port fees and the local market differ. Today the curve is built by hand, and prices differ desk to desk."
+    steps:
+      - "Builds the curve on a timeline: spot, then 30, 60 and 90-day tenors, out to a year."
+      - "Combines transportation, storage, quality and local taxes into one price per tenor."
+      - "Prices each curve per delivery point."
+      - "Validates every price on the way in; every change versioned and audited."
+    checkpoint: "Anomalies wait for a person's approval."
+    actor: "THE MARKET DATA HUB"
+
+  - type: usecase
+    kick: "Use case · Credit and Counterparty Data"
+    title: "Credit and Counterparty Data"
+    gloss: "A credit rating: an agency's score of how likely a counterparty is to pay."
+    before: "A treasury tracks ratings and limits for its banks, customers and counterparties, pulled from several agencies. Some deliver by API, others only a PDF report; someone re-keys them by hand, and a stale rating means a limit decision on old data."
+    steps:
+      - "Collects credit data from any agency or source, by API or from a PDF."
+      - "Reads the report and extracts the rating and credit report attributes into structured data."
+      - "Feeds SAP Credit Management and business partner, or any risk system."
+      - "Alerts when a rating changes."
+    checkpoint: "A person owns the limit decision; the data is current."
+    actor: "THE MARKET DATA HUB"
+
+  - type: governance
+    kick: "Governance"
+    head: "Governed, in plain terms."
+    intro: "The same four controls run under every application, the AI included: it is grounded in SAP, not free-floating, and keeps a human in the loop on the moves that matter. What each control means, and why it matters:"
+    focal: 1
+    cards:
+      - {label: "Audit trail", body: "Every action is logged and can be reviewed later, end to end. Nothing happens off the record."}
+      - {label: "Four-eyes / segregation of duty", body: "The person who enters something is not the one who approves it. A human stays in the loop (HITL) on the moves that matter."}
+      - {label: "Anomaly alerts", body: "The system flags what looks wrong before it posts, not after, so a bad value is caught on the way in."}
+      - {label: "Manage by exception", body: "People only touch the cases that need judgment. The rest just runs, and you hear about the odd one out."}
+    footline: "AI grounded in SAP, with a human in the loop.    ·    Certified to ISO 27001 and SOC 1 Type II."
+
+  - type: success
+    head: "Live deployment, real industry."
+    intro: "A production deployment in financial services, replacing a manual way of working."
+    stories:
+      - industry: "Financial Services"
+        deployment: "SAP S/4HANA, public cloud"
+        what: "A single OnePilot deployment governing several financial-data domains at once."
+        highlight: "One platform to govern all data integrations and controls."
+        replaced: "Replaced a manual solution."
+
+  - type: contact
+    head: "Let's map your first feed."

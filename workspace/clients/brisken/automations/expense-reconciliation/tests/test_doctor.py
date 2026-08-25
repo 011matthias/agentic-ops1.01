@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
 from expense_recon.doctor import run_doctor
 
@@ -154,25 +153,24 @@ def test_zoho_csv_source_missing_file_fails(tmp_path, capsys):
     assert "chart-of-accounts CSV not found" in capsys.readouterr().out
 
 
-def test_zoho_api_source_missing_creds_fails(tmp_path, capsys, monkeypatch):
-    for v in ("ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REFRESH_TOKEN", "ZOHO_ORG_ID"):
-        monkeypatch.delenv(v, raising=False)
+def test_live_chart_source_fails_with_the_migration_route(tmp_path, capsys):
+    """`coa_source: "api"` pulled the chart from the accounting API, which the
+    app no longer talks to (2026-08-22). An old config asking for it fails
+    loudly and says where the chart comes from now, rather than running
+    silently without the chart it expected."""
     cfg = _base_cfg(tmp_path)
     cfg["zoho"] = {"coa_source": "api"}
     rc = run_doctor(_write(tmp_path / "run.json", cfg))
     out = capsys.readouterr().out
     assert rc == 1
-    assert "env vars unset" in out
+    assert "no longer exists" in out
+    assert "coa_csv_path" in out
 
 
-def test_zoho_export_card_account_uncovered_warns(tmp_path, capsys, monkeypatch):
-    monkeypatch.setenv("ZOHO_CLIENT_ID", "x")
-    monkeypatch.setenv("ZOHO_CLIENT_SECRET", "x")
-    monkeypatch.setenv("ZOHO_REFRESH_TOKEN", "x")
-    monkeypatch.setenv("ZOHO_ORG_ID", "x")
+def test_zoho_export_card_account_uncovered_warns(tmp_path, capsys):
     cfg = _base_cfg(tmp_path)
     cfg["zoho"] = {
-        "coa_source": "api",
+        "coa_source": "none",
         "export_path": "journal.csv",
         "card_accounts": {"some-other-card": "A200"},
     }
@@ -180,7 +178,8 @@ def test_zoho_export_card_account_uncovered_warns(tmp_path, capsys, monkeypatch)
     out = capsys.readouterr().out
     # WARN does not change exit code
     assert rc == 0
-    assert "not in card_accounts" in out
+    # Cards R2 wording: per-card, token-resolution aware, Zoho-optional.
+    assert "matches no card with a Zoho account" in out
 
 
 def test_doctor_routes_through_cli_main(tmp_path, capsys):

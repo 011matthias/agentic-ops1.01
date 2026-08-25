@@ -32,10 +32,20 @@ import secrets
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from ..graph_mail import DEFAULT_DENY_DOMAINS
 from .store import CADENCE_PREFIX, DEGREES, ContactStore, attempt_key_for
 
 LEASE_MINUTES = 30
 MAX_SEND_ATTEMPTS = 3
+
+# Recipient domains that must NEVER receive a campaign send, regardless of
+# approval (a competitor we hold, and our own internal domain). This is the
+# immutable floor; canonical in graph_mail.DEFAULT_DENY_DOMAINS (re-exported
+# above, beside the send primitives that enforce it). The claim path unions it
+# with any operator-configured extras in the 'send_deny_domains' state key,
+# and the worker re-checks the floor before the Graph POST. Mirrors the hard
+# @sap.com deny in the ga_send_wave.py guard pattern
+# (rule_brisken_graph_send_by_id).
 
 # Merge variables a template may reference. Deliberately a whitelist over
 # contact columns (regex substitution, NOT Jinja - no template injection).
@@ -70,6 +80,37 @@ def now_utc() -> datetime:
 
 def _iso(dt: datetime) -> str:
     return dt.isoformat(timespec="seconds")
+
+
+def _recipient_domain(addr: str) -> str:
+    return (addr or "").strip().rsplit("@", 1)[-1].lower()
+
+
+def deny_domains(store: ContactStore) -> set[str]:
+    """Hard-denied recipient domains: the built-in floor unioned with any
+    operator-configured extras in the 'send_deny_domains' state key (JSON
+    array). A malformed state value falls back to the floor alone."""
+    try:
+        extra = json.loads(store.get_state("send_deny_domains") or "[]")
+    except (json.JSONDecodeError, TypeError):
+        extra = []
+    if not isinstance(extra, list):
+        extra = []
+    return {d.strip().lower() for d in (*DEFAULT_DENY_DOMAINS, *extra)
+            if isinstance(d, str) and d.strip()}
+
+
+def _record_guard_alert(store: ContactStore, campaign_id: str,
+                        blocks: list[dict], now: str) -> None:
+    """Surface send-guard blocks (drifted address, denied domain, unpinned
+    copy) as a single per-campaign state row, or clear a stale one when the
+    pass is clean. Never called on a peek (peek must not mutate state)."""
+    key = f"send_guard_alert:{campaign_id}"
+    if blocks:
+        store.set_state(key, json.dumps(
+            {"at": now, "count": len(blocks), "blocked": blocks[:50]}), now)
+    elif store.get_state(key) is not None:
+        store.delete_state(key)
 
 
 # -- templates ----------------------------------------------------------------
@@ -175,15 +216,43 @@ def classify_enrollments(store: ContactStore, campaign_id: str,
 
 # -- cadence state derivation ---------------------------------------------------
 
+def parse_sent_steps(progress: dict) -> set[int]:
+    """The SET of step_nos already sent for one enrollment. Prefers the
+    ``sent_steps`` field (comma-joined step_nos from the enrollment_progress
+    view); falls back to treating a ``steps_done`` COUNT as the sent prefix
+    ``{1..steps_done}`` when only the count is available (which is exactly the
+    append-only truth). step_no is the stable send-identity, so this set is what
+    keeps the cadence pointer correct across a mid-sequence INSERT/REORDER."""
+    raw = progress.get("sent_steps")
+    if raw is None:
+        n = int(progress.get("steps_done") or 0)
+        return set(range(1, n + 1))
+    out: set[int] = set()
+    for part in str(raw).split(","):
+        part = part.strip()
+        if part.lstrip("-").isdigit():
+            out.add(int(part))
+    return out
+
+
 def enrollment_state(enrollment: dict, progress: dict, steps: list[dict],
                      contact: dict, campaign: dict) -> dict:
     """Pure derivation of one enrollment's cadence state.
 
     Returns {state, steps_done, steps_total, next_step, next_due}. States:
     stopped:suppressed / stopped:bounced / stopped:replied / no_sequence /
-    done / pending_approval / paused / inactive / active."""
-    steps_done = int(progress.get("steps_done") or 0)
+    done / pending_approval / paused / inactive / active.
+
+    The step pointer keys on the SET of sent step_nos, not a positional count:
+    the next step is the first (in step_no order) whose step_no has NOT been
+    sent, and 'done' means every sequence step's step_no is sent. Since a step's
+    identity is its step_no (== its send ext_key), inserting or reordering steps
+    never re-sends old copy under a shifted index nor skips the new step."""
+    sent = parse_sent_steps(progress)
     total = len(steps)
+    # Display count: how many of the CURRENT sequence's steps are already sent
+    # (== the old positional steps_done for an append-only sequence).
+    steps_done = sum(1 for st in steps if int(st["step_no"]) in sent)
     base = {"steps_done": steps_done, "steps_total": total,
             "next_step": None, "next_due": None}
     if contact.get("suppressed"):
@@ -194,7 +263,10 @@ def enrollment_state(enrollment: dict, progress: dict, steps: list[dict],
         return {**base, "state": "stopped:replied"}
     if not steps:
         return {**base, "state": "no_sequence"}
-    if steps_done >= total:
+    # First step whose step_no is unsent; None means every step has been sent.
+    next_idx = next((i for i, st in enumerate(steps)
+                     if int(st["step_no"]) not in sent), None)
+    if next_idx is None:
         return {**base, "state": "done"}
     status = campaign.get("status") or "draft"
     if not enrollment.get("approved_at") and not enrollment.get("enrollment_approved_at"):
@@ -211,13 +283,20 @@ def enrollment_state(enrollment: dict, progress: dict, steps: list[dict],
     if status != "sending":
         return {**base, "state": "inactive"}
 
-    next_step = steps[steps_done]  # 1-based step_no == steps_done + 1
+    next_step = steps[next_idx]  # first step whose step_no is not yet sent
     # Offsets anchor on the PREVIOUS step's actual completion (a delayed send
     # never compresses the follow-up gap); step 1 anchors on approval.
     anchor = (progress.get("last_step_ts")
               or enrollment.get("approved_at")
               or enrollment.get("enrollment_approved_at"))
     anchor_date = date.fromisoformat(str(anchor)[:10]) if anchor else None
+    # A campaign 'start no earlier than' date holds the FIRST step (which has no
+    # prior completion to anchor on) until that date; later steps already anchor
+    # on their prior step's real completion, which is >= the start date.
+    snb = campaign.get("start_not_before")
+    if snb and not progress.get("last_step_ts"):
+        snb_date = date.fromisoformat(str(snb)[:10])
+        anchor_date = max(anchor_date, snb_date) if anchor_date else snb_date
     next_due = (anchor_date + timedelta(days=int(next_step["day_offset"]))
                 if anchor_date else None)
     return {**base, "state": "active", "next_step": dict(next_step),
@@ -265,7 +344,8 @@ def due_items(store: ContactStore, campaign_id: str, at: datetime) -> dict:
         steps = seq["steps"] if seq else []
         st = enrollment_state(
             {"approved_at": e.get("enrollment_approved_at")},
-            {"steps_done": e.get("steps_done"), "last_step_ts": e.get("last_step_ts"),
+            {"steps_done": e.get("steps_done"), "sent_steps": e.get("sent_steps"),
+             "last_step_ts": e.get("last_step_ts"),
              "replied": e.get("cadence_replied"), "bounced": e.get("cadence_bounced")},
             steps, e, campaign,
         )
@@ -288,6 +368,9 @@ def due_items(store: ContactStore, campaign_id: str, at: datetime) -> dict:
             "campaign": campaign, "attempt_key": akey,
             "due": st["next_due"], "steps_done": st["steps_done"],
             "steps_total": st["steps_total"],
+            # Operator escape hatch (a re-queued 'queued' row): claim drops
+            # the step's reply-to-thread flag and sends fresh.
+            "force_fresh": bool(attempt["force_fresh"]) if attempt is not None else False,
         }
         if step["channel"] == "email":
             emails.append(item)
@@ -316,6 +399,11 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
         return {"paused": True, "claims": []}
 
     claims: list[dict] = []
+    # Per-mailbox cap across ALL campaigns from one warm mailbox (global state,
+    # 0 = off). Seeded per mailbox on first use, then decremented as this pass
+    # claims, so two concurrent campaigns from one mailbox share the budget.
+    mailbox_cap = int(store.get_state("mailbox_daily_cap") or 0)
+    mailbox_used: dict[str, int] = {}
     for campaign_row in store.list_campaigns():
         campaign = dict(campaign_row)
         # The gate: the worker sends ONLY from a campaign a human has
@@ -326,18 +414,72 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
         if not in_window(window, at):
             continue
         today = _campaign_today(campaign, at)
+        snb = campaign.get("start_not_before")
+        if snb and today.isoformat() < str(snb)[:10]:
+            continue  # scheduled to start on a later date (vacation window)
         cap_left = int(campaign["daily_cap"]) - store.cadence_sends_today(
             campaign["campaign_id"], today.isoformat())
         if cap_left <= 0:
             continue
+        # Per-day NEW-contact ramp (None = off): how many more step-1 sends may
+        # start today. Follow-up steps are not ramp-limited.
+        ramp = int(campaign.get("ramp_per_day") or 0)
+        ramp_left = (ramp - store.first_step_sends_today(
+            campaign["campaign_id"], today.isoformat())) if ramp > 0 else None
+        mbx = campaign["from_address"]
+        if mailbox_cap > 0:
+            if mbx not in mailbox_used:
+                mailbox_used[mbx] = store.mailbox_sends_today(mbx, today.isoformat())
+            mbx_remaining = mailbox_cap - mailbox_used[mbx]
+        else:
+            mbx_remaining = None
         pins = store.get_pins(campaign["campaign_id"])
+        recipient_pins = store.get_recipient_pins(campaign["campaign_id"])
+        denied = deny_domains(store)
+        blocks: list[dict] = []
         due = due_items(store, campaign["campaign_id"], at)
         for item in due["emails"]:
-            if len(claims) >= max_items or cap_left <= 0:
+            if (len(claims) >= max_items or cap_left <= 0
+                    or (mbx_remaining is not None and mbx_remaining <= 0)):
                 break
             e, step = item["enrollment"], item["step"]
             to_addr = (e.get("email") or "").strip()
             if not to_addr:
+                continue
+            # SEND-SAFETY GUARDS (rule_brisken_graph_send_by_id): a send only
+            # ever goes to an address a human froze at approval, never to a
+            # denied domain, and only under approved (pinned) copy. Any breach
+            # blocks the item and surfaces a loud alert; the safe outcome of
+            # uncertainty is "send nothing".
+            cid = e["contact_id"]
+            pinned_to = recipient_pins.get(cid)
+            if pinned_to is None:
+                blocks.append({"contact_id": cid, "kind": "recipient_not_approved",
+                               "detail": f"{to_addr}: no approval-frozen address; re-approve"})
+                continue
+            if to_addr.lower() != pinned_to:
+                blocks.append({"contact_id": cid, "kind": "recipient_drift",
+                               "detail": f"approved {pinned_to!r}, now {to_addr.lower()!r}; re-approve"})
+                continue
+            if _recipient_domain(to_addr) in denied:
+                blocks.append({"contact_id": cid, "kind": "domain_denied",
+                               "detail": f"{to_addr}: hard-denied recipient domain"})
+                continue
+            sup = store.suppression_hit(to_addr)
+            if sup is not None:
+                blocks.append({"contact_id": cid, "kind": "suppression-list",
+                               "detail": f"{to_addr}: on the suppression list "
+                                         f"({sup['kind']} {sup['entry']})"})
+                continue
+            if step["template_key"] not in pins:
+                blocks.append({"contact_id": cid, "kind": "unpinned_template",
+                               "detail": f"step {step['step_no']} template "
+                                         f"{step['template_key']!r} not pinned; re-approve"})
+                continue
+            # Per-day ramp: hold fresh (step-1) contacts once today's ramp is
+            # spent. A benign, intentional deferral (no alert); the contact
+            # stays step-1 and starts on a later day.
+            if ramp_left is not None and step["step_no"] == 1 and ramp_left <= 0:
                 continue
             version = pins.get(step["template_key"])
             tpl = store.get_template(step["template_key"], version)
@@ -360,6 +502,11 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
                 lease_id = None
                 lease_expires = None
             cap_left -= 1
+            if ramp_left is not None and step["step_no"] == 1:
+                ramp_left -= 1
+            if mbx_remaining is not None:
+                mbx_remaining -= 1
+                mailbox_used[mbx] = mailbox_used.get(mbx, 0) + 1
             prior = attempt_key_for(e["enrollment_id"], step["step_no"] - 1) \
                 if step["step_no"] > 1 else None
             claims.append({
@@ -382,9 +529,17 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
                 "template_key": step["template_key"],
                 "template_version": int(tpl["version"]),
                 "thread_ext_key": prior,
+                # In-thread reply step: the worker sends this as a Graph reply
+                # anchored on the prior step's sent mail. An operator
+                # force_fresh (send-fresh escape hatch) overrides it back to a
+                # plain fresh send.
+                "reply_to_prior": bool(step.get("reply_to_prior"))
+                and not item.get("force_fresh"),
                 "throttle_seconds": int(campaign["throttle_seconds"]),
                 "jitter_seconds": int(campaign["jitter_seconds"]),
             })
+        if not peek:
+            _record_guard_alert(store, campaign["campaign_id"], blocks, now)
     return {"paused": False, "claims": claims}
 
 
@@ -481,6 +636,81 @@ def confirm_draft_sent(store: ContactStore, payload: dict) -> dict:
     return {"ok": True, "event_inserted": inserted}
 
 
+def enumerate_wave(store: ContactStore, campaign_id: str) -> dict:
+    """Enumerate one campaign's staged draft-dirk wave from journaled attempts:
+    every send_attempt with status 'drafted' AND a correlated Outlook entry_id.
+    Read-only visibility - this NEVER sends or releases anything (the gated
+    release action is a separate, later decision).
+
+    Each candidate re-runs the claim-time send-safety guards
+    (rule_brisken_graph_send_by_id) as PRE-checks, because the world can move
+    between staging and Dirk's click: the recipient must still equal its
+    approval-frozen ``campaign_recipient_pins`` address, its domain must not be
+    denied, and the contact must not be suppressed. Failures land in
+    ``blocks`` (with reason), never in ``items``.
+
+    Returns {items, blocks, count, ids_hash, oldest_staged_at,
+    oldest_staged_days}; ``ids_hash`` is the sha256 of the newline-joined
+    SORTED entry_id list, so two enumerations of the same staged set match
+    regardless of row order - the fingerprint a later release step must
+    re-derive and compare before acting."""
+    today = now_utc().date()
+    enrollments = {int(e["enrollment_id"]): dict(e)
+                   for e in store.enrollments_for_campaign(campaign_id)}
+    recipient_pins = store.get_recipient_pins(campaign_id)
+    denied = deny_domains(store)
+    items: list[dict] = []
+    blocks: list[dict] = []
+    for a in store.attempts_for_campaign(campaign_id, statuses=("drafted",)):
+        if not a["entry_id"]:
+            continue  # staged without a correlated Outlook draft: not part of a wave
+        e = enrollments.get(int(a["enrollment_id"]))
+        to_addr = (a["to_addr"] or "").strip()
+        staged_at = a["resolved_at"] or a["claimed_at"]
+        staged_date = date.fromisoformat(str(staged_at)[:10]) if staged_at else None
+        item = {
+            "attempt_key": a["attempt_key"], "entry_id": a["entry_id"],
+            "to": to_addr, "subject": a["rendered_subject"],
+            "contact_id": e["contact_id"] if e else None,
+            "contact_name": (f"{e.get('first_name') or ''} "
+                             f"{e.get('last_name') or ''}").strip() if e else "?",
+            "staged_at": staged_at,
+            "staged_days": (today - staged_date).days if staged_date else None,
+            "step_no": int(a["step_no"]),
+        }
+        if e is None:
+            blocks.append({**item, "kind": "orphan_attempt",
+                           "detail": "no enrollment/contact row for this attempt"})
+            continue
+        pinned_to = recipient_pins.get(e["contact_id"])
+        if pinned_to is None:
+            blocks.append({**item, "kind": "recipient_not_approved",
+                           "detail": f"{to_addr}: no approval-frozen address; re-approve"})
+            continue
+        if to_addr.lower() != pinned_to:
+            blocks.append({**item, "kind": "recipient_drift",
+                           "detail": f"approved {pinned_to!r}, now {to_addr.lower()!r}; re-approve"})
+            continue
+        if _recipient_domain(to_addr) in denied:
+            blocks.append({**item, "kind": "domain_denied",
+                           "detail": f"{to_addr}: hard-denied recipient domain"})
+            continue
+        if e.get("suppressed"):
+            blocks.append({**item, "kind": "suppressed",
+                           "detail": f"{to_addr}: contact suppressed after staging"})
+            continue
+        items.append(item)
+    ids = sorted(i["entry_id"] for i in items)
+    staged = [i["staged_at"] for i in items if i["staged_at"]]
+    ages = [i["staged_days"] for i in items if i["staged_days"] is not None]
+    return {
+        "items": items, "blocks": blocks, "count": len(items),
+        "ids_hash": hashlib.sha256("\n".join(ids).encode("utf-8")).hexdigest(),
+        "oldest_staged_at": min(staged) if staged else None,
+        "oldest_staged_days": max(ages) if ages else None,
+    }
+
+
 def mark_manual_done(store: ContactStore, enrollment_id: int, step_no: int,
                      user: str | None) -> dict:
     """A human executed a LinkedIn (manual) step. Same idempotent ext_key
@@ -519,6 +749,89 @@ def mark_manual_done(store: ContactStore, enrollment_id: int, step_no: int,
         )
     store.update_attempt(akey, {"status": "sent", "resolved_at": now})
     return {"ok": True, "event_inserted": inserted}
+
+
+# -- projected schedule -----------------------------------------------------------
+
+def project_schedule(store: ContactStore, campaign_id: str,
+                     at: datetime | None = None, horizon_days: int = 120) -> list[dict]:
+    """A day-by-day forward projection of when this campaign's sends land, for
+    the confirm-page preview. Simulates the day-level pacing (send window,
+    daily_cap, per-day ramp) over the active cohort from each enrollment's
+    start. An ESTIMATE: it does not model the cross-campaign mailbox cap,
+    reply/bounce drop-off, or intra-day throttle. Returns
+    [{"date": "YYYY-MM-DD", "count": N}, ...] for days that carry sends."""
+    at = at or now_utc()
+    campaign_row = store.get_campaign(campaign_id)
+    if campaign_row is None:
+        return []
+    campaign = dict(campaign_row)
+    window = parse_window(campaign.get("send_window"))
+    daily_cap = int(campaign["daily_cap"])
+    ramp = int(campaign.get("ramp_per_day") or 0)
+    sequences = {s["degree"]: s for s in store.sequences_for_campaign(campaign_id)}
+    start_floor = _campaign_today(campaign, at)
+    snb = campaign.get("start_not_before")
+    if snb:
+        snb_date = date.fromisoformat(str(snb)[:10])
+        start_floor = max(start_floor, snb_date)
+
+    workers: list[dict] = []
+    for row in store.enrollments_for_campaign(campaign_id):
+        e = dict(row)
+        if e.get("suppressed") or e.get("cadence_replied") or e.get("cadence_bounced"):
+            continue
+        seq = sequences.get(e.get("degree") or "")
+        steps = [s for s in (seq["steps"] if seq else []) if s["channel"] == "email"]
+        sent = parse_sent_steps(
+            {"sent_steps": e.get("sent_steps"), "steps_done": e.get("steps_done")})
+        remaining = [s for s in steps if int(s["step_no"]) not in sent]
+        if not remaining:
+            continue
+        fresh = not any(int(s["step_no"]) in sent for s in steps)  # no email step sent yet
+        last = e.get("last_step_ts")
+        if last:
+            anchor = date.fromisoformat(str(last)[:10])
+        else:
+            appr = e.get("enrollment_approved_at")
+            anchor = date.fromisoformat(str(appr)[:10]) if appr else start_floor
+            anchor = max(anchor, start_floor)
+        workers.append({
+            "steps": remaining, "idx": 0,
+            "next_due": anchor + timedelta(days=int(remaining[0]["day_offset"])),
+            "fresh": fresh,
+        })
+    if not workers:
+        return []
+
+    counts: dict[str, int] = {}
+    day = start_floor
+    pending = len(workers)
+    guard = 0
+    while pending > 0 and guard < horizon_days:
+        guard += 1
+        if day.weekday() in window["days"]:
+            cap = daily_cap
+            ramp_today = ramp if ramp > 0 else None
+            for w in workers:
+                if cap <= 0:
+                    break
+                if w["idx"] >= len(w["steps"]) or w["next_due"] > day:
+                    continue
+                is_first = w["fresh"] and w["idx"] == 0
+                if is_first and ramp_today is not None and ramp_today <= 0:
+                    continue
+                counts[day.isoformat()] = counts.get(day.isoformat(), 0) + 1
+                cap -= 1
+                if is_first and ramp_today is not None:
+                    ramp_today -= 1
+                w["idx"] += 1
+                if w["idx"] >= len(w["steps"]):
+                    pending -= 1
+                else:
+                    w["next_due"] = day + timedelta(days=int(w["steps"][w["idx"]]["day_offset"]))
+        day = day + timedelta(days=1)
+    return [{"date": d, "count": counts[d]} for d in sorted(counts)]
 
 
 # -- approval ---------------------------------------------------------------------
@@ -597,12 +910,17 @@ def approval_report(store: ContactStore, campaign_id: str) -> dict:
     window = parse_window(campaign.get("send_window"))
     degree_summary = ", ".join(
         f"{samples[d]['cohort_size']} {d}" for d in degrees_in_use if d in samples)
+    snb = campaign.get("start_not_before")
+    schedule_text = f" Starts no earlier than {str(snb)[:10]}." if snb else ""
+    ramp = campaign.get("ramp_per_day")
+    if ramp:
+        schedule_text += f" Ramp: up to {int(ramp)} new contacts/day."
     scope_text = (
         f"Approving sends up to {total_emails} emails to {len(active)} contacts "
         f"({degree_summary}), "
         f"from {campaign['from_address']} (CC {campaign['cc_address']}, "
         f"BCC Zoho CRM dropbox), {window['start']}-{window['end']} "
-        f"{window['tz']} weekdays, max {campaign['daily_cap']}/day. "
+        f"{window['tz']} weekdays, max {campaign['daily_cap']}/day.{schedule_text} "
         "Warm-degree steps are staged as drafts in Dirk's mailbox instead of "
         "auto-sending. Follow-ups stop on reply, bounce, or suppression. "
         "NOTE: until inbound capture runs, replies are detected by the local "
@@ -615,6 +933,7 @@ def approval_report(store: ContactStore, campaign_id: str) -> dict:
         "degrees": degrees_in_use, "samples": samples,
         "total_emails": total_emails, "active_count": len(active),
         "scope_text": scope_text,
+        "projected_schedule": project_schedule(store, campaign_id),
     }
 
 
@@ -651,6 +970,15 @@ def approve_campaign(store: ContactStore, campaign_id: str, user: str,
             key = rs["step"]["template_key"]
             pins[key] = existing.get(key, int(rs["template_version"]))
     store.pin_templates(campaign_id, pins)
+    # Freeze each approved contact's EXACT recipient address. The claim path
+    # refuses to send to an address that drifted from this snapshot, closing
+    # the hole where a post-approval sheet-sync overwrites an email and the
+    # frozen copy would go to an address no human reviewed.
+    recipient_pins = {
+        e["contact_id"]: (e.get("email") or "").strip().lower()
+        for e in report["enrollments"] if (e.get("email") or "").strip()
+    }
+    store.pin_recipients(campaign_id, recipient_pins)
     ids = sorted(e["contact_id"] for e in report["enrollments"])
     contacts_hash = hashlib.sha1("|".join(ids).encode("utf-8")).hexdigest()
     store.update_campaign(campaign_id, {
@@ -701,6 +1029,150 @@ def supersede_approval(store: ContactStore, campaign_id: str, reason: str) -> No
     store.update_campaign(campaign_id, {"status": "draft"}, now)
     store.set_state(f"approval-superseded:{campaign_id}",
                     json.dumps({"at": now, "reason": reason}), now)
+
+
+# -- live sequence editing (delta approval) ----------------------------------------
+
+def _steps_equal(a: dict, b: dict) -> bool:
+    return (a["channel"] == b["channel"]
+            and a["template_key"] == b["template_key"]
+            and int(a["day_offset"]) == int(b["day_offset"]))
+
+
+def sequence_delta_report(store: ContactStore, campaign_id: str, degree: str,
+                          submitted_steps: list[dict]) -> dict:
+    """Plan a live sequence edit that keeps the campaign 'sending' (no demote to
+    draft, no full re-approval).
+
+    ``submitted_steps`` is the desired ordered sequence
+    ([{channel, template_key, day_offset}], no step_no - assigned here). The
+    edit is admissible ONLY in the FUTURE (unsent) region: every step already
+    sent to any enrollment (a frozen step_no, see ``store.frozen_step_nos``)
+    must stay byte-identical and in place, as the leading prefix. Future steps
+    are (re)assigned fresh step_nos ABOVE every attempted step_no, so a new or
+    moved step never collides with a spoken-for send ext_key (which is what
+    part-1's step_no-keyed pointer then reads correctly).
+
+    Returns {ok, frozen_count, new_steps, added, pins, added_pins, name,
+    send_mode, degree, campaign} on success, or {ok: False, errors} when the
+    edit would touch sent history (route the operator to pause -> edit ->
+    re-approve instead)."""
+    campaign = store.get_campaign(campaign_id)
+    if campaign is None:
+        return {"ok": False, "errors": ["unknown campaign"]}
+    if campaign["status"] not in ("approved", "sending", "paused"):
+        return {"ok": False, "errors": [
+            f"campaign is '{campaign['status']}'; a live sequence delta needs an "
+            "approved / sending / paused campaign (edit a draft sequence directly)"]}
+    seq = store.get_sequence(campaign_id, degree)
+    current = seq["steps"] if seq else []  # ORDER BY step_no
+    frozen_set = store.frozen_step_nos(campaign_id, degree)
+    # Frozen steps must be a contiguous LEADING run of the current sequence
+    # (sends advance in step_no order). A gap - e.g. a still-pending LinkedIn
+    # step wedged before a later sent one - is outside the delta's safe
+    # envelope, so refuse and route to the heavier pause -> re-approve path.
+    frozen_prefix: list[dict] = []
+    for s in current:
+        if int(s["step_no"]) in frozen_set:
+            frozen_prefix.append(s)
+        else:
+            break
+    if {int(s["step_no"]) for s in frozen_prefix} != frozen_set:
+        return {"ok": False, "errors": [
+            "already-sent steps are not a contiguous prefix (a mid-sequence step "
+            "is still pending); pause the campaign to edit this sequence"]}
+    k = len(frozen_prefix)
+    if len(submitted_steps) < k:
+        return {"ok": False, "errors": [
+            f"the first {k} step(s) have already been sent and cannot be removed; "
+            "keep them and add or change only later steps (or pause to re-approve)"]}
+    for i in range(k):
+        if not _steps_equal(submitted_steps[i], frozen_prefix[i]):
+            return {"ok": False, "errors": [
+                f"step {i + 1} has already been sent and cannot be changed; keep "
+                "it as-is and edit only later steps (or pause to re-approve)"]}
+
+    frozen_max = max(frozen_set) if frozen_set else 0
+    new_steps: list[dict] = [dict(s) for s in frozen_prefix]
+    for i, s in enumerate(submitted_steps[k:]):
+        new_steps.append({"step_no": frozen_max + 1 + i, "channel": s["channel"],
+                          "template_key": s["template_key"],
+                          "day_offset": int(s["day_offset"]),
+                          "reply_to_prior": int(s.get("reply_to_prior") or 0)})
+    future = new_steps[k:]
+
+    # Validate every future template exists and channel matches (mirror approval).
+    errors: list[str] = []
+    for st in future:
+        tpl = store.get_template(st["template_key"])
+        if tpl is None:
+            errors.append(f"template '{st['template_key']}' does not exist")
+        elif tpl["channel"] != st["channel"]:
+            errors.append(f"template '{st['template_key']}' is {tpl['channel']}, "
+                          f"step is {st['channel']}")
+        if int(st["step_no"]) == 1 and st.get("reply_to_prior"):
+            errors.append("step 1 cannot be a reply: no prior step to reply to")
+    if errors:
+        return {"ok": False, "errors": errors}
+
+    # Re-pin: KEEP every existing campaign pin (other degrees + frozen steps);
+    # pin the latest version for each template_key a FUTURE step uses, so a saved
+    # new version applies to unsent steps and no future step is left unpinned
+    # (the increment-1 unpinned-template guard). A key shared with a frozen step
+    # keeps its frozen pinned version (that copy already went out).
+    existing = store.get_pins(campaign_id)
+    frozen_keys = {s["template_key"] for s in frozen_prefix}
+    pins = dict(existing)
+    added_pins: dict[str, int] = {}
+    for st in future:
+        key = st["template_key"]
+        latest = int(store.get_template(key)["version"])
+        if key in frozen_keys:
+            pins.setdefault(key, latest)
+        else:
+            if pins.get(key) != latest:
+                added_pins[key] = latest
+            pins[key] = latest
+    return {"ok": True, "frozen_count": k, "new_steps": new_steps, "added": future,
+            "pins": pins, "added_pins": added_pins,
+            "name": (seq["name"] if seq else degree),
+            "send_mode": (seq["send_mode"] if seq else "auto-matthias"),
+            "degree": degree, "campaign": dict(campaign)}
+
+
+def apply_sequence_delta(store: ContactStore, campaign_id: str, degree: str,
+                         submitted_steps: list[dict], user: str | None,
+                         now: str | None = None) -> dict:
+    """Apply a validated sequence delta WITHOUT demoting the campaign to draft.
+    Sent steps are preserved (same step_no); future steps are (re)written with
+    fresh step_nos; only changed/new template keys are re-pinned. The campaign
+    KEEPS its status, so a 'sending' wave never stops. Send-safety is intact:
+    recipient pins + contacts hash are untouched, and every step stays pinned."""
+    report = sequence_delta_report(store, campaign_id, degree, submitted_steps)
+    if not report["ok"]:
+        return report
+    now = now or _iso(now_utc())
+    store.upsert_sequence(campaign_id, degree, report["name"],
+                          report["send_mode"], report["new_steps"])
+    store.pin_templates(campaign_id, report["pins"])
+    # Keep the recorded approval pins in sync so the audit record matches what
+    # will render; do NOT touch campaign status (no supersede).
+    marker = store.get_state(f"approval:{campaign_id}")
+    if marker:
+        try:
+            data = json.loads(marker)
+            data["pins"] = report["pins"]
+            store.set_state(f"approval:{campaign_id}", json.dumps(data), now)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    store.set_state(f"sequence-delta:{campaign_id}:{degree}", json.dumps({
+        "at": now, "by": user, "frozen_count": report["frozen_count"],
+        "added": [s["template_key"] for s in report["added"]],
+        "pins_changed": report["added_pins"],
+    }), now)
+    return {"ok": True, "frozen_count": report["frozen_count"],
+            "added": report["added"], "pins": report["pins"],
+            "added_pins": report["added_pins"]}
 
 
 # -- reconcile -----------------------------------------------------------------------

@@ -55,11 +55,28 @@
   </div>
   {% endif %}
 
+  {% set worker_alert = freshness.cloud_worker_alert %}
+  {% if worker_alert or guard_alerts %}
+  <div style="margin-top:12px; padding:10px 14px; border:1px solid var(--red); border-radius:10px; background:var(--red-bg); color:var(--red);">
+    {% if worker_alert %}
+    <div><strong>Worker alert</strong>{% if worker_alert.ts %} ({{ worker_alert.ts[:16] }}){% endif %}:{% for a in worker_alert.alerts or [] %} {{ a }}{% if not loop.last %} &middot;{% endif %}{% endfor %}</div>
+    {% endif %}
+    {% for gcid, ga in guard_alerts.items() %}
+    <div><strong>Send guard</strong> [{{ gcid }}]{% if ga.at %} ({{ ga.at[:16] }}){% endif %}: {{ ga.count or ga.raw or '?' }} send(s) blocked by the pre-send guards. <a href="/campaigns/{{ gcid }}">Review &rarr;</a></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <div class="muted" style="margin-top:12px; font-size:12px; display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center;">
     {% if request.query_params.get('synced') is not none %}<span style="color:var(--green); font-weight:600;">&#10003; Synced {{ request.query_params.get('synced') }} contacts from the sheet.</span>{% endif %}
     {% if v.last_sync_error and (request.query_params.get('sync_error') or not v.last_sync_ok) %}<span style="color:var(--red); font-weight:600;">SYNC FAILED &middot; {{ v.last_sync_error }}</span>{% elif v.last_sync_ok %}<span>Last synced from sheet: {{ v.last_sync_ok[:16] }}</span>{% endif %}
     {% if v.last_sync_diffs %}<span style="color:var(--orange);">{{ v.last_sync_diffs }} contact(s): the sheet's next-step differs from the board (board value kept).</span>{% endif %}
-    <span title="The board reflects the master sheet plus manual grounding. Live mailbox capture (Phase 2) is not running yet, so a stage touched only in Outlook can be stale until the next sheet update.">&#9432; Stage may be stale: no live mail capture yet.</span>
+    {% set fr = freshness %}
+    <span class="badge {% if fr.heartbeat_fresh %}stage-booked{% else %}suppressed{% endif %}" title="Cloud worker heartbeat: capture ticks feed the board from the live mailboxes{% if fr.heartbeat and fr.heartbeat.ts %}; last at {{ fr.heartbeat.ts[:16] }}{% endif %}. Fresh under 2 hours.">capture {{ fr.heartbeat_age }}{% if fr.heartbeat_age != 'never' %} ago{% endif %}</span>
+    {% for mbx, a in fr.capture_watermark_ages.items() %}<span title="Capture watermark for {{ mbx }}: how far back that mailbox has been swept.">{{ mbx.split('@')[0] }} {{ a }}</span>{% endfor %}
+    <span class="badge {% if fr.truth_scan_fresh %}stage-booked{% else %}suppressed{% endif %}" title="Deep truth scan: the daily all-folders reconcile over both mailboxes. Fresh under 2 days.">deep scan {{ fr.truth_scan_age }}{% if fr.truth_scan_age != 'never' %} ago{% endif %}</span>
+    {% if fr.truth_scan %}<span title="Last deep-scan result">{{ (fr.truth_scan.ts or '')[:16] }}:{% for k, v2 in (fr.truth_scan.counts or {}).items() %} {{ k }} {{ v2 }}{% if not loop.last %},{% endif %}{% endfor %}</span>{% endif %}
+    {% if fr.truth_scan_alert %}<span style="color:var(--orange); font-weight:600;">SCAN ALERT &middot; {{ fr.truth_scan_alert.alert or fr.truth_scan_alert }}</span>{% endif %}
   </div>
 
   <div class="stats" style="margin-top:14px;">

@@ -45,6 +45,7 @@ from pathlib import Path
 
 from ..llm.client import ExtractedReceipt, LLMClient
 from ..matching.types import LineItem, Receipt
+from ..vendor_names import clean_vendor_name
 from ._common import ParseIssue
 
 logger = logging.getLogger("expense_recon")
@@ -220,7 +221,9 @@ def _map_and_merge(
     receipt list (input order preserved) plus the readings that mapped to no
     row. Greedy, one-to-one: reference match first, then amount + currency
     with page order breaking ties."""
-    assigned: dict[int, ExtractedReceipt] = {}   # receipt index -> reading
+    # receipt index -> (page index, reading); the page rides along so the
+    # merged receipt can record where its image lives (preview, 2026-07-25).
+    assigned: dict[int, tuple[int, ExtractedReceipt]] = {}
     used: set[int] = set()                        # extraction position used
 
     # Phase A -- reference match. A reading's reference must resolve to exactly
@@ -230,19 +233,19 @@ def _map_and_merge(
         nref = _norm_ref(r.detected_reference)
         if nref:
             ref_to_rows.setdefault(nref, []).append(i)
-    for pos, (_page, ext) in enumerate(extractions):
+    for pos, (page, ext) in enumerate(extractions):
         nref = _norm_ref(ext.reference)
         if not nref:
             continue
         free = [i for i in ref_to_rows.get(nref, []) if i not in assigned]
         if len(free) == 1:
-            assigned[free[0]] = ext
+            assigned[free[0]] = (page, ext)
             used.add(pos)
 
     # Phase B -- amount + currency, page order. Readings are already in page
     # order; each takes the earliest still-free row whose amount (and currency,
     # when both known) agrees. Earliest-free tie-break aligns the two orders.
-    for pos, (_page, ext) in enumerate(extractions):
+    for pos, (page, ext) in enumerate(extractions):
         if pos in used:
             continue
         ext_total = _to_decimal(ext.total)
@@ -257,12 +260,12 @@ def _map_and_merge(
             row_ccy = _norm_ccy(r.detected_currency)
             if ext_ccy and row_ccy and ext_ccy != row_ccy:
                 continue
-            assigned[i] = ext
+            assigned[i] = (page, ext)
             used.add(pos)
             break
 
     enriched = [
-        _merge_receipt(r, assigned[i]) if i in assigned else r
+        _merge_receipt(r, *assigned[i]) if i in assigned else r
         for i, r in enumerate(summary_receipts)
     ]
     unmapped = [
@@ -271,7 +274,14 @@ def _map_and_merge(
     return enriched, unmapped
 
 
-def _merge_receipt(receipt: Receipt, ext: ExtractedReceipt) -> Receipt:
+def render_receipt_page(pdf_path: str | Path, page_index: int) -> bytes | None:
+    """Render ONE page of the report PDF to PNG bytes (per-receipt preview,
+    2026-07-25). None when the page does not exist."""
+    out = _render_pages(Path(pdf_path), [page_index])
+    return out[0][1] if out else None
+
+
+def _merge_receipt(receipt: Receipt, page: int, ext: ExtractedReceipt) -> Receipt:
     """Attach a vision reading to one summary row. The summary keeps ownership
     of amount / currency / date / reference (the matcher's inputs); vision
     contributes the merchant (only when the summary had none) and the line
@@ -292,8 +302,15 @@ def _merge_receipt(receipt: Receipt, ext: ExtractedReceipt) -> Receipt:
     # still runs on the now-known merchant.
     new_items = line_items or receipt.line_items
     # Fill the merchant only when the summary lacked one -- the summary vendor,
-    # when present, is deterministic and stays the backbone.
-    vendor = receipt.detected_vendor or (ext.vendor or None)
+    # when present, is deterministic and stays the backbone. The short brand
+    # follows the effective vendor: when the summary owns it, clean the
+    # summary name; when vision supplied it, prefer the model's own brand.
+    if receipt.detected_vendor:
+        vendor = receipt.detected_vendor
+        vendor_clean = receipt.vendor_clean or clean_vendor_name(receipt.detected_vendor)
+    else:
+        vendor = ext.vendor or None
+        vendor_clean = ext.vendor_clean or clean_vendor_name(ext.vendor)
 
     notes: list[str] = []
     ext_total = _to_decimal(ext.total)
@@ -320,9 +337,11 @@ def _merge_receipt(receipt: Receipt, ext: ExtractedReceipt) -> Receipt:
     return replace(
         receipt,
         detected_vendor=vendor,
+        vendor_clean=vendor_clean,
         line_items=new_items,
         ocr_text=receipt.ocr_text or ext.notes,
         data_quality_note=note or receipt.data_quality_note,
+        receipt_image_page=page,
     )
 
 

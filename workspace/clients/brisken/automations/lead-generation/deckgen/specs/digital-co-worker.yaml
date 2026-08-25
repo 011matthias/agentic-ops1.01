@@ -153,6 +153,6 @@ slides:
   - pattern: platform-context
     patch:
       pc-app-dw: {highlight: true}
-      pc-caption: {set: "The AI Digital Workforce is the AI application inside TreasuryCentral, the shipped edition of OnePilot. Its use cases run in production at chemicals and agricultural customers."}
+      pc-caption: {set: "The Digital Co-Worker is the AI application inside TreasuryCentral, the shipped edition of OnePilot. Its use cases run in production at chemicals and agricultural customers."}
 
   - pattern: contact

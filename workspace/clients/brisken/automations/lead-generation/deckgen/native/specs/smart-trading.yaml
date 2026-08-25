@@ -1,0 +1,123 @@
+# Smart Trading — NEW-generation native deck (11 slides).
+# Copy sources, no invention: [OV] = the approved Overview build (S15 app
+# slide + functional_st, verbatim), [V2] = deckgen/specs/smart-trading.yaml
+# (Dirk-reviewed use-case substance). Stats only as sourced in V2 (ACT /
+# LSEG named in-sentence). No success story is sourced for Smart Trading,
+# so none ships; the sourced stats on the problem slide are its proof layer.
+# Badge on the functional slide is a deliberate family decision (Dirk's
+# certification mark, printed on his own product decks' functional diagrams).
+deck: smart-trading
+output: "NEW - Brisken - Smart Trading 2026-07-23"
+palette: smart-trading
+slides:
+  - type: cover
+    eyebrow: "TreasuryCentral, powered by OnePilot"
+    title: "Smart Trading"
+    sub: "A TreasuryCentral application"
+    tagline: "Every trade, from the decision to the booked deal in SAP."
+
+  - type: short_version
+    head: "One application, in four lines."
+    focal: 2
+    cards:
+      - {label: "What it is", body: "Brisken Smart Trading (BST): every trade, from the decision to the booked deal in SAP. Automated, on your own system, nothing to rebuild."}
+      - {label: "What it replaces", body: "The manual middle: re-keying tickets, chasing approvals, building deal entries by hand."}
+      - {label: "What you get", body: "The trade flows from the venue into SAP Treasury on its own, checked and logged."}
+      - {label: "Who it is for", body: "Teams that trade and book in SAP."}
+    note: "Then the same trade on our clock."
+
+  - type: problem
+    kick: "The problem"
+    head: "You trade. You book in SAP. Today a person joins the two by hand."
+    bands:
+      - {label: "Your trading venues", body: "360T, FXall, Bloomberg, Citi Pulse, BidFX."}
+      - {label: "The manual middle", body: "Re-keying tickets, chasing approvals, building deal entries by hand."}
+      - {label: "Booked in SAP", body: "Treasury, accounting, analytics."}
+    stat: "Manual FX execution: 10 to 15 minutes per trade (The Association of Corporate Treasurers). Spot FX automation across the market is now about 90% (LSEG)."
+
+  - type: hierarchy
+    focal_app: bst
+    footnote: "Brisken Smart Trading (BST) runs as an application inside TreasuryCentral, the shipped edition of OnePilot. OnePilot runs in production across chemicals, food & drink, financial-services, oil & gas, agricultural and commodity treasuries."
+
+  - type: app
+    kick: "Brisken Smart Trading (BST)"
+    head: "Autonomous trading, booked in SAP."
+    gloss: "Autonomous trading means the trade carries itself from the decision to the booked deal, with no manual re-keying."
+    problem:
+      - "You trade on a venue, then you book in SAP."
+      - "Today a person joins the two by hand: re-keying the ticket, chasing the approval, building the deal entry."
+    steps:
+      - "Reads the exposure (the money at risk from currency or price moves) from your SAP positions."
+      - "Sends the request to the venue; approval runs under your own rules."
+      - "Matches the fill that comes back and shapes it for SAP."
+      - "Books the deal in SAP Treasury, checked and logged."
+    freed:
+      - "Re-keying tickets and chasing approvals."
+      - "Building deal entries by hand."
+      - "Manual FX runs 10 to 15 minutes a trade (The Association of Corporate Treasurers)."
+    connects: "CONNECTS TO   360T · FXall · Bloomberg FX GO · Citi Pulse · BidFX  →  SAP Treasury (TRM/FAM), ECC, S/4HANA   ·   any order management (OMS) or treasury management system (TMS)"
+
+  - type: functional
+    kick: "Smart Trading · functional overview"
+    head: "The trade, straight through to SAP."
+    product: "Smart Trading"
+    sources: ["360T, FXall, Bloomberg FX GO", "Citi Pulse, BidFX", "Any OMS or TMS", "Banks & brokers"]
+    dests: ["SAP TRM & FAM", "SAP ECC & S/4HANA", "SAP Analytics Cloud", "Analytics platforms"]
+    note: "The trade flows from the venue into SAP Treasury on its own, checked and logged."
+    badge: true
+
+  - type: usecase
+    kick: "Use case · One FX Trade, End to End"
+    title: "One FX Trade, End to End"
+    gloss: "FX: foreign exchange, trading one currency for another."
+    before: "A dealer agrees an FX trade on the venue. From that moment the trade is not done until someone books it: re-keying the ticket, chasing the approval, building the deal entry in SAP by hand."
+    steps:
+      - "Reads the exposure from your SAP positions."
+      - "Sends the request to the venue: 360T, FXall, Bloomberg FX GO, Citi Pulse or BidFX."
+      - "Runs approval under your own rules."
+      - "Matches the fill that comes back."
+      - "Shapes it for SAP."
+      - "Books the deal in SAP Treasury, checked and logged."
+    checkpoint: "Each step runs on its own or waits for a person; everything is logged."
+    actor: "SMART TRADING"
+
+  - type: usecase
+    kick: "Use case · Derivatives and Securities"
+    title: "Derivatives and Securities"
+    gloss: "A security master: the record a system needs before an instrument can book."
+    before: "A treasury trades more than FX: interest-rate swaps, money-market deposits, bonds and other securities, each with its own booking rules. New instruments stall at master-data setup; a missing security class blocks the booking, and a gap in one record shows up everywhere."
+    steps:
+      - "Validates the security class as the trade flows."
+      - "Creates the master record automatically; no manual setup step."
+      - "Enriches the position for analytics and controls."
+      - "Shows the state of every step on one status monitor."
+    checkpoint: "Full audit trail and four-eye sign-off, built in."
+    actor: "SMART TRADING"
+
+  - type: usecase
+    kick: "Use case · OTC Commodity Swaps"
+    title: "OTC Commodity Swaps"
+    gloss: "OTC: over the counter, a trade agreed directly with a counterparty, not on an exchange."
+    before: "A commodity or energy treasury runs OTC swaps and hedges alongside its physical book. Confirmations arrive from several counterparties in several formats; matching is manual and slow, and a hedge that is not booked on time leaves the exposure open on the books."
+    steps:
+      - "Takes each swap from execution through custodian and counterparty confirmation."
+      - "Reads and matches the confirmations automatically."
+      - "Books the hedge into SAP Treasury against the exposure it offsets."
+      - "Works with any venue and any counterparty; nothing to rebuild when you add one."
+    checkpoint: "Four-eye sign-off; the hedge lines up with the position it offsets."
+    actor: "SMART TRADING"
+
+  - type: governance
+    kick: "Governance"
+    head: "Governed, in plain terms."
+    intro: "The same four controls run under every application, the AI included: it is grounded in SAP, not free-floating, and keeps a human in the loop on the moves that matter. What each control means, and why it matters:"
+    focal: 1
+    cards:
+      - {label: "Audit trail", body: "Every action is logged and can be reviewed later, end to end. Nothing happens off the record."}
+      - {label: "Four-eyes / segregation of duty", body: "The person who enters something is not the one who approves it. A human stays in the loop (HITL) on the moves that matter."}
+      - {label: "Anomaly alerts", body: "The system flags what looks wrong before it posts, not after, so a bad value is caught on the way in."}
+      - {label: "Manage by exception", body: "People only touch the cases that need judgment. The rest just runs, and you hear about the odd one out."}
+    footline: "AI grounded in SAP, with a human in the loop.    ·    Certified to ISO 27001 and SOC 1 Type II."
+
+  - type: contact
+    head: "Let's book your first trade, hands off."

@@ -12,17 +12,24 @@ Routes (cookie gate):
     POST /contacts/{id}/suppress  do-not-contact toggle
     POST /contacts/{id}/fields    BANT / demo / verdict / next-step update
     GET  /export.csv /export.xlsx regenerate the master sheet from the db
+    GET  /sheet                   all-contacts sheet view (?sort=&dir=)
+    GET  /sheet.csv /sheet.xlsx   aliases of /export.csv /export.xlsx
+    GET  /unmatched               unmatched capture events, grouped by email
+    POST /unmatched/link          replay a group onto an existing contact
+    POST /unmatched/dismiss       close a group with a reason (required)
     GET  /campaigns               campaign list + create
     GET  /campaigns/{cid}         campaign admin (upload, rules, sequences, approval)
     POST /campaigns/{cid}/...     upload / rules / reclassify / sequences / approve / pause / resume
     POST /templates               save a template (new version)
     POST /enrollments/{eid}/...   degree override / remove / manual step done
     POST /attempts/retry          re-queue a stalled/parked send (human decision)
+    POST /attempts/send-fresh     re-queue a parked reply step as a fresh send
     POST /worker/kill             global kill switch toggle
 
 Machine APIs (own bearer secrets, outside the cookie gate):
 
     POST /events                  event sink for capture workers (ingest secret)
+    GET  /api/events              read slice of the event log (ingest secret or session)
     GET  /api/worker/status       kill switch + per-campaign window/cap state (worker secret)
     POST /api/outbox/claim        lease due sends, rendered with pinned copy
     POST /api/outbox/result       ack/nack a leased send (emits the 'sent' event)
@@ -34,6 +41,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
@@ -42,16 +50,33 @@ from fastapi.responses import (
 )
 from fastapi.templating import Jinja2Templates
 
-from . import auth, cadence, uploads
+from . import accounts, auth, cadence, uploads
 from .service import (
     EDITABLE_FLAGS, EDITABLE_TEXT, StaleWriteError, apply_fields, build_board,
-    build_contact_view, create_contact, ingest_event, log_touch, now_iso,
+    build_contact_view, build_sheet, build_unmatched_groups, create_contact,
+    ingest_event, link_unmatched, log_touch, now_iso, sort_sheet,
     toggle_suppress,
 )
 from .store import (
-    CHANNELS, DEGREES, DIRECTIONS, EVENT_TYPES, SEND_MODES, ContactStore,
+    CHANNELS, DEGREES, DIRECTIONS, EVENT_TYPES, SEND_MODES, USER_ROLES,
+    ContactStore,
 )
+from ..freshness import freshness_report, guard_alerts
 from ..sync import have_creds, run_all, run_sync
+
+# Login-page banners, keyed by ?notice= / ?err= so a POST can 303-redirect
+# (no form re-submit on refresh) and the GET renders the message.
+_LOGIN_NOTICES = {
+    "sent": "Check your email. We just sent you a one-time sign-in link.",
+    "pending": "Your access request is with an admin. We'll email you once it's approved.",
+}
+_LOGIN_ERRORS = {
+    "throttled": "Too many attempts. Wait a few minutes and try again.",
+    "badlink": "That sign-in link is invalid, expired, or already used. Request a new one below.",
+    "invalidemail": "Enter a valid email address.",
+    "nomailer": "Email sign-in is temporarily unavailable. Please contact an admin.",
+    "sendfail": "We couldn't send the email just now. Please try again in a moment.",
+}
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 # Packaged brand assets (design tokens, Brisken logos, favicon). Served
@@ -132,8 +157,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # Auto-inject the session CSRF token into every template render.
         return {"csrf_token": auth.csrf_for_cookie(request.cookies.get(auth.COOKIE_NAME))}
 
+    def _nav_context(request: Request) -> dict:
+        # Expose is_admin so base.html can show the admin nav link only to
+        # admins. Fail-closed: any lookup error hides the link, never 500s.
+        ident = auth.read_user(request.cookies.get(auth.COOKIE_NAME))
+        if not ident and not auth.gate_enabled():
+            ident = "local"
+        admin = False
+        if ident:
+            try:
+                with ContactStore(db_path) as store:
+                    admin = accounts.is_admin(store, ident)
+            except Exception:  # noqa: BLE001 - a nav flag must never break a render
+                admin = False
+        return {"is_admin": admin}
+
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR),
-                                context_processors=[_csrf_context])
+                                context_processors=[_csrf_context, _nav_context])
     app.add_middleware(_CSRFMiddleware)
 
     def open_store() -> ContactStore:
@@ -168,34 +208,60 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return resp
 
     @app.get("/login", response_class=HTMLResponse)
-    def login_form(request: Request):
+    def login_form(request: Request, notice: str = "", err: str = ""):
         if not auth.gate_enabled():
             return RedirectResponse(url="/", status_code=303)
-        return templates.TemplateResponse(request, "login.html", {"error": None})
+        return templates.TemplateResponse(request, "login.html", {
+            "error": _LOGIN_ERRORS.get(err),
+            "notice": _LOGIN_NOTICES.get(notice),
+            "auth_email_on": accounts.auth_emails_enabled(),
+        })
 
-    @app.post("/login")
-    def login_submit(request: Request, code: str = Form("")):
+    def _client_ip(request: Request) -> str:
+        # Fly puts the real client IP in Fly-Client-IP; request.client.host is
+        # the fly-proxy, so keying a throttle on it would rate-limit everyone.
+        return request.headers.get("fly-client-ip") or (
+            request.client.host if request.client else "unknown")
+
+    @app.post("/login/magic")
+    def login_magic(request: Request, email: str = Form("")):
+        """Passwordless: email in -> single-use link out (approved), or an
+        access request recorded (new). Never reveals a password; rate-limited
+        per client IP so it cannot be used to spam an inbox."""
         if not auth.gate_enabled():
             return RedirectResponse(url="/", status_code=303)
-        # Fly puts the real client IP in Fly-Client-IP; request.client.host is
-        # the fly-proxy, so keying the throttle on it would rate-limit everyone.
-        ip = request.headers.get("fly-client-ip") or (
-            request.client.host if request.client else "unknown")
-        if auth.login_blocked(ip):
-            return templates.TemplateResponse(
-                request, "login.html",
-                {"error": "Too many attempts. Wait a few minutes and try again."},
-                status_code=429)
-        user = auth.resolve_user(code)
-        if not user:
-            auth.record_login_fail(ip)
-            return templates.TemplateResponse(
-                request, "login.html", {"error": "Wrong access code."}, status_code=401
-            )
-        auth.record_login_success(ip)
+        ip = _client_ip(request)
+        if auth.magic_blocked(ip):
+            return RedirectResponse(url="/login?err=throttled", status_code=303)
+        auth.record_magic_request(ip)
+        with open_store() as store:
+            result = accounts.request_magic_link(
+                store, email, base_url=accounts.base_url_from(request),
+                ip=ip, now=now_iso())
+        # Map the outcome to a neutral banner. pending / disabled / new all read
+        # as "with an admin" so the page never discloses account state.
+        target = {
+            "sent": "/login?notice=sent",
+            "pending_new": "/login?notice=pending",
+            "pending": "/login?notice=pending",
+            "disabled": "/login?notice=pending",
+            "invalid": "/login?err=invalidemail",
+            "no_mailer": "/login?err=nomailer",
+            "send_failed": "/login?err=sendfail",
+        }.get(result["status"], "/login?notice=sent")
+        return RedirectResponse(url=target, status_code=303)
+
+    @app.get("/auth/verify")
+    def auth_verify(request: Request, token: str = ""):
+        if not auth.gate_enabled():
+            return RedirectResponse(url="/", status_code=303)
+        with open_store() as store:
+            email = accounts.verify_and_login(store, token, now_iso())
+        if not email:
+            return RedirectResponse(url="/login?err=badlink", status_code=303)
         resp = RedirectResponse(url="/", status_code=303)
         resp.set_cookie(
-            auth.COOKIE_NAME, auth.issue_token(user),
+            auth.COOKIE_NAME, auth.issue_token(email),
             max_age=auth.SESSION_MAX_AGE, httponly=True,
             secure=auth.cookie_is_secure(), samesite="lax",
         )
@@ -206,6 +272,76 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         resp = RedirectResponse(url="/login", status_code=303)
         resp.delete_cookie(auth.COOKIE_NAME)
         return resp
+
+    # --- admin: user management (gated + admin-only) --------------------
+    # These paths are NOT in OPEN_PATHS, so require_login already blocks the
+    # unauthenticated; every handler then re-checks admin (deny by default).
+
+    @app.get("/admin/users", response_class=HTMLResponse)
+    def admin_users(request: Request):
+        with open_store() as store:
+            if not accounts.is_admin(store, current_user(request)):
+                return HTMLResponse("Forbidden", status_code=403)
+            users = [dict(u) for u in store.list_users()]
+        return templates.TemplateResponse(request, "admin_users.html", {
+            "users": users, "user": current_user(request),
+            "roles": USER_ROLES,
+            "auth_email_on": accounts.auth_emails_enabled(),
+        })
+
+    @app.post("/admin/users/approve")
+    def admin_user_approve(request: Request, email: str = Form(...)):
+        with open_store() as store:
+            if not accounts.is_admin(store, current_user(request)):
+                return HTMLResponse("Forbidden", status_code=403)
+            accounts.approve_user(store, email, by=current_user(request),
+                                  now=now_iso(),
+                                  base_url=accounts.base_url_from(request))
+        return RedirectResponse(url="/admin/users", status_code=303)
+
+    @app.post("/admin/users/disable")
+    def admin_user_disable(request: Request, email: str = Form(...)):
+        with open_store() as store:
+            if not accounts.is_admin(store, current_user(request)):
+                return HTMLResponse("Forbidden", status_code=403)
+            u = store.get_user(email)
+            # Never disable the last approved admin - that would lock everyone
+            # out of the admin surface.
+            if (u and u["role"] == "admin" and u["status"] == "approved"
+                    and store.count_admins() <= 1):
+                return HTMLResponse("Cannot disable the last admin.", status_code=400)
+            store.set_user_status(auth.normalize_email(email), "disabled",
+                                  current_user(request), now_iso())
+        return RedirectResponse(url="/admin/users", status_code=303)
+
+    @app.post("/admin/users/role")
+    def admin_user_role(request: Request, email: str = Form(...),
+                        role: str = Form(...)):
+        role = role.strip().lower()
+        if role not in USER_ROLES:
+            return HTMLResponse("bad role", status_code=400)
+        with open_store() as store:
+            if not accounts.is_admin(store, current_user(request)):
+                return HTMLResponse("Forbidden", status_code=403)
+            email_n = auth.normalize_email(email)
+            u = store.get_user(email_n)
+            if (u and u["role"] == "admin" and role == "member"
+                    and store.count_admins() <= 1):
+                return HTMLResponse("Cannot demote the last admin.", status_code=400)
+            store.set_user_role(email_n, role)
+        return RedirectResponse(url="/admin/users", status_code=303)
+
+    @app.post("/admin/users/invite")
+    def admin_user_invite(request: Request, email: str = Form(...),
+                          name: str = Form(""), role: str = Form("member")):
+        with open_store() as store:
+            if not accounts.is_admin(store, current_user(request)):
+                return HTMLResponse("Forbidden", status_code=403)
+            accounts.invite_user(store, email, name=name,
+                                 role=role.strip().lower(), by=current_user(request),
+                                 now=now_iso(),
+                                 base_url=accounts.base_url_from(request))
+        return RedirectResponse(url="/admin/users", status_code=303)
 
     @app.get("/healthz")
     def healthz():
@@ -240,8 +376,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 first = store.list_campaigns()
                 cid = first[0]["campaign_id"] if first else "rome-2026"
             view = build_board(store, filters, campaign=cid)
+            fresh = freshness_report(store, data_root_path)
+            guards = guard_alerts(store)
         return templates.TemplateResponse(
-            request, "board.html", {"view": view, "user": current_user(request)}
+            request, "board.html",
+            {"view": view, "freshness": fresh, "guard_alerts": guards,
+             "user": current_user(request)}
         )
 
     @app.get("/contacts/{contact_id}", response_class=HTMLResponse)
@@ -379,6 +519,93 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             headers={"Content-Disposition": "attachment; filename=lead-desk-rome-2026.xlsx"},
         )
 
+    # --- sheet view -------------------------------------------------------
+    @app.get("/sheet", response_class=HTMLResponse)
+    def sheet(request: Request, sort: str = "", dir: str = ""):
+        """The all-contacts sheet: every contact of every campaign, suppressed
+        included (muted), sortable per column. Completeness beats prettiness -
+        this replaces the frozen SharePoint status columns."""
+        desc = dir.strip().lower() == "desc"
+        with open_store() as store:
+            rows = sort_sheet(build_sheet(store), sort.strip(), desc)
+        return templates.TemplateResponse(
+            request, "sheet.html",
+            {"rows": rows, "sort": sort.strip(), "desc": desc,
+             "user": current_user(request)},
+        )
+
+    # Aliases: the extended export column set covers the sheet view, so these
+    # reuse the one exporter rather than growing a second one.
+    @app.get("/sheet.csv")
+    def sheet_csv():
+        return export_csv()
+
+    @app.get("/sheet.xlsx")
+    def sheet_xlsx():
+        return export_xlsx()
+
+    # --- unmatched capture review ----------------------------------------
+    @app.get("/unmatched", response_class=HTMLResponse)
+    def unmatched_page(request: Request):
+        with open_store() as store:
+            groups = build_unmatched_groups(store)
+            contacts = [dict(r) for r in store.conn.execute(
+                "SELECT contact_id, first_name, last_name, company, email "
+                "FROM contacts WHERE merged_into IS NULL "
+                "ORDER BY company, last_name").fetchall()]
+        return templates.TemplateResponse(
+            request, "unmatched.html",
+            {"groups": groups, "contacts": contacts,
+             "user": current_user(request)},
+        )
+
+    @app.post("/unmatched/link")
+    def unmatched_link(request: Request, email: str = Form(...),
+                       contact_id: str = Form(...),
+                       set_alt_email: str = Form("")):
+        """Link EVERY open unmatched row for this address onto one EXISTING
+        contact (each parked payload replays through the sink pinned to that
+        contact), optionally recording the address as the contact's alt_email
+        so the next capture matches on its own. Never creates a contact."""
+        contact_id = contact_id.strip()
+        addr = email.strip().lower()
+        with open_store() as store:
+            if store.get_contact(contact_id) is None:
+                return HTMLResponse("Contact not found", status_code=404)
+            if set_alt_email.strip() in ("1", "true", "on"):
+                apply_fields(store, contact_id, {"alt_email": addr},
+                             current_user(request))
+            linked = 0
+            for row in store.list_unmatched("open"):
+                if (row["email"] or "").strip().lower() != addr:
+                    continue
+                res = link_unmatched(store, row["id"], contact_id,
+                                     current_user(request), now_iso())
+                if res.get("ok"):
+                    linked += 1
+        return RedirectResponse(url=f"/unmatched?linked={linked}",
+                                status_code=303)
+
+    @app.post("/unmatched/dismiss")
+    def unmatched_dismiss(request: Request, email: str = Form(...),
+                          reason: str = Form("")):
+        """Dismiss every open unmatched row for this address. A reason is
+        required: the queue keeps WHY (resolved_by carries it)."""
+        if not reason.strip():
+            return HTMLResponse("A dismiss reason is required.", status_code=400)
+        addr = email.strip().lower()
+        with open_store() as store:
+            dismissed = 0
+            for row in store.list_unmatched("open"):
+                if (row["email"] or "").strip().lower() != addr:
+                    continue
+                store.resolve_unmatched(row["id"], None, current_user(request),
+                                        now_iso(),
+                                        dismiss_reason=reason.strip())
+                dismissed += 1
+        return RedirectResponse(url=f"/unmatched?dismissed={dismissed}",
+                                status_code=303)
+
     # --- campaigns --------------------------------------------------------
     def _campaign_or_404(store: ContactStore, cid: str):
         row = store.get_campaign(cid)
@@ -396,9 +623,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     (c["campaign_id"],),
                 ).fetchone()[0]
             kill = (store.get_state("kill_switch") or "0") == "1"
+            mailbox_cap = int(store.get_state("mailbox_daily_cap") or 0)
         return templates.TemplateResponse(
             request, "campaigns.html",
-            {"campaigns": rows, "kill_switch": kill, "user": current_user(request)},
+            {"campaigns": rows, "kill_switch": kill, "mailbox_cap": mailbox_cap,
+             "user": current_user(request)},
         )
 
     @app.post("/campaigns")
@@ -428,11 +657,30 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             attempts = [dict(a) for a in store.attempts_for_campaign(cid)]
             pins = store.get_pins(cid)
             kill_switch = (store.get_state("kill_switch") or "0") == "1"
+            guard_alert = guard_alerts(store).get(cid)
+            # Staged draft-dirk wave: only pay the enumeration when something
+            # is actually staged (visibility only; no release action exists).
+            wave = (cadence.enumerate_wave(store, cid)
+                    if any(a["status"] == "drafted" and a["entry_id"]
+                           for a in attempts) else None)
+            # Engine telemetry card: worker liveness (freshness helpers, same
+            # thresholds as the board strip) + outbox aggregates + capture-
+            # grounded inbound. All indexed reads; no migration.
+            today = cadence._campaign_today(campaign, cadence.now_utc()).isoformat()
+            engine = {
+                "freshness": freshness_report(store, data_root_path),
+                "attempts": store.attempt_status_counts(cid),
+                "sends_today": store.cadence_sends_today(cid, today),
+                "first_steps_today": store.first_step_sends_today(cid, today),
+                "inbound": store.campaign_inbound_counts(
+                    cid, campaign.get("approved_at")),
+            }
         return templates.TemplateResponse(
             request, "campaign.html",
             {"campaign": campaign, "report": report, "rules": rules,
              "sequences": sequences, "templates_": all_templates,
              "enrollments": enrollments, "attempts": attempts, "pins": pins,
+             "wave": wave, "guard_alert": guard_alert, "engine": engine,
              "degrees": DEGREES, "send_modes": SEND_MODES,
              "kill_switch": kill_switch,
              "user": current_user(request)},
@@ -477,37 +725,127 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             cadence.classify_enrollments(store, cid, current_user(request), now_iso())
         return RedirectResponse(url=f"/campaigns/{cid}", status_code=303)
 
+    def _parse_step_line(i: int, raw: str) -> dict | HTMLResponse:
+        """One sequence-form step line: 'channel template_key day_offset
+        [reply]'. The optional literal 'reply' token flags the step as an
+        in-thread reply to the prior step (wire subject RE: <prior subject>)."""
+        parts = raw.split()
+        if len(parts) not in (3, 4) or parts[0] not in ("email", "linkedin"):
+            return HTMLResponse(
+                f"bad step line {i + 1!r}: want 'channel template_key day_offset [reply]'",
+                status_code=400)
+        try:
+            off = int(parts[2])
+        except ValueError:
+            return HTMLResponse(f"bad day_offset on line {i + 1}", status_code=400)
+        reply = 0
+        if len(parts) == 4:
+            if parts[3].lower() != "reply":
+                return HTMLResponse(
+                    f"bad step line {i + 1}: 4th token must be 'reply'",
+                    status_code=400)
+            reply = 1
+        return {"channel": parts[0], "template_key": parts[1],
+                "day_offset": off, "reply_to_prior": reply}
+
     @app.post("/campaigns/{cid}/sequences")
     def campaign_sequences(request: Request, cid: str, degree: str = Form(...),
                            name: str = Form(""), send_mode: str = Form("auto-matthias"),
                            steps: str = Form("")):
-        """Steps: one per line, 'channel template_key day_offset'."""
+        """Steps: one per line, 'channel template_key day_offset [reply]'."""
         parsed = []
         for i, raw in enumerate(s for s in steps.splitlines() if s.strip()):
-            parts = raw.split()
-            if len(parts) != 3 or parts[0] not in ("email", "linkedin"):
-                return HTMLResponse(
-                    f"bad step line {i + 1!r}: want 'channel template_key day_offset'",
-                    status_code=400)
-            try:
-                off = int(parts[2])
-            except ValueError:
-                return HTMLResponse(f"bad day_offset on line {i + 1}", status_code=400)
-            parsed.append({"step_no": i + 1, "channel": parts[0],
-                           "template_key": parts[1], "day_offset": off})
+            step = _parse_step_line(i, raw)
+            if isinstance(step, HTMLResponse):
+                return step
+            parsed.append({**step, "step_no": i + 1})
         if send_mode not in SEND_MODES:
             return HTMLResponse("bad send_mode", status_code=400)
         with open_store() as store:
             if store.get_campaign(cid) is None:
                 return HTMLResponse("Campaign not found", status_code=404)
             if parsed:
-                store.upsert_sequence(cid, degree.strip(), name.strip() or degree,
-                                      send_mode, parsed)
+                try:
+                    store.upsert_sequence(cid, degree.strip(), name.strip() or degree,
+                                          send_mode, parsed)
+                except ValueError as exc:  # reply flag on step 1
+                    return HTMLResponse(str(exc), status_code=400)
             else:
                 store.delete_sequence(cid, degree.strip())
             # Structure changed: a frozen approval no longer matches reality.
             cadence.supersede_approval(store, cid, f"sequence '{degree}' edited")
         return RedirectResponse(url=f"/campaigns/{cid}", status_code=303)
+
+    @app.post("/campaigns/{cid}/sequences/{degree}/delta")
+    def campaign_sequence_delta(request: Request, cid: str, degree: str,
+                                steps: str = Form("")):
+        """Live sequence edit: append / insert / swap FUTURE steps on an
+        approved-or-sending campaign WITHOUT demoting it to draft. Already-sent
+        steps are immutable; the delta refuses any change to them (the operator
+        pauses and re-approves for that). Steps: one per line,
+        'channel template_key day_offset [reply]'."""
+        parsed = []
+        for i, raw in enumerate(s for s in steps.splitlines() if s.strip()):
+            step = _parse_step_line(i, raw)
+            if isinstance(step, HTMLResponse):
+                return step
+            parsed.append(step)
+        with open_store() as store:
+            if store.get_campaign(cid) is None:
+                return HTMLResponse("Campaign not found", status_code=404)
+            result = cadence.apply_sequence_delta(store, cid, degree.strip(),
+                                                  parsed, current_user(request))
+            store.set_state(f"delta-result:{cid}", json.dumps(result), now_iso())
+        return RedirectResponse(url=f"/campaigns/{cid}", status_code=303)
+
+    @app.post("/campaigns/{cid}/schedule")
+    def campaign_schedule(request: Request, cid: str,
+                          start_not_before: str = Form(""),
+                          ramp_per_day: str = Form("")):
+        """Set (or clear) the 'no earlier than' start date and the per-day new
+        contact ramp. A pacing change alters neither copy nor recipient list, so
+        it does NOT supersede an approval; it only shifts when steps become due."""
+        raw = start_not_before.strip()
+        if raw:
+            try:
+                date.fromisoformat(raw)
+            except ValueError:
+                return HTMLResponse("start_not_before must be YYYY-MM-DD",
+                                    status_code=400)
+        ramp_raw = ramp_per_day.strip()
+        ramp_val = None
+        if ramp_raw:
+            try:
+                ramp_val = int(ramp_raw)
+            except ValueError:
+                return HTMLResponse("ramp_per_day must be a whole number",
+                                    status_code=400)
+            if ramp_val < 0:
+                return HTMLResponse("ramp_per_day must be >= 0", status_code=400)
+        with open_store() as store:
+            if store.get_campaign(cid) is None:
+                return HTMLResponse("Campaign not found", status_code=404)
+            store.update_campaign(cid, {"start_not_before": raw or None,
+                                        "ramp_per_day": ramp_val}, now_iso())
+        return RedirectResponse(url=f"/campaigns/{cid}?scheduled=1", status_code=303)
+
+    @app.post("/settings/mailbox-cap")
+    def settings_mailbox_cap(request: Request, mailbox_daily_cap: str = Form("")):
+        """Global per-mailbox daily send cap across ALL campaigns from one warm
+        mailbox (0 or blank = off)."""
+        raw = mailbox_daily_cap.strip()
+        val = 0
+        if raw:
+            try:
+                val = int(raw)
+            except ValueError:
+                return HTMLResponse("mailbox_daily_cap must be a whole number",
+                                    status_code=400)
+            if val < 0:
+                return HTMLResponse("mailbox_daily_cap must be >= 0", status_code=400)
+        with open_store() as store:
+            store.set_state("mailbox_daily_cap", str(val), now_iso())
+        return RedirectResponse(url="/campaigns?mbxcap=1", status_code=303)
 
     @app.post("/templates")
     def template_save(request: Request, template_key: str = Form(...),
@@ -645,6 +983,26 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # without this. An operator-initiated retry is a fresh start.
             store.update_attempt(attempt_key.strip(), {
                 "status": "queued", "failure_reason": None, "attempt_count": 0,
+            })
+        target = f"/campaigns/{campaign}" if campaign.strip() else "/"
+        return RedirectResponse(url=target, status_code=303)
+
+    @app.post("/attempts/send-fresh")
+    def attempt_send_fresh(request: Request, attempt_key: str = Form(...),
+                           campaign: str = Form("")):
+        """Operator escape hatch for a parked reply step whose thread anchor
+        is unrecoverable: re-queue it with force_fresh so the claim drops the
+        reply-to-thread flag and sends it as a plain fresh mail. Same requeue
+        mechanics as /attempts/retry."""
+        with open_store() as store:
+            attempt = store.get_attempt(attempt_key.strip())
+            if attempt is None:
+                return HTMLResponse("Attempt not found", status_code=404)
+            if attempt["status"] not in ("stalled", "parked", "failed"):
+                return HTMLResponse("Not retryable", status_code=400)
+            store.update_attempt(attempt_key.strip(), {
+                "status": "queued", "failure_reason": None, "attempt_count": 0,
+                "force_fresh": 1,
             })
         target = f"/campaigns/{campaign}" if campaign.strip() else "/"
         return RedirectResponse(url=target, status_code=303)
@@ -810,6 +1168,33 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         inserted = sum(1 for r in results if r.get("inserted"))
         return JSONResponse({"ok": True, "inserted": inserted, "results": results})
 
+    # --- event log read API (capture-adequacy audits, tooling) ----------
+    @app.get("/api/events")
+    def api_events(request: Request, since: str = "", campaign: str = "",
+                   contact_id: str = "", ext_key: str = "",
+                   direction: str = "", type: str = "",
+                   limit: int = 200, offset: int = 0):
+        """Filtered read slice of ``outreach_events``. Self-guards like
+        /sync: a logged-in session (the browser) or the ingest bearer (the
+        machine callers that already hold the capture secret)."""
+        authed = bool(auth.read_user(request.cookies.get(auth.COOKIE_NAME))) \
+            or auth.ingest_authorized(request.headers.get("authorization"))
+        if auth.gate_enabled() and not authed:
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        limit = max(1, min(limit, 1000))
+        offset = max(0, offset)
+        with open_store() as store:
+            rows, total = store.query_events(
+                since=since.strip() or None,
+                campaign=campaign.strip() or None,
+                contact_id=contact_id.strip() or None,
+                ext_key=ext_key.strip() or None,
+                direction=direction.strip() or None,
+                type=type.strip() or None,
+                limit=limit, offset=offset)
+        return JSONResponse({"events": [dict(r) for r in rows],
+                             "total": total})
+
     # --- sheet sync (Graph app-only, sheet -> DB) -----------------------
     @app.post("/sync")
     async def post_sync(request: Request, campaign: str = ""):
@@ -900,6 +1285,46 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         pass
                     # Retry in MINUTES (exponential, capped at 1h), not after the
                     # full daily interval, so a transient Graph 503 recovers fast.
+                    sleep_for = min(backoff, interval)
+                    backoff = min(backoff * 2, 3600)
+                await asyncio.sleep(sleep_for)
+
+        asyncio.create_task(_loop())
+
+    # --- deep truth reconcile scheduler (read-only Graph; no sends) -------
+    @app.on_event("startup")
+    async def _start_truth_scan_scheduler():
+        import asyncio
+        if os.environ.get("LEAD_DESK_TRUTH_SCAN_DISABLED"):
+            return
+        if not have_creds():
+            print("[truth-scan] Graph credentials absent; scheduler disabled")
+            return
+        interval = int(os.environ.get("LEAD_DESK_TRUTH_SCAN_INTERVAL", "86400"))
+        if interval <= 0:
+            print("[truth-scan] interval <= 0; scheduler disabled")
+            return
+
+        async def _loop():
+            from ..graph_mail import GraphMailer
+            from ..truth_scan import run_scan
+
+            def _pass():
+                # Fresh mailer per pass: the app-only token expires ~1h.
+                with open_store() as store:
+                    return run_scan(store, GraphMailer())
+
+            backoff = 60
+            while True:
+                try:
+                    rep = await asyncio.to_thread(_pass)
+                    print(f"[truth-scan] pass ok: "
+                          f"{rep.get('folders_scanned')} folder(s) scanned, "
+                          f"+{rep.get('inserted')} event(s), "
+                          f"{len(rep.get('folders_failed') or [])} failed")
+                    sleep_for, backoff = interval, 60
+                except Exception as exc:  # noqa: BLE001 - the loop must survive
+                    print(f"[truth-scan] pass failed: {exc}")
                     sleep_for = min(backoff, interval)
                     backoff = min(backoff * 2, 3600)
                 await asyncio.sleep(sleep_for)

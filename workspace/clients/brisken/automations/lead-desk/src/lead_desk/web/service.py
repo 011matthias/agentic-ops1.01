@@ -6,9 +6,10 @@ the only I/O dependency.
 """
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timezone
 
-from .store import CADENCE_PREFIX, STAGES, ContactStore
+from .store import CADENCE_PREFIX, STAGES, ContactStore, event_hash
 
 # A reply we have not answered in this many days is an "aging hot reply".
 AGING_DAYS = 3
@@ -248,7 +249,8 @@ def _attach_cadence(store: ContactStore, rows: list[dict], campaign_row) -> None
         steps = seq["steps"] if seq else []
         st = cadence.enrollment_state(
             {"approved_at": r.get("enrollment_approved_at")},
-            {"steps_done": r.get("steps_done"), "last_step_ts": r.get("last_step_ts"),
+            {"steps_done": r.get("steps_done"), "sent_steps": r.get("sent_steps"),
+             "last_step_ts": r.get("last_step_ts"),
              "replied": r.get("cadence_replied"), "bounced": r.get("cadence_bounced")},
             steps, r, cdict,
         )
@@ -466,6 +468,31 @@ def build_board(store: ContactStore, filters: dict | None = None,
     }
 
 
+def event_evidence(detail: str | None) -> dict | None:
+    """Structured evidence chips for a timeline row. Rich capture writers can
+    store the event detail as a JSON object carrying provenance (mailbox
+    folder path, cohort, internetMessageId); most events carry free text.
+    Parse defensively: anything that is not a JSON object with at least one
+    known key renders as plain text."""
+    if not detail:
+        return None
+    text = detail.strip()
+    if not text.startswith("{"):
+        return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    evidence = {
+        "folder": data.get("folder") or data.get("folder_path"),
+        "cohort": data.get("cohort"),
+        "imid": data.get("imid") or data.get("internet_message_id"),
+    }
+    return evidence if any(evidence.values()) else None
+
+
 def build_contact_view(store: ContactStore, contact_id: str) -> dict | None:
     row = store.get_contact(contact_id)
     if row is None:
@@ -481,6 +508,8 @@ def build_contact_view(store: ContactStore, contact_id: str) -> dict | None:
     contact["recommended"] = recommended_action(
         {**contact, **enriched}, datetime.now(timezone.utc).date())
     events = [_row(e) for e in store.get_events(contact_id)]
+    for e in events:
+        e["evidence"] = event_evidence(e.get("detail"))
 
     # Cadence card: one entry per campaign this contact is enrolled in.
     from . import cadence
@@ -531,6 +560,77 @@ def build_contact_view(store: ContactStore, contact_id: str) -> dict | None:
         "phases": outreach_phases(events),
         "merge_candidates": merge_candidates,
     }
+
+
+# -- sheet view --------------------------------------------------------------
+
+# Sortable /sheet columns. Anything else keeps the default company/name sort.
+SHEET_SORT_KEYS = ("name", "company", "email", "tier", "campaign", "stage",
+                   "outreach_status", "last_out", "last_in", "suppressed",
+                   "next_step_due")
+
+
+def build_sheet(store: ContactStore) -> list[dict]:
+    """Every contact of every campaign, suppressed included, with the derived
+    stage/status + activity attached: the full-completeness sheet view that
+    replaces the frozen SharePoint status columns."""
+    campaigns = [c["campaign_id"] for c in store.list_campaigns()] or ["rome-2026"]
+    rows: list[dict] = []
+    for camp in campaigns:
+        for r in store.board_rows(camp):
+            d = dict(r)
+            d["status"] = status_label(d)
+            rows.append(d)
+    return rows
+
+
+def sort_sheet(rows: list[dict], sort: str, desc: bool) -> list[dict]:
+    """Order sheet rows by one SHEET_SORT_KEYS column (empty values last on
+    an ascending sort). Rows are pre-ordered company/name so ties stay in the
+    board's familiar order (Python's sort is stable)."""
+    rows = sorted(rows, key=lambda r: ((r.get("company") or "").lower(),
+                                       (r.get("last_name") or "").lower()))
+    if sort not in SHEET_SORT_KEYS:
+        return rows
+    if sort == "name":
+        def key(r):
+            return ((r.get("last_name") or "").lower(),
+                    (r.get("first_name") or "").lower())
+    else:
+        def key(r):
+            v = r.get(sort)
+            return (v is None or v == "", str(v).lower() if v is not None else "")
+    return sorted(rows, key=key, reverse=desc)
+
+
+# -- unmatched capture queue -------------------------------------------------
+
+def build_unmatched_groups(store: ContactStore) -> list[dict]:
+    """Open unmatched capture events grouped by email, busiest address first.
+    The newest row's payload supplies the subject/direction preview; payloads
+    are JSON the sink wrote, parsed defensively anyway."""
+    groups: dict[str, dict] = {}
+    for r in store.list_unmatched("open"):     # ordered last_seen DESC
+        addr = r["email"]
+        g = groups.get(addr)
+        if g is None:
+            try:
+                payload = json.loads(r["payload"])
+            except (TypeError, json.JSONDecodeError):
+                payload = {}
+            if not isinstance(payload, dict):
+                payload = {}
+            groups[addr] = g = {
+                "email": addr, "ids": [], "seen_count": 0,
+                "first_seen": r["first_seen"], "last_seen": r["last_seen"],
+                "subject": payload.get("subject"),
+                "direction": payload.get("direction"),
+            }
+        g["ids"].append(r["id"])
+        g["seen_count"] += r["seen_count"]
+        g["first_seen"] = min(g["first_seen"], r["first_seen"])
+        g["last_seen"] = max(g["last_seen"], r["last_seen"])
+    return sorted(groups.values(), key=lambda g: (-g["seen_count"], g["email"]))
 
 
 # -- mutations --------------------------------------------------------------
@@ -685,26 +785,39 @@ def ingest_event(store: ContactStore, payload: dict) -> dict:
     if ext_key and ext_key.startswith(CADENCE_PREFIX):
         return {"ok": False, "reason": "reserved ext_key namespace"}
 
+    type_ = payload.get("type") or "sent"
+    imid = (payload.get("internet_message_id") or "").strip()
+    ts = (payload.get("occurred_at") or payload.get("ts") or "").strip() or now
+
     contact_id = (payload.get("contact_id") or "").strip()
     if not contact_id:
         addr = (payload.get("email") or "").strip()
         row = store.find_by_email(addr) if addr else None
         if row is None:
-            return {"ok": False, "reason": "no matching contact",
-                    "email": payload.get("email")}
+            # Same imid dedup a matched event gets: a worker-logged send seen
+            # in Sent Items must not queue as unmatched either.
+            if type_ == "sent" and imid and store.find_attempt_by_imid(imid) is not None:
+                return {"ok": True, "inserted": False, "deduped": "worker send"}
+            # Park it for operator review (link/dismiss) instead of dropping
+            # it. The hash mirrors what the matched insert would have used
+            # (email standing in for the contact_id), so a re-poll of the same
+            # message bumps the row instead of duplicating it. No contact is
+            # ever auto-created here - that is an owner decision (2026-07-14).
+            h = event_hash(addr, ts, payload.get("channel") or "email",
+                           type_, payload.get("detail"), ext_key)
+            store.record_unmatched(addr, json.dumps(payload, sort_keys=True), h, now)
+            return {"ok": True, "queued": "unmatched", "email": payload.get("email")}
         contact_id = row["contact_id"]
     elif store.get_contact(contact_id) is None:
         return {"ok": False, "reason": "unknown contact_id", "contact_id": contact_id}
 
-    type_ = payload.get("type") or "sent"
-    imid = (payload.get("internet_message_id") or "").strip()
     if type_ == "sent" and imid:
         known = store.find_attempt_by_imid(imid)
         if known is not None:
             return {"ok": True, "contact_id": contact_id, "inserted": False,
                     "deduped": "worker send"}
 
-    ts = (payload.get("occurred_at") or payload.get("ts") or "").strip() or now
+    campaign = (payload.get("campaign") or "").strip()
     inserted = store.add_event(
         contact_id=contact_id,
         ts=ts,
@@ -715,6 +828,9 @@ def ingest_event(store: ContactStore, payload: dict) -> dict:
         detail=payload.get("detail"),
         source=payload.get("source") or "graph-auto",
         ext_key=ext_key,
+        # Only pass campaign when the payload names one, so the store default
+        # still applies to payloads without the field (unchanged behavior).
+        **({"campaign": campaign} if campaign else {}),
         now=now,
     )
     if type_ == "bounce":
@@ -722,3 +838,25 @@ def ingest_event(store: ContactStore, payload: dict) -> dict:
         if contact is not None and not contact["suppressed"]:
             store.set_suppressed(contact_id, True, "bounced", "auto", now)
     return {"ok": True, "contact_id": contact_id, "inserted": inserted}
+
+
+def link_unmatched(store: ContactStore, unmatched_id: int, contact_id: str,
+                   by: str | None, now: str) -> dict:
+    """Resolve a queued unmatched event onto an EXISTING contact: replay the
+    stored payload through ingest_event (pinned to the chosen contact_id, so
+    the event lands on that timeline even when the address differs), then mark
+    the row linked. Never creates a contact - the operator picks or creates
+    one first (owner decision 2026-07-14)."""
+    row = store.get_unmatched(unmatched_id)
+    if row is None or row["status"] != "open":
+        return {"ok": False, "reason": "no open unmatched row",
+                "unmatched_id": unmatched_id}
+    if store.get_contact(contact_id) is None:
+        return {"ok": False, "reason": "unknown contact_id", "contact_id": contact_id}
+    payload = {**json.loads(row["payload"]), "contact_id": contact_id}
+    res = ingest_event(store, payload)
+    if not res.get("ok"):
+        return {"ok": False, "reason": "replay failed", "replay": res}
+    store.resolve_unmatched(unmatched_id, contact_id, by, now)
+    return {"ok": True, "unmatched_id": unmatched_id, "contact_id": contact_id,
+            "replay": res}

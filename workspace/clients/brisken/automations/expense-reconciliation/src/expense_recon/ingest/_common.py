@@ -24,6 +24,8 @@ Two parse modes per ANNEALING B1:
 """
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -161,6 +163,199 @@ def parse_amount(s: str) -> Decimal:
     except InvalidOperation as exc:
         raise ValueError(f"Not a number: {s!r}") from exc
     return -value if negative else value
+
+
+def canonical_amount(value: Decimal) -> str:
+    """Canonical string form of a money amount for identity purposes.
+
+    Trailing zeros carry no monetary meaning, so `10.30` and `10.3` are
+    the SAME charge and must produce the same string. `Decimal.normalize`
+    does that but re-spells large round numbers in exponent form
+    (`Decimal("100.00").normalize()` -> `1E+2`); re-quantizing a positive
+    exponent back to an integer keeps the plain-digit spelling. Zero is
+    special-cased so `-0.00` and `0.00` cannot disagree.
+    """
+    if value == 0:
+        return "0"
+    n = value.normalize()
+    exponent = n.as_tuple().exponent
+    if isinstance(exponent, int) and exponent > 0:
+        n = n.quantize(Decimal(1))
+    return format(n, "f")
+
+
+def transaction_content_id(
+    *,
+    account_id: str,
+    card_last4: str | None,
+    transaction_date: date,
+    amount: Decimal,
+    transaction_currency: str,
+    vendor_from_statement: str,
+    reference: str | None = None,
+    seen: dict[str, int] | None = None,
+) -> str:
+    """A statement row's identity, derived from what the row SAYS.
+
+    Transaction ids used to be positional (`f"{account_id}:{row_index}"`).
+    Operator decisions key on the id (`decisions.transaction_id`), so any
+    partial or appended statement upload renumbered every row and silently
+    re-pointed every confirm / reject / manual-match onto a different
+    charge. The living month (PR 2) makes appends routine, which turns
+    that from a latent bug into a certain one. A content-derived id is
+    stable under append, insert, and reordering because it does not depend
+    on where in the file the row happened to sit.
+
+    Identical rows are NOT collapsed: two identical coffees on one day are
+    two real charges. Pass a per-parse `seen` dict and the second and later
+    occurrences get a `-{n}` suffix, so a re-parse of the same file
+    reproduces the same set of ids while distinct charges stay distinct.
+
+    The suffix separator is `-`, deliberately NOT `:`. Two consumers care.
+    `sheet_writeback._anchor_row` still recovers a sheet row from a legacy
+    positional id by splitting on the LAST `:`, so an id ending `:2` would
+    be read as "row 2" and write an account next to the wrong charge in
+    Criss's workbook. And `transaction_id` travels as a URL path segment
+    (`/api/runs/{run_id}/transactions/{transaction_id}/receipt`), which
+    rules out `#`. A hex digest can never contain `-`, so the split stays
+    unambiguous in the other direction too.
+
+    Fields are joined via `json.dumps` rather than a separator string: it
+    escapes deterministically (a vendor containing the separator cannot
+    forge a collision) and keeps `None` distinguishable from `""`.
+    """
+    card = (card_last4 or "").strip().upper() or None
+    payload = json.dumps(
+        [
+            account_id.strip(),
+            card,
+            transaction_date.isoformat(),
+            canonical_amount(amount),
+            (transaction_currency or "").strip().upper(),
+            " ".join((vendor_from_statement or "").split()).casefold(),
+            (reference or "").strip() or None,
+        ],
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+    if seen is None:
+        return digest
+    occurrence = seen.get(digest, 0)
+    seen[digest] = occurrence + 1
+    return digest if occurrence == 0 else f"{digest}-{occurrence}"
+
+
+def assign_content_ids(transactions: "list") -> "list":
+    """Stamp content-derived ids onto parsed transactions, in file order.
+
+    Called ONCE per parse, at the very end, by every statement parser.
+    Two reasons it is a post-pass rather than done inline:
+
+    * **Sign canonicalization has to have happened first.** With a mapped
+      `type` column the sign is canonicalized per row inside the parse
+      loop; without one it is inferred from the whole file's sign majority
+      and applied afterwards. Stamping inline would give the same logical
+      row a different id depending on which path ran. Stamping last means
+      the id always derives from the canonical amount.
+    * **One definition of identity for CSV, Excel and PDF.** The occurrence
+      counter for byte-identical rows only behaves consistently if every
+      parser walks its rows in file order through the same code.
+
+    A file whose sign inference differs between a partial and a full
+    upload therefore yields different ids for the same printed row. That
+    is deliberate: the two uploads genuinely disagree about whether the
+    money went out or came back, and surfacing two rows is safer than
+    silently deduping a contradiction down to whichever arrived first.
+    """
+    from dataclasses import replace
+
+    seen: dict[str, int] = {}
+    return [
+        replace(
+            t,
+            transaction_id=transaction_content_id(
+                account_id=t.account_id,
+                card_last4=t.card_last4,
+                transaction_date=t.transaction_date,
+                amount=t.amount,
+                transaction_currency=t.transaction_currency,
+                vendor_from_statement=t.vendor_from_statement,
+                seen=seen,
+            ),
+        )
+        for t in transactions
+    ]
+
+
+@dataclass(frozen=True)
+class TransactionMerge:
+    """What one statement upload contributed to a month's charges.
+
+    `transactions` is the month's full set after the fold, `added` the ids
+    this upload put there, `duplicates` the ids it supplied that the set
+    already held. The two id lists are what an append route reports back
+    ("14 rows, 11 already here") and what it records per statement.
+    """
+
+    transactions: list
+    added: list[str]
+    duplicates: list[str]
+
+
+def merge_transactions(existing: "list", incoming: "list") -> TransactionMerge:
+    """Fold a freshly parsed statement into the charges a month already holds.
+
+    The living month (PR 2b-2b) lets a statement arrive in pieces: one card
+    at a time, a mid-month partial then the full cycle, the same file twice
+    by accident. Every one of those overlaps what is already there, so the
+    fold has to be by IDENTITY rather than by position or by file.
+
+    `transaction_id` is that identity — content-derived since PR 2a, which
+    is precisely what makes it survive an append. Nothing else here is a
+    second definition of sameness: two rows are the same charge exactly when
+    `transaction_content_id` says so, and the occurrence suffix already keeps
+    two identical coffees on one day apart, in both the old set and the new.
+
+    Three properties the callers depend on:
+
+    * **First-write-wins.** A re-supplied row keeps the object the month
+      already committed. Operator decisions, `source_row`, and every stored
+      judgment key on that row; swapping in a byte-equal copy parsed from a
+      different file would re-point `source_row` into the wrong workbook and
+      buy nothing.
+    * **`existing` passes through untouched, in order.** This function
+      filters what an upload CONTRIBUTES; it never edits the month. An
+      `existing` list that somehow repeats an id keeps both rows, because
+      silently changing a month's charge count is not a merge's business.
+    * **A contradiction surfaces as two rows, not one.** A file whose sign
+      inference differs between a partial and a full upload gives the same
+      printed row two different ids (see `assign_content_ids`), so both
+      land. That is the deliberate call: the uploads genuinely disagree
+      about which way the money went, and deduping one away would pick a
+      winner arbitrarily.
+
+    Note what identity includes: `account_id`. Two uploads of one card's
+    statement typed against different account ids dedupe against nothing and
+    the month doubles. That is honest at this layer — the rows really do
+    claim to be different accounts — and it is the append route's job to
+    keep the account stable across a card's uploads.
+    """
+    seen = {t.transaction_id for t in existing}
+    merged = list(existing)
+    added: list[str] = []
+    duplicates: list[str] = []
+    for t in incoming:
+        tid = t.transaction_id
+        if tid in seen:
+            duplicates.append(tid)
+            continue
+        seen.add(tid)
+        merged.append(t)
+        added.append(tid)
+    return TransactionMerge(
+        transactions=merged, added=added, duplicates=duplicates
+    )
 
 
 def validate_required_map(column_map: Mapping[str, str]) -> None:

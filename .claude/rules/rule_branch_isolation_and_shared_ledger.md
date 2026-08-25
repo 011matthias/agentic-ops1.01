@@ -88,6 +88,25 @@ is not isolation.
   that context; an in-place checkout keeps it in the one working
   directory where it lives.
 
+## 4. Never discard uncommitted work with a git command
+
+`git checkout -- <path>`, `git restore <path>`, `git reset --hard` and
+`git clean -f` all overwrite the working tree from HEAD or the index.
+Uncommitted work exists in no object store, so unlike the 2026-06-12 stash
+tangle there is no `git fsck` route back; the only recovery is rebuilding
+from the conversation transcript.
+
+- **Restore a backup with `cp`/`mv`, never with git.** Git restores from
+  HEAD, not from the backup you made. On 2026-08-24 a `git checkout --
+  <path>` appended to a regression-test command to "restore the backup"
+  reverted `intake_mail.py` to HEAD instead, destroying a prior session's
+  uncommitted work and that session's rewrite.
+- **Archive before discarding:** `git diff -- <path> >
+  .scratch/pre-restore-<name>-<date>.patch`, or copy untracked files aside.
+- **The upstream fix is committing sooner.** Work that sits uncommitted for
+  hours is what turns one stray command into a rebuild. A dirty tree is the
+  precondition for every incident in this section.
+
 ## Why
 
 One root cause produced three friction events on 2026-06-12: p2
@@ -120,6 +139,18 @@ is banned for isolation outright.
   user-ordered stash stays possible via the prompt. Trigger recurrence: the
   2026-06-12 tangle plus a build subagent stashing on 2026-07-22 despite
   this rule. Tests: `tools/tests/test_git_stash_gate.py`.
+- **Structural guard for §4 (built 2026-08-24).**
+  `.claude/hooks/git-restore-gate.py` (PreToolUse Bash|PowerShell, wired in
+  `wire-hooks.py`) is the stash gate's sibling for the working tree. It
+  permission-stops `checkout -- <path>`, separator-less pathspec checkouts,
+  `restore`, `reset --hard`, forced `clean`, and force switch/checkout when
+  the targeted paths are dirty, listing the exact files at risk plus the
+  archive-first remedy. A provably clean target passes silently (a scripted
+  reset of a clean tree is routine); an unreadable state asks rather than
+  assuming safety. Read-class git, `restore --staged` alone, branch switches
+  and `clean -n` stay silent, and a branch name containing a slash is told
+  apart from a pathspec by existence on disk. Tests:
+  `tools/tests/test_git_restore_gate.py`.
 - **Structural guard (built 2026-07-22).**
   `.claude/hooks/branch-isolation-gate.py` (PreToolUse Write|Edit,
   wired in `wire-hooks.py`) advises when the target path is a TRACKED

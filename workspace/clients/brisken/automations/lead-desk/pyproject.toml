@@ -37,6 +37,9 @@ lead-desk-maint = "lead_desk.maintenance:main"
 lead-desk-reconcile = "lead_desk.reconcile_cli:main"
 lead-desk-worker = "lead_desk.worker.cli:main"
 lead-desk-cloud-worker = "lead_desk.cloud_worker:main"
+lead-desk-drill = "lead_desk.drill:main"
+lead-desk-truth-scan = "lead_desk.truth_scan:main"
+lead-desk-backfill = "lead_desk.backfill:main"
 
 [build-system]
 requires = ["hatchling"]

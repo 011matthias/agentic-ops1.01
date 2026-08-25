@@ -1,0 +1,34 @@
+name: deckgen native tests
+
+# Brisken native deck-engine test gate. Runs the engine suite on any change
+# under the deckgen folder (or its banned-terms fixture) so a regression is
+# caught at PR time, not after merge. Tests run without the gitignored
+# reference binary (placeholder assets generated per test).
+
+on:
+  pull_request:
+    paths:
+      - "workspace/clients/brisken/automations/lead-generation/deckgen/**"
+      - "tools/fixtures/demo-banned-terms.json"
+      - "tools/validate-demo-material.py"
+  push:
+    branches: [main]
+    paths:
+      - "workspace/clients/brisken/automations/lead-generation/deckgen/**"
+      - "tools/fixtures/demo-banned-terms.json"
+      - "tools/validate-demo-material.py"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workspace/clients/brisken/automations/lead-generation/deckgen
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Run native engine tests
+        run: >
+          uv run --no-project --with 'pytest>=8.0' --with python-pptx
+          --with pillow --with pyyaml pytest -q native/tests

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import difflib
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from collections.abc import Mapping
 from decimal import Decimal
 
@@ -209,17 +209,22 @@ _DEFAULT_FX_RATE_BANDS: dict[tuple[str, str], tuple[Decimal, Decimal]] = {
 _TUNABLE_DECIMAL = frozenset({
     "amount_exact_tolerance", "amount_probable_tolerance_pct",
     "fx_reference_match_pct", "fx_reference_review_pct",
+    "fx_base_amount_match_pct", "fx_base_amount_review_pct",
+    "fx_band_score_span_pct",
 })
 _TUNABLE_INT = frozenset({
     "date_exact_window_days", "date_probable_window_days",
     "fx_date_window_days",
+    "fx_self_derived_min_statement_rates", "fx_self_derived_min_receipts",
 })
 _TUNABLE_FLOAT = frozenset({
     "high_confidence", "probable_confidence", "possible_confidence",
     "blend_amount_weight", "blend_date_weight", "blend_vendor_weight",
-    "blend_card_weight",
+    "blend_card_weight", "fx_judgment_suggest_floor",
 })
-_TUNABLE_BOOL = frozenset({"card_scoping"})
+_TUNABLE_BOOL = frozenset({
+    "card_scoping", "fx_self_derived_rates", "fx_self_derived_review",
+})
 
 
 @dataclass(frozen=True)
@@ -279,6 +284,64 @@ class MatchingConfig:
     )
     fx_reference_match_pct: Decimal = Decimal("0.03")
     fx_reference_review_pct: Decimal = Decimal("0.13")
+
+    # ── Zoho base-amount deterministic FX (2026-07-23) ─────────────
+    # The ER report prints Zoho's own per-receipt conversion ("1 BRL =
+    # 0.193945 USD" -> Receipt.base_amount in the card currency). The
+    # human label fixture was largely confirmed off exactly this signal
+    # (E3, ±2%), yet the matcher never consulted it — the single biggest
+    # measured accuracy hole (E3 tier: 0/92 deterministic at baseline).
+    # Deviation is measured against the CHARGE (|amount - base| / amount,
+    # mirroring labeling.evidence_for). LD-5 caveat: an individual Zoho
+    # per-line rate can be off by up to 12.8%, so the clean threshold is
+    # tight and the review level exists — and review-grade base-amount
+    # ranks BELOW a clean reference-rate match in the ladder.
+    # 0.01 (not the labeler's 0.02): tuned by optimize run
+    # brisken-recon-tuning-v1 (2026-07-23). Tightening demoted a
+    # coincidental rival into the review zone, which made a TRUE pair
+    # bilaterally unique and promoted it — the knee is bracketed
+    # (0.005 loses, 0.01 wins, 0.02 loses). Promoted into the dataclass
+    # default because the hosted image ships only src/ and never reads
+    # the tuning file.
+    fx_base_amount_match_pct: Decimal = Decimal("0.01")
+    fx_base_amount_review_pct: Decimal = Decimal("0.13")
+
+    # ── FX-judgment suggestion floor (2026-07-24) ──────────────────
+    # A judged pair whose model same-purchase confidence lands BELOW
+    # this floor is not shown as a suggestion. On the April 2026 hosted
+    # run the workbench proposed a USD OpenAI subscription against a
+    # BRL construction-materials receipt at p=0.10, with the model's own
+    # reason saying "likely NOT the same purchase" (owner call
+    # 2026-07-24: such pairs must not be suggested). The pair is unbound
+    # instead: charge and receipt fall to the plain unmatched buckets,
+    # so nothing is silently dropped and the reconciliation guarantee
+    # holds. 0.0 disables the floor. The no-LLM stub verdict (0.5)
+    # always passes, so offline no-API runs and the pinned scorer path
+    # are byte-for-byte unaffected.
+    fx_judgment_suggest_floor: float = 0.2
+
+    # ── Self-derived per-run reference rates (2026-07-23) ──────────
+    # When no reference rate is configured for a pair, derive the month's
+    # rate from the run's own inputs: median of the statement's printed
+    # FX lines (bank-grade, n >= min_statement_rates) else median of the
+    # receipts' Zoho exchange_rate lines (n >= min_receipts — the median
+    # is the LD-5-safe aggregation). A derived rate outside the static
+    # fx band for its pair is discarded (poisoned-median clamp).
+    # Configured rates always win. `fx_self_derived_review` forces
+    # receipt-median matches to review even when clean; statement-derived
+    # rates are the bank's own numbers and stay clean.
+    fx_self_derived_rates: bool = True
+    fx_self_derived_min_statement_rates: int = 1
+    fx_self_derived_min_receipts: int = 3
+    fx_self_derived_review: bool = False
+
+    # ── FX band amount-scoring span (2026-07-23) ───────────────────
+    # Inside the implied-rate band, candidates are scored by amount
+    # agreement under the best available rate (configured > learned
+    # merchant mean > self-derived > band midpoint): score = 1 -
+    # deviation/span. Replaces the midpoint-distance score under which a
+    # junk pair near midpoint outranked a true pair near the band edge.
+    fx_band_score_span_pct: Decimal = Decimal("0.15")
 
     # ── Learned memory (PR 2c) ─────────────────────────────────────
     # Both default empty => the matcher is byte-for-byte its old self.
@@ -562,8 +625,105 @@ def _match_on_amount(
     return None
 
 
+def derive_fx_reference_rates(
+    transactions: "list[Transaction]",
+    receipts: "list[Receipt]",
+    cfg: MatchingConfig,
+) -> dict[tuple[str, str], tuple[Decimal, str, int]]:
+    """Self-derive this run's reference rate per currency pair from the
+    run's own inputs (2026-07-23). Returns {(from_ccy, to_ccy): (rate,
+    source, n_samples)} where source is "statement" or "receipts".
+
+    Two sources, in trust order:
+      * statement — median of the statement's printed per-charge FX rates
+        (`Transaction.fx_rate`, the Chase two-line detail). Bank-grade;
+        accepted from `fx_self_derived_min_statement_rates` samples.
+      * receipts — median of the ER report's per-receipt Zoho rates
+        (`Receipt.exchange_rate`). An individual line can be off by up to
+        12.8% (LD-5), the month's MEDIAN is not; accepted from
+        `fx_self_derived_min_receipts` samples. The to-currency is the
+        run's card currency (Zoho's base line converts into it).
+
+    A derived rate outside the static fx band for its pair is discarded
+    (poisoned-median clamp: one mis-parsed total cannot drag the month's
+    rate somewhere implausible). Configured `fx_reference_rates` are NOT
+    consulted here — the caller overlays them, so operator input always
+    wins. `fx_self_derived_rates=false` disables the whole derivation.
+    """
+    if not cfg.fx_self_derived_rates:
+        return {}
+    from statistics import median
+
+    stmt: dict[tuple[str, str], list[Decimal]] = {}
+    for t in transactions:
+        if (
+            t.original_currency
+            and t.fx_rate is not None
+            and t.fx_rate > 0
+            and t.original_currency != t.transaction_currency
+        ):
+            pair = (t.original_currency.upper(), t.transaction_currency.upper())
+            stmt.setdefault(pair, []).append(t.fx_rate)
+
+    # The receipts' Zoho conversion is into the card currency; take the
+    # dominant card currency across the (already credit-free) charges.
+    card_ccys = [t.account_card_currency.upper() for t in transactions
+                 if t.account_card_currency]
+    card_ccy = max(set(card_ccys), key=card_ccys.count) if card_ccys else "USD"
+    rec: dict[tuple[str, str], list[Decimal]] = {}
+    for r in receipts:
+        if (
+            r.detected_currency
+            and r.exchange_rate is not None
+            and r.exchange_rate > 0
+            and r.detected_currency.upper() != card_ccy
+        ):
+            pair = (r.detected_currency.upper(), card_ccy)
+            rec.setdefault(pair, []).append(r.exchange_rate)
+
+    out: dict[tuple[str, str], tuple[Decimal, str, int]] = {}
+    for pair, vals in stmt.items():
+        if len(vals) >= cfg.fx_self_derived_min_statement_rates:
+            out[pair] = (median(vals), "statement", len(vals))
+    for pair, vals in rec.items():
+        if pair not in out and len(vals) >= cfg.fx_self_derived_min_receipts:
+            out[pair] = (median(vals), "receipts", len(vals))
+
+    clamped: dict[tuple[str, str], tuple[Decimal, str, int]] = {}
+    for pair, (rate, source, n) in out.items():
+        band = cfg.fx_band(*pair)
+        if band is not None:
+            lo, hi = band
+            if not (lo <= rate <= hi):
+                continue  # implausible for the pair: discard, do not clamp-to-edge
+        clamped[pair] = (rate, source, n)
+    return clamped
+
+
+def _reference_rate_for(
+    cfg: MatchingConfig,
+    from_ccy: str,
+    to_ccy: str,
+    derived: "Mapping[tuple[str, str], tuple[Decimal, str, int]] | None",
+) -> tuple[Decimal, str, int] | None:
+    """The best reference rate for a pair: configured (operator intent)
+    wins, else this run's self-derived rate. Returns (rate, source, n)
+    with source in {"configured", "statement", "receipts"}, or None."""
+    configured = cfg.fx_reference_rate(from_ccy, to_ccy)
+    if configured is not None and configured > 0:
+        return configured, "configured", 0
+    if derived:
+        hit = derived.get(((from_ccy or "").upper(), (to_ccy or "").upper()))
+        if hit is not None:
+            return hit
+    return None
+
+
 def match_one(
-    tx: Transaction, receipt: Receipt, cfg: MatchingConfig
+    tx: Transaction,
+    receipt: Receipt,
+    cfg: MatchingConfig,
+    derived_rates: "Mapping[tuple[str, str], tuple[Decimal, str, int]] | None" = None,
 ) -> Match | None:
     """Score a single (transaction, receipt) candidate pair.
 
@@ -630,12 +790,13 @@ def match_one(
             if exact_fx is not None:
                 return exact_fx
 
-        # Need a receipt amount + date to judge plausibility. Missing
-        # either => no deterministic FX candidate; the receipt still
-        # surfaces in `unmatched_receipts` for review (guarantee held).
-        if receipt.detected_total is None or receipt.detected_date is None:
-            return None
-        if tx.amount <= 0 or receipt.detected_total <= 0:
+        # Every FX path is date-gated: without a receipt date no FX
+        # candidate is emitted (the receipt still surfaces in
+        # `unmatched_receipts` — guarantee held). The receipt TOTAL is no
+        # longer required up front (2026-07-23): the base-amount rung needs
+        # only Zoho's converted base_amount, so a receipt whose printed
+        # total failed to parse can still resolve deterministically.
+        if receipt.detected_date is None or tx.amount <= 0:
             return None
 
         candidate_dates = [tx.transaction_date]
@@ -646,66 +807,173 @@ def match_one(
         )
         if date_diff > cfg.fx_date_window_days:
             return None
+        date_score = max(0.0, 1.0 - date_diff / max(1, cfg.fx_date_window_days))
 
-        # Deterministic reference-rate FX (3.15, the 3.7 upgrade): when a
-        # monthly reference rate is configured for this pair, resolve the
-        # candidate WITHOUT the LLM. Deviation of the posted charge from
-        # (receipt total x rate): <= fx_reference_match_pct is a clean
-        # deterministic match; <= fx_reference_review_pct matches but is
-        # review-flagged (DCC-markup / tip territory); beyond that, fall
-        # through to the band / FX_JUDGMENT path exactly as before. This
-        # uses only the CONFIG rate — learned merchant_fx keeps its 2c
-        # role (re-centering the FX_JUDGMENT score within the band) and
-        # never decides bucket membership.
-        ref_rate = cfg.fx_reference_rate(
-            receipt.detected_currency, tx.transaction_currency
+        def _fx_det_match(
+            match_type: MatchType,
+            *,
+            clean: bool,
+            amount_score: float,
+            reason: str,
+            force_review: bool = False,
+        ) -> Match:
+            return Match(
+                transaction_id=tx.transaction_id,
+                document_id=receipt.document_id,
+                match_type=match_type,
+                confidence=(
+                    cfg.high_confidence if clean else cfg.probable_confidence
+                ),
+                reason=reason,
+                requires_review=(not clean) or force_review,
+                score=_blend_score(
+                    amount_score, date_score, vendor_score, card_score, cfg
+                ),
+                amount_score=amount_score,
+                date_score=date_score,
+                vendor_score=vendor_score,
+                card_score=card_score,
+            )
+
+        # Zoho base-amount deviation, measured against the CHARGE — the
+        # same formula the labeling E3 tier uses (labeling.evidence_for),
+        # so matcher and fixture agree on what "agrees" means.
+        base_dev: Decimal | None = None
+        if receipt.base_amount is not None and receipt.base_amount > 0:
+            base_dev = abs(tx.amount - receipt.base_amount) / tx.amount
+
+        # Reference-rate deviation under the best available rate:
+        # configured (operator intent) wins, else this run's self-derived
+        # median (statement FX lines, else receipt Zoho rates).
+        ref = _reference_rate_for(
+            cfg, receipt.detected_currency, tx.transaction_currency,
+            derived_rates,
         )
-        if ref_rate is not None and ref_rate > 0:
-            expected = receipt.detected_total * ref_rate
+        ref_dev: Decimal | None = None
+        if (
+            ref is not None
+            and receipt.detected_total is not None
+            and receipt.detected_total > 0
+        ):
+            expected = receipt.detected_total * ref[0]
             if expected > 0:
-                deviation = abs(tx.amount - expected) / expected
-                if deviation <= cfg.fx_reference_review_pct:
-                    clean = deviation <= cfg.fx_reference_match_pct
-                    date_score = max(
-                        0.0, 1.0 - date_diff / max(1, cfg.fx_date_window_days)
-                    )
-                    amount_score = max(
-                        0.0,
-                        1.0 - float(deviation) / float(cfg.fx_reference_review_pct),
-                    )
-                    return Match(
-                        transaction_id=tx.transaction_id,
-                        document_id=receipt.document_id,
-                        match_type=MatchType.FX_REFERENCE,
-                        confidence=(
-                            cfg.high_confidence if clean else cfg.probable_confidence
-                        ),
-                        reason=(
-                            f"Charge {tx.amount} {tx.transaction_currency} vs "
-                            f"receipt {receipt.detected_total} "
-                            f"{receipt.detected_currency} at monthly reference "
-                            f"rate {ref_rate}: deviation {float(deviation) * 100:.1f}%"
-                            + (
-                                "."
-                                if clean
-                                else (
-                                    f" (above {float(cfg.fx_reference_match_pct) * 100:.0f}%; "
-                                    f"DCC markup / tip territory — review)."
-                                )
-                            )
-                        ),
-                        requires_review=not clean,
-                        score=_blend_score(
-                            amount_score, date_score, vendor_score,
-                            card_score, cfg,
-                        ),
-                        amount_score=amount_score,
-                        date_score=date_score,
-                        vendor_score=vendor_score,
-                        card_score=card_score,
-                    )
-            # Deviation beyond the review threshold: not resolvable at the
-            # reference rate; the band / FX_JUDGMENT path below applies.
+                ref_dev = abs(tx.amount - expected) / expected
+
+        def _rate_phrase() -> str:
+            rate, source, n = ref
+            if source == "configured":
+                return f"monthly reference rate {rate}"
+            unit = (
+                "statement FX lines" if source == "statement"
+                else "receipt rates"
+            )
+            return f"derived rate {rate} (median of {n} {unit})"
+
+        # The deterministic FX ladder (2026-07-23). Clean evidence always
+        # outranks review-grade evidence, and at the same grade Zoho's
+        # per-receipt conversion outranks a month rate (it is
+        # per-purchase). LD-5's up-to-12.8% per-line error is exactly why
+        # base-amount REVIEW still sits BELOW a CLEAN rate match.
+        if base_dev is not None and base_dev <= cfg.fx_base_amount_match_pct:
+            return _fx_det_match(
+                MatchType.FX_BASE_AMOUNT,
+                clean=True,
+                amount_score=max(
+                    0.0,
+                    1.0 - float(base_dev) / float(cfg.fx_base_amount_review_pct),
+                ),
+                reason=(
+                    f"Charge {tx.amount} {tx.transaction_currency} vs the ER "
+                    f"report's own conversion {receipt.base_amount} "
+                    f"{tx.transaction_currency} (receipt "
+                    f"{receipt.detected_total} {receipt.detected_currency} at "
+                    f"Zoho's per-receipt rate): deviation "
+                    f"{float(base_dev) * 100:.1f}%."
+                ),
+            )
+        if ref is not None and ref_dev is not None and ref_dev <= cfg.fx_reference_match_pct:
+            return _fx_det_match(
+                MatchType.FX_REFERENCE,
+                clean=True,
+                force_review=(
+                    ref[1] == "receipts" and cfg.fx_self_derived_review
+                ),
+                amount_score=max(
+                    0.0,
+                    1.0 - float(ref_dev) / float(cfg.fx_reference_review_pct),
+                ),
+                reason=(
+                    f"Charge {tx.amount} {tx.transaction_currency} vs receipt "
+                    f"{receipt.detected_total} {receipt.detected_currency} at "
+                    f"{_rate_phrase()}: deviation {float(ref_dev) * 100:.1f}%."
+                ),
+            )
+        # Review-zone evidence (clean-threshold .. review_pct) DEFERS to the
+        # judgment bucket rather than resolving deterministically
+        # (2026-07-23, measured on the labelled fixture): treating the
+        # review zone as a match turned every coincidental within-13%
+        # charge into a deterministic pairing — 38 of the 46 receipts
+        # human-labelled "no charge exists" got auto-matched. Precision
+        # owns the matches bucket; the review zone tees the candidate up
+        # for the FX judgment layer / reviewer with its scores and reason.
+        if base_dev is not None and base_dev <= cfg.fx_base_amount_review_pct:
+            amount_score = max(
+                0.0,
+                1.0 - float(base_dev) / float(cfg.fx_base_amount_review_pct),
+            )
+            return Match(
+                transaction_id=tx.transaction_id,
+                document_id=receipt.document_id,
+                match_type=MatchType.FX_JUDGMENT,
+                confidence=0.5,  # placeholder; LLM layer revises
+                reason=(
+                    f"Charge {tx.amount} {tx.transaction_currency} vs the ER "
+                    f"report's own conversion {receipt.base_amount}: deviation "
+                    f"{float(base_dev) * 100:.1f}% (above "
+                    f"{float(cfg.fx_base_amount_match_pct) * 100:.0f}% — too "
+                    f"loose to auto-match; a single Zoho per-line rate can "
+                    f"drift). Requires FX judgment."
+                ),
+                requires_review=True,
+                score=_blend_score(
+                    amount_score, date_score, vendor_score, card_score, cfg
+                ),
+                amount_score=amount_score,
+                date_score=date_score,
+                vendor_score=vendor_score,
+                card_score=card_score,
+            )
+        if ref is not None and ref_dev is not None and ref_dev <= cfg.fx_reference_review_pct:
+            amount_score = max(
+                0.0,
+                1.0 - float(ref_dev) / float(cfg.fx_reference_review_pct),
+            )
+            return Match(
+                transaction_id=tx.transaction_id,
+                document_id=receipt.document_id,
+                match_type=MatchType.FX_JUDGMENT,
+                confidence=0.5,  # placeholder; LLM layer revises
+                reason=(
+                    f"Charge {tx.amount} {tx.transaction_currency} vs receipt "
+                    f"{receipt.detected_total} {receipt.detected_currency} at "
+                    f"{_rate_phrase()}: deviation {float(ref_dev) * 100:.1f}% "
+                    f"(above {float(cfg.fx_reference_match_pct) * 100:.0f}%; "
+                    f"DCC markup / tip territory). Requires FX judgment."
+                ),
+                requires_review=True,
+                score=_blend_score(
+                    amount_score, date_score, vendor_score, card_score, cfg
+                ),
+                amount_score=amount_score,
+                date_score=date_score,
+                vendor_score=vendor_score,
+                card_score=card_score,
+            )
+
+        # No deterministic FX evidence. The band / FX_JUDGMENT path below
+        # needs a printed receipt total to compute an implied rate.
+        if receipt.detected_total is None or receipt.detected_total <= 0:
+            return None
 
         implied_rate = tx.amount / receipt.detected_total
         band = cfg.fx_band(receipt.detected_currency, tx.transaction_currency)
@@ -715,33 +983,49 @@ def match_one(
                 # Implausible rate for this currency pair -> not the
                 # same purchase. Drop the candidate.
                 return None
-            # amount sub-score: how close the implied rate sits to the
-            # expected center. The center is the band midpoint by default,
-            # but a learned per-merchant FX mean (PR 2c) re-centers it on
-            # THIS merchant's known DCC pattern when one exists and sits in
-            # band — so a charge matching that merchant's history scores
-            # higher. Memory refines the score WITHIN the band; it never
-            # moves the lo/hi membership test above, so buckets are unchanged.
+            # amount sub-score (2026-07-23): amount agreement under the
+            # best available rate — configured reference > learned
+            # per-merchant mean (in-band, PR 2c) > self-derived month
+            # median > band midpoint as the last resort. The old score
+            # measured distance to the band MIDPOINT, under which a junk
+            # pair whose implied rate happened to sit mid-band outranked a
+            # true pair near the band edge under the month's real rate.
+            # Only the SCORE changes; the lo/hi membership test above is
+            # untouched, so bucket membership is byte-for-byte identical.
             learned_mean = cfg.merchant_fx_mean(
                 tx.legal_entity_id, receipt.detected_vendor,
                 receipt.detected_currency, tx.transaction_currency,
             )
-            if learned_mean is not None and lo <= learned_mean <= hi:
-                center = float(learned_mean)
-                rate_note = (
-                    f"implied rate {implied_rate:.4f} vs learned "
-                    f"{receipt.detected_currency}->{tx.transaction_currency} "
-                    f"mean {float(learned_mean):.4f} (band [{lo}, {hi}])"
+            if ref is not None and ref[1] == "configured":
+                score_rate = ref[0]
+                score_src = _rate_phrase()
+            elif learned_mean is not None and lo <= learned_mean <= hi:
+                score_rate = learned_mean
+                score_src = (
+                    f"learned {receipt.detected_currency}->"
+                    f"{tx.transaction_currency} mean {float(learned_mean):.4f}"
                 )
+            elif ref is not None:
+                score_rate = ref[0]
+                score_src = _rate_phrase()
             else:
-                center = (float(lo) + float(hi)) / 2.0
-                rate_note = (
-                    f"implied rate {implied_rate:.4f} within "
-                    f"{receipt.detected_currency}->{tx.transaction_currency} "
-                    f"band [{lo}, {hi}]"
-                )
-            half = ((float(hi) - float(lo)) / 2.0) or 1.0
-            amount_score = max(0.0, 1.0 - abs(float(implied_rate) - center) / half)
+                score_rate = (lo + hi) / 2
+                score_src = "band midpoint (no rate available)"
+            expected_band = receipt.detected_total * score_rate
+            band_dev = (
+                abs(tx.amount - expected_band) / expected_band
+                if expected_band > 0
+                else Decimal("1")
+            )
+            amount_score = max(
+                0.0, 1.0 - float(band_dev) / float(cfg.fx_band_score_span_pct)
+            )
+            rate_note = (
+                f"implied rate {implied_rate:.4f} within "
+                f"{receipt.detected_currency}->{tx.transaction_currency} "
+                f"band [{lo}, {hi}]; scored at {score_src}, amount "
+                f"deviation {float(band_dev) * 100:.1f}%"
+            )
         else:
             # Unprofiled currency pair: keep the candidate (date-gated
             # only) so we never lose a real match for a currency we
@@ -752,7 +1036,7 @@ def match_one(
             )
             amount_score = 0.5
 
-        date_score = max(0.0, 1.0 - date_diff / max(1, cfg.fx_date_window_days))
+        # date_score computed once with the ladder above.
         return Match(
             transaction_id=tx.transaction_id,
             document_id=receipt.document_id,
@@ -797,13 +1081,19 @@ class _Candidate:
     vendor_signal: float
 
     @property
-    def sort_key(self) -> tuple[int, float, float, float, float]:
+    def sort_key(self) -> tuple[int, float, int, float, float, float]:
         # Deterministic matches outrank FX for the same receipt; then
-        # confidence; then reference hit; then card agreement; then
-        # vendor similarity.
+        # confidence; then the 0-100 blended score (amount + date own
+        # 0.85 of the blend — added 2026-07-23: without it every
+        # FX_JUDGMENT candidate tied at confidence 0.5 and every EXACT at
+        # 0.99, so contested receipts were decided by vendor fuzz and
+        # card instead of by amount/date agreement, directly against the
+        # owner's date+amount-first directive); then reference hit; then
+        # card agreement; then vendor similarity.
         return (
             1 if self.is_determ else 0,
             self.match.confidence,
+            self.match.score,
             self.ref_signal,
             self.card_signal,
             self.vendor_signal,
@@ -817,6 +1107,7 @@ def _ties(a: _Candidate, b: _Candidate) -> bool:
     return (
         a.is_determ == b.is_determ
         and abs(a.match.confidence - b.match.confidence) < 0.001
+        and a.match.score == b.match.score
         and abs(a.ref_signal - b.ref_signal) < 0.001
         and abs(a.card_signal - b.card_signal) < 0.001
         and abs(a.vendor_signal - b.vendor_signal) < 0.01
@@ -886,6 +1177,12 @@ def match_month(
             if pm_keys & present_keys:
                 receipt_scope[r.document_id] = pm_keys
 
+    # Self-derived per-run reference rates (2026-07-23): computed once for
+    # the month from the run's own inputs, consulted by match_one wherever
+    # no configured rate covers a pair. Derivation is a pure function of
+    # the inputs; provenance rides in every reason string.
+    derived_rates = derive_fx_reference_rates(transactions, receipts, cfg)
+
     cands_by_tx: dict[str, list[_Candidate]] = {}
     for tx in transactions:
         for receipt in receipts:
@@ -894,7 +1191,7 @@ def match_month(
             scope = receipt_scope.get(receipt.document_id)
             if scope is not None and not (scope & tx_card_keys[tx.transaction_id]):
                 continue  # receipt's payment mode names a different card
-            scored = match_one(tx, receipt, cfg)
+            scored = match_one(tx, receipt, cfg, derived_rates)
             if scored is None:
                 continue
             ref_sig, card_sig, vendor_sig = _signal(tx, receipt, cfg)
@@ -906,6 +1203,80 @@ def match_month(
                     card_signal=card_sig,
                     vendor_signal=vendor_sig,
                 )
+            )
+
+    # Bilateral-uniqueness gate on rate-derived FX evidence (2026-07-23).
+    # A clean FX_BASE_AMOUNT / FX_REFERENCE candidate resolves
+    # deterministically ONLY when the pairing is exclusive both ways: the
+    # receipt has no other clean rate-derived claimant, and the charge no
+    # other clean rate-derived candidate. This is the labeled fixture's
+    # own AUTO criterion (labeling.auto_pairs): base-amount agreement was
+    # never conclusive evidence by itself — measured on the fixture,
+    # without this gate 26 of the June-2025 month's 31 receipts labelled
+    # "no charge exists" sat within 2% of SOME charge in a ±5-day window
+    # and auto-matched. Contested pairs are demoted to FX_JUDGMENT (the
+    # candidate, its scores and its reason survive for the judgment layer
+    # / reviewer; only the auto-resolution right is withdrawn). Exact
+    # evidence (same-currency EXACT/PROBABLE, statement-original-amount
+    # exact-FX) is bank-printed on both sides and is NOT subject to this
+    # gate — its baseline precision was clean.
+    _RATE_DERIVED = (MatchType.FX_BASE_AMOUNT, MatchType.FX_REFERENCE)
+    claimants_by_doc: dict[str, set[str]] = {}
+    docs_by_tx: dict[str, set[str]] = {}
+    for tx_id, cands in cands_by_tx.items():
+        for c in cands:
+            if c.match.match_type in _RATE_DERIVED:
+                claimants_by_doc.setdefault(c.match.document_id, set()).add(tx_id)
+                docs_by_tx.setdefault(tx_id, set()).add(c.match.document_id)
+    for tx_id, cands in cands_by_tx.items():
+        for i, c in enumerate(cands):
+            if c.match.match_type not in _RATE_DERIVED:
+                continue
+            doc = c.match.document_id
+            unique = (
+                len(claimants_by_doc.get(doc, ())) == 1
+                and len(docs_by_tx.get(tx_id, ())) == 1
+            )
+            # Card-contradiction gate (2026-07-23, matcher-v2). A rate-derived
+            # pair also forfeits its auto-resolution right when the charge's
+            # card and the receipt's Zoho payment mode both name a card and
+            # they DIFFER (card_signal == 0.0). Card scoping (above) has already
+            # dropped contradicted pairs whose receipt names a card PRESENT in
+            # the statement, so a surviving 0.0 here means the receipt was paid
+            # on a card entirely ABSENT from this statement — its true charge
+            # sits on another card's statement, and the clean base-amount hit to
+            # a present-card charge is a same-vendor / same-day coincidence
+            # (measured: 14/14 no_charge auto-matches on the labelled fixture
+            # carry an absent card; 0/55 true deterministic pairs do). payment_mode
+            # is an independent, always-present Zoho field — never part of the
+            # labeling evidence tiers E1–E4 — so this is a real signal, not a
+            # re-derivation of the base-amount agreement the fixture was built on.
+            card_contradicts = cfg.card_scoping and c.card_signal == 0.0
+            if unique and not card_contradicts:
+                continue  # bilaterally unique, card not contradicted: keep it
+            why = (
+                "the receipt's payment card is absent from this statement "
+                "(paid on another card)"
+                if card_contradicts
+                else "another charge or receipt agrees just as cleanly"
+            )
+            demoted = replace(
+                c.match,
+                match_type=MatchType.FX_JUDGMENT,
+                confidence=0.5,
+                requires_review=True,
+                reason=(
+                    c.match.reason.rstrip(".")
+                    + f". Demoted to judgment: this rate-derived pairing is "
+                    f"not conclusive ({why})."
+                ),
+            )
+            cands[i] = _Candidate(
+                match=demoted,
+                is_determ=False,
+                ref_signal=c.ref_signal,
+                card_signal=c.card_signal,
+                vendor_signal=c.vendor_signal,
             )
 
     # Pass 1: detect genuinely ambiguous transactions (top deterministic

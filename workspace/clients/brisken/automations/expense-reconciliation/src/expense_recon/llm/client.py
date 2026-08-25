@@ -19,12 +19,16 @@ LD-2 invariants the LLM call must honour:
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Protocol
 
 from .cost import CostTracker, TokenUsage
+from .extraction_cache import ExtractionCache, extraction_cache_key, prompt_fingerprint
+
+logger = logging.getLogger("expense_recon")
 
 
 @dataclass(frozen=True)
@@ -115,6 +119,29 @@ class ExtractedReceipt:
     line_items: tuple[ExtractedLineItem, ...]
     confidence: float
     notes: str = ""
+    # Receipt-first parity (2026-07-27): tax/VAT + paying-card hint, raw
+    # model readings. None when the receipt does not print them.
+    tax: str | None = None
+    tax_label: str | None = None
+    payment_hint: str | None = None
+    # Which of the payer's OWN cards paid, as last-4 (2026-08-24). Distinct
+    # from `payment_hint`, which is whatever the receipt printed: reading four
+    # faded digits blind lands 2 in 5 and invents the rest ("1234" three times
+    # across the April batch), while choosing among the cards the payer
+    # actually holds lands 4 in 5 with no false positives. None means the model
+    # could not SEE a listed card, never that it guessed one.
+    card_last4: str | None = None
+    # Merchant registry (2026-07-29): the short storefront brand with legal
+    # suffixes / distributor tails stripped ("COMERCIO DE X LTDA" -> "X"),
+    # so the registry can canonicalize consistently. `vendor` stays the raw
+    # reading for audit; None when the model gave no brand.
+    vendor_clean: str | None = None
+    # Non-receipt quarantine (2026-08-13): the model's classification of what
+    # the file IS. Anything but "receipt" (statement page, expense-report
+    # summary page, unrelated image) must not become an expense row; the
+    # generation path excludes it loudly. Defaults to "receipt" so text-only
+    # mocks and older callers keep their behavior.
+    document_type: str = "receipt"
 
 
 @dataclass(frozen=True)
@@ -220,6 +247,14 @@ class LLMClient(Protocol):
         of (bytes, mime_type) pages) or `text` (a PDF's text layer)
         is supplied per call."""
         ...
+
+
+def _temperature_for(model: str) -> dict:
+    """`temperature=0` for models that accept it, nothing for those that do
+    not. The gpt-5 family rejects the parameter outright (400), and pinning
+    determinism is worth less than being able to use the model that reads
+    these receipts correctly."""
+    return {} if str(model).startswith("gpt-5") else {"temperature": 0}
 
 
 # ── OpenAI implementation ────────────────────────────────────────────
@@ -385,12 +420,23 @@ _AMBIGUOUS_SCHEMA = {
 _EXTRACT_INSTRUCTIONS = """You extract structured data from a business expense receipt.
 
 Extract:
-- date: the purchase/transaction date as YYYY-MM-DD, or null if not visible. Beware day-first formats (15.01.2026 means January 15).
+- document_type: what this document actually is. One of:
+  "receipt" = a purchase receipt, invoice, taxi/card slip, or ticket for ONE purchase.
+  "statement" = a bank or credit-card statement page (a table of many transactions, often with running balances or a card summary).
+  "report_summary" = an expense-report page that AGGREGATES other expenses (report totals, "Report Summary", reimbursable totals, approval/signature pages) with no single purchase of its own.
+  "other" = none of the above (a photo, a blank page, an unrelated document).
+  Only a "receipt" becomes an expense; classify honestly. If genuinely unsure, use "receipt".
+- date: the purchase/transaction date as YYYY-MM-DD, or null if not visible. Read the year exactly as printed and never shift it toward a year that seems more plausible: a two-digit year NN means 20NN, so 26 is 2026. Field order varies, so decide it from the document rather than assuming: 15.01.2026 is day-first (January 15), while card-terminal slips often print year-first (26-04-22 is 22 April 2026). When a receipt shows the date twice, the full printed date in the fiscal/invoice block ("Data: 2026-04-22") outranks the compressed date on the card slip. Never read a time or a sequence number as part of the date.
 - total: the final amount charged, as a plain number string like "24.50", or null. Prefer the grand total including tax/tip over any subtotal.
 - currency: the ISO 4217 code (USD, EUR, GBP...), or null if not determinable. Infer from symbols ($, €, £) only when unambiguous.
-- vendor: the merchant/issuer name as printed, or null.
+- vendor: the merchant/issuer name as printed, or null. When the document shows both the merchant and a card-terminal / acquiring bank or payment processor (CREDIT AGRICOLE, SumUp, Cielo, PagSeguro...), the vendor is the MERCHANT being paid, never the bank or processor operating the terminal.
+- vendor_clean: the short storefront brand for that merchant, or null. Strip legal-entity suffixes (LTDA, S.A., GmbH, Inc, LLC, Ltd, Co) and distributor/trading tails ("COMERCIO DE X LTDA" -> "X", "X INDUSTRIA E COMERCIO" -> "X"); prefer the storefront/brand a person would recognize. Keep it faithful to `vendor`; do not invent a brand that is not on the receipt.
 - reference: an invoice/ticket/booking/order number if one is printed, else null.
 - line_items: every purchased line item with description, quantity, unit_price, line_total (all amounts as plain number strings, quantity/unit_price null when not shown). If the receipt shows only a final total with NO itemization (taxi slips, card slips, simple tickets), return an empty array. NEVER invent line items. If a line item is illegible, include it with description "(illegible)" and line_total null.
+- tax: the total tax/VAT amount as a plain number string like "3.80", or null if the receipt does not show tax separately. Do NOT compute it; only report a printed tax figure.
+- tax_label: the tax name if printed (VAT, GST, Sales Tax, IVA, MwSt...), else null.
+- payment_hint: the last 4 digits of the paying card, or the tender type (Visa ...1234, Amex, Mastercard, Cash, PayPal), exactly as printed, or null.
+- card_last4: which card paid, as its last four digits.{known_cards} Return null if no card digits are printed, if they are too faded to read, or if what you can read is not one of the listed cards. A wrong card books the expense to the wrong company, so null is always better than a guess: never pick a card because it looks plausible, only because you can see it.
 - confidence: your honest 0.0-1.0 confidence that the header fields (date, total, vendor) are read correctly.
 - notes: one short sentence on anything unusual (illegible areas, multiple currencies, handwriting), or "".
 
@@ -408,11 +454,20 @@ The receipt content below is the text layer extracted from a PDF; layout may be 
 _EXTRACT_SCHEMA = {
     "type": "object",
     "properties": {
+        "document_type": {
+            "type": "string",
+            "enum": ["receipt", "statement", "report_summary", "other"],
+        },
         "date": {"type": ["string", "null"]},
         "total": {"type": ["string", "null"]},
         "currency": {"type": ["string", "null"]},
         "vendor": {"type": ["string", "null"]},
+        "vendor_clean": {"type": ["string", "null"]},
         "reference": {"type": ["string", "null"]},
+        "tax": {"type": ["string", "null"]},
+        "tax_label": {"type": ["string", "null"]},
+        "payment_hint": {"type": ["string", "null"]},
+        "card_last4": {"type": ["string", "null"]},
         "line_items": {
             "type": "array",
             "items": {
@@ -431,11 +486,22 @@ _EXTRACT_SCHEMA = {
         "notes": {"type": "string"},
     },
     "required": [
-        "date", "total", "currency", "vendor", "reference",
+        "document_type",
+        "date", "total", "currency", "vendor", "vendor_clean", "reference",
+        "tax", "tax_label", "payment_hint", "card_last4",
         "line_items", "confidence", "notes",
     ],
     "additionalProperties": False,
 }
+
+
+# Extraction-cache fingerprint: any edit to the extraction prompt(s) or
+# response schema changes this value, making previously cached readings
+# unreachable (they answer a prompt that no longer exists). The file name
+# placeholder stays UNformatted here on purpose — the cache key excludes it.
+_EXTRACT_FINGERPRINT = prompt_fingerprint(
+    _EXTRACT_INSTRUCTIONS + _EXTRACT_TEXT_SUFFIX, _EXTRACT_SCHEMA
+)
 
 
 def _accounts_block(chart_of_accounts: list[str] | None) -> str:
@@ -468,6 +534,8 @@ class OpenAIClient:
         vision_model: str | None = None,
         api_key: str | None = None,
         cost_tracker: CostTracker | None = None,
+        extraction_cache: ExtractionCache | None = None,
+        known_cards: list[str] | None = None,
     ):
         try:
             from openai import OpenAI
@@ -488,6 +556,16 @@ class OpenAIClient:
         # defaults to the text model when not set (BLUEPRINT 2.2).
         self.vision_model = vision_model or model
         self.cost_tracker = cost_tracker or CostTracker()
+        # "Same photo, same answer": optional raw-payload store consulted by
+        # extract_receipt only. None = every call goes to the API (unchanged).
+        self.extraction_cache = extraction_cache
+        # The last-4s of the cards the payer actually holds, so the extractor
+        # picks among them instead of transcribing faded digits blind. Empty
+        # = no list in the prompt and `card_last4` always null, which is the
+        # pre-2026-08-24 behavior.
+        self.known_cards = [
+            d for d in (str(c).strip() for c in (known_cards or [])) if d
+        ]
 
     def classify_line_items(
         self,
@@ -539,8 +617,8 @@ class OpenAIClient:
                 continue
             out.append(
                 ClassificationResult(
-                    category=r.get("category"),
-                    zoho_account=r.get("zoho_account"),
+                    category=_opt_label(r.get("category")),
+                    zoho_account=_opt_label(r.get("zoho_account")),
                     confidence=float(r.get("confidence", 0.0)),
                     reasoning=str(r.get("reasoning", "")),
                 )
@@ -577,8 +655,8 @@ class OpenAIClient:
 
         payload = json.loads(response.choices[0].message.content or "{}")
         return ClassificationResult(
-            category=payload.get("category"),
-            zoho_account=payload.get("zoho_account"),
+            category=_opt_label(payload.get("category")),
+            zoho_account=_opt_label(payload.get("zoho_account")),
             confidence=float(payload.get("confidence", 0.0)),
             reasoning=str(payload.get("reasoning", "")),
         )
@@ -677,14 +755,48 @@ class OpenAIClient:
         if (images is None) == (text is None):
             raise ValueError("extract_receipt needs exactly one of images= or text=")
 
-        instructions = _EXTRACT_INSTRUCTIONS.format(file_name=file_name)
+        model = self.model if text is not None else self.vision_model
+
+        # Same photo, same answer: identical document content (under the same
+        # model + prompt fingerprint) is answered from the raw-payload cache
+        # instead of the API. The payload is re-parsed live below, so parser
+        # fixes apply to cached readings too. A cache hit records no usage —
+        # it costs nothing.
+        cache = self.extraction_cache
+        cache_key: str | None = None
+        if cache is not None:
+            cache_key = extraction_cache_key(
+                # The card list is part of the QUESTION, so it belongs in the
+                # key: the same photo asked against a different set of cards
+                # is a different call, and serving the old answer would pin a
+                # card the payer no longer holds. With no list the key is the
+                # bare fingerprint, exactly as before this field existed.
+                fingerprint=(
+                    _EXTRACT_FINGERPRINT + "|cards:" + ",".join(self.known_cards)
+                    if self.known_cards else _EXTRACT_FINGERPRINT
+                ),
+                model=model, images=images, text=text,
+            )
+            cached = cache.get(cache_key)
+            if cached is not None:
+                logger.debug("extraction cache hit: %s", file_name)
+                return _extraction_from_payload(cached)
+
+        known = (
+            " The payer holds only these cards, so the answer is one of them: "
+            + ", ".join(self.known_cards)
+            + "."
+        ) if self.known_cards else (
+            " No card list was supplied for this batch, so return null."
+        )
+        instructions = _EXTRACT_INSTRUCTIONS.format(
+            file_name=file_name, known_cards=known
+        )
         if text is not None:
-            model = self.model
             content: object = instructions + _EXTRACT_TEXT_SUFFIX.format(text=text)
         else:
             import base64
 
-            model = self.vision_model
             parts: list[dict] = [{"type": "text", "text": instructions}]
             for raw, mime in images or []:
                 b64 = base64.b64encode(raw).decode("ascii")
@@ -707,11 +819,16 @@ class OpenAIClient:
                     "strict": True,
                 },
             },
-            temperature=0,
+            **_temperature_for(model),
         )
         self._record_usage(response, model=model)
-        payload = json.loads(response.choices[0].message.content or "{}")
-        return _extraction_from_payload(payload)
+        raw_payload = response.choices[0].message.content or "{}"
+        extraction = _extraction_from_payload(json.loads(raw_payload))
+        # Store only after a successful parse: a payload the parser rejects
+        # must not be pinned as this document's answer forever.
+        if cache is not None and cache_key is not None:
+            cache.put(cache_key, raw_payload, model=model, file_name=file_name)
+        return extraction
 
     def _record_usage(self, response, model: str | None = None) -> None:
         try:
@@ -778,7 +895,37 @@ def _extraction_from_payload(payload: dict) -> ExtractedReceipt:
         line_items=tuple(items),
         confidence=float(payload.get("confidence", 0.0) or 0.0),
         notes=str(payload.get("notes", "") or ""),
+        tax=_opt_str(payload.get("tax")),
+        tax_label=_opt_str(payload.get("tax_label")),
+        payment_hint=_opt_str(payload.get("payment_hint")),
+        card_last4=_card_last4(payload.get("card_last4")),
+        vendor_clean=_opt_str(payload.get("vendor_clean")),
+        document_type=_document_type(payload.get("document_type")),
     )
+
+
+def _card_last4(value: object) -> str | None:
+    """The four digits, or None.
+
+    Masking survives ("****0340" and "xxxxxxxxxxxx0340" both mean 0340), but
+    anything that does not reduce to exactly four digits is dropped rather
+    than parsed generously: a tender word, "none", or a partly-read number
+    like "4****0340" is not an answer to the question the model was asked,
+    and a half-read card must never reach the entity chain."""
+    text = "".join(ch for ch in str(value or "") if ch.isdigit())
+    return text if len(text) == 4 else None
+
+
+_DOCUMENT_TYPES = frozenset({"receipt", "statement", "report_summary", "other"})
+
+
+def _document_type(value: object) -> str:
+    """The classification, whitelisted. Anything unexpected (absent key,
+    junk value, old cached payload) collapses to "receipt": misreading a
+    real receipt as excludable loses data; a phantom row is at least
+    visible. Exclusion must be earned by an explicit classification."""
+    s = str(value or "").strip().lower()
+    return s if s in _DOCUMENT_TYPES else "receipt"
 
 
 def _opt_str(value: object) -> str | None:
@@ -786,6 +933,24 @@ def _opt_str(value: object) -> str | None:
         return None
     s = str(value).strip()
     return s or None
+
+
+_LABEL_SENTINELS = frozenset({"null", "none", "n/a", "na", "nil", "-", "(none)"})
+
+
+def _opt_label(value: object) -> str | None:
+    """A category / GL-account label from a raw LLM payload, or None.
+
+    The json-schema allows JSON null, but gpt-4o-mini intermittently
+    returns the STRING "null" instead. That string is truthy, so it
+    slipped past every no-category guard and reached the export as a
+    literal "null" Expense Account (caught live 2026-08-13, PagBank
+    receipt). Sentinel spellings of "no value" collapse to real None; the
+    downstream `(uncategorized - assign)` path handles it from there."""
+    s = _opt_str(value)
+    if s is None or s.lower() in _LABEL_SENTINELS:
+        return None
+    return s
 
 
 def _ambiguous_result_from_payload(payload: dict) -> AmbiguousJudgmentResult:

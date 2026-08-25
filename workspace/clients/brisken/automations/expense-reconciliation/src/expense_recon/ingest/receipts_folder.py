@@ -21,12 +21,14 @@ vendor-fallback path triggers in categorization.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from ..llm.client import ExtractedReceipt, LLMClient
 from ..matching.types import LineItem, Receipt
+from ..vendor_names import clean_vendor_name
 from ._common import ParseIssue, parse_date
 
 logger = logging.getLogger("expense_recon")
@@ -103,6 +105,34 @@ def parse_receipts_folder(
     return receipts, issues
 
 
+def parse_receipt_file(
+    file: str | Path,
+    legal_entity_id: str,
+    client: LLMClient,
+    default_currency: str | None = None,
+) -> Receipt:
+    """Extract ONE receipt file (image or PDF) into a Receipt.
+
+    The single-file twin of `parse_receipts_folder`, for receipts that
+    arrive outside the ER export (e.g. emailed to the operator and
+    uploaded from the workbench, 2026-07-24). Raises on an unsupported
+    type or extraction failure — the caller surfaces the error to the
+    operator instead of collecting ParseIssues.
+    """
+    file = Path(file)
+    suffix = file.suffix.lower()
+    if suffix not in IMAGE_MIME and suffix != ".pdf":
+        raise ValueError(f"unsupported receipt file type {suffix!r}")
+    extraction, ocr_text = _extract_file(file, suffix, client)
+    return _to_receipt(
+        extraction,
+        document_id=file.name,
+        legal_entity_id=legal_entity_id,
+        default_currency=default_currency,
+        ocr_text=ocr_text,
+    )
+
+
 def _extract_file(
     file: Path, suffix: str, client: LLMClient
 ) -> tuple[ExtractedReceipt, str]:
@@ -140,7 +170,6 @@ def _pdf_text(file: Path) -> str:
 def _pdf_page_images(file: Path) -> list[tuple[bytes, str]]:
     """Rasterize a scanned PDF's pages to PNG bytes (pypdfium2)."""
     import io
-
     import pypdfium2 as pdfium
 
     doc = pdfium.PdfDocument(str(file))
@@ -177,7 +206,14 @@ def _to_receipt(
         detected_total=_parse_decimal_lenient(extraction.total),
         detected_currency=currency,
         detected_vendor=extraction.vendor,
+        vendor_clean=extraction.vendor_clean or clean_vendor_name(extraction.vendor),
         detected_reference=extraction.reference,
+        detected_tax=_parse_decimal_lenient(extraction.tax),
+        tax_label=extraction.tax_label,
+        # Folder OCR has no ER "payment_mode"; the receipt's own card/tender
+        # hint is the best paying-card signal for the Zoho Expenses export.
+        payment_mode=_payment_mode(extraction),
+        document_type=extraction.document_type or "receipt",
         ocr_text=ocr_text,
         line_items=tuple(
             LineItem(
@@ -192,6 +228,31 @@ def _to_receipt(
             for item in extraction.line_items
         ),
     )
+
+
+def _payment_mode(extraction: ExtractedReceipt) -> str | None:
+    """The paying-card signal the entity chain resolves against.
+
+    Two readings of the same line disagree often (2026-08-24 measurement over
+    the April batch): asked to transcribe four faded digits the model lands 2
+    in 5 and invents the rest — "1234" came back three times, once for a
+    receipt that plainly prints 1672 — while asked WHICH of the payer's own
+    cards it can see it lands 4 in 5 with no false positives.
+
+    So a confirmed pick replaces whatever digits the free-text hint carried,
+    and the tender words are kept around it because they are what the receipt
+    says and Criss reads them. With no confirmed pick the hint passes through
+    untouched: an unlisted digit run resolves to no card anyway, and dropping
+    it would hide a card the registry has not been told about yet.
+    """
+    hint = (extraction.payment_hint or "").strip()
+    last4 = extraction.card_last4
+    if not last4:
+        return hint or None
+    if not hint:
+        return f"...{last4}"
+    words = re.sub(r"[\dxX*•#]{2,}", "", hint).strip(" -:.,")
+    return f"{words} ...{last4}".strip() if words else f"...{last4}"
 
 
 def _parse_date_lenient(raw: str | None) -> date | None:

@@ -32,6 +32,12 @@ class MatchType(str, Enum):
     POSSIBLE = "possible"          # weaker signal; review required
     FX_JUDGMENT = "fx_judgment"    # currencies differ; LLM judgment needed
     FX_REFERENCE = "fx_reference"  # cross-currency, deterministic via monthly reference rate (3.15)
+    # Cross-currency, deterministic via the ER report's own per-receipt
+    # base-currency conversion (Zoho's "1 BRL = x USD" line -> base_amount).
+    # Its own type, not FX_REFERENCE reuse: the workbench and the accuracy
+    # scorer must tell "matched on Zoho's per-receipt conversion" apart from
+    # "matched on the month's reference rate" (2026-07-23).
+    FX_BASE_AMOUNT = "fx_base_amount"
     AMBIGUOUS = "ambiguous"        # multiple equally-strong candidates
 
 
@@ -44,6 +50,7 @@ class ClassificationSource(str, Enum):
     VENDOR = "VENDOR"      # Tier 2: vendor-name fallback; mark with ⚠
     REVIEW = "REVIEW"      # Tier 3: confidence too low or no signal at all
     LEARNED = "LEARNED"    # Tier 1: confirmed merchant->category recalled from memory (Phase 2)
+    REGISTRY = "REGISTRY"  # Tier 1: canonical merchant-registry default (2026-07-29); preempts the LLM
     UNCLASSIFIED = "UNCLASSIFIED"  # pre-categorization default
 
 
@@ -191,6 +198,26 @@ class Transaction:
     # to FX-false-pair with EUR meal receipts paid on 2838.
     card_last4: str | None = None
 
+    # The 1-indexed row this charge occupies in its source spreadsheet
+    # (header is row 1, data starts at row 2); None for sources with no
+    # tabular row, such as the Chase statement PDF.
+    #
+    # Carried separately because `transaction_id` stopped encoding it.
+    # Ids were positional (`"{account_id}:{row_index}"`) and the sheet
+    # writeback (L1/L3, Criss's own workbook) recovered the row by parsing
+    # the id back apart. Content-derived ids (PR 2a of the living month)
+    # are stable under append and reorder, which is what operator
+    # decisions need, but they carry no row — so the row travels in its
+    # own field instead of being smuggled through the identity.
+    # Which file that row counts in is deliberately NOT here. A month takes
+    # several statements now (PR 2b-2b-2), and one charge genuinely occupies
+    # a row in each file that prints it: a mid-month partial and the closing
+    # cycle both contain it, at different rows. A single field on the charge
+    # can only name one of them, so the file-to-row anchors live per UPLOAD,
+    # in the snapshot's `statement_anchors`, and `source_row` stays what it
+    # has always been: the row in the file this charge was first read from.
+    source_row: int | None = None
+
 
 @dataclass(frozen=True)
 class Receipt:
@@ -269,6 +296,46 @@ class Receipt:
     # here as a short human-readable note, surfaced in the workbench. None
     # when vision agreed with the summary, or vision did not run.
     data_quality_note: str | None = None
+
+    # Receipt preview (2026-07-25): the ER-PDF page index (0-based) whose
+    # rendered image the vision join attributed to this expense row, so the
+    # workbench can serve a per-receipt preview without re-running the join.
+    # None when vision did not run or no image reading mapped to this row.
+    receipt_image_page: int | None = None
+
+    # Receipt-first tax parity (2026-07-27). Zoho Expense carries a tax/VAT
+    # line per expense; the receipt-first OCR path reads it off the receipt.
+    # The statement path never needs it (the charge is tax-inclusive), so
+    # both default None and only the OCR path + the Zoho Expenses export
+    # populate/consume them.
+    detected_tax: Decimal | None = None
+    tax_label: str | None = None
+
+    # Merchant registry (2026-07-29): the short storefront brand for
+    # `detected_vendor` with legal suffixes / distributor tails stripped
+    # ("COMERCIO DE X LTDA" -> "X"). Populated by the vision extractor
+    # (`ExtractedReceipt.vendor_clean`) or deterministically at ingest;
+    # `detected_vendor` stays the raw reading for audit. The registry
+    # resolver reads this first and falls back to a deterministic clean of
+    # `detected_vendor` when it is None, so non-vision paths still resolve.
+    vendor_clean: str | None = None
+
+    # The canonical merchant name the registry resolved this receipt to, and
+    # where the DISPLAY vendor came from ("registry" | "learned"). Both set in
+    # `generate_expenses` only (registry consult / Phase-6 ExpenseMemory); the
+    # grid composes `vendor = {display, raw, source}` from these plus any
+    # reviewer override. None => display falls back to `detected_vendor`.
+    canonical_vendor: str | None = None
+    vendor_source: str | None = None
+
+    # Non-receipt quarantine (2026-08-13): what the vision extractor decided
+    # this file IS ("receipt" | "statement" | "report_summary" | "other").
+    # Criss's real uploads mix statement PDFs and expense-report summary
+    # pages in with the receipts (May 2026: 7 of 27 files); anything but
+    # "receipt" is excluded from expense generation with a loud parse issue
+    # instead of becoming a phantom expense. Statement-mode reconcile()
+    # ignores this field entirely.
+    document_type: str = "receipt"
 
     @property
     def has_receipt_image(self) -> bool:

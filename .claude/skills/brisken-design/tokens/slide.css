@@ -1,0 +1,34 @@
+/* 1920 x 1080 deck geometry, lifted 1:1 from
+   "Dirk - Brisken - TreasuryCentral Solutions Overview 2026-07-27.pptx".
+   Values are px on a 1920-wide canvas (PowerPoint pt x 2). */
+:root {
+  --slide-w: 1920px;
+  --slide-h: 1080px;
+  --slide-margin-x: 89px;   /* every element starts here */
+  --slide-eyebrow-y: 89px;
+  --slide-headline-y: 147px;
+  --slide-footer-rule-y: 996px;
+  --slide-footer-text-y: 1008px;
+
+  --slide-eyebrow: 25px;     /* Segoe UI Semibold, 0.2em tracking, teal-600 */
+  --slide-headline-xl: 144px;/* title slide product name */
+  --slide-headline-l: 92px;  /* section divider */
+  --slide-headline-m: 76px;  /* content headline, short */
+  --slide-headline-s: 68px;
+  --slide-headline-xs: 64px; /* content headline, long */
+  --slide-lead: 32px;
+  --slide-card-title: 31px;
+  --slide-card-body: 27px;
+  --slide-step: 27px;
+  --slide-chip: 24px;
+  --slide-band: 24px;
+  --slide-footer: 18px;
+
+  --slide-card-radius: 28px;
+  --slide-chip-radius: 14px;
+  --slide-band-radius: 9px;
+  --slide-card-pad: 35px;
+  --slide-accent-rule-w: 49px;  /* the short teal tick above every card title */
+  --slide-accent-rule-h: 7px;
+  --slide-col-gap: 51px;
+}

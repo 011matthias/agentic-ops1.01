@@ -27,6 +27,41 @@
   </div>
 </div>
 
+<div class="card" id="engine">
+  <h2>Engine</h2>
+  <p class="muted">What the engine is doing for this campaign right now: worker liveness, the outbox by status, and capture-grounded inbound from the live mailboxes.</p>
+  {% set fr = engine.freshness %}
+  <div class="muted" style="font-size:12px; display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center;">
+    <span class="badge {% if fr.heartbeat_fresh %}stage-booked{% else %}suppressed{% endif %}" title="Cloud worker heartbeat: the tick loop that claims, sends and captures. Fresh under 2 hours.">worker tick {{ fr.heartbeat_age }}{% if fr.heartbeat_age != 'never' %} ago{% endif %}</span>
+    {% if fr.heartbeat and fr.heartbeat.counters %}<span title="Counters the worker reported on its last tick.">last tick:{% for k, n in fr.heartbeat.counters.items() %} {{ k }} {{ n }}{% if not loop.last %},{% endif %}{% endfor %}</span>{% endif %}
+    <span title="Today's landed cadence sends plus outstanding leases, against this campaign's daily cap.">sends today {{ engine.sends_today }}/{{ campaign.daily_cap }}</span>
+    {% if campaign.ramp_per_day %}<span title="Step-1 (new-contact) sends started today, against the per-day ramp.">new contacts today {{ engine.first_steps_today }}/{{ campaign.ramp_per_day }}</span>{% endif %}
+    <span title="Inbound events captured from the live mailboxes for enrolled contacts{% if campaign.approved_at %} since approval{% endif %}: mailbox truth, not log assertions.">inbound{% if campaign.approved_at %} since approval{% endif %}: {{ engine.inbound.get('reply', 0) }} reply, {{ engine.inbound.get('bounce', 0) }} bounce</span>
+  </div>
+  <div class="inline" style="margin-top:10px; flex-wrap:wrap;">
+    {% for st in ('queued', 'leased', 'drafted', 'sent', 'stalled', 'parked', 'failed') %}
+    <span class="badge {% if st == 'sent' %}stage-booked{% elif st in ('stalled', 'parked', 'failed') %}suppressed{% else %}stage-sent{% endif %}" title="send attempts in status '{{ st }}'">{{ st }} {{ engine.attempts.get(st, 0) }}</span>
+    {% endfor %}
+    {% if attempts %}<a class="muted" href="#attempts" style="font-size:12px;">attempt detail &darr;</a>{% endif %}
+  </div>
+  {% if wave %}
+  <div class="muted" style="margin-top:10px; font-size:12px;">
+    Staged wave: {{ wave.count }} draft(s) in Dirk's Drafts{% if wave.oldest_staged_days is not none %}, oldest {{ wave.oldest_staged_days }}d{% endif %} &middot; <a href="#staged-wave">review the wave &darr;</a>
+  </div>
+  {% endif %}
+  {% if guard_alert %}
+  <div style="margin-top:10px; padding:10px 14px; border:1px solid var(--red); border-radius:10px; background:var(--red-bg);">
+    <div style="color:var(--red);"><strong>Send guard alert</strong>{% if guard_alert.at %} ({{ guard_alert.at[:16] }}){% endif %}: {{ guard_alert.count or guard_alert.raw or '?' }} send(s) blocked by the pre-send guards; they stay queued/parked until resolved (usually a re-approve).</div>
+    {% if guard_alert.blocked %}
+    <div class="mono" style="font-size:11.5px; margin-top:6px;">
+      {% for b in guard_alert.blocked[:10] %}<div>{{ b.kind }}: {{ b.detail }}</div>{% endfor %}
+      {% if guard_alert.blocked|length > 10 %}<div>... +{{ guard_alert.blocked|length - 10 }} more</div>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
 <div class="card">
   <h2>1. Upload contacts (CSV / XLSX)</h2>
   <p class="muted">Headers matched case-insensitively (email, first_name, last_name, company, job_title, linkedin_url, ...). An optional <span class="mono">degree</span> column assigns warmness manually. Existing contacts are adopted with their full history, never duplicated. Uploads are inert until approval.</p>
@@ -62,7 +97,7 @@
 
 <div class="card">
   <h2>3. Sequences per degree</h2>
-  <p class="muted">Steps, one per line: <span class="mono">channel template_key day_offset</span> (offset = days after the previous step actually completed; step 1 counts from approval). LinkedIn steps become manual board tasks. Editing a sequence on an approved campaign revokes the approval.</p>
+  <p class="muted">Steps, one per line: <span class="mono">channel template_key day_offset [reply]</span> (offset = days after the previous step actually completed; step 1 counts from approval). Add <span class="mono">reply</span> to send the step inside the previous step's thread; its wire subject becomes RE: &lt;prior subject&gt;. LinkedIn steps become manual board tasks. Editing a sequence on an approved campaign revokes the approval.</p>
   <div class="grid2">
   {% for degree in degrees %}
     {% set seq = (sequences | selectattr('degree', 'equalto', degree) | list | first) %}
@@ -80,10 +115,22 @@
           {% endfor %}
         </select>
         <label>Steps</label>
-        <textarea name="steps" rows="4" placeholder="email {{ degree }}-e1 0&#10;email {{ degree }}-e2 4&#10;linkedin {{ degree }}-li1 2">{% if seq %}{% for s in seq.steps %}{{ s.channel }} {{ s.template_key }} {{ s.day_offset }}
+        <textarea name="steps" rows="4" placeholder="email {{ degree }}-e1 0&#10;email {{ degree }}-e2 4 reply&#10;linkedin {{ degree }}-li1 2">{% if seq %}{% for s in seq.steps %}{{ s.channel }} {{ s.template_key }} {{ s.day_offset }}{% if s.reply_to_prior %} reply{% endif %}
 {% endfor %}{% endif %}</textarea>
         <div style="margin-top:8px;"><button class="btn btn-small" type="submit">Save sequence</button></div>
       </form>
+      {% if campaign.status in ('approved', 'sending', 'paused') %}
+      <details style="margin-top:10px;">
+        <summary class="muted" style="cursor:pointer;">Edit live (keep sending)</summary>
+        <p class="muted" style="font-size:12px;">Append, insert, or swap the copy of steps not yet sent. Already-sent steps stay locked and must be kept unchanged at the top; the campaign keeps sending. To change a sent step, pause and re-approve.</p>
+        <form method="post" action="/campaigns/{{ campaign.campaign_id }}/sequences/{{ degree }}/delta">
+          <label>Steps</label>
+          <textarea name="steps" rows="4">{% if seq %}{% for s in seq.steps %}{{ s.channel }} {{ s.template_key }} {{ s.day_offset }}{% if s.reply_to_prior %} reply{% endif %}
+{% endfor %}{% endif %}</textarea>
+          <div style="margin-top:8px;"><button class="btn btn-small" type="submit">Apply delta</button></div>
+        </form>
+      </details>
+      {% endif %}
     </div>
   {% endfor %}
   </div>
@@ -181,6 +228,11 @@
             <input type="hidden" name="campaign" value="{{ campaign.campaign_id }}">
             <button class="btn btn-secondary btn-small" type="submit">Retry</button>
           </form>
+          <form method="post" action="/attempts/send-fresh" style="margin:0;">
+            <input type="hidden" name="attempt_key" value="{{ a.attempt_key }}">
+            <input type="hidden" name="campaign" value="{{ campaign.campaign_id }}">
+            <button class="btn btn-secondary btn-small" type="submit" title="re-queue as a plain fresh send (drop the reply-to-thread anchor)">Send fresh</button>
+          </form>
           <form method="post" action="/attempts/mark-sent" style="margin:0;">
             <input type="hidden" name="attempt_key" value="{{ a.attempt_key }}">
             <input type="hidden" name="campaign" value="{{ campaign.campaign_id }}">
@@ -192,6 +244,40 @@
     {% endfor %}
     </tbody>
   </table>
+</div>
+{% endif %}
+
+{% if wave %}
+<div class="card scroll-x" id="staged-wave">
+  <h2>Staged in Dirk's Drafts ({{ wave.count }}) <span class="mono muted" style="font-weight:400; font-size:12px;">wave {{ wave.ids_hash[-8:] }}</span></h2>
+  <p class="muted">Ready drafts the engine staged in Dirk's mailbox; his click is the send gate. Visibility only: nothing on this page releases or sends.</p>
+  {% if wave.oldest_staged_days is not none and wave.oldest_staged_days > 5 %}
+  <div style="padding:10px 14px; border:1px solid var(--orange); border-radius:10px; background:var(--orange-bg); margin-bottom:10px;">
+    Oldest staged draft is {{ wave.oldest_staged_days }} days old; Dirk may be sitting on this wave.
+  </div>
+  {% endif %}
+  {% if wave.blocks %}
+  <div style="padding:10px 14px; border:1px solid var(--orange); border-radius:10px; background:var(--orange-bg); margin-bottom:10px;">
+    <strong>{{ wave.blocks|length }} staged draft(s) fail the send guards and are excluded from the wave:</strong>
+    <ul style="margin:6px 0 0;">{% for b in wave.blocks %}<li>{{ b.contact_name }}: <span class="mono">{{ b.kind }}</span> {{ b.detail }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if wave['items'] %}
+  <table>
+    <thead><tr><th>Contact</th><th>To</th><th>Subject</th><th>Staged</th><th>Step</th></tr></thead>
+    <tbody>
+    {% for i in wave['items'] %}
+      <tr>
+        <td><a href="/contacts/{{ i.contact_id }}">{{ i.contact_name }}</a></td>
+        <td class="mono" style="font-size:11.5px;">{{ i.to }}</td>
+        <td>{{ i.subject or '' }}</td>
+        <td class="muted">{% if i.staged_days == 0 %}today{% else %}{{ i.staged_days }}d ago{% endif %}</td>
+        <td>{{ i.step_no }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
 </div>
 {% endif %}
 
@@ -255,6 +341,33 @@
   {% endif %}
   {% endif %}{# /status == 'done' #}
 </div>
+
+{% if campaign.status != 'done' %}
+<div class="card">
+  <h2>Schedule &amp; pacing</h2>
+  <p class="muted" style="margin:0 0 10px;">
+    {% if campaign.start_not_before %}Sends nothing before <strong>{{ campaign.start_not_before }}</strong>.{% else %}No start-date hold.{% endif %}
+    {% if campaign.ramp_per_day %}Up to <strong>{{ campaign.ramp_per_day }}</strong> new contacts/day.{% else %}No ramp (all first sends become due at once; only the daily cap brakes the burst).{% endif %}
+    Hold a wave until contacts are back, and spread the first touch over days.
+  </p>
+  <form method="post" action="/campaigns/{{ campaign.campaign_id }}/schedule" class="row-actions">
+    <div style="min-width:200px;"><label>Start no earlier than (blank to clear)</label>
+      <input type="date" name="start_not_before" value="{{ campaign.start_not_before or '' }}"></div>
+    <div style="min-width:170px;"><label>New contacts per day (blank/0 = off)</label>
+      <input type="number" min="0" name="ramp_per_day" value="{{ campaign.ramp_per_day if campaign.ramp_per_day is not none else '' }}"></div>
+    <button class="btn btn-small" type="submit">Save</button>
+  </form>
+  {% if report and report.projected_schedule %}
+  <p class="muted" style="margin:14px 0 4px;">Projected send schedule (estimate; ignores replies, bounces, and the cross-campaign mailbox cap):</p>
+  <table style="border-collapse:collapse; font-size:13px;">
+    <thead><tr><th style="text-align:left; padding:2px 16px 2px 0;">Date</th><th style="text-align:left; padding:2px 0;">Sends</th></tr></thead>
+    <tbody>
+    {% for d in report.projected_schedule %}<tr><td style="padding:2px 16px 2px 0;">{{ d.date }}</td><td style="padding:2px 0;">{{ d.count }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endif %}
 
 {% if campaign.status in ('approved', 'sending', 'paused') %}
 <div class="card">

@@ -4,11 +4,48 @@ workstream: p2-product-decks
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-07-22
+updated: 2026-07-23
 general_ref: status/p2-lead-gen-general.md
 ---
 
 # Brisken / Product decks (p2)
+
+## 2026-07-23 — NEW Overview APPROVED; engine promoted; product-deck rebuild wave
+
+- **Dirk approved the NEW Overview** (`NEW - Brisken - TreasuryCentral
+  Solutions Overview 2026-07-21.pptx`, owner relay 2026-07-23). The
+  Overview DIRECTION decision (clone-and-patch vs NEW) is resolved: NEW.
+  Approval read as content approval; promotion into Product Assets and
+  the fate of the superseded `2026-08 PROPOSAL` + `MN - ` variants stay
+  Dirk's call (swap runbook unchanged).
+- **Build source promoted** out of the session scratchpad into
+  `automations/lead-generation/deckgen/native/` (tokens / draw / grammar /
+  assets / compose / render / montage + specs + tests). Regression proof:
+  composing `native/specs/overview.yaml` reproduces the approved deck
+  **part-for-part (121/121 zip parts md5-identical** to the committed
+  deliverable). The "build source ephemeral" debt is closed.
+- **Standard codified** in `deckgen/DESIGN.md` (tokens + per-deck palettes,
+  slide grammar + content contracts, gates G0-G6, rollout rules);
+  MESSAGING.md carries the Dirk-review vocabulary additions; six Dirk
+  decisions became fixture-enforced banned terms (`demo-banned-terms.json`:
+  your live SAP data, SAP OneExposure, AI Digital Workforce, ChatGPT,
+  central repository, cockpit). `context/deck-fix-pass-prompt.md` deleted
+  (superseded; surviving rules folded into DESIGN.md §2).
+- **Wave SHIPPED (same day):** all four product decks rebuilt from scratch
+  on the approved system (one family, per-deck accent + layout signature)
+  and uploaded to Asset Testing as `NEW - Brisken - <Deck> 2026-07-23`
+  pptx+pdf pairs. Gates: banned-terms/em-dash PASS (11 terms), native
+  font/rIds/hidden clean, slop scan clean, 14-checker adversarial
+  source-trace (6 REAL findings fixed, incl. a subject-drop that made the
+  platform "in production across six industries" claim read app-level),
+  full-size app-slide visual review (caught one hidden-overflow bug,
+  fixed), upload re-list 8/8 verified + all four pptx re-downloaded and
+  slide-text-identical to the local builds. Deliverables of record + full
+  provenance: `deliverables/product-decks-redesign/` (CHANGELOG.md).
+- **Folder note (2026-07-23 upload):** the approved Overview pptx now sits
+  in Asset Testing WITHOUT the "NEW - " prefix (renamed since the last
+  session; its PDF still carries it), and the non-MN "2026-08 PROPOSAL"
+  pairs are gone; "MN - " copies remain. Reconciliation stays Dirk's call.
 
 ## 2026-07-21 update — Dirk review pass + distinct aesthetics
 
@@ -137,12 +174,15 @@ engine `tools/pptx_slide_ops.py`).
 
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
-| Build system (deckgen v2) | done | Engine + library + composer + render + upload live; 10 pytest green; 5 decks built end-to-end | Reuse for future decks; refresh library when Dirk's reference changes (RENAMES tripwire fails loudly) | none | `automations/lead-generation/deckgen/README.md` |
-| MDH Commodities proposal (9 sl) | review | In Asset Testing, re-verified 2026-07-17; 2 use cases (curve + Valuation & Exposure Prices) | Dirk review | Dirk | `Asset Testing/Brisken - Market Data Hub Commodities 2026-08 PROPOSAL.*` |
-| Market Data Hub proposal (11 sl) | review | In Asset Testing, re-verified; 4 use cases (adds Credit & Counterparty Data) | Dirk review | Dirk | same folder |
-| Smart Trading proposal (10 sl) | review | In Asset Testing, re-verified; 3 use cases (One FX Trade, Derivatives & Securities, OTC Commodity Swaps); BST naming | Dirk review | Dirk | same folder |
-| Digital Co-Worker proposal (12 sl) | review | In Asset Testing, re-verified; 5 use-case one-pagers (adds Bank Statement Intake), internal demo labeled | Dirk review | Dirk | same folder |
-| Overview revision proposal (32 sl) | review | In Asset Testing, re-verified; Funding one-pager elaborated, sourced customer-base credential caption | Dirk review | Dirk | same folder |
+| Build system (native v3) | done | From-scratch engine promoted from scratchpad; Overview regression 121/121 parts identical; 12 pytest green; CI gate `deckgen-native-tests.yml` | Build the four product decks on it | none | `deckgen/native/` + `deckgen/DESIGN.md` |
+| Build system (deckgen v2, clone-and-patch) | dormant | Superseded for product decks; still owns the PROPOSAL artifacts + library mechanics | Keep until Dirk rules on PROPOSAL variants; prospect decks (Sanofi/Zalando) still reference it pending their rebuild | none | `automations/lead-generation/deckgen/README.md` |
+| Market Data Hub NEW (13 sl) | review | In Asset Testing 2026-07-23, G0-G6 verified; 4 use cases; FSI success story | Dirk per-deck pick | Dirk | `Asset Testing/NEW - Brisken - Market Data Hub 2026-07-23.*` |
+| MDH Commodities NEW (10 sl) | review | In Asset Testing 2026-07-23, G0-G6 verified; 2 use cases; no success slide (none sourced) | Dirk per-deck pick | Dirk | same folder |
+| Smart Trading NEW (11 sl) | review | In Asset Testing 2026-07-23, G0-G6 verified; 3 use cases; ACT/LSEG stats in-sentence | Dirk per-deck pick | Dirk | same folder |
+| Digital Co-Worker NEW (14 sl) | review | In Asset Testing 2026-07-23, G0-G6 verified; 5 use cases (internal-demo label kept); Agri+Chem success | Dirk per-deck pick | Dirk | same folder |
+| v2 PROPOSAL variants (clone-and-patch) | superseded | Non-MN PROPOSAL pairs observed gone from Asset Testing 2026-07-23; MN- copies remain | Fate of remaining variants = Dirk's call | Dirk | `deckgen/README.md` (v2 section) |
+| Overview NEW (31 sl) | **approved** | Dirk approved (owner relay 2026-07-23); review integrated, 0 placeholders | Swap into Product Assets on Dirk's word (runbook); naming reconciliation of PROPOSAL + MN- variants = Dirk's call | Dirk (filing) | `Asset Testing/NEW - ...2026-07-21.*`; repo copy `deliverables/tc-overview-redesign/` |
+| Overview revision proposal (32 sl, clone-and-patch) | superseded | Direction decision went to NEW; artifact still in Asset Testing | Fate = Dirk's call (archive or delete) | Dirk | same folder |
 | Swap into Product Assets | blocked | Runbook documented; NOT executed | Per-deck swap after explicit Dirk approval | Dirk approval per deck | deckgen README "Swap runbook" |
 | Old dark-cockpit generators | dormant | Superseded for product decks; TC prospect decks (Sanofi/Zalando) still on old pipeline | Rebuild TC prospect decks on the new foundation (next wave, per owner scope decision) | none | `.scratch/deckgen/build-treasurycentral.js` |
 

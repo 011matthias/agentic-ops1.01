@@ -100,6 +100,33 @@ def test_entry_status_survives_snapshot_round_trip(tmp_path):
     assert all(t.entry_status is None for t in txs3)
 
 
+def test_card_last4_survives_snapshot_round_trip():
+    """WS3: the per-row card must survive the snapshot so a later re-match
+    (the bulk receipts-folder attach) still card-scopes; a pre-WS3 snapshot
+    with no key must still load (falling back to account_id)."""
+    from expense_recon.matching.types import Transaction
+
+    tx = Transaction(
+        transaction_id="row-1",
+        legal_entity_id="le",
+        account_id="chase-2838-family",
+        transaction_date=date(2026, 6, 1),
+        posting_date=None,
+        amount=Decimal("10.00"),
+        transaction_currency="USD",
+        account_card_currency="USD",
+        vendor_from_statement="PLAIN VENDOR",
+        card_last4="3645",
+    )
+    snap = snapshot_to_dict([tx], [], match_month([tx], []), [])
+    (txr,), _, _, _ = snapshot_from_dict(snap)
+    assert txr.card_last4 == "3645"
+    # legacy snapshot (pre-WS3, no key) still loads, card_last4 -> None
+    snap["transactions"][0].pop("card_last4")
+    (txl,), _, _, _ = snapshot_from_dict(snap)
+    assert txl.card_last4 is None
+
+
 def test_formula_column_warns_but_never_aborts(tmp_path):
     wb = Workbook()
     ws = wb.active

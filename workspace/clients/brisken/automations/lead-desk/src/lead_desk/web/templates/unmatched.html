@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Unmatched - Brisken Lead Desk{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Unmatched capture events</h1>
+  <div class="muted">Captured mail that matched no contact, parked for review. Link a group to an existing contact (every parked event replays onto its timeline) or dismiss it with a reason. No contact is ever auto-created.</div>
+  {% if request.query_params.get('linked') %}<div style="color:var(--green); font-weight:600; margin-top:8px;">&#10003; Linked {{ request.query_params.get('linked') }} event(s).</div>{% endif %}
+  {% if request.query_params.get('dismissed') %}<div style="color:var(--green); font-weight:600; margin-top:8px;">&#10003; Dismissed {{ request.query_params.get('dismissed') }} event(s).</div>{% endif %}
+</div>
+
+<div class="card scroll-x">
+  <div class="muted" style="margin-bottom:8px;">{{ groups|length }} open address(es)</div>
+  <table>
+    <thead><tr><th>Email</th><th title="How often capture has seen mail for this address">Seen</th><th>First / last seen</th><th>Latest message</th><th>Link to contact</th><th>Dismiss</th></tr></thead>
+    <tbody>
+    {% for g in groups %}
+      <tr>
+        <td class="mono" style="font-size:12px;">{{ g.email }}</td>
+        <td><span class="badge tier">{{ g.seen_count }}&times;</span></td>
+        <td class="mono" style="font-size:11.5px;">{{ g.first_seen[:10] }} / {{ g.last_seen[:10] }}</td>
+        <td>{% if g.subject %}<strong>{{ g.subject }}</strong>{% endif %}{% if g.direction %}<div class="muted" style="font-size:12px;">{{ g.direction }}</div>{% endif %}</td>
+        <td>
+          <form method="post" action="/unmatched/link" class="inline" style="margin:0; flex-wrap:wrap; gap:4px;">
+            <input type="hidden" name="email" value="{{ g.email }}">
+            <input type="text" name="contact_id" list="contact-ids" placeholder="contact id" required style="width:180px; padding:3px 6px; font-size:12px;">
+            <label class="inline" style="margin:0; color:var(--text); font-size:12px;"><input type="checkbox" name="set_alt_email" value="1" style="width:auto;"> save as alt email</label>
+            <button class="btn btn-small" type="submit">Link</button>
+          </form>
+        </td>
+        <td>
+          <form method="post" action="/unmatched/dismiss" class="inline" style="margin:0; gap:4px;">
+            <input type="hidden" name="email" value="{{ g.email }}">
+            <input type="text" name="reason" placeholder="reason (required)" required style="width:150px; padding:3px 6px; font-size:12px;">
+            <button class="btn btn-small btn-secondary" type="submit">Dismiss</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">Queue is empty: every captured event matched a contact.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <datalist id="contact-ids">
+    {% for c in contacts %}<option value="{{ c.contact_id }}">{{ c.first_name }} {{ c.last_name }}{% if c.company %} ({{ c.company }}){% endif %}{% if c.email %} &lt;{{ c.email }}&gt;{% endif %}</option>{% endfor %}
+  </datalist>
+</div>
+{% endblock %}

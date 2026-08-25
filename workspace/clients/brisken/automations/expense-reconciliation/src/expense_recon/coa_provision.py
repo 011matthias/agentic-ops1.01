@@ -64,6 +64,28 @@ def load_provisioning(path: str | Path) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def provisioned_entity_labels(path: str | Path | None = None) -> list[str]:
+    """The legal-entity labels defined in the provisioning file, sorted.
+
+    This is the authoritative entity list the chart of accounts is keyed on
+    ("Corporate Services" / "Cloud Services" for Brisken). It is the source
+    that fills the reviewer's entity picker when ``settings['entities']`` is
+    empty (the real hosted case: the entities live here on ``/data``, not in
+    the settings blob). ``path`` defaults to the ``EXPENSE_RECON_COA_PROVISION``
+    env var; unset or unreadable yields an empty list (fail-open).
+    """
+    import os
+
+    if path is None:
+        path = os.environ.get(PROVISION_ENV)
+    if not path:
+        return []
+    entities = (load_provisioning(path) or {}).get("entities")
+    if not isinstance(entities, dict):
+        return []
+    return sorted({str(k).strip() for k in entities if str(k).strip()})
+
+
 def coa_validation_for(entity_label: str, provisioning: dict) -> dict | None:
     """Build a ``coa_validation`` block for ``entity_label`` from a loaded
     provisioning dict, or None when the entity is not provisioned.
@@ -102,28 +124,122 @@ def coa_validation_for(entity_label: str, provisioning: dict) -> dict | None:
     return block
 
 
+def entity_from_settings(settings: dict | None, entity_label: str) -> dict | None:
+    """The stored settings-registry entry for one legal entity
+    (`settings["entities"]`, Phase 5), matched case-insensitively like the
+    provisioning file's entities. None when the registry has no entry."""
+    entities = (settings or {}).get("entities")
+    if not isinstance(entities, dict):
+        return None
+    key = (entity_label or "").strip().lower()
+    return next(
+        (
+            v
+            for k, v in entities.items()
+            if str(k).strip().lower() == key and isinstance(v, dict)
+        ),
+        None,
+    )
+
+
+def coa_validation_from_settings(
+    entity_label: str, settings: dict | None, provisioning: dict | None
+) -> dict | None:
+    """Build a ``coa_validation`` block preferring the settings entity
+    registry over the /data provisioning file (Phase 5: entities become
+    definable in the UI, the file stays the fallback).
+
+    The settings entry supplies ``org_id`` / ``scope_groups`` (and may carry
+    its own ``chart_path``); the chart file path falls back to the
+    provisioning file's ``chart_path``, so a registry entry works without
+    re-stating where the chart lives. No settings entry => the file's own
+    entity mapping, exactly as before. None when neither source can build a
+    complete block (fail-open, run left unguarded)."""
+    ent = entity_from_settings(settings, entity_label)
+    file_chart = (provisioning or {}).get("chart_path")
+    if ent is not None and ent.get("org_id"):
+        chart_path = ent.get("chart_path") or file_chart
+        if chart_path:
+            block: dict = {
+                "enabled": True,
+                "chart_path": str(chart_path),
+                "org_id": str(ent["org_id"]),
+                "entity_label": entity_label,
+            }
+            if ent.get("scope_groups"):
+                block["scope_groups"] = list(ent["scope_groups"])
+            if ent.get("types"):
+                block["types"] = list(ent["types"])
+            return block
+    if provisioning is not None:
+        return coa_validation_for(entity_label, provisioning)
+    return None
+
+
+def coa_validation_for_all_entities(
+    settings: dict | None, provisioning: dict | None
+) -> dict | None:
+    """A `coa_validation` block covering EVERY known entity, for a batch that
+    does not target one (Cards R4).
+
+    Since Cards R3 a batch can carry receipts from several companies, and the
+    owner ruled 2026-08-22 that it exports as one file with the entity as a
+    column. Such a batch has no single `legal_entity_id`, so the per-entity
+    lookup returned None and the run went out completely un-validated — the
+    gate silently did not exist for exactly the batches most likely to post an
+    account to the wrong company. This block carries one entry per entity;
+    `cli._build_coa_gate` turns it into a gate that judges each row against
+    the chart of the entity that actually pays it.
+
+    None when nothing is provisioned (fail-open, same as before).
+    """
+    labels: set[str] = set()
+    for key in ((settings or {}).get("entities") or {}):
+        if str(key).strip():
+            labels.add(str(key).strip())
+    for key in ((provisioning or {}).get("entities") or {}):
+        if str(key).strip():
+            labels.add(str(key).strip())
+    entries = []
+    for label in sorted(labels):
+        block = coa_validation_from_settings(label, settings, provisioning)
+        if block is not None:
+            entries.append(block)
+    if not entries:
+        return None
+    return {"enabled": True, "entities": entries}
+
+
 def apply_to_config(
-    cfg: dict, entity_label: str, *, path: str | Path | None = None
+    cfg: dict,
+    entity_label: str,
+    *,
+    path: str | Path | None = None,
+    settings: dict | None = None,
 ) -> dict:
     """Return ``cfg`` with a per-entity ``coa_validation`` block injected from
     the provisioning file, or the same ``cfg`` unchanged when provisioning is
     absent / disabled / does not cover this entity.
 
     ``path`` defaults to the ``EXPENSE_RECON_COA_PROVISION`` env var. An
-    existing ``coa_validation`` block in ``cfg`` is never overwritten. Wholly
-    fail-open: any unexpected error returns ``cfg`` untouched, because the gate
-    guards the export and must not be able to break a run.
+    existing ``coa_validation`` block in ``cfg`` is never overwritten.
+    ``settings`` (Phase 5) is the stored web settings; when its ``entities``
+    registry covers this entity, that entry wins over the file's mapping
+    (``coa_validation_from_settings``). Wholly fail-open: any unexpected
+    error returns ``cfg`` untouched, because the gate guards the export and
+    must not be able to break a run.
     """
     try:
         if cfg.get("coa_validation") is not None:
             return cfg  # respect an explicit block; don't clobber
         prov_path = path if path is not None else os.environ.get(PROVISION_ENV)
-        if not prov_path:
-            return cfg
-        provisioning = load_provisioning(prov_path)
-        if provisioning is None:
-            return cfg
-        block = coa_validation_for(entity_label, provisioning)
+        provisioning = load_provisioning(prov_path) if prov_path else None
+        if entity_label.strip():
+            block = coa_validation_from_settings(entity_label, settings, provisioning)
+        else:
+            # Entity-less batch (Cards R3): entity resolves per receipt, so
+            # gate against every entity's chart rather than none.
+            block = coa_validation_for_all_entities(settings, provisioning)
         if block is None:
             logger.info(
                 "COA provisioning: no chart for legal entity %r; run left "
@@ -133,11 +249,19 @@ def apply_to_config(
             return cfg
         new_cfg = dict(cfg)
         new_cfg["coa_validation"] = block
-        logger.info(
-            "COA provisioning: run validated against entity %r (org %s)",
-            block["entity_label"],
-            block["org_id"],
-        )
+        if block.get("entities"):
+            logger.info(
+                "COA provisioning: run validated per receipt against %d entity "
+                "charts (%s)",
+                len(block["entities"]),
+                ", ".join(e["entity_label"] for e in block["entities"]),
+            )
+        else:
+            logger.info(
+                "COA provisioning: run validated against entity %r (org %s)",
+                block["entity_label"],
+                block["org_id"],
+            )
         return new_cfg
     except Exception:  # noqa: BLE001 - never let provisioning break a run
         logger.debug("COA provisioning failed; leaving config unchanged", exc_info=True)
