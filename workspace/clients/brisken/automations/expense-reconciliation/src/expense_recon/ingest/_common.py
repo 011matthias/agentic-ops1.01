@@ -288,6 +288,76 @@ def assign_content_ids(transactions: "list") -> "list":
     ]
 
 
+@dataclass(frozen=True)
+class TransactionMerge:
+    """What one statement upload contributed to a month's charges.
+
+    `transactions` is the month's full set after the fold, `added` the ids
+    this upload put there, `duplicates` the ids it supplied that the set
+    already held. The two id lists are what an append route reports back
+    ("14 rows, 11 already here") and what it records per statement.
+    """
+
+    transactions: list
+    added: list[str]
+    duplicates: list[str]
+
+
+def merge_transactions(existing: "list", incoming: "list") -> TransactionMerge:
+    """Fold a freshly parsed statement into the charges a month already holds.
+
+    The living month (PR 2b-2b) lets a statement arrive in pieces: one card
+    at a time, a mid-month partial then the full cycle, the same file twice
+    by accident. Every one of those overlaps what is already there, so the
+    fold has to be by IDENTITY rather than by position or by file.
+
+    `transaction_id` is that identity — content-derived since PR 2a, which
+    is precisely what makes it survive an append. Nothing else here is a
+    second definition of sameness: two rows are the same charge exactly when
+    `transaction_content_id` says so, and the occurrence suffix already keeps
+    two identical coffees on one day apart, in both the old set and the new.
+
+    Three properties the callers depend on:
+
+    * **First-write-wins.** A re-supplied row keeps the object the month
+      already committed. Operator decisions, `source_row`, and every stored
+      judgment key on that row; swapping in a byte-equal copy parsed from a
+      different file would re-point `source_row` into the wrong workbook and
+      buy nothing.
+    * **`existing` passes through untouched, in order.** This function
+      filters what an upload CONTRIBUTES; it never edits the month. An
+      `existing` list that somehow repeats an id keeps both rows, because
+      silently changing a month's charge count is not a merge's business.
+    * **A contradiction surfaces as two rows, not one.** A file whose sign
+      inference differs between a partial and a full upload gives the same
+      printed row two different ids (see `assign_content_ids`), so both
+      land. That is the deliberate call: the uploads genuinely disagree
+      about which way the money went, and deduping one away would pick a
+      winner arbitrarily.
+
+    Note what identity includes: `account_id`. Two uploads of one card's
+    statement typed against different account ids dedupe against nothing and
+    the month doubles. That is honest at this layer — the rows really do
+    claim to be different accounts — and it is the append route's job to
+    keep the account stable across a card's uploads.
+    """
+    seen = {t.transaction_id for t in existing}
+    merged = list(existing)
+    added: list[str] = []
+    duplicates: list[str] = []
+    for t in incoming:
+        tid = t.transaction_id
+        if tid in seen:
+            duplicates.append(tid)
+            continue
+        seen.add(tid)
+        merged.append(t)
+        added.append(tid)
+    return TransactionMerge(
+        transactions=merged, added=added, duplicates=duplicates
+    )
+
+
 def validate_required_map(column_map: Mapping[str, str]) -> None:
     """Raise `StatementParseError` if required column-map keys are missing."""
     missing = [k for k in REQUIRED_KEYS if k not in column_map]

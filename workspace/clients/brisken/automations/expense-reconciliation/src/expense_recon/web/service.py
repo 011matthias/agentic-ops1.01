@@ -39,6 +39,7 @@ from ..duplicates import (
     find_duplicate_charges,
     find_duplicate_receipts,
 )
+from ..ingest._common import merge_transactions
 from ..matching.types import (
     Categorization,
     ClassificationSource,
@@ -79,6 +80,7 @@ from .serialize import (
     receipt_to_dict,
     snapshot_from_dict,
     snapshot_to_dict,
+    transaction_from_dict,
 )
 from .store import (
     DISPOSITION_BUSINESS,
@@ -5211,6 +5213,20 @@ def has_statement(run: RunRow) -> bool:
     return bool((run.snapshot or {}).get("transactions"))
 
 
+def month_transactions(run: RunRow) -> list:
+    """The charges this month currently holds, rebuilt from its snapshot.
+
+    What a statement upload folds into (`merge_transactions`). Reads the
+    transaction block ALONE rather than going through `snapshot_from_dict`,
+    which would rebuild every receipt and the whole match outcome to reach
+    it; the same narrow read `has_statement` does one function up.
+    """
+    return [
+        transaction_from_dict(x)
+        for x in (run.snapshot or {}).get("transactions") or []
+    ]
+
+
 def _batch_llm_client(cfg: dict):
     """(client, tracker, source) for batch-lifecycle OCR, mirroring the
     folder-ingest sourcing: the run's own llm block first, the deployment
@@ -5853,15 +5869,60 @@ def execute_statement_attach(
 
     `reconcile()` itself is untouched: this reuses the module-level
     pipeline pieces exactly as the folder-ingest re-match already does.
+
+    Since PR 2b-2b-1 the read and the fold are their own steps
+    (`read_statement_upload` + `merge_transactions`), so an append route
+    can run the same three-step sequence over an already-reconciling
+    month. Here `existing` is empty by construction — `prepare_statement_attach`
+    refuses a second upload — which is what makes the one-shot attach the
+    degenerate case of that path rather than a second implementation of it.
+    """
+    transactions, stmt_issues, new_cfg, entity = read_statement_upload(
+        run,
+        stmt_name=stmt_name,
+        column_map=column_map,
+        form=form,
+        settings=settings,
+        on_stage=on_stage,
+    )
+    merged = merge_transactions(month_transactions(run), transactions)
+
+    return rematch_month(
+        store,
+        run,
+        transactions=merged.transactions,
+        cfg=new_cfg,
+        entity=entity,
+        statement_issues=stmt_issues,
+        now_iso=now_iso,
+        learning_db_path=learning_db_path,
+        on_stage=on_stage,
+        require_no_statement=True,
+    )
+
+
+def read_statement_upload(
+    run: RunRow,
+    *,
+    stmt_name: str,
+    column_map: dict | None,
+    form: RunForm,
+    settings: dict | None,
+    on_stage=None,
+) -> tuple[list, list, dict, str]:
+    """Resolve one uploaded statement file's config block and read it.
+
+    The STATEMENT half of an attach, split out so the append path
+    (PR 2b-2b) reads its file exactly the way the first one was read
+    rather than growing a parallel copy that drifts — the same reason
+    `rematch_month` exists for the half after it.
+
+    Returns `(transactions, issues, cfg, entity)`. The cfg is the run's
+    config with this file's `statement` block written over it and master
+    data applied; the entity is the statement's own, which the caller
+    hands to `rematch_month` for the cross-entity advisory.
     """
     from ..cli import _load_statement
-
-    def _stage(name: str) -> None:
-        if on_stage is not None:
-            try:
-                on_stage(name)
-            except Exception:  # noqa: BLE001 - progress is best-effort
-                pass
 
     work_dir = Path(run.work_dir)
     cfg = run.config or {}
@@ -5880,24 +5941,16 @@ def execute_statement_attach(
     new_cfg = {**cfg, "statement": stmt_block}
     new_cfg = apply_master_data(new_cfg, form, settings)
 
-    _stage("reading")
+    if on_stage is not None:
+        try:
+            on_stage("reading")
+        except Exception:  # noqa: BLE001 - progress is best-effort
+            pass
     try:
         transactions, stmt_issues = _load_statement(new_cfg, work_dir)
     except ConfigError as exc:
         raise RunInputError(str(exc)) from exc
-
-    return rematch_month(
-        store,
-        run,
-        transactions=transactions,
-        cfg=new_cfg,
-        entity=entity,
-        statement_issues=stmt_issues,
-        now_iso=now_iso,
-        learning_db_path=learning_db_path,
-        on_stage=on_stage,
-        require_no_statement=True,
-    )
+    return transactions, stmt_issues, new_cfg, entity
 
 
 def rematch_month(
