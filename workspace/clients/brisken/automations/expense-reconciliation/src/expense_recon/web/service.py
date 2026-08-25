@@ -185,6 +185,12 @@ class RunForm:
     # default keeps `detected_currency=None` and is flagged for review.
     receipts_default_currency: str
     use_llm: bool
+    # Which provisioned card preset this upload was made against, when the
+    # SPA sent one. Recorded per statement (PR 2b-2b-2) so a month can tell
+    # that two uploads are the SAME card, which is what makes an account-id
+    # change between them worth saying out loud. Defaulted: every existing
+    # construction site predates it and means "no card preset".
+    card_key: str = ""
 
     def resolve_legal_entity(self) -> str:
         """Derive this run's legal entity from the paying account."""
@@ -198,6 +204,31 @@ def _safe_name(name: str, fallback: str) -> str:
     trust a client-supplied path."""
     base = Path(name).name.strip() if name else ""
     return base or fallback
+
+
+def _unique_upload_name(work_dir: Path, name: str) -> str:
+    """`name`, or the first `stem-N.suffix` that is free in `work_dir`.
+
+    Statement uploads land directly in the run's work dir (receipts go to
+    subfolders), so the only thing a statement can collide with is another
+    statement — which stopped being impossible when the month began taking
+    several. Criss's per-card exports carry the bank's own filename, so two
+    cards genuinely arrive as the same `statement.xlsx`.
+
+    Overwriting is the dangerous outcome, not the confusing one: the first
+    upload's charges keep their `source_row`, the bytes underneath them are
+    replaced, and the sheet writeback then annotates the second file's rows
+    with the first file's accounts. The first free suffix is returned instead,
+    so a fresh batch (nothing to collide with) keeps the exact name it always
+    had and the one-shot path is unchanged.
+    """
+    if not (work_dir / name).exists():
+        return name
+    stem, suffix = Path(name).stem, Path(name).suffix
+    n = 2
+    while (work_dir / f"{stem}-{n}{suffix}").exists():
+        n += 1
+    return f"{stem}-{n}{suffix}"
 
 
 @dataclass
@@ -2840,6 +2871,9 @@ def build_view(
         ],
         # L3: xlsx statements can be written back with the resolved accounts.
         "writeback_available": writeback_available(run),
+        # The uploads this month has taken (PR 2b-2b-2). Parallel field:
+        # empty on every run that predates it, including reconciling ones.
+        "statements": month_statements(run),
         # Bulk receipts-folder attach (2026-07-27): the last upload's summary
         # (n_ingested / n_matched_new / n_review_new / n_possible_duplicates /
         # llm_source / cost_usd / issues), or None when no folder was uploaded.
@@ -3026,22 +3060,65 @@ def writeback_available(run: RunRow) -> bool:
     return Path(stmt).suffix.lower() in (".xlsx", ".xlsm")
 
 
+def writeback_statement_name(run: RunRow, requested: str = "") -> str | None:
+    """Which statement file a writeback should annotate, or None.
+
+    Default is the run's current `config.statement.path`, which is the last
+    upload and the only one a single-statement month ever had. `requested`
+    names a different one, and is resolved ONLY against this run's recorded
+    `statements[]`: the parameter reaches the writeback route from a query
+    string, and a name that is merely sanitized would still let a caller
+    address any file in the work dir. Matching an entry is the check.
+    """
+    requested = (requested or "").strip()
+    if not requested:
+        stmt = (run.config or {}).get("statement", {}).get("path", "")
+        return stmt or None
+    for entry in month_statements(run):
+        if entry.get("file") == requested:
+            return requested
+    return None
+
+
 def regenerate_writeback(
-    run: RunRow, decisions: dict[str, Decision], overrides: dict
+    run: RunRow,
+    decisions: dict[str, Decision],
+    overrides: dict,
+    statement_file: str = "",
 ) -> Path | None:
     """Write the L3 sheet writeback for a run: HER OWN uploaded workbook
     with one new "Zoho Account (tool)" column, after the reviewer's
     decisions + overrides. Returns None when the statement is not an
-    Excel workbook (CSV / PDF runs have no sheet to write back into)."""
-    if not writeback_available(run):
-        return None
+    Excel workbook (CSV / PDF runs have no sheet to write back into).
+
+    A month can hold several statements now, so this writes ONE of them:
+    `statement_file` when given, the run's current statement otherwise, and
+    exactly the charges THAT file contains, each at the row it occupies
+    there (`statement_anchors`). Writing every charge into whichever workbook
+    happened to be current is the wrong-cell bug this scoping exists to
+    prevent, and scoping on the charge's own first-read row instead would
+    leave the closing cycle blank wherever the partial got there first.
+    """
     from ..output.sheet_writeback import write_sheet_writeback
+
+    name = writeback_statement_name(run, statement_file)
+    if name is None or Path(name).suffix.lower() not in (".xlsx", ".xlsm"):
+        return None
 
     transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
     receipts = apply_overrides(receipts, overrides)
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     stmt_cfg = run.config.get("statement", {})
-    stmt_path = Path(run.work_dir) / stmt_cfg["path"]
+    # The sheet this workbook was read from. `config.statement` describes the
+    # LATEST upload only, so an earlier statement takes its own recorded
+    # sheet name and falls back to the config's just for the runs that
+    # predate `statements[]` and have exactly one statement anyway.
+    sheet_name = stmt_cfg.get("sheet_name")
+    for entry in month_statements(run):
+        if entry.get("file") == name:
+            sheet_name = entry.get("sheet_name")
+            break
+    stmt_path = Path(run.work_dir) / name
     suffix = stmt_path.suffix
     out_path = Path(run.work_dir) / f"{stmt_path.stem}-categorized{suffix}"
     chart = None
@@ -3054,9 +3131,10 @@ def regenerate_writeback(
         effective,
         transactions,
         receipts,
-        sheet_name=stmt_cfg.get("sheet_name"),
+        sheet_name=sheet_name,
         chart_of_accounts=chart,
         charge_categorizations=_charge_cats(run),
+        anchors=statement_anchors(run, name),
     )
     return out_path
 
@@ -4557,9 +4635,15 @@ def build_expense_view(
         "llm_enabled": run.llm_enabled,
         "has_coa": run.has_coa,
         "legal_entity_id": default_entity,
-        # Batch lifecycle: True once a statement was attached (the batch is
-        # frozen; review continues in the reconciliation workbench).
+        # Batch lifecycle: True once a statement was attached. The month is
+        # NOT frozen by it (2b-2); reconciliation review lives in the
+        # workbench while receipts and further statements keep arriving.
         "has_statement": has_statement(run),
+        # Which statements have been loaded, over what periods, and what each
+        # upload added (PR 2b-2b-2). The month page is where the next one is
+        # uploaded, so it is where the answer belongs. Parallel field: empty
+        # on every run created before it, reconciling ones included.
+        "statements": month_statements(run),
         # The last incremental receipt-add's summary (counts / cost /
         # skipped files), or None when receipts only came in at creation.
         "expense_ingest": run.snapshot.get("expense_ingest"),
@@ -5227,6 +5311,200 @@ def month_transactions(run: RunRow) -> list:
     ]
 
 
+# ── The uploads a month has taken (PR 2b-2b-2) ──────────────────────────
+# `has_statement` answers "is this month reconciling"; it cannot answer
+# "which cards have I loaded, over what periods, and what did each upload
+# actually contribute". A month takes several statements now, so that
+# question has an answer worth keeping, and the writeback needs it to know
+# which workbook it is annotating.
+#
+# Parallel field, per the SPA contract (docs/api-contract.md rule 1):
+# nothing existing changes type or meaning, so a stale SPA renders exactly
+# what it rendered before.
+
+STATEMENTS_KEY = "statements"
+# {stored file name: {transaction_id: sheet row}} — each upload's own row
+# map, kept out of `statements[]` because it is machinery for the sheet
+# writeback and not something a reviewer or the SPA reads.
+STATEMENT_ANCHORS_KEY = "statement_anchors"
+
+
+def statement_anchors(run: RunRow, file: str) -> dict[str, int] | None:
+    """One statement's transaction-id to sheet-row map, or None when the run
+    has none recorded (every run created before PR 2b-2b-2, and the CLI).
+
+    A charge occupies a row in EVERY file that prints it, at a different row
+    in each: a mid-month partial and the closing cycle both contain it. The
+    row therefore cannot live on the charge, which can only name one file.
+    Recording it per upload is what lets each of Criss's workbooks be
+    annotated completely and correctly, rather than each getting only the
+    charges it happened to introduce.
+
+    "Recorded and EMPTY" is not "not recorded", and the difference is
+    load-bearing: a workbook that parsed no rows has a real, empty map, and
+    treating that as "no map" would drop the writeback back to placing every
+    charge in the month by its own row number, writing other files' accounts
+    into a workbook that has no charges at all.
+    """
+    per_file = (run.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}
+    if file not in per_file:
+        return None
+    return {str(k): int(v) for k, v in (per_file[file] or {}).items()}
+
+
+def _upload_anchors(transactions: list) -> dict[str, int]:
+    """The id-to-row map for one parsed upload. Empty for a PDF statement,
+    whose charges have no tabular row at all."""
+    return {
+        t.transaction_id: t.source_row
+        for t in transactions
+        if t.source_row is not None
+    }
+
+
+def month_statements(run: RunRow) -> list[dict]:
+    """The statement uploads this month has taken, oldest first.
+
+    Empty for every run created before this field existed, including months
+    that are reconciling. Absence means "not recorded", never "none loaded";
+    `has_statement` stays the answer to whether a month has a statement at
+    all.
+    """
+    return list((run.snapshot or {}).get(STATEMENTS_KEY) or [])
+
+
+def _statement_period(transactions: list) -> tuple[str | None, str | None]:
+    """(earliest, latest) transaction date in one upload, ISO, or (None,
+    None) when it parsed no rows."""
+    dates = [t.transaction_date for t in transactions if t.transaction_date]
+    if not dates:
+        return None, None
+    return min(dates).isoformat(), max(dates).isoformat()
+
+
+def build_statement_entry(
+    *,
+    stored_name: str,
+    upload_name: str,
+    account_id: str,
+    card_key: str,
+    sheet_name: str | None,
+    transactions: list,
+    n_new: int,
+    uploaded_at: str,
+) -> dict:
+    """One `statements[]` row: what this upload was and what it added.
+
+    `file` is the name on disk, which is what `Transaction.source_file`
+    carries and what the writeback selector addresses; `upload_name` is what
+    Criss actually sent, kept because the two differ whenever two of her
+    per-card exports share the bank's filename.
+
+    `n_rows` is what the file held, `n_new` what the fold put in the month.
+    The difference is charges the month already had, which is the ordinary
+    result of a partial followed by the full cycle rather than a problem.
+    """
+    period_start, period_end = _statement_period(transactions)
+    return {
+        "file": stored_name,
+        "upload_name": upload_name,
+        "card_key": card_key or "",
+        "account_id": account_id or "",
+        # The worksheet inside THIS workbook. Recorded per upload because
+        # `config.statement` only ever describes the latest one, and writing
+        # an earlier statement back into the current statement's sheet name
+        # is the same class of wrong-cell write as ignoring `source_file`.
+        "sheet_name": sheet_name or None,
+        "period_start": period_start,
+        "period_end": period_end,
+        "n_rows": len(transactions),
+        "n_new": n_new,
+        "uploaded_at": uploaded_at,
+        "writeback": Path(stored_name).suffix.lower() in (".xlsx", ".xlsm"),
+        # Filled in at commit time by `statement_advisory`, against the
+        # entries the month holds at that moment.
+        "advisory": None,
+        # This file's own id-to-row map. Underscored and popped at commit
+        # into `statement_anchors`, so it never reaches the SPA: it is a
+        # per-row map the size of the statement, and nothing renders it.
+        "_anchors": _upload_anchors(transactions),
+    }
+
+
+def _periods_overlap(a: dict, b: dict) -> bool:
+    """Whether two entries' date ranges touch. False when either has none,
+    because an upload that parsed no dated rows makes no claim about a
+    period and must not produce an advisory out of nothing."""
+    a0, a1, b0, b1 = (
+        a.get("period_start"), a.get("period_end"),
+        b.get("period_start"), b.get("period_end"),
+    )
+    if not (a0 and a1 and b0 and b1):
+        return False
+    return a0 <= b1 and b0 <= a1
+
+
+def statement_advisory(prior: list[dict], entry: dict) -> str | None:
+    """One sentence about an upload that looks like it doubled the month, or
+    None.
+
+    Two shapes reach the same outcome, and the outcome is deliberate: the
+    fold surfaces a disagreement as two rows and never picks a winner. That
+    is right (deduping a contradiction would silently choose whichever file
+    arrived first) but it is not self-explanatory on screen, where the month
+    simply holds twice the charges it should. So both get said out loud, and
+    neither is refused.
+
+    * **The same card typed against a different account id.** `account_id`
+      is part of transaction identity, so the two uploads dedupe against
+      nothing. Honest at the fold layer, since the rows really do claim to
+      be different accounts, and the route cannot silently correct it
+      without overriding what the operator explicitly typed. Needs a
+      `card_key` on both uploads: without a card preset there is nothing
+      that says the two files are one card, and the second shape below is
+      what catches it instead.
+    * **An upload over a period the same account already covers, with no row
+      in common.** The usual cause is a sign inference that differs between
+      a partial and a full export, which gives one printed row two content
+      ids (see `ingest._common.assign_content_ids`).
+
+    Advisory only. Nothing is dropped, merged, or refused on the strength of
+    a heuristic about what an operator probably meant.
+    """
+    card = (entry.get("card_key") or "").strip()
+    account = (entry.get("account_id") or "").strip()
+    for other in prior:
+        if (
+            card
+            and (other.get("card_key") or "").strip() == card
+            and (other.get("account_id") or "").strip() != account
+        ):
+            return (
+                f"This card's earlier statement ({other['file']}) was read as "
+                f"account {other.get('account_id') or '(none)'}, this one as "
+                f"{account or '(none)'}. A charge cannot be recognized as the "
+                "same charge under two account ids, so anything that appears "
+                "in both files is now in the month twice. Check the account "
+                "id before working from these numbers."
+            )
+    n_rows, n_new = entry.get("n_rows") or 0, entry.get("n_new") or 0
+    if n_rows and n_new == n_rows:
+        for other in prior:
+            if (
+                (other.get("account_id") or "").strip() == account
+                and _periods_overlap(other, entry)
+            ):
+                return (
+                    f"All {n_rows} charges in this upload are new, but "
+                    f"{other['file']} already covers "
+                    f"{other['period_start']} to {other['period_end']} on the "
+                    "same account. If this is that statement re-exported, the "
+                    "two files disagree about the rows (a flipped sign is the "
+                    "usual cause) and the month now holds both readings."
+                )
+    return None
+
+
 def _batch_llm_client(cfg: dict):
     """(client, tracker, source) for batch-lifecycle OCR, mirroring the
     folder-ingest sourcing: the run's own llm block first, the deployment
@@ -5821,9 +6099,20 @@ def prepare_statement_attach(
     (with the file's headers) for a user-fixable mapping problem, so the
     form can re-prompt synchronously; the slow match runs in the
     background. Returns (stmt_name, column_map) — column_map None for the
-    Chase PDF path."""
-    if has_statement(run):
-        raise RunInputError("A statement is already attached to this batch.")
+    Chase PDF path.
+
+    Since PR 2b-2b-2 a second upload is ALLOWED and appends (the living
+    month: a statement arrives per card, several times a month). The
+    refusal that used to stand here was lifted deliberately, together with
+    the route gate above it, and `tests/test_living_month.py` pins the new
+    behavior in place of the old one.
+
+    Each upload gets its OWN name on disk (`_unique_upload_name`). Two of
+    Criss's per-card exports are both plausibly called `statement.xlsx`,
+    and letting the second overwrite the first would leave the first file's
+    charges pointing `source_row` into a workbook whose rows are somebody
+    else's — the same wrong-cell write `Transaction.source_file` exists to
+    prevent, arriving by a different road."""
     if not statement_bytes:
         raise RunInputError("No statement file uploaded.")
     stmt_name = _safe_name(statement_filename or "", "statement.csv")
@@ -5833,6 +6122,7 @@ def prepare_statement_attach(
             "the bank."
         )
     work_dir = Path(run.work_dir)
+    stmt_name = _unique_upload_name(work_dir, stmt_name)
     stmt_path = work_dir / stmt_name
     stmt_path.write_bytes(statement_bytes)
     if stmt_path.suffix.lower() == ".pdf":
@@ -5851,6 +6141,7 @@ def execute_statement_attach(
     now_iso: str,
     learning_db_path: Path | None = None,
     on_stage=None,
+    upload_name: str = "",
 ) -> dict:
     """Graduate an expense batch into a reconciliation: load the attached
     statement, then hand off to `rematch_month`, which runs the SAME
@@ -5871,11 +6162,15 @@ def execute_statement_attach(
     pipeline pieces exactly as the folder-ingest re-match already does.
 
     Since PR 2b-2b-1 the read and the fold are their own steps
-    (`read_statement_upload` + `merge_transactions`), so an append route
-    can run the same three-step sequence over an already-reconciling
-    month. Here `existing` is empty by construction — `prepare_statement_attach`
-    refuses a second upload — which is what makes the one-shot attach the
-    degenerate case of that path rather than a second implementation of it.
+    (`read_statement_upload` + `merge_transactions`), and since PR 2b-2b-2
+    this IS the append path: a second upload is no longer refused, so
+    `existing` is whatever the month already holds and the fold is what
+    keeps a re-supplied charge from landing twice. The one-shot attach is
+    the degenerate case (`existing` empty), not a separate implementation.
+
+    The upload is recorded in `statements[]`, written by `rematch_month`
+    inside the commit lock so the month has one writer and the advisory is
+    judged against the entries that are actually there at that moment.
     """
     transactions, stmt_issues, new_cfg, entity = read_statement_upload(
         run,
@@ -5897,7 +6192,16 @@ def execute_statement_attach(
         now_iso=now_iso,
         learning_db_path=learning_db_path,
         on_stage=on_stage,
-        require_no_statement=True,
+        statement_entry=build_statement_entry(
+            stored_name=stmt_name,
+            upload_name=upload_name or stmt_name,
+            account_id=(new_cfg.get("statement") or {}).get("account_id", ""),
+            card_key=form.card_key,
+            sheet_name=(new_cfg.get("statement") or {}).get("sheet_name"),
+            transactions=transactions,
+            n_new=len(merged.added),
+            uploaded_at=now_iso,
+        ),
     )
 
 
@@ -5964,7 +6268,7 @@ def rematch_month(
     now_iso: str = "",
     learning_db_path: Path | None = None,
     on_stage=None,
-    require_no_statement: bool = False,
+    statement_entry: dict | None = None,
 ) -> dict:
     """Match a month's transactions against its receipt pool and commit.
 
@@ -5980,10 +6284,21 @@ def rematch_month(
     judge, categorize receiptless charges, then commit under
     `_BATCH_ADD_LOCK` against a FRESH re-read of the row.
 
-    `require_no_statement` is the one thing that differs by caller. The
-    attach path must refuse if another attach won the race while it
-    matched; a re-match must not, because on that path a statement is
-    supposed to be there already.
+    One invariant guards every caller, enforced inside the commit lock: a
+    commit never DROPS a charge the month already holds. Both paths read
+    their transaction set minutes before they write it, and since PR
+    2b-2b-2 a concurrent statement upload can genuinely add charges in
+    between; committing the older set would erase them with no trace. This
+    replaces the narrower `require_no_statement` check, which asked whether
+    a statement existed at all and stopped meaning anything once a second
+    one was allowed. It is strictly stronger: an attach that raced another
+    attach still fails, and so does a receipt re-match that would have
+    quietly rolled an append back.
+
+    `statement_entry`, when given, is appended to `statements[]` here rather
+    than by the caller, so the month has ONE writer under ONE lock and the
+    entry's advisory is judged against the entries that are really there at
+    commit time.
 
     LLM judgments are memoized in the snapshot by `JudgmentCache`, so a
     re-match only pays for pairs it has not judged before. On the attach
@@ -6102,9 +6417,17 @@ def rematch_month(
         fresh = store.get_run(run.run_id)
         if fresh is None:
             raise RunInputError("this batch was deleted while it reconciled")
-        if require_no_statement and has_statement(fresh):
+        committing = {t.transaction_id for t in transactions}
+        dropped = [
+            str(td.get("transaction_id"))
+            for td in (fresh.snapshot or {}).get("transactions") or []
+            if td.get("transaction_id") not in committing
+        ]
+        if dropped:
             raise RunInputError(
-                "another statement attach completed on this batch first"
+                f"another statement upload added {len(dropped)} charge(s) to "
+                "this month while it reconciled; nothing was written, so no "
+                "charge was lost. Upload again."
             )
         fresh_cfg = fresh.config or {}
         if fresh_cfg.get("expense") is not None:
@@ -6159,6 +6482,21 @@ def rematch_month(
             new_snapshot["llm_judgments"] = merged_judgments
         else:
             new_snapshot.pop("llm_judgments", None)
+        # Record the upload against the entries the month holds RIGHT NOW,
+        # not against the ones this call read minutes ago: the advisory's
+        # whole job is to compare this file with what is already loaded.
+        statement_advice = None
+        if statement_entry is not None:
+            prior = list((fresh.snapshot or {}).get(STATEMENTS_KEY) or [])
+            entry = dict(statement_entry)
+            anchors = entry.pop("_anchors", {})
+            statement_advice = statement_advisory(prior, entry)
+            entry["advisory"] = statement_advice
+            new_snapshot[STATEMENTS_KEY] = [*prior, entry]
+            new_snapshot[STATEMENT_ANCHORS_KEY] = {
+                **((fresh.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}),
+                entry["file"]: anchors,
+            }
         n_tx = len(transactions)
         n_review = len(
             {m.transaction_id for m in outcome.judgment_required}
@@ -6236,6 +6574,8 @@ def rematch_month(
         "entity_mismatch": entity_mismatch,
         "judgments_reused": judgments.hits,
         "judgments_new": judgments.misses,
+        # None on every re-match and on an upload that folded cleanly.
+        "statement_advisory": statement_advice,
     }
 
 

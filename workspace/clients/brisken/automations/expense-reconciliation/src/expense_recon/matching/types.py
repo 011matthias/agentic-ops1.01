@@ -209,6 +209,13 @@ class Transaction:
     # are stable under append and reorder, which is what operator
     # decisions need, but they carry no row — so the row travels in its
     # own field instead of being smuggled through the identity.
+    # Which file that row counts in is deliberately NOT here. A month takes
+    # several statements now (PR 2b-2b-2), and one charge genuinely occupies
+    # a row in each file that prints it: a mid-month partial and the closing
+    # cycle both contain it, at different rows. A single field on the charge
+    # can only name one of them, so the file-to-row anchors live per UPLOAD,
+    # in the snapshot's `statement_anchors`, and `source_row` stays what it
+    # has always been: the row in the file this charge was first read from.
     source_row: int | None = None
 
 

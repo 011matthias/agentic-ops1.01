@@ -124,6 +124,13 @@ def _grid(client, batch_id):
     return client.get(f"/api/expense-batches/{batch_id}").json()
 
 
+def _transactions(client, batch_id):
+    """The month's stored charges. Read from the STORE, not the grid: the
+    grid's summary is receipt-centric and never carried a charge count."""
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        return (store.get_run(batch_id).snapshot or {}).get("transactions") or []
+
+
 def test_a_receipt_that_arrives_after_the_statement_joins_the_month(
     client, monkeypatch
 ):
@@ -236,14 +243,25 @@ def test_refresh_master_data_is_allowed_on_a_reconciling_month(
     assert resp.status_code == 200, resp.text
 
 
-def test_a_second_statement_is_still_refused(client, monkeypatch):
-    """Append is its own round. Until it lands, a second upload must not
-    silently replace the first month's charges."""
+def test_a_second_statement_is_taken_not_refused(client, monkeypatch):
+    """The refusal this file used to pin, lifted deliberately in PR 2b-2b-2.
+
+    Both layers had to go: the route gate (`_mutable_expense_run_or_error`)
+    and `prepare_statement_attach`'s own check beneath it. A test on the
+    route alone would have passed against a service that still refused, which
+    is the shape 2b-2a already found once.
+
+    What replaces the refusal is the fold, not a free-for-all: the same file
+    twice adds nothing. `tests/test_statement_append.py` owns the append
+    behavior; this pins that the door is open at all, where the closed door
+    used to be pinned."""
     _wire(monkeypatch, _extraction())
     batch_id = _create_batch(client)
     _attach(client, batch_id)
+    before = len(_transactions(client, batch_id))
 
-    assert _attach(client, batch_id).status_code == 400
+    assert _attach(client, batch_id).status_code == 200
+    assert len(_transactions(client, batch_id)) == before
 
 
 def test_the_expense_edit_overlay_stays_closed(client, monkeypatch):

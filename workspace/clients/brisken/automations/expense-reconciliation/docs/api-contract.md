@@ -37,6 +37,7 @@ receives after `jsonable_encoder`.
 | `parse_issues[]` | object `{file, line, message, severity}` |
 | `parse_errors[]` | array `[file, line, message, severity]` (legacy raw rows) |
 | `set_aside[]` | object |
+| `statements[]` | object |
 | `expenses[]` | object |
 | `expenses[].line_items[]` | object |
 | `expenses[].books_as[]` | object `{account, unassigned, amount}` |
@@ -68,6 +69,7 @@ receives after `jsonable_encoder`.
 | `duplicate_charges[]` · `duplicate_receipts[]` | array of objects |
 | `duplicate_receipts[][].line_items[]` | object |
 | `summary.setup_advisories[]` | object |
+| `statements[]` | object |
 | `category_options[]` | string |
 
 ## `parse_issues` specifically
@@ -142,6 +144,66 @@ rule; `service.batch_list_summary` derives the list screen's counts from the
 same live overlay the batch page renders, so a reviewer's edit moves both. A
 new count gets a row here and its own name — never a second meaning on an
 existing one.
+
+## The statements a month has taken: `statements[]` (added 2026-08-25)
+
+`POST /api/expense-batches/{id}/statement` is repeatable: a statement arrives
+per card, and often twice (a mid-month partial, then the closing cycle). Each
+upload appends one entry, oldest first, on BOTH review payloads. Parallel
+field, per rule 1 below: empty on every month created before it, reconciling
+ones included, so absence means "not recorded" and never "none loaded".
+`has_statement` is still the answer to whether a month has a statement at all.
+
+```json
+{ "file": "statement-2.xlsx",
+  "upload_name": "statement.xlsx",
+  "card_key": "corp-1672",
+  "account_id": "chase-2838-family",
+  "sheet_name": null,
+  "period_start": "2026-04-03",
+  "period_end": "2026-04-28",
+  "n_rows": 14,
+  "n_new": 11,
+  "uploaded_at": "2026-08-25T09:12:44",
+  "writeback": true,
+  "advisory": null }
+```
+
+Every entry carries the same keys, null where the upload does not use one.
+
+| Key | Question it answers |
+|---|---|
+| `file` | the name on disk, and the value `?file=` addresses |
+| `upload_name` | what the operator actually sent; differs when two per-card exports shared a filename |
+| `n_rows` · `n_new` | what the file held, and what the fold put in the month |
+| `period_start` · `period_end` | the dates this upload covers, null when it parsed no dated row |
+| `writeback` | whether this file is an Excel workbook the L3 writeback can annotate |
+| `advisory` | one sentence when the upload looks like it doubled the month, else null |
+
+`n_rows` minus `n_new` is charges the month already held. That is the ordinary
+result of a partial followed by the full cycle, not a problem.
+
+`advisory` fires on two shapes, and NOTHING is dropped or merged when it does:
+one card typed against two different account ids (which is part of transaction
+identity, so the two uploads dedupe against nothing), and an upload over a
+period the same account already covers that has no row in common with it (a
+sign inference that differs between two exports gives one printed row two
+ids). Both really are two rows; the advisory is there because on screen it
+otherwise just looks like the month doubled itself.
+
+`GET /runs/{id}/statement-categorized.xlsx` takes an optional `?file=`, matched
+against `statements[].file`, to write back a statement other than the current
+one. A name that is not in `statements[]` is a 404. Without the parameter the
+route behaves exactly as before.
+
+Each workbook is annotated for exactly the charges IT contains, at the rows it
+puts them on, from a per-upload id-to-row map in the snapshot's
+`statement_anchors`. That map is deliberately not in either payload: it is one
+entry per statement row, nothing renders it, and the SPA needs `statements[]`
+only. One charge occupies a row in every file that prints it, which is why the
+row is recorded per upload rather than on the charge; anchoring on the charge
+would leave the closing cycle blank wherever a mid-month partial got there
+first.
 
 ## Rules for changing a list field
 
