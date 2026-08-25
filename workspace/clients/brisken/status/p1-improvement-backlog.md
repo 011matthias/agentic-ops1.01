@@ -505,19 +505,67 @@ Suite 1316 -> 1325, calibrate exit 0, ruff clean on the diff. Both halves
 proven by mutation: restoring the guard reddens 5 tests, unwiring the
 re-match reddens the 2 that specifically catch allowed-but-inert.
 
-**PR 2b-2b - gradual statement uploads. NEXT.** What remains of the plan's
-2b-2: `POST .../statement` becomes append-capable and repeatable (per card,
-several times a month), parsing and content-id deduping against the existing
-set, with a `statements[]` parallel field. The one-shot attach is the
-degenerate case of the same path. `prepare_statement_attach` keeps its
-refusal until then, so a second upload cannot silently replace the first
-month's charges.
+**PR 2b-2b-1 - the fold. SHIPPED (#632).** The parse / content-id / dedupe
+foundation, landed and proven neutral before the `statements[]` surface goes
+on top of it. `merge_transactions` (`ingest/_common.py`) folds a freshly
+parsed statement into a month's charges by identity, keyed on the content id
+2a made stable. It adds no second definition of sameness: two rows are the
+same charge exactly when `transaction_content_id` says so, and the occurrence
+suffix already keeps two identical coffees apart ACROSS uploads, not only
+within a parse. Three properties the append route leans on: first-write-wins
+(a re-supplied row keeps the object the month committed, so decisions and
+`source_row` stay pointed at it), `existing` passes through untouched (the
+fold filters what an upload contributes, it never edits the month), and a
+sign contradiction lands as two rows rather than being deduped to whichever
+arrived first.
 
-One interaction pinned deliberately in 2a and still open: a file whose SIGN
-inference differs between a partial and a full upload yields different ids
-for the same printed row, because the two uploads genuinely disagree about
-which way the money went. Surfacing two rows beats silently deduping a
-contradiction; whether it also wants a visible warning is the open call.
+Beside it, two seams the append path needs: `read_statement_upload` splits
+the STATEMENT half out of `execute_statement_attach` so a second file is read
+exactly the way the first was, and `month_transactions` reads the charge
+block alone instead of rebuilding every receipt to reach it.
+
+**The neutrality is real, and so is its limit.** `prepare_statement_attach`
+still refuses a second upload, so on the attach path `existing` is empty and
+the fold IS the identity function. No test can tell an attach that routes
+through it from one that does not, and `tests/test_statement_merge.py` says
+that in its own comments rather than dressing an inert call up as a wiring
+proof. What DID bite, by mutation: disabling the dedupe reddens 7, stubbing
+the extracted read reddens 6 (four of them pre-existing living-month tests).
+Suite 1325 -> 1336, calibrate exit 0.
+
+**PR 2b-2b-2 - the `statements[]` surface. NEXT.** `POST .../statement`
+becomes append-capable and repeatable (per card, several times a month):
+lift `prepare_statement_attach`'s refusal deliberately (a test pins it, so it
+cannot go by accident), call the three steps the fold round left in place,
+and record `statements[]` ({file, card_key/account_id, period_start,
+period_end, n_rows, n_new, uploaded_at}) as a parallel field. `merge.added` /
+`merge.duplicates` are already the `n_new` the entry wants.
+
+Two hazards found while building the fold, neither a defect in the one-shot
+path, both squarely this round's to answer:
+
+- **The cfg's statement block is single-valued.** `read_statement_upload`
+  writes `{**cfg, "statement": block}`, so a second upload replaces the
+  first file's block: the run would point at file #2 while holding rows from
+  both. `sheet_writeback` anchors `source_row` into whatever
+  `cfg["statement"]["path"]` names, and `source_row` is only meaningful
+  relative to its OWN file, so a merged month writes Criss's accounts next
+  to the wrong charges. `statements[]` is the place that gets fixed: the
+  per-row source has to travel with the row, or the writeback has to be
+  scoped per statement.
+- **`account_id` is part of identity.** Two uploads of one card's statement
+  typed against different account ids dedupe against nothing and the month
+  silently doubles. Honest at the fold layer (the rows really do claim to be
+  different accounts); the route is what has to keep the account stable per
+  card, or say something when an append contributes 100% new rows over a
+  period the month already covers.
+
+That second hazard is the same shape as the interaction pinned deliberately
+in 2a and still open: a file whose SIGN inference differs between a partial
+and a full upload yields different ids for the same printed row, because the
+two uploads genuinely disagree about which way the money went. Surfacing two
+rows beats silently deduping a contradiction; whether it also wants a visible
+warning is the open call, and both cases now argue for the same answer.
 
 **PR 2b-2 - the living month (the original plan item).** The statement stops
 being a closing event
