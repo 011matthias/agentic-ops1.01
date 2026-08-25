@@ -132,10 +132,17 @@ unlogged.
 - `workspace/clients/brisken/status/p1-improvement-backlog.md`
 
 ### Open Questions
-- Why did SessionStart's `wire-hooks.py --ensure` report "intact (20/20)"
-  instead of healing to 24? Either it validates against a stale contract copy
-  or `--ensure` is weaker than `--write`. Until answered, the self-heal
-  cannot be trusted and `--check` should be run manually at session start.
+- ~~Why did SessionStart's `wire-hooks.py --ensure` report "intact
+  (20/20)"?~~ **Answered at close.** `--ensure` is not weaker than
+  `--write` and is not buggy: it validated 20/20 against its OWN checkout's
+  contract, because the primary clone was 216 commits behind and its
+  `EXPECTED_HOOK_SCRIPTS` listed 20. The four newer gates were not unwired
+  and undetected, they were absent from the contract being checked. Verified
+  by diffing `tools/wire-hooks.py` at `ce83d1f8` (20 scripts) against
+  `origin/main` (24). The root cause is the stale checkout, which this
+  session's consolidation fixed; the same clone now wires 24/24. The session
+  brief had already documented this failure mode, and it was logged as an
+  open question anyway.
 - Seven sibling `claude` sessions from 2026-08-24 are still running. One
   resuming will find `main` where its branch used to be.
 
@@ -191,9 +198,11 @@ paste `p1-recon-loop-prompt.md`, and start PR 3.
 ### System Health
 
 - The enforcement layer was **inert for this entire session** and SessionStart
-  said otherwise. A sibling logged the same thing today; it was still broken
-  hours later. Now repaired to 24/24, but the self-heal that should have done
-  it is unproven.
+  said otherwise, because a stale checkout can only validate its own stale
+  contract. Now repaired to 24/24, and the root cause is closed by the same
+  consolidation: the primary clone is on `main`, so its contract is the
+  trunk's. The standing risk is any long-lived checkout that drifts, since
+  its self-heal will keep reporting intact against whatever it last knew.
 - Autonomy: **0 corrections**. Two decision rounds were requested on genuine
   forks (PR #430's fate and the stale ledger; the lead-gen output), plus one
   owner-directed task change (consolidate the repo). Fully autonomous
