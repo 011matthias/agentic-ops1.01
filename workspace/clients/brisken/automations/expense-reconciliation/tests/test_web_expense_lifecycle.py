@@ -289,8 +289,14 @@ def test_statement_attach_graduates_batch(client, monkeypatch):
     job_id = late.json().get("job_id")
     if job_id:
         assert client.get(f"/jobs/{job_id}").json()["status"] == "done"
-    # And a second statement is still refused (append is its own round).
-    assert _attach_statement(client, batch_id).status_code == 400
+    # And since PR 2b-2b-2 a second statement is TAKEN, not refused: the
+    # statement is an input stream too, arriving per card and often twice.
+    # Re-uploading the same file adds no charge, because the fold is by
+    # identity. tests/test_statement_append.py owns the append behavior.
+    before = client.get("/api/expense-batches").json()["batches"][0]["summary"]
+    assert _attach_statement(client, batch_id).status_code == 200
+    after = client.get("/api/expense-batches").json()["batches"][0]["summary"]
+    assert after["n_transactions"] == before["n_transactions"]
 
 
 def test_statement_attach_unmappable_csv_is_sync_400(client, monkeypatch):

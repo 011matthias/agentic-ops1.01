@@ -345,6 +345,7 @@ def _run_batch_receipts_job(
 def _run_attach_statement_job(
     db_path: Path, job_id: str, run_id: str, stmt_name: str,
     column_map: dict | None, form: RunForm, learning_db_path: Path,
+    upload_name: str = "",
 ) -> None:
     """Graduate an expense batch into a reconciliation, off the request
     (statement load + match + judgment can take minutes with the LLM)."""
@@ -364,12 +365,20 @@ def _run_attach_statement_job(
                 settings=settings, now_iso=_now_iso(),
                 learning_db_path=learning_db_path,
                 on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
+                upload_name=upload_name,
             )
-            # The mismatch warning must survive the job round-trip: park it
-            # on the job's stage-free error-less row via the stage field.
-            if result.get("entity_mismatch"):
+            # Warnings must survive the job round-trip: park them on the
+            # job's stage-free error-less row via the stage field. Both are
+            # about a month that reconciled successfully and still needs a
+            # human look, so they ride the same channel; `statement_advisory`
+            # is the append-specific one (PR 2b-2b-2).
+            warnings = [
+                result[k] for k in ("entity_mismatch", "statement_advisory")
+                if result.get(k)
+            ]
+            if warnings:
                 store.set_job_stage(
-                    job_id, f"warning: {result['entity_mismatch']}", _now_iso()
+                    job_id, f"warning: {'; '.join(warnings)}", _now_iso()
                 )
             store.set_job_status(
                 job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
@@ -721,6 +730,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             expense_column_map=expense_map,
             receipts_default_currency=receipts_default_currency.strip(),
             use_llm=bool(use_llm.strip()),
+            card_key=card_key.strip(),
         )
 
     def _start_background_run(
@@ -2517,11 +2527,18 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         creation). Fail-fast half (file save + column-map resolve) runs
         synchronously so a mapping problem is a form 400 with the file's
         headers; the match runs in the background -> {job_id}. On done the
-        run serves the reconciliation workbench at GET /api/runs/{id}."""
+        run serves the reconciliation workbench at GET /api/runs/{id}.
+
+        Repeatable since PR 2b-2b-2: a statement arrives per card and often
+        twice (a mid-month partial, then the full cycle), so this appends by
+        identity rather than refusing. That is why the gate below is the
+        plain expense-run check and not `_mutable_expense_run_or_error` —
+        the lift is deliberate, and pinned by `tests/test_living_month.py`
+        so it cannot be reverted by accident either."""
         if not _receipt_first_on():
             return _flag_off()
         with open_store() as store:
-            run, err = _mutable_expense_run_or_error(store, run_id)
+            run, err = _expense_run_or_error(store, run_id)
         if err is not None:
             return err
 
@@ -2566,6 +2583,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         background.add_task(
             _run_attach_statement_job, app.state.db_path, job_id, run_id,
             stmt_name, column_map, form, app.state.learning_db_path,
+            statement.filename or "",
         )
         return JSONResponse({"ok": True, "job_id": job_id})
 
@@ -2905,16 +2923,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
 
     @app.get("/runs/{run_id}/statement-categorized.xlsx")
-    def download_writeback(run_id: str):
+    def download_writeback(run_id: str, file: str = ""):
         # L3 — her own uploaded workbook with one new "Zoho Account (tool)"
         # column; only for xlsx/xlsm statements.
+        #
+        # `?file=` picks WHICH statement, for a month that has taken several
+        # (PR 2b-2b-2); it is resolved against the run's own `statements[]`
+        # and 404s otherwise, so the query string cannot address a file the
+        # month never loaded. No parameter keeps the existing behavior: the
+        # run's current statement, which is the only one a single-statement
+        # month ever had.
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
                 return HTMLResponse("Run not found", status_code=404)
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
-        path = regenerate_writeback(run, decisions, overrides)
+        path = regenerate_writeback(run, decisions, overrides, file)
         if path is None:
             return HTMLResponse(
                 "This run's statement is not an Excel workbook", status_code=404

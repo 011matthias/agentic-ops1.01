@@ -533,39 +533,74 @@ proof. What DID bite, by mutation: disabling the dedupe reddens 7, stubbing
 the extracted read reddens 6 (four of them pre-existing living-month tests).
 Suite 1325 -> 1336, calibrate exit 0.
 
-**PR 2b-2b-2 - the `statements[]` surface. NEXT.** `POST .../statement`
-becomes append-capable and repeatable (per card, several times a month):
-lift `prepare_statement_attach`'s refusal deliberately (a test pins it, so it
-cannot go by accident), call the three steps the fold round left in place,
-and record `statements[]` ({file, card_key/account_id, period_start,
-period_end, n_rows, n_new, uploaded_at}) as a parallel field. `merge.added` /
-`merge.duplicates` are already the `n_new` the entry wants.
+**PR 2b-2b-2 - the `statements[]` surface. SHIPPED.** `POST .../statement` is
+append-capable and repeatable. The refusal came out of BOTH layers it sat in,
+deliberately: the route gate (`_mutable_expense_run_or_error`, now the plain
+expense-run check) and `prepare_statement_attach`'s own check beneath it, which
+2b-2a had already shown is where a route-only lift dies. Two tests pinned the
+closed door and now pin the open one, in `test_living_month.py` and
+`test_web_expense_lifecycle.py`; the second was found by the full suite, which
+is the gate working. The fold stops being inert: `existing` is now whatever the
+month holds, and 16 tests in `tests/test_statement_append.py` fail if it is
+unwired.
 
-Two hazards found while building the fold, neither a defect in the one-shot
-path, both squarely this round's to answer:
+`statements[]` records every upload as a parallel field on BOTH review payloads
+(`{file, upload_name, card_key, account_id, sheet_name, period_start,
+period_end, n_rows, n_new, uploaded_at, writeback, advisory}`), written by
+`rematch_month` inside the commit lock so the month has one writer.
 
-- **The cfg's statement block is single-valued.** `read_statement_upload`
-  writes `{**cfg, "statement": block}`, so a second upload replaces the
-  first file's block: the run would point at file #2 while holding rows from
-  both. `sheet_writeback` anchors `source_row` into whatever
-  `cfg["statement"]["path"]` names, and `source_row` is only meaningful
-  relative to its OWN file, so a merged month writes Criss's accounts next
-  to the wrong charges. `statements[]` is the place that gets fixed: the
-  per-row source has to travel with the row, or the writeback has to be
-  scoped per statement.
-- **`account_id` is part of identity.** Two uploads of one card's statement
-  typed against different account ids dedupe against nothing and the month
-  silently doubles. Honest at the fold layer (the rows really do claim to be
-  different accounts); the route is what has to keep the account stable per
-  card, or say something when an append contributes 100% new rows over a
-  period the month already covers.
+**The wrong-cell hazard, and what the fix had to become.** The plan said the
+per-row source travels with the row. It cannot. A charge occupies a row in
+EVERY file that prints it, at a different row in each, because a mid-month
+partial and the closing cycle both contain it; a field on the charge can only
+name one file, and first-write-wins (rightly) keeps the first. Built that way
+first and caught it in adversarial review by walking the canonical scenario:
+the closing cycle is the workbook Criss works from and the default download,
+and it would have been annotated ONLY for the charges it introduced, every
+repeat left blank, looking like charges the tool could not resolve. So the
+anchors are recorded per UPLOAD instead: `statement_anchors`
+(`{file: {transaction_id: row}}`), snapshot-only, never in a payload, and
+`write_sheet_writeback(anchors=...)` writes exactly the charges that file
+contains at the rows it puts them on. `Transaction.source_file` was reverted;
+nothing read it once anchors existed. Proven by mutation both ways: disabling
+the anchor path reddens the cycle-after-partial test and the cross-workbook
+test.
 
-That second hazard is the same shape as the interaction pinned deliberately
-in 2a and still open: a file whose SIGN inference differs between a partial
-and a full upload yields different ids for the same printed row, because the
-two uploads genuinely disagree about which way the money went. Surfacing two
-rows beats silently deduping a contradiction; whether it also wants a visible
-warning is the open call, and both cases now argue for the same answer.
+Two more found in the same review. A second upload with the same basename
+overwrote the first on disk (`_unique_upload_name` now gives each its own
+name), and a recorded-but-EMPTY anchor map read as "not recorded", which would
+drop a zero-row workbook back to placing every charge in the month by row
+number.
+
+**The account-id hazard, decided once for both cases.** Surface it, dedupe
+nothing. Two uploads that disagree really are two rows (that was already 2a's
+call for a flipped sign), so the addition is saying so: `advisory` fires when
+one `card_key` is typed against two account ids, or when an upload lands 100%
+new over a period the same account already covers. Advisory only, on the entry
+and on the job's warning channel beside `entity_mismatch`; nothing is dropped,
+merged, or refused on a heuristic about what an operator meant. A clean
+per-card append stays silent, which is pinned.
+
+**A race the round opened, closed with it.** Both the attach path and every
+re-match read their charges minutes before committing them, and a concurrent
+upload can now genuinely add rows in between; the older set would have erased
+them silently. `rematch_month` now refuses, inside the lock, any commit that
+would DROP a charge the month already holds. Strictly stronger than the
+`require_no_statement` check it replaces (which stopped meaning anything once
+a second statement was allowed), and it covers the receipt re-match path too.
+
+Also: `GET /runs/{id}/statement-categorized.xlsx?file=` selects which statement
+to write back, resolved against `statements[]` (a name not in it is a 404, so a
+query string cannot address a file the month never took). Per-upload
+`sheet_name` is recorded because `config.statement` only ever describes the
+latest one.
+
+Suite 1336 -> 1352, calibrate exit 0, ruff clean on the diff. Nine mutations
+run, every guard red under its own.
+
+**Still open here:** the SPA renders neither `statements[]` nor the `?file=`
+selector yet, so a month with two xlsx statements can only be downloaded for
+the current one from the UI. That is the coverage surface, PR 3.
 
 **PR 2b-2 - the living month (the original plan item).** The statement stops
 being a closing event

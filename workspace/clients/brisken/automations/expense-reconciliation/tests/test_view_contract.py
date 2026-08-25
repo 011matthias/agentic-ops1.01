@@ -98,6 +98,9 @@ EXPENSE_BATCH_CONTRACT = {
     "parse_errors[][]": "number|string",
     "parse_issues[]": "object",
     "set_aside[]": "object",
+    # PR 2b-2b-2: the statement uploads this month has taken. The month page
+    # is where the next one is uploaded, so the grid carries it too.
+    "statements[]": "object",
     "summary.upload_issues[]": "string",
     # Item 20: the same rejections with a stable code beside the prose. The
     # prose list stays `string[]` on purpose — enriching it in place is the
@@ -121,6 +124,7 @@ RUN_CONTRACT = {
     "rows[]": "object",
     "rows[].candidates[]": "object",
     "rows[].candidates[].receipt.line_items[]": "object",
+    "statements[]": "object",
     "summary.setup_advisories[]": "object",
     "unmatched_receipts[]": "object",
     "unmatched_receipts[].line_items[]": "object",
@@ -148,6 +152,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "account_options[]",
     "category_options[]",
     "entity_options[]",
+    "statements[]",
 }
 
 RUN_MUST_COVER = {
@@ -163,6 +168,7 @@ RUN_MUST_COVER = {
     "duplicate_receipts[]",
     "category_options[]",
     "summary.setup_advisories[]",
+    "statements[]",
 }
 
 
@@ -424,6 +430,47 @@ def _expense_batch(client, monkeypatch_setattr) -> dict:
     return view
 
 
+def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
+    """A month that has taken TWO statement uploads, so `statements[]` is
+    populated on both views it appears on.
+
+    Its own batch rather than an extra step on `_expense_batch`: attaching a
+    statement graduates a month into reconciliation, and that batch is
+    carrying the grid's whole list surface (set-aside, card review, category
+    variance, an edit). Coverage that specific stays where it is; this one
+    only has to make the new pin non-vacuous, which is the reason MUST_COVER
+    exists at all.
+    """
+    mock = MockLLMClient(extraction_responses=[_extraction()])
+    monkeypatch_setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
+    resp = client.post("/api/expense-batches", files=[
+        ("files", ("m.jpg", JPG + b"m", "application/octet-stream")),
+    ], data={"legal_entity": "Corporate Services", "label": "Contract month"})
+    assert resp.status_code == 200, resp.text
+    batch_id = resp.json()["batch_id"]
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+
+    for _ in range(2):
+        r = client.post(
+            f"/api/expense-batches/{batch_id}/statement",
+            files={"statement": (
+                "statement.example.csv",
+                (EXAMPLES / "statement.example.csv").read_bytes(), "text/csv",
+            )},
+            data={"account_id": "amex-9001",
+                  "account_legal_entities": '{"amex-9001": "Corporate Services"}',
+                  "account_card_currency": "USD"},
+        )
+        assert r.status_code == 200, r.text
+        assert client.get(f"/jobs/{r.json()['job_id']}").json()["status"] == "done"
+
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    run = client.get(f"/api/runs/{batch_id}").json()
+    assert len(grid["statements"]) == 2, grid["statements"]
+    assert grid["statements"] == run["statements"]
+    return grid, run
+
+
 @pytest.fixture(scope="module")
 def payloads(tmp_path_factory):
     """Both views, built once — every list surface the SPA renders."""
@@ -437,7 +484,11 @@ def payloads(tmp_path_factory):
             run_a = _statement_run(client)
             run_b = _synthetic_run(client, data_root)
             batch = _expense_batch(client, monkey.setattr)
-        yield {"run": (run_a, run_b), "expense_batch": (batch,)}
+            month_grid, month_run = _reconciling_month(client, monkey.setattr)
+        yield {
+            "run": (run_a, run_b, month_run),
+            "expense_batch": (batch, month_grid),
+        }
     finally:
         monkey.undo()
 
