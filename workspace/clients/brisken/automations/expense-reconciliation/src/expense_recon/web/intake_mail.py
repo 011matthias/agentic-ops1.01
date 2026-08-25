@@ -1263,14 +1263,21 @@ def _open_batch_for_month(store: RunStore, ym: tuple[int, int] | None):
     statement-bearing batch does not count as open (PR 2 lifts this)."""
     if ym is None:
         return None
+    reconciling = None
     for run in store.list_runs():
         if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
             continue
-        if has_statement(run):
+        if month_from_label(run.label) != ym:
             continue
-        if month_from_label(run.label) == ym:
+        if not has_statement(run):
             return run
-    return None
+        # 2b-2 lifted the statement refusal, so a month that is already
+        # reconciling DOES claim its pooled mail; it just loses a
+        # same-month tie to a statement-less batch, which is the
+        # preference `month_batch_states` reports.
+        if reconciling is None:
+            reconciling = run
+    return reconciling
 
 
 def month_batch_states(store: RunStore) -> dict[tuple[int, int], str]:
@@ -1283,7 +1290,7 @@ def month_batch_states(store: RunStore) -> dict[tuple[int, int], str]:
         ym = month_from_label(run.label)
         if ym is None:
             continue
-        state = "closed" if has_statement(run) else "open"
+        state = "reconciling" if has_statement(run) else "open"
         if out.get(ym) != "open":
             out[ym] = state
     return out
@@ -1353,9 +1360,17 @@ def annotate_status_view(rows: list[dict]) -> None:
                 label = "Waiting for its month"
             elif state == "open":
                 label = f"Joining {month}"
+            elif state == "reconciling":
+                # 2b-2: a month with a statement stays open and claims, so
+                # this is a normal wait, not the dead end "closed" was. The
+                # label says the month is further along, because a reviewer
+                # who already reconciled it should know a late receipt is
+                # about to re-open the numbers.
+                label = f"Joining {month}, which is already reconciling"
             elif state == "closed":
+                # No longer produced; kept so a row written by an older
+                # build still reads correctly.
                 label = f"{month} is already reconciled"
-                # A closed month will not take it: that needs a human.
                 kind = KIND_HELD
             else:
                 label = f"Waiting for {month}"

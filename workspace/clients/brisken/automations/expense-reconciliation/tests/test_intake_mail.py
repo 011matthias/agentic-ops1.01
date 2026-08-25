@@ -1991,8 +1991,9 @@ def test_reconcile_flips_interrupted_routing_and_claiming(client):
 
 def test_inbound_log_reports_the_pool_state_per_month(client, monkeypatch):
     """The Month column's three answers for waiting mail: no batch yet, a
-    batch is open (a claim is imminent), and the month is already
-    reconciled."""
+    batch is open (a claim is imminent), and the month already has its
+    statement and is reconciling (a claim is imminent there too, since
+    2b-2 -- the month no longer closes)."""
     from expense_recon.web.intake_mail import _update_meta, inbound_root
 
     state = client.app.state
@@ -2016,16 +2017,33 @@ def test_inbound_log_reports_the_pool_state_per_month(client, monkeypatch):
     _update_meta(arch, {"status": STATUS_POOLED, "batch_id": ""})
     assert _state() == "open"
 
-    # A statement makes the month closed to new mail (PR 2 lifts this),
-    # and a claim into it correctly declines.
+    # 2b-2 lifted the statement refusal: a month with its statement loaded
+    # reports "reconciling" rather than "closed", and the claim SUCCEEDS
+    # instead of declining. This is the whole point of the living month --
+    # a receipt that arrives after the statement still joins its month.
     with RunStore(state.db_path) as store:
         snapshot = dict(store.get_run(batch_id).snapshot or {})
-        snapshot["transactions"] = [{"transaction_id": "x"}]
+        # A DECODABLE transaction, not just a marker: the claim now runs a
+        # real re-match on the way in, so a stub that `snapshot_from_dict`
+        # cannot read would test the error path instead of the feature.
+        snapshot["transactions"] = [{
+            "transaction_id": "amex-9001:0",
+            "legal_entity_id": "Corporate Services",
+            "account_id": "amex-9001",
+            "transaction_date": "2026-04-15",
+            "posting_date": "2026-04-16",
+            "amount": "42.50",
+            "transaction_currency": "USD",
+            "account_card_currency": "USD",
+            "vendor_from_statement": "STAPLES",
+        }]
         assert store.update_run_snapshot(batch_id, snapshot)
-    assert _state() == "closed"
-    assert claim_pooled(
+    assert _state() == "reconciling"
+    claimed = claim_pooled(
         state.db_path, state.learning_db_path, state.data_root
-    )["still_pooled"] == 1
+    )
+    assert claimed["still_pooled"] == 0, claimed
+    assert claimed.get("claimed") == 1, claimed
 
 
 def test_arrival_extraction_warms_the_batch_cache(tmp_path, monkeypatch):

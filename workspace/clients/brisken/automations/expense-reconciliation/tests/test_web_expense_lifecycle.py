@@ -278,11 +278,18 @@ def test_statement_attach_graduates_batch(client, monkeypatch):
     assert client.request(
         "DELETE", f"/api/runs/{batch_id}/expenses/{doc}"
     ).status_code == 400
-    assert client.post(
+    # But the MONTH itself is not frozen (2b-2, the living month): a receipt
+    # that arrives after the statement joins and the month re-matches. Only
+    # the four overlay routes above stay closed.
+    late = client.post(
         f"/api/expense-batches/{batch_id}/receipts",
         files=[("files", ("late.jpg", JPG + b"9", "application/octet-stream"))],
-    ).status_code == 400
-    # And a second statement is refused.
+    )
+    assert late.status_code == 200, late.text
+    job_id = late.json().get("job_id")
+    if job_id:
+        assert client.get(f"/jobs/{job_id}").json()["status"] == "done"
+    # And a second statement is still refused (append is its own round).
     assert _attach_statement(client, batch_id).status_code == 400
 
 

@@ -120,16 +120,32 @@ def test_locked_endpoint_does_not_park_the_event_loop(batch, suffix, body):
 
 
 def _locked_service_functions() -> set[str]:
-    """Every `service.py` function whose body takes `_BATCH_ADD_LOCK`,
-    derived from the source so a new one joins the guard for free."""
+    """Every `service.py` function that takes `_BATCH_ADD_LOCK`, directly or
+    through what it calls, derived from the source so a new one joins the
+    guard for free.
+
+    The closure is the load-bearing half. Until 2b-2 every lock-taking
+    function held the `with` in its own body, so a direct scan saw them all.
+    `rematch_after_change` broke that: it takes the lock one call deeper
+    (via `rematch_month`), so a direct scan would report it as safe and an
+    `async def` route calling it would park the event loop for the minutes a
+    re-match runs -- the exact failure this guard exists to prevent
+    (backlog item 18, where /healthz stopped answering and Fly restarted
+    the machine mid-ingest).
+
+    Over-approximating is the safe direction here: a function wrongly called
+    locked costs a threadpool hop, one wrongly called free costs the app.
+    """
     import ast
     import inspect
 
     tree = ast.parse(inspect.getsource(service))
+    functions: dict[str, object] = {}
     locked = {"batch_write_lock"}  # hands the lock to callers outside the module
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
+        functions.setdefault(node.name, node)
         for inner in ast.walk(node):
             if isinstance(inner, ast.With) and any(
                 isinstance(item.context_expr, ast.Name)
@@ -138,6 +154,19 @@ def _locked_service_functions() -> set[str]:
             ):
                 locked.add(node.name)
                 break
+    # Anything that CALLS a locked function is locked too. `_called_names`
+    # does not descend into a nested sync `def`, so a function that hands
+    # the locked work to a closure for the threadpool stays free -- the
+    # same escape hatch the handlers use.
+    changed = True
+    while changed:
+        changed = False
+        for name, node in functions.items():
+            if name in locked:
+                continue
+            if _called_names(node) & locked:
+                locked.add(name)
+                changed = True
     return locked
 
 

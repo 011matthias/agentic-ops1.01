@@ -4856,18 +4856,23 @@ def assign_batch_cards(
         if fresh is None:
             raise RunInputError("This batch no longer exists (it was deleted).")
         run = fresh
-        if has_statement(run):
-            raise RunInputError(
-                "A statement is already attached to this batch; its receipt "
-                "pool and master data are fixed."
-            )
-        return _assign_batch_cards_locked(
+        # No statement refusal since 2b-2. A card assignment is exactly what
+        # an operator needs mid-month: matching is entity-scoped, so a card
+        # with no entity is what leaves a month matching nothing.
+        out = _assign_batch_cards_locked(
             store, run,
             assignments=assignments,
             new_cards_clean=new_cards_clean,
             learn=learn,
             now_iso=now_iso,
         )
+    # Outside the lock; see rematch_after_change. An assignment that does not
+    # reach the matcher is the R3 F1 failure (silent 0-match month), so the
+    # re-match is the point of allowing this at all.
+    rematch = rematch_after_change(store, run.run_id)
+    if rematch is not None:
+        out["rematch"] = rematch
+    return out
 
 
 def _assign_batch_cards_locked(
@@ -5062,14 +5067,15 @@ def refresh_batch_master_data(
         if fresh is None:
             raise RunInputError("This batch no longer exists (it was deleted).")
         run = fresh
-        if has_statement(run):
-            raise RunInputError(
-                "A statement is already attached to this batch; its master "
-                "data is fixed."
-            )
-        return _refresh_batch_master_data_locked(
+        # No statement refusal since 2b-2: the same reasoning as the card
+        # assignment above, of which this is the bulk form.
+        out = _refresh_batch_master_data_locked(
             store, run, now_iso=now_iso, operator=operator
         )
+    rematch = rematch_after_change(store, run.run_id)
+    if rematch is not None:
+        out["rematch"] = rematch
+    return out
 
 
 def _refresh_batch_master_data_locked(
@@ -5342,14 +5348,17 @@ def restore_set_aside_file(
         if fresh is None:
             raise RunInputError("This batch no longer exists (it was deleted).")
         run = fresh
-        if has_statement(run):
-            raise RunInputError(
-                "A statement is already attached to this batch; its receipt "
-                "pool is fixed."
-            )
-        return _restore_set_aside_locked(
+        # No statement refusal since 2b-2: a restored page is a receipt
+        # joining the pool, the same class as an arrival.
+        out = _restore_set_aside_locked(
             store, run, file, now_iso, learning_db_path=learning_db_path
         )
+    rematch = rematch_after_change(
+        store, run.run_id, learning_db_path=learning_db_path
+    )
+    if rematch is not None:
+        out["rematch"] = rematch
+    return out
 
 
 def _restore_set_aside_locked(
@@ -5545,13 +5554,27 @@ def add_receipts_to_expense_batch(
             # as ingested into a batch that no longer exists.
             raise RunInputError("This batch no longer exists (it was deleted).")
         run = fresh
-        return _add_receipts_locked(
+        result = _add_receipts_locked(
             store, run, staging_dir, now_iso,
             learning_db_path=learning_db_path,
             on_stage=on_stage,
             provenance_by_digest=provenance_by_digest,
             _stage=_stage,
         )
+
+    # OUTSIDE the lock (`rematch_month` takes the same non-reentrant lock to
+    # commit). A month whose statement is already loaded reconciles the
+    # arrival now; one without a statement does nothing here and pays
+    # nothing. Skipped when the upload added no receipt -- an all-duplicate
+    # add changed nothing to re-match.
+    if result.get("n_added"):
+        rematch = rematch_after_change(
+            store, run.run_id,
+            learning_db_path=learning_db_path, on_stage=on_stage,
+        )
+        if rematch is not None:
+            result["rematch"] = rematch
+    return result
 
 
 def _add_receipts_locked(
@@ -5569,11 +5592,10 @@ def _add_receipts_locked(
     from ..cli import _resolve_categorizer_chart
     from ..ingest.receipts_folder import parse_receipt_file
 
-    if has_statement(run):
-        raise RunInputError(
-            "A statement is already attached to this batch; its receipt "
-            "pool is fixed. Start a new batch for new receipts."
-        )
+    # No statement refusal here since 2b-2: receipts arrive all month,
+    # including after the statement has, and the month stays open for them.
+    # `add_receipts_to_expense_batch` re-matches once this returns, so an
+    # arrival reconciles rather than just landing in the pool.
 
     _, receipts, outcome, _parse_errors = snapshot_from_dict(run.snapshot)
     work_dir = Path(run.work_dir)
@@ -6162,3 +6184,78 @@ def rematch_month(
         "judgments_reused": judgments.hits,
         "judgments_new": judgments.misses,
     }
+
+
+def rematch_after_change(
+    store: RunStore,
+    run_id: str,
+    *,
+    learning_db_path: Path | None = None,
+    on_stage=None,
+) -> dict | None:
+    """Re-reconcile a statement-bearing month whose inputs just changed.
+
+    The living month (2b-2): a statement is an input stream, not a closing
+    event, so the operations that used to be refused once one was attached
+    -- receipts arriving, a set-aside page restored, a card assigned, master
+    data refreshed -- are allowed and each is followed by this. Without it
+    they would be allowed but inert: the new receipt would sit in the pool
+    while the match outcome still described the month as it was before.
+
+    Called AFTER the caller's `_BATCH_ADD_LOCK` span, never inside it:
+    `rematch_month` takes that same lock to commit and it is not reentrant.
+    Every incremental path goes through this one function rather than
+    growing its own copy, the same reason `rematch_month` itself exists.
+
+    Returns None (and costs nothing) when there is no statement to match
+    against, which is the ordinary pre-attach case and every non-expense
+    run. Re-reads the row rather than trusting the caller's: the caller
+    read its copy before it made its change.
+    """
+    fresh = store.get_run(run_id)
+    if fresh is None or not has_statement(fresh):
+        return None
+    try:
+        transactions, _, _, _ = snapshot_from_dict(fresh.snapshot)
+    except Exception as exc:  # noqa: BLE001 - see the contract below
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    if not transactions:
+        return None
+    cfg = fresh.config or {}
+    return _rematch_or_error(
+        store,
+        fresh,
+        transactions=transactions,
+        cfg=cfg,
+        # The statement's own entity, recovered from the config the attach
+        # wrote, so the cross-entity "nothing will match" advisory keeps
+        # firing on a re-match. That advisory earns its keep exactly here:
+        # a card assignment is what most often leaves a month unable to
+        # match anything (Cards R3 adversarial review F1).
+        entity=str((cfg.get("statement") or {}).get("legal_entity_id") or ""),
+        learning_db_path=learning_db_path,
+        on_stage=on_stage,
+    )
+
+
+def _rematch_or_error(*args, **kwargs) -> dict:
+    """`rematch_month`, with a failure reported rather than raised.
+
+    The caller's change is ALREADY COMMITTED when this runs -- the receipt
+    is in the pool, the card assignment is in the config -- because the
+    re-match deliberately happens after the lock span that wrote it. So a
+    re-match that throws must not make the caller look like it failed: a
+    mailed receipt would be marked `held_failed` and replayed despite
+    having landed, and an OpenAI outage would do that to every receipt
+    Dirk sends.
+
+    Not silent either. The error rides back in the result (`rematch`), so
+    the job and the log say the month did not re-reconcile, and the next
+    trigger retries against a pool that already holds the receipt. The
+    month's own match state is simply the one it had before, which is a
+    truthful stale rather than a wrong fresh.
+    """
+    try:
+        return rematch_month(*args, **kwargs)
+    except Exception as exc:  # noqa: BLE001 - reported, never raised
+        return {"error": f"{type(exc).__name__}: {exc}"}
