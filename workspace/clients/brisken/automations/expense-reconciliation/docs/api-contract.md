@@ -198,7 +198,7 @@ renders exactly what it rendered before.
 | `entries[].pool_month` | string `"YYYY-MM"` | which month this mail's receipts belong to |
 | `entries[].receipt_month_source` | string | how that month was decided: `receipt` (a printed date), `arrival` (none readable), `implausible-receipt` (a printed date outside the plausibility window) |
 | `entries[].mixed_months` | `true` (absent otherwise) | this mail spans more than one month, and routed by its earliest |
-| `entries[].pool_month_state` | string | pooled rows only: `no_batch`, `open` (a claim is imminent), `closed` (the month is already reconciled) |
+| `entries[].pool_month_state` | string | pooled rows only: `no_batch`, `open` (a claim is imminent), `reconciling` (the month has its statement and is still open, so a claim is imminent there too; 2b-2). `closed` is retired and no longer emitted -- the month used to shut when its statement arrived, and a pooled mail addressed to it was a dead end. An SPA that still branches on `closed` keeps working: it just never sees it, and `status_label` already says the right thing |
 | `n_pooled` | number | top-level, beside `n_held`. Distinct MAILS, not log rows |
 | `entries[].status_kind` | string | how to TREAT this row: `resting` (fine, waiting on something scheduled), `held` (needs a human), `working` (in flight, resolves in seconds), `done` (nothing owed), `unknown` (a status this backend build does not know). Added 2026-08-24 |
 | `entries[].status_label` | string | what to SAY, already composed in English: "Waiting for July 2026", "Needs one click to read", "Added". For an unrecognised status this is the raw status value, never a borrowed label |

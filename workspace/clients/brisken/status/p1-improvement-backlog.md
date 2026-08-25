@@ -459,7 +459,68 @@ baseline restores. Reopening them is its own round, with the re-match wiring
 that has to follow an edit, and it is not on the critical path for the living
 month.
 
-**PR 2b-2 - the living month. NEXT.** The statement stops being a closing event
+**PR 2b-2a - the month stays open. SHIPPED.** The guard was TWO layers, not
+the nine call sites the enumeration found: those nine are routes through one
+gate (`_mutable_expense_run_or_error`), and beneath five of them sat five
+more refusals inside the service functions themselves
+(`_add_receipts_locked`, `restore_set_aside_file`, `assign_batch_cards`,
+`refresh_batch_master_data`, `prepare_statement_attach`). Lifting only the
+routes would have moved the 400 one layer down and changed nothing.
+
+Four operations now stay open all month: receipts arriving, a set-aside page
+restored, a card assigned, master data refreshed. Each is followed by
+`service.rematch_after_change`, because allowed-but-inert is worse than
+refused: the receipt would sit in the pool while the match outcome still
+described the month as it was before. It runs OUTSIDE the caller's lock span
+(`_BATCH_ADD_LOCK` is not reentrant and `rematch_month` takes it to commit),
+and it is skipped when an upload added nothing, so an all-duplicate add pays
+for no model calls.
+
+A re-match failure is REPORTED, not raised. The caller's change is already
+committed when it runs, so a throw would mark a receipt that safely landed as
+`held_failed` and replay it -- an OpenAI outage would do that to every receipt
+Dirk sends. The error rides back in the result and the next trigger retries,
+so the month's match state is a truthful stale rather than a wrong fresh.
+
+Pool side: a month with its statement now claims its pooled mail instead of
+declining, and `pool_month_state` reports `reconciling` where it said
+`closed` (parallel value; `closed` is retired but still handled, and
+`status_label` already carries the prose so no SPA change is needed).
+A statement-less month still wins a same-month tie.
+
+**The adversarial find, and the recurrence-kill:** the item-18 AST guard that
+stops an `async def` route from parking the event loop derives its locked set
+by scanning for `with _BATCH_ADD_LOCK` in a function's OWN body. Every
+lock-taker held it that way until `rematch_after_change`, which takes it one
+call deeper -- so the guard reported it as safe, and a future async route
+calling it directly would have frozen every endpoint including `/healthz` for
+the minutes a re-match runs, exactly the failure that had Fly restarting the
+machine mid-ingest. The locked set is now a transitive closure. Proven by
+mutation: adding that call to a real async handler turns the guard red.
+
+Still closed, each pinned by a test: a second statement upload (append is its
+own round, below) and the four expense-edit overlay routes.
+
+Suite 1316 -> 1325, calibrate exit 0, ruff clean on the diff. Both halves
+proven by mutation: restoring the guard reddens 5 tests, unwiring the
+re-match reddens the 2 that specifically catch allowed-but-inert.
+
+**PR 2b-2b - gradual statement uploads. NEXT.** What remains of the plan's
+2b-2: `POST .../statement` becomes append-capable and repeatable (per card,
+several times a month), parsing and content-id deduping against the existing
+set, with a `statements[]` parallel field. The one-shot attach is the
+degenerate case of the same path. `prepare_statement_attach` keeps its
+refusal until then, so a second upload cannot silently replace the first
+month's charges.
+
+One interaction pinned deliberately in 2a and still open: a file whose SIGN
+inference differs between a partial and a full upload yields different ids
+for the same printed row, because the two uploads genuinely disagree about
+which way the money went. Surfacing two rows beats silently deduping a
+contradiction; whether it also wants a visible warning is the open call.
+
+**PR 2b-2 - the living month (the original plan item).** The statement stops
+being a closing event
 and becomes an input stream:
 
 1. **Stable transaction identity** (the prerequisite). Transaction ids are

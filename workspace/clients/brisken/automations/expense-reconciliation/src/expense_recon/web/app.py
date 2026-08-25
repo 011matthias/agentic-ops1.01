@@ -2197,10 +2197,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
     def _mutable_expense_run_or_error(store: RunStore, run_id: str):
         """Like `_expense_run_or_error`, but additionally refuses a batch
-        whose statement is attached: from that point the receipt pool is
-        the reconciliation's provenance and review continues in the
-        workbench (decisions / categories / manual match), never through
-        the expense-edit overlay."""
+        whose statement is attached.
+
+        Since 2b-2 this guards the four expense-edit OVERLAY routes only.
+        The month itself no longer closes: receipts, restores, card
+        assignments and master-data refreshes are allowed all month and
+        each re-matches (`service.rematch_after_change`).
+
+        What keeps the overlay out is not the risk of applying an edit
+        twice -- it is idempotent by construction, and `apply_expense_edits`
+        is written that way on purpose. It is that a re-match BAKES the
+        overlay into the receipt pool, so an edit surface is only worth
+        reopening once every edit it takes stays reversible and honestly
+        attributed. PR #628 restored the extraction baseline that both of
+        those rest on; reopening these four is its own round, with the
+        re-match an edit has to trigger."""
         run, err = _expense_run_or_error(store, run_id)
         if err is not None:
             return None, err
@@ -2329,7 +2340,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not _receipt_first_on():
             return _flag_off()
         with open_store() as store:
-            run, err = _mutable_expense_run_or_error(store, run_id)
+            run, err = _expense_run_or_error(store, run_id)
         if err is not None:
             return err
 
@@ -2395,7 +2406,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # like delete_run. See tests/test_web_batch_lock_threadpool.py.
         def _work():
             with open_store() as store:
-                run, err = _mutable_expense_run_or_error(store, run_id)
+                run, err = _expense_run_or_error(store, run_id)
                 if err is not None:
                     return err
                 try:
@@ -2443,7 +2454,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # assign_batch_cards takes the batch writer lock.
         def _work():
             with open_store() as store:
-                run, err = _mutable_expense_run_or_error(store, run_id)
+                run, err = _expense_run_or_error(store, run_id)
                 if err is not None:
                     return err
                 try:
@@ -2471,7 +2482,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not _receipt_first_on():
             return _flag_off()
         with open_store() as store:
-            run, err = _mutable_expense_run_or_error(store, run_id)
+            run, err = _expense_run_or_error(store, run_id)
             if err is not None:
                 return err
             try:
