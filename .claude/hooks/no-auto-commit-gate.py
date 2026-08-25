@@ -385,6 +385,44 @@ def recent_user_messages(transcript_path: str, lookback: int = USER_TURN_LOOKBAC
     return list(reversed(user_msgs))[:lookback]
 
 
+# A RED / pending PR needs a merge-anyway order specifically, never a generic
+# ship word. rule_no_auto_commit.md already says so ("wait for an explicit
+# 'merge anyway'"), but the gate accepted any AUTHORIZATION_PATTERNS hit within
+# the 30-turn lookback. Incident 2026-07-22: the owner said "deploy" (meaning a
+# Vercel deploy); minutes later a `gh pr merge` on a PR whose hooks job had just
+# failed fell through the CI check, matched that stale `\bdeploy\b`, and landed
+# broken tests on main. An override must name the override.
+RED_MERGE_OVERRIDE_PATTERNS = [
+    r"\bmerge\s+(?:it\s+|this\s+|that\s+|the\s+pr\s+)?anyway\b",
+    r"\bmerge\s+despite\b",
+    r"\bforce[-\s]?merge\b",
+    r"\bmerge\s+(?:with|even\s+with)\s+(?:red|failing)\b",
+    r"\boverride\s+(?:the\s+)?ci\b",
+    r"\bignore\s+(?:the\s+)?(?:failing\s+)?(?:ci|checks?)\b",
+]
+RED_MERGE_COMPILED = [re.compile(p, re.IGNORECASE)
+                      for p in RED_MERGE_OVERRIDE_PATTERNS]
+
+
+def _scannable(msg: str) -> str:
+    """Strip harness text that is not real user authorization."""
+    scan = re.sub(r"<system-reminder>.*?</system-reminder>", " ", msg,
+                  flags=re.DOTALL)
+    return re.sub(r"^Stop hook feedback:.*$", " ", scan, flags=re.MULTILINE)
+
+
+def has_red_merge_override(user_msgs: list[str]) -> str | None:
+    """Merge-anyway order for a non-green PR, or None. Deliberately narrow."""
+    for msg in user_msgs:
+        scan = _scannable(msg)
+        for rx in RED_MERGE_COMPILED:
+            m = rx.search(scan)
+            if m:
+                start = max(0, m.start() - 20)
+                return scan[start:m.end() + 30].strip().replace("\n", " ")[:120]
+    return None
+
+
 def has_authorization(user_msgs: list[str]) -> str | None:
     """Return the matched authorization snippet, or None."""
     for msg in user_msgs:
@@ -458,6 +496,44 @@ def main() -> None:
     # required. Scan recent user turns for authorization.
     transcript_path = payload.get("transcript_path", "")
     user_msgs = recent_user_messages(transcript_path)
+
+    # A non-green merge is its own class: it lands code the user has NOT seen
+    # pass, so a generic ship word from an unrelated earlier turn must not
+    # authorize it. Require an order that names the override.
+    if ship_tag == "gh-pr-merge":
+        override = has_red_merge_override(user_msgs)
+        if override:
+            log(f"allow:{ship_tag} band=red-merge-override auth={override!r}")
+            sys.exit(0)
+        log(f"ASK:{ship_tag} ci=not-green (no explicit merge-anyway order)")
+        if session_state is not None:
+            try:
+                session_state.add_candidate(
+                    "gate-fired-red-merge", "no-auto-commit-gate",
+                    f"{ship_tag}: {cmd[:240]}",
+                )
+            except Exception:
+                pass
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "ask",
+                "permissionDecisionReason": (
+                    "NON-GREEN `gh pr merge`. Per rule_no_auto_commit.md (B6), "
+                    "auto-merge fires ONLY on CI green; a red / pending / "
+                    "undeterminable PR needs an order that names the override "
+                    "(\"merge anyway\", \"force merge\", \"override CI\") -- a "
+                    "generic ship word from an earlier turn does NOT authorize "
+                    "it, because merging red lands code the user never saw "
+                    "pass. Recorded 2026-07-22: a stale \"deploy\" order (meant "
+                    "for Vercel) auto-merged a PR whose hooks job had just "
+                    "failed, turning main red. Fix the failing checks and let "
+                    "auto-merge fire on green, or get the explicit override."
+                ),
+            }
+        }))
+        sys.exit(0)
+
     auth_snippet = has_authorization(user_msgs)
 
     if auth_snippet:

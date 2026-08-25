@@ -75,8 +75,16 @@ env.
 The hook calls `gh pr checks` for the PR and:
 
 - **green** (all checks pass) → merge fires, no human order
-- **red / pending / undeterminable** → falls through to the floor:
-  allowed only on an explicit order ("merge anyway"), otherwise ASK
+- **red / pending / undeterminable** → needs an order that NAMES the
+  override ("merge anyway", "force merge", "override CI"), otherwise
+  ASK. A generic ship word ("push", "deploy", "ship it") from an
+  earlier turn does NOT clear a non-green merge, because merging red
+  lands code the user never saw pass. Enforced separately from the
+  generic authorization scan since 2026-07-22, after a stale "deploy"
+  order (meant for a Vercel deploy) auto-merged a PR whose hooks job
+  had just failed and turned `main` red. The narrowing is
+  merge-specific: every other gated-floor action still clears on a
+  generic order.
 
 CI is the objective signal that makes an autonomous merge-to-main
 safe: the repo's CI (`.github/workflows/ci.yml`) runs the platform
