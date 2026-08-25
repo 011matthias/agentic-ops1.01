@@ -11,6 +11,14 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-19 | Brisken Recon Feedback Everywhere + Criss July Run | client-dev | [Mini-Checkpoint-2](docs/2026-08-19%20-%20Brisken%20Recon%20Feedback%20Everywhere%20%2B%20Criss%20July%20Run/Mini-Checkpoint-2.md) |
+| 2026-08-18 | Brisken Recon Loop R4 Set-Aside + R5 Discovery | client-dev | [→](docs/2026-08-18%20-%20Brisken%20Recon%20Loop%20R4%20Set-Aside%20%2B%20R5%20Discovery/Checkpoint.md) |
+| 2026-08-15 | Brisken Expense Recon Loop Round 3 Extraction Cache | client-dev | [→](docs/2026-08-15%20-%20Brisken%20Expense%20Recon%20Loop%20Round%203%20Extraction%20Cache/Checkpoint.md) |
+| 2026-08-13 | Brisken Expense-Recon Zoho Scope + Receipt-First Test Loop | client-dev | [→](docs/2026-08-13%20-%20Brisken%20Expense-Recon%20Zoho%20Scope%20%2B%20Receipt-First%20Test%20Loop/Checkpoint.md) |
+| 2026-07-29 | Brisken Hours Log | misc | [→](docs/2026-07-29%20-%20Brisken%20Hours%20Log/Checkpoint.md) |
+| 2026-07-29 | Lead Desk Engine Hardening Phase1 Increments 1-3 | client-dev | [→](docs/2026-07-29%20-%20Lead%20Desk%20Engine%20Hardening%20Phase1%20Increments%201-3/Checkpoint.md) |
+| 2026-07-29 | Brisken Outreach Engine Strategy | client-dev | [→](docs/2026-07-29%20-%20Brisken%20Outreach%20Engine%20Strategy/Checkpoint.md) |
+| 2026-07-28 | Brisken Hours Log Write | misc | [→](docs/2026-07-28%20-%20Brisken%20Hours%20Log%20Write/Checkpoint.md) |
 | 2026-07-27 | Brisken Product-Deck Logo Walls + Overview Splice | client-dev | [→](docs/2026-07-27%20-%20Brisken%20Product-Deck%20Logo%20Walls%20%2B%20Overview%20Splice/Checkpoint.md) |
 | 2026-07-27 | Brisken Rome GA Post-Event Wave | comms | [→](docs/2026-07-27%20-%20Brisken%20Rome%20GA%20Post-Event%20Wave/Checkpoint.md) |
 | 2026-07-27 | Brisken Hours Log | misc | [→](docs/2026-07-27%20-%20Brisken%20Hours%20Log/Checkpoint.md) |
@@ -366,6 +374,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## platform
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-28 | UnpauseAI Website Deploy Path + Content Sweep | system-infra | [→](docs/2026-07-28%20-%20UnpauseAI%20Website%20Deploy%20Path%20%2B%20Content%20Sweep/Checkpoint.md) |
 | 2026-07-25 | Platform Deploy Reframe + Health-Pass Round 3 | system-infra | [→](docs/2026-07-25%20-%20Platform%20Deploy%20Reframe%20%2B%20Health-Pass%20Round%203/Checkpoint.md) |
 | 2026-06-10 | n8n Multi-Client Ops Proposal Teardown | misc | [Checkpoint](docs/2026-06-10%20-%20n8n%20Multi-Client%20Ops%20Proposal%20Teardown/Checkpoint.md) |
 | 2026-06-10 | VolaByg Proposal Reframe and Deploy | comms | [Checkpoint](docs/2026-06-10%20-%20VolaByg%20Proposal%20Reframe%20and%20Deploy/Checkpoint.md) |
@@ -420,6 +429,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## Jochen Projekt
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-29 | One Assessment Ergebnis Download | client-dev | [→](docs/2026-07-29%20-%20One%20Assessment%20Ergebnis%20Download/Checkpoint.md) |
+| 2026-07-29 | Nagarro ES Assessment + Ergebnisseiten-Leseführung | client-dev | [→](docs/2026-07-29%20-%20Nagarro%20ES%20Assessment%20%2B%20Ergebnisseiten-Lesef%C3%BChrung/Checkpoint.md) |
 | 2026-07-25 | 1Assessment Next-Level Round 1 | client-dev | [→](docs/2026-07-25%20-%201Assessment%20Next-Level%20Round%201/Checkpoint.md) |
 ## upwork-independence
 | Date | Topic | Type | Link |
