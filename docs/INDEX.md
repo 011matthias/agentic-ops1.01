@@ -249,6 +249,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-25 | Worktree and Branch Consolidation | system-infra | [Mini-Checkpoint-1](docs/2026-08-25%20-%20Worktree%20and%20Branch%20Consolidation/Mini-Checkpoint-1.md) |
 | 2026-08-24 | Structural Guards for the 2026-08-24 Friction Rows | system-infra | [→](docs/2026-08-24%20-%20Structural%20Guards%20for%20the%202026-08-24%20Friction%20Rows/Checkpoint.md) |
 | 2026-08-24 | Enforcement Hook Layer Fixes | system-infra | [→](docs/2026-08-24%20-%20Enforcement%20Hook%20Layer%20Fixes/Checkpoint.md) |
 | 2026-07-28 | UnpauseAI Website Deploy Path + Content Sweep | system-infra | [→](docs/2026-07-28%20-%20UnpauseAI%20Website%20Deploy%20Path%20%2B%20Content%20Sweep/Checkpoint.md) |

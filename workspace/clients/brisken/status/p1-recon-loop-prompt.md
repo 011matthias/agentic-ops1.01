@@ -14,15 +14,39 @@ usable for Brisken. Read this whole brief before touching anything, then read
 `p1-improvement-backlog.md` beside it — that file, not this one, is the list of
 what to do next.
 
-## Where things stand (2026-08-25)
+## Where things stand (2026-08-25, end of day)
 
-**Backlog item 30 is fully shipped and deployed** (PRs #607, #608, #609; Fly
-**v90**), along with the out-of-Lovable half of the "Arriving" bug:
+**The living month is built.** Backlog item 29's whole PR-2 chain is shipped
+and deployed (Fly **v97**): stable transaction identity (2a), `rematch_month`
++ the judgment cache (2b-1), the extraction baseline (2b-1b), the month
+staying open (2b-2a), the fold (2b-2b-1), and the `statements[]` surface
+(2b-2b-2, PR #636).
+
+A statement is now an input stream, not a closing event. `POST
+.../statement` appends by identity and is repeatable per card; each upload is
+recorded in `statements[]` on both review payloads; the sheet writeback is
+anchored PER UPLOAD (`statement_anchors`), because one charge occupies a row
+in every file that prints it and a field on the charge could only name one of
+them. Two hazards are answered by surfacing, never deduping: an `advisory`
+fires when one card is typed against two account ids, or when an upload lands
+100% new over a period the same account already covers. `rematch_month`
+refuses any commit that would drop a charge the month gained meanwhile.
+
+**Next is PR 3, the coverage surface** - per-card coverage in the batch view
+(which cards have statements, over what periods, matched/unmatched per card),
+the month page's statement panel, and per-card sections in the reconciliation
+report. The backend half of the selector already exists
+(`GET /runs/{id}/statement-categorized.xlsx?file=`), but the SPA renders
+neither `statements[]` nor the selector, so from the UI a month with two xlsx
+statements can still only download the current one.
+
+**Backlog item 30 is fully shipped and deployed** (PRs #607, #608, #609),
+along with the out-of-Lovable half of the "Arriving" bug:
 
 - **Known senders.** Settings `intake.known_senders` lists outside addresses
   that count as ours. `graph_notify.send_mail` takes an explicit per-call
   `allow_external` and asserts the structural recipient guard BEFORE
-  consulting it. **The production list is EMPTY** — Dirk's
+  consulting it. **The production list is EMPTY** - Dirk's
   `dirk_.neumann@icloud.com` still gets no ack until an operator lists it.
 - **Body-only mail from a known sender renders on arrival**, reusing the
   operator render path unchanged. Strangers still hold and still alert.
@@ -40,9 +64,15 @@ what to do next.
 whose content the tool already holds is parked as `duplicate` before it
 reaches a month, and points at the mail that has it.
 
-Baselines: suite **1312 passed / 2 skipped**, calibrate green, ruff (E9,F)
-clean on the diff. Worktree `C:\Users\neuma_p1qrsic\Repo\agentic-ops1-recon`,
-app root `workspace/clients/brisken/automations/expense-reconciliation`.
+Baselines: suite **1352 passed / 2 skipped**, calibrate exit 0, ruff (E9,F)
+clean on the diff. App root
+`workspace/clients/brisken/automations/expense-reconciliation`.
+
+**Worktrees were consolidated on 2026-08-25.** There is no longer an
+`agentic-ops1-recon` worktree: the repo is the primary clone
+`C:\Users\neuma_p1qrsic\Repo\agentic-ops1` (on `main`, clean) plus
+`agentic-ops1-deploy` (detached at origin/main, deploys only). Cut a fresh
+worktree for the round rather than expecting an old one to exist.
 
 **Live state (2026-08-25):** 10 **pooled**, `n_held` 0, `n_duplicates` 0.
 Three of the pooled ten are the SAME Hostinger invoice (H_46243348),
