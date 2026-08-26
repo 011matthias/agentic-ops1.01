@@ -84,6 +84,12 @@ EXPENSE_BATCH_CONTRACT = {
     "card_review.unresolved_hints[]": "object",
     "card_review.unresolved_hints[].documents[]": "string",
     "category_options[]": "string",
+    # PR 3: per-card coverage. `digits[]` and `statements[]` are the two
+    # lists inside an entry; both are plain strings, and both are empty on
+    # an entry the month knows only from its registry.
+    "coverage[]": "object",
+    "coverage[].digits[]": "string",
+    "coverage[].statements[]": "string",
     "duplicate_groups[]": "object",
     "duplicate_groups[].members[]": "string",
     "entity_options[]": "string",
@@ -111,6 +117,9 @@ EXPENSE_BATCH_CONTRACT = {
 RUN_CONTRACT = {
     "assignable_receipts[]": "object",
     "category_options[]": "string",
+    "coverage[]": "object",
+    "coverage[].digits[]": "string",
+    "coverage[].statements[]": "string",
     "duplicate_charges[]": "array",
     "duplicate_charges[][]": "object",
     "duplicate_groups[]": "object",
@@ -153,6 +162,9 @@ EXPENSE_BATCH_MUST_COVER = {
     "category_options[]",
     "entity_options[]",
     "statements[]",
+    "coverage[]",
+    "coverage[].digits[]",
+    "coverage[].statements[]",
 }
 
 RUN_MUST_COVER = {
@@ -169,6 +181,9 @@ RUN_MUST_COVER = {
     "category_options[]",
     "summary.setup_advisories[]",
     "statements[]",
+    "coverage[]",
+    "coverage[].digits[]",
+    "coverage[].statements[]",
 }
 
 
@@ -443,6 +458,14 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
     """
     mock = MockLLMClient(extraction_responses=[_extraction()])
     monkeypatch_setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
+    # A registry card whose digits match the statement's account, so the
+    # month's coverage entry carries a `digits[]` the pin can observe. A
+    # batch snapshots the composed registry at CREATION, so this settings
+    # write has to happen first.
+    client.put("/api/settings", json={"cards": {"amex-9001": {
+        "label": "Amex (contract fixture)", "digits": ["9001"],
+        "entity": "Corporate Services",
+    }}})
     resp = client.post("/api/expense-batches", files=[
         ("files", ("m.jpg", JPG + b"m", "application/octet-stream")),
     ], data={"legal_entity": "Corporate Services", "label": "Contract month"})
@@ -468,6 +491,10 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
     run = client.get(f"/api/runs/{batch_id}").json()
     assert len(grid["statements"]) == 2, grid["statements"]
     assert grid["statements"] == run["statements"]
+    assert grid["coverage"] == run["coverage"], "one month, one coverage"
+    assert any(c["digits"] and c["statements"] for c in grid["coverage"]), (
+        grid["coverage"]
+    )
     return grid, run
 
 

@@ -6,6 +6,12 @@ complete — not a data file. These tests pin what makes it that: exceptions
 come FIRST (they are the only part anyone must act on), the charge listing
 states each charge's receipt and status, and a receipt nobody could place is
 shown as unplaced rather than omitted.
+
+PR 3 adds a card axis, and the tests for it are about what the document
+does with a month that spans several cards: a coverage table, and a charge
+listing sectioned by card. Both stay silent on a one-card month, because a
+table and a heading that restate the headline are structure the content
+does not earn.
 """
 from __future__ import annotations
 
@@ -159,3 +165,116 @@ def test_an_empty_reconciliation_still_renders():
     )
     assert len(PdfReader(io.BytesIO(pdf)).pages) == 1
     assert "0 charges" in _text(pdf)
+
+
+# ── the card axis (PR 3) ─────────────────────────────────────────────
+#
+# The rows are deliberately INTERLEAVED across the two cards (chase, amex,
+# chase) while `coverage` lists chase first. Flat, the listing prints them in
+# payload order; sectioned, both chase charges print before the amex one.
+# Reading the vendor ORDER out of the page is therefore what tells a document
+# that groups by card from one that only says it does. An assertion on the
+# card NAMES could not: the coverage table prints those either way.
+
+TWO_CARD_VIEW = {
+    "summary": {"n_transactions": 3, "n_matched": 0, "match_rate": 0.0,
+                "unreconciled_by_ccy": {"USD": "600.00"}},
+    "coverage": [
+        {"key": "chase-2838", "card_key": "chase-2838",
+         "label": "Corporate card", "digits": ["2838"], "known": True,
+         "statements": ["chase-april.xlsx"], "period_start": "2026-04-01",
+         "period_end": "2026-04-03", "n_transactions": 2, "n_reconciled": 0,
+         "n_review": 0, "n_unmatched_tx": 2, "n_refunds": 0,
+         "unreconciled_by_ccy": {"USD": "500.00"}},
+        {"key": "9001", "card_key": "", "label": "amex-9001",
+         "digits": ["9001"], "known": False, "statements": ["amex.csv"],
+         "period_start": "2026-04-02", "period_end": "2026-04-02",
+         "n_transactions": 1, "n_reconciled": 0, "n_review": 0,
+         "n_unmatched_tx": 1, "n_refunds": 0,
+         "unreconciled_by_ccy": {"USD": "100.00"}},
+    ],
+    "rows": [
+        {"date": "2026-04-01", "vendor": "ALPHAVENDOR", "amount": "400.00",
+         "currency": "USD", "status": "pending", "chosen_document_id": None,
+         "effective_bucket": "unmatched", "candidates": [],
+         "posting_category": None, "coverage_key": "chase-2838"},
+        {"date": "2026-04-02", "vendor": "BRAVOVENDOR", "amount": "100.00",
+         "currency": "USD", "status": "pending", "chosen_document_id": None,
+         "effective_bucket": "unmatched", "candidates": [],
+         "posting_category": None, "coverage_key": "9001"},
+        {"date": "2026-04-03", "vendor": "CHARLIEVENDOR", "amount": "100.00",
+         "currency": "USD", "status": "pending", "chosen_document_id": None,
+         "effective_bucket": "unmatched", "candidates": [],
+         "posting_category": None, "coverage_key": "chase-2838"},
+    ],
+    "unmatched_transactions": [],
+    "unmatched_receipts": [],
+    "duplicate_groups": [],
+}
+
+
+def _one_card_view() -> dict:
+    view = dict(TWO_CARD_VIEW)
+    view["coverage"] = [TWO_CARD_VIEW["coverage"][0]]
+    view["rows"] = [r for r in TWO_CARD_VIEW["rows"]
+                    if r["coverage_key"] == "chase-2838"]
+    return view
+
+
+def test_a_multi_card_month_states_its_coverage_per_card():
+    """A single unreconciled figure spread over three cards says nothing
+    about which pile of receipts to go and find. The table splits it."""
+    page1 = _flat(build_reconciliation_report_pdf(TWO_CARD_VIEW, title="April"))
+    assert "Coverage by card" in page1
+    assert "Corporate card" in page1
+    assert "chase-april.xlsx" in page1
+    assert "2026-04-01 to 2026-04-03" in page1
+    assert "USD 500.00" in page1
+    assert "amex-9001" in page1
+
+
+def test_the_charge_listing_is_sectioned_by_card():
+    """Sectioned, both of the corporate card's charges print before the amex
+    one even though the payload interleaves them; flat, they print in payload
+    order. That ordering is the only thing that distinguishes the two."""
+    page1 = _flat(build_reconciliation_report_pdf(TWO_CARD_VIEW, title="April"))
+    listing = page1[page1.index("All charges"):]
+    assert listing.index("CHARLIEVENDOR") < listing.index("BRAVOVENDOR")
+    assert listing.index("ALPHAVENDOR") < listing.index("CHARLIEVENDOR")
+
+
+def test_a_charge_on_no_listed_card_is_still_printed():
+    """A listing that silently drops charges is worse than an ugly one. A row
+    whose card the coverage list does not carry gets its own section rather
+    than disappearing between two that it does."""
+    view = dict(TWO_CARD_VIEW)
+    view["rows"] = TWO_CARD_VIEW["rows"] + [
+        {"date": "2026-04-09", "vendor": "ORPHANVENDOR", "amount": "7.00",
+         "currency": "USD", "status": "pending", "chosen_document_id": None,
+         "effective_bucket": "unmatched", "candidates": [],
+         "posting_category": None, "coverage_key": "not-a-card"},
+    ]
+    page1 = _flat(build_reconciliation_report_pdf(view, title="April"))
+    assert "Other charges" in page1
+    assert "ORPHANVENDOR" in page1
+
+
+def test_a_one_card_month_gets_neither_a_table_nor_sections():
+    """The headline already says it. A coverage table restating one row, and a
+    section heading over the only table, are structure the content does not
+    earn."""
+    page1 = _flat(build_reconciliation_report_pdf(_one_card_view(), title="April"))
+    assert "Coverage by card" not in page1
+    assert "Corporate card" not in page1
+    assert "All charges" in page1
+    assert "ALPHAVENDOR" in page1
+    assert "CHARLIEVENDOR" in page1
+
+
+def test_a_payload_with_no_coverage_renders_as_it_always_did():
+    """Every run created before PR 3 carries no `coverage` at all, and the
+    document it produces has to be the one it produced yesterday."""
+    page1 = _flat(build_reconciliation_report_pdf(MESSY_VIEW, title="April"))
+    assert "Coverage by card" not in page1
+    assert "TRENITALIA" in page1
+    assert "UNKNOWN CHARGE" in page1
