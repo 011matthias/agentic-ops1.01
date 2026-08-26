@@ -38,6 +38,8 @@ receives after `jsonable_encoder`.
 | `parse_errors[]` | array `[file, line, message, severity]` (legacy raw rows) |
 | `set_aside[]` | object |
 | `statements[]` | object |
+| `coverage[]` | object |
+| `coverage[].digits[]` · `coverage[].statements[]` | string |
 | `expenses[]` | object |
 | `expenses[].line_items[]` | object |
 | `expenses[].books_as[]` | object `{account, unassigned, amount}` |
@@ -70,6 +72,8 @@ receives after `jsonable_encoder`.
 | `duplicate_receipts[][].line_items[]` | object |
 | `summary.setup_advisories[]` | object |
 | `statements[]` | object |
+| `coverage[]` | object |
+| `coverage[].digits[]` · `coverage[].statements[]` | string |
 | `category_options[]` | string |
 
 ## `parse_issues` specifically
@@ -204,6 +208,87 @@ only. One charge occupies a row in every file that prints it, which is why the
 row is recorded per upload rather than on the charge; anchoring on the charge
 would leave the closing cycle blank wherever a mid-month partial got there
 first.
+
+## Per-card coverage: `coverage[]` (added 2026-08-26)
+
+`statements[]` answers the FILE question. This answers the CARD question,
+which is the one the work is organized around: a card is loaded across
+several files (a mid-month partial, then the closing cycle) and one file
+prints charges from several cards, so neither list can be derived from the
+other. Parallel field, per rule 1, on BOTH review payloads and identical
+between them for the same month.
+
+```json
+{ "key": "corp-1672",
+  "card_key": "corp-1672",
+  "label": "Corporate card (Chase)",
+  "entity": "Corporate Services",
+  "digits": ["2838", "1672"],
+  "known": true,
+  "statements": ["statement.xlsx", "statement-2.xlsx"],
+  "period_start": "2026-04-03",
+  "period_end": "2026-04-28",
+  "n_transactions": 45,
+  "n_reconciled": 30,
+  "n_review": 2,
+  "n_unmatched_tx": 12,
+  "n_refunds": 1,
+  "unreconciled_by_ccy": { "USD": "1,204.55" } }
+```
+
+| Key | Question it answers |
+|---|---|
+| `key` | which row this is, and the value `rows[].coverage_key` points at. Opaque: match it, never parse it |
+| `card_key` | the card-registry key, or `""` when the registry does not know this card |
+| `label` | what to call it on screen, always renderable: the registry's label, else the string the statement printed, else `"No card on the charge"` |
+| `known` | whether the registry knows this card. `false` is a real finding, not an error: it is a card nobody has registered yet |
+| `digits` | the digit tokens that identify it |
+| `statements` | the uploads that covered this card, oldest first |
+| `period_start` · `period_end` | the first and last charge dates this month holds FOR THIS CARD; null when it holds none |
+| `n_transactions` and the four buckets | the same four counts the run summary carries, for this card's charges alone |
+| `unreconciled_by_ccy` | this card's share of the month's unreconciled money, by the summary's own rule |
+
+**The counts are the summary's counts.** `n_reconciled` + `n_review` +
+`n_unmatched_tx` + `n_refunds` equals the entry's `n_transactions`, and
+summing any of the five across `coverage[]` gives the run summary's value for
+the same name. That is deliberate and pinned by
+`tests/test_coverage_surface.py`: a panel a reader cannot add up against the
+headline it sits under is the `n_categorized` failure above, with money on
+it. Reconciled and refunded charges are settled and a posted charge is
+settled by definition, which is why they carry no unreconciled money.
+
+**Empty means nothing loaded.** A month with no charges and no uploads gets
+`[]`, so a receipt-only month does not open with a column of registry cards
+it has no business asking about yet, and `statements[]`'s own emptiness
+already says the same thing.
+
+**Which card a charge is on** starts from the string the matcher itself
+reads: the per-row card column when the statement prints one, the account id
+otherwise. That string is then resolved through `cards.resolve_card` against
+the batch's own registry snapshot, the same resolver the per-receipt card
+chain uses, so digit tokens and registry ALIASES both count and an ambiguous
+string resolves to nothing (ambiguity surfaces instead of guessing). The
+Chase cycle marker `2838` and the plastic's `1672` are therefore ONE row; a
+card the registry never met gets a row of its own rather than being folded
+into an "other" bucket; and a charge naming no card at all lands in the
+empty-key row, never in some card already listed. Every row carries the
+assignment as `rows[].coverage_key`.
+
+A card the registry does not know is keyed `digits:<tokens>`, which is why
+`key` must not be parsed. Cards are keyed by an operator-chosen slug and
+nothing stops that slug from being digits that are not the card's own
+(`"2838"` as the key of a card whose digits are 9999); without the namespace,
+charges on the real 2838 would land in that card's row and its money would be
+reported against the wrong plastic and the wrong entity.
+
+**Which statements a card was loaded from** comes from two joins, unioned:
+the operator's `card_key` on the upload (an explicit assertion, so it counts
+even when that file printed nothing on the card), and the charges the file
+actually printed via `statement_anchors`. `account_id` is the last resort,
+used only when both are silent, because it names an ACCOUNT: on the real
+corpserv export every row says `chase-2838-family` while the rows span
+2838 / 3645 / 3876 / 0340, and reading that as a card would invent a coverage
+row for a card that does not exist.
 
 ## Rules for changing a list field
 

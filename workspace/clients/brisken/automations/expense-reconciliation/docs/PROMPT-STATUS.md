@@ -43,8 +43,14 @@ are VERBATIM strings from each prompt.
 
 ## Not applied
 
-None. The three that were outstanding on 2026-08-24 were all applied by the
-owner and verified live on 2026-08-25.
+| Prompt | What it adds | Signature to audit for |
+|---|---|---|
+| `lovable-coverage-prompt.md` | The Statements panel, the per-statement download selector, and the Coverage by card panel (PR 3, shipped 2026-08-26) | "Coverage by card", "Add a statement", "not in your card list", "nothing loaded yet" |
+
+Written the same day its backend shipped, so the SPA half is outstanding
+until the owner pastes it. Until then a month holding two workbooks still
+offers one download button, and the per-card split of a month's unreconciled
+money exists in the API and on the reconciliation PDF but not on screen.
 
 ## Cannot verify (no live state exercises them)
 

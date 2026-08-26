@@ -1430,9 +1430,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         edits = store.get_expense_edits(run.run_id)
         resolutions = store.get_duplicate_resolutions(run.run_id)
         settings = store.get_settings()
+        # PR 3: the per-card coverage roll-up is decision-aware, so the grid
+        # reports the same stage of done the workbench does. Read here
+        # because the store is open here; a month with no statement holds no
+        # charges and the read costs nothing.
+        decisions = store.get_decisions(run.run_id)
         return build_expense_view(
             run, overrides, field_overrides, edits, resolutions,
-            settings=settings,
+            settings=settings, decisions=decisions,
         )
 
     @app.get("/api/runs/{run_id}")
