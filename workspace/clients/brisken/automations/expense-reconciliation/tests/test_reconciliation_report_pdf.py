@@ -51,7 +51,7 @@ def _flat(pdf: bytes, page: int = 0) -> str:
 
 
 CLEAN_VIEW = {
-    "summary": {"n_transactions": 2, "n_matched": 2, "match_rate": 100.0,
+    "summary": {"n_transactions": 2, "n_reconciled": 2, "match_rate": 100.0,
                 "unreconciled_by_ccy": {}},
     "rows": [
         {"date": "2026-04-01", "vendor": "TRENITALIA", "amount": "42.50",
@@ -71,7 +71,7 @@ CLEAN_VIEW = {
 }
 
 MESSY_VIEW = {
-    "summary": {"n_transactions": 3, "n_matched": 1, "match_rate": 33.3,
+    "summary": {"n_transactions": 3, "n_reconciled": 1, "match_rate": 33.3,
                 "unreconciled_by_ccy": {"EUR": "60.50"}},
     "rows": [
         CLEAN_VIEW["rows"][0],
@@ -112,6 +112,26 @@ def test_exceptions_come_before_the_listing():
     assert "1 possible duplicate groups" in page1
     assert "UNKNOWN CHARGE" in page1
     assert "Orphan Receipt" in page1
+
+
+def test_the_headline_counts_what_the_rate_is_computed_from():
+    """The two halves of the headline have to describe one thing.
+
+    `n_reconciled` is what a `build_view` payload calls the matched count and
+    what `match_rate` divides; `n_matched` is the STORED pipeline summary's
+    name for the pre-decision count and is never on the payload this document
+    is built from. Reading the stored key first printed "0 matched (13.8%)"
+    on every reconciliation the app produced, and the fixtures here carried
+    the stored key so nothing failed. A caller that genuinely hands over a
+    stored summary still gets its number.
+    """
+    page1 = _flat(build_reconciliation_report_pdf(MESSY_VIEW, title="April"))
+    assert "3 charges · 1 matched (33.3%)" in page1
+
+    stored_shape = {**MESSY_VIEW, "summary": {
+        "n_transactions": 3, "n_matched": 1, "match_rate": 33.3}}
+    assert "1 matched" in _flat(
+        build_reconciliation_report_pdf(stored_shape, title="April"))
 
 
 def test_a_clean_month_says_so_plainly():

@@ -107,7 +107,18 @@ def build_reconciliation_report_pdf(
     rows = list(view.get("rows") or [])
 
     n_tx = int(summary.get("n_transactions") or len(rows))
-    n_matched = int(summary.get("n_matched") or 0)
+    # `n_reconciled` is what the RENDER summary calls this, and it is the
+    # count `match_rate` is computed from, so the two halves of the headline
+    # describe one thing. `n_matched` is the STORED pipeline summary's name
+    # for the pre-decision count; it is never on a `build_view` payload,
+    # which is what this document is built from, so reading it first printed
+    # "0 matched (13.8%)" on every reconciliation the app has ever produced.
+    # Nothing caught it because the unit fixtures below carried the stored
+    # key, which the real payload does not have. Kept as the fallback for a
+    # caller that genuinely passes a stored summary.
+    n_matched = int(
+        summary.get("n_reconciled", summary.get("n_matched")) or 0
+    )
     rate = summary.get("match_rate")
     unreconciled = summary.get("unreconciled_by_ccy") or {}
 

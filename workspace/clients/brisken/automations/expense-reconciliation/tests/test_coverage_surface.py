@@ -553,6 +553,41 @@ def test_the_document_sections_its_charges_per_card(client, monkeypatch):
     assert "2838" in text and "3645" in text
 
 
+def test_the_document_headline_agrees_with_the_screen(client, monkeypatch):
+    """Through the real route, against a real payload.
+
+    The unit fixtures for this document invented a summary key production
+    never emits (`n_matched`), so they proved the headline rendered without
+    proving it rendered the right NUMBER: every live reconciliation said
+    "0 matched" beside a non-zero percentage. This asserts the count against
+    the same summary the workbench screen shows, which is the only way the
+    two can be seen to agree.
+    """
+    pytest.importorskip("reportlab")
+    pytest.importorskip("pypdf")
+    from pypdf import PdfReader
+
+    _wire(monkeypatch)
+    batch_id = _batch(client)
+    _upload(client, batch_id, _carded_csv(
+        ("2026-04-15", "42.50", "STAPLES", "2838"),
+        ("2026-04-05", "12.00", "AWS", "3645"),
+    ), map_card="Card")
+
+    summary = client.get(f"/api/runs/{batch_id}").json()["summary"]
+    assert summary["n_reconciled"] == 1, summary
+
+    resp = client.get(f"/runs/{batch_id}/reconciliation-report.pdf")
+    assert resp.status_code == 200, resp.text
+    path = Path(client._data_root) / "headline.pdf"
+    path.write_bytes(resp.content)
+    text = " ".join(
+        " ".join(p.extract_text() or "" for p in PdfReader(str(path)).pages).split()
+    )
+    assert f"{summary['n_reconciled']} matched" in text, text[:200]
+    assert "0 matched" not in text, text[:200]
+
+
 def test_a_one_card_month_keeps_the_one_flat_table(client, monkeypatch):
     """A one-card month is fully described by the headline already; a
     coverage table restating it would be a section the content does not
