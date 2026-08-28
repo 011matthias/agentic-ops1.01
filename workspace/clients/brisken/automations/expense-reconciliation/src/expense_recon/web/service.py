@@ -37,8 +37,10 @@ from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
 from ..duplicates import (
     duplicate_group_id,
+    duplicate_row_flags,
     find_duplicate_charges,
     find_duplicate_receipts,
+    n_extra_copies,
 )
 from ..ingest._common import merge_transactions
 from ..matching.types import (
@@ -2769,6 +2771,27 @@ def build_view(
             "resolution": resolutions.get(gid),
         })
 
+    # §18 (2026-08-28): the same groups, carried ON the row. A group is only
+    # actionable if the reviewer can see which row is in it; until now the
+    # ids lived in a side list, so the two Pressmaster copies in the April
+    # batch sat on screen with nothing to tell them apart from any other
+    # pair of rows. Parallel field: `duplicate` is None on every row in no
+    # live group, and on every payload built before this.
+    charge_dup_flags = duplicate_row_flags(duplicate_groups, kind="charge")
+    receipt_dup_flags = duplicate_row_flags(duplicate_groups, kind="receipt")
+    for row in rows:
+        row["duplicate"] = charge_dup_flags.get(row["transaction_id"])
+    for rec in unmatched_receipts:
+        rec["duplicate"] = receipt_dup_flags.get(rec.get("document_id"))
+    # `assignable_receipts` is the hand-match picker and holds EVERY
+    # receipt, matched ones included. It is the one place a reviewer could
+    # assign both copies of an invoice to two different charges, and it is
+    # what makes `n_duplicate_copies` fully backed by rows on screen: a
+    # duplicate receipt that matched a charge appears here even though it
+    # is in neither `rows` nor `unmatched_receipts`.
+    for rec in assignable_receipts:
+        rec["duplicate"] = receipt_dup_flags.get(rec.get("document_id"))
+
     n_tx = len(transactions)
     n_unknown_currency = sum(1 for r in receipts if r.detected_currency is None)
     # L4 noise guard: the missing-image badge renders only when this run's
@@ -2816,6 +2839,14 @@ def build_view(
         "llm_cost_usd": run.summary.get("llm_cost_usd", "0"),
         "ai_unavailable": run.summary.get("ai_unavailable", False),
         "n_duplicate_groups": len(duplicate_charges) + len(duplicate_receipts),
+        # How many COPIES are redundant (every copy after the first in a
+        # live group): the question "is this month's count inflated, and by
+        # how much". `n_duplicate_groups` answers a different one and keeps
+        # its meaning. Not "rows": a duplicate receipt that matched a charge
+        # counts here and is not one of `rows[]`.
+        "n_duplicate_copies": (
+            n_extra_copies(charge_dup_flags) + n_extra_copies(receipt_dup_flags)
+        ),
         # PR A — "Ready to post?" bar.
         "n_undecided": n_undecided,
         "ready_to_post": n_undecided == 0,
@@ -4590,6 +4621,14 @@ def build_expense_view(
             "resolution": resolutions.get(gid),
         })
 
+    # The same groups carried ON the row (2026-08-28). This is the one
+    # that matters most: an expense batch is where a twice-forwarded
+    # invoice becomes two expenses, and this grid is where somebody has to
+    # notice. None on a row in no live group.
+    dup_flags = duplicate_row_flags(duplicate_groups, kind="receipt")
+    for e in expenses:
+        e["duplicate"] = dup_flags.get(e["document_id"])
+
     has_image_info = any(r.has_receipt_image for r in receipts)
     n_categorized, n_uncategorized = categorized_counts(posted)
     set_aside = set_aside_view(run.snapshot or {})
@@ -4620,6 +4659,13 @@ def build_expense_view(
             if has_image_info else 0
         ),
         "n_duplicate_groups": len(duplicate_groups),
+        # Copies that are redundant (here, one per extra row: an expense
+        # batch's spine IS the receipts). `totals_by_ccy` below still sums
+        # every row, duplicates included: the tool flags, the reviewer
+        # deletes (DELETE /api/runs/{id}/expenses/{doc}), and a total that
+        # quietly disagreed with the rows above it would be worse than one
+        # that is honestly too high with the reason marked on screen.
+        "n_duplicate_copies": n_extra_copies(dup_flags),
         "totals_by_ccy": {
             ccy: f"{amt:,.2f}" for ccy, amt in sorted(totals.items())
         },

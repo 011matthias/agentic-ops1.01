@@ -142,6 +142,8 @@ name answers the same one:
 | `n_review` | how many are flagged for a look (`check` or `pick`) |
 | `n_needs_entity` | how many could not resolve a legal entity |
 | `n_set_aside` | how many files the quarantine is still holding back |
+| `n_duplicate_groups` | how many duplicate SITUATIONS were flagged |
+| `n_duplicate_copies` | how many copies are redundant (every copy after the first in a group the reviewer has not dismissed) |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -504,3 +506,66 @@ Two rules that decide the hard cases:
 
 A near-miss MISSES, which is the old behavior. A false match would hide a real
 receipt, which is worse than anything the detector prevents.
+
+## Duplicates on the row: `duplicate` (added 2026-08-28)
+
+Arrival-time detection above catches a mail whose every file the tool
+already holds. It cannot catch the case that actually reaches the grid: the
+same invoice as two different files, two different scans, two different
+attachments in two different mails. `find_duplicate_receipts` and
+`find_duplicate_charges` have caught that since Tier-1 #4, into
+`duplicate_groups[]` — a side list of ids.
+
+A side list of ids is not something a reviewer reads. The live April batch
+carries one group (Pressmaster FZCO, 135.00 USD, forwarded twice under two
+file names) and the 40-row grid above it showed both copies with nothing to
+distinguish them from any other pair of rows. So the group is now carried on
+the rows themselves.
+
+| Payload | Field |
+|---|---|
+| Expense batch | `expenses[].duplicate` |
+| Run | `rows[].duplicate` (charge groups) · `unmatched_receipts[].duplicate` and `assignable_receipts[].duplicate` (receipt groups) |
+
+`null` on a row in no live group, which is most of them, and `null` on every
+payload built before this. When present:
+
+```json
+{ "group_id": "cfdacfc912a79a47",
+  "kind": "receipt",
+  "n_copies": 2,
+  "copy": 2,
+  "of": "0039__Invoice-B2EA98DF-0020.pdf",
+  "is_extra": true,
+  "resolution": null }
+```
+
+- `copy` is this row's 1-based place in the group, `of` is the first
+  member's id. Together they let a row say "same as 0039" rather than
+  marking both copies equally guilty; the order is the group's own, so the
+  answer does not move between renders.
+- `is_extra` is true for every copy after the first, which is exactly the
+  population that inflates a count. `summary.n_duplicate_copies` is how many
+  of them there are.
+- `group_id` is what `POST /api/runs/{id}/duplicates/resolve` takes, so the
+  row can be acted on where it is read.
+
+**A dismissal dismisses.** `resolution: "ignore"` removes the marker from
+every row, drops the group out of `n_duplicate_copies`, and drops it from the
+reconciliation document's exceptions. The group itself stays in
+`duplicate_groups[]` carrying the ruling: "we looked at this and it is fine"
+is worth keeping. `"confirmed"` keeps the marker, because acknowledging a
+duplicate is not removing it — the second row is still on screen and still
+in the total until somebody deletes it with
+`DELETE /api/runs/{id}/expenses/{document_id}`.
+
+**Totals still count every row.** `totals_by_ccy` sums the duplicates too.
+The detector's whole contract is that it flags and never drops, and a total
+that quietly disagreed with the rows printed above it would be worse than
+one that is honestly too high with the reason marked on the row.
+
+`POST /api/runs/{id}/duplicates/resolve` replies with the summary of the
+payload the caller is on (grid for an unattached batch, workbench once a
+statement is attached), the same dispatch `GET /api/runs/{id}` uses. It
+previously always replied with the workbench's, so a grid header rendering
+`n_expenses` went blank on the reply to its own click.

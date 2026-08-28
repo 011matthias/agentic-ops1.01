@@ -109,7 +109,8 @@ def test_exceptions_come_before_the_listing():
     assert page1.index("What needs attention") < page1.index("All charges")
     assert "1 charges with no receipt" in page1
     assert "1 receipts with no charge" in page1
-    assert "1 possible duplicate groups" in page1
+    assert "1 possible duplicate group" in page1
+    assert "1 possible duplicate groups" not in page1
     assert "UNKNOWN CHARGE" in page1
     assert "Orphan Receipt" in page1
 

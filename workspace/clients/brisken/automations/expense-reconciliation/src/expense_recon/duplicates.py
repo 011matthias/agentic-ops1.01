@@ -40,6 +40,65 @@ def duplicate_group_id(kind: str, member_ids: list[str]) -> str:
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
 
 
+def duplicate_row_flags(groups: list[dict], *, kind: str) -> dict[str, dict]:
+    """What each ROW has to say about the duplicate group it belongs to.
+
+    The detector has flagged duplicates since Tier-1 #4, but only into a
+    side list of id groups. A reviewer reading a 40-row grid has no way to
+    see that rows 39 and 40 are the same invoice unless they cross-check a
+    panel against document ids, so in practice the flag was found by
+    whoever happened to notice the amount twice. This turns the group into
+    something a row can carry.
+
+    Keyed by member id, for the given `kind` only: a charge group and a
+    receipt group can hold the same id string without it meaning the same
+    thing, and one merged map would put a receipt's verdict on a charge.
+    Each entry:
+
+    * ``group_id`` - the group's stable id, so a row can post a resolution
+    * ``kind``, ``n_copies`` - what it is, and how many there are
+    * ``copy`` - this row's 1-based place in the group
+    * ``of`` - the FIRST member's id: the copy the others repeat
+    * ``is_extra`` - true for every copy after the first, which is exactly
+      the population that inflates a count or a total
+
+    A group the reviewer dismissed (``resolution == "ignore"``) yields
+    nothing: they have ruled it is not a duplicate, and a marker that
+    outlives the ruling is a marker nobody trusts. A ``confirmed`` group
+    keeps its marker, because acknowledging a duplicate is not removing it.
+    """
+    flags: dict[str, dict] = {}
+    for group in groups:
+        if group.get("kind") != kind or group.get("resolution") == "ignore":
+            continue
+        members = [m for m in (group.get("members") or []) if m]
+        if len(members) < 2:
+            continue
+        for i, member in enumerate(members, start=1):
+            flags[member] = {
+                "group_id": group.get("group_id") or "",
+                "kind": kind,
+                "n_copies": len(members),
+                "copy": i,
+                "of": members[0],
+                "is_extra": i > 1,
+                "resolution": group.get("resolution"),
+            }
+    return flags
+
+
+def n_extra_copies(flags: dict[str, dict]) -> int:
+    """How many rows are redundant copies: the number that answers "is my
+    count inflated, and by how much".
+
+    Deliberately a different question from ``n_duplicate_groups`` (how many
+    duplicate SITUATIONS there are), and named for the one it answers. One
+    count doing both jobs is how ``n_categorized`` came to mean two things
+    on 2026-08-22.
+    """
+    return sum(1 for f in flags.values() if f.get("is_extra"))
+
+
 def _norm_vendor(v: str | None) -> str:
     return _NON_ALNUM.sub(" ", (v or "").lower()).strip()
 
