@@ -1519,10 +1519,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             store.set_duplicate_resolution(run_id, group_id, resolution, _now_iso())
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-            resolutions = store.get_duplicate_resolutions(run_id)
-        view = build_view(run, decisions, overrides, resolutions)
+            # Dispatch on the run's mode, exactly as GET /api/runs/{id}
+            # does. Duplicate groups are flagged in BOTH payloads, so an
+            # expense batch can be resolved from the grid; replying with
+            # `build_view`'s summary there handed the grid the workbench's
+            # counts, and every one of the fields it renders (n_expenses,
+            # n_ready, n_duplicate_rows) is absent from that shape.
+            if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
+                view = _expense_view(store, run)
+            else:
+                view = build_view(
+                    run,
+                    store.get_decisions(run_id),
+                    store.get_category_overrides(run_id),
+                    store.get_duplicate_resolutions(run_id),
+                )
         return JSONResponse({"ok": True, "summary": view["summary"]})
 
     # §16 export policy. The policy is snapshotted into each new run's

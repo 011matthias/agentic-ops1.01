@@ -162,7 +162,10 @@ def build_reconciliation_report_pdf(
     story.append(Paragraph("What needs attention", styles["h2"]))
     unmatched_tx = list(view.get("unmatched_transactions") or [])
     unmatched_rec = list(view.get("unmatched_receipts") or [])
-    dup_groups = list(view.get("duplicate_groups") or [])
+    dup_groups = [
+        g for g in (view.get("duplicate_groups") or [])
+        if g.get("resolution") != "ignore"
+    ]
     if not (unmatched_tx or unmatched_rec or dup_groups):
         story.append(Paragraph(
             "Nothing. Every charge has a receipt, every receipt has a charge, "
@@ -197,9 +200,15 @@ def build_reconciliation_report_pdf(
             story.append(Spacer(1, 8))
         if dup_groups:
             story.append(Paragraph(
-                esc(f"{len(dup_groups)} possible duplicate groups"),
+                esc(f"{len(dup_groups)} possible duplicate"
+                    f"{' group' if len(dup_groups) == 1 else ' groups'}"),
                 styles["capsub"],
             ))
+            story.append(Spacer(1, 3))
+            story.append(_table([
+                ["What", "Date", "Amount", "Ccy", "Copies"],
+                *_duplicate_rows(dup_groups, view),
+            ], [230, 60, 80, 40, 50], styles))
 
     # ── the full charge listing ─────────────────────────────────────
     #
@@ -273,6 +282,49 @@ def _coverage_name(entry: dict) -> str:
     digits = [str(d) for d in (entry.get("digits") or []) if str(d).strip()]
     extra = [d for d in digits if d not in label]
     return f"{label} ({'/'.join(extra)})" if label and extra else (label or "-")
+
+
+def _duplicate_rows(groups: list[dict], view: dict) -> list[list[str]]:
+    """One line per flagged duplicate group, named rather than counted.
+
+    "3 possible duplicate groups" is a number a reader can do nothing
+    with; the vendor, the date and the amount are what sends somebody to
+    look. Names come from the payload's own lists (the charge rows, the
+    duplicate-receipt views) so the document cannot describe a charge
+    differently from the table below it, and a group whose members are
+    nowhere in this payload still prints, as its member count, rather
+    than being silently dropped.
+    """
+    named: dict[str, dict] = {}
+    for row in view.get("rows") or []:
+        named[str(row.get("transaction_id") or "")] = row
+    for group in view.get("duplicate_receipts") or []:
+        for rec in group:
+            named[str(rec.get("document_id") or "")] = rec
+    for rec in view.get("unmatched_receipts") or []:
+        named.setdefault(str(rec.get("document_id") or ""), rec)
+
+    out: list[list[str]] = []
+    for group in groups:
+        members = [str(m) for m in (group.get("members") or [])]
+        first = next((named[m] for m in members if m in named), None)
+        kind = str(group.get("kind") or "")
+        if first is None:
+            out.append([
+                f"{kind or 'item'} ({members[0] if members else '?'})",
+                "", "", "", str(len(members)),
+            ])
+            continue
+        amount = first.get("amount") or first.get("total") or ""
+        out.append([
+            f"{first.get('vendor') or '(no vendor)'}"
+            f"{' (charge)' if kind == 'charge' else ' (receipt)'}",
+            str(first.get("date") or ""),
+            str(amount),
+            str(first.get("currency") or ""),
+            str(len(members)),
+        ])
+    return out
 
 
 def _period(entry: dict) -> str:
