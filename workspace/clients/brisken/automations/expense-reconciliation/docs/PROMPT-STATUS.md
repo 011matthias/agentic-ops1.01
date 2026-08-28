@@ -46,11 +46,23 @@ are VERBATIM strings from each prompt.
 | Prompt | What it adds | Signature to audit for |
 |---|---|---|
 | `lovable-coverage-prompt.md` | The Statements panel, the per-statement download selector, and the Coverage by card panel (PR 3, shipped 2026-08-26) | "Coverage by card", "Add a statement", "not in your card list", "nothing loaded yet" |
+| `lovable-duplicates-prompt.md` | The per-row duplicate badge, the header count, and the two actions on a flagged row (PR #649, shipped 2026-08-28) | "duplicate copy", "Not a duplicate", "copy 2 of 2" |
+| `lovable-card-definition-prompt.md` | The seen-but-undefined card list on the Settings card screen, plus an always-visible Add card (PR #651, shipped 2026-08-28) | "Seen on your statements, not defined yet", "Define this card", "Add card" |
+| `lovable-months-open-prompt.md` | The way into a month on `/months`: rest-state link styling, a clickable row, an Open item in the row menu (no backend change; written 2026-08-28) | "Open" / "Abrir" as the first row-menu item; `aria-label` "Actions for ..." |
 
-Written the same day its backend shipped, so the SPA half is outstanding
-until the owner pastes it. Until then a month holding two workbooks still
-offers one download button, and the per-card split of a month's unreconciled
-money exists in the API and on the reconciliation PDF but not on screen.
+The first three were each written the same day their backend shipped, so the
+SPA half is outstanding until the owner pastes them. Until then: a month
+holding two workbooks still offers one download button and the per-card
+split of unreconciled money is API-and-PDF only; duplicate copies are
+detected, counted, and printed on the reconciliation PDF but carry no badge
+in the grid; and the cards actually charging a month appear nowhere on the
+screen where a card gets defined.
+
+`lovable-months-open-prompt.md` is the odd one out, needing no backend at
+all. It answers the 2026-08-28 operator note "why cant the user enter and
+view or edit the month": every month does open, but the only affordance is a
+name styled like plain text until hovered, and the row menu offers Rename
+and Delete with no Open.
 
 ## Cannot verify (no live state exercises them)
 
