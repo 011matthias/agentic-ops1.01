@@ -904,6 +904,32 @@ Halves: backend grouping (small, view-only, contract-test pinned per item
 interaction depends on item 26 either way: assigning the 0340 rows requires
 the 0340 card to exist in the registry first.
 
+### 36. Month auto-suggestion at manual upload (2026-08-28 user question)
+
+**User, same test session:** "why does the tool not automatically recognize
+what month the receipts inserted are from?"
+
+It half does. The MAIL path reads every arriving receipt at once and files
+it by the month printed on it (item 29's pool). The MANUAL path deliberately
+does not: the operator's label declares the month, and the receipt dates are
+used the other way around, to flag rows that do not look like the declared
+month (`date_outside_period`). That direction was chosen with evidence: the
+extracted date is the least reliable field on a scan (11 of 36 April
+readings carried wrong YEARS before #590; 3 dates come back blank in the
+current rehearsal set), so routing by it silently misfiles, while
+distrust-by-declaration only ever asks a human to look.
+
+The gap worth closing is the missing SUGGESTION, not missing automation:
+`batch_period.py` already derives a strict-plurality month from the batch's
+own dates (it is the fallback when the label names no month). Surface that
+derivation in the manual flow, confirm-first: after extraction, when the
+plurality month is confident and differs from (or is absent from) the
+label, say "these receipts read as April 2026" and offer to set/rename the
+label. Never silent, so the item-25 ruling (nothing auto-corrected, the
+operator's declaration stays authoritative) holds unchanged. Backend piece
+is small (expose the existing derivation on the view); SPA piece is a
+Lovable prompt.
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
 Four of the five known cards (0113, 6013, 9693, 8311) carry no legal entity,
