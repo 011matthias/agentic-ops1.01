@@ -87,13 +87,15 @@ def test_print_registration_golden_substrings():
     )
     assert proc.returncode == 0
     for token in ("Register-ScheduledTask", "uv.exe", "-StartWhenAvailable",
-                  "--scheduled", "agentic-ops1-cadence", "AgenticOpsWeeklySynthesis"):
+                  "--scheduled", "Repo\\agentic-ops1\"", "AgenticOpsWeeklySynthesis"):
         assert token in proc.stdout, f"missing {token}"
 
 
-def test_registration_targets_pinned_worktree_not_primary_clone():
-    assert "agentic-ops1-cadence" in ws.REGISTRATION
-    assert "Repo\\agentic-ops1\"" not in ws.REGISTRATION
+def test_registration_targets_primary_clone_not_prunable_worktree():
+    # 2026-08-28: the pinned cadence worktree was lost to a worktree cleanup
+    # and broke the task; the registration now targets the primary clone.
+    assert "agentic-ops1-cadence" not in ws.REGISTRATION
+    assert "Repo\\agentic-ops1\"" in ws.REGISTRATION
 
 
 def test_parse_sweep_log_last_stamp():
