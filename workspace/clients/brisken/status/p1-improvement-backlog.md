@@ -806,6 +806,37 @@ detector would have caught copies 2 and 3 (identical body fingerprint
 `body:4c6f42927cd37c87`, 485 chars each). Dismissing two is terminal, so it
 waits on an owner yes.
 
+### 34. The way into a month is invisible (2026-08-28 note, owner-side)
+
+**Operator note, left on `/months` and anchored on a row's Created cell:**
+"why cant the user enter and view or edit the month"
+
+Nothing is broken, which is why this took reading the published bundle to
+explain. Every month opens: `GET /api/runs/{id}` and
+`GET /api/expense-batches/{id}` both answer 200 with real data for all six
+batches, and item 32's prompt built the links.
+
+What the published build actually renders (`chunk-months-Bvb2xrOV.js`,
+fetched 2026-08-28):
+
+- The month name is the only clickable thing in the row, and it carries
+  `className="underline-offset-2 hover:underline"`. At rest it is styled
+  like the plain text in every other cell; it becomes a link only once the
+  pointer is on it.
+- The table row has no click handler, so the counts, the Statement badge
+  and the Created date are inert. The Created cell is where the note was
+  left.
+- The per-row menu holds exactly two items, Rename and Delete. Someone
+  opening it to look for the way in finds no Open.
+
+So the complaint is an affordance gap, not a routing bug, and it is entirely
+SPA-side: `docs/lovable-months-open-prompt.md` asks for rest-state link
+styling on the name, a clickable row (with the actions cell excluded), an
+Open item at the top of the row menu, and an `aria-label` on the menu
+trigger that says "Actions for ..." instead of repeating the month name.
+
+No backend work. Nothing to deploy on our side.
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
 Four of the five known cards (0113, 6013, 9693, 8311) carry no legal entity,
