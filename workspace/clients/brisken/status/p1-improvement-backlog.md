@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-08-25
+updated: 2026-08-26
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -598,9 +598,8 @@ latest one.
 Suite 1336 -> 1352, calibrate exit 0, ruff clean on the diff. Nine mutations
 run, every guard red under its own.
 
-**Still open here:** the SPA renders neither `statements[]` nor the `?file=`
-selector yet, so a month with two xlsx statements can only be downloaded for
-the current one from the UI. That is the coverage surface, PR 3.
+**Closed by PR 3 below**, whose Lovable prompt carries the `statements[]`
+panel and the `?file=` selector along with the coverage panel.
 
 **PR 2b-2 - the living month (the original plan item).** The statement stops
 being a closing event
@@ -631,9 +630,37 @@ and becomes an input stream:
    on a pair it already judged. `execute_statement_attach`'s bake logic
    refactors into `rematch_month(run, ...)`, which both paths call.
 
-**PR 3 - coverage surface.** Per-card coverage in the batch view (which cards
-have statements, which periods, matched/unmatched per card), the month page's
-statement panel prompt, per-card sections in the reconciliation report.
+**PR 3 - the coverage surface. SHIPPED**, see Shipped row 28.
+`coverage[]` on both review payloads: one row per card the month knows about,
+carrying which uploads covered it, the span of ITS charges, the run summary's
+own four bucket counts for its charges alone, and its share of the
+unreconciled money. Per-card sections in the reconciliation document, grouped
+on `rows[].coverage_key` so a section and the coverage table cannot disagree
+about which card a charge is on. The SPA half is
+`docs/lovable-coverage-prompt.md`, outstanding until the owner pastes it.
+
+**The registry cards with NOTHING loaded are the point, not padding.** The
+question is "which cards have statements", and it is only answerable from a
+list that includes the ones that do not; an entry reading 0 charges and no
+statements is the only place a reviewer sees what she still has to load.
+
+**One derivation, because two screens.** `charge_states` is now the single
+place a charge's effective bucket is decided, and the workbench rows, the
+summary's four counters and the roll-up all read it. The grid pays for its
+own `snapshot_from_dict` + `apply_decisions` on a reconciling month so it can
+answer with the reviewer's decisions applied; a cheaper pre-decision answer
+would have been a second meaning on the same five names, which is the
+`n_categorized` failure of 2026-08-22 with money on it.
+
+**Two defects the adversarial review found, both in card identity.** A card
+is keyed by an operator-chosen slug, and nothing stops that slug from being
+digits that are not the card's own; without a namespace on the unknown-card
+key, charges on the REAL 2838 would have landed in a card merely KEYED "2838"
+and its money would have been reported against the wrong plastic and the
+wrong entity. And resolution was reached only when the observed string
+carried digits, so a card named by alias alone ("CorpServ", which is how
+Zoho's payment modes name them) fell to "No card on the charge" even though
+the registry knew exactly which card it was. Both are pinned.
 
 **Ruling pinned, no build needed:** statement charges with no receipt (fees,
 direct debits; January reality was 78 of 80) stay exceptions in the
@@ -953,6 +980,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 28 | Per-card coverage: `coverage[]` on both review payloads answers which cards a month has loaded, from which uploads, over what span, and how far each has got, with the run summary's own four bucket counts and unreconciled money per card; the reconciliation document gains a coverage table and sections its charge listing per card; `charge_states` becomes the ONE place a charge's effective bucket is decided | Backlog item 29 PR 3. `statements[]` answered the FILE question and nothing answered the CARD one, which is how the loading is actually organized: a card arrives across several files and one file prints several cards, so neither list derives from the other. The live January month is the argument: 80 charges over THREE card identities, zero reconciled, and one flat USD 20,228.68 that tells a reviewer nothing about which pile of receipts to find. Registry cards with nothing loaded get a row on purpose, because "which cards have I not loaded" is unanswerable from a list of the ones she has. Adversarial review found both of the round's defects, both in card identity: an unknown-card key could collide with a registry slug and attribute money to the wrong plastic, and alias-only card names ("CorpServ") fell to the no-card row. Eleven regressions of the real source, each proven RED first | this round, 2026-08-26; suite 1375 passed / 2 skipped, calibrate exit 0, ruff clean on the diff; SPA half `docs/lovable-coverage-prompt.md` (owner applies) |
 | 27 | The intake says what it did. Every refusal is written down (`inbound/refusals.jsonl`: envelope sender, recipient, stage, reason, peer), covering the DATA-stage guards as well as a refused RCPT, size-trimmed so a scanner cannot fill the volume, and surfaced as `n_refused` (a 7-day window) + `refusals[]` on the intake log. Separately, every log row now carries `status_kind` (`resting` / `held` / `working` / `done` / `unknown`) and a composed `status_label` ("Waiting for July 2026", "Needs one click to read"), and an unrecognised status degrades to the raw value instead of borrowing a label | Backlog item 30 (b) plus the out-of-Lovable half of the "Arriving" bug. Two silences: mail we turned away left no trace at all, so "did anything bounce?" had no answer anywhere; and `status` had grown three values with nothing checking that the SPA absorbed them, so `pooled` / `routing` / `claiming` all fell through to its in-flight label and six resting receipts announced "Arriving" indefinitely. A confident wrong label is worse than a raw one. api-contract rule 5 now covers enum growth (a grown status set ships a parallel label), and `test_every_status_has_a_label` fails the suite on a new status until someone decides what it SAYS — the contract test pinned element TYPES and had nothing to say about a new VALUE. Eleven regressions of the real source, each proven RED first | this round, 2026-08-24; suite 1256 passed / 2 skipped, calibrate green; SPA half is section 0 + section 12 of `docs/lovable-month-pool-prompt.md` |
 | 26 | The intake knows who its own people are. Settings `intake.known_senders` lists outside addresses that count as ours; `graph_notify.send_mail` takes an explicit per-call `allow_external` and asserts the structural recipient guard BEFORE consulting it, so a listed address widens the rule by exactly itself and a smuggled second recipient stays refused. A known sender's body-only mail is now RENDERED ON ARRIVAL instead of waiting for a click, reusing the operator render path unchanged (same CAS, same month stamps, same pool), with a failure alerting because nobody watches an automatic render | Backlog item 30 (a) + (c). Dirk mails receipts from a private iCloud address as well as his work one, and the anti-backscatter guard meant that send produced no ack and no bounce: a delivered receipt and a lost one looked identical from his chair. Meanwhile every one of the six mails held on 2026-08-24 delivered NO file at all — a forwarded vendor receipt IS the email body — so the normal shape of a forwarded receipt read as a fault and sat there. Strangers still hold: the mailbox takes mail from anyone and we do not pay a vision call to read every newsletter. Eight regressions of the real source were each proven RED first, including the two that matter most (a malformed address ON the allowlist must still be refused; a look-alike domain must not read as internal) | this round, 2026-08-24; suite 1245 passed / 2 skipped, calibrate green, ruff clean on the diff; Settings editor `docs/lovable-known-senders-prompt.md` (owner applies) |
 | 25 | Emailed receipts file by the month printed ON the receipt, not by whichever month happens to be open. A receipt whose month has no batch RESTS in a pool (new status `pooled`, deliberately not `held_*`) with its month on it, and is added automatically when that month is created or renamed into. Deleting a month returns its mail to the pool, so re-creating the month re-claims it. Every attachment mail is read at ARRIVAL by the full extraction pipeline, which costs nothing extra: the cache is content-addressed and the arrival read warms it for the batch ingest | Dirk's August receipts landed in the April 2026 batch, because `route_archived` picked the newest statement-less batch and never looked at the receipt. Month identity is the operator's label read by `month_from_label`, which refuses day-bearing labels, so the DEFAULT full-date label names no month and can never claim; the create response says so and a rename is the fix path. Decisions are atomic under a new `_POOL_LOCK` held across the "is this month open?" query and the status CAS, so a batch created mid-arrival cannot leave one mail both ingested and pooled. Every new test was proven red first against a targeted regression of the real source (7 of them) | PRs #599 + #601, 2026-08-24, deployed Fly v87; suite 1237 passed / 2 skipped, calibrate green; SPA half `docs/lovable-month-pool-prompt.md`. Live drill on the deployed app, TEST-namespaced and cleaned to zero: a receipt printing 2026-03-15 mailed in August pooled under 2026-03 (source `receipt`, state `no_batch`), opening "TEST - March 2026" claimed it with its printed date intact, deleting that month returned it to the pool, dismiss cleared it. The drill also caught the one defect v86 shipped: `n_pooled` counted log ROWS, so one waiting mail that had been through a claim read as 2 (#601) |

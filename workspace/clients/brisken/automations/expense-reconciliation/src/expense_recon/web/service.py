@@ -26,6 +26,7 @@ import threading
 import uuid
 from dataclasses import dataclass, replace
 from datetime import date
+from typing import NamedTuple
 from decimal import Decimal
 from pathlib import Path
 
@@ -2386,11 +2387,6 @@ def build_view(
     # the consumed receipts, and the unmatched list can never disagree
     # between what Chris sees and what lands in the report (PR B).
     effective = apply_decisions(outcome, transactions, receipts, decisions)
-    eff_match_by_tx = {m.transaction_id: m for m in effective.matches}
-    eff_review_tx = {m.transaction_id for m in effective.judgment_required} | {
-        m.transaction_id for m in effective.ambiguous
-    }
-    eff_refund_tx = set(effective.refunds)
 
     matched_ids = {m.transaction_id for m in outcome.matches}
     judgment_ids = {m.transaction_id for m in outcome.judgment_required}
@@ -2418,24 +2414,27 @@ def build_view(
     # would still export as "(uncategorized - assign)".
     n_undecided = n_unmapped = 0
     unreconciled: dict[str, Decimal] = {}
+    # The reviewer's effective verdict per charge, derived ONCE (PR 3): the
+    # rows below, the summary's four counters, and the per-card coverage
+    # roll-up all read this map rather than each deciding a bucket for
+    # itself. See `charge_states`.
+    states = charge_states(transactions, effective, decisions)
+    coverage, coverage_key_by_tx = month_coverage(
+        run, transactions, states
+    )
     for tx in transactions:
         tx_id = tx.transaction_id
         decision = decisions.get(tx_id)
         status = decision.status if decision else STATUS_PENDING
         init = initial_bucket(tx_id)
 
-        if tx_id in eff_match_by_tx:
-            effective_bucket = "reconciled"
-            held_doc = eff_match_by_tx[tx_id].document_id
-        elif tx_id in eff_review_tx:
-            effective_bucket = "review"
-            held_doc = decision.chosen_document_id if decision else None
-        elif tx_id in eff_refund_tx:
-            effective_bucket = "refund"
-            held_doc = None
-        else:
-            effective_bucket = "unmatched"
-            held_doc = None
+        state = states[tx_id]
+        effective_bucket, held_doc = state["bucket"], state["held_doc"]
+        # PR-E: the workbench section this row renders in. "posted" wins
+        # (her yellow / the reviewer's z-key); review needs attention; a
+        # still-pending unmatched row with candidates is worth attention
+        # too; everything else unmatched is "no receipt yet".
+        is_posted = state["is_posted"]
 
         if effective_bucket == "reconciled":
             n_reconciled += 1
@@ -2445,14 +2444,6 @@ def build_view(
             n_refunds += 1
         else:
             n_unmatched_tx += 1
-
-        # PR-E: the workbench section this row renders in. "posted" wins
-        # (her yellow / the reviewer's z-key); review needs attention;
-        # a still-pending unmatched row with candidates is worth attention
-        # too; everything else unmatched is "no receipt yet".
-        is_posted = (
-            tx.entry_status == "posted" or status == STATUS_ALREADY_POSTED
-        )
 
         cands = []
         seen_docs = set()
@@ -2577,6 +2568,12 @@ def build_view(
                 "currency": tx.transaction_currency,
                 "account_id": tx.account_id,
                 "legal_entity_id": tx.legal_entity_id,
+                # PR 3: the `coverage[]` row this charge counts in. Carried
+                # on the row so the reconciliation document groups charges
+                # by the IDENTICAL assignment the coverage panel totals
+                # them under, rather than re-deriving a card from
+                # `account_id` and quietly splitting one card in two.
+                "coverage_key": coverage_key_by_tx.get(tx_id, ""),
                 "initial_bucket": init,
                 "effective_bucket": effective_bucket,
                 "status": status,
@@ -2874,6 +2871,12 @@ def build_view(
         # The uploads this month has taken (PR 2b-2b-2). Parallel field:
         # empty on every run that predates it, including reconciling ones.
         "statements": month_statements(run),
+        # Per-card coverage (PR 3): which cards this month holds charges
+        # for, which uploads covered them, over what span, and how far each
+        # one has got. `statements[]` answers the file question; this
+        # answers the card question, which is the one the work is organized
+        # around. Parallel field, empty on a month with nothing loaded.
+        "coverage": coverage,
         # Bulk receipts-folder attach (2026-07-27): the last upload's summary
         # (n_ingested / n_matched_new / n_review_new / n_possible_duplicates /
         # llm_source / cost_usd / issues), or None when no folder was uploaded.
@@ -4347,13 +4350,21 @@ def build_expense_view(
     edits: list[dict],
     resolutions: dict[str, str] | None = None,
     settings: dict | None = None,
+    decisions: dict | None = None,
 ) -> dict:
     """Compose the receipt-spine render model for an expense batch: one row
     per expense with the reviewer's edits applied, review-by-exception
     states, duplicate flags, and a receipt-centric summary. The parallel of
     `build_view` (which is NOT modified); the SPA renders `expenses`, never
     `rows`. `settings` (Phase 5) feeds the curated account picker and the
-    entity picker options."""
+    entity picker options.
+
+    `decisions` (PR 3) is the reviewer's per-charge verdicts, needed only by
+    the per-card coverage roll-up: a rejected match un-matches a charge, and
+    a card row that ignored that would report a month as further along than
+    the workbench says it is. Omitting it is honest for a month with no
+    charges (there is nothing to have decided) and wrong for a reconciling
+    one, which is why the route passes it."""
     parse_errors = [tuple(e) for e in (run.snapshot or {}).get("parse_errors", [])]
     # Compose from the EXTRACTION BASELINE, not the stored receipt block: on
     # a month whose statement has been attached the latter is the baked pool
@@ -4627,6 +4638,11 @@ def build_expense_view(
     # registry, plus this batch's own default), and the curated account list.
     entity_options = available_entities(settings, default_entity)
 
+    # Per-card coverage (PR 3). One read of the snapshot feeds both halves,
+    # so every charge rolled up has a state that was computed for it.
+    charges, charge_state_map = month_charge_states(run, decisions or {})
+    coverage, _keys = month_coverage(run, charges, charge_state_map)
+
     return {
         "run_id": run.run_id,
         "label": run.label,
@@ -4644,6 +4660,12 @@ def build_expense_view(
         # uploaded, so it is where the answer belongs. Parallel field: empty
         # on every run created before it, reconciling ones included.
         "statements": month_statements(run),
+        # The same uploads seen per CARD (PR 3), which is how the loading is
+        # actually organized. Identical to the run payload's `coverage` for
+        # the same month, by construction: both roll up the one
+        # `charge_states` map, so the grid and the workbench cannot report
+        # a month at two different stages of done.
+        "coverage": coverage,
         # The last incremental receipt-add's summary (counts / cost /
         # skipped files), or None when receipts only came in at creation.
         "expense_ingest": run.snapshot.get("expense_ingest"),
@@ -5503,6 +5525,375 @@ def statement_advisory(prior: list[dict], entry: dict) -> str | None:
                     "usual cause) and the month now holds both readings."
                 )
     return None
+
+
+# ── Per-card coverage (PR 3 of the living month) ────────────────────────
+# `statements[]` says which FILES a month has taken. It cannot say which
+# CARDS those files covered, over what span, or how far along each one is,
+# and that is the question an accountant working a living month actually
+# has: "I load per card, several times a month; which of my cards is done,
+# which is half in, which have I not loaded at all?"
+#
+# Live evidence for why the card is the right axis: the January 2026 run
+# holds 80 charges across THREE card identities (2838 / 3645 / 0340), zero
+# reconciled, USD 20,228.68 unreconciled. Flat, that is one number nobody
+# can act on. Split per card it is three, each belonging to a different
+# piece of plastic and a different pile of receipts.
+#
+# Parallel field per the SPA contract (docs/api-contract.md rule 1): empty
+# on every month that has taken no statement, so absence keeps meaning
+# "nothing loaded", and no existing field changes type or meaning.
+
+# The four buckets the run summary counts (`n_reconciled` / `n_review` /
+# `n_unmatched_tx` / `n_refunds`), whose sum is `n_transactions`. Coverage
+# carries the SAME four names for the same questions, per the one-name-
+# one-question rule, so a card's row and the month's summary can be added
+# up against each other, and must agree.
+_BUCKET_COUNTER = {
+    "reconciled": "n_reconciled",
+    "review": "n_review",
+    "refund": "n_refunds",
+    "unmatched": "n_unmatched_tx",
+}
+
+# What a charge that names no card at all is called on screen. Composed
+# here rather than in the SPA for the same reason `status_label` is
+# (docs/api-contract.md rule 5): the backend is the only side that knows
+# the difference between "no card printed on this charge" and "a card we
+# have not met", and a consumer guessing between them mislabels money.
+NO_CARD_LABEL = "No card on the charge"
+
+# Prefix for the key of a card the registry does not know, so a bare digit
+# token can never collide with a registry key. Cards are keyed by an
+# operator-chosen slug, and nothing stops that slug from being digits that
+# are not the card's own ("2838" as the key of a card whose digits are
+# 9999). Without the prefix, charges on the REAL 2838 would land in that
+# card's row and its money would be reported against the wrong plastic.
+_UNKNOWN_KEY_PREFIX = "digits:"
+
+
+class _CardIdentity(NamedTuple):
+    """Which coverage row something belongs to, and what to call it."""
+
+    key: str
+    card_key: str   # the registry's key, "" when the registry has not met it
+    label: str      # always renderable; "" only for the no-card identity
+    digits: tuple[str, ...]
+
+
+_NO_CARD = _CardIdentity("", "", "", ())
+
+
+def charge_states(
+    transactions: list,
+    effective: MatchOutcome,
+    decisions: dict[str, Decision],
+) -> dict[str, dict]:
+    """Per charge: `{bucket, held_doc, is_posted}` under the reviewer's
+    effective verdict.
+
+    ONE derivation, because three consumers have to agree about it: the
+    workbench rows, the run summary's four counters, and the per-card
+    coverage roll-up. A card row reading "reconciled" while the summary
+    reads "unmatched" is the `n_categorized` failure of 2026-08-22
+    (docs/api-contract.md, "Summary counts: one name, one question") with
+    money attached to it, and the only structural way to prevent it is for
+    both to read one map instead of each computing a bucket.
+
+    `bucket` is a key of `_BUCKET_COUNTER`; `held_doc` is the receipt the
+    charge currently holds (None when it holds none); `is_posted` is the
+    settled-by-definition flag, from Criss's own yellow fill or the
+    reviewer's already-posted verdict, which is why a posted charge never
+    counts as unreconciled money.
+    """
+    eff_match_by_tx = {m.transaction_id: m for m in effective.matches}
+    eff_review_tx = {m.transaction_id for m in effective.judgment_required} | {
+        m.transaction_id for m in effective.ambiguous
+    }
+    eff_refund_tx = set(effective.refunds)
+
+    states: dict[str, dict] = {}
+    for tx in transactions:
+        tx_id = tx.transaction_id
+        decision = decisions.get(tx_id)
+        status = decision.status if decision else STATUS_PENDING
+        if tx_id in eff_match_by_tx:
+            bucket, held_doc = "reconciled", eff_match_by_tx[tx_id].document_id
+        elif tx_id in eff_review_tx:
+            bucket = "review"
+            held_doc = decision.chosen_document_id if decision else None
+        elif tx_id in eff_refund_tx:
+            bucket, held_doc = "refund", None
+        else:
+            bucket, held_doc = "unmatched", None
+        states[tx_id] = {
+            "bucket": bucket,
+            "held_doc": held_doc,
+            "is_posted": (
+                tx.entry_status == "posted" or status == STATUS_ALREADY_POSTED
+            ),
+        }
+    return states
+
+
+def month_charge_states(
+    run: RunRow, decisions: dict
+) -> tuple[list, dict[str, dict]]:
+    """`(charges, states)` for a caller that has not already built the
+    effective outcome: the expense grid, which is receipt-spine and never
+    needed one.
+
+    Returns the charges as well as their states so `month_coverage` can be
+    handed BOTH from one read. A caller that re-read the snapshot for the
+    second half could be rolling up charges whose states it never computed,
+    and the roll-up would then have to invent a bucket for them.
+
+    Reads the snapshot itself rather than borrowing the grid's receipts: the
+    grid composes from the extraction BASELINE (pre-bake) and matching ran
+    against the baked pool, so feeding the baseline into `apply_decisions`
+    would answer a subtly different question than the workbench does. Same
+    input, same answer, or it is not one definition.
+
+    Empty for a month with no charges, which is every month before its first
+    statement, and the reason this costs nothing on the common path.
+    """
+    if not has_statement(run):
+        return [], {}
+    transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
+    effective = apply_decisions(outcome, transactions, receipts, decisions)
+    return transactions, charge_states(transactions, effective, decisions)
+
+
+def _identity_from_observed(observed: str | None, cards: dict) -> _CardIdentity:
+    """The coverage identity of one card-bearing string, or `_NO_CARD` when
+    it names no card.
+
+    Three outcomes, and the middle one is the one that matters here:
+
+    * the registry recognizes it -> that card, so the Chase cycle marker
+      "2838" and the plastic's "1672" are ONE row rather than two.
+      Resolution goes through `cards.resolve_card`, the same function the
+      per-receipt card chain uses, which means the registry's aliases count
+      and an AMBIGUOUS string resolves to nothing (the house ruling:
+      ambiguity surfaces instead of guessing).
+    * digits the registry has never heard of -> a row of their own, keyed by
+      the normalized tokens and labelled with what the statement printed.
+      Not folded into anything: cards 3645 and 0340 are real charges on real
+      plastic the registry is simply missing (backlog item 26), and hiding
+      them in an "other" bucket would bury the gap instead of showing it.
+    * nothing card-like at all -> the no-card identity. "Unknown card" is
+      never "some card we already listed"; the same rule `_tx_card_keys`
+      states, and generic tender words ("Visa", "cash") land here because
+      `resolve_card` refuses to let them identify anything.
+    """
+    from ..cards import resolve_card
+    from ..matching.deterministic import _card_keys
+
+    text = (observed or "").strip()
+    if not text:
+        return _NO_CARD
+    if cards:
+        card = resolve_card(text, cards, on_ambiguity="none")
+        if card is not None:
+            return _CardIdentity(
+                card.key, card.key, card.display_label, tuple(card.digits)
+            )
+    tokens = tuple(sorted(_card_keys(text)))
+    if not tokens:
+        return _NO_CARD
+    return _CardIdentity(
+        _UNKNOWN_KEY_PREFIX + "-".join(tokens), "", text, tokens
+    )
+
+
+def _charge_card_identity(tx, cards: dict) -> _CardIdentity:
+    """The coverage identity of one charge.
+
+    The observed string is picked exactly the way the matcher's
+    `_tx_card_keys` picks it: the per-row card column when it carries
+    digits, the account id otherwise. Two derivations of "which string names
+    this charge's card" would be two answers, and the matcher's is the one
+    the scoping already uses.
+    """
+    from ..matching.deterministic import _card_keys
+
+    observed = tx.card_last4 if _card_keys(tx.card_last4) else tx.account_id
+    return _identity_from_observed(observed, cards)
+
+
+def _statement_card_identities(
+    entry: dict,
+    anchors: dict,
+    charge_identity: dict[str, _CardIdentity],
+    cards: dict,
+) -> list[_CardIdentity]:
+    """The coverage rows one statement upload covers.
+
+    Two joins, unioned, because each alone is blind somewhere real:
+
+    * the operator's own `card_key`, a provisioned preset resolved through
+      the registry so a preset that merged into a settings card lands on the
+      composed key. An explicit assertion about what this file is for, so it
+      counts even when the file then printed nothing on that card: "loaded a
+      statement for this card, got no charges out of it" is worth seeing.
+      Blind when the upload named no preset, which is every upload made
+      through the plain form.
+    * the charges the file actually printed, via its `statement_anchors` row
+      map. Blind for a PDF statement, whose charges have no tabular row and
+      therefore no anchors, and for every upload that predates PR 2b-2b-2.
+
+    `account_id` is the LAST resort, used only when both joins came back
+    empty, and deliberately not a third voice beside them. It names an
+    ACCOUNT, not a card: on the real corpserv export every row carries
+    `chase-2838-family` while the rows themselves span 2838 / 3645 / 3876 /
+    0340, so treating it as a card identity would invent a coverage row for
+    a card that does not exist and park the file in it. Where it IS the card
+    (the Chase statement PDF, whose account id is the cycle marker, and
+    every single-card CSV with no Card column) the other two joins are
+    silent and it is the only thing that can answer.
+
+    Nothing here picks a winner between the joins: this surface reports
+    coverage, it does not adjudicate what an operator meant.
+    """
+    out: dict[str, _CardIdentity] = {}
+    identity = _identity_from_observed(entry.get("card_key"), cards)
+    if identity.key:
+        out[identity.key] = identity
+    for tx_id in (anchors.get(entry.get("file")) or {}):
+        identity = charge_identity.get(tx_id)
+        if identity is not None:
+            out[identity.key] = identity
+    if not out:
+        identity = _identity_from_observed(entry.get("account_id"), cards)
+        if identity.key:
+            out[identity.key] = identity
+    return list(out.values()) or [_NO_CARD]
+
+
+def month_coverage(
+    run: RunRow, transactions: list, states: dict[str, dict]
+) -> tuple[list[dict], dict[str, str]]:
+    """`(coverage rows, {transaction_id: coverage key})` for a month.
+
+    `transactions` and `states` must come from ONE read of the snapshot: the
+    roll-up looks every charge's state up unconditionally, so a charge whose
+    state is missing raises rather than being counted under a guessed
+    bucket. Both callers hand over a matched pair, which is what makes that
+    lookup total.
+
+    One row per card the month knows about: every card its charges name,
+    every card an upload covered, and every card in the batch's own registry
+    snapshot. That last group is the point of the surface rather than
+    padding, because "which cards have I not loaded yet" is only answerable
+    from a list that includes the ones with nothing in them.
+
+    Empty for a month with no charges and no uploads. That keeps absence
+    meaning "nothing loaded" rather than "this backend does not report
+    coverage", and stops a receipt-only month from opening with a column of
+    registry cards it has no business asking about yet.
+
+    The registry is the batch's SNAPSHOT (`run.config["expense"]["cards"]`),
+    the same one per-receipt card resolution reads, so the two cannot
+    disagree and a settings edit reaches an existing month only through the
+    explicit refresh-master-data pass. A run with no snapshot (a plain
+    statement run, or a batch older than the card registry) still works:
+    every charge falls to its digit tokens, which on the real January month
+    is exactly the three rows 2838 / 3645 / 0340.
+    """
+    statements = month_statements(run)
+    if not transactions and not statements:
+        return [], {}
+
+    cards = _batch_cards(run.config)
+    anchors = (run.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}
+    entries: dict[str, dict] = {}
+
+    def row(identity: _CardIdentity) -> dict:
+        entry = entries.get(identity.key)
+        if entry is None:
+            entry = entries[identity.key] = {
+                "key": identity.key,
+                # The registry key, or "" when the registry does not know
+                # this card. Kept apart from `key` so a consumer tells a
+                # named card from a bare digit token without parsing.
+                "card_key": identity.card_key,
+                "label": identity.label or NO_CARD_LABEL,
+                "entity": "",
+                "digits": list(identity.digits),
+                "known": bool(identity.card_key),
+                "statements": [],
+                "period_start": None,
+                "period_end": None,
+                "n_transactions": 0,
+                "n_reconciled": 0,
+                "n_review": 0,
+                "n_unmatched_tx": 0,
+                "n_refunds": 0,
+                "unreconciled_by_ccy": {},
+            }
+        return entry
+
+    # 1. the registry's own cards, so the ones with nothing loaded are
+    #    visible rather than merely absent.
+    for card in cards.values():
+        if not card.active:
+            continue
+        entry = row(_CardIdentity(
+            card.key, card.key, card.display_label, tuple(card.digits)
+        ))
+        entry["entity"] = card.entity
+
+    # 2. the charges, which is where every count comes from.
+    charge_identity: dict[str, _CardIdentity] = {}
+    unreconciled: dict[str, dict[str, Decimal]] = {}
+    for tx in transactions:
+        identity = _charge_card_identity(tx, cards)
+        charge_identity[tx.transaction_id] = identity
+        entry = row(identity)
+        state = states[tx.transaction_id]
+        bucket = state["bucket"]
+        entry["n_transactions"] += 1
+        entry[_BUCKET_COUNTER[bucket]] += 1
+        if tx.transaction_date:
+            iso = tx.transaction_date.isoformat()
+            if entry["period_start"] is None or iso < entry["period_start"]:
+                entry["period_start"] = iso
+            if entry["period_end"] is None or iso > entry["period_end"]:
+                entry["period_end"] = iso
+        # The summary's own rule, so a card's unreconciled money and the
+        # month's total are the same arithmetic: reconciled and refunded
+        # charges are settled, and a posted charge is settled by definition.
+        if bucket not in ("reconciled", "refund") and not state["is_posted"]:
+            per_ccy = unreconciled.setdefault(identity.key, {})
+            per_ccy[tx.transaction_currency] = (
+                per_ccy.get(tx.transaction_currency, Decimal("0")) + abs(tx.amount)
+            )
+
+    # 3. the uploads, which can cover a card whose charges all arrived under
+    #    a different identity, or whose rows the month already held.
+    for stmt in statements:
+        name = stmt.get("file")
+        if not name:
+            continue
+        for identity in _statement_card_identities(
+            stmt, anchors, charge_identity, cards
+        ):
+            target = row(identity)
+            if name not in target["statements"]:
+                target["statements"].append(name)
+
+    for key, per_ccy in unreconciled.items():
+        entries[key]["unreconciled_by_ccy"] = {
+            ccy: f"{amt:,.2f}" for ccy, amt in sorted(per_ccy.items())
+        }
+
+    rows = sorted(
+        entries.values(),
+        key=lambda e: (
+            -e["n_transactions"], -len(e["statements"]), e["label"].lower(), e["key"],
+        ),
+    )
+    return rows, {tx_id: i.key for tx_id, i in charge_identity.items()}
 
 
 def _batch_llm_client(cfg: dict):

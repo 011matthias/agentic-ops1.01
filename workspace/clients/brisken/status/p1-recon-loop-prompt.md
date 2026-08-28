@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-08-25
+updated: 2026-08-26
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
@@ -14,13 +14,13 @@ usable for Brisken. Read this whole brief before touching anything, then read
 `p1-improvement-backlog.md` beside it — that file, not this one, is the list of
 what to do next.
 
-## Where things stand (2026-08-25, end of day)
+## Where things stand (2026-08-26)
 
-**The living month is built.** Backlog item 29's whole PR-2 chain is shipped
-and deployed (Fly **v97**): stable transaction identity (2a), `rematch_month`
-+ the judgment cache (2b-1), the extraction baseline (2b-1b), the month
-staying open (2b-2a), the fold (2b-2b-1), and the `statements[]` surface
-(2b-2b-2, PR #636).
+**Backlog item 29 is COMPLETE.** The whole chain is shipped and deployed
+(Fly **v98**): stable transaction identity (2a), `rematch_month` + the
+judgment cache (2b-1), the extraction baseline (2b-1b), the month staying
+open (2b-2a), the fold (2b-2b-1), the `statements[]` surface (2b-2b-2,
+PR #636), and the coverage surface (PR 3, PR #644).
 
 A statement is now an input stream, not a closing event. `POST
 .../statement` appends by identity and is repeatable per card; each upload is
@@ -32,13 +32,34 @@ fires when one card is typed against two account ids, or when an upload lands
 100% new over a period the same account already covers. `rematch_month`
 refuses any commit that would drop a charge the month gained meanwhile.
 
-**Next is PR 3, the coverage surface** - per-card coverage in the batch view
-(which cards have statements, over what periods, matched/unmatched per card),
-the month page's statement panel, and per-card sections in the reconciliation
-report. The backend half of the selector already exists
-(`GET /runs/{id}/statement-categorized.xlsx?file=`), but the SPA renders
-neither `statements[]` nor the selector, so from the UI a month with two xlsx
-statements can still only download the current one.
+**PR 3 shipped 2026-08-26 (#644).** `coverage[]` on both review payloads
+answers which cards a month has loaded, from which uploads, over what span,
+and how far each has got, carrying the run summary's own four bucket counts
+and unreconciled money PER CARD. Registry cards with nothing loaded get a row
+on purpose. `charge_states` is now the one place a charge's effective bucket
+is decided, so the grid and the workbench cannot report a month at two
+different stages of done. The reconciliation document gained a coverage table
+and per-card sections, grouped on the new `rows[].coverage_key`.
+
+Verified live on the January month: three card rows (2838 / 3645 / 0340)
+summing 40+31+9 = 80 charges and 18,092.08 + 1,277.53 + 859.07 =
+USD 20,228.68, matching the summary exactly; the downloaded PDF carries the
+table and three sections; the SPA renders both month views with no errors.
+
+**The SPA half is outstanding.** `docs/lovable-coverage-prompt.md` carries the
+statements panel, the per-statement `?file=` download selector AND the
+coverage panel; until the owner pastes it, a month holding two workbooks still
+offers one download button and the per-card split exists only in the API and
+the PDF. That is the one open thread from this round.
+
+**What is next is a decision, not a queue.** Item 29 is closed, so the ranking
+rule (wrong money beats wrong text; things that stop the tool learning beat
+cosmetics) applies to the open items afresh. The substantive ones are 27 (the
+date guard catches a wrong MONTH, not a wrong DAY - narrowed, not closed, and
+it is a wrong-money item), 23 (cut every tie to Zoho), 24 (the output is a
+document now), and the round that reopens the four expense-edit overlay routes
+now that 2b-1b restored the audit baseline they need. Reading it here, 27
+leads on the ranking rule; the backlog is the authority.
 
 **Backlog item 30 is fully shipped and deployed** (PRs #607, #608, #609),
 along with the out-of-Lovable half of the "Arriving" bug:
@@ -123,27 +144,19 @@ and every incremental path in 2b-2 calls it rather than growing a second
 copy. `web/judgment_cache.py` means a re-match only pays for pairs it has
 not judged before.
 
-What remains (PR 2b-2): append-capable statement uploads (per card, several
-times a month, content-id dedupe), `has_statement` no longer closing the
-month, and wiring the incremental re-match to receipt arrivals.
+Nothing remains in item 29. Every part of the plan file shipped, and the
+sign-contradiction interaction 2a pinned is answered the way 2a implied: two
+uploads that disagree really are two rows, and 2b-2b-2's `advisory` says so
+out loud rather than deduping a contradiction into whichever file arrived
+first.
 
-Start 2b-2 by triaging the `has_statement` guard, NOT by lifting it. It
-refuses at nine call sites in three classes: three that must open (receipts,
-statement, set-aside restore), two that should open only because a re-match
-now follows (cards, refresh-master-data), and four expense-edit overlay
-routes that must stay closed or get a real decision, because the attach
-bakes edits into the snapshot receipts and reopening the overlay over a
-baked pool risks double-application. The plan reads as if it were one
-switch. It is not.
-
-One interaction PR 2a pinned deliberately and 2b has to handle: a file
-whose SIGN inference differs between a partial and a full upload yields
-different ids for the same printed row, because the two uploads genuinely
-disagree about whether the money went out or came back. Surfacing two rows
-beats silently deduping a contradiction. Decide in 2b whether that wants a
-visible warning.
-
-Nothing is on fire here, which is exactly why it is now the top item.
+**The one deliberate leftover:** the four expense-edit overlay routes are
+still closed, each pinned by a test. Not because re-applying an edit is
+dangerous (2b-1b refuted that; the overlay is idempotent by construction) but
+because opening a reviewer-facing edit surface is only worth doing once the
+edits it takes are reversible and honestly attributed. 2b-1b restored the
+baseline that makes that possible, so reopening them is now a real round with
+the re-match wiring that has to follow an edit.
 
 ### 2. The published SPA: what is live
 
