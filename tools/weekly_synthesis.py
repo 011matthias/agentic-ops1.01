@@ -18,7 +18,7 @@ CANONICAL-BY-CONSTRUCTION: in --scheduled mode the register, ledger, and
 reviews listing are read from origin/main BLOBS (`git fetch` first, then
 `git show origin/main:PATH` via subprocess list-args -- immune to the MSYS
 path-mangling gotcha), never from the working tree. This kills the
-stale-tree sensor class: the pinned worktree the scheduled task runs in can
+stale-tree sensor class: the checkout the scheduled task runs in can
 lag main in CODE, but the DATA is always main's; the ASSETS section prints
 the sensor commit + its distance behind origin/main so code lag is visible
 in every email.
@@ -33,10 +33,13 @@ Usage:
 Scheduling (the registration command is version-controlled HERE -- the gap
 with MejiWeeklyReview was that its Register-ScheduledTask invocation was
 never committed): run `--print-registration` and paste the output into an
-elevated-enough PowerShell. It targets a dedicated PINNED WORKTREE
-(agentic-ops1-cadence on main), NOT the primary clone (which may sit on a
-client branch that predates this tool). Refresh the sensor code with
-`git -C <worktree> pull --ff-only`. Registration is a machine-state action:
+elevated-enough PowerShell. It targets the PRIMARY CLONE. Until 2026-08-28
+it targeted a dedicated pinned worktree (agentic-ops1-cadence), which was
+lost to a worktree cleanup nothing guarded against and broke the task
+(LastTaskResult 2, caught by the 2026-08-28 asset sweep); the primary clone
+is the one checkout never cleaned up, and DATA is canonical-by-construction
+anyway -- only sensor CODE can lag, which every email prints. Refresh the
+sensor code with `git -C <clone> pull`. Registration is a machine-state action:
 executed by the user (or with explicit per-action approval), never silently.
 
 Env: none required -- send_email.py resolves Graph creds from the primary
@@ -59,14 +62,14 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-CADENCE_WORKTREE = r"C:\Users\neuma_p1qrsic\Repo\agentic-ops1-cadence"
+SENSOR_CHECKOUT = r"C:\Users\neuma_p1qrsic\Repo\agentic-ops1"
 UV_EXE = r"C:\Users\neuma_p1qrsic\.local\bin\uv.exe"
 SWEEP_LOG = Path.home() / ".repo-sweep.log"
 
 REGISTRATION = f"""Register-ScheduledTask -TaskName "AgenticOpsWeeklySynthesis" `
   -Action (New-ScheduledTaskAction -Execute "{UV_EXE}" `
-    -Argument 'run --directory "{CADENCE_WORKTREE}" tools/weekly_synthesis.py --scheduled' `
-    -WorkingDirectory "{CADENCE_WORKTREE}") `
+    -Argument 'run --directory "{SENSOR_CHECKOUT}" tools/weekly_synthesis.py --scheduled' `
+    -WorkingDirectory "{SENSOR_CHECKOUT}") `
   -Trigger (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 07:10) `
   -Settings (New-ScheduledTaskSettingsSet -StartWhenAvailable)"""
 
@@ -181,13 +184,11 @@ def ops_health(scheduled: bool) -> dict:
             if not path or not head:
                 continue
             if os.path.normcase(path) in (os.path.normcase(str(REPO)),
-                                          os.path.normcase(CADENCE_WORKTREE)):
-                continue  # the running copy / pinned-by-design
-            if branch in ("refs/heads/main", "refs/heads/master",
-                          "refs/heads/sys/cadence-pin"):
+                                          os.path.normcase(SENSOR_CHECKOUT)):
+                continue  # the running copy / the primary clone
+            if branch in ("refs/heads/main", "refs/heads/master"):
                 continue  # a clean main checkout is normal state, not a
-                # close candidate (the primary clone seen from the cadence
-                # worktree lands here)
+                # close candidate
             merged = subprocess.run(
                 ["git", "-C", str(REPO), "merge-base", "--is-ancestor",
                  head, "origin/main"], capture_output=True).returncode == 0
@@ -293,7 +294,7 @@ def render_text(r: dict) -> str:
     L.append("ASSETS")
     L.append(f"  sensor commit {a['sensor_commit']}, "
              f"{a['behind_origin_main']} commit(s) behind origin/main "
-             f"(refresh: git -C {CADENCE_WORKTREE} pull --ff-only)")
+             f"(refresh: git -C {SENSOR_CHECKOUT} pull)")
     if c or o["alerts"] or any([s["concentration"], s["memory_sprawl"],
                                 s["recurrence"]]):
         L.append("")
