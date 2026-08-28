@@ -883,14 +883,20 @@ Assign control as a real card.
 
 Two defects in one surface:
 
-1. **No canonical grouping.** The backend exposes only the per-row
-   `payment_hint`, so the SPA groups by verbatim hint text. The digit-run
-   logic that would collapse the five 0340 spellings into one row already
-   lives in `cards.py` (strict last-4 reduction, leading-zero display rule
-   decided in the coverage round). Backend should serve a grouped
-   `unknown_card_hints` view section (canonical last-4 + combined receipt
-   count + the member spellings), so the digit rules stay in one place
-   instead of being re-derived in the SPA.
+1. **No canonical grouping.** CORRECTED 2026-08-28 after reading both
+   repos: the grouping is SERVER-side already — `build_card_review`
+   (web/service.py:4174-4231) emits `card_review.unresolved_hints[]`
+   `{hint, n_rows, documents[], generic, ambiguous}` — but it groups by
+   VERBATIM hint string, which is what renders five spellings of 0340 as
+   five rows. The durable fix lands in `build_card_review`: key
+   digit-bearing hints by their canonical digit run (the strict last-4
+   rules in `cards.py`, leading zero preserved for display) and emit the
+   member spellings per group as a PARALLEL field per the api-contract
+   rules. Interim relief needs no backend change at all: the SPA can
+   partition on the existing `generic` flag and display-group by trailing
+   digit run, and `POST .../cards` already accepts a LIST of assignments,
+   so one grouped Assign can submit every member spelling in one call
+   (see `docs/lovable-*` prompt handed 2026-08-28).
 2. **Tender words presented as cards.** Digit-less hints CAN be
    batch-assigned by design (R3 owner ruling: they assign for this batch
    only and never learn), but rendering them in the same list as
