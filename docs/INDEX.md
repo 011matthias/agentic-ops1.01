@@ -344,6 +344,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-27 | Meji September Readiness + Make Credit Cliff | client-dev | [→](docs/2026-08-27%20-%20Meji%20September%20Readiness%20%2B%20Make%20Credit%20Cliff/Checkpoint.md) |
 | 2026-07-29 | Meji September Prep + Copy Approval | client-dev | [→](docs/2026-07-29%20-%20Meji%20September%20Prep%20%2B%20Copy%20Approval/Checkpoint.md) |
 | 2026-07-20 | Meji ROI Page Full Answer | client-dev | [Checkpoint](docs/2026-07-20%20-%20Meji%20ROI%20Page%20Full%20Answer/Checkpoint.md) |
 | 2026-07-20 | Meji Doc-Site Polish | client-dev | [Checkpoint](docs/2026-07-20%20-%20Meji%20Doc-Site%20Polish/Checkpoint.md) |
