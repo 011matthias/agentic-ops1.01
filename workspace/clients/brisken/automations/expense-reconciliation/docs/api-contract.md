@@ -569,3 +569,47 @@ payload the caller is on (grid for an unattached batch, workbench once a
 statement is attached), the same dispatch `GET /api/runs/{id}` uses. It
 previously always replied with the workbench's, so a grid header rendering
 `n_expenses` went blank on the reply to its own click.
+
+## The cards a month actually charges: `seen_undefined` (added 2026-08-28)
+
+`GET /api/cards` composed the settings registry plus the shipped presets,
+so the card-definition screen listed the cards somebody had already
+defined and nothing else. On the live data that means 2838 plus four cards
+carrying no charges, while 0340, 3645 and 4700 charge 53 of April's 94
+rows and appear nowhere on the screen where a card gets defined. The
+reviewer's actual move, define the card these charges are on, was the one
+move the screen could not start.
+
+The payload now carries a third key beside `cards[]` and
+`entity_options[]`. Empty when every card the months charge is already
+known, so a renderer that ignores it keeps working.
+
+```json
+"seen_undefined": [
+  { "key": "digits:3645",
+    "suggested_key": "3645",
+    "observed": "3645",
+    "digits": ["3645"],
+    "n_charges": 18,
+    "months": ["April 2026"] }
+]
+```
+
+- `suggested_key` is what to define the card AS, taken from what the
+  statement printed. `_card_keys` strips leading zeros deliberately, so
+  that Chase's `0340` and the Zoho payment mode's `340` land on one match
+  key; that is right for matching and wrong for a person, who would be
+  offered `340` for a card they know as `0340`. `key` keeps the
+  normalized, `digits:`-namespaced form because that is what joins to the
+  charge.
+- `n_charges` and `months` are there so the decision to define a card can
+  be made from the row: busiest card first.
+- The identity comes from the same `_charge_card_identity` the
+  `coverage[]` panel uses. A card listed here is the same card a coverage
+  row is about; two derivations would be two answers, and the reviewer
+  would define a card the coverage panel then does not credit.
+
+Defining one is the existing `PUT /api/settings` with `cards`, which
+replaces the whole map, so send the current `cards[]` plus the new entry.
+A card with no entity is still DEFINED and drops out of this list; the
+missing entity is the entity column's business.

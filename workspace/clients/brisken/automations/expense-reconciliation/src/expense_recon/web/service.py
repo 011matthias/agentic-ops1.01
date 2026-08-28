@@ -5816,6 +5816,84 @@ def _statement_card_identities(
     return list(out.values()) or [_NO_CARD]
 
 
+def _printed_digits(observed: str) -> list[str]:
+    """The card-like digit runs exactly as the statement printed them,
+    leading zeros intact. `_card_keys` strips those to make one match key
+    out of Chase's "0340" and Zoho's "340"; this is the other direction,
+    for a screen a person reads."""
+    import re as _re
+
+    return _re.findall(r"\d{3,}", observed or "")
+
+
+def cards_seen_but_undefined(runs: list, cards: dict) -> list[dict]:
+    """Cards the tool has actually MET, that the registry does not know.
+
+    `/api/cards` composed the registry and the shipped presets, so the
+    settings screen listed the cards somebody had already defined and
+    nothing else. On the live April month that meant 2838 and four cards
+    with no charges on screen, while 0340, 3645 and 4700 carried 53 of the
+    94 charges and were nowhere on the page where a card gets defined. The
+    reviewer's move (define the card these charges are on) was the one the
+    screen could not start.
+
+    So the same identity derivation the coverage panel uses runs across the
+    months and reports what it found that the registry cannot name. The
+    identity comes from `_charge_card_identity`, not a second reading of
+    `account_id`, so a card listed here is the same card the coverage row
+    is about.
+
+    One entry per unknown identity, newest month first inside each:
+
+    * ``suggested_key`` - what to define it as, taken from what the
+      statement PRINTED rather than from the match key. `_card_keys`
+      strips leading zeros on purpose, so that Chase's "0340" and the
+      Zoho payment mode's "340" land on one key; that is right for
+      matching and wrong for a human, who would be handed "340" for a
+      card they know as "0340" and could define it under a name that
+      never appears on their statement. Never a `digits:`-namespaced
+      internal key either.
+    * ``observed`` - the string the statement actually printed, which is
+      what makes it findable when the digits are not obvious
+    * ``digits``, ``n_charges``, ``months`` - enough to decide whether it
+      is worth defining before opening the definition form
+
+    Runs whose snapshot cannot be read are skipped rather than failing the
+    settings screen: an unreadable month is a reason to show fewer cards,
+    never a reason to show none.
+    """
+    seen: dict[str, dict] = {}
+    for run in runs:
+        snapshot = getattr(run, "snapshot", None) or {}
+        if not snapshot.get("transactions"):
+            continue
+        try:
+            transactions, _receipts, _outcome, _cfg = snapshot_from_dict(snapshot)
+        except Exception:
+            continue
+        label = getattr(run, "label", "") or getattr(run, "run_id", "")
+        for tx in transactions:
+            ident = _charge_card_identity(tx, cards)
+            if ident.card_key or not ident.key:
+                continue  # the registry knows it, or the charge names no card
+            printed = _printed_digits(ident.label)
+            entry = seen.setdefault(ident.key, {
+                "key": ident.key,
+                "suggested_key": printed[0] if printed else ident.label,
+                "observed": ident.label,
+                "digits": printed or list(ident.digits),
+                "n_charges": 0,
+                "months": [],
+            })
+            entry["n_charges"] += 1
+            if label and label not in entry["months"]:
+                entry["months"].append(label)
+
+    return sorted(
+        seen.values(), key=lambda e: (-e["n_charges"], e["suggested_key"])
+    )
+
+
 def month_coverage(
     run: RunRow, transactions: list, states: dict[str, dict]
 ) -> tuple[list[dict], dict[str, str]]:
