@@ -222,6 +222,34 @@ The surface splits into four layers, and they do NOT ship together:
    `docs/lovable-month-report-prompt.md`. Sequence it AFTER layer 2, which
    moves the same names on the SPA-facing payloads.
 
+**2026-08-28 user test confirmation (the account dropdown):** the GL
+dropdown on the batch grid (E600010-* / E500010-* codes) surfaced in live
+testing and the user's read was "pretty sure this is not necessary
+anymore." To be exact about what it is: the codes are the chart-of-accounts
+master data in the app's settings, seeded once from the Zoho Books chart on
+2026-08-06; no live Zoho tie remains (layer 1 deleted). Its remaining
+consumers are the deliverable documents (the workbook annotation and the
+report PDFs show the resolved account per row) and the layer-3 chart gate.
+Whether Brisken still wants code-level GL classification in those documents
+at all, or categories only, is the one product question left here; it
+decides how much of layers 2-4 is a rename and how much is a removal. Ask
+Dirk/Criss at the table.
+
+**Same test, minutes later, and it escalates the priority of layer 2:** the
+reconciliation page reads "94 charges from the bank statement, matched
+against Zoho Expense receipts", and the setup banner warns "Card 'Brisken'
+has no Zoho paid-through account set ... only the Zoho journal export uses
+it". The user's immediate read was "why are we still matching things
+against zoho data? i dont want this connected to zoho." The matching is
+against the uploaded scans, and the journal export the banner serves has no
+destination since the output-is-a-document ruling; the words alone made a
+disconnected system read as a connected one, in front of the operator, on
+demo day. The stale copy is now actively costing trust, not just tidiness:
+sweep the user-visible "Zoho" strings (run page copy, the paid-through
+banner, the CSV button) in the next code round rather than on layer 2's
+own schedule, and drop the paid-through warning outright if the journal
+export goes with layer 4.
+
 ### 24. The output is a document now (owner directive 2026-08-23)
 
 **Owner:** there is no target application at all. "The output should be first
@@ -836,6 +864,71 @@ Open item at the top of the row menu, and an `aria-label` on the menu
 trigger that says "Actions for ..." instead of repeating the month name.
 
 No backend work. Nothing to deploy on our side.
+
+### 35. The unknown-card strip lists spellings and tender words, not cards (2026-08-28 user test)
+
+**User, testing the April demo pack on the live app:** "too much ambiguity
+in this section, it must be improved; there should only be clearly defined
+cards listed and not stuff like 'cartao de credito', we want the card
+number."
+
+What the strip showed for the fresh April batch: "26 receipts name a card
+the tool does not know yet", across nine-plus rows. Five of those rows are
+ONE card, 0340, under five spellings (`***********0340` x4,
+`VISA - ******0340` x3, `****0340` x2, `*****0340` x1,
+`CARTAO ***********0340` x1 = 11 receipts). Four more rows are digit-less
+tender phrases (`CARTAO TEF`, `COMPRA CREDITO VISA`,
+`Cartao Credito 30 Dias`, `Cartao de Credito`), each offering the same
+Assign control as a real card.
+
+Two defects in one surface:
+
+1. **No canonical grouping.** The backend exposes only the per-row
+   `payment_hint`, so the SPA groups by verbatim hint text. The digit-run
+   logic that would collapse the five 0340 spellings into one row already
+   lives in `cards.py` (strict last-4 reduction, leading-zero display rule
+   decided in the coverage round). Backend should serve a grouped
+   `unknown_card_hints` view section (canonical last-4 + combined receipt
+   count + the member spellings), so the digit rules stay in one place
+   instead of being re-derived in the SPA.
+2. **Tender words presented as cards.** Digit-less hints CAN be
+   batch-assigned by design (R3 owner ruling: they assign for this batch
+   only and never learn), but rendering them in the same list as
+   digit-bearing rows presents them as card identities. Split them into a
+   separate, labeled sub-strip ("no card number readable on the receipt;
+   assignment applies to this month only") or fold them into a count with
+   an expandable control. The capability stays; the ambiguity goes.
+
+Halves: backend grouping (small, view-only, contract-test pinned per item
+21's rules) + a Lovable prompt for the two-part rendering. Note the demo-day
+interaction depends on item 26 either way: assigning the 0340 rows requires
+the 0340 card to exist in the registry first.
+
+### 36. Month auto-suggestion at manual upload (2026-08-28 user question)
+
+**User, same test session:** "why does the tool not automatically recognize
+what month the receipts inserted are from?"
+
+It half does. The MAIL path reads every arriving receipt at once and files
+it by the month printed on it (item 29's pool). The MANUAL path deliberately
+does not: the operator's label declares the month, and the receipt dates are
+used the other way around, to flag rows that do not look like the declared
+month (`date_outside_period`). That direction was chosen with evidence: the
+extracted date is the least reliable field on a scan (11 of 36 April
+readings carried wrong YEARS before #590; 3 dates come back blank in the
+current rehearsal set), so routing by it silently misfiles, while
+distrust-by-declaration only ever asks a human to look.
+
+The gap worth closing is the missing SUGGESTION, not missing automation:
+`batch_period.py` already derives a strict-plurality month from the batch's
+own dates (it is the fallback when the label names no month). Surface that
+derivation in the manual flow, confirm-first: after extraction, when the
+plurality month is confident and differs from (or is absent from) the
+label, say "these receipts read as April 2026" and offer to set/rename the
+label. Never silent, so the item-25 ruling (nothing auto-corrected, the
+operator's declaration stays authoritative) holds unchanged. Backend piece
+is small (expose the existing derivation on the view); SPA piece is a
+Lovable prompt.
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
