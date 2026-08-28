@@ -85,6 +85,7 @@ from .service import (
     MODE_EXPENSE_GENERATION,
     PreparedExpenseBatch,
     PreparedRun,
+    cards_seen_but_undefined,
     RunForm,
     RunInputError,
     add_receipts_to_expense_batch,
@@ -1581,10 +1582,18 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # plus the entity options the assignment UI needs.
         with open_store() as store:
             settings = store.get_settings()
+            runs = store.list_runs()
         composed = effective_cards(settings, load_cards())
         return JSONResponse({
             "cards": [card_to_dict(c) for c in composed.values()],
             "entity_options": available_entities(settings),
+            # Cards the months actually charge that the registry cannot
+            # name (2026-08-28). Without this the definition screen listed
+            # only cards somebody had already defined, so on the live April
+            # month it showed 2838 plus four cards with no charges, while
+            # 0340, 3645 and 4700 carried 53 of the 94 charges and appeared
+            # nowhere. Parallel field: empty when every card is known.
+            "seen_undefined": cards_seen_but_undefined(runs, composed),
         })
 
     @app.put("/api/settings")
