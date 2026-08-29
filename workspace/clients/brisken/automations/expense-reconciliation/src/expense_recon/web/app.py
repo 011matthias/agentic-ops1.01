@@ -2546,6 +2546,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         map_posting_date: str = Form(""),
         map_transaction_currency: str = Form(""),
         map_card: str = Form(""),
+        # Aliases the deployed SPA actually sends on its column-mapping
+        # retry (backlog item 37: the SPA appends map_date /
+        # map_description / map_currency, which this route silently
+        # dropped, so the operator's column picks never reached the
+        # parser). Accepted alongside the canonical names so both an
+        # updated and an un-updated SPA work; canonical wins on conflict.
+        map_date: str = Form(""),
+        map_description: str = Form(""),
+        map_currency: str = Form(""),
     ):
         """Month-end: attach the bank statement to a batch and reconcile
         it. THIS is where the card / account id is asked (never at batch
@@ -2577,11 +2586,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 receipts_default_currency="",
                 use_llm="",
                 expense_column_map="",
-                map_transaction_date=map_transaction_date,
+                map_transaction_date=map_transaction_date or map_date,
                 map_amount=map_amount,
-                map_vendor=map_vendor,
+                map_vendor=map_vendor or map_description,
                 map_posting_date=map_posting_date,
-                map_transaction_currency=map_transaction_currency,
+                map_transaction_currency=(
+                    map_transaction_currency or map_currency
+                ),
                 map_card=map_card,
                 card_key=card_key,
             )

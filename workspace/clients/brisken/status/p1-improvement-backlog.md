@@ -910,6 +910,15 @@ Halves: backend grouping (small, view-only, contract-test pinned per item
 interaction depends on item 26 either way: assigning the 0340 rows requires
 the 0340 card to exist in the registry first.
 
+**Vocabulary half SHIPPED 2026-08-29 (this round):** `tef`, `compra`,
+`dias` added to `GENERIC_TENDER_WORDS`, and `is_generic_tender` now
+tolerates number words below the card-digit floor (the "30" of
+`Cartao Credito 30 Dias`) while requiring at least one vocabulary word (a
+bare "30" stays non-generic). All four April tender phrases now come back
+`generic: true`; proven green-red-green by regressing the vocabulary. The
+canonical last-4 server grouping remains open; the interim display
+grouping is the SPA prompt handed 2026-08-28.
+
 ### 36. Month auto-suggestion at manual upload (2026-08-28 user question)
 
 **User, same test session:** "why does the tool not automatically recognize
@@ -936,6 +945,13 @@ operator's declaration stays authoritative) holds unchanged. Backend piece
 is small (expose the existing derivation on the view); SPA piece is a
 Lovable prompt.
 
+**Backend half SHIPPED 2026-08-29 (this round):** the expense-batch view
+now carries top-level `period_suggestion` (object or null:
+`{month, label_month, n_dates, n_in_month}`), documented in
+api-contract.md with its consensus rules. Proven by regression (nulling
+the emission reddens all three view tests). The SPA half is the gated
+month-banner prompt handed 2026-08-28; it activates once this deploys.
+
 ### 37. The attach dialog's column-mapping retry is dead on the wire (LIVE DEFECT, found 2026-08-28)
 
 Found by the adversarial verify pass on the attach-dialog Lovable prompt.
@@ -952,6 +968,13 @@ exports carry recognizable headers. Fix is SPA-side (rename the three
 appended keys; shipped inside the attach-dialog Lovable prompt handed
 2026-08-28, section 4); an optional backend nicety is accepting the old
 names as aliases so an un-updated SPA still works.
+
+**Alias half SHIPPED 2026-08-29 (this round):** the statement route now
+accepts `map_date` / `map_description` / `map_currency` alongside the
+canonical names, canonical winning on conflict, so the deployed SPA's
+retry works BEFORE the Lovable prompt is applied and keeps working after.
+Proven by regression (unwiring the date fold turns the alias attach test
+red: 400 with the file's headers).
 
 **Item 35 companion note (same verify pass):** of the four tender phrases
 on the April strip, only `Cartao de Credito` is `generic: true` under the

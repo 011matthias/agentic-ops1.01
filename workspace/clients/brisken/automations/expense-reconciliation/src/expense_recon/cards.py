@@ -85,8 +85,12 @@ SOURCE_PRESET = "preset"
 # card (owner ruling 2026-08-21: generic tender words never auto-resolve;
 # review, not guess). The check is word-subset, not exact-phrase, so
 # compound tenders ("Visa Credit", "cartao visa") stay generic while any
-# distinctive word ("CorpServ") makes the hint identifying. A digit-
-# bearing hint ("Visa ...1672") is never generic — its digits identify.
+# distinctive word ("CorpServ") makes the hint identifying. A hint with a
+# 3+ digit run ("Visa ...1672") is never generic — those digits identify;
+# a SHORTER number word ("30" in "Cartao Credito 30 Dias") is below the
+# extractor's floor, identifies nothing, and does not block genericity
+# (backlog item 35, 2026-08-28: three real April tender phrases rendered
+# as assignable cards because of vocabulary gaps + the "30").
 GENERIC_TENDER_WORDS = frozenset({
     # networks
     "visa", "mastercard", "master", "amex", "american", "express", "elo",
@@ -97,7 +101,7 @@ GENERIC_TENDER_WORDS = frozenset({
     "contactless", "chip",
     # PT
     "cartao", "credito", "debito", "dinheiro", "boleto",
-    "transferencia", "de",
+    "transferencia", "de", "tef", "compra", "dias",
     # DE
     "kreditkarte", "karte", "ec", "bar", "lastschrift", "girokarte",
     "uberweisung", "ueberweisung", "zahlung", "kredit",
@@ -106,9 +110,11 @@ GENERIC_TENDER_WORDS = frozenset({
 
 def is_generic_tender(text: str | None) -> bool:
     """True when a hint names only a tender type / card network: no digit
-    token, and EVERY word is generic tender vocabulary. Diacritics fold
-    first ("Cartão de crédito" -> "cartao de credito"): `_normalize` is
-    ASCII-alnum and would split accented letters."""
+    token, at least one vocabulary word, and EVERY word is either generic
+    tender vocabulary or a number too short to be a card digit run
+    (< _DIGIT_MIN, e.g. the "30" of "cartao credito 30 dias"). Diacritics
+    fold first ("Cartão de crédito" -> "cartao de credito"): `_normalize`
+    is ASCII-alnum and would split accented letters."""
     if not text or not text.strip():
         return False
     if _card_keys(text):
@@ -116,7 +122,14 @@ def is_generic_tender(text: str | None) -> bool:
     folded = unicodedata.normalize("NFKD", text)
     folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
     words = _normalize(folded).split()
-    return bool(words) and all(w in GENERIC_TENDER_WORDS for w in words)
+    return (
+        any(w in GENERIC_TENDER_WORDS for w in words)
+        and all(
+            w in GENERIC_TENDER_WORDS
+            or (w.isdigit() and len(w) < _DIGIT_MIN)
+            for w in words
+        )
+    )
 
 
 @dataclass(frozen=True)
