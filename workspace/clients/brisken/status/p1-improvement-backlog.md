@@ -936,6 +936,35 @@ operator's declaration stays authoritative) holds unchanged. Backend piece
 is small (expose the existing derivation on the view); SPA piece is a
 Lovable prompt.
 
+### 37. The attach dialog's column-mapping retry is dead on the wire (LIVE DEFECT, found 2026-08-28)
+
+Found by the adversarial verify pass on the attach-dialog Lovable prompt.
+When the statement attach 400s with the file's headers, the SPA lets the
+operator pick which column is which and retries, appending FormData keys
+`map_date`, `map_description`, `map_amount`, `map_currency`
+(ExpensesReviewGrid.tsx:2128-2132). The backend route accepts
+`map_transaction_date`, `map_amount`, `map_vendor`, `map_posting_date`,
+`map_transaction_currency`, `map_card` (app.py:2543-2548). Only
+`map_amount` aligns; FastAPI silently drops the rest, so the operator's
+date, description and currency picks never reach the parser and the retry
+resubmits effectively unmapped. Nobody has hit it loudly because Chase
+exports carry recognizable headers. Fix is SPA-side (rename the three
+appended keys; shipped inside the attach-dialog Lovable prompt handed
+2026-08-28, section 4); an optional backend nicety is accepting the old
+names as aliases so an un-updated SPA still works.
+
+**Item 35 companion note (same verify pass):** of the four tender phrases
+on the April strip, only `Cartao de Credito` is `generic: true` under the
+deployed vocabulary; `tef`, `compra`, `dias` are not in
+`GENERIC_TENDER_WORDS` (cards.py:90-119), so `CARTAO TEF`,
+`COMPRA CREDITO VISA` and `Cartao Credito 30 Dias` come back
+generic:false, and the last one prints the digits "30". The strip prompt
+was written to be truthful against this (3-digit floor on grouping,
+generic-first partition); the small backend half is adding those words to
+the vocabulary and deciding sub-3-digit-run tolerance in
+`is_generic_tender`, after which the three phrases move under the
+no-card-number section with no SPA change.
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
 Four of the five known cards (0113, 6013, 9693, 8311) carry no legal entity,
