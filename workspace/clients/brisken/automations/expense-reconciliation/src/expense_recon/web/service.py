@@ -31,7 +31,12 @@ from decimal import Decimal
 from pathlib import Path
 
 from .. import inspect as stmt_inspect
-from ..batch_period import batch_period, outside_period
+from ..batch_period import (
+    batch_period,
+    month_from_dates,
+    month_from_label,
+    outside_period,
+)
 from ..cli import NON_RECEIPT_LABELS, ConfigError, generate_expenses, reconcile
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
@@ -4458,6 +4463,30 @@ def build_expense_view(
     period = batch_period(
         run.label, [r.detected_date for r in receipts if r.detected_date]
     )
+    # Backlog item 36: what month do these receipts collectively read as?
+    # Confirm-first surface for the SPA banner — the label stays the only
+    # authority (item 25 ruling: nothing about dates is auto-corrected);
+    # this exposes the dates-plurality consensus the guard above already
+    # computes internally, so the operator can be OFFERED the rename
+    # instead of having to notice the mismatch. None when fewer than 4
+    # dated expenses or no clear winner (month_from_dates rules).
+    _dated = [r.detected_date for r in receipts if r.detected_date]
+    _consensus = month_from_dates(_dated)
+    if _consensus is None:
+        period_suggestion = None
+    else:
+        _label_month = month_from_label(run.label)
+        period_suggestion = {
+            "month": f"{_consensus[0]:04d}-{_consensus[1]:02d}",
+            "label_month": (
+                f"{_label_month[0]:04d}-{_label_month[1]:02d}"
+                if _label_month else None
+            ),
+            "n_dates": len(_dated),
+            "n_in_month": sum(
+                1 for d in _dated if (d.year, d.month) == _consensus
+            ),
+        }
     for r in receipts:
         res = card_res.get(r.document_id) or {
             "hint": "", "card": None, "entity": r.legal_entity_id or "",
@@ -4715,6 +4744,10 @@ def build_expense_view(
         # The last incremental receipt-add's summary (counts / cost /
         # skipped files), or None when receipts only came in at creation.
         "expense_ingest": run.snapshot.get("expense_ingest"),
+        # Backlog item 36: the dates-plurality month these receipts read
+        # as, for the SPA's confirm-first rename banner. Object or null;
+        # null whenever no consensus exists. The label stays authoritative.
+        "period_suggestion": period_suggestion,
         "summary": summary,
         "expenses": expenses,
         # Cards R3: the card-review strip — unresolved payment hints

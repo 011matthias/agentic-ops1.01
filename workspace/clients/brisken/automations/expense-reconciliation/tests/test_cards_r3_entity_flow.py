@@ -139,10 +139,21 @@ def test_generic_tender_predicate():
                  # (adversarial review: "Visa Credit" bypassed the exact-
                  # phrase check and became a learnable alias).
                  "Visa Credit", "credit visa", "cartao visa",
-                 "Mastercard Debit", "Kreditkarte", "EC-Karte", "Bar"):
+                 "Mastercard Debit", "Kreditkarte", "EC-Karte", "Bar",
+                 # Item 35 (2026-08-28): the three April tender phrases
+                 # that rendered as assignable cards. "30" is below the
+                 # card-digit floor and identifies nothing, so it must not
+                 # block genericity.
+                 "CARTAO TEF", "COMPRA CREDITO VISA",
+                 "Cartao Credito 30 Dias", "compra crédito"):
         assert is_generic_tender(text), text
     for text in ("Visa ...1672", "CorpServ", "brisken", "", None, "2838",
-                 "Visa CorpServ"):
+                 "Visa CorpServ",
+                 # A pure number carries no tender vocabulary: leave it
+                 # alone rather than declaring it generic.
+                 "30", "12 12",
+                 # A distinctive word keeps a compra-phrase identifying.
+                 "Compra Loja Central"):
         assert not is_generic_tender(text), text
 
 

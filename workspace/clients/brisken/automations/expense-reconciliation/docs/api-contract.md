@@ -292,6 +292,37 @@ corpserv export every row says `chase-2838-family` while the rows span
 2838 / 3645 / 3876 / 0340, and reading that as a card would invent a coverage
 row for a card that does not exist.
 
+## The month the receipts read as: `period_suggestion` (added 2026-08-29)
+
+Expense-batch payload, top level, object or null. Backlog item 36: the
+dates-plurality month the batch's receipts collectively read as, so the SPA
+can OFFER a rename ("These receipts read as April 2026") instead of the
+operator having to notice a mismatch. The label stays the only authority
+(item 25 ruling: nothing about dates is auto-corrected); this field never
+changes behavior on its own.
+
+```json
+{
+  "month": "2026-04",
+  "label_month": null,
+  "n_dates": 5,
+  "n_in_month": 5
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `month` | the consensus month, `YYYY-MM` |
+| `label_month` | the month the batch LABEL names, `YYYY-MM` or null when the label names none |
+| `n_dates` | how many expenses carried a date |
+| `n_in_month` | how many of those fall in the consensus month |
+
+Null (not an absent key) whenever no consensus exists: fewer than 4 dated
+expenses, or no month holds at least max(3, 40%) of them while strictly
+beating the runner-up (`batch_period.month_from_dates`). The SPA renders a
+banner only when `month` exists AND (`label_month == null` or it differs);
+render defensively per rule 3 below.
+
 ## Rules for changing a list field
 
 1. **Enriching a field in place is the dangerous move.** Adding keys to an
