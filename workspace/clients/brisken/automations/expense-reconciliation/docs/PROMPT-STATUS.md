@@ -8,6 +8,21 @@ nothing about whether it was ever pasted.
 The audit script is `%TEMP%/claude/recon-probe/prompt_ledger.py`. Signatures
 are VERBATIM strings from each prompt.
 
+**Re-audited 2026-09-01**, by a different method: fetch every JS chunk the
+published app can load (44 chunks, 921 KB) and grep the lot. A string
+rendered from an i18n key still lives in a chunk, so this sees copy the DOM
+only shows after a click, and it needs no browser. Where display copy is
+ambiguous, the decisive signature is the API FIELD NAME the applied code has
+to read (`seen_undefined`, `n_duplicate_copies`, `is_extra`, `coverage`,
+`period_suggestion`): a renderer cannot show a field it never names.
+
+Two display strings misread on the first pass, both resolved by reading the
+surrounding key: `"Not a duplicate"` is `wb.dups.notDup` from the workbench
+duplicates panel, which predates `lovable-duplicates-prompt.md` and is not
+its row badge; `"Card account id"` survives on purpose as the Other-account
+free-text label, so it is not evidence that the attach-dialog prompt is
+missing.
+
 **Two traps this audit hit, both of which produced a wrong answer first:**
 
 1. A loose regex matched a Cards help line ("every company card the tool can
@@ -40,6 +55,15 @@ are VERBATIM strings from each prompt.
 | `lovable-months-list-prompt.md` | `/months` renders a table: 6 rows, 6 `/expenses/{id}` links, real labels (January 2026, May 2026, April 2026). Backlog item 32 CLOSED |
 | `lovable-known-senders-prompt.md` | "People we recognise" editor present AND the stale "Accepted senders" editor is GONE. Backlog item 31 CLOSED |
 | `lovable-inbound-status-refusals-prompt.md` | Status cells render the backend `status_label` ("Waiting for August 2026"); the refusals strip is present, worded **"turned away"** |
+| `lovable-attach-dialog-prompt.md` | `months.attach.cardOther` = "Other account..." and `months.attach.cardFilled` in the i18n dictionary (2026-09-01) |
+| `lovable-card-strip-prompt.md` | "Card ending" and "No card number on the receipt" (2026-09-01) |
+| `lovable-zoho-copy-prompt.md` | "Download journal CSV" and "matched against this month's receipts" (2026-09-01) |
+| `lovable-month-suggestion-prompt.md` | The bundle reads `period_suggestion`. Gated on PR #657 deploying the field; pasted 2026-09-01 (2026-09-01) |
+
+These four were drafted 2026-08-28/29, pasted from chat, and lived only in a
+gitignored scratch directory until 2026-09-01. They are in `docs/` now
+because the pasted text is the record of what production was asked to do,
+and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
@@ -50,13 +74,20 @@ are VERBATIM strings from each prompt.
 | `lovable-card-definition-prompt.md` | The seen-but-undefined card list on the Settings card screen, plus an always-visible Add card (PR #651, shipped 2026-08-28) | "Seen on your statements, not defined yet", "Define this card", "Add card" |
 | `lovable-months-open-prompt.md` | The way into a month on `/months`: rest-state link styling, a clickable row, an Open item in the row menu (no backend change; written 2026-08-28) | "Open" / "Abrir" as the first row-menu item; `aria-label` "Actions for ..." |
 
+All four re-verified ABSENT on 2026-09-01 against the published bundle, on
+the field names their renderers would have to read: `coverage` 0 hits,
+`n_duplicate_copies` and `is_extra` 0, `seen_undefined` and `suggested_key`
+0, and the months row still carries the hover-only
+`underline-offset-2 hover:underline` with no "Actions for" label.
+
 The first three were each written the same day their backend shipped, so the
 SPA half is outstanding until the owner pastes them. Until then: a month
 holding two workbooks still offers one download button and the per-card
 split of unreconciled money is API-and-PDF only; duplicate copies are
 detected, counted, and printed on the reconciliation PDF but carry no badge
 in the grid; and the cards actually charging a month appear nowhere on the
-screen where a card gets defined.
+screen where a card gets defined, which is the screen the 2026-08-28 demo
+was going to use.
 
 `lovable-months-open-prompt.md` is the odd one out, needing no backend at
 all. It answers the 2026-08-28 operator note "why cant the user enter and
