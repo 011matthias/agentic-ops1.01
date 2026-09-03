@@ -70,8 +70,10 @@ September corporate wave launches from. Decision put to Gurmej 09-03
 September launch prep (2026-09-03): launch line-up message + 4-page campaign
 status PDF (`deliverables/meji-campaign-status-2026-09-03.{md,pdf}`) finalized
 after a 2-round adversarial verify (22 findings fixed) and handed to the owner
-for send. Owner ORDERED the second sending domain started this week (12 hrs
-scoped, ~$440 at $36.85/hr, announced to Gurmej in the message, not asked).
+for send. Owner APPROVED the full launch path 2026-09-04 (12 hrs / ~$440 domain work
+announced in the message with its price, not asked) with one change: the
+domain setup and the DMARC step also WAIT for Gurmej's reply; nothing
+executes before it.
 mejievent DMARC still `p=none` (live 8.8.8.8 pull 09-03); first tighten step is
 part of the launch chain. `placement-seeds.csv` still empty; seed inboxes asked
 of Gurmej in the message. Corporate rebuild = three NEW sequences from the
