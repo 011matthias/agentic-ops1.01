@@ -42,12 +42,11 @@ day: roughly 650 across a full month of 22 sending days, and nearer 450 to 500
 with a launch in the second week of September, against the 1,500 to 2,000 a
 month the plan was built around. The bottleneck is the mailboxes, not the list.
 
-A second sending domain with three more mailboxes doubles that. New domains
-need three to four weeks of warm-up, so one started this week comes into
-service late September to the first week of October, depending on how the
-warm-up goes; its mailboxes fold into A and B once warm.
+A second sending domain with three more mailboxes doubles that. It is set up
+at your go; three to four weeks of warm-up later, around early October, its
+mailboxes fold into A and B.
 
-| | Now | With the second domain (early October) |
+| | Now | With the second domain (3 to 4 weeks after the go) |
 |---|---|---|
 | Sending mailboxes | 3 | 6 |
 | Emails per day | 90 | 180 |
