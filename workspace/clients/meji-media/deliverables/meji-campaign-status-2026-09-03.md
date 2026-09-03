@@ -10,7 +10,7 @@ figures pulled live from the account on 3 September 2026.
 |---|---|---|---|---|
 | Corporate: Decision-Makers (A) | 589 | 589 | 0 | Stays and carries the push: sequence swapped for approved Version A (3 emails), fresh decision-maker contacts loaded, sending resumes. History kept |
 | Corporate: Organisers (B) | 434 | 431 | 3 | Same, with Version B. The 17 people left mid-sequence at the pause stay closed; the 3 never emailed ride into the new run |
-| Corporate: Big Companies in UK | 880 | 622 | 258 | Your call: finish it on its old copy (not recommended), retire it, or fold the 258 into A or B by job title after address re-verification. The 9 frozen mid-sequence stay closed on every path |
+| Corporate: Big Companies in UK | 880 | 622 | 258 | Your call: finish it on its old copy (not recommended), retire it, or fold the 258 into A or B by job title after address re-verification (my recommendation). The 9 frozen mid-sequence stay closed on every path |
 | Corporate: Named accounts (C) | Not built yet | | | The one new campaign, because none exists: Version C (3 emails) to the hand-picked company list, confirmed with you at load |
 | Christmas: Warm Re-engagement | 907 | 906 | 1 | Finished in practice; nothing sends this cycle |
 | Christmas: Bookers | 983 | 982 | 1 | Same |
