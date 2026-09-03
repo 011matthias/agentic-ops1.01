@@ -1,12 +1,10 @@
-# Campaign Status and Trajectory
+# Campaign Status and Plan
 
-**Meji Media, 3 September 2026**
+**Meji Media, 3 September 2026.** Where every campaign in the Instantly account
+stands today and exactly what happens to each at the September launch. All
+figures pulled live from the account on 3 September 2026.
 
-Where every campaign in the Instantly account stands today, and what happens to
-each one going into the September corporate launch. All figures pulled live from
-the account on 3 September 2026.
-
-## Where everything stands
+### Where everything stands
 
 | Campaign | Loaded | Emailed | Never emailed | Still in sequence | Sends from |
 |---|---|---|---|---|---|
@@ -18,58 +16,57 @@ the account on 3 September 2026.
 | Christmas: Bookers | 983 | 982 | 1 | 2 | mejimedia.co |
 | Christmas: Cold, three cities | 569 | 569 | 0 | 0 | mejixmas.com |
 
-Three further campaigns run under MejiAI and Banter on separate mailboxes. They
-sit outside this engagement and nothing here affects them.
+Three further campaigns run under MejiAI and Banter on separate mailboxes; they
+sit outside this engagement and nothing here touches them. Every list this
+engagement covers has been worked through: the one untouched audience of any
+size is the 258 in Big Companies in UK, plus five stragglers visible in the
+table.
 
-Every list this engagement covers has been worked through. The one untouched
-audience of any size is the 258 people loaded into Big Companies in UK and never
-emailed; beyond them, five stragglers are visible in the table (3 in Organisers,
-1 each in Warm Re-engagement and Bookers).
+### The plan: three new campaigns, one fresh list
 
-## What happens to each
+The push does not restart the old campaigns. They hold two-email sequences
+written before the copy you approved on 29 July; the approved pack is three
+versions at three touches each. So three new campaigns get built from it:
 
-**The corporate campaigns get rebuilt, not restarted.** All of them hold
-two-email sequences written before the 29 July approval. The pack signed off
-then is three versions at three touches each: Version A to decision-makers,
-Version B to organisers, Version C to named accounts. Version C has no campaign
-at all yet. So the launch builds three fresh sequences from the approved copy
-and retires the old ones.
+| New campaign | Audience | Copy | List |
+|---|---|---|---|
+| 1. Decision-makers | HR Director, Head of People, Head of Events and similar (11 titles) | Version A, 3 touches | Fresh pull at launch |
+| 2. Organisers | Office Manager, EA, PA to the Board, HR Manager and similar (6 titles) | Version B, 3 touches | Fresh pull at launch |
+| 3. Named accounts | The hand-picked company list, confirmed with you at load | Version C, 3 touches | Your list |
 
-**Big Companies in UK needs a decision.** It sits on the same three mejievent
-mailboxes the September push will use, and it is stopped rather than finished.
-Of the 880 loaded, 622 have been emailed and 258 never were; 9 of the emailed
-group sit frozen mid-sequence where the campaign stopped. The campaign predates my
-involvement, so the reason it stopped is not known here.
+The target audience is the July brief, unchanged: UK-wide, 50 to 2,000 staff,
+17 event-buying sectors. Roughly 41,000 people match; about 17,000 survive the
+filters. The list is pulled at launch so the data is freshest, which is also
+when your Apollo credits get spent. New contacts only: every batch passes five
+checks before loading (off-target names out, your past customers out, anyone
+ever emailed in any campaign out, risky mail gateways out, then address
+verification).
 
-Three ways forward: finish it on its existing copy, retire it, or fold the 258
-into the new push under the approved copy. The third is the recommendation,
-provided the addresses are re-verified first, since they have been sitting
-unused for some time and stale addresses damage sender reputation.
+The old Decision-Makers and Organisers campaigns retire in place as history and
+are never reactivated. Big Companies in UK is your call: finish it on its old
+copy (not recommended), retire it, or fold it, meaning the 258 never-emailed
+get re-verified and routed by job title into new campaign 1 or 2. The 9 frozen
+mid-sequence and the 594 already worked stay archived on every path. The
+campaign predates my involvement, so the reason it stopped is not known here.
 
-**The Christmas lists are spent.** Warm Re-engagement, Bookers and Cold hold two
-uncontacted people between them out of 2,459 loaded. Two of the three still show
-as active in the account, but with almost nothing left to send they are finished
-in practice. It matters only because September and October are when enquiries
-actually peak, so no outbound Christmas activity is running through the two
-busiest months. That is a separate conversation once corporate is away.
+The Christmas lists send nothing this cycle: Warm Re-engagement, Bookers and
+Cold hold two uncontacted people between them out of 2,459 loaded, so they are
+finished in practice even though two still show as active in the account. Any
+new Christmas outbound would need fresh lists and is a separate conversation.
 
-## What September can carry
+### What September can carry
 
-The corporate push sends from three mejievent mailboxes at 30 emails a day each,
-so 90 a day in total. At three touches per person, that supports about 30 new
-people a sending day. Over a full month of roughly 22 sending days that is about
-650 new contacts, against the 1,500 to 2,000 a month the September plan was
-built around; with a launch in the second week of September, this month lands
-nearer 450 to 500.
+The push sends from three mejievent mailboxes at 30 emails a day each, 90 in
+total. At three touches per person that supports about 30 new people a sending
+day: roughly 650 across a full month of 22 sending days, and nearer 450 to 500
+with a launch in the second week of September, against the 1,500 to 2,000 a
+month the September plan was built around. The ceiling is the mailboxes, not
+the list.
 
-The constraint is the mailboxes, not the audience. The Apollo universe matching
-the brief is around 41,000 contacts UK-wide, of which roughly 17,000 survive the
-filtering run before loading.
-
-A second sending domain carrying three more mailboxes doubles the ceiling. New
-domains need three to four weeks of warm-up before they can carry real volume,
-so one started this week comes into service late September to the first week of
-October, depending on how the warm-up goes.
+A second sending domain with three more mailboxes doubles the ceiling. New
+domains need three to four weeks of warm-up, so one started this week comes
+into service late September to the first week of October, depending on how the
+warm-up goes; its mailboxes fold into campaigns 1 and 2 once warm.
 
 | | Now | With the second domain (early October) |
 |---|---|---|
@@ -79,17 +76,13 @@ October, depending on how the warm-up goes.
 
 Both columns are full-month run rates at roughly 22 sending days a month.
 
-September therefore runs on the current three mailboxes. The reply rate still
-answers whether the awards angle lands, which is what the month was set up to
-test, but the number of conversations will be modest and the read comes off a
-smaller sample than planned.
+### Order of work at the go
 
-## One item already in hand
-
-mejievent.com's email authentication is set to monitor-only, which is weaker
-than it should be for the domain carrying the corporate volume. Tightening it
-sits on our side: the first step happens before anything sends, and it goes to
-full strength over the month as the reports stay clean.
+Authentication first step (mejievent.com is still on monitor-only; it steps to
+full strength over the month as the reports stay clean), build the three
+campaigns with stop-on-reply and bounce protection on, pull and filter the
+list, test send into your inboxes to check placement, load, final check, start.
+Two to three days once the test inboxes are in.
 
 ---
 
