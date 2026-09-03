@@ -25,7 +25,7 @@ table.
 ### The plan: three new campaigns, one fresh list
 
 The push does not restart the old campaigns. They hold two-email sequences
-written before the copy you approved on 29 July; the approved pack is three
+written before the copy you approved on 29 July; what you approved is three
 versions at three touches each. So three new campaigns get built from it:
 
 | New campaign | Audience | Copy | List |
@@ -87,5 +87,5 @@ Two to three days once the test inboxes are in.
 ---
 
 *Campaign figures pulled live from the Instantly account on 3 September 2026.
-Copy references the approved pack of 29 July 2026. Audience sizing from the
+Copy references the emails approved on 29 July 2026. Audience sizing from the
 Apollo search of 29 July 2026.*
