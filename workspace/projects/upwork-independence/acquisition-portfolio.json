@@ -3,7 +3,7 @@
   "target_geos": ["DE", "UK", "US"],
   "channel_effort": {
     "demo_first_local": 0.0,
-    "cold_email_b2b": 0.378,
+    "cold_email_b2b": 0.0,
     "linkedin_outbound": 0.289,
     "referral_partnership": 0.154,
     "content_aeo_inbound": 0.178
