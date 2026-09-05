@@ -1,7 +1,7 @@
 # UnpauseAI ICP (Ideal Customer Profile)
 
-Shared prerequisite for three uwi workstreams: u1 cold-email list filters, u3
-LinkedIn recipes, u2 editorial buyer-intent queries. Derived 2026-07-22 from
+Shared prerequisite for two uwi workstreams: u3 LinkedIn recipes, u2
+editorial buyer-intent queries. Derived 2026-07-22 from
 three evidence layers (5-agent extraction, run wf_7981a3ef-8ed):
 
 1. **Won engagements** (strongest): meji-media, brisken p1+p2, jochen/One
@@ -17,8 +17,9 @@ ASSUMED number to a prospect.
 
 ## The core persona (Route 2: B2B lead-gen retainer client)
 
-The three B2B channels (cold email, LinkedIn, referral) target ONE persona
-reached three ways (model finding, corroborated by the corpus):
+The B2B channels (LinkedIn, referral) target ONE persona (model finding,
+corroborated by the corpus; cold email was a third route until the owner
+retired it 2026-09-05):
 
 | Trait | Value | Provenance |
 |---|---|---|
@@ -28,7 +29,7 @@ reached three ways (model finding, corroborated by the corpus):
 | What they buy | "One owner, end to end, ongoing" - takeover + rebuild + recurring operation, never a one-off artifact | OBSERVED: volabyg ask verbatim; wimmer migration->maintenance; meji rescue->retainer |
 | Industry | No single vertical. Won set spans events marketing, SAP treasury, HVAC/renewables, construction. The COMMON factor is an owner running revenue-relevant process on low-code + spreadsheets | OBSERVED |
 | Stack markers (list filters) | Make.com / n8n / Zapier present or wanted; Google Sheets as the data plane; Instantly/Apollo for outbound-minded buyers; GHL in agency-land | OBSERVED: n8n or Make in ~10/12 and 9/12 of corpus batches; Sheets in 6/9 |
-| Geography | UK + US for cold email (UWG §7 bans DE cold). DE/DACH reachable ONLY via LinkedIn, referral, content, demo-first — where German language + CET is decisive: both German-language proposals in batch 1 were the only sent/won ones | OBSERVED constraint + OBSERVED signal |
+| Geography | DE/DACH reachable via LinkedIn, referral, content, demo-first, where German language + CET is decisive: both German-language proposals in batch 1 were the only sent/won ones. (Cold email, the UK/US-only channel under UWG §7, was retired 2026-09-05.) | OBSERVED constraint + OBSERVED signal |
 | Budget reality | Won pricing is modest: $30/hr (wimmer, ~$2,400/mo), $1,000-1,500/mo retainer (meji), EUR14/hr engagement tabs (Brisken family). Upwork posted budgets anchor at hobby level ($10-600) and every proposal absorbed a large gap via fixed-price + de-risked entry (free phase 0, EUR850 audit-first, $120 phase 1) | OBSERVED |
 | Expansion motion | Land-and-expand inside one account is the strongest revenue path: Brisken spawned three separately-billed workstreams; meji runs the hourly->retainer->fixed ladder | OBSERVED |
 
@@ -91,9 +92,6 @@ Ranked by corpus frequency:
 
 ## Channel filter derivation (operational)
 
-- **u1 Apollo/cold**: UK+US; owner/founder/MD titles; 5-50 employees;
-  technographic markers Make/n8n/Zapier/GHL/Instantly where available;
-  exclude DE. MX pre-filter (Mimecast = drop) before verification.
 - **u3 Sales Nav**: same persona, DE INCLUDED (LinkedIn is DE-legal);
   three-axis radar recipe shape from the Brisken targeting method;
   "changed jobs in 90 days" as the native trigger filter.
@@ -108,8 +106,10 @@ Ranked by corpus frequency:
    plausible; not yet proven at the tiered menu's framing.)
 2. Does the scale segment exist for us at EUR6,300/mo? (No won evidence;
    highest-risk tier assumption.)
-3. Are the channel pools real? (cold 50 / LinkedIn 30 / referral 15 / content
-   25 — all ASSUMED; u4's ledger is the referral test.)
+3. Are the channel pools real? (LinkedIn 30 / referral 15 / content 25 /
+   demo 33 — all ASSUMED; u4's ledger is the referral test. With cold email
+   retired the serviceable cap no longer binds, so pool validation matters
+   more.)
 4. Proposal-send drop-off: 11/12 of one corpus batch died at status:draft,
    never sent. The bottleneck was OUR send cadence, not prospect rejection —
    worth remembering when reading "Upwork didn't work" as evidence.
