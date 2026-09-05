@@ -2,10 +2,10 @@
   "_comment": "Upwork-independence CLIENT-ACQUISITION portfolio = the ONLY agent-writable surface during an optimize run. channel_effort values are DECISIONS: each is the fraction of the fixed acquisition-HOURS budget directed to that OWNED channel (sum <= 1; the rest reinvests at the opportunity rate). The reality that turns effort into won clients (per-channel cost/pool/ramp/value, the hours+cash budgets, the delivery serviceable-cap) is LOCKED in tools/scorers/leadgen-portfolio.py. Upwork is the status-quo being replaced, not a channel here. Edit values, not structure. Bounds + geo-legality enforced by tools/leadgen-portfolio-validate.py. Baseline is a naive even hedge across all five owned channels; the loop climbs from here.",
   "target_geos": ["DE", "UK", "US"],
   "channel_effort": {
-    "demo_first_local": 0.0,
+    "demo_first_local": 0.2992,
     "cold_email_b2b": 0.0,
-    "linkedin_outbound": 0.289,
-    "referral_partnership": 0.154,
-    "content_aeo_inbound": 0.178
+    "linkedin_outbound": 0.3683,
+    "referral_partnership": 0.1547,
+    "content_aeo_inbound": 0.1778
   }
 }
