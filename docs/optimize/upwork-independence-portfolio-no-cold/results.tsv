@@ -1,3 +1,4 @@
 round	commit	score	delta	status	description	timestamp
 0	27069c9	1610.55	0	baseline	baseline (asset as-is)	2026-09-05T18:59:56
 1	09d23e6	1864.34	+253.79	keep	Value-weighted no-cold mix: saturate linkedin (0.3683), referral (0.1547), content (0.1778) exactly to their pools, freed hours to demo (0.2992). Predict ~1864: demo marginal value ~144 EUR/h beats the 33 EUR/h opportunity rate now that cold no longer consumes the budget.	2026-09-05T19:00:19
+2	79fd858	1807.2	NA	probe	Boundary probe, expect DISCARD ~1807: drop demo back to 0 with the freed hours idle. Re-tests leadgen-portfolio's 'demo does not earn budget' dead end, which held only while cold email consumed the hours; demo's ~144 EUR/h marginal should beat the 33 EUR/h reinvestment now.	2026-09-05T19:00:46
