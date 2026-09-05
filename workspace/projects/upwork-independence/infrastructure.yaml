@@ -12,10 +12,8 @@ notes: >
 accounts:
   sending_domains:      # 2-3 secondaries; unpauseai.com NEVER cold-sends
     status: absent
-    detail: status/u1-cold-email-infra.md
   mailboxes:
     status: absent
-    detail: status/u1-cold-email-infra.md
   esp_instantly:
     status: absent
     note: Meji's Instantly/Apollo are client property, off-limits

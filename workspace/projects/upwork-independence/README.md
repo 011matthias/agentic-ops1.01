@@ -14,7 +14,7 @@ execution layer beneath it.
 | `pricing-tiers.json` | Optimize asset — canonical offer values (good 650/0.20, better 1850/0.55, best 6300/1.00). Public surfaces derive from this file, never duplicate it. |
 | `infrastructure.yaml` | Accounts roster: what the program owns, absent -> live as purchased. |
 | `context/` | Tracked program context (ICP). `context/.env` (gitignored) holds owned credentials as they exist. |
-| `status/` | One status-of-elements file per workstream (u1-u7) + `uwi-general.md` group reference. Start there. |
+| `status/` | One status-of-elements file per workstream (u2-u7) + `uwi-general.md` group reference. Start there. |
 
 ## Conventions
 
