@@ -4,13 +4,13 @@ workstream: uwi-general
 group: uwi
 spec:
 state: active
-updated: 2026-07-22
+updated: 2026-09-05
 ---
 
 # Upwork Independence (group general reference)
 
 Shared context for the owned-acquisition program. Workstream state lives in the
-u1-u7 files beside this one; this file holds pointers, the decisions taken, and
+u2-u7 files beside this one; this file holds pointers, the decisions taken, and
 the weekly hours ledger. It is a roll-up, not a copy.
 
 ## Shared context (belongs to the program, not one workstream)
@@ -20,7 +20,7 @@ the weekly hours ledger. It is a roll-up, not a copy.
 | Strategy verdicts | `docs/optimize/upwork-independence-{gtm-v2,gtm-v2-confirm,leadgen-portfolio,pricing-tiers}/SUMMARY.md` | Dead ends + sensitivities machine-readable via `optimize_overview.py --prior-art upwork-independence` |
 | Decision assets | `../gtm-plan.json`, `../acquisition-portfolio.json`, `../pricing-tiers.json` | Locked optimize assets; byte-stable outside runs |
 | Two-routes framing | memory `project_upwork_independence_two_routes` | Route 1 local SMB / Route 2 B2B lead-gen; UWG §7 fence |
-| ICP | `../context/icp.md` | Shared prerequisite for u1 (list filters), u2 (buyer-intent queries), u3 (recipes) |
+| ICP | `../context/icp.md` | Shared prerequisite for u2 (buyer-intent queries), u3 (recipes) |
 | Accounts roster | `../infrastructure.yaml` | absent -> live as purchased |
 
 ## Decisions taken (owner, 2026-07-22)
@@ -44,7 +44,9 @@ expensive to win — run as spare-capacity fill / AEO proof only.
 
 ## Workstreams
 
-- `u1-cold-email-infra.md` — sending infra checklist (purchases GATED)
+u1 (cold-email infra plan: status file, purchase checklist, list + sequences)
+deleted 2026-09-05 on owner order; git history holds the last version.
+
 - `u2-aeo-content.md` — sprint-zero platform fixes + corpus + probe loop
 - `u3-linkedin-outbound.md` — identity, recipes, cadences (seat GATED)
 - `u4-referral-partnership.md` — partner ledger + offer (drafts GATED)
