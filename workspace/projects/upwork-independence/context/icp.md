@@ -41,7 +41,7 @@ scope-to-deliverables mapping:
 | Segment | Size (pool) | Tier | Price | Who this plausibly is |
 |---|---|---|---|---|
 | Micro | 150 prospects | good EUR650/mo thin | solo founders / one-person operators (7/12 of one corpus batch) who anchor low but convert on de-risked entry |
-| Core | 95 prospects | better EUR1850/mo | the won-deal persona above; meji's real $1-1.5k/mo and wimmer's ~$2.4k/mo bracket this price point (OBSERVED corroboration) |
+| Core | 95 prospects | better EUR1850/mo | the won-deal persona above; the nearest observed price signals bracket this point but both are adverse or hourly (meji REFUSED $1-1.5k/mo as "seems high" 2026-05-19; wimmer's ~$2.4k/mo was our own $30/hr x 20h proposal projection, never invoiced) - see open question 1 |
 | Scale | 30 prospects | best EUR6300/mo full | funded/scaling orgs (the corpus's agency-intermediary + enterprise outliers). LEAST validated: no won deal at this level; the corpus's closest analog is the EUR1,800-2,200/mo agency retainer ask |
 
 ## Route 1 persona (local SMB care — fill only, never outbound hours)

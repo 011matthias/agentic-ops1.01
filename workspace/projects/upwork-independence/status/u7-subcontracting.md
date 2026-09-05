@@ -4,7 +4,7 @@ workstream: u7-subcontracting
 group: uwi
 spec:
 state: not-started
-updated: 2026-07-22
+updated: 2026-09-05
 general_ref: status/uwi-general.md
 ---
 
@@ -24,8 +24,8 @@ passes.
 |---|---|---|---|---|---|
 | Sourcing | not-started | Where subcontractors come from (near-shore/EU per the EUR20/hr assumption) | Sourcing shortlist when u5 lands | u5 kit | — |
 | Vetting checklist | not-started | Skills + trial-task design | With sourcing | u5 | — |
-| Trial task | not-started | One real delivery slice off the kit, measured | After vetting | u5 | — |
-| Leverage validation milestone | not-started | Measure actual oversight h/client/mo + rate vs EUR20/1.5h; falsified -> gtm-v3 scorer work (span-of-control cost) | After trial | trial | gtm-v2 SUMMARY sensitivities |
+| Trial task | not-started | One PAID delegation of a full kitted cycle at client 6-8; preconditions: u5 kit + >=1 clean paid kitted delivery cycle; Jochen = first sourcing candidate; second contractor identified before any pass (two-contractor floor). Parameters plan-set by `../context/monetization-strategy.md` 2026-09-05 | After vetting | u5 | — |
+| Leverage validation milestone | not-started | Pass = oversight <=2.25 h/client/mo (stress-guard x1.5 bound) held over 3 clean cycles, quality client-invisible. 2.25-3.0 = NOT passed: gtm-v3 re-model first, nothing above the solo ceiling unlocks. >=3.0 (2x miss) = fail + gtm-v3 trigger (span-of-control cost) | After trial | trial | gtm-v2 SUMMARY sensitivities; strategy doc u7 section |
 | Delegation SOP | not-started | Per-tier runbook derived from u5 playbooks; contractor-safe (nothing gitignored/operator-head-only) | With trial | u5 | — |
 
 ## Open decisions / gates
