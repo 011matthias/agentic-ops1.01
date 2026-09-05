@@ -17,7 +17,7 @@ the weekly hours ledger. It is a roll-up, not a copy.
 
 | Topic | Canonical source | Note |
 |---|---|---|
-| Strategy verdicts | `docs/optimize/upwork-independence-{gtm-v2,gtm-v2-confirm,leadgen-portfolio,pricing-tiers}/SUMMARY.md` | Dead ends + sensitivities machine-readable via `optimize_overview.py --prior-art upwork-independence` |
+| Strategy verdicts | `docs/optimize/upwork-independence-{gtm-v2,gtm-v2-confirm,leadgen-portfolio,pricing-tiers,portfolio-no-cold}/SUMMARY.md` | Dead ends + sensitivities machine-readable via `optimize_overview.py --prior-art upwork-independence` |
 | Decision assets | `../gtm-plan.json`, `../acquisition-portfolio.json`, `../pricing-tiers.json` | Locked optimize assets; byte-stable outside runs |
 | Two-routes framing | memory `project_upwork_independence_two_routes` | Route 1 local SMB / Route 2 B2B lead-gen; UWG §7 fence |
 | ICP | `../context/icp.md` | Shared prerequisite for u2 (buyer-intent queries), u3 (recipes) |
@@ -34,13 +34,17 @@ the weekly hours ledger. It is a roll-up, not a copy.
 
 ## Cross-model reconciliation (do not re-litigate)
 
-The operative acquisition plan is the **leadgen-portfolio mix** (cold-email
-0.378 volume engine, LinkedIn 0.289, referral 0.154, AEO 0.178, demo-first
-0.0/fill-only). gtm-v2-confirm's +35.62 kEUR referral keep is an artifact of
-the GTM model's missing referral-supply constraint (its own SUMMARY says so);
-u4's ledger probe is the validation, not a channel pivot. Demo-first tension
-(GTM kept 24% local, portfolio dropped it): local is cheap to deliver,
-expensive to win — run as spare-capacity fill / AEO proof only.
+The operative acquisition plan is the **portfolio-no-cold mix** (run
+2026-09-05, after the owner retired cold email: LinkedIn 0.3683, demo-first
+0.2992, AEO 0.1778, referral 0.1547, cold-email 0.0 pinned). The retirement
+is an owner order, priced by the model at ~1,149 kEUR vs the prior
+leadgen-portfolio winner; re-adding the channel is the owner's call, never a
+run's. gtm-v2-confirm's +35.62 kEUR referral keep is an artifact of the GTM
+model's missing referral-supply constraint (its own SUMMARY says so); u4's
+ledger probe is the validation, not a channel pivot. Demo-first is no longer
+fill-only: with cold email gone it takes the freed hours (its ~144 EUR/h
+marginal beats the 33 EUR/h reinvestment), reversing the leadgen-portfolio
+drop verdict under the new constraint regime.
 
 ## Workstreams
 

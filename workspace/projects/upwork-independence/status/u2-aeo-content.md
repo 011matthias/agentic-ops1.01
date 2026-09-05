@@ -22,9 +22,9 @@ The channel with the longest ramp (5 months). Blog publish mechanics live in
 unpauseai-web (`src/content/blog/*.md` auto-discovered by `blog.ts` -> static
 routes). Methodology in-repo (ai-seo skill), instrument built
 (`workspace/projects/ai-visibility/ai_visibility_probe.py`). Starts FIRST among
-the channels; largest slice of the weekly hours while cold email is
-purchase-gated. Model: 0.178 effort, ~200h fixed corpus + ~120h marginal,
-pool 25 (ASSUMPTION), EUR20k/client.
+the channels; keeps a large slice of the weekly hours outright now that cold
+email is retired (owner order 2026-09-05). Model: 0.1778 effort, ~200h fixed
+corpus + ~120h marginal, pool 25 (ASSUMPTION), EUR20k/client.
 
 ## Elements
 

@@ -10,17 +10,9 @@ notes: >
   assets and stay byte-stable outside optimize runs.
 
 accounts:
-  sending_domains:      # 2-3 secondaries; unpauseai.com NEVER cold-sends
-    status: absent
-  mailboxes:
-    status: absent
-  esp_instantly:
-    status: absent
-    note: Meji's Instantly/Apollo are client property, off-limits
-  list_apollo:
-    status: absent
-  verify_neverbounce:
-    status: absent
+  # Cold-email account rows (sending domains, mailboxes, Instantly, Apollo,
+  # verification) removed 2026-09-05: channel retired by owner order, never
+  # purchased. Client accounts (Meji's Instantly/Apollo) stay off-limits.
   linkedin_sales_nav_seat:
     status: absent
     detail: status/u3-linkedin-outbound.md
