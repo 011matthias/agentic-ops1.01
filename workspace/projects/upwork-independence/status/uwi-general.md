@@ -17,20 +17,39 @@ the weekly hours ledger. It is a roll-up, not a copy.
 
 | Topic | Canonical source | Note |
 |---|---|---|
-| Strategy verdicts | `docs/optimize/upwork-independence-{gtm-v2,gtm-v2-confirm,leadgen-portfolio,pricing-tiers,portfolio-no-cold}/SUMMARY.md` | Dead ends + sensitivities machine-readable via `optimize_overview.py --prior-art upwork-independence` |
+| Committed strategy | `../context/monetization-strategy.md` | Floor, sequencing, decoupling math, u7 milestone parameters; owner rulings 2026-09-05 |
+| Strategy verdicts | `docs/optimize/upwork-independence-{gtm-v1,gtm-v2,gtm-v2-confirm,leadgen-portfolio,pricing-tiers,portfolio-no-cold}/SUMMARY.md` | Dead ends + sensitivities machine-readable via `optimize_overview.py --prior-art upwork-independence` |
 | Decision assets | `../gtm-plan.json`, `../acquisition-portfolio.json`, `../pricing-tiers.json` | Locked optimize assets; byte-stable outside runs |
 | Two-routes framing | memory `project_upwork_independence_two_routes` | Route 1 local SMB / Route 2 B2B lead-gen; UWG §7 fence |
 | ICP | `../context/icp.md` | Shared prerequisite for u2 (buyer-intent queries), u3 (recipes) |
 | Accounts roster | `../infrastructure.yaml` | absent -> live as purchased |
 
-## Decisions taken (owner, 2026-07-22)
+## Decisions taken (owner)
 
-1. **Purchases: plan-only.** u1 stops at a ready-to-purchase checklist; every
-   purchase needs its own explicit approval.
-2. **Capacity: ~14 h/wk from day one** (the model's acquisition budget). Owner
-   decides which client load gives way; the ledger below measures actuals.
-3. **Referral: ledger + offer definition only.** No outbound drafts until a
-   separate go.
+1. **Purchases: plan-only** (2026-07-22). u1 stops at a ready-to-purchase
+   checklist; every purchase needs its own explicit approval.
+2. **Capacity: ~14 h/wk from day one** (2026-07-22; the model's acquisition
+   budget). Owner decides which client load gives way; the ledger below
+   measures actuals. Planning basis since 2026-09-05: 5-7 h/wk with a
+   send-gated ramp toward 14 (see the committed strategy); 14 stands as the
+   destination.
+3. **Referral: ledger + offer definition only** (2026-07-22). No outbound
+   drafts until a separate go.
+4. **Warm retainer conversion is OFF the table** (2026-07-28; re-landed here
+   2026-09-05, previously recorded only in memory + an unmerged sweep
+   commit). Brisken/Jochen are special agreements, Meji is hour-capped; new
+   income runs through NEW clients only. Rate/cap terms INSIDE an existing
+   hourly agreement are not fenced by this order.
+5. **Committed strategy adopted** (2026-09-05, `../context/monetization-strategy.md`).
+   Fork rulings: income floor EUR2,000 gross/mo by Nov 30; Meji = asset
+   reading (kit + case-study raw material + instrument; its revenue never
+   counts toward growth bands); defense-first concentration weeks 1-12 with
+   exit trigger, settled mix retained as destination.
+6. **Purchases approved per-item** (2026-09-05): Sales Nav seat ~EUR25/mo
+   (spend starts at rebalance), AEO probe key, postal + card printing
+   ~EUR20-40/mo. One polite-firm bonus re-raise to Gurmej approved (lifts
+   do-not-chase once, sequenced after ask-1's reply). Everything else stays
+   per-item.
 
 ## Cross-model reconciliation (do not re-litigate)
 
