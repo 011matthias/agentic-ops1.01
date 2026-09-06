@@ -156,3 +156,7 @@ workspace/clients/Jochen Projekt/
 # optimize-loop run state + per-run scorer logs (rule_optimize_loop.md)
 /.claude/optimize/
 docs/optimize/*/logs/
+
+# Vinted watcher: accumulated market DB + session state (machine-local), ntfy topic
+workspace/projects/vinted-reselling/data/
+workspace/projects/vinted-reselling/context/.env
