@@ -321,6 +321,16 @@ class RunStore:
                 updated_at  TEXT,
                 PRIMARY KEY (run_id, document_id)
             );
+            CREATE TABLE IF NOT EXISTS receipt_claims (
+                receipt_run_id    TEXT NOT NULL,
+                document_id       TEXT NOT NULL,
+                claimed_by_run_id TEXT NOT NULL,
+                transaction_id    TEXT NOT NULL,
+                claimed_at        TEXT NOT NULL,
+                PRIMARY KEY (receipt_run_id, document_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_receipt_claims_by_run
+                ON receipt_claims (claimed_by_run_id);
             CREATE TABLE IF NOT EXISTS login_failures (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ip TEXT NOT NULL,
@@ -480,6 +490,15 @@ class RunStore:
         resolves."""
         cur = self.conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
         self.conn.execute("DELETE FROM decisions WHERE run_id = ?", (run_id,))
+        # R4 (item 38): both claim directions go with the run. Claims BY it
+        # release every receipt its matches settled (a trip's receipts become
+        # matchable again when the month that consumed them is deleted);
+        # claims ON its receipts point at documents that no longer exist.
+        self.conn.execute(
+            "DELETE FROM receipt_claims "
+            "WHERE receipt_run_id = ? OR claimed_by_run_id = ?",
+            (run_id, run_id),
+        )
         self.conn.execute(
             "DELETE FROM category_overrides WHERE run_id = ?", (run_id,)
         )
@@ -1029,6 +1048,143 @@ class RunStore:
             (run_id, group_id, resolution, updated_at),
         )
         self.conn.commit()
+
+    # -- receipt claims (R4, backlog item 38) ------------------------------
+    # The cross-run settlement registry: one row says "the receipt
+    # (receipt_run_id, document_id) is settled against charge transaction_id
+    # in run claimed_by_run_id". The PRIMARY KEY is the global invariant --
+    # a receipt can never settle two charges across two batches, the
+    # cross-run shape of `rematch_month`'s never-drop rule. Within one run
+    # the matcher's own per-call assignment already guarantees it.
+    # An empty table (every database before this round) makes the invariant
+    # vacuously true for history.
+
+    def get_claims_on_receipts(self, receipt_run_id: str) -> dict[str, dict]:
+        """document_id -> claim for every claimed receipt LIVING in a run.
+        The advisory read at match time and the commit-time re-check both
+        filter this on `claimed_by_run_id != run_id`: a run's own claims
+        never exclude its own receipts from its own re-match."""
+        rows = self.conn.execute(
+            "SELECT document_id, claimed_by_run_id, transaction_id, "
+            "claimed_at FROM receipt_claims WHERE receipt_run_id = ?",
+            (receipt_run_id,),
+        ).fetchall()
+        return {
+            r["document_id"]: {
+                "claimed_by_run_id": r["claimed_by_run_id"],
+                "transaction_id": r["transaction_id"],
+                "claimed_at": r["claimed_at"],
+            }
+            for r in rows
+        }
+
+    def get_claims_by_run(self, claimed_by_run_id: str) -> list[dict]:
+        """Every claim a run's matches HOLD, oldest-insert order."""
+        rows = self.conn.execute(
+            "SELECT receipt_run_id, document_id, transaction_id, claimed_at "
+            "FROM receipt_claims WHERE claimed_by_run_id = ? "
+            "ORDER BY receipt_run_id, document_id",
+            (claimed_by_run_id,),
+        ).fetchall()
+        return [
+            {
+                "receipt_run_id": r["receipt_run_id"],
+                "document_id": r["document_id"],
+                "transaction_id": r["transaction_id"],
+                "claimed_at": r["claimed_at"],
+            }
+            for r in rows
+        ]
+
+    def upsert_receipt_claim(
+        self,
+        receipt_run_id: str,
+        document_id: str,
+        claimed_by_run_id: str,
+        transaction_id: str,
+        claimed_at: str,
+    ) -> bool:
+        """Claim one receipt for one charge. Returns False -- and writes
+        nothing -- when another run already holds the receipt: a cross-run
+        steal is never silent, the caller surfaces it. The same run
+        re-claiming (a re-pick onto a different charge) updates in place."""
+        cur = self.conn.execute(
+            "UPDATE receipt_claims SET transaction_id = ?, claimed_at = ? "
+            "WHERE receipt_run_id = ? AND document_id = ? "
+            "AND claimed_by_run_id = ?",
+            (transaction_id, claimed_at, receipt_run_id, document_id,
+             claimed_by_run_id),
+        )
+        if cur.rowcount > 0:
+            self.conn.commit()
+            return True
+        try:
+            self.conn.execute(
+                "INSERT INTO receipt_claims (receipt_run_id, document_id, "
+                "claimed_by_run_id, transaction_id, claimed_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (receipt_run_id, document_id, claimed_by_run_id,
+                 transaction_id, claimed_at),
+            )
+        except sqlite3.IntegrityError:
+            # Raced or standing claim by another run: the PRIMARY KEY held.
+            self.conn.commit()
+            return False
+        self.conn.commit()
+        return True
+
+    def delete_claims_for_tx(
+        self, claimed_by_run_id: str, transaction_id: str
+    ) -> None:
+        """Release whatever receipt a charge's settlement holds (the
+        reviewer rejected the match, or re-picked another receipt)."""
+        self.conn.execute(
+            "DELETE FROM receipt_claims "
+            "WHERE claimed_by_run_id = ? AND transaction_id = ?",
+            (claimed_by_run_id, transaction_id),
+        )
+        self.conn.commit()
+
+    def delete_claims_for_receipt(
+        self, receipt_run_id: str, document_id: str
+    ) -> None:
+        """Drop any claim on one receipt (the receipt itself was deleted)."""
+        self.conn.execute(
+            "DELETE FROM receipt_claims "
+            "WHERE receipt_run_id = ? AND document_id = ?",
+            (receipt_run_id, document_id),
+        )
+        self.conn.commit()
+
+    def replace_claims_by_run(
+        self,
+        claimed_by_run_id: str,
+        claims: list[tuple[str, str, str]],
+        claimed_at: str,
+    ) -> list[tuple[str, str, str]]:
+        """Set a run's held claims to exactly `claims`
+        ((receipt_run_id, document_id, transaction_id) triples) and return
+        the ones REFUSED because another run holds the receipt. Called at
+        `rematch_month` commit under the batch writer lock; a non-empty
+        return is the race the commit-time re-check downgrades on."""
+        self.conn.execute(
+            "DELETE FROM receipt_claims WHERE claimed_by_run_id = ?",
+            (claimed_by_run_id,),
+        )
+        conflicts: list[tuple[str, str, str]] = []
+        for receipt_run_id, document_id, transaction_id in claims:
+            try:
+                self.conn.execute(
+                    "INSERT INTO receipt_claims (receipt_run_id, "
+                    "document_id, claimed_by_run_id, transaction_id, "
+                    "claimed_at) VALUES (?, ?, ?, ?, ?)",
+                    (receipt_run_id, document_id, claimed_by_run_id,
+                     transaction_id, claimed_at),
+                )
+            except sqlite3.IntegrityError:
+                conflicts.append((receipt_run_id, document_id, transaction_id))
+        self.conn.commit()
+        return conflicts
 
     def set_settings(self, patch: dict, updated_at: str) -> dict:
         """Merge `patch` into the stored settings (shallow) and return the

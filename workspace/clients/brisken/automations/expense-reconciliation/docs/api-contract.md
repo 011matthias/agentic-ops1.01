@@ -725,6 +725,35 @@ statement is attached), the same dispatch `GET /api/runs/{id}` uses. It
 previously always replied with the workbench's, so a grid header rendering
 `n_expenses` went blank on the reply to its own click.
 
+## Cross-batch settlement: `settled_by` (added 2026-09-06, R4 / item 38)
+
+A receipt must never settle two charges across two batches. The arbiter is
+the `receipt_claims` table in the run store: one row per SETTLED receipt,
+keyed `(receipt_run_id, document_id)`, naming the run and charge that
+consumed it. `rematch_month` excludes receipts another run has settled from
+the candidate pool before matching, re-checks fresh claims inside the commit
+lock (a pairing whose receipt was claimed while the match ran is downgraded
+to unmatched, never committed), and records its own settlements on commit.
+Reviewer verdicts keep the table current: a reject releases the claim, an
+explicit pick moves it, and a pick that would steal another run's receipt is
+refused with **409** on `POST .../decisions` and `POST .../manual-match`
+(bulk endpoints skip the row instead; it lands in `skipped`).
+
+On the run payload, the settled receipt is named where it rests:
+
+| Path | Element key | Shape |
+|---|---|---|
+| `unmatched_receipts[]` · `assignable_receipts[]` | `settled_by` | object `{run_id, label, transaction_id}` |
+
+`settled_by` is ABSENT (not null) on every receipt no other run has settled,
+so a month with no cross-batch settlements renders byte-identically to
+before the field existed. When present, `label` is the settling run's label
+(its `run_id` when the run is gone), and the receipt counts as unmatched in
+THIS run because it is settled elsewhere. Today no production path puts one
+run's receipt in another run's pool, so the field never appears; the
+trip-spanning match pool (R4b) is what makes it real. Render defensively per
+rule 3.
+
 ## The cards a month actually charges: `seen_undefined` (added 2026-08-28)
 
 `GET /api/cards` composed the settings registry plus the shipped presets,

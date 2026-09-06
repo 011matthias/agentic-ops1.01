@@ -134,6 +134,7 @@ from .service import (
     reset_memory,
     restore_set_aside_file,
     run_mode,
+    sync_claim_for_decision,
     trip_view,
     validate_expense_field,
     validate_manual_match,
@@ -1561,6 +1562,29 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             settings=settings, decisions=decisions, trip=trip,
         )
 
+    def _settled_elsewhere(store: RunStore, run_id: str) -> dict[str, dict]:
+        """R4 (item 38): document_id -> {run_id, label, transaction_id} for
+        receipts in this run's pool that another run's charge settled.
+        Empty for every month with no cross-batch settlements, and
+        `build_view` then adds nothing."""
+        out: dict[str, dict] = {}
+        label_cache: dict[str, str] = {}
+        for doc, c in store.get_claims_on_receipts(run_id).items():
+            holder = c["claimed_by_run_id"]
+            if holder == run_id:
+                continue
+            if holder not in label_cache:
+                other = store.get_run(holder)
+                label_cache[holder] = (
+                    (other.label or other.run_id) if other else holder
+                )
+            out[doc] = {
+                "run_id": holder,
+                "label": label_cache[holder],
+                "transaction_id": c["transaction_id"],
+            }
+        return out
+
     @app.get("/api/runs/{run_id}")
     def api_workbench(run_id: str):
         """The review render model for the SPA: `build_view` (transaction
@@ -1581,7 +1605,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
             resolutions = store.get_duplicate_resolutions(run_id)
-        view = build_view(run, decisions, overrides, resolutions)
+            settled_elsewhere = _settled_elsewhere(store, run_id)
+        view = build_view(
+            run, decisions, overrides, resolutions,
+            settled_elsewhere=settled_elsewhere,
+        )
         # build_view already carries run_id, label, summary, rows,
         # unmatched_*, duplicate_groups, category_options: return it as the
         # SPA render model.
@@ -1599,6 +1627,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
+            # R4 (item 38): the claim sync runs FIRST -- a verdict that
+            # would let this receipt settle a second charge in another
+            # batch is refused whole, decision unwritten.
+            conflict = sync_claim_for_decision(
+                store, run, tx_id, status, chosen, _now_iso()
+            )
+            if conflict is not None:
+                return JSONResponse({"error": conflict}, status_code=409)
             store.set_decision(run_id, tx_id, status, chosen, _now_iso())
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
@@ -2021,15 +2057,24 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             decisions = store.get_decisions(run_id)
             pairs = matched_autopick_decisions(run, decisions)
+            confirmed = 0
             for tx_id, doc_id in pairs:
+                # R4: a pair whose receipt another run settled meanwhile is
+                # skipped, not confirmed onto a receipt this month no
+                # longer holds; the next re-match re-sorts the row.
+                if sync_claim_for_decision(
+                    store, run, tx_id, STATUS_CONFIRMED, doc_id, _now_iso()
+                ) is not None:
+                    continue
                 store.set_decision(
                     run_id, tx_id, STATUS_CONFIRMED, doc_id, _now_iso()
                 )
+                confirmed += 1
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
         view = build_view(run, decisions, overrides)
         return JSONResponse(
-            {"ok": True, "confirmed": len(pairs), "summary": view["summary"]}
+            {"ok": True, "confirmed": confirmed, "summary": view["summary"]}
         )
 
     @app.post("/api/runs/{run_id}/decisions/confirm-ready")
@@ -2054,16 +2099,24 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if len(pairs) > _BULK_DECISION_LIMIT:
                 remaining = len(pairs) - _BULK_DECISION_LIMIT
                 pairs = pairs[:_BULK_DECISION_LIMIT]
+            confirmed = 0
             for tx_id, doc_id in pairs:
+                # R4: skip a pair whose receipt another run settled
+                # meanwhile (see confirm-matched).
+                if sync_claim_for_decision(
+                    store, run, tx_id, STATUS_CONFIRMED, doc_id, _now_iso()
+                ) is not None:
+                    continue
                 store.set_decision(
                     run_id, tx_id, STATUS_CONFIRMED, doc_id, _now_iso()
                 )
+                confirmed += 1
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
         view = build_view(run, decisions, overrides)
         return JSONResponse({
             "ok": True,
-            "confirmed": len(pairs),
+            "confirmed": confirmed,
             "remaining": remaining,
             "summary": view["summary"],
         })
@@ -2103,18 +2156,27 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             decisions = store.get_decisions(run_id)
             writes = bulk_decisions(run, decisions, tx_ids, status)
+            updated = 0
             for tx_id, doc_id in writes:
+                # R4: a write whose receipt another run settled meanwhile
+                # is skipped, and lands in `skipped` below.
+                if sync_claim_for_decision(
+                    store, run, tx_id, status, doc_id, _now_iso()
+                ) is not None:
+                    continue
                 store.set_decision(run_id, tx_id, status, doc_id, _now_iso())
+                updated += 1
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
             resolutions = store.get_duplicate_resolutions(run_id)
         view = build_view(run, decisions, overrides, resolutions)
         # `skipped` is the honest half of the count: rows already decided,
-        # or (when confirming) rows with no candidate to confirm against.
+        # (when confirming) rows with no candidate to confirm against, or
+        # rows whose receipt another batch settled first.
         return JSONResponse({
             "ok": True,
-            "updated": len(writes),
-            "skipped": len(tx_ids) - len(writes),
+            "updated": updated,
+            "skipped": len(tx_ids) - updated,
             "summary": view["summary"],
         })
 
@@ -2153,6 +2215,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             err = validate_manual_match(run, tx_id, document_id)
             if err:
                 return JSONResponse({"error": err}, status_code=400)
+            # R4: an in-run steal is fine (apply_decisions frees the other
+            # charge); a CROSS-run steal is refused -- the receipt already
+            # settles a charge in another batch.
+            conflict = sync_claim_for_decision(
+                store, run, tx_id, STATUS_CONFIRMED, document_id, _now_iso()
+            )
+            if conflict is not None:
+                return JSONResponse({"error": conflict}, status_code=409)
             store.set_decision(
                 run_id, tx_id, STATUS_CONFIRMED, document_id, _now_iso()
             )
@@ -3119,6 +3189,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if document_id not in known:
                 return JSONResponse({"error": "unknown expense"}, status_code=404)
             store.set_expense_edit(run_id, document_id, "delete", None, _now_iso())
+            # R4: a deleted expense settles nothing any more -- whichever
+            # run's charge claimed this receipt releases it.
+            store.delete_claims_for_receipt(run_id, document_id)
             view = _expense_view(store, run)
         return JSONResponse({"ok": True, "summary": view["summary"]})
 
