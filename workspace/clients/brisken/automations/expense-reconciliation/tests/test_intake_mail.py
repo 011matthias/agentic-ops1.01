@@ -1520,12 +1520,12 @@ def _stranded_mail(client, monkeypatch, subject="stranded mail"):
 
 def test_re_ingest_puts_stranded_attachments_into_the_open_month(client, monkeypatch):
     """The owner-approved fix: an explicit per-archive action that re-ingests
-    the delivered attachments into the month that is open now. Replay cannot
-    do it (it skips `ingested`), so before this the receipts were unreachable
-    from the app even though the bytes were never deleted."""
+    the delivered attachments into the month that is open now. Replay's
+    replayed count still skips `ingested`; since item 39 its RE-POOL sweep
+    reaches a stampable stranded archive instead, so this test exercises
+    the direct path an operator takes WITHOUT clicking the sweep first
+    (and the path that remains for archives the sweep cannot stamp)."""
     archive = _stranded_mail(client, monkeypatch)
-    # Nothing to replay: this is the gap.
-    assert client.post("/api/inbound/replay-held").json()["replayed"] == 0
 
     new_batch = _create_batch(client, monkeypatch)
     _patch_ocr(monkeypatch, _extraction(vendor="Trenitalia"))
@@ -2729,3 +2729,507 @@ def test_a_dismissed_mail_is_not_dragged_back_by_a_deleted_month():
     assert rows[1]["status_kind"] == "held"
     assert rows[1]["status_label"] == "The month it was added to was deleted"
 
+
+
+# ------------------------------------- auto-materialization (item 39) ----
+# Owner directive 2026-09-06: mailed receipts become expenses on their own,
+# creating their month batch when the printed month is confidently known.
+# Rollout protocol (binding): ensure-month lives ONLY in route_archived's
+# no-open-batch branch, gated on receipt_month_source == "receipt", the
+# plausibility clamps, and EXPENSE_RECON_AUTO_MATERIALIZE (default OFF).
+# claim_pooled stays create-free; the existing pool backfills only on the
+# explicit operator trigger (materialize: true on replay-held).
+
+
+def _flag_on(monkeypatch):
+    monkeypatch.setenv("EXPENSE_RECON_AUTO_MATERIALIZE", "1")
+
+
+def _runs(client) -> list[dict]:
+    return client.get("/api/expense-batches").json()["batches"]
+
+
+def test_flag_off_receipt_mail_pools_and_creates_nothing(client, monkeypatch):
+    """T1: with the flag unset (the default), a confidently-stamped mail
+    whose month has no batch POOLS, exactly as before item 39. Deploying
+    flag-off must be inert; this is the pin the staged flip's step-3
+    verification leans on."""
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction())
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", attachments=[("r.jpg", JPG)]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_POOLED
+    assert res["pool_month"] == RECEIPT_MONTH
+    assert res["receipt_month_source"] == "receipt"
+    assert _runs(client) == []  # nothing materialized
+
+
+def test_flag_on_receipt_mail_materializes_its_month(client, monkeypatch):
+    """T2: the whole arrival half. A pooled-bound mail creates its month,
+    the label round-trips month_from_label (which is what makes the batch
+    claimable), the origin marker reads "intake", provenance reaches the
+    grid, the ack and the log row say "filed into", and the new month
+    drains its already-waiting pool mail."""
+    from expense_recon.batch_period import month_from_label
+    from expense_recon.web.intake_mail import _ym
+
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+
+    # An older mail pooled before the flag existed.
+    _patch_ocr(monkeypatch, _extraction(vendor="Older"))
+    older = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", subject="older taxi",
+              attachments=[("old.jpg", JPG + b"old")]),
+        synchronous=True,
+    )
+    assert older["status"] == STATUS_POOLED
+
+    _flag_on(monkeypatch)
+    # Budget: arrival read + create-execute read (the materializing mail),
+    # then the claim ingest of the older pooled mail.
+    _patch_ocr(monkeypatch, _extraction(vendor="Newer"),
+               _extraction(vendor="Newer"), _extraction(vendor="Older"))
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", subject="newer taxi",
+              attachments=[("new.jpg", JPG + b"new")]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_INGESTED
+    assert res["materialized"] is True
+    assert res["pool_month"] == RECEIPT_MONTH
+    # The ingested outcome keeps its job_id invariant (a done job row is
+    # written for the create): the not-a-duplicate endpoint returns this
+    # same dict, and an SPA polling /jobs/{id} must read a real done job.
+    job = client.get(f"/jobs/{res['job_id']}").json()
+    assert job["status"] == "done"
+    assert job["run_id"] == res["batch_id"]
+
+    batches = _runs(client)
+    assert len(batches) == 1
+    assert batches[0]["label"] == MONTH_LABEL
+    # The round-trip that makes the month claimable.
+    assert month_from_label(batches[0]["label"]) == _ym(RECEIPT_MONTH)
+    assert batches[0]["created_by"] == "intake"
+
+    view = client.get(f"/api/expense-batches/{batches[0]['batch_id']}").json()
+    assert view["summary"]["created_by"] == "intake"
+    # Both mails' receipts are in the month: the creator's, and the older
+    # pooled one the new month claimed on its way in.
+    assert view["summary"]["n_expenses"] == 2
+    submitted = {
+        e["submitted_by"]["address"]
+        for e in view["expenses"] if e.get("submitted_by")
+    }
+    assert submitted == {"dirk.neumann@brisken.com"}
+
+    # The ack states a finished fact, not a wait.
+    ack_bodies = [c[2] for c in calls]
+    assert any(f"filed into {MONTH_LABEL}" in b for b in ack_bodies)
+    assert not any("will join that month" in b for b in ack_bodies[1:])
+
+    # The log row carries the origin and the composed label (rule 5: no
+    # new STATUS_* constant, the label pair carries the new meaning).
+    log = client.get("/api/inbound/log").json()
+    row = next(e for e in log["entries"] if e["archive"] == res["archive"])
+    assert row["materialized"] is True
+    assert row["status_label"] == f"Filed into {MONTH_LABEL}"
+    assert row["status_kind"] == "done"
+
+    # A third same-month mail takes the NORMAL open-batch path: one month,
+    # no second batch, no materialized marker.
+    _patch_ocr(monkeypatch, _extraction(vendor="Third"),
+               _extraction(vendor="Third"))
+    res3 = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", subject="third taxi",
+              attachments=[("third.jpg", JPG + b"3rd")]),
+        synchronous=True,
+    )
+    assert res3["status"] == STATUS_INGESTED
+    assert "materialized" not in res3
+    assert len(_runs(client)) == 1
+
+
+def test_flag_on_implausible_date_still_pools(client, monkeypatch):
+    """T3: the plausibility clamp gates creation. A wrong-year read (item
+    25's live failure mode: 11 of 36 April readings) must never create a
+    2023 batch — the clamp turns it into "implausible-receipt", which
+    pools under the arrival month and creates nothing."""
+    _flag_on(monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(date="2020-01-15"))
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", attachments=[("r.jpg", JPG)]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_POOLED
+    assert res["receipt_month_source"] == "implausible-receipt"
+    assert res["pool_month"] == ARRIVAL_MONTH
+    assert _runs(client) == []
+
+
+def test_claim_pooled_stays_create_free(client, monkeypatch):
+    """T4: the widen-the-sweep pin. claim_pooled fires at deploy, boot,
+    batch create/rename and on replay — if it ever grew an ensure-month,
+    a restart would backfill months unattended. It must leave a pooled
+    mail resting and create nothing, flag on or off."""
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction())
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", attachments=[("r.jpg", JPG)]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_POOLED
+    _flag_on(monkeypatch)
+    out = claim_pooled(state.db_path, state.learning_db_path,
+                       state.data_root)
+    assert out["claimed"] == 0
+    assert out["still_pooled"] == 1
+    assert _runs(client) == []  # the pool waits; only arrivals create
+
+
+def test_create_refusal_pools_the_mail(client, monkeypatch):
+    """T5: create-with-receipt keeps the empty-batch refusal as its floor.
+    When `create_expense_batch` refuses (no readable receipt file), the
+    mail goes to the POOL — the truthful resting place the operator
+    backfill retries — never to a held status, and no month exists."""
+    from expense_recon.web import intake_mail as im
+    from expense_recon.web.service import RunInputError
+
+    _flag_on(monkeypatch)
+    state = client.app.state
+
+    def _refuse(*a, **kw):
+        raise RunInputError("No readable receipt files uploaded.")
+
+    monkeypatch.setattr(im, "create_expense_batch", _refuse)
+    _patch_ocr(monkeypatch, _extraction())
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", attachments=[("r.jpg", JPG)]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_POOLED
+    assert _runs(client) == []
+
+
+def test_backfill_materializes_confident_months_only(client, monkeypatch):
+    """T6: the explicit operator backfill. materialize:true creates a
+    month per confidently-stamped pooled mail group and the claim drains
+    the rest; an arrival-stamped mail keeps resting. Stamping is
+    vision-free — the sweep trusts the stamps it has."""
+    from expense_recon.web import intake_mail as im
+
+    state = client.app.state
+    # Two same-month mails and one dateless mail, all pooled under
+    # flag-off.
+    _patch_ocr(monkeypatch, _extraction(vendor="J1"))
+    j1 = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", subject="j1",
+              attachments=[("j1.jpg", JPG + b"j1")]),
+        synchronous=True,
+    )
+    _patch_ocr(monkeypatch, _extraction(vendor="J2"))
+    j2 = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", subject="j2",
+              attachments=[("j2.jpg", JPG + b"j2")]),
+        synchronous=True,
+    )
+    _patch_ocr(monkeypatch)  # empty queue -> dateless -> arrival month
+    x = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", subject="x",
+              attachments=[("x.jpg", JPG + b"x")]),
+        synchronous=True,
+    )
+    for r in (j1, j2, x):
+        assert r["status"] == STATUS_POOLED
+    assert x["receipt_month_source"] == "arrival"
+
+    _flag_on(monkeypatch)
+
+    def _no_restamp(*a, **kw):
+        raise AssertionError("backfill must trust stamps, not re-read")
+
+    monkeypatch.setattr(im, "_month_stamps", _no_restamp)
+    # Budget: J1's create-execute read + J2's claim ingest. Nothing else
+    # may extract.
+    _patch_ocr(monkeypatch, _extraction(vendor="J1"), _extraction(vendor="J2"))
+    resp = client.post("/api/inbound/replay-held", json={"materialize": True})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["materialized_months"] == [MONTH_LABEL]
+    assert body["materialize_failed"] == 0
+    assert body["claimed"] == 1       # J2, drained by the claim that follows
+    assert body["still_pooled"] == 1  # the arrival-stamped mail rests
+    assert body["re_pooled"] == 0     # no stranded archives here
+
+    batches = _runs(client)
+    assert len(batches) == 1
+    assert batches[0]["label"] == MONTH_LABEL
+    assert batches[0]["created_by"] == "intake"
+    view = client.get(f"/api/expense-batches/{batches[0]['batch_id']}").json()
+    assert view["summary"]["n_expenses"] == 2
+
+
+def test_backfill_refused_without_the_flag(client, monkeypatch):
+    """T7: flipping the flag off returns the WHOLE tool to today's
+    behavior — even the explicit backfill refuses, naming the flag."""
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction())
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", attachments=[("r.jpg", JPG)]),
+        synchronous=True,
+    )
+    resp = client.post("/api/inbound/replay-held", json={"materialize": True})
+    assert resp.status_code == 409
+    assert "EXPENSE_RECON_AUTO_MATERIALIZE" in resp.json()["error"]
+    assert _runs(client) == []
+    # A plain replay-held (no materialize) still works untouched.
+    resp = client.post("/api/inbound/replay-held")
+    assert resp.status_code == 200
+
+
+def test_stranded_archives_re_pool_and_rest(client, monkeypatch):
+    """T8: the re-pool sweep. Legacy batch_deleted archives (no month
+    stamp — the delete cascade could only stamp, not pool them) get
+    lazily month-stamped by replay-held and returned to the POOL, where
+    they REST: with their month deleted nothing claims them, and
+    materializing stays the operator's explicit call. A dismissed archive
+    stays dismissed; a partless one stays legacy."""
+    from expense_recon.web.intake_mail import _update_meta, inbound_root
+
+    state = client.app.state
+    batch_id = _create_batch(client, monkeypatch, MONTH_LABEL)
+
+    def _route_one(tag: bytes, subject: str):
+        _patch_ocr(monkeypatch, _extraction(), _extraction())
+        res = process_message(
+            state.db_path, state.learning_db_path, state.data_root,
+            _mail("dirk.neumann@brisken.com", subject=subject,
+                  attachments=[(f"{subject}.jpg", JPG + tag)]),
+            synchronous=True,
+        )
+        assert res["status"] == STATUS_INGESTED
+        return res["archive"]
+
+    m_arch = _route_one(b"m", "m")
+    n_arch = _route_one(b"n", "n")
+    p_arch = _route_one(b"p", "p")
+
+    # Simulate the pre-stamp legacy state the live strandeds are in.
+    root = inbound_root(state.data_root)
+    for arch in (m_arch, n_arch, p_arch):
+        meta_path = root / arch / "meta.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        for key in ("receipt_month", "receipt_month_source", "receipt_dates",
+                    "mixed_months"):
+            meta.pop(key, None)
+        meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    # Deleting the month now takes the LEGACY branch: stamp, no pooling.
+    resp = client.post(f"/api/runs/{batch_id}/delete",
+                       json={"confirm": MONTH_LABEL})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["pooled_back"] == 0
+
+    # N was dismissed by an operator; P's files are gone (unstampable).
+    _update_meta(root / n_arch, {"status": STATUS_DISMISSED})
+    import shutil as _sh
+    _sh.rmtree(root / p_arch / "parts")
+
+    def _metas():
+        return {
+            arch: json.loads((root / arch / "meta.json").read_text(
+                encoding="utf-8"))
+            for arch in (m_arch, n_arch, p_arch)
+        }
+
+    # A PLAIN retry click never touches the strandeds: no vision spent,
+    # no archive migrated, no `re_pooled` in the body — a flag-off deploy
+    # stays inert and the item-19 re-ingest path keeps its mail.
+    resp = client.post("/api/inbound/replay-held")
+    assert resp.status_code == 200, resp.text
+    assert "re_pooled" not in resp.json()
+    before = _metas()
+    assert before[m_arch]["status"] == STATUS_INGESTED
+    assert before[m_arch]["batch_deleted"] is True
+
+    # The sweep runs only on the explicit materialize call, LAST — so M
+    # is re-pooled but NOT minted in the same call, and its lazy stamp is
+    # one arrival read.
+    _flag_on(monkeypatch)
+    _patch_ocr(monkeypatch, _extraction(vendor="M"))
+    resp = client.post("/api/inbound/replay-held", json={"materialize": True})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["re_pooled"] == 1
+    assert body["materialized_months"] == []  # rests this round-trip
+
+    metas = _metas()
+    assert metas[m_arch]["status"] == STATUS_POOLED
+    assert metas[m_arch]["receipt_month"] == RECEIPT_MONTH
+    assert metas[m_arch]["batch_deleted"] is False
+    assert metas[m_arch]["job_id"] == ""  # no stamp from a previous life
+    assert metas[n_arch]["status"] == STATUS_DISMISSED
+    assert metas[n_arch]["batch_deleted"] is True
+    assert metas[p_arch]["status"] == STATUS_INGESTED
+    assert metas[p_arch]["batch_deleted"] is True
+    # Re-pooled mail RESTS: the month is deleted, nothing claims it, and
+    # no batch came back on its own.
+    assert _runs(client) == []
+
+    # The NEXT explicit call is what mints its month — the full recovery
+    # arc for a stranded receipt, operator-explicit at every step.
+    _patch_ocr(monkeypatch, _extraction(vendor="M2"))
+    resp = client.post("/api/inbound/replay-held", json={"materialize": True})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["materialized_months"] == [MONTH_LABEL]
+    batches = _runs(client)
+    assert len(batches) == 1
+    assert batches[0]["created_by"] == "intake"
+    assert _metas()[m_arch]["status"] == STATUS_INGESTED
+
+
+def test_rollback_delete_returns_materialized_mail_to_the_pool(
+    client, monkeypatch,
+):
+    """T9, the rollback story the flip protocol leans on: deleting a
+    materialized month returns its mail to the pool WITHOUT the
+    materialized stamp — a later normal claim into an operator-created
+    month must not read "Filed into" about a mail an operator filed."""
+    _flag_on(monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(), _extraction())
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", attachments=[("r.jpg", JPG)]),
+        synchronous=True,
+    )
+    assert res["materialized"] is True
+
+    resp = client.post(f"/api/runs/{res['batch_id']}/delete",
+                       json={"confirm": MONTH_LABEL})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["pooled_back"] == 1
+
+    log = client.get("/api/inbound/log").json()
+    row = next(e for e in log["entries"] if e["archive"] == res["archive"])
+    assert row["status"] == STATUS_POOLED
+    assert "materialized" not in row  # cleared on rollback
+    assert row["status_label"] == f"Waiting for {MONTH_LABEL}"
+    assert _runs(client) == []  # flag stays on; nothing re-creates on its own
+    # No stamp from the previous life survives the trip back: a stale done
+    # job_id would make the boot sweep read a later mid-claim death as
+    # finished and strand the mail in `claiming`.
+    from expense_recon.web.intake_mail import _read_meta, inbound_root
+    meta = _read_meta(inbound_root(state.data_root) / res["archive"])
+    assert meta["job_id"] == ""
+
+
+def test_a_strangers_mail_never_materializes_a_month(client, monkeypatch):
+    """T10 (adversarial review): the mailbox takes mail from ANYONE, so
+    the arrival half is gated on known senders — the same reason
+    auto-render is. Letting a stranger's dated PDF decide when months
+    exist (and when the pool drains into them) would hand an outsider the
+    operator's call. A stranger's mail pools exactly as before; the
+    explicit backfill files it."""
+    _flag_on(monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction())
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail(OUTSIDE, attachments=[("r.jpg", JPG)]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_POOLED
+    assert res["receipt_month_source"] == "receipt"
+    assert _runs(client) == []
+
+
+def test_month_deleted_downgrade_beats_the_filed_into_label():
+    """T11 (adversarial review): a materialized mail stranded by a
+    mid-flight delete must read held / month-deleted, never done /
+    "Filed into" — the origin story cannot hide lost receipts."""
+    from expense_recon.web.intake_mail import annotate_status_view
+
+    rows = [{
+        "status": STATUS_INGESTED, "materialized": True,
+        "batch_deleted": True, "pool_month": RECEIPT_MONTH,
+    }]
+    annotate_status_view(rows)
+    assert rows[0]["status_kind"] == "held"
+    assert rows[0]["status_label"] == "The month it was added to was deleted"
+
+
+def test_operator_create_racing_a_materialize_yields_one_month(
+    client, monkeypatch,
+):
+    """T12 (adversarial review): the operator upload path takes no
+    materialize lock and its commit can land while a mail's month-create
+    runs vision. The pre-commit re-check aborts our create (no second
+    batch, work dir cleaned) and the mail joins the operator's batch the
+    normal way."""
+    from expense_recon.web import intake_mail as im
+    from expense_recon.web.service import (
+        create_expense_batch as real_create,
+        execute_expense_batch as real_execute,
+    )
+    from expense_recon.web.store import RunStore
+
+    _flag_on(monkeypatch)
+    state = client.app.state
+
+    def racing_execute(store, prepared, **kw):
+        # Simulate the operator's batch committing mid-create: land a
+        # competing MONTH_LABEL batch first, then run the real execute,
+        # whose pre_commit re-check must abort.
+        competing = real_create(
+            state.data_root,
+            files=[("op-seed.jpg", JPG + b"operator")],
+            legal_entity="",
+            label=MONTH_LABEL,
+            now_iso="2026-01-01T00:00:00+00:00",
+            operator="operator",
+            learning_db_path=state.learning_db_path,
+            settings=store.get_settings(),
+        )
+        with RunStore(state.db_path) as store2:
+            real_execute(store2, competing)
+        return real_execute(store, prepared, **kw)
+
+    monkeypatch.setattr(im, "execute_expense_batch", racing_execute)
+    # Budget: arrival read, the operator seed's read, our aborted
+    # create's read, then the join ingest into the winner.
+    _patch_ocr(monkeypatch, _extraction(vendor="Mail"),
+               _extraction(vendor="OpSeed"), _extraction(vendor="Mail"),
+               _extraction(vendor="Mail"))
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", attachments=[("r.jpg", JPG)]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_INGESTED
+    assert "materialized" not in res  # it joined the winner, normal path
+
+    batches = _runs(client)
+    assert len(batches) == 1  # ONE July, not two
+    assert batches[0]["created_by"] is None  # the operator's batch won
+    view = client.get(f"/api/expense-batches/{batches[0]['batch_id']}").json()
+    assert view["summary"]["n_expenses"] == 2  # op seed + the mailed receipt
+    # The aborted create left no orphan run directory behind.
+    run_dirs = {
+        p.name for p in (state.data_root / "runs").iterdir() if p.is_dir()
+    }
+    assert run_dirs == {batches[0]["batch_id"]}

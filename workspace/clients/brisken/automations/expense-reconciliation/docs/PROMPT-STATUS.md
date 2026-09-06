@@ -74,13 +74,14 @@ and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
-Nothing. Every prompt in `docs/` is live in the published SPA as of
-2026-09-06, verified by field name against the bundle.
+| Prompt | Field name its renderer has to read |
+|---|---|
+| `lovable-months-origin-refusals-prompt.md` (R2, 2026-09-06) | `created_by` on the batches list; `n_refused_ours` + `n_probes` + `refusals[].kind_label` on the inbound log |
 
-This has never been true before; the backlog's habit is that a backend round
-ships the same day its prompt is written and the SPA half then waits. When
-the next round opens a gap, add the row back here with the field name its
-renderer would have to read, not just its display copy.
+Everything older is live in the published SPA as of 2026-09-06, verified by
+field name against the bundle. When auditing, remember the rule that made
+this table honest: the decisive signature is the API field name the applied
+code has to read, not display copy.
 
 ## Cannot verify (no live state exercises them)
 
