@@ -924,6 +924,13 @@ bare "30" stays non-generic). All four April tender phrases now come back
 canonical last-4 server grouping remains open; the interim display
 grouping is the SPA prompt handed 2026-08-28.
 
+**Assigned 2026-09-06: the canonical-grouping half rides R1 as its FIRST
+commit.** Item 41's `suggested_private` surfaces inside the digit-less
+sub-strip this item creates, and R1 rewrites the strip's Lovable prompt
+anyway; shipping the grouping separately would rework the same SPA surface
+twice, with the second prompt having to describe the first prompt's output
+to modify it. One R1 prompt describes the final strip once.
+
 ### 36. Month auto-suggestion at manual upload (2026-08-28 user question)
 
 **User, same test session:** "why does the tool not automatically recognize
@@ -1071,11 +1078,45 @@ the month holds a statement. Guards that stay or get added:
   July 2026". `status_label` rules (api-contract rule 5) cover the new
   wording.
 
-Live consequence to handle at deploy: the pool held 10 resting mails as of
-2026-08-25, three of them the SAME Hostinger invoice (pre-dedupe arrivals).
-On auto-materialization the receipt pool's add-time content check keeps
-copies 2+3 from becoming expenses, but their intake rows will read as
-processed; dismissing two first (item 33's open owner yes) is the tidy path.
+Live consequence to handle at deploy: the pool held 23 resting mails as of
+the 2026-09-06 audit (12 Aug / 5 Jul / 6 Sep), three of them the SAME
+Hostinger invoice (pre-dedupe arrivals). On auto-materialization the receipt
+pool's add-time content check keeps copies 2+3 from becoming expenses, but
+their intake rows will read as processed; dismissing two first (item 33's
+open owner yes) is the tidy path and GATES the flag flip.
+
+**Rollout protocol (settled 2026-09-06, binding for the R2 round):**
+
+- Ensure-month lives ONLY in `route_archived`'s no-open-batch branch, gated
+  on `receipt_month_source == "receipt"`, the plausibility window, and a new
+  env flag `EXPENSE_RECON_AUTO_MATERIALIZE` (default OFF). `claim_pooled`
+  stays create-free: deploy or boot must never backfill three months
+  unattended. Once a month IS open (created by an arrival), the normal pool
+  drain claims that month's resting mail — coherent, and stated here so it
+  is not read as a backfill leak.
+- The EXISTING pool backfills only on an explicit operator trigger:
+  `materialize: true` on `POST /api/inbound/replay-held` runs
+  claim-with-ensure-month over confidently-stamped pooled mail.
+- The 7 stranded `batch_deleted` archives get a re-pool sweep in the same
+  round: lazily month-stamp stampable archives the way `replay_held` stamps
+  pre-stamp mail, flip them to `pooled` (dismissed excluded, unstampable
+  stay legacy). They then REST like any pooled mail; materializing their
+  months stays the operator's explicit backfill call. The legacy per-archive
+  `re_ingest` path 409s with zero months open and targets "newest open
+  batch" rather than the receipt's month, so without this sweep seven real
+  receipts are unreachable.
+- Staged flip: dismiss the 2 Hostinger copies → snapshot the pool via API →
+  deploy flag-off → verify inert → flip → operator backfill → verify each
+  materialized month against the snapshot (labels, `created_by`, counts,
+  dedupe held, acks) → Playwright SPA drive → stranded-archive triage.
+- Rollback story, already shipped: deleting a month returns its stamped mail
+  to the pool; flip the flag off and the tool is back to today's behavior.
+- Creating the 0340 card (2026-09-06) changed the extraction-cache salt, so
+  the backfill re-pays ~23 vision calls. Accepted; correctness beats cache.
+
+**Subsumed:** the "create-month-from-pool button" candidate from the
+2026-09-06 manual-input audit. Auto-materialization does the same job
+without a new surface; do not build the button.
 
 ### 40. Every expense belongs to a person, through the card (owner directive 2026-09-06)
 
@@ -1100,8 +1141,17 @@ Consequences:
   a generic tender resolves neither (per the 2026-08-22 ruling those are
   per-month assignments, so the batch-assignment path takes a person the
   same way it takes an entity — this month only, never learned); the 0340
-  card still does not exist. Data entry decides how much of a real month
-  attributes.
+  card exists as of 2026-09-06 (entity still blank). Data entry decides how
+  much of a real month attributes.
+- **Person data entry can only happen AFTER this round deploys.**
+  `normalize_cards_setting` whitelists its fields, so a `person` typed into
+  settings today is silently discarded; the field must round-trip through
+  all five card code points (`normalize_cards_setting`, `cards_to_setting`,
+  `Card`/`_card_from_setting`, `card_to_dict`, the snapshot/refresh path).
+  And because the settings cards map is whole-map replace, person entry
+  waits until the round's Lovable prompt is verified in the published SPA
+  (JS-chunk field-name grep): a stale SPA save would silently erase every
+  person value. Round-0 collects the values; nobody types them early.
 - Rows gain `person` + `person_source` as PARALLEL fields (api-contract
   rules, view-contract pinned); unattributed rows get their own review
   surface and count beside MISSING ENTITY, with a rule-5 label.
@@ -1149,16 +1199,44 @@ Design:
   where the suggestion surfaces naturally ("no card number readable;
   suggested as a private expense").
 
+### 42. Refusals counter drowned by relay probes (2026-09-06 audit)
+
+`n_refused` counts every ledger row in the 7-day window, and the 2026-09-06
+audit measured all 55 of them as `*@flyio.net` spam relay probes (`stage:
+"rcpt"`, "relay not permitted"). The counter was built to answer "is
+anything bouncing this week?"; with a permanent probe floor a REAL refused
+submission is invisible in the number.
+
+The ledger already records `stage: "rcpt" | "data"`, so the fix is a
+view-only split in `refusal_view`/`count_refusals`: parallel fields
+(`n_refused_ours` for data-stage refusals of mail addressed to the intake
+domain, `n_probes` for rcpt-stage relay probes, a per-row `probe` flag with
+a rule-5 label), with `n_refused` itself unchanged — the api-contract warns
+against silently redefining an existing field's meaning. SPA degrades
+gracefully; the Lovable line is optional and small.
+
+Assigned: standalone micro-PR at the head of the R2 chat, deployed with or
+before the R2 flip so the counter is meaningful exactly when the operator
+watches the first auto-materialization.
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
-Four of the five known cards (0113, 6013, 9693, 8311) carry no legal entity,
-and the 0340 card is absent from the registry entirely — the 0340 rows alone
-account for 8 of the 29 unresolved entity rows. Nine more rows are generic
-tenders (cash, personal), which by design never auto-resolve and stay
-per-month assignments.
+**Entity half DONE 2026-09-06** (authorized operator-API write, verified on
+`/api/cards` re-read): 0113 → Corporate Services; 6013/9693/8311 → Cloud
+Services; card-0340 created (digits `0340`). Values from the Zoho entity map
+in `context/expense-reconciliation/zoho-entity-card-map.md`. No retroactive
+heal expected — zero months were open; the next batch (or a
+refresh-master-data on any future one) picks the entities up at ingest.
 
-No code needed: this is data entry in Settings > Cards, plus creating the
-0340 card. Listed here so it is not mistaken for a defect in the chain.
+Still open, Criss/Dirk only: the 0340 card's entity, the 3645 and
+plastic-1672 identities, and (for item 40) a PERSON per card — collect now,
+enter after item 40's round deploys (see the person-timing note there).
+Nine generic-tender rows stay per-month assignments by design.
+
+Historical text (for the ranking's sake): four of the five known cards
+carried no legal entity and 0340 was absent entirely; the 0340 rows alone
+accounted for 8 of the 29 unresolved April entity rows. No code needed then
+or now; listed here so it is not mistaken for a defect in the chain.
 
 ### 16. Rejected matches need a "what now" (2026-07-27 note, untracked)
 
