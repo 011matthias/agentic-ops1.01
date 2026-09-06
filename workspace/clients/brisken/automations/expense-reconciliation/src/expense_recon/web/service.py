@@ -25,7 +25,7 @@ import re
 import threading
 import uuid
 from dataclasses import dataclass, replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import NamedTuple
 from decimal import Decimal
 from pathlib import Path
@@ -1554,6 +1554,12 @@ def attach_emailed_receipt(
     store.set_decision(
         run.run_id, transaction_id, STATUS_CONFIRMED, document_id, now_iso
     )
+    # R4: a confirmed manual attach settles its receipt -- record the
+    # claim. The receipt was just created in this run, so no other run can
+    # hold it; the sync is for the registry, not for a conflict.
+    sync_claim_for_decision(
+        store, run, transaction_id, STATUS_CONFIRMED, document_id, now_iso
+    )
     return None, document_id
 
 
@@ -2355,6 +2361,7 @@ def build_view(
     decisions: dict[str, Decision],
     overrides: dict,
     resolutions: dict[str, str] | None = None,
+    settled_elsewhere: dict[str, dict] | None = None,
 ) -> dict:
     """Compose the render model: per-transaction rows with candidates and
     the reviewer's effective verdict, plus the unmatched-receipt list and
@@ -2363,7 +2370,14 @@ def build_view(
     `resolutions` (§18, group_id -> `ignore`/`confirmed`) attaches the
     reviewer's advisory verdict to each duplicate group in the SPA-facing
     `duplicate_groups` list. None => every group unresolved; advisory only,
-    it never touches buckets or the invariant."""
+    it never touches buckets or the invariant.
+
+    `settled_elsewhere` (R4, item 38): document_id -> `{run_id, label,
+    transaction_id}` for receipts in this run's pool that another run's
+    charge has claimed. Attached as `settled_by` on the matching
+    unmatched / assignable receipt entries -- parallel field, ABSENT (not
+    null) everywhere else, so a month with no cross-batch settlements
+    renders byte-identically to before the field existed."""
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
     rec_by_id = {r.document_id: r for r in receipts}
     by_tx = _candidates_by_tx(outcome)
@@ -2797,6 +2811,15 @@ def build_view(
     # is in neither `rows` nor `unmatched_receipts`.
     for rec in assignable_receipts:
         rec["duplicate"] = receipt_dup_flags.get(rec.get("document_id"))
+
+    # R4 (item 38): name the run that settled a receipt this pool still
+    # holds. Absent-unless-set, like `mixed_months` on the inbound log: a
+    # month with no cross-batch settlements renders exactly as before.
+    if settled_elsewhere:
+        for rec in (*unmatched_receipts, *assignable_receipts):
+            hit = settled_elsewhere.get(rec.get("document_id"))
+            if hit is not None:
+                rec["settled_by"] = hit
 
     n_tx = len(transactions)
     n_unknown_currency = sum(1 for r in receipts if r.detected_currency is None)
@@ -7425,6 +7448,162 @@ def read_statement_upload(
     return transactions, stmt_issues, new_cfg, entity
 
 
+# ---------------------------------------------------------------------------
+# Cross-run receipt claims (R4, backlog item 38)
+# ---------------------------------------------------------------------------
+# A receipt must never settle two charges across two batches. Within one run
+# the matcher's own assignment pass guarantees single consumption; across
+# runs the `receipt_claims` table is the arbiter (store.py). The protocol,
+# in `rematch_month`: an advisory read excludes receipts another run has
+# already settled from the candidate pool, a commit-time re-check inside
+# `_BATCH_ADD_LOCK` downgrades any pairing whose receipt was claimed while
+# the match ran, and the commit then records this run's own settlements.
+# Reviewer decisions keep the table current (`sync_claim_for_decision`).
+# With no cross-batch receipts in play (every month before trips exist),
+# every claim is a run's own and none of this changes a match result.
+
+
+def receipt_source_run(run: RunRow, document_id: str) -> str:
+    """The run a receipt LIVES in. Today every receipt in a run's pool is
+    its own; when the trip-spanning pool lands (R4b), receipts borrowed
+    from another batch carry their home run in the snapshot's
+    `receipt_sources` map and claims must be keyed on it, not on the
+    borrowing run."""
+    sources = (run.snapshot or {}).get("receipt_sources") or {}
+    return str(sources.get(document_id) or run.run_id)
+
+
+def effective_settlements(
+    outcome_matches: dict[str, str], decisions: dict
+) -> dict[str, str]:
+    """transaction_id -> document_id for every charge the run currently
+    SETTLES: the matcher's deterministic matches, overlaid with the
+    reviewer's verdicts (a reject releases, an explicit pick replaces).
+    Review-bucket proposals settle nothing until confirmed."""
+    settled = dict(outcome_matches)
+    for tx_id, dec in decisions.items():
+        if dec.status == STATUS_REJECTED:
+            settled.pop(tx_id, None)
+        elif (
+            dec.status in (STATUS_CONFIRMED, STATUS_ALREADY_POSTED)
+            and dec.chosen_document_id
+        ):
+            settled[tx_id] = dec.chosen_document_id
+    return settled
+
+
+def sync_claim_for_decision(
+    store: RunStore,
+    run: RunRow,
+    transaction_id: str,
+    status: str,
+    chosen_document_id: str | None,
+    now_iso: str,
+) -> str | None:
+    """Bring the claims table in line with one reviewer verdict. Returns a
+    conflict sentence (and writes NO claim) when the receipt is already
+    settled by another run -- the caller refuses the verdict rather than
+    letting one receipt settle two charges across two batches. None means
+    the claim state now matches the verdict."""
+    if status == STATUS_REJECTED:
+        store.delete_claims_for_tx(run.run_id, transaction_id)
+        return None
+    doc = chosen_document_id
+    if status == STATUS_PENDING or doc is None:
+        # Back to (or still on) the matcher's own state: the settlement is
+        # the outcome's match for this charge, or nothing. Re-derive the
+        # claim from that rather than from whatever pick the verdict
+        # carried, so un-confirming a hand-pick releases the picked
+        # receipt.
+        doc = next(
+            (
+                m.get("document_id")
+                for m in ((run.snapshot or {}).get("outcome") or {}).get(
+                    "matches", []
+                )
+                if m.get("transaction_id") == transaction_id
+            ),
+            None,
+        )
+        if doc is None:
+            store.delete_claims_for_tx(run.run_id, transaction_id)
+            return None
+    explicit_pick = (
+        status in (STATUS_CONFIRMED, STATUS_ALREADY_POSTED)
+        and chosen_document_id is not None
+    )
+    source = receipt_source_run(run, doc)
+    prior = store.get_claims_on_receipts(source).get(doc)
+    if prior is not None and prior["claimed_by_run_id"] != run.run_id:
+        if explicit_pick:
+            other = store.get_run(prior["claimed_by_run_id"])
+            holder = (other.label or other.run_id) if other else prior[
+                "claimed_by_run_id"]
+            return (
+                f"this receipt already settles a charge in {holder!r}; a "
+                "receipt can only settle one charge. Reject it there "
+                "first, or pick another receipt."
+            )
+        # A pending reset (or a bare ratify) onto a foreign-settled receipt
+        # claims nothing and refuses nothing: the row simply goes back to
+        # holding no claim, and the next re-match sorts the pairing out.
+        store.delete_claims_for_tx(run.run_id, transaction_id)
+        return None
+    # A re-pick moves the charge's claim: release the old receipt first so
+    # one charge never pins two.
+    store.delete_claims_for_tx(run.run_id, transaction_id)
+    ok = store.upsert_receipt_claim(
+        source, doc, run.run_id, transaction_id, now_iso
+    )
+    if not ok and explicit_pick:
+        return (
+            "this receipt was just settled by another batch; a receipt "
+            "can only settle one charge."
+        )
+    return None
+
+
+def _downgrade_claimed_pairs(
+    outcome, claimed_docs: set[str], pool_doc_ids: set[str]
+) -> bool:
+    """Strip every pairing that consumes a receipt another run settled
+    while this match ran, sending the charge to unmatched and leaving the
+    receipt to the run that claimed it. Returns whether anything moved."""
+    stripped_tx: set[str] = set()
+    changed = False
+    for bucket in ("matches", "judgment_required", "ambiguous"):
+        pairs = getattr(outcome, bucket)
+        kept = [m for m in pairs if m.document_id not in claimed_docs]
+        if len(kept) != len(pairs):
+            changed = True
+            stripped_tx.update(
+                m.transaction_id for m in pairs
+                if m.document_id in claimed_docs
+            )
+            pairs[:] = kept
+    if not changed:
+        return False
+    # Every charge that lost its LAST pairing surfaces as unmatched rather
+    # than vanishing -- the same never-drop shape as the fresh-row check.
+    placed = (
+        {m.transaction_id for m in outcome.matches}
+        | {m.transaction_id for m in outcome.judgment_required}
+        | {m.transaction_id for m in outcome.ambiguous}
+        | set(outcome.refunds)
+        | set(outcome.unmatched_transactions)
+    )
+    outcome.unmatched_transactions.extend(
+        tx_id for tx_id in sorted(stripped_tx) if tx_id not in placed
+    )
+    # The receipt stays visible in this run's pool (settled elsewhere, so
+    # unmatched HERE); ids not in the pool are another run's business.
+    have = set(outcome.unmatched_receipts)
+    outcome.unmatched_receipts.extend(
+        d for d in sorted(claimed_docs & pool_doc_ids) if d not in have
+    )
+    return True
+
+
 def rematch_month(
     store: RunStore,
     run: RunRow,
@@ -7533,7 +7712,23 @@ def rematch_month(
     )
     match_cfg = build_match_cfg(cfg, work_dir, match_memory)
     _stage("matching")
-    outcome = match_month(transactions, receipts, match_cfg)
+    # R4 advisory read: a receipt another run has already settled is out of
+    # the candidate pool before the matcher sees it -- it cannot settle a
+    # second charge here. Advisory because it races (the authoritative
+    # re-check runs inside the commit lock below); keyed on the receipt's
+    # HOME run, so a run's own claims never gate its own re-match. The
+    # receipt itself stays in the snapshot pool and surfaces as unmatched,
+    # with the view naming who settled it.
+    foreign_claims = {
+        doc: c
+        for doc, c in store.get_claims_on_receipts(run.run_id).items()
+        if c["claimed_by_run_id"] != run.run_id
+    }
+    pool = (
+        [r for r in receipts if r.document_id not in foreign_claims]
+        if foreign_claims else receipts
+    )
+    outcome = match_month(transactions, pool, match_cfg)
 
     _stage("judging")
     tx_by_id = {t.transaction_id: t for t in transactions}
@@ -7544,9 +7739,18 @@ def rematch_month(
     )
     _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
     _apply_unmatched_judgment(
-        outcome, transactions, receipts, llm_client,
+        outcome, transactions, pool, llm_client,
         match_cfg or MatchingConfig(), cfg,
     )
+    # Excluded receipts still belong to this month's pool and its totals;
+    # they are unmatched HERE because they are settled elsewhere.
+    if foreign_claims:
+        _in_pool = {r.document_id for r in receipts}
+        _have = set(outcome.unmatched_receipts)
+        outcome.unmatched_receipts.extend(
+            d for d in foreign_claims
+            if d in _in_pool and d not in _have
+        )
 
     learned = (
         MerchantCategoryLookup.from_db_path(learning_db_path)
@@ -7619,6 +7823,61 @@ def rematch_month(
                 if r.document_id in {rd["document_id"] for rd in extra}
             ]
             outcome.unmatched_receipts.extend(rd["document_id"] for rd in extra)
+        # R4 commit-time re-check, the authoritative half of the claims
+        # protocol: the advisory read above ran minutes ago, and a reviewer
+        # confirm in another run can settle one of our paired receipts in
+        # between. Re-read the claims FRESH under the same lock the commit
+        # holds and downgrade any pairing whose receipt is now another
+        # run's -- the charge goes to unmatched, nothing is lost, and the
+        # next re-match sees the claim at the advisory read.
+        pool_doc_ids = {r.document_id for r in receipts}
+        pair_docs = {
+            m.document_id
+            for m in (
+                *outcome.matches,
+                *outcome.judgment_required,
+                *outcome.ambiguous,
+            )
+        }
+        claim_sources = {receipt_source_run(run, d) for d in pair_docs}
+        claim_sources.add(run.run_id)
+        claims_now: dict[str, dict] = {}
+        for src in sorted(claim_sources):
+            for doc, c in store.get_claims_on_receipts(src).items():
+                if c["claimed_by_run_id"] != run.run_id:
+                    claims_now[doc] = c
+        downgraded = False
+        lost_docs = pair_docs & set(claims_now)
+        if lost_docs:
+            downgraded = _downgrade_claimed_pairs(
+                outcome, lost_docs, pool_doc_ids
+            )
+        # Record this run's own settlements: deterministic matches overlaid
+        # with the reviewer's standing verdicts. One receipt, one claim;
+        # a refused insert is the same race as above, downgraded the same
+        # way, so the table and the committed snapshot cannot disagree.
+        settled = effective_settlements(
+            {m.transaction_id: m.document_id for m in outcome.matches},
+            store.get_decisions(run.run_id),
+        )
+        triples: list[tuple[str, str, str]] = []
+        seen_claim_keys: set[tuple[str, str]] = set()
+        for tx_id in sorted(settled):
+            doc = settled[tx_id]
+            key = (receipt_source_run(run, doc), doc)
+            if key in seen_claim_keys:
+                continue
+            seen_claim_keys.add(key)
+            triples.append((key[0], doc, tx_id))
+        conflicts = store.replace_claims_by_run(
+            run.run_id, triples, now_iso or datetime.now().isoformat()
+        )
+        if conflicts:
+            downgraded = _downgrade_claimed_pairs(
+                outcome, {doc for _, doc, _ in conflicts}, pool_doc_ids
+            ) or downgraded
+        if downgraded:
+            base["outcome"] = outcome_to_dict(outcome)
         new_snapshot = {**dict(fresh.snapshot), **base}
         # Preserve what extraction read, BEFORE this commit replaces the
         # receipt block with the baked pool. `receipts0` is the snapshot as
