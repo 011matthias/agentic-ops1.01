@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-06 | Brisken P1 Program Prompts And Round-0 | client-dev | [Mini-Checkpoint-2](docs/2026-09-06%20-%20Brisken%20P1%20Program%20Prompts%20And%20Round-0/Mini-Checkpoint-2.md) |
 | 2026-09-06 | Brisken Expense Tool Owner Program | client-dev | [→](docs/2026-09-06%20-%20Brisken%20Expense%20Tool%20Owner%20Program/Checkpoint.md) |
 | 2026-09-06 | Expense-Recon Manual-Input Analysis | client-dev | [→](docs/2026-09-06%20-%20Expense-Recon%20Manual-Input%20Analysis/Checkpoint.md) |
 | 2026-09-06 | Brisken Zoho Entity Data Layout | client-dev | [→](docs/2026-09-06%20-%20Brisken%20Zoho%20Entity%20Data%20Layout/Checkpoint.md) |
