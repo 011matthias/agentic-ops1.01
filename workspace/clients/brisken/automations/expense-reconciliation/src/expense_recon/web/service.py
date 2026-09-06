@@ -25,7 +25,7 @@ import re
 import threading
 import uuid
 from dataclasses import dataclass, replace
-from datetime import date
+from datetime import date, timedelta
 from typing import NamedTuple
 from decimal import Decimal
 from pathlib import Path
@@ -102,6 +102,7 @@ from .store import (
     IntakeRow,
     RunRow,
     RunStore,
+    TripRow,
 )
 
 # The documented Zoho Expense export header map (run.with-expense-csv
@@ -3579,6 +3580,201 @@ def run_mode(run: RunRow) -> str:
     return (run.config or {}).get("mode") or "reconciliation"
 
 
+# The two batch functions (item 38, owner directive 2026-09-06): overall
+# monthly company expenses, and trips. The type is DECLARED at creation
+# and never inferred from content; an absent marker reads as a company
+# month because every batch that predates the split is one.
+BATCH_TYPE_COMPANY = "company-month"
+BATCH_TYPE_TRIP = "trip"
+VALID_BATCH_TYPES = (BATCH_TYPE_COMPANY, BATCH_TYPE_TRIP)
+
+
+def batch_type(run: RunRow) -> str:
+    """The batch's declared kind: ``company-month`` or ``trip``."""
+    return (run.config or {}).get("batch_type") or BATCH_TYPE_COMPANY
+
+
+def is_trip_batch(run: RunRow) -> bool:
+    return batch_type(run) == BATCH_TYPE_TRIP
+
+
+# ---------------------------------------------------------------- trips --
+# The trip entity (item 38): named, date-ranged, VARIABLE roster of
+# travelers. Created empty (a name and a roster only a human knows, so a
+# trip can never be auto-created); its expense batch materializes when
+# the first receipt joins it.
+
+MAX_TRIP_TRAVELERS = 50
+
+
+def validate_trip_fields(payload: dict) -> tuple[dict | None, str | None]:
+    """Clean a trip create/update payload. Returns (cleaned, None) or
+    (None, error). ``travelers`` is a list of PERSON names (item 40's
+    vocabulary), whole-list replace, may be empty while the roster is
+    still being collected."""
+    if not isinstance(payload, dict):
+        return None, "body must be an object"
+    name = str(payload.get("name") or "").strip()[:200]
+    if not name:
+        return None, "name is required"
+    start_raw = str(payload.get("start") or "").strip()
+    end_raw = str(payload.get("end") or "").strip()
+    try:
+        start = date.fromisoformat(start_raw)
+        end = date.fromisoformat(end_raw)
+    except ValueError:
+        return None, "start and end must be YYYY-MM-DD dates"
+    if end < start:
+        return None, "end must not be before start"
+    travelers_raw = payload.get("travelers", [])
+    if travelers_raw is None:
+        travelers_raw = []
+    if not isinstance(travelers_raw, list) or not all(
+        isinstance(t, str) for t in travelers_raw
+    ):
+        return None, "travelers must be a list of names"
+    travelers = list(dict.fromkeys(
+        t.strip() for t in travelers_raw if t.strip()
+    ))
+    if len(travelers) > MAX_TRIP_TRAVELERS:
+        return None, f"travelers holds at most {MAX_TRIP_TRAVELERS} names"
+    return {
+        "name": name,
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "travelers": travelers,
+    }, None
+
+
+def find_trip_batch(store: RunStore, trip_id: str) -> RunRow | None:
+    """The expense batch holding this trip's receipts, or None while no
+    receipt has joined yet. The link lives on the BATCH
+    (``config["trip_id"]``), so this scan is the one lookup."""
+    for run in store.list_runs():
+        if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if not is_trip_batch(run):
+            continue
+        if str((run.config or {}).get("trip_id") or "") == str(trip_id):
+            return run
+    return None
+
+
+# One batch per trip is a fact only if creation is single-winner. A run
+# row appears only when the OCR job COMMITS — minutes after the create
+# was accepted — so a store scan alone is blind for the whole job
+# duration (adversarial review 2026-09-06, finding 1): two uploads
+# declaring the same trip, or an upload racing a join click, would each
+# pass the "already has a batch" check and commit two batches, the older
+# of which no list can reach. This in-process registry closes the
+# window: a trip id is CLAIMED before its create starts and released
+# when the job commits or dies. In-process is sufficient for the same
+# reason the intake day-budget is: the app is one process, and a crash
+# that loses the set also loses the uncommitted job it was tracking.
+# Deleting the trip entity goes through the same lock, which closes the
+# delete-during-create window (finding 2) as well.
+_TRIP_BATCH_PENDING: set[str] = set()
+_TRIP_BATCH_LOCK = threading.Lock()
+
+
+def claim_trip_batch_slot(store: RunStore, trip_id: str) -> dict | None:
+    """Reserve the right to create THE batch for this trip. Returns None
+    on success (caller MUST release via `release_trip_batch_slot` when
+    its create commits or fails), or an error body carrying ``code``
+    (http status) — and ``batch_id`` when a batch already exists."""
+    tid = str(trip_id)
+    with _TRIP_BATCH_LOCK:
+        if store.get_trip(tid) is None:
+            return {"code": 404, "error": "trip not found"}
+        if tid in _TRIP_BATCH_PENDING:
+            return {"code": 409, "error": (
+                "this trip's expense batch is being created right now; "
+                "retry when that upload finishes"
+            )}
+        existing = find_trip_batch(store, tid)
+        if existing is not None:
+            return {"code": 409, "error": (
+                "this trip already has an expense batch; add receipts "
+                "to it instead"
+            ), "batch_id": existing.run_id}
+        _TRIP_BATCH_PENDING.add(tid)
+    return None
+
+
+def release_trip_batch_slot(trip_id: str) -> None:
+    with _TRIP_BATCH_LOCK:
+        _TRIP_BATCH_PENDING.discard(str(trip_id))
+
+
+def delete_trip_entity(store: RunStore, trip_id: str) -> dict | None:
+    """Delete a trip entity, refusing while a batch exists OR one is
+    mid-creation. Runs entirely under the trip-batch lock, so a claim
+    and a delete serialize: whichever wins, the other sees it. Returns
+    None on success or an error body carrying ``code`` (http status)."""
+    tid = str(trip_id)
+    with _TRIP_BATCH_LOCK:
+        if store.get_trip(tid) is None:
+            return {"code": 404, "error": "Trip not found"}
+        if tid in _TRIP_BATCH_PENDING:
+            return {"code": 409, "error": (
+                "this trip's expense batch is being created right now; "
+                "retry when that upload finishes"
+            )}
+        batch = find_trip_batch(store, tid)
+        if batch is not None:
+            return {"code": 409, "error": (
+                "this trip still has an expense batch; delete the "
+                "batch first"
+            ), "batch_id": batch.run_id}
+        store.delete_trip(tid)
+    return None
+
+
+def trip_view(store: RunStore, trip: TripRow, batch: RunRow | None) -> dict:
+    """One row of the trips list. ``batch_id`` / ``summary`` are null until
+    a receipt has joined (the batch materializes on first join); a null is
+    the honest answer, never an empty fabricated summary."""
+    return {
+        "trip_id": trip.trip_id,
+        "name": trip.name,
+        "start": trip.start_date,
+        "end": trip.end_date,
+        "travelers": list(trip.travelers),
+        "created_at": trip.created_at,
+        "updated_at": trip.updated_at,
+        "batch_id": batch.run_id if batch is not None else None,
+        "summary": (
+            batch_list_summary(store, batch) if batch is not None else None
+        ),
+    }
+
+
+def covering_trips(
+    trips: list[TripRow], dates: list[str],
+) -> list[TripRow]:
+    """The trips whose inclusive date range contains at least one of the
+    given ISO dates. Feeds the pool-row SUGGESTION (exactly one covering
+    trip suggests; joining stays a click, never an inference)."""
+    parsed: list[date] = []
+    for raw in dates or []:
+        try:
+            parsed.append(date.fromisoformat(str(raw)[:10]))
+        except ValueError:
+            continue
+    if not parsed:
+        return []
+    out: list[TripRow] = []
+    for trip in trips:
+        try:
+            start = date.fromisoformat(trip.start_date)
+            end = date.fromisoformat(trip.end_date)
+        except ValueError:
+            continue
+        if any(start <= d <= end for d in parsed):
+            out.append(trip)
+    return out
+
+
 # Header-level fields a reviewer may edit on one expense. `category` /
 # `zoho_account` are deliberately NOT here: they are line-level and fold
 # into the existing `category_overrides` path (the endpoint does that).
@@ -3649,9 +3845,11 @@ class PreparedExpenseBatch:
     # Item 39: "intake" when a mailed receipt materialized this batch
     # itself. Stored in the run summary; absent on operator-created batches.
     created_by: str = ""
-    # Item 39: submitter provenance for mail-created batches, keyed by the
-    # STORED receipt file name — the same shape `add_receipts_to_expense_batch`
-    # writes, so the grid's submitted_by chip works from the first render.
+    # Submitter provenance for mail-created batches (item 39's
+    # auto-materialization AND R3's trip-join create-with-receipt), keyed
+    # by the STORED receipt file name — the same shape
+    # `add_receipts_to_expense_batch` writes, so the grid's submitted_by
+    # chip works from the first render. None/empty => not mailed.
     intake_provenance: dict | None = None
 
 
@@ -3667,6 +3865,8 @@ def create_expense_batch(
     learning_db_path: Path | None = None,
     settings: dict | None = None,
     created_by: str = "",
+    batch_type: str = "",
+    trip_id: str = "",
     provenance_by_digest: dict[str, dict] | None = None,
 ) -> PreparedExpenseBatch:
     """Validate + spool an uploaded batch of receipts and build the
@@ -3684,9 +3884,22 @@ def create_expense_batch(
     resolves from its paying card (the registry snapshotted into the
     config below), the batch value is only a fallback, and an unresolved
     entity is a review state (`needs_entity`) that never blocks an export.
+
+    `batch_type` (item 38) is the DECLARED kind: "" / "company-month"
+    for a company month (the marker is stored only when declared, so an
+    undeclared create produces the exact pre-split config), "trip" for a
+    trip batch, which requires `trip_id` (the caller has verified the
+    trip exists). `provenance_by_digest` (sha1[:16] -> person dict)
+    carries mail provenance for a batch created FROM a mailed receipt.
     """
     if not files:
         raise RunInputError("No receipt files uploaded.")
+    if batch_type and batch_type not in VALID_BATCH_TYPES:
+        raise RunInputError(
+            f"batch_type must be one of {', '.join(VALID_BATCH_TYPES)}."
+        )
+    if batch_type == BATCH_TYPE_TRIP and not str(trip_id).strip():
+        raise RunInputError("A trip batch needs a trip_id.")
 
     run_id = uuid.uuid4().hex[:12]
     work_dir = data_root / "runs" / run_id
@@ -3737,6 +3950,9 @@ def create_expense_batch(
         dest_name = f"{n_saved:04d}__{fs_name}"
         (receipts_dir / dest_name).write_bytes(data)
         if provenance_by_digest and digest in provenance_by_digest:
+            # Keyed by the STORED name, which is the document_id the
+            # folder pipeline assigns — the same key the incremental add
+            # path uses, so `submitted_by` renders identically.
             intake_provenance[dest_name] = provenance_by_digest[digest]
         n_saved += 1
     import shutil as _shutil
@@ -3760,6 +3976,13 @@ def create_expense_batch(
         "expense": {"legal_entity_id": legal_entity.strip()},
         "receipts": {"path": "receipts", "source": "folder"},
     }
+    # Item 38: the declared type, stored only when declared — an
+    # undeclared create keeps the exact pre-split config shape, and an
+    # absent marker reads as a company month everywhere.
+    if batch_type:
+        cfg["batch_type"] = batch_type
+    if batch_type == BATCH_TYPE_TRIP:
+        cfg["trip_id"] = str(trip_id).strip()
     if default_currency.strip():
         cfg["receipts"]["default_currency"] = default_currency.strip()
     # Phase 5: the entity registry's default Paid Through account rides in
@@ -3885,6 +4108,9 @@ def execute_expense_batch(
     if set_aside:
         snapshot["set_aside"] = set_aside
     if prepared.intake_provenance:
+        # A batch created FROM mailed receipts (item 39 materialization,
+        # R3 trip join) carries the submitters the same way the
+        # incremental add path records them.
         snapshot["intake_provenance"] = dict(prepared.intake_provenance)
 
     if on_stage is not None:
@@ -4579,6 +4805,7 @@ def build_expense_view(
     resolutions: dict[str, str] | None = None,
     settings: dict | None = None,
     decisions: dict | None = None,
+    trip: dict | None = None,
 ) -> dict:
     """Compose the receipt-spine render model for an expense batch: one row
     per expense with the reviewer's edits applied, review-by-exception
@@ -4649,12 +4876,44 @@ def build_expense_view(
     # review states, the paid-through card step, and the card_review
     # strip — the same pass the export runs, so they cannot disagree.
     card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
-    # The month this batch is, for the date guard (backlog item 25). Derived
-    # from the operator's label first and the batch's own dates second, over
-    # the EDITED receipts, so correcting dates moves the consensus with them.
-    period = batch_period(
-        run.label, [r.detected_date for r in receipts if r.detected_date]
-    )
+    # The window this batch's dates are expected in, for the date guard
+    # (backlog item 25). A company month derives it from the operator's
+    # label first and the batch's own dates second, over the EDITED
+    # receipts, so correcting dates moves the consensus with them. A TRIP
+    # takes its own declared range (item 38: trips span month boundaries
+    # freely, so a label- or plurality-derived month would flag legitimate
+    # rows), padded a month either side because travel spend books early
+    # (flights) and settles late; a trip whose entity is gone gets no
+    # window at all — never a label-derived one.
+    if is_trip_batch(run):
+        period = None
+        if trip is not None:
+            try:
+                period = (
+                    date.fromisoformat(str(trip.get("start"))) - timedelta(days=31),
+                    date.fromisoformat(str(trip.get("end"))) + timedelta(days=31),
+                )
+            except ValueError:
+                period = None
+    else:
+        period = batch_period(
+            run.label, [r.detected_date for r in receipts if r.detected_date]
+        )
+    # Item 38 x item 40: on a trip, an expense paid by a person who is
+    # not on the roster is worth a flag. The person comes off the card
+    # chain (or `reimburse_to` on a private row) exactly as item 40
+    # resolves it; the roster is the trip's. A flag, never a block, and
+    # never a review state: the likely fix is adding the traveler to the
+    # roster (a trip edit), not touching the row. None = not a trip (or
+    # the entity is gone), so company months carry no key at all; an
+    # EMPTY roster flags nothing — there is no stated roster to miss.
+    roster = None
+    if is_trip_batch(run) and trip is not None:
+        roster = {
+            str(t).strip().casefold()
+            for t in (trip.get("travelers") or [])
+            if str(t).strip()
+        }
     # Backlog item 36: what month do these receipts collectively read as?
     # Confirm-first surface for the SPA banner — the label stays the only
     # authority (item 25 ruling: nothing about dates is auto-corrected);
@@ -4663,7 +4922,9 @@ def build_expense_view(
     # instead of having to notice the mismatch. None when fewer than 4
     # dated expenses or no clear winner (month_from_dates rules).
     _dated = [r.detected_date for r in receipts if r.detected_date]
-    _consensus = month_from_dates(_dated)
+    # A trip spans month boundaries freely (item 38), so the month-rename
+    # banner is meaningless there: never offer one on a trip batch.
+    _consensus = None if is_trip_batch(run) else month_from_dates(_dated)
     if _consensus is None:
         period_suggestion = None
     else:
@@ -4829,6 +5090,16 @@ def build_expense_view(
             # {person, source: alias|sender, address, received_at}.
             "submitted_by": intake_provenance.get(r.document_id),
         })
+        if roster is not None:
+            # Trip batches only (the key is absent on company months).
+            # A row with no resolved person is n_needs_person's business,
+            # not a mismatch; exact match after trim+casefold, because
+            # persons and roster entries share item 40's one vocabulary
+            # (free-text names entered by the same operator).
+            expenses[-1]["roster_mismatch"] = bool(
+                res["person"] and roster
+                and str(res["person"]).strip().casefold() not in roster
+            )
 
     # Category-variance chip (backlog item 8): a vendor whose receipts in
     # THIS batch carry different (non-null) posting categories gets flagged
@@ -4948,6 +5219,12 @@ def build_expense_view(
         # this month itself; null on operator-created batches (parallel).
         "created_by": run.summary.get("created_by"),
     }
+    if roster is not None:
+        # Trip batches only: how many rows a person OUTSIDE the roster
+        # paid for. Absent on company months, like the row flag.
+        summary["n_roster_mismatch"] = sum(
+            1 for e in expenses if e.get("roster_mismatch")
+        )
 
     # Phase 5 pickers: entities the reviewer can assign (the real entities
     # from the CoA provisioning + the card->entity map + the settings
@@ -4964,6 +5241,13 @@ def build_expense_view(
         "label": run.label,
         "created_at": run.created_at,
         "mode": MODE_EXPENSE_GENERATION,
+        # Item 38: the declared kind, "company-month" on every batch that
+        # predates the split (absent marker reads as company). Scalar,
+        # parallel — a stale SPA renders exactly what it rendered before.
+        "batch_type": batch_type(run),
+        # The trip this batch belongs to (entity fields incl. the
+        # travelers roster), null on every company month.
+        "trip": trip,
         "llm_enabled": run.llm_enabled,
         "has_coa": run.has_coa,
         "legal_entity_id": default_entity,

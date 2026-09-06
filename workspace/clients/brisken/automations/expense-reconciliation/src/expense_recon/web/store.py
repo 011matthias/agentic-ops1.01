@@ -175,6 +175,25 @@ class RunRow:
 
 
 @dataclass
+class TripRow:
+    """One trip (item 38, owner directive 2026-09-06): named, date-ranged,
+    with a VARIABLE roster of travelers. The entity is deliberately not a
+    run: a trip has a name and a roster only a human knows, so it is
+    created empty and its expense BATCH materializes when the first
+    receipt joins (create-with-receipt, the item-39 ordering). The batch
+    references the trip via ``config["trip_id"]``; the trip stores no
+    batch id, so there is exactly one source of truth for the link."""
+
+    trip_id: str
+    created_at: str
+    name: str
+    start_date: str   # YYYY-MM-DD, inclusive
+    end_date: str     # YYYY-MM-DD, inclusive
+    travelers: list[str]
+    updated_at: str | None = None
+
+
+@dataclass
 class IntakeRow:
     intake_id: str
     created_at: str
@@ -306,6 +325,15 @@ class RunStore:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ip TEXT NOT NULL,
                 ts REAL NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS trips (
+                trip_id    TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                name       TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date   TEXT NOT NULL,
+                travelers  TEXT NOT NULL,
+                updated_at TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_login_failures_ts
                 ON login_failures (ts);
@@ -484,6 +512,85 @@ class RunStore:
             published=bool(row["published"]),
             published_at=row["published_at"],
             intake_id=row["intake_id"],
+        )
+
+    # -- trips (item 38) ---------------------------------------------------
+
+    def create_trip(
+        self,
+        *,
+        trip_id: str,
+        created_at: str,
+        name: str,
+        start_date: str,
+        end_date: str,
+        travelers: list[str],
+    ) -> None:
+        self.conn.execute(
+            "INSERT INTO trips (trip_id, created_at, name, start_date, "
+            "end_date, travelers, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (trip_id, created_at, name, start_date, end_date,
+             json.dumps(travelers), created_at),
+        )
+        self.conn.commit()
+
+    def list_trips(self) -> list[TripRow]:
+        rows = self.conn.execute(
+            "SELECT * FROM trips ORDER BY start_date DESC, created_at DESC"
+        ).fetchall()
+        return [self._row_to_trip(r) for r in rows]
+
+    def get_trip(self, trip_id: str) -> TripRow | None:
+        row = self.conn.execute(
+            "SELECT * FROM trips WHERE trip_id = ?", (trip_id,)
+        ).fetchone()
+        return self._row_to_trip(row) if row else None
+
+    def update_trip(
+        self,
+        trip_id: str,
+        *,
+        name: str,
+        start_date: str,
+        end_date: str,
+        travelers: list[str],
+        updated_at: str,
+    ) -> bool:
+        cur = self.conn.execute(
+            "UPDATE trips SET name = ?, start_date = ?, end_date = ?, "
+            "travelers = ?, updated_at = ? WHERE trip_id = ?",
+            (name, start_date, end_date, json.dumps(travelers),
+             updated_at, trip_id),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def delete_trip(self, trip_id: str) -> bool:
+        """Drop a trip entity. The caller refuses the delete while a batch
+        still references it (the batch holds real expenses; the entity is
+        the lighter object and goes second)."""
+        cur = self.conn.execute(
+            "DELETE FROM trips WHERE trip_id = ?", (trip_id,)
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    @staticmethod
+    def _row_to_trip(row: sqlite3.Row) -> TripRow:
+        try:
+            travelers = json.loads(row["travelers"])
+        except (TypeError, ValueError):
+            travelers = []
+        if not isinstance(travelers, list):
+            travelers = []
+        return TripRow(
+            trip_id=row["trip_id"],
+            created_at=row["created_at"],
+            name=row["name"],
+            start_date=row["start_date"],
+            end_date=row["end_date"],
+            travelers=[str(t) for t in travelers],
+            updated_at=row["updated_at"],
         )
 
     # -- intakes (testing mode) --------------------------------------------

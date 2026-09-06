@@ -64,12 +64,17 @@ from pathlib import Path
 from ..batch_period import month_from_label
 from . import graph_notify
 from .service import (
+    BATCH_TYPE_TRIP,
     FOLDER_RECEIPT_SUFFIXES,
     MODE_EXPENSE_GENERATION,
     add_receipts_to_expense_batch,
+    claim_trip_batch_slot,
     create_expense_batch,
     execute_expense_batch,
+    find_trip_batch,
     has_statement,
+    is_trip_batch,
+    release_trip_batch_slot,
 )
 from .store import JOB_DONE, JOB_ERROR, RunStore
 
@@ -205,6 +210,10 @@ def auto_materialize_enabled() -> bool:
 # under this lock makes a lost race land in the batch the winner created.
 _MATERIALIZE_LOCK = threading.Lock()
 
+# A mail local-part as the travel alias uses it (lowercased). The alias
+# matches the BASE local of a recipient, before any "+tag".
+_TRAVEL_ALIAS_RE = re.compile(r"[a-z0-9._-]{1,64}")
+
 
 def _is_plain_address(value) -> bool:
     """One bare e-mail address: no display name, no second address hiding
@@ -229,6 +238,11 @@ class IntakeConfig:
     alert_recipients: tuple[str, ...] = DEFAULT_ALERT_RECIPIENTS
     retention_years: int = DEFAULT_RETENTION_YEARS
     known_senders: tuple[str, ...] = ()   # outside addresses that are OURS
+    # Item 38: the local-part that routes mail to the TRAVEL pool.
+    # Configurable because the owner has not picked the name yet; ""
+    # means unset, and with it unset every mail routes exactly as before
+    # (the receipts@ behavior is regression-pinned on that).
+    travel_alias: str = ""
 
     @classmethod
     def from_settings(cls, settings: dict | None) -> "IntakeConfig":
@@ -272,6 +286,15 @@ class IntakeConfig:
             if _is_plain_address(a)
         ))[:MAX_KNOWN_SENDERS]
 
+        # Same drop-don't-raise posture as known_senders: a hand-edited
+        # blob must never take the mailbox down. A travel alias that
+        # collides with a person alias or the canonical receipts local is
+        # ignored (the PUT edge refuses it; this is the belt).
+        travel = str(raw.get("travel_alias") or "").strip().lower()
+        if not _TRAVEL_ALIAS_RE.fullmatch(travel) or travel == "receipts" \
+                or travel in aliases:
+            travel = ""
+
         return cls(
             domain=domain,
             aliases=aliases,
@@ -281,6 +304,7 @@ class IntakeConfig:
             alert_recipients=alerts,
             retention_years=_cap("retention_years", DEFAULT_RETENTION_YEARS),
             known_senders=known,
+            travel_alias=travel,
         )
 
 
@@ -352,6 +376,33 @@ def normalize_intake_setting(raw) -> dict:
                 "addresses"
             )
         cleaned["known_senders"] = deduped
+    # Item 38: the travel-pool local-part. "" stores as unset (the owner
+    # has not picked the name yet; the feature activates when they do).
+    # Collisions are refused HERE, against the aliases of THIS payload,
+    # because the intake object is stored exactly as sent: "receipts"
+    # would swallow the company intake wholesale, and a person alias
+    # would stop routing that person's mail.
+    if "travel_alias" in raw:
+        travel = raw["travel_alias"]
+        if not isinstance(travel, str):
+            raise ValueError("intake.travel_alias must be a string")
+        travel = travel.strip().lower()
+        if travel and not _TRAVEL_ALIAS_RE.fullmatch(travel):
+            raise ValueError(
+                "intake.travel_alias must be a bare address local-part "
+                "(letters, digits, . _ -)"
+            )
+        if travel == "receipts":
+            raise ValueError(
+                "intake.travel_alias cannot be 'receipts' - that is the "
+                "company intake address"
+            )
+        if travel and travel in cleaned.get("aliases", {}):
+            raise ValueError(
+                f"intake.travel_alias {travel!r} collides with a person "
+                "alias"
+            )
+        cleaned["travel_alias"] = travel
     return cleaned
 
 
@@ -366,13 +417,26 @@ class InboundMessage:
     attachments: list[tuple[str, bytes]]   # (filename, bytes), receipt types
     skipped: list[str]            # attachment names dropped (type/size/count)
     body_only: bool               # no usable attachments but there IS a body
+    # The BASE local of each recipient (the part before any "+tag"), in
+    # the same order. `to_locals` carries the plus-TAG because that is
+    # the person-alias signal (receipts+dirk@ -> "dirk"); the travel
+    # split keys on the base instead, so travel+rome@ is travel and
+    # receipts+travel@ stays the company intake's tag convention
+    # (adversarial review 2026-09-06, finding 4).
+    to_base_locals: list[str] = field(default_factory=list)
 
 
-def _locals_from_addrs(addrs, domain: str, out: list[str]) -> None:
+def _locals_from_addrs(
+    addrs, domain: str, out: list[str],
+    base_out: list[str] | None = None,
+) -> None:
     for addr in addrs:
         addr = (addr or "").strip().lower()
         if addr.endswith("@" + domain):
             local = addr.split("@", 1)[0]
+            base = local.split("+", 1)[0]
+            if base_out is not None and base and base not in base_out:
+                base_out.append(base)
             # plus-addressing: receipts+dirk@ -> tag "dirk" is the signal
             if "+" in local:
                 local = local.split("+", 1)[1]
@@ -386,16 +450,17 @@ def parse_inbound(
     msg = BytesParser(policy=policy.default).parsebytes(raw)
     from_addr = parseaddr(str(msg.get("From", "")))[1].strip().lower()
     to_locals: list[str] = []
+    to_base_locals: list[str] = []
     # Envelope recipients first: our own listener IS the receiving MTA, so
     # they are authoritative and cover Bcc'd aliases the headers never show.
-    _locals_from_addrs(envelope_rcpts or [], domain, to_locals)
+    _locals_from_addrs(envelope_rcpts or [], domain, to_locals, to_base_locals)
     # NOTE: 3.12's strict getaddresses (CVE-2023-27043 fix) answers the
     # WHOLE call with the [('','')] failure sentinel if ANY element is
     # unparseable — an empty string from an absent header poisons it.
     header_values = [str(msg.get(h, "")) for h in ("To", "Cc")]
     _locals_from_addrs(
         (a for _l, a in getaddresses([v for v in header_values if v.strip()])),
-        domain, to_locals,
+        domain, to_locals, to_base_locals,
     )
 
     attachments: list[tuple[str, bytes]] = []
@@ -454,6 +519,7 @@ def parse_inbound(
         attachments=attachments,
         skipped=skipped,
         body_only=body_only,
+        to_base_locals=to_base_locals,
     )
 
 
@@ -469,6 +535,21 @@ def resolve_person(
         if person:
             return {"person": person, "source": "alias", "address": from_addr}
     return {"person": from_addr, "source": "sender", "address": from_addr}
+
+
+def is_travel_mail(base_locals: list[str], cfg: IntakeConfig) -> bool:
+    """Was this mail addressed to the travel alias? Address-only, per
+    item 38 ruling 1: the split routes by the To-address the sender
+    picked, never by content classification. With no alias configured
+    (the owner has not chosen the name) nothing is ever travel.
+
+    Matches the BASE local (before any "+tag"): travel+rome@ is travel
+    mail, while receipts+travel@ is the company intake's person-tag
+    convention and stays month mail. A mail addressed to BOTH intakes
+    (To receipts@, Cc travel@) counts as travel: resting in the travel
+    pool is recoverable with one click, auto-ingesting into a month
+    against the sender's travel flag is the worse error."""
+    return bool(cfg.travel_alias) and cfg.travel_alias in (base_locals or [])
 
 
 def is_known_sender(from_addr: str, cfg: IntakeConfig) -> bool:
@@ -813,6 +894,12 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
                 row["receipt_month_source"] = meta["receipt_month_source"]
             if meta.get("mixed_months"):
                 row["mixed_months"] = True
+            # Travel stamp (item 38): parallel field, absent on month
+            # mail. The trip suggestion is computed at read time in
+            # `annotate_travel_pool` (trips open and close; a suggestion
+            # stamped at arrival would go stale).
+            if meta.get("pool_kind"):
+                row["pool_kind"] = meta["pool_kind"]
             # Duplicate stamps (2026-08-25): which earlier mail already
             # carried this content, so the row can point at it instead of
             # just refusing to explain itself.
@@ -865,6 +952,10 @@ def archive_message(
         "at": _now_iso(),
         "from": parsed.from_addr,
         "to_locals": parsed.to_locals,
+        # The base locals too, so a router that died BEFORE the routing
+        # CAS leaves enough behind for replay to re-derive the travel
+        # answer (finding 3): the stamp is only written at routing.
+        "to_base_locals": parsed.to_base_locals,
         "subject": parsed.subject,
         "message_id": parsed.message_id,
         "status": status,
@@ -1213,10 +1304,12 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
             cfg = IntakeConfig.from_settings(store.get_settings())
             meta = _read_meta(arch)
             batch_label = ""
+            batch_is_trip = False
             if meta.get("batch_id"):
                 run = store.get_run(str(meta["batch_id"]))
                 if run is not None:
                     batch_label = (run.label or "").strip()
+                    batch_is_trip = is_trip_batch(run)
         if not cfg.auto_ack or not graph_notify.enabled():
             return
         if meta.get("ack_at") or _inbound_is_auto_generated(arch):
@@ -1235,11 +1328,22 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
             )
         elif meta.get("status") == STATUS_POOLED:
             verb = "are" if n > 1 else "is"
-            landed = (
-                f" {verb} stored for {_month_human(month)} in the Brisken "
-                "expense tool, and will join that month's expense run "
-                "automatically when the month is opened."
-            )
+            if str(meta.get("pool_kind") or "") == "travel":
+                # Travel mail waits for a human to put it on its trip, so
+                # the ack must not promise the month pool's automatic
+                # join — that would be a claim about behavior that
+                # deliberately does not happen (deny-by-default).
+                landed = (
+                    f" {verb} stored as travel receipts in the Brisken "
+                    "expense tool, and will be added to the right trip "
+                    "with the next review."
+                )
+            else:
+                landed = (
+                    f" {verb} stored for {_month_human(month)} in the "
+                    "Brisken expense tool, and will join that month's "
+                    "expense run automatically when the month is opened."
+                )
         elif meta.get("materialized") and month:
             # Item 39: the mail opened its month itself, so the ack states
             # a finished fact — "filed into", never "waiting for".
@@ -1250,8 +1354,9 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
             )
         elif batch_label:
             landed = (
-                f' landed in the "{batch_label}" expense month in the '
-                "Brisken expense tool."
+                f' landed in the "{batch_label}" '
+                + ("trip" if batch_is_trip else "expense month")
+                + " in the Brisken expense tool."
             )
         else:
             landed = (
@@ -1265,13 +1370,29 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
             f"{n} file(s) from your email" if n
             else "Your email"
         )
+        # Travel mail is reviewed per trip and was sent to the travel
+        # address; promising "the monthly run" and signing as receipts@
+        # would both be wrong about it (finding 7).
+        is_travel = (
+            str(meta.get("pool_kind") or "") == "travel" or batch_is_trip
+        )
+        review_note = (
+            " Nothing else to do; Criss reviews them with the trip's "
+            "expenses." if is_travel else
+            " Nothing else to do; Criss reviews them with the monthly "
+            "run."
+        )
+        sender_local = (
+            cfg.travel_alias if is_travel and cfg.travel_alias
+            else "receipts"
+        )
         body = (
             lead
             + (f' "{subject}"' if subject else "")
             + landed
-            + " Nothing else to do; Criss reviews them with the "
-            "monthly run.\n\nAutomated confirmation from "
-            f"receipts@{cfg.domain}."
+            + review_note
+            + "\n\nAutomated confirmation from "
+            f"{sender_local}@{cfg.domain}."
         )
         if graph_notify.send_mail(
             recipient, "Receipt received" + (f": {subject}" if subject else ""),
@@ -1324,6 +1445,10 @@ def open_batch(store: RunStore):
     for run in store.list_runs():
         if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
             continue
+        if is_trip_batch(run):
+            # A trip is not a month: legacy re-ingest and the
+            # delete-month "next open" answer both mean company months.
+            continue
         if not has_statement(run):
             return run
     return None
@@ -1359,6 +1484,11 @@ def _open_batch_for_month(store: RunStore, ym: tuple[int, int] | None):
     for run in store.list_runs():
         if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
             continue
+        if is_trip_batch(run):
+            # Item 38: month routing NEVER lands mail in a trip, even
+            # when the trip's name happens to parse as a month. Travel
+            # mail joins a trip only by an operator's click.
+            continue
         if month_from_label(run.label) != ym:
             continue
         if not has_statement(run):
@@ -1378,6 +1508,8 @@ def month_batch_states(store: RunStore) -> dict[tuple[int, int], str]:
     out: dict[tuple[int, int], str] = {}
     for run in store.list_runs():
         if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if is_trip_batch(run):
             continue
         ym = month_from_label(run.label)
         if ym is None:
@@ -1415,10 +1547,18 @@ def annotate_pool_state(store: RunStore, rows: list[dict]) -> int:
     """Stamp ``pool_month_state`` ("no_batch" | "open" | "closed") on the
     pooled rows of a read_log listing; returns how many distinct mails are
     waiting. "open" is transient — an open month claims its pool on the
-    next trigger."""
+    next trigger.
+
+    Travel rows (``pool_kind: "travel"``) get NO month state: they are
+    not waiting on a month, and a state that says "a claim is imminent"
+    would be a false promise about mail the month pool deliberately
+    skips. The returned count still includes them — ``n_pooled`` answers
+    "how many mails are resting", whichever pool they rest in."""
     states = month_batch_states(store)
     for row in rows:
         if str(row.get("status", "")) != STATUS_POOLED:
+            continue
+        if str(row.get("pool_kind") or "") == "travel":
             continue
         ym = _ym(str(row.get("pool_month") or ""))
         row["pool_month_state"] = (
@@ -1426,6 +1566,50 @@ def annotate_pool_state(store: RunStore, rows: list[dict]) -> int:
         )
     return count_archives(
         rows, lambda r: str(r.get("status", "")) == STATUS_POOLED
+    )
+
+
+def annotate_travel_pool(
+    db_path: Path, data_root: Path, rows: list[dict],
+) -> int:
+    """Stamp ``trip_suggestion`` on travel-pooled rows and return how
+    many distinct travel mails are resting.
+
+    The suggestion fires only when the mail's receipt dates fall inside
+    EXACTLY ONE trip's range (item 38 design call): zero covering trips
+    is an honest blank, two is ambiguity that must surface as absence,
+    never as a guess. Joining stays a click either way. Computed at read
+    time against the live trips list, so opening or deleting a trip
+    moves the suggestion without touching the archive."""
+    from .service import covering_trips
+
+    travel_rows = [
+        r for r in rows
+        if str(r.get("status", "")) == STATUS_POOLED
+        and str(r.get("pool_kind") or "") == "travel"
+    ]
+    if travel_rows:
+        with RunStore(db_path) as store:
+            trips = store.list_trips()
+        for row in travel_rows:
+            arch = _archive_dir(data_root, str(row.get("archive") or ""))
+            dates = (
+                _read_meta(arch).get("receipt_dates") or []
+                if arch is not None else []
+            )
+            covering = covering_trips(trips, dates)
+            if len(covering) == 1:
+                trip = covering[0]
+                row["trip_suggestion"] = {
+                    "trip_id": trip.trip_id,
+                    "name": trip.name,
+                    "start": trip.start_date,
+                    "end": trip.end_date,
+                }
+    return count_archives(
+        rows,
+        lambda r: str(r.get("status", "")) == STATUS_POOLED
+        and str(r.get("pool_kind") or "") == "travel",
     )
 
 
@@ -1445,7 +1629,19 @@ def annotate_status_view(rows: list[dict]) -> None:
     for row in rows:
         status = str(row.get("status", ""))
         kind, label = _STATUS_VIEW.get(status, (KIND_UNKNOWN, status or "?"))
-        if status == STATUS_POOLED:
+        if status == STATUS_POOLED and str(
+            row.get("pool_kind") or ""
+        ) == "travel":
+            # Travel rows wait on a HUMAN's click, not on a month opening;
+            # the label must never borrow the month pool's promise. With
+            # exactly one covering trip the suggestion is named — as a
+            # reading, not a decision.
+            suggestion = row.get("trip_suggestion")
+            if isinstance(suggestion, dict) and suggestion.get("name"):
+                label = f'Travel; reads as "{suggestion["name"]}"'
+            else:
+                label = "Travel, waiting for its trip"
+        elif status == STATUS_POOLED:
             month = _month_human(str(row.get("pool_month") or ""))
             state = str(row.get("pool_month_state") or "no_batch")
             if not row.get("pool_month"):
@@ -2020,15 +2216,24 @@ def route_archived(
     cfg = IntakeConfig.from_settings(settings)
     person = resolve_person(parsed.to_locals, parsed.from_addr, cfg)
     received_at = _now_iso()
+    travel = is_travel_mail(parsed.to_base_locals, cfg)
 
     # Single-winner: CAS received -> routing before doing anything. A
     # second router (the replay sweep picking up a stale `received`, a
     # redelivery) sees the transient status and stands down, which also
     # closes the pre-existing double-route window on stale receiveds.
+    # The travel stamp rides in the SAME CAS (item 38): it is decided by
+    # the address alone, so it is known before any content is read, and
+    # stamping it here means every later path (render, replay, claim,
+    # re-ingest) reads the meta instead of re-deriving the answer. It is
+    # written on EVERY route ("" when not travel), so a re-route after
+    # the alias changed cannot leave a stale travel stamp behind
+    # (finding 6), and an absent key means "never routed".
     applied, meta = _transition_meta(
         arch,
         lambda m: str(m.get("status", "")) == STATUS_RECEIVED,
-        {"status": STATUS_ROUTING, "person": person},
+        {"status": STATUS_ROUTING, "person": person,
+         "pool_kind": "travel" if travel else ""},
     )
     if not applied:
         return {
@@ -2094,6 +2299,31 @@ def route_archived(
         stamps = _month_stamps(arch, settings, arrival_iso)
         _update_meta(arch, stamps)
         month = str(stamps["receipt_month"])
+
+        if travel:
+            # Item 38: travel mail RESTS in the pool, unconditionally —
+            # deny-by-default. It never consults the month batches (a
+            # trip has a name and a roster only a human knows, so
+            # nothing here may pick one) and never auto-joins a trip
+            # even when exactly one covers its dates; that trip is a
+            # SUGGESTION on the pooled row, and joining is a click.
+            # The dates were still extracted above: they feed the
+            # suggestion, and the cache is warm for the eventual join.
+            # DELIBERATELY ABOVE the item-39 materializer: travel mail
+            # must never open a month, whatever the flag says.
+            _transition_meta(
+                arch,
+                lambda m: str(m.get("status", "")) == STATUS_ROUTING,
+                {"status": STATUS_POOLED, "batch_id": "",
+                 "batch_deleted": False},
+            )
+            _maybe_ack(db_path, arch)
+            return {
+                "status": STATUS_POOLED, "archive": arch.name,
+                "person": person, "pool_month": month,
+                "pool_kind": "travel",
+                "receipt_month_source": stamps["receipt_month_source"],
+            }
 
         # Ensure-month (item 39) fires ONLY here — the no-open-batch branch
         # of arrival routing — and only when the month came off a RECEIPT
@@ -2240,6 +2470,12 @@ def claim_pooled(
         meta = _read_meta(arch)
         if str(meta.get("status", "")) != STATUS_POOLED:
             continue
+        if str(meta.get("pool_kind") or "") == "travel":
+            # Travel mail is never claimed by a month, whatever its
+            # receipt_month stamp says: it rests until an operator joins
+            # it to a trip (item 38, deny-by-default).
+            still_pooled += 1
+            continue
         ym = _ym(str(meta.get("receipt_month") or ""))
         # No month stamp = nothing to match a batch against. Leave it
         # resting and visible rather than guessing a month for it.
@@ -2343,6 +2579,13 @@ def materialize_pooled(
             continue
         meta = _read_meta(arch)
         if str(meta.get("status", "")) != STATUS_POOLED:
+            continue
+        if str(meta.get("pool_kind") or "") == "travel":
+            # Item 38 x item 39 (rebase interplay): travel mail is never
+            # material for a MONTH — its receipt_month stamp exists only
+            # to warm the cache and feed the trip suggestion. It rests
+            # until an operator joins it to a trip; the backfill must not
+            # seed a month batch from a travel receipt.
             continue
         if str(meta.get("receipt_month_source", "")) != "receipt":
             continue
@@ -2490,6 +2733,202 @@ def re_pool_stranded(
     return {"re_pooled": re_pooled}
 
 
+# Trip-batch creation is serialized so two simultaneous joins to a
+# batch-less trip cannot each create one. Joins are operator clicks —
+# rare — so holding one lock across the whole join (vision included) is
+# correct and keeps "one batch per trip" a structural fact rather than a
+# race outcome. Arrival routing never takes this lock.
+_TRIP_JOIN_LOCK = threading.Lock()
+
+
+def join_trip(
+    db_path: Path, learning_db_path: Path | None, data_root: Path,
+    archive: str, trip_id: str, operator: str | None = None,
+) -> dict:
+    """Join ONE travel-pooled mail to a trip — the operator's click, the
+    only way travel mail becomes expenses (item 38, deny-by-default; the
+    suggestion on the row is a reading, this is the decision).
+
+    The trip's batch is created WITH this mail's receipts when it does
+    not exist yet (create-with-receipt, the same ordering item 39 uses
+    for months: `create_expense_batch` refuses an empty batch and that
+    refusal is load-bearing), else the receipts are added incrementally
+    exactly like a month claim. Either way the mail's submitter rides in
+    as provenance, and a failure puts the mail back to RESTING in the
+    travel pool for the next click."""
+    arch = _archive_dir(data_root, archive)
+    if arch is None:
+        return {"error": "not found", "code": 404}
+    meta = _read_meta(arch)
+    if str(meta.get("pool_kind") or "") != "travel":
+        return {
+            "error": "only travel mail joins a trip; month mail joins "
+                     "its month automatically",
+            "code": 409,
+        }
+    with RunStore(db_path) as store:
+        trip = store.get_trip(str(trip_id))
+    if trip is None:
+        return {"error": "trip not found", "code": 404}
+    attachments = _archive_attachments(arch)
+    if not attachments:
+        return {
+            "error": "this mail has no ingestable file yet; render its "
+                     "body first",
+            "code": 409,
+        }
+
+    with _TRIP_JOIN_LOCK:
+        with RunStore(db_path) as store:
+            run = find_trip_batch(store, trip.trip_id)
+        # Single-winner on the archive: pooled -> claiming, same CAS the
+        # month claim uses, so a double click or a concurrent replay
+        # sweep sees the transient state and stands down.
+        applied, meta = _transition_meta(
+            arch,
+            lambda m: str(m.get("status", "")) == STATUS_POOLED,
+            {"status": STATUS_CLAIMING,
+             "batch_id": run.run_id if run is not None else ""},
+        )
+        if not applied:
+            return {
+                "error": "cannot join mail in state "
+                         f"{str(meta.get('status', ''))!r}",
+                "code": 409,
+            }
+        person = _archive_person(meta)
+        received_at = str(meta.get("at") or _now_iso())
+
+        if run is not None:
+            try:
+                job_id = _start_ingest(
+                    db_path, learning_db_path, run, attachments, person,
+                    received_at, arch, synchronous=True,
+                )
+                with RunStore(db_path) as store:
+                    job = store.get_job(job_id) or {}
+            except Exception as exc:  # noqa: BLE001 - same guard as claim_pooled
+                # A failure BEFORE the job existed (staging, disk, store)
+                # would otherwise strand the archive in `claiming` and
+                # 409 every further click (finding 5). Back to resting.
+                log.warning("trip join failed for %s: %s", arch.name, exc)
+                _transition_meta(
+                    arch,
+                    lambda m: str(m.get("status", "")) == STATUS_CLAIMING,
+                    {"status": STATUS_POOLED, "batch_id": "",
+                     "batch_deleted": False, "error": str(exc)[:400]},
+                )
+                return {"error": f"join failed: {exc}"[:400], "code": 500}
+            if job.get("status") != JOB_DONE:
+                # _ingest_job stamped held_failed + the error; the
+                # RESTING place for travel mail is the travel pool.
+                _transition_meta(
+                    arch,
+                    lambda m: str(m.get("status", "")) == HELD_FAILED,
+                    {"status": STATUS_POOLED, "batch_id": "",
+                     "batch_deleted": False},
+                )
+                return {
+                    "error": str(job.get("error") or "ingest failed"),
+                    "code": 500,
+                }
+            _update_meta(arch, {"job_id": job_id, "batch_id": run.run_id,
+                                "batch_deleted": False})
+            final = _read_meta(arch)
+            _append_log(data_root, {
+                "at": _now_iso(), "from": meta.get("from", ""),
+                "person": person.get("person"),
+                "subject": meta.get("subject", ""),
+                "n_files": len(attachments), "status": STATUS_INGESTED,
+                "archive": arch.name, "batch_id": run.run_id,
+                "job_id": job_id,
+            })
+            return {
+                "status": str(final.get("status", "")),
+                "archive": arch.name, "batch_id": run.run_id,
+                "trip_id": trip.trip_id, "job_id": job_id,
+                "documents": final.get("documents", []),
+            }
+
+        # No batch yet: create it WITH this mail's receipts, holding the
+        # trip-batch slot so a concurrent upload declaring the same trip
+        # cannot create a second batch while this OCR runs (finding 1),
+        # and so the trip entity cannot be deleted out from under the
+        # creation (finding 2; `delete_trip_entity` shares the lock).
+        with RunStore(db_path) as store:
+            refused = claim_trip_batch_slot(store, trip.trip_id)
+        if refused is not None:
+            # A concurrent upload won the creation (or just finished).
+            # Back to resting; the next click lands on the append path.
+            _transition_meta(
+                arch,
+                lambda m: str(m.get("status", "")) == STATUS_CLAIMING,
+                {"status": STATUS_POOLED, "batch_id": "",
+                 "batch_deleted": False},
+            )
+            return dict(refused)
+        prepared = None
+        try:
+            provenance = {
+                hashlib.sha1(data).hexdigest()[:16]:
+                    {**person, "received_at": received_at}
+                for _name, data in attachments
+            }
+            with RunStore(db_path) as store:
+                settings = store.get_settings()
+            prepared = create_expense_batch(
+                data_root,
+                files=attachments,
+                legal_entity="",
+                label=trip.name,
+                now_iso=_now_iso(),
+                operator=operator,
+                learning_db_path=learning_db_path,
+                settings=settings,
+                batch_type=BATCH_TYPE_TRIP,
+                trip_id=trip.trip_id,
+                provenance_by_digest=provenance,
+            )
+            with RunStore(db_path) as store:
+                run_id = execute_expense_batch(store, prepared)
+                created = store.get_run(run_id)
+        except Exception as exc:  # noqa: BLE001 - pool it back, keep it clickable
+            if prepared is not None:
+                shutil.rmtree(prepared.work_dir, ignore_errors=True)
+            _transition_meta(
+                arch,
+                lambda m: str(m.get("status", "")) == STATUS_CLAIMING,
+                {"status": STATUS_POOLED, "batch_id": "",
+                 "batch_deleted": False, "error": str(exc)[:400]},
+            )
+            log.warning("trip join failed for %s: %s", arch.name, exc)
+            return {"error": f"join failed: {exc}"[:400], "code": 500}
+        finally:
+            release_trip_batch_slot(trip.trip_id)
+        documents = [
+            str(r.get("document_id"))
+            for r in (created.snapshot or {}).get("receipts") or []
+            if isinstance(r, dict) and r.get("document_id")
+        ]
+        _update_meta(arch, {
+            "status": STATUS_INGESTED, "batch_id": run_id,
+            "batch_deleted": False, "documents": documents,
+        })
+        _maybe_ack(db_path, arch)
+        _append_log(data_root, {
+            "at": _now_iso(), "from": meta.get("from", ""),
+            "person": person.get("person"),
+            "subject": meta.get("subject", ""),
+            "n_files": len(attachments), "status": STATUS_INGESTED,
+            "archive": arch.name, "batch_id": run_id,
+        })
+        return {
+            "status": STATUS_INGESTED, "archive": arch.name,
+            "batch_id": run_id, "trip_id": trip.trip_id,
+            "documents": documents, "created_batch": True,
+        }
+
+
 def process_message(
     db_path: Path,
     learning_db_path: Path | None,
@@ -2613,7 +3052,39 @@ def replay_held(
                 log.warning("month stamp failed for %s: %s", arch.name, exc)
                 still_held += 1
                 continue
+        if "pool_kind" not in meta:
+            # A router that died BEFORE the routing CAS (custody taken,
+            # 250 sent, no stamp) left an archive replay would otherwise
+            # month-route blind — finding 3: a travel-addressed mail
+            # ingested into a company month via the crash path. The
+            # base locals were archived at custody; derive the answer
+            # against the CURRENT alias, exactly as arrival would.
+            if settings is None:
+                with RunStore(db_path) as store:
+                    settings = store.get_settings()
+            locals_ = list(
+                meta.get("to_base_locals") or meta.get("to_locals") or []
+            )
+            kind = "travel" if is_travel_mail(
+                locals_, IntakeConfig.from_settings(settings)
+            ) else ""
+            _update_meta(arch, {"pool_kind": kind})
+            meta = {**meta, "pool_kind": kind}
         held_status = str(meta.get("status", ""))
+        if str(meta.get("pool_kind") or "") == "travel":
+            # A stuck travel mail (failed join, crashed router) goes back
+            # to RESTING in the travel pool; replay never month-routes it.
+            applied, _m = _transition_meta(
+                arch,
+                lambda m, s=held_status: str(m.get("status", "")) == s,
+                {"status": STATUS_POOLED, "batch_id": "",
+                 "batch_deleted": False},
+            )
+            if applied:
+                pooled += 1
+            else:
+                still_held += 1
+            continue
         with _POOL_LOCK:
             # Re-resolve per archive INSIDE the hold: a statement attach
             # mid-drain closes the month and later archives must pool, not
@@ -2870,6 +3341,23 @@ def render_ingest(
         return {"error": f"render failed: {exc}", "code": 500}
 
     month = str(stamps["receipt_month"])
+    if str(_read_meta(arch).get("pool_kind") or "") == "travel":
+        # Item 38: a rendered travel mail rests in the travel pool like a
+        # delivered one — it never month-routes and never auto-joins a
+        # trip. The stamp was written at arrival routing, off the
+        # address, so a render months later still routes by what the
+        # sender addressed.
+        _transition_meta(
+            arch,
+            lambda m: str(m.get("status", "")) == STATUS_RENDERING,
+            {"status": STATUS_POOLED, "batch_id": "",
+             "batch_deleted": False},
+        )
+        _maybe_ack(db_path, arch)
+        return {
+            "status": STATUS_POOLED, "archive": arch.name,
+            "pool_month": month, "pool_kind": "travel",
+        }
     with _POOL_LOCK:
         with RunStore(db_path) as store:
             run = _open_batch_for_month(store, _ym(month))
@@ -2945,6 +3433,17 @@ def re_ingest(
         return {
             "error": "this mail delivered no attachment to re-ingest; a "
                      "body-only mail is recovered with render-ingest",
+            "code": 409,
+        }
+    if str(_read_meta(arch).get("pool_kind") or "") == "travel":
+        # Belt: travel mail joins a TRIP by an operator's click, never
+        # "the newest open month". In practice a travel archive is always
+        # month-stamped, so the delete cascade pools it back rather than
+        # stamping batch_deleted, and this path cannot fire — but a
+        # guard that costs one read keeps the invariant explicit.
+        return {
+            "error": "travel mail joins a trip, not a month; use the "
+                     "trip join on the pooled row",
             "code": 409,
         }
     with RunStore(db_path) as store:

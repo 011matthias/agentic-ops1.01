@@ -142,6 +142,7 @@ name answers the same one:
 | `n_review` | how many are flagged for a look (`check` or `pick`) |
 | `n_needs_entity` | how many still need a legal entity (a confirmed private row needs none by design, so it does not count — item 41 sharpened the question the name always asked) |
 | `n_needs_person` | how many rows no person owns yet (item 40; the fix is a person on the card, not a row edit) |
+| `n_roster_mismatch` | trip batches only (absent on company months): how many rows a person OUTSIDE the trip's roster paid for (item 38 x 40) |
 | `n_suggested_private` | how many rows are suggested as private expenses, unconfirmed (item 41) |
 | `n_private` | how many rows the operator confirmed private (reimbursement rows) |
 | `n_set_aside` | how many files the quarantine is still holding back |
@@ -295,6 +296,77 @@ corpserv export every row says `chase-2838-family` while the rows span
 2838 / 3645 / 3876 / 0340, and reading that as a card would invent a coverage
 row for a card that does not exist.
 
+## The two batch functions: `batch_type` + `trip` (added 2026-09-06)
+
+Item 38: expense creation splits into company months and trips, DECLARED
+at creation and never inferred from content. Both fields are parallel
+(rule 1); a stale SPA renders exactly what it rendered before.
+
+**`batch_type`** — scalar string, `"company-month"` or `"trip"`, on the
+expense-batch payload and on every row of `GET /api/expense-batches`. An
+absent config marker reads as `"company-month"`: every batch that
+predates the split is one, and an undeclared `POST /api/expense-batches`
+stores no marker at all, so an un-updated caller produces the exact
+pre-split config. Declaring is a form field on the create
+(`batch_type`, plus `trip_id` when it is `"trip"`).
+
+**`trip`** — object or null on the expense-batch payload. Null on every
+company month; on a trip batch:
+
+```json
+{ "trip_id": "8c1f30aa2e41",
+  "name": "Rome 2026",
+  "start": "2026-09-20",
+  "end": "2026-10-03",
+  "travelers": ["Dirk Neumann", "Criss"] }
+```
+
+`travelers[]` is a list of person NAMES (item 40's vocabulary), pinned
+`string` in `test_view_contract.py`. The roster is VARIABLE by owner
+ruling; render the list, never assume one traveler.
+
+On a trip batch's rows, `expenses[].roster_mismatch` (boolean; the key
+is absent on company months) says the row's resolved `person` — item
+40's card chain, or `reimburse_to` on a private row — is not on the
+trip's roster. A flag, never a block and never a review state: the
+likely fix is adding the traveler to the roster (PUT /api/trips/{id}),
+not editing the row. An empty roster flags nothing, and a row with no
+person is `n_needs_person`'s business. `summary.n_roster_mismatch` is
+the count, same trip-only presence.
+
+**What a trip batch never does:** it never appears in
+`GET /api/expense-batches` (the months screen stays months — trips list
+via `GET /api/trips`), it never claims pooled month mail (month routing
+skips trip batches structurally, even when the trip's name parses as a
+month), it never carries a `period_suggestion` (trips span month
+boundaries freely), and `POST .../statement` refuses it with a 400
+(ruling 3: trip receipts reconcile against the company month's
+statement; the cross-batch match pool is the R4 round). The item-25
+date guard stays alive on trips but measures against the TRIP's range
+padded a month either side (flights book early, charges settle late),
+never against a label- or plurality-derived month; the flagged row's
+`review.period` carries that padded window.
+
+### `GET /api/trips` (beside /api/expense-batches)
+
+`{trips: [...]}`, newest range first. Each row is the trip entity plus
+its batch join — `batch_id` and `summary` are null until the first
+receipt joins, because the batch materializes on first join
+(create-with-receipt) rather than being created empty:
+
+| Key | Meaning |
+|---|---|
+| `trip_id` · `name` · `start` · `end` · `travelers[]` | the entity; dates inclusive, `YYYY-MM-DD` |
+| `batch_id` | the trip's expense batch, or null while no receipt has joined |
+| `summary` | `batch_list_summary` of that batch (same counts vocabulary as the months list), or null |
+
+`POST /api/trips` (`{name, start, end, travelers[]}`) creates the
+entity; `PUT /api/trips/{id}` updates it (`travelers` replaces the whole
+roster); `DELETE /api/trips/{id}` refuses (409) while a batch still
+references the trip. One batch per trip: a second
+`POST /api/expense-batches` declaring the same `trip_id` is a 409
+naming the existing batch.
+
 ## The month the receipts read as: `period_suggestion` (added 2026-08-29)
 
 Expense-batch payload, top level, object or null. Backlog item 36: the
@@ -410,6 +482,47 @@ the mail, its month simply is not open yet. It therefore does NOT count toward
 `n_held`, and the Held badge cannot be made to reach zero by fixing it. A
 pooled row carries no `batch_id` and no `expenses`, because it belongs to no
 batch yet.
+
+### The travel pool (item 38, added 2026-09-06)
+
+Mail addressed to the TRAVEL alias (settings `intake.travel_alias`, unset
+until the owner picks the local-part) rests in the pool too, with three
+parallel fields on its rows and one parallel count. The `status` enum did
+NOT grow: travel rows are `pooled`, distinguished by `pool_kind`, and
+`status_label` already says the right thing on a stale SPA.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `entries[].pool_kind` | `"travel"` (absent on month mail) | this mail waits for a TRIP and an operator's click, never for a month |
+| `entries[].trip_suggestion` | object `{trip_id, name, start, end}` (absent otherwise) | present only when the mail's receipt dates fall inside EXACTLY ONE trip's range. A reading, not a decision: two covering trips surface as absence, and joining is always the click |
+| `n_pooled_travel` | number | the travel share of `n_pooled` (which keeps counting ALL resting mail) |
+
+Travel rows carry NO `pool_month_state` — a month state on them would
+promise a claim that deliberately never happens. Their `status_label` is
+`Travel, waiting for its trip`, or `Travel; reads as "{name}"` when the
+suggestion is present. The month claim, the replay sweep, re-ingest and
+auto-materialization all skip `pool_kind: "travel"` structurally.
+
+Address semantics, pinned: the alias matches the BASE local of any
+recipient, before any `+tag` — `travel+rome2026@` is travel mail, while
+`receipts+travel@` is the company intake's person-tag convention and
+stays month mail. A mail addressed to BOTH intakes (To `receipts@`, Cc
+`travel@`) counts as travel: resting is one click to recover,
+auto-ingesting against the sender's travel flag is the worse error.
+
+`POST /api/inbound/{archive}/join-trip` (`{"trip_id": ...}`) is the
+click: 409 unless the mail is travel-pooled, 404 on an unknown trip,
+and 409 (mail returned to resting) while another upload is mid-creation
+of the same trip's batch. It creates the trip's batch WITH this mail's
+receipts when none exists (reply carries `created_batch: true`), else
+appends incrementally like a month claim; either way `submitted_by`
+provenance rides in and a failure returns the mail to the travel pool.
+
+`PUT /api/settings` `intake.travel_alias`: a bare local-part, `""` to
+unset. Refused when it is `"receipts"` or collides with a person alias.
+REMINDER: the `intake` object is whole-object-replace (see below), so an
+SPA that does not know this key will silently drop it on its next
+settings save — ship the SPA prompt before anyone sets the alias.
 
 Both `n_pooled` and `n_held` count distinct ARCHIVES. The log holds more than
 one row per archive by design (one at acceptance, another when a replay or a
