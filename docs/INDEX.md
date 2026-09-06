@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-06 | Expense-Recon Manual-Input Analysis | client-dev | [→](docs/2026-09-06%20-%20Expense-Recon%20Manual-Input%20Analysis/Checkpoint.md) |
 | 2026-09-06 | Brisken Zoho Entity Data Layout | client-dev | [→](docs/2026-09-06%20-%20Brisken%20Zoho%20Entity%20Data%20Layout/Checkpoint.md) |
 | 2026-09-06 | Brisken P1 Feedback Wave and Lovable Prompt Audit | client-dev | [→](docs/2026-09-06%20-%20Brisken%20P1%20Feedback%20Wave%20and%20Lovable%20Prompt%20Audit/Checkpoint.md) |
 | 2026-08-29 | Brisken P1 Demo Day Test Loop | client-dev | [Mini-Checkpoint-2](docs/2026-08-29%20-%20Brisken%20P1%20Demo%20Day%20Test%20Loop/Mini-Checkpoint-2.md) |
