@@ -5,11 +5,15 @@
 # price_max: alert cap in EUR (total incl. buyer fee). Listings above it are
 #            still recorded as comp data, just never alerted.
 
+# Hand-set 2026-09-06 after first live afternoon (52 alerts / ~6h was a
+# firehose at 0.62/6/5). Judgment values until the backtest scorer exists;
+# proper calibration goes through /comd_optimize once ~2 weeks of gone-data
+# has accumulated (see status/watcher.md).
 settings:
-  deal_ratio: 0.62        # alert when total price <= ratio * comp median
-  min_comps: 6            # minimum comparable listings before scoring fires
+  deal_ratio: 0.55        # alert when total price <= ratio * comp median
+  min_comps: 8            # minimum comparable listings before scoring fires
   comp_window_days: 45    # how far back comps count
-  min_price: 5            # ignore sub-5-EUR listings (junk/scam floor)
+  min_price: 8            # floor in EUR; below this a flip is not worth the time
 
 searches:
   - tag: carhartt-jacke
