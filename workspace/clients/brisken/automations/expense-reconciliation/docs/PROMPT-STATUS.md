@@ -16,8 +16,11 @@ ambiguous, the decisive signature is the API FIELD NAME the applied code has
 to read (`seen_undefined`, `n_duplicate_copies`, `is_extra`, `coverage`,
 `period_suggestion`): a renderer cannot show a field it never names.
 
-Two display strings misread on the first pass, both resolved by reading the
-surrounding key: `"Not a duplicate"` is `wb.dups.notDup` from the workbench
+**Re-audited 2026-09-06 after the owner published: every prompt in this
+file is applied. The Not-applied table is empty for the first time.**
+
+Two display strings misread on the 2026-09-01 pass, both resolved by reading
+the surrounding key: `"Not a duplicate"` is `wb.dups.notDup` from the workbench
 duplicates panel, which predates `lovable-duplicates-prompt.md` and is not
 its row badge; `"Card account id"` survives on purpose as the Other-account
 free-text label, so it is not evidence that the attach-dialog prompt is
@@ -59,6 +62,10 @@ missing.
 | `lovable-card-strip-prompt.md` | "Card ending" and "No card number on the receipt" (2026-09-01) |
 | `lovable-zoho-copy-prompt.md` | "Download journal CSV" and "matched against this month's receipts" (2026-09-01) |
 | `lovable-month-suggestion-prompt.md` | The bundle reads `period_suggestion`. Gated on PR #657 deploying the field; pasted 2026-09-01 (2026-09-01) |
+| `lovable-coverage-prompt.md` | "Coverage by card", "Add a statement", "not in your card list"; `coverage` read twice (2026-09-06) |
+| `lovable-duplicates-prompt.md` | `n_duplicate_copies` and `is_extra` both read; `expx.dup.*` keys in EN and PT, including the singular "1 duplicate copy" (2026-09-06) |
+| `lovable-card-definition-prompt.md` | `seen_undefined`, `suggested_key` and `n_charges` all read; "Define this card" present (2026-09-06) |
+| `lovable-months-open-prompt.md` | `months.open` = "Open" / "Abrir" wired to a menu item, "Actions for" label present, and the hover-only `underline-offset-2 hover:underline` is GONE (2026-09-06) |
 
 These four were drafted 2026-08-28/29, pasted from chat, and lived only in a
 gitignored scratch directory until 2026-09-01. They are in `docs/` now
@@ -67,33 +74,13 @@ and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
-| Prompt | What it adds | Signature to audit for |
-|---|---|---|
-| `lovable-coverage-prompt.md` | The Statements panel, the per-statement download selector, and the Coverage by card panel (PR 3, shipped 2026-08-26) | "Coverage by card", "Add a statement", "not in your card list", "nothing loaded yet" |
-| `lovable-duplicates-prompt.md` | The per-row duplicate badge, the header count, and the two actions on a flagged row (PR #649, shipped 2026-08-28) | "duplicate copy", "Not a duplicate", "copy 2 of 2" |
-| `lovable-card-definition-prompt.md` | The seen-but-undefined card list on the Settings card screen, plus an always-visible Add card (PR #651, shipped 2026-08-28) | "Seen on your statements, not defined yet", "Define this card", "Add card" |
-| `lovable-months-open-prompt.md` | The way into a month on `/months`: rest-state link styling, a clickable row, an Open item in the row menu (no backend change; written 2026-08-28) | "Open" / "Abrir" as the first row-menu item; `aria-label` "Actions for ..." |
+Nothing. Every prompt in `docs/` is live in the published SPA as of
+2026-09-06, verified by field name against the bundle.
 
-All four re-verified ABSENT on 2026-09-01 against the published bundle, on
-the field names their renderers would have to read: `coverage` 0 hits,
-`n_duplicate_copies` and `is_extra` 0, `seen_undefined` and `suggested_key`
-0, and the months row still carries the hover-only
-`underline-offset-2 hover:underline` with no "Actions for" label.
-
-The first three were each written the same day their backend shipped, so the
-SPA half is outstanding until the owner pastes them. Until then: a month
-holding two workbooks still offers one download button and the per-card
-split of unreconciled money is API-and-PDF only; duplicate copies are
-detected, counted, and printed on the reconciliation PDF but carry no badge
-in the grid; and the cards actually charging a month appear nowhere on the
-screen where a card gets defined, which is the screen the 2026-08-28 demo
-was going to use.
-
-`lovable-months-open-prompt.md` is the odd one out, needing no backend at
-all. It answers the 2026-08-28 operator note "why cant the user enter and
-view or edit the month": every month does open, but the only affordance is a
-name styled like plain text until hovered, and the row menu offers Rename
-and Delete with no Open.
+This has never been true before; the backlog's habit is that a backend round
+ships the same day its prompt is written and the SPA half then waits. When
+the next round opens a gap, add the row back here with the field name its
+renderer would have to read, not just its display copy.
 
 ## Cannot verify (no live state exercises them)
 

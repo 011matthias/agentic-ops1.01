@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-08-28
+updated: 2026-09-06
 ---
 
 # Brisken / Expense Reconciliation (p1)
@@ -20,6 +20,14 @@ The backend is hosted and running on real data at brisken-expense-recon.fly.dev
 (API-only since v31; gated by `EXPENSE_RECON_OPERATOR_CODE`). The UI is the
 Lovable SPA at brisken-reconcile-dash.lovable.app. Verify the deployed origin,
 not localhost, after backend edits (`flyctl deploy`).
+
+**Every Lovable prompt is applied as of 2026-09-06**, verified against the
+published bundle by the field names each renderer has to read. The authority
+is `automations/expense-reconciliation/docs/PROMPT-STATUS.md`; where a row
+below still says a SPA half is "remaining" or "owner to apply", it is a
+record of that round, not the current state. This is the first time the
+not-applied list has been empty, so expect it to fill again: the habit is
+that a backend round ships the same day its prompt is written.
 
 ## Elements (index)
 
