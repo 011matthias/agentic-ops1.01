@@ -4181,10 +4181,27 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
     never judges): unresolved hints (with the rows they cover, generic
     tenders marked — those never auto-resolve BY DESIGN and can only be
     assigned explicitly), resolved cards with their hit counts, and the
-    no-hint rest."""
-    from ..cards import is_generic_tender
+    no-hint rest.
+
+    Digit-bearing unresolved hints group by their CANONICAL digit run
+    (backlog item 35: five spellings of 0340 rendered as five assignable
+    rows). The group key is the run's zero-stripped form — the same
+    equivalence `_card_keys` gives the matcher, so "0340" and a label
+    printing "340" are one group — while `digits` keeps the longest
+    printed spelling for display (a human knows the card as the statement
+    prints it, leading zero included). `hint` stays the row's own field
+    per api-contract rule 1: it carries the group's most-frequent member
+    spelling, so a stale SPA renders one truthful row and its Assign
+    still submits a hint string that exists in the batch (the digit fold
+    on assignment then resolves every sibling spelling). The full member
+    list rides in the PARALLEL `spellings[]`. Digit-less hints (generic
+    tenders, word-only hints) keep one row per verbatim string —
+    `digits: null` + the `generic` flag are what the SPA partitions the
+    no-card-number sub-strip on."""
+    from ..cards import hint_digit_run, is_generic_tender
 
     unresolved: dict[str, dict] = {}
+    spelling_rows: dict[str, dict[str, int]] = {}
     resolved: dict[str, dict] = {}
     n_no_hint = 0
     for doc, res in resolution.items():
@@ -4204,19 +4221,33 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
             if hint:
                 entry["hints"].add(hint)
         elif hint:
-            entry = unresolved.setdefault(hint, {
-                "hint": hint,
+            run = hint_digit_run(hint)
+            group = (
+                f"digits:{run.lstrip('0') or '0'}" if run else f"hint:{hint}"
+            )
+            entry = unresolved.setdefault(group, {
+                "hint": "",  # representative spelling, chosen after the loop
+                "digits": None,
                 "n_rows": 0,
                 "documents": [],
                 "generic": is_generic_tender(hint),
                 # True = two or more cards claim this hint; assigning it
                 # explicitly is the only resolution path.
-                "ambiguous": bool(res.get("ambiguous")),
+                "ambiguous": False,
             })
             entry["n_rows"] += 1
             entry["documents"].append(doc)
+            entry["ambiguous"] = entry["ambiguous"] or bool(res.get("ambiguous"))
+            if run and len(run) > len(entry["digits"] or ""):
+                entry["digits"] = run
+            counts = spelling_rows.setdefault(group, {})
+            counts[hint] = counts.get(hint, 0) + 1
         else:
             n_no_hint += 1
+    for group, entry in unresolved.items():
+        counts = spelling_rows[group]
+        entry["spellings"] = sorted(counts, key=lambda s: (-counts[s], s))
+        entry["hint"] = entry["spellings"][0]
     return {
         "unresolved_hints": sorted(
             unresolved.values(), key=lambda e: (-e["n_rows"], e["hint"])

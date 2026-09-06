@@ -646,3 +646,39 @@ Defining one is the existing `PUT /api/settings` with `cards`, which
 replaces the whole map, so send the current `cards[]` plus the new entry.
 A card with no entity is still DEFINED and drops out of this list; the
 missing entity is the entity column's business.
+
+## The unknown-card strip, grouped by card: `spellings[]` + `digits` (added 2026-09-06)
+
+Backlog item 35. `card_review.unresolved_hints[]` grouped by VERBATIM hint
+string, so the April batch rendered ONE unregistered card (0340) as five
+assignable rows — five spellings of the same masked number. Digit-bearing
+hints now group by their canonical digit run (the zero-stripped form the
+matcher's `_card_keys` uses, so "0340" and a label printing "340" are one
+group). Digit-less hints keep one row per verbatim string.
+
+Two fields on each entry, both parallel per rule 1 — `hint`, `n_rows`,
+`documents[]`, `generic`, `ambiguous` all keep their meaning:
+
+```json
+{ "hint": "***********0340",
+  "digits": "0340",
+  "spellings": ["***********0340", "VISA - ******0340", "****0340"],
+  "n_rows": 11,
+  "documents": ["..."],
+  "generic": false,
+  "ambiguous": false }
+```
+
+| Field | Meaning |
+|---|---|
+| `hint` | now the group's MOST-FREQUENT member spelling (ties break lexicographically). Still a real hint string from the batch, so an un-updated Assign submitting it works — and the digit fold on assignment resolves every sibling spelling with it |
+| `digits` | the longest printed digit run in the group, leading zero preserved (`"0340"`, never `"340"`), for display. `null` on digit-less entries |
+| `spellings[]` | every member spelling, most-frequent first. `[hint]` on digit-less entries |
+
+The no-card-number sub-strip is a rendering partition, not a second list:
+entries with `digits: null` and `generic: true` are tender words ("no card
+number readable on the receipt; assignment applies to this month only");
+`digits: null` with `generic: false` is a word-only identifying hint. The
+SPA partitions on those two existing flags and maps over `spellings[]` for
+the grouped Assign (`POST /api/expense-batches/{id}/cards` takes the full
+assignment list in one call).

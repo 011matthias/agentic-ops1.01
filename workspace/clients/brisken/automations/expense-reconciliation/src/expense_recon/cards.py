@@ -132,6 +132,27 @@ def is_generic_tender(text: str | None) -> bool:
     )
 
 
+def hint_digit_run(text: str | None) -> str | None:
+    """The digit run that identifies a payment hint's card, VERBATIM.
+
+    The strict masked-PAN rule from `resolve_card`, generalized (backlog
+    item 35): of the 3-8 digit runs in a hint, the LAST is taken — on a
+    masked PAN the earlier runs are BIN/middle fragments that cross-match
+    unrelated cards (R3 adversarial review), and on any other multi-run
+    hint the pick is display-only determinism for a string the resolver
+    refused to resolve anyway. Returns the run as printed (leading zero
+    preserved): "0340" stays
+    "0340", because this feeds the review strip's display grouping,
+    where a human knows the card as the statement prints it. The
+    zero-stripped match-key equivalence is the caller's business
+    (`_card_keys` semantics).
+    """
+    if not text:
+        return None
+    runs = re.findall(r"\d{3,8}", text)
+    return runs[-1] if runs else None
+
+
 @dataclass(frozen=True)
 class Card:
     """One card identity, composed from all sources."""

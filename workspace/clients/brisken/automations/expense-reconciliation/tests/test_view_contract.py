@@ -83,6 +83,11 @@ EXPENSE_BATCH_CONTRACT = {
     "card_review.resolved[].hints[]": "string",
     "card_review.unresolved_hints[]": "object",
     "card_review.unresolved_hints[].documents[]": "string",
+    # Item 35: the member spellings of a canonically-grouped hint row.
+    # Parallel to `hint` (which keeps the most-frequent spelling), so a
+    # stale SPA renders one truthful row while an updated one shows the
+    # group and submits every spelling on Assign.
+    "card_review.unresolved_hints[].spellings[]": "string",
     "category_options[]": "string",
     # PR 3: per-card coverage. `digits[]` and `statements[]` are the two
     # lists inside an entry; both are plain strings, and both are empty on
@@ -154,6 +159,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "expenses[].category_variance.categories[]",
     "duplicate_groups[]",
     "card_review.unresolved_hints[]",
+    "card_review.unresolved_hints[].spellings[]",
     "card_review.resolved[]",
     "card_review.resolved[].hints[]",
     "summary.upload_issues[]",
@@ -401,11 +407,15 @@ def _expense_batch(client, monkeypatch_setattr) -> dict:
         # two Staples receipts: reclassified below into different categories
         _extraction(vendor="Staples", tax="5.00", tax_label="VAT",
                     payment_hint="Visa"),
-        _extraction(vendor="Staples", total="12.00", date="2026-07-02"),
+        # an unregistered card under two spellings -> ONE grouped
+        # unresolved row (item 35), covering the spellings[] pin
+        _extraction(vendor="Staples", total="12.00", date="2026-07-02",
+                    payment_hint="****0340"),
         # an identical pair -> a duplicate group
         _extraction(vendor="Dup Co", total="9.00", date="2026-07-03",
                     payment_hint="Visa ...1672"),
-        _extraction(vendor="Dup Co", total="9.00", date="2026-07-03"),
+        _extraction(vendor="Dup Co", total="9.00", date="2026-07-03",
+                    payment_hint="CARTAO ***********0340"),
         # a statement page among the receipts -> quarantine + parse issue
         _extraction(vendor=None, total="8796.35", document_type="statement"),
     ])
