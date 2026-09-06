@@ -646,13 +646,50 @@ def _refusal_rows(data_root: Path) -> list[dict]:
     return rows
 
 
-def _within_days(rows: list[dict], days: int) -> int:
+def _window_rows(rows: list[dict], days: int) -> list[dict]:
     # Same timespec on both sides, or a row stamped in the cutoff SECOND
     # compares against a microsecond tail and falls out of its own window.
     cutoff = (
         datetime.now(timezone.utc) - timedelta(days=max(1, days))
     ).isoformat(timespec="seconds")
-    return sum(1 for r in rows if str(r.get("at", "")) >= cutoff)
+    return [r for r in rows if str(r.get("at", "")) >= cutoff]
+
+
+def _within_days(rows: list[dict], days: int) -> int:
+    return len(_window_rows(rows, days))
+
+
+def is_probe_refusal(row: dict) -> bool:
+    """A relay probe: rcpt-stage, recipient outside the intake domain.
+
+    The reason line IS the encoding of that check — `rcpt_decision` answers
+    "550 5.7.1 relay not permitted" exactly when the recipient is not ours —
+    so the split cannot drift from the refusal it describes. The other
+    rcpt-stage refusal ("too many recipients") is real mail addressed to us
+    and is deliberately NEITHER bucket: it stays in `n_refused` alone.
+    """
+    return (
+        str(row.get("stage", "")) == "rcpt"
+        and "relay not permitted" in str(row.get("reason", ""))
+    )
+
+
+def _annotate_refusal_rows(rows: list[dict]) -> None:
+    """Stamp ``probe`` + ``kind_label`` on refusal rows (parallel fields).
+
+    The label is prose per api-contract rule 5, so an SPA that has never
+    heard of the split still renders correct text instead of guessing from
+    the SMTP reason line.
+    """
+    for row in rows:
+        probe = is_probe_refusal(row)
+        row["probe"] = probe
+        if probe:
+            row["kind_label"] = "Relay probe, not our mail"
+        elif str(row.get("stage", "")) == "data":
+            row["kind_label"] = "A real submission, turned away"
+        else:
+            row["kind_label"] = "Refused at the envelope"
 
 
 def read_refusals(data_root: Path, limit: int = 20) -> list[dict]:
@@ -672,14 +709,29 @@ def count_refusals(data_root: Path, days: int = REFUSAL_WINDOW_DAYS) -> int:
 
 def refusal_view(
     data_root: Path, limit: int = 20, days: int = REFUSAL_WINDOW_DAYS,
-) -> tuple[int, list[dict]]:
-    """(count in the window, newest rows) from ONE read of the ledger.
+) -> tuple[dict, list[dict]]:
+    """(window counts, newest annotated rows) from ONE read of the ledger.
 
     The intake log is polled; reading a capped-but-not-tiny file twice per
     poll to answer two questions about the same rows is waste.
+
+    Counts (item 42): ``total`` keeps `n_refused`'s exact meaning; beside
+    it, ``ours`` counts data-stage refusals (real submissions we accepted
+    the envelope for and then turned away) and ``probes`` counts rcpt-stage
+    relay probes. The 2026-09-06 audit measured all 55 window rows as
+    `*@flyio.net` relay probes — with a permanent probe floor, a REAL
+    refused submission is invisible in the single number.
     """
     rows = _refusal_rows(data_root)
-    return _within_days(rows, days), rows[-max(1, limit):]
+    window = _window_rows(rows, days)
+    counts = {
+        "total": len(window),
+        "ours": sum(1 for r in window if str(r.get("stage", "")) == "data"),
+        "probes": sum(1 for r in window if is_probe_refusal(r)),
+    }
+    newest = rows[-max(1, limit):]
+    _annotate_refusal_rows(newest)
+    return counts, newest
 
 
 def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[dict]:

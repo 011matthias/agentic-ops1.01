@@ -2480,6 +2480,81 @@ def test_a_budget_refusal_at_data_is_written_down(client, monkeypatch):
     assert row["from"] == "dirk.neumann@brisken.com"
 
 
+def test_refusal_split_tells_probes_from_real_submissions(client, monkeypatch):
+    """Item 42: the 2026-09-06 audit measured all 55 window rows as
+    `*@flyio.net` relay probes, so a REAL refused submission was invisible
+    in `n_refused`. The split is view-only and parallel: `n_refused` keeps
+    its meaning, `n_probes` counts the noise, `n_refused_ours` counts
+    submissions we turned away, and each row says which it is in prose."""
+    from expense_recon.web import smtp_server as ss
+
+    state = client.app.state
+    handler = IntakeHandler(state.db_path, state.learning_db_path,
+                            state.data_root)
+    session = SimpleNamespace(peer=("203.0.113.9", 51000))
+
+    # A relay probe: recipient outside the intake domain, refused at RCPT.
+    envelope = SimpleNamespace(content=b"", rcpt_tos=[],
+                               mail_from="scanner@flyio.net")
+    reply = asyncio.run(handler.handle_RCPT(
+        None, session, envelope, "victim@gmail.com", {},
+    ))
+    assert reply.startswith("550")
+
+    # A real submission, turned away at DATA by the day budget.
+    resp = client.put("/api/settings", json={
+        "intake": {"sender_daily_cap": 1, "global_daily_cap": 1}
+    })
+    assert resp.status_code == 200, resp.text
+
+    def fake_route(self, arch, parsed):  # noqa: ARG001 - signature match
+        ss.end_route()
+
+    monkeypatch.setattr(IntakeHandler, "_route", fake_route)
+    monkeypatch.setattr(ss, "DAY_BUDGET", DayBudget())
+
+    def _send(subject):
+        env = SimpleNamespace(
+            content=_mail("dirk.neumann@brisken.com",
+                          attachments=[("r.jpg", JPG)], subject=subject),
+            rcpt_tos=[f"receipts@{DOMAIN}"],
+            mail_from="dirk.neumann@brisken.com",
+        )
+        return asyncio.run(handler.handle_DATA(None, session, env))
+
+    assert _send("first").startswith("250")
+    assert _send("over the cap").startswith("452")
+
+    log = client.get("/api/inbound/log").json()
+    assert log["n_refused"] == 2  # meaning unchanged: every refusal counts
+    assert log["n_probes"] == 1
+    assert log["n_refused_ours"] == 1
+
+    by_stage = {r["stage"]: r for r in log["refusals"]}
+    probe = by_stage["rcpt"]
+    assert probe["probe"] is True
+    assert probe["kind_label"] == "Relay probe, not our mail"
+    ours = by_stage["data"]
+    assert ours["probe"] is False
+    assert ours["kind_label"] == "A real submission, turned away"
+
+
+def test_too_many_recipients_is_neither_probe_nor_ours(tmp_path):
+    """The OTHER rcpt refusal is real mail addressed to us that tripped the
+    recipient cap: not a relay probe, not a data-stage submission. It stays
+    in `n_refused` alone, and its label says where it stopped."""
+    from expense_recon.web.intake_mail import record_refusal, refusal_view
+
+    record_refusal(
+        tmp_path, stage="rcpt", reason="452 4.5.3 too many recipients",
+        sender="dirk.neumann@brisken.com", recipient=f"receipts@{DOMAIN}",
+    )
+    counts, rows = refusal_view(tmp_path)
+    assert counts == {"total": 1, "ours": 0, "probes": 0}
+    assert rows[-1]["probe"] is False
+    assert rows[-1]["kind_label"] == "Refused at the envelope"
+
+
 def test_the_refusal_ledger_stays_bounded(tmp_path):
     """A scanner hammering the listener must not fill the volume. The
     trim keeps the NEWEST rows and rewrites hard, so a sustained flood
