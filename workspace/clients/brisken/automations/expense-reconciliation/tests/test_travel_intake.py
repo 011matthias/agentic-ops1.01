@@ -629,6 +629,36 @@ def test_failed_append_join_returns_the_mail_to_the_pool(
     assert "disk full" in final.get("error", "")
 
 
+# ── item 39's materializer never touches travel mail ────────────────
+#
+# The two rounds shipped in parallel; these pin their one interplay.
+
+
+def test_travel_mail_never_materializes_a_month(client, monkeypatch):
+    """With auto-materialization ON, a travel mail from a known sender
+    with a receipt-sourced month stamp still RESTS: neither the arrival
+    materializer nor the operator backfill may open a month from it."""
+    monkeypatch.setenv("EXPENSE_RECON_AUTO_MATERIALIZE", "1")
+    _set_travel_alias(client)
+    _patch_ocr(monkeypatch, _extraction())
+    result = _send(client, _mail(
+        "dirk.neumann@brisken.com", f"travel@{DOMAIN}",
+        attachments=[("taxi.jpg", JPG)],
+    ))
+    assert result["status"] == STATUS_POOLED
+    assert result["pool_kind"] == "travel"
+    meta = _meta(client, result["archive"])
+    assert meta["receipt_month_source"] == "receipt"
+    assert client.get("/api/expense-batches").json()["batches"] == []
+
+    from expense_recon.web.intake_mail import materialize_pooled
+
+    swept = materialize_pooled(client._db_path, None, client._data_root)
+    assert swept["materialized_months"] == []
+    assert _meta(client, result["archive"])["status"] == STATUS_POOLED
+    assert client.get("/api/expense-batches").json()["batches"] == []
+
+
 # ── the other roads into the pool stay travel-aware ─────────────────
 
 

@@ -2580,6 +2580,13 @@ def materialize_pooled(
         meta = _read_meta(arch)
         if str(meta.get("status", "")) != STATUS_POOLED:
             continue
+        if str(meta.get("pool_kind") or "") == "travel":
+            # Item 38 x item 39 (rebase interplay): travel mail is never
+            # material for a MONTH — its receipt_month stamp exists only
+            # to warm the cache and feed the trip suggestion. It rests
+            # until an operator joins it to a trip; the backfill must not
+            # seed a month batch from a travel receipt.
+            continue
         if str(meta.get("receipt_month_source", "")) != "receipt":
             continue
         if _ym(str(meta.get("receipt_month") or "")) is None:
