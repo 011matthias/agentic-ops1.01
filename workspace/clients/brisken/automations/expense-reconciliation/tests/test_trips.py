@@ -277,6 +277,81 @@ def test_no_period_suggestion_on_a_trip(client, monkeypatch):
     assert grid["summary"]["n_expenses"] == 5
 
 
+# ── the roster-mismatch flag (item 38 x item 40) ────────────────────
+
+
+def test_roster_mismatch_flags_off_roster_persons_only(
+    client, monkeypatch,
+):
+    """On a trip: a row paid by a card whose person is off the roster
+    flags; the on-roster person (case-insensitively) and the person-less
+    row do not; the count sums the flags. Company months carry neither
+    the key nor the count."""
+    client.put("/api/settings", json={"cards": {
+        "corp-1672": {"label": "Corp", "digits": ["1672"],
+                      "entity": "Corporate Services",
+                      "person": "Dirk Neumann"},
+        "corp-9001": {"label": "Nine", "digits": ["9001"],
+                      "entity": "Corporate Services",
+                      "person": "Jane Doe"},
+    }})
+    trip = _make_trip(client, travelers=("dirk neumann",))
+    _patch_ocr(
+        monkeypatch,
+        _extraction(date="2026-09-21", payment_hint="Visa ...1672"),
+        _extraction(date="2026-09-22", vendor="Hotel",
+                    payment_hint="Visa ...9001"),
+        _extraction(date="2026-09-23", vendor="Cash Cafe"),
+    )
+    resp = _create_batch(
+        client,
+        files=[("a.jpg", JPG), ("b.jpg", JPG + b"2"), ("c.jpg", JPG + b"3")],
+        data={"batch_type": "trip", "trip_id": trip["trip_id"]},
+    )
+    assert resp.status_code == 200, resp.text
+    batch_id = _done(client, resp.json())
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+
+    def _by_vendor(name):
+        return next(
+            e for e in grid["expenses"]
+            if (e["vendor"].get("display") if isinstance(e["vendor"], dict)
+                else e["vendor"]) == name
+        )
+
+    assert _by_vendor("Staples")["roster_mismatch"] is False  # on roster
+    assert _by_vendor("Hotel")["roster_mismatch"] is True     # Jane Doe
+    assert _by_vendor("Cash Cafe")["roster_mismatch"] is False  # no person
+    assert grid["summary"]["n_roster_mismatch"] == 1
+
+    # Company month: neither the key nor the count exists.
+    _patch_ocr(monkeypatch, _extraction(payment_hint="Visa ...9001"))
+    plain = _create_batch(client, data={})
+    assert plain.status_code == 200, plain.text
+    month_id = _done(client, plain.json())
+    month = client.get(f"/api/expense-batches/{month_id}").json()
+    assert all("roster_mismatch" not in e for e in month["expenses"])
+    assert "n_roster_mismatch" not in month["summary"]
+
+
+def test_empty_roster_flags_nothing(client, monkeypatch):
+    client.put("/api/settings", json={"cards": {
+        "corp-9001": {"label": "Nine", "digits": ["9001"],
+                      "entity": "Corporate Services",
+                      "person": "Jane Doe"},
+    }})
+    trip = _make_trip(client, travelers=())
+    _patch_ocr(monkeypatch,
+               _extraction(date="2026-09-21", payment_hint="Visa ...9001"))
+    resp = _create_batch(client, data={
+        "batch_type": "trip", "trip_id": trip["trip_id"],
+    })
+    batch_id = _done(client, resp.json())
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    assert grid["expenses"][0]["roster_mismatch"] is False
+    assert grid["summary"]["n_roster_mismatch"] == 0
+
+
 # ── month routing can never see a trip ──────────────────────────────
 
 

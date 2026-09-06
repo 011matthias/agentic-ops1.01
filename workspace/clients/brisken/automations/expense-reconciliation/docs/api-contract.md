@@ -142,6 +142,7 @@ name answers the same one:
 | `n_review` | how many are flagged for a look (`check` or `pick`) |
 | `n_needs_entity` | how many still need a legal entity (a confirmed private row needs none by design, so it does not count — item 41 sharpened the question the name always asked) |
 | `n_needs_person` | how many rows no person owns yet (item 40; the fix is a person on the card, not a row edit) |
+| `n_roster_mismatch` | trip batches only (absent on company months): how many rows a person OUTSIDE the trip's roster paid for (item 38 x 40) |
 | `n_suggested_private` | how many rows are suggested as private expenses, unconfirmed (item 41) |
 | `n_private` | how many rows the operator confirmed private (reimbursement rows) |
 | `n_set_aside` | how many files the quarantine is still holding back |
@@ -323,6 +324,15 @@ company month; on a trip batch:
 `travelers[]` is a list of person NAMES (item 40's vocabulary), pinned
 `string` in `test_view_contract.py`. The roster is VARIABLE by owner
 ruling; render the list, never assume one traveler.
+
+On a trip batch's rows, `expenses[].roster_mismatch` (boolean; the key
+is absent on company months) says the row's resolved `person` — item
+40's card chain, or `reimburse_to` on a private row — is not on the
+trip's roster. A flag, never a block and never a review state: the
+likely fix is adding the traveler to the roster (PUT /api/trips/{id}),
+not editing the row. An empty roster flags nothing, and a row with no
+person is `n_needs_person`'s business. `summary.n_roster_mismatch` is
+the count, same trip-only presence.
 
 **What a trip batch never does:** it never appears in
 `GET /api/expense-batches` (the months screen stays months — trips list

@@ -4899,6 +4899,21 @@ def build_expense_view(
         period = batch_period(
             run.label, [r.detected_date for r in receipts if r.detected_date]
         )
+    # Item 38 x item 40: on a trip, an expense paid by a person who is
+    # not on the roster is worth a flag. The person comes off the card
+    # chain (or `reimburse_to` on a private row) exactly as item 40
+    # resolves it; the roster is the trip's. A flag, never a block, and
+    # never a review state: the likely fix is adding the traveler to the
+    # roster (a trip edit), not touching the row. None = not a trip (or
+    # the entity is gone), so company months carry no key at all; an
+    # EMPTY roster flags nothing — there is no stated roster to miss.
+    roster = None
+    if is_trip_batch(run) and trip is not None:
+        roster = {
+            str(t).strip().casefold()
+            for t in (trip.get("travelers") or [])
+            if str(t).strip()
+        }
     # Backlog item 36: what month do these receipts collectively read as?
     # Confirm-first surface for the SPA banner — the label stays the only
     # authority (item 25 ruling: nothing about dates is auto-corrected);
@@ -5075,6 +5090,16 @@ def build_expense_view(
             # {person, source: alias|sender, address, received_at}.
             "submitted_by": intake_provenance.get(r.document_id),
         })
+        if roster is not None:
+            # Trip batches only (the key is absent on company months).
+            # A row with no resolved person is n_needs_person's business,
+            # not a mismatch; exact match after trim+casefold, because
+            # persons and roster entries share item 40's one vocabulary
+            # (free-text names entered by the same operator).
+            expenses[-1]["roster_mismatch"] = bool(
+                res["person"] and roster
+                and str(res["person"]).strip().casefold() not in roster
+            )
 
     # Category-variance chip (backlog item 8): a vendor whose receipts in
     # THIS batch carry different (non-null) posting categories gets flagged
@@ -5194,6 +5219,12 @@ def build_expense_view(
         # this month itself; null on operator-created batches (parallel).
         "created_by": run.summary.get("created_by"),
     }
+    if roster is not None:
+        # Trip batches only: how many rows a person OUTSIDE the roster
+        # paid for. Absent on company months, like the row flag.
+        summary["n_roster_mismatch"] = sum(
+            1 for e in expenses if e.get("roster_mismatch")
+        )
 
     # Phase 5 pickers: entities the reviewer can assign (the real entities
     # from the CoA provisioning + the card->entity map + the settings
