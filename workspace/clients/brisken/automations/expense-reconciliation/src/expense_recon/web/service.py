@@ -4192,9 +4192,19 @@ def resolve_batch_row_cards(
         else:
             entity, source = "", "none"
         fields = field_overrides.get(r.document_id) or {}
-        private = str(fields.get("private") or "").strip() == "1"
         reimburse_to = str(fields.get("reimburse_to") or "").strip()
-        if private and reimburse_to:
+        # A confirmation IS the pair: the flag AND who gets reimbursed.
+        # A `private` flag without a person (reachable through the
+        # generic field PUT's one-field-at-a-time writes) is NOT a
+        # decision — honoring it would let "owed to nobody" exit
+        # MISSING ENTITY and reach the report (adversarial review,
+        # 2026-09-06). Such a row stays suggested until both halves
+        # exist.
+        private = (
+            str(fields.get("private") or "").strip() == "1"
+            and bool(reimburse_to)
+        )
+        if private:
             person, person_source = reimburse_to, "private"
         elif card is not None and card.person:
             person, person_source = card.person, "card"
@@ -4301,7 +4311,22 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
     for group, entry in unresolved.items():
         counts = spelling_rows[group]
         entry["spellings"] = sorted(counts, key=lambda s: (-counts[s], s))
-        entry["hint"] = entry["spellings"][0]
+        # The representative must be able to HEAL the group on a stale
+        # SPA: assigning it folds its digit into the card only when the
+        # spelling carries exactly ONE digit run (`learnable_hint_tokens`
+        # refuses multi-run hints — BIN/expiry ambiguity), so prefer the
+        # most frequent single-run member. A Zoho payment-mode label
+        # ("1 - CorpServ 2838/1672 (Chase)") must not become the
+        # representative just by being frequent: assigning it alone would
+        # teach no digit and leave its siblings unresolved (adversarial
+        # review, 2026-09-06). A group with no single-run member falls
+        # back to the most frequent spelling — no member could teach a
+        # digit there anyway.
+        healing = [
+            s for s in entry["spellings"]
+            if len(re.findall(r"\d{3,8}", s)) == 1
+        ]
+        entry["hint"] = (healing or entry["spellings"])[0]
     return {
         "unresolved_hints": sorted(
             unresolved.values(), key=lambda e: (-e["n_rows"], e["hint"])
@@ -4964,11 +4989,15 @@ def _private_reimbursements(
     """The batch's operator-CONFIRMED private expenses (backlog item 41):
     ``{document_id: reimburse_to}``. Confirmation lives in the same
     field-override store as every other per-expense decision, so it
-    survives re-ingest and clears with `private: false`."""
+    survives re-ingest and clears with `private: false`. A `private`
+    flag WITHOUT a reimburse_to is not a confirmation (same rule as
+    `resolve_batch_row_cards`): a report must never state a
+    reimbursement owed to nobody."""
     return {
         doc: str(fields.get("reimburse_to") or "").strip()
         for doc, fields in field_overrides.items()
         if str(fields.get("private") or "").strip() == "1"
+        and str(fields.get("reimburse_to") or "").strip()
     }
 
 
@@ -5161,7 +5190,7 @@ def build_expense_report(
                 group["totals"].get(ccy, Decimal("0")) + r.detected_total
             )
         evidence.append(_evidence_item(
-            r, [n], extra_detail=f"private — reimburse {person}",
+            r, [n], extra_detail=f"private, reimburse {person}",
         ))
         n += 1
     reimbursements = [

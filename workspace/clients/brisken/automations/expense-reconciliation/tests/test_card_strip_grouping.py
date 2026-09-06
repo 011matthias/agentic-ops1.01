@@ -133,6 +133,24 @@ def test_digitless_hints_stay_one_row_per_verbatim_string():
     assert by_hint["CorpServ"]["generic"] is False
 
 
+def test_representative_prefers_a_spelling_that_can_heal():
+    """Adversarial-review finding (2026-09-06): a multi-run spelling
+    (the Zoho payment-mode label) teaches no digit on assignment, so if
+    it became the representative by frequency, a stale SPA's assign
+    would strand the group's other spellings. The representative is the
+    most frequent SINGLE-run member; `spellings[]` keeps pure frequency
+    order."""
+    strip = build_card_review({
+        "d1": _res("1 - CorpServ 2838/1672 (Chase)"),
+        "d2": _res("1 - CorpServ 2838/1672 (Chase)"),
+        "d3": _res("Visa ...1672"),
+    })
+    (entry,) = strip["unresolved_hints"]
+    assert entry["n_rows"] == 3
+    assert entry["spellings"][0] == "1 - CorpServ 2838/1672 (Chase)"
+    assert entry["hint"] == "Visa ...1672"
+
+
 def test_ambiguity_marks_the_whole_group():
     strip = build_card_review({
         "d1": _res("****0340"),
@@ -194,3 +212,43 @@ def test_grouped_strip_and_representative_assignment_heal(client, monkeypatch):
     assert grid["card_review"]["unresolved_hints"] == []
     (resolved,) = grid["card_review"]["resolved"]
     assert resolved["n_rows"] == 2
+
+
+def test_multi_run_group_heals_from_the_representative(client, monkeypatch):
+    """The executed adversarial-review scenario: two Zoho-label rows plus
+    one masked row are ONE group; assigning ONLY the representative
+    (the single-run member) teaches its digit and resolves the label
+    rows with it — the stale-SPA heal the contract promises."""
+    _patch_ocr(
+        monkeypatch,
+        _extraction(payment_hint="1 - CorpServ 2838/1672 (Chase)"),
+        _extraction(vendor="B Co", total="9.00",
+                    payment_hint="1 - CorpServ 2838/1672 (Chase)"),
+        _extraction(vendor="C Co", total="7.00",
+                    payment_hint="Visa ...1672"),
+    )
+    resp = client.post("/api/expense-batches", files=[
+        ("files", ("a.jpg", JPG, "application/octet-stream")),
+        ("files", ("b.jpg", JPG + b"2", "application/octet-stream")),
+        ("files", ("c.jpg", JPG + b"3", "application/octet-stream")),
+    ], data={"legal_entity": "", "label": "August 2026"})
+    assert resp.status_code == 200, resp.text
+    batch_id = resp.json()["batch_id"]
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    (entry,) = grid["card_review"]["unresolved_hints"]
+    assert entry["n_rows"] == 3
+    assert entry["hint"] == "Visa ...1672"
+
+    resp = client.post(f"/api/expense-batches/{batch_id}/cards", json={
+        "assignments": [{"hint": entry["hint"], "card": "card-1672"}],
+        "new_cards": {"card-1672": {
+            "label": "CorpServ plastic", "entity": "Corporate Services",
+        }},
+    })
+    assert resp.status_code == 200, resp.text
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    assert grid["card_review"]["unresolved_hints"] == []
+    (resolved,) = grid["card_review"]["resolved"]
+    assert resolved["n_rows"] == 3

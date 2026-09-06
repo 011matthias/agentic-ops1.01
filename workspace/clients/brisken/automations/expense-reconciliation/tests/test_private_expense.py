@@ -240,6 +240,46 @@ def test_confirm_private_makes_a_reimbursement_row(client, monkeypatch):
     assert row["review"]["reason_code"] == "suggested_private"
 
 
+def test_the_flag_alone_is_not_a_confirmation(client, monkeypatch):
+    """Adversarial-review finding (2026-09-06): the generic field PUT
+    writes one field at a time, so it could set `private: "1"` with no
+    reimburse_to — "owed to nobody" then exited MISSING ENTITY and the
+    report printed a reimbursement for "(person not named)". Now the
+    PUT refuses the flag until the person is stored, and the resolution
+    layer treats a flag-without-person as unconfirmed regardless."""
+    _patch_ocr(monkeypatch, _extraction(payment_hint="Cartao de Credito"))
+    batch = _create_batch(client)
+    doc = _grid(client, batch)["expenses"][0]["document_id"]
+
+    r = client.put(f"/api/runs/{batch}/expenses/{doc}",
+                   json={"field": "private", "value": "1"})
+    assert r.status_code == 400
+    assert "reimburse_to" in r.json()["error"]
+
+    # person first, then the flag: a full confirmation, either route
+    r = client.put(f"/api/runs/{batch}/expenses/{doc}",
+                   json={"field": "reimburse_to", "value": "Dirk"})
+    assert r.status_code == 200, r.text
+    r = client.put(f"/api/runs/{batch}/expenses/{doc}",
+                   json={"field": "private", "value": "1"})
+    assert r.status_code == 200, r.text
+    row = _grid(client, batch)["expenses"][0]
+    assert row["private"] is True
+    assert row["person"] == "Dirk"
+
+    # clearing the person un-confirms (defense in depth): back to
+    # suggested, out of the reimbursement section, back in MISSING ENTITY
+    r = client.put(f"/api/runs/{batch}/expenses/{doc}",
+                   json={"field": "reimburse_to", "value": ""})
+    assert r.status_code == 200, r.text
+    grid = _grid(client, batch)
+    row = grid["expenses"][0]
+    assert row["private"] is False
+    assert row["review"]["reason_code"] == "suggested_private"
+    assert grid["summary"]["n_private"] == 0
+    assert grid["summary"]["n_needs_entity"] == 1
+
+
 def test_prefill_rides_only_the_private_flow(client, monkeypatch):
     """The sender claim is offered ONLY where the owner sanctioned it:
     pre-filling reimburse_to on the private flow, for mailed receipts.

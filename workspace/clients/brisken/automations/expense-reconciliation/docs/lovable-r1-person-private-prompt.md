@@ -78,8 +78,8 @@ row fields `suggested_private` (bool), `private` (bool), `reimburse_to`
   PT mirror. Submit: `POST /api/runs/{batchId}/expenses/{documentId}/private`
   with `{"private": true, "reimburse_to": "<name>"}`. The 400 for a blank
   name renders inline.
-- A confirmed row shows a "Private — reimburse {reimburse_to}" / PT
-  "Particular — reembolsar {reimburse_to}" badge instead of the entity
+- A confirmed row shows a "Private: reimburse {reimburse_to}" / PT
+  "Particular: reembolsar {reimburse_to}" badge instead of the entity
   cell's MISSING ENTITY treatment, and its action flips to EN "Not
   private (undo)" / PT "Não é particular (desfazer)" →
   `{"private": false}`.
@@ -141,7 +141,7 @@ Cards. Rows may also render `person` in the grid's card/entity cell
    "Card ending" row; expanding lists both spellings; Assign submits
    both in one request (network tab: `assignments` length 2).
 3. A row with an unknown payment method shows the suggested-private chip;
-   confirming with a name turns it into "Private — reimburse {name}" and
+   confirming with a name turns it into "Private: reimburse {name}" and
    the MISSING ENTITY count does not include it; undo brings the
    suggestion back.
 4. Enter a person on a card in Settings, save, re-open: the person

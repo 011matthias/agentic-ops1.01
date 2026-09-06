@@ -2722,6 +2722,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run, err = _mutable_expense_run_or_error(store, run_id)
             if err is not None:
                 return err
+            # Item 41: a private confirmation is the PAIR (flag + who
+            # gets reimbursed). This one-field-at-a-time route cannot
+            # set both, so the flag alone is refused unless reimburse_to
+            # is already stored — otherwise "owed to nobody" would read
+            # as decided (adversarial review, 2026-09-06).
+            if field == "private" and value == "1":
+                stored = store.get_expense_field_overrides(run_id).get(
+                    document_id, {}
+                )
+                if not str(stored.get("reimburse_to") or "").strip():
+                    return JSONResponse(
+                        {"error": "confirming a private expense needs "
+                                  "reimburse_to; set it first, or use "
+                                  "POST .../expenses/{id}/private which "
+                                  "takes both together"},
+                        status_code=400,
+                    )
             if field in EXPENSE_CATEGORY_FIELDS:
                 # Whole-expense category/account edit -> a category_override
                 # per line. Find the expense in the EFFECTIVE receipt set so

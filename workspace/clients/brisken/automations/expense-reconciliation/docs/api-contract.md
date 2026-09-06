@@ -674,7 +674,7 @@ Two fields on each entry, both parallel per rule 1 — `hint`, `n_rows`,
 
 | Field | Meaning |
 |---|---|
-| `hint` | now the group's MOST-FREQUENT member spelling (ties break lexicographically). Still a real hint string from the batch, so an un-updated Assign submitting it works — and the digit fold on assignment resolves every sibling spelling with it |
+| `hint` | now the group's representative spelling: the most frequent member that carries exactly ONE digit run, so an un-updated Assign submitting it teaches that digit and resolves every sibling spelling with it (a multi-run spelling like a Zoho payment-mode label teaches no digit and would strand its siblings). A group with no single-run member falls back to the most frequent spelling. Ties break lexicographically; always a real hint string from the batch |
 | `digits` | the longest printed digit run in the group, leading zero preserved (`"0340"`, never `"340"`), for display. `null` on digit-less entries |
 | `spellings[]` | every member spelling, most-frequent first. `[hint]` on digit-less entries |
 
@@ -762,7 +762,13 @@ to item 40's card-only rule), no entity required (it leaves
 Assigning or registering the real card clears the SUGGESTION through the
 existing flows; a CONFIRMED row stays confirmed until cleared here. Both
 fields also ride the generic field-edit PUT (`private` accepts only
-`"1"`), and `edited_fields` lists them like any other override.
+`"1"`, and ONLY when `reimburse_to` is already stored for the row — set
+the person first, or use the POST route which takes both), and
+`edited_fields` lists them like any other override. A `private` flag
+without a person is never treated as a confirmation anywhere: the row
+stays suggested, stays in `n_needs_entity`, and never reaches the
+reimbursements section — a report must not state a reimbursement owed
+to nobody.
 
 **Strip**: `card_review.unresolved_hints[]` entries gain
 `suggested_private` (boolean; any member row still suggested), which is
