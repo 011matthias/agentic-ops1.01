@@ -102,6 +102,7 @@ from .store import (
     IntakeRow,
     RunRow,
     RunStore,
+    TripRow,
 )
 
 # The documented Zoho Expense export header map (run.with-expense-csv
@@ -3579,6 +3580,131 @@ def run_mode(run: RunRow) -> str:
     return (run.config or {}).get("mode") or "reconciliation"
 
 
+# The two batch functions (item 38, owner directive 2026-09-06): overall
+# monthly company expenses, and trips. The type is DECLARED at creation
+# and never inferred from content; an absent marker reads as a company
+# month because every batch that predates the split is one.
+BATCH_TYPE_COMPANY = "company-month"
+BATCH_TYPE_TRIP = "trip"
+VALID_BATCH_TYPES = (BATCH_TYPE_COMPANY, BATCH_TYPE_TRIP)
+
+
+def batch_type(run: RunRow) -> str:
+    """The batch's declared kind: ``company-month`` or ``trip``."""
+    return (run.config or {}).get("batch_type") or BATCH_TYPE_COMPANY
+
+
+def is_trip_batch(run: RunRow) -> bool:
+    return batch_type(run) == BATCH_TYPE_TRIP
+
+
+# ---------------------------------------------------------------- trips --
+# The trip entity (item 38): named, date-ranged, VARIABLE roster of
+# travelers. Created empty (a name and a roster only a human knows, so a
+# trip can never be auto-created); its expense batch materializes when
+# the first receipt joins it.
+
+MAX_TRIP_TRAVELERS = 50
+
+
+def validate_trip_fields(payload: dict) -> tuple[dict | None, str | None]:
+    """Clean a trip create/update payload. Returns (cleaned, None) or
+    (None, error). ``travelers`` is a list of PERSON names (item 40's
+    vocabulary), whole-list replace, may be empty while the roster is
+    still being collected."""
+    if not isinstance(payload, dict):
+        return None, "body must be an object"
+    name = str(payload.get("name") or "").strip()[:200]
+    if not name:
+        return None, "name is required"
+    start_raw = str(payload.get("start") or "").strip()
+    end_raw = str(payload.get("end") or "").strip()
+    try:
+        start = date.fromisoformat(start_raw)
+        end = date.fromisoformat(end_raw)
+    except ValueError:
+        return None, "start and end must be YYYY-MM-DD dates"
+    if end < start:
+        return None, "end must not be before start"
+    travelers_raw = payload.get("travelers", [])
+    if travelers_raw is None:
+        travelers_raw = []
+    if not isinstance(travelers_raw, list) or not all(
+        isinstance(t, str) for t in travelers_raw
+    ):
+        return None, "travelers must be a list of names"
+    travelers = list(dict.fromkeys(
+        t.strip() for t in travelers_raw if t.strip()
+    ))
+    if len(travelers) > MAX_TRIP_TRAVELERS:
+        return None, f"travelers holds at most {MAX_TRIP_TRAVELERS} names"
+    return {
+        "name": name,
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "travelers": travelers,
+    }, None
+
+
+def find_trip_batch(store: RunStore, trip_id: str) -> RunRow | None:
+    """The expense batch holding this trip's receipts, or None while no
+    receipt has joined yet. The link lives on the BATCH
+    (``config["trip_id"]``), so this scan is the one lookup."""
+    for run in store.list_runs():
+        if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if not is_trip_batch(run):
+            continue
+        if str((run.config or {}).get("trip_id") or "") == str(trip_id):
+            return run
+    return None
+
+
+def trip_view(store: RunStore, trip: TripRow, batch: RunRow | None) -> dict:
+    """One row of the trips list. ``batch_id`` / ``summary`` are null until
+    a receipt has joined (the batch materializes on first join); a null is
+    the honest answer, never an empty fabricated summary."""
+    return {
+        "trip_id": trip.trip_id,
+        "name": trip.name,
+        "start": trip.start_date,
+        "end": trip.end_date,
+        "travelers": list(trip.travelers),
+        "created_at": trip.created_at,
+        "updated_at": trip.updated_at,
+        "batch_id": batch.run_id if batch is not None else None,
+        "summary": (
+            batch_list_summary(store, batch) if batch is not None else None
+        ),
+    }
+
+
+def covering_trips(
+    trips: list[TripRow], dates: list[str],
+) -> list[TripRow]:
+    """The trips whose inclusive date range contains at least one of the
+    given ISO dates. Feeds the pool-row SUGGESTION (exactly one covering
+    trip suggests; joining stays a click, never an inference)."""
+    parsed: list[date] = []
+    for raw in dates or []:
+        try:
+            parsed.append(date.fromisoformat(str(raw)[:10]))
+        except ValueError:
+            continue
+    if not parsed:
+        return []
+    out: list[TripRow] = []
+    for trip in trips:
+        try:
+            start = date.fromisoformat(trip.start_date)
+            end = date.fromisoformat(trip.end_date)
+        except ValueError:
+            continue
+        if any(start <= d <= end for d in parsed):
+            out.append(trip)
+    return out
+
+
 # Header-level fields a reviewer may edit on one expense. `category` /
 # `zoho_account` are deliberately NOT here: they are line-level and fold
 # into the existing `category_overrides` path (the endpoint does that).
@@ -3649,9 +3775,11 @@ class PreparedExpenseBatch:
     # Item 39: "intake" when a mailed receipt materialized this batch
     # itself. Stored in the run summary; absent on operator-created batches.
     created_by: str = ""
-    # Item 39: submitter provenance for mail-created batches, keyed by the
-    # STORED receipt file name — the same shape `add_receipts_to_expense_batch`
-    # writes, so the grid's submitted_by chip works from the first render.
+    # Submitter provenance for mail-created batches (item 39's
+    # auto-materialization AND R3's trip-join create-with-receipt), keyed
+    # by the STORED receipt file name — the same shape
+    # `add_receipts_to_expense_batch` writes, so the grid's submitted_by
+    # chip works from the first render. None/empty => not mailed.
     intake_provenance: dict | None = None
 
 
@@ -3667,6 +3795,8 @@ def create_expense_batch(
     learning_db_path: Path | None = None,
     settings: dict | None = None,
     created_by: str = "",
+    batch_type: str = "",
+    trip_id: str = "",
     provenance_by_digest: dict[str, dict] | None = None,
 ) -> PreparedExpenseBatch:
     """Validate + spool an uploaded batch of receipts and build the
@@ -3684,9 +3814,22 @@ def create_expense_batch(
     resolves from its paying card (the registry snapshotted into the
     config below), the batch value is only a fallback, and an unresolved
     entity is a review state (`needs_entity`) that never blocks an export.
+
+    `batch_type` (item 38) is the DECLARED kind: "" / "company-month"
+    for a company month (the marker is stored only when declared, so an
+    undeclared create produces the exact pre-split config), "trip" for a
+    trip batch, which requires `trip_id` (the caller has verified the
+    trip exists). `provenance_by_digest` (sha1[:16] -> person dict)
+    carries mail provenance for a batch created FROM a mailed receipt.
     """
     if not files:
         raise RunInputError("No receipt files uploaded.")
+    if batch_type and batch_type not in VALID_BATCH_TYPES:
+        raise RunInputError(
+            f"batch_type must be one of {', '.join(VALID_BATCH_TYPES)}."
+        )
+    if batch_type == BATCH_TYPE_TRIP and not str(trip_id).strip():
+        raise RunInputError("A trip batch needs a trip_id.")
 
     run_id = uuid.uuid4().hex[:12]
     work_dir = data_root / "runs" / run_id
@@ -3737,6 +3880,9 @@ def create_expense_batch(
         dest_name = f"{n_saved:04d}__{fs_name}"
         (receipts_dir / dest_name).write_bytes(data)
         if provenance_by_digest and digest in provenance_by_digest:
+            # Keyed by the STORED name, which is the document_id the
+            # folder pipeline assigns — the same key the incremental add
+            # path uses, so `submitted_by` renders identically.
             intake_provenance[dest_name] = provenance_by_digest[digest]
         n_saved += 1
     import shutil as _shutil
@@ -3760,6 +3906,13 @@ def create_expense_batch(
         "expense": {"legal_entity_id": legal_entity.strip()},
         "receipts": {"path": "receipts", "source": "folder"},
     }
+    # Item 38: the declared type, stored only when declared — an
+    # undeclared create keeps the exact pre-split config shape, and an
+    # absent marker reads as a company month everywhere.
+    if batch_type:
+        cfg["batch_type"] = batch_type
+    if batch_type == BATCH_TYPE_TRIP:
+        cfg["trip_id"] = str(trip_id).strip()
     if default_currency.strip():
         cfg["receipts"]["default_currency"] = default_currency.strip()
     # Phase 5: the entity registry's default Paid Through account rides in
@@ -3885,6 +4038,9 @@ def execute_expense_batch(
     if set_aside:
         snapshot["set_aside"] = set_aside
     if prepared.intake_provenance:
+        # A batch created FROM mailed receipts (item 39 materialization,
+        # R3 trip join) carries the submitters the same way the
+        # incremental add path records them.
         snapshot["intake_provenance"] = dict(prepared.intake_provenance)
 
     if on_stage is not None:
@@ -4579,6 +4735,7 @@ def build_expense_view(
     resolutions: dict[str, str] | None = None,
     settings: dict | None = None,
     decisions: dict | None = None,
+    trip: dict | None = None,
 ) -> dict:
     """Compose the receipt-spine render model for an expense batch: one row
     per expense with the reviewer's edits applied, review-by-exception
@@ -4663,7 +4820,9 @@ def build_expense_view(
     # instead of having to notice the mismatch. None when fewer than 4
     # dated expenses or no clear winner (month_from_dates rules).
     _dated = [r.detected_date for r in receipts if r.detected_date]
-    _consensus = month_from_dates(_dated)
+    # A trip spans month boundaries freely (item 38), so the month-rename
+    # banner is meaningless there: never offer one on a trip batch.
+    _consensus = None if is_trip_batch(run) else month_from_dates(_dated)
     if _consensus is None:
         period_suggestion = None
     else:
@@ -4964,6 +5123,13 @@ def build_expense_view(
         "label": run.label,
         "created_at": run.created_at,
         "mode": MODE_EXPENSE_GENERATION,
+        # Item 38: the declared kind, "company-month" on every batch that
+        # predates the split (absent marker reads as company). Scalar,
+        # parallel — a stale SPA renders exactly what it rendered before.
+        "batch_type": batch_type(run),
+        # The trip this batch belongs to (entity fields incl. the
+        # travelers roster), null on every company month.
+        "trip": trip,
         "llm_enabled": run.llm_enabled,
         "has_coa": run.has_coa,
         "legal_entity_id": default_entity,

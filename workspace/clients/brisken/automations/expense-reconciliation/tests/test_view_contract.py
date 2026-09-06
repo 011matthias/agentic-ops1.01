@@ -117,6 +117,10 @@ EXPENSE_BATCH_CONTRACT = {
     # prose list stays `string[]` on purpose — enriching it in place is the
     # move that took the batch page down (see docs/api-contract.md).
     "summary.upload_issue_details[]": "object",
+    # Item 38: the trip entity on a trip batch's grid (null on company
+    # months, so the path appears only via the trip fixture). The roster
+    # is person NAMES, plain strings.
+    "trip.travelers[]": "string",
 }
 
 RUN_CONTRACT = {
@@ -171,6 +175,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "coverage[]",
     "coverage[].digits[]",
     "coverage[].statements[]",
+    "trip.travelers[]",
 }
 
 RUN_MUST_COVER = {
@@ -508,6 +513,26 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
     return grid, run
 
 
+def _trip_batch(client, monkeypatch_setattr) -> dict:
+    """A trip batch (item 38), so the `trip` object — and its travelers
+    roster, the one new LIST — is observed on the expense-batch view."""
+    trip = client.post("/api/trips", json={
+        "name": "Contract trip", "start": "2026-07-01", "end": "2026-07-10",
+        "travelers": ["Dirk Neumann", "Criss"],
+    })
+    assert trip.status_code == 200, trip.text
+    mock = MockLLMClient(extraction_responses=[_extraction()])
+    monkeypatch_setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
+    resp = client.post("/api/expense-batches", files=[
+        ("files", ("t.jpg", JPG + b"t", "application/octet-stream")),
+    ], data={"batch_type": "trip", "trip_id": trip.json()["trip_id"]})
+    assert resp.status_code == 200, resp.text
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    view = client.get(f"/api/expense-batches/{resp.json()['batch_id']}").json()
+    assert view["trip"]["travelers"], view["trip"]
+    return view
+
+
 @pytest.fixture(scope="module")
 def payloads(tmp_path_factory):
     """Both views, built once — every list surface the SPA renders."""
@@ -522,9 +547,10 @@ def payloads(tmp_path_factory):
             run_b = _synthetic_run(client, data_root)
             batch = _expense_batch(client, monkey.setattr)
             month_grid, month_run = _reconciling_month(client, monkey.setattr)
+            trip_grid = _trip_batch(client, monkey.setattr)
         yield {
             "run": (run_a, run_b, month_run),
-            "expense_batch": (batch, month_grid),
+            "expense_batch": (batch, month_grid, trip_grid),
         }
     finally:
         monkey.undo()

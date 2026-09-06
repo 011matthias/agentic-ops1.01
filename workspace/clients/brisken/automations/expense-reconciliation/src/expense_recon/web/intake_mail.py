@@ -70,6 +70,7 @@ from .service import (
     create_expense_batch,
     execute_expense_batch,
     has_statement,
+    is_trip_batch,
 )
 from .store import JOB_DONE, JOB_ERROR, RunStore
 
@@ -1324,6 +1325,10 @@ def open_batch(store: RunStore):
     for run in store.list_runs():
         if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
             continue
+        if is_trip_batch(run):
+            # A trip is not a month: legacy re-ingest and the
+            # delete-month "next open" answer both mean company months.
+            continue
         if not has_statement(run):
             return run
     return None
@@ -1359,6 +1364,11 @@ def _open_batch_for_month(store: RunStore, ym: tuple[int, int] | None):
     for run in store.list_runs():
         if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
             continue
+        if is_trip_batch(run):
+            # Item 38: month routing NEVER lands mail in a trip, even
+            # when the trip's name happens to parse as a month. Travel
+            # mail joins a trip only by an operator's click.
+            continue
         if month_from_label(run.label) != ym:
             continue
         if not has_statement(run):
@@ -1378,6 +1388,8 @@ def month_batch_states(store: RunStore) -> dict[tuple[int, int], str]:
     out: dict[tuple[int, int], str] = {}
     for run in store.list_runs():
         if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if is_trip_batch(run):
             continue
         ym = month_from_label(run.label)
         if ym is None:

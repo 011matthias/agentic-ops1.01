@@ -295,6 +295,64 @@ corpserv export every row says `chase-2838-family` while the rows span
 2838 / 3645 / 3876 / 0340, and reading that as a card would invent a coverage
 row for a card that does not exist.
 
+## The two batch functions: `batch_type` + `trip` (added 2026-09-06)
+
+Item 38: expense creation splits into company months and trips, DECLARED
+at creation and never inferred from content. Both fields are parallel
+(rule 1); a stale SPA renders exactly what it rendered before.
+
+**`batch_type`** — scalar string, `"company-month"` or `"trip"`, on the
+expense-batch payload and on every row of `GET /api/expense-batches`. An
+absent config marker reads as `"company-month"`: every batch that
+predates the split is one, and an undeclared `POST /api/expense-batches`
+stores no marker at all, so an un-updated caller produces the exact
+pre-split config. Declaring is a form field on the create
+(`batch_type`, plus `trip_id` when it is `"trip"`).
+
+**`trip`** — object or null on the expense-batch payload. Null on every
+company month; on a trip batch:
+
+```json
+{ "trip_id": "8c1f30aa2e41",
+  "name": "Rome 2026",
+  "start": "2026-09-20",
+  "end": "2026-10-03",
+  "travelers": ["Dirk Neumann", "Criss"] }
+```
+
+`travelers[]` is a list of person NAMES (item 40's vocabulary), pinned
+`string` in `test_view_contract.py`. The roster is VARIABLE by owner
+ruling; render the list, never assume one traveler.
+
+**What a trip batch never does:** it never appears in
+`GET /api/expense-batches` (the months screen stays months — trips list
+via `GET /api/trips`), it never claims pooled month mail (month routing
+skips trip batches structurally, even when the trip's name parses as a
+month), it never carries a `period_suggestion` (trips span month
+boundaries freely), and `POST .../statement` refuses it with a 400
+(ruling 3: trip receipts reconcile against the company month's
+statement; the cross-batch match pool is the R4 round).
+
+### `GET /api/trips` (beside /api/expense-batches)
+
+`{trips: [...]}`, newest range first. Each row is the trip entity plus
+its batch join — `batch_id` and `summary` are null until the first
+receipt joins, because the batch materializes on first join
+(create-with-receipt) rather than being created empty:
+
+| Key | Meaning |
+|---|---|
+| `trip_id` · `name` · `start` · `end` · `travelers[]` | the entity; dates inclusive, `YYYY-MM-DD` |
+| `batch_id` | the trip's expense batch, or null while no receipt has joined |
+| `summary` | `batch_list_summary` of that batch (same counts vocabulary as the months list), or null |
+
+`POST /api/trips` (`{name, start, end, travelers[]}`) creates the
+entity; `PUT /api/trips/{id}` updates it (`travelers` replaces the whole
+roster); `DELETE /api/trips/{id}` refuses (409) while a batch still
+references the trip. One batch per trip: a second
+`POST /api/expense-batches` declaring the same `trip_id` is a 409
+naming the existing batch.
+
 ## The month the receipts read as: `period_suggestion` (added 2026-08-29)
 
 Expense-batch payload, top level, object or null. Backlog item 36: the

@@ -79,6 +79,8 @@ from ..cards_provision import card_by_key, load_cards
 from ..ingest.expense_report_images import render_receipt_page
 from .serialize import receipt_from_dict
 from .service import (
+    BATCH_TYPE_COMPANY,
+    BATCH_TYPE_TRIP,
     DEFAULT_EXPENSE_COLUMN_MAP,
     EXPENSE_CATEGORY_FIELDS,
     EXPENSE_HEADER_FIELDS,
@@ -103,12 +105,15 @@ from .service import (
     bulk_decisions,
     commit_to_memory,
     compare_runs,
+    batch_type,
     create_expense_batch,
     create_intake,
     execute_expense_batch,
     execute_run,
     execute_statement_attach,
+    find_trip_batch,
     has_statement,
+    is_trip_batch,
     prepare_statement_attach,
     forget_memory_vendor,
     ingest_receipts_folder_into_run,
@@ -126,8 +131,10 @@ from .service import (
     reset_memory,
     restore_set_aside_file,
     run_mode,
+    trip_view,
     validate_expense_field,
     validate_manual_match,
+    validate_trip_fields,
 )
 from ..matching.types import EXPENSE_CATEGORIES
 from ..merchant_registry import normalize_merchants_setting
@@ -1485,9 +1492,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # because the store is open here; a month with no statement holds no
         # charges and the read costs nothing.
         decisions = store.get_decisions(run.run_id)
+        # Item 38: a trip batch renders its trip entity (name, range,
+        # travelers roster) beside the grid; null on company months and
+        # on a trip batch whose entity was deleted out from under it
+        # (the null is the honest answer, never a fabricated object).
+        trip = None
+        trip_id = str((run.config or {}).get("trip_id") or "")
+        if trip_id:
+            trip_row = store.get_trip(trip_id)
+            if trip_row is not None:
+                trip = {
+                    "trip_id": trip_row.trip_id,
+                    "name": trip_row.name,
+                    "start": trip_row.start_date,
+                    "end": trip_row.end_date,
+                    "travelers": list(trip_row.travelers),
+                }
         return build_expense_view(
             run, overrides, field_overrides, edits, resolutions,
-            settings=settings, decisions=decisions,
+            settings=settings, decisions=decisions, trip=trip,
         )
 
     @app.get("/api/runs/{run_id}")
@@ -2331,6 +2354,45 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         files = []
         for up in uploads:
             files.append((up.filename, await up.read()))
+        # Item 38: the DECLARED batch type. Absent / "" / "company-month"
+        # is a company month (the pre-split shape, byte-identical config);
+        # "trip" requires an existing trip and at most one batch per trip
+        # (further receipts join through POST .../receipts or the pool).
+        declared = str(form.get("batch_type") or "").strip()
+        trip_id = str(form.get("trip_id") or "").strip()
+        if declared and declared not in (BATCH_TYPE_COMPANY, BATCH_TYPE_TRIP):
+            return JSONResponse(
+                {"error": "batch_type must be 'company-month' or 'trip'"},
+                status_code=400,
+            )
+        trip_row = None
+        if declared == BATCH_TYPE_TRIP:
+            if not trip_id:
+                return JSONResponse(
+                    {"error": "trip_id is required for a trip batch"},
+                    status_code=400,
+                )
+            with open_store() as store:
+                trip_row = store.get_trip(trip_id)
+                existing = find_trip_batch(store, trip_id) if trip_row else None
+            if trip_row is None:
+                return JSONResponse(
+                    {"error": "trip not found"}, status_code=404
+                )
+            if existing is not None:
+                return JSONResponse(
+                    {"error": "this trip already has an expense batch; "
+                              "add receipts to it instead",
+                     "batch_id": existing.run_id},
+                    status_code=409,
+                )
+            if not label.strip():
+                label = trip_row.name
+        elif trip_id:
+            return JSONResponse(
+                {"error": "trip_id only applies to batch_type 'trip'"},
+                status_code=400,
+            )
         with open_store() as store:
             settings = store.get_settings()
         try:
@@ -2344,6 +2406,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 operator=_operator(),
                 learning_db_path=app.state.learning_db_path,
                 settings=settings,
+                batch_type=declared,
+                trip_id=trip_id,
             )
         except RunInputError as exc:
             return JSONResponse({"error": exc.message}, status_code=400)
@@ -2361,10 +2425,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             "batch_id": prepared.run_id,
             "job_id": job_id,
             "label": prepared.label,
+            "batch_type": declared or BATCH_TYPE_COMPANY,
             "upload_issues": prepared.upload_issues,
             "month": f"{month[0]:04d}-{month[1]:02d}" if month else None,
         }
-        if month is None:
+        if declared == BATCH_TYPE_TRIP:
+            # A trip is not addressed by month: no month advisory, and the
+            # month field is null even when the trip NAME happens to parse
+            # as one (month routing skips trip batches structurally).
+            body["month"] = None
+            body["trip_id"] = trip_id
+        elif month is None:
             # Mailed receipts are addressed by MONTH, and this label names
             # none — the default label is a full date, which is a timestamp,
             # not a month. Say so at creation time; renaming claims.
@@ -2384,6 +2455,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return _flag_off()
         # The rows are composed INSIDE the store context: the summary is
         # derived from each batch's live overlay, which needs a live store.
+        # Trip batches live on the trips list (GET /api/trips), not here:
+        # the months screen stays months (item 38).
         with open_store() as store:
             batches = [
                 {
@@ -2391,6 +2464,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     "run_id": r.run_id,
                     "label": r.label,
                     "created_at": r.created_at,
+                    # Item 38, parallel scalar: constant here (trips are
+                    # filtered out) but the SPA gets one vocabulary for
+                    # both lists.
+                    "batch_type": batch_type(r),
                     # Derived, not the frozen ingest summary: the list and
                     # the batch page must show one number (2026-08-22).
                     "summary": batch_list_summary(store, r),
@@ -2403,8 +2480,98 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 }
                 for r in store.list_runs()
                 if (r.config or {}).get("mode") == MODE_EXPENSE_GENERATION
+                and not is_trip_batch(r)
             ]
         return JSONResponse({"batches": batches})
+
+    # ── Trips (item 38): the travel half of the expense split. A trip is
+    # an entity of its own — named, date-ranged, variable roster — because
+    # only a human knows those, so it can never be auto-created. Its
+    # expense BATCH materializes when the first receipt joins (a click on
+    # a travel-pooled mail, or an upload declared batch_type=trip).
+
+    @app.get("/api/trips")
+    def list_trips():
+        """Every trip, newest range first, each joined to its batch when
+        one exists (`batch_id` / `summary` null until then)."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            trips = store.list_trips()
+            out = [
+                trip_view(store, t, find_trip_batch(store, t.trip_id))
+                for t in trips
+            ]
+        return JSONResponse({"trips": out})
+
+    @app.post("/api/trips")
+    async def post_trip(request: Request):
+        if not _receipt_first_on():
+            return _flag_off()
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body is a client error
+            return JSONResponse({"error": "invalid json"}, status_code=400)
+        cleaned, err = validate_trip_fields(payload)
+        if err is not None:
+            return JSONResponse({"error": err}, status_code=400)
+        trip_id = uuid.uuid4().hex[:12]
+        with open_store() as store:
+            store.create_trip(
+                trip_id=trip_id, created_at=_now_iso(), **cleaned
+            )
+            trip = store.get_trip(trip_id)
+            view = trip_view(store, trip, None)
+        return JSONResponse({"ok": True, **view})
+
+    @app.put("/api/trips/{trip_id}")
+    async def put_trip(trip_id: str, request: Request):
+        """Update name / range / roster. Whole-object semantics on the
+        fields it takes: `travelers` replaces the whole roster."""
+        if not _receipt_first_on():
+            return _flag_off()
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body is a client error
+            return JSONResponse({"error": "invalid json"}, status_code=400)
+        with open_store() as store:
+            current = store.get_trip(trip_id)
+            if current is None:
+                return _not_found("Trip not found")
+            merged = {
+                "name": payload.get("name", current.name),
+                "start": payload.get("start", current.start_date),
+                "end": payload.get("end", current.end_date),
+                "travelers": payload.get("travelers", current.travelers),
+            } if isinstance(payload, dict) else None
+            cleaned, err = validate_trip_fields(merged)
+            if err is not None:
+                return JSONResponse({"error": err}, status_code=400)
+            store.update_trip(trip_id, updated_at=_now_iso(), **cleaned)
+            trip = store.get_trip(trip_id)
+            view = trip_view(store, trip, find_trip_batch(store, trip_id))
+        return JSONResponse({"ok": True, **view})
+
+    @app.delete("/api/trips/{trip_id}")
+    def delete_trip(trip_id: str):
+        """Remove a trip ENTITY. Refused while a batch references it: the
+        batch holds real expenses and goes first (POST /api/runs/{id}/
+        delete), then the entity."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            if store.get_trip(trip_id) is None:
+                return _not_found("Trip not found")
+            batch = find_trip_batch(store, trip_id)
+            if batch is not None:
+                return JSONResponse(
+                    {"error": "this trip still has an expense batch; "
+                              "delete the batch first",
+                     "batch_id": batch.run_id},
+                    status_code=409,
+                )
+            store.delete_trip(trip_id)
+        return JSONResponse({"ok": True, "trip_id": trip_id, "deleted": True})
 
     @app.get("/api/expense-batches/{run_id}")
     def get_expense_batch(run_id: str):
@@ -2627,6 +2794,18 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run, err = _expense_run_or_error(store, run_id)
         if err is not None:
             return err
+        if is_trip_batch(run):
+            # Item 38 ruling 3: trips DO reconcile, but through the
+            # company month's statement (the cross-batch match pool is
+            # R4's round). A statement never attaches to a trip; opening
+            # that here would give one charge two competing settlement
+            # homes. Deny-by-default until the cross-batch design lands.
+            return JSONResponse(
+                {"error": "statements attach to company months; a trip's "
+                          "receipts reconcile against the month statement "
+                          "covering the charge"},
+                status_code=400,
+            )
 
         try:
             form = _parse_run_form(
