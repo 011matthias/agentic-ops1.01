@@ -1295,7 +1295,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     "currency": e.get("currency"),
                 })
             r["expenses"] = out
-        n_refused, refusals = refusal_view(app.state.data_root)
+        refused_counts, refusals = refusal_view(app.state.data_root)
         # LAST: the label needs the pool state and the resolved batch
         # labels that the loops above just stamped.
         annotate_status_view(rows)
@@ -1307,7 +1307,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # Mail we turned away. Deliberately NOT rows in `entries`: a
             # refusal has no archive, and a row there carrying a status no
             # consumer knows is the exact shape of the "Arriving" bug.
-            "n_refused": n_refused,
+            "n_refused": refused_counts["total"],
+            # Parallel split (item 42): a permanent relay-probe floor made
+            # the single number blind to a real refused submission.
+            # `n_refused` keeps its meaning; these answer the two questions
+            # it conflated.
+            "n_refused_ours": refused_counts["ours"],
+            "n_probes": refused_counts["probes"],
             "refusals": refusals,
         })
 
