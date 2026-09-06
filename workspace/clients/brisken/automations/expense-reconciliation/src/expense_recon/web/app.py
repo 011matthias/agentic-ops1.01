@@ -2698,6 +2698,45 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             view = _expense_view(store, run)
         return JSONResponse({"ok": True, "summary": view["summary"]})
 
+    @app.post("/api/runs/{run_id}/expenses/{document_id:path}/private")
+    async def post_expense_private(run_id: str, document_id: str, request: Request):
+        """Item 41: confirm or clear a private expense. Body
+        {"private": bool, "reimburse_to": str}. Confirming requires
+        `reimburse_to` — a reimbursement owed to nobody is not a decision
+        — and turns the row into a reimbursement row (person =
+        reimburse_to, entity not required). `private: false` clears both
+        and the suggestion returns if the payment method still resolves
+        no card. Assigning a real card clears the SUGGESTION through the
+        existing flow; a confirmed row stays confirmed until cleared
+        here. Same mutability rule as every other expense edit."""
+        if not _receipt_first_on():
+            return _flag_off()
+        body = await request.json()
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "invalid payload"}, status_code=400)
+        private = bool(body.get("private"))
+        reimburse_to = str(body.get("reimburse_to") or "").strip()
+        if private and not reimburse_to:
+            return JSONResponse(
+                {"error": "reimburse_to is required to confirm a private "
+                          "expense: name who gets reimbursed"},
+                status_code=400,
+            )
+        with open_store() as store:
+            run, err = _mutable_expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            now = _now_iso()
+            store.set_expense_field_override(
+                run_id, document_id, "private", "1" if private else None, now
+            )
+            store.set_expense_field_override(
+                run_id, document_id, "reimburse_to",
+                reimburse_to if private else None, now
+            )
+            view = _expense_view(store, run)
+        return JSONResponse({"ok": True, "summary": view["summary"]})
+
     @app.put("/api/runs/{run_id}/expenses/{document_id:path}")
     async def put_expense_field(run_id: str, document_id: str, request: Request):
         """One field edit on one expense: {field, value}. Header fields land
@@ -2729,6 +2768,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run, err = _mutable_expense_run_or_error(store, run_id)
             if err is not None:
                 return err
+            # Item 41: a private confirmation is the PAIR (flag + who
+            # gets reimbursed). This one-field-at-a-time route cannot
+            # set both, so the flag alone is refused unless reimburse_to
+            # is already stored — otherwise "owed to nobody" would read
+            # as decided (adversarial review, 2026-09-06).
+            if field == "private" and value == "1":
+                stored = store.get_expense_field_overrides(run_id).get(
+                    document_id, {}
+                )
+                if not str(stored.get("reimburse_to") or "").strip():
+                    return JSONResponse(
+                        {"error": "confirming a private expense needs "
+                                  "reimburse_to; set it first, or use "
+                                  "POST .../expenses/{id}/private which "
+                                  "takes both together"},
+                        status_code=400,
+                    )
             if field in EXPENSE_CATEGORY_FIELDS:
                 # Whole-expense category/account edit -> a category_override
                 # per line. Find the expense in the EFFECTIVE receipt set so
