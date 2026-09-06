@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-06 | Brisken Expense Tool Owner Program | client-dev | [→](docs/2026-09-06%20-%20Brisken%20Expense%20Tool%20Owner%20Program/Checkpoint.md) |
 | 2026-09-06 | Brisken P1 Feedback Wave and Lovable Prompt Audit | client-dev | [→](docs/2026-09-06%20-%20Brisken%20P1%20Feedback%20Wave%20and%20Lovable%20Prompt%20Audit/Checkpoint.md) |
 | 2026-08-29 | Brisken P1 Demo Day Test Loop | client-dev | [Mini-Checkpoint-2](docs/2026-08-29%20-%20Brisken%20P1%20Demo%20Day%20Test%20Loop/Mini-Checkpoint-2.md) |
 | 2026-08-25 | Expense-Recon Statement Append + Repo Consolidation | client-dev | [→](docs/2026-08-25%20-%20Expense-Recon%20Statement%20Append%20%2B%20Repo%20Consolidation/Checkpoint.md) |
