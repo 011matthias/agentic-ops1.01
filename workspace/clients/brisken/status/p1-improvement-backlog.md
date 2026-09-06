@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-08-26
+updated: 2026-09-06
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -987,6 +987,122 @@ generic-first partition); the small backend half is adding those words to
 the vocabulary and deciding sub-3-digit-run tolerance in
 `is_generic_tender`, after which the three phrases move under the
 no-card-number section with no SPA change.
+
+### 38. Two functions: monthly company expenses and trips (owner directive 2026-09-06)
+
+**Owner:** "Expense creation should be split and separated into 2 functions:
+One for overall monthly company expenses and one for travel expenses." One of
+three directives given together (with items 39 and 40); they ship as one
+program, rounds at the end of this item.
+
+**Rulings, asked and answered 2026-09-06:**
+
+1. *How the tool knows which is which:* **declared at entry, never
+   inferred.** A batch is created as a company month or as a trip, and mail
+   routes by ADDRESS (the existing receipts@ stays company; a travel alias on
+   the same intake domain routes to travel). No content classification in the
+   split. To-alias already beats From-sender in the intake, so the routing
+   mechanism exists.
+2. *The travel unit:* **a trip — named, date-ranged, with a VARIABLE roster
+   of travelers.** Explicitly "not just one traveller per trip, that number
+   needs to be variable." Trips span month boundaries freely.
+3. *Reconciliation:* **both functions reconcile.** Travel expenses paid on
+   company cards participate in statement matching; travel is not a
+   receipts-only report.
+
+**Design consequences, stated now so they are not re-derived:**
+
+- Ruling 3 is the deep half: a month's statement charges must be matchable
+  against receipts sitting in TRIPS, so the match pool for a statement spans
+  batch types, and a receipt must never settle two charges across two
+  batches (a global claim, the same shape as `rematch_month`'s drop-refusal
+  but across runs). Everything else in the split is surface by comparison.
+- The trip document is the existing report pattern (listing + receipt
+  evidence per expense); with a variable roster it sections per person,
+  which is item 40's field.
+- Travel mail with no open trip RESTS in the pool like month mail. A trip
+  cannot be auto-created (it has a name and a roster only a human knows);
+  whether a receipt dated inside exactly one open trip's range auto-joins it
+  is the round's design call — deny-by-default is the house pattern.
+- SPA: batch creation gains the declared type; a trips list beside /months;
+  Lovable prompts per the api-contract rules.
+
+**Rounds for the 38/39/40 program:** R1 = item 40 (person on the card,
+smallest, everything else reads it), R2 = item 39 (auto-materialization),
+R3 = the trip entity + declared-type creation + travel alias routing,
+R4 = cross-batch reconciliation + the trip report. Each round the house
+loop: worktree, RED-proven tests, adversarial review, suite + calibrate,
+deploy, Lovable prompt, PROMPT-STATUS ledger.
+
+### 39. Mailed receipts become expenses on their own (owner directive 2026-09-06)
+
+**Owner:** "Receipts injected via Email should be automatically categorized
+and turned into expenses without having to start a reconciliation for the
+corresponding month."
+
+**This supersedes the 2026-08-24 ruling that pre-creating months intrudes**
+(recorded in the loop brief; it retired a "create the two months" step). The
+owner now directs the opposite: mail materializes the month itself. The
+POOL'S ROUTING HALF STAYS — filing by the month printed ON the receipt (item
+29 PR 1) is exactly what makes auto-creation safe.
+
+Design: arrival already runs the full extraction read (cache-warm) and
+arrival-time dedupe (item 33). The new step: a pooled receipt whose printed
+month is confidently known ENSURES the month batch — create it if absent,
+ingest, categorize through the normal pipeline, `rematch_after_change` when
+the month holds a statement. Guards that stay or get added:
+
+- An implausible month still rests. Bound the auto-create window: wrong-year
+  OCR (item 25: 11 of 36 April readings) is why a 2023 misread must never
+  create a 2023 batch. The `batch_period` neighbor logic is the reference.
+- `create_expense_batch` refuses an empty batch; the auto-create carries its
+  first receipt, so the ordering (create-with-receipt, not create-then-add)
+  is part of the design, not an accident.
+- Auto-created batches carry their origin (parallel field, e.g.
+  `created_by: "intake"`), so /months shows which months materialized on
+  their own.
+- The ack changes meaning: "filed into July 2026" instead of "waiting for
+  July 2026". `status_label` rules (api-contract rule 5) cover the new
+  wording.
+
+Live consequence to handle at deploy: the pool held 10 resting mails as of
+2026-08-25, three of them the SAME Hostinger invoice (pre-dedupe arrivals).
+On auto-materialization the receipt pool's add-time content check keeps
+copies 2+3 from becoming expenses, but their intake rows will read as
+processed; dismissing two first (item 33's open owner yes) is the tidy path.
+
+### 40. Every expense belongs to a person, through the card (owner directive 2026-09-06)
+
+**Owner:** "All injected expenses whether email or manual need to be
+attributed to a person." Ruling on the mechanism, near-verbatim: "The person
+attribution should really only happen depending on what card was used. Each
+card is attributed to a name and therefore every expense can be attributed
+to a person. Even the ones injected via email."
+
+So: a cards-registry entry gains `person` beside `entity`, and person
+resolution is the LAST LINK of the existing card chain (extraction pick,
+item 28 → hint → registry → stamped → needs). No parallel person chain, and
+NO sender-based attribution: `submitted_by` stays what it is (ingest
+provenance, a claim about who MAILED the file), and the person on the
+expense comes from the card even for mailed receipts — the owner said so
+explicitly, so do not "improve" this with sender inference later.
+
+Consequences:
+
+- Coverage is bounded by the registry, which makes item 26 three-ways
+  load-bearing: a card with no `person` resolves an entity but no person;
+  a generic tender resolves neither (per the 2026-08-22 ruling those are
+  per-month assignments, so the batch-assignment path takes a person the
+  same way it takes an entity — this month only, never learned); the 0340
+  card still does not exist. Data entry decides how much of a real month
+  attributes.
+- Rows gain `person` + `person_source` as PARALLEL fields (api-contract
+  rules, view-contract pinned); unattributed rows get their own review
+  surface and count beside MISSING ENTITY, with a rule-5 label.
+- Settings > Cards editor gains the person column (Lovable prompt), and the
+  card strip's Assign control carries the person half.
+- Trips (item 38): the roster is people; a trip receipt whose card person is
+  not on the roster is worth a flag — design call in that round.
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 

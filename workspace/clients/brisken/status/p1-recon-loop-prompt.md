@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-08-26
+updated: 2026-09-06
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
@@ -52,14 +52,17 @@ coverage panel; until the owner pastes it, a month holding two workbooks still
 offers one download button and the per-card split exists only in the API and
 the PDF. That is the one open thread from this round.
 
-**What is next is a decision, not a queue.** Item 29 is closed, so the ranking
-rule (wrong money beats wrong text; things that stop the tool learning beat
-cosmetics) applies to the open items afresh. The substantive ones are 27 (the
-date guard catches a wrong MONTH, not a wrong DAY - narrowed, not closed, and
-it is a wrong-money item), 23 (cut every tie to Zoho), 24 (the output is a
-document now), and the round that reopens the four expense-edit overlay routes
-now that 2b-1b restored the audit baseline they need. Reading it here, 27
-leads on the ranking rule; the backlog is the authority.
+**What is next is no longer a decision: the 2026-09-06 owner program leads.**
+On 2026-09-06 the owner directed three product changes in one message,
+captured with their rulings as backlog items 38 (company months vs TRIPS,
+declared at entry, both reconcile), 39 (mail materializes the month itself —
+supersedes the 2026-08-24 "pre-creating months intrudes" ruling below), and
+40 (person attribution through the CARD: registry entries gain a person, the
+existing card chain resolves it, sender identity stays provenance only).
+Round order is in item 38: person-on-card first, auto-materialization second,
+the trip entity third, cross-batch reconciliation + trip report last. The
+previously-ranked items (27, 23's Zoho string sweep, 24, the overlay-route
+round) queue behind the program unless one of them rides along cheaply.
 
 **Backlog item 30 is fully shipped and deployed** (PRs #607, #608, #609),
 along with the out-of-Lovable half of the "Arriving" bug:
@@ -117,12 +120,12 @@ They join automatically the moment a batch labelled "August 2026" /
 month needs at least one uploaded receipt — do NOT seed a fabricated one into
 a live month.
 
-**Owner ruling 2026-08-24: pre-creating months INTRUDES.** The open question
-from the previous checkpoint is closed. We do not open August or July on
-Criss's behalf, and we do not ask her to. The pool is the correct resting
-place and the receipts wait there until she opens the month herself in the
-course of her own work. This retires the "create the two months" step that
-sat at position 2 of the previous next-steps list.
+**Owner ruling 2026-08-24: pre-creating months INTRUDES — SUPERSEDED
+2026-09-06 by backlog item 39.** The owner now directs the opposite: mailed
+receipts become expenses on their own, auto-creating the month batch when the
+printed month is confidently known. Until item 39's round DEPLOYS, the
+2026-08-24 behavior is still what runs live (the pool waits); do not hand-create
+months in the interim.
 
 ## The directions, in the order they now rank
 
