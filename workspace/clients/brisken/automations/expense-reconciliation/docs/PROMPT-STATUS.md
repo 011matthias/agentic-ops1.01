@@ -78,6 +78,7 @@ and a rollback would otherwise have nothing to re-apply.
 |---|---|---|
 | `lovable-r1-person-private-prompt.md` | settings chunk reads AND writes `person`; grid chunk reads `suggested_private`, `reimburse_to_prefill`, `n_needs_person`, `spellings` | R1 backend deployed 2026-09-06. **Person data entry waits for this prompt's verification** (cards map is whole-map replace; a stale save erases stored persons). Supersedes the client-side grouping half of `lovable-card-strip-prompt.md` |
 | `lovable-months-origin-refusals-prompt.md` | `created_by` on the batches list; `n_refused_ours` + `n_probes` + `refusals[].kind_label` on the inbound log | R2 (#683 merged, #687) deploys with the staged flip |
+| `lovable-trips-prompt.md` (R3, 2026-09-06) | `trip_id`, `batch_type`, `pool_kind`, `trip_suggestion`, `n_pooled_travel`, `travel_alias` | §5 (Settings travel-alias field) GATES alias entry: the intake object is whole-object-replace, and a stale SPA save would erase the alias. Do not set the alias through the SPA before §5 is verified in the bundle |
 
 The clean slate lasted from the 2026-09-06 audit until R1 shipped the same
 day; the backlog's habit holds. Verify by the field names above, not
