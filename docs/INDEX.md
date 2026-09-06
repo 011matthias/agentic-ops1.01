@@ -11,9 +11,6 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
-| 2026-09-06 | Brisken P1 Program Prompts And Round-0 | client-dev | [Mini-Checkpoint-2](docs/2026-09-06%20-%20Brisken%20P1%20Program%20Prompts%20And%20Round-0/Mini-Checkpoint-2.md) |
-| 2026-09-06 | Brisken Expense Tool Owner Program | client-dev | [→](docs/2026-09-06%20-%20Brisken%20Expense%20Tool%20Owner%20Program/Checkpoint.md) |
-| 2026-09-06 | Expense-Recon Manual-Input Analysis | client-dev | [→](docs/2026-09-06%20-%20Expense-Recon%20Manual-Input%20Analysis/Checkpoint.md) |
 | 2026-09-06 | Brisken Zoho Entity Data Layout | client-dev | [→](docs/2026-09-06%20-%20Brisken%20Zoho%20Entity%20Data%20Layout/Checkpoint.md) |
 | 2026-09-06 | Brisken P1 Feedback Wave and Lovable Prompt Audit | client-dev | [→](docs/2026-09-06%20-%20Brisken%20P1%20Feedback%20Wave%20and%20Lovable%20Prompt%20Audit/Checkpoint.md) |
 | 2026-08-29 | Brisken P1 Demo Day Test Loop | client-dev | [Mini-Checkpoint-2](docs/2026-08-29%20-%20Brisken%20P1%20Demo%20Day%20Test%20Loop/Mini-Checkpoint-2.md) |
@@ -351,6 +348,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-06 | Meji September Launch Line-Up + Jess Workload Proposal | client-dev | [→](docs/2026-09-06%20-%20Meji%20September%20Launch%20Line-Up%20%2B%20Jess%20Workload%20Proposal/Checkpoint.md) |
 | 2026-08-27 | Meji September Readiness + Make Credit Cliff | client-dev | [→](docs/2026-08-27%20-%20Meji%20September%20Readiness%20%2B%20Make%20Credit%20Cliff/Checkpoint.md) |
 | 2026-07-29 | Meji September Prep + Copy Approval | client-dev | [→](docs/2026-07-29%20-%20Meji%20September%20Prep%20%2B%20Copy%20Approval/Checkpoint.md) |
 | 2026-07-20 | Meji ROI Page Full Answer | client-dev | [Checkpoint](docs/2026-07-20%20-%20Meji%20ROI%20Page%20Full%20Answer/Checkpoint.md) |
