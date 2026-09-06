@@ -138,9 +138,10 @@ name answers the same one:
 |---|---|
 | `n_expenses` · `n_receipts` | how many expenses are in the batch |
 | `n_categorized` · `n_uncategorized` | how many still need a category |
-| `n_ready` | how many need NOTHING from the reviewer (category, entity, core fields) |
+| `n_ready` | how many need NOTHING from the reviewer (category, entity, core fields, and — since item 40 — a person) |
 | `n_review` | how many are flagged for a look (`check` or `pick`) |
 | `n_needs_entity` | how many could not resolve a legal entity |
+| `n_needs_person` | how many rows no person owns yet (item 40; the fix is a person on the card, not a row edit) |
 | `n_set_aside` | how many files the quarantine is still holding back |
 | `n_duplicate_groups` | how many duplicate SITUATIONS were flagged |
 | `n_duplicate_copies` | how many copies are redundant (every copy after the first in a group the reviewer has not dismissed) |
@@ -682,3 +683,41 @@ number readable on the receipt; assignment applies to this month only");
 SPA partitions on those two existing flags and maps over `spellings[]` for
 the grouped Assign (`POST /api/expense-batches/{id}/cards` takes the full
 assignment list in one call).
+
+## Every expense belongs to a person, through the card (added 2026-09-06)
+
+Backlog item 40, owner directive: "each card is attributed to a name and
+therefore every expense can be attributed to a person. Even the ones
+injected via email." All fields below are PARALLEL (rule 1).
+
+**The card registry entry** gains `person` beside `entity`: accepted by
+`PUT /api/settings` `cards`, emitted by `GET /api/cards` (`cards[].person`,
+`""` when unset), snapshotted into a batch at creation, and reaching an
+existing batch only through `POST .../refresh-master-data` (whose `changes`
+gains a `row_persons` entry counting re-attributed rows). The cards map is
+still WHOLE-MAP REPLACE: an SPA build that does not read and write `person`
+in its Settings > Cards editor silently erases every stored person on save
+— person data entry therefore waits until the round's Lovable prompt is
+verified in the published bundle.
+
+**Expense rows** gain:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `expenses[].person` | string | who this expense belongs to; `""` until its card carries a person |
+| `expenses[].person_source` | string | `card` (the chain resolved it) or `none`. Item 41's round adds `private` |
+| `expenses[].card.person` | string | the resolved card's own person (also on `card_review.resolved[].card`) |
+
+Person resolution is the LAST link of the existing card chain (extraction
+pick → hint → registry/batch assignment → stamped): whichever card the
+chain lands on, its person wins. There is deliberately NO sender fallback:
+`submitted_by` stays ingest provenance (a claim about who MAILED the file)
+and never becomes attribution — pinned by
+`test_submitted_by_never_becomes_the_person`.
+
+**Review**: a row that would otherwise be ready reads `check` with the new
+`reason_code: "needs_person"` (rule 5: the human label rides in `reason`).
+It fires LAST — a missing category, entity, or core field always outranks
+it, because those are per-row fixes while a person is registry work.
+`n_needs_person` sits beside `n_needs_entity` on both `summary` and
+`card_review`.

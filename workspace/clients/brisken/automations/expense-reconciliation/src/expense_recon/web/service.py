@@ -4138,6 +4138,13 @@ def resolve_batch_row_cards(
     meaning the stamped value differs from the batch default (memory or an
     earlier card stamp), so the UI can say why without guessing.
 
+    `person` / `person_source` (backlog item 40): who the expense belongs
+    to, resolved as the LAST link of the SAME card chain — the resolved
+    card's own `person`, source "card", else "" / "none". There is NO
+    sender-based fallback by explicit owner ruling: `submitted_by` stays
+    ingest provenance and never becomes attribution, which is why this
+    function never sees it.
+
     `card_map_blocked` (per doc) tells the paid-through resolver the
     registry chain already ANSWERED the identity question in a way the
     flat digit->account map must not second-guess: the hint was ambiguous
@@ -4164,11 +4171,17 @@ def resolve_batch_row_cards(
             source = "batch" if entity == (batch_entity or "").strip() else "learned"
         else:
             entity, source = "", "none"
+        if card is not None and card.person:
+            person, person_source = card.person, "card"
+        else:
+            person, person_source = "", "none"
         out[r.document_id] = {
             "hint": hint,
             "card": card,
             "entity": entity,
             "entity_source": source,
+            "person": person,
+            "person_source": person_source,
             "ambiguous": ambiguous,
             "card_map_blocked": ambiguous
             or (card is not None and not card.zoho_account),
@@ -4212,6 +4225,7 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
                     "key": card.key,
                     "label": card.display_label,
                     "entity": card.entity,
+                    "person": card.person,
                     "zoho_account": card.zoho_account,
                 },
                 "n_rows": 0,
@@ -4264,6 +4278,12 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
         "n_needs_entity": sum(
             1 for res in resolution.values() if not res["entity"]
         ),
+        # Item 40: rows no person owns yet — the count beside MISSING
+        # ENTITY. Resolution is card-only, so the fix is a person on the
+        # card (Settings > Cards), not a per-row edit.
+        "n_needs_person": sum(
+            1 for res in resolution.values() if not res.get("person")
+        ),
     }
 
 
@@ -4274,6 +4294,7 @@ def _expense_review(
     entity: str | None = None,
     period: tuple[date, date] | None = None,
     date_is_human: bool = False,
+    person: str | None = None,
 ) -> dict:
     """Review-by-exception for one expense (receipt-spine). Missing core
     fields first (an expense cannot export cleanly without date / amount /
@@ -4281,7 +4302,13 @@ def _expense_review(
     25), then a missing legal entity (Cards R3 — resolves from the
     paying card; unresolved = review, and the export still runs with a
     visible placeholder), then the shared category judgment — the same
-    ready / check / pick vocabulary the statement workbench uses."""
+    ready / check / pick vocabulary the statement workbench uses.
+
+    `person` (backlog item 40) is checked LAST, only on a row that would
+    otherwise be ready: the fix (a person on the card, in Settings) is
+    registry work, not row work, so it must never hide a more actionable
+    per-row exception. `None` keeps the pre-item-40 behavior (statement-
+    workbench callers do not attribute persons)."""
     missing = [
         label
         for label, value in (
@@ -4338,7 +4365,19 @@ def _expense_review(
             "export shows a placeholder until then.",
             "needs_entity",
         )
-    return _matched_category_review(r, overrides)
+    review = _matched_category_review(r, overrides)
+    if review["state"] == "ready" and person is not None and not person:
+        # Item 40: every expense belongs to a person, through the card.
+        # A row whose card carries no person is not done — but the fix
+        # lives in Settings > Cards, so this fires only when nothing
+        # more actionable is wrong with the row itself.
+        return _review(
+            "check",
+            "No person owns this expense yet. Add a person to its paying "
+            "card in Settings > Cards, so every expense is attributed.",
+            "needs_person",
+        )
+    return review
 
 
 def _expense_account_options(run: RunRow, settings: dict | None) -> list[str]:
@@ -4521,11 +4560,12 @@ def build_expense_view(
     for r in receipts:
         res = card_res.get(r.document_id) or {
             "hint": "", "card": None, "entity": r.legal_entity_id or "",
-            "entity_source": "batch", "ambiguous": False,
-            "card_map_blocked": False,
+            "entity_source": "batch", "person": "", "person_source": "none",
+            "ambiguous": False, "card_map_blocked": False,
         }
         review = _expense_review(
             r, overrides, entity=res["entity"], period=period,
+            person=res["person"],
             # A hand-typed date, or a whole expense entered by hand, is the
             # reviewer's own value; the guard only questions the machine's.
             date_is_human=(
@@ -4598,12 +4638,18 @@ def build_expense_view(
             # raw hint stays visible for the review strip.
             "legal_entity_id": res["entity"],
             "entity_source": res["entity_source"],
+            # Item 40: who this expense belongs to, through the card — the
+            # last link of the same chain, with its provenance beside it.
+            # Parallel fields; "" / "none" until the card carries a person.
+            "person": res["person"],
+            "person_source": res["person_source"],
             "payment_hint": res["hint"],
             "card": (
                 {
                     "key": res["card"].key,
                     "label": res["card"].display_label,
                     "entity": res["card"].entity,
+                    "person": res["card"].person,
                     "hint": res["hint"],
                 }
                 if res["card"] is not None
@@ -4711,6 +4757,11 @@ def build_expense_view(
         # `needs_entity` review population (never an export blocker).
         "n_needs_entity": sum(
             1 for res in card_res.values() if not res["entity"]
+        ),
+        # Item 40: rows no person owns yet. Sits beside n_needs_entity;
+        # the fix is a person on the card, not a per-row edit.
+        "n_needs_person": sum(
+            1 for res in card_res.values() if not res.get("person")
         ),
         "n_learned_lines": n_learned_lines,
         "has_image_info": has_image_info,
@@ -5401,6 +5452,19 @@ def _refresh_batch_master_data_locked(
             )
             if n_moved:
                 changes.append({"field": "row_entities", "n_rows_changed": n_moved})
+            # Item 40: person moves are the same one-click-flips-a-batch
+            # hazard — a person added to a card re-attributes every row
+            # on that card, and the audit should say how many.
+            n_person_moved = sum(
+                1
+                for doc in before
+                if before[doc].get("person")
+                != after.get(doc, before[doc]).get("person")
+            )
+            if n_person_moved:
+                changes.append(
+                    {"field": "row_persons", "n_rows_changed": n_person_moved}
+                )
         except Exception:  # noqa: BLE001 - impact count must not break refresh
             pass
         store.update_run_config(run.run_id, cfg)

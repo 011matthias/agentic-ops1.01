@@ -17,10 +17,19 @@ This module gives cards one home: ``settings["cards"]``.
         "digits": ["2838", "1672"],
         "aliases": ["CorpServ"],
         "entity": "Corporate Services",
+        "person": "Nicolas",
         "zoho_account": "1010 Chase Corporate",
         "currency": "USD"
       }
     }
+
+``person`` (backlog item 40, owner directive 2026-09-06) is who a card's
+expenses belong to: "each card is attributed to a name and therefore
+every expense can be attributed to a person. Even the ones injected via
+email." Person attribution rides the SAME card chain as ``entity`` — the
+LAST link, resolved from whichever card the chain lands on — and NEVER
+the mail sender: ``submitted_by`` stays ingest provenance (a claim about
+who mailed a file), by explicit owner ruling.
 
 Two design facts carried from production evidence:
 
@@ -163,6 +172,7 @@ class Card:
     digits: tuple[str, ...] = ()
     aliases: tuple[str, ...] = ()
     entity: str = ""
+    person: str = ""
     zoho_account: str | None = None
     currency: str = ""
     active: bool = True
@@ -191,6 +201,7 @@ def card_to_dict(card: Card) -> dict:
         "digits": list(card.digits),
         "aliases": list(card.aliases),
         "entity": card.entity,
+        "person": card.person,
         "zoho_account": card.zoho_account,
         "currency": card.currency,
         "active": card.active,
@@ -217,7 +228,7 @@ def normalize_cards_setting(raw: object) -> dict:
         if not isinstance(entry, dict):
             raise ValueError(f"cards[{slug!r}] must be an object")
         out: dict = {}
-        for skey in ("label", "label_pt", "entity", "zoho_account"):
+        for skey in ("label", "label_pt", "entity", "person", "zoho_account"):
             value = str(entry.get(skey) or "").strip()
             if value:
                 out[skey] = value
@@ -288,6 +299,8 @@ def cards_to_setting(cards: dict[str, Card]) -> dict:
             entry["aliases"] = list(card.aliases)
         if card.entity:
             entry["entity"] = card.entity
+        if card.person:
+            entry["person"] = card.person
         if card.zoho_account:
             entry["zoho_account"] = card.zoho_account
         if card.currency:
@@ -416,6 +429,7 @@ def _card_from_setting(slug: str, entry: dict) -> Card:
         digits=tuple(str(d) for d in (entry.get("digits") or [])),
         aliases=tuple(str(a) for a in (entry.get("aliases") or [])),
         entity=str(entry.get("entity") or "").strip(),
+        person=str(entry.get("person") or "").strip(),
         zoho_account=(
             str(entry["zoho_account"]).strip()
             if str(entry.get("zoho_account") or "").strip()
