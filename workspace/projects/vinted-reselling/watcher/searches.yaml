@@ -1,0 +1,41 @@
+# Vinted watcher config. Edit freely; the watcher reads this on every cycle.
+# tag: short stable id (used as the comp-grouping key in the database;
+#      renaming a tag orphans its history, so pick names you can keep).
+# query: the literal Vinted search text.
+# price_max: alert cap in EUR (total incl. buyer fee). Listings above it are
+#            still recorded as comp data, just never alerted.
+
+settings:
+  deal_ratio: 0.62        # alert when total price <= ratio * comp median
+  min_comps: 6            # minimum comparable listings before scoring fires
+  comp_window_days: 45    # how far back comps count
+  min_price: 5            # ignore sub-5-EUR listings (junk/scam floor)
+
+searches:
+  - tag: carhartt-jacke
+    query: "carhartt jacke"
+    price_max: 45
+  - tag: carhartt-hose
+    query: "carhartt hose"
+    price_max: 35
+  - tag: rl-strick
+    query: "ralph lauren strickpullover"
+    price_max: 30
+  - tag: tnf-jacke
+    query: "the north face jacke"
+    price_max: 40
+  - tag: patagonia
+    query: "patagonia"
+    price_max: 40
+  - tag: levis-501
+    query: "levis 501"
+    price_max: 25
+  - tag: stone-island
+    query: "stone island"
+    price_max: 60
+  - tag: nike-vintage
+    query: "nike vintage"
+    price_max: 25
+  - tag: adidas-vintage
+    query: "adidas vintage"
+    price_max: 25
