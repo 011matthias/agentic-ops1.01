@@ -53,13 +53,16 @@ offers one download button and the per-card split exists only in the API and
 the PDF. That is the one open thread from this round.
 
 **What is next is no longer a decision: the 2026-09-06 owner program leads.**
-On 2026-09-06 the owner directed three product changes in one message,
-captured with their rulings as backlog items 38 (company months vs TRIPS,
-declared at entry, both reconcile), 39 (mail materializes the month itself —
-supersedes the 2026-08-24 "pre-creating months intrudes" ruling below), and
-40 (person attribution through the CARD: registry entries gain a person, the
-existing card chain resolves it, sender identity stays provenance only).
-Round order is in item 38: person-on-card first, auto-materialization second,
+On 2026-09-06 the owner directed four product changes, captured with their
+rulings as backlog items 38 (company months vs TRIPS, declared at entry,
+both reconcile), 39 (mail materializes the month itself — supersedes the
+2026-08-24 "pre-creating months intrudes" ruling below), 40 (person
+attribution through the CARD: registry entries gain a person, the existing
+card chain resolves it, sender identity stays provenance only), and 41 (a
+payment method that resolves to no registered card is SUGGESTED as a
+private expense with `reimburse_to` a person — the one bounded exception to
+40's card-only rule). Round order is in item 38: person-on-card + the
+private-expense suggestion first (one round), auto-materialization second,
 the trip entity third, cross-batch reconciliation + trip report last. The
 previously-ranked items (27, 23's Zoho string sweep, 24, the overlay-route
 round) queue behind the program unless one of them rides along cheaply.

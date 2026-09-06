@@ -1027,8 +1027,9 @@ program, rounds at the end of this item.
 - SPA: batch creation gains the declared type; a trips list beside /months;
   Lovable prompts per the api-contract rules.
 
-**Rounds for the 38/39/40 program:** R1 = item 40 (person on the card,
-smallest, everything else reads it), R2 = item 39 (auto-materialization),
+**Rounds for the 38/39/40/41 program:** R1 = items 40 + 41 (person on the
+card + the private-expense suggestion for payment methods that resolve to no
+card — one round, same surfaces), R2 = item 39 (auto-materialization),
 R3 = the trip entity + declared-type creation + travel alias routing,
 R4 = cross-batch reconciliation + the trip report. Each round the house
 loop: worktree, RED-proven tests, adversarial review, suite + calibrate,
@@ -1103,6 +1104,45 @@ Consequences:
   card strip's Assign control carries the person half.
 - Trips (item 38): the roster is people; a trip receipt whose card person is
   not on the roster is worth a flag — design call in that round.
+
+### 41. Unknown payment methods suggest a private expense (owner directive 2026-09-06)
+
+**Owner:** "When payment methods arise that have not been defined in the
+system they must be suggested to the user as private expenses that will
+require reimbursement to the person who expensed." Fourth directive of the
+2026-09-06 program; rides in the same round as item 40 (same surfaces: card
+chain, review states, the strip, Settings).
+
+Today the same situation — a payment hint that resolves to no registered
+card, whether unlisted digits (the live 0340 case before item 26's data
+entry) or a digit-less tender ("Cartao de Credito") — lands in the
+unknown-card strip or MISSING ENTITY and just waits. This directive gives it
+a default reading: not-a-company-card SUGGESTS private money.
+
+Design:
+
+- SUGGESTED, never stamped. A new review state (working name
+  `suggested_private`, own rule-5 label and count) that the operator
+  resolves one of two ways: confirm private (the row becomes a
+  reimbursement row) or register/assign the real card through the existing
+  flows, which clears the suggestion. Nothing auto-books; deny-by-default
+  holds.
+- A confirmed private expense carries `reimburse_to`, a person. This is the
+  one place person attribution CANNOT ride the card chain (there is no
+  company card), so it is a deliberate, bounded exception to item 40's
+  card-only rule, created by this directive: operator-confirmed, pre-filled
+  from `submitted_by` on mailed receipts (shown as the claim it is), blank
+  on manual uploads. Do not generalize this into sender-based attribution
+  anywhere else.
+- Private rows report as their own section — reimbursements owed, grouped
+  per person with sums — in the month report and the export, instead of
+  carrying an entity placeholder that reads like an unfinished company row.
+- The 2026-08-22 ruling (cash/personal tenders handled at end of month,
+  per-batch, never learned) keeps its timing; this item gives those rows a
+  name, a person, and a document section instead of a bare assignment.
+- Interaction with item 35's strip: the digit-less sub-strip it proposed is
+  where the suggestion surfaces naturally ("no card number readable;
+  suggested as a private expense").
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
