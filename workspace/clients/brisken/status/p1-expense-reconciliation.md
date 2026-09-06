@@ -37,6 +37,7 @@ this table is the index, not a second record.
 
 | Element | State | Tracked in |
 |---|---|---|
+| 2026-09-06 owner program: company months vs trips (declared, both reconcile), mail materializes the month, person attribution via the card, unknown payment methods suggest a private expense | captured + merged, nothing built; rounds R1-R4 planned (R1 = person-on-card + private-expense suggestion) | backlog items 38-41 + the re-ranked loop brief (PRs #672 / #674). Supersedes the 2026-08-24 "pre-creating months intrudes" ruling (noted in place) |
 | Statement ingest (CSV + XLSX) | done | BLUEPRINT (ingest) |
 | Transaction identity (content-derived, stable under append) | done (PR 2a of the living month) | backlog item 29; `ingest/_common.assign_content_ids` |
 | Extraction baseline survives the bake | live (PR #628, deployed Fly v94 2026-08-25) | backlog item 29 / PR 2b-1b. `rematch_month` committed the BAKED receipt pool as the snapshot, but the snapshot is also the audit baseline: `raw` echoed the reviewer's own edit, clearing an edit could not revert (the OCR value was gone), and the learning harvest keyed corrections on the corrected vendor instead of the original, so an attached month taught the merchant book nothing. Fixed by `extracted_receipts`, a parallel snapshot key, first-write-wins PER document; grid / export / learning / batch-list counts compose from it, matching and the reports keep the baked pool. Pre-2b runs fall back to what they had; nothing migrates. `service.baseline_receipts` |
