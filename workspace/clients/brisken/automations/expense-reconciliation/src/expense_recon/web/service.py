@@ -25,7 +25,7 @@ import re
 import threading
 import uuid
 from dataclasses import dataclass, replace
-from datetime import date
+from datetime import date, timedelta
 from typing import NamedTuple
 from decimal import Decimal
 from pathlib import Path
@@ -3660,6 +3660,76 @@ def find_trip_batch(store: RunStore, trip_id: str) -> RunRow | None:
     return None
 
 
+# One batch per trip is a fact only if creation is single-winner. A run
+# row appears only when the OCR job COMMITS — minutes after the create
+# was accepted — so a store scan alone is blind for the whole job
+# duration (adversarial review 2026-09-06, finding 1): two uploads
+# declaring the same trip, or an upload racing a join click, would each
+# pass the "already has a batch" check and commit two batches, the older
+# of which no list can reach. This in-process registry closes the
+# window: a trip id is CLAIMED before its create starts and released
+# when the job commits or dies. In-process is sufficient for the same
+# reason the intake day-budget is: the app is one process, and a crash
+# that loses the set also loses the uncommitted job it was tracking.
+# Deleting the trip entity goes through the same lock, which closes the
+# delete-during-create window (finding 2) as well.
+_TRIP_BATCH_PENDING: set[str] = set()
+_TRIP_BATCH_LOCK = threading.Lock()
+
+
+def claim_trip_batch_slot(store: RunStore, trip_id: str) -> dict | None:
+    """Reserve the right to create THE batch for this trip. Returns None
+    on success (caller MUST release via `release_trip_batch_slot` when
+    its create commits or fails), or an error body carrying ``code``
+    (http status) — and ``batch_id`` when a batch already exists."""
+    tid = str(trip_id)
+    with _TRIP_BATCH_LOCK:
+        if store.get_trip(tid) is None:
+            return {"code": 404, "error": "trip not found"}
+        if tid in _TRIP_BATCH_PENDING:
+            return {"code": 409, "error": (
+                "this trip's expense batch is being created right now; "
+                "retry when that upload finishes"
+            )}
+        existing = find_trip_batch(store, tid)
+        if existing is not None:
+            return {"code": 409, "error": (
+                "this trip already has an expense batch; add receipts "
+                "to it instead"
+            ), "batch_id": existing.run_id}
+        _TRIP_BATCH_PENDING.add(tid)
+    return None
+
+
+def release_trip_batch_slot(trip_id: str) -> None:
+    with _TRIP_BATCH_LOCK:
+        _TRIP_BATCH_PENDING.discard(str(trip_id))
+
+
+def delete_trip_entity(store: RunStore, trip_id: str) -> dict | None:
+    """Delete a trip entity, refusing while a batch exists OR one is
+    mid-creation. Runs entirely under the trip-batch lock, so a claim
+    and a delete serialize: whichever wins, the other sees it. Returns
+    None on success or an error body carrying ``code`` (http status)."""
+    tid = str(trip_id)
+    with _TRIP_BATCH_LOCK:
+        if store.get_trip(tid) is None:
+            return {"code": 404, "error": "Trip not found"}
+        if tid in _TRIP_BATCH_PENDING:
+            return {"code": 409, "error": (
+                "this trip's expense batch is being created right now; "
+                "retry when that upload finishes"
+            )}
+        batch = find_trip_batch(store, tid)
+        if batch is not None:
+            return {"code": 409, "error": (
+                "this trip still has an expense batch; delete the "
+                "batch first"
+            ), "batch_id": batch.run_id}
+        store.delete_trip(tid)
+    return None
+
+
 def trip_view(store: RunStore, trip: TripRow, batch: RunRow | None) -> dict:
     """One row of the trips list. ``batch_id`` / ``summary`` are null until
     a receipt has joined (the batch materializes on first join); a null is
@@ -4806,12 +4876,29 @@ def build_expense_view(
     # review states, the paid-through card step, and the card_review
     # strip — the same pass the export runs, so they cannot disagree.
     card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
-    # The month this batch is, for the date guard (backlog item 25). Derived
-    # from the operator's label first and the batch's own dates second, over
-    # the EDITED receipts, so correcting dates moves the consensus with them.
-    period = batch_period(
-        run.label, [r.detected_date for r in receipts if r.detected_date]
-    )
+    # The window this batch's dates are expected in, for the date guard
+    # (backlog item 25). A company month derives it from the operator's
+    # label first and the batch's own dates second, over the EDITED
+    # receipts, so correcting dates moves the consensus with them. A TRIP
+    # takes its own declared range (item 38: trips span month boundaries
+    # freely, so a label- or plurality-derived month would flag legitimate
+    # rows), padded a month either side because travel spend books early
+    # (flights) and settles late; a trip whose entity is gone gets no
+    # window at all — never a label-derived one.
+    if is_trip_batch(run):
+        period = None
+        if trip is not None:
+            try:
+                period = (
+                    date.fromisoformat(str(trip.get("start"))) - timedelta(days=31),
+                    date.fromisoformat(str(trip.get("end"))) + timedelta(days=31),
+                )
+            except ValueError:
+                period = None
+    else:
+        period = batch_period(
+            run.label, [r.detected_date for r in receipts if r.detected_date]
+        )
     # Backlog item 36: what month do these receipts collectively read as?
     # Confirm-first surface for the SPA banner — the label stays the only
     # authority (item 25 ruling: nothing about dates is auto-corrected);

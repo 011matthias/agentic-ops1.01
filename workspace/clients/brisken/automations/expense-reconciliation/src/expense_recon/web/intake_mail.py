@@ -68,11 +68,13 @@ from .service import (
     FOLDER_RECEIPT_SUFFIXES,
     MODE_EXPENSE_GENERATION,
     add_receipts_to_expense_batch,
+    claim_trip_batch_slot,
     create_expense_batch,
     execute_expense_batch,
     find_trip_batch,
     has_statement,
     is_trip_batch,
+    release_trip_batch_slot,
 )
 from .store import JOB_DONE, JOB_ERROR, RunStore
 
@@ -415,13 +417,26 @@ class InboundMessage:
     attachments: list[tuple[str, bytes]]   # (filename, bytes), receipt types
     skipped: list[str]            # attachment names dropped (type/size/count)
     body_only: bool               # no usable attachments but there IS a body
+    # The BASE local of each recipient (the part before any "+tag"), in
+    # the same order. `to_locals` carries the plus-TAG because that is
+    # the person-alias signal (receipts+dirk@ -> "dirk"); the travel
+    # split keys on the base instead, so travel+rome@ is travel and
+    # receipts+travel@ stays the company intake's tag convention
+    # (adversarial review 2026-09-06, finding 4).
+    to_base_locals: list[str] = field(default_factory=list)
 
 
-def _locals_from_addrs(addrs, domain: str, out: list[str]) -> None:
+def _locals_from_addrs(
+    addrs, domain: str, out: list[str],
+    base_out: list[str] | None = None,
+) -> None:
     for addr in addrs:
         addr = (addr or "").strip().lower()
         if addr.endswith("@" + domain):
             local = addr.split("@", 1)[0]
+            base = local.split("+", 1)[0]
+            if base_out is not None and base and base not in base_out:
+                base_out.append(base)
             # plus-addressing: receipts+dirk@ -> tag "dirk" is the signal
             if "+" in local:
                 local = local.split("+", 1)[1]
@@ -435,16 +450,17 @@ def parse_inbound(
     msg = BytesParser(policy=policy.default).parsebytes(raw)
     from_addr = parseaddr(str(msg.get("From", "")))[1].strip().lower()
     to_locals: list[str] = []
+    to_base_locals: list[str] = []
     # Envelope recipients first: our own listener IS the receiving MTA, so
     # they are authoritative and cover Bcc'd aliases the headers never show.
-    _locals_from_addrs(envelope_rcpts or [], domain, to_locals)
+    _locals_from_addrs(envelope_rcpts or [], domain, to_locals, to_base_locals)
     # NOTE: 3.12's strict getaddresses (CVE-2023-27043 fix) answers the
     # WHOLE call with the [('','')] failure sentinel if ANY element is
     # unparseable — an empty string from an absent header poisons it.
     header_values = [str(msg.get(h, "")) for h in ("To", "Cc")]
     _locals_from_addrs(
         (a for _l, a in getaddresses([v for v in header_values if v.strip()])),
-        domain, to_locals,
+        domain, to_locals, to_base_locals,
     )
 
     attachments: list[tuple[str, bytes]] = []
@@ -503,6 +519,7 @@ def parse_inbound(
         attachments=attachments,
         skipped=skipped,
         body_only=body_only,
+        to_base_locals=to_base_locals,
     )
 
 
@@ -520,12 +537,19 @@ def resolve_person(
     return {"person": from_addr, "source": "sender", "address": from_addr}
 
 
-def is_travel_mail(to_locals: list[str], cfg: IntakeConfig) -> bool:
+def is_travel_mail(base_locals: list[str], cfg: IntakeConfig) -> bool:
     """Was this mail addressed to the travel alias? Address-only, per
     item 38 ruling 1: the split routes by the To-address the sender
     picked, never by content classification. With no alias configured
-    (the owner has not chosen the name) nothing is ever travel."""
-    return bool(cfg.travel_alias) and cfg.travel_alias in (to_locals or [])
+    (the owner has not chosen the name) nothing is ever travel.
+
+    Matches the BASE local (before any "+tag"): travel+rome@ is travel
+    mail, while receipts+travel@ is the company intake's person-tag
+    convention and stays month mail. A mail addressed to BOTH intakes
+    (To receipts@, Cc travel@) counts as travel: resting in the travel
+    pool is recoverable with one click, auto-ingesting into a month
+    against the sender's travel flag is the worse error."""
+    return bool(cfg.travel_alias) and cfg.travel_alias in (base_locals or [])
 
 
 def is_known_sender(from_addr: str, cfg: IntakeConfig) -> bool:
@@ -928,6 +952,10 @@ def archive_message(
         "at": _now_iso(),
         "from": parsed.from_addr,
         "to_locals": parsed.to_locals,
+        # The base locals too, so a router that died BEFORE the routing
+        # CAS leaves enough behind for replay to re-derive the travel
+        # answer (finding 3): the stamp is only written at routing.
+        "to_base_locals": parsed.to_base_locals,
         "subject": parsed.subject,
         "message_id": parsed.message_id,
         "status": status,
@@ -1276,10 +1304,12 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
             cfg = IntakeConfig.from_settings(store.get_settings())
             meta = _read_meta(arch)
             batch_label = ""
+            batch_is_trip = False
             if meta.get("batch_id"):
                 run = store.get_run(str(meta["batch_id"]))
                 if run is not None:
                     batch_label = (run.label or "").strip()
+                    batch_is_trip = is_trip_batch(run)
         if not cfg.auto_ack or not graph_notify.enabled():
             return
         if meta.get("ack_at") or _inbound_is_auto_generated(arch):
@@ -1324,8 +1354,9 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
             )
         elif batch_label:
             landed = (
-                f' landed in the "{batch_label}" expense month in the '
-                "Brisken expense tool."
+                f' landed in the "{batch_label}" '
+                + ("trip" if batch_is_trip else "expense month")
+                + " in the Brisken expense tool."
             )
         else:
             landed = (
@@ -1339,13 +1370,29 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
             f"{n} file(s) from your email" if n
             else "Your email"
         )
+        # Travel mail is reviewed per trip and was sent to the travel
+        # address; promising "the monthly run" and signing as receipts@
+        # would both be wrong about it (finding 7).
+        is_travel = (
+            str(meta.get("pool_kind") or "") == "travel" or batch_is_trip
+        )
+        review_note = (
+            " Nothing else to do; Criss reviews them with the trip's "
+            "expenses." if is_travel else
+            " Nothing else to do; Criss reviews them with the monthly "
+            "run."
+        )
+        sender_local = (
+            cfg.travel_alias if is_travel and cfg.travel_alias
+            else "receipts"
+        )
         body = (
             lead
             + (f' "{subject}"' if subject else "")
             + landed
-            + " Nothing else to do; Criss reviews them with the "
-            "monthly run.\n\nAutomated confirmation from "
-            f"receipts@{cfg.domain}."
+            + review_note
+            + "\n\nAutomated confirmation from "
+            f"{sender_local}@{cfg.domain}."
         )
         if graph_notify.send_mail(
             recipient, "Receipt received" + (f": {subject}" if subject else ""),
@@ -2169,7 +2216,7 @@ def route_archived(
     cfg = IntakeConfig.from_settings(settings)
     person = resolve_person(parsed.to_locals, parsed.from_addr, cfg)
     received_at = _now_iso()
-    travel = is_travel_mail(parsed.to_locals, cfg)
+    travel = is_travel_mail(parsed.to_base_locals, cfg)
 
     # Single-winner: CAS received -> routing before doing anything. A
     # second router (the replay sweep picking up a stale `received`, a
@@ -2178,12 +2225,15 @@ def route_archived(
     # The travel stamp rides in the SAME CAS (item 38): it is decided by
     # the address alone, so it is known before any content is read, and
     # stamping it here means every later path (render, replay, claim,
-    # re-ingest) reads the meta instead of re-deriving the answer.
+    # re-ingest) reads the meta instead of re-deriving the answer. It is
+    # written on EVERY route ("" when not travel), so a re-route after
+    # the alias changed cannot leave a stale travel stamp behind
+    # (finding 6), and an absent key means "never routed".
     applied, meta = _transition_meta(
         arch,
         lambda m: str(m.get("status", "")) == STATUS_RECEIVED,
         {"status": STATUS_ROUTING, "person": person,
-         **({"pool_kind": "travel"} if travel else {})},
+         "pool_kind": "travel" if travel else ""},
     )
     if not applied:
         return {
@@ -2743,12 +2793,25 @@ def join_trip(
         received_at = str(meta.get("at") or _now_iso())
 
         if run is not None:
-            job_id = _start_ingest(
-                db_path, learning_db_path, run, attachments, person,
-                received_at, arch, synchronous=True,
-            )
-            with RunStore(db_path) as store:
-                job = store.get_job(job_id) or {}
+            try:
+                job_id = _start_ingest(
+                    db_path, learning_db_path, run, attachments, person,
+                    received_at, arch, synchronous=True,
+                )
+                with RunStore(db_path) as store:
+                    job = store.get_job(job_id) or {}
+            except Exception as exc:  # noqa: BLE001 - same guard as claim_pooled
+                # A failure BEFORE the job existed (staging, disk, store)
+                # would otherwise strand the archive in `claiming` and
+                # 409 every further click (finding 5). Back to resting.
+                log.warning("trip join failed for %s: %s", arch.name, exc)
+                _transition_meta(
+                    arch,
+                    lambda m: str(m.get("status", "")) == STATUS_CLAIMING,
+                    {"status": STATUS_POOLED, "batch_id": "",
+                     "batch_deleted": False, "error": str(exc)[:400]},
+                )
+                return {"error": f"join failed: {exc}"[:400], "code": 500}
             if job.get("status") != JOB_DONE:
                 # _ingest_job stamped held_failed + the error; the
                 # RESTING place for travel mail is the travel pool.
@@ -2780,7 +2843,23 @@ def join_trip(
                 "documents": final.get("documents", []),
             }
 
-        # No batch yet: create it WITH this mail's receipts.
+        # No batch yet: create it WITH this mail's receipts, holding the
+        # trip-batch slot so a concurrent upload declaring the same trip
+        # cannot create a second batch while this OCR runs (finding 1),
+        # and so the trip entity cannot be deleted out from under the
+        # creation (finding 2; `delete_trip_entity` shares the lock).
+        with RunStore(db_path) as store:
+            refused = claim_trip_batch_slot(store, trip.trip_id)
+        if refused is not None:
+            # A concurrent upload won the creation (or just finished).
+            # Back to resting; the next click lands on the append path.
+            _transition_meta(
+                arch,
+                lambda m: str(m.get("status", "")) == STATUS_CLAIMING,
+                {"status": STATUS_POOLED, "batch_id": "",
+                 "batch_deleted": False},
+            )
+            return dict(refused)
         prepared = None
         try:
             provenance = {
@@ -2817,6 +2896,8 @@ def join_trip(
             )
             log.warning("trip join failed for %s: %s", arch.name, exc)
             return {"error": f"join failed: {exc}"[:400], "code": 500}
+        finally:
+            release_trip_batch_slot(trip.trip_id)
         documents = [
             str(r.get("document_id"))
             for r in (created.snapshot or {}).get("receipts") or []
@@ -2964,6 +3045,24 @@ def replay_held(
                 log.warning("month stamp failed for %s: %s", arch.name, exc)
                 still_held += 1
                 continue
+        if "pool_kind" not in meta:
+            # A router that died BEFORE the routing CAS (custody taken,
+            # 250 sent, no stamp) left an archive replay would otherwise
+            # month-route blind — finding 3: a travel-addressed mail
+            # ingested into a company month via the crash path. The
+            # base locals were archived at custody; derive the answer
+            # against the CURRENT alias, exactly as arrival would.
+            if settings is None:
+                with RunStore(db_path) as store:
+                    settings = store.get_settings()
+            locals_ = list(
+                meta.get("to_base_locals") or meta.get("to_locals") or []
+            )
+            kind = "travel" if is_travel_mail(
+                locals_, IntakeConfig.from_settings(settings)
+            ) else ""
+            _update_meta(arch, {"pool_kind": kind})
+            meta = {**meta, "pool_kind": kind}
         held_status = str(meta.get("status", ""))
         if str(meta.get("pool_kind") or "") == "travel":
             # A stuck travel mail (failed join, crashed router) goes back

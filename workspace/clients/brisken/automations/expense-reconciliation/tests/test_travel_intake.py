@@ -35,15 +35,21 @@ from expense_recon.web.intake_mail import (  # noqa: E402
     STATUS_INGESTED,
     STATUS_POOLED,
     IntakeConfig,
+    archive_incoming,
     claim_pooled,
     inbound_root,
     normalize_intake_setting,
+    parse_inbound,
     process_message,
     render_ingest,
     replay_held,
 )
-from expense_recon.web.service import covering_trips  # noqa: E402
-from expense_recon.web.store import TripRow  # noqa: E402
+from expense_recon.web.service import (  # noqa: E402
+    claim_trip_batch_slot,
+    covering_trips,
+    release_trip_batch_slot,
+)
+from expense_recon.web.store import RunStore, TripRow  # noqa: E402
 
 JPG = b"\xff\xd8\xff\xe0" + b"x" * 5000
 DOMAIN = "expenses.brisken.com"
@@ -242,10 +248,20 @@ def test_travel_mail_rests_even_when_its_month_is_open(
 def test_receipts_behavior_is_identical_with_and_without_the_alias(
     tmp_path_factory, monkeypatch,
 ):
-    """The regression pin: the SAME receipts@ mail, one app with the
-    alias configured, one without. Every routing-visible outcome —
-    route result, meta stamps, log row — must agree field for field
-    (ids and timestamps aside)."""
+    """The regression pin: the SAME receipts@ traffic, one app with the
+    alias configured, one without. Both halves of the month path are
+    compared — the POOLED outcome (no month open) and the DIRECT-INGEST
+    outcome (month open) — field for field, ids and timestamps aside."""
+    volatile = {"archive", "at", "job_id", "batch_id"}
+
+    def _comparable(result, meta, row):
+        return (
+            {k: v for k, v in result.items() if k not in volatile},
+            {k: v for k, v in meta.items()
+             if k not in volatile | {"message_id", "peer"}},
+            {k: v for k, v in row.items() if k not in volatile},
+        )
+
     outcomes = []
     for configure_alias in (False, True):
         tmp = tmp_path_factory.mktemp(
@@ -259,24 +275,52 @@ def test_receipts_behavior_is_identical_with_and_without_the_alias(
             c._db_path = tmp / "recon-web.sqlite"
             if configure_alias:
                 _set_travel_alias(c)
+            # Half 1: no month open -> the mail pools.
             _patch_ocr(monkeypatch, _extraction())
-            result = _send(c, _mail(
+            pooled = _send(c, _mail(
                 "dirk.neumann@brisken.com", f"receipts@{DOMAIN}",
                 attachments=[("taxi.jpg", JPG)],
             ))
-            meta = _meta(c, result["archive"])
-            row = _log_row(c, result["archive"])
-        volatile = {"archive", "at", "job_id", "batch_id"}
-        outcomes.append((
-            {k: v for k, v in result.items() if k not in volatile},
-            {k: v for k, v in meta.items()
-             if k not in volatile | {"message_id", "peer"}},
-            {k: v for k, v in row.items() if k not in volatile},
-        ))
+            pooled_state = _comparable(
+                pooled, _meta(c, pooled["archive"]),
+                _log_row(c, pooled["archive"]),
+            )
+            # Open the month (its create also claims the pooled mail:
+            # queue = seed extraction + the claim's ingest extraction).
+            _patch_ocr(monkeypatch, _extraction(vendor="Seed"),
+                       _extraction())
+            resp = c.post(
+                "/api/expense-batches",
+                files=[("files",
+                        ("seed.jpg", JPG + b"s", "application/octet-stream"))],
+                data={"legal_entity": "Corporate Services",
+                      "label": MONTH_LABEL},
+            )
+            assert resp.status_code == 200, resp.text
+            assert c.get(
+                f"/jobs/{resp.json()['job_id']}"
+            ).json()["status"] == "done"
+            # Half 2: month open -> the mail direct-ingests.
+            _patch_ocr(monkeypatch,
+                       _extraction(vendor="Cafe", total="9.00"),
+                       _extraction(vendor="Cafe", total="9.00"))
+            ingested = _send(c, _mail(
+                "dirk.neumann@brisken.com", f"receipts@{DOMAIN}",
+                attachments=[("cafe.jpg", JPG + b"c", )],
+                subject="Cafe",
+            ))
+            ingested_state = _comparable(
+                ingested, _meta(c, ingested["archive"]),
+                _log_row(c, ingested["archive"]),
+            )
+        outcomes.append((pooled_state, ingested_state))
     assert outcomes[0] == outcomes[1]
-    # And the shared shape is the month pool, never the travel pool.
-    assert outcomes[0][0]["status"] == STATUS_POOLED
-    assert "pool_kind" not in outcomes[0][1]
+    # And the shared shapes are the month path, never the travel pool.
+    assert outcomes[0][0][0]["status"] == STATUS_POOLED
+    assert "pool_kind" not in {
+        k for k, v in outcomes[0][0][1].items() if v
+    }
+    assert outcomes[0][1][1]["status"] == STATUS_INGESTED
 
 
 def test_unset_alias_routes_travel_named_mail_as_ordinary(
@@ -291,7 +335,9 @@ def test_unset_alias_routes_travel_named_mail_as_ordinary(
     ))
     assert result["status"] == STATUS_POOLED
     assert "pool_kind" not in result
-    assert "pool_kind" not in _meta(client, result["archive"])
+    # Routed non-travel writes the empty stamp ("" = decided, not
+    # travel); only an unrouted archive lacks the key entirely.
+    assert not _meta(client, result["archive"]).get("pool_kind")
 
 
 # ── the pooled row: suggestion + labels + counts ────────────────────
@@ -443,6 +489,146 @@ def test_join_guards(client, monkeypatch):
     assert again.status_code == 409
 
 
+# ── plus-addressing + multi-recipient (findings 4 + 9b) ─────────────
+
+
+def test_plus_tag_on_the_travel_alias_is_still_travel(client, monkeypatch):
+    _set_travel_alias(client)
+    _patch_ocr(monkeypatch, _extraction())
+    result = _send(client, _mail(
+        "dirk.neumann@brisken.com", f"travel+rome2026@{DOMAIN}",
+        attachments=[("taxi.jpg", JPG)],
+    ))
+    assert result["status"] == STATUS_POOLED
+    assert result.get("pool_kind") == "travel"
+
+
+def test_receipts_plus_travel_tag_stays_month_mail(client, monkeypatch):
+    """receipts+X@ is the person-tag convention; a tag that happens to
+    spell the travel alias does not reroute the company intake."""
+    _set_travel_alias(client)
+    _patch_ocr(monkeypatch, _extraction())
+    result = _send(client, _mail(
+        "dirk.neumann@brisken.com", f"receipts+travel@{DOMAIN}",
+        attachments=[("taxi.jpg", JPG)],
+    ))
+    assert result["status"] == STATUS_POOLED
+    assert "pool_kind" not in result
+    assert not _meta(client, result["archive"]).get("pool_kind")
+
+
+def test_mail_addressed_to_both_intakes_is_travel(client, monkeypatch):
+    """To receipts@ AND Cc travel@: travel wins, pinned. Resting in the
+    travel pool is one click to recover; auto-ingesting into a month
+    against the sender's travel flag is the worse error."""
+    _set_travel_alias(client)
+    _patch_ocr(monkeypatch, _extraction())
+    raw = _mail(
+        "dirk.neumann@brisken.com", f"receipts@{DOMAIN}",
+        attachments=[("taxi.jpg", JPG)],
+    ).replace(b"Subject:", f"Cc: travel@{DOMAIN}\nSubject:".encode(), 1)
+    result = _send(client, raw)
+    assert result["status"] == STATUS_POOLED
+    assert result.get("pool_kind") == "travel"
+
+
+# ── crash recovery keeps the address's meaning (finding 3) ──────────
+
+
+def test_replay_re_derives_travel_for_a_pre_routing_crash(
+    client, monkeypatch,
+):
+    """Custody taken (250 sent), router died BEFORE the routing CAS: no
+    pool_kind stamp exists. Replay must re-derive travel from the
+    archived base locals rather than month-routing blind."""
+    _set_travel_alias(client)
+    raw = _mail(
+        "dirk.neumann@brisken.com", f"travel@{DOMAIN}",
+        attachments=[("taxi.jpg", JPG)],
+    )
+    parsed = parse_inbound(raw, DOMAIN)
+    arch = archive_incoming(client._data_root, raw, parsed)
+    # Age the `received` stamp past the stale threshold so replay takes it.
+    meta_path = arch / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert "pool_kind" not in meta  # the crash left no routing stamp
+    meta["at"] = "2026-01-01T00:00:00+00:00"
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    _patch_ocr(monkeypatch, _extraction())
+    swept = replay_held(client._db_path, None, client._data_root)
+    assert swept["pooled"] == 1
+    final = _meta(client, arch.name)
+    assert final["status"] == STATUS_POOLED
+    assert final["pool_kind"] == "travel"
+
+
+# ── the join under contention (findings 1, 2, 5) ────────────────────
+
+
+def test_join_refuses_while_an_upload_is_creating_the_batch(
+    client, monkeypatch,
+):
+    _set_travel_alias(client)
+    trip = _make_trip(client)
+    _patch_ocr(monkeypatch, _extraction())
+    result = _send(client, _mail(
+        "dirk.neumann@brisken.com", f"travel@{DOMAIN}",
+        attachments=[("taxi.jpg", JPG)],
+    ))
+    with RunStore(client._db_path) as store:
+        assert claim_trip_batch_slot(store, trip["trip_id"]) is None
+    try:
+        resp = client.post(
+            f"/api/inbound/{result['archive']}/join-trip",
+            json={"trip_id": trip["trip_id"]},
+        )
+        assert resp.status_code == 409
+        assert "being created" in resp.json()["error"]
+        # The mail went back to RESTING, so the next click works.
+        assert _meta(client, result["archive"])["status"] == STATUS_POOLED
+    finally:
+        release_trip_batch_slot(trip["trip_id"])
+    _patch_ocr(monkeypatch, _extraction())
+    ok = client.post(f"/api/inbound/{result['archive']}/join-trip",
+                     json={"trip_id": trip["trip_id"]})
+    assert ok.status_code == 200, ok.text
+
+
+def test_failed_append_join_returns_the_mail_to_the_pool(
+    client, monkeypatch,
+):
+    """A staging/disk failure on the APPEND branch must not strand the
+    archive in `claiming` (the create branch already guards this)."""
+    _set_travel_alias(client)
+    trip = _make_trip(client)
+    _patch_ocr(monkeypatch, _extraction(), _extraction())
+    first = _send(client, _mail(
+        "dirk.neumann@brisken.com", f"travel@{DOMAIN}",
+        attachments=[("taxi.jpg", JPG)],
+    ))
+    ok = client.post(f"/api/inbound/{first['archive']}/join-trip",
+                     json={"trip_id": trip["trip_id"]})
+    assert ok.status_code == 200, ok.text
+
+    _patch_ocr(monkeypatch, _extraction(vendor="Hotel"))
+    second = _send(client, _mail(
+        "criss@brisken.com", f"travel@{DOMAIN}",
+        attachments=[("hotel.jpg", JPG + b"2")], subject="Hotel",
+    ))
+
+    def _boom(*a, **kw):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("expense_recon.web.intake_mail._start_ingest", _boom)
+    resp = client.post(f"/api/inbound/{second['archive']}/join-trip",
+                       json={"trip_id": trip["trip_id"]})
+    assert resp.status_code == 500
+    final = _meta(client, second["archive"])
+    assert final["status"] == STATUS_POOLED
+    assert "disk full" in final.get("error", "")
+
+
 # ── the other roads into the pool stay travel-aware ─────────────────
 
 
@@ -504,3 +690,8 @@ def test_travel_ack_names_the_trip_review_not_the_month_join(
     assert sent, "pooled travel mail must still be acked"
     assert "travel receipts" in sent[-1]
     assert "join that month's" not in sent[-1]
+    # Finding 7: the review promise and the signature both follow the
+    # address the sender used, never the month run / receipts@.
+    assert "trip's expenses" in sent[-1]
+    assert "monthly run" not in sent[-1]
+    assert f"travel@{DOMAIN}" in sent[-1]

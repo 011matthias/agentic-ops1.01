@@ -106,14 +106,17 @@ from .service import (
     commit_to_memory,
     compare_runs,
     batch_type,
+    claim_trip_batch_slot,
     create_expense_batch,
     create_intake,
+    delete_trip_entity,
     execute_expense_batch,
     execute_run,
     execute_statement_attach,
     find_trip_batch,
     has_statement,
     is_trip_batch,
+    release_trip_batch_slot,
     prepare_statement_attach,
     forget_memory_vendor,
     ingest_receipts_folder_into_run,
@@ -286,6 +289,7 @@ def _run_expense_job(
     When the batch's label names a month, the pool is drained into it once
     the rows are committed: creating "July 2026" is what makes July's
     waiting mail arrive, with no second click."""
+    pending_trip = str((prepared.cfg or {}).get("trip_id") or "")
     try:
         with RunStore(db_path) as store:
             run_id = execute_expense_batch(
@@ -302,6 +306,12 @@ def _run_expense_job(
                 job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
             )
         return
+    finally:
+        # The trip's creation slot opens once the outcome is durable:
+        # committed => find_trip_batch sees the row; failed => no row and
+        # the next create may try again.
+        if pending_trip:
+            release_trip_batch_slot(pending_trip)
     # Inline, not threaded: this already runs off the request, and the
     # claim must not start before the batch rows are committed.
     if data_root is not None and month_from_label(prepared.label) is not None:
@@ -2403,28 +2413,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 {"error": "batch_type must be 'company-month' or 'trip'"},
                 status_code=400,
             )
-        trip_row = None
         if declared == BATCH_TYPE_TRIP:
             if not trip_id:
                 return JSONResponse(
                     {"error": "trip_id is required for a trip batch"},
                     status_code=400,
                 )
+            # Single-winner batch creation: the run row only commits when
+            # the OCR job does, so a store scan alone is blind for the
+            # whole job. The slot is released by `_run_expense_job` (or
+            # below, when the create fails before a job exists).
             with open_store() as store:
-                trip_row = store.get_trip(trip_id)
-                existing = find_trip_batch(store, trip_id) if trip_row else None
-            if trip_row is None:
-                return JSONResponse(
-                    {"error": "trip not found"}, status_code=404
+                refused = claim_trip_batch_slot(store, trip_id)
+                trip_row = (
+                    store.get_trip(trip_id) if refused is None else None
                 )
-            if existing is not None:
-                return JSONResponse(
-                    {"error": "this trip already has an expense batch; "
-                              "add receipts to it instead",
-                     "batch_id": existing.run_id},
-                    status_code=409,
-                )
-            if not label.strip():
+            if refused is not None:
+                code = refused.pop("code", 409)
+                return JSONResponse(refused, status_code=code)
+            if not label.strip() and trip_row is not None:
                 label = trip_row.name
         elif trip_id:
             return JSONResponse(
@@ -2448,6 +2455,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 trip_id=trip_id,
             )
         except RunInputError as exc:
+            if declared == BATCH_TYPE_TRIP:
+                release_trip_batch_slot(trip_id)
             return JSONResponse({"error": exc.message}, status_code=400)
 
         job_id = uuid.uuid4().hex[:12]
@@ -2592,23 +2601,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
     @app.delete("/api/trips/{trip_id}")
     def delete_trip(trip_id: str):
-        """Remove a trip ENTITY. Refused while a batch references it: the
-        batch holds real expenses and goes first (POST /api/runs/{id}/
-        delete), then the entity."""
+        """Remove a trip ENTITY. Refused while a batch references it (the
+        batch holds real expenses and goes first: POST /api/runs/{id}/
+        delete, then the entity) — or while one is mid-creation, which is
+        the window `delete_trip_entity` serializes shut."""
         if not _receipt_first_on():
             return _flag_off()
         with open_store() as store:
-            if store.get_trip(trip_id) is None:
-                return _not_found("Trip not found")
-            batch = find_trip_batch(store, trip_id)
-            if batch is not None:
-                return JSONResponse(
-                    {"error": "this trip still has an expense batch; "
-                              "delete the batch first",
-                     "batch_id": batch.run_id},
-                    status_code=409,
-                )
-            store.delete_trip(trip_id)
+            refused = delete_trip_entity(store, trip_id)
+        if refused is not None:
+            code = refused.pop("code", 409)
+            return JSONResponse(refused, status_code=code)
         return JSONResponse({"ok": True, "trip_id": trip_id, "deleted": True})
 
     @app.get("/api/expense-batches/{run_id}")

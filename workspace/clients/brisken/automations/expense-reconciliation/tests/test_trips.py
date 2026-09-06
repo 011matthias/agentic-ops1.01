@@ -29,6 +29,10 @@ from expense_recon.web.intake_mail import (  # noqa: E402
     month_batch_states,
     open_batch,
 )
+from expense_recon.web.service import (  # noqa: E402
+    claim_trip_batch_slot,
+    release_trip_batch_slot,
+)
 from expense_recon.web.store import RunStore  # noqa: E402
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
@@ -274,6 +278,129 @@ def test_no_period_suggestion_on_a_trip(client, monkeypatch):
 
 
 # ── month routing can never see a trip ──────────────────────────────
+
+
+# ── the creation slot (adversarial review findings 1 + 2) ───────────
+#
+# The run row only commits when the OCR job does, so "does a batch
+# exist" is blind for the whole job. The slot is what makes one batch
+# per trip a fact rather than a race outcome.
+
+
+def test_trip_batch_slot_single_winner(client):
+    trip = _make_trip(client)
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        assert claim_trip_batch_slot(store, trip["trip_id"]) is None
+        second = claim_trip_batch_slot(store, trip["trip_id"])
+        assert second["code"] == 409
+        assert "being created" in second["error"]
+        release_trip_batch_slot(trip["trip_id"])
+        assert claim_trip_batch_slot(store, trip["trip_id"]) is None
+        release_trip_batch_slot(trip["trip_id"])
+        missing = claim_trip_batch_slot(store, "nope")
+        assert missing["code"] == 404
+
+
+def test_post_and_delete_refuse_while_a_creation_is_pending(
+    client, monkeypatch,
+):
+    trip = _make_trip(client)
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        assert claim_trip_batch_slot(store, trip["trip_id"]) is None
+    try:
+        # An upload declaring the same trip while another create's OCR
+        # is still running: refused, not doubled.
+        resp = _create_batch(client, data={
+            "batch_type": "trip", "trip_id": trip["trip_id"],
+        })
+        assert resp.status_code == 409
+        assert "being created" in resp.json()["error"]
+        # And the entity cannot be deleted out from under the creation.
+        gone = client.delete(f"/api/trips/{trip['trip_id']}")
+        assert gone.status_code == 409
+        assert "being created" in gone.json()["error"]
+    finally:
+        release_trip_batch_slot(trip["trip_id"])
+    # Slot released (the job's finally): both work again.
+    _patch_ocr(monkeypatch, _extraction(date="2026-09-21"))
+    resp = _create_batch(client, data={
+        "batch_type": "trip", "trip_id": trip["trip_id"],
+    })
+    assert resp.status_code == 200, resp.text
+    _done(client, resp.json())
+    # The slot was released after the commit too: a second create now
+    # 409s on the EXISTING batch, naming it.
+    again = _create_batch(client, data={
+        "batch_type": "trip", "trip_id": trip["trip_id"],
+    })
+    assert again.status_code == 409
+    assert again.json()["batch_id"] == resp.json()["batch_id"]
+
+
+# ── the date guard on trips (finding 8) ─────────────────────────────
+
+
+def test_trip_date_guard_uses_the_trip_range_not_the_label_month(
+    client, monkeypatch,
+):
+    """A trip named "July 2026" spanning late September: a receipt dated
+    inside the trip must NOT flag (the label-month window would have),
+    while one dated far outside the padded range still does — the guard
+    stays alive on trips, it just measures against the trip."""
+    trip = _make_trip(client, name="July 2026",
+                      start="2026-09-20", end="2026-10-03")
+    _patch_ocr(monkeypatch,
+               _extraction(date="2026-09-21"),
+               _extraction(date="2026-05-01", vendor="Old Inn"))
+    resp = _create_batch(
+        client,
+        files=[("in.jpg", JPG), ("out.jpg", JPG + b"2")],
+        data={"batch_type": "trip", "trip_id": trip["trip_id"]},
+    )
+    assert resp.status_code == 200, resp.text
+    batch_id = _done(client, resp.json())
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    def _display(v):
+        return v.get("display") if isinstance(v, dict) else v
+
+    by_date = {_display(e["date"]): e for e in grid["expenses"]}
+    inside = by_date["2026-09-21"]["review"]
+    outside = by_date["2026-05-01"]["review"]
+    assert inside.get("reason_code") != "date_outside_period", inside
+    assert outside.get("reason_code") == "date_outside_period", outside
+    # The flagged window is the trip's padded range, not a label month.
+    assert outside["period"]["start"] == "2026-08-20"
+    assert outside["period"]["end"] == "2026-11-03"
+
+
+# ── the trips list keeps its element shapes (finding 10) ────────────
+
+
+def test_trips_list_element_shapes(client, monkeypatch):
+    """A hand pin for the list surface the SPA maps over. The two review
+    payloads have the walker-based contract; this endpoint gets the same
+    discipline in miniature: retyping travelers[] or summary fails here."""
+    bare = _make_trip(client, name="Bare")
+    trip = _make_trip(client)
+    _patch_ocr(monkeypatch, _extraction(date="2026-09-21"))
+    resp = _create_batch(client, data={
+        "batch_type": "trip", "trip_id": trip["trip_id"],
+    })
+    _done(client, resp.json())
+
+    rows = client.get("/api/trips").json()["trips"]
+    assert {r["trip_id"] for r in rows} == {bare["trip_id"], trip["trip_id"]}
+    for row in rows:
+        assert isinstance(row["trip_id"], str)
+        assert isinstance(row["name"], str)
+        assert isinstance(row["start"], str)
+        assert isinstance(row["end"], str)
+        assert isinstance(row["travelers"], list)
+        assert all(isinstance(t, str) for t in row["travelers"])
+        assert row["batch_id"] is None or isinstance(row["batch_id"], str)
+        assert row["summary"] is None or isinstance(row["summary"], dict)
+    with_batch = next(r for r in rows if r["trip_id"] == trip["trip_id"])
+    assert isinstance(with_batch["summary"]["n_expenses"], int)
 
 
 def test_month_selectors_skip_trip_batches(client, monkeypatch):

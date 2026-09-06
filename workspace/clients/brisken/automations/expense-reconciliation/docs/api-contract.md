@@ -331,7 +331,11 @@ skips trip batches structurally, even when the trip's name parses as a
 month), it never carries a `period_suggestion` (trips span month
 boundaries freely), and `POST .../statement` refuses it with a 400
 (ruling 3: trip receipts reconcile against the company month's
-statement; the cross-batch match pool is the R4 round).
+statement; the cross-batch match pool is the R4 round). The item-25
+date guard stays alive on trips but measures against the TRIP's range
+padded a month either side (flights book early, charges settle late),
+never against a label- or plurality-derived month; the flagged row's
+`review.period` carries that padded window.
 
 ### `GET /api/trips` (beside /api/expense-batches)
 
@@ -489,12 +493,20 @@ promise a claim that deliberately never happens. Their `status_label` is
 suggestion is present. The month claim, the replay sweep, re-ingest and
 auto-materialization all skip `pool_kind: "travel"` structurally.
 
+Address semantics, pinned: the alias matches the BASE local of any
+recipient, before any `+tag` — `travel+rome2026@` is travel mail, while
+`receipts+travel@` is the company intake's person-tag convention and
+stays month mail. A mail addressed to BOTH intakes (To `receipts@`, Cc
+`travel@`) counts as travel: resting is one click to recover,
+auto-ingesting against the sender's travel flag is the worse error.
+
 `POST /api/inbound/{archive}/join-trip` (`{"trip_id": ...}`) is the
-click: 409 unless the mail is travel-pooled, 404 on an unknown trip.
-It creates the trip's batch WITH this mail's receipts when none exists
-(reply carries `created_batch: true`), else appends incrementally like a
-month claim; either way `submitted_by` provenance rides in and a failure
-returns the mail to the travel pool.
+click: 409 unless the mail is travel-pooled, 404 on an unknown trip,
+and 409 (mail returned to resting) while another upload is mid-creation
+of the same trip's batch. It creates the trip's batch WITH this mail's
+receipts when none exists (reply carries `created_batch: true`), else
+appends incrementally like a month claim; either way `submitted_by`
+provenance rides in and a failure returns the mail to the travel pool.
 
 `PUT /api/settings` `intake.travel_alias`: a bare local-part, `""` to
 unset. Refused when it is `"receipts"` or collides with a person alias.
