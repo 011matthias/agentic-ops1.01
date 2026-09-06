@@ -112,7 +112,10 @@ def test_registry_canonicalizes_and_categorizes_skipping_llm(client, monkeypatch
     assert row["vendor"]["source"] == "registry"
     assert row["posting_category"]["category"] == "Office Supplies & Consumables"
     assert row["posting_category"]["source"] == "registry"
-    assert row["review"]["state"] == "ready"
+    # Item 40 sharpened "done": category + entity are settled, so the one
+    # thing left is that no card (hence no person) owns this expense.
+    assert row["review"]["state"] == "check"
+    assert row["review"]["reason_code"] == "needs_person"
     # Deterministic-first: the LLM classifier was never consulted for it.
     assert not any(c[0].startswith("classify") for c in mock.calls)
 

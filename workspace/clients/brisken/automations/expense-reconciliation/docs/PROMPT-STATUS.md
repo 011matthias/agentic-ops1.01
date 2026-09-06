@@ -74,13 +74,13 @@ and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
-Nothing. Every prompt in `docs/` is live in the published SPA as of
-2026-09-06, verified by field name against the bundle.
+| Prompt | Decisive field names | Gate |
+|---|---|---|
+| `lovable-r1-person-private-prompt.md` | settings chunk reads AND writes `person`; grid chunk reads `suggested_private`, `reimburse_to_prefill`, `n_needs_person`, `spellings` | R1 backend deployed 2026-09-06. **Person data entry waits for this prompt's verification** (cards map is whole-map replace; a stale save erases stored persons). Supersedes the client-side grouping half of `lovable-card-strip-prompt.md` |
 
-This has never been true before; the backlog's habit is that a backend round
-ships the same day its prompt is written and the SPA half then waits. When
-the next round opens a gap, add the row back here with the field name its
-renderer would have to read, not just its display copy.
+The clean slate lasted from the 2026-09-06 audit until R1 shipped the same
+day; the backlog's habit holds. Verify by the field names above, not
+display copy.
 
 ## Cannot verify (no live state exercises them)
 

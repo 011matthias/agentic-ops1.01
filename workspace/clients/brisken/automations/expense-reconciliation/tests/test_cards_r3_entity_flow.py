@@ -231,7 +231,10 @@ def test_entityless_batch_creates_and_flags_needs_entity(client, monkeypatch):
     assert row["legal_entity_id"] == ""
     assert row["entity_source"] == "none"
     assert row["card"] is None
-    assert row["review"]["reason_code"] == "needs_entity"
+    # Item 41 sharpened this exception: a payment method no registered
+    # card matches is SUGGESTED as a private expense (confirm private or
+    # assign the card — the same decision needs_entity was asking for).
+    assert row["review"]["reason_code"] == "suggested_private"
     assert grid["summary"]["n_needs_entity"] == 1
     strip = grid["card_review"]
     assert strip["n_needs_entity"] == 1
@@ -668,7 +671,8 @@ def test_graduation_bakes_card_resolved_entities(client, monkeypatch):
     )
     batch = _create_batch(client, legal_entity="")
     row = _grid(client, batch)["expenses"][0]
-    assert row["review"]["reason_code"] == "needs_entity"
+    # item 41: an unresolved payment method reads suggested_private now
+    assert row["review"]["reason_code"] == "suggested_private"
     resp = client.post(
         f"/api/expense-batches/{batch}/cards",
         json={"assignments": [{"hint": "Visa", "card": "corp-2838"}]},

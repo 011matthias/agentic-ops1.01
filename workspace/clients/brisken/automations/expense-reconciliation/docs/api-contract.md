@@ -138,9 +138,12 @@ name answers the same one:
 |---|---|
 | `n_expenses` · `n_receipts` | how many expenses are in the batch |
 | `n_categorized` · `n_uncategorized` | how many still need a category |
-| `n_ready` | how many need NOTHING from the reviewer (category, entity, core fields) |
+| `n_ready` | how many need NOTHING from the reviewer (category, entity, core fields, and — since item 40 — a person) |
 | `n_review` | how many are flagged for a look (`check` or `pick`) |
-| `n_needs_entity` | how many could not resolve a legal entity |
+| `n_needs_entity` | how many still need a legal entity (a confirmed private row needs none by design, so it does not count — item 41 sharpened the question the name always asked) |
+| `n_needs_person` | how many rows no person owns yet (item 40; the fix is a person on the card, not a row edit) |
+| `n_suggested_private` | how many rows are suggested as private expenses, unconfirmed (item 41) |
+| `n_private` | how many rows the operator confirmed private (reimbursement rows) |
 | `n_set_aside` | how many files the quarantine is still holding back |
 | `n_duplicate_groups` | how many duplicate SITUATIONS were flagged |
 | `n_duplicate_copies` | how many copies are redundant (every copy after the first in a group the reviewer has not dismissed) |
@@ -646,3 +649,137 @@ Defining one is the existing `PUT /api/settings` with `cards`, which
 replaces the whole map, so send the current `cards[]` plus the new entry.
 A card with no entity is still DEFINED and drops out of this list; the
 missing entity is the entity column's business.
+
+## The unknown-card strip, grouped by card: `spellings[]` + `digits` (added 2026-09-06)
+
+Backlog item 35. `card_review.unresolved_hints[]` grouped by VERBATIM hint
+string, so the April batch rendered ONE unregistered card (0340) as five
+assignable rows — five spellings of the same masked number. Digit-bearing
+hints now group by their canonical digit run (the zero-stripped form the
+matcher's `_card_keys` uses, so "0340" and a label printing "340" are one
+group). Digit-less hints keep one row per verbatim string.
+
+Two fields on each entry, both parallel per rule 1 — `hint`, `n_rows`,
+`documents[]`, `generic`, `ambiguous` all keep their meaning:
+
+```json
+{ "hint": "***********0340",
+  "digits": "0340",
+  "spellings": ["***********0340", "VISA - ******0340", "****0340"],
+  "n_rows": 11,
+  "documents": ["..."],
+  "generic": false,
+  "ambiguous": false }
+```
+
+| Field | Meaning |
+|---|---|
+| `hint` | now the group's representative spelling: the most frequent member that carries exactly ONE digit run, so an un-updated Assign submitting it teaches that digit and resolves every sibling spelling with it (a multi-run spelling like a Zoho payment-mode label teaches no digit and would strand its siblings). A group with no single-run member falls back to the most frequent spelling. Ties break lexicographically; always a real hint string from the batch |
+| `digits` | the longest printed digit run in the group, leading zero preserved (`"0340"`, never `"340"`), for display. `null` on digit-less entries |
+| `spellings[]` | every member spelling, most-frequent first. `[hint]` on digit-less entries |
+
+The no-card-number sub-strip is a rendering partition, not a second list:
+entries with `digits: null` and `generic: true` are tender words ("no card
+number readable on the receipt; assignment applies to this month only");
+`digits: null` with `generic: false` is a word-only identifying hint. The
+SPA partitions on those two existing flags and maps over `spellings[]` for
+the grouped Assign (`POST /api/expense-batches/{id}/cards` takes the full
+assignment list in one call).
+
+## Every expense belongs to a person, through the card (added 2026-09-06)
+
+Backlog item 40, owner directive: "each card is attributed to a name and
+therefore every expense can be attributed to a person. Even the ones
+injected via email." All fields below are PARALLEL (rule 1).
+
+**The card registry entry** gains `person` beside `entity`: accepted by
+`PUT /api/settings` `cards`, emitted by `GET /api/cards` (`cards[].person`,
+`""` when unset), snapshotted into a batch at creation, and reaching an
+existing batch only through `POST .../refresh-master-data` (whose `changes`
+gains a `row_persons` entry counting re-attributed rows). The cards map is
+still WHOLE-MAP REPLACE: an SPA build that does not read and write `person`
+in its Settings > Cards editor silently erases every stored person on save
+— person data entry therefore waits until the round's Lovable prompt is
+verified in the published bundle.
+
+**Expense rows** gain:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `expenses[].person` | string | who this expense belongs to; `""` until its card carries a person |
+| `expenses[].person_source` | string | `card` (the chain resolved it) or `none`. Item 41's round adds `private` |
+| `expenses[].card.person` | string | the resolved card's own person (also on `card_review.resolved[].card`) |
+
+Person resolution is the LAST link of the existing card chain (extraction
+pick → hint → registry/batch assignment → stamped): whichever card the
+chain lands on, its person wins. There is deliberately NO sender fallback:
+`submitted_by` stays ingest provenance (a claim about who MAILED the file)
+and never becomes attribution — pinned by
+`test_submitted_by_never_becomes_the_person`.
+
+**Review**: a row that would otherwise be ready reads `check` with the new
+`reason_code: "needs_person"` (rule 5: the human label rides in `reason`).
+It fires LAST — a missing category, entity, or core field always outranks
+it, because those are per-row fixes while a person is registry work.
+`n_needs_person` sits beside `n_needs_entity` on both `summary` and
+`card_review`.
+
+## Unknown payment methods suggest a private expense (added 2026-09-06)
+
+Backlog item 41, owner directive: "when payment methods arise that have
+not been defined in the system they must be suggested to the user as
+private expenses that will require reimbursement to the person who
+expensed." SUGGESTED, never stamped; nothing auto-books. All fields are
+PARALLEL (rule 1).
+
+**Expense rows** gain:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed, no entity override), so this reads as private money until someone decides |
+| `expenses[].private` | boolean | the operator confirmed it: a reimbursement row |
+| `expenses[].reimburse_to` | string | who gets reimbursed; `""` unless confirmed |
+| `expenses[].reimburse_to_prefill` | string | the `submitted_by` person, offered ONLY on suggested/confirmed private rows as a pre-fill for the confirm dialog. The ONE sanctioned use of the sender claim — it never fills `person` and must never generalize into sender-based attribution |
+
+A suggested row reads `check` / `reason_code: "suggested_private"` (rule
+5: prose in `reason`). The suggestion takes the entity check's slot: it IS
+the sharpened needs_entity question for a row whose payment method the
+registry does not know. Ambiguous hints (two cards claim them) keep
+`needs_entity` — that is a known-card contest, not private money. An
+explicit entity override also clears the suggestion: an operator decision
+stands.
+
+**Confirming**: `POST /api/runs/{id}/expenses/{document_id}/private` with
+`{"private": true, "reimburse_to": "Dirk"}` (`reimburse_to` required;
+400 without it). The row becomes a reimbursement row: `person` =
+`reimburse_to` with `person_source: "private"` (the one bounded exception
+to item 40's card-only rule), no entity required (it leaves
+`n_needs_entity`), grid `posting_paid_through` reads
+`{"account": "Private (Dirk)", "source": "private"}` — note the new
+`source` value `private` on that existing enum-ish field; the row's own
+`private` flag is the parallel signal a stale consumer can read.
+`{"private": false}` clears both fields and the suggestion returns.
+Assigning or registering the real card clears the SUGGESTION through the
+existing flows; a CONFIRMED row stays confirmed until cleared here. Both
+fields also ride the generic field-edit PUT (`private` accepts only
+`"1"`, and ONLY when `reimburse_to` is already stored for the row — set
+the person first, or use the POST route which takes both), and
+`edited_fields` lists them like any other override. A `private` flag
+without a person is never treated as a confirmation anywhere: the row
+stays suggested, stays in `n_needs_entity`, and never reaches the
+reimbursements section — a report must not state a reimbursement owed
+to nobody.
+
+**Strip**: `card_review.unresolved_hints[]` entries gain
+`suggested_private` (boolean; any member row still suggested), which is
+what the digit-less sub-strip renders as "no card number readable;
+suggested as a private expense". `n_suggested_private` + `n_private` sit
+beside the other counts on `summary` and `card_review`.
+
+**Report and export**: the month report partitions confirmed private rows
+out of the company listing into a "Reimbursements owed" section, grouped
+per person with per-currency sums, numbering continuing the listing's;
+their receipts stay in the evidence pages. The CSV keeps them as rows
+(mixed-entity ruling: one file) with `Legal Entity` = `(private expense)`
+and `Paid Through` = `Private ({person})` — the same strings the grid
+shows.

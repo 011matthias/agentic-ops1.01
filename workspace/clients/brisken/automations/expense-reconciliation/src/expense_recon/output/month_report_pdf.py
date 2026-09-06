@@ -66,6 +66,7 @@ def build_expense_report_pdf(
     subtitle: str = "",
     evidence: Sequence[dict] | None = None,
     prepared_note: str = "",
+    reimbursements: Sequence[dict] | None = None,
 ) -> bytes:
     """Render the month's report: listing first, then the receipts.
 
@@ -83,6 +84,16 @@ def build_expense_report_pdf(
     writes TWO listing rows and must still appear once — its caption names
     both expense numbers. An expense with no document keeps its caption and
     says so; nothing is silently dropped.
+
+    `reimbursements` (backlog item 41) is the reimbursements-owed section:
+    one entry per person, in section order —
+
+        {"person": "Dirk", "rows": [{"n": 12, "date": "2026-08-02",
+         "vendor": "Taxi", "amount": "18.00", "currency": "EUR"}],
+         "totals": {"EUR": "18.00"}}
+
+    — rendered between the listing and the receipts. Row numbers continue
+    the listing's, so every receipt caption still names a unique number.
     """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -158,6 +169,48 @@ def build_expense_report_pdf(
     )
     table.setStyle(table_style())
     story.append(table)
+
+    # ── reimbursements owed (item 41): per person, with sums ────────
+    if reimbursements:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Reimbursements owed", styles["caption"]))
+        story.append(Paragraph(
+            "Private expenses confirmed by the reviewer: paid out of "
+            "pocket, owed back to the person named. Not part of the "
+            "company listing above.",
+            styles["capsub"],
+        ))
+        r_head = [
+            Paragraph(_esc(name), styles["cellhead"])
+            for name in ("#", "Date", "Vendor", "Amount", "Ccy")
+        ]
+        for group in reimbursements:
+            person = str(group.get("person") or "(person not named)")
+            story.append(Spacer(1, 8))
+            story.append(Paragraph(
+                _esc(f"Reimburse {person}"), styles["caption"]
+            ))
+            g_rows: list[list] = [r_head]
+            for row in group.get("rows") or []:
+                g_rows.append([
+                    Paragraph(_esc(str(row.get("n", ""))), styles["cell"]),
+                    Paragraph(_esc(str(row.get("date", ""))), styles["cell"]),
+                    Paragraph(_esc(str(row.get("vendor", ""))), styles["cell"]),
+                    Paragraph(_esc(str(row.get("amount", ""))), styles["cellr"]),
+                    Paragraph(_esc(str(row.get("currency", ""))), styles["cell"]),
+                ])
+            g_table = Table(g_rows, colWidths=[26, 70, 240, 90, 40],
+                            repeatRows=1)
+            g_table.setStyle(table_style())
+            story.append(g_table)
+            totals = group.get("totals") or {}
+            totals_line = "  ·  ".join(
+                f"{ccy} {amount}" for ccy, amount in sorted(totals.items())
+            ) or "no amounts read"
+            story.append(Paragraph(
+                _esc(f"Owed to {person}: {totals_line}"), styles["sub"]
+            ))
+
     if prepared_note:
         story.append(Spacer(1, 8))
         story.append(Paragraph(_esc(prepared_note), styles["sub"]))

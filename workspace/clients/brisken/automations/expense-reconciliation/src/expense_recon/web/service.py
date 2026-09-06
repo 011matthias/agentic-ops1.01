@@ -3587,6 +3587,11 @@ def run_mode(run: RunRow) -> str:
 EXPENSE_HEADER_FIELDS = frozenset({
     "vendor", "date", "total", "currency", "tax", "tax_label",
     "paid_through", "legal_entity", "reference", "customer",
+    # Item 41: the private-expense confirmation pair. Stored like any
+    # other per-expense decision; the sugar route
+    # POST .../expenses/{doc}/private sets both and enforces that a
+    # confirmation names who gets reimbursed.
+    "private", "reimburse_to",
 })
 EXPENSE_CATEGORY_FIELDS = frozenset({"category", "zoho_account"})
 
@@ -3611,6 +3616,9 @@ def validate_expense_field(field: str, value: str) -> str | None:
     elif field == "legal_entity":
         if not value.strip():
             return "legal_entity cannot be blank"
+    elif field == "private":
+        if value != "1":
+            return 'private must be "1" (or empty to clear)'
     return None
 
 
@@ -4138,12 +4146,31 @@ def resolve_batch_row_cards(
     meaning the stamped value differs from the batch default (memory or an
     earlier card stamp), so the UI can say why without guessing.
 
+    `person` / `person_source` (backlog item 40): who the expense belongs
+    to, resolved as the LAST link of the SAME card chain — the resolved
+    card's own `person`, source "card", else "" / "none". There is NO
+    sender-based fallback by explicit owner ruling: `submitted_by` stays
+    ingest provenance and never becomes attribution, which is why this
+    function never sees it.
+
     `card_map_blocked` (per doc) tells the paid-through resolver the
     registry chain already ANSWERED the identity question in a way the
     flat digit->account map must not second-guess: the hint was ambiguous
     between cards, or it resolved to a card with no Zoho account set
     (R3 adversarial review — the flat map's fuzzy fallback was guessing a
     wrong account exactly where the chain had refused to).
+
+    `private` / `reimburse_to` / `suggested_private` (backlog item 41,
+    owner directive 2026-09-06): a payment method that resolves to NO
+    registered card is SUGGESTED as a private expense — never stamped.
+    The suggestion fires on a non-empty hint the chain refused (not on
+    ambiguity, which is a known-card contest, and not once the operator
+    set the row's entity explicitly — an override is a decision). The
+    operator resolves it by confirming private (the `private` +
+    `reimburse_to` field overrides; the row becomes a reimbursement row
+    and its person IS `reimburse_to`, source "private" — the one bounded
+    exception to item 40's card-only rule, operator-confirmed) or by
+    assigning/registering the real card, which clears it.
     """
     from ..cards import resolve_hinted_card_ex
 
@@ -4164,11 +4191,41 @@ def resolve_batch_row_cards(
             source = "batch" if entity == (batch_entity or "").strip() else "learned"
         else:
             entity, source = "", "none"
+        fields = field_overrides.get(r.document_id) or {}
+        reimburse_to = str(fields.get("reimburse_to") or "").strip()
+        # A confirmation IS the pair: the flag AND who gets reimbursed.
+        # A `private` flag without a person (reachable through the
+        # generic field PUT's one-field-at-a-time writes) is NOT a
+        # decision — honoring it would let "owed to nobody" exit
+        # MISSING ENTITY and reach the report (adversarial review,
+        # 2026-09-06). Such a row stays suggested until both halves
+        # exist.
+        private = (
+            str(fields.get("private") or "").strip() == "1"
+            and bool(reimburse_to)
+        )
+        if private:
+            person, person_source = reimburse_to, "private"
+        elif card is not None and card.person:
+            person, person_source = card.person, "card"
+        else:
+            person, person_source = "", "none"
         out[r.document_id] = {
             "hint": hint,
             "card": card,
             "entity": entity,
             "entity_source": source,
+            "person": person,
+            "person_source": person_source,
+            "private": private,
+            "reimburse_to": reimburse_to if private else "",
+            "suggested_private": bool(
+                hint
+                and card is None
+                and not ambiguous
+                and not private
+                and source != "override"
+            ),
             "ambiguous": ambiguous,
             "card_map_blocked": ambiguous
             or (card is not None and not card.zoho_account),
@@ -4181,10 +4238,27 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
     never judges): unresolved hints (with the rows they cover, generic
     tenders marked — those never auto-resolve BY DESIGN and can only be
     assigned explicitly), resolved cards with their hit counts, and the
-    no-hint rest."""
-    from ..cards import is_generic_tender
+    no-hint rest.
+
+    Digit-bearing unresolved hints group by their CANONICAL digit run
+    (backlog item 35: five spellings of 0340 rendered as five assignable
+    rows). The group key is the run's zero-stripped form — the same
+    equivalence `_card_keys` gives the matcher, so "0340" and a label
+    printing "340" are one group — while `digits` keeps the longest
+    printed spelling for display (a human knows the card as the statement
+    prints it, leading zero included). `hint` stays the row's own field
+    per api-contract rule 1: it carries the group's most-frequent member
+    spelling, so a stale SPA renders one truthful row and its Assign
+    still submits a hint string that exists in the batch (the digit fold
+    on assignment then resolves every sibling spelling). The full member
+    list rides in the PARALLEL `spellings[]`. Digit-less hints (generic
+    tenders, word-only hints) keep one row per verbatim string —
+    `digits: null` + the `generic` flag are what the SPA partitions the
+    no-card-number sub-strip on."""
+    from ..cards import hint_digit_run, is_generic_tender
 
     unresolved: dict[str, dict] = {}
+    spelling_rows: dict[str, dict[str, int]] = {}
     resolved: dict[str, dict] = {}
     n_no_hint = 0
     for doc, res in resolution.items():
@@ -4195,6 +4269,7 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
                     "key": card.key,
                     "label": card.display_label,
                     "entity": card.entity,
+                    "person": card.person,
                     "zoho_account": card.zoho_account,
                 },
                 "n_rows": 0,
@@ -4204,19 +4279,54 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
             if hint:
                 entry["hints"].add(hint)
         elif hint:
-            entry = unresolved.setdefault(hint, {
-                "hint": hint,
+            run = hint_digit_run(hint)
+            group = (
+                f"digits:{run.lstrip('0') or '0'}" if run else f"hint:{hint}"
+            )
+            entry = unresolved.setdefault(group, {
+                "hint": "",  # representative spelling, chosen after the loop
+                "digits": None,
                 "n_rows": 0,
                 "documents": [],
                 "generic": is_generic_tender(hint),
                 # True = two or more cards claim this hint; assigning it
                 # explicitly is the only resolution path.
-                "ambiguous": bool(res.get("ambiguous")),
+                "ambiguous": False,
             })
             entry["n_rows"] += 1
             entry["documents"].append(doc)
+            entry["ambiguous"] = entry["ambiguous"] or bool(res.get("ambiguous"))
+            # Item 41: any member row still suggested-private marks the
+            # entry, so the sub-strip can say "suggested as a private
+            # expense" without judging (confirmed/ambiguous rows do not).
+            entry["suggested_private"] = entry.get(
+                "suggested_private", False
+            ) or bool(res.get("suggested_private"))
+            if run and len(run) > len(entry["digits"] or ""):
+                entry["digits"] = run
+            counts = spelling_rows.setdefault(group, {})
+            counts[hint] = counts.get(hint, 0) + 1
         else:
             n_no_hint += 1
+    for group, entry in unresolved.items():
+        counts = spelling_rows[group]
+        entry["spellings"] = sorted(counts, key=lambda s: (-counts[s], s))
+        # The representative must be able to HEAL the group on a stale
+        # SPA: assigning it folds its digit into the card only when the
+        # spelling carries exactly ONE digit run (`learnable_hint_tokens`
+        # refuses multi-run hints — BIN/expiry ambiguity), so prefer the
+        # most frequent single-run member. A Zoho payment-mode label
+        # ("1 - CorpServ 2838/1672 (Chase)") must not become the
+        # representative just by being frequent: assigning it alone would
+        # teach no digit and leave its siblings unresolved (adversarial
+        # review, 2026-09-06). A group with no single-run member falls
+        # back to the most frequent spelling — no member could teach a
+        # digit there anyway.
+        healing = [
+            s for s in entry["spellings"]
+            if len(re.findall(r"\d{3,8}", s)) == 1
+        ]
+        entry["hint"] = (healing or entry["spellings"])[0]
     return {
         "unresolved_hints": sorted(
             unresolved.values(), key=lambda e: (-e["n_rows"], e["hint"])
@@ -4230,8 +4340,23 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
         "n_resolved_rows": sum(e["n_rows"] for e in resolved.values()),
         "n_unresolved_rows": sum(e["n_rows"] for e in unresolved.values()),
         "n_no_hint": n_no_hint,
+        # A confirmed private row needs NO entity by design (item 41).
         "n_needs_entity": sum(
-            1 for res in resolution.values() if not res["entity"]
+            1 for res in resolution.values()
+            if not res["entity"] and not res.get("private")
+        ),
+        # Item 40: rows no person owns yet — the count beside MISSING
+        # ENTITY. Resolution is card-only, so the fix is a person on the
+        # card (Settings > Cards), not a per-row edit.
+        "n_needs_person": sum(
+            1 for res in resolution.values() if not res.get("person")
+        ),
+        # Item 41: the private-expense pair, beside the two above.
+        "n_suggested_private": sum(
+            1 for res in resolution.values() if res.get("suggested_private")
+        ),
+        "n_private": sum(
+            1 for res in resolution.values() if res.get("private")
         ),
     }
 
@@ -4243,6 +4368,9 @@ def _expense_review(
     entity: str | None = None,
     period: tuple[date, date] | None = None,
     date_is_human: bool = False,
+    person: str | None = None,
+    private: bool = False,
+    suggested_private: bool = False,
 ) -> dict:
     """Review-by-exception for one expense (receipt-spine). Missing core
     fields first (an expense cannot export cleanly without date / amount /
@@ -4250,7 +4378,20 @@ def _expense_review(
     25), then a missing legal entity (Cards R3 — resolves from the
     paying card; unresolved = review, and the export still runs with a
     visible placeholder), then the shared category judgment — the same
-    ready / check / pick vocabulary the statement workbench uses."""
+    ready / check / pick vocabulary the statement workbench uses.
+
+    `person` (backlog item 40) is checked LAST, only on a row that would
+    otherwise be ready: the fix (a person on the card, in Settings) is
+    registry work, not row work, so it must never hide a more actionable
+    per-row exception. `None` keeps the pre-item-40 behavior (statement-
+    workbench callers do not attribute persons).
+
+    `suggested_private` (backlog item 41) takes the entity check's slot:
+    a payment method no registered card matches SUGGESTS private money,
+    and confirming private or assigning the card is the same decision
+    needs_entity was asking for, sharpened. A CONFIRMED private row
+    (`private`) skips the entity check entirely — a reimbursement row
+    needs a person (`reimburse_to`), not a company entity."""
     missing = [
         label
         for label, value in (
@@ -4299,7 +4440,16 @@ def _expense_review(
             "date": seen.isoformat(),
             "period": {"start": start.isoformat(), "end": end.isoformat()},
         }
-    if entity is not None and not entity:
+    if suggested_private and not private:
+        return _review(
+            "check",
+            "No registered company card matches this payment method, so "
+            "this is suggested as a private expense someone paid out of "
+            "pocket. Confirm it as private (naming who gets reimbursed), "
+            "or assign or register the company card if there is one.",
+            "suggested_private",
+        )
+    if entity is not None and not entity and not private:
         return _review(
             "check",
             "No legal entity yet. Assign this expense's paying card (or set "
@@ -4307,7 +4457,19 @@ def _expense_review(
             "export shows a placeholder until then.",
             "needs_entity",
         )
-    return _matched_category_review(r, overrides)
+    review = _matched_category_review(r, overrides)
+    if review["state"] == "ready" and person is not None and not person:
+        # Item 40: every expense belongs to a person, through the card.
+        # A row whose card carries no person is not done — but the fix
+        # lives in Settings > Cards, so this fires only when nothing
+        # more actionable is wrong with the row itself.
+        return _review(
+            "check",
+            "No person owns this expense yet. Add a person to its paying "
+            "card in Settings > Cards, so every expense is attributed.",
+            "needs_person",
+        )
+    return review
 
 
 def _expense_account_options(run: RunRow, settings: dict | None) -> list[str]:
@@ -4490,11 +4652,15 @@ def build_expense_view(
     for r in receipts:
         res = card_res.get(r.document_id) or {
             "hint": "", "card": None, "entity": r.legal_entity_id or "",
-            "entity_source": "batch", "ambiguous": False,
-            "card_map_blocked": False,
+            "entity_source": "batch", "person": "", "person_source": "none",
+            "private": False, "reimburse_to": "", "suggested_private": False,
+            "ambiguous": False, "card_map_blocked": False,
         }
         review = _expense_review(
             r, overrides, entity=res["entity"], period=period,
+            person=res["person"],
+            private=res["private"],
+            suggested_private=res["suggested_private"],
             # A hand-typed date, or a whole expense entered by hand, is the
             # reviewer's own value; the guard only questions the machine's.
             date_is_human=(
@@ -4517,6 +4683,15 @@ def build_expense_view(
             ),
             card_map_blocked=res["card_map_blocked"],
         )
+        # Item 41: a confirmed private expense was paid out of somebody's
+        # pocket, not through a company account. Same strings the CSV
+        # writes (_expense_export_inputs), so grid and export agree.
+        if res["private"]:
+            pt_account = (
+                f"Private ({res['reimburse_to']})"
+                if res["reimburse_to"] else "Private"
+            )
+            pt_source = "private"
         rv = _receipt_view(r, overrides)
         # An expense batch's receipt files live under the run's receipts
         # dir named `<document_id>`. HONEST availability: a manual expense
@@ -4567,12 +4742,29 @@ def build_expense_view(
             # raw hint stays visible for the review strip.
             "legal_entity_id": res["entity"],
             "entity_source": res["entity_source"],
+            # Item 40: who this expense belongs to, through the card — the
+            # last link of the same chain, with its provenance beside it.
+            # Parallel fields; "" / "none" until the card carries a person.
+            "person": res["person"],
+            "person_source": res["person_source"],
+            # Item 41: the private-expense state. `reimburse_to_prefill` is
+            # the ONE sanctioned use of the sender claim — offered only on
+            # a suggested/confirmed private row, shown as the claim it is,
+            # and never resolved into `person` without operator confirm.
+            "private": res["private"],
+            "reimburse_to": res["reimburse_to"],
+            "suggested_private": res["suggested_private"],
+            "reimburse_to_prefill": (
+                ((intake_provenance.get(r.document_id) or {}).get("person") or "")
+                if (res["suggested_private"] or res["private"]) else ""
+            ),
             "payment_hint": res["hint"],
             "card": (
                 {
                     "key": res["card"].key,
                     "label": res["card"].display_label,
                     "entity": res["card"].entity,
+                    "person": res["card"].person,
                     "hint": res["hint"],
                 }
                 if res["card"] is not None
@@ -4678,8 +4870,24 @@ def build_expense_view(
         "n_unknown_currency": sum(1 for r in receipts if r.detected_currency is None),
         # Cards R3: rows whose entity the chain could not resolve — the
         # `needs_entity` review population (never an export blocker).
+        # A confirmed private row needs NO entity by design (item 41), so
+        # it does not count as missing one.
         "n_needs_entity": sum(
-            1 for res in card_res.values() if not res["entity"]
+            1 for res in card_res.values()
+            if not res["entity"] and not res.get("private")
+        ),
+        # Item 40: rows no person owns yet. Sits beside n_needs_entity;
+        # the fix is a person on the card, not a per-row edit.
+        "n_needs_person": sum(
+            1 for res in card_res.values() if not res.get("person")
+        ),
+        # Item 41: unconfirmed private-expense suggestions, and rows the
+        # operator has confirmed private (reimbursement rows).
+        "n_suggested_private": sum(
+            1 for res in card_res.values() if res.get("suggested_private")
+        ),
+        "n_private": sum(
+            1 for res in card_res.values() if res.get("private")
         ),
         "n_learned_lines": n_learned_lines,
         "has_image_info": has_image_info,
@@ -4775,6 +4983,24 @@ def build_expense_view(
     }
 
 
+def _private_reimbursements(
+    field_overrides: dict[str, dict[str, str]],
+) -> dict[str, str]:
+    """The batch's operator-CONFIRMED private expenses (backlog item 41):
+    ``{document_id: reimburse_to}``. Confirmation lives in the same
+    field-override store as every other per-expense decision, so it
+    survives re-ingest and clears with `private: false`. A `private`
+    flag WITHOUT a reimburse_to is not a confirmation (same rule as
+    `resolve_batch_row_cards`): a report must never state a
+    reimbursement owed to nobody."""
+    return {
+        doc: str(fields.get("reimburse_to") or "").strip()
+        for doc, fields in field_overrides.items()
+        if str(fields.get("private") or "").strip() == "1"
+        and str(fields.get("reimburse_to") or "").strip()
+    }
+
+
 def _expense_export_inputs(
     run: RunRow,
     overrides: dict,
@@ -4811,6 +5037,18 @@ def _expense_export_inputs(
     # grid renders (assign a card after an export, re-export, and the new
     # file carries it — exports are regenerable, never stale by design).
     card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
+    # Item 41: a confirmed private expense was paid out of somebody's
+    # pocket. In the one-file export it stays a row (mixed-entity ruling:
+    # one file, entity as a column) with both columns saying so — the
+    # same strings the grid renders, so the two cannot disagree.
+    private_by_doc = _private_reimbursements(field_overrides)
+    entity_by_doc = {
+        doc: res["entity"] for doc, res in card_res.items() if res["entity"]
+    }
+    paid_through_by_doc: dict[str, str] = {}
+    for doc, person in private_by_doc.items():
+        entity_by_doc[doc] = "(private expense)"
+        paid_through_by_doc[doc] = f"Private ({person})" if person else "Private"
     kwargs = dict(
         chart_of_accounts=chart,
         coa_gate=coa_gate,
@@ -4821,9 +5059,8 @@ def _expense_export_inputs(
             (run.config or {}).get("expense") or {}
         ).get("card_accounts"),
         customer_by_doc=customer_by_doc,
-        entity_by_doc={
-            doc: res["entity"] for doc, res in card_res.items() if res["entity"]
-        },
+        entity_by_doc=entity_by_doc,
+        paid_through_by_doc=paid_through_by_doc,
         card_hint_accounts={
             doc: res["card"].zoho_account
             for doc, res in card_res.items()
@@ -4868,15 +5105,25 @@ def build_expense_report(
     `expense_posting_parts`, the same fan-out the export writes, and is
     checked against the row count — if the two ever disagree the report falls
     back to one caption per row rather than mislabelling the evidence.
+
+    Confirmed private expenses (backlog item 41) are PARTITIONED out of the
+    company listing into a reimbursements-owed section, grouped per person
+    with sums — a private row in the company listing would read as an
+    unfinished company row, which is the exact ambiguity the directive
+    removes. Their receipts stay in the evidence, numbered after the
+    listing's rows.
     """
     from ..output.month_report_pdf import build_expense_report_pdf
 
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits
     )
-    rows = build_expense_rows(receipts, **kwargs)
+    private_by_doc = _private_reimbursements(field_overrides)
+    company = [r for r in receipts if r.document_id not in private_by_doc]
+    private = [r for r in receipts if r.document_id in private_by_doc]
+    rows = build_expense_rows(company, **kwargs)
 
-    widths = [max(1, len(expense_posting_parts(r))) for r in receipts]
+    widths = [max(1, len(expense_posting_parts(r))) for r in company]
     aligned = sum(widths) == len(rows)
     receipts_dir = Path(run.work_dir) / "receipts"
     # Backlog item 25: the document says which of its own dates it distrusts.
@@ -4887,10 +5134,8 @@ def build_expense_report(
     )
     suspect: list[int] = []
     evidence: list[dict] = []
-    n = 1
-    for r, width in zip(receipts, widths):
-        numbers = list(range(n, n + width)) if aligned else [n]
-        n += width if aligned else 1
+
+    def _evidence_item(r, numbers: list[int], extra_detail: str = "") -> dict:
         if outside_period(r.detected_date, period) and not (
             "date" in field_overrides.get(r.document_id, {})
             or r.document_id.startswith("manual:")
@@ -4908,12 +5153,56 @@ def build_expense_report(
                 (f"{r.detected_total} {r.detected_currency or ''}".strip()
                  if r.detected_total is not None else ""),
                 r.legal_entity_id or "",
+                extra_detail,
             ) if x),
         }
         if path is not None:
             item["name"] = _display_name(path.name)
             item["data"] = path.read_bytes()
-        evidence.append(item)
+        return item
+
+    n = 1
+    for r, width in zip(company, widths):
+        numbers = list(range(n, n + width)) if aligned else [n]
+        n += width if aligned else 1
+        evidence.append(_evidence_item(r, numbers))
+
+    # The reimbursements-owed section: one numbered row per private
+    # expense (no account fan-out — a reimbursement is owed whole),
+    # grouped per person, sums per currency, numbering continuing the
+    # listing's so every receipt page still names a unique number.
+    reimb_groups: dict[str, dict] = {}
+    for r in private:
+        person = private_by_doc.get(r.document_id) or "(person not named)"
+        group = reimb_groups.setdefault(person, {
+            "person": person, "rows": [], "totals": {},
+        })
+        group["rows"].append({
+            "n": n,
+            "date": str(r.detected_date or ""),
+            "vendor": r.canonical_vendor or r.detected_vendor or "(no vendor)",
+            "amount": _fmt_amount(r.detected_total) or "",
+            "currency": r.detected_currency or "?",
+        })
+        if r.detected_total is not None:
+            ccy = r.detected_currency or "?"
+            group["totals"][ccy] = (
+                group["totals"].get(ccy, Decimal("0")) + r.detected_total
+            )
+        evidence.append(_evidence_item(
+            r, [n], extra_detail=f"private, reimburse {person}",
+        ))
+        n += 1
+    reimbursements = [
+        {
+            "person": g["person"],
+            "rows": g["rows"],
+            "totals": {
+                ccy: f"{amt:,.2f}" for ccy, amt in sorted(g["totals"].items())
+            },
+        }
+        for g in sorted(reimb_groups.values(), key=lambda g: g["person"])
+    ]
 
     label = run.label or run.run_id
     note = (
@@ -4921,7 +5210,7 @@ def build_expense_report(
         "receipt follows behind the expense number it proves."
     )
     if suspect:
-        listed = ", ".join(str(i) for i in suspect)
+        listed = ", ".join(str(i) for i in sorted(suspect))
         note += (
             f" The date read on {'expense' if len(suspect) == 1 else 'expenses'} "
             f"{listed} falls outside this month, so check "
@@ -4934,6 +5223,7 @@ def build_expense_report(
         title=f"Expense report — {label}",
         evidence=evidence,
         prepared_note=note,
+        reimbursements=reimbursements,
     )
 
 
@@ -5370,6 +5660,19 @@ def _refresh_batch_master_data_locked(
             )
             if n_moved:
                 changes.append({"field": "row_entities", "n_rows_changed": n_moved})
+            # Item 40: person moves are the same one-click-flips-a-batch
+            # hazard — a person added to a card re-attributes every row
+            # on that card, and the audit should say how many.
+            n_person_moved = sum(
+                1
+                for doc in before
+                if before[doc].get("person")
+                != after.get(doc, before[doc]).get("person")
+            )
+            if n_person_moved:
+                changes.append(
+                    {"field": "row_persons", "n_rows_changed": n_person_moved}
+                )
         except Exception:  # noqa: BLE001 - impact count must not break refresh
             pass
         store.update_run_config(run.run_id, cfg)
