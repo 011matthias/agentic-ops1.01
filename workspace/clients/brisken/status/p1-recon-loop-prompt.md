@@ -67,14 +67,28 @@ the trip entity third, cross-batch reconciliation + trip report last. The
 previously-ranked items (27, 23's Zoho string sweep, 24, the overlay-route
 round) queue behind the program unless one of them rides along cheaply.
 
+**Execution model (2026-09-06): the four rounds run as four parallel chats,
+one worktree + branch + PR each** (`client/brisken/r1-person-private-expense`,
+`r2-auto-materialize`, `r3-trips`, `r4-cross-batch-settlement`). MERGE ORDER
+IS R1 → R2 → R3 → R4: rebase onto latest origin/main immediately before
+merge and rerun the suite if main moved; the later-merging round owns
+conflict resolution on the shared surfaces (service.py, app.py,
+api-contract.md, test_view_contract.py). Wait-points: R3's roster-mismatch
+commit and its merge wait for R1; R4's trip-spanning half (R4b) starts only
+after R3 merges (its settlement-registry half R4a builds immediately).
+Deploys serialize on merge order, each from a fresh detached origin/main
+worktree. Ride-alongs are assigned: item 35's canonical grouping is R1's
+first commit; item 42 (refusals split) is a standalone micro-PR at the head
+of the R2 chat.
+
 **Backlog item 30 is fully shipped and deployed** (PRs #607, #608, #609),
 along with the out-of-Lovable half of the "Arriving" bug:
 
 - **Known senders.** Settings `intake.known_senders` lists outside addresses
   that count as ours. `graph_notify.send_mail` takes an explicit per-call
   `allow_external` and asserts the structural recipient guard BEFORE
-  consulting it. **The production list is EMPTY** - Dirk's
-  `dirk_.neumann@icloud.com` still gets no ack until an operator lists it.
+  consulting it. The production list now carries Dirk's
+  `dirk_.neumann@icloud.com` (verified 2026-09-06; acks work).
 - **Body-only mail from a known sender renders on arrival**, reusing the
   operator render path unchanged. Strangers still hold and still alert.
 - **Every refusal is written down** (`inbound/refusals.jsonl`, DATA-stage
@@ -91,9 +105,10 @@ along with the out-of-Lovable half of the "Arriving" bug:
 whose content the tool already holds is parked as `duplicate` before it
 reaches a month, and points at the mail that has it.
 
-Baselines: suite **1352 passed / 2 skipped**, calibrate exit 0, ruff (E9,F)
-clean on the diff. App root
-`workspace/clients/brisken/automations/expense-reconciliation`.
+Baselines: suite **1400 passed / 2 skipped** (PR #657, 2026-08-29), calibrate
+exit 0, ruff (E9,F) clean on the diff. App root
+`workspace/clients/brisken/automations/expense-reconciliation`. Live app is
+the #657 release (v101+; nothing has shipped in September).
 
 **Worktrees were consolidated on 2026-08-25.** There is no longer an
 `agentic-ops1-recon` worktree: the repo is the primary clone
@@ -101,27 +116,21 @@ clean on the diff. App root
 `agentic-ops1-deploy` (detached at origin/main, deploys only). Cut a fresh
 worktree for the round rather than expecting an old one to exist.
 
-**Live state (2026-08-25):** 10 **pooled**, `n_held` 0, `n_duplicates` 0.
-Three of the pooled ten are the SAME Hostinger invoice (H_46243348),
-forwarded three times minutes before the dedupe deployed; they will
-become three expenses when July 2026 opens unless two are dismissed.
-`intake.known_senders` is still EMPTY, so Dirk's
-`dirk_.neumann@icloud.com` body-only forwards hold and go unacked.
+**Live state (2026-09-06 audit):** ZERO month batches exist (all six deleted
+after the demo test), **23 pooled** (12 Aug / 5 Jul / 6 Sep) plus **7 stranded
+`batch_deleted` archives**, `n_held` 0. Three of the pooled are still the SAME
+Hostinger invoice (H_46243348, pre-dedupe arrivals); two must be dismissed
+before any month materializes or their intake rows will read as processed.
+`n_refused` 55 in the 7-day window, ALL `*@flyio.net` relay probes; item 42
+splits the counter. `intake.known_senders` now lists Dirk's iCloud (acks
+work). Card registry after the 2026-09-06 round-0 data entry: 6 cards, five
+with entities (0113 Corporate Services; 6013/9693/8311 Cloud Services; 2838
+legacy), 0340 created with entity blank; persons not yet enterable (item 40
+builds the field first).
 
-**Earlier state:** 21 inbound archives, 6 **pooled**, `n_refused` 1
-(a deliberate relay-refusal drill on 2026-08-24; it ages out of the window).
-The 6 pooled are real receipts waiting for months that do not exist, and they
-now say so on screen:
-
-| Month | Mail |
-| --- | --- |
-| 2026-08 | Monetico/CIC card ticket, two OpenAI purchases, OpenAI credits |
-| 2026-07 | Hostinger subscription, AWS billing statement |
-
-They join automatically the moment a batch labelled "August 2026" /
-"July 2026" exists. `create_expense_batch` refuses an empty batch, so opening a
-month needs at least one uploaded receipt — do NOT seed a fabricated one into
-a live month.
+Pooled mail joins automatically the moment its month batch exists.
+`create_expense_batch` refuses an empty batch, so opening a month needs at
+least one uploaded receipt — do NOT seed a fabricated one into a live month.
 
 **Owner ruling 2026-08-24: pre-creating months INTRUDES — SUPERSEDED
 2026-09-06 by backlog item 39.** The owner now directs the opposite: mailed
@@ -211,17 +220,23 @@ backlog are small and unranked; none of them is urgent.
 `automations/expense-reconciliation/docs/PROMPT-STATUS.md`, reading its two
 known-stale rows per the traps above.
 
-`intake.known_senders` is still EMPTY on production. Until an operator lists
-`dirk_.neumann@icloud.com`, every body-only forward from Dirk's personal
-address holds and he gets no ack — that address is outside the tenant, and
-`is_known_sender` recognises `@brisken.com` plus the list, nothing else. The
-Settings editor for it now exists ("People we recognise"), so this is a UI
-edit, no deploy. A session sandboxed against state-changing calls to the live
-app cannot do it; hand it over.
+Card registry: entities for 0113/6013/9693/8311 and the 0340 card itself were
+entered 2026-09-06 (item 26, done via authorized operator-API write). Still
+open, owner/Criss-side: a PERSON for every card (2838/0113/6013/9693/8311/
+0340, plus 3645 and plastic-1672) — collect now, enterable only after item
+40's round deploys the field AND its Lovable prompt is verified in the
+published SPA (the settings cards map is whole-map replace; a stale SPA save
+would silently erase person values); entities for 0340/3645/1672; whether
+Criss's recon ever covers the Consulting entity's cards (Wise 1160 / Chase
+1176 — gates provisioning a third entity); the travel alias local-part
+(gates R3's deploy); the GL-codes-vs-categories call (gates only the
+post-program item 23 layers 2-4). Two dismissals of the duplicate Hostinger
+pool copies gate the R2 flip.
 
-Card registry data entry: entities for cards 0113 / 6013 / 9693 / 8311 and
-the missing 0340 card. That is backlog item 26 and the live MISSING ENTITY
-count, not a defect in the resolution chain.
+Curation, operator-side, nothing to build: the 103 learned category rows are
+all unvalidated (the item-13 surface exists, unused); the merchant registry
+carries the MEGA CENTER/CENTRE and Fenix/Ki-Massa dup pairs and the
+construction-materials-as-Travel mislabel (Merchants editor edits).
 
 Live finding already surfaced, not a bug: the January statement run
 reconciles 0 of 80 charges, USD 20,228.68 unreconciled, 78 charges with no
