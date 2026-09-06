@@ -67,6 +67,8 @@ from .service import (
     FOLDER_RECEIPT_SUFFIXES,
     MODE_EXPENSE_GENERATION,
     add_receipts_to_expense_batch,
+    create_expense_batch,
+    execute_expense_batch,
     has_statement,
 )
 from .store import JOB_DONE, JOB_ERROR, RunStore
@@ -186,6 +188,22 @@ REFUSAL_WINDOW_DAYS = 7
 # future grace absorbs timezone skew on a same-day receipt.
 _IMPLAUSIBLE_PAST_DAYS = 366
 _FUTURE_GRACE_DAYS = 1
+
+
+def auto_materialize_enabled() -> bool:
+    """Item 39 (owner directive 2026-09-06): mailed receipts become
+    expenses on their own, creating their month batch when the printed
+    month is confidently known. Default OFF — with the flag unset, arrival
+    routing behaves exactly as before (the pool waits)."""
+    return os.environ.get("EXPENSE_RECON_AUTO_MATERIALIZE") == "1"
+
+
+# Month creation is single-winner: two same-month arrivals racing the
+# no-open-batch branch must produce ONE batch. A separate lock from
+# _POOL_LOCK on purpose — creation runs vision (minutes on a cold cache)
+# and must not stall arrival routing of every other mail; the re-check
+# under this lock makes a lost race land in the batch the winner created.
+_MATERIALIZE_LOCK = threading.Lock()
 
 
 def _is_plain_address(value) -> bool:
@@ -804,6 +822,10 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
                 row["duplicate_of_subject"] = meta["duplicate_of_subject"]
             if meta.get("duplicate_of_at"):
                 row["duplicate_of_at"] = meta["duplicate_of_at"]
+            # Item 39: this mail created its month itself; the label reads
+            # "Filed into July 2026" instead of "Added".
+            if meta.get("materialized"):
+                row["materialized"] = True
     return rows
 
 
@@ -1081,6 +1103,16 @@ def pool_deleted_batch(data_root: Path, batch_id: str) -> tuple[int, int]:
                     # The rows this mail created went with the month; the
                     # next claim writes the new ones.
                     "documents": [],
+                    # Item 39 rollback: the month this mail materialized is
+                    # gone. Without clearing the stamp, a later NORMAL claim
+                    # into an operator-created month would still read
+                    # "Filed into ..." about a mail that did not file itself.
+                    "materialized": False,
+                    # And no job_id from the previous life: the boot sweep
+                    # reads a done job as "this transient episode finished"
+                    # (reconcile_interrupted), so a stale one would strand a
+                    # later mid-claim death in `claiming` forever.
+                    "job_id": "",
                 },
             )
             if applied:
@@ -1207,6 +1239,14 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
                 f" {verb} stored for {_month_human(month)} in the Brisken "
                 "expense tool, and will join that month's expense run "
                 "automatically when the month is opened."
+            )
+        elif meta.get("materialized") and month:
+            # Item 39: the mail opened its month itself, so the ack states
+            # a finished fact — "filed into", never "waiting for".
+            verb = "were" if n > 1 else "was"
+            landed = (
+                f" {verb} filed into {_month_human(month)} in the Brisken "
+                "expense tool (the month was opened automatically)."
             )
         elif batch_label:
             landed = (
@@ -1432,6 +1472,21 @@ def annotate_status_view(rows: list[dict]) -> None:
                 f'Already have this, from "{subject}"' if subject
                 else "Already have this"
             )
+        elif (
+            row.get("materialized")
+            and status in (STATUS_INGESTED, STATUS_REPLAYED)
+            # A deleted month outranks the origin story: without this a
+            # materialized mail stranded by a delete would read done /
+            # "Filed into ..." and hide lost receipts behind a finished
+            # claim (the batch_deleted downgrade below must win).
+            and not row.get("batch_deleted")
+        ):
+            # Item 39: this mail opened its month itself. Composed like
+            # the pooled label (no new STATUS_* constant, per rule 5 the
+            # existing kind/label pair carries the new meaning).
+            month = _month_human(str(row.get("pool_month") or ""))
+            if month:
+                label = f"Filed into {month}"
         elif (
             row.get("batch_deleted")
             and kind == KIND_DONE
@@ -1728,6 +1783,219 @@ def _auto_render(
     }
 
 
+class MonthOpenedMeanwhile(Exception):
+    """Another creator committed this month between our re-check and our
+    commit. `_MATERIALIZE_LOCK` makes mail-vs-mail creation single-winner,
+    but the operator upload path (`POST /api/expense-batches`) takes no
+    lock and its own execute runs for minutes, so its row can land
+    mid-create. The pre-commit re-check turns that from two same-month
+    batches into a clean abort."""
+
+
+def _create_month_from_mail(
+    db_path: Path,
+    learning_db_path: Path | None,
+    data_root: Path,
+    arch: Path,
+    attachments: list[tuple[str, bytes]],
+    person: dict,
+    month: str,
+    received_at: str,
+    *,
+    owned_status: str,
+):
+    """Create ``month``'s batch FROM this mail's receipts (item 39) and
+    stamp the archive ingested. Returns ``(run, job_id, stamped)``.
+
+    Create-with-receipt, not create-then-add: `create_expense_batch`
+    refuses an empty batch, and that refusal is this path's floor too — a
+    mail whose every file the upload validation rejects raises
+    `RunInputError` here and the caller pools the mail instead. A month is
+    never created without a receipt in it.
+
+    The label is `_month_human` ("July 2026"), which `month_from_label`
+    parses back to the same month — that round-trip is what makes the new
+    batch claimable by the rest of its pooled mail.
+
+    Vision is cache-warm in production: arrival already read these bytes
+    with an identically-composed client.
+
+    A done JOB row is written for the create, so the ingested outcome
+    carries a `job_id` like every other ingest (an SPA that polls
+    `/jobs/{id}` after "not a duplicate" reads a real done job, not
+    undefined).
+
+    The final meta stamp is a CAS on ``owned_status`` (the transient the
+    caller holds — `routing` on arrival, `claiming` on backfill), never an
+    unconditional write: a create runs for minutes, which is longer than
+    the stale-transient replay threshold, so a concurrent replay or a
+    dismiss can legitimately take the archive meanwhile and must not be
+    silently reversed. ``stamped`` says whether we still owned it.
+
+    Caller holds `_MATERIALIZE_LOCK` and has re-checked the month is not
+    open. Raises `MonthOpenedMeanwhile` (work dir cleaned, no run row)
+    when a competing creator committed the month mid-create."""
+    with RunStore(db_path) as store:
+        settings = store.get_settings()
+    provenance = {
+        hashlib.sha1(data).hexdigest()[:16]: {
+            **person, "received_at": received_at,
+        }
+        for _name, data in attachments
+    }
+    prepared = create_expense_batch(
+        Path(data_root),
+        files=attachments,
+        legal_entity="",
+        label=_month_human(month),
+        now_iso=_now_iso(),
+        operator=None,
+        learning_db_path=learning_db_path,
+        settings=settings,
+        created_by="intake",
+        provenance_by_digest=provenance,
+    )
+    ym = _ym(month)
+
+    def _month_still_absent(store: RunStore) -> None:
+        if _open_batch_for_month(store, ym) is not None:
+            raise MonthOpenedMeanwhile(month)
+
+    try:
+        with RunStore(db_path) as store:
+            run_id = execute_expense_batch(
+                store, prepared, pre_commit=_month_still_absent,
+            )
+            job_id = uuid.uuid4().hex[:12]
+            store.create_job(job_id, None, _now_iso())
+            store.set_job_status(
+                job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
+            )
+            run = store.get_run(run_id)
+    except MonthOpenedMeanwhile:
+        shutil.rmtree(prepared.work_dir, ignore_errors=True)
+        raise
+    documents = [
+        str(r.get("document_id"))
+        for r in ((run.snapshot or {}).get("receipts") or [])
+    ] if run is not None else []
+    stamped, _m = _transition_meta(
+        arch,
+        lambda m: str(m.get("status", "")) == owned_status,
+        {"status": STATUS_INGESTED, "batch_id": run_id, "job_id": job_id,
+         "batch_deleted": False, "materialized": True,
+         "documents": documents},
+    )
+    if not stamped:
+        # Someone (a stale-transient replay, a dismiss) took the archive
+        # while the create ran. The batch stands — its receipts are real —
+        # but their ruling on the ARCHIVE outranks our stamp.
+        log.warning("materialize stamp lost for %s (status moved)",
+                    arch.name)
+    return run, job_id, stamped
+
+
+def _ensure_month_for_arrival(
+    db_path: Path,
+    learning_db_path: Path | None,
+    data_root: Path,
+    arch: Path,
+    parsed: "InboundMessage",
+    person: dict,
+    month: str,
+    source: str,
+    received_at: str,
+    *,
+    synchronous: bool = False,
+) -> tuple[object, dict | None]:
+    """The arrival half of item 39: materialize the month for a mail that
+    would otherwise pool. Returns ``(run, result)``:
+
+    - ``(created_run, ingested-result)`` — the month was created from this
+      mail and the mail is already in it; the caller returns the result.
+    - ``(None, pooled-result)`` — creation was refused or crashed; the
+      mail is POOLED (the truthful resting place — the operator backfill
+      retries it), never held.
+    - ``(open_run, None)`` — lost the creation race (another arrival made
+      the month first, or an operator upload committed it mid-create).
+      The caller falls through to the normal ingest.
+    """
+    with _MATERIALIZE_LOCK:
+        with RunStore(db_path) as store:
+            run = _open_batch_for_month(store, _ym(month))
+        if run is not None:
+            return run, None
+        err = ""
+        try:
+            run, job_id, stamped = _create_month_from_mail(
+                db_path, learning_db_path, data_root, arch,
+                parsed.attachments, person, month,
+                received_at, owned_status=STATUS_ROUTING,
+            )
+        except MonthOpenedMeanwhile:
+            # An operator upload committed this month while we created.
+            # Their batch is the winner; join it the normal way.
+            with RunStore(db_path) as store:
+                run = _open_batch_for_month(store, _ym(month))
+            if run is not None:
+                return run, None
+            # The winner vanished again (deleted immediately) — rest.
+            run = None
+        except Exception as exc:  # noqa: BLE001 - pool the mail, never hold
+            log.warning("auto-materialize failed for %s: %s", arch.name, exc)
+            err = str(exc)[:400]
+            run = None
+        if run is None:
+            patch = {"status": STATUS_POOLED, "batch_id": "", "job_id": "",
+                     "batch_deleted": False}
+            if err:
+                patch["error"] = err
+            _transition_meta(
+                arch,
+                lambda m: str(m.get("status", "")) == STATUS_ROUTING,
+                patch,
+            )
+            _maybe_ack(db_path, arch)
+            return None, {
+                "status": STATUS_POOLED, "archive": arch.name,
+                "person": person, "pool_month": month,
+                "receipt_month_source": source,
+            }
+    # Outside the materialize hold from here: the ack is a 20s-class Graph
+    # round-trip and the claim pays vision per pooled mail; neither may
+    # queue another month's creation behind it.
+    if stamped:
+        _maybe_ack(db_path, arch)
+    # The month exists now, so its OTHER waiting mail joins the normal
+    # way — the drain, not a backfill leak (item 39 protocol). Threaded on
+    # a live arrival so the SMTP route slot frees; inline for replay/tests.
+    if synchronous:
+        try:
+            claim_pooled(db_path, learning_db_path, data_root)
+        except Exception:  # noqa: BLE001 - a claim never breaks its trigger
+            log.warning("post-materialize pool claim failed", exc_info=True)
+    else:
+        threading.Thread(
+            target=_claim_pooled_quiet,
+            args=(db_path, learning_db_path, data_root),
+            daemon=True,
+        ).start()
+    return run, {
+        "status": STATUS_INGESTED, "archive": arch.name,
+        "person": person, "pool_month": month,
+        "batch_id": run.run_id, "job_id": job_id, "materialized": True,
+    }
+
+
+def _claim_pooled_quiet(
+    db_path: Path, learning_db_path: Path | None, data_root: Path,
+) -> None:
+    try:
+        claim_pooled(db_path, learning_db_path, data_root)
+    except Exception:  # noqa: BLE001 - a claim never breaks its trigger
+        log.warning("post-materialize pool claim failed", exc_info=True)
+
+
 def route_archived(
     db_path: Path,
     learning_db_path: Path | None,
@@ -1827,26 +2095,58 @@ def route_archived(
         _update_meta(arch, stamps)
         month = str(stamps["receipt_month"])
 
+        # Ensure-month (item 39) fires ONLY here — the no-open-batch branch
+        # of arrival routing — and only when the month came off a RECEIPT
+        # (the plausibility clamps already turned a wrong-year read into
+        # "implausible-receipt", which pools). `claim_pooled` stays
+        # create-free: a deploy or boot must never backfill months
+        # unattended. KNOWN SENDERS only, same reason auto-render is: the
+        # mailbox takes mail from anyone, and letting a stranger's dated
+        # PDF decide when months exist (and when the pool drains into
+        # them) hands an outsider the operator's call. A stranger's mail
+        # pools exactly as before; the explicit backfill files it.
+        may_materialize = (
+            auto_materialize_enabled()
+            and stamps["receipt_month_source"] == "receipt"
+            and is_known_sender(parsed.from_addr, cfg)
+        )
+
         # Decide atomically: ask whether the month is open and commit the
         # answer under one hold, so a batch created between the two cannot
         # leave this mail both ingested and pooled.
         with _POOL_LOCK:
             with RunStore(db_path) as store:
                 run = _open_batch_for_month(store, _ym(month))
-            if run is None:
+            if run is None and not may_materialize:
                 _transition_meta(
                     arch,
                     lambda m: str(m.get("status", "")) == STATUS_ROUTING,
                     {"status": STATUS_POOLED, "batch_id": "",
                      "batch_deleted": False},
                 )
-            else:
+            elif run is not None:
                 # batch_deleted: False clears a stale delete stamp when
                 # mail re-routes into a live batch — without it the row
                 # would keep saying "month deleted" about live receipts.
                 _update_meta(arch, {
                     "batch_id": run.run_id, "batch_deleted": False,
                 })
+
+        if run is None and may_materialize:
+            # Status is still `routing` (ours via the CAS above) while the
+            # month is created; single-winner via _MATERIALIZE_LOCK.
+            run, result = _ensure_month_for_arrival(
+                db_path, learning_db_path, data_root, arch, parsed,
+                person, month, stamps["receipt_month_source"], received_at,
+                synchronous=synchronous,
+            )
+            if result is not None:
+                return result
+            # Lost the creation race — `run` is the winner's batch; join
+            # it the normal way.
+            _update_meta(arch, {
+                "batch_id": run.run_id, "batch_deleted": False,
+            })
 
         if run is None:
             _maybe_ack(db_path, arch)
@@ -1982,7 +2282,7 @@ def claim_pooled(
             _transition_meta(
                 arch,
                 lambda m: str(m.get("status", "")) == STATUS_CLAIMING,
-                {"status": STATUS_POOLED, "batch_id": "",
+                {"status": STATUS_POOLED, "batch_id": "", "job_id": "",
                  "batch_deleted": False, "error": str(exc)[:400]},
             )
             failed += 1
@@ -2006,13 +2306,188 @@ def claim_pooled(
             _transition_meta(
                 arch,
                 lambda m: str(m.get("status", "")) == HELD_FAILED,
-                {"status": STATUS_POOLED, "batch_id": "",
+                {"status": STATUS_POOLED, "batch_id": "", "job_id": "",
                  "batch_deleted": False},
             )
             failed += 1
     return {
         "claimed": claimed, "still_pooled": still_pooled, "failed": failed,
     }
+
+
+def materialize_pooled(
+    db_path: Path, learning_db_path: Path | None, data_root: Path,
+) -> dict:
+    """The explicit operator backfill (item 39): create month batches for
+    confidently-stamped pooled mail, oldest month first. The endpoint runs
+    `claim_pooled` right after, which drains each created month's other
+    waiting mail.
+
+    One creation per month: the oldest stamped mail of a month becomes the
+    month's first receipt. Only ``receipt``-sourced stamps qualify — an
+    arrival-stamped mail keeps resting, because its month is a guess about
+    delivery, not a fact printed on a receipt. Stamps are trusted as they
+    stand: this sweep never re-reads a receipt to decide a month
+    (vision-free where stamps exist).
+
+    Flag-gated like the arrival path: the endpoint checks
+    `auto_materialize_enabled()` and refuses without it, so flipping the
+    flag off returns the whole tool to today's behavior."""
+    out: dict = {"materialized_months": [], "failed": 0}
+    root = inbound_root(data_root)
+    if not root.is_dir():
+        return out
+    by_month: dict[str, Path] = {}
+    for arch in sorted(root.iterdir()):
+        if not (arch / "meta.json").is_file():
+            continue
+        meta = _read_meta(arch)
+        if str(meta.get("status", "")) != STATUS_POOLED:
+            continue
+        if str(meta.get("receipt_month_source", "")) != "receipt":
+            continue
+        if _ym(str(meta.get("receipt_month") or "")) is None:
+            continue
+        if not (
+            (arch / "parts").is_dir()
+            or (arch / "rendered-body.pdf").is_file()
+        ):
+            continue
+        # sorted() walks oldest archive first, so the first seen wins.
+        by_month.setdefault(str(meta["receipt_month"]), arch)
+    for month in sorted(by_month):
+        arch = by_month[month]
+        # Own the mail before creating anything: a concurrent claim,
+        # dismiss, or replay sees `claiming` and stands down.
+        applied, meta = _transition_meta(
+            arch,
+            lambda m: str(m.get("status", "")) == STATUS_POOLED,
+            {"status": STATUS_CLAIMING},
+        )
+        if not applied:
+            continue
+        with _MATERIALIZE_LOCK:
+            with RunStore(db_path) as store:
+                run = _open_batch_for_month(store, _ym(month))
+            if run is not None:
+                # The month opened meanwhile — back to the pool; the
+                # claim that follows this sweep drains it.
+                _transition_meta(
+                    arch,
+                    lambda m: str(m.get("status", "")) == STATUS_CLAIMING,
+                    {"status": STATUS_POOLED, "batch_id": "", "job_id": "",
+                     "batch_deleted": False},
+                )
+                continue
+            attachments = _archive_attachments(arch)
+            person = _archive_person(meta)
+            try:
+                created, job_id, stamped = _create_month_from_mail(
+                    db_path, learning_db_path, data_root, arch,
+                    attachments, person, month, _now_iso(),
+                    owned_status=STATUS_CLAIMING,
+                )
+            except MonthOpenedMeanwhile:
+                # An operator upload committed this month mid-create: not
+                # a failure — back to the pool, and the claim that follows
+                # this sweep drains it into the winner.
+                _transition_meta(
+                    arch,
+                    lambda m: str(m.get("status", "")) == STATUS_CLAIMING,
+                    {"status": STATUS_POOLED, "batch_id": "", "job_id": "",
+                     "batch_deleted": False},
+                )
+                continue
+            except Exception as exc:  # noqa: BLE001 - one month, not the sweep
+                log.warning("backfill materialize failed for %s: %s",
+                            arch.name, exc)
+                _transition_meta(
+                    arch,
+                    lambda m: str(m.get("status", "")) == STATUS_CLAIMING,
+                    {"status": STATUS_POOLED, "batch_id": "", "job_id": "",
+                     "batch_deleted": False, "error": str(exc)[:400]},
+                )
+                out["failed"] += 1
+                continue
+        # Outside the materialize hold: the ack is a Graph round-trip.
+        if stamped:
+            _maybe_ack(db_path, arch)
+        _append_log(data_root, {
+            "at": _now_iso(), "from": meta.get("from", ""),
+            "person": person.get("person"),
+            "subject": meta.get("subject", ""),
+            "n_files": len(attachments), "status": STATUS_INGESTED,
+            "archive": arch.name, "batch_id": created.run_id,
+            "job_id": job_id,
+        })
+        out["materialized_months"].append(created.label)
+    return out
+
+
+def re_pool_stranded(
+    db_path: Path, learning_db_path: Path | None, data_root: Path,
+) -> dict:
+    """Item 39's re-pool sweep for legacy `batch_deleted` archives: lazily
+    month-stamp stampable ones (the replay pre-stamp pattern) and return
+    them to the POOL. Dismissed archives are excluded by `_stranded_legacy`;
+    an unstampable one stays legacy (the item-19 re-ingest still reaches it
+    once a month is open).
+
+    Runs ONLY on the explicit `materialize: true` call, and the endpoint
+    runs it LAST — after the backfill and the claim — so a re-pooled
+    archive always RESTS for at least one full round-trip: the operator
+    sees the freshly-guessed stamps before any later call may act on them.
+    Keeping it out of the plain replay keeps a flag-off deploy inert (a
+    routine "Retry held emails" click must not spend vision or migrate
+    seven real archives)."""
+    root = inbound_root(data_root)
+    re_pooled = 0
+    if not root.is_dir():
+        return {"re_pooled": 0}
+    settings: dict | None = None
+    client = _UNSET
+    for arch in sorted(root.iterdir()):
+        if not (arch / "meta.json").is_file():
+            continue
+        meta = _read_meta(arch)
+        if not _stranded_legacy(meta):
+            continue
+        if not (
+            (arch / "parts").is_dir()
+            or (arch / "rendered-body.pdf").is_file()
+        ):
+            continue
+        if not meta.get("receipt_month"):
+            try:
+                if settings is None:
+                    with RunStore(db_path) as store:
+                        settings = store.get_settings()
+                if client is _UNSET:
+                    client = _arrival_llm_client(settings)
+                stamps = _month_stamps(
+                    arch, settings, str(meta.get("at") or _now_iso()),
+                    client=client,
+                )
+                _update_meta(arch, stamps)
+            except Exception as exc:  # noqa: BLE001 - stays legacy
+                log.warning("re-pool stamp failed for %s: %s",
+                            arch.name, exc)
+                continue
+        applied, _m = _transition_meta(
+            arch, _stranded_legacy,
+            {"status": STATUS_POOLED, "batch_id": "",
+             "batch_deleted": False,
+             # The rows this mail created went with the month; and no
+             # stamp from a previous life may survive the trip back —
+             # a stale done job_id would blind the boot sweep's
+             # claiming-recovery, and a stale materialized flag would
+             # relabel a later normal claim as "Filed into".
+             "documents": [], "job_id": "", "materialized": False,
+             "re_pooled_at": _now_iso()},
+        )
+        if applied:
+            re_pooled += 1
+    return {"re_pooled": re_pooled}
 
 
 def process_message(
@@ -2035,6 +2510,20 @@ def process_message(
         db_path, learning_db_path, data_root, arch, parsed,
         synchronous=synchronous,
     )
+
+
+def _stranded_legacy(meta: dict) -> bool:
+    """Mail stranded by a deleted month, resting in a terminal status.
+
+    These predate the month stamps (stamped mail re-pools in the delete
+    cascade), so until item 39 the per-archive re-ingest was their only
+    way back — and it 409s with zero months open and targets the NEWEST
+    open batch, not the receipt's month. Dismissed mail stays dismissed
+    (the operator's junk ruling outranks where it used to live);
+    transient states belong to whoever holds them."""
+    if not meta.get("batch_deleted"):
+        return False
+    return str(meta.get("status", "")) in {STATUS_INGESTED, STATUS_REPLAYED}
 
 
 def _is_replayable(meta: dict, now: datetime) -> bool:

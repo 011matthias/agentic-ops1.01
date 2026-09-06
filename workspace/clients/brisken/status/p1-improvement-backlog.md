@@ -1118,6 +1118,22 @@ open owner yes) is the tidy path and GATES the flag flip.
 2026-09-06 manual-input audit. Auto-materialization does the same job
 without a new surface; do not build the button.
 
+**Built (R2, PR #687, 2026-09-06; deploy + staged flip pending).** The
+protocol above shipped verbatim, plus three guards a 3-lens adversarial
+review added: the arrival half fires for KNOWN senders only (an open
+mailbox must not let a stranger's dated PDF decide when months exist;
+strangers' mail pools, the explicit backfill files it); the stranded
+re-pool sweep runs only on `materialize: true` calls and LAST, so a
+plain retry click stays inert and re-pooled mail rests one full
+round-trip before any call can act on its just-guessed stamps; and
+every back-to-pool transition clears previous-life stamps (`job_id`,
+`materialized`), because a stale done job blinded the boot sweep's
+claiming recovery and a stale flag relabelled a later normal claim as
+"Filed into". The operator-vs-intake same-month create race aborts at
+commit via a pre-commit re-check (`execute_expense_batch(pre_commit=)`)
+and the mail joins the winner. Item 42 (refusals split) shipped ahead as
+PR #683. Residuals in item 43.
+
 ### 40. Every expense belongs to a person, through the card (owner directive 2026-09-06)
 
 **Owner:** "All injected expenses whether email or manual need to be
@@ -1218,6 +1234,34 @@ gracefully; the Lovable line is optional and small.
 Assigned: standalone micro-PR at the head of the R2 chat, deployed with or
 before the R2 flip so the counter is meaningful exactly when the operator
 watches the first auto-materialization.
+
+**Shipped (PR #683, merged 2026-09-06):** view-only split keyed on the
+ledger's existing `stage` field — `n_refused_ours` (data-stage), `n_probes`
+(rcpt relay probes), per-row `probe` + `kind_label`; `n_refused` unchanged.
+A rcpt-stage "too many recipients" row is deliberately neither bucket.
+Deploys with the R2 flip.
+
+### 43. Materialize residuals (adversarial review 2026-09-06, watch-only)
+
+Accepted residuals from item 39's three-lens review; none load-bearing for
+the flip, each evidence-gated before any build:
+
+- A process death mid-create AFTER the run row commits converges on replay
+  (content dedupe absorbs the re-ingest) but stamps `documents: []` and no
+  `materialized` flag, and fires a false held alert — archive-to-row
+  lineage is lost. A boot reconciliation matching `created_by: "intake"`
+  batches against stuck `routing` archives would close it; build only if a
+  real death produces one.
+- `_is_replayable` reads a >600s `routing`/`claiming` as dead-owner, and a
+  cold-cache create legitimately runs longer, so a concurrent replay can
+  take a LIVE owner's archive. The CAS-guarded final stamps make this lose
+  lineage, never rows, and never reverse a dismissal.
+- A pooled ack still in flight when the month materializes seconds later
+  can double-ack with contradictory verbs (`ack_at` is check-then-act).
+- The operator half of the same-month create race (their commit landing
+  after the intake's) still yields two same-label batches; newest wins the
+  pool, and deleting the loser re-pools its mail. Self-healing; runbook
+  line: two same-label months means an upload raced an arrival.
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 

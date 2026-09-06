@@ -3646,6 +3646,13 @@ class PreparedExpenseBatch:
     # Merchant registry (2026-07-29): canonical vendor + default category,
     # built from settings["merchants"]; also generate_expenses-only.
     registry: object | None = None
+    # Item 39: "intake" when a mailed receipt materialized this batch
+    # itself. Stored in the run summary; absent on operator-created batches.
+    created_by: str = ""
+    # Item 39: submitter provenance for mail-created batches, keyed by the
+    # STORED receipt file name — the same shape `add_receipts_to_expense_batch`
+    # writes, so the grid's submitted_by chip works from the first render.
+    intake_provenance: dict | None = None
 
 
 def create_expense_batch(
@@ -3659,6 +3666,8 @@ def create_expense_batch(
     operator: str | None,
     learning_db_path: Path | None = None,
     settings: dict | None = None,
+    created_by: str = "",
+    provenance_by_digest: dict[str, dict] | None = None,
 ) -> PreparedExpenseBatch:
     """Validate + spool an uploaded batch of receipts and build the
     expense-generation config. No statement, no run row yet — this is the
@@ -3701,6 +3710,7 @@ def create_expense_batch(
         issue_details.append(detail)
 
     seen_hashes: set[str] = set()
+    intake_provenance: dict[str, dict] = {}
     n_saved = n_seen = 0
     for name, data in _folder_receipt_files(staging):
         n_seen += 1
@@ -3724,7 +3734,10 @@ def create_expense_batch(
             continue  # identical bytes twice in one upload
         seen_hashes.add(digest)
         fs_name = re.sub(r"[^A-Za-z0-9._-]", "_", display) or f"receipt{suffix}"
-        (receipts_dir / f"{n_saved:04d}__{fs_name}").write_bytes(data)
+        dest_name = f"{n_saved:04d}__{fs_name}"
+        (receipts_dir / dest_name).write_bytes(data)
+        if provenance_by_digest and digest in provenance_by_digest:
+            intake_provenance[dest_name] = provenance_by_digest[digest]
         n_saved += 1
     import shutil as _shutil
 
@@ -3811,15 +3824,24 @@ def create_expense_batch(
         upload_issue_details=issue_details,
         expense_memory=expense_memory,
         registry=registry,
+        created_by=created_by,
+        intake_provenance=intake_provenance or None,
     )
 
 
 def execute_expense_batch(
-    store: RunStore, prepared: PreparedExpenseBatch, *, on_stage=None
+    store: RunStore, prepared: PreparedExpenseBatch, *, on_stage=None,
+    pre_commit=None,
 ) -> str:
     """Run OCR + categorization for a prepared expense batch and persist the
     run row (mode marker in config AND summary). Slow (vision per file);
-    the web layer runs it in the background and the SPA polls the job."""
+    the web layer runs it in the background and the SPA polls the job.
+
+    ``pre_commit(store)``, when given, runs immediately before the run row
+    is written and may raise to abort the commit (no row is created; the
+    exception propagates). The mail-intake materializer uses it to
+    re-check that no competing batch for the same month landed while the
+    OCR ran — this function itself stays policy-free."""
     try:
         result = generate_expenses(
             prepared.cfg,
@@ -3855,15 +3877,23 @@ def execute_expense_batch(
         "upload_issues": prepared.upload_issues,
         "upload_issue_details": prepared.upload_issue_details,
     }
+    if prepared.created_by:
+        # Origin marker (item 39): parallel, absent on operator-created
+        # batches, so /months can say which months materialized themselves.
+        summary["created_by"] = prepared.created_by
     snapshot = snapshot_to_dict([], receipts, result.outcome, result.parse_errors)
     if set_aside:
         snapshot["set_aside"] = set_aside
+    if prepared.intake_provenance:
+        snapshot["intake_provenance"] = dict(prepared.intake_provenance)
 
     if on_stage is not None:
         try:
             on_stage("saving")
         except Exception:  # noqa: BLE001
             pass
+    if pre_commit is not None:
+        pre_commit(store)
     store.create_run(
         run_id=prepared.run_id,
         created_at=prepared.now_iso,
@@ -4914,6 +4944,9 @@ def build_expense_view(
         # Absent on every run created before item 20; the SPA falls back to
         # the prose whenever this list is empty.
         "upload_issue_details": run.summary.get("upload_issue_details", []),
+        # Item 39 origin marker: "intake" when a mailed receipt created
+        # this month itself; null on operator-created batches (parallel).
+        "created_by": run.summary.get("created_by"),
     }
 
     # Phase 5 pickers: entities the reviewer can assign (the real entities

@@ -139,6 +139,12 @@ printed month is confidently known. Until item 39's round DEPLOYS, the
 2026-08-24 behavior is still what runs live (the pool waits); do not hand-create
 months in the interim.
 
+**R2 status (2026-09-06): built, not yet live.** Item 42 merged as PR #683;
+item 39 is PR #687 (this branch) — flag `EXPENSE_RECON_AUTO_MATERIALIZE`
+default OFF, arrival half known-senders-only, stranded sweep only under
+`materialize: true` and last, residuals in backlog item 43. Live behavior is
+unchanged until the staged flip (Hostinger dismissals gate it).
+
 ## The directions, in the order they now rank
 
 ### 1. PR 2b of the living month (backlog item 29) — the top remaining build

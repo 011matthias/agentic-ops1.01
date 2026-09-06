@@ -1318,28 +1318,71 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         })
 
     @app.post("/api/inbound/replay-held")
-    def inbound_replay_held() -> JSONResponse:
+    def inbound_replay_held(payload: dict | None = Body(None)) -> JSONResponse:
         """Drain both halves in one click: held mail re-routes by month
         (pooling what has no month open), then every pooled mail whose
-        month IS open is claimed."""
-        from .intake_mail import claim_pooled, replay_held
+        month IS open is claimed.
 
+        `{"materialize": true}` (item 39) is the explicit operator
+        backfill: month batches are CREATED for confidently-stamped pooled
+        mail, then the normal claim drains them, and LAST the stranded
+        `batch_deleted` archives are re-pooled — last on purpose, so a
+        freshly re-pooled archive always rests one full round-trip before
+        any later call may act on its just-guessed stamps. Requires the
+        EXPENSE_RECON_AUTO_MATERIALIZE flag — with it off (or on a plain
+        call), the pool only ever waits and the stranded archives are not
+        touched, exactly as before the flag existed."""
+        from .intake_mail import (
+            auto_materialize_enabled,
+            claim_pooled,
+            materialize_pooled,
+            re_pool_stranded,
+            replay_held,
+        )
+
+        materialize = bool((payload or {}).get("materialize"))
+        if materialize and not auto_materialize_enabled():
+            return JSONResponse({
+                "error": "auto-materialization is off "
+                         "(EXPENSE_RECON_AUTO_MATERIALIZE); the pool keeps "
+                         "waiting. Flip the flag before backfilling.",
+            }, status_code=409)
         result = replay_held(
             app.state.db_path, app.state.learning_db_path,
             app.state.data_root,
         )
+        mat: dict = {}
+        if materialize:
+            mat = materialize_pooled(
+                app.state.db_path, app.state.learning_db_path,
+                app.state.data_root,
+            )
         claim = claim_pooled(
             app.state.db_path, app.state.learning_db_path,
             app.state.data_root,
         )
-        return JSONResponse({
+        body = {
             "ok": True, **result,
             "claimed": claim["claimed"],
             # replay_held's own `pooled` counts what it just parked; the
             # claim's still_pooled is the pool's size after both halves.
             "still_pooled": claim["still_pooled"],
             "failed": result["failed"] + claim["failed"],
-        })
+        }
+        if materialize:
+            # Parallel fields (item 39): which months the backfill created
+            # (their first mail is already ingested into each), and how
+            # many creations were refused or errored back to the pool.
+            body["materialized_months"] = mat.get("materialized_months", [])
+            body["materialize_failed"] = mat.get("failed", 0)
+            # The stranded re-pool sweep, AFTER the claim: what it just
+            # re-pooled rests until the operator's next explicit call.
+            sweep = re_pool_stranded(
+                app.state.db_path, app.state.learning_db_path,
+                app.state.data_root,
+            )
+            body["re_pooled"] = sweep["re_pooled"]
+        return JSONResponse(body)
 
     # ── Body-only mail actions (C2): view the body, render+ingest it as a
     # PDF through the normal pipeline, or dismiss it as junk. All sync:
@@ -2354,6 +2397,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     # Lifecycle: False = still collecting receipts; True =
                     # statement attached, review lives in the workbench.
                     "has_statement": has_statement(r),
+                    # Item 39 origin marker: "intake" when mail created
+                    # this month itself; null otherwise (parallel field).
+                    "created_by": (r.summary or {}).get("created_by"),
                 }
                 for r in store.list_runs()
                 if (r.config or {}).get("mode") == MODE_EXPENSE_GENERATION

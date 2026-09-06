@@ -77,6 +77,7 @@ and a rollback would otherwise have nothing to re-apply.
 | Prompt | Decisive field names | Gate |
 |---|---|---|
 | `lovable-r1-person-private-prompt.md` | settings chunk reads AND writes `person`; grid chunk reads `suggested_private`, `reimburse_to_prefill`, `n_needs_person`, `spellings` | R1 backend deployed 2026-09-06. **Person data entry waits for this prompt's verification** (cards map is whole-map replace; a stale save erases stored persons). Supersedes the client-side grouping half of `lovable-card-strip-prompt.md` |
+| `lovable-months-origin-refusals-prompt.md` | `created_by` on the batches list; `n_refused_ours` + `n_probes` + `refusals[].kind_label` on the inbound log | R2 (#683 merged, #687) deploys with the staged flip |
 
 The clean slate lasted from the 2026-09-06 audit until R1 shipped the same
 day; the backlog's habit holds. Verify by the field names above, not
