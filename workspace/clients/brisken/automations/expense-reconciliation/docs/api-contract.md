@@ -469,6 +469,39 @@ the mail, its month simply is not open yet. It therefore does NOT count toward
 pooled row carries no `batch_id` and no `expenses`, because it belongs to no
 batch yet.
 
+### The travel pool (item 38, added 2026-09-06)
+
+Mail addressed to the TRAVEL alias (settings `intake.travel_alias`, unset
+until the owner picks the local-part) rests in the pool too, with three
+parallel fields on its rows and one parallel count. The `status` enum did
+NOT grow: travel rows are `pooled`, distinguished by `pool_kind`, and
+`status_label` already says the right thing on a stale SPA.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `entries[].pool_kind` | `"travel"` (absent on month mail) | this mail waits for a TRIP and an operator's click, never for a month |
+| `entries[].trip_suggestion` | object `{trip_id, name, start, end}` (absent otherwise) | present only when the mail's receipt dates fall inside EXACTLY ONE trip's range. A reading, not a decision: two covering trips surface as absence, and joining is always the click |
+| `n_pooled_travel` | number | the travel share of `n_pooled` (which keeps counting ALL resting mail) |
+
+Travel rows carry NO `pool_month_state` — a month state on them would
+promise a claim that deliberately never happens. Their `status_label` is
+`Travel, waiting for its trip`, or `Travel; reads as "{name}"` when the
+suggestion is present. The month claim, the replay sweep, re-ingest and
+auto-materialization all skip `pool_kind: "travel"` structurally.
+
+`POST /api/inbound/{archive}/join-trip` (`{"trip_id": ...}`) is the
+click: 409 unless the mail is travel-pooled, 404 on an unknown trip.
+It creates the trip's batch WITH this mail's receipts when none exists
+(reply carries `created_batch: true`), else appends incrementally like a
+month claim; either way `submitted_by` provenance rides in and a failure
+returns the mail to the travel pool.
+
+`PUT /api/settings` `intake.travel_alias`: a bare local-part, `""` to
+unset. Refused when it is `"receipts"` or collides with a person alias.
+REMINDER: the `intake` object is whole-object-replace (see below), so an
+SPA that does not know this key will silently drop it on its next
+settings save — ship the SPA prompt before anyone sets the alias.
+
 Both `n_pooled` and `n_held` count distinct ARCHIVES. The log holds more than
 one row per archive by design (one at acceptance, another when a replay or a
 claim ingests it), so counting rows would report two waiting mails where one

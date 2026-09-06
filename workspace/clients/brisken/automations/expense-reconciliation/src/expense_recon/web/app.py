@@ -1205,6 +1205,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         from .intake_mail import (
             annotate_pool_state,
             annotate_status_view,
+            annotate_travel_pool,
             count_archives,
             read_log,
             refusal_view,
@@ -1303,6 +1304,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 })
             r["expenses"] = out
         refused_counts, refusals = refusal_view(app.state.data_root)
+        # Travel rows (item 38): stamp the trip suggestion, count the
+        # travel share of the pool. Before the status view, whose travel
+        # label names the suggestion.
+        n_pooled_travel = annotate_travel_pool(
+            app.state.db_path, app.state.data_root, rows
+        )
         # LAST: the label needs the pool state and the resolved batch
         # labels that the loops above just stamped.
         annotate_status_view(rows)
@@ -1310,6 +1317,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             "entries": rows,
             "n_held": n_held,
             "n_pooled": n_pooled,
+            # The travel share of n_pooled (item 38). Parallel count with
+            # its own name, never a second meaning on n_pooled.
+            "n_pooled_travel": n_pooled_travel,
             "n_duplicates": n_duplicates,
             # Mail we turned away. Deliberately NOT rows in `entries`: a
             # refusal has no archive, and a row there carrying a status no
@@ -1426,6 +1436,34 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         result = re_ingest(
             app.state.db_path, app.state.learning_db_path,
             app.state.data_root, archive, operator=_operator(),
+        )
+        if "error" in result:
+            code = result.pop("code", 400)
+            return JSONResponse(result, status_code=code)
+        return JSONResponse({"ok": True, **result})
+
+    @app.post("/api/inbound/{archive}/join-trip")
+    async def inbound_join_trip(archive: str, request: Request) -> JSONResponse:
+        """Item 38: the operator's click that puts a travel-pooled mail on
+        a trip — the ONLY way travel mail becomes expenses. Body:
+        {"trip_id": ...}. Runs the ingest synchronously in the threadpool
+        like the other inbound actions (vision work)."""
+        from .intake_mail import join_trip
+
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body is a client error
+            return JSONResponse({"error": "invalid json"}, status_code=400)
+        trip_id = str((body or {}).get("trip_id") or "").strip() \
+            if isinstance(body, dict) else ""
+        if not trip_id:
+            return JSONResponse(
+                {"error": "trip_id is required"}, status_code=400
+            )
+        result = await run_in_threadpool(
+            join_trip,
+            app.state.db_path, app.state.learning_db_path,
+            app.state.data_root, archive, trip_id, _operator(),
         )
         if "error" in result:
             code = result.pop("code", 400)
