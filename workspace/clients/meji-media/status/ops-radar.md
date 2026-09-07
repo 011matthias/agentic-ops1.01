@@ -4,7 +4,7 @@ workstream: ops-radar
 group: ""
 spec: ""
 state: active
-updated: 2026-09-03
+updated: 2026-09-06
 ---
 
 # Meji Media / Opportunity Radar
@@ -77,5 +77,11 @@ executes before it.
 mejievent DMARC still `p=none` (live 8.8.8.8 pull 09-03); first tighten step is
 part of the launch chain. `placement-seeds.csv` still empty; seed inboxes asked
 of Gurmej in the message. Corporate rebuild = three NEW sequences from the
-approved 07-29 pack (existing campaigns hold pre-approval 2-step copy; Version C
-has no campaign yet).
+approved 07-29 emails. PLAN PIVOT (owner, 09-04): A and B are UPGRADED IN
+PLACE (sequence swap + fresh list + resume, history kept), NOT retired; only
+Version C is a new campaign. Message finalized 09-06, PENDING owner send.
+Jess ask-3 (workload proposal, no prices) drafted 09-06 off the LIVE A1
+blueprint (8804011): venue map is hardcoded ids 130-150 with FALLBACK
+'birmingham', so any post-April event gets Birmingham venue details; the two
+fixes are head-of-flow enquiry_type filter + live venue read from the event
+record. Pricing (ask 4) only after Meji accepts the scope.
