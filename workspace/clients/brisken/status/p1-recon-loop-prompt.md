@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-09-06
+updated: 2026-09-07
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
@@ -52,34 +52,35 @@ coverage panel; until the owner pastes it, a month holding two workbooks still
 offers one download button and the per-card split exists only in the API and
 the PDF. That is the one open thread from this round.
 
-**What is next is no longer a decision: the 2026-09-06 owner program leads.**
-On 2026-09-06 the owner directed four product changes, captured with their
-rulings as backlog items 38 (company months vs TRIPS, declared at entry,
-both reconcile), 39 (mail materializes the month itself — supersedes the
-2026-08-24 "pre-creating months intrudes" ruling below), 40 (person
-attribution through the CARD: registry entries gain a person, the existing
-card chain resolves it, sender identity stays provenance only), and 41 (a
-payment method that resolves to no registered card is SUGGESTED as a
-private expense with `reimburse_to` a person — the one bounded exception to
-40's card-only rule). Round order is in item 38: person-on-card + the
-private-expense suggestion first (one round), auto-materialization second,
-the trip entity third, cross-batch reconciliation + trip report last. The
-previously-ranked items (27, 23's Zoho string sweep, 24, the overlay-route
-round) queue behind the program unless one of them rides along cheaply.
+**The 2026-09-06 owner program is COMPLETE (2026-09-07).** All four rounds
+merged in order and deployed: R1 person-on-card + private-expense
+suggestion (items 35/40/41, #686, v103), R2 auto-materialization (item 39,
+#687, v104, flag `EXPENSE_RECON_AUTO_MATERIALIZE` still OFF pending the
+staged flip) with item 42's refusals split ahead of it (#683), R3 the trip
+entity + declared batch type + travel-alias routing (#688, v105), R4
+cross-batch settlement + the trip report (item 38's deep half, #685, v106:
+the `receipt_claims` registry arbitrates one-receipt-one-charge across
+batches, a month's pool spans overlapping trips, provenance ships as
+`settled_by` both ways, and a trip's report sections per person). R4's
+live drill on v106 proved the settlement end to end (a TEST trip receipt
+settled a TEST month charge, a second month could not re-settle it, the
+workbench rendered the settled row) and returned the live state to zero
+TEST fixtures.
 
-**Execution model (2026-09-06): the four rounds run as four parallel chats,
-one worktree + branch + PR each** (`client/brisken/r1-person-private-expense`,
-`r2-auto-materialize`, `r3-trips`, `r4-cross-batch-settlement`). MERGE ORDER
-IS R1 → R2 → R3 → R4: rebase onto latest origin/main immediately before
-merge and rerun the suite if main moved; the later-merging round owns
-conflict resolution on the shared surfaces (service.py, app.py,
-api-contract.md, test_view_contract.py). Wait-points: R3's roster-mismatch
-commit and its merge wait for R1; R4's trip-spanning half (R4b) starts only
-after R3 merges (its settlement-registry half R4a builds immediately).
-Deploys serialize on merge order, each from a fresh detached origin/main
-worktree. Ride-alongs are assigned: item 35's canonical grouping is R1's
-first commit; item 42 (refusals split) is a standalone micro-PR at the head
-of the R2 chat.
+**What ranks next, in order:**
+
+1. **Owner-side applies, which gate everything visible.** Four Lovable
+   prompts pending in `docs/` (per `PROMPT-STATUS.md`): R1
+   person/private (GATES person data entry), R2 months-origin/refusals,
+   R3 trips (§5 GATES travel-alias entry), R4 settled-by badges. Plus
+   the travel alias local-part decision, and the two Hostinger
+   dismissals that gate the staged R2 flag flip.
+2. **The R2 staged flip** once the dismissals land: snapshot pool →
+   verify inert → flip → operator backfill → verify → stranded-archive
+   triage (protocol in backlog item 39).
+3. **The previously-ranked items resume:** 27 (wrong DAY in the right
+   month), 23's remaining Zoho string layers (gated on the GL-codes
+   call), 24, the overlay-route round.
 
 **Backlog item 30 is fully shipped and deployed** (PRs #607, #608, #609),
 along with the out-of-Lovable half of the "Arriving" bug:
@@ -105,10 +106,11 @@ along with the out-of-Lovable half of the "Arriving" bug:
 whose content the tool already holds is parked as `duplicate` before it
 reaches a month, and points at the mail that has it.
 
-Baselines: suite **1400 passed / 2 skipped** (PR #657, 2026-08-29), calibrate
-exit 0, ruff (E9,F) clean on the diff. App root
+Baselines: suite **1496 passed / 2 skipped** (post-#685, 2026-09-07),
+calibrate exit 0, ruff (E9,F) clean on the diff. App root
 `workspace/clients/brisken/automations/expense-reconciliation`. Live app is
-the #657 release (v101+; nothing has shipped in September).
+**v106** (the R4 deploy, 2026-09-07); live state after the R4 drill
+cleanup: zero month batches, zero trips.
 
 **Worktrees were consolidated on 2026-08-25.** There is no longer an
 `agentic-ops1-recon` worktree: the repo is the primary clone
