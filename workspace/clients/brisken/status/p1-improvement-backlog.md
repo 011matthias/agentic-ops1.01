@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-06
+updated: 2026-09-07
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -1177,6 +1177,11 @@ Consequences:
   waits until the round's Lovable prompt is verified in the published SPA
   (JS-chunk field-name grep): a stale SPA save would silently erase every
   person value. Round-0 collects the values; nobody types them early.
+  **Gate CLEARED 2026-09-07:** `lovable-r1-person-private-prompt.md` is
+  applied and bundle-verified (settings chunk round-trips `person` in the
+  cards save payload; see PROMPT-STATUS.md), so person entry is safe. What
+  is still missing is the DATA, per item 26: the person per card plus the
+  0340 entity and the 3645/plastic-1672 identities, Criss/Dirk only.
 - Rows gain `person` + `person_source` as PARALLEL fields (api-contract
   rules, view-contract pinned); unattributed rows get their own review
   surface and count beside MISSING ENTITY, with a rule-5 label.
