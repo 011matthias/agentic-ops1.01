@@ -647,6 +647,26 @@ _MIGRATIONS: dict[int, list] = {
         _add_column("sequence_steps", "reply_to_prior", "INTEGER NOT NULL DEFAULT 0"),
         _add_column("send_attempts", "force_fresh", "INTEGER NOT NULL DEFAULT 0"),
     ],
+    # v13: campaign review packets. One shareable in-app page per roll-out
+    # where the owner-side reviewer answers the open decisions (multiple
+    # choice + comment) and approves or edits the suggested sequence wording
+    # before anything is built into a live campaign. body/response are JSON
+    # (shape owned by web/review.py). Kept out of _SCHEMA so a fresh DB gets
+    # the table via this migration (v6 pattern). Packet metadata lives in the
+    # state KV as ``review:{packet_id}``.
+    13: [
+        "CREATE TABLE IF NOT EXISTS review_items ("
+        "item_id INTEGER PRIMARY KEY, "
+        "packet_id TEXT NOT NULL, "
+        "position INTEGER NOT NULL, "
+        "kind TEXT NOT NULL, "
+        "title TEXT NOT NULL, "
+        "body TEXT NOT NULL, "
+        "response TEXT, "
+        "updated_at TEXT)",
+        "CREATE INDEX IF NOT EXISTS ix_review_items_packet "
+        "ON review_items(packet_id, position)",
+    ],
 }
 
 # Highest applied migration. On a fresh DB the runner applies 1..N in order;
@@ -1305,6 +1325,44 @@ class ContactStore:
             "ON m.template_key = t.template_key AND m.v = t.version "
             "ORDER BY t.template_key"
         ).fetchall()
+
+    # -- review packets -----------------------------------------------------
+
+    def add_review_item(self, packet_id: str, position: int, kind: str,
+                        title: str, body_json: str, now: str) -> int:
+        cur = self.conn.execute(
+            "INSERT INTO review_items (packet_id, position, kind, title, body, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (packet_id, position, kind, title, body_json, now),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def list_review_items(self, packet_id: str) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM review_items WHERE packet_id = ? ORDER BY position, item_id",
+            (packet_id,),
+        ).fetchall()
+
+    def get_review_item(self, item_id: int) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM review_items WHERE item_id = ?", (item_id,),
+        ).fetchone()
+
+    def set_review_response(self, item_id: int, response_json: str, now: str) -> None:
+        self.conn.execute(
+            "UPDATE review_items SET response = ?, updated_at = ? WHERE item_id = ?",
+            (response_json, now, item_id),
+        )
+        self.conn.commit()
+
+    def delete_review_packet(self, packet_id: str) -> int:
+        """Remove a packet's items (used by seed --replace). Responses go with
+        them; a reseed is a fresh review round by design."""
+        cur = self.conn.execute(
+            "DELETE FROM review_items WHERE packet_id = ?", (packet_id,))
+        self.conn.commit()
+        return cur.rowcount
 
     # -- sequences + steps --------------------------------------------------
 

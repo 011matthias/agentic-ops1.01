@@ -25,6 +25,9 @@ Routes (cookie gate):
     POST /attempts/retry          re-queue a stalled/parked send (human decision)
     POST /attempts/send-fresh     re-queue a parked reply step as a fresh send
     POST /worker/kill             global kill switch toggle
+    GET  /review/{packet_id}      roll-out review packet (decisions + wording)
+    POST /review/{pid}/decision/{item}   answer a multiple-choice decision
+    POST /review/{pid}/sequence/{item}   approve / edit / request changes on wording
 
 Machine APIs (own bearer secrets, outside the cookie gate):
 
@@ -50,7 +53,7 @@ from fastapi.responses import (
 )
 from fastapi.templating import Jinja2Templates
 
-from . import accounts, auth, cadence, uploads
+from . import accounts, auth, cadence, review, uploads
 from .service import (
     EDITABLE_FLAGS, EDITABLE_TEXT, StaleWriteError, apply_fields, build_board,
     build_contact_view, build_sheet, build_unmatched_groups, create_contact,
@@ -342,6 +345,63 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                                  now=now_iso(),
                                  base_url=accounts.base_url_from(request))
         return RedirectResponse(url="/admin/users", status_code=303)
+
+    # --- campaign review packets (gated) --------------------------------
+    # One page per roll-out where the reviewer answers the open decisions
+    # (multiple choice) and approves or edits the suggested wording. Review
+    # only: nothing here arms, approves, or sends a campaign.
+
+    @app.get("/review/{packet_id}", response_class=HTMLResponse)
+    def review_page(request: Request, packet_id: str, saved: int = 0):
+        with open_store() as store:
+            view = review.build_review_view(store, packet_id)
+        if view is None:
+            return HTMLResponse("No such review.", status_code=404)
+        return templates.TemplateResponse(request, "review.html", {
+            "v": view, "user": current_user(request), "saved": saved,
+        })
+
+    @app.post("/review/{packet_id}/decision/{item_id}")
+    def review_decision(request: Request, packet_id: str, item_id: int,
+                        choice: str = Form(""), comment: str = Form("")):
+        try:
+            with open_store() as store:
+                review.submit_decision(store, item_id, choice, comment,
+                                       by=current_user(request), now=now_iso())
+        except ValueError as exc:
+            return HTMLResponse(str(exc), status_code=400)
+        return RedirectResponse(
+            url=f"/review/{packet_id}?saved={item_id}#item-{item_id}",
+            status_code=303)
+
+    @app.post("/review/{packet_id}/sequence/{item_id}")
+    async def review_sequence(request: Request, packet_id: str, item_id: int):
+        form = await request.form()
+        steps = []
+        for key in form.keys():
+            if not key.startswith("text_"):
+                continue
+            try:
+                step_no = int(key[len("text_"):])
+            except ValueError:
+                continue
+            steps.append({
+                "step_no": step_no,
+                "subject": (form.get(f"subject_{step_no}") or "").strip(),
+                "text": (form.get(key) or "").strip(),
+            })
+        steps.sort(key=lambda s: s["step_no"])
+        try:
+            with open_store() as store:
+                review.submit_sequence(
+                    store, item_id, (form.get("action") or "").strip(),
+                    steps, form.get("comment") or "",
+                    by=current_user(request), now=now_iso())
+        except ValueError as exc:
+            return HTMLResponse(str(exc), status_code=400)
+        return RedirectResponse(
+            url=f"/review/{packet_id}?saved={item_id}#item-{item_id}",
+            status_code=303)
 
     @app.get("/healthz")
     def healthz():

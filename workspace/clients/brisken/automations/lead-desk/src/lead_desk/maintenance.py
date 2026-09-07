@@ -299,6 +299,13 @@ def main(argv: list[str] | None = None) -> int:
     ta = sub.add_parser("truth-audit",
                         help="event-provenance health report (never a gate)")
     ta.add_argument("--data", default=os.environ.get("LEAD_DESK_DATA", "lead-desk-data"))
+    sr = sub.add_parser("seed-review",
+                        help="load a campaign review packet (decisions + "
+                             "suggested wording) from a JSON file")
+    sr.add_argument("--data", default=os.environ.get("LEAD_DESK_DATA", "lead-desk-data"))
+    sr.add_argument("--file", required=True, help="packet JSON (packet_id, title, intro, items)")
+    sr.add_argument("--replace", action="store_true",
+                    help="reseed over an existing packet (drops its responses)")
     args = p.parse_args(argv)
 
     db = Path(args.data).resolve() / "lead-desk.sqlite"
@@ -312,6 +319,10 @@ def main(argv: list[str] | None = None) -> int:
             report = rekey_anon_contacts(store, dry_run=args.dry_run)
         elif args.cmd == "suppression-import":
             report = suppression_import(store, Path(args.csv), apply=args.apply)
+        elif args.cmd == "seed-review":
+            from .web.review import seed_packet
+            packet = json.loads(Path(args.file).read_text(encoding="utf-8"))
+            report = seed_packet(store, packet, now_iso(), replace=args.replace)
         else:
             report = truth_audit(store)
     if args.cmd == "truth-audit":
