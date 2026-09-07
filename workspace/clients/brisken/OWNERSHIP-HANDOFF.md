@@ -186,36 +186,110 @@ Not optional; without it the transfer hands over control they cannot use.
 - Where the data lives and how to get a copy out.
 - What the nightly and scheduled jobs are, and what breaks if they stop.
 
-## 5. Consolidation, optional, after the transfer
+## 5. Target end state: one platform, Brisken-owned
 
-The estate is four platforms wide for what is really two jobs. Once
-ownership is clean, this reduces Brisken's operating surface:
+Owner direction 2026-09-07: the estate does not just change hands, it
+collapses to a single platform that Brisken owns and pays for. Five
+services in one person's name becomes one account, one invoice, one place
+where everything lives.
 
-- Merge the three static Vercel projects into one, using host rewrites as
-  `brisken-onepilot` already does for `onepilot.brisken.com`.
-- Co-host the expense-recon SPA bundle on the Fly app it already calls, so
-  one deploy ships frontend and backend, and the Lovable publish step stops
-  being a separate way for a change to sit unshipped.
+What is spread today: Vercel (three sites plus the Neon integration),
+Fly.io (two stateful apps plus two review apps), Neon (lead capture),
+Lovable (the expense-recon SPA editor), GitHub (source).
 
-Both are worth doing. Neither is worth blocking the transfer on.
+### 5.1 The binding constraint
+
+`brisken-expense-recon` and `brisken-lead-desk` both mount a persistent
+volume at `/data` (`fly.toml` `[mounts]`, verified 2026-09-07). The
+reconciliation engine keeps its SQLite ledger, receipt files and cross-run
+memory there; the lead desk keeps contacts and outreach events there.
+
+Any consolidation target therefore has to offer real persistent storage
+attached to a long-running process. That is the single fact that decides
+the shortlist.
+
+### 5.2 Candidates
+
+**Vercel only: rejected.** Functions are stateless with a read-only
+filesystem. Taking the two apps there means re-architecting the storage
+layer of the part of the product that currently works. The sites would be
+happy; the engine would be rewritten for no product gain.
+
+**Fly.io only: viable, low effort.** Already runs both stateful apps. The
+three sites become one small static-serving app or containers alongside;
+the SPA bundle co-hosts on the app it already calls, which removes the
+CORS surface and the separate Lovable publish step at the same time; lead
+capture moves from Neon to Fly Managed Postgres. One org, one bill.
+Weakness: Fly is a developer platform. Brisken IT has no reason to know it,
+so "Brisken owns it" would be true on the invoice and thin in practice.
+
+**Azure only: viable, highest effort, best fit for a real handover.**
+Brisken already runs a Microsoft tenant
+(`aa3bd2bf-9c6e-4f49-9c4f-44f878ae9e74`), with IT, an existing billing
+relationship, and the Graph app we already use. Container Apps for the
+FastAPI engine, Azure Files or a managed disk for the `/data` volumes,
+Azure Database for PostgreSQL for lead capture, Static Web Apps or Blob
+plus CDN for the three sites, and source under the same Microsoft
+relationship.
+
+The bonus is not architectural, it is the access model. Today the
+expense-recon boundary is a shared operator code
+(`EXPENSE_RECON_OPERATOR_CODE`), and the lead desk runs per-user codes.
+On Azure that becomes Entra sign-in with the accounts Criss and Dirk
+already have, which is a genuine security upgrade and removes the codes we
+currently hand around.
+
+### 5.3 The choice is not really technical
+
+Fly and Azure both work. Which one is right follows from who operates the
+thing afterwards, which is the same question section 7 asks Dirk:
+
+| If the operating arrangement is | The platform should be |
+|---|---|
+| We keep running it, Brisken owns and pays | Fly. Faster, nothing changes day to day, billing and ownership still move. |
+| Full handover, Brisken IT operates it | Azure. It is the only target Brisken's own people can run long-term, and the only one where hosting, identity and source fold into a relationship they already pay for. |
+
+So the platform recommendation should not be sent to Dirk ahead of his
+answer. Ask the operating question; the platform falls out of it.
+
+### 5.4 Sequencing against section 4
+
+Consolidation does not replace the transfer, and it does not go first.
+Section 4 moves ownership on the current stack, which is days. Section 5
+changes the stack, which is weeks and carries real migration risk for
+Criss's financial records. Doing them in that order means Brisken owns the
+estate before anything moves underneath it, and a consolidation that goes
+badly fails onto infrastructure they already control.
+
+One exception worth taking early regardless of the target: co-hosting the
+SPA bundle on the expense-recon app. It removes the manual Lovable publish
+step, which is the current way for a frontend change to sit unshipped with
+nobody notified.
 
 ## 6. On rebuilding in Lovable
 
 Considered and not recommended as a handoff strategy. Lovable is a frontend
-builder. It cannot host the FastAPI reconciliation engine, the SQLite
-volumes, the Neon lead DB, or brisken.com, and rebuilding into it would
+builder. It cannot host the FastAPI reconciliation engine, the volumes at
+`/data`, the lead database, or brisken.com, and rebuilding into it would
 discard the Python engine (deterministic matcher, OCR, categorizer, Zoho
-export) that is the actual product. It also does not remove a single account
-dependency; it adds one. Keep Lovable where it already earns its place: the
-expense-recon SPA, on a Brisken-owned seat.
+export) that is the actual product. It also does not remove an account
+dependency; it adds one, and it is the one dependency in the estate whose
+deploy step no API can reach.
+
+Under the section 5 target, Lovable leaves the picture entirely: the SPA
+source is already in a git repo that transfers, and the built bundle
+co-hosts with the API. Until then, keep it on a Brisken-owned seat.
 
 ## 7. Open items for Dirk
 
-1. Who at Brisken holds the admin accounts, and who pays. Vercel team, Fly
-   org, GitHub org, Lovable seat, Neon.
-2. Whether Brisken wants lead capture to stay on Neon or move to whatever
-   their team already runs.
+1. **The one that decides everything else:** who operates this after the
+   transfer. We keep running it, or Brisken IT takes it over. Per section
+   5.3 that answer picks the consolidation target, so it gets asked on its
+   own and before any platform is proposed.
+2. Who at Brisken holds the admin accounts and who pays, once the target is
+   known.
 3. Confirmation that Brisken IT will reissue the Graph client secret at
    cutover.
-4. Whether any support arrangement continues after transfer, which decides
-   whether we keep a member seat or are removed outright.
+4. If the answer to 1 is Azure: whether Brisken IT will own the identity
+   side, so the shared operator codes retire in favour of Entra sign-in
+   rather than being carried over unchanged.
