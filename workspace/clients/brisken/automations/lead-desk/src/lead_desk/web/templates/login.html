@@ -74,6 +74,7 @@
       <label for="email">Work email</label>
       <input type="email" id="email" name="email" autocomplete="email"
              placeholder="you@brisken.com" autofocus required>
+      {% if next_path %}<input type="hidden" name="next" value="{{ next_path }}">{% endif %}
       <button type="submit">Email me a sign-in link</button>
     </form>
 
