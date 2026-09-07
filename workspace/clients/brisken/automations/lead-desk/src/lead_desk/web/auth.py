@@ -213,6 +213,18 @@ def path_is_open(path: str) -> bool:
     return path in OPEN_PATHS or path.startswith("/static/")
 
 
+def safe_next_path(raw: str | None) -> str:
+    """A post-login destination is honored only when it is a local absolute
+    path: leading '/', no protocol-relative '//', no backslash, no scheme,
+    bounded length. Anything else falls back to the board, so a crafted
+    magic link can never bounce a fresh session to a foreign origin."""
+    p = (raw or "").strip()
+    if (p.startswith("/") and not p.startswith("//") and "\\" not in p
+            and "://" not in p and len(p) <= 512):
+        return p
+    return "/"
+
+
 def ingest_secret() -> str | None:
     s = os.environ.get("LEAD_DESK_INGEST_SECRET", "").strip()
     return s or None

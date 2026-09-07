@@ -184,4 +184,4 @@ def test_review_sits_behind_the_login_gate(tmp_path, monkeypatch):
     c = TestClient(app)
     r = c.get("/review/sept-test", follow_redirects=False)
     assert r.status_code == 303
-    assert r.headers["location"] == "/login"
+    assert r.headers["location"] == "/login?next=%2Freview%2Fsept-test"

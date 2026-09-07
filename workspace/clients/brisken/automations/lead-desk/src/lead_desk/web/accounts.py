@@ -125,7 +125,7 @@ def _expiry(now_str: str, ttl: int = auth.MAGIC_TOKEN_TTL) -> str:
 # -- the flow -----------------------------------------------------------------
 
 def request_magic_link(store, email: str, *, base_url: str, ip: str | None,
-                       now: str, mailer=_UNSET) -> dict:
+                       now: str, mailer=_UNSET, next_path: str = "") -> dict:
     """Handle an email submitted at /login. Returns a status dict; the route
     maps status -> a user-facing banner. ``link`` is present only on 'sent' and
     is for tests / server-side use, never rendered to the browser."""
@@ -152,6 +152,13 @@ def request_magic_link(store, email: str, *, base_url: str, ip: str | None,
         raw, token_hash = auth.new_magic_token()
         store.create_login_token(token_hash, email, now, _expiry(now), ip)
         link = f"{base_url}/auth/verify?token={raw}"
+        # Carry the pre-login destination through the emailed link, so the
+        # sign-in lands where the person was headed (e.g. a review packet),
+        # not on the board. Validated again at redeem time (auth.safe_next_path).
+        next_path = auth.safe_next_path(next_path) if next_path else ""
+        if next_path and next_path != "/":
+            from urllib.parse import quote
+            link += f"&next={quote(next_path, safe='')}"
         if not _send_login_email(mailer, email, link):
             return {"status": "send_failed"}
         return {"status": "sent", "link": link}

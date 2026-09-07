@@ -191,7 +191,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if auth.gate_enabled() and not auth.path_is_open(request.url.path):
             if not auth.read_user(request.cookies.get(auth.COOKIE_NAME)):
                 if request.method == "GET":
-                    return RedirectResponse(url="/login", status_code=303)
+                    # Remember where the person was headed so the magic-link
+                    # sign-in can land them there, not on the board.
+                    from urllib.parse import quote
+                    path = request.url.path
+                    if request.url.query:
+                        path += f"?{request.url.query}"
+                    target = "/login" if path == "/" else \
+                        f"/login?next={quote(path, safe='')}"
+                    return RedirectResponse(url=target, status_code=303)
                 return JSONResponse({"error": "authentication required"}, status_code=401)
         return await call_next(request)
 
@@ -211,13 +219,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return resp
 
     @app.get("/login", response_class=HTMLResponse)
-    def login_form(request: Request, notice: str = "", err: str = ""):
+    def login_form(request: Request, notice: str = "", err: str = "",
+                   next: str = ""):
         if not auth.gate_enabled():
             return RedirectResponse(url="/", status_code=303)
+        next_path = auth.safe_next_path(next) if next else ""
         return templates.TemplateResponse(request, "login.html", {
             "error": _LOGIN_ERRORS.get(err),
             "notice": _LOGIN_NOTICES.get(notice),
             "auth_email_on": accounts.auth_emails_enabled(),
+            "next_path": next_path if next_path != "/" else "",
         })
 
     def _client_ip(request: Request) -> str:
@@ -227,7 +238,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             request.client.host if request.client else "unknown")
 
     @app.post("/login/magic")
-    def login_magic(request: Request, email: str = Form("")):
+    def login_magic(request: Request, email: str = Form(""),
+                    next: str = Form("")):
         """Passwordless: email in -> single-use link out (approved), or an
         access request recorded (new). Never reveals a password; rate-limited
         per client IP so it cannot be used to spam an inbox."""
@@ -237,10 +249,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if auth.magic_blocked(ip):
             return RedirectResponse(url="/login?err=throttled", status_code=303)
         auth.record_magic_request(ip)
+        next_path = auth.safe_next_path(next) if next else ""
         with open_store() as store:
             result = accounts.request_magic_link(
                 store, email, base_url=accounts.base_url_from(request),
-                ip=ip, now=now_iso())
+                ip=ip, now=now_iso(), next_path=next_path)
         # Map the outcome to a neutral banner. pending / disabled / new all read
         # as "with an admin" so the page never discloses account state.
         target = {
@@ -252,17 +265,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             "no_mailer": "/login?err=nomailer",
             "send_failed": "/login?err=sendfail",
         }.get(result["status"], "/login?notice=sent")
+        if next_path and next_path != "/":
+            # Keep the destination through banner round-trips (a failed send
+            # retried from the banner page still lands where they were headed).
+            from urllib.parse import quote
+            target += f"&next={quote(next_path, safe='')}"
         return RedirectResponse(url=target, status_code=303)
 
     @app.get("/auth/verify")
-    def auth_verify(request: Request, token: str = ""):
+    def auth_verify(request: Request, token: str = "", next: str = ""):
         if not auth.gate_enabled():
             return RedirectResponse(url="/", status_code=303)
         with open_store() as store:
             email = accounts.verify_and_login(store, token, now_iso())
         if not email:
             return RedirectResponse(url="/login?err=badlink", status_code=303)
-        resp = RedirectResponse(url="/", status_code=303)
+        resp = RedirectResponse(url=auth.safe_next_path(next), status_code=303)
         resp.set_cookie(
             auth.COOKIE_NAME, auth.issue_token(email),
             max_age=auth.SESSION_MAX_AGE, httponly=True,
