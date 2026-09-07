@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-07 | Brisken P1 Prompts Verified Alias Live | client-dev | [→](docs/2026-09-07%20-%20Brisken%20P1%20Prompts%20Verified%20Alias%20Live/Checkpoint.md) |
 | 2026-09-07 | Brisken P1 R2 Flip Live | client-dev | [Mini-Checkpoint-2](docs/2026-09-07%20-%20Brisken%20P1%20R2%20Flip%20Live/Mini-Checkpoint-2.md) |
 | 2026-09-07 | Brisken R4 Cross-Batch Settlement | client-dev | [Mini-Checkpoint-2](docs/2026-09-07%20-%20Brisken%20R4%20Cross-Batch%20Settlement/Mini-Checkpoint-2.md) |
 | 2026-09-07 | Brisken P1 R3 Trips Round | client-dev | [Mini-Checkpoint-2](docs/2026-09-07%20-%20Brisken%20P1%20R3%20Trips%20Round/Mini-Checkpoint-2.md) |
