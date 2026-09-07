@@ -19,6 +19,13 @@ to read (`seen_undefined`, `n_duplicate_copies`, `is_extra`, `coverage`,
 **Re-audited 2026-09-06 after the owner published: every prompt in this
 file is applied. The Not-applied table is empty for the first time.**
 
+**Re-audited 2026-09-07 after the owner pasted and published the four
+pending prompts (R1 person/private, months origin + refusals, R3 trips,
+R4 settled-by): every prompt is applied again. Method: fetched the live
+index + 45 JS chunks (937 KB) and grepped the decisive field names; for
+the two whole-object-replace gates, read the settings chunk's save-payload
+construction to confirm the writes carry `person` and `travel_alias`.**
+
 Two display strings misread on the 2026-09-01 pass, both resolved by reading
 the surrounding key: `"Not a duplicate"` is `wb.dups.notDup` from the workbench
 duplicates panel, which predates `lovable-duplicates-prompt.md` and is not
@@ -66,6 +73,10 @@ missing.
 | `lovable-duplicates-prompt.md` | `n_duplicate_copies` and `is_extra` both read; `expx.dup.*` keys in EN and PT, including the singular "1 duplicate copy" (2026-09-06) |
 | `lovable-card-definition-prompt.md` | `seen_undefined`, `suggested_key` and `n_charges` all read; "Define this card" present (2026-09-06) |
 | `lovable-months-open-prompt.md` | `months.open` = "Open" / "Abrir" wired to a menu item, "Actions for" label present, and the hover-only `underline-offset-2 hover:underline` is GONE (2026-09-06) |
+| `lovable-r1-person-private-prompt.md` | Settings chunk reads AND writes `person`: card rows hydrate `person: e.person ?? ""` and the save payload carries `person: t.person` (same for the intake alias-to-person map). Grid chunk reads `suggested_private`, `reimburse_to_prefill`, `n_needs_person`, `spellings`. Person data entry is safe (2026-09-07) |
+| `lovable-months-origin-refusals-prompt.md` | `created_by` read in the months chunk; `n_refused_ours`, `n_probes`, `kind_label` read in the inbound chunk (2026-09-07) |
+| `lovable-trips-prompt.md` | `trip_id` / `batch_type` / `pool_kind` / `trip_suggestion` / `n_pooled_travel` across the trips, inbound and NewExpenseBatch chunks (a dedicated `chunk-trips-*` exists). §5 verified: the settings chunk hydrates `travel_alias` from the intake object, re-syncs it on object change, and the save payload carries `travel_alias: C.trim()...` — alias entry through the SPA is now safe (2026-09-07) |
+| `lovable-r4-settled-by-prompt.md` | `settled_by` read in the run chunk (x3) and the batch chunk (2026-09-07) |
 
 These four were drafted 2026-08-28/29, pasted from chat, and lived only in a
 gitignored scratch directory until 2026-09-01. They are in `docs/` now
@@ -74,16 +85,9 @@ and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
-| Prompt | Decisive field names | Gate |
-|---|---|---|
-| `lovable-r1-person-private-prompt.md` | settings chunk reads AND writes `person`; grid chunk reads `suggested_private`, `reimburse_to_prefill`, `n_needs_person`, `spellings` | R1 backend deployed 2026-09-06. **Person data entry waits for this prompt's verification** (cards map is whole-map replace; a stale save erases stored persons). Supersedes the client-side grouping half of `lovable-card-strip-prompt.md` |
-| `lovable-months-origin-refusals-prompt.md` | `created_by` on the batches list; `n_refused_ours` + `n_probes` + `refusals[].kind_label` on the inbound log | Backend LIVE since 2026-09-07 (flag ON, three months minted by intake); prompt just needs pasting |
-| `lovable-trips-prompt.md` (R3, 2026-09-06) | `trip_id`, `batch_type`, `pool_kind`, `trip_suggestion`, `n_pooled_travel`, `travel_alias` | §5 (Settings travel-alias field) GATES alias entry: the intake object is whole-object-replace, and a stale SPA save would erase the alias. Do not set the alias through the SPA before §5 is verified in the bundle |
-| `lovable-r4-settled-by-prompt.md` (R4, 2026-09-07) | `settled_by` on `rows[]` / `unmatched_receipts[]` / `assignable_receipts[]` (run payload) and on `expenses[]` (batch payload); 409 on decisions / manual-match | R4 backend deploy. Purely additive badges; nothing gates data entry |
-
-The clean slate lasted from the 2026-09-06 audit until R1 shipped the same
-day; the backlog's habit holds. Verify by the field names above, not
-display copy.
+Empty as of the 2026-09-07 audit. The previous clean slate lasted from the
+2026-09-06 audit until R1 shipped the same day; expect this table to fill
+again with the next backend round. Verify by field names, not display copy.
 
 ## Cannot verify (no live state exercises them)
 
