@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}{{ v.title }} | Brisken Lead Desk{% endblock %}
+{% block content %}
+<style>
+  .rv-option { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 10px; margin: 8px 0; cursor: pointer; }
+  .rv-option:hover { border-color: var(--border-strong); }
+  .rv-option input { margin-top: 3px; }
+  .rv-option .lbl { font-weight: 600; }
+  .rv-option .det { color: var(--muted); font-size: 12.5px; }
+  .rv-reco { margin-left: 8px; }
+  .rv-step { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin: 10px 0; }
+  .rv-step textarea { min-height: 120px; }
+  .rv-meta { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .rv-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  .rv-note { white-space: pre-wrap; }
+  details.rv-recipients { margin: 10px 0; }
+  details.rv-recipients summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+</style>
+
+<h1>{{ v.title }}</h1>
+{% if v.intro %}<p class="muted" style="max-width:760px">{{ v.intro }}</p>{% endif %}
+
+<div class="stats" style="margin: 14px 0 18px">
+  {% if v.complete %}
+    <span class="chip good">All answered. Nothing sends without the switch-on session.</span>
+  {% else %}
+    {% if v.open_decisions %}<span class="chip warn"><span class="n">{{ v.open_decisions }}</span> decision{{ '' if v.open_decisions == 1 else 's' }} open</span>{% endif %}
+    {% if v.open_sequences %}<span class="chip warn"><span class="n">{{ v.open_sequences }}</span> wording review{{ '' if v.open_sequences == 1 else 's' }} open</span>{% endif %}
+  {% endif %}
+</div>
+
+{% for item in v['items'] %}
+<div class="card" id="item-{{ item.item_id }}">
+  <h2>{{ loop.index }}. {{ item.title }}
+    {% if item.kind == 'decision' and item.response %}
+      <span class="badge stage-booked">Answered: {{ item.chosen_label }}</span>
+    {% elif item.kind == 'sequence' and item.response %}
+      {% if item.response.status == 'approved' %}<span class="badge stage-booked">Wording approved</span>
+      {% elif item.response.status == 'edited' %}<span class="badge stage-sent">Edited, not yet approved</span>
+      {% else %}<span class="badge stage-replied">Changes requested</span>{% endif %}
+    {% endif %}
+    {% if saved == item.item_id %}<span class="badge stage-booked">Saved</span>{% endif %}
+  </h2>
+
+  {% if item.kind == 'note' %}
+    <p class="rv-note">{{ item.body.text }}</p>
+
+  {% elif item.kind == 'decision' %}
+    <p>{{ item.body.question }}</p>
+    <form method="post" action="/review/{{ v.packet_id }}/decision/{{ item.item_id }}">
+      {% for opt in item.body.options %}
+      <label class="rv-option">
+        <input type="radio" name="choice" value="{{ opt.key }}"
+          {% if item.response and item.response.choice == opt.key %}checked
+          {% elif not item.response and item.body.recommended == opt.key %}checked{% endif %}>
+        <span>
+          <span class="lbl">{{ opt.label }}</span>
+          {% if item.body.recommended == opt.key %}<span class="badge stage-sourced rv-reco">our suggestion</span>{% endif %}
+          {% if opt.detail %}<div class="det">{{ opt.detail }}</div>{% endif %}
+        </span>
+      </label>
+      {% endfor %}
+      <label>Comment (optional)</label>
+      <input type="text" name="comment" value="{{ item.response.comment if item.response else '' }}"
+             placeholder="Anything we should know about this choice">
+      <div class="rv-actions">
+        <button class="btn" type="submit">Save answer</button>
+        {% if item.response %}<span class="rv-meta">Answered by {{ item.response.by }} on {{ item.response.at[:10] }}</span>{% endif %}
+      </div>
+    </form>
+
+  {% elif item.kind == 'sequence' %}
+    <p class="muted">
+      {% if item.body.audience %}<b style="color:var(--text)">Who:</b> {{ item.body.audience }}{% endif %}
+      {% if item.body.timing %} &nbsp; <b style="color:var(--text)">When:</b> {{ item.body.timing }}{% endif %}
+      {% if item.body.from_line %} &nbsp; <b style="color:var(--text)">From:</b> {{ item.body.from_line }}{% endif %}
+    </p>
+    {% if item.body.recipients %}
+    <details class="rv-recipients">
+      <summary>Show the {{ item.body.recipients | length }} recipients</summary>
+      <div class="scroll-x"><table>
+        <tr><th>Name</th><th>Company</th><th>Email</th></tr>
+        {% for r in item.body.recipients %}
+        <tr><td>{{ r.name }}</td><td>{{ r.company }}</td><td class="mono">{{ r.email or '' }}</td></tr>
+        {% endfor %}
+      </table></div>
+    </details>
+    {% endif %}
+    <form method="post" action="/review/{{ v.packet_id }}/sequence/{{ item.item_id }}">
+      {% for step in item.body.steps %}
+      <div class="rv-step">
+        <b>{{ step.label or ('Mail ' ~ step.step_no) }}</b>
+        {% if step.subject is not none %}
+        <label>Subject</label>
+        <input type="text" name="subject_{{ step.step_no }}" value="{{ step.current_subject }}">
+        {% endif %}
+        <label>Text (edit freely; this exact wording is what goes out)</label>
+        <textarea name="text_{{ step.step_no }}">{{ step.current_text }}</textarea>
+      </div>
+      {% endfor %}
+      <label>Comment (needed when requesting changes)</label>
+      <input type="text" name="comment" value="{{ item.response.comment if item.response else '' }}"
+             placeholder="What should be different">
+      <div class="rv-actions">
+        <button class="btn" type="submit" name="action" value="approve">Approve this wording</button>
+        <button class="btn btn-secondary" type="submit" name="action" value="save">Save edits</button>
+        <button class="btn btn-secondary" type="submit" name="action" value="changes">Request changes</button>
+        {% if item.response %}<span class="rv-meta">Last saved by {{ item.response.by }} on {{ item.response.at[:10] }}</span>{% endif %}
+      </div>
+    </form>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

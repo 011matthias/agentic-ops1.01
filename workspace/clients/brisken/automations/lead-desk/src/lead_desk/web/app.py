@@ -25,6 +25,9 @@ Routes (cookie gate):
     POST /attempts/retry          re-queue a stalled/parked send (human decision)
     POST /attempts/send-fresh     re-queue a parked reply step as a fresh send
     POST /worker/kill             global kill switch toggle
+    GET  /review/{packet_id}      roll-out review packet (decisions + wording)
+    POST /review/{pid}/decision/{item}   answer a multiple-choice decision
+    POST /review/{pid}/sequence/{item}   approve / edit / request changes on wording
 
 Machine APIs (own bearer secrets, outside the cookie gate):
 
@@ -50,7 +53,7 @@ from fastapi.responses import (
 )
 from fastapi.templating import Jinja2Templates
 
-from . import accounts, auth, cadence, uploads
+from . import accounts, auth, cadence, review, uploads
 from .service import (
     EDITABLE_FLAGS, EDITABLE_TEXT, StaleWriteError, apply_fields, build_board,
     build_contact_view, build_sheet, build_unmatched_groups, create_contact,
@@ -188,7 +191,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if auth.gate_enabled() and not auth.path_is_open(request.url.path):
             if not auth.read_user(request.cookies.get(auth.COOKIE_NAME)):
                 if request.method == "GET":
-                    return RedirectResponse(url="/login", status_code=303)
+                    # Remember where the person was headed so the magic-link
+                    # sign-in can land them there, not on the board.
+                    from urllib.parse import quote
+                    path = request.url.path
+                    if request.url.query:
+                        path += f"?{request.url.query}"
+                    target = "/login" if path == "/" else \
+                        f"/login?next={quote(path, safe='')}"
+                    return RedirectResponse(url=target, status_code=303)
                 return JSONResponse({"error": "authentication required"}, status_code=401)
         return await call_next(request)
 
@@ -208,13 +219,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return resp
 
     @app.get("/login", response_class=HTMLResponse)
-    def login_form(request: Request, notice: str = "", err: str = ""):
+    def login_form(request: Request, notice: str = "", err: str = "",
+                   next: str = ""):
         if not auth.gate_enabled():
             return RedirectResponse(url="/", status_code=303)
+        next_path = auth.safe_next_path(next) if next else ""
         return templates.TemplateResponse(request, "login.html", {
             "error": _LOGIN_ERRORS.get(err),
             "notice": _LOGIN_NOTICES.get(notice),
             "auth_email_on": accounts.auth_emails_enabled(),
+            "next_path": next_path if next_path != "/" else "",
         })
 
     def _client_ip(request: Request) -> str:
@@ -224,7 +238,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             request.client.host if request.client else "unknown")
 
     @app.post("/login/magic")
-    def login_magic(request: Request, email: str = Form("")):
+    def login_magic(request: Request, email: str = Form(""),
+                    next: str = Form("")):
         """Passwordless: email in -> single-use link out (approved), or an
         access request recorded (new). Never reveals a password; rate-limited
         per client IP so it cannot be used to spam an inbox."""
@@ -234,10 +249,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if auth.magic_blocked(ip):
             return RedirectResponse(url="/login?err=throttled", status_code=303)
         auth.record_magic_request(ip)
+        next_path = auth.safe_next_path(next) if next else ""
         with open_store() as store:
             result = accounts.request_magic_link(
                 store, email, base_url=accounts.base_url_from(request),
-                ip=ip, now=now_iso())
+                ip=ip, now=now_iso(), next_path=next_path)
         # Map the outcome to a neutral banner. pending / disabled / new all read
         # as "with an admin" so the page never discloses account state.
         target = {
@@ -249,17 +265,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             "no_mailer": "/login?err=nomailer",
             "send_failed": "/login?err=sendfail",
         }.get(result["status"], "/login?notice=sent")
+        if next_path and next_path != "/":
+            # Keep the destination through banner round-trips (a failed send
+            # retried from the banner page still lands where they were headed).
+            from urllib.parse import quote
+            target += f"&next={quote(next_path, safe='')}"
         return RedirectResponse(url=target, status_code=303)
 
     @app.get("/auth/verify")
-    def auth_verify(request: Request, token: str = ""):
+    def auth_verify(request: Request, token: str = "", next: str = ""):
         if not auth.gate_enabled():
             return RedirectResponse(url="/", status_code=303)
         with open_store() as store:
             email = accounts.verify_and_login(store, token, now_iso())
         if not email:
             return RedirectResponse(url="/login?err=badlink", status_code=303)
-        resp = RedirectResponse(url="/", status_code=303)
+        resp = RedirectResponse(url=auth.safe_next_path(next), status_code=303)
         resp.set_cookie(
             auth.COOKIE_NAME, auth.issue_token(email),
             max_age=auth.SESSION_MAX_AGE, httponly=True,
@@ -342,6 +363,63 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                                  now=now_iso(),
                                  base_url=accounts.base_url_from(request))
         return RedirectResponse(url="/admin/users", status_code=303)
+
+    # --- campaign review packets (gated) --------------------------------
+    # One page per roll-out where the reviewer answers the open decisions
+    # (multiple choice) and approves or edits the suggested wording. Review
+    # only: nothing here arms, approves, or sends a campaign.
+
+    @app.get("/review/{packet_id}", response_class=HTMLResponse)
+    def review_page(request: Request, packet_id: str, saved: int = 0):
+        with open_store() as store:
+            view = review.build_review_view(store, packet_id)
+        if view is None:
+            return HTMLResponse("No such review.", status_code=404)
+        return templates.TemplateResponse(request, "review.html", {
+            "v": view, "user": current_user(request), "saved": saved,
+        })
+
+    @app.post("/review/{packet_id}/decision/{item_id}")
+    def review_decision(request: Request, packet_id: str, item_id: int,
+                        choice: str = Form(""), comment: str = Form("")):
+        try:
+            with open_store() as store:
+                review.submit_decision(store, item_id, choice, comment,
+                                       by=current_user(request), now=now_iso())
+        except ValueError as exc:
+            return HTMLResponse(str(exc), status_code=400)
+        return RedirectResponse(
+            url=f"/review/{packet_id}?saved={item_id}#item-{item_id}",
+            status_code=303)
+
+    @app.post("/review/{packet_id}/sequence/{item_id}")
+    async def review_sequence(request: Request, packet_id: str, item_id: int):
+        form = await request.form()
+        steps = []
+        for key in form.keys():
+            if not key.startswith("text_"):
+                continue
+            try:
+                step_no = int(key[len("text_"):])
+            except ValueError:
+                continue
+            steps.append({
+                "step_no": step_no,
+                "subject": (form.get(f"subject_{step_no}") or "").strip(),
+                "text": (form.get(key) or "").strip(),
+            })
+        steps.sort(key=lambda s: s["step_no"])
+        try:
+            with open_store() as store:
+                review.submit_sequence(
+                    store, item_id, (form.get("action") or "").strip(),
+                    steps, form.get("comment") or "",
+                    by=current_user(request), now=now_iso())
+        except ValueError as exc:
+            return HTMLResponse(str(exc), status_code=400)
+        return RedirectResponse(
+            url=f"/review/{packet_id}?saved={item_id}#item-{item_id}",
+            status_code=303)
 
     @app.get("/healthz")
     def healthz():
