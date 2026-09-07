@@ -77,7 +77,7 @@ and a rollback would otherwise have nothing to re-apply.
 | Prompt | Decisive field names | Gate |
 |---|---|---|
 | `lovable-r1-person-private-prompt.md` | settings chunk reads AND writes `person`; grid chunk reads `suggested_private`, `reimburse_to_prefill`, `n_needs_person`, `spellings` | R1 backend deployed 2026-09-06. **Person data entry waits for this prompt's verification** (cards map is whole-map replace; a stale save erases stored persons). Supersedes the client-side grouping half of `lovable-card-strip-prompt.md` |
-| `lovable-months-origin-refusals-prompt.md` | `created_by` on the batches list; `n_refused_ours` + `n_probes` + `refusals[].kind_label` on the inbound log | R2 (#683 merged, #687) deploys with the staged flip |
+| `lovable-months-origin-refusals-prompt.md` | `created_by` on the batches list; `n_refused_ours` + `n_probes` + `refusals[].kind_label` on the inbound log | Backend LIVE since 2026-09-07 (flag ON, three months minted by intake); prompt just needs pasting |
 | `lovable-trips-prompt.md` (R3, 2026-09-06) | `trip_id`, `batch_type`, `pool_kind`, `trip_suggestion`, `n_pooled_travel`, `travel_alias` | §5 (Settings travel-alias field) GATES alias entry: the intake object is whole-object-replace, and a stale SPA save would erase the alias. Do not set the alias through the SPA before §5 is verified in the bundle |
 | `lovable-r4-settled-by-prompt.md` (R4, 2026-09-07) | `settled_by` on `rows[]` / `unmatched_receipts[]` / `assignable_receipts[]` (run payload) and on `expenses[]` (batch payload); 409 on decisions / manual-match | R4 backend deploy. Purely additive badges; nothing gates data entry |
 

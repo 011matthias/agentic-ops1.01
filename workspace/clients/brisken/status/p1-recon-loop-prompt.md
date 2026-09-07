@@ -137,15 +137,17 @@ least one uploaded receipt — do NOT seed a fabricated one into a live month.
 **Owner ruling 2026-08-24: pre-creating months INTRUDES — SUPERSEDED
 2026-09-06 by backlog item 39.** The owner now directs the opposite: mailed
 receipts become expenses on their own, auto-creating the month batch when the
-printed month is confidently known. Until item 39's round DEPLOYS, the
-2026-08-24 behavior is still what runs live (the pool waits); do not hand-create
-months in the interim.
+printed month is confidently known.
 
-**R2 status (2026-09-06): built, not yet live.** Item 42 merged as PR #683;
-item 39 is PR #687 (this branch) — flag `EXPENSE_RECON_AUTO_MATERIALIZE`
-default OFF, arrival half known-senders-only, stranded sweep only under
-`materialize: true` and last, residuals in backlog item 43. Live behavior is
-unchanged until the staged flip (Hostinger dismissals gate it).
+**R2 status (2026-09-07): LIVE, flag ON.** Item 42 merged as PR #683, item 39
+as PR #687; `EXPENSE_RECON_AUTO_MATERIALIZE=1` set on Fly 2026-09-07 with the
+owner watching. The watched backfill minted July, August and September 2026
+(`created_by: intake`, 0 failures), claimed all 24 pooled mails, and the
+stranded sweep re-pooled 10 legacy archives: the owner triaged them same
+session (5 TEST- drills dismissed; 5 real mails claimed into August by their
+receipt-read dates — all were `receipt_month_source == "receipt"`). Pool is 0.
+Arrival half stays known-senders-only; residuals live in backlog item 43.
+Rollback order: flag OFF first, then delete the month (mail re-pools).
 
 ## The directions, in the order they now rank
 

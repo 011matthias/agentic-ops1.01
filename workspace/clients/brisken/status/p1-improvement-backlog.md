@@ -1118,6 +1118,15 @@ open owner yes) is the tidy path and GATES the flag flip.
 2026-09-06 manual-input audit. Auto-materialization does the same job
 without a new surface; do not build the button.
 
+**LIVE (2026-09-07).** Flag `EXPENSE_RECON_AUTO_MATERIALIZE=1` set on Fly
+with the owner watching. The backfill minted July, August and September 2026
+(`created_by: intake`, 0 failures, all 24 pooled mails claimed); the
+stranded sweep re-pooled 10 legacy archives, triaged with the owner in the
+same session: 5 TEST- drills dismissed, 5 real mails (all
+`receipt_month_source == "receipt"`) claimed into August by their
+receipt-read dates. Pool 0, held 0. SPA verified rendering "Filed into
+{month}" labels and the three intake-minted months.
+
 **Built (R2, PR #687, 2026-09-06; deploy + staged flip pending).** The
 protocol above shipped verbatim, plus three guards a 3-lens adversarial
 review added: the arrival half fires for KNOWN senders only (an open
