@@ -67,6 +67,7 @@ def build_expense_report_pdf(
     evidence: Sequence[dict] | None = None,
     prepared_note: str = "",
     reimbursements: Sequence[dict] | None = None,
+    sections: Sequence[dict] | None = None,
 ) -> bytes:
     """Render the month's report: listing first, then the receipts.
 
@@ -94,6 +95,16 @@ def build_expense_report_pdf(
 
     — rendered between the listing and the receipts. Row numbers continue
     the listing's, so every receipt caption still names a unique number.
+
+    `sections` (item 38, trip reports) partitions the LISTING per person:
+    contiguous slices of `rows`, in order —
+
+        {"person": "Dirk", "on_roster": True, "start": 1, "count": 3}
+
+    — one table per section with its own caption and per-currency sums,
+    numbering continuous across sections (`start` is the 1-based global
+    row number of the slice's first row, and the slices cover `rows`
+    exactly). Omitted => the single flat table, unchanged.
     """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -149,9 +160,9 @@ def build_expense_report_pdf(
             documented.update(int(n) for n in item.get("rows") or [])
 
     head = [Paragraph(_esc(name), styles["cellhead"]) for name, _w in _LISTING]
-    table_rows: list[list] = [head]
-    for n, row in enumerate(rows, start=1):
-        table_rows.append([
+
+    def _listing_row(n: int, row: Sequence[str]) -> list:
+        return [
             Paragraph(str(n), styles["cell"]),
             Paragraph(_esc(cell(row, "Expense Date")), styles["cell"]),
             Paragraph(_esc(cell(row, "Vendor")), styles["cell"]),
@@ -161,14 +172,56 @@ def build_expense_report_pdf(
             Paragraph(_esc(cell(row, "Expense Amount")), styles["cellr"]),
             Paragraph(_esc(cell(row, "Currency Code")), styles["cell"]),
             Paragraph("attached" if n in documented else "none", styles["cell"]),
-        ])
-    table = Table(
-        table_rows,
-        colWidths=[w for _name, w in _LISTING],
-        repeatRows=1,
-    )
-    table.setStyle(table_style())
-    story.append(table)
+        ]
+
+    def _listing_table(numbered: list[tuple[int, Sequence[str]]]):
+        t = Table(
+            [head] + [_listing_row(n, row) for n, row in numbered],
+            colWidths=[w for _name, w in _LISTING],
+            repeatRows=1,
+        )
+        t.setStyle(table_style())
+        return t
+
+    if sections:
+        # Trip report: one listing table per person, numbering continuous,
+        # per-person sums beneath each — the reimbursements block's shape,
+        # applied to the listing itself.
+        for sec in sections:
+            person = str(sec.get("person") or "(person not named)")
+            caption = person
+            if sec.get("on_roster") is False:
+                caption += "  (not on the trip roster)"
+            start = int(sec.get("start") or 1)
+            count = int(sec.get("count") or 0)
+            numbered = [
+                (start + i, rows[start - 1 + i]) for i in range(count)
+                if 0 <= start - 1 + i < len(rows)
+            ]
+            story.append(Spacer(1, 10))
+            story.append(Paragraph(_esc(caption), styles["caption"]))
+            story.append(_listing_table(numbered))
+            sec_totals: dict[str, float] = {}
+            for _n, row in numbered:
+                ccy = cell(row, "Currency Code") or "?"
+                try:
+                    sec_totals[ccy] = sec_totals.get(ccy, 0.0) + float(
+                        (cell(row, "Expense Amount") or "0").replace(",", "")
+                    )
+                except ValueError:
+                    continue
+            sec_line = "  ·  ".join(
+                f"{ccy} {amount:,.2f}"
+                for ccy, amount in sorted(sec_totals.items())
+            ) or "no amounts read"
+            story.append(Paragraph(
+                _esc(f"{person}: {len(numbered)} "
+                     f"expense{'s' if len(numbered) != 1 else ''}"
+                     f"  ·  {sec_line}"),
+                styles["sub"],
+            ))
+    else:
+        story.append(_listing_table(list(enumerate(rows, start=1))))
 
     # ── reimbursements owed (item 41): per person, with sums ────────
     if reimbursements:

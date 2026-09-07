@@ -749,10 +749,41 @@ On the run payload, the settled receipt is named where it rests:
 so a month with no cross-batch settlements renders byte-identically to
 before the field existed. When present, `label` is the settling run's label
 (its `run_id` when the run is gone), and the receipt counts as unmatched in
-THIS run because it is settled elsewhere. Today no production path puts one
-run's receipt in another run's pool, so the field never appears; the
-trip-spanning match pool (R4b) is what makes it real. Render defensively per
-rule 3.
+THIS run because it is settled elsewhere. Render defensively per rule 3.
+
+### The trip-spanning pool (R4b): where the field becomes real
+
+A month's statement matching spans TRIPS (item 38 ruling 3): every trip
+whose date range overlaps the month's charge span contributes its batch's
+receipts to the candidate pool (confirmed private expenses and receipts
+another run already settled excluded), and the claims table arbitrates so
+one receipt never settles two charges. Cross-batch provenance then shows on
+BOTH sides, same key, direction told by the payload it sits on:
+
+| Payload | Path | Shape | Reads as |
+|---|---|---|---|
+| Run (month) | `rows[].settled_by` | object `{run_id, trip_id, label}` | this charge was settled by a receipt from that TRIP |
+| Expense batch (trip) | `expenses[].settled_by` | object `{run_id, label, transaction_id}` | this receipt settles a charge in that MONTH |
+
+Both are parallel fields, absent unless a cross-batch settlement exists, so
+every pre-trip payload is unchanged. A borrowed receipt renders in the
+month's candidate/receipt views from a snapshot copy; it stays an expense
+of its TRIP only — the month's `n_receipts`, its export, and its expense
+report never absorb it.
+
+A receipt joining a trip re-matches every reconciling month whose charges
+span the trip (the add reply carries `months_rematched` when any did), and
+a month's own re-match picks up trip receipts through the ordinary pool.
+
+### The trip report
+
+`GET /runs/{id}/expense-report.pdf` on a TRIP batch renders the trip
+report: same listing + receipt-evidence document, LISTING SECTIONED PER
+PERSON (item 40's field, through the card chain) — roster order first,
+other named persons after, unowned rows last, numbering continuous, sums
+per person. Titled by the trip's name with its date range and roster in
+the subtitle. Confirmed private rows stay in the reimbursements-owed
+section exactly as on a company month.
 
 ## The cards a month actually charges: `seen_undefined` (added 2026-08-28)
 

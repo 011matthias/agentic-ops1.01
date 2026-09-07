@@ -1560,6 +1560,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return build_expense_view(
             run, overrides, field_overrides, edits, resolutions,
             settings=settings, decisions=decisions, trip=trip,
+            # R4: name the month that settled each of this batch's
+            # receipts (a trip receipt matched by a statement). Empty on
+            # every batch with no cross-batch settlements.
+            settled_elsewhere=_settled_elsewhere(store, run.run_id),
         )
 
     def _settled_elsewhere(store: RunStore, run_id: str) -> dict[str, dict]:
@@ -3256,7 +3260,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             field_overrides = store.get_expense_field_overrides(run_id)
             edits = store.get_expense_edits(run_id)
             label = run.label or run_id
-        pdf = build_expense_report(run, overrides, field_overrides, edits)
+            # R4b: a trip batch's report is the trip report -- sectioned
+            # per person, titled by the trip. Null for company months and
+            # for a trip whose entity was deleted (it still sections).
+            trip = store.get_trip(
+                str((run.config or {}).get("trip_id") or "")
+            ) if batch_type(run) == BATCH_TYPE_TRIP else None
+        pdf = build_expense_report(
+            run, overrides, field_overrides, edits, trip=trip
+        )
         safe = re.sub(r"[^A-Za-z0-9._-]+", "-", label).strip("-") or run_id
         return Response(
             content=pdf,
