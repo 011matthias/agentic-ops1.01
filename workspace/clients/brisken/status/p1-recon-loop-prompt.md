@@ -55,8 +55,8 @@ the PDF. That is the one open thread from this round.
 **The 2026-09-06 owner program is COMPLETE (2026-09-07).** All four rounds
 merged in order and deployed: R1 person-on-card + private-expense
 suggestion (items 35/40/41, #686, v103), R2 auto-materialization (item 39,
-#687, v104, flag `EXPENSE_RECON_AUTO_MATERIALIZE` still OFF pending the
-staged flip) with item 42's refusals split ahead of it (#683), R3 the trip
+#687, v104, flag `EXPENSE_RECON_AUTO_MATERIALIZE` ON since the watched
+2026-09-07 flip, #695) with item 42's refusals split ahead of it (#683), R3 the trip
 entity + declared batch type + travel-alias routing (#688, v105), R4
 cross-batch settlement + the trip report (item 38's deep half, #685, v106:
 the `receipt_claims` registry arbitrates one-receipt-one-charge across
@@ -70,15 +70,15 @@ TEST fixtures.
 **What ranks next, in order:**
 
 1. **Owner-side applies, which gate everything visible.** Four Lovable
-   prompts pending in `docs/` (per `PROMPT-STATUS.md`): R1
-   person/private (GATES person data entry), R2 months-origin/refusals,
-   R3 trips (§5 GATES travel-alias entry), R4 settled-by badges. Plus
-   the travel alias local-part decision, and the two Hostinger
-   dismissals that gate the staged R2 flag flip.
-2. **The R2 staged flip** once the dismissals land: snapshot pool →
-   verify inert → flip → operator backfill → verify → stranded-archive
-   triage (protocol in backlog item 39).
-3. **The previously-ranked items resume:** 27 (wrong DAY in the right
+   prompts pending in `docs/` (per `PROMPT-STATUS.md`), handed to the
+   owner as pasteable text 2026-09-07: R1 person/private (GATES person
+   data entry), R2 months-origin/refusals, R3 trips (§5 GATES
+   travel-alias entry), R4 settled-by badges. Plus the travel alias
+   local-part decision. After each publish: re-run the bundle audit,
+   update `PROMPT-STATUS.md`, and only then green-light person entry /
+   the alias. (The R2 flip is DONE: dismissals landed and
+   `EXPENSE_RECON_AUTO_MATERIALIZE=1` went live 2026-09-07, #695.)
+2. **The previously-ranked items resume:** 27 (wrong DAY in the right
    month), 23's remaining Zoho string layers (gated on the GL-codes
    call), 24, the overlay-route round.
 
@@ -225,10 +225,11 @@ backlog are small and unranked; none of them is urgent.
 
 ## Owner-side, still open (hand the paths when asked, do not chase)
 
-**No unapplied Lovable prompts.** All of `docs/` is applied; re-run
-`%TEMP%/claude/recon-probe/prompt_ledger.py` after any publish and update
-`automations/expense-reconciliation/docs/PROMPT-STATUS.md`, reading its two
-known-stale rows per the traps above.
+**Four unapplied Lovable prompts** (the R1/R2/R3/R4 rows in
+`PROMPT-STATUS.md`), handed to the owner as pasteable text 2026-09-07.
+Re-run `%TEMP%/claude/recon-probe/prompt_ledger.py` after any publish and
+update `automations/expense-reconciliation/docs/PROMPT-STATUS.md`, reading
+its two known-stale rows per the traps above.
 
 Card registry: entities for 0113/6013/9693/8311 and the 0340 card itself were
 entered 2026-09-06 (item 26, done via authorized operator-API write). Still
@@ -239,9 +240,9 @@ published SPA (the settings cards map is whole-map replace; a stale SPA save
 would silently erase person values); entities for 0340/3645/1672; whether
 Criss's recon ever covers the Consulting entity's cards (Wise 1160 / Chase
 1176 — gates provisioning a third entity); the travel alias local-part
-(gates R3's deploy); the GL-codes-vs-categories call (gates only the
-post-program item 23 layers 2-4). Two dismissals of the duplicate Hostinger
-pool copies gate the R2 flip.
+(gates R3's routing going live; the code is deployed); the
+GL-codes-vs-categories call (gates only the post-program item 23 layers
+2-4). The Hostinger dismissals and the R2 flip are DONE (2026-09-07, #695).
 
 Curation, operator-side, nothing to build: the 103 learned category rows are
 all unvalidated (the item-13 surface exists, unused); the merchant registry
