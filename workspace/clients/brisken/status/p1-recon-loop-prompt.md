@@ -69,14 +69,19 @@ TEST fixtures.
 
 **What ranks next, in order:**
 
-1. **Owner-side applies, which gate everything visible.** Four Lovable
-   prompts pending in `docs/` (per `PROMPT-STATUS.md`), handed to the
-   owner as pasteable text 2026-09-07: R1 person/private (GATES person
-   data entry), R2 months-origin/refusals, R3 trips (§5 GATES
-   travel-alias entry), R4 settled-by badges. Plus the travel alias
-   local-part decision. After each publish: re-run the bundle audit,
-   update `PROMPT-STATUS.md`, and only then green-light person entry /
-   the alias. (The R2 flip is DONE: dismissals landed and
+1. **Owner-side applies: DONE 2026-09-07.** All four Lovable prompts
+   pasted, published and bundle-verified the same day (PR #698; the
+   settings chunk round-trips `person` and `travel_alias`, so both
+   erasure gates cleared). The travel alias is SET to `travel`
+   (travel@expenses.brisken.com) and the full TEST- alias drill PASSED
+   live: mailed a TEST- receipt to the alias via the MX, it rested as
+   `pool_kind: travel` without minting a month (flag ON), the trip
+   suggestion named the one TEST- trip, join-trip materialized the trip
+   batch with the vision-read receipt (23.50 EUR taxi), batch delete
+   pooled the mail back, fixtures removed to zero (0 trips, 3 months,
+   pool 0). Person data entry is unblocked; the remaining owner-side
+   item is DATA (see the collect list below).
+   (The R2 flip is DONE: dismissals landed and
    `EXPENSE_RECON_AUTO_MATERIALIZE=1` went live 2026-09-07, #695.)
 2. **The previously-ranked items resume:** 27 (wrong DAY in the right
    month), 23's remaining Zoho string layers (gated on the GL-codes
@@ -234,15 +239,14 @@ its two known-stale rows per the traps above.
 Card registry: entities for 0113/6013/9693/8311 and the 0340 card itself were
 entered 2026-09-06 (item 26, done via authorized operator-API write). Still
 open, owner/Criss-side: a PERSON for every card (2838/0113/6013/9693/8311/
-0340, plus 3645 and plastic-1672) — collect now, enterable only after item
-40's round deploys the field AND its Lovable prompt is verified in the
-published SPA (the settings cards map is whole-map replace; a stale SPA save
-would silently erase person values); entities for 0340/3645/1672; whether
+0340, plus 3645 and plastic-1672) — collect and enter any time (the entry
+gate CLEARED 2026-09-07: the R1 prompt is verified in the published SPA, so
+saves round-trip person values); entities for 0340/3645/1672; whether
 Criss's recon ever covers the Consulting entity's cards (Wise 1160 / Chase
-1176 — gates provisioning a third entity); the travel alias local-part
-(gates R3's routing going live; the code is deployed); the
+1176 — gates provisioning a third entity); the
 GL-codes-vs-categories call (gates only the post-program item 23 layers
-2-4). The Hostinger dismissals and the R2 flip are DONE (2026-09-07, #695).
+2-4). The travel alias is SET (`travel`, drill passed 2026-09-07), the
+Hostinger dismissals and the R2 flip are DONE (2026-09-07, #695).
 
 Curation, operator-side, nothing to build: the 103 learned category rows are
 all unvalidated (the item-13 surface exists, unused); the merchant registry
