@@ -124,6 +124,67 @@ def test_the_change_is_captured_before_the_overwrite(vw, con):
     assert events(con)[0] == ("price", 20.0, 9.0)
 
 
+# ------------------- 1b. the recheck page is a second price observation
+
+def test_the_item_price_is_read_off_the_page(vw):
+    """Verified against two rows whose stored price is known: 8.0 and 59.0."""
+    assert vw.item_page_price(snippet("item_sold.snippet.html")) == 8.0
+    assert vw.item_page_price(snippet("item_alive.snippet.html")) == 59.0
+
+
+def test_a_shipping_quote_is_not_mistaken_for_the_item_price(vw):
+    """Both pages carry postage as well. Shipping uses camelCase currencyCode,
+    the item uses snake_case currency_code, and reading the wrong one would
+    record every listing as having crashed to about 4 EUR."""
+    body = (r'\"price\":{\"amount\":\"4.19\",\"currencyCode\":\"EUR\"}'
+            r'\"price\":{\"amount\":\"8.0\",\"currency_code\":\"EUR\"}')
+    assert vw.item_page_price(body) == 8.0
+
+
+def test_two_conflicting_item_prices_are_refused(vw):
+    body = (r'\"price\":{\"amount\":\"8.0\",\"currency_code\":\"EUR\"}'
+            r'\"price\":{\"amount\":\"12.0\",\"currency_code\":\"EUR\"}')
+    assert vw.item_page_price(body) is None
+
+
+def test_a_page_without_a_price_yields_none_rather_than_zero(vw):
+    assert vw.item_page_price("<html></html>") is None
+    assert vw.item_page_price("") is None
+
+
+def test_a_price_cut_found_by_the_recheck_is_recorded(vw, con, monkeypatch):
+    """The reach that matters: the poll sees a listing for a median 10 minutes,
+    so a cut made on day three is invisible to it. The recheck lands 12h-10d
+    out, on a page it was already fetching."""
+    pages = {}
+    for i in range(60, 65):
+        vw.upsert(con, listing(id=i, url=f"https://x/items/{i}", price=59.0,
+                               total_price=62.65))
+        pages[f"https://x/items/{i}"] = (200, snippet("item_alive.snippet.html"))
+    con.execute("UPDATE listings SET first_seen='2026-01-01T00:00:00Z',"
+                " last_seen='2026-01-01T00:00:00Z'")
+    con.execute("UPDATE listings SET price=70.0 WHERE id=60")   # the page says 59.0
+    con.commit()
+    _recheck(vw, con, monkeypatch, pages)
+    cuts = [e for e in events(con, 60) if e[0] == "price"]
+    assert cuts == [("price", 70.0, 59.0)], "the cut the recheck saw must be kept"
+    assert con.execute("SELECT price FROM listings WHERE id=60").fetchone()[0] == 59.0
+    # and the buyer-paid total is derived from the fee, not left stale
+    assert con.execute("SELECT total_price FROM listings WHERE id=60").fetchone()[0] == 62.65
+
+
+def test_an_unchanged_price_at_recheck_writes_nothing(vw, con, monkeypatch):
+    pages = {}
+    for i in range(70, 75):
+        vw.upsert(con, listing(id=i, url=f"https://x/items/{i}", price=59.0))
+        pages[f"https://x/items/{i}"] = (200, snippet("item_alive.snippet.html"))
+    con.execute("UPDATE listings SET first_seen='2026-01-01T00:00:00Z',"
+                " last_seen='2026-01-01T00:00:00Z'")
+    con.commit()
+    _recheck(vw, con, monkeypatch, pages)
+    assert events(con, 70) == []
+
+
 # ------------------------------------- 7a. sold is told apart from withdrawn
 
 def snippet(name):

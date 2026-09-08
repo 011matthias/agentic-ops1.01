@@ -1,6 +1,6 @@
 # Listing-Referenz: Titel, Beschreibung, Keywords auf Vinted
 
-Stand 2026-09-08. Quellen: zwei vom Owner gelieferte TikTok-Videos
+Stand 2026-09-09. Quellen: zwei vom Owner gelieferte TikTok-Videos
 (lokal transkribiert und Frame-für-Frame ausgelesen), die Vinted-Hilfe
 und Katalogregeln als Primärquelle, plus eine Live-Untersuchung des im
 Video beworbenen Tools vintagezai.com.
@@ -401,6 +401,114 @@ Beides ist bewusst noch nicht eingebaut: dafür fehlt die
 Beschreibungs-Rückgabe der Katalog-API, und ein Signal, das wir nicht
 messen können, gehört nicht in den Score.
 
+## Verkauft oder nur weg: die Antwort (2026-09-09, live geprüft)
+
+Die offene Frage des Projekts. Sie ist beantwortet, und zwar **ohne eine
+einzige zusätzliche Anfrage**, weil der Recheck genau diese Seite ohnehin
+schon holt.
+
+Eine Artikelseite ist ein Next.js-Dokument, dessen Seitenleiste als
+escaped JSON im Flight-Payload liegt. Genau eines von zwei Plugins steht
+drin, und welches, **ist** das Urteil:
+
+| Antwort | Plugin | Bedeutung |
+|---|---|---|
+| 200 | `buyer_item_status` `{"title":"Verkauft","theme":"SUCCESS"}` | **verkauft** |
+| 200 | `item_status` `{"is_closed":false,"item_closing_action":null}` | lebt |
+| 404 / 410 | keins | gelöscht, **kein Verkauf** |
+
+Grundwahrheit war der vom Owner selbst gekaufte Levi's 501 (Listing
+9934904203). Gegenprobe: 3 von 3 Anzeigen aus dem letzten Poll lasen
+`alive`, 3 von 5 abgestandenen lasen `Verkauft`.
+
+**Drei Kandidaten wurden geprüft und verworfen**, jeder hätte still
+Müll produziert:
+
+1. `is_sold":true`, der bis dahin eingebaute Marker. Steht auf **keiner**
+   Seite, weder verkauft noch lebend. Der Verkaufs-Zweig war unerreichbar,
+   und weil eine verkaufte Anzeige mit 200 antwortet, wurde sie als "lebt"
+   verbucht und ihr `last_seen` vorgeschoben. Jeder Recheck-Durchlauf hat
+   Verkäufe gelöscht. Das erklärt 3 Ergebnis-Zeilen, davon 0 verkauft.
+2. Das Wort **"Verkauft"**. Steht auf jeder Seite, auch auf lebenden, im
+   i18n-Bundle (`flash_messages.no_longer_available_sold.title`:
+   "Dieser Artikel wurde schon verkauft"). Eine Textsuche hätte 100% der
+   Anzeigen als verkauft markiert.
+3. **404 als Verkaufs-Indiz.** Eine verkaufte Anzeige antwortet tagelang
+   mit 200. 404 ist Löschung, und sie als Verkauf zu lesen ist genau die
+   Fabrikation vom 2026-09-07 (375 erfundene Zeilen).
+
+Nur das Theme `SUCCESS` gilt als Verkauf. Ein Theme, das wir noch nie
+gesehen haben, ist eine Schließung, die wir nicht verstehen, und wird als
+`closed` verbucht statt geraten.
+
+### Das Budget ist nicht die Grenze, die Auswahl war es
+
+25 Seiten pro Stunde sind 600 am Tag gegen ~13.800 neue Anzeigen: eine
+4%-Stichprobe, egal nach welcher Regel. Die Frage ist also nur, **welche**
+4%. "Älteste zuerst" war zweimal die falsche Antwort: über 36.000 Zeilen
+braucht ein Durchlauf zwei Monate, und es kauft genau die Anzeigen, bei
+denen die Verkaufs-Anzeige längst zu einem 404 zerfallen ist. Jetzt:
+Alert-Kandidaten zuerst (~50/Tag, passt immer, und nur diese Kohorte kann
+das Deal-Tor kalibrieren), dann das Fenster 12h bis 10d, dann der alte
+Lauf als Rest.
+
+### Der Preis steht auf derselben Seite
+
+Der Poll liefert `newest_first`, eine Anzeige verlässt Seite 1 nach
+Minuten: **Median-Beobachtungsdauer 10 Minuten**, nur 4,2% werden nach
+einer Stunde noch gesehen. Preissenkungen passieren über Tage, also
+komplett außerhalb dieses Fensters. Die Recheck-Seite trägt
+`"price":{"amount":"8.0","currency_code":"EUR"}` und liefert damit den
+zweiten Messpunkt gratis. Achtung: Versandangebote auf derselben Seite
+nutzen `currencyCode` in camelCase; wer den falschen liest, verbucht jede
+Anzeige als auf ~4 EUR abgestürzt.
+
+### Ab wann trägt das Signal?
+
+Bei einem Begriff mit Anteil p unter n verkauften Anzeigen ist der
+Standardfehler `sqrt(p(1-p)/n)`:
+
+| n | SE bei p=0,2 | eine Verdopplung ist |
+|---|---|---|
+| 30 | 7,3 pp | 1,4 Sigma, Rauschen |
+| 100 | 4,0 pp | 2,5 Sigma, brauchbar |
+| 250 | 2,5 pp | auch 1,5x wird sichtbar |
+
+Deshalb: **nichts unter 30, vorläufig bis 99, belastbar ab 100** je Zelle.
+Die Tempo-Auswertung halbiert die Menge und wartet auf 100 Verkäufe mit
+Zeitstempel. Darunter sagt der Bot "noch Angebots-Korpus", statt Nachfrage
+vorzutäuschen.
+
+## Die Sprachfrage, gelöst (2026-09-09)
+
+Der Korpus ist französisch-lastig: 28,7% der Titel tragen französische
+Marker gegen 15,3% deutsche, 45% gar keine (eine Marke plus ein
+Modellname gehört zu keiner Sprache). Deshalb schlug der Engine "bleu"
+für ein deutsches Listing vor.
+
+**Nach Verkäuferland zu gewichten geht nicht.** `listings.country` ist auf
+166 von 36.304 Zeilen gefüllt (0,46%), weil die Katalog-Antwort kein Land
+trägt und der Watcher das Verkäuferprofil nur für Deal-Kandidaten holt;
+über die `sellers`-Tabelle sind es 302. Ein Länder-Gewicht wäre ein
+Schalter ohne Wirkung gewesen.
+
+Die Sprache steht im Titel, dort ist die Abdeckung echt. Zwei Stufen:
+
+1. **Die eigenen Wörter des Begriffs.** Ein Token in einer fremden
+   Marker-Liste, keines in der deutschen, heißt fremdsprachig, egal in
+   welchem Umfeld.
+2. **Das Umfeld**, aber nur für Begriffe, zu denen Stufe 1 nichts sagt,
+   und nur wenn **kein einziger** deutschsprachiger Verkäufer den Begriff
+   benutzt.
+
+Warum die zweite Stufe so eng ist: nach Umfeld allein zu urteilen kippt
+genau die wertvollsten Begriffe. **Nano Puff** steht zu 90% in
+niederländischen Titeln und **Levi's 501** zu 85% in französischen, rein
+weil diese Verkäufer mehr Prosa um den Namen herum schreiben. Ein
+Modellname erbt die Sprache seiner Nachbarn, hat aber selbst keine.
+Gemessen: `bleu`, `jean`, `veste`, `pantalon` fallen raus; `501`,
+`nano puff`, `torrentshell` bleiben.
+
 ## Quellen
 
 | Key | Quelle |
@@ -414,3 +522,5 @@ messen können, gehört nicht in den Score.
 | S5 | [vintagezai.com](https://www.vintagezai.com/) und /agb, Anbieter-Angaben |
 | S6 | [vinted.engineering](https://vinted.engineering/2024/09/05/goodbye-elasticsearch-hello-vespa/) Vespa-Migration |
 | S7 | Eigene Live-Tests gegen vinted.de am 2026-09-08 (404-Test, Suchvergleiche, vier Tool-Listings) |
+| S8 | Eigene Live-Tests gegen vinted.de am 2026-09-09: 21 Artikelseiten, Grundwahrheit der vom Owner gekaufte Levi's 501 (9934904203), plus 3 Live-Kontrollen aus dem letzten Poll |
+| S9 | 36.229 Preispaare aus der eigenen Datenbank, aus denen die Käuferschutz-Gebühr (0,70 + 5%) auf einen halben Cent genau zurückgerechnet wurde |
