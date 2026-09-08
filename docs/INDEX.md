@@ -259,6 +259,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-08 | Vinted Bulk Listing Run | misc | [→](docs/2026-09-08%20-%20Vinted%20Bulk%20Listing%20Run/Checkpoint.md) |
 | 2026-09-08 | Vinted Resale Intake And Listings | misc | [Mini-Checkpoint-2](docs/2026-09-08%20-%20Vinted%20Resale%20Intake%20And%20Listings/Mini-Checkpoint-2.md) |
 | 2026-08-28 | KIT CoDaS Wechsel + Studienstart-Plan | misc | [→](docs/2026-08-28%20-%20KIT%20CoDaS%20Wechsel%20%2B%20Studienstart-Plan/Checkpoint.md) |
 | 2026-08-25 | Worktree and Branch Consolidation | system-infra | [Mini-Checkpoint-1](docs/2026-08-25%20-%20Worktree%20and%20Branch%20Consolidation/Mini-Checkpoint-1.md) |
