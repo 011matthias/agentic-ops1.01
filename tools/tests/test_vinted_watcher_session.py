@@ -722,11 +722,13 @@ def test_suppressed_candidates_are_recorded_not_forgotten(vw, con, paths, monkey
     monkeypatch.setattr(vw, "notify",
                         lambda *a, **k: pytest.fail("a suppressed candidate was pushed"))
     _comps(con, vw, n=8, price=40.0, brand_norm="stone-island")
-    # Price alone flags but never silences: suppressing every deep discount
-    # would throw away exactly the steals this watcher exists to find. Here an
-    # absurd price (0.6) plus a hype brand (0.2) clears the 0.7 bar together.
+    # Suppression needs TWO independent signals. Price alone tops out at 0.6,
+    # below the 0.7 bar, deliberately: silencing every deep discount would throw
+    # away exactly the steals this watcher exists to find. Here an absurd price
+    # meets a title the seller wrote themselves.
     rec = _rec(vw, price=3.0, total_price=3.5, brand="Stone Island",
-               brand_norm="stone-island")
+               brand_norm="stone-island",
+               title="Stone Island Jacke 1:1 Qualitaet")
     assert vw.score_and_alert(con, rec, {"tag": "t"}, _settings(min_price=3), {}) is False
     row = con.execute("SELECT sent, suppress_reason, fake_risk FROM alerts").fetchone()
     assert row[0] == 0
@@ -747,11 +749,33 @@ def test_a_deep_discount_alone_still_reaches_the_phone(vw, con, paths, monkeypat
 # ------------------------------------------------ precision upgrade: fake risk
 
 def test_fake_risk_price_tiers_do_not_stack(vw, con, paths):
+    """One price, one verdict, and never two terms for the same fact."""
     absurd, why = vw.fake_risk_score(con, _rec(vw, total_price=4.0), med=40.0)
-    assert "preis_absurd" in why and "preis_zu_gut" not in why
+    assert len([w for w in why if w.startswith("preis")]) == 1
+    assert absurd == 0.6
     good, why2 = vw.fake_risk_score(con, _rec(vw, total_price=9.0), med=40.0)
-    assert "preis_zu_gut" in why2
+    assert len([w for w in why2 if w.startswith("preis")]) == 1
     assert absurd > good
+
+
+def test_a_hype_brand_sharpens_the_price_test_rather_than_adding_to_it(vw, con, paths):
+    """The two used to be separate terms and both fired for the same fact.
+
+    Anything below 0.15 of the median is also below 0.30, so a hype-brand item
+    at 9% of market scored 0.6 plus 0.2 and was suppressed on price alone. That
+    is exactly the steal this watcher exists to find.
+    """
+    plain = _rec(vw, total_price=11.0, brand="Some Label", brand_norm="some-label")
+    hype = _rec(vw, total_price=11.0, brand="Stone Island", brand_norm="stone-island")
+    # 27.5% of the median: below the hype threshold, above the ordinary one.
+    assert vw.fake_risk_score(con, plain, med=40.0)[0] == 0.0
+    assert vw.fake_risk_score(con, hype, med=40.0)[0] == 0.4
+    # And at any price, the price test alone can never reach the suppress bar.
+    for price in (1.0, 3.0, 5.0, 9.0):
+        score, _ = vw.fake_risk_score(con, _rec(vw, total_price=price,
+                                                brand="Stone Island",
+                                                brand_norm="stone-island"), med=40.0)
+        assert score < 0.7, f"{price} EUR was silenced on price alone"
 
 
 def test_fake_risk_title_markers_flag_without_suppressing(vw, con, paths, monkeypatch):
@@ -1338,3 +1362,85 @@ def test_a_corrupt_success_stamp_does_not_wedge_the_gate(vw, con, paths):
     con.commit()
     assert vw.is_catch_up(con, 40) is True
     assert vw.is_catch_up(con, 2) is False
+
+# ------------------- a public topic must not be able to break the feedback poll
+
+def test_an_oversized_id_from_a_stranger_cannot_kill_the_poll(vw, con, paths, monkeypatch):
+    """The feedback topic is public by obscurity, so anyone can post to it.
+
+    An unbounded digit run reached sqlite as an integer too large to bind and
+    raised OverflowError inside the poll, on every cycle, until someone noticed.
+    A single message from a stranger was enough to end the rating channel.
+    """
+    con.execute("INSERT INTO alerts (listing_id, alerted_at, search_tag, sent)"
+                " VALUES (4242, ?, 't', 1)", (vw.now_iso(),))
+    con.commit()
+    monkeypatch.setattr(vw, "_ntfy_poll", lambda topic, since: [
+        {"id": "a", "event": "message", "message": "good " + "9" * 400},
+        {"id": "b", "event": "message", "message": "good 4242"},   # a real one behind it
+    ])
+    got = vw.ingest_feedback(con, {"NTFY_FEEDBACK_TOPIC": "t"})
+    assert got == 1, "the genuine rating behind the junk must still land"
+    assert con.execute("SELECT listing_id FROM alert_feedback").fetchone()[0] == 4242
+
+
+@pytest.mark.parametrize("junk", [
+    "good " + "9" * 400,
+    "bad " + "1" * 25,
+    "bought 99999999999999999999999999",
+])
+def test_absurd_ids_are_rejected_by_shape(vw, junk):
+    assert vw.FEEDBACK_RE.match(junk) is None
+
+
+def test_a_real_ten_digit_listing_id_still_parses(vw):
+    """The bound must not exclude the ids Vinted actually issues."""
+    m = vw.FEEDBACK_RE.match("good 9932723613")
+    assert m and m.group(2) == "9932723613"
+
+
+# --------------------------- a backfill that died must be redone, not assumed
+
+def test_a_column_added_without_its_backfill_is_filled_on_the_next_start(vw, paths):
+    """ALTER TABLE commits on the spot, so a crash mid-backfill leaves a hole.
+
+    Keying completion on the column existing meant the fill was never retried
+    and those rows stayed blank for good. On a database that cannot be rebuilt
+    that is silent and permanent.
+    """
+    import sqlite3
+    old = sqlite3.connect(vw.DB_PATH)
+    old.execute("CREATE TABLE listings (id INTEGER PRIMARY KEY, search_tag TEXT,"
+                " title TEXT, brand TEXT,"
+                " size TEXT, condition TEXT, cond_tier TEXT, total_price REAL,"
+                " first_seen TEXT, last_seen TEXT, gone_at TEXT,"
+                " sold_flag INTEGER DEFAULT 0, alerted INTEGER DEFAULT 0)")
+    old.execute("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT)")
+    for i in range(5):
+        old.execute("INSERT INTO listings (id, search_tag, title, brand, size, condition,"
+                    " cond_tier) VALUES (?, 't', 'Carhartt Jacke', 'Carhartt WIP', 'M',"
+                    " 'Sehr gut', 'very_good')", (i,))
+    # The crash: the column exists, nothing filled it, no flag was written.
+    old.execute("ALTER TABLE listings ADD COLUMN brand_norm TEXT")
+    old.commit()
+    old.close()
+
+    con = vw.db_connect()
+    filled = con.execute(
+        "SELECT COUNT(*) FROM listings WHERE brand_norm='carhartt'").fetchone()[0]
+    assert filled == 5, "the interrupted backfill was never redone"
+    assert vw.meta_get(con, "backfill:brand_norm") is not None
+    con.close()
+
+
+def test_a_completed_backfill_is_not_repeated(vw, paths):
+    """The flag is what stops it, so a hand-edited value must survive a restart."""
+    con = vw.db_connect()
+    con.execute("INSERT INTO listings (id, search_tag, brand, brand_norm)"
+                " VALUES (1, 't', 'Carhartt', 'deliberately-different')")
+    con.commit()
+    con.close()
+    con = vw.db_connect()
+    assert con.execute("SELECT brand_norm FROM listings WHERE id=1").fetchone()[0] \
+        == "deliberately-different", "a finished backfill must not run again"
+    con.close()
