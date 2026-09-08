@@ -130,6 +130,43 @@ def test_the_model_name_is_lifted_out_of_the_sellers_own_title(inv, db):
     assert "501" in d["listing"]["title"], d["listing"]["title"]
 
 
+def test_the_model_does_not_change_places_with_the_category_word(inv, db):
+    """A live regression, caught on the owner's own bought Levi's.
+
+    Once the size/model fix let 501 through, 501 was the MOST COMMON term in
+    levis/pants at 87.5%, so a "most common single word" rule made it the
+    category and demoted "Jeans" to the model: category 501, model Jeans, wrong
+    in both fields. The noun has to come from a garment vocabulary.
+
+    The corpus reproduces the live proportions, which is what makes the test
+    bite: 501 in 210 of 240 rows and "jeans" in 150, so the model outranks the
+    category word on frequency. Each also has to clear the phrase containing it
+    ("501 jeans", 90) or the subsumption rule folds the single word away, and
+    501 needs titles WITHOUT the brand word or "levi 501" folds it away too.
+    """
+    for i in range(90):
+        add_listing(db, 11_000 + i, f"Levi's 501 Jeans straight {i}")
+    for i in range(60):
+        add_listing(db, 11_200 + i, f"Levi's 501 blau gewaschen {i}")
+    for i in range(30):
+        add_listing(db, 11_400 + i, f"Levi's Jeans weit dunkel {i}")
+    for i in range(60):
+        add_listing(db, 11_600 + i, f"501 Jeans straight herren {i}")
+    # The background sets the lift, and lift is what tells a model number from a
+    # size: 501 has to clear 3.0 to be a term at all. The live cell measures 7.6.
+    for i in range(500):
+        add_listing(db, 11_900 + i, f"Carhartt Jacke Detroit {i}", brand="Carhartt",
+                    brand_norm="carhartt", garment_class="jacket")
+    add_listing(db, 1111, "Levi’s Jeans 501 Herren", price=8.0, total=9.1)
+    mark_bought(db, 1111)
+    db.commit()
+    d = inv.draft(db, 1111)
+    assert d["listing"]["structured_fields"]["category"].lower() == "jeans", \
+        d["listing"]["structured_fields"]
+    # The model reaching the title is the sibling test's claim, not this one's.
+    # This test exists for the swap: the category must not become the model.
+
+
 def test_the_price_is_the_item_price_not_the_buyer_total(inv, db):
     """Every comp in the database is a buyer-paid total, but Vinted asks for the
     item price. Confusing them overprices every listing by the fee."""
