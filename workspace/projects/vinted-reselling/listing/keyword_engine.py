@@ -177,6 +177,12 @@ for _dims in CLASS_DIMENSIONS.values():
     for _axis in _dims:
         FIELD_ALIASES.setdefault(_axis, _axis)
 
+# Split in two for the same reason keyword_research splits its size patterns: a
+# bare number is ambiguous. "w31" can only be a size; "501" next to Levi's is a
+# model, and reading it as the size put 501 in the size field and left the model
+# empty, which is the wrong answer twice over.
+SIZE_NOTATION = re.compile(
+    r"^(w\d{2}(?:[/x-]?l\d{2})?|l\d{2}|xxs|xs|s|m|l|xl|xxl|xxxl|3xl)$", re.I)
 SIZE_PATTERN = re.compile(
     r"^(w\d{2}(?:[/x-]?l\d{2})?|l\d{2}|xxs|xs|s|m|l|xl|xxl|xxxl|3xl|\d{2,3})$", re.I)
 
@@ -230,6 +236,15 @@ def parse_free_text(text: str) -> tuple[dict, list[str]]:
         low = low.replace(brand, " ")
 
     remaining = [t for t in re.split(r"[\s,;|]+", low) if t]
+    # Unambiguous size notations are claimed first, over the whole line, so that
+    # "levis 501 w31" gives size W31 and leaves 501 to become the model. Left to
+    # token order, the bare 501 was taken as the size and the model came out
+    # empty.
+    for token in remaining:
+        if SIZE_NOTATION.match(token) and "size" not in item:
+            item["size"] = token.upper()
+    remaining = [t for t in remaining
+                 if not (SIZE_NOTATION.match(t) and item.get("size") == t.upper())]
     for token in remaining:
         if SIZE_PATTERN.match(token) and "size" not in item:
             item["size"] = token.upper()

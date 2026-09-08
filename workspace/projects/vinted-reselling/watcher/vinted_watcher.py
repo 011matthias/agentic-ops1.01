@@ -271,6 +271,37 @@ ITEM_STATUS = re.compile(
 SOLD_THEME = "SUCCESS"
 
 
+# The item's own price, as the page carries it. Two price shapes appear in the
+# payload and only one is the item: the item price uses snake_case
+# `currency_code`, while shipping quotes use camelCase `currencyCode`. Keying on
+# that distinction is what separates 8.00 (the Levi's) from 4.19 (its postage).
+# Verified against two rows whose stored price is known: 8.0 and 59.0.
+PAGE_PRICE = re.compile(r'\\"price\\":\{\\"amount\\":\\"([\d.]+)\\",\\"currency_code\\"')
+
+
+def item_page_price(body: str) -> float | None:
+    """The listing's current asking price, read off its item page.
+
+    This is why it matters: the catalog poll returns newest_first, so a listing
+    leaves page one within minutes and the median row is observed for 10
+    minutes total, with only 4.2% still seen after an hour. Price cuts happen
+    over days, entirely outside that window, so the poll alone would record
+    almost none of them. The recheck already fetches this page 12h to 10d
+    later, which is exactly when a seller has started cutting, and the price is
+    sitting in the response we already paid for.
+
+    Ambiguity is refused rather than guessed: if the page carries more than one
+    distinct item-shaped price, none of them is known to be the item's.
+    """
+    found = {m.group(1) for m in PAGE_PRICE.finditer(body or "")}
+    if len(found) != 1:
+        return None
+    try:
+        return float(found.pop())
+    except ValueError:
+        return None
+
+
 def item_page_verdict(status_code: int, body: str) -> tuple[str, str]:
     """Read a listing's fate off its item page. Returns (verdict, evidence).
 
@@ -1127,6 +1158,41 @@ def record_changes(con: sqlite3.Connection, listing_id: int, before: sqlite3.Row
     return written
 
 
+def record_page_price(con: sqlite3.Connection, listing_id: int,
+                      page_price: float | None, ts: str) -> int:
+    """Record a price read off the item page during a recheck. Returns 1 if moved.
+
+    The catalog poll and this share one table on purpose: a price change is a
+    price change whichever observation caught it. What differs is the reach. The
+    poll sees a listing for a median of 10 minutes and then never again, so the
+    cuts a seller makes on day three are invisible to it; the recheck lands 12h
+    to 10d out, which is exactly when they happen.
+
+    total_price is derived rather than read, because the page states the item
+    price while every comparison in this database is in buyer-paid totals. The
+    fee is 0.70 + 5%, recovered from 36,229 price pairs to within half a cent.
+    """
+    if page_price is None:
+        return 0
+    row = con.execute("SELECT price, total_price FROM listings WHERE id=?",
+                      (listing_id,)).fetchone()
+    if row is None or row[0] is None:
+        return 0
+    if round(float(row[0]), 2) == round(page_price, 2):
+        return 0
+    total = round(page_price * 1.05 + 0.70, 2)
+    con.execute(
+        "INSERT INTO listing_events (listing_id, seen_at, field, old_value, new_value)"
+        " VALUES (?, ?, 'price', ?, ?)", (listing_id, ts, float(row[0]), page_price))
+    if row[1] is not None:
+        con.execute(
+            "INSERT INTO listing_events (listing_id, seen_at, field, old_value, new_value)"
+            " VALUES (?, ?, 'total_price', ?, ?)", (listing_id, ts, float(row[1]), total))
+    con.execute("UPDATE listings SET price=?, total_price=? WHERE id=?",
+                (page_price, total, listing_id))
+    return 1
+
+
 def upsert(con: sqlite3.Connection, rec: dict) -> bool:
     """Insert or refresh a listing. Returns True when the id was new."""
     ts = now_iso()
@@ -1977,10 +2043,15 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: 
             con.commit()
             return
         verdict, source = item_page_verdict(r.status_code, r.text)
-        verdicts.append((item_id, verdict, source))
+        # The page we already fetched carries the current price, so a still-live
+        # listing yields a second observation days after the poll lost sight of
+        # it. That is where price cuts actually live.
+        verdicts.append((item_id, verdict,
+                         item_page_price(r.text) if verdict == "alive" else None,
+                         source))
         time.sleep(random.uniform(1.5, 3.0))
 
-    counts = Counter(v for _, v, _ in verdicts)
+    counts = Counter(v for _, v, _, _ in verdicts)
     gone_n, sold_n = counts["gone"], counts["sold"]
     if verdicts and gone_n / len(verdicts) > GONE_RATE_CEILING:
         # A large simultaneous sweep of 404s is a session symptom every time,
@@ -2004,8 +2075,10 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: 
         return
 
     ts = now_iso()
-    for item_id, verdict, source in verdicts:
+    price_moves = 0
+    for item_id, verdict, page_price, source in verdicts:
         if verdict == "alive":
+            price_moves += record_page_price(con, item_id, page_price, ts)
             con.execute("UPDATE listings SET last_seen=? WHERE id=?", (ts, item_id))
         elif verdict == "unknown":
             continue                     # never guess; leave it for the next pass
@@ -2018,7 +2091,8 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: 
     con.commit()
     if rows:
         log(f"recheck: {len(rows)} visited, {sold_n} sold, {gone_n} deleted, "
-            f"{counts['closed']} closed, {counts['unknown']} unreadable")
+            f"{counts['closed']} closed, {counts['unknown']} unreadable, "
+            f"{price_moves} price change(s)")
 
 
 def acquire_lock() -> bool:
