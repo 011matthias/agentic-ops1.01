@@ -3632,7 +3632,12 @@ def route_dropped_receipts(
     with status ``filed`` / ``needs_month`` / ``rejected`` / ``failed``,
     and per-month ``months`` entries carrying ``created_batch`` and the
     add counts (``n_added`` < files means content duplicates were
-    skipped, which is the dedupe working, not a loss)."""
+    skipped, which is the dedupe working, not a loss). A month group
+    larger than ``FOLDER_MAX_FILES`` has its overflow marked ``rejected``
+    / ``upload-cap`` (with ``limit``) HERE, before the ingest call whose
+    internal cap would otherwise skip those files while the row read
+    ``filed``; re-dropping the same pile is safe because content dedupe
+    skips what already landed."""
     from .service import FOLDER_RECEIPT_MAX_BYTES
 
     def _stage(name: str) -> None:
@@ -3699,10 +3704,22 @@ def route_dropped_receipts(
         rows.append(row)
         routed.setdefault(month, []).append((row, path))
 
+    from .service import FOLDER_MAX_FILES as _drop_cap
+
     months_out: list[dict] = []
     created_any = False
     for month in sorted(routed):
         group = routed[month]
+        if len(group) > _drop_cap:
+            # The ingest call beneath (create or add) truncates at the same
+            # cap and would skip the tail while its rows read "filed" —
+            # mark the overflow honestly before it, and point at the safe
+            # recovery (drop the pile again; dedupe skips what landed).
+            for row, _path in group[_drop_cap:]:
+                row["status"] = "rejected"
+                row["reason"] = "upload-cap"
+                row["limit"] = _drop_cap
+            group = group[:_drop_cap]
         label = _month_human(month)
         _stage(f"filing {label}")
         entry: dict = {"month": month, "label": label,

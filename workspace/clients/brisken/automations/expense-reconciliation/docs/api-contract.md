@@ -554,12 +554,22 @@ The reply is `{ok, job_id, n_files}`; the outcome rides the JOB row:
 `GET /jobs/{id}` gains a `result` field (parallel, absent on every
 other job kind) —
 `{files: [{file, status: filed|needs_month|rejected|failed, month?,
-month_source?, batch_id?, reason?, mixed_months?}], months: [{month,
-label, batch_id?, created_batch, n_files, n_added, issues?, error?}],
-n_filed, n_needs_month, n_rejected}`. `n_added < n_files` on a month
-entry means content duplicates were skipped (the dedupe working, not a
-loss). A drop-created month claims its pooled mail like any other month
-creation.
+month_source?, batch_id?, reason?, limit?, mixed_months?}], months:
+[{month, label, batch_id?, created_batch, n_files, n_added, issues?,
+error?}], n_filed, n_needs_month, n_rejected}`. `n_added < n_files` on
+a month entry means content duplicates were skipped (the dedupe
+working, not a loss). A drop-created month claims its pooled mail like
+any other month creation.
+
+One ingest call takes at most `FOLDER_MAX_FILES` (500 since
+2026-09-08; was 80) files per MONTH. When one month's group exceeds
+that, the overflow rows come back `rejected` / `upload-cap` carrying
+`limit`, marked in the ledger BEFORE the ingest call (whose internal
+cap would otherwise skip them while the row read `filed`). Recovery is
+to drop the same pile again: content dedupe skips what already landed.
+The server parses at most ~1000 multipart files per request (Starlette
+default), so a client sending giant piles should chunk into sequential
+POSTs well under that.
 
 Both `n_pooled` and `n_held` count distinct ARCHIVES. The log holds more than
 one row per archive by design (one at acceptance, another when a replay or a
