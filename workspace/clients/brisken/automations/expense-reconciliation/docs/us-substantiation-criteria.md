@@ -19,25 +19,23 @@ cites a primary source fetched on 2026-09-08 and quoted, so a US CPA can
 check the reasoning against the text rather than against my summary of it.
 Before the tool's output is relied on in an examination, that CPA signs off.
 
-## 1. The threshold question the owner has to answer first
+## 1. The threshold question, answered
 
-Everything below is conditional on a fact I could not verify: **do any of
-the Brisken entities this tool serves file a US federal return?** The
-tool reconciles a Chase card, which is a US bank, but a US card does not
-make a US taxpayer. The entities in play are Corporate Services and Cloud
-Services (`context/expense-reconciliation/zoho-entity-card-map.md`).
+**ANSWERED by the owner 2026-09-08: at least one Brisken entity files a US
+federal return.** So the criteria below bind, and the ranked gaps in
+section 5 are live rather than hypothetical.
 
-- If **no entity files US**, this whole analysis is background reading and
-  the correct next step is the same exercise against the German and
-  Brazilian rules instead.
-- If **some entity files US**, the criteria bind that entity's expenses and
-  the ranked gaps in section 5 are live.
-- If **the answer is mixed**, the tool already carries a per-row legal
-  entity, so the criteria can be scoped per entity rather than applied to
-  every month wholesale.
+The question mattered because the tool reconciles a Chase card, which is a
+US bank relationship and not a US filing position; a US card does not make
+a US taxpayer, and I had no query path to the entities' filing status. The
+entities in play are Corporate Services and Cloud Services
+(`context/expense-reconciliation/zoho-entity-card-map.md`).
 
-Marked **UNVERIFIED**. I have no query path to the entities' filing
-positions and did not guess one.
+**Still open, and it decides scope rather than applicability:** WHICH
+entities file. The tool already carries a legal entity per row, so the
+criteria can be applied to the filing entities' expenses alone rather than
+to every month wholesale. Until that list exists, treat every criterion as
+applying to every row, which is the conservative reading.
 
 ## 2. Sources
 
@@ -304,15 +302,24 @@ the owner is making.
 
 ### Needs a new field, so needs a capture decision first
 
-- **Business purpose** (G1). This is the whole ballgame and it needs the
-  owner's call on where the text comes from. The option that fits the
-  tool's existing architecture: a default purpose per merchant in the
-  merchant registry, which already resolves canonical names and already
-  learns from corrections, overridable per expense, so recurring
-  subscriptions carry a standing purpose after being set once and only
-  genuinely new merchants ask. That keeps it off Criss's monthly path,
-  which is the ranking rule. Alternatives worth weighing: per-card default
-  purpose, per-account default, or per-expense only.
+- **Business purpose** (G1). **Capture decided by the owner 2026-09-08:
+  per merchant, learned once.** A default purpose lives in the merchant
+  registry, which already resolves canonical names and already learns from
+  corrections, and is overridable per expense. Recurring subscriptions
+  carry a standing purpose after being set once, and only genuinely new
+  merchants ask, so the field stays off Criss's monthly path. Per-card,
+  per-account and per-expense-only were the alternatives and were not
+  taken: a card buys across purposes, an account says what kind of cost it
+  is rather than why it was incurred, and per-expense-only puts a manual
+  field on every row of every month forever.
+
+  Three design questions this leaves, to settle when the round is specced:
+  what a merchant's purpose defaults to before anyone has set one (blank
+  and flagged, rather than a guess, is the B4-consistent answer); whether
+  the purpose belongs on the listing row or only in the CSV, given the
+  listing is already nine columns wide; and whether a purpose set on one
+  entity's merchant row should carry to another entity's, which is the same
+  question the card registry answered with per-entity chains.
 - **Place from the OCR path** (G3, second half). Vision already reads the
   receipt; the merchant's city is usually printed on it. Capturing it is an
   extraction-schema change, so it lands with a re-read cost.
@@ -342,12 +349,16 @@ the owner is making.
 
 ## 7. Open questions for the owner
 
-1. Do any of these entities file a US federal return? Section 1. Everything
-   else waits on this.
-2. If yes, where should business purpose come from: per merchant, per card,
-   per account, or per expense? Section 6.
-3. What retention period does Brisken want to commit to, and should
-   deleting a month be blocked outright or recorded?
-4. Does Brisken give business gifts through these cards? If no, G10 closes.
-5. Is anyone binning paper receipts today on the assumption the tool has
-   them? If yes, G8 is more urgent than its rank suggests.
+Answered 2026-09-08: **US filing applies** (section 1) and **business
+purpose is captured per merchant, learned once** (section 6). Still open:
+
+1. WHICH entities file US. Decides whether the criteria scope to those
+   entities' rows or apply to every month. Conservative reading until
+   answered: all rows.
+2. What retention period does Brisken want to commit to, and should
+   deleting a month be blocked outright or recorded? Pub. 583's ladder is
+   3 / 6 / 7 years / unlimited depending on the situation.
+3. Does Brisken give business gifts through these cards? If no, G10 closes.
+4. Is anyone binning paper receipts today on the assumption the tool has
+   them? If yes, G8 is more urgent than its rank suggests, because
+   Rev. Proc. 97-22 section 7 does not yet permit it.

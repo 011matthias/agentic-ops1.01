@@ -1451,10 +1451,29 @@ regulation text is Cornell LII rather than official, and Pub. 463's
 Table 5-1 never came back cleanly so it was used as authority for
 nothing (the element lists come from 1.274-5T(b) verbatim instead).
 
-**Blocking question before any of it is live:** whether any Brisken
-entity files a US federal return. UNVERIFIED, no query path, not
-guessed. A US card is not a US taxpayer; if the answer is no, the
-correct round 2 is the same exercise against DE and BR rules.
+**Owner answers, same day, both recorded in the file:** (1) **US filing
+applies** to at least one entity, so the criteria bind and the gaps are
+live; the DE/BR fallback is off the table. Still open is WHICH entities
+file, which scopes the criteria rather than deciding whether they apply,
+and until it is answered every row is treated as in scope. (2) Business
+purpose (G1) is captured **per merchant, learned once**: a default in the
+merchant registry, overridable per expense, so recurring subscriptions
+carry a standing purpose after one setting and only new merchants ask.
+Per-card, per-account and per-expense-only were rejected (a card buys
+across purposes; an account says what kind of cost, not why; per-expense
+puts a manual field on every row forever).
+
+**Round 2 shape, not yet scheduled:** the five rendering-only changes
+(Place column, receipt-required flags at the lodging / $75 thresholds, a
+real preparation block replacing the static `prepared_note`, days-away on
+trip reports, the 60-day reimbursement clock) need no new data and share
+one surface, so they ship as ONE round. The business-purpose capture is a
+separate round with three design questions still to settle (default before
+anyone sets one - blank and flagged, not a guess; listing row vs CSV only,
+given the listing is already nine columns; and whether a purpose carries
+across entities, the question the card registry answered with per-entity
+chains). G7, the examiner-facing system description Rev. Proc. 97-22
+4.01(5) requires, is one markdown file and blocked by nothing.
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
