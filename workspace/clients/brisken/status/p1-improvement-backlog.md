@@ -1182,6 +1182,22 @@ Consequences:
   cards save payload; see PROMPT-STATUS.md), so person entry is safe. What
   is still missing is the DATA, per item 26: the person per card plus the
   0340 entity and the 3645/plastic-1672 identities, Criss/Dirk only.
+  **Person data after the ALL BANKS list, 2026-09-08: still zero written.**
+  The list carries person SIGNAL but the owner confirmed only the entity
+  half, so no `person` value was written in the calibration round. What the
+  round assembled, every row sourced, none inferred from initials alone:
+  4921 → Dirk and 5126 → Rafael (the list prints `DN` / `RR`, and Zoho's
+  own COA account names for org `696750461` independently read "Volksbank
+  Visa 4921 (Dirk)" and "5126 (Rafael)", so two sources agree; Rafael's
+  surname is still unknown); 0113 and 8311 → Dirk Neumann, from the Zoho
+  account names already stored on those cards. A third signal turned up in
+  the live August batch: an Obsidian receipt whose payment hint reads
+  `CorpServ & DN ••3645`, which points at 3645 being a Corp Services card
+  of Dirk's. That is a merchant's rendering of a statement descriptor, not
+  the owner's record, so it is asked rather than written. 6013, 9693, 2838,
+  0340, 1176 and 3693 have no person source anywhere. All of it is in the
+  draft `context/drafts/2026-09-08-card-gaps-criss-dirk.md`; enter persons
+  only against a reply, never against the initials.
 - Rows gain `person` + `person_source` as PARALLEL fields (api-contract
   rules, view-contract pinned); unattributed rows get their own review
   surface and count beside MISSING ENTITY, with a rule-5 label.
@@ -1652,14 +1668,92 @@ chains). G7, the examiner-facing system description Rev. Proc. 97-22
 **Entity half DONE 2026-09-06** (authorized operator-API write, verified on
 `/api/cards` re-read): 0113 → Corporate Services; 6013/9693/8311 → Cloud
 Services; card-0340 created (digits `0340`). Values from the Zoho entity map
-in `context/expense-reconciliation/zoho-entity-card-map.md`. No retroactive
-heal expected — zero months were open; the next batch (or a
-refresh-master-data on any future one) picks the entities up at ingest.
+in `context/expense-reconciliation/zoho-entity-card-map.md`.
 
-Still open, Criss/Dirk only: the 0340 card's entity, the 3645 and
-plastic-1672 identities, and (for item 40) a PERSON per card — collect now,
-enter after item 40's round deploys (see the person-timing note there).
-Nine generic-tender rows stay per-month assignments by design.
+**Calibrated against the owner's ALL BANKS list 2026-09-08** (screenshot
+transcribed to
+`context/expense-reconciliation/all-banks-brisken-group-2026-09-08.md`; owner
+confirmed the mapping table in-chat before any write). Registry went 6 cards
+→ 15, verified field by field on an `/api/cards` re-read, then
+`refresh-master-data` on all three open batches (July/August/September).
+Measured on real rows: **30 of 40 rows had no card and no entity before, 28
+after.** The two that flipped are the `Visa ...1176` rows (Brave Software,
+September; Anthropic, August), now card-1176 → Consulting with
+`entity_source: card`. No row lost a card or an entity.
+
+What the list settled:
+
+- **New cards:** 1176 → Consulting, 3693 → Cloud Services, 4921 + 5126 →
+  BRISKEN GmbH. Confirmed-existing: 0113, 2838 (Corporate Services); 6013,
+  8311 (Cloud Services).
+- **The four crossed-out cards** (2448 → Cloud Services, 7531 → entity
+  pending, 1160 → Consulting, 3344 → Corporate Services) plus the
+  owner-marked-closed 1930 → Cloud Services are registered **active**, with
+  the retirement carried in the `label`. This is the opposite of the
+  originally planned `active: false`, on a code finding: `resolve_card`
+  filters to `live = {k: c for k, c in cards.items() if c.active}` and
+  `legacy_card_accounts` skips inactive cards, so deactivation means "never
+  resolve" in BOTH directions. An inactive card does not resolve a
+  historical receipt either, so `active: false` would have left behaviour
+  identical to today (absent = resolves nothing) and bought only a
+  Settings-screen entry. Owner confirmed active-plus-label 2026-09-08. A
+  cancelled card cannot be charged, so the usual risk of leaving one active
+  is nil. Past batches are unaffected either way: each snapshots the
+  registry at creation.
+- **No backend round was needed.** `active` already round-trips through all
+  five card code points (`normalize_cards_setting`, `cards_to_setting`,
+  `Card`/`_card_from_setting`, `card_to_dict`, the snapshot/refresh path).
+- **Entity naming:** owner confirmed the tool keeps `Corporate Services`;
+  the list's "Corp Service / LLC" and Zoho's "BRISKEN, LLC (Corporate
+  Services)" are the same entity. Renaming would have meant re-keying the
+  `/data` COA provisioning and re-stamping live rows.
+- **Consulting is now charted** (owner: "add cards now and chart"), via
+  `settings["entities"]` rather than the `/data` volume, because
+  `coa_validation_from_settings` prefers the settings registry and falls
+  back to the file's `chart_path` (the volume chart already holds all 8
+  Zoho orgs). org_id `808232536`, six scope groups derived from the live
+  chart under the same exclusion rule as the 2026-07-01 derivation (drop
+  COGS, payroll, tax, depreciation/amortization/interest, R&D, discounts).
+  They come out identical to Cloud Services' six. Proved, not assumed:
+  `load_entity_chart` over the live `/data/zoho-books-coa.json` resolves
+  all six to real chart roots covering 60 accounts, and
+  `coa_validation_from_settings("Consulting", ...)` builds an enabled
+  block. `entity_options` is now BRISKEN GmbH, Cloud Services, Consulting,
+  Corporate Services.
+
+Still open, Criss/Dirk only (all carried in the draft
+`context/drafts/2026-09-08-card-gaps-criss-dirk.md`):
+
+- **Cloud Solutions.** A separate entity block on the list matching no Zoho
+  org. Owner reads it as a second name for Cloud Services and asked for
+  Dirk to confirm, so card-7531 is registered with **no entity** pending
+  the answer. Do not fold it into Cloud Services on our own read.
+- **Six pending numbers:** three Ed Jones (one Cloud Solutions, two Corp
+  Service / LLC), CHASE VISA CONS NEW, CORP SERV NEW, CORP SERV NEW2.
+- **3645** is the largest live gap: four unresolved rows across
+  July-September (`Visa ...3645` ×2, `[Visa] - 3645`,
+  `Credit Card: xxxxxxxxxxxx3645`). An August Obsidian receipt prints
+  **`CorpServ & DN ••3645`**, a sourced hypothesis (Corp Services card,
+  Dirk) but a merchant's rendering, not the owner's own record. Not
+  written; asked.
+- **2544 and 9129**, two Google charges in August, in neither the list nor
+  the registry. Found by this enumeration.
+- **1042** (is `6013 - 1042` one card with two digit identities?) and
+  **1672** (the 2838 plastic, still NOT registered live despite `cards.py`
+  using it as its worked example). Same question shape; register both
+  digits on one card once confirmed.
+- **9693** is in the registry as Cloud Services but absent from the list.
+  Asked rather than assumed retired.
+- **0340** still has no entity.
+- **GmbH stays chartless.** Its Zoho chart (org `696750461`) is flat and
+  German with no operating-subtree structure to mirror, so deriving a scope
+  would be inventing one, and the entity is dormant in Zoho since
+  2024-12-30 with zero live rows. Surfaced, not filled.
+- Zoho knows two cards the list omits: GmbH **1940 (Firma)** and Holding
+  **Wise Visa 4872**; Holding does not appear on the list at all.
+- The `(P)` printed on Wise Visa 3344 is unexplained (personal?). Filed
+  under Corporate Services per the list; low risk, retired card, no rows.
+- Nine generic-tender rows stay per-month assignments by design.
 
 Historical text (for the ranking's sake): four of the five known cards
 carried no legal entity and 0340 was absent entirely; the 0340 rows alone
