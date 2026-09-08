@@ -19,6 +19,7 @@ Modes:
 """
 
 import argparse
+import base64
 import json
 import random
 import re
@@ -58,10 +59,18 @@ COND_TIERS = {
 # Listings whose title suggests damage or junk are logged but never alerted.
 TITLE_BLACKLIST = ["defekt", "kaputt", "loch ", "löcher", "fleck", "bastler", "fake", "replik"]
 
-# Kids' items are a different market; logged but never alerted.
+# Kids' items are a different market; logged but never alerted, and kept out
+# of comp pools where their lower prices drag an adult median down.
+#
+# The age-unit list is data-derived, not guessed: Vinted spells kids sizes as
+# "24-36 Monate / 92", "12 Jahre / 152", so the size field names the unit
+# outright. The v1 list carried the year-words but not the month-words, and
+# every kids item that reached a phone alert (15 of 360 on 2026-09-08) was a
+# "Monate" size. Numeric size ladders are deliberately NOT used: "W34 | DE 50"
+# is an adult men's size that any 50-176 cm ladder test would misread.
 KID_MARKERS = re.compile(
-    r"enfant|kinder|kids|girls|boys|fille|gar[cç]on|bambin|b[eé]b[eé]|baby|junior"
-    r"|\d+\s*(jahre|jaar|anni|ans\b|yrs|years)"
+    r"enfant|kinder|kids|girls|boys|fille|gar[cç]on|bambin|b[eé]b[eé]|baby|junior|bimb[oa]"
+    r"|\d+\s*(jahre|jaar|anni|ans\b|yrs|years|monate|monaten|mois|maanden|mesi|months|mnd)"
 )
 
 # Comp pools mix apples and oranges without a garment class: a cap scored
@@ -89,13 +98,43 @@ def garment_class(title: str | None) -> str:
             return cls
     return "other"
 
+
+def is_kid_item(title: str | None, size: str | None) -> int:
+    """1 when title or size marks this as children's clothing."""
+    return 1 if KID_MARKERS.search(f"{title or ''} {size or ''}".lower()) else 0
+
 RECHECK_INTERVAL_MIN = 60
 RECHECK_BATCH = 25
 RECHECK_MIN_AGE_H = 24
+GONE_RATE_CEILING = 0.40   # a batch reading gone above this is systemic, not sales
+STALE_ALERT_MIN = 45       # no successful poll this long -> tell the operator
+STALE_RENAG_H = 6          # keep reminding while an outage continues
+
+# A URL that has left the item page for a login/consent/challenge screen.
+WALL_URL = re.compile(r"/login|/member/general|captcha|challenge|consent", re.I)
+
+# Only an explicit machine-readable sold flag counts. The bare word "Verkauft"
+# appears in ordinary German page chrome, so matching it would mark live
+# listings sold, corrupting outcome data in the opposite direction.
+SOLD_MARKER = re.compile(r"is_sold(&quot;|\")?\s*:\s*true", re.I)
 
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_ts(value: str | None) -> datetime | None:
+    """Parse a stored UTC stamp; None when absent or malformed.
+
+    Never raises: a corrupt meta row must not be able to crash a cycle,
+    which is how a wedged state used to become permanent.
+    """
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
 
 
 def log(msg: str) -> None:
@@ -141,6 +180,7 @@ CREATE TABLE IF NOT EXISTS listings (
     condition TEXT,
     cond_tier TEXT,
     garment_class TEXT,
+    is_kid INTEGER DEFAULT 0,
     price REAL,
     total_price REAL,
     currency TEXT,
@@ -155,18 +195,59 @@ CREATE TABLE IF NOT EXISTS listings (
     first_seen TEXT,
     last_seen TEXT,
     gone_at TEXT,
+    gone_source TEXT,
     sold_flag INTEGER DEFAULT 0,
     alerted INTEGER DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS idx_listings_comp ON listings (search_tag, brand, cond_tier, garment_class);
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 """
+
+# Indexes are created only AFTER migrate() has added any columns an older
+# database predates: CREATE INDEX names its columns, so building it first
+# fails outright on a database that has not caught up yet.
+DDL_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_listings_comp ON listings (search_tag, brand, cond_tier, garment_class);
+"""
+
+
+ADDED_COLUMNS = {                       # column -> DDL fragment, applied to old DBs
+    "garment_class": "TEXT",
+    "is_kid": "INTEGER DEFAULT 0",
+    "gone_source": "TEXT",
+}
+
+
+def migrate(con: sqlite3.Connection) -> None:
+    """Add columns an older database predates.
+
+    CREATE TABLE IF NOT EXISTS silently does nothing when the table already
+    exists, so a new column would otherwise only reach a fresh database. The
+    v1 garment_class column was added by deleting the database, which is not
+    an option now that it holds real market history.
+    """
+    have = {row[1] for row in con.execute("PRAGMA table_info(listings)")}
+    for column, decl in ADDED_COLUMNS.items():
+        if column not in have:
+            con.execute(f"ALTER TABLE listings ADD COLUMN {column} {decl}")
+            log(f"migrated: added listings.{column}")
+            if column == "is_kid":
+                for row_id, title, size in con.execute(
+                        "SELECT id, title, size FROM listings").fetchall():
+                    if is_kid_item(title, size):
+                        con.execute("UPDATE listings SET is_kid=1 WHERE id=?", (row_id,))
+            elif column == "garment_class":
+                for row_id, title in con.execute("SELECT id, title FROM listings").fetchall():
+                    con.execute("UPDATE listings SET garment_class=? WHERE id=?",
+                                (garment_class(title), row_id))
+            con.commit()
 
 
 def db_connect() -> sqlite3.Connection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB_PATH)
     con.executescript(DDL)
+    migrate(con)
+    con.executescript(DDL_INDEXES)
     return con
 
 
@@ -181,6 +262,84 @@ def meta_set(con: sqlite3.Connection, k: str, v: str) -> None:
 
 # ------------------------------------------------------------------- session
 
+TOKEN_COOKIE = "access_token_web"
+TOKEN_MARGIN_MIN = 45   # renew this long before the token's own expiry
+AUTH_BACKOFF_MIN = 10   # 401: auth hiccup, self-healing, retry soon
+WALL_BACKOFF_MIN = 60   # 403: bot wall, stay away
+MAX_BACKOFF_MIN = 360   # ceiling for repeated walls
+
+
+def jwt_expiry(token: str) -> datetime | None:
+    """Expiry claim of a JWT as an aware datetime; None if unreadable.
+
+    Never raises: an unreadable token is treated as "no usable session",
+    which routes to a refresh rather than to a crash.
+    """
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        exp = json.loads(base64.urlsafe_b64decode(payload))["exp"]
+        return datetime.fromtimestamp(int(exp), timezone.utc)
+    except Exception:
+        return None
+
+
+def cookie_value(client: httpx.Client, name: str) -> str | None:
+    """Read a cookie by name, tolerating duplicates across domains.
+
+    httpx's Cookies.get() raises CookieConflict when the same name exists on
+    two domains, which Vinted produces routinely (.vinted.de and
+    .www.vinted.de). Raising inside a session check would crash the cycle at
+    the exact moment the session needs renewing, so read the jar directly and
+    take the most recent entry.
+    """
+    hits = [c.value for c in client.cookies.jar if c.name == name]
+    return hits[-1] if hits else None
+
+
+def token_is_fresh(client: httpx.Client, margin_min: int = TOKEN_MARGIN_MIN) -> bool:
+    """True when the jar holds an access token good for at least margin_min."""
+    token = cookie_value(client, TOKEN_COOKIE)
+    if not token:
+        return False
+    exp = jwt_expiry(token)
+    if exp is None:
+        return False
+    return exp > datetime.now(timezone.utc) + timedelta(minutes=margin_min)
+
+
+def save_cookies(client: httpx.Client) -> None:
+    """Persist the jar with domain and path intact.
+
+    The v1 format was a bare {name: value} dict, which lost the domain and
+    reloaded every cookie onto .vinted.de even though the server sets
+    refresh_token_web on .www.vinted.de. load_cookies still reads that shape.
+    """
+    jar = [
+        {"name": c.name, "value": c.value, "domain": c.domain, "path": c.path or "/"}
+        for c in client.cookies.jar
+    ]
+    COOKIE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    COOKIE_PATH.write_text(json.dumps(jar))
+
+
+def load_cookies(client: httpx.Client) -> None:
+    try:
+        raw = json.loads(COOKIE_PATH.read_text())
+    except (json.JSONDecodeError, OSError):
+        return
+    if isinstance(raw, dict):                       # legacy {name: value}
+        for name, value in raw.items():
+            client.cookies.set(name, value, domain=".vinted.de")
+        return
+    for c in raw:
+        try:
+            client.cookies.set(c["name"], c["value"], domain=c.get("domain") or ".vinted.de",
+                               path=c.get("path") or "/")
+        except (KeyError, TypeError):
+            continue
+
+
 def new_client() -> httpx.Client:
     client = httpx.Client(
         headers={"User-Agent": UA, "Accept-Language": "de-DE,de;q=0.9"},
@@ -188,41 +347,90 @@ def new_client() -> httpx.Client:
         follow_redirects=True,
     )
     if COOKIE_PATH.exists():
-        try:
-            for name, value in json.loads(COOKIE_PATH.read_text()).items():
-                client.cookies.set(name, value, domain=".vinted.de")
-        except (json.JSONDecodeError, OSError):
-            pass
+        load_cookies(client)
     return client
 
 
-def refresh_session(client: httpx.Client) -> None:
+def refresh_session(client: httpx.Client) -> bool:
+    """Mint a NEW anonymous session, clean slate. Returns success.
+
+    The jar is CLEARED first, and that clearing is the whole fix. Vinted
+    reissues no token when a stale one is presented: the homepage answers
+    200 and leaves the expired cookie untouched, so the old
+    refresh-then-retry path could never recover. A 24h token expiry on
+    2026-09-07 therefore became a 46h silent outage, every cycle retrying
+    with the same dead token and backing off again.
+    """
+    client.cookies.clear()
     r = client.get(BASE + "/")
     r.raise_for_status()
-    COOKIE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    COOKIE_PATH.write_text(json.dumps(dict(client.cookies)))
-    log("session refreshed")
+    if not token_is_fresh(client, margin_min=0):
+        log("WARN: refresh returned no usable access token")
+        return False
+    save_cookies(client)
+    exp = jwt_expiry(cookie_value(client, TOKEN_COOKIE) or "")
+    log(f"session refreshed (token valid until {exp:%Y-%m-%dT%H:%M:%SZ})" if exp else "session refreshed")
+    return True
 
 
-def api_get(client: httpx.Client, con: sqlite3.Connection, url: str, params: dict) -> dict | None:
-    """GET a catalog API URL; refresh the anonymous session once on 401/403.
+def ensure_session(client: httpx.Client) -> bool:
+    """Renew proactively, before expiry, rather than waiting for a 401."""
+    if token_is_fresh(client):
+        return True
+    return refresh_session(client)
 
-    A second 401/403 sets a one-hour backoff so a bot-wall never gets hammered.
+
+class SessionWall(Exception):
+    """Raised when the remote has said no. Ends the cycle immediately."""
+
+
+def set_backoff(con: sqlite3.Connection, minutes: int, why: str, escalate: bool = False) -> None:
+    if escalate:
+        level = int(meta_get(con, "backoff_level") or 0) + 1
+        minutes = min(minutes * (2 ** (level - 1)), MAX_BACKOFF_MIN)
+        meta_set(con, "backoff_level", str(level))
+    until = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    meta_set(con, "backoff_until", until)
+    con.commit()
+    log(f"WARN: {why}; backing off until {until}")
+
+
+def api_get(client: httpx.Client, con: sqlite3.Connection, url: str, params: dict) -> dict:
+    """GET a catalog API URL, healing an expired session once.
+
+    401 and 403 mean different things and get different treatment. A 401 is
+    an expired token: clean-slate refresh, retry, and on a second failure
+    back off only briefly, because the condition is self-healing. A 403 is
+    the bot wall; no refresh helps, so back off hard, escalating if it
+    repeats.
+
+    Either way the failure raises SessionWall rather than returning, so the
+    cycle STOPS. Returning None merely skipped one search and let the
+    remaining eight fire two requests each into a wall that had already
+    said no.
     """
     for attempt in (1, 2):
         r = client.get(url, params=params, headers={"Accept": "application/json"})
-        if r.status_code in (401, 403):
-            if attempt == 1:
-                refresh_session(client)
+        if r.status_code in (403, 429):
+            wait = WALL_BACKOFF_MIN
+            retry_after = r.headers.get("retry-after")
+            if retry_after and retry_after.isdigit():
+                wait = max(wait, int(retry_after) // 60 + 1)
+            set_backoff(con, wait, f"{r.status_code} (bot wall)", escalate=True)
+            raise SessionWall(f"HTTP {r.status_code}")
+        if r.status_code == 401:
+            if attempt == 1 and refresh_session(client):
                 continue
-            until = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            meta_set(con, "backoff_until", until)
-            con.commit()
-            log(f"WARN: {r.status_code} after refresh; backing off until {until}")
-            return None
+            set_backoff(con, AUTH_BACKOFF_MIN, "401 after clean-slate refresh")
+            raise SessionWall("HTTP 401")
         r.raise_for_status()
+        if "json" not in r.headers.get("content-type", ""):
+            # An HTML body on a 200 is an interstitial, not data. Parsing it
+            # would raise; treating it as a wall is what it actually is.
+            set_backoff(con, WALL_BACKOFF_MIN, "HTML body where JSON expected", escalate=True)
+            raise SessionWall("non-JSON body")
         return r.json()
-    return None
+    raise SessionWall("unreachable")
 
 
 # ------------------------------------------------------------------- parsing
@@ -244,6 +452,7 @@ def parse_item(item: dict, tag: str, seed: int) -> dict:
         "condition": cond,
         "cond_tier": COND_TIERS.get(cond.lower(), "unknown"),
         "garment_class": garment_class(item.get("title")),
+        "is_kid": is_kid_item(item.get("title"), item.get("size_title")),
         "price": price,
         "total_price": total,
         "currency": (item.get("price") or {}).get("currency_code", "EUR"),
@@ -263,17 +472,21 @@ def upsert(con: sqlite3.Connection, rec: dict) -> bool:
     ts = now_iso()
     existing = con.execute("SELECT id FROM listings WHERE id=?", (rec["id"],)).fetchone()
     if existing:
+        # Seeing a listing in a live search result disproves any earlier
+        # "gone" verdict, so clear it. Without this a row wrongly marked gone
+        # stayed gone forever, and the outcome data could never self-correct.
         con.execute(
-            "UPDATE listings SET last_seen=?, favourites=?, views=?, price=?, total_price=? WHERE id=?",
+            "UPDATE listings SET last_seen=?, favourites=?, views=?, price=?, total_price=?, "
+            "gone_at=NULL, gone_source=NULL, sold_flag=0 WHERE id=?",
             (ts, rec["favourites"], rec["views"], rec["price"], rec["total_price"], rec["id"]),
         )
         return False
     con.execute(
         """INSERT INTO listings (id, search_tag, title, brand, size, condition, cond_tier,
-               garment_class, price, total_price, currency, url, photo_url, seller_id,
+               garment_class, is_kid, price, total_price, currency, url, photo_url, seller_id,
                seller_login, favourites, views, promoted, seed, first_seen, last_seen)
            VALUES (:id, :search_tag, :title, :brand, :size, :condition, :cond_tier,
-               :garment_class, :price, :total_price, :currency, :url, :photo_url, :seller_id,
+               :garment_class, :is_kid, :price, :total_price, :currency, :url, :photo_url, :seller_id,
                :seller_login, :favourites, :views, :promoted, :seed, :first_seen, :last_seen)""",
         {**rec, "first_seen": ts, "last_seen": ts},
     )
@@ -299,8 +512,7 @@ def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: 
     title_l = (rec["title"] or "").lower()
     if any(w in title_l for w in TITLE_BLACKLIST):
         return False
-    size_l = (rec["size"] or "").lower()
-    if KID_MARKERS.search(title_l) or KID_MARKERS.search(size_l):
+    if rec["is_kid"]:
         return False
     if not rec["brand"] or rec["cond_tier"] == "unknown":
         return False
@@ -312,7 +524,8 @@ def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: 
         for row in con.execute(
             """SELECT total_price FROM listings
                WHERE search_tag=? AND brand=? AND cond_tier=? AND garment_class=? AND id!=?
-                 AND last_seen>=? AND total_price BETWEEN 3 AND 400""",
+                 AND last_seen>=? AND total_price BETWEEN 3 AND 400
+                 AND COALESCE(is_kid,0)=0""",
             (rec["search_tag"], rec["brand"], rec["cond_tier"], rec["garment_class"],
              rec["id"], window),
         ).fetchall()
@@ -353,7 +566,9 @@ def notify(env: dict, title: str, message: str, click: str | None = None, priori
 
 # -------------------------------------------------------------------- cycle
 
-def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, settings: dict, env: dict) -> None:
+def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, settings: dict,
+                env: dict) -> bool:
+    """Poll one search. Returns True when the API actually answered."""
     tag = search["tag"]
     seeded = meta_get(con, f"seeded:{tag}")
     url = BASE + "/api/v2/catalog/items"
@@ -363,22 +578,18 @@ def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, set
             data = api_get(client, con, url, {
                 "search_text": search["query"], "per_page": settings["seed_per_page"], "page": page,
             })
-            if data is None:
-                return
             for item in data.get("items", []):
                 upsert(con, parse_item(item, tag, seed=1))
             time.sleep(random.uniform(1.5, 3.5))
         meta_set(con, f"seeded:{tag}", now_iso())
         con.commit()
         log(f"seeded {tag}")
-        return
+        return True
 
     data = api_get(client, con, url, {
         "search_text": search["query"], "per_page": settings["poll_per_page"],
         "page": 1, "order": "newest_first",
     })
-    if data is None:
-        return
     new_recs = []
     for item in data.get("items", []):
         rec = parse_item(item, tag, seed=0)
@@ -399,18 +610,26 @@ def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, set
         if new_recs:
             log(f"{tag}: {len(new_recs)} new listings, {alerts} alerted")
     con.commit()
+    return True
 
 
-def recheck_gone(client: httpx.Client, con: sqlite3.Connection) -> None:
+def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: bool = False) -> None:
     """Hourly: revisit stale listings to detect sold/removed (sell-speed data).
 
     Heuristic, marked as such: 404/410 or a redirect off the item page counts
     as gone; a 200 item page containing a sold marker sets sold_flag. A live
     item page bumps last_seen so it is not rechecked again for 24h.
     """
-    last = meta_get(con, "last_recheck")
-    if last and datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) > \
-            datetime.now(timezone.utc) - timedelta(minutes=RECHECK_INTERVAL_MIN):
+    last = parse_ts(meta_get(con, "last_recheck"))
+    if last and last > datetime.now(timezone.utc) - timedelta(minutes=RECHECK_INTERVAL_MIN):
+        return
+    if not (session_proven and token_is_fresh(client, margin_min=0)):
+        # A dead session redirects item pages to a login wall, which this
+        # function used to read as "sold": that is how all 375 outcome rows
+        # in the database came to be fabricated between 2026-09-07 and
+        # 2026-09-08. Outcome data is the whole asset here, so a session that
+        # has not just answered a real API call earns no verdicts at all.
+        log("recheck skipped: session not proven this cycle")
         return
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=RECHECK_MIN_AGE_H)).strftime("%Y-%m-%dT%H:%M:%SZ")
     rows = con.execute(
@@ -418,7 +637,7 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection) -> None:
            ORDER BY last_seen ASC LIMIT ?""",
         (cutoff, RECHECK_BATCH),
     ).fetchall()
-    gone = 0
+    verdicts = []      # (item_id, gone: bool, sold: bool, source: str)
     for item_id, item_url in rows:
         if not item_url:
             continue
@@ -426,21 +645,45 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection) -> None:
             r = client.get(item_url)
         except httpx.HTTPError:
             continue
-        ts = now_iso()
-        if r.status_code in (404, 410) or "/items/" not in str(r.url):
-            con.execute("UPDATE listings SET gone_at=? WHERE id=?", (ts, item_id))
-            gone += 1
+        final = str(r.url)
+        if r.status_code in (404, 410):
+            verdicts.append((item_id, True, False, str(r.status_code)))
+        elif "/items/" not in final or WALL_URL.search(final):
+            # Bounced off the item page. That is a statement about our
+            # session, not about the listing, and it is unknowable which.
+            # Abandon the pass with nothing written.
+            log(f"WARN: item page bounced to {final}; recheck abandoned, nothing recorded")
+            meta_set(con, "last_recheck", now_iso())
+            con.commit()
+            return
         elif r.status_code == 200:
-            if re.search(r"Verkauft|is_sold&quot;:true|\"is_sold\":true", r.text):
-                con.execute("UPDATE listings SET gone_at=?, sold_flag=1 WHERE id=?", (ts, item_id))
-                gone += 1
-            else:
-                con.execute("UPDATE listings SET last_seen=? WHERE id=?", (ts, item_id))
+            sold = bool(SOLD_MARKER.search(r.text))
+            verdicts.append((item_id, sold, sold, "sold_marker" if sold else "alive"))
         time.sleep(random.uniform(1.5, 3.0))
-    meta_set(con, "last_recheck", now_iso())
+
+    gone_n = sum(1 for _, g, _, _ in verdicts if g)
+    if verdicts and gone_n / len(verdicts) > GONE_RATE_CEILING:
+        # The batch is drawn from the OLDEST listings not yet marked gone, and
+        # those turn over slowly; a large simultaneous sweep is a session
+        # symptom every time, never a market event. Discard rather than
+        # poison the outcome data.
+        log(f"WARN: recheck discarded, {gone_n}/{len(verdicts)} read as gone "
+            f"(> {GONE_RATE_CEILING:.0%} is systemic, not sales)")
+        meta_set(con, "last_recheck", now_iso())
+        con.commit()
+        return
+
+    ts = now_iso()
+    for item_id, gone, sold, source in verdicts:
+        if gone:
+            con.execute("UPDATE listings SET gone_at=?, sold_flag=?, gone_source=? WHERE id=?",
+                        (ts, 1 if sold else 0, source, item_id))
+        else:
+            con.execute("UPDATE listings SET last_seen=? WHERE id=?", (ts, item_id))
+    meta_set(con, "last_recheck", ts)
     con.commit()
     if rows:
-        log(f"recheck: {len(rows)} visited, {gone} gone")
+        log(f"recheck: {len(rows)} visited, {gone_n} gone")
 
 
 def acquire_lock() -> bool:
@@ -457,27 +700,84 @@ def acquire_lock() -> bool:
     return True
 
 
-def run_cycle() -> None:
-    if not acquire_lock():
+def check_liveness(con: sqlite3.Connection, env: dict) -> None:
+    """Tell the operator when the watcher has stopped collecting.
+
+    The 2026-09-07 outage ran 46 hours unnoticed because the scheduled task
+    kept reporting success while every poll failed. Silence from a market
+    watcher is indistinguishable from a quiet market, so the watcher has to
+    say so itself. One alert per outage, re-armed on recovery.
+    """
+    last = parse_ts(meta_get(con, "last_success"))
+    if last is None:
         return
+    stale_min = int((datetime.now(timezone.utc) - last).total_seconds() // 60)
+    if stale_min < STALE_ALERT_MIN:
+        if meta_get(con, "stale_alerted"):
+            meta_set(con, "stale_alerted", "")
+            con.commit()
+            log(f"recovered after {stale_min} min without data")
+        return
+    alerted_at = parse_ts(meta_get(con, "stale_alerted"))
+    if alerted_at and alerted_at > datetime.now(timezone.utc) - timedelta(hours=STALE_RENAG_H):
+        return      # already told; nag again only every STALE_RENAG_H hours
+    notify(env, "Vinted watcher steht",
+           f"Seit {stale_min} min keine neuen Daten. Letzter Erfolg: "
+           f"{last:%Y-%m-%d %H:%M}Z. Log pruefen.",
+           priority=5)
+    meta_set(con, "stale_alerted", now_iso())
+    con.commit()
+    log(f"WARN: no successful poll for {stale_min} min; operator alerted")
+
+
+def run_cycle() -> int:
+    """One poll cycle. Returns a process exit code (0 ok, 1 collected nothing)."""
+    if not acquire_lock():
+        return 0
+    con = None
     try:
         cfg = load_config()
         env = load_env()
         con = db_connect()
-        backoff = meta_get(con, "backoff_until")
-        if backoff and datetime.strptime(backoff, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) > \
-                datetime.now(timezone.utc):
-            log(f"cycle skipped: in backoff until {backoff}")
-            return
+        check_liveness(con, env)
+        backoff = parse_ts(meta_get(con, "backoff_until"))
+        if backoff and backoff > datetime.now(timezone.utc):
+            log(f"cycle skipped: in backoff until {backoff:%Y-%m-%dT%H:%M:%SZ}")
+            return 1
         client = new_client()
-        if not COOKIE_PATH.exists():
-            refresh_session(client)
-        for search in cfg["searches"]:
-            poll_search(client, con, search, cfg["settings"], env)
-            time.sleep(random.uniform(1.5, 3.5))
-        recheck_gone(client, con)
-        con.close()
+        if not ensure_session(client):
+            log("WARN: could not establish a session")
+            set_backoff(con, AUTH_BACKOFF_MIN, "no session could be established")
+            return 1
+        ok = False
+        try:
+            for search in cfg["searches"]:
+                try:
+                    if poll_search(client, con, search, cfg["settings"], env):
+                        ok = True
+                except SessionWall:
+                    raise
+                except (httpx.HTTPError, sqlite3.Error, ValueError, KeyError) as e:
+                    # One bad search must not cost the other eight.
+                    log(f"WARN: {search['tag']} failed: {type(e).__name__}: {e}")
+                time.sleep(random.uniform(1.5, 3.5))
+        except SessionWall as e:
+            log(f"cycle aborted: {e}")
+            return 1
+        if ok:
+            # A poll got through, so whatever caused an earlier backoff is
+            # over; leaving it set would skip cycles for no reason.
+            meta_set(con, "last_success", now_iso())
+            con.execute("DELETE FROM meta WHERE k IN ('backoff_until','backoff_level')")
+            con.commit()
+        try:
+            recheck_gone(client, con, session_proven=ok)
+        except SessionWall as e:
+            log(f"recheck aborted: {e}")
+        return 0 if ok else 1
     finally:
+        if con is not None:
+            con.close()
         LOCK_PATH.unlink(missing_ok=True)
 
 
@@ -490,6 +790,25 @@ def print_status() -> None:
         "SELECT COUNT(*), COALESCE(SUM(sold_flag),0) FROM listings WHERE gone_at IS NOT NULL"
     ).fetchone()
     print(f"listings: {total}  alerted: {alerted}  gone: {gone}  (sold-flagged: {sold})")
+    last = parse_ts(meta_get(con, "last_success"))
+    if last:
+        stale = int((datetime.now(timezone.utc) - last).total_seconds() // 60)
+        state = "OK" if stale < STALE_ALERT_MIN else "STALLED"
+        print(f"health: {state}  last success {last:%Y-%m-%dT%H:%M:%SZ} ({stale} min ago)")
+    else:
+        print("health: no successful cycle recorded yet")
+    backoff = parse_ts(meta_get(con, "backoff_until"))
+    if backoff and backoff > datetime.now(timezone.utc):
+        print(f"        in backoff until {backoff:%Y-%m-%dT%H:%M:%SZ}")
+    if COOKIE_PATH.exists():
+        try:
+            c = new_client()
+            exp = jwt_expiry(cookie_value(c, TOKEN_COOKIE) or "")
+            c.close()
+            print(f"        session token expires {exp:%Y-%m-%dT%H:%M:%SZ}" if exp
+                  else "        session token unreadable")
+        except Exception:
+            pass
     for tag, n, seeds in con.execute(
         "SELECT search_tag, COUNT(*), SUM(seed) FROM listings GROUP BY search_tag ORDER BY 2 DESC"
     ):
@@ -512,7 +831,7 @@ def main() -> None:
     if args.status:
         print_status()
         return
-    run_cycle()
+    sys.exit(run_cycle())
 
 
 if __name__ == "__main__":
