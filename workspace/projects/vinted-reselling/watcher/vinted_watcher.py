@@ -109,7 +109,21 @@ GARMENT_CLASSES: list[tuple[str, re.Pattern]] = [
 ]
 
 MAX_ALERTS_PER_SEARCH = 3   # per cycle; a real steady-state cycle has 0-2 candidates
-BACKLOG_SUPPRESS = 15       # more new items than this = catch-up cycle, data only
+# What makes a cycle a catch-up run is the GAP since the last successful poll,
+# not how many listings it returned. The first version keyed on count alone, and
+# measurement against 29,433 real rows showed what that costs: the guard fired on
+# 37% of cycles and 67% of all listings were never scored at all, because a busy
+# search routinely returns 24 to 48 new items in an ordinary five minutes.
+# nike-vintage was suppressed on 77% of its cycles, adidas-vintage 75%,
+# tnf-jacke 62%. The scorer was effectively switched off for exactly the
+# searches with the most turnover.
+#
+# The count still matters, but only once time says a gap really happened: after
+# the watcher has been down for hours, a pile of listings IS stale, and alerting
+# on it races nothing. Within the normal cadence the same pile is simply the
+# market moving, and MAX_ALERTS_PER_SEARCH already keeps the phone civil.
+BACKLOG_SUPPRESS = 15       # only applied when a real gap preceded the cycle
+BACKLOG_GAP_MIN = 25        # minutes since last success that still count as steady state
 
 # Which normalised size classes are allowed to reach the phone. The resale
 # audience is widest here; everything else still lands in the database as comp
@@ -342,7 +356,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     deal_ratio_used REAL, min_comps_used INTEGER, comp_window_used INTEGER,
     size_filter TEXT, settings_json TEXT,
     fake_risk REAL, fake_risk_reasons TEXT,
-    profile_score REAL, priority INTEGER,
+    profile_score REAL, quality REAL, priority INTEGER,
     sent INTEGER NOT NULL DEFAULT 0,
     suppress_reason TEXT,
     cycle_backlog_n INTEGER
@@ -1003,6 +1017,7 @@ def record_alert(con: sqlite3.Connection, rec: dict, ctx: dict) -> int:
         "fake_risk": ctx.get("fake_risk"),
         "fake_risk_reasons": ctx.get("fake_risk_reasons"),
         "profile_score": ctx.get("profile_score"),
+        "quality": ctx.get("quality"),
         "priority": ctx.get("priority"),
         "sent": ctx.get("sent", 0),
         "suppress_reason": ctx.get("suppress_reason"),
@@ -1015,38 +1030,85 @@ def record_alert(con: sqlite3.Connection, rec: dict, ctx: dict) -> int:
     return int(cur.lastrowid or 0)
 
 
-def alert_priority(discount_pct: float, fake: float, country: str | None,
-                   size_ok_core: bool, prof: float | None) -> int:
-    """ntfy priority for one alert: which ones are allowed to ring.
+# How many alerts a day are allowed to make a sound. Everything else still
+# arrives and is still one tap from a rating; it just does not interrupt.
+RING_BUDGET_PER_DAY = 15
+NORMAL_BUDGET_PER_DAY = 60
 
-    Volume stays where the owner set it; the noise does not. The ranking is
-    driven by the criteria the owner named (clean fake risk, core size, German
-    location, deal depth), and the learned taste score only nudges within that
-    frame. Ratings are still one tap away on every alert, quiet or loud.
+
+def alert_quality(discount_pct: float, margin_eur: float, fake: float,
+                  country: str | None, size_ok_core: bool,
+                  prof: float | None) -> float:
+    """One number for how good a candidate is, on the criteria the owner named.
+
+    Deal depth and absolute margin carry the weight, because a 60% discount on
+    a 12 EUR item is worth less attention than a 45% discount on a 90 EUR one.
+    Fake risk, size and location adjust it, and the learned taste score nudges
+    within that frame rather than overriding it.
     """
-    score = 0
-    if discount_pct >= 55:
-        score += 2
-    elif discount_pct >= 45:
-        score += 1
-    if fake < 0.2:
-        score += 1
+    q = discount_pct + min(margin_eur, 80.0)
+    q *= (1.0 - min(fake, 1.0) * 0.6)
     if size_ok_core:
-        score += 1
-    if country == "DE":
-        score += 1
+        q *= 1.15
+    if country and country != "DE":
+        q *= 0.80
     if prof is not None:
-        if prof >= 0.65:
-            score += 2
-        elif prof < 0.35:
-            score -= 2
+        q *= 0.7 + 0.6 * prof
+    return round(q, 3)
+
+
+def alert_priority(discount_pct: float, fake: float, country: str | None,
+                   size_ok_core: bool, prof: float | None,
+                   con: sqlite3.Connection | None = None,
+                   margin_eur: float = 0.0) -> int:
+    """ntfy priority: which alerts are allowed to ring.
+
+    An absolute score cannot do this job. Measured against 27,831 real rows,
+    a fixed ladder put 46% of candidates in the ringing tier once country data
+    existed, which is 833 ringing notifications a day, and 0% before it, which
+    is a ladder that never rings at all. Both are the same mistake: the bar was
+    set against an imagined stream rather than the real one.
+
+    So the bar is relative. A candidate rings only if it beats the day's own
+    competition, measured on the alerts already recorded in the last 24 hours.
+    That makes the loud tier self-limiting at roughly RING_BUDGET_PER_DAY
+    however the market behaves, and it means "the best of today" rather than
+    "above a number someone guessed". Volume stays where the owner set it; the
+    interruptions do not.
+
+    With no history yet, it falls back to absolute cuts, deliberately generous:
+    a cold start should ring for the obvious ones rather than stay silent while
+    it learns.
+    """
+    q = alert_quality(discount_pct, margin_eur, fake, country, size_ok_core, prof)
     if fake >= 0.4:
-        score -= 2
-    if score >= 5:
-        return 5      # rings
-    if score >= 3:
-        return 3      # normal
-    return 2          # silent, still rateable
+        return 2          # a flagged listing never interrupts, whatever it scores
+    if con is None:
+        return 5 if q >= 90 else (3 if q >= 55 else 2)
+    try:
+        window = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
+        # The stored quality, not a re-derivation from discount and margin: the
+        # score carries multipliers for size, country, fake risk and taste, so
+        # comparing a multiplied candidate against an unmultiplied baseline
+        # would let ordinary candidates clear the bar on the boost alone.
+        recent = [r[0] for r in con.execute(
+            """SELECT quality FROM alerts
+               WHERE alerted_at >= ? AND sent=1 AND quality IS NOT NULL""",
+            (window,)).fetchall()]
+    except sqlite3.Error:
+        recent = []
+    if len(recent) < RING_BUDGET_PER_DAY:
+        # Too little history to rank against; be generous rather than silent.
+        return 5 if q >= 90 else (3 if q >= 55 else 2)
+    recent.sort(reverse=True)
+    ring_bar = recent[min(RING_BUDGET_PER_DAY, len(recent)) - 1]
+    normal_bar = recent[min(NORMAL_BUDGET_PER_DAY, len(recent)) - 1]
+    if q >= ring_bar:
+        return 5
+    if q >= normal_bar:
+        return 3
+    return 2
 
 
 CORE_SIZE_CLASSES = {"s", "m", "l"}
@@ -1173,7 +1235,12 @@ def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: 
         if rated >= int(settings.get("profile_min_rated", 8)):
             return drop("learned")
 
-    prio = alert_priority(pct, fake, country, size_class in CORE_SIZE_CLASSES, taste)
+    margin = med - rec["total_price"]
+    quality = alert_quality(pct, margin, fake, country,
+                            size_class in CORE_SIZE_CLASSES, taste)
+    ctx["quality"] = quality
+    prio = alert_priority(pct, fake, country, size_class in CORE_SIZE_CLASSES, taste,
+                          con=con, margin_eur=margin)
     lines = [
         f"{rec['brand']} | {rec['condition']} | Gr. {rec['size']} | {rec['garment_class']}",
         f"{rec['total_price']:.2f} EUR inkl. Gebuehr, Median vergleichbar {med:.2f} EUR ({pct}% drunter)",
@@ -1277,6 +1344,27 @@ def notify(env: dict, title: str, message: str, click: str | None = None,
 
 # -------------------------------------------------------------------- cycle
 
+def is_catch_up(con: sqlite3.Connection, n_new: int) -> bool:
+    """Is this cycle working through a backlog, or just watching a busy market?
+
+    Both look identical from inside one poll: a lot of listings the database has
+    not seen. What tells them apart is whether time passed. If the previous
+    successful poll was five minutes ago, forty new listings are forty fresh
+    listings and racing for them is the entire point. If it was yesterday, the
+    same forty are stale and alerting on them wins nothing.
+    """
+    last = parse_ts(meta_get(con, "last_success"))
+    if last is None:
+        # No successful poll on record: a fresh database, or the first cycle
+        # after a reset. Whatever arrives now has unknown age, so treat a large
+        # batch as backlog.
+        return n_new > BACKLOG_SUPPRESS
+    gap_min = (datetime.now(timezone.utc) - last).total_seconds() / 60.0
+    if gap_min <= BACKLOG_GAP_MIN:
+        return False
+    return n_new > BACKLOG_SUPPRESS
+
+
 def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, settings: dict,
                 env: dict, seller_budget: list[int] | None = None) -> bool:
     """Poll one search. Returns True when the API actually answered."""
@@ -1306,7 +1394,7 @@ def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, set
         rec = parse_item(item, tag, seed=0)
         if upsert(con, rec):
             new_recs.append(rec)
-    if len(new_recs) > BACKLOG_SUPPRESS:
+    if is_catch_up(con, len(new_recs)):
         # Catch-up after a gap (PC off, first poll after seeding): these are
         # not fresh-this-minute listings, so alerting on them races nothing.
         # Record as comp data only.
