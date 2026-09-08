@@ -1651,6 +1651,27 @@ Per-card, per-account and per-expense-only were rejected (a card buys
 across purposes; an account says what kind of cost, not why; per-expense
 puts a manual field on every row forever).
 
+**G7 CLOSED same day, and it corrected round 1.**
+`automations/expense-reconciliation/docs/electronic-storage-system-description.md`
+is the examiner-facing description Rev. Proc. 97-22 4.01(5) requires, drafted
+against the deployed code and then refuted line by line by eight independent
+reviewers (97 challenges, 53 confirmed, 7 rejected as misreadings). Draft
+pending owner + CPA review; two blanks to fill before hand-over (which
+entities file US, the deployed access-code configuration).
+
+Writing it is what caught a **material error in round 1**: D1/D2/D5 were
+graded Satisfied on the content-addressed receipt store, and that store is
+CLI-only. `ReceiptStore` is instantiated only in `cli.py` behind an optional
+`hosting:` block; nothing under `web/` imports it. The deployed paths compute
+a truncated SHA-1 for de-dup and discard it, so **no digest survives and
+nothing can detect that a stored receipt changed**. D2 and D3 are now
+Missing, five more rows downgraded, D12/D13 added, and G2b leads the gap list
+beside G1. Cause worth keeping: round 1 read the docstrings, which describe
+the store accurately, and never checked whether the deployed entry point
+imports it. The estimate that G7 was "a writing task, not a build, the
+cheapest item on the list" was wrong in the useful direction: describing a
+system completely is what exposes what it actually does.
+
 **Round 2 shape, not yet scheduled:** the five rendering-only changes
 (Place column, receipt-required flags at the lodging / $75 thresholds, a
 real preparation block replacing the static `prepared_note`, days-away on
@@ -1662,6 +1683,57 @@ given the listing is already nine columns; and whether a purpose carries
 across entities, the question the card registry answered with per-entity
 chains). G7, the examiner-facing system description Rev. Proc. 97-22
 4.01(5) requires, is one markdown file and blocked by nothing.
+
+### 49. Correctness defects found by the item-48 code audit (2026-09-08)
+
+Not a compliance item. The eight-reviewer audit behind item 48's system
+description read the deployed paths looking for overstatements and turned up
+defects that stand on their own, none of which needs a US filing position to
+matter. Ranked by the loop brief's own rule (wrong money first). Every one is
+recorded with its evidence in
+`docs/electronic-storage-system-description.md` section 12; this row exists so
+they are not lost inside a compliance document nobody opens for bug reports.
+
+**Wrong money.** The report totals are summed in binary floating point, and a
+row whose amount cannot be parsed is dropped from the PDF total **with nothing
+on the report saying so**. Amounts are stored as strings precisely so
+precision is not lost, and then the reports throw that away. A month can print
+a total that is quietly short by one receipt.
+
+**Silent data loss.** Two paths rewrite the whole period record without taking
+the batch lock (the manual per-charge attach and the bulk folder ingest), so a
+concurrent write on either can be lost. Separately, replacing a file on a
+queued upload deletes the file it replaces, and re-attaching a receipt to the
+same charge under the same filename overwrites the stored bytes, both with no
+version and no record.
+
+**A period that cannot be reported at all.** The renderability check opens a
+PDF's index only, so a password-protected or structurally damaged receipt
+passes it and then fails during assembly: the request 500s and NO report is
+produced for the whole month, with no caption, no partial output and no
+message naming the file. One bad receipt makes a month unreproducible until
+someone finds and removes it by hand. A large month can hit the same wall for
+a different reason: the whole report is assembled in memory on a 512 MB
+machine.
+
+**The listing overstates receipt coverage.** The Receipt column reads
+"attached" once the file was read off disk, which is decided before
+renderability is known, so the count of expenses with a usable receipt page
+can be too high. The caption pages are the truth.
+
+**Two reports can disagree.** An expense the reviewer deleted leaves the
+expense report immediately but stays in the reconciliation report until the
+next re-match, because the two are built from different sources.
+
+**Smaller, same family.** A borrowed trip receipt is listed in the
+reconciliation report with no pages behind it; a lost stored file prints the
+same caption as an expense that never had one; a byte-identical mail duplicate
+arriving inside the same second overwrites the earlier archive's recorded
+arrival time; image receipts lose EXIF rotation and transparency in the
+report.
+
+None of this is scheduled. The float-total and the lock-bypass are the two
+worth doing regardless of what happens with item 48.
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
