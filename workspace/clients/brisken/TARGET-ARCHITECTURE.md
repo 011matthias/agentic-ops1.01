@@ -1,0 +1,372 @@
+# Brisken target architecture: one application
+
+Status: recommendation, for owner review. Not sent to Dirk.
+Prepared: 2026-09-08. Sibling of `OWNERSHIP-HANDOFF.md`, which covers who
+owns the accounts. This covers what the estate should become.
+
+Produced by a 12-agent workflow: four agents grounding the real constraints
+from the code, four independent architectures from different lenses, three
+adversarial judgements, one synthesis. Facts below were verified against the
+running systems and the repo, not inferred. Where something is an estimate it
+says UNVERIFIED.
+
+## 1. The ask, and what it actually means
+
+Owner direction 2026-09-08: "Dirk does not want to use 20 different
+applications. Preferably all of them are hosted in the same application:
+website and tools."
+
+He described applications he *uses*, not bills he pays, so this is the strong
+reading: one deployed application, one domain family, one sign-in, public
+website and internal tools under one roof. Vendor consolidation alone would
+not answer the complaint.
+
+One honest boundary, which the pitch to Dirk has to state rather than let him
+discover: of roughly twenty applications in his working day we are
+responsible for five. He will still open Outlook, SharePoint, Planner, Zoho
+CRM, Zoho Books, Zoho Bookings, Zoho Desk and Brisken's own product. We take
+our five to one door. Claiming more than that loses the room.
+
+## 2. The constraint that decides the host before taste enters
+
+`brisken-expense-recon` is not only a web app. Receipts arrive by email:
+an `aiosmtpd` listener starts from the FastAPI startup hook, in its own
+thread, binding `0.0.0.0:2525`, with Fly raw TCP pass-through on port 25,
+a dedicated IPv4, matching rDNS, and the MX for `expenses.brisken.com`.
+Dirk and Criss were told about this in writing twice (`receipts@` on
+2026-08-29, `travel@` on 2026-09-07), so it is a live product feature.
+
+An MX target can only point at port 25, and a shared or anycast IP cannot
+carry it. That eliminates **Vercel, Netlify, Cloudflare Pages and Workers,
+and Azure Container Apps** outright, before any other criterion is applied.
+
+Two consequences follow, and they set the whole direction:
+
+1. The host must be a container host. So consolidation pulls the 11.4 MB
+   website *into* the container that already runs the engine. It never
+   pushes the engine out to the edge.
+2. The app that already holds the dedicated IPv4, the MX, the rDNS and the
+   certificate is `brisken-expense-recon`. Merging **into** that app means
+   the IP, the MX, the PTR and the cert never move. There is no mail
+   cutover, no dual-MX choreography, no window where sending MTAs retry.
+
+## 3. The trap that invalidates the obvious approach
+
+The intuitive way to merge apps is to mount them under path prefixes:
+`/recon`, `/desk`. Three of the four candidate architectures did exactly
+that. It is empirically broken here, on the Starlette version pinned in the
+app's own lockfile (1.3.1):
+
+- `Mount` does not propagate lifespan to the child. The SMTP listener and
+  the lead desk's capture loops would silently never start. Five startup
+  hooks across the two apps would go dead.
+- The app still deploys green, because `/healthz` returns an unconditional
+  `ok`. Every page serves. Mail quietly stops arriving.
+- `Mount` also leaves the prefix in `request.url.path`, and both engines
+  gate on exact-match `OPEN_PATHS`, so a mounted app locks out its own
+  login and health routes.
+
+**Dispatch whole applications by Host header instead.** No prefix, no path
+rewriting, no predicate to invert. This is the single most important
+technical finding in the review, and it is the reason the recommendation
+does not look like the obvious plan.
+
+## 4. The recommendation
+
+Consolidate into the existing `brisken-expense-recon` Fly app behind a small
+Host-header router, serve the reviewer SPA same-origin, and make one
+magic-link sign-in cover both tools. Six phases, the first paying off on its
+own, each rolling back with a DNS change or an env flag.
+
+### 4.1 What Dirk ends up with
+
+Four hostnames, one password, one nav bar.
+
+Public, no sign-in: `brisken.com` / `www` (TreasuryCentral),
+`onepilot.brisken.com`, `resources.brisken.com` (kept as its own address
+because it is linked from live client mail).
+
+Private, one sign-in: `tools.brisken.com`. He types his address, a link
+arrives in Outlook, he is in for 12 hours. Criss does the same. The landing
+page is the expense reviewer he uses today, same screens, same Portuguese
+for Criss. Top bar: Expenses | Leads | his name | Sign out.
+
+Mail is unchanged, and he should be told so unprompted: receipts keep going
+to `receipts@` and `travel@expenses.brisken.com`, from any address including
+his iCloud one, no sign-in ever. Brisken corporate mail is never touched.
+
+Gone from his bookmarks: `brisken-reconcile-dash.lovable.app`,
+`brisken-lead-desk.fly.dev`, the two OnePilot Fly sites,
+`api.expenses.brisken.com`, `rome2026.brisken.com`, the shared code
+`mn040307`, and the type-any-name gate. Ten addresses and three sign-in
+mechanisms become four addresses and one.
+
+### 4.2 The shape
+
+One Fly app, one machine, one volume, one uvicorn process, in a
+Brisken-owned Fly organisation. The app object stays named
+`brisken-expense-recon` because Fly apps cannot be renamed and that object
+owns the mail IP; the internal name is invisible once `tools.brisken.com`
+resolves to it.
+
+**Outer layer.** A Host-header ASGI router, roughly 40 lines, dispatching
+whole applications:
+
+| Host | Target |
+|---|---|
+| `brisken.com`, `www`, `onepilot`, `resources` | `site_app` (public, no auth) |
+| `tools.brisken.com` | `recon_app` (unchanged, deny-by-default) |
+| `api.expenses.brisken.com` | `recon_app` (90-day transition alias) |
+| anything else | 421, deny |
+
+Unknown hosts default to DENY, so a misconfiguration fails toward a 401 on
+the marketing site, which is loud and harmless, rather than a 200 on Criss's
+ledger, which looks like success in every log. The router forwards lifespan
+to each child explicitly and records which children started; `/healthz` stops
+returning an unconditional ok and asserts each one.
+
+`recon_app` is mounted at host level, so `scope["path"]` is untouched and
+`OPEN_PATHS` stays exactly `{"/api/login", "/healthz"}`. The engine ships
+genuinely unchanged.
+
+`site_app` is a separate ASGI application: StaticFiles over the website and
+resources trees committed into the image, `redirects.json` read at boot
+carrying the 18 legacy 301s, cleanUrls and trailingSlash emulation, security
+headers as one middleware. The redirects become versioned data with a replay
+test instead of vendor config with none. They are load-bearing: a 2019
+WordPress PDF path still resolves today, and two of the five redirect-target
+PDFs are referenced by no page at all, so anyone porting by reading the site
+instead of the config would silently drop them.
+
+**The SPA, same-origin.** Built to a static Nitro preset in a node build
+stage of the Dockerfile, served by recon at `tools.brisken.com/` with a
+catch-all to `index.html`. `API_BASE` becomes the empty string; the CORS
+regex pinned to `*.lovable.app` is deleted rather than widened, because
+same-origin has no preflight. Tractable because the SPA has zero server-side
+data dependency: no route uses a loader or a server function. The Lovable
+build wrapper is public MIT on npm, so the bundle builds in CI without a
+seat. Lovable stays available for visual authoring; it stops being the only
+path to ship.
+
+**Auth.** Recon adopts the lead desk's magic-link scheme and becomes the
+issuer: users table, roles, admin approval, single-use 256-bit tokens stored
+as sha256 with a 15-minute TTL, and a sessions table on `/data` so
+revocation is real. The SPA keeps `Authorization: Bearer`, but the bearer
+becomes a session handle with expiry and nonce, which avoids adding a CSRF
+surface to the app holding bank statements.
+
+In the same deploy recon mints a cookie in the lead desk's exact format,
+signed with the shared `LEAD_DESK_AUTH_SECRET`, scoped `Domain=.brisken.com`.
+Verified: lead-desk's `read_user` is a stateless HMAC check with no database
+lookup, so it accepts that cookie **with zero code changes**. One sign-in
+covers both tools from phase 3, before either process moves. That is what
+makes the plan degrade gracefully rather than strand.
+
+`EXPENSE_RECON_OPERATOR_CODE`, `_CODES` and `issue_token` are deleted in the
+same change. That token is a deterministic function of (secret, role, label)
+with no expiry and no individual revocation, so leaving it alive is a
+permanent bypass of the new layer.
+
+**Scheduler.** One interval loop absorbing recon's four boot sweeps, the lead
+desk's three loops, and `BriskenReconNotify` off Matthias's laptop.
+
+**State.** One volume at `/data`, 3 GB, namespaced. SQLite stays SQLite: the
+app is already correct only at exactly one instance, because the mail day
+budget, `MAX_INFLIGHT_ROUTES`, the trip-batch slot set, the batch write lock
+and the Graph send counter are process globals under `threading.Lock`. The
+singleton stops being a Fly accident and becomes written policy:
+`max_machines_running = 1` plus an flock on `/data/.instance-lock`.
+
+**Leads.** `/api/book-demo` becomes a `site_app` route writing a contacts row
+plus an outreach_events row into the lead desk with `source='website'`. Neon
+and its 18 `DATABASE_*` vars retire.
+
+**Mail.** Not touched, at any phase.
+
+## 5. The phased plan
+
+Every phase rolls back. P1 through P5 is everything Dirk can see. P6 is
+optional. P7 is conditional on Brisken IT.
+
+| # | Phase | Duration | Rollback |
+|---|---|---|---|
+| P1 | Rescue, subtract, probe the org move | 1 wk | Fully; snapshots held 30 days |
+| P2 | `tools.brisken.com`, SPA same-origin behind the Host router | 2 wk | Old Lovable URL stays live in parallel |
+| P3 | One key (magic link, both tools) | 1.5 wk | One rehearsed env flag, 24 hours only |
+| P4 | The laptop stops being infrastructure | 1 wk | Re-register the Windows task |
+| P5 | Website moves in; Fly app moves to Brisken | 2 wk | DNS back to Vercel; keep projects 30 days |
+| P6 | Optional: lead desk comes inside | 2 to 3 wk | Route flip; old app suspended not destroyed |
+| P7 | Conditional on IT: Entra and the Exchange mailbox | unbounded | Magic link stays as break-glass |
+
+Gates worth stating in full, because they are where this plan differs from
+an optimistic one:
+
+- **P1** probes `flyctl apps move` for free on `brisken-onepilot-proto`
+  (volume-backed, zero consequence) *before* P5 depends on the answer.
+  Volume-backed org moves are UNVERIFIED on this estate.
+- **P2** gate is an external unauthenticated assertion test against the
+  deployed origin: 401 on every tool and download route, 200 only on the
+  shell, assets, `/healthz` and `/login`. Assert from outside, never by code
+  review. Plus Criss completing one real reconciliation on the new origin.
+- **P3** must not ship in the last five days of a month. Mail intake is the
+  only other way anything gets in. Both people must complete a real link
+  redeem *before* the codes are deleted, not after.
+- **P4** ships the sweep conversion and `min_machines_running = 1` in the
+  same change, never separately. The four boot sweeps, including the
+  ten-year AO §147 retention deletion, work today only because scale-to-zero
+  makes a restart near-daily. An always-warm process stops all four with no
+  error and no log line.
+- **P5** replays all 18 redirects to exact destinations before any DNS cut,
+  and verifies a real book-demo submission by looking at the lead-desk board,
+  not by a 200 response.
+- **P6** is cancelled outright, not deferred, if the campaign sender is
+  armed. One extra hostname is the correct trade against merging a live
+  campaign engine into the same process as the financial ledger.
+
+## 6. What was rejected, and why
+
+**One Azure VM in Brisken's tenant with Entra SSO.** The best ideas in the
+set, disqualified as a plan of record by two of three judges. Every
+distinguishing advantage is written by a party we cannot query: the Graph
+credential returns 403 on `/users`, `/users/{upn}` and `/applications`, so we
+cannot confirm Criss holds a licensed sign-in-capable account, and at three
+seats that is a third of the user base locked out of her own month-close. The
+measured base rate on this IT function is one Exchange Application Access
+Policy requested 2026-07-14 and still unconfirmed eight weeks later. The
+design concedes it has no safe resting point between steps 6 and 9, and
+concedes its own collapse mode: an unpatched VM holding Criss's financial
+records with the consultant gone. Its ideas are grafted throughout; the plan
+is not adopted until an owner is named.
+
+**Path-prefix mounting.** Empirically broken, §3.
+
+**Leaving the website on Vercel (the low-risk answer).** It is the lowest-risk
+option and it is not the answer to the question asked. Two vendors and a
+EUR 20/month seat that buys terms-of-service compliance rather than
+capability is caution winning over the actual complaint.
+
+**A module registry.** A plugin architecture built to host exactly two
+plugins, for an organisation with no development capability. Nothing in the
+evidence names a third tool.
+
+**Migrating SQLite to Postgres.** Three users, 60 MB of live data, and an
+application already correct only at one instance. Porting means rewriting
+~2,000 LOC of store layer on the code holding Criss's financial records, for
+no user-visible gain.
+
+**Retiring the SMTP listener now.** Right destination, wrong phase. Today
+refusals are in-protocol so the sender's own MTA bounces; under Graph polling
+Exchange accepts everything and the auto-acknowledgement carries a
+`@brisken.com` recipient guard, so an external submitter who trips a cap gets
+neither a bounce nor an ack.
+
+**Rebuilding the SPA away from Lovable.** All 679 commits on that repo are
+authored by Lovable's bot; no human has ever edited it. Co-hosting the built
+bundle removes the manual dashboard publish, which is the actual failure
+mode, without requiring anyone to become its maintainer.
+
+## 7. Honest risks
+
+**brisken.com's uptime becomes coupled to the expense engine.** A genuine
+regression, not argued away. Today they fail independently. After P5, an
+out-of-memory during a statement match takes the corporate site down too.
+Three things bound it: the site is static files in an address space already
+serving them, Fly restarts a dead machine in seconds, and the health check
+catches a wedged one. The escape hatch, roughly a day's work, is a second
+machine serving only `site_app` that returns `fly-replay` for tool paths.
+Build it the first time it is needed, not now.
+
+**This leaves Brisken one Python container someone eventually has to patch.**
+Lower than an unmanaged VM, not zero. If nobody ever touches the code again
+the application keeps running; it stops changing. That is the correct
+degradation target for a departing consultant and should be said to Dirk in
+those words.
+
+**Merging four surfaces makes the estate harder to move later.** If this ever
+has to leave Fly it leaves as a whole, and needs a new dedicated inbound IPv4
+and an MX repoint. That cost is real and it is the price of what Dirk asked
+for.
+
+**The SPA build config is the highest-variance item.** The Lovable wrapper
+defaults Nitro to Cloudflare. The preset is a documented pass-through so a
+static target should work, but if it fights, the fallback costs Dirk one
+extra hostname. Decide it in week one.
+
+**There is no type-check between SPA and backend.** On 2026-08-22 a field
+whose element type changed from string to object blanked the reviewer's
+entire screen in production. Re-hosting is a fresh opportunity for that class
+of failure, on a surface where a blank page and a quiet month look identical.
+
+**Estimates are UNVERIFIED.** Roughly 8 to 10 focused developer-weeks for
+P1 to P6, of which P1 to P5 (everything Dirk can see) is 5 to 6. Infrastructure
+lands at roughly EUR 8 to 9/month, against roughly EUR 50 to 70 for a
+*compliant* version of today's split estate. The money is not the reason to
+do this, and pitching it on cost invites a comparison it wins by too little.
+
+**Ownership transfer comes first and consolidation must not block it.**
+`OWNERSHIP-HANDOFF.md` §4 moves accounts on the stack that exists, in days.
+This plan changes the stack, in weeks, with Criss's records in the blast
+radius. Transfer first means a bad consolidation fails onto infrastructure
+Brisken already controls.
+
+## 8. Live defects found during the review
+
+Independent of the strategy, actionable now.
+
+| Defect | Consequence |
+|---|---|
+| The checked-in leads migration declares 7 columns; the real table has 8, and the function's claim that it bootstraps on cold start is false | A fresh deploy 500s on every book-demo submission |
+| `/api/book-demo` writes to a table no page, export or API reads back | Lead capture is write-only; a form that stops persisting looks like a quiet week |
+| `BRISKEN_INQUIRY_RESEND_KEY` was never set on the OnePilot sites | Any submission there has never reached a human. Read `inquiries.jsonl` off both volumes before destroying them |
+| The old Wix OnePilot form was still taking submissions five days before the site moved, and the only two real inbound enquiries Brisken has ever had came through it | If it is still on, leads are landing where none of this reaches |
+| `DEV_RECIPIENTS` is `matthias.silva` only; `EXPENSE_RECON_NOTIFY_USER` is absent from the client `.env` | Criss has never received a result-ready mail |
+| `.scratch/brisken-rome-hub/index.html` (25,471 bytes, untracked, one laptop) has diverged from the tracked canonical (27,466 bytes) | The only item that gets strictly worse with time |
+| `smart-trading-deck.pdf` returns 404 | Broken link on a live client-facing page |
+
+## 9. What would change the recommendation
+
+**A named Brisken owner for the tenant side.** If Brisken IT commits a person
+who will hold an Azure subscription, register a delegated app and administer
+it for years, the destination changes rather than the route: P7 stops being
+conditional and becomes the point, the SMTP listener retires into an Exchange
+Online shared mailbox using `Mail.Read` and `Mail.ReadWrite` the credential
+already holds, the AO §147 retention floor moves onto a Microsoft Purview
+policy an auditor recognises, and sign-in moves behind Brisken's own MFA and
+conditional access. That is the only idea in the comparison that deletes a
+category of risk rather than relocating it.
+
+The tell is cheap and it is one question, not a project: if IT cannot answer
+who restores this from backup, by name, within a week of being asked, the
+answer is no and P1 to P6 stand exactly as written.
+
+The second-largest lever: if Dirk ever decides receipts arrive by upload only
+and mail intake retires, the port-25 constraint disappears and the whole
+comparison reopens on different ground. Our tool would still win that
+comparison, because it is a bank-statement-to-receipt reconciliation engine
+with entity and card master data, a self-improving merchant registry,
+cross-run learning and a Portuguese interface Criss uses, while Zoho Expense
+does the receipt half and not the reconciliation half. But it should be
+re-run by whoever is there, not inherited.
+
+## 10. Questions only Dirk can answer
+
+1. When you and Criss open the expense tool, do you each want your own
+   sign-in, or keep sharing one code? You chose sharing in August; checking
+   that still holds before building on it.
+2. After I step back, who at Brisken owns this, by name? Not who approves it:
+   who would restart it at nine in the evening if the tool stopped answering.
+3. Do you want brisken.com and the tools on the same server? One place, one
+   bill, one login. It also means a bad day for the expense tool takes the
+   website down with it, where today they fail separately. Recommendation is
+   yes, because the website is three pages and the risk is small.
+4. Is the old Wix account still switched on for forms? Its OnePilot form was
+   still taking submissions five days before the move, and the only two real
+   inbound enquiries came through it.
+
+One thing true regardless: Dirk signed into the Lead Desk on 2026-09-08 at
+20:36Z and has answered none of the eight review items waiting there. Any
+proposal to restructure his estate lands on top of a decision he already
+owes, and should acknowledge that rather than compete with it.
+
+Related: `OWNERSHIP-HANDOFF.md` (who owns the accounts),
+`status/p1-expense-reconciliation.md`, `status/p2-lead-gen-general.md`.
