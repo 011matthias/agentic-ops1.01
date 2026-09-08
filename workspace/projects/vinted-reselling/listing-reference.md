@@ -229,6 +229,16 @@ Listing wie dieses (live gefunden, derselbe Verkäufer): Hook,
 Stil-Absatz, Detailblock mit Modell und Material, Maße, dreizehn eng am
 Artikel liegende Keywords, keine Fremdmarke.
 
+### Hashtags: belegt gegen Kandidaten
+
+Der Bot waehlt nur Tags aus Feldern, die du selbst angegeben hast (Marke plus
+Modell, Schnitt, Aera). Korpus-Begriffe werden NICHT uebernommen, sondern als
+Kandidaten zum Bestaetigen ausgegeben. Grund: ein Hashtag ist eine Behauptung
+ueber das Teil, kein Suchwort. Der erste Entwurf bot "#cargo #knee #chino" fuer
+eine einzige Hose an und "#nuptse" fuer eine North-Face-Jacke, deren Modell
+niemand eingetragen hatte. Beides ist genau der Ausblendungsgrund "nicht
+zugehoerige Hashtags", nicht Keyword-Strategie. Obergrenze bleibt 3.
+
 ### Keywords: an Vinteds Dimensionen verankert
 
 Fünf bis acht Begriffe, ohne Raute, und jeder muss aus einer von Vinteds

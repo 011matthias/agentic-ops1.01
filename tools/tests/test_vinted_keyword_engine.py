@@ -176,3 +176,99 @@ def test_the_real_tool_output_fails_on_every_defect_it_actually_has(ke):
     assert "nike" in joined and "adidas" in joined
     assert "Hashtag" in joined
     assert "Zahlen-Slot" in joined
+
+
+# ---------------------------------------------------- hashtags, added 2026-09-09
+#
+# The owner asked three times for the bot to define hashtags for a specific
+# item. It never produced any: MAX_HASHTAGS existed only in the validator, to
+# complain about tags HE had written. The first draft that generated them
+# offered "#cargo #knee #chino" for one pair of trousers and "#nuptse" for a
+# North Face jacket whose model nobody had entered, because it drew from the
+# corpus terms of the cell. A hashtag is a claim about the garment, and
+# "nicht zugehoerige Hashtags" is an enumerated reason for Vinted to hide the
+# listing. So chosen tags come only from supplied fields; corpus terms come
+# back as candidates to confirm.
+
+def test_a_tag_is_only_ever_built_from_what_the_seller_supplied(ke):
+    tags, candidates = ke.build_hashtags(
+        {"brand": "The North Face", "type": "Jacke", "garment_class": "jacket",
+         "size": "M", "color": "Schwarz"},
+        keywords=[], mined=["nuptse", "doudoune", "1996"])
+    assert "nuptse" not in tags, "a model nobody entered must never be asserted"
+    assert "doudoune" not in tags
+    assert "nuptse" in candidates, "the corpus finding is still offered, to confirm"
+
+
+def test_the_cargo_chino_contradiction_cannot_reach_the_tags(ke):
+    """One pair of trousers is not both. This is the defect that was shipped."""
+    tags, candidates = ke.build_hashtags(
+        {"brand": "Carhartt", "type": "Hose", "garment_class": "pants",
+         "size": "M", "color": "Beige"},
+        keywords=[], mined=["cargo", "knee", "chino"])
+    assert not ({"cargo", "chino"} <= set(tags)), "asserted two exclusive cuts"
+    assert {"cargo", "chino"} <= set(candidates)
+
+
+def test_the_model_is_the_first_tag_because_nothing_else_carries_it(ke):
+    tags, _ = ke.build_hashtags(
+        {"brand": "Levis", "model": "501", "type": "Jeans",
+         "garment_class": "pants", "cut": "Straight", "size": "W31"},
+        keywords=[])
+    assert tags[0] == "levis501"
+    assert "straight" in tags
+
+
+def test_never_more_than_the_cap(ke):
+    tags, _ = ke.build_hashtags(
+        {"brand": "Levis", "model": "501", "cut": "Straight", "style": "Mom",
+         "era": "90er", "type": "Jeans", "garment_class": "pants"},
+        keywords=[])
+    assert len(tags) <= ke.MAX_HASHTAGS
+
+
+def test_a_field_vinted_already_filters_on_is_not_worth_a_slot(ke):
+    """Category, size and colour have their own filters; a tag adds nothing."""
+    _, candidates = ke.build_hashtags(
+        {"brand": "Carhartt", "type": "Hose", "garment_class": "pants",
+         "size": "W32", "color": "Beige"},
+        keywords=[], mined=["pants", "beige", "w32", "hose", "single knee"])
+    assert candidates == ["singleknee"], candidates
+
+
+def test_singular_and_plural_are_one_word_not_two_slots(ke):
+    _, candidates = ke.build_hashtags(
+        {"brand": "Carhartt", "type": "Trousers", "garment_class": "pants"},
+        keywords=[], mined=["pant", "pants", "carpenter"])
+    assert "carpenter" in candidates
+    assert "pant" not in candidates and "pants" not in candidates
+
+
+def test_a_candidate_never_repeats_a_chosen_tag(ke):
+    tags, candidates = ke.build_hashtags(
+        {"brand": "Levis", "model": "501", "type": "Jeans", "garment_class": "pants"},
+        keywords=[], mined=["levis501", "selvedge"])
+    assert set(tags).isdisjoint(candidates)
+
+
+def test_with_nothing_distinctive_it_falls_back_rather_than_inventing(ke):
+    tags, _ = ke.build_hashtags(
+        {"brand": "Nike", "type": "Shirt", "garment_class": "shirt"}, keywords=[])
+    assert tags == ["nikeshirt"]
+
+
+def test_a_tag_has_to_survive_as_one_linkifiable_word(ke):
+    assert ke.slug_tag("Straight Leg") == "straightleg"
+    assert ke.slug_tag("Grün & Weiß") == "gruenweiss"
+    assert ke.slug_tag("Größe") == "groesse"
+    assert ke.slug_tag("H&M") is None, "two characters is not a tag"
+    assert ke.slug_tag("") is None
+    assert ke.slug_tag(None) is None
+
+
+def test_the_suggestion_carries_both_lists(ke):
+    out = ke.suggest({"brand": "Levis", "model": "501", "type": "Jeans",
+                      "garment_class": "pants", "cut": "Straight", "size": "W31",
+                      "condition": "Sehr gut"}, use_corpus=False)
+    assert out["hashtags"] == ["levis501", "straight"]
+    assert out["hashtag_candidates"] == []
