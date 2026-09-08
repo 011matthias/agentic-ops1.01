@@ -11,10 +11,40 @@ Sourcing watcher + price/demand database. Polls the Vinted catalog API for
 staple-brand searches, records every listing to SQLite, and pushes deal alerts
 via ntfy with one-tap rating buttons.
 
+## Wo der Watcher laeuft
+
+Der Windows-Task `VintedWatcher` zeigt seit 2026-09-08 auf einen **eigenen,
+festen Worktree**:
+
+```
+C:\Users\neuma_p1qrsic\Repo\agentic-ops1-watcher
+```
+
+Vorher lief er aus dem Haupt-Checkout. Das ging so lange gut, wie dort `main`
+stand, und ging schief, sobald eine parallele Session den Baum auf ihren
+Feature-Branch stellte: an dem Abend, an dem dieses Upgrade lief, wechselte eine
+Brisken-Session den Branch, und der Watcher hätte ab diesem Moment die alte
+Version gegen die bereits migrierte Datenbank gefahren. Neue Zeilen haetten
+`brand_norm` und `size_class` als NULL bekommen, und weil der Backfill als
+erledigt markiert ist, dauerhaft.
+
+Der Worktree ist auf `origin/main` festgenagelt (detached), und `data/` sowie
+`context/` sind Verzeichnis-Junctions auf die kanonischen Ordner im
+Haupt-Checkout. Es gibt also weiterhin genau eine Datenbank und genau eine
+`.env`; nur der Code kommt jetzt aus einem Baum, den niemand umschaltet.
+
+**Nach jedem Merge, der den Watcher betrifft**, den Worktree nachziehen:
+
+```
+git -C C:\Users\neuma_p1qrsic\Repo\agentic-ops1 fetch origin
+git -C C:\Users\neuma_p1qrsic\Repo\agentic-ops1-watcher checkout --detach origin/main
+```
+
 ## Elemente
 
 | Element | Zustand | Stand | Nächster Schritt | Blocker |
 |---|---|---|---|---|
+| Laufzeit-Baum | live | Eigener Worktree `agentic-ops1-watcher`, Junctions auf data/ und context/ | Nach Watcher-Merges nachziehen | - |
 | Poller + Comp-DB | live | v3 Präzisions-Upgrade 2026-09-08; ~31k Zeilen | Datenqualität beobachten | - |
 | Session-Handling | live | Clean-slate refresh, 45-Min-Renewal, 401/403-Split, jetzt auch 5xx-Backoff | - | - |
 | Zustands-Mapping | live | **Defekt behoben 2026-09-08**: "Neu" / "Neu, mit Etikett" fielen auf `unknown`, 4.527 Zeilen waren von Alerts UND Comps ausgeschlossen. Rückwirkend repariert | - | - |
