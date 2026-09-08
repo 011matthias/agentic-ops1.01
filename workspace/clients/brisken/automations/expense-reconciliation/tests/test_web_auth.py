@@ -147,6 +147,25 @@ def test_cors_reflects_lovable_origin_only(gated_client):
     assert evil.headers.get("access-control-allow-origin") is None
 
 
+def test_cors_reflects_the_brisken_spa_domain(gated_client):
+    """The SPA's own domain (expenses.brisken.com) is allowed; its
+    neighbours on brisken.com are not, because the allow-list names the
+    one host rather than the domain."""
+    ours = gated_client.options(
+        "/api/login",
+        headers={"Origin": "https://expenses.brisken.com",
+                 "Access-Control-Request-Method": "POST"},
+    )
+    assert ours.headers.get("access-control-allow-origin") == "https://expenses.brisken.com"
+    for neighbour in ("https://brisken.com", "https://guides.brisken.com",
+                      "https://expenses.brisken.com.evil.example"):
+        other = gated_client.options(
+            "/api/login",
+            headers={"Origin": neighbour, "Access-Control-Request-Method": "POST"},
+        )
+        assert other.headers.get("access-control-allow-origin") is None, neighbour
+
+
 # ------------------------------------------------------------ named codes --
 
 def test_named_codes_identity_and_labelled_token(monkeypatch):

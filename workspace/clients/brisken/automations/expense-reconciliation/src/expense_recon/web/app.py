@@ -567,10 +567,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # never a cookie, so no ambient credentials cross the origin and a
     # scoped allow-list is safe. Added after the gate middleware so it
     # wraps it and answers the CORS preflight before the gate runs.
+    # `expenses.brisken.com` is the SPA's own Brisken domain (2026-09-08),
+    # listed literally rather than as a brisken.com wildcard: the domain
+    # carries many unrelated hosts and only this one serves the front end.
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=(
             r"https://([a-z0-9-]+\.)*(lovable\.app|lovableproject\.com|lovable\.dev)"
+            r"|https://expenses\.brisken\.com"
             r"|http://localhost(:\d+)?|http://127\.0\.0\.1(:\d+)?"
         ),
         allow_methods=["*"],

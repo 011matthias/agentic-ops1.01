@@ -131,6 +131,17 @@ this table is the index, not a second record.
   on Criss's live 94-row run). Live app now at #299.
 - SPA production URL DECIDED 2026-07-22: `brisken-reconcile-dash.lovable.app`. A custom
   `recon.brisken.com` stays optional; it would need the CORS regex widened + a Fly deploy.
+- **Brisken domain, 2026-09-08 (owner directive: a name without "fly" in it).** The API
+  half is LIVE: `api.expenses.brisken.com` (GoDaddy `A`/`AAAA` to the app's dedicated
+  `149.248.221.114` + `2a09:8280:1::12b:572b:0`, Fly cert issued after the
+  `_acme-challenge.api.expenses` CNAME went in; `/healthz` 200 over TLS). The old
+  `brisken-expense-recon.fly.dev` keeps answering, so nothing had to move at once. The SPA
+  half is owner-side: add `expenses.brisken.com` in Lovable settings, send back the
+  `lovable_verify` value for the `_lovable.expenses` TXT, then paste half 2 of
+  `automations/expense-reconciliation/docs/lovable-brisken-domain-prompt.md`. CORS already
+  allows the SPA host (PR #751). `expenses.brisken.com` keeps its MX, so mailed receipts are
+  unaffected: Lovable's five other Brisken sites use an `A` to `185.158.133.1`, and an A
+  record coexists with an MX where a CNAME would not.
 - **Lovable merge != live:** merging the SPA repo's main syncs the Lovable EDITOR only; the
   published site keeps serving the last explicitly-published build. Verify with a structural
   DOM probe, not a label. Publishing is a dashboard action the agent cannot perform.
