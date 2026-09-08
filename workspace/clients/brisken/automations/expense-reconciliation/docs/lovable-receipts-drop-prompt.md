@@ -6,7 +6,10 @@
 > intake. Section 2 removes the upload area from the create-month form;
 > the server now refuses files there (400), so an unpasted SPA cannot
 > corrupt anything, it just shows an error when someone tries the old
-> flow. Paste sections in order.
+> flow. Amended same day: the per-ingest cap was raised 80 → 500 and
+> the ledger gained the `upload-cap` rejected reason (section 1), and
+> section 5 is the owner's navigation redesign (top bar only on the
+> main menu). Paste sections in order.
 
 Copy everything below the line into Lovable.
 
@@ -19,10 +22,17 @@ The backend already works this way; this change makes the UI match.
 
 Add a nav entry "Receipts" (PT "Recibos") pointing at a new page
 `/receipts`. The page is one large drag-and-drop zone (click to browse
-also works) that accepts image and PDF receipt files, several at once.
+also works) that accepts image and PDF receipt files, several at once —
+big backfill piles included. Like every page outside the main menu it
+carries the "← Menu" button from section 5, so there is always a way
+back to the months overview.
 
 On drop, POST the files to `POST /api/receipts` as multipart, field name
-`files` (repeatable). The reply is `{ok, job_id, n_files}`. Poll
+`files` (repeatable). If more than 300 files were dropped at once, split
+them into sequential POSTs of at most 300 files each (the server parses
+at most ~1000 form parts per request), show one combined progress line
+("Uploading part 2 of 3"), and merge the resulting ledgers into one
+list. The reply per POST is `{ok, job_id, n_files}`. Poll
 `GET /jobs/{job_id}` like other uploads; while it runs, show the job's
 `stage` text ("reading receipts", "filing September 2026"). When status
 is `done`, the job object carries a `result` field:
@@ -55,7 +65,10 @@ Render `result.files` as a list, grouped by `status`:
   typed month.
 - `rejected`: per `reason` — `unsupported-type` ("not a receipt file
   type; images and PDFs only, one file per receipt — zips are not
-  expanded here"), `empty-file`, `too-large`.
+  expanded here"), `empty-file`, `too-large`, and `upload-cap` ("more
+  receipts for {month label} than one drop can take; the first {limit}
+  were filed — drop the rest again, anything already filed is skipped
+  automatically", reading the row's `limit` and `month`).
 - `failed`: show the row's `reason` verbatim.
 
 Explain the page in one quiet line under the drop zone: "Each receipt
@@ -93,3 +106,22 @@ A month batch with `summary.n_expenses === 0` (now a normal state right
 after creation) should show a quiet empty state on the batch page:
 "No receipts yet. They arrive by email or through the Receipts page;
 the statement can be uploaded at any time." Never an error styling.
+
+## 5. The top bar lives only on the main menu
+
+The months overview (`/months`) is the app's main menu. It keeps the
+full top bar exactly as today: the nav tabs, the language toggle, the
+signed-in state, and Log out.
+
+Every other route — Receipts, Trips, Email intake, Memory, Compare,
+Guide, Settings, and every detail page (a month's expenses page, a
+trip, an intake mail) — hides the top bar completely. In its place,
+show one sticky button pinned at the top left of every non-menu page:
+"← Menu" (same wording in PT), which navigates to `/months`, where the
+top bar is visible again. The button stays visible while scrolling, so
+there is always exactly one way back to the main menu from anywhere.
+
+Consequence to implement deliberately, not fight: the language toggle
+and Log out now appear only on the main menu. Do not re-add a second
+bar or partial header to the other pages; each page keeps its own h1
+and content, plus the Menu button.

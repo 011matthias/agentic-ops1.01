@@ -297,6 +297,51 @@ def test_drop_duplicate_bytes_are_skipped(client, monkeypatch):
     assert len(_batches(client)) == 1
 
 
+def test_drop_takes_more_than_80_files(client, monkeypatch):
+    """The 2026-09-08 cap raise: a backfill pile beyond the old 80-file
+    bound files completely. Regressing FOLDER_MAX_FILES to 80 must turn
+    this red (81st file skipped by the ingest cap)."""
+    n = 81
+    # Override month -> no routing reads; one ingest read per file.
+    _patch_ocr(monkeypatch, *[_extraction(DAY_M1) for _ in range(n)])
+    files = [(f"r{i:03d}.jpg", JPG + str(i).encode()) for i in range(n)]
+    result = _drop(client, files, month=MONTH_M1)
+    assert result["n_filed"] == n, result
+    assert result["n_rejected"] == 0
+    assert not any(r.get("reason") == "upload-cap" for r in result["files"])
+    entry = result["months"][0]
+    assert entry["created_batch"] is True
+    assert entry["n_added"] == n
+    view = client.get(f"/api/expense-batches/{entry['batch_id']}").json()
+    assert view["summary"]["n_expenses"] == n
+
+
+def test_drop_overflow_past_cap_is_ledgered_not_silent(client, monkeypatch):
+    """A month group larger than FOLDER_MAX_FILES marks its overflow
+    rejected/upload-cap in the drop ledger BEFORE the ingest call, whose
+    internal cap would otherwise skip those files while their rows read
+    "filed". Unwiring the pre-slice in route_dropped_receipts turns this
+    red."""
+    monkeypatch.setattr("expense_recon.web.service.FOLDER_MAX_FILES", 3)
+    _patch_ocr(monkeypatch, *[_extraction(DAY_M1) for _ in range(3)])
+    files = [(f"r{i}.jpg", JPG + str(i).encode()) for i in range(5)]
+    result = _drop(client, files, month=MONTH_M1)
+    by_file = {r["file"]: r for r in result["files"]}
+    for name in ("r0.jpg", "r1.jpg", "r2.jpg"):
+        assert by_file[name]["status"] == "filed"
+    for name in ("r3.jpg", "r4.jpg"):
+        assert by_file[name]["status"] == "rejected"
+        assert by_file[name]["reason"] == "upload-cap"
+        assert by_file[name]["limit"] == 3
+    assert result["n_filed"] == 3
+    assert result["n_rejected"] == 2
+    entry = result["months"][0]
+    assert entry["n_added"] == 3
+    assert "issues" not in entry  # the ingest cap itself never fired
+    view = client.get(f"/api/expense-batches/{entry['batch_id']}").json()
+    assert view["summary"]["n_expenses"] == 3
+
+
 # --- 3. the job ledger ----------------------------------------------------
 
 

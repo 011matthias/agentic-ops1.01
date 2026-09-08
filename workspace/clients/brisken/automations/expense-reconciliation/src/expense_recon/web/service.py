@@ -1572,9 +1572,13 @@ FOLDER_RECEIPT_MAX_BYTES = 15 * 1024 * 1024
 # The same number the reviewer reads in the rejection sentence, so the
 # prose and the machine-readable `limit` cannot disagree.
 FOLDER_RECEIPT_MAX_MB = FOLDER_RECEIPT_MAX_BYTES // (1024 * 1024)
-# One bulk upload is one operator action on one run; a receipts-folder month
-# is ~20-40 files. The cap bounds vision cost and a zip's blast radius.
-FOLDER_MAX_FILES = 80
+# One bulk upload is one operator action on one run. The cap bounds vision
+# cost and a zip's blast radius PER INGEST CALL; it is sized for the
+# Receipts drop page, whose legitimate load is a multi-month backfill pile,
+# not one month's ~20-40 receipts (owner 2026-09-08: 80 was too small).
+# The drop router marks anything past the cap `upload-cap` in its ledger
+# BEFORE the ingest call, so a truncation is never silent there.
+FOLDER_MAX_FILES = 500
 # Charges the reviewer has decided; held out of the re-match entirely so a
 # folder upload can never disturb confirmed / rejected / already-posted work.
 _FOLDER_TERMINAL = frozenset(

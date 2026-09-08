@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-07
+updated: 2026-09-08
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -1325,6 +1325,30 @@ injected via email" is item 40's language for mail as a first-class path).
 
 SPA half: `docs/lovable-receipts-drop-prompt.md` (owner applies; §2 removes
 the create-month upload area, which the server already 400s).
+
+### 45. Drop cap raised + honest overflow; nav redesign (owner directives 2026-09-08)
+
+**Owner, same day as item 44 shipped:** the drop page's 80-file bound "must
+be increased"; the Receipts page needs a button back to the main menu; and
+on every page except the main menu the top bar should disappear completely,
+replaced by an always-visible button back to the menu.
+
+**Backend shipped:** `FOLDER_MAX_FILES` 80 → 500 (`service.py` — the cap
+bounds vision cost and zip blast radius PER INGEST CALL; sized now for a
+multi-month backfill pile). Found and fixed beside it: when one month's
+drop group exceeded the cap, the create/add call truncated silently while
+the drop ledger still read `filed` for the skipped files. The router now
+marks the overflow `rejected` / `upload-cap` (with `limit`) BEFORE the
+ingest call; recovery is re-dropping the pile (content dedupe skips what
+landed). Both proven by mutation: cap regressed to 80 reddens the 81-file
+test, unwiring the pre-slice reddens the overflow-ledger test.
+
+**SPA half (all three asks):** folded into
+`docs/lovable-receipts-drop-prompt.md` (still one paste) — §1 gains the
+`upload-cap` rejected copy and client-side chunking at 300 files per POST
+(Starlette parses ~1000 form parts max), §5 is the nav redesign: top bar
+only on `/months` (the main menu), a sticky "← Menu" button on every other
+page, language toggle + logout consequently menu-only.
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
