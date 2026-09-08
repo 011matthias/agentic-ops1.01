@@ -329,7 +329,16 @@ def test_plain_german_page_chrome_is_not_read_as_sold(vw, con, paths):
 
 
 def test_recheck_records_a_plausible_mixed_batch(vw, con, paths):
-    """The guard must not suppress real, partial turnover."""
+    """The guard must not suppress real, partial turnover.
+
+    The live-page body is real bytes from a real Vinted page (2026-09-09). It
+    used to be the string "<html>still listed</html>", which stopped being a
+    valid stand-in when the recheck learned to read the page's status plugin:
+    a 200 carrying no plugin at all is now what a soft wall looks like, so an
+    invented body reads as unreadable rather than as alive.
+    """
+    alive_body = (Path(__file__).resolve().parents[1] / "fixtures" / "vinted-item-page"
+                  / "item_alive.snippet.html").read_text(encoding="utf-8")
     old = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
     for i in range(10):
         _seed_listing(con, i, f"{vw.BASE}/items/{i}-thing", old)
@@ -338,7 +347,7 @@ def test_recheck_records_a_plausible_mixed_batch(vw, con, paths):
         idx = int(str(request.url).rsplit("/", 1)[1].split("-")[0])
         if idx < 3:
             return httpx.Response(404, text="gone")
-        return httpx.Response(200, text="<html>still listed</html>")
+        return httpx.Response(200, text=alive_body)
 
     c = client_with(vw, httpx.MockTransport(handler), token=make_jwt(12))
     vw.recheck_gone(c, con, session_proven=True)
