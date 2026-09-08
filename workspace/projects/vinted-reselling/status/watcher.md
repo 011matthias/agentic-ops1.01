@@ -93,6 +93,61 @@ Median 26,95; `bad 9932861205` Agolde Shorts XS).
 `alerts`-Zeilen samt `quality`, der 21:55-Lauf holte einen frisch
 veröffentlichten Tap vom ntfy-Topic in die Datenbank (77 → 78 Zeilen).
 
+## Post-Alter und "jung und schon gefragt" (2026-09-08)
+
+Der Owner fragte, ob ein Verhaeltnis aus Likes zu Zeit-seit-Post als weiteres
+Kriterium hilft. Als Verhaeltnis nein: der Bot pollt alle 5 Minuten
+`newest_first`, also ist der Nenner eine Ziehung aus dem Poll-Intervall (Median
+3,18 Min ueber 33.231 Live-Zeilen) und keine Marktgroesse; durch ihn zu teilen
+sortiert die Spitze der Alarmliste nach Poll-Glueck. Ausserdem tragen 64% der
+Kandidaten ueberhaupt kein Herz.
+
+Die Frage hat aber etwas Schlimmeres freigelegt: **der Bot hielt jedes Listing
+fuer brandneu.** `listing_age_min` misst die Zeit seit WIR es gesehen haben und
+stand bei jedem einzelnen Alarm auf 0,0. Tatsaechlich waren 7 von 107 Alarmen
+auf Listings zwischen 3,8 Stunden und 5,05 Tagen alt, vier davon gingen laut
+raus.
+
+**Die Uhr lag schon in der Datenbank.** Vinted liefert Fotos von einem Pfad, der
+auf den Upload-Epoch endet, und `photo_url` steht auf jeder Zeile. Vier
+unabhaengige Bestaetigungen:
+
+1. 35.752 von 35.753 Zeilen lesbar (die eine hat gar keine Foto-URL).
+2. Live gepollte Zeilen kommen mit Median 3,18 Min heraus, die Seed-Crawl-Zeilen
+   mit Median 3,7 Tagen. Der Parser sieht das Seed-Flag nie.
+3. Kein einziges negatives Alter, und die Reihenfolge stimmt mit Vinteds eigenen
+   aufsteigenden Listing-IDs bei Spearman 0,993 ueberein.
+4. Herzen wachsen monoton mit dem Alter und fallen nach 24 Stunden wieder:
+   0,41 unter 5 Min, 1,31 bei 5-60 Min, 1,89 bei 1-24 Std, 1,13 darueber. Eine
+   erfundene Uhr erzeugt diese Kurve nicht. Der Abfall nach 24 Stunden ist
+   Survivorship: was dann noch dasteht, ist liegengeblieben.
+
+**Die Regel des Owners** (2026-09-08): "wenn junge posts schon paar like haben
+solls laut klingeln". Herzen zaehlen nur, solange das Listing unter 60 Minuten
+alt ist. Auf einem alten Listing heisst dieselbe Zahl, dass der Markt
+hingeschaut und nicht gekauft hat; auf einem jungen, dass innerhalb von Minuten
+Nachfrage da war. Die Herzen verdienen einen eigenen Term, statt den Rabatt zu
+wiederholen: der mittlere Rabatt liegt bei 56,0% ohne Herz, 55,7% bei einem und
+55,8% bei zwei.
+
+Gebaut als begrenzte Anhebung **innerhalb** des bestehenden relativen
+Klingel-Budgets, nicht als absolute Regel: 35% der Kandidaten tragen mindestens
+ein Herz, ein absolutes "klingeln wenn geliked" wuerde den lauten Kanal fluten.
+Der Boost ist bei +35% gedeckelt, damit ein einzelnes virales Listing den Kanal
+nicht besetzt. Alte Listings bekommen keinen Abschlag, den der Owner nicht
+verlangt hat; sie gewinnen die lauten Plaetze nur nicht mehr.
+
+Verifiziert am laufenden Task: eine Meldung um 21:29 UTC trug "seit 1 Min.
+online", Prio 5, mit den drei Bewertungsknoepfen.
+
+Nebenbei repariert: `tools/preflight-hooks.py` startete pytest ohne httpx und
+pyyaml, waehrend der CI-Job beide mitgibt. Jedes Modul hinter
+`pytest.importorskip` wurde lokal stillschweigend uebersprungen, darunter die
+gesamte 151er-Vinted-Suite, und das Werkzeug meldete trotzdem "der CI-hooks-Job
+sollte durchgehen". Nach dem Angleichen steigt die lokale Zahl von 1178 auf
+1329. Ein lokales Tor, das eine echte Teilmenge des entfernten ist, ist
+schlimmer als keins, weil man ihm glaubt.
+
 ## Elemente
 
 | Element | Zustand | Stand | Nächster Schritt | Blocker |
@@ -106,6 +161,8 @@ veröffentlichten Tap vom ntfy-Topic in die Datenbank (77 → 78 Zeilen).
 | Fake-Risk | live | Regelbasiert inkl. Verkäuferprofil; ab 0.4 Warnzeile, ab 0.7 unterdrückt. Unterdrückung braucht **zwei** unabhängige Signale, der Preis allein warnt nur | Schwellen nachziehen, sobald Bewertungen da sind | Feedback-Daten |
 | Verkäuferprofil | live | `/api/v2/users/{id}` liefert Land + Reputation, gecacht pro Verkäufer, max 6 Abrufe/Zyklus | - | - |
 | Standort DE | live | Land kommt aus dem Verkäuferprofil (Katalog-Antwort hat keins); Ausland braucht 8 EUR Vorsprung | Schwelle nach 1 Woche Länderdaten nachmessen | Länderdaten |
+| Post-Alter | live | Echte Post-Zeit aus der Foto-URL, rueckwirkend ueber 35.752 Zeilen, 0 zusaetzliche Vinted-Anfragen. Steht im Alert-Text und in jedem Snapshot | Nach 2 Wochen gegen Outcome-Daten pruefen | - |
+| Jung + gefragt | live | Herzen auf einem Listing unter 60 Min heben die Qualitaet um bis zu 35%, gedeckelt, innerhalb des Klingel-Budgets. Auf aelteren Listings zaehlen sie nicht | Vorzeichen mit Outcome-Daten pruefen | Outcome-Daten |
 | Alert-Snapshots | live | Jede Entscheidung friert Comps, Schwellen und Risiko ein, auch die unterdrückten. **2026-09-08 zwei Stunden ausgefallen** (fehlende Spalte `quality`), behoben und 34 Zeilen rekonstruiert | - | - |
 | Feedback-Kanal | live | 👍 / 👎 / Gekauft; **am Handy des Owners bestätigt** (Knöpfe rendern, Tap erreicht ntfy). Eine Bewertung überlebt jetzt auch ohne Snapshot | Taste-Daten sammeln | - |
 | Prioritäts-Stufen | live | **Relativ** statt absolut: laut wird nur, was die Konkurrenz der letzten 24h schlägt. Gemessen an einem echten Tag: 5% klingeln, 12% normal, 83% still | Nach einer Woche gegen echte Daten nachjustieren | - |
@@ -182,6 +239,12 @@ Das Angebot ist dabei nur der Proxy; echte Nachfrage misst erst R4.
 3. Nach 2 Wochen: die drei neuen Denim-Suchen gegen R1 bis R3 bewerten.
 4. Nach ~300 vertrauenswürdigen gone-Events: Backtest-Scorer als eigener PR,
    dann `/comd_optimize`.
+5. Das Vorzeichen der Herzen ist noch unbelegt. Trigger: sobald 100 alarmierte
+   Listings ein gone-Event aus vertrauenswuerdiger Quelle haben, den Anteil
+   "weg" bei 0 Herzen gegen >= 1 Herz testen, kontrolliert auf `search_tag`.
+   Ab 10 Prozentpunkten Unterschied ist das Gewicht datengestuetzt statt
+   gesetzt. Heute: 3 gone-Events, keines davon war je ein Alarm, und alle drei
+   echten Bewertungen haben exakt 1 Herz, also nicht einmal Varianz.
 5. Aus der adversarialen Prüfung sind rund ein Dutzend Befunde ungeprüft
    geblieben (der Lauf brach beim Sitzungslimit ab, 38 von 71 Agenten).
    Bestätigt und behoben wurden: Wall-Verschlucken im Verkäufer-Abruf,
