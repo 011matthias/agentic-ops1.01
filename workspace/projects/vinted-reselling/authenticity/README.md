@@ -95,6 +95,46 @@ Die Routine:
 Wenn der Lens-Link nichts hergibt (die Fotos sind zu unscharf, das ist
 häufig), nimm Bing oder Yandex; Yandex ist bei Kleidung oft der stärkste.
 
+## Abnahmetest der Routine, 2026-09-08
+
+Drei echte Alerts von diesem Nachmittag, absichtlich über drei Marken und
+drei Risikoklassen. Jeweils der Weg, den du am Handy gehen würdest.
+
+| Listing | Anzeigentitel | Preis | Ergebnis der Bildsuche |
+|---|---|---|---|
+| 9932723613 | "Veste stone Islande magnifique et intemporelle" | 42,70 € | Bing: **Stone Island Zip-Up Hoodie**. Warenart und Marke bestätigt, Modelltyp präzisiert. |
+| 9932759269 | "Polo Ralph Lauren Pullover" | 19,60 € | Yandex: **polo ralph lauren bear**, "джемпер polo ralph lauren с медведем". Der Titel verschweigt die Linie. |
+| 9932717176 | "Levi's Jeans 501" | 13,30 € | Yandex: nur "джинсы мужской", "джинсы широкие". Warenart bestätigt, **501 nicht bestätigt**. |
+
+Was die drei Fälle zeigen:
+
+**Der Ralph-Lauren-Treffer ist der Grund, warum sich der Handgriff lohnt.**
+Die Anzeige sagt "Pullover", die Bildsuche sagt Polo Bear. Das ist eine
+deutlich wertvollere Linie, und gleichzeitig eine der am häufigsten
+gefälschten. Beides ändert die Kaufentscheidung, und beides stand nicht im
+Titel.
+
+**Der Levi's-Fall ist ein Ergebnis, kein Fehlschlag.** Dass die Bildsuche nur
+"Jeans" sagt und die 501 nicht bestätigt, heißt: die Fotos zeigen die
+unterscheidenden Merkmale nicht. Das ist genau der Moment für die Rückfrage
+aus [levis.md](levis.md) (Red Tab, Waschzettel, Lederpatch), nicht der Moment
+zum Kaufen.
+
+### Welcher Dienst wofür
+
+- **Yandex ist bei Kleidung der stärkste.** Er benennt Modelllinien, wo die
+  anderen bei der Warengattung bleiben. Sprache der Treffer ist oft Russisch;
+  das stört nicht, die Markennamen stehen lateinisch drin.
+- **Bing** liefert saubere Produktnamen und funktioniert zuverlässig.
+- **Google Lens** verarbeitet das Vinted-Bild korrekt (im Test hat Lens die
+  Bildmaße 600x800 aus der URL gelesen), zeigte dem automatisierten Browser
+  danach aber einen Bot-Check. **Am Handy tritt das nicht auf**, dort ist Lens
+  weiterhin die beste erste Wahl. Verifiziert ist damit, dass der Link gültig
+  ist und Lens das Bild annimmt; das Endergebnis konnte aus der Automatisierung
+  heraus nicht abgerufen werden.
+
+Reihenfolge im Alert bleibt deshalb Lens zuerst; wenn er zickt, Yandex.
+
 ## Was der Watcher automatisch prüft
 
 Der Fake-Risk-Score im Alert deckt die Signale ab, die aus den Daten
