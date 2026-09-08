@@ -342,6 +342,8 @@ CREATE TABLE IF NOT EXISTS listings (
     currency TEXT,
     url TEXT,
     photo_url TEXT,
+    posted_at TEXT,
+    fav_first INTEGER,
     seller_id INTEGER,
     seller_login TEXT,
     favourites INTEGER,
@@ -375,7 +377,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     country TEXT,
     price_at_alert REAL, total_at_alert REAL,
     favourites_at_alert INTEGER, promoted INTEGER, seller_id INTEGER,
-    listing_age_min REAL,
+    listing_age_min REAL, posted_at TEXT,
     comp_n INTEGER, comp_median REAL, comp_p25 REAL, comp_p75 REAL,
     discount_pct REAL, margin_eur REAL,
     deal_ratio_used REAL, min_comps_used INTEGER, comp_window_used INTEGER,
@@ -440,6 +442,8 @@ ADDED_COLUMNS = {                       # column -> DDL fragment, applied to old
     "country": "TEXT",
     "fake_risk": "REAL",
     "fake_risk_reasons": "TEXT",
+    "posted_at": "TEXT",
+    "fav_first": "INTEGER",
 }
 
 
@@ -495,13 +499,27 @@ BACKFILLS = {
                     (brand_norm_of(brand), row_id))
         for row_id, brand in con.execute("SELECT id, brand FROM listings").fetchall()
     ],
+    # Retroactive over the whole history, because the photo URL was stored from
+    # the first row onwards. This is the one field the watcher gains for free
+    # and backwards: every listing it ever saw gets a real posting time.
+    "posted_at": lambda con: [
+        con.execute("UPDATE listings SET posted_at=? WHERE id=?",
+                    (posted_at_of(url), row_id))
+        for row_id, url in con.execute("SELECT id, photo_url FROM listings").fetchall()
+    ],
+    # fav_first can only be seeded from the current reading, which for an
+    # already-seen row is the LATEST count, not the first. Seeding it anyway
+    # would silently invent growth of zero on 35k rows, so old rows stay NULL
+    # and the measure starts clean with the next listing the watcher meets.
+    "fav_first": lambda con: None,
 }
 
 # Which existing column each backfill reads. A very old table shape may not have
 # it, and a backfill that cannot read its source must skip rather than crash the
 # connect that every mode depends on.
 BACKFILL_SOURCE = {"is_kid": "title", "garment_class": "title",
-                   "size_class": "size", "brand_norm": "brand"}
+                   "size_class": "size", "brand_norm": "brand",
+                   "posted_at": "photo_url"}
 
 # Clause openers that are table constraints rather than columns.
 _DDL_CONSTRAINTS = {"primary", "unique", "foreign", "check", "constraint"}
@@ -900,6 +918,38 @@ def item_country(item: dict) -> str | None:
     return None
 
 
+# Vinted serves listing photos from a path that ends in the image's upload
+# epoch: .../f800/1788892725.jpeg, with an optional /r<n>/ revision segment.
+# That epoch is the closest thing to a posting time the catalog response
+# carries, and it costs nothing: the URL is already stored on every row.
+# Validated three ways over 35,393 rows: 35,392 parse; listings found by the
+# 5-minute poll come out at a median 3.18 minutes old while the seed crawl's
+# come out at a median 3.7 days, which the parser cannot know; there is not one
+# negative age; and the ordering agrees with Vinted's own ascending listing ids
+# at Spearman 0.993.
+PHOTO_EPOCH = re.compile(r"/f\d{2,4}/(?:r\d+/)?(\d{9,11})\.jpe?g")
+
+
+def posted_at_of(photo_url: str | None) -> str | None:
+    """Posting time read off the listing photo URL; None when unreadable.
+
+    Bounded rather than trusted: an epoch in the future or absurdly far in the
+    past is a URL shape we have not seen, not a posting time, and returning
+    None keeps such a row out of the age logic instead of poisoning it.
+    """
+    m = PHOTO_EPOCH.search(photo_url or "")
+    if not m:
+        return None
+    try:
+        ts = datetime.fromtimestamp(int(m.group(1)), timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+    now = datetime.now(timezone.utc)
+    if ts > now + timedelta(minutes=10) or ts < now - timedelta(days=3650):
+        return None
+    return ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def parse_item(item: dict, tag: str, seed: int) -> dict:
     price = float((item.get("price") or {}).get("amount") or 0)
     total = float((item.get("total_item_price") or {}).get("amount") or price)
@@ -926,6 +976,7 @@ def parse_item(item: dict, tag: str, seed: int) -> dict:
         "currency": (item.get("price") or {}).get("currency_code", "EUR"),
         "url": item.get("url"),
         "photo_url": photo_url,
+        "posted_at": posted_at_of(photo_url),
         "seller_id": user.get("id"),
         "seller_login": user.get("login"),
         "favourites": item.get("favourite_count", 0),
@@ -954,13 +1005,16 @@ def upsert(con: sqlite3.Connection, rec: dict) -> bool:
     con.execute(
         """INSERT INTO listings (id, search_tag, title, brand, brand_norm, size, size_class,
                condition, cond_tier, garment_class, is_kid, country, price, total_price, currency,
-               url, photo_url, seller_id, seller_login, favourites, views, promoted, seed,
-               first_seen, last_seen)
+               url, photo_url, posted_at, seller_id, seller_login, favourites, fav_first,
+               views, promoted, seed, first_seen, last_seen)
            VALUES (:id, :search_tag, :title, :brand, :brand_norm, :size, :size_class,
                :condition, :cond_tier, :garment_class, :is_kid, :country, :price, :total_price, :currency,
-               :url, :photo_url, :seller_id, :seller_login, :favourites, :views, :promoted, :seed,
-               :first_seen, :last_seen)""",
-        {**rec, "first_seen": ts, "last_seen": ts},
+               :url, :photo_url, :posted_at, :seller_id, :seller_login, :favourites, :fav_first,
+               :views, :promoted, :seed, :first_seen, :last_seen)""",
+        # fav_first is written here and never again: the UPDATE branch above
+        # overwrites favourites on every re-sight, so without a frozen first
+        # reading there is no second point to measure like growth against.
+        {**rec, "first_seen": ts, "last_seen": ts, "fav_first": rec.get("favourites")},
     )
     return True
 
@@ -1197,6 +1251,7 @@ def record_alert(con: sqlite3.Connection, rec: dict, ctx: dict) -> int:
         "promoted": rec.get("promoted"),
         "seller_id": rec.get("seller_id"),
         "listing_age_min": ctx.get("listing_age_min"),
+        "posted_at": ctx.get("posted_at"),
         "comp_n": ctx.get("comp_n"),
         "comp_median": ctx.get("comp_median"),
         "comp_p25": ctx.get("comp_p25"),
@@ -1230,15 +1285,31 @@ RING_BUDGET_PER_DAY = 15
 NORMAL_BUDGET_PER_DAY = 60
 
 
+# A young listing that already carries hearts, per the owner's 2026-09-08
+# direction: "wenn junge posts schon paar like haben solls laut klingeln".
+# Not a likes-per-time ratio. The bot polls newest_first every five minutes, so
+# the age of a freshly found listing is a draw from the poll interval (median
+# 3.2 min over 33,231 live rows) rather than a market fact; dividing by it
+# reorders the top of the alert list by poll luck. Holding age roughly constant
+# and reading the raw count is the same idea without the noisy denominator.
+# The count earns its own term: across alert candidates the mean discount is
+# 56.0% at zero hearts, 55.7% at one and 55.8% at two, so hearts are not a
+# restatement of the deal depth already in q.
+YOUNG_POST_MAX_MIN = 60     # older than this is not a "young post" any more
+FRESH_LIKE_CAP = 5          # hearts beyond this add nothing
+FRESH_LIKE_WEIGHT = 0.35    # the strongest boost a young, liked listing can get
+
+
 def alert_quality(discount_pct: float, margin_eur: float, fake: float,
                   country: str | None, size_ok_core: bool,
-                  prof: float | None) -> float:
+                  prof: float | None, fresh_likes: int = 0) -> float:
     """One number for how good a candidate is, on the criteria the owner named.
 
     Deal depth and absolute margin carry the weight, because a 60% discount on
     a 12 EUR item is worth less attention than a 45% discount on a 90 EUR one.
-    Fake risk, size and location adjust it, and the learned taste score nudges
-    within that frame rather than overriding it.
+    Fake risk, size and location adjust it, hearts on a still-young listing
+    lift it, and the learned taste score nudges within that frame rather than
+    overriding it.
     """
     q = discount_pct + min(margin_eur, 80.0)
     q *= (1.0 - min(fake, 1.0) * 0.6)
@@ -1246,6 +1317,8 @@ def alert_quality(discount_pct: float, margin_eur: float, fake: float,
         q *= 1.15
     if country and country != "DE":
         q *= 0.80
+    if fresh_likes > 0:
+        q *= 1.0 + FRESH_LIKE_WEIGHT * min(fresh_likes, FRESH_LIKE_CAP) / FRESH_LIKE_CAP
     if prof is not None:
         q *= 0.7 + 0.6 * prof
     return round(q, 3)
@@ -1254,7 +1327,7 @@ def alert_quality(discount_pct: float, margin_eur: float, fake: float,
 def alert_priority(discount_pct: float, fake: float, country: str | None,
                    size_ok_core: bool, prof: float | None,
                    con: sqlite3.Connection | None = None,
-                   margin_eur: float = 0.0) -> int:
+                   margin_eur: float = 0.0, fresh_likes: int = 0) -> int:
     """ntfy priority: which alerts are allowed to ring.
 
     An absolute score cannot do this job. Measured against 27,831 real rows,
@@ -1274,7 +1347,8 @@ def alert_priority(discount_pct: float, fake: float, country: str | None,
     a cold start should ring for the obvious ones rather than stay silent while
     it learns.
     """
-    q = alert_quality(discount_pct, margin_eur, fake, country, size_ok_core, prof)
+    q = alert_quality(discount_pct, margin_eur, fake, country, size_ok_core, prof,
+                      fresh_likes=fresh_likes)
     if fake >= 0.4:
         return 2          # a flagged listing never interrupts, whatever it scores
     if con is None:
@@ -1399,6 +1473,7 @@ def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: 
         "size_filter": ",".join(allowed), "fake_risk": fake, "fake_risk_reasons": reasons,
         "profile_score": taste, "cycle_backlog_n": backlog_n,
         "listing_age_min": listing_age_min(con, rec["id"]),
+        "posted_at": rec.get("posted_at"),
         "settings_json": json.dumps({"settings": settings, "search": search}, default=str)[:4000],
     }
 
@@ -1430,16 +1505,27 @@ def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: 
             return drop("learned")
 
     margin = med - rec["total_price"]
+    # Hearts count towards the score only while the listing is still young.
+    # An old listing's hearts say the market looked and did not buy; a young
+    # one's say demand showed up within minutes. Same number, opposite meaning,
+    # and only the second is the signal the owner asked to ring for.
+    age = post_age_min(rec.get("posted_at"))
+    fresh_likes = (rec.get("favourites") or 0) if (
+        age is not None and age <= YOUNG_POST_MAX_MIN) else 0
     quality = alert_quality(pct, margin, fake, country,
-                            size_class in CORE_SIZE_CLASSES, taste)
+                            size_class in CORE_SIZE_CLASSES, taste,
+                            fresh_likes=fresh_likes)
     ctx["quality"] = quality
     prio = alert_priority(pct, fake, country, size_class in CORE_SIZE_CLASSES, taste,
-                          con=con, margin_eur=margin)
+                          con=con, margin_eur=margin, fresh_likes=fresh_likes)
     lines = [
         f"{rec['brand']} | {rec['condition']} | Gr. {rec['size']} | {rec['garment_class']}",
         f"{rec['total_price']:.2f} EUR inkl. Gebuehr, Median vergleichbar {med:.2f} EUR ({pct}% drunter)",
         f"{len(comps)} Vergleichsangebote | Marge {med - rec['total_price']:.2f} EUR"
         + (f" | Land {country}" if country else ""),
+        f"{human_age(age)} online"
+        + (f" | {rec['favourites']} Herzen" if (rec.get("favourites") or 0) else "")
+        + (" | frisch und schon gefragt" if fresh_likes else ""),
     ]
     if fake >= float(settings.get("fake_risk_flag", 0.4)):
         lines.insert(0, f"FAKE-RISIKO {fake:.0%}: {reasons}")
@@ -1464,6 +1550,32 @@ def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: 
         log(f"ALERT sent (p{prio}, alert {alert_id}): {rec['id']} {rec['title']} @ {rec['total_price']}")
         return True
     return False
+
+
+def human_age(minutes: float | None) -> str:
+    """Listing age for the notification line, in the unit a reader thinks in."""
+    if minutes is None:
+        return "Alter unbekannt,"
+    if minutes < 90:
+        return f"seit {int(round(minutes))} Min."
+    if minutes < 60 * 36:
+        return f"seit {minutes / 60:.1f} Std."
+    return f"seit {minutes / 1440:.1f} Tagen"
+
+
+def post_age_min(posted_at: str | None) -> float | None:
+    """Minutes since the listing was actually posted, or None if unknown.
+
+    Distinct from listing_age_min below, which measures time since WE first saw
+    it and is therefore ~0 on every alert: the bot polls newest_first, so it
+    finds listings within minutes and then believes every one of them is brand
+    new. Measured on 2026-09-08, 7 of 107 alerts were on listings between 3.8
+    hours and 5.05 days old, four of which went out ringing.
+    """
+    posted = parse_ts(posted_at)
+    if not posted:
+        return None
+    return round((datetime.now(timezone.utc) - posted).total_seconds() / 60.0, 1)
 
 
 def listing_age_min(con: sqlite3.Connection, listing_id: int) -> float | None:

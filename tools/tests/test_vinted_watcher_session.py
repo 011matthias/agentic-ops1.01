@@ -1648,3 +1648,170 @@ def test_a_flaky_search_still_costs_only_itself(vw, paths, monkeypatch):
     monkeypatch.setattr(vw, "poll_search", one_sided)
     assert vw.run_cycle() == 0
     assert seen == ["bad", "good"], "the second search was never reached"
+
+
+# ------------------------- 2026-09-08: the real posting time, and young + liked
+#
+# The owner asked whether likes-per-time-since-posted would help as a criterion.
+# It does not as a ratio: the bot polls newest_first every five minutes, so the
+# denominator is a draw from the poll interval (median 3.18 min over 33,231 live
+# rows), not a market fact, and 64% of alert candidates carry zero hearts anyway.
+# What the question uncovered is that the bot had no idea how old a listing
+# really was: listing_age_min measures time since WE saw it and was 0.0 on every
+# single alert, while 7 of 107 alerts were on listings 3.8 hours to 5.05 days
+# old, four of them ringing. The photo URL carries the upload epoch, already
+# stored on every row. The owner's rule: young AND already liked should ring.
+
+def test_the_posting_time_is_read_off_the_photo_url(vw):
+    now = datetime.now(timezone.utc)
+    epoch = int((now - timedelta(minutes=7)).timestamp())
+    url = f"https://images1.vinted.net/t/02_00a50_Bx/f800/{epoch}.jpeg?s=abc"
+    posted = vw.posted_at_of(url)
+    assert posted is not None
+    assert 6.0 <= vw.post_age_min(posted) <= 8.0
+
+
+def test_the_revision_segment_some_urls_carry_is_not_a_parse_failure(vw):
+    """171 of 35,393 production rows have /r1/ or /r3/ before the epoch."""
+    now = int((datetime.now(timezone.utc) - timedelta(hours=2)).timestamp())
+    assert vw.posted_at_of(f"https://images1.vinted.net/t/06_00/f800/r3/{now}.jpeg") is not None
+    assert vw.posted_at_of(f"https://images1.vinted.net/t/06_00/f200/{now}.jpg") is not None
+
+
+def test_an_implausible_epoch_is_refused_rather_than_believed(vw):
+    assert vw.posted_at_of(None) is None
+    assert vw.posted_at_of("https://images1.vinted.net/t/06_00/f800/nope.jpeg") is None
+    future = int((datetime.now(timezone.utc) + timedelta(days=2)).timestamp())
+    assert vw.posted_at_of(f"https://images1.vinted.net/t/06_00/f800/{future}.jpeg") is None
+    assert vw.posted_at_of("https://images1.vinted.net/t/06_00/f800/0000000001.jpeg") is None
+    assert vw.post_age_min(None) is None
+
+
+def test_the_posting_time_is_backfilled_over_the_whole_history(vw, paths):
+    """It is retroactive: the photo URL was stored from the very first row."""
+    con = vw.db_connect()
+    con.execute("ALTER TABLE listings DROP COLUMN posted_at")
+    epoch = int((datetime.now(timezone.utc) - timedelta(hours=5)).timestamp())
+    con.execute("INSERT INTO listings (id, search_tag, photo_url) VALUES (1, 't', ?)",
+                (f"https://images1.vinted.net/t/02_00/f800/{epoch}.jpeg",))
+    con.execute("DELETE FROM meta WHERE k='backfill:posted_at'")
+    con.commit()
+    con.close()
+    con = vw.db_connect()
+    filled = con.execute("SELECT posted_at FROM listings WHERE id=1").fetchone()[0]
+    assert filled is not None, "the backfill did not run"
+    assert 290 < vw.post_age_min(filled) < 310
+    con.close()
+
+
+def test_hearts_on_a_young_listing_lift_the_score(vw):
+    base = dict(discount_pct=60.0, margin_eur=20.0, fake=0.0, country="DE",
+                size_ok_core=True, prof=None)
+    cold = vw.alert_quality(**base, fresh_likes=0)
+    one = vw.alert_quality(**base, fresh_likes=1)
+    many = vw.alert_quality(**base, fresh_likes=5)
+    assert cold < one < many, "more hearts on a young post must score higher"
+    assert many == pytest.approx(cold * (1 + vw.FRESH_LIKE_WEIGHT))
+
+
+def test_the_heart_boost_is_capped_so_one_viral_listing_cannot_own_the_channel(vw):
+    base = dict(discount_pct=60.0, margin_eur=20.0, fake=0.0, country="DE",
+                size_ok_core=True, prof=None)
+    assert vw.alert_quality(**base, fresh_likes=5) == vw.alert_quality(**base, fresh_likes=247)
+
+
+def test_hearts_never_rescue_a_candidate_a_named_gate_refused(vw):
+    """The owner's frame: his criteria are the backbone, signals rank within it."""
+    hot = dict(discount_pct=60.0, margin_eur=20.0, country="DE",
+               size_ok_core=True, prof=None)
+    assert vw.alert_priority(fake=0.5, **{k: v for k, v in hot.items()
+                                          if k != "margin_eur"},
+                             margin_eur=20.0, fresh_likes=5) == 2, \
+        "a fake-flagged listing must stay quiet however many hearts it has"
+
+
+def _deal_settings():
+    return {"deal_ratio": 0.55, "min_comps": 5, "comp_window_days": 45,
+            "min_price": 5, "size_classes": ["m"], "min_margin": 0,
+            "foreign_advantage_eur": 8, "fake_risk_suppress": 0.7,
+            "fake_risk_flag": 0.4, "profile_suppress": 0.15, "profile_min_rated": 8}
+
+
+def test_a_young_liked_listing_outranks_an_identical_cold_one(vw, con, paths, monkeypatch):
+    """End to end through score_and_alert: same deal, hearts decide the priority."""
+    _comps(con, vw, n=10, price=40.0, brand_norm="carhartt", size_class="m")
+    sent = []
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: sent.append(k) or True)
+    settings = _deal_settings()
+    fresh = int(datetime.now(timezone.utc).timestamp()) - 120
+    photo = f"https://images1.vinted.net/t/02_00/f800/{fresh}.jpeg"
+
+    def candidate(listing_id, favourites):
+        return {"id": listing_id, "search_tag": "t", "title": "Carhartt Jacke",
+                "brand": "Carhartt", "brand_norm": "carhartt", "size": "M",
+                "size_class": "m", "condition": "Sehr gut", "cond_tier": "very_good",
+                "garment_class": "jacket", "is_kid": 0, "country": "DE",
+                "price": 18.0, "total_price": 20.0, "currency": "EUR",
+                "url": "u", "photo_url": photo, "posted_at": vw.posted_at_of(photo),
+                "seller_id": 1, "seller_login": "s", "favourites": favourites,
+                "views": 0, "promoted": 0, "seed": 0}
+
+    for lid, favs in ((5001, 0), (5002, 4)):
+        rec = candidate(lid, favs)
+        vw.upsert(con, rec)
+        assert vw.score_and_alert(con, rec, {"tag": "t", "query": "q"}, settings, {})
+    cold, liked = con.execute(
+        "SELECT quality FROM alerts WHERE listing_id IN (5001,5002) ORDER BY listing_id"
+    ).fetchall()
+    assert liked[0] > cold[0], "hearts on a fresh listing did not lift the score"
+    assert "4 Herzen" in sent[1]["message"] and "frisch und schon gefragt" in sent[1]["message"]
+    assert "Herzen" not in sent[0]["message"]
+
+
+def test_hearts_on_a_stale_listing_do_not_count_as_demand(vw, con, paths, monkeypatch):
+    """The counterweight: the same hearts, five days later, mean the opposite."""
+    _comps(con, vw, n=10, price=40.0, brand_norm="carhartt", size_class="m")
+    sent = []
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: sent.append(k) or True)
+    old = int((datetime.now(timezone.utc) - timedelta(days=5)).timestamp())
+    photo = f"https://images1.vinted.net/t/02_00/f800/{old}.jpeg"
+    rec = {"id": 5003, "search_tag": "t", "title": "Carhartt Jacke",
+           "brand": "Carhartt", "brand_norm": "carhartt", "size": "M",
+           "size_class": "m", "condition": "Sehr gut", "cond_tier": "very_good",
+           "garment_class": "jacket", "is_kid": 0, "country": "DE",
+           "price": 18.0, "total_price": 20.0, "currency": "EUR", "url": "u",
+           "photo_url": photo, "posted_at": vw.posted_at_of(photo),
+           "seller_id": 1, "seller_login": "s", "favourites": 4, "views": 0,
+           "promoted": 0, "seed": 0}
+    vw.upsert(con, rec)
+    assert vw.score_and_alert(con, rec, {"tag": "t", "query": "q"}, _deal_settings(), {})
+    assert "frisch und schon gefragt" not in sent[0]["message"]
+    assert "seit 5.0 Tagen online" in sent[0]["message"], sent[0]["message"]
+    q = con.execute("SELECT quality FROM alerts WHERE listing_id=5003").fetchone()[0]
+    cold = vw.alert_quality(50.0, 20.0, 0.0, "DE", True, None, fresh_likes=0)
+    assert q == pytest.approx(cold), "a stale listing was boosted by its hearts"
+
+
+def test_the_first_favourite_reading_is_frozen_against_later_overwrites(vw, con, paths):
+    """Without a frozen first point there is no second point to measure against."""
+    rec = {"id": 6001, "search_tag": "t", "title": "x", "brand": "Carhartt",
+           "brand_norm": "carhartt", "size": "M", "size_class": "m",
+           "condition": "Sehr gut", "cond_tier": "very_good", "garment_class": "jacket",
+           "is_kid": 0, "country": "DE", "price": 10.0, "total_price": 11.0,
+           "currency": "EUR", "url": "u", "photo_url": None, "posted_at": None,
+           "seller_id": 1, "seller_login": "s", "favourites": 2, "views": 0,
+           "promoted": 0, "seed": 0}
+    assert vw.upsert(con, rec) is True
+    rec["favourites"] = 19
+    assert vw.upsert(con, rec) is False
+    row = con.execute("SELECT favourites, fav_first FROM listings WHERE id=6001").fetchone()
+    assert row == (19, 2), "the first reading must survive every re-sight"
+
+
+def test_the_alert_snapshot_keeps_the_posting_time(vw, paths):
+    con = vw.db_connect()
+    rowid = vw.record_alert(con, {"id": 7, "search_tag": "t"},
+                            {"posted_at": "2026-09-08T10:00:00Z", "sent": 1})
+    assert con.execute("SELECT posted_at FROM alerts WHERE id=?",
+                       (rowid,)).fetchone()[0] == "2026-09-08T10:00:00Z"
+    con.close()
