@@ -1195,7 +1195,7 @@ Consequences:
   `CorpServ & DN ••3645`, which points at 3645 being a Corp Services card
   of Dirk's. That is a merchant's rendering of a statement descriptor, not
   the owner's record, so it is asked rather than written. 6013, 9693, 2838,
-  0340, 1176 and 3693 have no person source anywhere. All of it is in the
+  0340, 1176 and 9693 have no person source anywhere. All of it is in the
   draft `context/drafts/2026-09-08-card-gaps-criss-dirk.md`; enter persons
   only against a reply, never against the initials.
 - Rows gain `person` + `person_source` as PARALLEL fields (api-contract
@@ -1755,9 +1755,21 @@ September; Anthropic, August), now card-1176 → Consulting with
 
 What the list settled:
 
-- **New cards:** 1176 → Consulting, 3693 → Cloud Services, 4921 + 5126 →
-  BRISKEN GmbH. Confirmed-existing: 0113, 2838 (Corporate Services); 6013,
-  8311 (Cloud Services).
+- **New cards:** 1176 → Consulting, 4921 + 5126 → BRISKEN GmbH.
+  Confirmed-existing: 0113, 2838 (Corporate Services); 6013, 8311, 9693
+  (Cloud Services). **Correction 2026-09-08 pm:** the round also created
+  `card-3693` from a misread of the sheet's `CHASE VISA 9693` row. Re-read
+  at pixel resolution against Criss's own mail of the same sheet, the row
+  is 9693; Zoho's COA ("Chase Visa | 9693 | Cloud Expenses") and six live
+  July/August/September rows carrying 9693 hints agree, and no row has ever
+  carried 3693. So 9693 was ALREADY registered (2026-09-06) and is
+  confirmed by the list rather than absent from it; `card-3693` was a
+  phantom and is gone from the live registry as of 2026-09-08 pm. Nothing
+  was misfiled: both keys pointed at Cloud Services and 3693 resolved no
+  rows. Two Wise bank-ACCOUNT digits in the same transcription are also
+  suspect (2932 may be 2992, 0173 may be 0179, 9137 may be 9197); they feed
+  statement coverage, not the card registry, and are flagged unverified in
+  `context/expense-reconciliation/all-banks-brisken-group-2026-09-08.md`.
 - **The four crossed-out cards** (2448 → Cloud Services, 7531 → entity
   pending, 1160 → Consulting, 3344 → Corporate Services) plus the
   owner-marked-closed 1930 → Cloud Services are registered **active**, with
