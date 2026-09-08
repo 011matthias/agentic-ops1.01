@@ -4,7 +4,7 @@ workstream: ops-radar
 group: ""
 spec: ""
 state: active
-updated: 2026-09-06
+updated: 2026-09-07
 ---
 
 # Meji Media / Opportunity Radar
@@ -85,3 +85,32 @@ blueprint (8804011): venue map is hardcoded ids 130-150 with FALLBACK
 'birmingham', so any post-April event gets Birmingham venue details; the two
 fixes are head-of-flow enquiry_type filter + live venue read from the event
 record. Pricing (ask 4) only after Meji accepts the scope.
+
+Ask 3 SENT and ANSWERED: Jess replied 2026-09-07 17:29 CEST in the Upwork room
+("Thanks Matthias, let me know if you need anything from me in the meantime"),
+which clears the ask-4 gate. Ask 4 (pricing) drafted 09-07 for Gurmej in the
+same room, grounded in a second live read of A0 (8841775) + A1 (8804011):
+
+- A0 runs `SELECT * FROM enquiries WHERE id > cursor ORDER BY id ASC LIMIT 50`
+  on MySQL connection 13875518 and POSTs a fixed JSON body to A1's webhook.
+  So the venue fix does NOT need a new DB read in A1: joining the event/venue
+  in A0's existing query and adding one payload field lets A1 module 80 read
+  the venue straight from the webhook. Module 80 keeps its `venue_key` output
+  name, so module 81, sheet column 20 and module 90 stay untouched, and A3
+  (which renders venue from the sheet) inherits the fix.
+- Same reason the family exclusion is cheapest as a WHERE clause in A0 rather
+  than a Make filter at A1's head: the row is never fetched, so there is no
+  cursor stall (cursor advances to the last office row; an all-family batch
+  returns nothing and costs no extra op, since A0's query runs on its 30-min
+  schedule regardless). This SUPERSEDES the 09-06 "head-of-flow filter"
+  placement, which was chosen before A0's query was read.
+- Head-of-A1 filtering would also block module 6 (gateway:WebhookRespond), so
+  the website form would stop getting the `{"status":"ok"}` body. Filtering in
+  A0 avoids that question entirely.
+- Net effect on Make usage: no operations added, and the family exclusion
+  removes a few. Relevant to the Block 31 credit-cliff conversation.
+
+Quote: 8-10 hrs total (~3 exclusion, ~5-6 venue read incl. regression across
+event ids 130-150), $295-$370 at $36.85/hr; piece 1 alone ~3 hrs / ~$110.
+UNSENT, with the owner. OPEN: whether ask 1 (launch line-up to Gurmej) has
+actually gone out; no Gurmej reply in the mailbox since 2026-08-28.
