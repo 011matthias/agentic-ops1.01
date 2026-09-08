@@ -40,11 +40,64 @@ git -C C:\Users\neuma_p1qrsic\Repo\agentic-ops1 fetch origin
 git -C C:\Users\neuma_p1qrsic\Repo\agentic-ops1-watcher checkout --detach origin/main
 ```
 
+## Der Aufzeichnungs-Ausfall vom 2026-09-08 (behoben)
+
+Der Owner hat auf dem Handy einen Bewertungsknopf gedrückt und nichts passierte.
+Die Knöpfe waren in Ordnung; die Aufzeichnung dahinter nicht.
+
+`alerts.quality` kam in die DDL, aber `CREATE TABLE IF NOT EXISTS` tut an einer
+bestehenden Tabelle nichts, und die Migrationsschleife lief nur über `listings`.
+Die Produktionstabelle bekam die Spalte nie, also scheiterte ab diesem Moment
+jedes INSERT in `alerts`. Vier Dinge mussten zusammenkommen, damit das zwei
+Stunden unsichtbar blieb:
+
+1. Das INSERT steht **hinter** dem ntfy-Aufruf, also kamen die Alerts weiter an.
+2. Der Fehler landete im Handler "eine schlechte Suche darf nicht die anderen
+   acht kosten" und wurde zur Warnung.
+3. Die Warnung ging nach stdout, das `run-hidden.vbs` verwirft. Es gab keine
+   Logdatei.
+4. `ingest_feedback` verlangte eine `alerts`-Zeile, bevor es eine Bewertung
+   speicherte, und schob seinen ntfy-Zeiger trotzdem weiter. Beide echten Taps
+   wurden gelesen und verworfen.
+
+Gemessener Schaden: von 26 Alerts mit Knöpfen wurden 5 aufgezeichnet und 21
+nicht, dazu die zwei ersten echten Bewertungen des Owners.
+
+Behoben in PR #749 (inhaltsgleich mit #748, den eine Parallel-Session aus
+demselben Arbeitsbaum gemerged hat):
+
+- `reconcile_ddl_columns()` liest die DDL selbst und ergänzt jeder bestehenden
+  Tabelle die fehlenden deklarierten Spalten. Eine Stelle zum Ändern, der Rest
+  leitet sich ab. Läuft über alle Tabellen, nicht nur `listings`.
+- `alterable()` meldet die Spalten, die SQLite nicht nachträglich hinzufügen
+  kann (PRIMARY KEY, UNIQUE, NOT NULL ohne Default, nicht-konstanter Default),
+  statt im Verbindungsaufbau zu scheitern.
+- Indizes werden einzeln angelegt: ein fehlender Index kostet Tempo, ein
+  gescheiterter Verbindungsaufbau kostet den Zyklus.
+- `log()` schreibt zusätzlich nach `data/watcher.log` (Rotation bei 2 MB).
+- `is_schema_error()` trennt "Code und Datenbank sind sich über die Form uneins"
+  von vorübergehenden SQLite-Fehlern; ersteres beendet den Zyklus mit Exit-Code
+  ungleich 0, was das einzige Signal ist, das ein verborgener Task tragen kann.
+- `feedback_target()` nimmt eine Bewertung für jedes Listing an, das diese
+  Datenbank je gesehen hat, und speichert sie mit leerem `alert_id`, wenn kein
+  Snapshot existiert. Der Tap ist das Knappe; ntfy vergisst ihn nach ~12 Stunden.
+
+**Wiederherstellung:** 34 verlorene Alert-Zeilen wurden aus den zugestellten
+ntfy-Nachrichten rekonstruiert und tragen in `settings_json` die Herkunft
+`recovered-from-ntfy`; `quality` bleibt dort NULL, weil der Wert nie in der
+Nachricht stand. Die zwei echten Bewertungen des Owners sind erfasst und an
+ihre Snapshots gehängt (`bought 9934904203` Levi's 501 W31 für 9,10 EUR gegen
+Median 26,95; `bad 9932861205` Agolde Shorts XS).
+
+**Verifiziert am laufenden Task, nicht per Hand:** der 21:50-Lauf schrieb wieder
+`alerts`-Zeilen samt `quality`, der 21:55-Lauf holte einen frisch
+veröffentlichten Tap vom ntfy-Topic in die Datenbank (77 → 78 Zeilen).
+
 ## Elemente
 
 | Element | Zustand | Stand | Nächster Schritt | Blocker |
 |---|---|---|---|---|
-| Laufzeit-Baum | live | Eigener Worktree `agentic-ops1-watcher`, Junctions auf data/ und context/ | Nach Watcher-Merges nachziehen | - |
+| Laufzeit-Baum | live | Eigener Worktree `agentic-ops1-watcher`, Junctions auf data/ und context/; Zyklen schreiben nach `data/watcher.log` | Nach Watcher-Merges nachziehen | - |
 | Poller + Comp-DB | live | v3 Präzisions-Upgrade 2026-09-08; ~33k Zeilen. **Backlog-Gate korrigiert**: zählte Artikel statt Zeit und liess 67% aller Listings ungeprüft | Datenqualität beobachten | - |
 | Session-Handling | live | Clean-slate refresh, 45-Min-Renewal, 401/403-Split, jetzt auch 5xx-Backoff | - | - |
 | Zustands-Mapping | live | **Defekt behoben 2026-09-08**: "Neu" / "Neu, mit Etikett" fielen auf `unknown`, 4.527 Zeilen waren von Alerts UND Comps ausgeschlossen. Rückwirkend repariert | - | - |
@@ -53,8 +106,8 @@ git -C C:\Users\neuma_p1qrsic\Repo\agentic-ops1-watcher checkout --detach origin
 | Fake-Risk | live | Regelbasiert inkl. Verkäuferprofil; ab 0.4 Warnzeile, ab 0.7 unterdrückt. Unterdrückung braucht **zwei** unabhängige Signale, der Preis allein warnt nur | Schwellen nachziehen, sobald Bewertungen da sind | Feedback-Daten |
 | Verkäuferprofil | live | `/api/v2/users/{id}` liefert Land + Reputation, gecacht pro Verkäufer, max 6 Abrufe/Zyklus | - | - |
 | Standort DE | live | Land kommt aus dem Verkäuferprofil (Katalog-Antwort hat keins); Ausland braucht 8 EUR Vorsprung | Schwelle nach 1 Woche Länderdaten nachmessen | Länderdaten |
-| Alert-Snapshots | live | Jede Entscheidung friert Comps, Schwellen und Risiko ein, auch die unterdrückten | - | - |
-| Feedback-Kanal | live | 👍 / 👎 / Gekauft als ntfy-Buttons; Topic gesetzt, Rundlauf-Drill bestanden (publish → poll → ingest → dedupe) | Owner tippt einmal einen Knopf an, damit das Rendern am Handy belegt ist | Owner |
+| Alert-Snapshots | live | Jede Entscheidung friert Comps, Schwellen und Risiko ein, auch die unterdrückten. **2026-09-08 zwei Stunden ausgefallen** (fehlende Spalte `quality`), behoben und 34 Zeilen rekonstruiert | - | - |
+| Feedback-Kanal | live | 👍 / 👎 / Gekauft; **am Handy des Owners bestätigt** (Knöpfe rendern, Tap erreicht ntfy). Eine Bewertung überlebt jetzt auch ohne Snapshot | Taste-Daten sammeln | - |
 | Prioritäts-Stufen | live | **Relativ** statt absolut: laut wird nur, was die Konkurrenz der letzten 24h schlägt. Gemessen an einem echten Tag: 5% klingeln, 12% normal, 83% still | Nach einer Woche gegen echte Daten nachjustieren | - |
 | Gone/Sold-Erkennung | live | Proven-session-Vorbedingung, Wall-Abbruch, 40%-Batch-Decke, `gone_source` | Vertrauenswürdige Outcomes sammeln | Zeit |
 | Brand-Report | live | `--brand-report`: Volumen, Median, Spread, Marge am Gate, Größen-Nachfrage, Keep/Drop | Wöchentlich laufen lassen | - |
@@ -121,8 +174,10 @@ Das Angebot ist dabei nur der Proxy; echte Nachfrage misst erst R4.
 
 ## Offene Punkte
 
-1. Owner tippt einmal einen Bewertungsknopf an. Der Rundlauf ist maschinell
-   belegt; offen ist nur, ob die drei Buttons am Handy sauber rendern.
+1. Das erste 👎 traf eine Agolde-Shorts in XS. `xs` steht für die drei
+   Damen-Denim-Suchen absichtlich in `size_classes` (die Probe zeigte, dass
+   Premium-Damenjeans in XS/S/M gelistet werden). Ein Signal ist keine Regel;
+   wiederholt sich das, ist es eine Zeile Config.
 2. Nach einer Woche: Länderverteilung messen und die 8-EUR-Schwelle prüfen.
 3. Nach 2 Wochen: die drei neuen Denim-Suchen gegen R1 bis R3 bewerten.
 4. Nach ~300 vertrauenswürdigen gone-Events: Backtest-Scorer als eigener PR,
