@@ -1381,6 +1381,50 @@ already published v1 mid-day (the drop page is LIVE; the operator's
 chunking, this item's create-UI removal, the nav redesign, the
 Open-month release (travel rows excluded).
 
+### 47. Cost centers: attribute expenses to projects and purposes (owner directive 2026-09-08)
+
+**Owner (Dirk's ask):** a cost-center view deriving which costs belong to
+which projects/purposes — examples given: Nicolas's Brazil expenses, the
+Lidar project Nicolas works on, Matthias's work on this tool, marketing.
+
+**Shape (design round first, not a build):** a cost-center DIMENSION on
+expenses, sibling to category/entity/person, following the established
+pattern — operator-defined registry in settings (like `cards` /
+`merchants`), per-expense resolution chain with explicit override >
+learned > suggestion, never a silent guess; roll-ups in the month report
+and a cross-month view. The person attribution (R1, person-via-card) and
+trips are existing signals a resolver can lean on (Nicolas's card +
+Brazil-trip receipts ≈ two of Dirk's own examples). Owner questions to
+settle BEFORE building: who defines the list (Dirk once, or learned from
+assignments), what the resolution precedence is (person? card? trip?
+merchant?), whether one expense can split across cost centers (the
+books_as split precedent says yes eventually), and which surface Dirk
+reads (a tile page vs a report section). Session prompt handed
+2026-09-08 (checkpoint of the same day); full brief there.
+
+### 48. Report structures against US accounting law, tool-scope only (owner directive 2026-09-08)
+
+**Owner:** the tool's output is lawfully regulated; there are specific
+report structures and criteria that must be fulfilled — reference
+American accounting law, incorporating ONLY what falls within the
+expense-reconciliation tool's range.
+
+**Scope guard (the load-bearing constraint):** the tool produces expense
+DOCUMENTATION — monthly expense report PDF with receipt evidence,
+reconciliation report (statement vs receipts + exceptions), CSV/XLSX
+sidecars. It is not a general ledger and files nothing; financial
+statements, tax filings and bookkeeping are out of range, so GAAP
+statement-presentation rules mostly do NOT bind here. The plausible
+binding body is IRS substantiation for business expenses (accountable-
+plan rules, the T&E substantiation elements — amount / date / place /
+business purpose, receipt thresholds, retention) — but every criterion
+must be verified against PRIMARY sources in a research gate before any
+report change is proposed (B4: no invented legal claims, ever; each
+criterion cites its source or is dropped). Deliverable of round 1: a
+verified criteria list mapped onto the tool's actual outputs + a gap
+analysis, reviewed by the owner BEFORE any build. Session prompt handed
+2026-09-08 (checkpoint of the same day); full brief there.
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
 **Entity half DONE 2026-09-06** (authorized operator-API write, verified on
