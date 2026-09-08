@@ -944,14 +944,73 @@ def test_alert_message_carries_an_image_check_link(vw, con, paths, monkeypatch):
     assert "lens.google.com" in sent["message"]
 
 
-def test_priority_ranks_by_the_owners_criteria_first(vw):
-    """Clean, core-size, German and deeply discounted is what earns a ring."""
-    best = vw.alert_priority(discount_pct=60, fake=0.0, country="DE", size_ok_core=True, prof=None)
-    assert best == 5
-    risky = vw.alert_priority(discount_pct=60, fake=0.5, country="DE", size_ok_core=True, prof=None)
-    assert risky < best, "fake risk must cost priority even on a deep discount"
-    quiet = vw.alert_priority(discount_pct=20, fake=0.3, country="IT", size_ok_core=False, prof=None)
-    assert quiet == 2, "a marginal candidate arrives silently, still rateable"
+def test_quality_weighs_absolute_margin_not_just_discount_depth(vw):
+    """60% off a 12 EUR item deserves less attention than 45% off a 90 EUR one."""
+    cheap = vw.alert_quality(60, 7.0, 0.0, "DE", True, None)
+    dear = vw.alert_quality(45, 50.0, 0.0, "DE", True, None)
+    assert dear > cheap
+    # Fake risk, foreign shipping and a disliked cell all cost quality.
+    clean = vw.alert_quality(50, 30.0, 0.0, "DE", True, None)
+    assert vw.alert_quality(50, 30.0, 0.5, "DE", True, None) < clean
+    assert vw.alert_quality(50, 30.0, 0.0, "IT", True, None) < clean
+    assert vw.alert_quality(50, 30.0, 0.0, "DE", False, None) < clean
+    assert vw.alert_quality(50, 30.0, 0.0, "DE", True, 0.1) < clean
+    assert vw.alert_quality(50, 30.0, 0.0, "DE", True, 0.9) > clean
+
+
+def test_a_flagged_listing_never_interrupts(vw, con, paths):
+    """Whatever it scores, a fake-risk flag means it arrives quietly."""
+    assert vw.alert_priority(80, 0.5, "DE", True, None, con=con, margin_eur=90) == 2
+
+
+def test_without_history_the_ladder_falls_back_to_absolute_cuts(vw, con, paths):
+    """A cold start should ring for the obvious ones rather than stay silent."""
+    loud = vw.alert_priority(60, 0.0, "DE", True, None, con=con, margin_eur=45)
+    assert loud == 5
+    quiet = vw.alert_priority(15, 0.0, "DE", False, None, con=con, margin_eur=5)
+    assert quiet == 2
+
+
+def test_the_loud_tier_is_relative_to_the_days_own_stream(vw, con, paths):
+    """An absolute bar cannot hold: measured on real rows it put 46% of
+    candidates in the ringing tier once country data existed, and 0% before it.
+    The bar is the day's own competition instead, so the loud tier stays near
+    RING_BUDGET_PER_DAY however busy the market gets.
+    """
+    now = vw.now_iso()
+    # A day of strong alerts: every one better than the candidate below.
+    for i in range(40):
+        con.execute(
+            "INSERT INTO alerts (listing_id, alerted_at, search_tag, discount_pct,"
+            " margin_eur, quality, sent) VALUES (?,?,'t',?,?,?,1)",
+            (6000 + i, now, 60, 60, vw.alert_quality(60, 60, 0.0, 'DE', True, None)))
+    con.commit()
+    # Same candidate that rings on a cold start must now be merely normal or
+    # quiet, because forty better ones already came through today.
+    assert vw.alert_priority(45, 0.0, "DE", True, None, con=con, margin_eur=20) < 5
+    # Something that beats the whole field still rings.
+    assert vw.alert_priority(70, 0.0, "DE", True, None, con=con, margin_eur=80) == 5
+
+
+def test_a_busy_day_does_not_multiply_the_ringing(vw, con, paths):
+    """The point of the relative bar: volume can triple without the phone doing so."""
+    now = vw.now_iso()
+    import random
+    rng = random.Random(7)
+    scores = []
+    for i in range(400):
+        d, m = rng.uniform(45, 80), rng.uniform(5, 70)
+        scores.append((d, m))
+        con.execute(
+            "INSERT INTO alerts (listing_id, alerted_at, search_tag, discount_pct,"
+            " margin_eur, quality, sent) VALUES (?,?,'t',?,?,?,1)",
+            (7000 + i, now, d, m, vw.alert_quality(d, m, 0.0, 'DE', True, None)))
+    con.commit()
+    rings = sum(1 for d, m in scores
+                if vw.alert_priority(d, 0.0, "DE", True, None, con=con, margin_eur=m) == 5)
+    # Out of 400 candidates in one day, only a small head should ring.
+    assert rings <= 60, f"{rings} of 400 would ring; the bar is not holding"
+    assert rings >= 1, "the bar must not silence everything either"
 
 # ------------------------------------------- precision upgrade: seller profile
 
@@ -1238,3 +1297,44 @@ def test_recheck_still_records_real_outcomes(vw, con, paths, monkeypatch):
     # matters here is that the pass ran rather than being cut short by the guard.
     assert vw.meta_get(con, "last_recheck") is not None
     assert vw.meta_get(con, "backoff_until") is None, "an honest 404 is not a wall"
+
+# --------------------------------- backlog: a gap makes a backlog, not a count
+
+def test_a_busy_search_is_not_mistaken_for_a_backlog(vw, con, paths):
+    """Measured cost of the old rule: 67% of listings were never scored.
+
+    A search returning 40 new listings five minutes after the last successful
+    poll is watching a busy market, not working through a pile. The old
+    count-only rule suppressed nike-vintage on 77% of its cycles and
+    adidas-vintage on 75%, which is precisely where the turnover is.
+    """
+    vw.meta_set(con, "last_success",
+                (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    con.commit()
+    assert vw.is_catch_up(con, 40) is False
+    assert vw.is_catch_up(con, 48) is False
+
+
+def test_a_real_gap_still_suppresses_a_pile(vw, con, paths):
+    """After hours offline the listings are stale and racing for them wins nothing."""
+    vw.meta_set(con, "last_success",
+                (datetime.now(timezone.utc) - timedelta(hours=20)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    con.commit()
+    assert vw.is_catch_up(con, 40) is True
+    # A gap with only a trickle behind it is not a backlog either.
+    assert vw.is_catch_up(con, 3) is False
+
+
+def test_without_a_success_record_a_large_batch_is_treated_as_stale(vw, con, paths):
+    """A fresh database has no age information, so it errs toward silence."""
+    assert vw.meta_get(con, "last_success") is None
+    assert vw.is_catch_up(con, 40) is True
+    assert vw.is_catch_up(con, 2) is False
+
+
+def test_a_corrupt_success_stamp_does_not_wedge_the_gate(vw, con, paths):
+    """parse_ts never raises, and the gate must degrade to the old rule."""
+    vw.meta_set(con, "last_success", "not-a-timestamp")
+    con.commit()
+    assert vw.is_catch_up(con, 40) is True
+    assert vw.is_catch_up(con, 2) is False
