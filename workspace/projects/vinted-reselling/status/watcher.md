@@ -4,7 +4,7 @@ workstream: watcher
 group: ""
 spec: ""
 state: active
-updated: 2026-09-08
+updated: 2026-09-09
 ---
 
 Sourcing watcher + price/demand database. Polls the Vinted catalog API for
@@ -166,11 +166,18 @@ schlimmer als keins, weil man ihm glaubt.
 | Alert-Snapshots | live | Jede Entscheidung friert Comps, Schwellen und Risiko ein, auch die unterdrückten. **2026-09-08 zwei Stunden ausgefallen** (fehlende Spalte `quality`), behoben und 34 Zeilen rekonstruiert | - | - |
 | Feedback-Kanal | live | 👍 / 👎 / Gekauft; **am Handy des Owners bestätigt** (Knöpfe rendern, Tap erreicht ntfy). Eine Bewertung überlebt jetzt auch ohne Snapshot | Taste-Daten sammeln | - |
 | Prioritäts-Stufen | live | **Relativ** statt absolut: laut wird nur, was die Konkurrenz der letzten 24h schlägt. Gemessen an einem echten Tag: 5% klingeln, 12% normal, 83% still | Nach einer Woche gegen echte Daten nachjustieren | - |
-| Gone/Sold-Erkennung | live | Proven-session-Vorbedingung, Wall-Abbruch, 40%-Batch-Decke, `gone_source` | Vertrauenswürdige Outcomes sammeln | Zeit |
+| Gone/Sold-Erkennung | live | **Verkauft wird jetzt von geloescht getrennt** (2026-09-09): 200 + Plugin `buyer_item_status` Theme SUCCESS = verkauft, 200 + `item_status` `is_closed:false` = lebt, 404 = geloescht. Der alte Marker `is_sold":true` stand auf keiner Seite, also war der Verkaufs-Zweig unerreichbar und jeder Verkauf wurde als "lebt" verbucht | Outcomes sammeln bis 100 je Zelle | Zeit |
+| Recheck-Auswahl | live | Dasselbe Budget (25 Seiten/Stunde), andere Reihenfolge: erst Alert-Kandidaten, dann das Fenster 12h-10d, dann der alte Aeltester-zuerst-Lauf | - | - |
+| Zeitreihen | live | `listing_events` haelt jede Bewegung von Preis, Favoriten, Aufrufen fest. Die Recheck-Seite liefert den zweiten Preispunkt Tage spaeter, den der Poll nie sieht (Median-Beobachtung 10 Minuten) | - | - |
 | Brand-Report | live | `--brand-report`: Volumen, Median, Spread, Marge am Gate, Größen-Nachfrage, Keep/Drop | Wöchentlich laufen lassen | - |
 | Damen-Jeans | live | Probes gelaufen: agolde (Median 126,70) und mother-denim aufgenommen, citizens-of-humanity bei ratio 0.50, 7 for all mankind abgelehnt (Median 18,55). Alle drei geseedet | Nach 2 Wochen gegen R1-R3 bewerten | - |
 | Backtest-Kalibrierung | geplant | Snapshot-Tabelle sammelt ab jetzt alles Nötige | `/comd_optimize` mit Offline-Scorer | ~300 gone-Events |
-| Listing-Engine | live | `keyword_engine.py` (Titel/Beschreibung/Validator) + `keyword_research.py` (Korpus-Mining pro Marke und Klasse, Modellnamen per Lift) | An echten eigenen Listings erproben | - |
+| Listing-Engine | live | `keyword_engine.py` (Titel/Beschreibung/Hashtags/Validator, nachsichtige Eingabe) + `keyword_research.py` (Korpus-Mining, Modellnamen per Lift, Sprachfilter, Trend, Nachfrage) | An echten eigenen Listings erproben | - |
+| Gekauft-zu-Entwurf | live | `inventory.py --draft`: der Gekauft-Tipp wird zum fertigen Entwurf samt Preisvorschlag; offene Achsen kommen als Fragen, nicht als TBD | - | - |
+| Eigene Anzeigen | live | `my_listings` + `inventory.py --record/--mine/--sold`. Bis dort Zeilen stehen, ist jede Keyword-Rangfolge eine Hypothese ohne Rueckkanal | Erste eigene Anzeige eintragen | - |
+| Sprachfilter | live | Der Korpus ist franzoesisch-lastig (28,7% fr gegen 15,3% de). `listings.country` war als Hebel unbrauchbar (0,46% gefuellt), also entscheidet die Titelsprache. `bleu`/`jean` fallen raus, `501`/`nano puff`/`torrentshell` bleiben | - | - |
+| Trend | gebaut, wartet | Rechnet nur auf beobachteten Fenstern (Zeilen, die der Watcher frisch gesehen hat). Heute 3 Beobachtungstage von 14 noetigen; meldet den Fehlbetrag statt einer Zahl | 11 weitere Sammeltage | Zeit |
+| Nachfrage-Gewichtung | gebaut, wartet | Begriffe nach echten Verkaeufen gewichtet. Schwellen aus dem Standardfehler: nichts unter 30, vorlaeufig bis 99, belastbar ab 100 je Zelle | Outcome-Daten | Verkaufsdaten |
 
 ## Keep / Drop / Add-Regeln
 
