@@ -151,17 +151,19 @@ If no comms-log exists, skip this step silently.
 - Check `trigger.config.ts` for registered tasks
 - Note deployment status
 
-## Step 5.5: Load ALL Memory Files (Bulk Context Load)
+## Step 5.5: Load Memory (Index First, Then Targeted Files)
 
-With 1M token context, memory files cost ~1,800 tokens total (~0.2% of budget). Load ALL of them to eliminate recall failures.
+`MEMORY.md` is the index and already arrives in context: one line per memory naming what that file holds. Read it as the roster, then read the FULL file for every memory whose line touches this session's scope (the client, the surface, the tools in play), plus any the work surfaces later.
 
-**Mandatory:** Read every `.md` file in the memory directory. This includes trigger files, feedback files, reference files, and project files. The cost is negligible; the benefit is that every learned pattern is available at decision time without requiring recall.
+**Mandatory:** the index line is a pointer, never the fact. Never act on a hook line alone and never cite one as if it were the memory; open the file. Confirm what you opened, by name, on the session header's `Memories:` line, so a gap is visible.
+
+**Do not bulk-load the directory.** The store is 128 files / 659 KB (~165k tokens, measured 2026-09-08) and grows weekly. The retired instruction here ("~1,800 tokens, ~0.2% of budget, read every file") was ~90x under reality, which made the step unfollowable as written and therefore silently skipped (register row 2026-09-08, `infrastructure-deferred`). Index-plus-targeted is what working sessions already do.
+
+When scope is broad or a specific system is in play, grep the store instead of loading it whole (`--no-ignore`; the directory is outside the repo):
 
 ```bash
-ls -1 {memory_directory}/*.md
+grep -ril --no-ignore "{system-or-tool}" {memory_directory}
 ```
-
-Read each file. This replaces the previous selective loading approach.
 
 **Domain-specific extras (load when applicable):**
 
