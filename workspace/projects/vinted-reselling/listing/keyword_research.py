@@ -59,6 +59,14 @@ xxs xxl xxxl one onesize einheitsgroesse
 # Vinted can filter on them; repeating them as keywords buys nothing.
 SIZE_TOKEN = re.compile(r"^(x{0,3}[sml]|w\d{2}|l\d{2}|\d{2,3}|\d{2}x\d{2})$")
 
+# Tokens that can ONLY be a size, whatever they sit next to. Kept apart from
+# SIZE_TOKEN because a bare 2-3 digit number is ambiguous: 46 is a size and 501
+# is the most valuable model name in this corpus, and the same pattern matches
+# both. So a bare number is a size only when the whole term is sizes ("w31 46"),
+# while an explicit notation makes the phrase around it a size restatement
+# ("jeans w31") no matter what else is in it.
+SIZE_NOTATION = re.compile(r"^(x{0,3}[sml]|w\d{2}|l\d{2}|\d{2}x\d{2})$")
+
 # Counterfeit slang. Mined terms matching these are never offered as keywords;
 # they are reported separately, because a term the forgers use is a signal about
 # the market rather than a word to put in a listing.
@@ -75,12 +83,72 @@ KID_TOKEN = re.compile(
 
 # The corpus is a German marketplace with a lot of Dutch and French listings.
 # Foreign terms are kept but flagged, because writing a German listing in Dutch
-# narrows its audience rather than widening it.
+# narrows its audience rather than widening it. This hand-written list is only
+# the FLOOR, for terms the evidence below is too thin to judge.
 FOREIGN_HINT = re.compile(
     r"^(jas|jasje|tussenjas|regenjas|broek|spijkerbroek|trui|vest|jurk|"
     r"veste|blouson|pantalon|chemise|robe|manteau|droit|droite|brut|"
     r"giacca|pantaloni|maglia|camicia|vestito|nuovo)$"
 )
+
+# --------------------------------------------------------------- language
+#
+# The brief proposed weighting terms by seller country. That cannot work here:
+# listings.country is filled on 166 of 36,304 rows (0.46%), because the catalog
+# response carries no country and the watcher only fetches a seller profile for
+# listings that already cleared the deal gate. Joining through the sellers table
+# reaches 302 rows. A country weight would be a switch that does nothing.
+#
+# The language is in the title, where coverage is real: 28.7% of titles carry
+# French markers against 15.3% German, which is the leak (the engine offered
+# "bleu" for a German listing). The remaining 45% carry no marker at all,
+# because "Carhartt Detroit Jacket" is not in any language, and those must count
+# for NEITHER side or every brand term would look half-foreign.
+LANG_MARKERS = {
+    "de": set("""jacke hose pullover pulli hemd kleid rock groesse größe herren damen
+        schwarz blau weiss weiß gruen grün rot gelb braun grau kinder neu getragen
+        gebraucht mit und sehr gut ohne selten weit eng kurz lang jungen maedchen
+        mädchen tasche guter zustand originale echt""".split()),
+    "fr": set("""veste blouson pantalon chemise robe manteau pull jean bleu noir blanc
+        rouge vert jaune marron gris taille homme femme neuf neuve avec sans pour
+        droite droit brut delave délavé enfant porte porté tres très bon etat état
+        haute large courte longue poche""".split()),
+    "nl": set("""jas jasje broek trui vest jurk spijkerbroek maat heren dames nieuw
+        nieuwe zwart blauw wit groen rood geel bruin grijs kinderen met voor van
+        gedragen goede staat zonder hoge wijde korte lange zak""".split()),
+    "it": set("""giacca pantaloni maglia camicia vestito gonna taglia uomo donna nuovo
+        nuova nero blu bianco verde rosso giallo marrone grigio bambino con senza
+        usato buono stato alta larga corta lunga tasca""".split()),
+}
+
+# A term needs this many language-attributed listings before the evidence is
+# allowed to overrule the hand-written floor. Below it the sample is one or two
+# sellers, and one French seller does not make a word French.
+MIN_LANG_EVIDENCE = 5
+# Below this share of German among the attributed listings, a term is a foreign
+# word that happens to appear here, not a word this market uses in German.
+GERMAN_SHARE_FLOOR = 0.25
+# Lift above which a bare number identifies a product line rather than a size.
+MODEL_NUMBER_LIFT = 3.0
+
+
+def title_language(title: str | None) -> str | None:
+    """Which language a listing title is written in, or None when it says nothing.
+
+    None is the common and correct answer: a title that is only a brand, a model
+    and a size belongs to no language. Returning a guess for those would put
+    every brand term into whichever language happened to win a tiebreak.
+    """
+    words = set(normalise(title))
+    hits = {lang: len(words & markers) for lang, markers in LANG_MARKERS.items()}
+    best = max(hits, key=lambda k: hits[k])
+    if hits[best] == 0:
+        return None
+    # A tie is genuine ambiguity ("jeans blau" reads German and Dutch), and
+    # counting it for one side would bias exactly the shared vocabulary.
+    if sum(1 for v in hits.values() if v == hits[best]) > 1:
+        return None
+    return best
 
 
 @dataclass
@@ -93,6 +161,20 @@ class Term:
     kind: str = "term"          # term | fake-slang | foreign | size | kids | brand
     notes: list[str] = field(default_factory=list)
     ceiling: float = 0.0        # the lift a cell-exclusive term reaches here
+    langs: Counter = field(default_factory=Counter)   # language of its listings
+
+    def german_share(self) -> float | None:
+        """Share of German among the listings that HAVE an attributable language.
+
+        None when too few are attributable. Language-neutral titles (a brand and
+        a model name) are excluded from both numerator and denominator, so a
+        model name never looks foreign just because nobody wrote a sentence
+        around it.
+        """
+        attributed = sum(self.langs.values())
+        if attributed < MIN_LANG_EVIDENCE:
+            return None
+        return self.langs.get("de", 0) / attributed
 
     def score(self) -> float:
         """Rank by how strongly a term identifies this cell, not by raw count.
@@ -123,6 +205,49 @@ class Term:
         return self.lift >= 0.9 * self.ceiling and self.share < 0.6
 
 
+def language_verdict(term) -> tuple[str, str]:
+    """Is this term a foreign WORD, or just a term foreigners happen to use?
+
+    The distinction is the whole difficulty. "Patagonia Nano Puff jas" is a Dutch
+    title, but Nano Puff is a product name and belongs in a German listing;
+    "jean" is a French word and does not. Judging purely by the language of the
+    surrounding titles conflates the two, and it fails on exactly the terms this
+    project values most, because a model name inherits whatever language its
+    neighbours were written in. Measured on the live corpus, that rule flagged
+    Nano Puff (90% Dutch context) and Levi's 501 (85% French context).
+
+    So two tiers, lexical first:
+
+      1. The term's OWN words. A token in a foreign marker set, with none in the
+         German set, is a foreign word whatever its context. Precise, and it
+         cannot touch a name that is in no dictionary.
+      2. Context, but only as a tie-breaker for terms tier 1 says nothing about,
+         and only when NOT ONE German-language listing uses the term. That
+         catches foreign vocabulary no list happens to name, while a single
+         German seller using the word is enough to keep it: a product name in a
+         German sentence is a product name.
+    """
+    parts = term.text.split()
+    foreign_hits = {lang: sum(1 for p in parts if p in markers)
+                    for lang, markers in LANG_MARKERS.items() if lang != "de"}
+    german_hits = sum(1 for p in parts if p in LANG_MARKERS["de"])
+    top_lang = max(foreign_hits, key=lambda k: foreign_hits[k]) if foreign_hits else None
+    if top_lang and foreign_hits[top_lang] and not german_hits:
+        return "foreign", (f"fremdsprachiges Wort ({top_lang}); auf vinted.de "
+                           f"schmaelert das die Zielgruppe")
+    if german_hits:
+        return "german", ""
+    if any(FOREIGN_HINT.match(p) for p in parts):
+        return "foreign", "fremdsprachig; auf vinted.de schmaelert das die Zielgruppe"
+
+    attributed = sum(term.langs.values())
+    if attributed >= MIN_LANG_EVIDENCE and term.langs.get("de", 0) == 0:
+        top = term.langs.most_common(1)[0][0]
+        return "foreign", (f"alle {attributed} sprachlich zuordenbaren Belege sind "
+                           f"{top}, keiner deutsch")
+    return "unknown", ""
+
+
 def normalise(title: str | None) -> list[str]:
     text = re.sub(r"[^0-9a-zA-ZäöüÄÖÜßéèêàçñ]+", " ", (title or "").lower())
     return [w for w in text.split() if len(w) >= 2]
@@ -132,7 +257,28 @@ def ngrams(words: list[str], n: int) -> list[str]:
     return [" ".join(words[i:i + n]) for i in range(len(words) - n + 1)]
 
 
-def classify(term: str, brand_norm: str) -> tuple[str, list[str]]:
+def size_numbers_of(con: sqlite3.Connection) -> set[str]:
+    """Every number the corpus uses as a SIZE, read off the size column itself.
+
+    The size field is the market's own answer to "is this number a size", and it
+    needs no threshold: 32 is in there (from W32 and DE 32), 501 is not. Read
+    once per run over the distinct values, of which there are a few hundred.
+    """
+    numbers: set[str] = set()
+    # A table shape without the column skips the check rather than crashing the
+    # whole research run, the same way the watcher's data fixes do. Losing the
+    # size/model split costs precision on one term class; raising costs the run.
+    have = {row[1] for row in con.execute("PRAGMA table_info(listings)")}
+    if "size" not in have:
+        return numbers
+    for (size,) in con.execute("SELECT DISTINCT size FROM listings WHERE size IS NOT NULL"):
+        for token in re.findall(r"\d{1,3}", str(size)):
+            numbers.add(token.lstrip("0") or token)
+    return numbers
+
+
+def classify(term: str, brand_norm: str, lift: float = 0.0,
+             size_numbers: set[str] | None = None) -> tuple[str, list[str]]:
     """What kind of thing this term is, which decides whether it may be a keyword."""
     parts = term.split()
     notes: list[str] = []
@@ -140,7 +286,22 @@ def classify(term: str, brand_norm: str) -> tuple[str, list[str]]:
         return "kids", notes
     if any(FAKE_SLANG.match(p) for p in parts):
         return "fake-slang", notes
+    # An explicit size notation poisons the whole phrase: "jeans w31" spends a
+    # keyword slot restating the size field, which Vinted filters on anyway.
+    if any(SIZE_NOTATION.match(p) for p in parts):
+        return "size", ["gehoert ins Groessenfeld, nicht in den Text"]
     if all(SIZE_TOKEN.match(p) for p in parts):
+        # A bare number is the genuinely ambiguous case: 46 is a size and 501 is
+        # the most valuable model name in this corpus, and one pattern matches
+        # both. The size COLUMN settles it, because it is the authority on what
+        # counts as a size in this market: 32 appears there (as W32 and DE 32),
+        # 501 never does. Lift alone did not work, since a numeric size in a
+        # brand that sizes numerically is cell-specific too and scored 7.4x in
+        # carhartt/pants, indistinguishable from a model number.
+        if size_numbers is not None and all(p in size_numbers for p in parts):
+            return "size", ["gehoert ins Groessenfeld, nicht in den Text"]
+        if size_numbers is not None and lift >= MODEL_NUMBER_LIFT:
+            return "term", notes
         return "size", ["gehoert ins Groessenfeld, nicht in den Text"]
     if any(FOREIGN_HINT.match(p) for p in parts):
         return "foreign", ["fremdsprachig; auf vinted.de schmaelert das die Zielgruppe"]
@@ -174,12 +335,20 @@ def mine_cell(con: sqlite3.Connection, brand_norm: str, garment_class: str,
         return [], 0
 
     cell = Counter()
+    # Per term, which languages its listings were written in. This is what
+    # replaces the unusable country column: evidence gathered from the same
+    # titles the terms come from, so coverage is by construction the same.
+    term_langs: dict[str, Counter] = {}
     for title in cell_titles:
         words = [w for w in normalise(title) if w not in STOPWORDS]
         seen = set()
         for n in range(1, max_n + 1):
             seen.update(ngrams(words, n))
         cell.update(seen)
+        lang = title_language(title)
+        if lang:
+            for term in seen:
+                term_langs.setdefault(term, Counter())[lang] += 1
 
     # Background frequency over the whole corpus, so lift measures specificity.
     background = Counter()
@@ -192,6 +361,7 @@ def mine_cell(con: sqlite3.Connection, brand_norm: str, garment_class: str,
         background.update(seen)
         n_all += 1
 
+    size_nums = size_numbers_of(con)
     floor = max(min_count, int(n_cell * 0.005))
     # The lift a term reaches if it appears in this cell and nowhere else.
     ceiling = (n_all / n_cell) if n_cell else 0.0
@@ -202,9 +372,22 @@ def mine_cell(con: sqlite3.Connection, brand_norm: str, garment_class: str,
         share = k / n_cell
         p_all = background[text] / n_all if n_all else 0
         lift = (share / p_all) if p_all else 0.0
-        kind, notes = classify(text, brand_norm)
-        terms.append(Term(text=text, n=k, share=share, lift=lift, kind=kind,
-                          notes=notes, ceiling=ceiling))
+        kind, notes = classify(text, brand_norm, lift, size_nums)
+        term = Term(text=text, n=k, share=share, lift=lift, kind=kind,
+                    notes=notes, ceiling=ceiling,
+                    langs=term_langs.get(text, Counter()))
+        # The measured language overrules the hand-written list in both
+        # directions: a term this market writes in German stays usable even if
+        # it looks foreign, and a term the evidence says is French is dropped
+        # even though no list named it. That is the whole point of measuring;
+        # "bleu" was reaching listings because no list happened to contain it.
+        if term.kind in ("term", "foreign"):
+            verdict, why = language_verdict(term)
+            if verdict == "foreign":
+                term.kind, term.notes = "foreign", [why]
+            elif verdict == "german" and term.kind == "foreign":
+                term.kind, term.notes = "term", []
+        terms.append(term)
 
     # A longer phrase that always appears inside a shorter one adds nothing;
     # prefer the phrase, drop the fragment it subsumes.

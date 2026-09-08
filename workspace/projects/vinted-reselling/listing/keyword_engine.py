@@ -136,6 +136,210 @@ MAX_KEYWORDS = 8
 # listings being hidden, kept deliberately low because the upside is small.
 MAX_HASHTAGS = 3
 
+# The German noun a buyer actually types for each garment class. The watcher's
+# classes are internal English labels; a listing titled "pants" would be found
+# by nobody on vinted.de.
+CLASS_NOUN = {
+    "pants": "Hose", "jacket": "Jacke", "sweater": "Pullover", "shirt": "Shirt",
+    "shorts": "Shorts", "dress": "Kleid", "skirt": "Rock", "other": None,
+}
+
+# ---------------------------------------------------------- lenient input
+#
+# The engine used to take only hand-typed JSON with exact English keys. A
+# misspelled or German key was not an error: the value simply vanished, the
+# axis came out as TBD, and the output looked finished. Silent degradation is
+# the worst failure mode a tool like this has, because it produces a listing
+# that reads fine and quietly omits the thing that would have sold it.
+
+FIELD_ALIASES = {
+    "brand": "brand", "marke": "brand", "label": "brand",
+    "type": "type", "typ": "type", "art": "type", "artikel": "type",
+    "kategorie": "garment_class", "klasse": "garment_class",
+    "garment_class": "garment_class", "category": "garment_class",
+    "model": "model", "modell": "model", "modellname": "model",
+    "size": "size", "groesse": "size", "größe": "size", "gr": "size",
+    "color": "color", "colour": "color", "farbe": "color",
+    "material": "material", "stoff": "material", "fabric": "material",
+    "condition": "condition", "zustand": "condition",
+    "era": "era", "aera": "era", "ära": "era", "epoche": "era", "jahrzehnt": "era",
+    "cut": "cut", "schnitt": "cut", "fit": "cut", "passform": "cut",
+    "wash": "wash", "waschung": "wash",
+    "rise": "rise", "leibhoehe": "rise", "leibhöhe": "rise", "bund": "rise",
+    "closure": "closure", "verschluss": "closure",
+    "style": "style", "stil": "style",
+    "measurements": "measurements", "masse": "measurements", "maße": "measurements",
+}
+
+# Per-class axis names are legitimate keys too; they are declared in German in
+# CLASS_DIMENSIONS, so they alias to themselves.
+for _dims in CLASS_DIMENSIONS.values():
+    for _axis in _dims:
+        FIELD_ALIASES.setdefault(_axis, _axis)
+
+SIZE_PATTERN = re.compile(
+    r"^(w\d{2}(?:[/x-]?l\d{2})?|l\d{2}|xxs|xs|s|m|l|xl|xxl|xxxl|3xl|\d{2,3})$", re.I)
+
+
+def normalise_keys(raw: dict) -> tuple[dict, list[str]]:
+    """Map supplied keys onto the engine's own, reporting the ones it cannot.
+
+    Returns (item, unknown_keys). An unknown key is REPORTED rather than
+    dropped: the caller can then ask about it instead of shipping a listing
+    that silently lost a field.
+    """
+    item, unknown = {}, []
+    for key, value in raw.items():
+        canon = FIELD_ALIASES.get(str(key).strip().lower().replace(" ", "_"))
+        if canon is None:
+            unknown.append(str(key))
+            continue
+        if value not in (None, "", []):
+            item[canon] = value
+    return item, unknown
+
+
+def parse_free_text(text: str) -> tuple[dict, list[str]]:
+    """Read item facts out of a line like "levis 501 w31 blau sehr gut".
+
+    Returns (item, leftovers). Leftovers are the words nothing claimed; they
+    are surfaced rather than discarded, because an unclaimed word is usually
+    either the model name or a typo, and both are worth a question.
+    """
+    item: dict = {}
+    tokens = [t for t in re.split(r"[\s,;|]+", (text or "").strip()) if t]
+    low = " ".join(tokens).lower()
+    leftovers: list[str] = []
+
+    # Condition first: it is the only multi-word value, so matching it early
+    # stops "sehr gut" being read as two stray words.
+    for cond in sorted(VINTED_CONDITIONS, key=len, reverse=True):
+        if cond.lower() in low:
+            item["condition"] = cond
+            low = low.replace(cond.lower(), " ")
+            break
+
+    brand = None
+    for spellings in KNOWN_BRANDS.values():
+        for spelling in sorted(spellings, key=len, reverse=True):
+            if re.search(r"(?<![a-z])" + re.escape(spelling) + r"(?![a-z])", low):
+                if brand is None or len(spelling) > len(brand):
+                    brand = spelling
+    if brand:
+        item["brand"] = brand.title() if brand.islower() else brand
+        low = low.replace(brand, " ")
+
+    remaining = [t for t in re.split(r"[\s,;|]+", low) if t]
+    for token in remaining:
+        if SIZE_PATTERN.match(token) and "size" not in item:
+            item["size"] = token.upper()
+            continue
+        colour = next((c for c in VINTED_COLOURS if c.lower() == token), None)
+        if colour and "color" not in item:
+            item["color"] = colour
+            continue
+        era = next((e for e in ERAS if e.lower() == token), None)
+        if era and "era" not in item:
+            item["era"] = era
+            continue
+        noun = next((cls for cls, word in CLASS_NOUN.items()
+                     if word and word.lower() == token), None)
+        if noun and "garment_class" not in item:
+            item["garment_class"] = noun
+            item.setdefault("type", CLASS_NOUN[noun])
+            continue
+        axis_hit = False
+        for dims in CLASS_DIMENSIONS.values():
+            for axis, values in dims.items():
+                match = next((v for v in values if v.lower() == token), None)
+                if match and axis not in item:
+                    item[axis] = match
+                    axis_hit = True
+                    break
+            if axis_hit:
+                break
+        if axis_hit:
+            continue
+        leftovers.append(token)
+
+    # A leftover next to a known brand is almost always the model name
+    # ("levis 501" -> 501), which is the single most searched-for token there is.
+    if leftovers and "model" not in item and item.get("brand"):
+        item["model"] = leftovers.pop(0)
+    return item, leftovers
+
+
+def read_item(raw) -> tuple[dict, list[str]]:
+    """Accept a dict, a JSON string, or a free-text line. Returns (item, notes)."""
+    notes: list[str] = []
+    if isinstance(raw, dict):
+        item, unknown = normalise_keys(raw)
+    else:
+        text = str(raw).strip()
+        parsed = None
+        if text.startswith("{"):
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError as e:
+                notes.append(f"sieht aus wie JSON, ist aber keins ({e.msg}); "
+                             "als Freitext gelesen")
+        if isinstance(parsed, dict):
+            item, unknown = normalise_keys(parsed)
+        else:
+            item, leftovers = parse_free_text(text)
+            unknown = []
+            if leftovers:
+                notes.append("nicht zugeordnet: " + ", ".join(leftovers)
+                             + " (Modellname? Tippfehler?)")
+    if unknown:
+        notes.append("unbekannte Felder, deshalb ignoriert: " + ", ".join(unknown)
+                     + "; bekannt sind: " + ", ".join(sorted(set(FIELD_ALIASES.values()))))
+    # The class is what selects the axis vocabulary, so deriving it from the
+    # noun is worth doing rather than leaving the whole per-class layer unused.
+    if "garment_class" not in item and item.get("type"):
+        typ = str(item["type"]).lower()
+        for cls, word in CLASS_NOUN.items():
+            if word and word.lower() in typ:
+                item["garment_class"] = cls
+                break
+    if "type" not in item and item.get("garment_class"):
+        noun = CLASS_NOUN.get(item["garment_class"])
+        if noun:
+            item["type"] = noun
+    return item, notes
+
+
+def open_questions(item: dict) -> list[str]:
+    """What is still missing, as questions to answer rather than TBD to ship.
+
+    Ordered by what it costs to leave out. Colour and material are Vinted
+    FILTER fields: a listing without them is excluded from those filters
+    outright, which is a visibility loss, not a cosmetic one. Everything after
+    is detail a buyer would otherwise have to ask for.
+    """
+    questions = []
+    if not item.get("brand"):
+        questions.append("Marke? (Pflicht-Filterfeld; ohne sie ist die Anzeige praktisch unsichtbar)")
+    if not item.get("garment_class") and not item.get("type"):
+        questions.append("Was ist es? (Hose, Jacke, Pullover, Shirt, Shorts, Kleid)")
+    if not item.get("size"):
+        questions.append("Groesse? (Filterfeld)")
+    if not item.get("condition"):
+        questions.append("Zustand? (" + " / ".join(VINTED_CONDITIONS) + ")")
+    if not item.get("color"):
+        questions.append("Farbe? (Filterfeld; Vinted kennt: "
+                         + ", ".join(VINTED_COLOURS[:8]) + ", ...)")
+    if not item.get("material"):
+        questions.append("Material? (Filterfeld; steht im Innenetikett)")
+    if not item.get("measurements"):
+        questions.append("Masse flach gemessen? (haeufigste Rueckfrage)")
+    axes = CLASS_DIMENSIONS.get(item.get("garment_class") or "", {})
+    missing = [a for a in axes if not item.get(a)]
+    if missing:
+        questions.append("Optional, macht den Titel spezifisch: "
+                         + ", ".join(f"{a} ({'/'.join(axes[a][:3])} ...)" for a in missing))
+    return questions
+
 
 def brand_key(name: str) -> str | None:
     """Which known brand family a string names, if any."""
@@ -195,17 +399,39 @@ def leading_detail(item: dict) -> str | None:
     return None
 
 
+def dedupe_words(text: str) -> str:
+    """Drop a word the phrase already used. Case-insensitive, order-preserving.
+
+    Brand, model and type are supplied independently and routinely overlap:
+    brand "Levi's", model "501", type "Jeans" is fine, but a model mined as
+    "Jeans 501" next to type "Jeans" reads "Levi's Jeans 501 Jeans". The title
+    is the scarcest space in a listing and a repeated word buys nothing twice.
+    """
+    seen, out = set(), []
+    for word in text.split():
+        key = word.lower().strip(".,|")
+        if key and key in seen:
+            continue
+        seen.add(key)
+        out.append(word)
+    return " ".join(out)
+
+
 def build_title(item: dict) -> str:
     """Brand first, then the one detail that distinguishes this piece."""
-    parts = [" ".join(p for p in [item.get("brand"), item.get("model"),
-                                  item.get("type")] if p).strip()]
+    parts = [dedupe_words(" ".join(p for p in [item.get("brand"), item.get("model"),
+                                               item.get("type")] if p).strip())]
     detail = leading_detail(item)
     if detail:
         parts.append(detail)
     if item.get("color"):
         parts.append(item["color"])
     if item.get("size"):
-        parts.append(f"Gr. {item['size']}")
+        # Vinted stores denim sizes in a dual notation, "W31 | DE 46". Both
+        # belong in the size FIELD, which is what buyers filter on, but a title
+        # spends scarce characters saying one thing twice. The first notation
+        # is the one the garment is searched by.
+        parts.append(f"Gr. {str(item['size']).split('|')[0].strip()}")
     title = " | ".join(p for p in parts if p)
     return title
 
@@ -225,12 +451,23 @@ def build_keywords(item: dict, mined: list[str] | None = None) -> tuple[list[str
     kws: list[str] = []
     notes: list[str] = []
 
+    # A phrase and its own permutation are one keyword, not two. The corpus
+    # legitimately ranks "501 jeans" and "jeans 501" separately, because
+    # sellers type both, but a listing that carries both has spent two of its
+    # eight slots saying one thing: Vinted matches on the words, not the order.
+    seen_wordsets: set[frozenset] = set()
+
     def add(value: str | None) -> None:
         if not value:
             return
         v = str(value).strip()
-        if v and v.lower() not in {k.lower() for k in kws}:
-            kws.append(v)
+        if not v or v.lower() in {k.lower() for k in kws}:
+            return
+        words = frozenset(v.lower().split())
+        if words in seen_wordsets:
+            return
+        seen_wordsets.add(words)
+        kws.append(v)
 
     # Dimension 1+2: the category word and the brand-plus-type compound. These
     # are what a buyer actually types.
@@ -293,8 +530,11 @@ def build_description(item: dict, keywords: list[str]) -> str:
     lines = []
 
     era = item.get("era")
-    hook_bits = [b for b in [era, brand, typ] if b]
-    lines.append(f"{' '.join(hook_bits)}." if hook_bits else f"{typ}.")
+    # The model belongs in the first line: on a Levi's it is the whole point of
+    # the garment, and a hook reading "Levi's Jeans" describes a category while
+    # "Levi's 501 Jeans" describes the item.
+    hook_bits = [b for b in [era, brand, item.get("model"), typ] if b]
+    lines.append(f"{dedupe_words(' '.join(hook_bits))}." if hook_bits else f"{typ}.")
 
     style_bits = []
     for axis in ("cut", "rise", "wash", "closure", "fit"):
@@ -475,6 +715,9 @@ def suggest(item: dict, use_corpus: bool = True) -> dict:
             "material": item.get("material"), "condition": item.get("condition"),
         },
         "notes": notes,
+        # What is missing, phrased as questions. A TBD inside the description
+        # gets published; a question gets answered.
+        "open_questions": open_questions(item),
     }
     result["validation"] = validate(title, description, item.get("brand") or "",
                                    keywords)
@@ -582,9 +825,15 @@ def main() -> None:
 
     if args.suggest:
         raw = args.suggest
-        item = json.loads(Path(raw[1:]).read_text(encoding="utf-8")
-                          if raw.startswith("@") else raw)
+        if raw.startswith("@"):
+            raw = Path(raw[1:]).read_text(encoding="utf-8")
+        # Accepts JSON with English OR German keys, and plain free text like
+        # "levis 501 w31 blau sehr gut". A key it cannot place is reported, not
+        # silently dropped.
+        item, read_notes = read_item(raw)
         out = suggest(item, use_corpus=not args.no_corpus)
+        out["notes"] = read_notes + out["notes"]
+        out["parsed_as"] = item
         if args.json:
             print(json.dumps(out, indent=2, ensure_ascii=False))
             return
@@ -605,9 +854,16 @@ def main() -> None:
             print("  Die Raute bringt keine Reichweite (Vinted hat keine Tag-Seiten),")
             print("  nur Selbstsortierung. Zu viele oder unpassende sind ein")
             print("  Ausblendungsgrund, deshalb wird nichts geraten.")
+        print("\nGELESEN ALS")
+        for k, v in sorted(out.get("parsed_as", item).items()):
+            print(f"  {k:<16}{v}")
         print("\nSTRUKTURIERTE FELDER (das harte Filter-Tor)")
         for k, v in out["structured_fields"].items():
-            print(f"  {k:<10}{v if v else 'TBD'}")
+            print(f"  {k:<10}{v if v else 'OFFEN'}")
+        if out["open_questions"]:
+            print("\nOFFENE FRAGEN")
+            for q in out["open_questions"]:
+                print("  - " + q)
         if out["notes"]:
             print("\nHINWEISE")
             for n in out["notes"]:
