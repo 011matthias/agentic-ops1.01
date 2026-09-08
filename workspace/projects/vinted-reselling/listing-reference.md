@@ -264,6 +264,110 @@ Das **Waschetikett** ist die wertvollste Aufnahme im ganzen Set: es
 liefert Marke, Größe und Material in einem Bild und speist damit drei
 strukturierte Filterfelder. Immer mit fotografieren.
 
+## Der Keyword-Recherche-Bot
+
+Die statische Vokabelliste in `keyword_engine.py` weiss, dass eine Jeans einen
+Schnitt und eine Waschung hat. Sie weiss nicht, dass Carhartts Hosen Newel, Sid,
+Landon und Aviation heissen oder dass Patagonias Jacken Torrentshell und Nano
+Puff sind. Genau diese Namen tippt ein Kaeufer ein, und keine handgepflegte
+Liste bleibt damit aktuell.
+
+`listing/keyword_research.py` liest sie deshalb vom Markt ab. Die
+Watcher-Datenbank enthaelt zehntausende echte Anzeigentitel, nach Markenfamilie
+und Warenklasse sortiert. Das ist ein Korpus davon, wie Verkaeufer in genau
+dieser Nische genau diese Ware beschreiben.
+
+### Warum Lift und nicht Haeufigkeit
+
+Der entscheidende Kniff ist die Bewertung. "Jacke" kommt ueberall vor und sagt
+nichts. "Torrentshell" kommt in Patagonia-Jacken 71-mal haeufiger vor als im
+Korpus insgesamt und identifiziert damit das Teil. Der Lift misst genau diese
+Spezifik, der Anteil misst die Gelaeufigkeit, und die Rangfolge gewichtet
+beides. Modellnamen bekommen eine eigene Bandbreite, weil sie auf Anteil nie
+gewinnen koennen: jeder benennt ein Produkt aus einem ganzen Katalog.
+
+Die Lift-Obergrenze ist dabei nicht willkuerlich. Ein Begriff, der
+ausschliesslich in einer Zelle vorkommt, erreicht genau Korpusgroesse geteilt
+durch Zellgroesse. Deshalb prueft der Bot relativ zu dieser Obergrenze statt
+gegen eine feste Zahl; eine feste Schwelle hoert genau dann auf, Modellnamen zu
+erkennen, wenn eine Marke gross genug wird, um sich zu lohnen.
+
+### Was das gegenueber dem Vorbild besser macht
+
+Zwei Carhartt-Hosen, durch den Bot gelaufen:
+
+```
+Carhartt WIP Single Knee Pant Hamilton Brown
+  -> pant, single knee, knee pant, single knee pant, knee, brown
+
+Carhartt Newel Pant Relaxed Fit Dunkelblau
+  -> pant, newel, newel pant, relaxed, relaxed fit, fit
+```
+
+Eine einzige Ueberschneidung, und zwar das Kategoriewort. Zum Vergleich: bei
+vintagezai trug ein Tank Top denselben 22er-Block wie eine Zip-Jacke derselben
+Marke, Wort fuer Wort.
+
+### Was aussortiert wird, und warum
+
+| Klasse | Beispiel | Grund |
+|---|---|---|
+| `size` | `w32` | gehoert ins Groessenfeld, wo Vinted danach filtern kann |
+| `brand` | `carhartt` | steht schon im Markenfeld, das eigenstaendig durchsuchbar ist |
+| `brand-padded` | `carhartt hose` | Marke plus Allerweltswort; beides steht schon einzeln da |
+| `kids` | `12 jahre` | anderer Markt, zieht das Vokabular seitwaerts |
+| `foreign` | `broek`, `pantalon` | auf vinted.de schmaelert eine fremde Sprache die Zielgruppe |
+| `fake-slang` | `reps`, `replica` | Faelscher-Vokabular; Signal, aber kein Wort fuer eine Anzeige |
+
+Jeder aussortierte Begriff wird mit Grund ausgegeben, nicht stillschweigend
+verschluckt.
+
+### Nebenprodukt: gemessenes Faelschungsrisiko
+
+Weil der Bot das Faelscher-Vokabular ohnehin erkennt, faellt eine Messung ab,
+die vorher nur eine Annahme war (`--fake-vocab`, Stand 2026-09-08):
+
+| Marke | Anzeigen | Treffer | Quote | Begriffe |
+|---|---|---|---|---|
+| stone-island | 2.439 | 11 | 0,451% | reps x10, batch x1 |
+| adidas | 5.694 | 4 | 0,070% | inspired x3, replica x1 |
+| nike | 5.181 | 3 | 0,058% | replica x3 |
+| ralph-lauren | 2.024 | 1 | 0,049% | fake x1 |
+
+Stone Island fuehrt mit dem 6,4-fachen der adidas-Quote. Die `HYPE_BRANDS`-Liste
+im Watcher hat das bisher angenommen; jetzt ist es gemessen. Die Quoten sind
+Untergrenzen: nur wer sein Vokabular offen hinschreibt, wird hier gezaehlt.
+
+### Bedienung
+
+```
+# Welche Zellen genug Daten haben
+uv run listing/keyword_research.py --cells
+
+# Keywords fuer eine Zelle, mit Belegen
+uv run listing/keyword_research.py --research patagonia/jacket
+
+# Faelscher-Vokabular pro Marke
+uv run listing/keyword_research.py --fake-vocab
+
+# Vollstaendiges Listing; nutzt den Korpus automatisch
+uv run listing/keyword_engine.py --suggest '{"brand":"Carhartt", ...}'
+uv run listing/keyword_engine.py --no-corpus --suggest '...'   # nur statische Achsen
+```
+
+Die Recherche ist eine Anreicherung, keine Abhaengigkeit: fehlt die Datenbank,
+faellt `--suggest` auf die statischen Achsen zurueck und sagt das dazu.
+
+### Grenzen
+
+Der Korpus ist ein Angebots-Korpus, kein Nachfrage-Korpus. Er sagt, welche
+Begriffe Verkaeufer benutzen, nicht welche Kaeufer eintippen. Die beiden fallen
+oft zusammen, aber nicht immer. Sobald genug vertrauenswuerdige gone-Daten da
+sind, laesst sich das nachschaerfen: Begriffe, die in schnell verkauften
+Anzeigen ueberproportional vorkommen, sind der bessere Nachfrage-Proxy. Das ist
+bewusst noch nicht eingebaut, weil die Outcome-Uhr erst am 2026-09-08 neu
+gestartet ist.
+
 ## Folgerungen für den Watcher
 
 Aus den Videos ergeben sich keine neuen Suchbegriffe, die wir übernehmen

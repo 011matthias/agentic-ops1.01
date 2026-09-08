@@ -722,11 +722,13 @@ def test_suppressed_candidates_are_recorded_not_forgotten(vw, con, paths, monkey
     monkeypatch.setattr(vw, "notify",
                         lambda *a, **k: pytest.fail("a suppressed candidate was pushed"))
     _comps(con, vw, n=8, price=40.0, brand_norm="stone-island")
-    # Price alone flags but never silences: suppressing every deep discount
-    # would throw away exactly the steals this watcher exists to find. Here an
-    # absurd price (0.6) plus a hype brand (0.2) clears the 0.7 bar together.
+    # Suppression needs TWO independent signals. Price alone tops out at 0.6,
+    # below the 0.7 bar, deliberately: silencing every deep discount would throw
+    # away exactly the steals this watcher exists to find. Here an absurd price
+    # meets a title the seller wrote themselves.
     rec = _rec(vw, price=3.0, total_price=3.5, brand="Stone Island",
-               brand_norm="stone-island")
+               brand_norm="stone-island",
+               title="Stone Island Jacke 1:1 Qualitaet")
     assert vw.score_and_alert(con, rec, {"tag": "t"}, _settings(min_price=3), {}) is False
     row = con.execute("SELECT sent, suppress_reason, fake_risk FROM alerts").fetchone()
     assert row[0] == 0
@@ -747,11 +749,33 @@ def test_a_deep_discount_alone_still_reaches_the_phone(vw, con, paths, monkeypat
 # ------------------------------------------------ precision upgrade: fake risk
 
 def test_fake_risk_price_tiers_do_not_stack(vw, con, paths):
+    """One price, one verdict, and never two terms for the same fact."""
     absurd, why = vw.fake_risk_score(con, _rec(vw, total_price=4.0), med=40.0)
-    assert "preis_absurd" in why and "preis_zu_gut" not in why
+    assert len([w for w in why if w.startswith("preis")]) == 1
+    assert absurd == 0.6
     good, why2 = vw.fake_risk_score(con, _rec(vw, total_price=9.0), med=40.0)
-    assert "preis_zu_gut" in why2
+    assert len([w for w in why2 if w.startswith("preis")]) == 1
     assert absurd > good
+
+
+def test_a_hype_brand_sharpens_the_price_test_rather_than_adding_to_it(vw, con, paths):
+    """The two used to be separate terms and both fired for the same fact.
+
+    Anything below 0.15 of the median is also below 0.30, so a hype-brand item
+    at 9% of market scored 0.6 plus 0.2 and was suppressed on price alone. That
+    is exactly the steal this watcher exists to find.
+    """
+    plain = _rec(vw, total_price=11.0, brand="Some Label", brand_norm="some-label")
+    hype = _rec(vw, total_price=11.0, brand="Stone Island", brand_norm="stone-island")
+    # 27.5% of the median: below the hype threshold, above the ordinary one.
+    assert vw.fake_risk_score(con, plain, med=40.0)[0] == 0.0
+    assert vw.fake_risk_score(con, hype, med=40.0)[0] == 0.4
+    # And at any price, the price test alone can never reach the suppress bar.
+    for price in (1.0, 3.0, 5.0, 9.0):
+        score, _ = vw.fake_risk_score(con, _rec(vw, total_price=price,
+                                                brand="Stone Island",
+                                                brand_norm="stone-island"), med=40.0)
+        assert score < 0.7, f"{price} EUR was silenced on price alone"
 
 
 def test_fake_risk_title_markers_flag_without_suppressing(vw, con, paths, monkeypatch):
@@ -944,14 +968,73 @@ def test_alert_message_carries_an_image_check_link(vw, con, paths, monkeypatch):
     assert "lens.google.com" in sent["message"]
 
 
-def test_priority_ranks_by_the_owners_criteria_first(vw):
-    """Clean, core-size, German and deeply discounted is what earns a ring."""
-    best = vw.alert_priority(discount_pct=60, fake=0.0, country="DE", size_ok_core=True, prof=None)
-    assert best == 5
-    risky = vw.alert_priority(discount_pct=60, fake=0.5, country="DE", size_ok_core=True, prof=None)
-    assert risky < best, "fake risk must cost priority even on a deep discount"
-    quiet = vw.alert_priority(discount_pct=20, fake=0.3, country="IT", size_ok_core=False, prof=None)
-    assert quiet == 2, "a marginal candidate arrives silently, still rateable"
+def test_quality_weighs_absolute_margin_not_just_discount_depth(vw):
+    """60% off a 12 EUR item deserves less attention than 45% off a 90 EUR one."""
+    cheap = vw.alert_quality(60, 7.0, 0.0, "DE", True, None)
+    dear = vw.alert_quality(45, 50.0, 0.0, "DE", True, None)
+    assert dear > cheap
+    # Fake risk, foreign shipping and a disliked cell all cost quality.
+    clean = vw.alert_quality(50, 30.0, 0.0, "DE", True, None)
+    assert vw.alert_quality(50, 30.0, 0.5, "DE", True, None) < clean
+    assert vw.alert_quality(50, 30.0, 0.0, "IT", True, None) < clean
+    assert vw.alert_quality(50, 30.0, 0.0, "DE", False, None) < clean
+    assert vw.alert_quality(50, 30.0, 0.0, "DE", True, 0.1) < clean
+    assert vw.alert_quality(50, 30.0, 0.0, "DE", True, 0.9) > clean
+
+
+def test_a_flagged_listing_never_interrupts(vw, con, paths):
+    """Whatever it scores, a fake-risk flag means it arrives quietly."""
+    assert vw.alert_priority(80, 0.5, "DE", True, None, con=con, margin_eur=90) == 2
+
+
+def test_without_history_the_ladder_falls_back_to_absolute_cuts(vw, con, paths):
+    """A cold start should ring for the obvious ones rather than stay silent."""
+    loud = vw.alert_priority(60, 0.0, "DE", True, None, con=con, margin_eur=45)
+    assert loud == 5
+    quiet = vw.alert_priority(15, 0.0, "DE", False, None, con=con, margin_eur=5)
+    assert quiet == 2
+
+
+def test_the_loud_tier_is_relative_to_the_days_own_stream(vw, con, paths):
+    """An absolute bar cannot hold: measured on real rows it put 46% of
+    candidates in the ringing tier once country data existed, and 0% before it.
+    The bar is the day's own competition instead, so the loud tier stays near
+    RING_BUDGET_PER_DAY however busy the market gets.
+    """
+    now = vw.now_iso()
+    # A day of strong alerts: every one better than the candidate below.
+    for i in range(40):
+        con.execute(
+            "INSERT INTO alerts (listing_id, alerted_at, search_tag, discount_pct,"
+            " margin_eur, quality, sent) VALUES (?,?,'t',?,?,?,1)",
+            (6000 + i, now, 60, 60, vw.alert_quality(60, 60, 0.0, 'DE', True, None)))
+    con.commit()
+    # Same candidate that rings on a cold start must now be merely normal or
+    # quiet, because forty better ones already came through today.
+    assert vw.alert_priority(45, 0.0, "DE", True, None, con=con, margin_eur=20) < 5
+    # Something that beats the whole field still rings.
+    assert vw.alert_priority(70, 0.0, "DE", True, None, con=con, margin_eur=80) == 5
+
+
+def test_a_busy_day_does_not_multiply_the_ringing(vw, con, paths):
+    """The point of the relative bar: volume can triple without the phone doing so."""
+    now = vw.now_iso()
+    import random
+    rng = random.Random(7)
+    scores = []
+    for i in range(400):
+        d, m = rng.uniform(45, 80), rng.uniform(5, 70)
+        scores.append((d, m))
+        con.execute(
+            "INSERT INTO alerts (listing_id, alerted_at, search_tag, discount_pct,"
+            " margin_eur, quality, sent) VALUES (?,?,'t',?,?,?,1)",
+            (7000 + i, now, d, m, vw.alert_quality(d, m, 0.0, 'DE', True, None)))
+    con.commit()
+    rings = sum(1 for d, m in scores
+                if vw.alert_priority(d, 0.0, "DE", True, None, con=con, margin_eur=m) == 5)
+    # Out of 400 candidates in one day, only a small head should ring.
+    assert rings <= 60, f"{rings} of 400 would ring; the bar is not holding"
+    assert rings >= 1, "the bar must not silence everything either"
 
 # ------------------------------------------- precision upgrade: seller profile
 
@@ -1082,3 +1165,282 @@ def test_a_server_error_backs_off_instead_of_holding_the_cadence(vw, con, paths)
 def test_a_server_error_is_not_mistaken_for_a_bot_wall(vw, con, paths):
     """They call for different waits, so they must not share a code path."""
     assert vw.SERVER_BACKOFF_MIN < vw.WALL_BACKOFF_MIN
+
+# ------------------------------------ politeness: a refusal must survive the cycle
+
+def test_a_wall_on_the_seller_endpoint_is_not_erased_by_a_good_catalog_poll(vw, paths, monkeypatch):
+    """Vinted rate-limits the client, not one endpoint.
+
+    Found by adversarial review and reproduced: the catalog answered 200 while
+    /api/v2/users/{id} answered 429. api_get set the backoff and raised,
+    seller_profile swallowed it, and then run_cycle's success branch deleted
+    backoff_until AND backoff_level, because a poll had got through. The
+    refusal and its escalation level both vanished, and five minutes later the
+    watcher polled at full rate again, forever.
+    """
+    calls = {"catalog": 0, "user": 0}
+
+    def handler(request):
+        path = request.url.path
+        if path == "/":
+            return httpx.Response(200, headers={
+                "set-cookie": f"access_token_web={make_jwt(12)}; Path=/"})
+        if "/api/v2/users/" in path:
+            calls["user"] += 1
+            return httpx.Response(429, text="slow down")
+        calls["catalog"] += 1
+        return httpx.Response(200, json={"items": [{
+            "id": 5000 + calls["catalog"], "title": "Patagonia Regenjacke Herren",
+            "brand_title": "Patagonia", "size_title": "M", "status": "Sehr gut",
+            "price": {"amount": "20.0", "currency_code": "EUR"},
+            "total_item_price": {"amount": "20.0"},
+            "user": {"id": 77, "login": "s"}, "url": "u",
+            "photo": {"url": "p"}, "favourite_count": 0, "view_count": 0}]})
+
+    monkeypatch.setattr(vw, "new_client",
+                        lambda: httpx.Client(transport=httpx.MockTransport(handler),
+                                             base_url=vw.BASE))
+    monkeypatch.setattr(vw, "load_env", lambda: {})
+    monkeypatch.setattr(vw, "load_config", lambda: {
+        "settings": {"deal_ratio": 0.55, "min_comps": 1, "comp_window_days": 45,
+                     "min_price": 5, "poll_per_page": 48, "seed_pages": 1,
+                     "seed_per_page": 10, "size_classes": ["m"], "min_margin": 0,
+                     "foreign_advantage_eur": 8, "fake_risk_suppress": 0.7,
+                     "fake_risk_flag": 0.4, "profile_suppress": 0.15,
+                     "profile_min_rated": 8},
+        "searches": [{"tag": "t", "query": "q", "price_max": 100}]})
+    monkeypatch.setattr(vw.time, "sleep", lambda *_: None)
+
+    con = vw.db_connect()
+    now = vw.now_iso()
+    vw.meta_set(con, "seeded:t", now)           # steady-state path, so scoring runs
+    for i in range(4):                          # comps so a candidate can score
+        con.execute(
+            "INSERT INTO listings (id, search_tag, brand, brand_norm, cond_tier,"
+            " garment_class, size_class, is_kid, total_price, last_seen, first_seen)"
+            " VALUES (?,'t','Patagonia','patagonia','very_good','jacket','m',0,60.0,?,?)",
+            (900 + i, now, now))
+    con.commit()
+    con.close()
+    vw.acquire_lock()
+    vw.LOCK_PATH.unlink(missing_ok=True)
+
+    vw.run_cycle()
+
+    con = vw.db_connect()
+    until = vw.meta_get(con, "backoff_until")
+    level = vw.meta_get(con, "backoff_level")
+    con.close()
+    assert calls["user"] >= 1, "the seller endpoint must actually have been tried"
+    assert until is not None, "the 429 was erased by the successful catalog poll"
+    assert level is not None, "the escalation level was erased too"
+
+
+def test_a_clean_cycle_still_clears_an_old_backoff(vw, paths, monkeypatch):
+    """The counterweight: without a wall, a good poll must free the watcher."""
+    def handler(request):
+        if request.url.path == "/":
+            return httpx.Response(200, headers={
+                "set-cookie": f"access_token_web={make_jwt(12)}; Path=/"})
+        return httpx.Response(200, json={"items": []})
+
+    monkeypatch.setattr(vw, "new_client",
+                        lambda: httpx.Client(transport=httpx.MockTransport(handler),
+                                             base_url=vw.BASE))
+    monkeypatch.setattr(vw, "load_env", lambda: {})
+    monkeypatch.setattr(vw, "load_config", lambda: {
+        "settings": {"deal_ratio": 0.55, "min_comps": 8, "comp_window_days": 45,
+                     "min_price": 5, "poll_per_page": 48, "seed_pages": 1,
+                     "seed_per_page": 10},
+        "searches": [{"tag": "t", "query": "q"}]})
+    monkeypatch.setattr(vw.time, "sleep", lambda *_: None)
+
+    con = vw.db_connect()
+    vw.meta_set(con, "seeded:t", vw.now_iso())
+    # An EXPIRED backoff: an active one would correctly skip the cycle, which
+    # would prove nothing about the clearing branch.
+    past = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    vw.meta_set(con, "backoff_until", past)
+    vw.meta_set(con, "backoff_level", "2")
+    con.commit()
+    con.close()
+
+    vw.run_cycle()
+
+    con = vw.db_connect()
+    assert vw.meta_get(con, "backoff_until") is None, "a clean cycle must free the watcher"
+    con.close()
+
+
+def test_the_recheck_loop_backs_off_instead_of_walking_into_a_wall(vw, con, paths, monkeypatch):
+    """The recheck is the biggest request block and had no wall handling at all.
+
+    It fetches item pages rather than the JSON API, so it cannot go through
+    api_get. Without its own status check a 429 matched no branch: not 404/410,
+    not a redirect, not 200. The loop simply went round again, twenty-five
+    times, and repeated an hour later.
+    """
+    calls = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        return httpx.Response(429, text="slow down")
+
+    client = client_with(vw, httpx.MockTransport(handler), token=make_jwt(12))
+    old = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for i in range(40):
+        con.execute("INSERT INTO listings (id, search_tag, url, first_seen, last_seen)"
+                    " VALUES (?,'t',?,?,?)",
+                    (700 + i, f"{vw.BASE}/items/{700+i}", old, old))
+    con.commit()
+    monkeypatch.setattr(vw.time, "sleep", lambda *_: None)
+
+    vw.recheck_gone(client, con, session_proven=True)
+
+    assert len(calls) == 1, f"walked into the wall {len(calls)} times instead of stopping"
+    assert vw.meta_get(con, "backoff_until") is not None, "a 429 in recheck set no backoff"
+    assert con.execute("SELECT COUNT(*) FROM listings WHERE gone_at IS NOT NULL"
+                       ).fetchone()[0] == 0, "a refusal must never be recorded as an outcome"
+
+
+def test_recheck_still_records_real_outcomes(vw, con, paths, monkeypatch):
+    """The counterweight: the new guard must not swallow honest 404s."""
+    def handler(request):
+        return httpx.Response(404)
+
+    client = client_with(vw, httpx.MockTransport(handler), token=make_jwt(12))
+    old = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for i in range(10):
+        con.execute("INSERT INTO listings (id, search_tag, url, first_seen, last_seen)"
+                    " VALUES (?,'t',?,?,?)",
+                    (750 + i, f"{vw.BASE}/items/{750+i}", old, old))
+    con.commit()
+    monkeypatch.setattr(vw.time, "sleep", lambda *_: None)
+    vw.recheck_gone(client, con, session_proven=True)
+    # All ten 404 at once, so the batch ceiling discards them as systemic; what
+    # matters here is that the pass ran rather than being cut short by the guard.
+    assert vw.meta_get(con, "last_recheck") is not None
+    assert vw.meta_get(con, "backoff_until") is None, "an honest 404 is not a wall"
+
+# --------------------------------- backlog: a gap makes a backlog, not a count
+
+def test_a_busy_search_is_not_mistaken_for_a_backlog(vw, con, paths):
+    """Measured cost of the old rule: 67% of listings were never scored.
+
+    A search returning 40 new listings five minutes after the last successful
+    poll is watching a busy market, not working through a pile. The old
+    count-only rule suppressed nike-vintage on 77% of its cycles and
+    adidas-vintage on 75%, which is precisely where the turnover is.
+    """
+    vw.meta_set(con, "last_success",
+                (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    con.commit()
+    assert vw.is_catch_up(con, 40) is False
+    assert vw.is_catch_up(con, 48) is False
+
+
+def test_a_real_gap_still_suppresses_a_pile(vw, con, paths):
+    """After hours offline the listings are stale and racing for them wins nothing."""
+    vw.meta_set(con, "last_success",
+                (datetime.now(timezone.utc) - timedelta(hours=20)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    con.commit()
+    assert vw.is_catch_up(con, 40) is True
+    # A gap with only a trickle behind it is not a backlog either.
+    assert vw.is_catch_up(con, 3) is False
+
+
+def test_without_a_success_record_a_large_batch_is_treated_as_stale(vw, con, paths):
+    """A fresh database has no age information, so it errs toward silence."""
+    assert vw.meta_get(con, "last_success") is None
+    assert vw.is_catch_up(con, 40) is True
+    assert vw.is_catch_up(con, 2) is False
+
+
+def test_a_corrupt_success_stamp_does_not_wedge_the_gate(vw, con, paths):
+    """parse_ts never raises, and the gate must degrade to the old rule."""
+    vw.meta_set(con, "last_success", "not-a-timestamp")
+    con.commit()
+    assert vw.is_catch_up(con, 40) is True
+    assert vw.is_catch_up(con, 2) is False
+
+# ------------------- a public topic must not be able to break the feedback poll
+
+def test_an_oversized_id_from_a_stranger_cannot_kill_the_poll(vw, con, paths, monkeypatch):
+    """The feedback topic is public by obscurity, so anyone can post to it.
+
+    An unbounded digit run reached sqlite as an integer too large to bind and
+    raised OverflowError inside the poll, on every cycle, until someone noticed.
+    A single message from a stranger was enough to end the rating channel.
+    """
+    con.execute("INSERT INTO alerts (listing_id, alerted_at, search_tag, sent)"
+                " VALUES (4242, ?, 't', 1)", (vw.now_iso(),))
+    con.commit()
+    monkeypatch.setattr(vw, "_ntfy_poll", lambda topic, since: [
+        {"id": "a", "event": "message", "message": "good " + "9" * 400},
+        {"id": "b", "event": "message", "message": "good 4242"},   # a real one behind it
+    ])
+    got = vw.ingest_feedback(con, {"NTFY_FEEDBACK_TOPIC": "t"})
+    assert got == 1, "the genuine rating behind the junk must still land"
+    assert con.execute("SELECT listing_id FROM alert_feedback").fetchone()[0] == 4242
+
+
+@pytest.mark.parametrize("junk", [
+    "good " + "9" * 400,
+    "bad " + "1" * 25,
+    "bought 99999999999999999999999999",
+])
+def test_absurd_ids_are_rejected_by_shape(vw, junk):
+    assert vw.FEEDBACK_RE.match(junk) is None
+
+
+def test_a_real_ten_digit_listing_id_still_parses(vw):
+    """The bound must not exclude the ids Vinted actually issues."""
+    m = vw.FEEDBACK_RE.match("good 9932723613")
+    assert m and m.group(2) == "9932723613"
+
+
+# --------------------------- a backfill that died must be redone, not assumed
+
+def test_a_column_added_without_its_backfill_is_filled_on_the_next_start(vw, paths):
+    """ALTER TABLE commits on the spot, so a crash mid-backfill leaves a hole.
+
+    Keying completion on the column existing meant the fill was never retried
+    and those rows stayed blank for good. On a database that cannot be rebuilt
+    that is silent and permanent.
+    """
+    import sqlite3
+    old = sqlite3.connect(vw.DB_PATH)
+    old.execute("CREATE TABLE listings (id INTEGER PRIMARY KEY, search_tag TEXT,"
+                " title TEXT, brand TEXT,"
+                " size TEXT, condition TEXT, cond_tier TEXT, total_price REAL,"
+                " first_seen TEXT, last_seen TEXT, gone_at TEXT,"
+                " sold_flag INTEGER DEFAULT 0, alerted INTEGER DEFAULT 0)")
+    old.execute("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT)")
+    for i in range(5):
+        old.execute("INSERT INTO listings (id, search_tag, title, brand, size, condition,"
+                    " cond_tier) VALUES (?, 't', 'Carhartt Jacke', 'Carhartt WIP', 'M',"
+                    " 'Sehr gut', 'very_good')", (i,))
+    # The crash: the column exists, nothing filled it, no flag was written.
+    old.execute("ALTER TABLE listings ADD COLUMN brand_norm TEXT")
+    old.commit()
+    old.close()
+
+    con = vw.db_connect()
+    filled = con.execute(
+        "SELECT COUNT(*) FROM listings WHERE brand_norm='carhartt'").fetchone()[0]
+    assert filled == 5, "the interrupted backfill was never redone"
+    assert vw.meta_get(con, "backfill:brand_norm") is not None
+    con.close()
+
+
+def test_a_completed_backfill_is_not_repeated(vw, paths):
+    """The flag is what stops it, so a hand-edited value must survive a restart."""
+    con = vw.db_connect()
+    con.execute("INSERT INTO listings (id, search_tag, brand, brand_norm)"
+                " VALUES (1, 't', 'Carhartt', 'deliberately-different')")
+    con.commit()
+    con.close()
+    con = vw.db_connect()
+    assert con.execute("SELECT brand_norm FROM listings WHERE id=1").fetchone()[0] \
+        == "deliberately-different", "a finished backfill must not run again"
+    con.close()

@@ -24,6 +24,7 @@ see listing-reference.md for the live evidence.
 
 Modes:
   --suggest    generate a listing from item facts (JSON or flags)
+               draws on keyword_research's mined corpus unless --no-corpus
   --validate   check an existing title/description against the catalog rules
   --vocab      print the dimension vocabulary for one garment class
 """
@@ -209,11 +210,17 @@ def build_title(item: dict) -> str:
     return title
 
 
-def build_keywords(item: dict) -> tuple[list[str], list[str]]:
+def build_keywords(item: dict, mined: list[str] | None = None) -> tuple[list[str], list[str]]:
     """Keywords drawn only from dimensions Vinted can filter or search on.
 
     Returns (keywords, notes). Each keyword traces to a field the seller
     actually supplied, so a listing never claims an attribute nobody verified.
+
+    `mined` carries terms researched from the real corpus by keyword_research,
+    which is where the model names live: this module knows jeans have a cut,
+    but only the market knows that Carhartt calls its trousers Newel and Sid.
+    Supplied facts still rank first, because they describe the garment in hand
+    rather than its neighbours.
     """
     kws: list[str] = []
     notes: list[str] = []
@@ -254,6 +261,18 @@ def build_keywords(item: dict) -> tuple[list[str], list[str]]:
     missing = [a for a in dims if not item.get(a)]
     if missing:
         notes.append("nicht befuellte Achsen dieser Klasse: " + ", ".join(missing))
+
+    # Corpus terms fill the remaining slots. They are appended rather than
+    # merged so a researched term can never displace a stated fact.
+    if mined:
+        before = len(kws)
+        for term in mined:
+            if len(kws) >= MAX_KEYWORDS:
+                break
+            add(term)
+        if len(kws) > before:
+            notes.append("aus dem Korpus ergaenzt: "
+                         + ", ".join(kws[before:]))
 
     if len(kws) > MAX_KEYWORDS:
         notes.append(f"auf {MAX_KEYWORDS} gekuerzt (Vinted wertet Tag-Masse als "
@@ -313,9 +332,45 @@ def build_description(item: dict, keywords: list[str]) -> str:
     return "\n".join(lines)
 
 
-def suggest(item: dict) -> dict:
+def mined_terms(item: dict) -> tuple[list[str], list[str]]:
+    """Corpus terms for this item, or nothing when the database is not there.
+
+    Kept optional on purpose: the engine stays a pure function that runs
+    anywhere, and the research layer is an enrichment rather than a dependency.
+    """
+    brand = brand_key(item.get("brand") or "")
+    cls = item.get("garment_class")
+    if not brand or not cls:
+        return [], []
+    try:
+        import importlib.util
+        import sqlite3
+        research_path = SCRIPT_DIR / "keyword_research.py"
+        if not research_path.exists():
+            return [], []
+        spec = importlib.util.spec_from_file_location("keyword_research", research_path)
+        kr = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(kr)
+        if not kr.DB_PATH.exists():
+            return [], ["keine Korpus-Datenbank; nur die statischen Achsen genutzt"]
+        con = sqlite3.connect("file:" + str(kr.DB_PATH) + "?mode=ro", uri=True)
+        try:
+            hint = " ".join(str(item.get(k) or "") for k in
+                            ("brand", "model", "type", "cut", "style", "era"))
+            hint += " " + " ".join(str(v) for v in item.values() if isinstance(v, str))
+            terms = kr.keywords_for(con, brand, cls, title_hint=hint, limit=MAX_KEYWORDS)
+            return terms, []
+        finally:
+            con.close()
+    except Exception as e:                       # research must never break a listing
+        return [], [f"Korpus-Recherche uebersprungen: {type(e).__name__}"]
+
+
+def suggest(item: dict, use_corpus: bool = True) -> dict:
     """Full listing proposal plus the validation of what it produced."""
-    keywords, notes = build_keywords(item)
+    mined, mine_notes = mined_terms(item) if use_corpus else ([], [])
+    keywords, notes = build_keywords(item, mined=mined)
+    notes = mine_notes + notes
     title = build_title(item)
     description = build_description(item, keywords)
     result = {
@@ -404,6 +459,8 @@ def main() -> None:
                     help="check an existing listing text file against the rules")
     ap.add_argument("--vocab", metavar="CLASS",
                     help="print the dimension vocabulary for a garment class")
+    ap.add_argument("--no-corpus", action="store_true",
+                    help="skip the mined corpus terms; static axes only")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     args = ap.parse_args()
 
@@ -436,7 +493,7 @@ def main() -> None:
         raw = args.suggest
         item = json.loads(Path(raw[1:]).read_text(encoding="utf-8")
                           if raw.startswith("@") else raw)
-        out = suggest(item)
+        out = suggest(item, use_corpus=not args.no_corpus)
         if args.json:
             print(json.dumps(out, indent=2, ensure_ascii=False))
             return

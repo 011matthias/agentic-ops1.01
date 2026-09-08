@@ -19,6 +19,18 @@ cites a primary source fetched on 2026-09-08 and quoted, so a US CPA can
 check the reasoning against the text rather than against my summary of it.
 Before the tool's output is relied on in an examination, that CPA signs off.
 
+> **REVISION 2, same day.** Revision 1 graded three storage criteria
+> Satisfied on the strength of a content-addressed receipt store that turns
+> out not to run in the deployed system. A six-agent adversarial audit of the
+> deployed code paths caught it. **D2 and D3 moved from Satisfied to
+> Missing**, D1, D5, D6, D7 and D9 were downgraded, A3 was split, two
+> criteria revision 1 never reached were added (D12, D13), and four gaps were
+> added to section 5 including **G2b, which now leads the list beside G1**.
+> The correction note in section 4D has the evidence. The lesson is recorded
+> because it generalises: revision 1 read the module docstrings, which
+> described the store accurately, and never checked whether the deployed
+> entry point imports it.
+
 ## 1. The threshold question, answered
 
 **ANSWERED by the owner 2026-09-08: at least one Brisken entity files a US
@@ -105,8 +117,18 @@ disposition.
 **XLSX** (`output/report_xlsx.py`): Summary, one sheet per card, Needs
 Review, Unmatched, Errors, Explain.
 
-**Receipt store** (`hosting/store.py`): content-addressed, each file at the
-SHA-256 of its own bytes.
+**Receipt store, as actually deployed.** Receipts rest as ordinary files on
+the Fly volume at `/data`, inside each run's own `receipts/` directory, named
+`NNNN__<original filename>`. The bytes are written verbatim, with no
+transcode or recompression on any path. A truncated SHA-1 is computed on
+upload for de-duplication within the batch and then discarded, so no digest
+survives alongside the stored file.
+
+The content-addressed store in `hosting/store.py`, which would address each
+file at the SHA-256 of its own bytes, exists in the codebase but is reachable
+only from `cli.py` behind an optional `hosting:` config block. It holds
+nothing in production. An earlier version of this document credited the
+deployed system with its properties; see the correction note in section 4D.
 
 ### In scope
 
@@ -151,7 +173,7 @@ is deductible.
 |---|---|---|---|---|
 | A1 | Keep "such permanent books of account or records ... as are sufficient to establish the amount of gross income, deductions, credits, or other matters" | 1.6001-1(a) (S5) | Month report PDF listing plus appended receipts; reconciliation PDF proves the month is complete | **Satisfied** |
 | A2 | Supporting documents show "the amount paid and that the amount was for a business expense" | Pub. 583 (S8); 162(a) "ordinary and necessary ... in carrying on any trade or business" (S1) | Amount is on every row and traced to the receipt. The business-expense half rests on the Account column implying it | **Partial**, see G1 |
-| A3 | Records "retained so long as the contents thereof may become material in the administration of any internal revenue law" | 1.6001-1(e) (S5); periods 3 / 6 / 7 years / unlimited per Pub. 583 (S8) | Receipt store is content-addressed and durable, but `store.delete_run` removes a month and nothing states or enforces a retention period | **Missing** as a control, see G2 |
+| A3 | Records "retained so long as the contents thereof may become material in the administration of any internal revenue law" | 1.6001-1(e) (S5); periods 3 / 6 / 7 years / unlimited per Pub. 583 (S8) | Split, and the original row was wrong to call it flatly absent. The inbound mail archive DOES carry a retention floor: `sweep_retention` deletes archives older than `intake.retention_years`, default 10 years on a German AO paragraph 147 basis, which comfortably exceeds the US ladder. The run tree, where every receipt that reached a batch lives, has no retention rule at all and `delete_run` destroys it wholesale with no record. Underneath both, the Fly volume's only automated durability is scheduled snapshots with **5-day** retention (verified live 2026-09-08), which is disaster recovery, not retention | **Partial**, see G2 |
 
 ### B. Section 274(d) substantiation, binding travel, gifts and listed property only
 
@@ -189,24 +211,64 @@ system that complies "will constitute records within the meaning of 6001"
 (S7 section 1); a system that fails may draw a Notice of Inadequate Records
 under 1.6001-1(d) and the penalties in section 9.
 
+> **CORRECTED 2026-09-08, same day, after a code audit.** The first version of
+> this table graded D1, D2 and D5 as **Satisfied** on the strength of the
+> content-addressed receipt store in `hosting/store.py`, which addresses each
+> file at the SHA-256 of its own bytes. **That store is not used by the
+> deployed system.** `ReceiptStore` is imported and instantiated only in
+> `cli.py` (line 123 and line 1450), behind an optional `hosting:` config
+> block; nothing under `web/` references it, and the Fly image runs the web
+> app alone (`Dockerfile` CMD `expense-recon-web`). The deployed upload paths
+> compute a truncated SHA-1 for in-batch de-duplication and then discard it
+> (`web/service.py:3996-4002`, `:7274-7281`), storing the file under a
+> sequence number instead. So no digest survives for a stored receipt, and
+> nothing in the running system can detect that a stored file has changed.
+>
+> The second leg of the old D2 grade, the `extracted_receipts` baseline, is
+> also narrower than stated: `EXTRACTED_RECEIPTS_KEY` has exactly one writer
+> (`web/service.py:8200`, inside the statement-attach commit), and
+> `baseline_receipts` (`:4318-4344`) silently returns the CURRENT receipts
+> when no baseline exists, which its own docstring concedes covers "every
+> statement-less run". Receipt-first months, the primary mode today, have no
+> baseline at all, and a caller cannot tell that apart from a pristine one.
+>
+> D2 and D3 therefore move to **Missing**, D1, D5, D6 and D7 are downgraded,
+> and two criteria the original table never reached (4.01(7) and 4.01(9)) are
+> added as D12 and D13. The rows below are the corrected ones. Found by an
+> adversarial code audit of the deployed paths, not by a reader of the
+> docstrings, which is how the original error was made.
+
 | # | Criterion | Source | Where it lands | Status |
 |---|---|---|---|---|
-| D1 | "ensure an accurate and complete transfer ... must also index, store, preserve, retrieve, and reproduce" | 4.01(1) (S7) | Content-addressed store, `document_id` index, PDF reproduction | **Satisfied** |
-| D2 | "reasonable controls to ensure the integrity, accuracy, and reliability" | 4.01(2)(a) (S7) | Strong. The address of a receipt is the SHA-256 of its bytes, and `extracted_receipts` keeps the original OCR reading in a parallel first-write-wins snapshot so a reviewer edit cannot overwrite what the machine first read | **Satisfied** |
-| D3 | "reasonable controls to prevent and detect the unauthorized creation of, addition to, alteration of, deletion of, or deterioration of" the records | 4.01(2)(b) (S7) | Content addressing detects byte alteration. Against it: one shared operator code gates the whole app, so no action is attributable to a person, and `delete_run` removes a month leaving nothing behind | **Partial**, see G2 and G11 |
+| D1 | "ensure an accurate and complete transfer ... must also index, store, preserve, retrieve, and reproduce" | 4.01(1) (S7) | Transfer is genuinely verbatim: every storage write is a raw `write_bytes` of the bytes as received, with no transcode, resize or recompression on any path (`web/service.py:1511, 1765, 4002, 7281`), and a mailed message is archived whole before the SMTP 250 is returned (`web/smtp_server.py:143-152`). Against that: the copy appended into a report is a downscaled re-encode (see D6), and there is no way to retrieve everything stored (see D9) | **Partial** |
+| D2 | "reasonable controls to ensure the integrity, accuracy, and reliability" | 4.01(2)(a) (S7) | No integrity control operates in the deployed system: the content-addressed store is CLI-only and the per-file digest is discarded after de-duplication (see the correction note above). Separately, "accuracy" is unaddressed in a second sense the original table missed entirely: the amounts, dates and vendors on the report are vision-model readings, the model returns its own confidence and the code logs and discards it (`ingest/receipts_folder.py:101-102`; no confidence field on `Receipt`), the report nowhere discloses that its values are machine-extracted, and no measured error rate exists anywhere in the repo | **Missing** |
+| D3 | "reasonable controls to prevent and detect the unauthorized creation of, addition to, alteration of, deletion of, or deterioration of" the records | 4.01(2)(b) (S7) | Nothing detects any of them. No digest is persisted for a stored receipt, so an altered file is indistinguishable from the original; one shared operator code gates the whole app (`web/auth.py`), so no action is attributable to a person; the hosted app writes no run log at all (`runlog.py` is imported only by `cli.py` and `runlog_cli.py`); and a deletion is recorded nowhere (`web/store.py:493` `delete_run` plus the `rmtree` at `web/app.py:1093-1100`, neither writing a ledger row) | **Missing**, see G2, G2b and G11 |
 | D4 | "an inspection and quality assurance program evidenced by regular evaluations ... including periodic checks" | 4.01(2)(c) (S7) | None exists | **Missing**, see G8 |
-| D5 | An indexing system that "permits the identification and retrieval", for example "assigning each electronically stored document a unique identification number" | 4.01(2)(d), 4.02 (S7) | `document_id` plus `Reference#` on the export plus the content hash | **Satisfied** |
-| D6 | Reproductions "must exhibit a high degree of legibility and readability when displayed on a video display terminal and when reproduced in hardcopy" | 4.01(3) (S7) | Receipts are appended as pages, PDFs keeping their own. Nobody has checked a printed page against the paper original | **Satisfied, UNVERIFIED** at print resolution |
-| D7 | Cross-reference "in a manner that provides an audit trail between the general ledger and the source document(s)" | 4.01(4) (S7) | The tool holds one end: `Reference#`, `Receipt URL`, and a caption naming the expense number each receipt proves. The general ledger is Zoho, outside the tool | **Partial** by design |
-| D8 | Maintain and make available "complete descriptions of (a) the electronic storage system, including all procedures relating to its use; and (b) the indexing system" | 4.01(5) (S7) | BLUEPRINT.md describes the system to us. Nothing describes it to an examiner | **Missing**, see G7 |
-| D9 | At examination, "retrieve and reproduce (including hardcopies if requested)" and provide the resources to do so | 4.01(6) (S7) | The PDF download is exactly this | **Satisfied** |
+| D5 | An indexing system that "permits the identification and retrieval", for example "assigning each electronically stored document a unique identification number" | 4.01(2)(d), 4.02 (S7) | A `document_id` exists and is unique WITHIN a run, but not across runs, and there is no content hash in the index (see the correction note). The reproduction does not carry the key: the receipt caption prints `_display_name` (`web/service.py:5604, :6844-6847`), a regex that deliberately strips the `NNNN__` prefix which is the part that makes the stored name unique, so two files uploaded under one original name caption identically and no printed page carries the index key, the run id or the batch label. There is no search across runs | **Partial**, see G3b |
+| D6 | Reproductions "must exhibit a high degree of legibility and readability when displayed on a video display terminal and when reproduced in hardcopy" | 4.01(3) (S7) | A PDF receipt passes through intact, but an IMAGE receipt is converted to RGB, resized to fit an A4 box at ~150 dpi and re-saved (`output/_pdf_common.py:108-128`), so the page an examiner reads is a downscaled re-encode rather than the stored file. Neither PDF carries page numbers of any kind (zero hits for `onPage` / `canvasMaker` / page numbering across `output/`), so a printed set cannot be shown to be complete or in order and a removed page leaves no trace. Still nobody has compared a printed page against a paper original | **Partial**, see G4b |
+| D7 | Cross-reference "in a manner that provides an audit trail between the general ledger and the source document(s)" | 4.01(4) (S7) | Weaker than the original row claimed. The `Receipt URL` column is BLANK on every row in receipt-first mode: the deployed export call never passes `receipt_urls` (`web/service.py:5478`), so the writer falls back to `Receipt.receipt_url`, which only the Zoho expense-CSV ingest ever sets. What survives is `Reference#`, an OCR reading or a filename unique only within one run, plus a caption that has had the index key stripped out of it (D5). The general ledger is Zoho, outside the tool | **Partial**, materially weaker than stated |
+| D8 | Maintain and make available "complete descriptions of (a) the electronic storage system, including all procedures relating to its use; and (b) the indexing system" | 4.01(5) (S7) | `electronic-storage-system-description.md`, written 2026-09-08 against the deployed code and adversarially verified. Draft pending owner and CPA sign-off, and two facts must be filled in before hand-over (which entities file US; the deployed access-code configuration) | **Met in draft**, see G7 |
+| D9 | At examination, "retrieve and reproduce (including hardcopies if requested)" and provide the resources to do so | 4.01(6) (S7) | The PDF download reproduces what reached a report, and the stored files are ordinary PDFs and images on the volume, readable without this codebase. But the reports are NOT an inventory of what is stored: soft-deleted expenses, set-aside documents, and mail that never routed (pooled, body-only, duplicate, dismissed) appear in no report and no route serves the inbound archive's parts, so "show me every receipt you hold for 2025" cannot be answered. There is no bulk export and no cross-run search | **Partial**, see G3b |
 | D10 | "retain electronically stored books and records so long as their contents may become material" | 4.01(8) (S7) | Same gap as A3 | **Missing**, see G2 |
 | D11 | Paper originals may be destroyed only after the taxpayer "has completed its own testing of the electronic storage system that establishes that hardcopy or computerized books and records are being reproduced in compliance with all the provisions" and "has instituted procedures that ensure its continued compliance" | section 7 (S7) | No such testing has been done | **Missing**, see G8 |
+| D12 | The system "must not be subject, in whole or in part, to any agreement (such as a contract or license) that would limit or restrict the Service's access to and use of the electronic storage system on the taxpayer's premises ... including personnel, hardware, software, files, indexes, and software documentation" | 4.01(7) (S7) | The original table never reached this criterion. Three third parties sit between the Service and the records: Fly.io holds the only copy of the volume, the sole human retrieval interface is a Lovable-hosted SPA whose source is in a different repository (the server-rendered UI was retired 2026-07-22 and the backend now serves JSON and file downloads only), and every receipt image is transmitted to OpenAI for reading. None of the three agreements has been read against this requirement | **UNVERIFIED**, see G12 |
+| D13 | "The taxpayer may use more than one electronic storage system. In that event, each electronic storage system must meet the requirements of this revenue procedure" | 4.01(9) (S7) | There are two live stores with materially different rules, and describing "the system" as singular would misstate half the records. The inbound mail archive HAS a retention floor and an age sweep (`web/intake_mail.py` `sweep_retention`, `intake.retention_years`, default 10 years, run at every boot); the run tree has no retention rule at all and is destroyed wholesale by `delete_run`. A third store, the content-addressed one, exists but is CLI-only and holds nothing in production | **Partial**, see G2 |
 
 ## 5. Ranked gaps
 
 Ranked by exposure times frequency, following the backlog's own rule that
 wrong money beats wrong text and a monthly hand-fix beats a one-off.
+
+> **CORRECTED 2026-09-08.** The code audit behind the section 4D correction
+> note added four gaps and promoted one. G1 no longer stands alone at the
+> top: **G2b now sits beside it**. The two lead for different reasons and
+> forcing an order between them would be false precision. G1 is the more
+> CERTAIN harm, a missing element on a defined set of expenses with a known
+> consequence. G2b is the BROADER one, because it goes to whether the stored
+> records qualify as records under section 6001 at all, which is every row
+> rather than the travel subset. Fix G1 first only if you are optimising for
+> the likeliest audit adjustment; fix G2b first if you are optimising for
+> the system's standing as a record-keeping system.
 
 **G1. Business purpose is absent from every output.** 274(d)(C),
 1.274-5T(b)(2)(iv), 1.62-2(e)(2). This is the one required element the tool
@@ -223,6 +285,17 @@ The tool's whole purpose is holding the evidence, and nothing stops the
 evidence being dropped, states how long it should live, or records that it
 was dropped.
 
+**G2b. Nothing can prove a stored receipt is the file that arrived, and
+nothing records who changed or deleted anything.** Rev. Proc. 97-22
+4.01(2)(a) and (b). Three separate absences compound: no digest is persisted
+for a stored file, so alteration is undetectable; one shared operator code
+means no action is attributable to a person; and the hosted app writes no run
+log, so deletions and edits leave no trail. Under section 6 of the Rev. Proc.
+a storage system that fails these "may be treated as not being in compliance
+with the recordkeeping requirements of section 6001", which is what puts a
+Notice of Inadequate Records and the section 9 penalties in play. This is the
+gap the first version of this document reported as a strength.
+
 **G3. Place is captured on one path and dies before any output.**
 1.274-5T(b)(2)(iii). `expense_location` is read by the Zoho expense-CSV and
 expense-report-PDF ingests, reaches `serialize.py` and the API dict, and
@@ -235,6 +308,24 @@ thrown away, which makes this the cheapest real fix on the list.
 should not: a missing receipt on a 12 EUR taxi is fine, and a missing
 receipt on a hotel bill or a 400 USD charge is a disallowed deduction. The
 report has the amount and the account, so the flag is derivable today.
+
+**G3b. The reports are not an inventory of what is stored, and the printed
+page cannot be traced back to the stored file.** Rev. Proc. 97-22 4.01(1),
+4.01(6), 4.02. Three classes of stored document reach no report at all:
+soft-deleted expenses, set-aside documents, and mail that never routed. For
+the last of these the inbound archive is the only copy and no route serves
+it. Meanwhile the receipt caption on the page has the index key stripped out
+of it, so an examiner cannot get from a printed page back to the stored
+file, and two uploads sharing an original filename caption identically. "Show
+me every receipt you hold for 2025" is currently unanswerable.
+
+**G4b. Image receipts are downscaled in the reproduction, and no page is
+numbered.** Rev. Proc. 97-22 4.01(3). An image receipt is re-encoded to RGB
+and resized to an A4 box at roughly 150 dpi before it is appended; a PDF
+receipt passes through untouched. Neither report numbers its pages, so a
+printed month plus forty receipt pages cannot be shown to be complete or in
+order, and a page removed from the set leaves no trace. Cheap to fix and
+disproportionately visible to a reader who is checking your work.
 
 **G5. The accountable-plan clock is invisible.** 1.62-2(g)(2)(i). The safe
 harbor wants substantiation within 60 days of the expense and return of
@@ -250,8 +341,12 @@ records were made at or near the time of the expense.
 
 **G7. There is no system description an examiner could be handed.**
 Rev. Proc. 97-22 section 4.01(5) requires complete descriptions of the
-storage system and the indexing system, on request. This is a writing task,
-not a build, and it is the cheapest item on the whole list.
+storage system and the indexing system, on request. **CLOSED 2026-09-08**:
+`electronic-storage-system-description.md`, draft pending owner and CPA
+review. The estimate here ("a writing task, not a build, the cheapest item
+on the whole list") was wrong in an instructive way: describing a system
+completely is what exposes what it actually does, and it produced both the
+D-section correction above and twenty disclosed defects of its own.
 
 **G8. Criss cannot yet safely bin the paper.** Rev. Proc. 97-22 section 7
 permits destroying originals only after the taxpayer's own testing
@@ -266,6 +361,16 @@ spent on business is not derived. Narrow, and only applies to trips.
 
 **G10. No gift handling.** 1.274-5T(b)(5). Only matters if Brisken gives
 business gifts. Owner question, not a defect.
+
+**G12. Three third parties sit between the Service and the records, and no
+agreement has been read against 4.01(7).** Fly.io holds the only copy of the
+volume; the sole human retrieval interface is a Lovable-hosted SPA whose
+source lives in a different repository; every receipt image is sent to OpenAI
+to be read. The Rev. Proc. forbids any agreement that would "limit or
+restrict the Service's access to and use of the electronic storage system
+... including personnel, hardware, software, files, indexes, and software
+documentation". Whether these three do is a contract question, not a code
+question, and nobody has looked. UNVERIFIED rather than missing.
 
 **G11. One shared operator code means no per-user attribution.**
 Rev. Proc. 97-22 section 4.01(2)(b). The system can detect that bytes
@@ -324,14 +429,44 @@ the owner is making.
   receipt; the merchant's city is usually printed on it. Capturing it is an
   extraction-schema change, so it lands with a re-read cost.
 
+### Rendering-only, added by the 2026-09-08 correction
+
+- **Number the pages** of both reports, as "page N of M" (G4b). Half a day,
+  and it is what lets a printed set be shown complete.
+- **Put the index key back in the receipt caption** (G3b, D5). The caption
+  currently strips the very prefix that identifies the stored file; printing
+  the stored name plus the run id alongside the friendly name restores the
+  trace from page to file.
+- **Disclose that the values are machine-read** (D2). One line in the
+  preparation block saying the amounts, dates and vendors were extracted
+  automatically from the receipt images and reviewed by the operator. This
+  costs nothing and removes a misrepresentation.
+
 ### Not a report change at all
 
+- **Persist a digest per stored file and re-verify it** (G2b). The upload
+  paths already compute a SHA-1 for de-duplication and throw it away; storing
+  it beside the record and adding a periodic re-check turns the single
+  largest storage-compliance gap into a satisfied criterion, and doubles as
+  the quality-assurance evidence 4.01(2)(c) wants. This is the highest
+  value-per-effort item on the whole list.
+- **Record who did what** (G2b, G11). Per-operator identity instead of one
+  shared code, and a ledger row for every edit and every deletion.
 - **A retention policy and a delete that leaves a trace** (G2). Needs a
   decision on the period first, which follows from the entity question in
-  section 1 and from Pub. 583's 3 / 6 / 7 / unlimited ladder.
-- **A system description document for an examiner** (G7). One markdown
-  file, written once, covering the storage scheme, the indexing scheme, the
-  retrieval path and the procedures. Cheapest item here.
+  section 1 and from Pub. 583's 3 / 6 / 7 / unlimited ladder. Note that the
+  inbound archive already has a 10-year floor on a German basis, so the
+  decision is really about the run tree and about whether to align the two.
+- **Read the three third-party agreements against 4.01(7)** (G12). Not an
+  engineering task at all.
+- **A system description document for an examiner** (G7). **DONE
+  2026-09-08**, same day: `electronic-storage-system-description.md`. It was
+  not the cheap writing task this line predicted. Drafting it forced the
+  deployed paths to be read rather than their docstrings, which is where the
+  content-addressing error above surfaced; and the draft was then refuted
+  line by line by eight independent reviewers, who produced 97 challenges of
+  which 53 were confirmed, five against flat false statements in the first
+  draft. Still a draft pending owner and CPA review.
 - **A quality-assurance routine** (G8), so the paper can eventually go. A
   periodic sample of stored receipts reproduced and compared against the
   original, recorded. Rev. Proc. 97-22 wants it "regular"; the shape is

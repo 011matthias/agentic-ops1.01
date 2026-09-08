@@ -163,6 +163,15 @@ CANONICAL_HOOKS = {
                     "timeout": 10000,
                 },
                 {
+                    # MSYS rewrites leading-slash args and <ref>:<path>
+                    # pathspecs before the program sees them; advisory names
+                    # MSYS_NO_PATHCONV=1. Memory failed this class three
+                    # times in one day (2026-08-24), plus 2026-07-22.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/msys-mangle-gate.py"),
+                    "timeout": 10000,
+                },
+                {
                     "type": "command",
                     "command": _cmd(".claude/hooks/git-stash-gate.py"),
                     "timeout": 10000,
@@ -336,6 +345,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "ruff-push-gate.py",
     "cd-guard.py",
     "heredoc-size-gate.py",
+    "msys-mangle-gate.py",
     "git-stash-gate.py",
     "git-restore-gate.py",
     "write-shrink-gate.py",
