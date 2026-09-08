@@ -47,8 +47,16 @@ RUFF = ("ruff (real-bug ruleset)",
          "ruff", "check", "tools", ".claude/hooks", "tools/tests"])
 INDEX = ("tools/INDEX.md membership",
          ["uv", "run", "tools/check-index.py"])
+# The dependency list must match the CI `hooks` job exactly. It did not until
+# 2026-09-08: CI passed --with requests --with httpx --with pyyaml and this did
+# not, so every module guarded by pytest.importorskip("httpx") or ("yaml") was
+# silently skipped here. The 151-test Vinted watcher suite was one of them, and
+# this tool still printed "the CI hooks job should pass" while never having run
+# it. A local gate that is a strict subset of the remote one is worse than no
+# local gate, because it is trusted.
 PYTEST = ("enforcement-layer pytest suite",
           ["uv", "run", "--no-project", "--with", "pytest", "--with", "python-pptx",
+           "--with", "requests", "--with", "httpx", "--with", "pyyaml",
            "pytest", "tools/tests"])
 
 
