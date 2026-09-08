@@ -1374,9 +1374,12 @@ time with zero receipts has no container until one receipt of that month
 is dropped (the drop page's month override makes that a 10-second act).
 Named to the owner before the greenlight; their call stands.
 
-**SPA half:** `docs/lovable-receipts-drop-prompt.md` §2 (rewritten: full
-removal, trips arm kept, dead route redirects to `/months`) + new §6 (the
-Open-month button, travel rows excluded). Still one paste with items 44/45.
+**SPA half:** `docs/lovable-receipts-drop-prompt.md`, reworked 2026-09-08
+evening into a DELTA prompt after the bundle audit showed the owner had
+already published v1 mid-day (the drop page is LIVE; the operator's
+"only accepts 80 files" report was the tell). Delta = cap copy +
+chunking, this item's create-UI removal, the nav redesign, the
+Open-month release (travel rows excluded).
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 

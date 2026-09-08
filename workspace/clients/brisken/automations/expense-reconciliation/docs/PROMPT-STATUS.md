@@ -26,6 +26,16 @@ index + 45 JS chunks (937 KB) and grepped the decisive field names; for
 the two whole-object-replace gates, read the settings chunk's save-payload
 construction to confirm the writes carry `person` and `travel_alias`.**
 
+**Re-audited 2026-09-08 evening (46 chunks): the receipts-drop prompt's v1
+was published by the owner mid-day** — `chunk-receipts` reads `n_filed` /
+`n_needs_month` / `needs_month`, `/api/receipts` + "Recibos" + "Dos
+recibos" live in the i18n chunk. The same-day amendments are NOT in the
+bundle (`upload-cap` zero hits; "Start a new month" and `expenses/new`
+still referenced), so the pending paste is now the DELTA in the reworked
+`lovable-receipts-drop-prompt.md`. Lesson pinned: the operator reporting a
+behavior only a live page could show ("can only accept 80 files") IS a
+publish signal — re-audit then, not at the next session boundary.
+
 Two display strings misread on the 2026-09-01 pass, both resolved by reading
 the surrounding key: `"Not a duplicate"` is `wb.dups.notDup` from the workbench
 duplicates panel, which predates `lovable-duplicates-prompt.md` and is not
@@ -46,6 +56,7 @@ missing.
 
 | Prompt | Verified by |
 |---|---|
+| `lovable-receipts-drop-prompt.md` v1 (#709 text; §1 page + §3 badge + §4 empty state + §2 upload-area removal) | `chunk-receipts` reads `n_filed`/`n_needs_month`/`needs_month`; `/api/receipts` POST; "Recibos" nav + "Dos recibos" badge strings in i18n (bundle audit 2026-09-08; badge wiring + §4 to be eyeballed on the next browser drive) |
 | `lovable-mail-intake-prompt.md` | Email intake section in Settings; alias rows; "Receipts can be emailed to any-name@expenses.brisken.com" |
 | `lovable-intake-quickwins-prompt.md` §1 §2 | Files column; Month column with real labels |
 | `lovable-body-only-prompt.md` | Held-row menu offers View body / Add to month as PDF / Dismiss |
@@ -87,7 +98,7 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
-| `lovable-receipts-drop-prompt.md` (2026-09-08, amended twice same day: cap raise + §5 nav; then §2 full create-UI removal + §6 Open-month release per owner ruling) | a chunk POSTs to `/api/receipts` and reads `n_filed` + `n_needs_month` + `needs_month` + `created_batch` + `month_source` from the job `result`; months chunk reads `created_by` value `"drop"`; rejected copy reads reason `upload-cap` + `limit`; intake chunk reads `pool_month_state` + `pool_month` and POSTs a `label`-only `/api/expense-batches` (the §6 release); no chunk references `/expenses/new` for company months | Backend deploy (cap 80→500 + upload-cap ledger rows deployed 2026-09-08; §2/§6 need NO backend — the create route stays as plumbing). §5 nav + §2 button death are chrome — verify by browser drive, not bundle grep. Nothing gates data entry |
+| `lovable-receipts-drop-prompt.md` DELTA (2026-09-08: §1 cap copy + chunking, §2 full create-UI removal, §3 nav, §4 Open-month release) | rejected copy reads reason `upload-cap` + `limit`; intake chunk POSTs a `label`-only `/api/expense-batches` and reads `pool_month`; no chunk references "Start a new month" or `/expenses/new` for company months | Backend already deployed (cap 80→500 + upload-cap ledger rows, 2026-09-08); §2-§4 need NO backend — the create route stays as plumbing. Nav + button death are chrome — verify by browser drive, not bundle grep. Nothing gates data entry |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
