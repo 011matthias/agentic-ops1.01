@@ -85,9 +85,12 @@ and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
-Empty as of the 2026-09-07 audit. The previous clean slate lasted from the
-2026-09-06 audit until R1 shipped the same day; expect this table to fill
-again with the next backend round. Verify by field names, not display copy.
+| Prompt | Decisive field names | Gate |
+|---|---|---|
+| `lovable-receipts-drop-prompt.md` (2026-09-08) | a chunk POSTs to `/api/receipts` and reads `n_filed` + `n_needs_month` + `needs_month` + `created_batch` + `month_source` from the job `result`; months chunk reads `created_by` value `"drop"` | Backend deploy. §2 removes the create-month upload area — the server 400s files there, so an unpasted SPA errors loudly on the old flow rather than corrupting anything. Nothing gates data entry |
+
+The previous clean slate (2026-09-07) lasted one day; the backlog's habit
+holds. Verify by field names, not display copy.
 
 ## Cannot verify (no live state exercises them)
 

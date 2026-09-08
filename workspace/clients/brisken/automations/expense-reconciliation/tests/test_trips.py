@@ -89,6 +89,21 @@ def _done(client, body):
     return body["batch_id"]
 
 
+def _add_receipts(client, batch_id, files=None):
+    """Company months are created EMPTY since 2026-09-08; their receipts
+    enter through the add route (trip creates still take files)."""
+    payload = [
+        ("files", (n, d, "application/octet-stream"))
+        for n, d in (files or [("a.jpg", JPG)])
+    ]
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/receipts", files=payload
+    )
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+
+
 # ── the trip entity ─────────────────────────────────────────────────
 
 
@@ -161,10 +176,13 @@ def test_undeclared_create_stores_no_marker_and_reads_company(
     client, monkeypatch,
 ):
     _patch_ocr(monkeypatch, _extraction())
-    resp = _create_batch(client, data={"legal_entity": "Corporate Services"})
+    resp = client.post(
+        "/api/expense-batches", data={"legal_entity": "Corporate Services"}
+    )
     assert resp.status_code == 200, resp.text
     assert resp.json()["batch_type"] == "company-month"
     batch_id = _done(client, resp.json())
+    _add_receipts(client, batch_id)
 
     grid = client.get(f"/api/expense-batches/{batch_id}").json()
     assert grid["batch_type"] == "company-month"
@@ -180,20 +198,25 @@ def test_undeclared_create_stores_no_marker_and_reads_company(
 
 def test_declared_company_month_reads_company(client, monkeypatch):
     _patch_ocr(monkeypatch, _extraction())
-    resp = _create_batch(client, data={"batch_type": "company-month"})
+    resp = client.post(
+        "/api/expense-batches", data={"batch_type": "company-month"}
+    )
     assert resp.status_code == 200, resp.text
     assert resp.json()["batch_type"] == "company-month"
+    _add_receipts(client, _done(client, resp.json()))
 
 
 def test_batch_type_validation(client):
-    assert _create_batch(
-        client, data={"batch_type": "vacation"}
+    # Company-shaped creates go file-less (files on a company create are
+    # their own 400 since 2026-09-08, which would mask the checks here).
+    assert client.post(
+        "/api/expense-batches", data={"batch_type": "vacation"}
     ).status_code == 400
     assert _create_batch(
         client, data={"batch_type": "trip"}
     ).status_code == 400  # no trip_id
-    assert _create_batch(
-        client, data={"trip_id": "abc"}
+    assert client.post(
+        "/api/expense-batches", data={"trip_id": "abc"}
     ).status_code == 400  # trip_id without the declared type
     assert _create_batch(
         client, data={"batch_type": "trip", "trip_id": "nope"}
@@ -326,9 +349,10 @@ def test_roster_mismatch_flags_off_roster_persons_only(
 
     # Company month: neither the key nor the count exists.
     _patch_ocr(monkeypatch, _extraction(payment_hint="Visa ...9001"))
-    plain = _create_batch(client, data={})
+    plain = client.post("/api/expense-batches", data={})
     assert plain.status_code == 200, plain.text
     month_id = _done(client, plain.json())
+    _add_receipts(client, month_id)
     month = client.get(f"/api/expense-batches/{month_id}").json()
     assert all("roster_mismatch" not in e for e in month["expenses"])
     assert "n_roster_mismatch" not in month["summary"]

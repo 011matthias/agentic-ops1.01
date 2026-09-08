@@ -1277,6 +1277,55 @@ the flip, each evidence-gated before any build:
   pool, and deleting the loser re-pools its mail. Self-healing; runbook
   line: two same-label months means an upload raced an arrival.
 
+### 44. Receipt entry is decoupled from month creation (owner directive 2026-09-08)
+
+**Owner:** "Criss needs a page inside the reconciliation tool in which she can
+just drop any new receipts into manually. Mind you, the expense creation
+should only happen this way ... we dont want receipt injection and expense
+creation to be limited to the start of a month's reconciliation." Asked
+directly whether receipt injection should come out of "create a new month":
+**yes, and it only works as a pair with legal empty months.**
+
+**Why removal, not merely allowing both.** The create-month upload slot was
+the last surface filing receipts by OPERATOR CONTEXT (whatever month was
+being created) rather than by what the receipt says. That is the exact class
+that put Dirk's August receipts in the April batch and drove item 29's
+rebuild of mail routing. Leaving it would leave two filing brains, one of
+which is the one already replaced.
+
+**The pairing, and why it is not optional.** `create_expense_batch` refused an
+empty batch, which is why the whole intake stream once waited on a manual
+first-receipt upload. Stripping receipts out of creation without lifting that
+refusal would leave Criss unable to open a month at all — and statement-first
+is her real workflow (January: 78 of 80 charges had no receipt). So a company
+month is now a legal empty container that a statement lands in, and the
+refusal survives exactly where it is load-bearing: `allow_empty` is opt-in
+per caller, and it never sanctions an upload whose every file was REJECTED
+(the mail materializer's floor — a month is never created from files that
+could not be read).
+
+**Shipped (Shipped row 31).** `POST /api/receipts` is the one manual
+entrance: each dropped FILE routes on its own dates through the same
+`resolve_receipt_month` brain mail uses, materializing absent months
+(`created_by: "drop"`). Deliberate asymmetries with mail, each with a reason:
+a MAIL routes as one unit by its earliest date because its files arrived
+together, a DROP is a pile of unrelated receipts; mail materialization is
+flag-gated because a stranger's mail could mint months, while an operator
+dropping a file is the opposite of that, so the drop is unconditional; and a
+file with no readable date RESTS as `needs_month` rather than falling to the
+arrival month, because a silent guess is what the routing rebuild removed.
+The release valve is an explicit `month` override, believed like a typed
+date. Zips are refused (one file per receipt) — a zip's members would each
+need their own verdict, and the page is a drag-and-drop of files.
+
+**Scope not taken:** mail intake and the travel alias stay, since they route
+through the identical brain; "only this way" was read as the only MANUAL
+entrance, confirmed against the directive's own framing ("even the ones
+injected via email" is item 40's language for mail as a first-class path).
+
+SPA half: `docs/lovable-receipts-drop-prompt.md` (owner applies; §2 removes
+the create-month upload area, which the server already 400s).
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
 **Entity half DONE 2026-09-06** (authorized operator-API write, verified on

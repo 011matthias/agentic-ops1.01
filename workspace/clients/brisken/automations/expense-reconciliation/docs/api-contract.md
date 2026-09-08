@@ -123,6 +123,17 @@ This is rule 1 below in practice: the richer data arrives as a PARALLEL
 field. The same three emission sites feed `expense_ingest.issues` (batch
 create), the folder-ingest reply, and the add-receipts job summary.
 
+Since the 2026-09-08 decoupling, a COMPANY month's upload feedback arrives
+through the ADD path, not the create: `summary.upload_issues` /
+`upload_issue_details` are `[]` on an empty create, and the batch grid's
+`expense_ingest` carries the per-add ledger — `documents[]` (string ids),
+`issues[]` (string prose) and `issue_details[]` (the four-key objects),
+all three pinned by `test_view_contract.py`. Trip creates still take files
+and still populate the create-time fields, which is why the contract's
+fixtures cover both. The non-receipt quarantine likewise reports through
+`expense_ingest.issues` + the `set_aside` strip on the add path, where a
+create populated the grid's `parse_issues[]`.
+
 ## Summary counts: one name, one question
 
 Types are not the only contract a payload carries. `n_categorized` shipped on
@@ -523,6 +534,32 @@ unset. Refused when it is `"receipts"` or collides with a person alias.
 REMINDER: the `intake` object is whole-object-replace (see below), so an
 SPA that does not know this key will silently drop it on its next
 settings save — ship the SPA prompt before anyone sets the alias.
+
+### The receipts drop (2026-09-08)
+
+Receipt entry is decoupled from month creation. `POST
+/api/expense-batches` REFUSES `files` on a company month (400; trip
+creates keep create-with-receipt) and creates the month EMPTY — the
+container a statement lands in. The one manual entrance is `POST
+/api/receipts` (multipart `files`, repeatable): each FILE routes to the
+month printed on it through the same `resolve_receipt_month` brain mail
+uses, materializing absent months unconditionally (`created_by:
+"drop"`; the auto-materialize flag gates MAIL only). A file with no
+readable plausible date is `needs_month` and NOT ingested; the optional
+form field `month` ("YYYY-MM") is the operator override and files every
+file in that call (`month_source: "operator"`). Zips are not expanded
+here (`rejected` / `unsupported-type`) — one file per receipt.
+
+The reply is `{ok, job_id, n_files}`; the outcome rides the JOB row:
+`GET /jobs/{id}` gains a `result` field (parallel, absent on every
+other job kind) —
+`{files: [{file, status: filed|needs_month|rejected|failed, month?,
+month_source?, batch_id?, reason?, mixed_months?}], months: [{month,
+label, batch_id?, created_batch, n_files, n_added, issues?, error?}],
+n_filed, n_needs_month, n_rejected}`. `n_added < n_files` on a month
+entry means content duplicates were skipped (the dedupe working, not a
+loss). A drop-created month claims its pooled mail like any other month
+creation.
 
 Both `n_pooled` and `n_held` count distinct ARCHIVES. The log holds more than
 one row per archive by design (one at acceptance, another when a replay or a

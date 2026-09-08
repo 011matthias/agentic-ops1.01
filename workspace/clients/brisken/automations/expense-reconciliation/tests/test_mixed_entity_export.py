@@ -86,15 +86,22 @@ def _mixed_batch(client, monkeypatch) -> str:
         _extraction(vendor="Staples", payment_hint="Visa ...2838"),
         _extraction(vendor="Cafe Lisboa", total="18.00", payment_hint="Visa ...9693"),
     )
+    # A company month is created EMPTY (2026-09-08); receipts join via the
+    # add route afterwards.
     resp = client.post(
         "/api/expense-batches",
-        files=[("files", ("a.jpg", JPG, "application/octet-stream")),
-               ("files", ("b.jpg", JPG2, "application/octet-stream"))],
         data={"legal_entity": "", "label": "Mixed month"},
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert client.get(f"/jobs/{body['job_id']}").json()["status"] == "done"
+    resp = client.post(
+        f"/api/expense-batches/{body['batch_id']}/receipts",
+        files=[("files", ("a.jpg", JPG, "application/octet-stream")),
+               ("files", ("b.jpg", JPG2, "application/octet-stream"))],
+    )
+    assert resp.status_code == 200, resp.text
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
     return body["batch_id"]
 
 

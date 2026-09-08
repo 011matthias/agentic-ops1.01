@@ -72,18 +72,26 @@ def _patch_ocr(monkeypatch, *extractions: ExtractedReceipt) -> None:
 
 
 def _create_batch(client, monkeypatch, label=None, *extra) -> str:
-    _patch_ocr(monkeypatch, _extraction(), *extra)
+    # The create takes no files since 2026-09-08: the month is created
+    # EMPTY (any pool claim it triggers consumes `extra`), then the seed
+    # receipt enters through the add route and pays its own read.
+    _patch_ocr(monkeypatch, *extra)
     data = {"legal_entity": "Corporate Services"}
     if label:
         data["label"] = label
-    resp = client.post(
-        "/api/expense-batches",
-        files=[("files", ("seed.jpg", JPG, "application/octet-stream"))],
-        data=data,
-    )
+    resp = client.post("/api/expense-batches", data=data)
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert client.get(f"/jobs/{body['job_id']}").json()["status"] == "done"
+    _patch_ocr(monkeypatch, _extraction())
+    added = client.post(
+        f"/api/expense-batches/{body['batch_id']}/receipts",
+        files=[("files", ("seed.jpg", JPG, "application/octet-stream"))],
+    )
+    assert added.status_code == 200, added.text
+    assert client.get(
+        f"/jobs/{added.json()['job_id']}"
+    ).json()["status"] == "done"
     return body["batch_id"]
 
 

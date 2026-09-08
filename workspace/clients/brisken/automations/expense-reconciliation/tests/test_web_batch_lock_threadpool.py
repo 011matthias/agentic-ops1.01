@@ -56,14 +56,20 @@ def batch(tmp_path, monkeypatch):
     monkeypatch.setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
     app = create_app(tmp_path)
     with TestClient(app) as c:
+        # 2026-09-08 split: empty company-month create + receipt add.
         resp = c.post(
             "/api/expense-batches",
-            files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
             data={"legal_entity": "Corporate Services", "label": "Lock fixture"},
         )
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert c.get(f"/jobs/{body['job_id']}").json()["status"] == "done"
+        resp = c.post(
+            f"/api/expense-batches/{body['batch_id']}/receipts",
+            files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
+        )
+        assert resp.status_code == 200, resp.text
+        assert c.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
         yield c, body["batch_id"]
 
 

@@ -84,8 +84,17 @@ def _wire(monkeypatch, n=6):
 
 
 def _batch(client, n_files=2, label="April 2026"):
+    # A company month is created EMPTY (2026-09-08); receipts join via the
+    # add route afterwards.
     resp = client.post(
         "/api/expense-batches",
+        data={"legal_entity": "Corporate Services", "label": label},
+    )
+    assert resp.status_code == 200, resp.text
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    batch_id = resp.json()["batch_id"]
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
         files=[
             # Distinct BYTES, identical CONTENT: two scans of one invoice,
             # which is what a twice-forwarded receipt actually looks like.
@@ -95,11 +104,10 @@ def _batch(client, n_files=2, label="April 2026"):
                        "application/octet-stream"))
             for i in range(n_files)
         ],
-        data={"legal_entity": "Corporate Services", "label": label},
     )
     assert resp.status_code == 200, resp.text
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
-    return resp.json()["batch_id"]
+    return batch_id
 
 
 def _csv(*rows: tuple[str, str, str]) -> bytes:

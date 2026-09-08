@@ -63,14 +63,21 @@ def _create_batch(client, label, n_files):
         ("files", (f"r{i}.jpg", JPG + bytes([i]), "application/octet-stream"))
         for i in range(n_files)
     ]
+    # A company month is created EMPTY (2026-09-08); receipts join via the
+    # add route afterwards.
     resp = client.post(
         "/api/expense-batches",
-        files=files,
         data={"legal_entity": "Corporate Services", "label": label},
     )
     assert resp.status_code == 200, resp.text
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
-    return resp.json()["batch_id"]
+    batch_id = resp.json()["batch_id"]
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/receipts", files=files,
+    )
+    assert resp.status_code == 200, resp.text
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    return batch_id
 
 
 def _grid(client, batch_id):

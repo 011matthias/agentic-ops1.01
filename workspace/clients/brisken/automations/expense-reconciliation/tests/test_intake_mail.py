@@ -128,26 +128,36 @@ def _create_batch(
     client, monkeypatch, label: str | None = None,
     *extra: ExtractedReceipt,
 ) -> str:
-    """Create an expense batch and wait for its OCR job.
+    """Create an expense batch (EMPTY — the create route refuses files
+    since 2026-09-08), add the seed receipt through the add route, and
+    wait for both jobs.
 
     `label` names the batch's month; without one the batch carries the
     default full-date label, which names no month and can never claim
-    mail. `extra` extends the mock queue past the seed receipt, for the
-    pool claim that a month-labelled batch triggers on creation."""
-    _patch_ocr(monkeypatch, _extraction(), *extra)
+    mail. `extra` feeds the pool claim that a month-labelled batch
+    triggers on creation. The claim runs at CREATE time, before the seed
+    exists, so it is queued for the create; the seed's single read is
+    queued separately for the ADD job — same pops as the old
+    create-with-files, assigned to the same receipts."""
+    _patch_ocr(monkeypatch, *extra)
     data = {"legal_entity": "Corporate Services"}
     if label:
         data["label"] = label
-    resp = client.post(
-        "/api/expense-batches",
-        files=[("files", ("seed.jpg", JPG, "application/octet-stream"))],
-        data=data,
-    )
+    resp = client.post("/api/expense-batches", data=data)
     assert resp.status_code == 200, resp.text
     body = resp.json()
     job = client.get(f"/jobs/{body['job_id']}").json()
     assert job["status"] == "done", job
-    return body["batch_id"]
+    batch_id = body["batch_id"]
+    _patch_ocr(monkeypatch, _extraction())
+    added = client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("seed.jpg", JPG, "application/octet-stream"))],
+    )
+    assert added.status_code == 200, added.text
+    add_job = client.get(f"/jobs/{added.json()['job_id']}").json()
+    assert add_job["status"] == "done", add_job
+    return batch_id
 
 
 def _mail(
@@ -1755,7 +1765,6 @@ def test_a_month_less_label_never_claims_and_the_response_says_so(
     _patch_ocr(monkeypatch, _extraction())
     resp = client.post(
         "/api/expense-batches",
-        files=[("files", ("seed.jpg", JPG, "application/octet-stream"))],
         data={"legal_entity": "Corporate Services"},
     )
     assert resp.status_code == 200, resp.text
@@ -1763,6 +1772,14 @@ def test_a_month_less_label_never_claims_and_the_response_says_so(
     assert body["month"] is None
     assert "does not name a month" in body["advisory"]
     assert client.get(f"/jobs/{body['job_id']}").json()["status"] == "done"
+    added = client.post(
+        f"/api/expense-batches/{body['batch_id']}/receipts",
+        files=[("files", ("seed.jpg", JPG, "application/octet-stream"))],
+    )
+    assert added.status_code == 200, added.text
+    assert client.get(
+        f"/jobs/{added.json()['job_id']}"
+    ).json()["status"] == "done"
     # Still waiting: an unnamed month is not a claim target.
     assert client.get("/api/inbound/log").json()["n_pooled"] == 1
 
@@ -2113,7 +2130,6 @@ def test_arrival_extraction_warms_the_batch_cache(tmp_path, monkeypatch):
 
         resp = c.post(
             "/api/expense-batches",
-            files=[("files", ("seed.jpg", JPG, "application/octet-stream"))],
             data={"legal_entity": "Corporate Services",
                   "label": MONTH_LABEL},
         )
@@ -2121,6 +2137,14 @@ def test_arrival_extraction_warms_the_batch_cache(tmp_path, monkeypatch):
         body = resp.json()
         assert c.get(f"/jobs/{body['job_id']}").json()["status"] == "done"
         assert c.get("/api/inbound/log").json()["n_pooled"] == 0
+        added = c.post(
+            f"/api/expense-batches/{body['batch_id']}/receipts",
+            files=[("files", ("seed.jpg", JPG, "application/octet-stream"))],
+        )
+        assert added.status_code == 200, added.text
+        assert c.get(
+            f"/jobs/{added.json()['job_id']}"
+        ).json()["status"] == "done"
 
         # THE assertion: the mailed image was read exactly once, ever.
         # The ingest asked the cache the identical question and was

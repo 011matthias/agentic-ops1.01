@@ -94,20 +94,28 @@ def _patch_ocr(monkeypatch, *extractions: ExtractedReceipt) -> None:
 
 
 def _create_batch(client, files=None, legal_entity="", **data):
-    payload = [
-        ("files", (n, d, "application/octet-stream"))
-        for n, d in (files or [("a.jpg", JPG)])
-    ]
+    # Since 2026-09-08 a company month is created EMPTY (files are refused
+    # at creation); receipts join through the add route right after.
     resp = client.post(
         "/api/expense-batches",
-        files=payload,
         data={"legal_entity": legal_entity, **data},
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     job = client.get(f"/jobs/{body['job_id']}").json()
     assert job["status"] == "done", job
-    return body["batch_id"]
+    batch_id = body["batch_id"]
+    payload = [
+        ("files", (n, d, "application/octet-stream"))
+        for n, d in (files or [("a.jpg", JPG)])
+    ]
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/receipts", files=payload
+    )
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return batch_id
 
 
 def _grid(client, batch_id) -> dict:

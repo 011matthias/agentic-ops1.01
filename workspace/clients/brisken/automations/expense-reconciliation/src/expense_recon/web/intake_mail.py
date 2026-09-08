@@ -67,6 +67,7 @@ from .service import (
     BATCH_TYPE_TRIP,
     FOLDER_RECEIPT_SUFFIXES,
     MODE_EXPENSE_GENERATION,
+    RunInputError,
     add_receipts_to_expense_batch,
     claim_trip_batch_slot,
     create_expense_batch,
@@ -3586,3 +3587,243 @@ def dismiss_archive(
         return {"error": "only held or pooled mail can be dismissed "
                          f"(status: {meta.get('status', '')})", "code": 409}
     return {"status": STATUS_DISMISSED, "archive": arch.name}
+# ------------------------------------------------------------ receipts drop --
+
+
+def valid_month_key(month: str) -> bool:
+    """True when ``month`` is a well-formed "YYYY-MM" key (the drop
+    endpoint's override format)."""
+    return _ym(month) is not None
+
+
+def route_dropped_receipts(
+    db_path: Path,
+    learning_db_path: Path | None,
+    data_root: Path,
+    staging: Path,
+    month_override: str = "",
+    on_stage=None,
+) -> dict:
+    """File manually dropped receipts by the month printed ON each receipt
+    (the Receipts page, 2026-09-08 owner directive: receipt entry stops
+    being coupled to month creation). The manual twin of mail routing:
+    same extraction client, same `resolve_receipt_month` ruling, same
+    guarded month materialization — one routing brain for every entrance.
+
+    Unlike a MAIL (which routes as one unit by its earliest date), each
+    dropped FILE is its own receipt and routes on its own dates. Only a
+    ``receipt``-sourced month auto-files; a file with no readable
+    plausible date is reported ``needs_month`` and NOT ingested, because
+    silently guessing the arrival month is how receipts used to land in
+    whatever batch was open. The release valve is ``month_override``
+    ("YYYY-MM", the operator's explicit pick, validated by the caller):
+    it files EVERY file in this call into that month, source
+    ``operator`` — a typed month is believed, like a typed date.
+
+    Months materialize UNCONDITIONALLY here when absent (created_by
+    "drop"): the flag that gates MAIL materialization protects against a
+    stranger's mail minting months, and an operator dropping a file on
+    the page is the opposite of that. Creation mirrors the mail
+    materializer where it matters: `_MATERIALIZE_LOCK` held across the
+    create, `_open_batch_for_month` re-checked before the commit, and
+    `MonthOpenedMeanwhile` falling back to the add path.
+
+    Returns a per-file ledger (the drop job's ``result``): ``files`` rows
+    with status ``filed`` / ``needs_month`` / ``rejected`` / ``failed``,
+    and per-month ``months`` entries carrying ``created_batch`` and the
+    add counts (``n_added`` < files means content duplicates were
+    skipped, which is the dedupe working, not a loss)."""
+    from .service import FOLDER_RECEIPT_MAX_BYTES
+
+    def _stage(name: str) -> None:
+        if on_stage is not None:
+            try:
+                on_stage(name)
+            except Exception:  # noqa: BLE001 - progress is best-effort
+                pass
+
+    now = _now_iso()
+    staged = sorted(p for p in Path(staging).iterdir() if p.is_file())
+    with RunStore(db_path) as store:
+        settings = store.get_settings()
+
+    rows: list[dict] = []
+    routed: dict[str, list[tuple[dict, Path]]] = {}
+    client = _UNSET
+    _stage("reading receipts")
+    for path in staged:
+        display = re.sub(r"^\d{4}__", "", path.name)
+        suffix = path.suffix.lower()
+        if suffix not in FOLDER_RECEIPT_SUFFIXES:
+            # Zips included, deliberately: a zip's members would each need
+            # their own routing verdict, and the page is a drag-and-drop
+            # of the files themselves.
+            rows.append({"file": display, "status": "rejected",
+                         "reason": "unsupported-type"})
+            continue
+        size = path.stat().st_size
+        if size == 0:
+            rows.append({"file": display, "status": "rejected",
+                         "reason": "empty-file"})
+            continue
+        if size > FOLDER_RECEIPT_MAX_BYTES:
+            rows.append({"file": display, "status": "rejected",
+                         "reason": "too-large"})
+            continue
+        if month_override:
+            row = {"file": display, "status": "filed",
+                   "month": month_override, "month_source": "operator"}
+            rows.append(row)
+            routed.setdefault(month_override, []).append((row, path))
+            continue
+        if client is _UNSET:
+            client = _arrival_llm_client(settings)
+        dates = (
+            _extract_receipt_dates([path], client)
+            if client is not None else []
+        )
+        month, source, mixed = resolve_receipt_month(dates, now)
+        if source != "receipt":
+            rows.append({
+                "file": display, "status": "needs_month",
+                "reason": (
+                    "implausible-date" if source == "implausible-receipt"
+                    else "no-readable-date"
+                ),
+            })
+            continue
+        row = {"file": display, "status": "filed", "month": month,
+               "month_source": "receipt"}
+        if mixed:
+            row["mixed_months"] = True
+        rows.append(row)
+        routed.setdefault(month, []).append((row, path))
+
+    months_out: list[dict] = []
+    created_any = False
+    for month in sorted(routed):
+        group = routed[month]
+        label = _month_human(month)
+        _stage(f"filing {label}")
+        entry: dict = {"month": month, "label": label,
+                       "created_batch": False, "n_files": len(group)}
+        target_run = None
+        ym = _ym(month)
+        with _MATERIALIZE_LOCK:
+            with RunStore(db_path) as store:
+                target_run = _open_batch_for_month(store, ym)
+            if target_run is None:
+                files_bytes = [
+                    (row["file"], path.read_bytes()) for row, path in group
+                ]
+
+                def _month_still_absent(
+                    store: RunStore, ym=ym, month=month,
+                ) -> None:
+                    if _open_batch_for_month(store, ym) is not None:
+                        raise MonthOpenedMeanwhile(month)
+
+                try:
+                    prepared = create_expense_batch(
+                        Path(data_root),
+                        files=files_bytes,
+                        legal_entity="",
+                        label=label,
+                        now_iso=_now_iso(),
+                        operator=None,
+                        learning_db_path=learning_db_path,
+                        settings=settings,
+                        created_by="drop",
+                    )
+                    with RunStore(db_path) as store:
+                        run_id = execute_expense_batch(
+                            store, prepared, pre_commit=_month_still_absent,
+                        )
+                    entry.update({
+                        "batch_id": run_id, "created_batch": True,
+                        "n_added": len(files_bytes),
+                    })
+                    if prepared.upload_issues:
+                        entry["issues"] = list(prepared.upload_issues)
+                    for row, _path in group:
+                        row["batch_id"] = run_id
+                    created_any = True
+                    months_out.append(entry)
+                    continue
+                except MonthOpenedMeanwhile:
+                    with RunStore(db_path) as store:
+                        target_run = _open_batch_for_month(store, ym)
+                except RunInputError as exc:
+                    entry["error"] = str(exc)
+                    for row, _path in group:
+                        row["status"] = "failed"
+                        row["reason"] = str(exc)
+                    months_out.append(entry)
+                    continue
+        if target_run is None:
+            entry["error"] = "month batch vanished mid-create"
+            for row, _path in group:
+                row["status"] = "failed"
+                row["reason"] = entry["error"]
+            months_out.append(entry)
+            continue
+        # The ADD path runs outside `_MATERIALIZE_LOCK`: it takes the batch
+        # write lock itself and a statement-bearing month re-matches on the
+        # arrival, which can run for minutes — mail materialization must
+        # not queue behind it.
+        add_staging = (
+            Path(target_run.work_dir) / f"drop-add-{uuid.uuid4().hex[:8]}"
+        )
+        add_staging.mkdir(parents=True, exist_ok=True)
+        try:
+            for i, (row, path) in enumerate(group):
+                safe = re.sub(r"[^A-Za-z0-9._-]", "_", row["file"]) or "file"
+                (add_staging / f"{i:04d}__{safe}").write_bytes(
+                    path.read_bytes()
+                )
+            with RunStore(db_path) as store:
+                fresh = store.get_run(target_run.run_id)
+                if fresh is None:
+                    raise RunInputError(
+                        "This batch no longer exists (it was deleted)."
+                    )
+                result = add_receipts_to_expense_batch(
+                    store, fresh, add_staging, _now_iso(),
+                    learning_db_path=learning_db_path,
+                    on_stage=on_stage,
+                )
+            entry.update({
+                "batch_id": target_run.run_id,
+                "n_added": int(result.get("n_added") or 0),
+            })
+            if result.get("issues"):
+                entry["issues"] = list(result["issues"])
+            for row, _path in group:
+                row["batch_id"] = target_run.run_id
+        except RunInputError as exc:
+            entry["error"] = str(exc)
+            for row, _path in group:
+                row["status"] = "failed"
+                row["reason"] = str(exc)
+        finally:
+            shutil.rmtree(add_staging, ignore_errors=True)
+        months_out.append(entry)
+
+    if created_any:
+        # A drop-created month claims its waiting mail the way every other
+        # month creation does. Quiet: a claim failure never fails the drop.
+        try:
+            claimed = claim_pooled(db_path, learning_db_path, data_root)
+            if claimed.get("claimed"):
+                log.info("drop-created month(s) claimed %d pooled mail(s)",
+                         claimed["claimed"])
+        except Exception:  # noqa: BLE001 - a claim never breaks its trigger
+            log.warning("pool claim after drop failed", exc_info=True)
+
+    return {
+        "files": rows,
+        "months": months_out,
+        "n_filed": sum(1 for r in rows if r["status"] == "filed"),
+        "n_needs_month": sum(1 for r in rows if r["status"] == "needs_month"),
+        "n_rejected": sum(1 for r in rows if r["status"] == "rejected"),
+    }

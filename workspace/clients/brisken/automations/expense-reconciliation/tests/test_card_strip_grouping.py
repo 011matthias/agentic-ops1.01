@@ -185,12 +185,17 @@ def test_grouped_strip_and_representative_assignment_heal(client, monkeypatch):
         _extraction(vendor="Other Co", total="9.00",
                     payment_hint="VISA - ******0340"),
     )
-    resp = client.post("/api/expense-batches", files=[
-        ("files", ("a.jpg", JPG, "application/octet-stream")),
-        ("files", ("b.jpg", JPG + b"2", "application/octet-stream")),
-    ], data={"legal_entity": "", "label": "April 2026"})
+    # Empty create + receipts add (the 2026-09-08 decoupling).
+    resp = client.post("/api/expense-batches",
+                       data={"legal_entity": "", "label": "April 2026"})
     assert resp.status_code == 200, resp.text
     batch_id = resp.json()["batch_id"]
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    resp = client.post(f"/api/expense-batches/{batch_id}/receipts", files=[
+        ("files", ("a.jpg", JPG, "application/octet-stream")),
+        ("files", ("b.jpg", JPG + b"2", "application/octet-stream")),
+    ])
+    assert resp.status_code == 200, resp.text
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
 
     grid = client.get(f"/api/expense-batches/{batch_id}").json()
@@ -227,13 +232,18 @@ def test_multi_run_group_heals_from_the_representative(client, monkeypatch):
         _extraction(vendor="C Co", total="7.00",
                     payment_hint="Visa ...1672"),
     )
-    resp = client.post("/api/expense-batches", files=[
+    # Empty create + receipts add (the 2026-09-08 decoupling).
+    resp = client.post("/api/expense-batches",
+                       data={"legal_entity": "", "label": "August 2026"})
+    assert resp.status_code == 200, resp.text
+    batch_id = resp.json()["batch_id"]
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    resp = client.post(f"/api/expense-batches/{batch_id}/receipts", files=[
         ("files", ("a.jpg", JPG, "application/octet-stream")),
         ("files", ("b.jpg", JPG + b"2", "application/octet-stream")),
         ("files", ("c.jpg", JPG + b"3", "application/octet-stream")),
-    ], data={"legal_entity": "", "label": "August 2026"})
+    ])
     assert resp.status_code == 200, resp.text
-    batch_id = resp.json()["batch_id"]
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
 
     grid = client.get(f"/api/expense-batches/{batch_id}").json()

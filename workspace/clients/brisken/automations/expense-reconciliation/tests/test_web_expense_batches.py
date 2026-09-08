@@ -77,21 +77,35 @@ def _patch_ocr(monkeypatch, *extractions: ExtractedReceipt) -> None:
     )
 
 
-def _create_batch(client, files=None, legal_entity="Corporate Services", **data):
-    payload = [
-        ("files", (n, d, "application/octet-stream"))
-        for n, d in (files or [("a.jpg", JPG)])
-    ]
+def _create_empty(client, legal_entity="Corporate Services", **data):
+    """Company-month create, 2026-09-08 shape: no files, month born empty."""
     resp = client.post(
-        "/api/expense-batches",
-        files=payload,
-        data={"legal_entity": legal_entity, **data},
+        "/api/expense-batches", data={"legal_entity": legal_entity, **data}
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     job = client.get(f"/jobs/{body['job_id']}").json()
     assert job["status"] == "done", job
     return body["batch_id"]
+
+
+def _add_receipts(client, batch_id, files):
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", (n, d, "application/octet-stream")) for n, d in files],
+    )
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return job
+
+
+def _create_batch(client, files=None, legal_entity="Corporate Services", **data):
+    """Empty create + receipts add: since the 2026-09-08 split receipts no
+    longer ride the company-month create, they enter through the add route."""
+    batch_id = _create_empty(client, legal_entity=legal_entity, **data)
+    _add_receipts(client, batch_id, files or [("a.jpg", JPG)])
+    return batch_id
 
 
 def _grid(client, batch_id) -> dict:
@@ -165,10 +179,11 @@ def test_runs_endpoint_dispatches_by_mode(client, monkeypatch):
 
 
 def test_no_llm_and_no_key_fails_the_job_honestly(client):
+    # The create job still runs the folder pipeline (over zero receipts
+    # since the 2026-09-08 split), and folder OCR without an `llm:` block
+    # or key fails at execute time rather than pretending the month is fine.
     resp = client.post(
-        "/api/expense-batches",
-        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
-        data={"legal_entity": "Corporate Services"},
+        "/api/expense-batches", data={"legal_entity": "Corporate Services"}
     )
     assert resp.status_code == 200, resp.text
     job = client.get(f"/jobs/{resp.json()['job_id']}").json()
@@ -176,20 +191,29 @@ def test_no_llm_and_no_key_fails_the_job_honestly(client):
     assert "llm" in (job["error"] or "").lower()
 
 
-def test_batch_create_validation(client):
+def test_add_receipts_validation(client, monkeypatch):
+    # Create-side file validation is retired with the 2026-09-08 split: an
+    # empty create is legal and a create WITH files is refused outright —
+    # both pinned in test_receipts_drop. The upload validation now lives on
+    # the add route.
+    _patch_ocr(monkeypatch)
+    batch_id = _create_empty(client)
     # No files at all -> 400.
+    resp = client.post(f"/api/expense-batches/{batch_id}/receipts")
+    assert resp.status_code == 400
+    # Only zero-byte files -> 400, synchronously (nothing to stage).
     resp = client.post(
-        "/api/expense-batches", data={"legal_entity": "Corporate Services"}
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("a.jpg", b"", "application/octet-stream"))],
     )
     assert resp.status_code == 400
-    # Only unreadable files -> 400. (No legal entity is VALID since Cards
-    # R3 — entity resolves per receipt; see test_cards_r3_entity_flow.)
-    resp = client.post(
-        "/api/expense-batches",
-        files=[("files", ("a.txt", b"nope", "text/plain"))],
-        data={"legal_entity": "Corporate Services"},
-    )
-    assert resp.status_code == 400
+    # Only unreadable files: the job reports the rejection and adds nothing
+    # — the month stays empty rather than erroring or ingesting junk.
+    _add_receipts(client, batch_id, [("a.txt", b"nope")])
+    view = _grid(client, batch_id)
+    assert view["summary"]["n_expenses"] == 0
+    assert view["expense_ingest"]["n_added"] == 0
+    assert view["expense_ingest"]["issue_details"][0]["code"] == "unsupported_type"
 
 
 # ── field edits ─────────────────────────────────────────────────────
@@ -642,25 +666,47 @@ def test_upload_rejections_carry_a_code_beside_the_prose(client, monkeypatch):
     """Item 20: every upload rejection ships a stable code the SPA can say in
     the reviewer's language, WITHOUT retyping the prose list underneath a live
     renderer (the 2026-08-22 crash class). Prose and code are built together,
-    so a reworded sentence cannot drift from its code."""
-    _patch_ocr(monkeypatch, _extraction())
-    batch_id = _create_batch(client, files=[
+    so a reworded sentence cannot drift from its code.
+
+    Since the 2026-09-08 split the rejections surface on the ADD path: the
+    add job writes them into the batch view's `expense_ingest`, and the
+    create-time `summary.upload_issues` stays empty on a company month. The
+    add route drops zero-byte uploads before the job, so the empty-file code
+    is only reachable through a zip member — which also pins that the shared
+    folder reader (zip expansion included) runs on the add route."""
+    import zipfile
+
+    _patch_ocr(monkeypatch, _extraction(), _extraction(vendor="Zipped Co"))
+    batch_id = _create_empty(client)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("zipped.jpg", JPG + b"z")
+        zf.writestr("inner-empty.jpg", b"")
+    _add_receipts(client, batch_id, [
         ("a.jpg", JPG),
         ("notes.txt", b"not a receipt"),
-        ("empty.jpg", b""),
+        ("bundle.zip", buf.getvalue()),
     ])
 
-    summary = _grid(client, batch_id)["summary"]
-    assert summary["upload_issues"] == [
+    view = _grid(client, batch_id)
+    ingest = view["expense_ingest"]
+    assert ingest["issues"] == [
         "notes.txt: unsupported type .txt (skipped)",
-        "empty.jpg: empty or unreadable (skipped)",
+        "inner-empty.jpg: empty or unreadable (skipped)",
     ]
-    assert summary["upload_issue_details"] == [
+    assert ingest["issue_details"] == [
         {"code": "unsupported_type", "file": "notes.txt",
          "suffix": ".txt", "limit": None},
-        {"code": "empty_or_unreadable", "file": "empty.jpg",
+        {"code": "empty_or_unreadable", "file": "inner-empty.jpg",
          "suffix": None, "limit": None},
     ]
+    # The zip's valid member became an expense beside the direct upload.
+    assert ingest["n_added"] == 2
+    vendors = {e["vendor"]["display"] for e in view["expenses"]}
+    assert vendors == {"Staples", "Zipped Co"}
+    # Create-time upload feedback is retired on company months.
+    assert view["summary"]["upload_issues"] == []
+    assert view["summary"]["upload_issue_details"] == []
 
 
 def test_upload_issue_prose_and_code_come_from_one_place(client):
