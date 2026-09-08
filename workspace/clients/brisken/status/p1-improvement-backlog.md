@@ -1195,7 +1195,9 @@ Consequences:
   `CorpServ & DN ••3645`, which points at 3645 being a Corp Services card
   of Dirk's. That is a merchant's rendering of a statement descriptor, not
   the owner's record, so it is asked rather than written. 6013, 9693, 2838,
-  0340, 1176 and 3693 have no person source anywhere. All of it is in the
+  0340 and 1176 have no person source anywhere (the list's sixth Cloud
+  Services card was read as 3693 and is actually 9693, already counted here;
+  see the correction in item 26). All of it is in the
   draft `context/drafts/2026-09-08-card-gaps-criss-dirk.md`; enter persons
   only against a reply, never against the initials.
 - Rows gain `person` + `person_source` as PARALLEL fields (api-contract
@@ -1755,9 +1757,35 @@ September; Anthropic, August), now card-1176 → Consulting with
 
 What the list settled:
 
-- **New cards:** 1176 → Consulting, 3693 → Cloud Services, 4921 + 5126 →
-  BRISKEN GmbH. Confirmed-existing: 0113, 2838 (Corporate Services); 6013,
-  8311 (Cloud Services).
+- **New cards:** 1176 → Consulting, 4921 + 5126 → BRISKEN GmbH.
+  Confirmed-existing: 0113, 2838 (Corporate Services); 6013, 8311, 9693
+  (Cloud Services).
+- **CORRECTION, same day (2026-09-08 pm).** The round also created
+  `card-3693` from the Cloud Services row read as "CHASE VISA 3693". Criss
+  mailed the same sheet directly and a 10x re-read says that row is **9693**;
+  the first transcription misread a 9 as a 3. Three sources agree and nothing
+  supports 3693: the screenshot at pixel resolution, Zoho's own COA name for
+  org 697686691 ("Chase Visa | 9693 | Cloud Expenses", the ONLY 3693-or-9693
+  match across all eight orgs), and six live payment hints carrying 9693
+  against zero ever carrying 3693. `card-3693` was a phantom of this round
+  and has been DELETED from the live registry (operator API, re-read
+  verified: 14 cards, no card-3693, everything else byte-identical), followed
+  by `refresh-master-data` on all three open batches. No expense was ever
+  misfiled by it: both digits mapped to Cloud Services and 3693 resolved no
+  row, so the unresolved count is unchanged at 28/40 and the six 9693 rows
+  and two 1176 rows are intact. Two consequences: 9693 is CONFIRMED on the
+  list rather than absent from it, so that open question is closed and the
+  ask was struck from the Criss/Dirk draft; and the transcription's own
+  correction note flags three Wise bank-ACCOUNT digits as suspect on the same
+  re-read (2932 may be 2992, 0173 may be 0179, 9137 may be 9197). Those are
+  statement-coverage account ids, not cards, so nothing in the registry
+  depends on them; verify against the source before using any as an
+  account_id. The transferable lesson is in the checkpoint: a digit read off
+  a screenshot is a MEASUREMENT, and this round cross-checked 1176 against
+  live rows but accepted 3693 on the transcription alone because it resolved
+  nothing to contradict it. Absence of contradicting rows is not
+  confirmation; the Zoho COA cross-check was available and would have caught
+  it in one grep.
 - **The four crossed-out cards** (2448 → Cloud Services, 7531 → entity
   pending, 1160 → Consulting, 3344 → Corporate Services) plus the
   owner-marked-closed 1930 → Cloud Services are registered **active**, with
@@ -1814,8 +1842,6 @@ Still open, Criss/Dirk only (all carried in the draft
   **1672** (the 2838 plastic, still NOT registered live despite `cards.py`
   using it as its worked example). Same question shape; register both
   digits on one card once confirmed.
-- **9693** is in the registry as Cloud Services but absent from the list.
-  Asked rather than assumed retired.
 - **0340** still has no entity.
 - **GmbH stays chartless.** Its Zoho chart (org `696750461`) is flat and
   German with no operating-subtree structure to mirror, so deriving a scope
