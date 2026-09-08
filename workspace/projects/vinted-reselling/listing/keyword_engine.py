@@ -366,11 +366,100 @@ def mined_terms(item: dict) -> tuple[list[str], list[str]]:
         return [], [f"Korpus-Recherche uebersprungen: {type(e).__name__}"]
 
 
+def slug_tag(text: str) -> str | None:
+    """A term as a Vinted-linkifiable tag, or None if nothing usable is left.
+
+    Vinted linkifies `#\\w+`, so the tag has to survive as one word. Umlauts
+    are folded rather than kept: the linkified target is a search_text query,
+    and the corpus spells the same garment both ways.
+    """
+    folded = (text or "").lower()
+    for src, dst in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")):
+        folded = folded.replace(src, dst)
+    tag = re.sub(r"[^a-z0-9]", "", folded)
+    return tag if len(tag) >= 3 else None
+
+
+def build_hashtags(item: dict, keywords: list[str],
+                   mined: list[str] | None = None) -> tuple[list[str], list[str]]:
+    """Returns (tags, candidates_to_confirm).
+
+    Deliberately few and deliberately conservative. A tag on Vinted buys no
+    reach (there are no tag pages; `/hashtag/*` is a 404), only self-sorting
+    within a wardrobe, while "besonders viele oder nicht zugehoerige Hashtags"
+    is an enumerated reason for Vinted to hide the listing outright, with no
+    refund on a paid push.
+
+    Which is why the chosen tags come ONLY from fields the seller supplied. A
+    mined corpus term describes the CELL, not this garment, and as a hashtag it
+    stops being a search word and becomes a claim: the first draft of this
+    function offered "#cargo #knee #chino" for one pair of trousers, which
+    cannot all be true, and "#nuptse" for a North Face jacket whose model
+    nobody had entered. Both are the hide trigger, not a keyword strategy.
+
+    The corpus still earns its place, one step back: its high-lift terms come
+    back as CANDIDATES for the seller to confirm. That is the honest version of
+    per-product research. It says "this cell's buyers search for `single knee`;
+    take it if your trousers actually are one", instead of asserting it.
+
+    Order of preference among the supplied fields: the model, because it is the
+    one term a buyer searches that no other listing carries by accident; then
+    the cut or defining style; then the era.
+    """
+    brand = item.get("brand") or ""
+    tags: list[str] = []
+    used: set[str] = set()
+
+    def words(text: str | None) -> set[str]:
+        # Stemmed to a trailing-s, so "pant" and "pants" are one word rather
+        # than two of three slots.
+        out = set()
+        for w in re.split(r"[^a-z0-9]+", (text or "").lower()):
+            if w:
+                out.add(w[:-1] if len(w) > 3 and w.endswith("s") else w)
+        return out
+
+    # Words with no sorting power of their own, because Vinted already filters
+    # on them: the category (in either language), the size, the colour.
+    inert = (words(item.get("type")) | words(item.get("garment_class"))
+             | words(item.get("size")) | words(item.get("color")))
+
+    def add(*parts: str | None) -> None:
+        if len(tags) >= MAX_HASHTAGS:
+            return
+        joined = " ".join(p for p in parts if p)
+        tag = slug_tag(joined.replace(" ", ""))
+        if tag and tag not in tags:
+            tags.append(tag)
+            used.update(words(joined))
+
+    if item.get("model"):
+        add(brand, item.get("model"))
+    add(item.get("cut") or item.get("style"))
+    if item.get("era"):
+        add(item.get("era"))
+    if not tags and brand and item.get("type"):
+        add(brand, item.get("type"))
+
+    # Candidates: what this cell's listings actually say, minus anything the
+    # chosen tags or Vinted's own filters already cover. Never auto-adopted.
+    candidates = []
+    for term in (mined or []):
+        if len(candidates) >= MAX_HASHTAGS:
+            break
+        if words(term) - used - inert:
+            tag = slug_tag(term.replace(" ", ""))
+            if tag and tag not in tags and tag not in candidates:
+                candidates.append(tag)
+    return tags[:MAX_HASHTAGS], candidates
+
+
 def suggest(item: dict, use_corpus: bool = True) -> dict:
     """Full listing proposal plus the validation of what it produced."""
     mined, mine_notes = mined_terms(item) if use_corpus else ([], [])
     keywords, notes = build_keywords(item, mined=mined)
     notes = mine_notes + notes
+    tags, tag_candidates = build_hashtags(item, keywords, mined=mined)
     title = build_title(item)
     description = build_description(item, keywords)
     result = {
@@ -378,6 +467,8 @@ def suggest(item: dict, use_corpus: bool = True) -> dict:
         "title_len": len(title),
         "description": description,
         "keywords": keywords,
+        "hashtags": tags,
+        "hashtag_candidates": tag_candidates,
         "structured_fields": {
             "brand": item.get("brand"), "category": item.get("type"),
             "size": item.get("size"), "color": item.get("color"),
@@ -504,6 +595,16 @@ def main() -> None:
             print("  " + line)
         print("\nKEYWORDS (" + str(len(out["keywords"])) + ")")
         print("  " + ", ".join(out["keywords"]))
+        if out["hashtags"] or out["hashtag_candidates"]:
+            print("\nHASHTAGS (max " + str(MAX_HASHTAGS) + " insgesamt)")
+            if out["hashtags"]:
+                print("  belegt: " + " ".join("#" + t for t in out["hashtags"]))
+            if out["hashtag_candidates"]:
+                print("  Kandidaten aus dem Korpus, nur nehmen wenn zutreffend:")
+                print("    " + " ".join("#" + t for t in out["hashtag_candidates"]))
+            print("  Die Raute bringt keine Reichweite (Vinted hat keine Tag-Seiten),")
+            print("  nur Selbstsortierung. Zu viele oder unpassende sind ein")
+            print("  Ausblendungsgrund, deshalb wird nichts geraten.")
         print("\nSTRUKTURIERTE FELDER (das harte Filter-Tor)")
         for k, v in out["structured_fields"].items():
             print(f"  {k:<10}{v if v else 'TBD'}")
