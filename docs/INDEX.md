@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-08 | Brisken Outreach Packet Link Sent | comms | [→](docs/2026-09-08%20-%20Brisken%20Outreach%20Packet%20Link%20Sent/Checkpoint.md) |
 | 2026-09-08 | Brisken Card Entity Calibration | client-dev | [→](docs/2026-09-08%20-%20Brisken%20Card%20Entity%20Calibration/Checkpoint.md) |
 | 2026-09-08 | Brisken P1 Cost Center Design | client-dev | [→](docs/2026-09-08%20-%20Brisken%20P1%20Cost%20Center%20Design/Checkpoint.md) |
 | 2026-09-08 | Brisken P1 US Substantiation Criteria | client-dev | [→](docs/2026-09-08%20-%20Brisken%20P1%20US%20Substantiation%20Criteria/Checkpoint.md) |

@@ -3,8 +3,8 @@ project: brisken
 workstream: p2-outreach
 group: lead-generation
 spec: p2
-state: active
-updated: 2026-06-21
+state: dormant
+updated: 2026-09-08
 general_ref: status/p2-lead-gen-general.md
 ---
 
@@ -26,6 +26,12 @@ grant a meeting cold). Shared lead-gen context is in
 | Research channel (series + hub + AEO wiring) | done | Spec ready | Stand up on publish | Publish decision | `context/lead-generation/outreach-assets/research-channel.md` |
 | Forwardable proof (Calvin / Remittance) | in-progress | Best forwardable proof asset kept | Build the forwardable clip brief | none | `deliverables/lead-generation/aeo-outreach/mdh-forwardable-colgate.html` |
 | Cold-email sending infra | paused | Retired as a channel 2026-06-12 | None (dormant) | none | `project_brisken_outreach_domains` memory; spec p2 last_changes |
+
+**Dormant since 2026-06-21** (state corrected 2026-09-08). Every element below is
+built and waiting on the same human gate: Dirk's decision to publish on a Brisken
+property. Nothing is in flight and nothing is blocked on us. This is NOT superseded
+by `p2-outreach-engine.md`, which is a different workstream (the Lead Desk sending
+engine); the 2026-09-07 checkpoint's "verify and delete" note was mistaken.
 
 ## Open decisions / gates
 
