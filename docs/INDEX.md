@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-08 | Brisken P1 Cost Center Design | client-dev | [→](docs/2026-09-08%20-%20Brisken%20P1%20Cost%20Center%20Design/Checkpoint.md) |
 | 2026-09-08 | Brisken P1 US Substantiation Criteria | client-dev | [→](docs/2026-09-08%20-%20Brisken%20P1%20US%20Substantiation%20Criteria/Checkpoint.md) |
 | 2026-09-08 | Brisken P1 Drop Cap And Create-UI Retirement | client-dev | [→](docs/2026-09-08%20-%20Brisken%20P1%20Drop%20Cap%20And%20Create-UI%20Retirement/Checkpoint.md) |
 | 2026-09-08 | Brisken P1 Receipts Drop Page | client-dev | [→](docs/2026-09-08%20-%20Brisken%20P1%20Receipts%20Drop%20Page/Checkpoint.md) |
