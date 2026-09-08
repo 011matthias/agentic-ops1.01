@@ -45,22 +45,22 @@ git -C C:\Users\neuma_p1qrsic\Repo\agentic-ops1-watcher checkout --detach origin
 | Element | Zustand | Stand | Nächster Schritt | Blocker |
 |---|---|---|---|---|
 | Laufzeit-Baum | live | Eigener Worktree `agentic-ops1-watcher`, Junctions auf data/ und context/ | Nach Watcher-Merges nachziehen | - |
-| Poller + Comp-DB | live | v3 Präzisions-Upgrade 2026-09-08; ~31k Zeilen | Datenqualität beobachten | - |
+| Poller + Comp-DB | live | v3 Präzisions-Upgrade 2026-09-08; ~33k Zeilen. **Backlog-Gate korrigiert**: zählte Artikel statt Zeit und liess 67% aller Listings ungeprüft | Datenqualität beobachten | - |
 | Session-Handling | live | Clean-slate refresh, 45-Min-Renewal, 401/403-Split, jetzt auch 5xx-Backoff | - | - |
 | Zustands-Mapping | live | **Defekt behoben 2026-09-08**: "Neu" / "Neu, mit Etikett" fielen auf `unknown`, 4.527 Zeilen waren von Alerts UND Comps ausgeschlossen. Rückwirkend repariert | - | - |
 | Größenklassen | live | `size_class` normalisiert drei Notationen; Alert-Filter s/m/l + W29-W34, pro Search überschreibbar | XL/52 je Produkt aus `--brand-report` entscheiden | - |
 | Marken-Normalisierung | live | `brand_norm` führt Ralph Lauren aus 6 Schreibweisen zu einem 2.069-Zeilen-Pool zusammen | - | - |
-| Fake-Risk | live | Regelbasiert, 0 bis 1, inkl. Verkäuferprofil; ab 0.4 Warnzeile, ab 0.7 unterdrückt | Schwellen nachziehen, sobald Bewertungen da sind | Feedback-Daten |
+| Fake-Risk | live | Regelbasiert inkl. Verkäuferprofil; ab 0.4 Warnzeile, ab 0.7 unterdrückt. Unterdrückung braucht **zwei** unabhängige Signale, der Preis allein warnt nur | Schwellen nachziehen, sobald Bewertungen da sind | Feedback-Daten |
 | Verkäuferprofil | live | `/api/v2/users/{id}` liefert Land + Reputation, gecacht pro Verkäufer, max 6 Abrufe/Zyklus | - | - |
 | Standort DE | live | Land kommt aus dem Verkäuferprofil (Katalog-Antwort hat keins); Ausland braucht 8 EUR Vorsprung | Schwelle nach 1 Woche Länderdaten nachmessen | Länderdaten |
 | Alert-Snapshots | live | Jede Entscheidung friert Comps, Schwellen und Risiko ein, auch die unterdrückten | - | - |
-| Feedback-Kanal | live | 👍 / 👎 / Gekauft als ntfy-Buttons auf ein zweites Topic, Watcher pollt es je Zyklus; CLI-Fallback | `NTFY_FEEDBACK_TOPIC` in `context/.env` setzen | Owner |
-| Prioritäts-Stufen | live | Klingeln nur bei sauber + Kerngröße + DE + tiefem Rabatt; Grenzfälle kommen still an | - | - |
+| Feedback-Kanal | live | 👍 / 👎 / Gekauft als ntfy-Buttons; Topic gesetzt, Rundlauf-Drill bestanden (publish → poll → ingest → dedupe) | Owner tippt einmal einen Knopf an, damit das Rendern am Handy belegt ist | Owner |
+| Prioritäts-Stufen | live | **Relativ** statt absolut: laut wird nur, was die Konkurrenz der letzten 24h schlägt. Gemessen an einem echten Tag: 5% klingeln, 12% normal, 83% still | Nach einer Woche gegen echte Daten nachjustieren | - |
 | Gone/Sold-Erkennung | live | Proven-session-Vorbedingung, Wall-Abbruch, 40%-Batch-Decke, `gone_source` | Vertrauenswürdige Outcomes sammeln | Zeit |
 | Brand-Report | live | `--brand-report`: Volumen, Median, Spread, Marge am Gate, Größen-Nachfrage, Keep/Drop | Wöchentlich laufen lassen | - |
-| Damen-Jeans | offen | Probes gebaut (`--probe-search`), Ausführung scheiterte an einer 5xx-Welle | Vier Probes nachholen, dann searches.yaml | API-Erholung |
+| Damen-Jeans | live | Probes gelaufen: agolde (Median 126,70) und mother-denim aufgenommen, citizens-of-humanity bei ratio 0.50, 7 for all mankind abgelehnt (Median 18,55). Alle drei geseedet | Nach 2 Wochen gegen R1-R3 bewerten | - |
 | Backtest-Kalibrierung | geplant | Snapshot-Tabelle sammelt ab jetzt alles Nötige | `/comd_optimize` mit Offline-Scorer | ~300 gone-Events |
-| Listing-Engine | live | `listing/keyword_engine.py`: Titel, Beschreibung, Keywords an Vinted-Dimensionen | An echten eigenen Listings erproben | - |
+| Listing-Engine | live | `keyword_engine.py` (Titel/Beschreibung/Validator) + `keyword_research.py` (Korpus-Mining pro Marke und Klasse, Modellnamen per Lift) | An echten eigenen Listings erproben | - |
 
 ## Keep / Drop / Add-Regeln
 
@@ -121,10 +121,16 @@ Das Angebot ist dabei nur der Proxy; echte Nachfrage misst erst R4.
 
 ## Offene Punkte
 
-1. `NTFY_FEEDBACK_TOPIC` in `context/.env` setzen; ohne das tragen die Alerts
-   keine Bewertungsknöpfe.
-2. Vier Damen-Jeans-Probes nachholen (agolde, citizens of humanity,
-   mother jeans, 7 for all mankind), sobald die API wieder antwortet.
-3. Nach einer Woche: Länderverteilung messen und die 8-EUR-Schwelle prüfen.
+1. Owner tippt einmal einen Bewertungsknopf an. Der Rundlauf ist maschinell
+   belegt; offen ist nur, ob die drei Buttons am Handy sauber rendern.
+2. Nach einer Woche: Länderverteilung messen und die 8-EUR-Schwelle prüfen.
+3. Nach 2 Wochen: die drei neuen Denim-Suchen gegen R1 bis R3 bewerten.
 4. Nach ~300 vertrauenswürdigen gone-Events: Backtest-Scorer als eigener PR,
    dann `/comd_optimize`.
+5. Aus der adversarialen Prüfung sind rund ein Dutzend Befunde ungeprüft
+   geblieben (der Lauf brach beim Sitzungslimit ab, 38 von 71 Agenten).
+   Bestätigt und behoben wurden: Wall-Verschlucken im Verkäufer-Abruf,
+   fehlender Backoff im Recheck, Absturz durch Fremd-IDs im Feedback-Poll,
+   nie wiederholter Backfill, Doppelzählung im Fake-Risk. Offen sind unter
+   anderem: `brand_report` teilt gone-Rate über zwei Grundgesamtheiten,
+   `poll_search` ist ungetestet, `refresh_session` umgeht den Backoff.
