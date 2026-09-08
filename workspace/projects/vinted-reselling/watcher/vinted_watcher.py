@@ -261,8 +261,33 @@ def parse_ts(value: str | None) -> datetime | None:
         return None
 
 
+LOG_NAME = "watcher.log"
+LOG_MAX_BYTES = 2_000_000
+
+
 def log(msg: str) -> None:
-    print(f"[{now_iso()}] {msg}")
+    """Print, and keep a copy on disk.
+
+    The scheduled task runs through run-hidden.vbs, which discards stdout, so
+    for a headless run print() writes to nowhere. That is how a warning per
+    cycle about a failing INSERT went unseen for two hours on 2026-09-08 while
+    the notifications themselves kept arriving. A file is the difference
+    between a diagnosable failure and an invisible one. It must never be the
+    thing that ends a cycle, hence the swallowed OSError.
+    """
+    line = f"[{now_iso()}] {msg}"
+    print(line)
+    try:
+        # Resolved per call, not at import: the tests redirect DATA_DIR and a
+        # module-level path would write into the real data directory.
+        path = DATA_DIR / LOG_NAME
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        if path.exists() and path.stat().st_size > LOG_MAX_BYTES:
+            path.replace(DATA_DIR / (LOG_NAME + ".1"))
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except OSError:
+        pass
 
 
 # ---------------------------------------------------------------- config / env
@@ -478,6 +503,111 @@ BACKFILLS = {
 BACKFILL_SOURCE = {"is_kid": "title", "garment_class": "title",
                    "size_class": "size", "brand_norm": "brand"}
 
+# Clause openers that are table constraints rather than columns.
+_DDL_CONSTRAINTS = {"primary", "unique", "foreign", "check", "constraint"}
+
+
+def ddl_columns(ddl: str = "") -> dict[str, list[tuple[str, str]]]:
+    """Parse the DDL literal into {table: [(column, declaration), ...]}.
+
+    Deliberately reads the same string the tables are created from, so a
+    column added to the DDL cannot be forgotten in a migration list: there is
+    one place to edit, and this derives the rest.
+    """
+    text = ddl or DDL
+    out: dict[str, list[tuple[str, str]]] = {}
+    for block in re.finditer(
+            r"CREATE TABLE IF NOT EXISTS\s+(\w+)\s*\((.*?)\n?\s*\);", text, re.S):
+        table, body = block.group(1), block.group(2)
+        body = re.sub(r"--[^\n]*", "", body)            # strip trailing comments
+        cols: list[tuple[str, str]] = []
+        depth, current = 0, []
+        for ch in body:                                  # split on top-level commas
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+            if ch == "," and depth == 0:
+                cols.append("".join(current))
+                current = []
+            else:
+                current.append(ch)
+        cols.append("".join(current))
+        parsed = []
+        for clause in cols:
+            tokens = clause.split()
+            if not tokens or tokens[0].lower() in _DDL_CONSTRAINTS:
+                continue
+            parsed.append((tokens[0], " ".join(tokens[1:])))
+        if parsed:
+            out[table] = parsed
+    return out
+
+
+def alterable(decl: str) -> bool:
+    """Can SQLite add this column to an existing table?
+
+    ALTER TABLE ADD COLUMN refuses a PRIMARY KEY, refuses UNIQUE, refuses
+    NOT NULL without a default, and refuses a non-constant default. Each of
+    those raises inside the connect that every mode of the watcher depends on,
+    so they are reported rather than attempted. The UNIQUE case is not
+    hypothetical: alert_feedback.ntfy_msg_id carries it.
+    """
+    low = decl.lower()
+    if "primary key" in low or "unique" in low:
+        return False
+    if "current_timestamp" in low or "current_date" in low or "current_time" in low:
+        return False
+    return not ("not null" in low and "default" not in low)
+
+
+def is_schema_error(exc: BaseException) -> bool:
+    """Does this exception mean the code and the database disagree on shape?
+
+    Kept narrow on purpose. "database is locked" is also an OperationalError
+    and is transient; a missing column or table is neither transient nor
+    survivable, and treating the two the same is what let a broken INSERT hide
+    behind a per-search warning.
+    """
+    if not isinstance(exc, sqlite3.Error):
+        return False
+    text = str(exc).lower()
+    return "no such column" in text or "has no column" in text or "no such table" in text
+
+
+def reconcile_ddl_columns(con: sqlite3.Connection) -> int:
+    """Add columns the DDL declares that an existing table is missing.
+
+    CREATE TABLE IF NOT EXISTS is a no-op once the table exists, so a column
+    added later reaches only databases created after it. On 2026-09-08 that
+    cost real data: alerts.quality was added to the DDL, the production table
+    predated it, and every INSERT into alerts raised OperationalError from
+    then on. The insert sits behind the notification, so alerts kept arriving
+    on the phone while nothing was recorded, the per-search error handler
+    logged a warning into a discarded stdout, and the rating buttons had
+    nothing to attach to. Twenty-one alerts and two real taps were lost that
+    way in two hours. The listings-only ADDED_COLUMNS loop below could not
+    have caught it, so this walks every table in the DDL instead.
+    """
+    added = 0
+    for table, columns in ddl_columns().items():
+        live = {row[1] for row in con.execute(f"PRAGMA table_info({table})")}
+        if not live:
+            continue                                     # created by the DDL itself
+        for column, decl in columns:
+            if column in live:
+                continue
+            if not alterable(decl):
+                log(f"WARN: {table}.{column} is missing and cannot be added in place "
+                    f"({decl}); the table predates the current schema")
+                continue
+            con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+            log(f"migrated: added {table}.{column}")
+            added += 1
+    if added:
+        con.commit()
+    return added
+
 
 def migrate(con: sqlite3.Connection) -> None:
     """Add columns an older database predates, and fill them exactly once.
@@ -494,6 +624,7 @@ def migrate(con: sqlite3.Connection) -> None:
     those rows stayed blank for good. On a database that cannot be rebuilt,
     that is the expensive kind of silent damage, and it is invisible.
     """
+    reconcile_ddl_columns(con)
     have = {row[1] for row in con.execute("PRAGMA table_info(listings)")}
     for column, decl in ADDED_COLUMNS.items():
         flag = f"backfill:{column}"
@@ -530,7 +661,18 @@ def db_connect() -> sqlite3.Connection:
     con = sqlite3.connect(DB_PATH)
     con.executescript(DDL)
     migrate(con)
-    con.executescript(DDL_INDEXES)
+    # Statement by statement rather than executescript: an index names its
+    # columns, so on a table shape migrate() could not fully repair the whole
+    # script aborts and every mode of the watcher dies at connect. A missing
+    # index costs speed; a failed connect costs the cycle.
+    for statement in DDL_INDEXES.split(";"):
+        if not re.sub(r"--[^\n]*", "", statement).strip():
+            continue                                 # comment-only tail
+        try:
+            con.execute(statement)
+        except sqlite3.OperationalError as e:
+            log(f"WARN: index not created ({e}); the table shape is behind the schema")
+    con.commit()
     return con
 
 
@@ -1631,6 +1773,27 @@ def _ntfy_poll(topic: str, since: str) -> list[dict]:
         return []
 
 
+def feedback_target(con: sqlite3.Connection, listing_id: int) -> tuple[bool, int | None]:
+    """Is this id one of ours, and which alert does the rating belong to?
+
+    A rating is joined to its alert snapshot when one exists, but a missing
+    snapshot must never discard the rating: the tap is the scarce thing here,
+    it cannot be repeated, and ntfy forgets the message after about twelve
+    hours. Requiring the alert row is what silently dropped the owner's first
+    two real taps on 2026-09-08 while the alerts table was failing to record.
+    A listing this database has actually seen is proof enough that the id came
+    from one of our own notifications; anything else is noise on a public
+    topic and is still refused.
+    """
+    row = con.execute(
+        "SELECT id FROM alerts WHERE listing_id=? ORDER BY id DESC LIMIT 1",
+        (listing_id,)).fetchone()
+    if row:
+        return True, int(row[0])
+    seen = con.execute("SELECT 1 FROM listings WHERE id=?", (listing_id,)).fetchone()
+    return bool(seen), None
+
+
 def ingest_feedback(con: sqlite3.Connection, env: dict) -> int:
     """Pull rating taps off the feedback topic into alert_feedback.
 
@@ -1657,21 +1820,21 @@ def ingest_feedback(con: sqlite3.Connection, env: dict) -> int:
             continue
         verdict, listing_id = match.group(1).lower(), int(match.group(2))
         try:
-            row = con.execute(
-                "SELECT id FROM alerts WHERE listing_id=? ORDER BY id DESC LIMIT 1",
-                (listing_id,)).fetchone()
+            known, alert_id = feedback_target(con, listing_id)
         except (OverflowError, sqlite3.Error):
             # Belt as well as braces: the pattern above bounds the length, and
             # this makes sure no shape of stranger input can end the poll for
             # the messages behind it.
             continue
-        if not row:
+        if not known:
+            log(f"WARN: rating '{verdict} {listing_id}' names a listing this "
+                f"database has never seen; ignored as stranger noise")
             continue
         cur = con.execute(
             """INSERT OR IGNORE INTO alert_feedback
                    (listing_id, alert_id, verdict, received_at, source, ntfy_msg_id, raw)
                VALUES (?, ?, ?, ?, 'ntfy', ?, ?)""",
-            (listing_id, row[0], verdict, now_iso(), mid, json.dumps(m)[:2000]),
+            (listing_id, alert_id, verdict, now_iso(), mid, json.dumps(m)[:2000]),
         )
         inserted += cur.rowcount
     if last_id:
@@ -2030,6 +2193,13 @@ def run_cycle() -> int:
                 except SessionWall:
                     raise
                 except (httpx.HTTPError, sqlite3.Error, ValueError, KeyError) as e:
+                    if is_schema_error(e):
+                        # Not a bad search: the database cannot store what this
+                        # code produces, and every remaining search would fail
+                        # the same way. Ending the cycle non-zero is what makes
+                        # it visible; as a warning it read like one flaky poll.
+                        log(f"FATAL: schema mismatch on {search['tag']}: {e}")
+                        raise
                     # One bad search must not cost the other eight.
                     log(f"WARN: {search['tag']} failed: {type(e).__name__}: {e}")
                 time.sleep(random.uniform(1.5, 3.5))

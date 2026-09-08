@@ -1444,3 +1444,207 @@ def test_a_completed_backfill_is_not_repeated(vw, paths):
     assert con.execute("SELECT brand_norm FROM listings WHERE id=1").fetchone()[0] \
         == "deliberately-different", "a finished backfill must not run again"
     con.close()
+
+
+# --------------------------------- 2026-09-08: the alerts table stopped recording
+#
+# alerts.quality was added to the DDL. CREATE TABLE IF NOT EXISTS does nothing
+# to a table that already exists, and the migration loop only ever walked
+# listings, so the production alerts table never got the column. Every INSERT
+# raised OperationalError from that moment. The insert sits behind the ntfy
+# call, so alerts kept arriving on the phone; the per-search handler caught the
+# error as if it were a flaky poll and logged a warning into a stdout that
+# run-hidden.vbs discards. 21 alerts and the owner's first two real rating taps
+# were lost in two hours, and nothing anywhere reported a failure.
+
+def _old_shape_alerts_db(vw):
+    """A database whose alerts table predates the quality column."""
+    import sqlite3 as s3
+    c = s3.connect(vw.DB_PATH)
+    c.executescript("""
+        CREATE TABLE alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            listing_id INTEGER NOT NULL,
+            alerted_at TEXT NOT NULL,
+            search_tag TEXT NOT NULL,
+            sent INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT);
+    """)
+    c.commit()
+    c.close()
+
+
+def test_a_column_added_to_the_ddl_reaches_an_existing_table(vw, paths):
+    _old_shape_alerts_db(vw)
+    con = vw.db_connect()
+    live = {r[1] for r in con.execute("PRAGMA table_info(alerts)")}
+    declared = {name for name, _ in vw.ddl_columns()["alerts"]}
+    assert declared <= live, f"still missing after migrate: {sorted(declared - live)}"
+    con.close()
+
+
+def test_record_alert_survives_a_database_that_predates_the_column(vw, paths):
+    """The bite: this is the exact call that failed silently in production."""
+    _old_shape_alerts_db(vw)
+    con = vw.db_connect()
+    rec = {"id": 42, "search_tag": "t", "title": "x", "brand": "Levi\'s",
+           "size": "W31 | DE 46", "price": 8.0, "total_price": 9.1}
+    rowid = vw.record_alert(con, rec, {"quality": 88.0, "priority": 5, "sent": 1})
+    assert rowid > 0
+    assert con.execute("SELECT quality FROM alerts WHERE id=?", (rowid,)).fetchone()[0] == 88.0
+    con.close()
+
+
+def test_ddl_columns_reads_columns_and_not_constraints(vw):
+    tables = vw.ddl_columns()
+    assert {"listings", "alerts", "sellers", "alert_feedback", "meta"} <= set(tables)
+    alerts = dict(tables["alerts"])
+    assert "quality" in alerts and "comp_median" in alerts
+    assert not any(name.lower() in {"primary", "unique", "foreign", "check"}
+                   for name in alerts), "a table constraint was read as a column"
+    # A multi-column declaration on one line must still yield every column.
+    assert {"title", "brand", "brand_norm"} <= set(alerts)
+
+
+def test_a_column_sqlite_cannot_add_in_place_is_reported_not_crashed(vw, paths, capsys):
+    assert vw.alterable("REAL") is True
+    assert vw.alterable("INTEGER NOT NULL DEFAULT 0") is True
+    assert vw.alterable("INTEGER PRIMARY KEY AUTOINCREMENT") is False
+    assert vw.alterable("TEXT NOT NULL") is False, "SQLite refuses this on a filled table"
+    assert vw.alterable("TEXT UNIQUE") is False, "alert_feedback.ntfy_msg_id is exactly this"
+    assert vw.alterable("TEXT DEFAULT CURRENT_TIMESTAMP") is False
+    import sqlite3 as s3
+    c = s3.connect(vw.DB_PATH)
+    # verdict is TEXT NOT NULL with no default, which SQLite will not add to an
+    # existing table. The connect must report it and carry on: bricking every
+    # mode of the watcher over one column is worse than running without it.
+    c.executescript(
+        "CREATE TABLE alert_feedback (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " listing_id INTEGER NOT NULL, received_at TEXT NOT NULL, source TEXT NOT NULL);"
+        "CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT);")
+    c.commit()
+    c.close()
+    con = vw.db_connect()                       # must not raise
+    out = capsys.readouterr().out
+    assert "alert_feedback.verdict is missing and cannot be added in place" in out
+    assert con.execute("SELECT COUNT(*) FROM listings").fetchone()[0] == 0, \
+        "the connect has to stay usable"
+    con.close()
+
+
+def test_an_index_that_cannot_be_built_does_not_brick_the_connect(vw, paths, capsys):
+    import sqlite3 as s3
+    c = s3.connect(vw.DB_PATH)
+    c.executescript("CREATE TABLE alerts (listing_id INTEGER);"      # no alerted_at
+                    "CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT);")
+    c.commit()
+    c.close()
+    con = vw.db_connect()                       # used to raise: no such column
+    assert "index not created" in capsys.readouterr().out
+    con.close()
+
+
+def test_a_rating_outlives_a_missing_alert_snapshot(vw, con, paths, monkeypatch):
+    """The tap is the scarce thing; a bookkeeping gap must not discard it."""
+    con.execute("INSERT INTO listings (id, search_tag, title) VALUES (9934904203, 't', 'x')")
+    con.commit()
+    monkeypatch.setattr(vw, "_ntfy_poll", lambda topic, since: [
+        {"id": "m1", "event": "message", "message": "bought 9934904203"},
+    ])
+    assert vw.ingest_feedback(con, {"NTFY_FEEDBACK_TOPIC": "fb"}) == 1
+    row = con.execute("SELECT verdict, alert_id FROM alert_feedback").fetchone()
+    assert row == ("bought", None), "stored, and honestly unlinked"
+
+
+def test_a_rating_for_a_listing_we_never_saw_is_still_refused(
+        vw, con, paths, monkeypatch, capsys):
+    monkeypatch.setattr(vw, "_ntfy_poll", lambda topic, since: [
+        {"id": "m1", "event": "message", "message": "good 5555555555"},
+    ])
+    assert vw.ingest_feedback(con, {"NTFY_FEEDBACK_TOPIC": "fb"}) == 0
+    assert con.execute("SELECT COUNT(*) FROM alert_feedback").fetchone()[0] == 0
+    assert "stranger noise" in capsys.readouterr().out, "silence is what hid the last one"
+
+
+def test_log_lines_land_in_a_file_the_hidden_task_cannot_swallow(vw, paths):
+    vw.log("hello from a headless cycle")
+    text = (paths / vw.LOG_NAME).read_text(encoding="utf-8")
+    assert "hello from a headless cycle" in text
+
+
+def test_the_log_file_rotates_instead_of_growing_without_end(vw, paths, monkeypatch):
+    monkeypatch.setattr(vw, "LOG_MAX_BYTES", 200)
+    for i in range(40):
+        vw.log(f"line {i} padded out to move past the cap quickly")
+    assert (paths / (vw.LOG_NAME + ".1")).exists(), "nothing was rotated"
+    assert (paths / vw.LOG_NAME).stat().st_size < 4000
+
+
+def test_a_schema_error_is_told_apart_from_a_transient_one(vw):
+    import sqlite3 as s3
+    assert vw.is_schema_error(s3.OperationalError("table alerts has no column named quality"))
+    assert vw.is_schema_error(s3.OperationalError("no such table: alerts"))
+    assert not vw.is_schema_error(s3.OperationalError("database is locked"))
+    assert not vw.is_schema_error(ValueError("no such column"))
+
+
+def test_a_schema_mismatch_ends_the_cycle_instead_of_reading_as_a_flaky_poll(
+        vw, paths, monkeypatch):
+    """Non-zero exit is the only signal a hidden scheduled task can carry."""
+    import sqlite3 as s3
+
+    def handler(request):
+        if request.url.path == "/":
+            return httpx.Response(200, headers={
+                "set-cookie": f"access_token_web={make_jwt(12)}; Path=/"})
+        return httpx.Response(200, json={"items": []})
+
+    monkeypatch.setattr(vw, "new_client",
+                        lambda: httpx.Client(transport=httpx.MockTransport(handler),
+                                             base_url=vw.BASE))
+    monkeypatch.setattr(vw, "load_env", lambda: {})
+    monkeypatch.setattr(vw, "load_config", lambda: {
+        "settings": {"deal_ratio": 0.55, "min_comps": 8, "comp_window_days": 45,
+                     "min_price": 5, "poll_per_page": 48, "seed_pages": 1,
+                     "seed_per_page": 10},
+        "searches": [{"tag": "t", "query": "q"}, {"tag": "t2", "query": "q2"}]})
+    monkeypatch.setattr(vw.time, "sleep", lambda *_: None)
+
+    def boom(*a, **k):
+        raise s3.OperationalError("table alerts has no column named quality")
+
+    monkeypatch.setattr(vw, "poll_search", boom)
+    with pytest.raises(s3.OperationalError):
+        vw.run_cycle()
+
+
+def test_a_flaky_search_still_costs_only_itself(vw, paths, monkeypatch):
+    """The counterweight: the narrow escalation must not swallow the old rule."""
+    def handler(request):
+        if request.url.path == "/":
+            return httpx.Response(200, headers={
+                "set-cookie": f"access_token_web={make_jwt(12)}; Path=/"})
+        return httpx.Response(200, json={"items": []})
+
+    monkeypatch.setattr(vw, "new_client",
+                        lambda: httpx.Client(transport=httpx.MockTransport(handler),
+                                             base_url=vw.BASE))
+    monkeypatch.setattr(vw, "load_env", lambda: {})
+    monkeypatch.setattr(vw, "load_config", lambda: {
+        "settings": {"deal_ratio": 0.55, "min_comps": 8, "comp_window_days": 45,
+                     "min_price": 5, "poll_per_page": 48, "seed_pages": 1,
+                     "seed_per_page": 10},
+        "searches": [{"tag": "bad", "query": "q"}, {"tag": "good", "query": "q2"}]})
+    monkeypatch.setattr(vw.time, "sleep", lambda *_: None)
+    seen = []
+
+    def one_sided(client, con, search, *a, **k):
+        seen.append(search["tag"])
+        if search["tag"] == "bad":
+            raise ValueError("malformed page")
+        return True
+
+    monkeypatch.setattr(vw, "poll_search", one_sided)
+    assert vw.run_cycle() == 0
+    assert seen == ["bad", "good"], "the second search was never reached"
