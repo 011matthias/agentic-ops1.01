@@ -449,37 +449,71 @@ DATA_FIXES: list[tuple[str, object]] = [
 ]
 
 
+BACKFILLS = {
+    "is_kid": lambda con: [
+        con.execute("UPDATE listings SET is_kid=? WHERE id=?",
+                    (is_kid_item(title, size), row_id))
+        for row_id, title, size in con.execute("SELECT id, title, size FROM listings").fetchall()
+    ],
+    "garment_class": lambda con: [
+        con.execute("UPDATE listings SET garment_class=? WHERE id=?",
+                    (garment_class(title), row_id))
+        for row_id, title in con.execute("SELECT id, title FROM listings").fetchall()
+    ],
+    "size_class": lambda con: [
+        con.execute("UPDATE listings SET size_class=? WHERE id=?",
+                    (size_class_of(size), row_id))
+        for row_id, size in con.execute("SELECT id, size FROM listings").fetchall()
+    ],
+    "brand_norm": lambda con: [
+        con.execute("UPDATE listings SET brand_norm=? WHERE id=?",
+                    (brand_norm_of(brand), row_id))
+        for row_id, brand in con.execute("SELECT id, brand FROM listings").fetchall()
+    ],
+}
+
+# Which existing column each backfill reads. A very old table shape may not have
+# it, and a backfill that cannot read its source must skip rather than crash the
+# connect that every mode depends on.
+BACKFILL_SOURCE = {"is_kid": "title", "garment_class": "title",
+                   "size_class": "size", "brand_norm": "brand"}
+
+
 def migrate(con: sqlite3.Connection) -> None:
-    """Add columns an older database predates.
+    """Add columns an older database predates, and fill them exactly once.
 
     CREATE TABLE IF NOT EXISTS silently does nothing when the table already
     exists, so a new column would otherwise only reach a fresh database. The
     v1 garment_class column was added by deleting the database, which is not
     an option now that it holds real market history.
+
+    Completion is recorded in meta rather than inferred from the column being
+    there. ALTER TABLE is DDL and commits the open transaction on the spot, so
+    a process that dies partway through a backfill leaves the column present
+    and empty; keying on presence alone meant the fill was never retried and
+    those rows stayed blank for good. On a database that cannot be rebuilt,
+    that is the expensive kind of silent damage, and it is invisible.
     """
     have = {row[1] for row in con.execute("PRAGMA table_info(listings)")}
     for column, decl in ADDED_COLUMNS.items():
+        flag = f"backfill:{column}"
+        filled = con.execute("SELECT 1 FROM meta WHERE k=?", (flag,)).fetchone()
+        if column in have and filled:
+            continue
         if column not in have:
             con.execute(f"ALTER TABLE listings ADD COLUMN {column} {decl}")
             log(f"migrated: added listings.{column}")
-            if column == "is_kid":
-                for row_id, title, size in con.execute(
-                        "SELECT id, title, size FROM listings").fetchall():
-                    if is_kid_item(title, size):
-                        con.execute("UPDATE listings SET is_kid=1 WHERE id=?", (row_id,))
-            elif column == "garment_class":
-                for row_id, title in con.execute("SELECT id, title FROM listings").fetchall():
-                    con.execute("UPDATE listings SET garment_class=? WHERE id=?",
-                                (garment_class(title), row_id))
-            elif column == "size_class" and "size" in have:
-                for row_id, size in con.execute("SELECT id, size FROM listings").fetchall():
-                    con.execute("UPDATE listings SET size_class=? WHERE id=?",
-                                (size_class_of(size), row_id))
-            elif column == "brand_norm" and "brand" in have:
-                for row_id, brand in con.execute("SELECT id, brand FROM listings").fetchall():
-                    con.execute("UPDATE listings SET brand_norm=? WHERE id=?",
-                                (brand_norm_of(brand), row_id))
-            con.commit()
+        elif not filled:
+            log(f"migrated: listings.{column} was added but never filled; redoing")
+
+        backfill = BACKFILLS.get(column)
+        source = BACKFILL_SOURCE.get(column)
+        if backfill and (source is None or source in have):
+            backfill(con)
+        con.execute("INSERT INTO meta (k, v) VALUES (?, ?)"
+                    " ON CONFLICT(k) DO UPDATE SET v=excluded.v", (flag, now_iso()))
+        con.commit()
+
     for name, fix in DATA_FIXES:
         flag = f"datafix:{name}"
         if con.execute("SELECT 1 FROM meta WHERE k=?", (flag,)).fetchone():
@@ -825,7 +859,19 @@ EMOJI_RANGE = re.compile(
 )
 # Brands whose fakes are mass-produced and whose price band makes a deep
 # discount suspicious rather than lucky.
-HYPE_BRANDS = {"stone-island", "nike", "the-north-face", "carhartt", "adidas"}
+#
+# This started as a guess and is now partly measured. Counting counterfeit slang
+# in listing titles across the corpus (listing/keyword_research.py --fake-vocab,
+# 2026-09-08) put Stone Island at 0.451% of its listings, adidas at 0.070%, Nike
+# at 0.058% and Ralph Lauren at 0.049%; those are lower bounds, since only the
+# sellers who write it down get counted. Ralph Lauren and Patagonia were missing
+# here despite both being widely counterfeited and both sitting in a price band
+# where it pays, so they are in. The premium denim lines are in for the same
+# reason: a 300 EUR pair of jeans offered at 30 is the shape this rule exists to
+# catch.
+HYPE_BRANDS = {"stone-island", "nike", "the-north-face", "carhartt", "adidas",
+               "ralph-lauren", "patagonia", "agolde", "citizens-of-humanity",
+               "mother", "7-for-all-mankind"}
 
 
 def fake_risk_score(con: sqlite3.Connection, rec: dict, med: float) -> tuple[float, list[str]]:
@@ -843,15 +889,21 @@ def fake_risk_score(con: sqlite3.Connection, rec: dict, med: float) -> tuple[flo
     title_l = (rec.get("title") or "").lower()
 
     if med > 0:
-        if total < 0.15 * med:
+        # A hype brand shifts the thresholds rather than adding a term of its
+        # own. The two used to be separate and both fired for the same fact:
+        # anything under 0.15 of the median is also under 0.30, so a Patagonia
+        # at 9% of market scored 0.6 + 0.2 and was suppressed on price alone.
+        # That is the opposite of the point. A deep discount is more suspicious
+        # on a faked brand, which is a sharper test, not a second one.
+        hype = brand_key in HYPE_BRANDS
+        absurd_at = 0.20 if hype else 0.15
+        too_good_at = 0.30 if hype else 0.25
+        if total < absurd_at * med:
             score += 0.6
-            why.append("preis_absurd")
-        elif total < 0.25 * med:
+            why.append("preis_absurd_hype" if hype else "preis_absurd")
+        elif total < too_good_at * med:
             score += 0.4
-            why.append("preis_zu_gut")
-        if brand_key in HYPE_BRANDS and total < 0.30 * med:
-            score += 0.2
-            why.append("hype_marke_billig")
+            why.append("preis_zu_gut_hype" if hype else "preis_zu_gut")
 
     if FAKE_TITLE_MARKERS.search(title_l):
         score += 0.5
@@ -1548,9 +1600,12 @@ def check_liveness(con: sqlite3.Connection, env: dict) -> None:
     log(f"WARN: no successful poll for {stale_min} min; operator alerted")
 
 
-# Any digit run is accepted; the guard that matters is the alerts-row lookup
-# below, not the id's shape. A length rule here would only reject real ids.
-FEEDBACK_RE = re.compile(r"^(good|bad|bought)\s+(\d+)$", re.I)
+# The length bound is not cosmetic. The feedback topic is public by obscurity,
+# so anyone who learns the name can post to it, and an unbounded digit run
+# reaches sqlite as an integer too large to bind: OverflowError, raised inside
+# the poll, every cycle, until someone notices. A Vinted listing id is ten
+# digits; eighteen is already far past any real one and inside SQLite's range.
+FEEDBACK_RE = re.compile(r"^(good|bad|bought)\s+(\d{1,18})$", re.I)
 
 
 def _ntfy_poll(topic: str, since: str) -> list[dict]:
@@ -1601,9 +1656,15 @@ def ingest_feedback(con: sqlite3.Connection, env: dict) -> int:
         if not match:
             continue
         verdict, listing_id = match.group(1).lower(), int(match.group(2))
-        row = con.execute(
-            "SELECT id FROM alerts WHERE listing_id=? ORDER BY id DESC LIMIT 1", (listing_id,)
-        ).fetchone()
+        try:
+            row = con.execute(
+                "SELECT id FROM alerts WHERE listing_id=? ORDER BY id DESC LIMIT 1",
+                (listing_id,)).fetchone()
+        except (OverflowError, sqlite3.Error):
+            # Belt as well as braces: the pattern above bounds the length, and
+            # this makes sure no shape of stranger input can end the poll for
+            # the messages behind it.
+            continue
         if not row:
             continue
         cur = con.execute(
