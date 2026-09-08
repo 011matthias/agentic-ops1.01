@@ -99,6 +99,7 @@ and a rollback would otherwise have nothing to re-apply.
 | Prompt | Decisive field names | Gate |
 |---|---|---|
 | `lovable-receipts-drop-prompt.md` DELTA (2026-09-08: §1 cap copy + chunking, §2 full create-UI removal, §3 nav, §4 Open-month release) | rejected copy reads reason `upload-cap` + `limit`; intake chunk POSTs a `label`-only `/api/expense-batches` and reads `pool_month`; no chunk references "Start a new month" or `/expenses/new` for company months | Backend already deployed (cap 80→500 + upload-cap ledger rows, 2026-09-08); §2-§4 need NO backend — the create route stays as plumbing. Nav + button death are chrome — verify by browser drive, not bundle grep. Nothing gates data entry |
+| `lovable-brisken-domain-prompt.md` half 2 (2026-09-08: API base URL to `api.expenses.brisken.com`) | some chunk contains `api.expenses.brisken.com` AND no chunk contains `brisken-expense-recon.fly.dev` — grep BOTH, since the old host keeps answering and a half-applied change reads as a mix | Half 1 (the Lovable custom domain for `expenses.brisken.com`) is owner-side and gates nothing: the DNS records here wait on the `lovable_verify` value Lovable emits. Backend ready: cert live on the API host, CORS allows the SPA host (PR #751) |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
