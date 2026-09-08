@@ -1350,6 +1350,34 @@ test, unwiring the pre-slice reddens the overflow-ledger test.
 only on `/months` (the main menu), a sticky "← Menu" button on every other
 page, language toggle + logout consequently menu-only.
 
+### 46. Month creation leaves the UI (owner ruling 2026-09-08)
+
+**Owner, rebutting the "three surviving jobs" analysis:** receipts flow in
+continuously through the drop page and mail and the tool organizes them
+into months itself, so the "Start a new month" ceremony is useless. Ruled
+after an explicit decision round: **no statement-first month creation**
+("we will not be creating new months with statement first"); "Add a
+statement" stays where it is, inside each month's page; the create button
+and `/expenses/new` company-month form die entirely.
+
+**What replaces the button's one real residual job:** the pooled-mail
+release. Mail from unknown senders and mail with unreadable dates
+deliberately rest in the pool (`pool_month_state: "no_batch"`); those
+intake rows get a one-click "Open {month}" that calls the EXISTING create
+route with a label and no files — the post-create pool claim then drains
+the waiting mail in automatically. No backend change anywhere in this
+item; the create route survives as plumbing (mail materializer, drop,
+Open-month, trips).
+
+**Consequence accepted in the decision:** a month that reaches statement
+time with zero receipts has no container until one receipt of that month
+is dropped (the drop page's month override makes that a 10-second act).
+Named to the owner before the greenlight; their call stands.
+
+**SPA half:** `docs/lovable-receipts-drop-prompt.md` §2 (rewritten: full
+removal, trips arm kept, dead route redirects to `/months`) + new §6 (the
+Open-month button, travel rows excluded). Still one paste with items 44/45.
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
 **Entity half DONE 2026-09-06** (authorized operator-API write, verified on
