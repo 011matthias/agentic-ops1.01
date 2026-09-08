@@ -863,6 +863,11 @@ def fake_risk_score(con: sqlite3.Connection, rec: dict, med: float) -> tuple[flo
 
 
 MAX_SELLER_FETCHES = 6      # per cycle; real cycles need 0-2
+
+# Walls that were caught rather than propagated, so the end of the cycle can
+# tell the difference between "nothing went wrong" and "something did, and we
+# carried on anyway". Cleared at the start of every cycle.
+WALL_SEEN: list[str] = []
 PROBE_PER_PAGE = 48         # match the poll size; a probe is not a licence to ask for more
 
 
@@ -895,7 +900,18 @@ def seller_profile(client, con: sqlite3.Connection, seller_id: int | None,
         budget[0] -= 1
     try:
         data = api_get(client, con, f"{BASE}/api/v2/users/{seller_id}", {})
-    except (httpx.HTTPError, SessionWall) as e:
+    except SessionWall as e:
+        # A wall here is about the connection, not about this one seller. The
+        # catalog poll is the asset and should not die for a profile lookup, so
+        # the cycle continues; but the backoff api_get just set has to SURVIVE
+        # the cycle, and run_cycle used to clear it wholesale on any successful
+        # poll. Recording it lets that clearing step know a wall was seen.
+        log(f"WARN: seller lookup hit a wall ({e}); backoff kept, profile skipped")
+        if budget is not None:
+            budget[0] = 0          # stop asking this endpoint for the rest of the cycle
+        WALL_SEEN.append(str(e))
+        return None
+    except httpx.HTTPError as e:
         log(f"WARN: seller {seller_id} lookup failed: {type(e).__name__}")
         return None
     u = (data or {}).get("user") or data or {}
@@ -1342,6 +1358,24 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: 
         except httpx.HTTPError:
             continue
         final = str(r.url)
+        if r.status_code in (403, 429) or r.status_code >= 500:
+            # This loop fetches item PAGES, not the JSON API, so it cannot go
+            # through api_get. Without its own check a refusal was invisible
+            # here: 404 and 410 mean gone, a redirect means a wall, 200 means
+            # alive, and everything else fell through every branch and simply
+            # went round again. That made the largest request block of the
+            # cycle, 25 pages, the only one that would walk straight into a
+            # 429 twenty-five times and then repeat in an hour.
+            wait = SERVER_BACKOFF_MIN if r.status_code >= 500 else WALL_BACKOFF_MIN
+            retry_after = r.headers.get("retry-after")
+            if retry_after and retry_after.isdigit():
+                wait = max(wait, int(retry_after) // 60 + 1)
+            set_backoff(con, wait, f"recheck saw HTTP {r.status_code}", escalate=True)
+            WALL_SEEN.append(f"recheck HTTP {r.status_code}")
+            log(f"WARN: recheck saw HTTP {r.status_code}; pass abandoned, nothing recorded")
+            meta_set(con, "last_recheck", now_iso())
+            con.commit()
+            return
         if r.status_code in (404, 410):
             verdicts.append((item_id, True, False, str(r.status_code)))
         elif "/items/" not in final or WALL_URL.search(final):
@@ -1731,29 +1765,49 @@ def probe_search(query: str) -> int:
             brands[bn] = brands.get(bn, 0) + 1
         prices.sort()
         med = statistics.median(prices) if prices else 0.0
-        w_target = sum(c for s, c in sizes.items() if s in {"w26", "w27", "w28", "w29", "w30", "w31"})
+        # The resale-friendly band, counted in BOTH notations a market might
+        # use. The first version of this counted W-numbers only and reported 0%
+        # for premium women's denim, where sellers list XS/S/M instead; that
+        # made a strong candidate look unviable for a reason that was about the
+        # measurement rather than the market.
+        target_classes = {"w26", "w27", "w28", "w29", "w30", "w31",
+                          "xs", "s", "m"}
+        w_target = sum(c for sc, c in sizes.items() if sc in target_classes)
         top_brand, top_n = max(brands.items(), key=lambda kv: kv[1])
         purity = top_n / len(items)
+        # What a flip actually clears at the configured bar, which is the number
+        # that decides whether a search is worth a poll slot.
+        margin_at_gate = (1 - cfg["settings"]["deal_ratio"]) * med
         pagination = data.get("pagination") or {}
         total_entries = pagination.get("total_entries")
 
         print(f"Probe: {query!r}")
         print(f"  Seite 1: {len(items)} Artikel" + (f" | Gesamt laut API: {total_entries}" if total_entries else ""))
         print(f"  Preis (inkl. Gebuehr): Median {med:.2f} | p25 {prices[len(prices)//4]:.2f} | p75 {prices[3*len(prices)//4]:.2f}")
-        print(f"  W26-W31: {w_target}/{len(items)} = {100*w_target/len(items):.0f}%")
+        print(f"  Zielgroessen (W26-W31 oder XS/S/M): {w_target}/{len(items)}"
+              f" = {100*w_target/len(items):.0f}%")
+        print(f"  Marge am Gate bei deal_ratio {cfg['settings']['deal_ratio']}:"
+              f" {margin_at_gate:.2f} EUR")
         print(f"  Haeufigste Marke: {top_brand} ({100*purity:.0f}% Reinheit)")
         print("  Groessenklassen: " + ", ".join(f"{k}:{v}" for k, v in
                                                 sorted(sizes.items(), key=lambda kv: -kv[1])[:8]))
         checks = {
             "Volumen (Seite voll / >=300 gesamt)": len(items) >= 90 or (total_entries or 0) >= 300,
             "Median >= 30 EUR": med >= 30,
-            "W26-W31 >= 25%": w_target / len(items) >= 0.25,
+            "Marge am Gate >= 15 EUR": margin_at_gate >= 15,
+            "Zielgroessen >= 25%": w_target / len(items) >= 0.25,
             "Marken-Reinheit >= 70%": purity >= 0.70,
         }
         print("  Aufnahme-Kriterien:")
         for name, passed in checks.items():
             print(f"    [{'x' if passed else ' '}] {name}")
-        print(f"  => {'AUFNEHMEN' if all(checks.values()) else 'NICHT aufnehmen'}")
+        if all(checks.values()):
+            print("  => AUFNEHMEN")
+        elif not checks["Marge am Gate >= 15 EUR"] and med >= 30:
+            tighter = 1 - 15 / med if med else 1
+            print(f"  => NUR mit deal_ratio <= {tighter:.2f} (dann traegt die Marge 15 EUR)")
+        else:
+            print("  => NICHT aufnehmen")
         return 0
     finally:
         con.close()
@@ -1816,6 +1870,7 @@ def run_cycle() -> int:
             set_backoff(con, AUTH_BACKOFF_MIN, "no session could be established")
             return 1
         ok = False
+        WALL_SEEN.clear()
         seller_budget = [MAX_SELLER_FETCHES]
         try:
             for search in cfg["searches"]:
@@ -1836,7 +1891,17 @@ def run_cycle() -> int:
             # A poll got through, so whatever caused an earlier backoff is
             # over; leaving it set would skip cycles for no reason.
             meta_set(con, "last_success", now_iso())
-            con.execute("DELETE FROM meta WHERE k IN ('backoff_until','backoff_level')")
+            if WALL_SEEN:
+                # Except when a wall fell somewhere else in this same cycle.
+                # Vinted rate-limits by client, not by endpoint, so a 429 on the
+                # seller endpoint while the catalog still answers is luck rather
+                # than permission. Clearing the backoff here would erase the
+                # refusal and its escalation level, and the next cycle would
+                # poll at full rate five minutes later, indefinitely.
+                log(f"backoff kept: {len(WALL_SEEN)} wall(s) during this cycle "
+                    f"({WALL_SEEN[0]})")
+            else:
+                con.execute("DELETE FROM meta WHERE k IN ('backoff_until','backoff_level')")
             con.commit()
         try:
             recheck_gone(client, con, session_proven=ok)

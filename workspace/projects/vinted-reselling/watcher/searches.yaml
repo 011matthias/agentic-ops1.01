@@ -70,3 +70,25 @@ searches:
   - tag: adidas-vintage
     query: "adidas vintage"
     price_max: 25
+
+  # Damen-Premium-Denim, aufgenommen 2026-09-08 nach Live-Probe (--probe-search).
+  # Groessen als Buchstaben, nicht als W-Zahlen: so listet dieser Markt.
+  # 7 for all mankind fiel durch (Median 18,55 EUR, Marge am Gate 8,35 EUR);
+  # viel Altbestand aus der 2005-2012-Welle, schwache aktuelle Nachfrage.
+  - tag: agolde
+    query: "agolde"
+    price_max: 90
+    # Median 126,70 EUR bei 98% Markenreinheit, Marge am Gate 56,78 EUR.
+    size_classes: [xs, s, m, w26, w27, w28, w29, w30, w31]
+  - tag: mother-denim
+    query: "mother jeans"
+    price_max: 90
+    # Median 126,70 EUR bei 98% Markenreinheit, gleiche Rechnung wie Agolde.
+    size_classes: [xs, s, m, w26, w27, w28, w29, w30, w31]
+  - tag: citizens-of-humanity
+    query: "citizens of humanity"
+    price_max: 60
+    # Median 30,10 EUR traegt am Standard-Gate nur 14,49 EUR Marge. Der eigene
+    # deal_ratio hebt sie ueber die 15-EUR-Schwelle des Owners.
+    deal_ratio: 0.50
+    size_classes: [xs, s, m, w26, w27, w28, w29, w30, w31]

@@ -1082,3 +1082,159 @@ def test_a_server_error_backs_off_instead_of_holding_the_cadence(vw, con, paths)
 def test_a_server_error_is_not_mistaken_for_a_bot_wall(vw, con, paths):
     """They call for different waits, so they must not share a code path."""
     assert vw.SERVER_BACKOFF_MIN < vw.WALL_BACKOFF_MIN
+
+# ------------------------------------ politeness: a refusal must survive the cycle
+
+def test_a_wall_on_the_seller_endpoint_is_not_erased_by_a_good_catalog_poll(vw, paths, monkeypatch):
+    """Vinted rate-limits the client, not one endpoint.
+
+    Found by adversarial review and reproduced: the catalog answered 200 while
+    /api/v2/users/{id} answered 429. api_get set the backoff and raised,
+    seller_profile swallowed it, and then run_cycle's success branch deleted
+    backoff_until AND backoff_level, because a poll had got through. The
+    refusal and its escalation level both vanished, and five minutes later the
+    watcher polled at full rate again, forever.
+    """
+    calls = {"catalog": 0, "user": 0}
+
+    def handler(request):
+        path = request.url.path
+        if path == "/":
+            return httpx.Response(200, headers={
+                "set-cookie": f"access_token_web={make_jwt(12)}; Path=/"})
+        if "/api/v2/users/" in path:
+            calls["user"] += 1
+            return httpx.Response(429, text="slow down")
+        calls["catalog"] += 1
+        return httpx.Response(200, json={"items": [{
+            "id": 5000 + calls["catalog"], "title": "Patagonia Regenjacke Herren",
+            "brand_title": "Patagonia", "size_title": "M", "status": "Sehr gut",
+            "price": {"amount": "20.0", "currency_code": "EUR"},
+            "total_item_price": {"amount": "20.0"},
+            "user": {"id": 77, "login": "s"}, "url": "u",
+            "photo": {"url": "p"}, "favourite_count": 0, "view_count": 0}]})
+
+    monkeypatch.setattr(vw, "new_client",
+                        lambda: httpx.Client(transport=httpx.MockTransport(handler),
+                                             base_url=vw.BASE))
+    monkeypatch.setattr(vw, "load_env", lambda: {})
+    monkeypatch.setattr(vw, "load_config", lambda: {
+        "settings": {"deal_ratio": 0.55, "min_comps": 1, "comp_window_days": 45,
+                     "min_price": 5, "poll_per_page": 48, "seed_pages": 1,
+                     "seed_per_page": 10, "size_classes": ["m"], "min_margin": 0,
+                     "foreign_advantage_eur": 8, "fake_risk_suppress": 0.7,
+                     "fake_risk_flag": 0.4, "profile_suppress": 0.15,
+                     "profile_min_rated": 8},
+        "searches": [{"tag": "t", "query": "q", "price_max": 100}]})
+    monkeypatch.setattr(vw.time, "sleep", lambda *_: None)
+
+    con = vw.db_connect()
+    now = vw.now_iso()
+    vw.meta_set(con, "seeded:t", now)           # steady-state path, so scoring runs
+    for i in range(4):                          # comps so a candidate can score
+        con.execute(
+            "INSERT INTO listings (id, search_tag, brand, brand_norm, cond_tier,"
+            " garment_class, size_class, is_kid, total_price, last_seen, first_seen)"
+            " VALUES (?,'t','Patagonia','patagonia','very_good','jacket','m',0,60.0,?,?)",
+            (900 + i, now, now))
+    con.commit()
+    con.close()
+    vw.acquire_lock()
+    vw.LOCK_PATH.unlink(missing_ok=True)
+
+    vw.run_cycle()
+
+    con = vw.db_connect()
+    until = vw.meta_get(con, "backoff_until")
+    level = vw.meta_get(con, "backoff_level")
+    con.close()
+    assert calls["user"] >= 1, "the seller endpoint must actually have been tried"
+    assert until is not None, "the 429 was erased by the successful catalog poll"
+    assert level is not None, "the escalation level was erased too"
+
+
+def test_a_clean_cycle_still_clears_an_old_backoff(vw, paths, monkeypatch):
+    """The counterweight: without a wall, a good poll must free the watcher."""
+    def handler(request):
+        if request.url.path == "/":
+            return httpx.Response(200, headers={
+                "set-cookie": f"access_token_web={make_jwt(12)}; Path=/"})
+        return httpx.Response(200, json={"items": []})
+
+    monkeypatch.setattr(vw, "new_client",
+                        lambda: httpx.Client(transport=httpx.MockTransport(handler),
+                                             base_url=vw.BASE))
+    monkeypatch.setattr(vw, "load_env", lambda: {})
+    monkeypatch.setattr(vw, "load_config", lambda: {
+        "settings": {"deal_ratio": 0.55, "min_comps": 8, "comp_window_days": 45,
+                     "min_price": 5, "poll_per_page": 48, "seed_pages": 1,
+                     "seed_per_page": 10},
+        "searches": [{"tag": "t", "query": "q"}]})
+    monkeypatch.setattr(vw.time, "sleep", lambda *_: None)
+
+    con = vw.db_connect()
+    vw.meta_set(con, "seeded:t", vw.now_iso())
+    # An EXPIRED backoff: an active one would correctly skip the cycle, which
+    # would prove nothing about the clearing branch.
+    past = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    vw.meta_set(con, "backoff_until", past)
+    vw.meta_set(con, "backoff_level", "2")
+    con.commit()
+    con.close()
+
+    vw.run_cycle()
+
+    con = vw.db_connect()
+    assert vw.meta_get(con, "backoff_until") is None, "a clean cycle must free the watcher"
+    con.close()
+
+
+def test_the_recheck_loop_backs_off_instead_of_walking_into_a_wall(vw, con, paths, monkeypatch):
+    """The recheck is the biggest request block and had no wall handling at all.
+
+    It fetches item pages rather than the JSON API, so it cannot go through
+    api_get. Without its own status check a 429 matched no branch: not 404/410,
+    not a redirect, not 200. The loop simply went round again, twenty-five
+    times, and repeated an hour later.
+    """
+    calls = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        return httpx.Response(429, text="slow down")
+
+    client = client_with(vw, httpx.MockTransport(handler), token=make_jwt(12))
+    old = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for i in range(40):
+        con.execute("INSERT INTO listings (id, search_tag, url, first_seen, last_seen)"
+                    " VALUES (?,'t',?,?,?)",
+                    (700 + i, f"{vw.BASE}/items/{700+i}", old, old))
+    con.commit()
+    monkeypatch.setattr(vw.time, "sleep", lambda *_: None)
+
+    vw.recheck_gone(client, con, session_proven=True)
+
+    assert len(calls) == 1, f"walked into the wall {len(calls)} times instead of stopping"
+    assert vw.meta_get(con, "backoff_until") is not None, "a 429 in recheck set no backoff"
+    assert con.execute("SELECT COUNT(*) FROM listings WHERE gone_at IS NOT NULL"
+                       ).fetchone()[0] == 0, "a refusal must never be recorded as an outcome"
+
+
+def test_recheck_still_records_real_outcomes(vw, con, paths, monkeypatch):
+    """The counterweight: the new guard must not swallow honest 404s."""
+    def handler(request):
+        return httpx.Response(404)
+
+    client = client_with(vw, httpx.MockTransport(handler), token=make_jwt(12))
+    old = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for i in range(10):
+        con.execute("INSERT INTO listings (id, search_tag, url, first_seen, last_seen)"
+                    " VALUES (?,'t',?,?,?)",
+                    (750 + i, f"{vw.BASE}/items/{750+i}", old, old))
+    con.commit()
+    monkeypatch.setattr(vw.time, "sleep", lambda *_: None)
+    vw.recheck_gone(client, con, session_proven=True)
+    # All ten 404 at once, so the batch ceiling discards them as systemic; what
+    # matters here is that the pass ran rather than being cut short by the guard.
+    assert vw.meta_get(con, "last_recheck") is not None
+    assert vw.meta_get(con, "backoff_until") is None, "an honest 404 is not a wall"
