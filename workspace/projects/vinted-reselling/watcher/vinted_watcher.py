@@ -33,6 +33,7 @@ import statistics
 import sys
 import time
 import urllib.parse
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -229,7 +230,8 @@ def brand_norm_of(brand: str | None) -> str:
 
 RECHECK_INTERVAL_MIN = 60
 RECHECK_BATCH = 25
-RECHECK_MIN_AGE_H = 24
+RECHECK_MIN_AGE_H = 12   # too soon to have resolved into anything
+RECHECK_MAX_AGE_D = 10   # past this the sold panel gives way to a 404
 GONE_RATE_CEILING = 0.40   # a batch reading gone above this is systemic, not sales
 STALE_ALERT_MIN = 45       # no successful poll this long -> tell the operator
 STALE_RENAG_H = 6          # keep reminding while an outage continues
@@ -237,10 +239,64 @@ STALE_RENAG_H = 6          # keep reminding while an outage continues
 # A URL that has left the item page for a login/consent/challenge screen.
 WALL_URL = re.compile(r"/login|/member/general|captcha|challenge|consent", re.I)
 
-# Only an explicit machine-readable sold flag counts. The bare word "Verkauft"
-# appears in ordinary German page chrome, so matching it would mark live
-# listings sold, corrupting outcome data in the opposite direction.
-SOLD_MARKER = re.compile(r"is_sold(&quot;|\")?\s*:\s*true", re.I)
+# How a sold listing is actually told apart from a withdrawn one (probed
+# 2026-09-09 against the owner's own bought item as ground truth).
+#
+# The item page is a Next.js app that ships its sidebar as a list of plugins
+# inside an escaped-JSON flight payload. Exactly one of two plugins is present,
+# and which one IS the verdict:
+#
+#   sold : buyer_item_status {"item_id":..,"title":"Verkauft","theme":"SUCCESS"}
+#   live : item_status       {"is_closed":false,"item_closing_action":null,..}
+#
+# Three earlier candidates were checked and rejected, each of which would have
+# produced silent garbage:
+#   - is_sold":true  -- the previous marker. It appears on NO page, sold or
+#     live, so the sold branch was unreachable and every sale was recorded as
+#     "alive". This is why 3 outcome rows exist and 0 are marked sold.
+#   - the word "Verkauft" -- present on every page, live ones included, inside
+#     the i18n bundle ("flash_messages.no_longer_available_sold.title"). It
+#     would mark 100% of listings sold.
+#   - HTTP 404 as a proxy for sold -- a sold listing answers 200 and keeps
+#     answering it for days. 404 is deletion, which is not a sale.
+BUYER_STATUS = re.compile(
+    r'\\"name\\":\\"buyer_item_status\\".{0,240}?\\"title\\":\\"([^"\\]{0,40})\\"'
+    r'.{0,80}?\\"theme\\":\\"([A-Z_]{0,20})\\"')
+ITEM_STATUS = re.compile(
+    r'\\"name\\":\\"item_status\\".{0,400}?\\"is_closed\\":(true|false)'
+    r'.{0,80}?\\"item_closing_action\\":(null|\\"[a-z_]{0,30}\\")')
+# The sold panel's title is localised, so the theme carries the meaning and the
+# title is kept only as evidence. SUCCESS is the sold panel; anything else is a
+# closure we have not seen yet and must not guess at.
+SOLD_THEME = "SUCCESS"
+
+
+def item_page_verdict(status_code: int, body: str) -> tuple[str, str]:
+    """Read a listing's fate off its item page. Returns (verdict, evidence).
+
+    Verdicts: sold | gone | alive | closed | unknown. `closed` is a real
+    closure whose reason is not a sale; `unknown` is a page we could not read,
+    which is deliberately NOT folded into any of the others. Guessing here is
+    how 375 fabricated sales entered this database on 2026-09-07.
+    """
+    if status_code in (404, 410):
+        return "gone", str(status_code)
+    if status_code != 200:
+        return "unknown", f"http_{status_code}"
+    m = BUYER_STATUS.search(body)
+    if m:
+        title, theme = m.group(1), m.group(2)
+        verdict = "sold" if theme == SOLD_THEME else "closed"
+        return verdict, f"buyer_item_status:{theme}:{title}"[:60]
+    m = ITEM_STATUS.search(body)
+    if m:
+        if m.group(1) == "false":
+            return "alive", "item_status:open"
+        action = m.group(2).strip('\\"') or "null"
+        # A closed item whose closing action says it sold is still a sale.
+        return ("sold" if "sold" in action and "not" not in action else "closed",
+                f"item_status:closed:{action}"[:60])
+    return "unknown", "no_status_plugin"
 
 
 def now_iso() -> str:
@@ -416,6 +472,54 @@ CREATE TABLE IF NOT EXISTS alert_feedback (
     ntfy_msg_id TEXT UNIQUE,
     raw TEXT
 );
+
+-- One row per OBSERVED CHANGE to a listing's price, favourites or views.
+-- upsert() overwrites those columns on every re-sight, so before this table
+-- the watcher spent every cycle deleting the only history it will ever have:
+-- a seller who cuts the price three times wants out, which is a demand signal
+-- for the cell and a buying signal for us, and none of it survived. Past
+-- changes are gone for good and cannot be backfilled from anywhere.
+--
+-- Written only when the value actually moved. Writing every sighting instead
+-- would add ~13.8k contentless rows a day, and a table that grows without
+-- carrying information is a slower way to learn nothing.
+CREATE TABLE IF NOT EXISTS listing_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id INTEGER NOT NULL,
+    seen_at TEXT NOT NULL,
+    field TEXT NOT NULL,
+    old_value REAL,
+    new_value REAL
+);
+
+-- What WE listed, for what, with which keywords, and whether it sold. The
+-- market corpus says how sellers describe things; this is the only table that
+-- can ever say whether the bot's suggestions worked. Without it every
+-- keyword ranking is a hypothesis with no feedback path.
+CREATE TABLE IF NOT EXISTS my_listings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vinted_item_id INTEGER,
+    source_listing_id INTEGER,
+    title TEXT,
+    brand TEXT, brand_norm TEXT,
+    garment_class TEXT,
+    size TEXT, size_class TEXT,
+    condition TEXT, cond_tier TEXT,
+    color TEXT, material TEXT,
+    keywords TEXT,
+    description TEXT,
+    buy_price REAL,
+    ask_price REAL,
+    comp_median_at_listing REAL,
+    listed_at TEXT,
+    sold_at TEXT,
+    sold_price REAL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    url TEXT,
+    notes TEXT,
+    created_at TEXT,
+    updated_at TEXT
+);
 """
 
 # Indexes are created only AFTER migrate() has added any columns an older
@@ -430,6 +534,9 @@ CREATE INDEX IF NOT EXISTS idx_listings_recheck ON listings (gone_at, last_seen)
 CREATE INDEX IF NOT EXISTS idx_alerts_listing ON alerts (listing_id, alerted_at);
 CREATE INDEX IF NOT EXISTS idx_alerts_tag ON alerts (search_tag, alerted_at);
 CREATE INDEX IF NOT EXISTS idx_feedback_listing ON alert_feedback (listing_id);
+CREATE INDEX IF NOT EXISTS idx_events_listing ON listing_events (listing_id, seen_at);
+CREATE INDEX IF NOT EXISTS idx_events_field ON listing_events (field, seen_at);
+CREATE INDEX IF NOT EXISTS idx_my_listings_status ON my_listings (status, listed_at);
 """
 
 
@@ -986,11 +1093,52 @@ def parse_item(item: dict, tag: str, seed: int) -> dict:
     }
 
 
+# Columns upsert() overwrites on every re-sight, and whose movement is the
+# signal. Rounded before comparison because the price arrives as a float and
+# 26.950000000000003 != 26.95 would log a change that did not happen.
+TRACKED_FIELDS = (("price", 2), ("total_price", 2), ("favourites", 0), ("views", 0))
+
+
+def record_changes(con: sqlite3.Connection, listing_id: int, before: sqlite3.Row | tuple,
+                   rec: dict, ts: str) -> int:
+    """Append one row per tracked value that actually moved. Returns the count.
+
+    A value that did not move writes nothing: at ~13.8k re-sights a day, logging
+    every sighting would grow the table by that much daily while carrying no
+    information. A first reading of NULL is skipped too, since "unknown became
+    12" is not a change anyone can learn from.
+    """
+    written = 0
+    for i, (field, places) in enumerate(TRACKED_FIELDS):
+        old, new = before[i], rec.get(field)
+        if old is None or new is None:
+            continue
+        try:
+            if round(float(old), places) == round(float(new), places):
+                continue
+        except (TypeError, ValueError):
+            continue
+        con.execute(
+            "INSERT INTO listing_events (listing_id, seen_at, field, old_value, new_value)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (listing_id, ts, field, float(old), float(new)),
+        )
+        written += 1
+    return written
+
+
 def upsert(con: sqlite3.Connection, rec: dict) -> bool:
     """Insert or refresh a listing. Returns True when the id was new."""
     ts = now_iso()
-    existing = con.execute("SELECT id FROM listings WHERE id=?", (rec["id"],)).fetchone()
+    # Selects the tracked values rather than just the id, so the comparison
+    # costs nothing extra: this row has to be read either way.
+    existing = con.execute(
+        "SELECT price, total_price, favourites, views FROM listings WHERE id=?",
+        (rec["id"],)).fetchone()
     if existing:
+        # The history has to be captured BEFORE the UPDATE overwrites it. This
+        # is the whole point of the ordering here.
+        record_changes(con, rec["id"], existing, rec, ts)
         # Seeing a listing in a live search result disproves any earlier
         # "gone" verdict, so clear it. Without this a row wrongly marked gone
         # stayed gone forever, and the outcome data could never self-correct.
@@ -1719,6 +1867,61 @@ def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, set
     return True
 
 
+def recheck_queue(con: sqlite3.Connection, limit: int) -> list[tuple[int, str]]:
+    """Which listings this hour's fixed page budget is spent on.
+
+    The budget is 25 pages an hour, 600 a day, against a corpus taking in
+    ~13.8k listings a day. No policy makes that a census, so the only question
+    is which 4% to buy, and oldest-first was the wrong answer twice over: on
+    36k rows it needs two months for one pass, and it spends the budget on the
+    listings least likely to still be readable.
+
+    Three tiers, in order:
+
+      1. Anything we alerted on. ~50 a day, so it always fits, and it is the
+         only cohort that can ever tell us whether the deal gate is right.
+      2. A window 12h to 10d after posting. Under 12h too little has happened
+         to be worth a page; past 10d the sold panel gives way to a 404 and
+         the verdict degrades from "sold" to "gone, cause unknown".
+      3. Oldest unresolved, so nothing is stranded forever.
+
+    Ordered by favourites inside tier 2: a listing nobody hearted rarely
+    resolves into anything, and the budget is small enough to care.
+    """
+    now = datetime.now(timezone.utc)
+    def stamp(**kw):
+        return (now - timedelta(**kw)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    picked: dict[int, str] = {}
+
+    def take(sql: str, params: tuple) -> None:
+        if len(picked) >= limit:
+            return
+        for item_id, url in con.execute(sql, params + (limit - len(picked),)):
+            if url and item_id not in picked:
+                picked[item_id] = url
+
+    # Tier 1: alerted, not yet resolved, given a few hours to actually happen.
+    take("""SELECT l.id, l.url FROM listings l
+            WHERE l.gone_at IS NULL AND l.url IS NOT NULL
+              AND EXISTS (SELECT 1 FROM alerts a WHERE a.listing_id = l.id)
+              AND l.first_seen < ?
+            ORDER BY l.first_seen ASC LIMIT ?""", (stamp(hours=RECHECK_MIN_AGE_H),))
+    # Tier 2: inside the window where the page still distinguishes sold from gone.
+    take("""SELECT id, url FROM listings
+            WHERE gone_at IS NULL AND url IS NOT NULL
+              AND posted_at IS NOT NULL AND posted_at BETWEEN ? AND ?
+              AND last_seen < ?
+            ORDER BY favourites DESC, posted_at ASC LIMIT ?""",
+         (stamp(days=RECHECK_MAX_AGE_D), stamp(hours=RECHECK_MIN_AGE_H),
+          stamp(hours=RECHECK_INTERVAL_MIN / 60 * 12)))
+    # Tier 3: the old oldest-first sweep, as the tail.
+    take("""SELECT id, url FROM listings
+            WHERE gone_at IS NULL AND url IS NOT NULL AND last_seen < ?
+            ORDER BY last_seen ASC LIMIT ?""", (stamp(hours=RECHECK_MIN_AGE_H),))
+    return list(picked.items())
+
+
 def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: bool = False) -> None:
     """Hourly: revisit stale listings to detect sold/removed (sell-speed data).
 
@@ -1737,13 +1940,8 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: 
         # has not just answered a real API call earns no verdicts at all.
         log("recheck skipped: session not proven this cycle")
         return
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=RECHECK_MIN_AGE_H)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    rows = con.execute(
-        """SELECT id, url FROM listings WHERE gone_at IS NULL AND last_seen < ?
-           ORDER BY last_seen ASC LIMIT ?""",
-        (cutoff, RECHECK_BATCH),
-    ).fetchall()
-    verdicts = []      # (item_id, gone: bool, sold: bool, source: str)
+    rows = recheck_queue(con, RECHECK_BATCH)
+    verdicts = []      # (item_id, verdict: str, source: str)
     for item_id, item_url in rows:
         if not item_url:
             continue
@@ -1770,9 +1968,7 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: 
             meta_set(con, "last_recheck", now_iso())
             con.commit()
             return
-        if r.status_code in (404, 410):
-            verdicts.append((item_id, True, False, str(r.status_code)))
-        elif "/items/" not in final or WALL_URL.search(final):
+        if "/items/" not in final or WALL_URL.search(final):
             # Bounced off the item page. That is a statement about our
             # session, not about the listing, and it is unknowable which.
             # Abandon the pass with nothing written.
@@ -1780,34 +1976,49 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: 
             meta_set(con, "last_recheck", now_iso())
             con.commit()
             return
-        elif r.status_code == 200:
-            sold = bool(SOLD_MARKER.search(r.text))
-            verdicts.append((item_id, sold, sold, "sold_marker" if sold else "alive"))
+        verdict, source = item_page_verdict(r.status_code, r.text)
+        verdicts.append((item_id, verdict, source))
         time.sleep(random.uniform(1.5, 3.0))
 
-    gone_n = sum(1 for _, g, _, _ in verdicts if g)
+    counts = Counter(v for _, v, _ in verdicts)
+    gone_n, sold_n = counts["gone"], counts["sold"]
     if verdicts and gone_n / len(verdicts) > GONE_RATE_CEILING:
-        # The batch is drawn from the OLDEST listings not yet marked gone, and
-        # those turn over slowly; a large simultaneous sweep is a session
-        # symptom every time, never a market event. Discard rather than
-        # poison the outcome data.
-        log(f"WARN: recheck discarded, {gone_n}/{len(verdicts)} read as gone "
-            f"(> {GONE_RATE_CEILING:.0%} is systemic, not sales)")
+        # A large simultaneous sweep of 404s is a session symptom every time,
+        # never a market event. The ceiling covers the 404 class ONLY: a sold
+        # verdict comes from a named plugin carrying a theme, which a login
+        # wall or an error page cannot fabricate, so a high sold rate is real
+        # and must not be thrown away with it.
+        log(f"WARN: recheck discarded, {gone_n}/{len(verdicts)} read as 404 "
+            f"(> {GONE_RATE_CEILING:.0%} is systemic, not deletions)")
+        meta_set(con, "last_recheck", now_iso())
+        con.commit()
+        return
+    if verdicts and counts["unknown"] / len(verdicts) > GONE_RATE_CEILING:
+        # A page that answers 200 while carrying neither status plugin is not
+        # an item page. That is the shape a soft wall takes now that a hard
+        # redirect is caught above, so it aborts rather than records.
+        log(f"WARN: recheck discarded, {counts['unknown']}/{len(verdicts)} pages "
+            f"carried no status plugin; that is a wall, not a market")
         meta_set(con, "last_recheck", now_iso())
         con.commit()
         return
 
     ts = now_iso()
-    for item_id, gone, sold, source in verdicts:
-        if gone:
-            con.execute("UPDATE listings SET gone_at=?, sold_flag=?, gone_source=? WHERE id=?",
-                        (ts, 1 if sold else 0, source, item_id))
-        else:
+    for item_id, verdict, source in verdicts:
+        if verdict == "alive":
             con.execute("UPDATE listings SET last_seen=? WHERE id=?", (ts, item_id))
+        elif verdict == "unknown":
+            continue                     # never guess; leave it for the next pass
+        else:
+            # sold | gone | closed all end the listing's life; only sold is a
+            # demand signal, and gone_source keeps the three apart forever.
+            con.execute("UPDATE listings SET gone_at=?, sold_flag=?, gone_source=? WHERE id=?",
+                        (ts, 1 if verdict == "sold" else 0, source, item_id))
     meta_set(con, "last_recheck", ts)
     con.commit()
     if rows:
-        log(f"recheck: {len(rows)} visited, {gone_n} gone")
+        log(f"recheck: {len(rows)} visited, {sold_n} sold, {gone_n} deleted, "
+            f"{counts['closed']} closed, {counts['unknown']} unreadable")
 
 
 def acquire_lock() -> bool:
