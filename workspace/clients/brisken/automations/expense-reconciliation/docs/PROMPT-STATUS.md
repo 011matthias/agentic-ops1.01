@@ -87,7 +87,7 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
-| `lovable-receipts-drop-prompt.md` (2026-09-08, amended same day: cap raise + §5 nav) | a chunk POSTs to `/api/receipts` and reads `n_filed` + `n_needs_month` + `needs_month` + `created_batch` + `month_source` from the job `result`; months chunk reads `created_by` value `"drop"`; rejected copy reads reason `upload-cap` + `limit` | Backend deploy (cap 80→500 + upload-cap ledger rows deployed 2026-09-08). §2 removes the create-month upload area — the server 400s files there, so an unpasted SPA errors loudly on the old flow. §5 (top bar only on `/months`, sticky "← Menu" elsewhere) is pure chrome — verify by browser drive, not bundle grep. Nothing gates data entry |
+| `lovable-receipts-drop-prompt.md` (2026-09-08, amended twice same day: cap raise + §5 nav; then §2 full create-UI removal + §6 Open-month release per owner ruling) | a chunk POSTs to `/api/receipts` and reads `n_filed` + `n_needs_month` + `needs_month` + `created_batch` + `month_source` from the job `result`; months chunk reads `created_by` value `"drop"`; rejected copy reads reason `upload-cap` + `limit`; intake chunk reads `pool_month_state` + `pool_month` and POSTs a `label`-only `/api/expense-batches` (the §6 release); no chunk references `/expenses/new` for company months | Backend deploy (cap 80→500 + upload-cap ledger rows deployed 2026-09-08; §2/§6 need NO backend — the create route stays as plumbing). §5 nav + §2 button death are chrome — verify by browser drive, not bundle grep. Nothing gates data entry |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
