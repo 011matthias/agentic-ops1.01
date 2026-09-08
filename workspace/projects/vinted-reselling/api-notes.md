@@ -63,3 +63,66 @@ Search page is a client-rendered microfrontend behind Akamai Bot Manager:
 200 OK but zero listing data in HTML (no prices, no ad IDs, empty JSON-LD
 itemList). Plain-HTTP scraping is out; would need Scrapling browser
 fetchers or the unofficial mobile API.
+
+## Feld-Zensus 2026-09-08 (`--probe-fields`, live gelesen)
+
+Die frühere Notiz "Country/Versand nicht verifiziert" ist jetzt beantwortet:
+**die Katalog-Antwort trägt kein Länderfeld.** Vollständige Blattschlüssel
+eines Items:
+
+```
+brand_title, content_source, conversion, favourite_count, id, is_favourite,
+is_visible, item_box.{accessibility_label, first_line, item_id, second_line},
+path, photo.*, photos[].*, price.{amount, currency_code}, promoted,
+search_tracking_params.score, service_fee.{amount, currency_code},
+show_1st_time_seller_discount, size_title, status, title,
+total_item_price.{amount, currency_code}, url,
+user.{id, login, profile_url, photo.*, business}, view_count
+```
+
+Neu gegenüber der v1-Liste: `user.business` (Gewerbe-Flag, bisher verworfen),
+`item_box.second_line` (Größe + Zustand vorformatiert),
+`search_tracking_params.score` (Vinteds eigener Relevanzwert für diese Suche),
+`show_1st_time_seller_discount`. `view_count` ist anonym immer 0.
+
+`pagination` liefert `{current_page, total_pages, total_entries, per_page,
+time}`, also eine echte Gesamtzahl für Volumen-Probes.
+
+### Land und Verkäuferqualität: `/api/v2/users/{id}`
+
+- `/api/v2/items/{id}` ist anonym **404**, entgegen der Annahme in v1.
+- `/api/v2/users/{id}` funktioniert dagegen anonym und liefert 105
+  Blattschlüssel, darunter genau das Fehlende:
+  `country_iso_code`, `country_code`, `country_id`, `country_title`, `city`,
+  `feedback_count`, `positive_feedback_count`, `feedback_reputation`,
+  `item_count`, `business`, `verification.*`.
+
+Beispiel aus dem Probe-Lauf: der geprüfte Carhartt-Artikel gehört einem
+Verkäufer in Amsterdam (`country_iso_code: NL`, 121 Bewertungen, Reputation
+0.78). Das Land des Verkäufers IST der Versandursprung, also die Größe, die
+für die Versandkosten zählt.
+
+Der Watcher ruft das Profil nur für Anzeigen ab, die das Deal-Gate schon
+passiert haben, cacht es pro Verkäufer in der Tabelle `sellers` und deckelt
+auf 6 Abrufe je Zyklus. 20k Verkäufer auf 29k Zeilen heißt: Verkäufer
+wiederholen sich, der Cache trägt.
+
+### 5xx-Welle 2026-09-08, und was daraus folgt
+
+Nach etwa 25 einmaligen Probe-Anfragen innerhalb von 20 Minuten, parallel zum
+laufenden 5-Minuten-Takt, antwortete `/api/v2/catalog/items` durchgehend mit
+**500** für jeden Suchbegriff, auch für die, die Minuten vorher funktioniert
+hatten. Der Produktions-Watcher war gleichzeitig betroffen. Kein 429, kein 403,
+sondern 500: so sieht hier offenbar eine weiche Drosselung aus.
+
+Zwei Konsequenzen, beide eingebaut:
+
+1. `api_get` behandelt jedes 5xx wie einen Rückzugsgrund: 20 Minuten Backoff,
+   eskalierend. Vorher lief der 5-Minuten-Takt einfach weiter gegen einen
+   Endpunkt, der schon nicht mehr konnte.
+2. Probes fragen mit `per_page=48` (wie ein normaler Poll) und fangen Fehler ab,
+   statt mit einem Traceback abzubrechen.
+
+Die alte Notiz "per_page 96 ok" bleibt unbestätigt; im Zensus lief 96 nur bei
+`--probe-fields` mit `per_page=1` sauber, alle 96er-Versuche fielen in die
+5xx-Welle.

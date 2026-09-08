@@ -4,6 +4,13 @@
 # query: the literal Vinted search text.
 # price_max: alert cap in EUR (total incl. buyer fee). Listings above it are
 #            still recorded as comp data, just never alerted.
+#
+# Per-search overrides (all optional):
+#   size_classes:    which normalised size classes may alert for this search
+#   deal_ratio:      tighten or loosen this one search's bar
+#   alerts_disabled: true keeps collecting data but never alerts (probe mode,
+#                    and the "drop" state of the brand rules; the price history
+#                    is the asset, so a dropped brand keeps feeding it)
 
 # Hand-set 2026-09-06 after first live afternoon (52 alerts / ~6h was a
 # firehose at 0.62/6/5). Judgment values until the backtest scorer exists;
@@ -13,7 +20,23 @@ settings:
   deal_ratio: 0.55        # alert when total price <= ratio * comp median
   min_comps: 8            # minimum comparable listings before scoring fires
   comp_window_days: 45    # how far back comps count
-  min_price: 8            # floor in EUR; below this a flip is not worth the time
+  min_price: 8            # floor in EUR (total incl. fee); below this a flip is not worth the time
+
+  # Alert-side size focus. Comps keep every size; only the phone is filtered.
+  # xl / DE 52 is deliberately out of the default: whether a class earns a slot
+  # is a per-product call fed by the size-demand block of --brand-report.
+  size_classes: [s, m, l, w29, w30, w31, w32, w33, w34]
+
+  min_margin: 0           # EUR below the comp median a deal must clear; 0 = off
+  foreign_advantage_eur: 8   # non-DE listings must beat the bar by this much extra
+
+  fake_risk_suppress: 0.7    # at or above this the alert is withheld
+  fake_risk_flag: 0.4        # at or above this the alert carries a warning line
+
+  # The learned taste layer only overrules a cell after it has really been
+  # rated; below profile_min_rated it can rank, never suppress.
+  profile_suppress: 0.15
+  profile_min_rated: 8
 
 searches:
   - tag: carhartt-jacke
@@ -34,6 +57,10 @@ searches:
   - tag: levis-501
     query: "levis 501"
     price_max: 25
+    # Women's 501 rides on this tag rather than a search of its own: a listing
+    # keeps the tag it was first seen under, so a separate "levis 501 damen"
+    # search would only ever collect the leftovers into a starved comp pool.
+    size_classes: [s, m, l, w26, w27, w28, w29, w30, w31, w32, w33, w34]
   - tag: stone-island
     query: "stone island"
     price_max: 60
