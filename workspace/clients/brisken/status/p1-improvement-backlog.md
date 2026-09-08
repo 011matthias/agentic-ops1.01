@@ -1387,20 +1387,192 @@ Open-month release (travel rows excluded).
 which projects/purposes — examples given: Nicolas's Brazil expenses, the
 Lidar project Nicolas works on, Matthias's work on this tool, marketing.
 
-**Shape (design round first, not a build):** a cost-center DIMENSION on
-expenses, sibling to category/entity/person, following the established
-pattern — operator-defined registry in settings (like `cards` /
-`merchants`), per-expense resolution chain with explicit override >
-learned > suggestion, never a silent guess; roll-ups in the month report
-and a cross-month view. The person attribution (R1, person-via-card) and
-trips are existing signals a resolver can lean on (Nicolas's card +
-Brazil-trip receipts ≈ two of Dirk's own examples). Owner questions to
-settle BEFORE building: who defines the list (Dirk once, or learned from
-assignments), what the resolution precedence is (person? card? trip?
-merchant?), whether one expense can split across cost centers (the
-books_as split precedent says yes eventually), and which surface Dirk
-reads (a tile page vs a report section). Session prompt handed
-2026-09-08 (checkpoint of the same day); full brief there.
+**DESIGN ANSWERED 2026-09-08** in an owner decision round (four questions
+put with recommendations; three taken, D1 answered against the
+recommendation). Nothing was built — the build is a separate order.
+
+The shape is a cost-center DIMENSION on the expense row, sibling to
+category, legal entity and person, resolved through the same
+override > learned > registry chain the rest of the tool already uses and
+never guessed silently. Dirk's four examples are deliberately
+heterogeneous — Lidar is a project, marketing is a function, Brazil is a
+trip, tool work is a person's — so the registry is ONE FLAT LIST carrying a
+display-only `kind`; no hierarchy in v1.
+
+**D1 — the list is owner-authored, full stop.** Owner answer: "Dirk creates
+and defines the cost centers manually." `settings["cost_centers"]`, whole-map
+replace, edited in Settings exactly like `cards` / `merchants` / `entities`:
+
+```
+settings["cost_centers"] = {
+    "<name>": {"kind": "project"|"function"|"trip"|"", "note": "", "active": bool},
+    ...
+}
+```
+
+The tool never invents a cost center and never learns a new NAME; the
+learning in D2 only ever re-uses a name Dirk has already defined. `kind`
+groups the roll-up and never participates in resolution.
+
+The load-bearing consequence, and the thing to build FIRST: **an empty
+registry must resolve nothing AND flag nothing.** This is the merchant
+registry's own contract ("an empty registry resolves nothing, so a tenant
+with no `merchants` key behaves exactly as before"), and without it the day
+the field ships every row in every month reads `needs_cost_center` — a
+review state at 100% is noise, not signal. The review state starts firing
+only once at least one active cost center exists. Item 26 (card identities,
+open since 2026-08-23) is the standing evidence that an owner-side data-entry
+prerequisite can sit for weeks; the field has to be inert, not loud, while
+it does.
+
+The whole-map-replace hazard is the one that already bit `person` on cards:
+a Settings screen that does not read AND write the map erases it on save.
+The Lovable half must round-trip the whole map, and data entry waits until
+the published bundle proves it does.
+
+**D2 — resolution precedence.** Highest first, first hit wins:
+
+1. **explicit per-row override** — rides `edited_fields` like every other
+   override; always beats everything below.
+2. **trip** — a `batch_type: "trip"` batch whose trip carries a
+   `cost_center` fills every row in it. Strongest automatic signal because a
+   human DECLARED it at creation (item 38), not because anything inferred it.
+3. **learned merchant → cost center** — per legal entity, `decision_count`
+   weighted; the structural twin of the existing `merchant_entity` table.
+4. **card `default_cost_center`** — for a card that belongs to one project.
+   One line in `normalize_cards_setting`'s string-field loop.
+5. otherwise **unresolved**.
+
+**Person is NOT a resolver, by decision.** It ranks the picker (Nicolas's
+usual cost centers first) and nothing more. Person is precisely the signal
+that cannot separate two of Dirk's own examples: Nicolas is on both sides of
+"Brazil" and "Lidar", so a person-first chain would fill one of them in
+wrong and confidently — the failure mode item 25 and rule 5's "Arriving"
+incident both punish. **Category is not a resolver either:** letting the two
+dimensions co-vary destroys the point of cutting the money a second way.
+
+Learned outranking the static card/registry default is deliberate
+consistency with the 2026-08-07 merchant reversal (owner call: a per-entity
+learned row outranks the registry default; registry-preempts-learned is
+dead).
+
+Unresolved reads `check` / `reason_code: "needs_cost_center"`, firing
+**LAST** — after `needs_person` — because it is registry work of the same
+class and must never hide a more actionable per-row exception. Silent
+entirely while the registry is empty (above).
+
+**D3 — v1 refuses splits.** One expense, one cost center. Named
+consequence, accepted: a genuinely shared cost (a hotel bill half Lidar,
+half marketing) lands wholly on one side and that roll-up is slightly wrong.
+No real shared-cost example was on the table when this was decided; if one
+appears, the v2 shape is **per line item**, reusing the `books_as` fan-out
+(the report already handles the doubled listing rows, and evidence stays per
+DOCUMENT captioned "Expenses 3, 4"). Operator-typed percentage splits are
+NOT the path: they would be new machinery through the export, the report
+numbering and the receipt captions.
+
+**D4 — surface, in two steps, in this order.**
+
+*Step 1, the month report groups its listing by cost center.* Nearly free:
+`build_expense_report_pdf` already takes `sections`, contiguous slices of
+the listing with their own caption, per-currency sums and continuous
+numbering, built for the per-person trip report (item 38). Partitioning on
+cost center instead of person is the same call with a different key.
+Unassigned rows get their own final section, named as unassigned, never
+hidden.
+
+*Step 2, a cross-month view.* This is the only genuinely new surface: all 57
+routes were enumerated and nothing aggregates across batches (months list,
+trips list, per-batch, per-run). "What has Lidar cost since January" is the
+question a project actually raises, and a month report cannot answer it.
+`GET /api/cost-centers/totals?from=&to=`.
+
+NOT building: a dedicated cost-center page with its own tiles. The
+cross-month view is most of what would land on it.
+
+**Stated limit, on both surfaces.** This tool only sees money that flows
+through a Brisken card or a receipt. Contractor invoices, salaries and
+anything paid another way never enter it, so "what did Lidar cost" answered
+from here is CARD-AND-RECEIPT SPEND, not total project cost. Both surfaces
+label themselves that way. A number that reads as a project total and is not
+one is worse than no number (B4), and it is the same class of error as the
+`pooled` rows that confidently read "Arriving".
+
+**API-contract implications — parallel fields only (rule 1).** Nothing
+existing changes type or meaning, so a stale SPA renders exactly what it
+renders now.
+
+Expense-batch payload:
+
+| Path | Element | Meaning |
+|---|---|---|
+| `expenses[].cost_center` | string | the resolved name; `""` unresolved |
+| `expenses[].cost_center_source` | string | `override` \| `trip` \| `learned` \| `card` \| `none` |
+| `expenses[].cost_center_source_label` | string | the parallel human-readable label |
+| `summary.n_needs_cost_center` | int | beside `n_needs_person` |
+| `cost_center_options[]` | string | beside `account_options[]` / `entity_options[]` |
+
+`cost_center_source_label` is not optional politeness: rule 5 says an
+enum-ish field the SPA maps by hand ships WITH a parallel label, so an
+un-updated consumer degrades to correct text instead of somebody else's copy
+(the `pooled` / `routing` / `claiming` → "Arriving" hole). New `reason_code`
+value `"needs_cost_center"`, prose in `reason` per the same rule.
+
+Settings and cards:
+
+- `GET /api/settings` emits `cost_centers`; `PUT /api/settings` accepts it,
+  normalized + validated at the edge like `merchants` / `cards` (blank name
+  dropped, unknown `kind` rejected, whole-map replace).
+- card entry gains `default_cost_center`, emitted as
+  `cards[].default_cost_center` on `GET /api/cards` (`""` unset). It reaches
+  an EXISTING batch only through `POST .../refresh-master-data`, whose
+  `changes` gains a `row_cost_centers` count — same contract as item 40's
+  `row_persons`.
+- trip object gains `cost_center`; `POST` / `PUT /api/trips` accept it.
+
+New route: `GET /api/cost-centers/totals?from=&to=` — per cost center, per
+currency, with a row count and an explicit unassigned bucket.
+
+Re-pin `tests/test_view_contract.py` and `docs/api-contract.md` in the same
+round (rule 4), and ship the SPA half in the same round (rule 2).
+
+**Lovable half (DRAFTED, not pasteable yet).** Kept here rather than in
+`docs/lovable-*.md` on purpose: a prompt in that folder is one PROMPT-STATUS
+audits as pasteable, and every field below is unbuilt. Promote it to its own
+prompt doc in the build round, once the backend emits the fields.
+
+1. *Settings > Cost centers.* A list editor over the whole `cost_centers`
+   map: name, `kind` (project / function / trip / blank), optional note,
+   active toggle. Saves the WHOLE map back on every save, including entries
+   it did not touch — a partial write erases the rest (the trap that hit
+   `person` on cards). An empty list is a normal state with an explanatory
+   empty view, not an error.
+2. *Settings > Cards.* One added field per card, `default_cost_center`, a
+   picker over the defined list plus blank. Same whole-map-replace warning:
+   the cards save payload must keep carrying `entity` and `person`.
+3. *The expense row.* A cost-center picker offering only defined names,
+   ordered with the row's person's most-used first, blank allowed. Show
+   `cost_center_source_label` beside the value so a filled-in row says WHY
+   it is filled in. Setting it by hand adds `cost_center` to `edited_fields`
+   like any other override.
+4. *Review.* Render `reason_code: "needs_cost_center"` from `reason`, and
+   surface `n_needs_cost_center` beside `n_needs_person`. Both stay
+   invisible while the count is zero, which is the whole first phase.
+5. *Trip page.* One cost-center field on the trip, saved through
+   `PUT /api/trips/{id}`; the roster save must keep carrying `travelers`.
+6. *Cross-month view (step 2).* One screen over
+   `GET /api/cost-centers/totals`: a date range, one row per cost center
+   with per-currency sums and a row count, an unassigned row that is never
+   hidden, and a standing caption that these are card and receipt expenses
+   only, not total project cost.
+
+Render defensively throughout (rule 3): a missing or unexpected
+`cost_center*` field degrades to blank, never to an error boundary.
+
+**Build order when the build is ordered:** registry + resolution chain +
+review state (inert while empty) → report sections → learning table →
+cross-month route. The cross-month view last, because it is the only piece
+that needs data the earlier pieces produce.
 
 ### 48. Report structures against US accounting law, tool-scope only (owner directive 2026-09-08)
 
