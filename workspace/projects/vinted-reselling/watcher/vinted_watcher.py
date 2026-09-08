@@ -13,9 +13,14 @@ The database is the asset: asking prices on insert, favourite/view
 deltas on re-sight, and gone-detection (sold-speed proxy) on recheck.
 
 Modes:
-  --cycle        one poll cycle over all searches (default; scheduled task entry)
-  --test-notify  send a test push to the configured ntfy topic
-  --status       print row counts and per-search state
+  --cycle          one poll cycle over all searches (default; scheduled task entry)
+  --test-notify    send a test push to the configured ntfy topic
+  --status         print row counts and per-search state
+  --brand-report   weekly per-brand keep/drop/add evaluation
+  --probe-fields   dump one raw catalog item (field census, nothing assumed)
+  --probe-search   viability census for a candidate search before it gets a slot
+  --image-check    reverse-image-search links for one listing
+  --feedback       record a rating by hand: good | bad | bought
 """
 
 import argparse
@@ -27,6 +32,7 @@ import sqlite3
 import statistics
 import sys
 import time
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -48,13 +54,28 @@ UA = (
     "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 )
 
+# Condition strings as the API actually spells them, not as the docs imply.
+# The v1 table keyed on "neu mit etikett" / "neu ohne etikett"; the live API
+# returns "Neu" and "Neu, mit Etikett" (with a comma). Neither matched, so
+# every new-condition listing fell to "unknown" and was excluded from BOTH
+# alerting and comp pools: 4,348 rows (14.9%) on 2026-09-08, and not one alert
+# ever fired on new stock. cond_tier_of() normalises punctuation and case, so
+# both spellings resolve; the DATA_FIXES entry repairs the stored rows.
 COND_TIERS = {
     "neu mit etikett": "new_tag",
     "neu ohne etikett": "new",
+    "neu": "new",
     "sehr gut": "very_good",
     "gut": "good",
     "zufriedenstellend": "fair",
 }
+
+
+def cond_tier_of(condition: str | None) -> str:
+    """Map a Vinted condition string to a comp tier, punctuation-insensitive."""
+    key = re.sub(r"[^a-zäöüß ]+", " ", (condition or "").lower())
+    key = re.sub(r"\s+", " ", key).strip()
+    return COND_TIERS.get(key, "unknown")
 
 # Listings whose title suggests damage or junk are logged but never alerted.
 TITLE_BLACKLIST = ["defekt", "kaputt", "loch ", "löcher", "fleck", "bastler", "fake", "replik"]
@@ -90,6 +111,13 @@ GARMENT_CLASSES: list[tuple[str, re.Pattern]] = [
 MAX_ALERTS_PER_SEARCH = 3   # per cycle; a real steady-state cycle has 0-2 candidates
 BACKLOG_SUPPRESS = 15       # more new items than this = catch-up cycle, data only
 
+# Which normalised size classes are allowed to reach the phone. The resale
+# audience is widest here; everything else still lands in the database as comp
+# data. Jeans searches override this per search (W26-W31 for women's denim),
+# and edge classes like xl / DE 52 are a per-product config call fed by the
+# size-demand column of --brand-report, not a mapping decision.
+DEFAULT_SIZE_CLASSES = ["s", "m", "l", "w29", "w30", "w31", "w32", "w33", "w34"]
+
 
 def garment_class(title: str | None) -> str:
     t = (title or "").lower()
@@ -102,6 +130,88 @@ def garment_class(title: str | None) -> str:
 def is_kid_item(title: str | None, size: str | None) -> int:
     """1 when title or size marks this as children's clothing."""
     return 1 if KID_MARKERS.search(f"{title or ''} {size or ''}".lower()) else 0
+
+
+# The size field carries three incompatible notations at once: bare letters
+# ("M"), the combined form ("S / 36 / 8", "M / 38 / 10"), the jeans form
+# ("W32 | DE 48"), and kids ladders ("12 Jahre / 152"). 141 distinct strings on
+# 2026-09-08, so the alert filter cannot key on the raw value. size_class_of()
+# collapses them to one token per garment size. Two deliberate calls:
+# the W token wins over the DE number in "W32 | DE 48" (a jeans buyer searches
+# W32), and DE 46 resolves to men's s rather than women's xxl, because these
+# searches are men's-inventory dominated. Mapping stays truthful (DE 52 is xl,
+# not l); which classes actually alert is a config decision, not a mapping one.
+SIZE_LETTERS = [
+    ("xxl", re.compile(r"^(4xl|3xl|xxxl|xxl|2xl)\b")),
+    ("xl", re.compile(r"^xl\b")),
+    ("xxs", re.compile(r"^xxs\b")),
+    ("xs", re.compile(r"^xs\b")),
+    ("s", re.compile(r"^s\b")),
+    ("m", re.compile(r"^m\b")),
+    ("l", re.compile(r"^l\b")),
+]
+SIZE_DE_WOMEN = {32: "xxs", 34: "xs", 36: "s", 38: "m", 40: "l", 42: "xl", 44: "xxl"}
+SIZE_DE_MEN = {46: "s", 48: "m", 50: "l", 52: "xl", 54: "xxl", 56: "xxl"}
+
+
+def size_class_of(size: str | None) -> str:
+    """Normalise a Vinted size string to one comparable class token."""
+    raw = (size or "").strip()
+    if not raw:
+        return "unknown"
+    low = raw.lower()
+    if KID_MARKERS.search(low):
+        return "kids"
+    if re.search(r"einheitsgr|one ?size|onesize|taille unique|unica|universal", low):
+        return "one"
+    w = re.search(r"\bw ?(\d{2})\b", low)
+    if w and 24 <= int(w.group(1)) <= 44:
+        return f"w{int(w.group(1))}"
+    for cls, pat in SIZE_LETTERS:
+        if pat.search(low):
+            return cls
+    bare = re.match(r"^(\d{2})\s*$", low)
+    if bare:
+        n = int(bare.group(1))
+        if n in SIZE_DE_MEN and n >= 46:
+            return SIZE_DE_MEN[n]
+        if n in SIZE_DE_WOMEN:
+            return SIZE_DE_WOMEN[n]
+    return "other"
+
+
+# Comp pools keyed on the exact brand string starve their own sub-brands:
+# "Ralph Lauren", "Polo Ralph Lauren", "LAUREN Ralph Lauren", "Chaps Ralph
+# Lauren" and "Ralph Lauren Sport" were five separate pools for one market on
+# 2026-09-08, and likewise adidas/adidas Originals and Nike/Nike Air/SB/ACG.
+# brand_norm_of() folds each family to one key; anything unrecognised keeps its
+# own slug, so a new brand is never silently merged into a neighbour.
+BRAND_FAMILIES: list[tuple[str, re.Pattern]] = [
+    ("ralph-lauren", re.compile(r"ralph lauren|chaps")),
+    ("the-north-face", re.compile(r"north face")),
+    ("stone-island", re.compile(r"stone island")),
+    ("carhartt", re.compile(r"^carhartt")),
+    ("patagonia", re.compile(r"^patagonia")),
+    ("levis", re.compile(r"^levi")),
+    ("nike", re.compile(r"^nike")),
+    ("adidas", re.compile(r"^adidas")),
+    ("agolde", re.compile(r"^agolde")),
+    ("citizens-of-humanity", re.compile(r"citizens of humanity")),
+    ("7-for-all-mankind", re.compile(r"7 ?for ?all ?mankind|seven for all mankind|7fam")),
+    ("mother", re.compile(r"^mother\b")),
+]
+
+
+def brand_norm_of(brand: str | None) -> str:
+    """Fold a brand string to its comp-pool family key."""
+    raw = (brand or "").strip()
+    if not raw:
+        return ""
+    low = raw.lower()
+    for key, pat in BRAND_FAMILIES:
+        if pat.search(low):
+            return key
+    return re.sub(r"[^a-z0-9]+", "-", low).strip("-")
 
 RECHECK_INTERVAL_MIN = 60
 RECHECK_BATCH = 25
@@ -154,6 +264,13 @@ def load_config() -> dict:
     s.setdefault("poll_per_page", 48)
     s.setdefault("seed_pages", 2)
     s.setdefault("seed_per_page", 96)
+    s.setdefault("size_classes", list(DEFAULT_SIZE_CLASSES))
+    s.setdefault("min_margin", 0)
+    s.setdefault("foreign_advantage_eur", 8)
+    s.setdefault("fake_risk_suppress", 0.7)
+    s.setdefault("fake_risk_flag", 0.4)
+    s.setdefault("profile_suppress", 0.15)
+    s.setdefault("profile_min_rated", 8)
     return cfg
 
 
@@ -200,13 +317,78 @@ CREATE TABLE IF NOT EXISTS listings (
     alerted INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
+
+-- One row per candidate that cleared the deal gate, INCLUDING the ones that
+-- were then suppressed. Two reasons this is not optional bookkeeping: upsert()
+-- overwrites price/total_price/favourites on every re-sight, so the state a
+-- decision was made on is otherwise unrecoverable; and the planned offline
+-- backtest scorer replays each decision against its own comp context, which
+-- has to be frozen here or it does not exist. listings.alerted stays as the
+-- cheap boolean it always was.
+CREATE TABLE IF NOT EXISTS alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id INTEGER NOT NULL,
+    alerted_at TEXT NOT NULL,
+    search_tag TEXT NOT NULL,
+    title TEXT, brand TEXT, brand_norm TEXT,
+    size TEXT, size_class TEXT,
+    condition TEXT, cond_tier TEXT, garment_class TEXT,
+    country TEXT,
+    price_at_alert REAL, total_at_alert REAL,
+    favourites_at_alert INTEGER, promoted INTEGER, seller_id INTEGER,
+    listing_age_min REAL,
+    comp_n INTEGER, comp_median REAL, comp_p25 REAL, comp_p75 REAL,
+    discount_pct REAL, margin_eur REAL,
+    deal_ratio_used REAL, min_comps_used INTEGER, comp_window_used INTEGER,
+    size_filter TEXT, settings_json TEXT,
+    fake_risk REAL, fake_risk_reasons TEXT,
+    profile_score REAL, priority INTEGER,
+    sent INTEGER NOT NULL DEFAULT 0,
+    suppress_reason TEXT,
+    cycle_backlog_n INTEGER
+);
+
+-- Seller profiles, fetched at most once per seller and only for listings that
+-- already look like deals. The catalog response carries no country and no
+-- reputation, but /api/v2/users/{id} carries both, and sellers repeat across
+-- listings, so a cache turns a per-listing cost into a per-seller one.
+CREATE TABLE IF NOT EXISTS sellers (
+    seller_id INTEGER PRIMARY KEY,
+    login TEXT,
+    country TEXT,
+    city TEXT,
+    feedback_count INTEGER,
+    positive_feedback_count INTEGER,
+    feedback_reputation REAL,
+    item_count INTEGER,
+    business INTEGER,
+    fetched_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS alert_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id INTEGER NOT NULL,
+    alert_id INTEGER,
+    verdict TEXT NOT NULL,
+    received_at TEXT NOT NULL,
+    source TEXT NOT NULL,
+    ntfy_msg_id TEXT UNIQUE,
+    raw TEXT
+);
 """
 
 # Indexes are created only AFTER migrate() has added any columns an older
 # database predates: CREATE INDEX names its columns, so building it first
 # fails outright on a database that has not caught up yet.
 DDL_INDEXES = """
-CREATE INDEX IF NOT EXISTS idx_listings_comp ON listings (search_tag, brand, cond_tier, garment_class);
+-- idx_listings_comp keyed the old exact-brand pool. CREATE INDEX IF NOT EXISTS
+-- would silently keep that stale definition, so it is dropped by name first.
+DROP INDEX IF EXISTS idx_listings_comp;
+CREATE INDEX IF NOT EXISTS idx_listings_comp_norm ON listings (search_tag, brand_norm, cond_tier, garment_class);
+CREATE INDEX IF NOT EXISTS idx_listings_recheck ON listings (gone_at, last_seen);
+CREATE INDEX IF NOT EXISTS idx_alerts_listing ON alerts (listing_id, alerted_at);
+CREATE INDEX IF NOT EXISTS idx_alerts_tag ON alerts (search_tag, alerted_at);
+CREATE INDEX IF NOT EXISTS idx_feedback_listing ON alert_feedback (listing_id);
 """
 
 
@@ -214,7 +396,43 @@ ADDED_COLUMNS = {                       # column -> DDL fragment, applied to old
     "garment_class": "TEXT",
     "is_kid": "INTEGER DEFAULT 0",
     "gone_source": "TEXT",
+    "size_class": "TEXT",
+    "brand_norm": "TEXT",
+    "country": "TEXT",
+    "fake_risk": "REAL",
+    "fake_risk_reasons": "TEXT",
 }
+
+
+def _fix_cond_tier(con: sqlite3.Connection) -> int:
+    """Recompute cond_tier for rows the v1 mapping left at 'unknown'."""
+    # A data fix reads columns the column loop above does not guarantee, so it
+    # checks first: an ancient table shape must skip the repair, not crash the
+    # connect that every mode depends on.
+    have = {row[1] for row in con.execute("PRAGMA table_info(listings)")}
+    if not {"condition", "cond_tier"} <= have:
+        return 0
+    rows = con.execute(
+        "SELECT DISTINCT condition FROM listings WHERE cond_tier='unknown' AND condition!=''"
+    ).fetchall()
+    fixed = 0
+    for (cond,) in rows:
+        tier = cond_tier_of(cond)
+        if tier == "unknown":
+            continue
+        cur = con.execute(
+            "UPDATE listings SET cond_tier=? WHERE condition=? AND cond_tier='unknown'",
+            (tier, cond),
+        )
+        fixed += cur.rowcount
+    return fixed
+
+
+# Repairs that add no column, so the column loop above cannot carry them. Each
+# runs once, guarded by its own meta flag, and reports how many rows it touched.
+DATA_FIXES: list[tuple[str, object]] = [
+    ("cond_tier_v2", _fix_cond_tier),
+]
 
 
 def migrate(con: sqlite3.Connection) -> None:
@@ -239,7 +457,24 @@ def migrate(con: sqlite3.Connection) -> None:
                 for row_id, title in con.execute("SELECT id, title FROM listings").fetchall():
                     con.execute("UPDATE listings SET garment_class=? WHERE id=?",
                                 (garment_class(title), row_id))
+            elif column == "size_class" and "size" in have:
+                for row_id, size in con.execute("SELECT id, size FROM listings").fetchall():
+                    con.execute("UPDATE listings SET size_class=? WHERE id=?",
+                                (size_class_of(size), row_id))
+            elif column == "brand_norm" and "brand" in have:
+                for row_id, brand in con.execute("SELECT id, brand FROM listings").fetchall():
+                    con.execute("UPDATE listings SET brand_norm=? WHERE id=?",
+                                (brand_norm_of(brand), row_id))
             con.commit()
+    for name, fix in DATA_FIXES:
+        flag = f"datafix:{name}"
+        if con.execute("SELECT 1 FROM meta WHERE k=?", (flag,)).fetchone():
+            continue
+        touched = fix(con)
+        con.execute("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v",
+                    (flag, f"{now_iso()} rows={touched}"))
+        con.commit()
+        log(f"migrated: data fix {name} touched {touched} rows")
 
 
 def db_connect() -> sqlite3.Connection:
@@ -264,8 +499,9 @@ def meta_set(con: sqlite3.Connection, k: str, v: str) -> None:
 
 TOKEN_COOKIE = "access_token_web"
 TOKEN_MARGIN_MIN = 45   # renew this long before the token's own expiry
-AUTH_BACKOFF_MIN = 10   # 401: auth hiccup, self-healing, retry soon
-WALL_BACKOFF_MIN = 60   # 403: bot wall, stay away
+AUTH_BACKOFF_MIN = 10     # 401: auth hiccup, self-healing, retry soon
+SERVER_BACKOFF_MIN = 20   # 5xx: the far end is struggling, stop asking
+WALL_BACKOFF_MIN = 60     # 403: bot wall, stay away
 MAX_BACKOFF_MIN = 360   # ceiling for repeated walls
 
 
@@ -423,6 +659,18 @@ def api_get(client: httpx.Client, con: sqlite3.Connection, url: str, params: dic
                 continue
             set_backoff(con, AUTH_BACKOFF_MIN, "401 after clean-slate refresh")
             raise SessionWall("HTTP 401")
+        if r.status_code >= 500:
+            # A 5xx is the far end struggling, and the polite answer to that is
+            # to stop asking for a while rather than to keep the 5-minute
+            # cadence pointed at it. It is also how a soft rate limit surfaces
+            # here: on 2026-09-08 a burst of one-off probe requests alongside
+            # the normal cycle turned every catalog call into a 500, including
+            # the searches that had worked minutes earlier. Escalating, so a
+            # sustained outage backs further off each time instead of retrying
+            # at a fixed rate.
+            set_backoff(con, SERVER_BACKOFF_MIN, f"HTTP {r.status_code} (server side)",
+                        escalate=True)
+            raise SessionWall(f"HTTP {r.status_code}")
         r.raise_for_status()
         if "json" not in r.headers.get("content-type", ""):
             # An HTML body on a 200 is an interstitial, not data. Parsing it
@@ -434,6 +682,33 @@ def api_get(client: httpx.Client, con: sqlite3.Connection, url: str, params: dic
 
 
 # ------------------------------------------------------------------- parsing
+
+# Country paths the catalog response might carry. Which of these (if any) is
+# actually populated is settled by --probe-fields against the live API, never
+# assumed: api-notes.md listed country/shipping fields as unverified, and a
+# guessed path would silently mark every listing unknown. Reading several
+# candidate paths costs nothing and survives a field rename.
+COUNTRY_PATHS = [
+    ("user", "country_iso_code"),
+    ("user", "countryIsoCode"),
+    ("user", "country_code"),
+    ("user", "country_title_local"),
+    ("country_iso_code",),
+    ("country_code",),
+]
+
+
+def item_country(item: dict) -> str | None:
+    """Best-effort ISO country of the seller, or None when the API omits it."""
+    for path in COUNTRY_PATHS:
+        node: object = item
+        for key in path:
+            node = (node or {}).get(key) if isinstance(node, dict) else None
+        if isinstance(node, str) and node.strip():
+            val = node.strip().upper()
+            return val[:2] if len(val) >= 2 else None
+    return None
+
 
 def parse_item(item: dict, tag: str, seed: int) -> dict:
     price = float((item.get("price") or {}).get("amount") or 0)
@@ -450,9 +725,12 @@ def parse_item(item: dict, tag: str, seed: int) -> dict:
         "brand": (item.get("brand_title") or "").strip(),
         "size": item.get("size_title"),
         "condition": cond,
-        "cond_tier": COND_TIERS.get(cond.lower(), "unknown"),
+        "cond_tier": cond_tier_of(cond),
         "garment_class": garment_class(item.get("title")),
         "is_kid": is_kid_item(item.get("title"), item.get("size_title")),
+        "size_class": size_class_of(item.get("size_title")),
+        "brand_norm": brand_norm_of(item.get("brand_title")),
+        "country": item_country(item),
         "price": price,
         "total_price": total,
         "currency": (item.get("price") or {}).get("currency_code", "EUR"),
@@ -477,17 +755,21 @@ def upsert(con: sqlite3.Connection, rec: dict) -> bool:
         # stayed gone forever, and the outcome data could never self-correct.
         con.execute(
             "UPDATE listings SET last_seen=?, favourites=?, views=?, price=?, total_price=?, "
+            "country=COALESCE(?, country), "
             "gone_at=NULL, gone_source=NULL, sold_flag=0 WHERE id=?",
-            (ts, rec["favourites"], rec["views"], rec["price"], rec["total_price"], rec["id"]),
+            (ts, rec["favourites"], rec["views"], rec["price"], rec["total_price"],
+             rec.get("country"), rec["id"]),
         )
         return False
     con.execute(
-        """INSERT INTO listings (id, search_tag, title, brand, size, condition, cond_tier,
-               garment_class, is_kid, price, total_price, currency, url, photo_url, seller_id,
-               seller_login, favourites, views, promoted, seed, first_seen, last_seen)
-           VALUES (:id, :search_tag, :title, :brand, :size, :condition, :cond_tier,
-               :garment_class, :is_kid, :price, :total_price, :currency, :url, :photo_url, :seller_id,
-               :seller_login, :favourites, :views, :promoted, :seed, :first_seen, :last_seen)""",
+        """INSERT INTO listings (id, search_tag, title, brand, brand_norm, size, size_class,
+               condition, cond_tier, garment_class, is_kid, country, price, total_price, currency,
+               url, photo_url, seller_id, seller_login, favourites, views, promoted, seed,
+               first_seen, last_seen)
+           VALUES (:id, :search_tag, :title, :brand, :brand_norm, :size, :size_class,
+               :condition, :cond_tier, :garment_class, :is_kid, :country, :price, :total_price, :currency,
+               :url, :photo_url, :seller_id, :seller_login, :favourites, :views, :promoted, :seed,
+               :first_seen, :last_seen)""",
         {**rec, "first_seen": ts, "last_seen": ts},
     )
     return True
@@ -495,17 +777,284 @@ def upsert(con: sqlite3.Connection, rec: dict) -> bool:
 
 # ------------------------------------------------------------------- scoring
 
-def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: dict, env: dict) -> bool:
+def profile_score(con: sqlite3.Connection, rec: dict) -> float | None:
+    """Owner-taste score for this listing's cell, or None when unrated.
+
+    The cell is brand family x garment class x size class. Feedback is sparse
+    by nature, so the score is Laplace-smoothed and only returned once the cell
+    has been rated at all; callers treat None as "no opinion", never as bad.
+    This is a ranking signal layered on top of the explicit gates, never a way
+    around them: a fake-risk or size verdict is not undone by a good track.
+    """
+    row = con.execute(
+        """SELECT
+               SUM(CASE WHEN f.verdict IN ('good','bought') THEN 1 ELSE 0 END),
+               SUM(CASE WHEN f.verdict='bad' THEN 1 ELSE 0 END)
+           FROM alert_feedback f JOIN alerts a ON a.id=f.alert_id
+           WHERE a.brand_norm=? AND a.garment_class=? AND a.size_class=?""",
+        (rec.get("brand_norm") or brand_norm_of(rec.get("brand")),
+         rec.get("garment_class"),
+         rec.get("size_class") or size_class_of(rec.get("size"))),
+    ).fetchone()
+    good, bad = (row[0] or 0), (row[1] or 0)
+    if good + bad == 0:
+        return None
+    return (good + 1.0) / (good + bad + 2.0)
+
+
+FAKE_TITLE_MARKERS = re.compile(
+    r"1[:.]1\b|\baaa\+?\b|replic|replik|\brep\b|inspired by|inspiriert von|kopie|"
+    r"\bmirror\b|dhgate|pandabuy|weidian|taobao|\bua\b|unauthorized|nachbau"
+)
+EMOJI_RANGE = re.compile(
+    "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F000-\U0001F0FF]"
+)
+# Brands whose fakes are mass-produced and whose price band makes a deep
+# discount suspicious rather than lucky.
+HYPE_BRANDS = {"stone-island", "nike", "the-north-face", "carhartt", "adidas"}
+
+
+def fake_risk_score(con: sqlite3.Connection, rec: dict, med: float) -> tuple[float, list[str]]:
+    """Rule-based counterfeit risk for one deal candidate, 0.0 to 1.0.
+
+    Runs only on candidates that already cleared the deal gate, so the SQL here
+    costs a handful of queries a day, not one per ingested listing. Image
+    analysis is deliberately absent: downloading listing photos would multiply
+    the request budget for a weak signal, and the reverse-image links in the
+    alert do that job better with a human eye behind them.
+    """
+    score, why = 0.0, []
+    total = rec["total_price"]
+    brand_key = rec.get("brand_norm") or brand_norm_of(rec.get("brand"))
+    title_l = (rec.get("title") or "").lower()
+
+    if med > 0:
+        if total < 0.15 * med:
+            score += 0.6
+            why.append("preis_absurd")
+        elif total < 0.25 * med:
+            score += 0.4
+            why.append("preis_zu_gut")
+        if brand_key in HYPE_BRANDS and total < 0.30 * med:
+            score += 0.2
+            why.append("hype_marke_billig")
+
+    if FAKE_TITLE_MARKERS.search(title_l):
+        score += 0.5
+        why.append("titel_marker")
+    if len(EMOJI_RANGE.findall(rec.get("title") or "")) >= 5:
+        score += 0.15
+        why.append("emoji_spam")
+
+    # Identical titles across separate sellers is the cheap stand-in for stock
+    # photos: a genuine secondhand listing is one person's own wording.
+    if rec.get("title"):
+        window = (datetime.now(timezone.utc) - timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        others = con.execute(
+            """SELECT COUNT(DISTINCT seller_id) FROM listings
+               WHERE title=? AND seller_id IS NOT NULL AND seller_id!=? AND last_seen>=?""",
+            (rec["title"], rec.get("seller_id") or -1, window),
+        ).fetchone()[0]
+        if others and others >= 2:
+            score += 0.3
+            why.append(f"titel_bei_{others}_verkaeufern")
+
+    return min(round(score, 3), 1.0), why
+
+
+MAX_SELLER_FETCHES = 6      # per cycle; real cycles need 0-2
+PROBE_PER_PAGE = 48         # match the poll size; a probe is not a licence to ask for more
+
+
+def seller_profile(client, con: sqlite3.Connection, seller_id: int | None,
+                   budget: list[int] | None = None) -> dict | None:
+    """Seller country and reputation, cached, fetched only when it matters.
+
+    The catalog response has neither field, and the item-detail endpoint is 404
+    for an anonymous session, but /api/v2/users/{id} answers with both. Calling
+    it per listing would multiply the request budget several times over, so it
+    is called only for a listing that has already cleared the deal gate, at
+    most MAX_SELLER_FETCHES times a cycle, and never twice for the same seller.
+    """
+    if not seller_id:
+        return None
+    row = con.execute(
+        """SELECT seller_id, login, country, city, feedback_count,
+                  positive_feedback_count, feedback_reputation, item_count, business
+           FROM sellers WHERE seller_id=?""", (seller_id,)).fetchone()
+    if row:
+        keys = ("seller_id", "login", "country", "city", "feedback_count",
+                "positive_feedback_count", "feedback_reputation", "item_count",
+                "business")
+        return dict(zip(keys, row))
+    if client is None:
+        return None
+    if budget is not None:
+        if budget[0] <= 0:
+            return None
+        budget[0] -= 1
+    try:
+        data = api_get(client, con, f"{BASE}/api/v2/users/{seller_id}", {})
+    except (httpx.HTTPError, SessionWall) as e:
+        log(f"WARN: seller {seller_id} lookup failed: {type(e).__name__}")
+        return None
+    u = (data or {}).get("user") or data or {}
+    prof = {
+        "seller_id": seller_id,
+        "login": u.get("login"),
+        "country": (u.get("country_iso_code") or u.get("country_code") or "").upper()[:2] or None,
+        "city": u.get("city"),
+        "feedback_count": u.get("feedback_count"),
+        "positive_feedback_count": u.get("positive_feedback_count"),
+        "feedback_reputation": u.get("feedback_reputation"),
+        "item_count": u.get("item_count"),
+        "business": 1 if u.get("business") else 0,
+    }
+    con.execute(
+        """INSERT OR REPLACE INTO sellers (seller_id, login, country, city,
+               feedback_count, positive_feedback_count, feedback_reputation,
+               item_count, business, fetched_at)
+           VALUES (:seller_id, :login, :country, :city, :feedback_count,
+               :positive_feedback_count, :feedback_reputation, :item_count,
+               :business, :fetched_at)""",
+        {**prof, "fetched_at": now_iso()})
+    con.commit()
+    return prof
+
+
+def seller_risk(prof: dict | None, brand_key: str, total: float,
+                med: float) -> tuple[float, list[str]]:
+    """Counterfeit risk contributed by the seller profile.
+
+    A brand-new account with no history selling a hype brand well under the
+    market is the classic shape; an established account with real feedback is
+    the opposite. Nothing here fires without a profile, so a lookup that failed
+    costs no false accusation.
+    """
+    if not prof:
+        return 0.0, []
+    score, why = 0.0, []
+    feedback = prof.get("feedback_count")
+    reputation = prof.get("feedback_reputation")
+    if feedback is not None and feedback == 0:
+        if brand_key in HYPE_BRANDS and med > 0 and total < 0.4 * med:
+            score += 0.35
+            why.append("neuer_verkaeufer_hype_billig")
+        else:
+            score += 0.1
+            why.append("keine_bewertungen")
+    elif feedback is not None and feedback < 5 and brand_key in HYPE_BRANDS:
+        score += 0.15
+        why.append("kaum_bewertungen_hype")
+    if reputation is not None and feedback and feedback >= 10 and reputation < 0.6:
+        score += 0.2
+        why.append(f"schlechte_reputation_{reputation:.2f}")
+    return score, why
+
+
+def record_alert(con: sqlite3.Connection, rec: dict, ctx: dict) -> int:
+    """Freeze one scoring decision into the alerts table; returns its rowid."""
+    row = {
+        "listing_id": rec["id"],
+        "alerted_at": now_iso(),
+        "search_tag": rec["search_tag"],
+        "title": rec.get("title"),
+        "brand": rec.get("brand"),
+        "brand_norm": rec.get("brand_norm") or brand_norm_of(rec.get("brand")),
+        "size": rec.get("size"),
+        "size_class": rec.get("size_class") or size_class_of(rec.get("size")),
+        "condition": rec.get("condition"),
+        "cond_tier": rec.get("cond_tier"),
+        "garment_class": rec.get("garment_class"),
+        "country": rec.get("country"),
+        "price_at_alert": rec.get("price"),
+        "total_at_alert": rec.get("total_price"),
+        "favourites_at_alert": rec.get("favourites"),
+        "promoted": rec.get("promoted"),
+        "seller_id": rec.get("seller_id"),
+        "listing_age_min": ctx.get("listing_age_min"),
+        "comp_n": ctx.get("comp_n"),
+        "comp_median": ctx.get("comp_median"),
+        "comp_p25": ctx.get("comp_p25"),
+        "comp_p75": ctx.get("comp_p75"),
+        "discount_pct": ctx.get("discount_pct"),
+        "margin_eur": ctx.get("margin_eur"),
+        "deal_ratio_used": ctx.get("deal_ratio_used"),
+        "min_comps_used": ctx.get("min_comps_used"),
+        "comp_window_used": ctx.get("comp_window_used"),
+        "size_filter": ctx.get("size_filter"),
+        "settings_json": ctx.get("settings_json"),
+        "fake_risk": ctx.get("fake_risk"),
+        "fake_risk_reasons": ctx.get("fake_risk_reasons"),
+        "profile_score": ctx.get("profile_score"),
+        "priority": ctx.get("priority"),
+        "sent": ctx.get("sent", 0),
+        "suppress_reason": ctx.get("suppress_reason"),
+        "cycle_backlog_n": ctx.get("cycle_backlog_n"),
+    }
+    cur = con.execute(
+        f"""INSERT INTO alerts ({', '.join(row)}) VALUES ({', '.join(':' + k for k in row)})""",
+        row,
+    )
+    return int(cur.lastrowid or 0)
+
+
+def alert_priority(discount_pct: float, fake: float, country: str | None,
+                   size_ok_core: bool, prof: float | None) -> int:
+    """ntfy priority for one alert: which ones are allowed to ring.
+
+    Volume stays where the owner set it; the noise does not. The ranking is
+    driven by the criteria the owner named (clean fake risk, core size, German
+    location, deal depth), and the learned taste score only nudges within that
+    frame. Ratings are still one tap away on every alert, quiet or loud.
+    """
+    score = 0
+    if discount_pct >= 55:
+        score += 2
+    elif discount_pct >= 45:
+        score += 1
+    if fake < 0.2:
+        score += 1
+    if size_ok_core:
+        score += 1
+    if country == "DE":
+        score += 1
+    if prof is not None:
+        if prof >= 0.65:
+            score += 2
+        elif prof < 0.35:
+            score -= 2
+    if fake >= 0.4:
+        score -= 2
+    if score >= 5:
+        return 5      # rings
+    if score >= 3:
+        return 3      # normal
+    return 2          # silent, still rateable
+
+
+CORE_SIZE_CLASSES = {"s", "m", "l"}
+
+
+def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: dict,
+                    env: dict, backlog_n: int | None = None, client=None,
+                    seller_budget: list[int] | None = None) -> bool:
     """Score one new listing against its comp pool; push at most one alert.
 
     Returns True when an alert was sent (caller enforces the per-cycle cap).
-    Comp pool = same search tag + brand + condition tier + garment class,
-    within the comp window. Class "other" (bags, caps, shoes) never alerts.
+    Comp pool = same search tag + brand family + condition tier + garment
+    class, within the comp window. Class "other" (bags, caps, shoes) never
+    alerts. Every candidate that clears the deal gate is written to alerts,
+    sent or suppressed, so the record of what was decided survives the
+    listings row being overwritten on the next re-sight.
     """
-    if rec["price"] < settings["min_price"]:
+    # Both price gates read total_price, the number a buyer actually pays and
+    # the one every comp is measured in. The floor used to read the ex-fee
+    # price, which let sub-floor items through on the fee alone.
+    if rec["total_price"] < settings["min_price"]:
         return False
     price_max = search.get("price_max")
-    if price_max and rec["total_price"] > price_max:
+    if price_max is not None and rec["total_price"] > price_max:
         return False
     if rec["garment_class"] == "other":
         return False
@@ -516,39 +1065,183 @@ def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: 
         return False
     if not rec["brand"] or rec["cond_tier"] == "unknown":
         return False
+    if search.get("alerts_disabled"):
+        return False
+
+    # Size gate: alerting narrows to the classes that resell fastest, while the
+    # comp pool below stays deliberately unfiltered. Every size keeps feeding
+    # the price database; only the phone gets the focused set.
+    allowed = search.get("size_classes") or settings.get("size_classes") or DEFAULT_SIZE_CLASSES
+    size_class = rec.get("size_class") or size_class_of(rec.get("size"))
+    if size_class not in allowed:
+        return False
+
     window = (datetime.now(timezone.utc) - timedelta(days=settings["comp_window_days"])).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
+    brand_key = rec.get("brand_norm") or brand_norm_of(rec["brand"])
     comps = [
         row[0]
         for row in con.execute(
             """SELECT total_price FROM listings
-               WHERE search_tag=? AND brand=? AND cond_tier=? AND garment_class=? AND id!=?
+               WHERE search_tag=? AND brand_norm=? AND cond_tier=? AND garment_class=? AND id!=?
                  AND last_seen>=? AND total_price BETWEEN 3 AND 400
                  AND COALESCE(is_kid,0)=0""",
-            (rec["search_tag"], rec["brand"], rec["cond_tier"], rec["garment_class"],
+            (rec["search_tag"], brand_key, rec["cond_tier"], rec["garment_class"],
              rec["id"], window),
         ).fetchall()
     ]
     if len(comps) < settings["min_comps"]:
         return False
     med = statistics.median(comps)
-    if rec["total_price"] > settings["deal_ratio"] * med:
+    deal_ratio = search.get("deal_ratio", settings["deal_ratio"])
+    if rec["total_price"] > deal_ratio * med:
         return False
+
+    # From here the candidate is a decision worth recording, whatever happens.
+    quant = sorted(comps)
+    p25 = quant[max(0, int(0.25 * (len(quant) - 1)))]
+    p75 = quant[min(len(quant) - 1, int(0.75 * (len(quant) - 1)))]
     pct = round(100 * (1 - rec["total_price"] / med))
-    msg = (
-        f"{rec['brand']} | {rec['condition']} | Gr. {rec['size']} | {rec['garment_class']}\n"
-        f"{rec['total_price']:.2f} EUR inkl. Gebuehr, Median vergleichbar {med:.2f} EUR ({pct}% drunter)\n"
-        f"{len(comps)} Vergleichsangebote im Fenster"
+    fake, why = fake_risk_score(con, rec, med)
+    prof = seller_profile(con=con, client=client, seller_id=rec.get("seller_id"),
+                          budget=seller_budget)
+    s_score, s_why = seller_risk(prof, brand_key, rec["total_price"], med)
+    fake, why = min(round(fake + s_score, 3), 1.0), why + s_why
+    reasons = ",".join(why)
+    con.execute("UPDATE listings SET fake_risk=?, fake_risk_reasons=? WHERE id=?",
+                (fake, reasons, rec["id"]))
+    taste = profile_score(con, rec)
+    # The seller's country is the listing's shipping origin; the catalog
+    # response never carries it, so it arrives with the profile above.
+    country = rec.get("country") or (prof or {}).get("country")
+    if country and not rec.get("country"):
+        con.execute("UPDATE listings SET country=? WHERE id=?", (country, rec["id"]))
+    min_margin = float(settings.get("min_margin", 0) or 0)
+
+    ctx = {
+        "comp_n": len(comps), "comp_median": med, "comp_p25": p25, "comp_p75": p75,
+        "discount_pct": pct, "margin_eur": round(med - rec["total_price"], 2),
+        "deal_ratio_used": deal_ratio, "min_comps_used": settings["min_comps"],
+        "comp_window_used": settings["comp_window_days"],
+        "size_filter": ",".join(allowed), "fake_risk": fake, "fake_risk_reasons": reasons,
+        "profile_score": taste, "cycle_backlog_n": backlog_n,
+        "listing_age_min": listing_age_min(con, rec["id"]),
+        "settings_json": json.dumps({"settings": settings, "search": search}, default=str)[:4000],
+    }
+
+    def drop(reason: str) -> bool:
+        record_alert(con, rec, {**ctx, "sent": 0, "suppress_reason": reason, "priority": 0})
+        log(f"suppressed ({reason}): {rec['id']} {rec['title']} @ {rec['total_price']}")
+        return False
+
+    if fake >= float(settings.get("fake_risk_suppress", 0.7)):
+        return drop("fake_risk")
+    if min_margin and (med - rec["total_price"]) < min_margin:
+        return drop("min_margin")
+    # A listing outside Germany carries shipping the comp median does not, so
+    # it has to beat the same bar with headroom rather than merely reach it.
+    # Unknown country is treated as domestic: the field is forward-only, and
+    # penalising every pre-country row would silence the watcher for weeks.
+    if country and country != "DE":
+        headroom = float(settings.get("foreign_advantage_eur", 8))
+        if rec["total_price"] + headroom > deal_ratio * med:
+            return drop("country")
+    if taste is not None and taste < float(settings.get("profile_suppress", 0.15)):
+        rated = con.execute(
+            """SELECT COUNT(*) FROM alert_feedback f JOIN alerts a ON a.id=f.alert_id
+               WHERE a.brand_norm=? AND a.garment_class=? AND a.size_class=?""",
+            (brand_key, rec.get("garment_class"),
+             rec.get("size_class") or size_class_of(rec.get("size"))),
+        ).fetchone()[0]
+        if rated >= int(settings.get("profile_min_rated", 8)):
+            return drop("learned")
+
+    prio = alert_priority(pct, fake, country, size_class in CORE_SIZE_CLASSES, taste)
+    lines = [
+        f"{rec['brand']} | {rec['condition']} | Gr. {rec['size']} | {rec['garment_class']}",
+        f"{rec['total_price']:.2f} EUR inkl. Gebuehr, Median vergleichbar {med:.2f} EUR ({pct}% drunter)",
+        f"{len(comps)} Vergleichsangebote | Marge {med - rec['total_price']:.2f} EUR"
+        + (f" | Land {country}" if country else ""),
+    ]
+    if fake >= float(settings.get("fake_risk_flag", 0.4)):
+        lines.insert(0, f"FAKE-RISIKO {fake:.0%}: {reasons}")
+    links = reverse_image_links(rec.get("photo_url"))
+    if links:
+        lines.append("Bildcheck: " + links["lens"])
+
+    ok = notify(
+        env,
+        title=f"Deal: {rec['title']}",
+        message="\n".join(lines),
+        click=rec["url"],
+        priority=prio,
+        actions=feedback_actions(env, rec["id"]),
     )
-    if notify(env, title=f"Deal: {rec['title']}", message=msg, click=rec["url"]):
+    alert_id = record_alert(con, rec, {
+        **ctx, "sent": 1 if ok else 0, "priority": prio,
+        "suppress_reason": None if ok else "notify_failed",
+    })
+    if ok:
         con.execute("UPDATE listings SET alerted=1 WHERE id=?", (rec["id"],))
-        log(f"ALERT sent: {rec['id']} {rec['title']} @ {rec['total_price']}")
+        log(f"ALERT sent (p{prio}, alert {alert_id}): {rec['id']} {rec['title']} @ {rec['total_price']}")
         return True
     return False
 
 
-def notify(env: dict, title: str, message: str, click: str | None = None, priority: int = 4) -> bool:
+def listing_age_min(con: sqlite3.Connection, listing_id: int) -> float | None:
+    """Minutes between first sighting and now, for backtest replay context."""
+    row = con.execute("SELECT first_seen FROM listings WHERE id=?", (listing_id,)).fetchone()
+    first = parse_ts(row[0]) if row else None
+    if not first:
+        return None
+    return round((datetime.now(timezone.utc) - first).total_seconds() / 60.0, 1)
+
+
+def reverse_image_links(photo_url: str | None) -> dict[str, str] | None:
+    """Reverse-image-search deep links for one listing photo.
+
+    Deep links rather than browser automation: Lens has no API and driving its
+    UI breaks on consent screens, while a URL the phone opens directly works
+    every time and costs nothing to build.
+    """
+    if not photo_url:
+        return None
+    enc = urllib.parse.quote(photo_url, safe="")
+    return {
+        "lens": f"https://lens.google.com/uploadbyurl?url={enc}",
+        "bing": f"https://www.bing.com/images/search?view=detailv2&iss=sbi&q=imgurl:{enc}",
+        "yandex": f"https://yandex.com/images/search?rpt=imageview&url={enc}",
+    }
+
+
+FEEDBACK_VERDICTS = {"good", "bad", "bought"}
+
+
+def feedback_actions(env: dict, listing_id: int) -> list[dict] | None:
+    """The three rating buttons carried by every alert.
+
+    They publish to a second ntfy topic rather than to this machine: the phone
+    is on cellular and cannot reach a local port, and the watcher reads that
+    topic on its own schedule. Thumbs up/down is one tap from the notification
+    shade, which is the only interaction rate that survives contact with a
+    real day.
+    """
+    topic = env.get("NTFY_FEEDBACK_TOPIC")
+    if not topic:
+        return None
+    def button(label: str, verdict: str) -> dict:
+        return {
+            "action": "http", "label": label,
+            "url": f"https://ntfy.sh/{topic}",
+            "method": "POST", "body": f"{verdict} {listing_id}",
+            "clear": False,
+        }
+    return [button("\U0001F44D", "good"), button("\U0001F44E", "bad"), button("Gekauft", "bought")]
+
+
+def notify(env: dict, title: str, message: str, click: str | None = None,
+           priority: int = 4, actions: list[dict] | None = None) -> bool:
     topic = env.get("NTFY_TOPIC")
     if not topic:
         log("WARN: NTFY_TOPIC not configured; alert not sent")
@@ -556,6 +1249,8 @@ def notify(env: dict, title: str, message: str, click: str | None = None, priori
     body = {"topic": topic, "title": title, "message": message, "priority": priority, "tags": ["shirt"]}
     if click:
         body["click"] = click
+    if actions:
+        body["actions"] = actions[:3]
     try:
         r = httpx.post("https://ntfy.sh/", json=body, timeout=15)
         return r.status_code == 200
@@ -567,7 +1262,7 @@ def notify(env: dict, title: str, message: str, click: str | None = None, priori
 # -------------------------------------------------------------------- cycle
 
 def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, settings: dict,
-                env: dict) -> bool:
+                env: dict, seller_budget: list[int] | None = None) -> bool:
     """Poll one search. Returns True when the API actually answered."""
     tag = search["tag"]
     seeded = meta_get(con, f"seeded:{tag}")
@@ -605,7 +1300,8 @@ def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, set
         for rec in new_recs:
             if alerts >= MAX_ALERTS_PER_SEARCH:
                 break
-            if score_and_alert(con, rec, search, settings, env):
+            if score_and_alert(con, rec, search, settings, env, backlog_n=len(new_recs),
+                               client=client, seller_budget=seller_budget):
                 alerts += 1
         if new_recs:
             log(f"{tag}: {len(new_recs)} new listings, {alerts} alerted")
@@ -730,6 +1426,368 @@ def check_liveness(con: sqlite3.Connection, env: dict) -> None:
     log(f"WARN: no successful poll for {stale_min} min; operator alerted")
 
 
+# Any digit run is accepted; the guard that matters is the alerts-row lookup
+# below, not the id's shape. A length rule here would only reject real ids.
+FEEDBACK_RE = re.compile(r"^(good|bad|bought)\s+(\d+)$", re.I)
+
+
+def _ntfy_poll(topic: str, since: str) -> list[dict]:
+    """One non-streaming read of a ntfy topic. Never raises."""
+    try:
+        r = httpx.get(f"https://ntfy.sh/{topic}/json",
+                      params={"poll": "1", "since": since}, timeout=15)
+        if r.status_code != 200:
+            log(f"WARN: feedback poll HTTP {r.status_code}")
+            return []
+        out = []
+        for line in r.text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return out
+    except httpx.HTTPError as e:
+        log(f"WARN: feedback poll failed: {e}")
+        return []
+
+
+def ingest_feedback(con: sqlite3.Connection, env: dict) -> int:
+    """Pull rating taps off the feedback topic into alert_feedback.
+
+    The topic is public by obscurity like the alert topic, so the parser is
+    strict and every id is checked against a real alert before it is stored:
+    anything else on that topic is someone else's noise, not a rating. ntfy
+    keeps messages for about twelve hours, so a tap made while this machine is
+    off past that window is lost; --feedback is the durable way in.
+    """
+    topic = env.get("NTFY_FEEDBACK_TOPIC")
+    if not topic:
+        return 0
+    since = meta_get(con, "feedback_since") or "all"
+    messages = _ntfy_poll(topic, since)
+    inserted, last_id = 0, None
+    for m in messages:
+        mid = m.get("id")
+        if mid:
+            last_id = mid
+        if m.get("event") != "message":
+            continue
+        match = FEEDBACK_RE.match((m.get("message") or "").strip())
+        if not match:
+            continue
+        verdict, listing_id = match.group(1).lower(), int(match.group(2))
+        row = con.execute(
+            "SELECT id FROM alerts WHERE listing_id=? ORDER BY id DESC LIMIT 1", (listing_id,)
+        ).fetchone()
+        if not row:
+            continue
+        cur = con.execute(
+            """INSERT OR IGNORE INTO alert_feedback
+                   (listing_id, alert_id, verdict, received_at, source, ntfy_msg_id, raw)
+               VALUES (?, ?, ?, ?, 'ntfy', ?, ?)""",
+            (listing_id, row[0], verdict, now_iso(), mid, json.dumps(m)[:2000]),
+        )
+        inserted += cur.rowcount
+    if last_id:
+        meta_set(con, "feedback_since", last_id)
+    con.commit()
+    return inserted
+
+
+def cli_feedback(listing_id: int, verdict: str) -> int:
+    """Record a rating by hand, for when a tap did not make it through."""
+    verdict = verdict.lower()
+    if verdict not in FEEDBACK_VERDICTS:
+        print(f"verdict must be one of {sorted(FEEDBACK_VERDICTS)}")
+        return 2
+    con = db_connect()
+    try:
+        row = con.execute(
+            "SELECT id FROM alerts WHERE listing_id=? ORDER BY id DESC LIMIT 1", (listing_id,)
+        ).fetchone()
+        con.execute(
+            """INSERT INTO alert_feedback
+                   (listing_id, alert_id, verdict, received_at, source, raw)
+               VALUES (?, ?, ?, ?, 'cli', NULL)""",
+            (listing_id, row[0] if row else None, verdict, now_iso()),
+        )
+        con.commit()
+        print(f"recorded: {verdict} for listing {listing_id}"
+              + ("" if row else " (no alert row; feedback stored unlinked)"))
+        return 0
+    finally:
+        con.close()
+
+
+# Trustworthy outcome data starts after the v2 session fix: the 375 rows before
+# it were produced by a dead session against a login wall and were reset.
+OUTCOME_EPOCH = "2026-09-08"
+
+# Keep/drop/add thresholds. Judgment values where marked; the sell-through row
+# stays unset until enough gone events exist to derive one. Documented in
+# status/watcher.md, evaluated here, decided by the owner.
+BRAND_RULES = {
+    "comp_coverage_min": 0.60,     # judgment: share of candidates reaching min_comps
+    "margin_floor_eur": 15.0,      # owner's minimum worthwhile flip
+    "spread_min": 1.5,             # judgment: p75/p25, mispricing room
+    "precision_drop": 0.20,        # judgment: below this with enough ratings = drop flag
+    "precision_min_rated": 10,     # judgment: ratings needed before precision counts
+    "fake_risk_manual": 0.50,      # judgment: above this the brand needs a manual check
+}
+
+
+def brand_report(settings: dict | None = None) -> int:
+    """Weekly per-brand keep/drop/add evaluation against the database."""
+    con = db_connect()
+    try:
+        cfg_settings = settings or load_config()["settings"]
+        window = (datetime.now(timezone.utc)
+                  - timedelta(days=cfg_settings["comp_window_days"])).strftime("%Y-%m-%dT%H:%M:%SZ")
+        deal_ratio = cfg_settings["deal_ratio"]
+        min_comps = cfg_settings["min_comps"]
+
+        print(f"Brand-Report  {now_iso()}")
+        print(f"Fenster {cfg_settings['comp_window_days']}d | deal_ratio {deal_ratio} | min_comps {min_comps}")
+        print(f"Outcome-Daten gelten ab {OUTCOME_EPOCH} (frueheres wurde als unbrauchbar verworfen)\n")
+
+        brands = [r[0] for r in con.execute(
+            """SELECT brand_norm FROM listings
+               WHERE brand_norm IS NOT NULL AND brand_norm!='' AND last_seen>=?
+               GROUP BY brand_norm HAVING COUNT(*) >= 25 ORDER BY COUNT(*) DESC""",
+            (window,),
+        ).fetchall()]
+
+        hdr = (f"{'Marke':<22}{'n':>7}{'Median':>9}{'p25':>7}{'p75':>7}{'Spread':>8}"
+               f"{'Marge@Gate':>12}{'gone%':>7}{'h→gone':>8}{'Praez.':>8}{'Fake':>7}")
+        print(hdr)
+        print("-" * len(hdr))
+        verdicts = []
+        for b in brands:
+            prices = [r[0] for r in con.execute(
+                """SELECT total_price FROM listings
+                   WHERE brand_norm=? AND last_seen>=? AND COALESCE(is_kid,0)=0
+                     AND total_price BETWEEN 3 AND 400""", (b, window)).fetchall()]
+            if len(prices) < 10:
+                continue
+            prices.sort()
+            med = statistics.median(prices)
+            p25 = prices[int(0.25 * (len(prices) - 1))]
+            p75 = prices[int(0.75 * (len(prices) - 1))]
+            spread = (p75 / p25) if p25 else 0.0
+            margin_at_gate = (1 - deal_ratio) * med
+
+            gone_n, gone_hours = con.execute(
+                """SELECT COUNT(*), AVG((julianday(gone_at)-julianday(first_seen))*24)
+                   FROM listings WHERE brand_norm=? AND gone_at IS NOT NULL
+                     AND gone_at >= ? AND gone_source IS NOT NULL""",
+                (b, OUTCOME_EPOCH)).fetchone()
+            total_n = len(prices)
+            gone_rate = (gone_n / total_n) if total_n else 0.0
+
+            good, bad = con.execute(
+                """SELECT SUM(CASE WHEN f.verdict IN ('good','bought') THEN 1 ELSE 0 END),
+                          SUM(CASE WHEN f.verdict='bad' THEN 1 ELSE 0 END)
+                   FROM alert_feedback f JOIN alerts a ON a.id=f.alert_id
+                   WHERE a.brand_norm=?""", (b,)).fetchone()
+            good, bad = (good or 0), (bad or 0)
+            rated = good + bad
+            precision = (good / rated) if rated else None
+
+            fake_avg = con.execute(
+                "SELECT AVG(fake_risk) FROM listings WHERE brand_norm=? AND fake_risk IS NOT NULL",
+                (b,)).fetchone()[0]
+
+            print(f"{b:<22}{total_n:>7}{med:>9.2f}{p25:>7.0f}{p75:>7.0f}{spread:>8.2f}"
+                  f"{margin_at_gate:>12.2f}{gone_rate*100:>7.1f}"
+                  f"{(gone_hours or 0):>8.1f}"
+                  + (f"{precision*100:>7.0f}%" if precision is not None else f"{'n/a':>8}")
+                  + (f"{fake_avg:>7.2f}" if fake_avg is not None else f"{'-':>7}"))
+
+            flags = []
+            if margin_at_gate < BRAND_RULES["margin_floor_eur"]:
+                flags.append(f"R2 Marge {margin_at_gate:.1f} EUR < {BRAND_RULES['margin_floor_eur']:.0f}")
+            if spread and spread < BRAND_RULES["spread_min"]:
+                flags.append(f"R3 Spread {spread:.2f} < {BRAND_RULES['spread_min']}")
+            if precision is not None and rated >= BRAND_RULES["precision_min_rated"] \
+                    and precision < BRAND_RULES["precision_drop"]:
+                flags.append(f"R5 Praezision {precision:.0%} bei n={rated}")
+            if fake_avg is not None and fake_avg > BRAND_RULES["fake_risk_manual"]:
+                flags.append(f"R6 Fake-Risiko {fake_avg:.2f} -> manuelle Pruefung")
+            verdicts.append((b, flags, rated))
+
+        print("\nGroessen-Nachfrage (Anteil pro Klasse, Fenster):")
+        for b, _, _ in verdicts:
+            rows = con.execute(
+                """SELECT size_class, COUNT(*) FROM listings
+                   WHERE brand_norm=? AND last_seen>=? AND COALESCE(is_kid,0)=0
+                     AND size_class NOT IN ('unknown','kids','other')
+                   GROUP BY size_class ORDER BY COUNT(*) DESC LIMIT 6""",
+                (b, window)).fetchall()
+            tot = sum(c for _, c in rows) or 1
+            share = "  ".join(f"{sc}:{100*c/tot:.0f}%" for sc, c in rows)
+            print(f"  {b:<22}{share}")
+
+        print("\nBewertung:")
+        for b, flags, rated in verdicts:
+            if not flags:
+                print(f"  KEEP  {b}" + (f"  (n_bewertet={rated})" if rated else "  (noch keine Bewertungen)"))
+            else:
+                print(f"  PRUEF {b}: " + "; ".join(flags))
+                print(f"        Vorschlag: deal_ratio-Override oder alerts_disabled: true fuer den Tag")
+        print("\nEntscheidung liegt beim Owner. Drop heisst alerts_disabled, nicht Search entfernen:")
+        print("die Preisdaten laufen weiter, sie sind das eigentliche Asset.")
+
+        no_outcome = con.execute(
+            "SELECT COUNT(*) FROM listings WHERE gone_at IS NOT NULL AND gone_at>=? AND gone_source IS NOT NULL",
+            (OUTCOME_EPOCH,)).fetchone()[0]
+        if no_outcome < 300:
+            print(f"\nHINWEIS: erst {no_outcome} vertrauenswuerdige gone-Events. Sell-Through-Regel (R4)")
+            print("bleibt bis ~300 Events unbewertet, ebenso die formale Schwellen-Kalibrierung.")
+        return 0
+    finally:
+        con.close()
+
+
+def probe_fields() -> int:
+    """Print one raw catalog item so field availability is read, not assumed."""
+    cfg = load_config()
+    con = db_connect()
+    client = new_client()
+    try:
+        if not ensure_session(client):
+            print("no session")
+            return 1
+        search = cfg["searches"][0]
+        try:
+            data = api_get(client, con, f"{BASE}/api/v2/catalog/items",
+                           {"search_text": search["query"], "per_page": 1, "page": 1})
+        except (SessionWall, httpx.HTTPError) as e:
+            print(f"Probe nicht moeglich: {type(e).__name__}: {e}")
+            return 1
+        items = data.get("items") or []
+        if not items:
+            print("no items returned")
+            return 1
+        item = items[0]
+        print("=== TOP-LEVEL KEYS ===")
+        print(", ".join(sorted(item.keys())))
+        print("\n=== FULL ITEM JSON ===")
+        print(json.dumps(item, indent=2, ensure_ascii=False)[:12000])
+        print("\n=== KEY PATHS ===")
+        def walk(node, prefix=""):
+            if isinstance(node, dict):
+                for k, v in sorted(node.items()):
+                    walk(v, f"{prefix}.{k}" if prefix else k)
+            elif isinstance(node, list):
+                if node:
+                    walk(node[0], f"{prefix}[0]")
+            else:
+                print(f"  {prefix} = {str(node)[:80]}")
+        walk(item)
+        print("\n=== COUNTRY EXTRACTION ===")
+        print(f"item_country() -> {item_country(item)!r}")
+        print("\n=== PAGINATION KEYS ===")
+        print(", ".join(sorted(k for k in data.keys() if k != "items")))
+        for k in ("pagination", "meta"):
+            if k in data:
+                print(f"{k}: {json.dumps(data[k], ensure_ascii=False)[:600]}")
+        return 0
+    finally:
+        con.close()
+
+
+def probe_search(query: str) -> int:
+    """One-off viability census for a candidate search, before it earns a slot."""
+    cfg = load_config()
+    con = db_connect()
+    client = new_client()
+    try:
+        if not ensure_session(client):
+            print("no session")
+            return 1
+        try:
+            data = api_get(client, con, f"{BASE}/api/v2/catalog/items",
+                           {"search_text": query, "per_page": PROBE_PER_PAGE, "page": 1})
+        except (SessionWall, httpx.HTTPError) as e:
+            print(f"Probe {query!r} nicht moeglich: {type(e).__name__}: {e}")
+            print("Die API antwortet gerade nicht; spaeter erneut versuchen.")
+            return 1
+        items = data.get("items") or []
+        if not items:
+            print(f"{query!r}: no items")
+            return 1
+        prices, sizes, brands = [], {}, {}
+        for it in items:
+            total = float((it.get("total_item_price") or {}).get("amount")
+                          or (it.get("price") or {}).get("amount") or 0)
+            if total:
+                prices.append(total)
+            sc = size_class_of(it.get("size_title"))
+            sizes[sc] = sizes.get(sc, 0) + 1
+            bn = brand_norm_of(it.get("brand_title"))
+            brands[bn] = brands.get(bn, 0) + 1
+        prices.sort()
+        med = statistics.median(prices) if prices else 0.0
+        w_target = sum(c for s, c in sizes.items() if s in {"w26", "w27", "w28", "w29", "w30", "w31"})
+        top_brand, top_n = max(brands.items(), key=lambda kv: kv[1])
+        purity = top_n / len(items)
+        pagination = data.get("pagination") or {}
+        total_entries = pagination.get("total_entries")
+
+        print(f"Probe: {query!r}")
+        print(f"  Seite 1: {len(items)} Artikel" + (f" | Gesamt laut API: {total_entries}" if total_entries else ""))
+        print(f"  Preis (inkl. Gebuehr): Median {med:.2f} | p25 {prices[len(prices)//4]:.2f} | p75 {prices[3*len(prices)//4]:.2f}")
+        print(f"  W26-W31: {w_target}/{len(items)} = {100*w_target/len(items):.0f}%")
+        print(f"  Haeufigste Marke: {top_brand} ({100*purity:.0f}% Reinheit)")
+        print("  Groessenklassen: " + ", ".join(f"{k}:{v}" for k, v in
+                                                sorted(sizes.items(), key=lambda kv: -kv[1])[:8]))
+        checks = {
+            "Volumen (Seite voll / >=300 gesamt)": len(items) >= 90 or (total_entries or 0) >= 300,
+            "Median >= 30 EUR": med >= 30,
+            "W26-W31 >= 25%": w_target / len(items) >= 0.25,
+            "Marken-Reinheit >= 70%": purity >= 0.70,
+        }
+        print("  Aufnahme-Kriterien:")
+        for name, passed in checks.items():
+            print(f"    [{'x' if passed else ' '}] {name}")
+        print(f"  => {'AUFNEHMEN' if all(checks.values()) else 'NICHT aufnehmen'}")
+        return 0
+    finally:
+        con.close()
+
+
+def image_check(listing_id: int) -> int:
+    """Print the reverse-image links for one listing, for a manual legit check."""
+    con = db_connect()
+    try:
+        row = con.execute(
+            """SELECT title, brand, size, condition, total_price, url, photo_url, fake_risk,
+                      fake_risk_reasons, country
+               FROM listings WHERE id=?""", (listing_id,)).fetchone()
+        if not row:
+            print(f"listing {listing_id} not in database")
+            return 1
+        (title, brand, size, cond, total, url, photo, fake, why, country) = row
+        print(f"{title}")
+        print(f"{brand} | {cond} | Gr. {size} | {total:.2f} EUR" + (f" | {country}" if country else ""))
+        if fake is not None:
+            print(f"Fake-Risiko: {fake:.0%}" + (f" ({why})" if why else ""))
+        print(f"Anzeige: {url}")
+        links = reverse_image_links(photo)
+        if not links:
+            print("kein Foto gespeichert")
+            return 1
+        print(f"Foto:    {photo}")
+        for name, link in links.items():
+            print(f"{name+':':<9}{link}")
+        return 0
+    finally:
+        con.close()
+
+
 def run_cycle() -> int:
     """One poll cycle. Returns a process exit code (0 ok, 1 collected nothing)."""
     if not acquire_lock():
@@ -740,6 +1798,14 @@ def run_cycle() -> int:
         env = load_env()
         con = db_connect()
         check_liveness(con, env)
+        # Feedback rides on ntfy, not on Vinted, so it is collected before the
+        # backoff gate: a Vinted wall must not also silence the rating channel.
+        try:
+            got = ingest_feedback(con, env)
+            if got:
+                log(f"feedback: {got} new rating(s)")
+        except (httpx.HTTPError, sqlite3.Error, ValueError) as e:
+            log(f"WARN: feedback poll failed: {type(e).__name__}: {e}")
         backoff = parse_ts(meta_get(con, "backoff_until"))
         if backoff and backoff > datetime.now(timezone.utc):
             log(f"cycle skipped: in backoff until {backoff:%Y-%m-%dT%H:%M:%SZ}")
@@ -750,10 +1816,12 @@ def run_cycle() -> int:
             set_backoff(con, AUTH_BACKOFF_MIN, "no session could be established")
             return 1
         ok = False
+        seller_budget = [MAX_SELLER_FETCHES]
         try:
             for search in cfg["searches"]:
                 try:
-                    if poll_search(client, con, search, cfg["settings"], env):
+                    if poll_search(client, con, search, cfg["settings"], env,
+                                   seller_budget=seller_budget):
                         ok = True
                 except SessionWall:
                     raise
@@ -822,15 +1890,40 @@ def main() -> None:
     ap.add_argument("--cycle", action="store_true", help="run one poll cycle (default)")
     ap.add_argument("--test-notify", action="store_true", help="send a test push")
     ap.add_argument("--status", action="store_true", help="print db state")
+    ap.add_argument("--brand-report", action="store_true",
+                    help="weekly per-brand keep/drop/add evaluation")
+    ap.add_argument("--probe-fields", action="store_true",
+                    help="print one raw catalog item (country/shipping field census)")
+    ap.add_argument("--probe-search", metavar="QUERY",
+                    help="one-off viability census for a candidate search")
+    ap.add_argument("--image-check", type=int, metavar="LISTING_ID",
+                    help="print reverse-image-search links for one listing")
+    ap.add_argument("--feedback", nargs=2, metavar=("LISTING_ID", "VERDICT"),
+                    help="record a rating by hand: good | bad | bought")
     args = ap.parse_args()
     if args.test_notify:
-        ok = notify(load_env(), "Vinted watcher test",
-                    "Wenn du das liest, funktioniert der Alert-Kanal.", click=BASE)
+        env = load_env()
+        ok = notify(env, "Vinted watcher test",
+                    "Wenn du das liest, funktioniert der Alert-Kanal.\n"
+                    "Die drei Knoepfe unten sind der Bewertungskanal.",
+                    click=BASE, actions=feedback_actions(env, 0))
         print("test notify:", "sent" if ok else "FAILED")
+        if not env.get("NTFY_FEEDBACK_TOPIC"):
+            print("NOTE: NTFY_FEEDBACK_TOPIC not set; no rating buttons attached")
         sys.exit(0 if ok else 1)
     if args.status:
         print_status()
         return
+    if args.brand_report:
+        sys.exit(brand_report())
+    if args.probe_fields:
+        sys.exit(probe_fields())
+    if args.probe_search:
+        sys.exit(probe_search(args.probe_search))
+    if args.image_check:
+        sys.exit(image_check(args.image_check))
+    if args.feedback:
+        sys.exit(cli_feedback(int(args.feedback[0]), args.feedback[1]))
     sys.exit(run_cycle())
 
 

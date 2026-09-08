@@ -447,13 +447,15 @@ def test_kid_items_stay_out_of_comp_pools(vw, con, paths, monkeypatch):
     now = vw.now_iso()
     for i in range(8):                      # adult comps around 40 EUR
         con.execute(
-            "INSERT INTO listings (id, search_tag, brand, cond_tier, garment_class, is_kid,"
-            " total_price, last_seen) VALUES (?,'t','Patagonia','very_good','jacket',0,40.0,?)",
+            "INSERT INTO listings (id, search_tag, brand, brand_norm, cond_tier, garment_class,"
+            " is_kid, total_price, last_seen)"
+            " VALUES (?,'t','Patagonia','patagonia','very_good','jacket',0,40.0,?)",
             (100 + i, now))
     for i in range(8):                      # kids noise around 10 EUR
         con.execute(
-            "INSERT INTO listings (id, search_tag, brand, cond_tier, garment_class, is_kid,"
-            " total_price, last_seen) VALUES (?,'t','Patagonia','very_good','jacket',1,10.0,?)",
+            "INSERT INTO listings (id, search_tag, brand, brand_norm, cond_tier, garment_class,"
+            " is_kid, total_price, last_seen)"
+            " VALUES (?,'t','Patagonia','patagonia','very_good','jacket',1,10.0,?)",
             (200 + i, now))
     con.commit()
 
@@ -518,3 +520,565 @@ def test_cookie_roundtrip_keeps_domain_and_reads_legacy_files(vw, paths):
     legacy = client_with(vw, transport)
     vw.load_cookies(legacy)
     assert vw.token_is_fresh(legacy, margin_min=60), "legacy cookie file must still load"
+
+# ------------------------------------------------ precision upgrade: normalisers
+
+@pytest.mark.parametrize("condition,tier", [
+    ("Neu", "new"),                       # the live string the v1 table missed
+    ("Neu, mit Etikett", "new_tag"),      # comma spelling, also missed
+    ("Neu mit Etikett", "new_tag"),
+    ("Neu ohne Etikett", "new"),
+    ("Sehr gut", "very_good"),
+    ("  sehr   gut ", "very_good"),
+    ("Zufriedenstellend", "fair"),
+    ("", "unknown"),
+    (None, "unknown"),
+    ("Nagelneu Deluxe", "unknown"),
+])
+def test_cond_tier_maps_the_strings_the_api_actually_sends(vw, condition, tier):
+    assert vw.cond_tier_of(condition) == tier
+
+
+def test_cond_tier_backfill_recovers_unknown_rows_exactly_once(vw, paths):
+    """The defect excluded every new-condition row from alerts AND comps."""
+    import sqlite3
+    old = sqlite3.connect(vw.DB_PATH)
+    old.execute("CREATE TABLE listings (id INTEGER PRIMARY KEY, search_tag TEXT, title TEXT,"
+                " brand TEXT, size TEXT, condition TEXT, cond_tier TEXT, total_price REAL,"
+                " first_seen TEXT, last_seen TEXT, gone_at TEXT, sold_flag INTEGER DEFAULT 0,"
+                " alerted INTEGER DEFAULT 0)")
+    old.execute("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT)")
+    for i, cond in enumerate(["Neu", "Neu, mit Etikett", "Sehr gut"]):
+        old.execute("INSERT INTO listings (id, search_tag, title, condition, cond_tier)"
+                    " VALUES (?, 't', 'Carhartt Jacke', ?, 'unknown')", (i + 1, cond))
+    old.commit()
+    old.close()
+
+    con = vw.db_connect()
+    assert con.execute("SELECT cond_tier FROM listings WHERE id=1").fetchone()[0] == "new"
+    assert con.execute("SELECT cond_tier FROM listings WHERE id=2").fetchone()[0] == "new_tag"
+    assert con.execute("SELECT cond_tier FROM listings WHERE id=3").fetchone()[0] == "very_good"
+    flag = con.execute("SELECT v FROM meta WHERE k='datafix:cond_tier_v2'").fetchone()
+    assert flag and "rows=3" in flag[0]
+
+    # A row legitimately set to unknown later must not be re-fixed on next connect.
+    con.execute("UPDATE listings SET cond_tier='unknown' WHERE id=1")
+    con.commit()
+    con.close()
+    con2 = vw.db_connect()
+    assert con2.execute("SELECT cond_tier FROM listings WHERE id=1").fetchone()[0] == "unknown", \
+        "data fix re-ran; it must be guarded by its meta flag"
+    con2.close()
+
+
+@pytest.mark.parametrize("size,cls", [
+    ("M", "m"),
+    ("S / 36 / 8", "s"),                  # combined notation, letter wins
+    ("M / 38 / 10", "m"),
+    ("W32 | DE 48", "w32"),               # jeans notation, W token beats the DE number
+    ("W29", "w29"),
+    ("XL / 42 / 14", "xl"),
+    ("XXL", "xxl"),
+    ("38", "m"),                          # bare women's DE
+    ("46", "s"),                          # bare men's DE
+    ("52", "xl"),                         # truthful: DE 52 is xl, not l
+    ("39", "other"),                      # odd number can only be shoes
+    ("12 Jahre / 152", "kids"),
+    ("24-36 Monate / 92", "kids"),
+    ("Einheitsgröße", "one"),
+    ("", "unknown"),
+    (None, "unknown"),
+])
+def test_size_class_normalises_all_three_live_notations(vw, size, cls):
+    assert vw.size_class_of(size) == cls
+
+
+@pytest.mark.parametrize("brand,norm", [
+    ("Ralph Lauren", "ralph-lauren"),
+    ("Polo Ralph Lauren", "ralph-lauren"),
+    ("LAUREN Ralph Lauren", "ralph-lauren"),
+    ("Chaps Ralph Lauren", "ralph-lauren"),
+    ("adidas", "adidas"),
+    ("adidas Originals", "adidas"),
+    ("Nike Air", "nike"),
+    ("Carhartt WIP", "carhartt"),
+    ("Levi Strauss & Co.", "levis"),
+    ("The North Face", "the-north-face"),
+    ("7 For All Mankind", "7-for-all-mankind"),
+    ("Some Unknown Label", "some-unknown-label"),
+    ("", ""),
+])
+def test_brand_norm_folds_families_without_merging_strangers(vw, brand, norm):
+    assert vw.brand_norm_of(brand) == norm
+
+
+# ------------------------------------------------ precision upgrade: alert gates
+
+def _rec(vw, **over):
+    """A clean alertable candidate; override what a test is actually about."""
+    rec = {"id": 999, "search_tag": "t", "title": "Patagonia Jacke Herren", "brand": "Patagonia",
+           "brand_norm": "patagonia", "size": "L", "size_class": "l", "condition": "Sehr gut",
+           "cond_tier": "very_good", "garment_class": "jacket", "is_kid": 0, "country": None,
+           "price": 20.0, "total_price": 20.0, "currency": "EUR", "url": "u",
+           "photo_url": "https://images1.vinted.net/t/x/f800/1.jpeg?s=sig", "seller_id": 1,
+           "seller_login": "s", "favourites": 0, "views": 0, "promoted": 0, "seed": 0}
+    rec.update(over)
+    return rec
+
+
+def _settings(**over):
+    s = {"deal_ratio": 0.55, "min_comps": 6, "comp_window_days": 45, "min_price": 8,
+         "size_classes": ["s", "m", "l"], "min_margin": 0, "foreign_advantage_eur": 8,
+         "fake_risk_suppress": 0.7, "fake_risk_flag": 0.4,
+         "profile_suppress": 0.15, "profile_min_rated": 8}
+    s.update(over)
+    return s
+
+
+def _comps(con, vw, n=8, price=40.0, brand_norm="patagonia", size_class="l", base=100):
+    now = vw.now_iso()
+    for i in range(n):
+        con.execute(
+            "INSERT INTO listings (id, search_tag, brand, brand_norm, cond_tier, garment_class,"
+            " size_class, is_kid, total_price, last_seen, first_seen)"
+            " VALUES (?,'t','Patagonia',?, 'very_good','jacket',?,0,?,?,?)",
+            (base + i, brand_norm, size_class, price, now, now))
+    con.commit()
+
+
+def test_size_gate_blocks_the_phone_but_never_the_comp_pool(vw, con, paths, monkeypatch):
+    """Alerting narrows to resale-friendly sizes; the price database keeps everything."""
+    sent = []
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: sent.append(1) or True)
+    # The comp pool is built entirely from XL rows: if comps were size-filtered
+    # too, an M candidate would find nothing and could never alert.
+    _comps(con, vw, n=8, price=40.0, size_class="xl")
+
+    assert vw.score_and_alert(con, _rec(vw, size="XL", size_class="xl"), {"tag": "t"},
+                              _settings(), {}) is False, "XL must not reach the phone"
+    assert not sent
+    assert vw.score_and_alert(con, _rec(vw, size="M", size_class="m"), {"tag": "t"},
+                              _settings(), {}) is True, "comps must not be size-filtered"
+    assert sent
+
+
+def test_per_search_size_classes_override_the_global_set(vw, con, paths, monkeypatch):
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    _comps(con, vw, n=8, price=40.0, size_class="w27")
+    jeans = {"tag": "t", "size_classes": ["w26", "w27", "w28"]}
+    assert vw.score_and_alert(con, _rec(vw, size="W27", size_class="w27"), jeans,
+                              _settings(), {}) is True
+    assert vw.score_and_alert(con, _rec(vw, id=998, size="M", size_class="m"), jeans,
+                              _settings(), {}) is False
+
+
+def test_comp_pool_reunites_split_brand_families(vw, con, paths, monkeypatch):
+    """Polo Ralph Lauren and Ralph Lauren are one market, so one comp pool."""
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    now = vw.now_iso()
+    for i, raw in enumerate(["Ralph Lauren", "Polo Ralph Lauren", "LAUREN Ralph Lauren"] * 3):
+        con.execute(
+            "INSERT INTO listings (id, search_tag, brand, brand_norm, cond_tier, garment_class,"
+            " size_class, is_kid, total_price, last_seen, first_seen)"
+            " VALUES (?,'t',?,?, 'very_good','sweater','m',0,40.0,?,?)",
+            (300 + i, raw, vw.brand_norm_of(raw), now, now))
+    con.commit()
+    rec = _rec(vw, brand="Polo Ralph Lauren", brand_norm="ralph-lauren",
+               garment_class="sweater", size="M", size_class="m", title="Ralph Lauren Pullover")
+    assert vw.score_and_alert(con, rec, {"tag": "t"}, _settings(), {}) is True
+
+
+def test_price_gates_read_total_price_and_a_zero_cap_blocks(vw, con, paths, monkeypatch):
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    _comps(con, vw, n=8, price=40.0)
+    # 7.50 ex-fee, 8.90 total: the floor is about what the buyer pays, so this passes.
+    assert vw.score_and_alert(con, _rec(vw, price=7.5, total_price=8.9), {"tag": "t"},
+                              _settings(), {}) is True
+    # price_max: 0 is an explicit "never alert", not a falsy no-op.
+    assert vw.score_and_alert(con, _rec(vw, id=998), {"tag": "t", "price_max": 0},
+                              _settings(), {}) is False
+
+
+def test_alert_writes_a_full_decision_snapshot(vw, con, paths, monkeypatch):
+    """The listings row is overwritten on re-sight; the snapshot is the record."""
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    _comps(con, vw, n=8, price=40.0)
+    assert vw.score_and_alert(con, _rec(vw), {"tag": "t"}, _settings(), {}) is True
+    row = con.execute(
+        "SELECT listing_id, comp_n, comp_median, discount_pct, margin_eur, deal_ratio_used,"
+        " size_class, brand_norm, sent, suppress_reason FROM alerts").fetchone()
+    assert row[0] == 999
+    assert row[1] == 8
+    assert row[2] == 40.0
+    assert row[3] == 50            # 20 EUR against a 40 EUR median
+    assert row[4] == 20.0
+    assert row[5] == 0.55
+    assert (row[6], row[7]) == ("l", "patagonia")
+    assert row[8] == 1 and row[9] is None
+
+
+def test_suppressed_candidates_are_recorded_not_forgotten(vw, con, paths, monkeypatch):
+    """The backtest scorer needs the rejects to judge the policy that rejected them."""
+    monkeypatch.setattr(vw, "notify",
+                        lambda *a, **k: pytest.fail("a suppressed candidate was pushed"))
+    _comps(con, vw, n=8, price=40.0, brand_norm="stone-island")
+    # Price alone flags but never silences: suppressing every deep discount
+    # would throw away exactly the steals this watcher exists to find. Here an
+    # absurd price (0.6) plus a hype brand (0.2) clears the 0.7 bar together.
+    rec = _rec(vw, price=3.0, total_price=3.5, brand="Stone Island",
+               brand_norm="stone-island")
+    assert vw.score_and_alert(con, rec, {"tag": "t"}, _settings(min_price=3), {}) is False
+    row = con.execute("SELECT sent, suppress_reason, fake_risk FROM alerts").fetchone()
+    assert row[0] == 0
+    assert row[1] == "fake_risk"
+    assert row[2] >= 0.7
+
+
+def test_a_deep_discount_alone_still_reaches_the_phone(vw, con, paths, monkeypatch):
+    """The counterweight to suppression: a steal is not a fake just for being cheap."""
+    sent = {}
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: sent.update(k) or True)
+    _comps(con, vw, n=8, price=40.0)
+    rec = _rec(vw, price=3.0, total_price=3.5)     # 8.75% of median, no other signal
+    assert vw.score_and_alert(con, rec, {"tag": "t"}, _settings(min_price=3), {}) is True
+    assert "FAKE-RISIKO" in sent["message"], "it must arrive warned, not silently"
+
+
+# ------------------------------------------------ precision upgrade: fake risk
+
+def test_fake_risk_price_tiers_do_not_stack(vw, con, paths):
+    absurd, why = vw.fake_risk_score(con, _rec(vw, total_price=4.0), med=40.0)
+    assert "preis_absurd" in why and "preis_zu_gut" not in why
+    good, why2 = vw.fake_risk_score(con, _rec(vw, total_price=9.0), med=40.0)
+    assert "preis_zu_gut" in why2
+    assert absurd > good
+
+
+def test_fake_risk_title_markers_flag_without_suppressing(vw, con, paths, monkeypatch):
+    sent = {}
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: sent.update(k) or True)
+    _comps(con, vw, n=8, price=40.0)
+    rec = _rec(vw, title="Patagonia Jacke 1:1 Qualitaet")
+    assert vw.score_and_alert(con, rec, {"tag": "t"}, _settings(), {}) is True
+    assert "FAKE-RISIKO" in sent["message"], "a flagged listing must say so on the phone"
+
+
+def test_identical_title_across_sellers_raises_risk(vw, con, paths):
+    now = vw.now_iso()
+    for i in range(3):
+        con.execute(
+            "INSERT INTO listings (id, search_tag, title, seller_id, last_seen)"
+            " VALUES (?,'t','Patagonia Jacke Herren',?,?)", (400 + i, 500 + i, now))
+    con.commit()
+    score, why = vw.fake_risk_score(con, _rec(vw), med=40.0)
+    assert any(w.startswith("titel_bei_") for w in why)
+    assert score >= 0.3
+
+
+def test_a_clean_listing_scores_no_risk(vw, con, paths):
+    score, why = vw.fake_risk_score(con, _rec(vw, total_price=22.0), med=40.0)
+    assert score == 0.0 and why == []
+
+
+# ------------------------------------------------ precision upgrade: country
+
+def test_foreign_listings_need_price_headroom(vw, con, paths, monkeypatch):
+    """Shipping from abroad is not in the comp median, so the bar moves."""
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    _comps(con, vw, n=8, price=40.0)
+    # Bar is 0.55 * 40 = 22. A 21 EUR Italian listing clears the plain gate but
+    # not the gate plus 8 EUR of headroom.
+    assert vw.score_and_alert(con, _rec(vw, total_price=21.0, country="IT"), {"tag": "t"},
+                              _settings(), {}) is False
+    assert con.execute("SELECT suppress_reason FROM alerts").fetchone()[0] == "country"
+    assert vw.score_and_alert(con, _rec(vw, id=998, total_price=13.0, country="IT"),
+                              {"tag": "t"}, _settings(), {}) is True
+
+
+def test_domestic_and_unknown_country_use_the_plain_gate(vw, con, paths, monkeypatch):
+    """country is forward-only, so unknown must not be punished as foreign."""
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    _comps(con, vw, n=8, price=40.0)
+    assert vw.score_and_alert(con, _rec(vw, total_price=21.0, country="DE"), {"tag": "t"},
+                              _settings(), {}) is True
+    assert vw.score_and_alert(con, _rec(vw, id=998, total_price=21.0, country=None),
+                              {"tag": "t"}, _settings(), {}) is True
+
+
+def test_item_country_reads_the_field_without_inventing_one(vw):
+    assert vw.item_country({"user": {"country_iso_code": "de"}}) == "DE"
+    assert vw.item_country({"user": {"id": 1, "login": "x"}}) is None
+    assert vw.item_country({}) is None
+
+
+# ------------------------------------------------ precision upgrade: feedback
+
+def test_alert_carries_three_rating_buttons(vw, monkeypatch):
+    captured = {}
+
+    def fake_post(url, json=None, timeout=None):
+        captured.update(json)
+        return type("R", (), {"status_code": 200})()
+
+    monkeypatch.setattr(vw.httpx, "post", fake_post)
+    env = {"NTFY_TOPIC": "alerts", "NTFY_FEEDBACK_TOPIC": "fb"}
+    assert vw.notify(env, "t", "m", click="u", actions=vw.feedback_actions(env, 12345)) is True
+    actions = captured["actions"]
+    assert len(actions) == 3
+    assert [a["body"] for a in actions] == ["good 12345", "bad 12345", "bought 12345"]
+    assert all(a["url"] == "https://ntfy.sh/fb" and a["method"] == "POST" for a in actions)
+    assert actions[0]["label"] == "\U0001F44D" and actions[1]["label"] == "\U0001F44E"
+
+
+def test_no_feedback_topic_means_no_buttons(vw):
+    assert vw.feedback_actions({"NTFY_TOPIC": "alerts"}, 1) is None
+
+
+def test_ingest_feedback_stores_taps_and_dedupes_replays(vw, con, paths, monkeypatch):
+    con.execute("INSERT INTO alerts (listing_id, alerted_at, search_tag, sent)"
+                " VALUES (999, ?, 't', 1)", (vw.now_iso(),))
+    con.commit()
+    messages = [
+        {"id": "m1", "event": "message", "message": "good 999"},
+        {"id": "m2", "event": "message", "message": "bought 999"},
+    ]
+    monkeypatch.setattr(vw, "_ntfy_poll", lambda topic, since: messages)
+    env = {"NTFY_FEEDBACK_TOPIC": "fb"}
+    assert vw.ingest_feedback(con, env) == 2
+    assert vw.ingest_feedback(con, env) == 0, "a replayed poll must not double-count"
+    assert con.execute("SELECT COUNT(*) FROM alert_feedback").fetchone()[0] == 2
+    assert vw.meta_get(con, "feedback_since") == "m2"
+
+
+def test_ingest_feedback_ignores_noise_on_a_public_topic(vw, con, paths, monkeypatch):
+    con.execute("INSERT INTO alerts (listing_id, alerted_at, search_tag, sent)"
+                " VALUES (999, ?, 't', 1)", (vw.now_iso(),))
+    con.commit()
+    monkeypatch.setattr(vw, "_ntfy_poll", lambda topic, since: [
+        {"id": "n1", "event": "message", "message": "hello there"},
+        {"id": "n2", "event": "message", "message": "good notanumber"},
+        {"id": "n3", "event": "message", "message": "maybe 999"},
+        {"id": "n4", "event": "message", "message": "good 123456"},   # no such alert
+        {"id": "n5", "event": "open", "message": "good 999"},         # not a message event
+    ])
+    assert vw.ingest_feedback(con, {"NTFY_FEEDBACK_TOPIC": "fb"}) == 0
+    assert con.execute("SELECT COUNT(*) FROM alert_feedback").fetchone()[0] == 0
+
+
+def test_learned_taste_ranks_but_never_overrides_an_explicit_gate(vw, con, paths, monkeypatch):
+    """A good feedback track must not smuggle a suppressed candidate through."""
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: pytest.fail("gate was overridden"))
+    _comps(con, vw, n=8, price=40.0)
+    for i in range(10):                      # a strongly liked cell
+        con.execute("INSERT INTO alerts (id, listing_id, alerted_at, search_tag, brand_norm,"
+                    " garment_class, size_class, sent) VALUES (?,?,?,'t','patagonia','jacket','xl',1)",
+                    (i + 1, 700 + i, vw.now_iso()))
+        con.execute("INSERT INTO alert_feedback (listing_id, alert_id, verdict, received_at, source)"
+                    " VALUES (?,?, 'good', ?, 'cli')", (700 + i, i + 1, vw.now_iso()))
+    con.commit()
+    # XL is outside the configured classes; the liked track must not rescue it.
+    assert vw.score_and_alert(con, _rec(vw, size="XL", size_class="xl"), {"tag": "t"},
+                              _settings(), {}) is False
+
+
+def test_learned_suppression_needs_real_evidence(vw, con, paths, monkeypatch):
+    """One bad rating is an opinion; a rated-out cell is a pattern."""
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    _comps(con, vw, n=8, price=40.0)
+    con.execute("INSERT INTO alerts (id, listing_id, alerted_at, search_tag, brand_norm,"
+                " garment_class, size_class, sent) VALUES (1, 800, ?, 't','patagonia','jacket','l',1)",
+                (vw.now_iso(),))
+    con.execute("INSERT INTO alert_feedback (listing_id, alert_id, verdict, received_at, source)"
+                " VALUES (800, 1, 'bad', ?, 'cli')", (vw.now_iso(),))
+    con.commit()
+    assert vw.score_and_alert(con, _rec(vw), {"tag": "t"}, _settings(), {}) is True, \
+        "a single bad rating must not silence a whole cell"
+
+    for i in range(50, 60):
+        con.execute("INSERT INTO alerts (id, listing_id, alerted_at, search_tag, brand_norm,"
+                    " garment_class, size_class, sent)"
+                    " VALUES (?,?,?, 't','patagonia','jacket','l',1)", (i, 800 + i, vw.now_iso()))
+        con.execute("INSERT INTO alert_feedback (listing_id, alert_id, verdict, received_at, source)"
+                    " VALUES (?,?, 'bad', ?, 'cli')", (800 + i, i, vw.now_iso()))
+    con.commit()
+    assert vw.score_and_alert(con, _rec(vw, id=997), {"tag": "t"}, _settings(), {}) is False
+    assert con.execute(
+        "SELECT suppress_reason FROM alerts WHERE listing_id=997").fetchone()[0] == "learned"
+
+
+def test_cli_feedback_records_a_rating_by_hand(vw, con, paths, capsys):
+    con.execute("INSERT INTO alerts (listing_id, alerted_at, search_tag, sent)"
+                " VALUES (999, ?, 't', 1)", (vw.now_iso(),))
+    con.commit()
+    con.close()
+    assert vw.cli_feedback(999, "bad") == 0
+    assert vw.cli_feedback(999, "nonsense") == 2
+    con2 = vw.db_connect()
+    assert con2.execute("SELECT verdict, source FROM alert_feedback").fetchone() == ("bad", "cli")
+    con2.close()
+
+
+def test_alerts_disabled_collects_data_without_alerting(vw, con, paths, monkeypatch):
+    """Probe and dropped brands keep feeding the price database; that is the asset."""
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: pytest.fail("alerts_disabled was ignored"))
+    _comps(con, vw, n=8, price=40.0)
+    assert vw.score_and_alert(con, _rec(vw), {"tag": "t", "alerts_disabled": True},
+                              _settings(), {}) is False
+
+
+# ------------------------------------------------ precision upgrade: image links
+
+def test_reverse_image_links_encode_the_signed_photo_url(vw):
+    links = vw.reverse_image_links("https://images1.vinted.net/t/x/f800/1.jpeg?s=a&b=c")
+    assert set(links) == {"lens", "bing", "yandex"}
+    assert "%3Fs%3Da%26b%3Dc" in links["lens"], "query string must survive as one parameter"
+    assert links["lens"].startswith("https://lens.google.com/uploadbyurl?url=")
+    assert vw.reverse_image_links(None) is None
+
+
+def test_alert_message_carries_an_image_check_link(vw, con, paths, monkeypatch):
+    sent = {}
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: sent.update(k) or True)
+    _comps(con, vw, n=8, price=40.0)
+    assert vw.score_and_alert(con, _rec(vw), {"tag": "t"}, _settings(), {}) is True
+    assert "lens.google.com" in sent["message"]
+
+
+def test_priority_ranks_by_the_owners_criteria_first(vw):
+    """Clean, core-size, German and deeply discounted is what earns a ring."""
+    best = vw.alert_priority(discount_pct=60, fake=0.0, country="DE", size_ok_core=True, prof=None)
+    assert best == 5
+    risky = vw.alert_priority(discount_pct=60, fake=0.5, country="DE", size_ok_core=True, prof=None)
+    assert risky < best, "fake risk must cost priority even on a deep discount"
+    quiet = vw.alert_priority(discount_pct=20, fake=0.3, country="IT", size_ok_core=False, prof=None)
+    assert quiet == 2, "a marginal candidate arrives silently, still rateable"
+
+# ------------------------------------------- precision upgrade: seller profile
+
+def _seller_server(vw, payload, calls):
+    """A transport that answers the user endpoint once and counts the calls."""
+    def handler(request):
+        calls.append(str(request.url))
+        if "/api/v2/users/" in str(request.url):
+            return httpx.Response(200, json={"user": payload})
+        return httpx.Response(200, json={"items": []})
+    return httpx.MockTransport(handler)
+
+
+def test_seller_profile_is_fetched_once_and_then_cached(vw, con, paths):
+    """Sellers repeat across listings, so the cost is per seller, not per item."""
+    calls = []
+    payload = {"login": "meike", "country_iso_code": "nl", "city": "Amsterdam",
+               "feedback_count": 121, "positive_feedback_count": 89,
+               "feedback_reputation": 0.78, "item_count": 173, "business": False}
+    client = httpx.Client(transport=_seller_server(vw, payload, calls), base_url=vw.BASE)
+    budget = [6]
+    first = vw.seller_profile(client=client, con=con, seller_id=42, budget=budget)
+    assert first["country"] == "NL"
+    assert first["feedback_count"] == 121
+    second = vw.seller_profile(client=client, con=con, seller_id=42, budget=budget)
+    assert second["country"] == "NL"
+    assert len(calls) == 1, "a cached seller must not be fetched twice"
+    assert budget == [5], "only the uncached lookup may spend budget"
+
+
+def test_seller_lookups_are_capped_per_cycle(vw, con, paths):
+    """An unbounded lookup would multiply the request budget on a busy cycle."""
+    calls = []
+    payload = {"login": "x", "country_iso_code": "de", "feedback_count": 5}
+    client = httpx.Client(transport=_seller_server(vw, payload, calls), base_url=vw.BASE)
+    budget = [2]
+    for seller_id in (1, 2, 3, 4):
+        vw.seller_profile(client=client, con=con, seller_id=seller_id, budget=budget)
+    assert len(calls) == 2, "the cap must hold"
+    assert budget == [0]
+
+
+def test_a_failed_lookup_costs_no_accusation(vw, con, paths):
+    """No profile means no seller-based risk, never a guessed one."""
+    def handler(request):
+        return httpx.Response(500)
+    client = httpx.Client(transport=httpx.MockTransport(handler), base_url=vw.BASE)
+    prof = vw.seller_profile(client=client, con=con, seller_id=99, budget=[3])
+    assert prof is None
+    assert vw.seller_risk(None, "stone-island", 10.0, 100.0) == (0.0, [])
+
+
+def test_new_account_selling_a_hype_brand_cheap_raises_risk(vw):
+    """The classic counterfeit shape, now measurable via the profile endpoint."""
+    fresh = {"feedback_count": 0, "feedback_reputation": None}
+    score, why = vw.seller_risk(fresh, "stone-island", 20.0, 100.0)
+    assert score >= 0.3 and "neuer_verkaeufer_hype_billig" in why
+    # The same empty account selling an ordinary brand at an ordinary price is
+    # just a beginner, and must not be treated as a forger.
+    mild, why2 = vw.seller_risk(fresh, "patagonia", 80.0, 100.0)
+    assert mild < score and "keine_bewertungen" in why2
+
+
+def test_an_established_seller_with_good_feedback_adds_no_risk(vw):
+    solid = {"feedback_count": 121, "feedback_reputation": 0.95}
+    assert vw.seller_risk(solid, "stone-island", 20.0, 100.0) == (0.0, [])
+
+
+def test_bad_reputation_with_enough_ratings_raises_risk(vw):
+    poor = {"feedback_count": 40, "feedback_reputation": 0.42}
+    score, why = vw.seller_risk(poor, "patagonia", 50.0, 100.0)
+    assert score >= 0.2 and any("schlechte_reputation" in w for w in why)
+
+
+def test_country_comes_from_the_seller_and_is_written_back(vw, con, paths, monkeypatch):
+    """The catalog response carries no country; the seller profile does."""
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    _comps(con, vw, n=8, price=40.0)
+    calls = []
+    payload = {"login": "x", "country_iso_code": "IT", "feedback_count": 60,
+               "feedback_reputation": 0.9}
+    client = httpx.Client(transport=_seller_server(vw, payload, calls), base_url=vw.BASE)
+    con.execute("INSERT INTO listings (id, search_tag, brand, brand_norm, cond_tier,"
+                " garment_class, size_class, total_price, first_seen, last_seen)"
+                " VALUES (999,'t','Patagonia','patagonia','very_good','jacket','l',21.0,?,?)",
+                (vw.now_iso(), vw.now_iso()))
+    con.commit()
+    # 21 EUR clears the plain 0.55 x 40 gate but not the foreign headroom.
+    assert vw.score_and_alert(con, _rec(vw, total_price=21.0), {"tag": "t"},
+                              _settings(), {}, client=client, seller_budget=[3]) is False
+    assert con.execute("SELECT country FROM listings WHERE id=999").fetchone()[0] == "IT"
+    assert con.execute("SELECT suppress_reason FROM alerts").fetchone()[0] == "country"
+
+
+def test_scoring_without_a_client_still_works(vw, con, paths, monkeypatch):
+    """Every existing call site passes no client; none of them may break."""
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    _comps(con, vw, n=8, price=40.0)
+    assert vw.score_and_alert(con, _rec(vw), {"tag": "t"}, _settings(), {}) is True
+
+def test_a_server_error_backs_off_instead_of_holding_the_cadence(vw, con, paths):
+    """A 5xx wave is the far end struggling; keep polling and you make it worse.
+
+    Live shape on 2026-09-08: a burst of one-off probe requests alongside the
+    normal 5-minute cycle turned every catalog call into a 500, including
+    searches that had answered minutes earlier. Without this the watcher would
+    have kept its cadence pointed at a struggling endpoint indefinitely.
+    """
+    calls = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        if request.url.path == "/":
+            return httpx.Response(200, headers={
+                "set-cookie": f"access_token_web={make_jwt(12)}; Path=/"})
+        return httpx.Response(500, text="oops")
+
+    client = client_with(vw, httpx.MockTransport(handler), token=make_jwt(12))
+    with pytest.raises(vw.SessionWall):
+        vw.api_get(client, con, f"{vw.BASE}/api/v2/catalog/items", {"search_text": "x"})
+    until = vw.parse_ts(vw.meta_get(con, "backoff_until"))
+    assert until is not None, "a 5xx must set a backoff"
+    minutes = (until - datetime.now(timezone.utc)).total_seconds() / 60
+    assert 5 < minutes <= vw.SERVER_BACKOFF_MIN + 1
+    assert len([c for c in calls if "catalog" in c]) == 1, "no retry into a 5xx"
+
+
+def test_a_server_error_is_not_mistaken_for_a_bot_wall(vw, con, paths):
+    """They call for different waits, so they must not share a code path."""
+    assert vw.SERVER_BACKOFF_MIN < vw.WALL_BACKOFF_MIN
