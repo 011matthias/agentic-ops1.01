@@ -85,15 +85,23 @@ def _patch_ocr(monkeypatch, *extractions: ExtractedReceipt) -> None:
 
 
 def _create_batch(client, legal_entity="Corporate Services"):
+    # 2026-09-08 split: the company month is created empty (the config —
+    # default_paid_through, card maps, CoA provisioning — is written at
+    # create), and the receipt enters through the add route.
     resp = client.post(
-        "/api/expense-batches",
+        "/api/expense-batches", data={"legal_entity": legal_entity}
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert client.get(f"/jobs/{body['job_id']}").json()["status"] == "done"
+    resp = client.post(
+        f"/api/expense-batches/{body['batch_id']}/receipts",
         files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
-        data={"legal_entity": legal_entity},
     )
     assert resp.status_code == 200, resp.text
     job = client.get(f"/jobs/{resp.json()['job_id']}").json()
     assert job["status"] == "done", job
-    return resp.json()["batch_id"]
+    return body["batch_id"]
 
 
 # ── coa_validation_from_settings (unit) ─────────────────────────────

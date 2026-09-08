@@ -237,17 +237,25 @@ def test_grid_variance_chip_and_books_as(web_client, monkeypatch):
         _extraction("Staples", "17.00"),
         _extraction("Uber", "9.99"),
     )
+    # A company month is created EMPTY (2026-09-08); receipts join via the
+    # add route afterwards.
     resp = web_client.post(
         "/api/expense-batches",
+        data={"legal_entity": "Corporate Services"},
+    )
+    assert resp.status_code == 200, resp.text
+    batch_id = resp.json()["batch_id"]
+    job = web_client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    resp = web_client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
         files=[
             ("files", ("a.jpg", JPG, "application/octet-stream")),
             ("files", ("b.jpg", JPG + b"2", "application/octet-stream")),
             ("files", ("c.jpg", JPG + b"3", "application/octet-stream")),
         ],
-        data={"legal_entity": "Corporate Services"},
     )
     assert resp.status_code == 200, resp.text
-    batch_id = resp.json()["batch_id"]
     job = web_client.get(f"/jobs/{resp.json()['job_id']}").json()
     assert job["status"] == "done", job
 

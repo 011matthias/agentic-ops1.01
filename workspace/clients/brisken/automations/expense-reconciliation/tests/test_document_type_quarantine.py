@@ -191,6 +191,10 @@ def _patch_ocr(monkeypatch, *extractions):
 
 
 def test_web_batch_create_quarantines_statement_page(web_client, monkeypatch):
+    # A company month is created EMPTY (2026-09-08); receipts join via the
+    # add route afterwards, so the quarantine surfaces through the add
+    # path's own record (ingest issues + set-aside strip), not through
+    # creation-time parse_issues.
     _patch_ocr(
         monkeypatch,
         _extraction(vendor="Staples", total="42.50"),
@@ -198,34 +202,49 @@ def test_web_batch_create_quarantines_statement_page(web_client, monkeypatch):
     )
     resp = web_client.post(
         "/api/expense-batches",
+        data={"legal_entity": "Corporate Services"},
+    )
+    assert resp.status_code == 200, resp.text
+    batch_id = resp.json()["batch_id"]
+    job = web_client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    resp = web_client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
         files=[
             ("files", ("a.jpg", JPG, "application/octet-stream")),
             ("files", ("summary.jpg", JPG + b"2", "application/octet-stream")),
         ],
-        data={"legal_entity": "Corporate Services"},
     )
     assert resp.status_code == 200, resp.text
     job = web_client.get(f"/jobs/{resp.json()['job_id']}").json()
     assert job["status"] == "done", job
 
-    grid = web_client.get(f"/api/expense-batches/{resp.json()['batch_id']}").json()
+    grid = web_client.get(f"/api/expense-batches/{batch_id}").json()
     assert grid["summary"]["n_expenses"] == 1
     assert {e["vendor"]["display"] for e in grid["expenses"]} == {"Staples"}
     quarantine = [
-        i for i in grid["parse_issues"] if "not a purchase receipt" in i["message"]
+        i for i in grid["expense_ingest"]["issues"]
+        if "not a purchase receipt" in i
     ]
     assert len(quarantine) == 1
-    assert "summary.jpg" in quarantine[0]["file"]
+    assert "summary.jpg" in quarantine[0]
+    assert [e["display"] for e in grid["set_aside"]] == ["summary.jpg"]
 
 
 def test_web_incremental_add_quarantines_statement_page(web_client, monkeypatch):
     _patch_ocr(monkeypatch, _extraction(vendor="Staples"))
     resp = web_client.post(
         "/api/expense-batches",
-        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
         data={"legal_entity": "Corporate Services"},
     )
     batch_id = resp.json()["batch_id"]
+    job = web_client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    resp = web_client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
+    )
+    assert resp.status_code == 200, resp.text
     job = web_client.get(f"/jobs/{resp.json()['job_id']}").json()
     assert job["status"] == "done", job
 
@@ -276,18 +295,26 @@ def _make_batch_with_set_aside(web_client, monkeypatch):
         _extraction(vendor="Staples", total="42.50"),
         _extraction(vendor=None, total="8796.35", document_type="report_summary"),
     )
+    # A company month is created EMPTY (2026-09-08); receipts join via the
+    # add route afterwards.
     resp = web_client.post(
         "/api/expense-batches",
-        files=[
-            ("files", ("a.jpg", JPG, "application/octet-stream")),
-            ("files", ("summary.jpg", JPG + b"2", "application/octet-stream")),
-        ],
         data={"legal_entity": "Corporate Services"},
     )
     assert resp.status_code == 200, resp.text
     job = web_client.get(f"/jobs/{resp.json()['job_id']}").json()
     assert job["status"] == "done", job
     batch_id = resp.json()["batch_id"]
+    resp = web_client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[
+            ("files", ("a.jpg", JPG, "application/octet-stream")),
+            ("files", ("summary.jpg", JPG + b"2", "application/octet-stream")),
+        ],
+    )
+    assert resp.status_code == 200, resp.text
+    job = web_client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
     grid = web_client.get(f"/api/expense-batches/{batch_id}").json()
     assert len(grid["set_aside"]) == 1
     return batch_id, grid["set_aside"][0]["file"]
@@ -355,10 +382,14 @@ def test_web_add_set_aside_survives_next_add(web_client, monkeypatch):
     _patch_ocr(monkeypatch, _extraction(vendor="Staples"))
     resp = web_client.post(
         "/api/expense-batches",
-        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
         data={"legal_entity": "Corporate Services"},
     )
     batch_id = resp.json()["batch_id"]
+    assert web_client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    resp = web_client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
+    )
     assert web_client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
 
     _patch_ocr(
@@ -397,6 +428,18 @@ def test_web_legacy_snapshot_derives_and_restores(web_client, monkeypatch):
         run = store.get_run(batch_id)
         legacy = dict(run.snapshot)
         legacy.pop("set_aside")
+        # A pre-strip batch (the May run) recorded the quarantine in its
+        # own parse warnings; the batch above was built through the add
+        # route, which records it in expense_ingest instead. Reproduce the
+        # legacy record the derivation historically read.
+        legacy["parse_errors"] = [
+            [
+                file, 0,
+                "looks like an expense-report summary page, not a purchase "
+                "receipt; excluded from expenses (no row exported)",
+                "warning",
+            ]
+        ]
         store.update_run_snapshot(batch_id, legacy)
 
     grid = web_client.get(f"/api/expense-batches/{batch_id}").json()

@@ -74,14 +74,22 @@ def _wire(monkeypatch, n=4):
 
 
 def _batch(client, label="April 2026"):
+    # Empty create + receipts add (the 2026-09-08 decoupling): the month
+    # is a container at creation; the receipt joins through the add route.
     resp = client.post(
         "/api/expense-batches",
-        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
         data={"legal_entity": "Corporate Services", "label": label},
     )
     assert resp.status_code == 200, resp.text
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
-    return resp.json()["batch_id"]
+    batch_id = resp.json()["batch_id"]
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
+    )
+    assert resp.status_code == 200, resp.text
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    return batch_id
 
 
 def _carded_csv(*rows: tuple[str, str, str, str]) -> bytes:

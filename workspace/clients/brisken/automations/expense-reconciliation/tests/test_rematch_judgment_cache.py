@@ -74,15 +74,24 @@ def _mock(extractions, n_fx: int = 8) -> MockLLMClient:
 
 
 def _create_batch(client) -> str:
+    # A company month is created EMPTY (2026-09-08); receipts join via the
+    # add route afterwards.
     resp = client.post(
         "/api/expense-batches",
-        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
         data={"legal_entity": "Corporate Services"},
     )
     assert resp.status_code == 200, resp.text
     job = client.get(f"/jobs/{resp.json()['job_id']}").json()
     assert job["status"] == "done", job
-    return resp.json()["batch_id"]
+    batch_id = resp.json()["batch_id"]
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
+    )
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return batch_id
 
 
 def _attach(client, batch_id):

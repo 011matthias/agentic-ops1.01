@@ -68,14 +68,23 @@ def _extraction(vendor="OriginalVendor", total="42.50"):
 
 
 def _create_batch(client):
+    # A company month is created EMPTY (2026-09-08); receipts join via the
+    # add route afterwards. The add stages the file as `0000__a.jpg`, so
+    # DOC_ID is unchanged.
     resp = client.post(
         "/api/expense-batches",
-        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
         data={"legal_entity": "Corporate Services"},
     )
     assert resp.status_code == 200, resp.text
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
-    return resp.json()["batch_id"]
+    batch_id = resp.json()["batch_id"]
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
+    )
+    assert resp.status_code == 200, resp.text
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    return batch_id
 
 
 def _attach(client, batch_id):

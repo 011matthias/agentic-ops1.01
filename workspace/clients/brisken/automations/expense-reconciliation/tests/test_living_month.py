@@ -79,14 +79,22 @@ def _wire(monkeypatch, *extractions, n_fx=12):
 
 
 def _create_batch(client, label="April 2026"):
+    # A company month is created EMPTY (2026-09-08); receipts join via the
+    # add route afterwards.
     resp = client.post(
         "/api/expense-batches",
-        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
         data={"legal_entity": "Corporate Services", "label": label},
     )
     assert resp.status_code == 200, resp.text
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
-    return resp.json()["batch_id"]
+    batch_id = resp.json()["batch_id"]
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
+    )
+    assert resp.status_code == 200, resp.text
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    return batch_id
 
 
 def _attach(client, batch_id):

@@ -86,19 +86,38 @@ def _create_trip(client, name="TEST - Rome", start="2026-04-01",
 
 def _create_batch(client, label="April 2026", *, files=None, extra=None,
                   fname="a.jpg", body=b""):
-    resp = client.post(
-        "/api/expense-batches",
-        files=files or [
-            ("files", (fname, JPG + body, "application/octet-stream"))
-        ],
-        data={
-            "legal_entity": "Corporate Services", "label": label,
-            **(extra or {}),
-        },
-    )
+    payload = files or [
+        ("files", (fname, JPG + body, "application/octet-stream"))
+    ]
+    data = {
+        "legal_entity": "Corporate Services", "label": label,
+        **(extra or {}),
+    }
+    if data.get("batch_type") == "trip":
+        # Trip creates keep their create-with-receipt shape.
+        resp = client.post("/api/expense-batches", files=payload, data=data)
+        assert resp.status_code == 200, resp.text
+        assert client.get(
+            f"/jobs/{resp.json()['job_id']}"
+        ).json()["status"] == "done"
+        return resp.json()["batch_id"]
+    # A company month is created EMPTY since 2026-09-08; its receipts
+    # follow through the add route, popping the SAME mock extractions in
+    # the same order the old create-with-files did.
+    resp = client.post("/api/expense-batches", data=data)
     assert resp.status_code == 200, resp.text
-    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
-    return resp.json()["batch_id"]
+    batch_id = resp.json()["batch_id"]
+    assert client.get(
+        f"/jobs/{resp.json()['job_id']}"
+    ).json()["status"] == "done"
+    added = client.post(
+        f"/api/expense-batches/{batch_id}/receipts", files=payload
+    )
+    assert added.status_code == 200, added.text
+    assert client.get(
+        f"/jobs/{added.json()['job_id']}"
+    ).json()["status"] == "done"
+    return batch_id
 
 
 def _create_trip_batch(client, trip_id, *, files=None):

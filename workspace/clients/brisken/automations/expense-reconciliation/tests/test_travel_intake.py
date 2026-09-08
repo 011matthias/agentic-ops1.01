@@ -213,16 +213,25 @@ def test_travel_mail_rests_even_when_its_month_is_open(
 ):
     _set_travel_alias(client)
     # An OPEN month batch matching the receipt's printed month — the
-    # exact situation where month mail would ingest immediately.
+    # exact situation where month mail would ingest immediately. Created
+    # EMPTY (the create takes no files since 2026-09-08), then seeded
+    # through the add route.
     _patch_ocr(monkeypatch, _extraction(vendor="Seed"))
     resp = client.post(
         "/api/expense-batches",
-        files=[("files", ("seed.jpg", JPG, "application/octet-stream"))],
         data={"legal_entity": "Corporate Services", "label": MONTH_LABEL},
     )
     assert resp.status_code == 200, resp.text
     batch_id = resp.json()["batch_id"]
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    added = client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("seed.jpg", JPG, "application/octet-stream"))],
+    )
+    assert added.status_code == 200, added.text
+    assert client.get(
+        f"/jobs/{added.json()['job_id']}"
+    ).json()["status"] == "done"
 
     _patch_ocr(monkeypatch, _extraction())
     result = _send(client, _mail(
@@ -285,20 +294,30 @@ def test_receipts_behavior_is_identical_with_and_without_the_alias(
                 pooled, _meta(c, pooled["archive"]),
                 _log_row(c, pooled["archive"]),
             )
-            # Open the month (its create also claims the pooled mail:
-            # queue = seed extraction + the claim's ingest extraction).
-            _patch_ocr(monkeypatch, _extraction(vendor="Seed"),
-                       _extraction())
+            # Open the month EMPTY (the create takes no files since
+            # 2026-09-08); its create claims the pooled mail, then the
+            # seed enters through the add route. Queue = the claim's
+            # ingest extraction first, the seed extraction after it —
+            # the same two pops as before, assigned to the same files.
+            _patch_ocr(monkeypatch, _extraction(),
+                       _extraction(vendor="Seed"))
             resp = c.post(
                 "/api/expense-batches",
-                files=[("files",
-                        ("seed.jpg", JPG + b"s", "application/octet-stream"))],
                 data={"legal_entity": "Corporate Services",
                       "label": MONTH_LABEL},
             )
             assert resp.status_code == 200, resp.text
             assert c.get(
                 f"/jobs/{resp.json()['job_id']}"
+            ).json()["status"] == "done"
+            added = c.post(
+                f"/api/expense-batches/{resp.json()['batch_id']}/receipts",
+                files=[("files",
+                        ("seed.jpg", JPG + b"s", "application/octet-stream"))],
+            )
+            assert added.status_code == 200, added.text
+            assert c.get(
+                f"/jobs/{added.json()['job_id']}"
             ).json()["status"] == "done"
             # Half 2: month open -> the mail direct-ingests.
             _patch_ocr(monkeypatch,

@@ -46,16 +46,23 @@ def _patch_ocr(monkeypatch, *extractions: ExtractedReceipt) -> MockLLMClient:
 
 
 def _create_batch(client, files=None, legal_entity="Corporate Services"):
-    payload = [
-        ("files", (n, d, "application/octet-stream"))
-        for n, d in (files or [("a.jpg", JPG)])
-    ]
+    # 2026-09-08 split: empty company-month create + receipt add. Registry
+    # canonicalization / categorization run on the add path now.
     resp = client.post(
-        "/api/expense-batches", files=payload, data={"legal_entity": legal_entity}
+        "/api/expense-batches", data={"legal_entity": legal_entity}
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert client.get(f"/jobs/{body['job_id']}").json()["status"] == "done"
+    resp = client.post(
+        f"/api/expense-batches/{body['batch_id']}/receipts",
+        files=[
+            ("files", (n, d, "application/octet-stream"))
+            for n, d in (files or [("a.jpg", JPG)])
+        ],
+    )
+    assert resp.status_code == 200, resp.text
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
     return body["batch_id"]
 
 

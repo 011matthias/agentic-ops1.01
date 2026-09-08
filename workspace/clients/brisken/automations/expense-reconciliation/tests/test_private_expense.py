@@ -75,16 +75,23 @@ def _extraction(**overrides) -> ExtractedReceipt:
 
 
 def _create_batch(client, n_files=1, label="August 2026"):
-    files = [
-        ("files", (f"r{i}.jpg", JPG + bytes([i]), "application/octet-stream"))
-        for i in range(n_files)
-    ]
-    resp = client.post("/api/expense-batches", files=files,
+    # Empty create + receipts add (the 2026-09-08 decoupling): files are
+    # refused at month creation and join through the add route instead.
+    resp = client.post("/api/expense-batches",
                        data={"legal_entity": "", "label": label})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert client.get(f"/jobs/{body['job_id']}").json()["status"] == "done"
-    return body["batch_id"]
+    batch_id = body["batch_id"]
+    files = [
+        ("files", (f"r{i}.jpg", JPG + bytes([i]), "application/octet-stream"))
+        for i in range(n_files)
+    ]
+    resp = client.post(f"/api/expense-batches/{batch_id}/receipts",
+                       files=files)
+    assert resp.status_code == 200, resp.text
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    return batch_id
 
 
 def _grid(client, batch_id) -> dict:

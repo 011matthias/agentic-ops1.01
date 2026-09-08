@@ -98,6 +98,12 @@ EXPENSE_BATCH_CONTRACT = {
     "duplicate_groups[]": "object",
     "duplicate_groups[].members[]": "string",
     "entity_options[]": "string",
+    # The incremental add's summary (2026-09-08 split: receipts enter a
+    # company month through the add route, so its ledger — the rows it
+    # created and the uploads it rejected — is a grid surface the SPA reads).
+    "expense_ingest.documents[]": "string",
+    "expense_ingest.issues[]": "string",
+    "expense_ingest.issue_details[]": "object",
     "expenses[]": "object",
     "expenses[].books_as[]": "object",
     "expenses[].category_variance.categories[]": "string",
@@ -168,6 +174,9 @@ EXPENSE_BATCH_MUST_COVER = {
     "card_review.resolved[].hints[]",
     "summary.upload_issues[]",
     "summary.upload_issue_details[]",
+    "expense_ingest.documents[]",
+    "expense_ingest.issues[]",
+    "expense_ingest.issue_details[]",
     "account_options[]",
     "category_options[]",
     "entity_options[]",
@@ -426,20 +435,30 @@ def _expense_batch(client, monkeypatch_setattr) -> dict:
     ])
     monkeypatch_setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
 
-    resp = client.post("/api/expense-batches", files=[
-        ("files", ("a.jpg", JPG, "application/octet-stream")),
-        ("files", ("b.jpg", JPG + b"2", "application/octet-stream")),
-        ("files", ("c.jpg", JPG + b"3", "application/octet-stream")),
-        ("files", ("d.jpg", JPG + b"4", "application/octet-stream")),
-        ("files", ("stmt.jpg", JPG + b"5", "application/octet-stream")),
-        # not a receipt type -> summary.upload_issues
-        ("files", ("notes.txt", b"not a receipt", "text/plain")),
-    ], data={"legal_entity": "Corporate Services", "label": "Contract fixture"})
+    # 2026-09-08 split: the month is created empty and the receipts enter
+    # through the add route, whose job writes the upload ledger into the
+    # grid's `expense_ingest` (the quarantine + rejection surfaces below).
+    resp = client.post(
+        "/api/expense-batches",
+        data={"legal_entity": "Corporate Services", "label": "Contract fixture"},
+    )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     job = client.get(f"/jobs/{body['job_id']}").json()
     assert job["status"] == "done", job
     batch_id = body["batch_id"]
+    resp = client.post(f"/api/expense-batches/{batch_id}/receipts", files=[
+        ("files", ("a.jpg", JPG, "application/octet-stream")),
+        ("files", ("b.jpg", JPG + b"2", "application/octet-stream")),
+        ("files", ("c.jpg", JPG + b"3", "application/octet-stream")),
+        ("files", ("d.jpg", JPG + b"4", "application/octet-stream")),
+        ("files", ("stmt.jpg", JPG + b"5", "application/octet-stream")),
+        # not a receipt type -> expense_ingest.issues / issue_details
+        ("files", ("notes.txt", b"not a receipt", "text/plain")),
+    ])
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
 
     grid = client.get(f"/api/expense-batches/{batch_id}").json()
     staples = [e["document_id"] for e in grid["expenses"]
@@ -456,7 +475,13 @@ def _expense_batch(client, monkeypatch_setattr) -> dict:
     assert r.status_code == 200, r.text
 
     view = client.get(f"/api/expense-batches/{batch_id}").json()
-    assert view["parse_issues"], view["summary"]
+    # The add-path quarantine reports through set_aside + expense_ingest
+    # (create-time parse_issues are covered by the trip fixture, whose
+    # create still takes files).
+    assert view["set_aside"], view["summary"]
+    assert view["expense_ingest"]["issues"], view["expense_ingest"]
+    assert view["expense_ingest"]["issue_details"], view["expense_ingest"]
+    assert view["expense_ingest"]["documents"], view["expense_ingest"]
     return view
 
 
@@ -481,11 +506,17 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
         "label": "Amex (contract fixture)", "digits": ["9001"],
         "entity": "Corporate Services",
     }}})
-    resp = client.post("/api/expense-batches", files=[
-        ("files", ("m.jpg", JPG + b"m", "application/octet-stream")),
-    ], data={"legal_entity": "Corporate Services", "label": "Contract month"})
+    resp = client.post(
+        "/api/expense-batches",
+        data={"legal_entity": "Corporate Services", "label": "Contract month"},
+    )
     assert resp.status_code == 200, resp.text
     batch_id = resp.json()["batch_id"]
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    resp = client.post(f"/api/expense-batches/{batch_id}/receipts", files=[
+        ("files", ("m.jpg", JPG + b"m", "application/octet-stream")),
+    ])
+    assert resp.status_code == 200, resp.text
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
 
     for _ in range(2):
@@ -515,21 +546,36 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
 
 def _trip_batch(client, monkeypatch_setattr) -> dict:
     """A trip batch (item 38), so the `trip` object — and its travelers
-    roster, the one new LIST — is observed on the expense-batch view."""
+    roster — is observed on the expense-batch view.
+
+    Since the 2026-09-08 split the trip create is the ONE create that still
+    takes files, so this fixture also carries the create-time surfaces a
+    company month no longer produces: a quarantined statement page
+    (parse_issues[] + set_aside[]) and an unsupported upload
+    (summary.upload_issues[] / upload_issue_details[])."""
     trip = client.post("/api/trips", json={
         "name": "Contract trip", "start": "2026-07-01", "end": "2026-07-10",
         "travelers": ["Dirk Neumann", "Criss"],
     })
     assert trip.status_code == 200, trip.text
-    mock = MockLLMClient(extraction_responses=[_extraction()])
+    mock = MockLLMClient(extraction_responses=[
+        _extraction(),
+        # a statement page among the receipts -> quarantine + parse issue
+        _extraction(vendor=None, total="8796.35", document_type="statement"),
+    ])
     monkeypatch_setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
     resp = client.post("/api/expense-batches", files=[
         ("files", ("t.jpg", JPG + b"t", "application/octet-stream")),
+        ("files", ("trip-stmt.jpg", JPG + b"s", "application/octet-stream")),
+        # not a receipt type -> summary.upload_issues
+        ("files", ("notes.txt", b"not a receipt", "text/plain")),
     ], data={"batch_type": "trip", "trip_id": trip.json()["trip_id"]})
     assert resp.status_code == 200, resp.text
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
     view = client.get(f"/api/expense-batches/{resp.json()['batch_id']}").json()
     assert view["trip"]["travelers"], view["trip"]
+    assert view["parse_issues"], view["summary"]
+    assert view["summary"]["upload_issues"], view["summary"]
     return view
 
 

@@ -361,6 +361,42 @@ def _run_batch_receipts_job(
         shutil.rmtree(staging_dir, ignore_errors=True)
 
 
+def _run_receipts_drop_job(
+    db_path: Path, job_id: str, staging: Path, month_override: str,
+    learning_db_path: Path | None, data_root: Path,
+) -> None:
+    """Route a dropped pile of receipts to their months, off the request
+    (per-file vision). The per-file ledger lands in the job row's
+    ``result``, so GET /jobs/{id} is where the page reads what filed
+    where, what needs a month picked, and what was rejected."""
+    from .intake_mail import route_dropped_receipts
+
+    def _stage(name: str) -> None:
+        # A fresh short-lived connection per stage write: the routing runs
+        # for minutes and opens its own stores, so nothing long-lived may
+        # sit beside them.
+        with RunStore(db_path) as store:
+            store.set_job_stage(job_id, name, _now_iso())
+
+    try:
+        outcome = route_dropped_receipts(
+            db_path, learning_db_path, data_root, staging,
+            month_override, on_stage=_stage,
+        )
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_DONE, result=json.dumps(outcome),
+                updated_at=_now_iso(),
+            )
+    except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
+            )
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
 def _run_attach_statement_job(
     db_path: Path, job_id: str, run_id: str, stmt_name: str,
     column_map: dict | None, form: RunForm, learning_db_path: Path,
@@ -2487,6 +2523,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 {"error": "batch_type must be 'company-month' or 'trip'"},
                 status_code=400,
             )
+        if declared != BATCH_TYPE_TRIP and files:
+            # 2026-09-08 owner directive: receipt entry is decoupled from
+            # month creation. A company month is created EMPTY (the
+            # container a statement lands in); receipts enter through the
+            # Receipts drop page (POST /api/receipts) or by mail, and each
+            # files into the month printed on it. Trip creates keep their
+            # create-with-receipt shape (a trip batch exists only once a
+            # receipt joins), and the mail materializer builds months
+            # through the service layer, not this route.
+            return JSONResponse(
+                {"error": (
+                    "Receipts no longer attach at month creation. Create "
+                    "the month empty, then add receipts on the Receipts "
+                    "page — each files into its month automatically."
+                )},
+                status_code=400,
+            )
         if declared == BATCH_TYPE_TRIP:
             if not trip_id:
                 return JSONResponse(
@@ -2527,6 +2580,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 settings=settings,
                 batch_type=declared,
                 trip_id=trip_id,
+                # A company month is a legal empty container since
+                # 2026-09-08; a trip batch still requires its first
+                # receipt (create-with-receipt or first join).
+                allow_empty=declared != BATCH_TYPE_TRIP,
             )
         except RunInputError as exc:
             if declared == BATCH_TYPE_TRIP:
@@ -2745,6 +2802,63 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         background.add_task(
             _run_batch_receipts_job, app.state.db_path, job_id, run_id,
             staging, app.state.learning_db_path,
+        )
+        return JSONResponse({"ok": True, "job_id": job_id, "n_files": saved})
+
+    @app.post("/api/receipts")
+    async def post_receipts_drop(
+        background: BackgroundTasks, request: Request
+    ):
+        """The Receipts page (2026-09-08): drop any receipts, any time —
+        the ONE manual entrance for expense creation. Each file routes to
+        the month printed on it (months materialize when absent,
+        `created_by: "drop"`); a file with no readable date is reported
+        `needs_month` and the page re-submits it with an explicit
+        `month` ("YYYY-MM") override. Multipart `files` (repeatable);
+        background job -> {job_id}; the SPA polls GET /jobs/{id} and
+        reads the per-file ledger from the job's `result`."""
+        if not _receipt_first_on():
+            return _flag_off()
+        from .intake_mail import valid_month_key
+
+        form = await request.form()
+        uploads = [
+            u for u in form.getlist("files") if getattr(u, "filename", None)
+        ]
+        one = form.get("file")
+        if one is not None and getattr(one, "filename", None):
+            uploads.append(one)
+        if not uploads:
+            return JSONResponse({"error": "no files uploaded"}, status_code=400)
+        month_override = str(form.get("month") or "").strip()
+        if month_override and not valid_month_key(month_override):
+            return JSONResponse(
+                {"error": 'month must be "YYYY-MM"'}, status_code=400
+            )
+
+        job_id = uuid.uuid4().hex[:12]
+        staging = Path(app.state.data_root) / "drops" / job_id
+        staging.mkdir(parents=True, exist_ok=True)
+        saved = 0
+        for i, up in enumerate(uploads):
+            data = await up.read()
+            if not data:
+                continue
+            safe = re.sub(r"[^A-Za-z0-9._-]", "_", Path(up.filename).name) or "file"
+            (staging / f"{i:04d}__{safe}").write_bytes(data)
+            saved += 1
+        if saved == 0:
+            shutil.rmtree(staging, ignore_errors=True)
+            return JSONResponse(
+                {"error": "all uploaded files were empty"}, status_code=400
+            )
+
+        with open_store() as store:
+            store.create_job(job_id, None, _now_iso())
+        background.add_task(
+            _run_receipts_drop_job, app.state.db_path, job_id, staging,
+            month_override, app.state.learning_db_path,
+            Path(app.state.data_root),
         )
         return JSONResponse({"ok": True, "job_id": job_id, "n_files": saved})
 

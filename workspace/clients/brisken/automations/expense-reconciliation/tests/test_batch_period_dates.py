@@ -218,13 +218,22 @@ def _batch(client, monkeypatch, readings, label="April 2026"):
         ("files", (f"r{i:02d}.jpg", JPG + str(i).encode(), "application/octet-stream"))
         for i in range(len(readings))
     ]
+    # A company month is created EMPTY (2026-09-08); receipts join via the
+    # add route afterwards. The label stays on the create, so period
+    # derivation is unchanged.
     resp = client.post(
-        "/api/expense-batches", files=files,
+        "/api/expense-batches",
         data={"legal_entity": "Corporate Services", "label": label},
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     job = client.get(f"/jobs/{body['job_id']}").json()
+    assert job["status"] == "done", job
+    resp = client.post(
+        f"/api/expense-batches/{body['batch_id']}/receipts", files=files,
+    )
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
     assert job["status"] == "done", job
     return body["batch_id"]
 

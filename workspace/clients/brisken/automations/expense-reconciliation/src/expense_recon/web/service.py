@@ -3914,6 +3914,7 @@ def create_expense_batch(
     batch_type: str = "",
     trip_id: str = "",
     provenance_by_digest: dict[str, dict] | None = None,
+    allow_empty: bool = False,
 ) -> PreparedExpenseBatch:
     """Validate + spool an uploaded batch of receipts and build the
     expense-generation config. No statement, no run row yet — this is the
@@ -3938,7 +3939,7 @@ def create_expense_batch(
     trip exists). `provenance_by_digest` (sha1[:16] -> person dict)
     carries mail provenance for a batch created FROM a mailed receipt.
     """
-    if not files:
+    if not files and not allow_empty:
         raise RunInputError("No receipt files uploaded.")
     if batch_type and batch_type not in VALID_BATCH_TYPES:
         raise RunInputError(
@@ -4005,7 +4006,13 @@ def create_expense_batch(
 
     _shutil.rmtree(staging, ignore_errors=True)
 
-    if n_saved == 0:
+    if n_saved == 0 and not (allow_empty and not files):
+        # `allow_empty` sanctions a deliberately RECEIPTLESS month (the
+        # empty container a statement lands in; receipts arrive via mail
+        # or the drop page). It never sanctions an upload whose every file
+        # the validation rejected: that refusal is the floor the mail
+        # materializer and the drop path both stand on — a month is never
+        # created from files that could not be read.
         _shutil.rmtree(work_dir, ignore_errors=True)
         detail = f" ({issues[0]})" if issues else ""
         raise RunInputError(f"No readable receipt files uploaded.{detail}")

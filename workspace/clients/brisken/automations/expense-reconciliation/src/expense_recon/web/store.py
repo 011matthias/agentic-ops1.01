@@ -290,6 +290,7 @@ class RunStore:
                 run_id     TEXT,
                 error      TEXT,
                 stage      TEXT,
+                result     TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT
             );
@@ -379,6 +380,15 @@ class RunStore:
         }
         if "disposition" not in decision_cols:
             self.conn.execute("ALTER TABLE decisions ADD COLUMN disposition TEXT")
+        # jobs.result (receipts drop, 2026-09-08): the live volume predates
+        # the column; NULL on old rows reads as "this job kind carries no
+        # payload", which is true of every job kind before the drop.
+        job_cols = {
+            row["name"]
+            for row in self.conn.execute("PRAGMA table_info(jobs)").fetchall()
+        }
+        if "result" not in job_cols:
+            self.conn.execute("ALTER TABLE jobs ADD COLUMN result TEXT")
 
     # -- runs -------------------------------------------------------------
 
@@ -744,14 +754,19 @@ class RunStore:
         run_id: str | None = None,
         error: str | None = None,
         stage: str | None = None,
+        result: str | None = None,
         updated_at: str,
     ) -> None:
         self.conn.execute(
             # COALESCE keeps the last recorded pipeline stage when the final
             # status write passes no stage (done/error must not blank it).
+            # Same rule for result: only a job kind that produces a payload
+            # (the receipts drop) ever passes one, and a later status write
+            # must not blank it.
             "UPDATE jobs SET status = ?, run_id = ?, error = ?, "
-            "stage = COALESCE(?, stage), updated_at = ? WHERE job_id = ?",
-            (status, run_id, error, stage, updated_at, job_id),
+            "stage = COALESCE(?, stage), result = COALESCE(?, result), "
+            "updated_at = ? WHERE job_id = ?",
+            (status, run_id, error, stage, result, updated_at, job_id),
         )
         self.conn.commit()
 
@@ -784,17 +799,26 @@ class RunStore:
 
     def get_job(self, job_id: str) -> dict | None:
         row = self.conn.execute(
-            "SELECT status, run_id, error, stage FROM jobs WHERE job_id = ?",
+            "SELECT status, run_id, error, stage, result FROM jobs "
+            "WHERE job_id = ?",
             (job_id,),
         ).fetchone()
         if row is None:
             return None
-        return {
+        job = {
             "status": row["status"],
             "run_id": row["run_id"],
             "error": row["error"],
             "stage": row["stage"],
         }
+        if row["result"]:
+            # Stored as JSON text; a corrupt payload degrades to absent
+            # rather than 500ing the poll.
+            try:
+                job["result"] = json.loads(row["result"])
+            except ValueError:
+                pass
+        return job
 
     def sweep_stale_jobs(self, now_iso: str) -> list[str | None]:
         """Mark every still-`running` job as interrupted (a server restart
