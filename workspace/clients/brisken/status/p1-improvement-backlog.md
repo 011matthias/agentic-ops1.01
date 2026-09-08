@@ -1425,6 +1425,37 @@ verified criteria list mapped onto the tool's actual outputs + a gap
 analysis, reviewed by the owner BEFORE any build. Session prompt handed
 2026-09-08 (checkpoint of the same day); full brief there.
 
+**Round 1 DELIVERED 2026-09-08, pending owner review, nothing built:**
+`automations/expense-reconciliation/docs/us-substantiation-criteria.md`.
+27 criteria in four sets, each citing a primary source fetched that
+session (26 U.S.C. 162/274; 26 C.F.R. 1.6001-1, 1.62-2, 1.274-5,
+1.274-5T; Rev. Proc. 97-22; Pub. 583/463). The scope guard held and
+narrowed: GAAP presentation and filing are out as predicted, and TWO
+criteria a pre-2018 checklist would have added are out on the statute's
+own text (entertainment left the 274(d) list in 2017, so no attendee /
+business-relationship element binds; the 274(n) 50% meals limit is a
+deduction computation, not a document element). The body that binds the
+tool most directly turned out to be **Rev. Proc. 97-22**, the electronic
+storage system rules, which nobody had named: the tool IS the storage
+system, and compliance is what makes its records count as 6001 records.
+
+Eleven gaps ranked. The top three: **business purpose exists nowhere in
+the tool** (a repo-wide search returns zero hits; it is a required 274(d)
+element and its absence can turn a reimbursement into wages under
+1.62-2(c)(5)); **no retention control and `delete_run` drops a whole
+month** (1.6001-1(e), 97-22 4.01(8)); **`expense_location` is captured on
+the Zoho ingest path and dies at the API layer**, reaching no PDF, CSV or
+XLSX, so a required element is being thrown away. Two source caveats
+recorded in the file: eCFR blocked automated access all session so the
+regulation text is Cornell LII rather than official, and Pub. 463's
+Table 5-1 never came back cleanly so it was used as authority for
+nothing (the element lists come from 1.274-5T(b) verbatim instead).
+
+**Blocking question before any of it is live:** whether any Brisken
+entity files a US federal return. UNVERIFIED, no query path, not
+guessed. A US card is not a US taxpayer; if the answer is no, the
+correct round 2 is the same exercise against DE and BR rules.
+
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
 **Entity half DONE 2026-09-06** (authorized operator-API write, verified on
