@@ -315,8 +315,8 @@ Independent of the strategy, actionable now.
 
 | Defect | Consequence |
 |---|---|
-| The checked-in leads migration declares 7 columns; the real table has 8, and the function's claim that it bootstraps on cold start is false | A fresh deploy 500s on every book-demo submission |
-| `/api/book-demo` writes to a table no page, export or API reads back | Lead capture is write-only; a form that stops persisting looks like a quiet week |
+| The leads migration's header claimed `api/book-demo.js` runs `CREATE TABLE IF NOT EXISTS` on cold start. It contains no DDL at all | A fresh Neon project 500s on every submission while the reader believes the migration is optional. Bites precisely at the P5 Neon migration. **Fixed 2026-09-09.** (The same review also reported a 7-against-8 column mismatch; re-reading the files, there is none: the migration declares 8 and the insert names 6 with `id` and `created_at` defaulted.) |
+| `/api/book-demo` writes to a table nothing reads back: there is no `SELECT` against `leads` anywhere in the repo | Confirmed 2026-09-09. The only egress is the `NOTIFY_WEBHOOK_URL` push, which for ntfy is deliberately PII-minimal: company and preferred date, no name and no email. So a booking notification arrives that cannot be replied to, and reaching the person means opening the Neon console. Folding this into the lead desk (P5) is the fix |
 | `BRISKEN_INQUIRY_RESEND_KEY` was never set on the OnePilot sites | Any contact-form submission there would never have reached a human. **Checked 2026-09-09: no `inquiries.jsonl` exists on either volume**, so nothing was submitted and nothing was lost. Both volumes did hold a `feedback.jsonl` of in-page review notes, now rescued to `deliverables/lead-generation/onepilot/REVIEW-FEEDBACK-2026-06.md` |
 | The old Wix OnePilot form was still taking submissions five days before the site moved, and the only two real inbound enquiries Brisken has ever had came through it | If it is still on, leads are landing where none of this reaches |
 | `DEV_RECIPIENTS` is `matthias.silva` only; `EXPENSE_RECON_NOTIFY_USER` is absent from the client `.env` | Criss has never received a result-ready mail |

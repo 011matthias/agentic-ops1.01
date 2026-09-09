@@ -1,7 +1,15 @@
 -- Book-a-demo lead store (Neon Postgres). Keep the Neon project in an EU region.
--- Run once in the Neon SQL Editor. The function also runs the equivalent
--- CREATE TABLE IF NOT EXISTS on cold start; for a hardened setup, run this once
--- and point DATABASE_URL at an INSERT-only role (then the function's DDL is a no-op).
+--
+-- YOU MUST RUN THIS. api/book-demo.js contains no DDL of any kind: it only
+-- INSERTs. An earlier version of this header claimed the function ran the
+-- equivalent CREATE TABLE IF NOT EXISTS on cold start, which was never true and
+-- would leave a fresh Neon project 500ing on every submission with the reader
+-- believing the step was optional. Corrected 2026-09-09 after re-reading the
+-- function; it matters for the Neon migration in TARGET-ARCHITECTURE P5, where
+-- a new database gets provisioned and this file is the only bootstrap.
+--
+-- Run once in the Neon SQL Editor, then point LEADS_DATABASE_URL at an
+-- INSERT-only role (DATABASE_URL is the fallback).
 
 create table if not exists leads (
   id             bigserial   primary key,
