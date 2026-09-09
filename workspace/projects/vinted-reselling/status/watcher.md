@@ -279,10 +279,24 @@ Das Angebot ist dabei nur der Proxy; echte Nachfrage misst erst R4.
    Ab 10 Prozentpunkten Unterschied ist das Gewicht datengestuetzt statt
    gesetzt. Heute: 3 gone-Events, keines davon war je ein Alarm, und alle drei
    echten Bewertungen haben exakt 1 Herz, also nicht einmal Varianz.
-5. Aus der adversarialen Prüfung sind rund ein Dutzend Befunde ungeprüft
+6. Aus der adversarialen Prüfung sind rund ein Dutzend Befunde ungeprüft
    geblieben (der Lauf brach beim Sitzungslimit ab, 38 von 71 Agenten).
    Bestätigt und behoben wurden: Wall-Verschlucken im Verkäufer-Abruf,
    fehlender Backoff im Recheck, Absturz durch Fremd-IDs im Feedback-Poll,
    nie wiederholter Backfill, Doppelzählung im Fake-Risk. Offen sind unter
    anderem: `brand_report` teilt gone-Rate über zwei Grundgesamtheiten,
    `poll_search` ist ungetestet, `refresh_session` umgeht den Backoff.
+
+7. **Kein zweiter Markt vor dem Round-Trip-Nachweis.** Der Vergleichsmedian ist
+   ein Median von ANGEBOTS-Preisen. Ob er den realisierten Verkaufspreis
+   vorhersagt, ist nie gemessen worden, auch nicht hier, wo als Einzigem beide
+   Seiten sichtbar sind. Gate vor jeder Portierung auf ein anderes Handelsfeld:
+   30 abgeschlossene Round Trips bis zum Endzustand (verkauft zu erfasstem
+   Preis, oder nach 90 Tagen unverkauft), die gemessene Korrelation zwischen
+   vorhergesagtem Median und realisiertem Preis, und ein vorab festgelegtes
+   Abbruchkriterium (Durchverkaufsquote unter 50% oder mediane Nettomarge unter
+   10 EUR heisst: die Auswahlfunktion ist falsch, und kein zweiter Markt
+   repariert das). Dafuer fehlt ein Round-Trip-Ledger (Kauf, Landed Cost,
+   Haltetage, Listung, realisierter Preis); `my_listings` ist die Tabelle, sie
+   steht heute auf 0 Zeilen. Bei ~1 Kauf/Tag ist das rund ein Quartal.
+   Herleitung im Checkpoint 2026-09-09.
