@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-09-08
+updated: 2026-09-09
 ---
 
 # Brisken / Expense Reconciliation (p1)
@@ -15,6 +15,15 @@ Scope is the "working tool" (single-tenant, Brisken-only) per Dirk's directive;
 the multi-tenant SaaS in spec v2 is deferred. Per-slice authority is
 `automations/expense-reconciliation/BLUEPRINT.md` + `ANNEALING.md`; this is the
 roll-up.
+
+**This app is the consolidation target for the whole Brisken estate**
+(2026-09-09, `../TARGET-ARCHITECTURE.md`). It already owns the dedicated
+IPv4, the `expenses.brisken.com` MX, the rDNS and the cert, so the plan
+merges the websites and the lead desk INTO this app behind a Host-header
+router rather than moving anything out. Port 25 is what forces it: an MX
+target cannot point at an edge host, which rules out Vercel, Netlify,
+Cloudflare and Azure Container Apps. Nothing is scheduled; ownership
+transfer (`../OWNERSHIP-HANDOFF.md`) comes first.
 
 The backend is hosted and running on real data at brisken-expense-recon.fly.dev
 (API-only since v31; gated by `EXPENSE_RECON_OPERATOR_CODE`). The UI is the
