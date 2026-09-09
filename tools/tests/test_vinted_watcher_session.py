@@ -1824,3 +1824,101 @@ def test_the_alert_snapshot_keeps_the_posting_time(vw, paths):
     assert con.execute("SELECT posted_at FROM alerts WHERE id=?",
                        (rowid,)).fetchone()[0] == "2026-09-08T10:00:00Z"
     con.close()
+
+
+# ------------------------------ 2026-09-09: the phone went quiet at the quota
+#
+# The relative bar capped how many alerts could make a SOUND and let everything
+# below it through silently, on the reasoning that volume should stay where the
+# owner set it. It did not: he asked for roughly 50 a day and got 319, which
+# only became visible once the alerts table started recording the evening
+# before. ntfy counts every message against a daily quota whatever its
+# priority, so at 16:40Z the free tier answered 429 and the phone stayed silent
+# for the rest of the day, dropping the good alerts along with the filler. And
+# notify() returned False on a non-200 without logging, so 24 refusals left no
+# trace anywhere.
+
+def _seed_candidates(con, vw, qualities, sent=1):
+    now = vw.now_iso()
+    for i, q in enumerate(qualities):
+        con.execute(
+            "INSERT INTO alerts (listing_id, alerted_at, search_tag, quality, sent)"
+            " VALUES (?,?,'t',?,?)", (800000 + i, now, q, sent))
+    con.commit()
+
+
+def test_a_candidate_outside_the_days_send_budget_is_not_pushed(vw, con, paths):
+    _seed_candidates(con, vw, [200.0] * (vw.SEND_BUDGET_PER_DAY + 5))
+    assert vw.alert_priority(40.0, 0.0, "DE", True, None, con=con, margin_eur=5.0) == 0
+
+
+def test_the_best_of_the_day_still_rings(vw, con, paths):
+    _seed_candidates(con, vw, [10.0] * (vw.SEND_BUDGET_PER_DAY + 5))
+    assert vw.alert_priority(70.0, 0.0, "DE", True, None, con=con, margin_eur=60.0) == 5
+
+
+def test_the_middle_of_the_day_arrives_without_ringing(vw, con, paths):
+    """15 loud, 60 sent: a candidate between the two bars must still arrive."""
+    qs = [500.0] * vw.RING_BUDGET_PER_DAY + [1.0] * (vw.SEND_BUDGET_PER_DAY + 5)
+    _seed_candidates(con, vw, qs)
+    assert vw.alert_priority(40.0, 0.0, "DE", True, None, con=con, margin_eur=5.0) == 3
+
+
+def test_the_baseline_counts_every_scored_candidate_not_only_the_sent_ones(vw, con, paths):
+    """Ranking against sent-only would ratchet the cap open again.
+
+    Once the tail stops being sent, the worst SENT alert becomes the bar to
+    beat. The bar collapses toward the best of a shrinking set and the cap
+    stops capping, which is the failure this whole change exists to prevent.
+    """
+    _seed_candidates(con, vw, [200.0] * (vw.SEND_BUDGET_PER_DAY + 5), sent=0)
+    assert vw.alert_priority(40.0, 0.0, "DE", True, None, con=con, margin_eur=5.0) == 0, \
+        "unsent candidates were ignored, so the budget did not bind"
+
+
+def test_a_cold_start_is_generous_rather_than_silent(vw, con, paths):
+    _seed_candidates(con, vw, [500.0] * 3)
+    assert vw.alert_priority(70.0, 0.0, "DE", True, None, con=con, margin_eur=60.0) > 0
+    assert vw.alert_priority(10.0, 0.0, "DE", True, None, con=None, margin_eur=1.0) > 0
+
+
+def test_a_flagged_listing_still_never_interrupts(vw, con, paths):
+    qs = [1.0] * (vw.SEND_BUDGET_PER_DAY + 5)
+    _seed_candidates(con, vw, qs)
+    assert vw.alert_priority(70.0, 0.5, "DE", True, None, con=con, margin_eur=60.0) == 2
+
+
+def test_a_withheld_candidate_is_still_recorded_with_its_score(vw, con, paths, monkeypatch):
+    """The backtest needs the whole candidate stream, not just what was pushed."""
+    _comps(con, vw, n=10, price=40.0, brand_norm="carhartt", size_class="m")
+    _seed_candidates(con, vw, [9999.0] * (vw.SEND_BUDGET_PER_DAY + 5))
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: pytest.fail("must not push"))
+    rec = {"id": 7101, "search_tag": "t", "title": "Carhartt Jacke", "brand": "Carhartt",
+           "brand_norm": "carhartt", "size": "M", "size_class": "m",
+           "condition": "Sehr gut", "cond_tier": "very_good", "garment_class": "jacket",
+           "is_kid": 0, "country": "DE", "price": 18.0, "total_price": 20.0,
+           "currency": "EUR", "url": "u", "photo_url": None, "posted_at": None,
+           "seller_id": 1, "seller_login": "s", "favourites": 0, "views": 0,
+           "promoted": 0, "seed": 0}
+    vw.upsert(con, rec)
+    settings = {"deal_ratio": 0.55, "min_comps": 5, "comp_window_days": 45,
+                "min_price": 5, "size_classes": ["m"], "min_margin": 0,
+                "foreign_advantage_eur": 8, "fake_risk_suppress": 0.7,
+                "fake_risk_flag": 0.4, "profile_suppress": 0.15, "profile_min_rated": 8}
+    assert vw.score_and_alert(con, rec, {"tag": "t", "query": "q"}, settings, {}) is False
+    row = con.execute("SELECT sent, suppress_reason, quality FROM alerts"
+                      " WHERE listing_id=7101").fetchone()
+    assert row[0] == 0 and row[1] == "send_budget"
+    assert row[2] is not None, "a withheld candidate must keep its score"
+
+
+def test_ntfy_refusing_the_push_is_logged_not_swallowed(vw, monkeypatch, capsys, paths):
+    class R:
+        status_code = 429
+        text = '{"error":"limit reached: daily message quota reached"}'
+
+    monkeypatch.setattr(vw.httpx, "post", lambda *a, **k: R())
+    assert vw.notify({"NTFY_TOPIC": "t"}, "title", "msg") is False
+    out = capsys.readouterr().out
+    assert "429" in out and "quota" in out
+    assert "send budget" in out, "the 429 must name what prevents it"

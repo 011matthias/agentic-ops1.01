@@ -1493,10 +1493,15 @@ def record_alert(con: sqlite3.Connection, rec: dict, ctx: dict) -> int:
     return int(cur.lastrowid or 0)
 
 
-# How many alerts a day are allowed to make a sound. Everything else still
-# arrives and is still one tap from a rating; it just does not interrupt.
+# How many alerts a day are allowed to make a sound, and how many are allowed
+# to arrive at all. The second number is the one that was missing: capping
+# interruptions while letting the tail through silently produced 319 pushes on
+# 2026-09-09 against an owner target of roughly 50, and ntfy's free tier
+# answered 429 for the rest of the day. Everything below the send budget is
+# still scored and still recorded in the alerts table, so nothing is lost for
+# the backtest; it just does not reach the phone.
 RING_BUDGET_PER_DAY = 15
-NORMAL_BUDGET_PER_DAY = 60
+SEND_BUDGET_PER_DAY = 60
 
 
 # A young listing that already carries hearts, per the owner's 2026-09-08
@@ -1551,11 +1556,26 @@ def alert_priority(discount_pct: float, fake: float, country: str | None,
     set against an imagined stream rather than the real one.
 
     So the bar is relative. A candidate rings only if it beats the day's own
-    competition, measured on the alerts already recorded in the last 24 hours.
-    That makes the loud tier self-limiting at roughly RING_BUDGET_PER_DAY
+    competition, measured on the candidates already recorded in the last 24
+    hours. That makes the loud tier self-limiting at roughly RING_BUDGET_PER_DAY
     however the market behaves, and it means "the best of today" rather than
-    "above a number someone guessed". Volume stays where the owner set it; the
-    interruptions do not.
+    "above a number someone guessed".
+
+    Returns 0 for "do not send at all". The first version of this capped the
+    loud tier and let everything below it through silently, on the reasoning
+    that volume should stay where the owner set it. Volume did not stay there:
+    the owner asked for roughly 50 a day and the watcher pushed 319 on
+    2026-09-09, which was invisible until the alerts table started recording
+    the evening before. ntfy counts every message against a daily quota
+    whatever its priority, so at 16:40Z the free tier answered 429 and the
+    phone went silent for the rest of the day, dropping the good alerts along
+    with the filler. A cap on interruptions is not a cap on volume, and this
+    function now sets both.
+
+    The baseline deliberately counts every SCORED candidate rather than only
+    the sent ones. Ranking against what was sent would ratchet: once the tail
+    stops being sent, the worst sent alert becomes the bar to beat, the bar
+    collapses towards the best of a shrinking set, and the cap stops capping.
 
     With no history yet, it falls back to absolute cuts, deliberately generous:
     a cold start should ring for the obvious ones rather than stay silent while
@@ -1563,10 +1583,8 @@ def alert_priority(discount_pct: float, fake: float, country: str | None,
     """
     q = alert_quality(discount_pct, margin_eur, fake, country, size_ok_core, prof,
                       fresh_likes=fresh_likes)
-    if fake >= 0.4:
-        return 2          # a flagged listing never interrupts, whatever it scores
     if con is None:
-        return 5 if q >= 90 else (3 if q >= 55 else 2)
+        return 2 if fake >= 0.4 else (5 if q >= 90 else (3 if q >= 55 else 2))
     try:
         window = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime(
             "%Y-%m-%dT%H:%M:%SZ")
@@ -1576,21 +1594,23 @@ def alert_priority(discount_pct: float, fake: float, country: str | None,
         # would let ordinary candidates clear the bar on the boost alone.
         recent = [r[0] for r in con.execute(
             """SELECT quality FROM alerts
-               WHERE alerted_at >= ? AND sent=1 AND quality IS NOT NULL""",
+               WHERE alerted_at >= ? AND quality IS NOT NULL""",
             (window,)).fetchall()]
     except sqlite3.Error:
         recent = []
     if len(recent) < RING_BUDGET_PER_DAY:
         # Too little history to rank against; be generous rather than silent.
-        return 5 if q >= 90 else (3 if q >= 55 else 2)
+        return 2 if fake >= 0.4 else (5 if q >= 90 else (3 if q >= 55 else 2))
     recent.sort(reverse=True)
     ring_bar = recent[min(RING_BUDGET_PER_DAY, len(recent)) - 1]
-    normal_bar = recent[min(NORMAL_BUDGET_PER_DAY, len(recent)) - 1]
+    send_bar = recent[min(SEND_BUDGET_PER_DAY, len(recent)) - 1]
+    if q < send_bar and len(recent) > SEND_BUDGET_PER_DAY:
+        return 0          # outside today's send budget; recorded, not pushed
+    if fake >= 0.4:
+        return 2          # a flagged listing never interrupts, whatever it scores
     if q >= ring_bar:
         return 5
-    if q >= normal_bar:
-        return 3
-    return 2
+    return 3
 
 
 CORE_SIZE_CLASSES = {"s", "m", "l"}
@@ -1732,6 +1752,11 @@ def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: 
     ctx["quality"] = quality
     prio = alert_priority(pct, fake, country, size_class in CORE_SIZE_CLASSES, taste,
                           con=con, margin_eur=margin, fresh_likes=fresh_likes)
+    if prio == 0:
+        # Scored, ranked, and outside today's send budget. The snapshot is kept
+        # with its full context so the backtest sees the whole candidate stream;
+        # only the push is withheld.
+        return drop("send_budget")
     lines = [
         f"{rec['brand']} | {rec['condition']} | Gr. {rec['size']} | {rec['garment_class']}",
         f"{rec['total_price']:.2f} EUR inkl. Gebuehr, Median vergleichbar {med:.2f} EUR ({pct}% drunter)",
@@ -1856,6 +1881,15 @@ def notify(env: dict, title: str, message: str, click: str | None = None,
         body["actions"] = actions[:3]
     try:
         r = httpx.post("https://ntfy.sh/", json=body, timeout=15)
+        if r.status_code != 200:
+            # Silence here is how 24 refusals produced no log line at all on
+            # 2026-09-09 while the phone stayed quiet: the daily quota was
+            # exhausted and nothing said so. 429 is the one worth naming,
+            # because it is self-inflicted rather than a network fault.
+            detail = r.text.strip()[:200]
+            log(f"WARN: ntfy refused the push, HTTP {r.status_code}: {detail}"
+                + ("  (daily quota; the send budget is what prevents this)"
+                   if r.status_code == 429 else ""))
         return r.status_code == 200
     except httpx.HTTPError as e:
         log(f"WARN: ntfy send failed: {e}")
