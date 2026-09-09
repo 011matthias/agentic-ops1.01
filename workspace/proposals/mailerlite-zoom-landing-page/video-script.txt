@@ -1,0 +1,90 @@
+BEAT 1 -- REFRAME
+
+>> Overview / hero
+
+SAY: Hi there, Nico here. I saw your posting for MailerLite landing page help -- domain authentication, a reusable page template, Stripe payments, GDPR consent, and an automated email with your Zoom link.
+
+>> Overview / The Signup Flow
+
+SAY: Good news -- everything you need is native to MailerLite. No third-party connectors, no custom code. I put together a proposal site to show you how each piece works.
+
+
+AUTHORITY
+
+SAY: Quick background -- I am Nico, based in Germany. I build email automation workflows daily. Relevant experience: GDPR compliance automation, Stripe payment flows, and MailerLite domain authentication setups. CET timezone with solid US overlap.
+
+
+BEAT 2 -- WALKTHROUGH
+
+>> Solution / Domain Authentication
+
+SAY: Three DNS records -- DKIM, SPF, and DMARC. MailerLite generates the values, I add them to your registrar, verify. Under 30 minutes.
+
+>> Solution / Landing Page Template
+
+SAY: The page uses MailerLite's drag-and-drop builder. Hero, session details, signup form with Stripe payment -- all on one page. Saved as a reusable template.
+
+>> Solution / Stripe Payment Integration
+
+SAY: Stripe connects natively -- one-click OAuth. No Zapier, no middleware. Create a product in Stripe, drop the payment block on the page, done.
+
+>> Solution / GDPR Consent Setup
+
+SAY: Required checkbox that cannot be pre-checked. Terms displayed in a popup so users stay on the page. MailerLite logs IP, timestamp, and consent text automatically.
+
+>> Solution / Email Automation
+
+SAY: After signup, a MailerLite automation fires immediately -- branded email with your Zoom link, session details, and a calendar add link.
+
+>> Timeline / Day 1: Domain Authentication + Account Setup
+
+SAY: Four-day timeline. Day 1 is DNS records and Stripe connection.
+
+>> Timeline / Day 2-3: Landing Page + Form + Payment
+
+SAY: Days 2-3 are the page build with form, payment, and GDPR consent.
+
+>> Timeline / Day 4: Email Automation + Testing + Handoff
+
+SAY: Day 4 is the email automation, end-to-end testing, and a Loom walkthrough showing how to duplicate the template.
+
+>> Investment / Why $200
+
+SAY: $200 fixed -- $50 above your budget. That covers Stripe and GDPR setup properly. The reusable template means each new Zoom session is a 5-minute duplication.
+
+
+BEAT 3 -- CLOSE
+
+>> Investment / Return on Investment
+
+SAY: After your second session, the template has already saved you more than the $50 difference. Built to hand off cleanly -- you will not need me again unless you want additional features.
+
+>> Onboarding / Onboarding Form
+
+SAY: If this looks good, the onboarding form collects everything I need -- domain registrar, MailerLite plan, Stripe account, session details. Five minutes. I will start Day 1 within 24 hours. Looking forward to hearing from you.
+
+
+________________________________________
+
+LOOM NOTES
+
+BEAT 1 -- REFRAME
+- MailerLite setup: domain auth, template, Stripe, GDPR, Zoom email
+- All native to MailerLite, no connectors
+
+AUTHORITY
+- Germany, email automation daily
+- GDPR compliance, Stripe flows, domain auth
+
+BEAT 2 -- WALKTHROUGH
+- Solution / Domain Authentication -- DKIM, SPF, DMARC
+- Solution / Landing Page Template -- drag-drop, reusable
+- Solution / Stripe Payment Integration -- native OAuth
+- Solution / GDPR Consent Setup -- required checkbox, popup, auto-logging
+- Solution / Email Automation -- instant trigger, Zoom link
+- Timeline / Day 1-4 breakdown
+- Investment / $200 fixed, $50 justification
+
+BEAT 3 -- CLOSE
+- Investment / ROI -- pays for itself session 2
+- Onboarding / form, 5 min, start within 24hr

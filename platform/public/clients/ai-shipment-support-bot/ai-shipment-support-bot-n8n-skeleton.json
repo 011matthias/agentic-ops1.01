@@ -1,0 +1,209 @@
+{
+  "name": "AI Shipment Support Bot - Skeleton",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 1. Ingest, two channels into one shape\nAll-Inkl email over IMAP and Amazon Message Center over the Selling Partner API are normalized into a single internal message: sender, body, channel, thread id, locale. The rest of the flow does not care where the message came from.",
+        "height": 260,
+        "width": 620
+      },
+      "id": "sticky-ingest",
+      "name": "Lane 1 Ingest",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {},
+      "id": "node-imap",
+      "name": "All-Inkl IMAP Trigger",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [40, 60]
+    },
+    {
+      "parameters": {},
+      "id": "node-amazon-poll",
+      "name": "Amazon Messaging Poll",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [40, 160]
+    },
+    {
+      "parameters": {},
+      "id": "node-normalize",
+      "name": "Normalize Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [340, 110]
+    },
+    {
+      "parameters": {
+        "content": "## 2. Understand\nOne small-model call extracts the order reference, customer hints, and an intent label from a fixed set: shipment status, tracking correction, out of scope. Every field comes back with a confidence score. The router branches on the label.",
+        "height": 220,
+        "width": 620
+      },
+      "id": "sticky-understand",
+      "name": "Lane 2 Understand",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [0, 360]
+    },
+    {
+      "parameters": {},
+      "id": "node-extract",
+      "name": "Extract Order + Intent (small LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [40, 420]
+    },
+    {
+      "parameters": {},
+      "id": "node-router",
+      "name": "Intent Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [340, 420]
+    },
+    {
+      "parameters": {
+        "content": "## 3. Ground in your data\nDeterministic call to the ERP interface with the order reference. Returns tracking link, number, carrier, status. No model involved. The guard handles not found, multiple matches, and a slow or failing ERP: retry, then hand off.",
+        "height": 220,
+        "width": 620
+      },
+      "id": "sticky-ground",
+      "name": "Lane 3 Ground",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [0, 680]
+    },
+    {
+      "parameters": {},
+      "id": "node-erp",
+      "name": "ERP Tracking Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [40, 740]
+    },
+    {
+      "parameters": {},
+      "id": "node-guard",
+      "name": "Guard: No Match / ERP Down",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [340, 740]
+    },
+    {
+      "parameters": {
+        "content": "## 4. Reply\nA German template carries the structure and the formal Sie tone. The model only adjusts wording for the case. Tracking facts from lane 3 are inserted verbatim and never passed through the model as free text. The gate decides auto-send vs human draft and runs the Amazon policy filter.",
+        "height": 220,
+        "width": 620
+      },
+      "id": "sticky-reply",
+      "name": "Lane 4 Reply",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [0, 1000]
+    },
+    {
+      "parameters": {},
+      "id": "node-compose",
+      "name": "Compose German Reply",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [40, 1060]
+    },
+    {
+      "parameters": {},
+      "id": "node-gate",
+      "name": "Confidence + Amazon Policy Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [340, 1060]
+    },
+    {
+      "parameters": {
+        "content": "## 5. Outbound and record\nReply goes out on the original channel (SMTP reply or Amazon message). Anything low-confidence, unmatched, or out of scope goes to the human queue with full context. Every decision and every ERP field used is written to the audit log.",
+        "height": 240,
+        "width": 620
+      },
+      "id": "sticky-out",
+      "name": "Lane 5 Out",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [0, 1320]
+    },
+    {
+      "parameters": {},
+      "id": "node-send",
+      "name": "Send Reply (origin channel)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [40, 1380]
+    },
+    {
+      "parameters": {},
+      "id": "node-handoff",
+      "name": "Human Handoff Queue",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [340, 1380]
+    },
+    {
+      "parameters": {},
+      "id": "node-audit",
+      "name": "Audit Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [40, 1480]
+    }
+  ],
+  "connections": {
+    "All-Inkl IMAP Trigger": {
+      "main": [[{ "node": "Normalize Message", "type": "main", "index": 0 }]]
+    },
+    "Amazon Messaging Poll": {
+      "main": [[{ "node": "Normalize Message", "type": "main", "index": 0 }]]
+    },
+    "Normalize Message": {
+      "main": [[{ "node": "Extract Order + Intent (small LLM)", "type": "main", "index": 0 }]]
+    },
+    "Extract Order + Intent (small LLM)": {
+      "main": [[{ "node": "Intent Router", "type": "main", "index": 0 }]]
+    },
+    "Intent Router": {
+      "main": [[{ "node": "ERP Tracking Lookup", "type": "main", "index": 0 }]]
+    },
+    "ERP Tracking Lookup": {
+      "main": [[{ "node": "Guard: No Match / ERP Down", "type": "main", "index": 0 }]]
+    },
+    "Guard: No Match / ERP Down": {
+      "main": [
+        [{ "node": "Compose German Reply", "type": "main", "index": 0 }],
+        [{ "node": "Human Handoff Queue", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compose German Reply": {
+      "main": [[{ "node": "Confidence + Amazon Policy Gate", "type": "main", "index": 0 }]]
+    },
+    "Confidence + Amazon Policy Gate": {
+      "main": [
+        [{ "node": "Send Reply (origin channel)", "type": "main", "index": 0 }],
+        [{ "node": "Human Handoff Queue", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Reply (origin channel)": {
+      "main": [[{ "node": "Audit Log", "type": "main", "index": 0 }]]
+    },
+    "Human Handoff Queue": {
+      "main": [[{ "node": "Audit Log", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "description": "Skeleton pipeline for the German shipment support bot. Structure only: real credentials, the ERP request mapping, the extraction prompt, and the German templates are filled in during the build. Judgment lives in the small-LLM node; every tracking fact comes from the ERP node verbatim."
+  }
+}
