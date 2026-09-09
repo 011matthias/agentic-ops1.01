@@ -148,6 +148,33 @@ sollte durchgehen". Nach dem Angleichen steigt die lokale Zahl von 1178 auf
 1329. Ein lokales Tor, das eine echte Teilmenge des entfernten ist, ist
 schlimmer als keins, weil man ihm glaubt.
 
+## Am laufenden Task verifiziert (2026-09-09)
+
+Nicht per Handaufruf, sondern an den echten Zyklen des Windows-Tasks.
+
+**Zeitreihen (Zyklus 22:55Z).** Der erste Lauf mit dem neuen Code schrieb 32
+Zeilen nach `listing_events`, darunter zwei echte Preisbewegungen: ein
+Juventus-Polo von 25,00 auf 20,00 (Senkung) und ein Nike Dunk von 40,00 auf
+43,00 (Erhoehung), dazu 28 Favoriten-Zuwaechse. Kurz darauf: 13
+Preisaenderungen und 231 Favoriten-Bewegungen.
+
+**Verkaufserkennung (Recheck 23:52Z).** `25 visited, 16 sold, 2 deleted, 0
+closed, 0 unreadable, 2 price change(s)`. Jeder vorherige Lauf meldete
+`0 gone`, seit es den Watcher gibt. Die 16 Verkaeufe tragen die Herkunft
+`buyer_item_status:SUCCESS:Verkauft`; die 404er stehen weiter getrennt daneben
+mit `sold_flag=0`. Erste Zeit-bis-Verkauf-Werte: 76,8 h (TNF Regenjacke),
+78,3 h (Adidas Firebird), 86,3 h (Levi's 501 Damen).
+
+Das ist genau das, was vorher verloren ging: eine verkaufte Anzeige antwortet
+mit 200, also las der alte Code sie als "lebt" und schob `last_seen` vor. Jeder
+Recheck-Durchlauf hat Verkaeufe geloescht.
+
+**Entwurf aus dem Gekauft-Tipp.** Der vom Owner gekaufte Levi's 501
+(9934904203, 9,10 EUR gegen Median 26,95) ergibt ohne eine einzige Eingabe:
+Titel `Levi's 501 Jeans | Gr. W31`, Preisvorschlag 20,50 EUR (Kaeufer zahlt
+22,22 EUR), Marge 11,40 EUR, Vergleich Median 25,90 / p25 18,55 / p75 37,45
+ueber 94 Anzeigen der Zelle, plus drei offene Fragen (Farbe, Material, Masse).
+
 ## Elemente
 
 | Element | Zustand | Stand | Nächster Schritt | Blocker |
