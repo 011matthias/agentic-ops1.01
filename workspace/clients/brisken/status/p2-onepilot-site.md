@@ -4,7 +4,7 @@ workstream: p2-onepilot-site
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-07-22
+updated: 2026-09-09
 general_ref: status/p2-lead-gen-general.md
 ---
 
@@ -18,6 +18,18 @@ The prototype is hosted for internal review (pre-Dirk) at
 brisken-onepilot-proto.fly.dev behind a name page (no access code, just share the
 URL); feedback writes to JSONL on the Fly volume
 (`project_brisken_onepilot_site_hosting` memory).
+
+**Stale warning (2026-09-09):** the element table below was last reviewed
+2026-07-22 and has not been re-verified against live state. Treat every row
+as unconfirmed until someone walks it.
+
+**Both Fly review sites are slated for retirement** in phase P1 of
+`../TARGET-ARCHITECTURE.md`: `brisken-onepilot` and
+`brisken-onepilot-proto` get destroyed, and `rome2026.brisken.com` 301s to
+brisken.com. One hard precondition, because it is a data-loss step:
+`BRISKEN_INQUIRY_RESEND_KEY` was never set, so any contact-form submission
+on those sites has never reached a human. Read `inquiries.jsonl` off both
+volumes and surface anything real BEFORE destroying them.
 
 ## Elements
 
