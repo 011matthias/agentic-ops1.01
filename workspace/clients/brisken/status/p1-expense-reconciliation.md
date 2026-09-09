@@ -149,9 +149,16 @@ this table is the index, not a second record.
   attached" for 108 of 111 July rows when asked for the file directly (Hostinger
   ran as the control in the same pass and did return its file), the Books document
   inbox holds only AP bills, and 8,263 SharePoint finance files hold statements,
-  not card receipts. Two rows need a human glance: the Anthropic 214.20 was read as
-  EUR and is USD, and the Normandie Seine row has no date and reads 6.60 where Zoho
-  Expense records 2026-07-05 / 6.00. Evidence and the full map:
+  not card receipts. July then went to **32** when six more Anthropic
+  receipts came out of Matthias's iCloud, covering the period since Anthropic
+  billing moved onto the Brisken card (Mastercard 3964 to Visa 2838, between
+  2026-05-23 and 2026-06-12); five clear the 07-14 chase rows exactly, and the
+  drop entrance materialised June and August months for the rest. CORRECTION to
+  an earlier line here: the Anthropic 214.20 row is NOT a currency misread.
+  Anthropic denominates the subscription in euro and bills usage credits in
+  dollars, so EUR is right as booked. The one row that does need a human glance
+  is Normandie Seine: no date, and 6.60 where Zoho Expense records
+  2026-07-05 / 6.00. Evidence and the full map:
   `context/zoho-receipts-july-2026/README-july-receipt-gap.md`, with byte-verified
   copies in `uploaded-2026-09-09/`.
   **Two blockers, both owner-side.** (a) Six of eight Zoho Expense orgs refuse
