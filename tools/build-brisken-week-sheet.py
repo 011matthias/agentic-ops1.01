@@ -232,8 +232,15 @@ def build_summary(wb, week_label, engagements, summary):
 
 
 def default_out(lo, hi):
-    stem = "hours-tracker-{:%Y-%m}-week-{}{:%d}-{:%d}".format(
-        lo, lo.strftime("%b").lower(), lo, hi)
+    # A week inside one month reads fine as "aug17-23". A week that straddles
+    # two months does not: "aug31-06" looks like a range inside August. Name the
+    # second month when it differs, and leave every same-month name untouched so
+    # the books already delivered keep their filenames.
+    span = "{}{:%d}-{:%d}".format(lo.strftime("%b").lower(), lo, hi)
+    if lo.month != hi.month:
+        span = "{}{:%d}-{}{:%d}".format(
+            lo.strftime("%b").lower(), lo, hi.strftime("%b").lower(), hi)
+    stem = "hours-tracker-{:%Y-%m}-week-{}".format(lo, span)
     return WEEKLY_DIR / (stem + ".xlsx")
 
 
