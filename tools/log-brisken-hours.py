@@ -36,6 +36,8 @@ Modes:
   --add  -                 read the rows JSON from stdin
   --export-csv             opt-in: write the gitignored CSV mirrors from the xlsx
   --dry-run                with --add: print what WOULD be written, do not save
+  --file <xlsx>            target this workbook instead of the latest month
+                           (back-filling a prior month after a rollover)
 
 rows.json schema (a JSON list):
   [{"tab": "Lead Generation", "date": "2026-06-21", "start": "12:30",
@@ -456,7 +458,14 @@ def main() -> int:
     g.add_argument("--add", metavar="ROWS_JSON", help="path to rows JSON, or - for stdin")
     g.add_argument("--export-csv", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--file", metavar="XLSX",
+                    help="target this workbook instead of the latest month; "
+                         "use it to back-fill a prior month after a rollover")
     args = ap.parse_args()
+
+    if args.file:
+        global XLSX
+        XLSX = Path(args.file)
 
     if XLSX is None or not XLSX.exists():
         print(f"no dated hours-tracker workbook found in {FOLDER}/", file=sys.stderr)
