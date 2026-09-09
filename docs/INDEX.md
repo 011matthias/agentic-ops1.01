@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-09 | Brisken Ownership Handoff and Single-Application Target Architecture | client-dev | [→](docs/2026-09-09%20-%20Brisken%20Ownership%20Handoff%20and%20Single-Application%20Target%20Architecture/Checkpoint.md) |
 | 2026-09-08 | Brisken Card 3693 Correction | client-dev | [→](docs/2026-09-08%20-%20Brisken%20Card%203693%20Correction/Checkpoint.md) |
 | 2026-09-08 | Brisken P1 Storage System Description | client-dev | [→](docs/2026-09-08%20-%20Brisken%20P1%20Storage%20System%20Description/Checkpoint.md) |
 | 2026-09-08 | Brisken Outreach Packet Link Sent | comms | [→](docs/2026-09-08%20-%20Brisken%20Outreach%20Packet%20Link%20Sent/Checkpoint.md) |
