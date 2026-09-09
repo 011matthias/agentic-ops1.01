@@ -140,6 +140,31 @@ this table is the index, not a second record.
   on Criss's live 94-row run). Live app now at #299.
 - SPA production URL DECIDED 2026-07-22: `brisken-reconcile-dash.lovable.app`. A custom
   `recon.brisken.com` stays optional; it would need the CORS regex widened + a Fly deploy.
+- **July 2026 receipt sweep, 2026-09-09 (Criss ask: pull the July receipts that
+  are not in the tool).** July went from 8 receipts to **26** (EUR 17,907.84 /
+  USD 14,995.21). 8 came out of Zoho Expense (org CLOUD SERVICES, the German meal
+  and supermarket photos), 8 out of Dirk's and Matthias's mailboxes over Graph
+  (Google Workspace x2, Anthropic x3, GitHub, Eleven Labs, Network Solutions).
+  Every other source was searched and is exhausted: Books answers "Receipt not
+  attached" for 108 of 111 July rows when asked for the file directly (Hostinger
+  ran as the control in the same pass and did return its file), the Books document
+  inbox holds only AP bills, and 8,263 SharePoint finance files hold statements,
+  not card receipts. Two rows need a human glance: the Anthropic 214.20 was read as
+  EUR and is USD, and the Normandie Seine row has no date and reads 6.60 where Zoho
+  Expense records 2026-07-05 / 6.00. Evidence and the full map:
+  `context/zoho-receipts-july-2026/README-july-receipt-gap.md`, with byte-verified
+  copies in `uploaded-2026-09-09/`.
+  **Two blockers, both owner-side.** (a) Six of eight Zoho Expense orgs refuse
+  every endpoint with 400/6018 "your account is disabled", including Corporate
+  Services (107 of the 108 July charges) and Tech LTDA (the Brazilian spend); that
+  is a user membership setting, not a scope, so an Expense admin has to enable our
+  API user. (b) Ten chase-list vendors (Lovable, Perplexity, OpenRouter, Supabase,
+  Vercel, Resend, Adobe, Wix, SaaS Rise, PressMaster) have no receipt mail in
+  either allowlisted mailbox; Dirk forwards receipts to
+  Cristiane.Cavalcanti@brisken.com and several vendor accounts bill her directly,
+  so either the Graph allowlist widens to her mailbox or she forwards July into the
+  tool's mail intake.
+
 - **Brisken domain, 2026-09-08 (owner directive: a name without "fly" in it).** The API
   half is LIVE: `api.expenses.brisken.com` (GoDaddy `A`/`AAAA` to the app's dedicated
   `149.248.221.114` + `2a09:8280:1::12b:572b:0`, Fly cert issued after the
