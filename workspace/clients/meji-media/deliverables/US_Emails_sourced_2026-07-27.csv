@@ -1,0 +1,4 @@
+First Name,Last Name,Company,Job Title,Company Domain,Email,Verification,LinkedIn URL,Location
+Julie,Molloy,Coupa,"Senior Manager, Field Marketing EMEA",coupa.com,julie.molloy@coupa.com,"NeverBounce valid; derived from Coupa's email pattern (Apollo had no email on file for her)",linkedin.com/in/ACoAAALDcQgBvU-O15RtEIXAL8zZQgX14Ys8TLQ,Edinburgh
+Cleone,Barton,Sprinklr,"Director, Field Marketing EMEA",sprinklr.com,cleone.barton@sprinklr.com,"Apollo verified + NeverBounce valid",linkedin.com/in/ACoAAAD0fdABQvc63YMJN8meBksLQCvD-yCI0Ys,
+Sonia,Brilli,Grafana Labs,Events Director,grafana.com,sonia.brilli@grafana.com,"Apollo verified + NeverBounce valid",,London
