@@ -283,15 +283,20 @@ def model_from_title(con: sqlite3.Connection, p: dict) -> tuple[str | None, str 
         terms, _ = kr.mine_cell(con, p["brand_norm"], p["garment_class"])
     except Exception:
         return None, None                    # research must never break a draft
+    ke = load_sibling("keyword_engine")
     words = set(kr.normalise(p["title"]))
     # The noun is resolved FIRST and then excluded from the model, because the
     # corpus ranks the compound "jeans 501" above the bare "501" and taking it
-    # as the model produced "Levi's Jeans 501 Jeans". The noun is the common
-    # word of the cell that the seller's own title uses: "Jeans" beats the
-    # internal label "pants" and beats the generic "Hose".
+    # as the model produced "Levi's Jeans 501 Jeans".
+    #
+    # It comes from a bounded garment vocabulary, not from "the most common term
+    # in the cell". Once the size/model fix let 501 through, 501 WAS the most
+    # common term in levis/pants at 87.5%, so a frequency rule made it the
+    # category word and demoted "Jeans" to the model: wrong in both fields.
+    allowed = set(ke.CLASS_MARKET_NOUNS.get(p["garment_class"] or "", []))
     nouns = [t.text for t in terms
              if t.kind == "term" and " " not in t.text and t.text in words
-             and t.share > 0.15]
+             and t.text in allowed]
     noun = nouns[0] if nouns else None
 
     def strip_noun(text: str) -> str:

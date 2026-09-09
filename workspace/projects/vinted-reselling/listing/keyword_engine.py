@@ -144,6 +144,25 @@ CLASS_NOUN = {
     "shorts": "Shorts", "dress": "Kleid", "skirt": "Rock", "other": None,
 }
 
+# The nouns this market actually uses for each class, which is often narrower
+# and better than the generic label: a Levi's 501 is a "Jeans", not a "Hose".
+# A bounded vocabulary rather than "the most common term in the cell", because
+# the most common term in levis/pants is 501 at 87.5%, and picking that as the
+# category word put the model in the category field and the word "Jeans" in the
+# model field, which is wrong twice over.
+CLASS_MARKET_NOUNS = {
+    "pants": ["jeans", "hose", "pant", "pants", "chino", "chinos", "cargohose",
+              "jogginghose", "cordhose", "trousers"],
+    "jacket": ["jacke", "jacket", "parka", "weste", "mantel", "blouson", "coat",
+               "windbreaker", "regenjacke", "daunenjacke", "fleecejacke"],
+    "sweater": ["pullover", "pulli", "sweater", "hoodie", "sweatshirt", "strickjacke",
+                "cardigan", "sweatjacke", "crewneck"],
+    "shirt": ["shirt", "tshirt", "hemd", "polo", "poloshirt", "longsleeve", "top"],
+    "shorts": ["shorts", "short", "bermuda", "sweatshorts"],
+    "dress": ["kleid", "dress", "sommerkleid", "midikleid"],
+    "skirt": ["rock", "skirt"],
+}
+
 # ---------------------------------------------------------- lenient input
 #
 # The engine used to take only hand-typed JSON with exact English keys. A
