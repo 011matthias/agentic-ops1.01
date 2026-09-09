@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meji Media: Instantly estate</title>
+<script>(function(){try{var t=localStorage.getItem('theme');var d=document.documentElement;
+d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');}catch(e){}})();</script>
+<style>
+:root{
+--bg:#f7f8fa; --surface:#ffffff; --surface-2:#f0f2f6; --text:#14181f; --muted:#5b6472;
+--border:#dfe3ea; --accent:#2563eb; --accent-bg:#eaf0fe;
+--green:#059669; --green-bg:#e7f6f0; --orange:#d97706; --orange-bg:#fdf1e0;
+--red:#dc2626; --red-bg:#fdeceb; --purple:#7c3aed; --purple-bg:#f1eafe;
+--mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+}
+:root[data-theme="dark"]{
+--bg:#0e1116; --surface:#161b22; --surface-2:#1c232c; --text:#e6edf3; --muted:#9aa5b1;
+--border:#2a323d; --accent:#5b8cff; --accent-bg:#16233f;
+--green:#3fb98c; --green-bg:#10281f; --orange:#e0a250; --orange-bg:#2a1f10;
+--red:#f2645a; --red-bg:#2c1614; --purple:#a683f5; --purple-bg:#221a38;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+padding-top:56px;-webkit-font-smoothing:antialiased}
+
+/* nav */
+.site-nav{position:fixed;top:0;left:0;right:0;height:56px;z-index:50;display:flex;align-items:center;
+gap:18px;padding:0 22px;background:var(--surface);border-bottom:1px solid var(--border)}
+.nav-logo{font-weight:700;letter-spacing:-.2px}
+.nav-client{color:var(--muted);font-size:13px}
+.nav-links{margin-left:auto;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.nav-links a{color:var(--muted);text-decoration:none;font-size:13px}
+.nav-links a:hover{color:var(--accent)}
+.nav-status{font-size:11px;padding:3px 9px;border-radius:999px;background:var(--green-bg);color:var(--green);
+font-weight:600;letter-spacing:.3px}
+.nav-theme{background:var(--surface-2);border:1px solid var(--border);color:var(--text);cursor:pointer;
+border-radius:999px;padding:5px 11px;font-size:13px}
+.kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--border);border-radius:4px;
+padding:1px 5px;color:var(--muted);background:var(--surface-2)}
+
+.wrap{max-width:1120px;margin:0 auto;padding:34px 22px 90px}
+h1{font-size:31px;line-height:1.2;letter-spacing:-.5px;margin:0 0 10px}
+h2{font-size:20px;letter-spacing:-.2px;margin:52px 0 6px;scroll-margin-top:74px}
+h3{font-size:15px;margin:26px 0 6px}
+.sub{color:var(--muted);max-width:74ch;margin:0 0 8px}
+.badge{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;
+padding:4px 10px;border-radius:999px;background:var(--accent-bg);color:var(--accent);margin-bottom:14px}
+
+/* stat band */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:26px 0 8px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:15px 16px}
+.stat-value{font-size:25px;font-weight:700;letter-spacing:-.6px;line-height:1.15}
+.stat-label{font-size:12px;color:var(--muted);margin-top:3px}
+
+.callout{border:1px solid var(--border);border-left:3px solid var(--accent);background:var(--surface);
+border-radius:0 10px 10px 0;padding:14px 17px;margin:18px 0}
+.callout.red{border-left-color:var(--red)}
+.callout.orange{border-left-color:var(--orange)}
+.callout.green{border-left-color:var(--green)}
+.callout-title{font-weight:650;margin-bottom:4px;font-size:14px}
+.callout p{margin:6px 0 0;color:var(--muted);font-size:14px}
+.callout p strong{color:var(--text)}
+
+/* table */
+.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface);margin-top:12px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:860px}
+th,td{text-align:left;padding:10px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600;
+background:var(--surface-2);position:sticky;top:56px}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-2)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:12.5px}
+.name{font-weight:600}
+.cid{font-family:var(--mono);font-size:11px;color:var(--muted);display:block;margin-top:2px}
+
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.p-live{background:var(--green-bg);color:var(--green)}
+.p-done{background:var(--accent-bg);color:var(--accent)}
+.p-paused{background:var(--orange-bg);color:var(--orange)}
+.p-stopped{background:var(--red-bg);color:var(--red)}
+.p-dead{background:var(--red-bg);color:var(--red)}
+.p-ours{background:var(--purple-bg);color:var(--purple)}
+.p-inherited{background:var(--surface-2);color:var(--muted)}
+
+.filterbar{display:flex;gap:10px;align-items:center;margin:16px 0 0;flex-wrap:wrap}
+#q{flex:1;min-width:220px;background:var(--surface);border:1px solid var(--border);color:var(--text);
+border-radius:9px;padding:9px 13px;font-size:14px;font-family:inherit}
+#q:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.chip{background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;
+border-radius:999px;padding:6px 13px;font-size:12.5px;font-family:inherit}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.hint{font-size:12px;color:var(--muted)}
+.empty{padding:22px;color:var(--muted);text-align:center;display:none}
+
+/* timeline */
+.tl{border-left:2px solid var(--border);margin:18px 0 0;padding:0 0 0 22px;list-style:none}
+.tl li{position:relative;padding:0 0 20px}
+.tl li::before{content:"";position:absolute;left:-28px;top:5px;width:9px;height:9px;border-radius:50%;
+background:var(--accent);border:2px solid var(--bg)}
+.tl li.ours::before{background:var(--purple)}
+.tl li.bad::before{background:var(--red)}
+.tl .when{font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.2px}
+.tl .what{font-weight:600;margin:1px 0 2px}
+.tl .why{color:var(--muted);font-size:13.5px}
+
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:14px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:15px 17px}
+.card h4{margin:0 0 6px;font-size:14px}
+.card ul{margin:6px 0 0;padding-left:17px;color:var(--muted);font-size:13.5px}
+.card li{margin:4px 0}
+.card li strong{color:var(--text)}
+
+code{font-family:var(--mono);font-size:12.5px;background:var(--surface-2);padding:1px 5px;border-radius:4px}
+.codeblock{position:relative;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;
+padding:13px 15px;margin:12px 0;overflow-x:auto}
+.codeblock pre{margin:0;font-family:var(--mono);font-size:12.5px;line-height:1.55}
+.copy{position:absolute;top:8px;right:8px;opacity:0;transition:opacity .15s;background:var(--surface);
+border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer}
+.codeblock:hover .copy{opacity:1}
+.copy:hover{color:var(--accent);border-color:var(--accent)}
+
+.footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:12.5px}
+mark{background:var(--orange-bg);color:var(--text);border-radius:3px;padding:0 2px}
+@media print{.site-nav,.filterbar{display:none!important}body{padding-top:0!important}
+h2{page-break-before:always}h2:first-of-type{page-break-before:avoid}}
+</style>
+</head>
+<body>
+
+<nav class="site-nav">
+  <span class="nav-logo">UnpauseAI</span>
+  <span class="nav-client">&middot; Meji Media</span>
+  <span class="nav-links">
+    <a href="#glance">At a glance</a>
+    <a href="#campaigns">Campaigns</a>
+    <a href="#timeline">Timeline</a>
+    <a href="#mailboxes">Mailboxes</a>
+    <a href="#changed">What we changed</a>
+    <a href="#evolution">Campaign evolution</a>
+    <a href="#retired">Retired</a>
+    <a href="#work">Needs work</a>
+    <span class="nav-status">LIVE PULL 08 SEP</span>
+    <button class="nav-theme" id="themeBtn" aria-label="Toggle theme">&#9788;/&#9790;</button>
+  </span>
+</nav>
+
+<div class="wrap">
+
+<span class="badge">Internal reference</span>
+<h1>The Instantly estate, end to end</h1>
+<p class="sub">Every campaign and mailbox in Meji Media's Instantly account: what we inherited,
+what we built, what we fixed, what is dead, and what is still open. All counts pulled live from the
+Instantly API on 8 September 2026. Press <span class="kbd">Ctrl</span> <span class="kbd">K</span>
+to jump to the campaign filter.</p>
+
+<div class="stats">
+  <div class="stat"><div class="stat-value">9</div><div class="stat-label">campaigns ever created</div></div>
+  <div class="stat"><div class="stat-value">10,190</div><div class="stat-label">leads across all lists</div></div>
+  <div class="stat"><div class="stat-value">20,132</div><div class="stat-label">emails sent, all time</div></div>
+  <div class="stat"><div class="stat-value">216</div><div class="stat-label">replies</div></div>
+  <div class="stat"><div class="stat-value">43</div><div class="stat-label">tagged interested</div></div>
+  <div class="stat"><div class="stat-value">16</div><div class="stat-label">sending mailboxes</div></div>
+</div>
+
+<h2 id="glance">At a glance: two eras</h2>
+<p class="sub">The account splits cleanly in two. Five campaigns predate our engagement and were built
+around a different product mix. Four are ours, built as the three-piece pilot in June 2026.</p>
+
+<div class="grid2">
+  <div class="card">
+    <h4><span class="pill p-inherited">Inherited</span> &nbsp;Nov 2025, before us</h4>
+    <ul>
+      <li><strong>5 campaigns</strong>, 7,691 leads, 14,620 emails, 99 replies, 26 tagged interested</li>
+      <li>Spans three different businesses: the Christmas party product, the MejiAI chatbot line, and Banter</li>
+      <li>Two are stopped with bounce rates above 5 percent; one is paused; one is complete; one is nominally active but has not sent since Feb 2026</li>
+      <li>None of them can send today without work</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4><span class="pill p-ours">Ours</span> &nbsp;Jun 2026, the three-piece pilot</h4>
+    <ul>
+      <li><strong>4 campaigns</strong>, 2,499 leads, 5,512 emails, 117 replies, 17 tagged interested</li>
+      <li>Piece 1 warm re-engagement, Piece 2 corporate cold split A/B, Piece 3 Christmas cold in the three venue cities</li>
+      <li>Strict mailbox-to-piece routing, no cross-wiring, enforced by a validator hook</li>
+      <li>More replies from a third of the send volume</li>
+    </ul>
+  </div>
+</div>
+
+<div class="callout red">
+  <div class="callout-title">The number that matters for the end-of-September decision</div>
+  <p>Corporate cold has never produced a tagged opportunity. Across all three corporate campaigns
+  ever run (the inherited Big Companies list and our A/B split), that is
+  <strong>3,906 emails to 1,903 people, 9 replies, 0 tagged interested</strong>. By contrast the warm
+  re-engagement list replies at <strong>4.2 percent</strong> and the Christmas cold list at 0.9 percent.
+  Caveat worth holding: "interested" is a manual tag, so 0 could mean nobody was interested or it could
+  mean the 9 replies were never tagged. The API cannot separate those two.</p>
+</div>
+
+<h2 id="campaigns">Every campaign, live state</h2>
+<p class="sub">Sorted oldest first. Reply and bounce rates are computed against emails sent, not against
+list size. "Interested" is Instantly's manual interest tag, not an automatic signal.</p>
+
+<div class="filterbar">
+  <input id="q" type="search" placeholder="Filter campaigns by name, mailbox domain or status..." autocomplete="off">
+  <button class="chip" data-f="all" aria-pressed="true">All</button>
+  <button class="chip" data-f="ours" aria-pressed="false">Ours</button>
+  <button class="chip" data-f="inherited" aria-pressed="false">Inherited</button>
+  <button class="chip" data-f="sendable" aria-pressed="false">Can send today</button>
+  <span class="hint">9 shown</span>
+</div>
+
+<div class="tablewrap">
+<table id="ct">
+<thead><tr>
+  <th>Campaign</th><th>Origin</th><th>State</th><th class="num">Leads</th><th class="num">Sent</th>
+  <th class="num">Replies</th><th class="num">Reply&nbsp;%</th><th class="num">Interested</th>
+  <th class="num">Bounce&nbsp;%</th><th>Sends from</th>
+</tr></thead>
+<tbody>
+
+<tr data-o="inherited" data-send="no" data-k="banter reactivation booked banterexp mejiai completed">
+  <td class="name">Banter reactivation, Booked<span class="cid">c83adc69 &middot; created 10 Nov 2025</span></td>
+  <td><span class="pill p-inherited">Inherited</span></td>
+  <td><span class="pill p-done">Completed</span></td>
+  <td class="num">4,362</td><td class="num">8,588</td><td class="num">45</td><td class="num">0.5%</td>
+  <td class="num">8</td><td class="num">1.6%</td>
+  <td>banterexp.com &times;3<br>mejiai.com &times;3</td>
+</tr>
+
+<tr data-o="inherited" data-send="no" data-k="christmas bookers mejimedia.co dormant dead">
+  <td class="name">Meji Media, Christmas Bookers<span class="cid">1f40cb36 &middot; created 10 Nov 2025</span></td>
+  <td><span class="pill p-inherited">Inherited</span></td>
+  <td><span class="pill p-dead">Active but cannot send</span></td>
+  <td class="num">983</td><td class="num">1,923</td><td class="num">26</td><td class="num">1.4%</td>
+  <td class="num">16</td><td class="num">2.0%</td>
+  <td>mejimedia.co &times;3 <span class="pill p-dead">dead</span></td>
+</tr>
+
+<tr data-o="inherited" data-send="no" data-k="big companies uk corporate mejievent stopped bounce">
+  <td class="name">Corporate Events, Big Companies in UK<span class="cid">245913f7 &middot; created 12 Nov 2025</span></td>
+  <td><span class="pill p-inherited">Inherited</span></td>
+  <td><span class="pill p-stopped">Stopped</span></td>
+  <td class="num">880</td><td class="num">1,968</td><td class="num">5</td><td class="num">0.3%</td>
+  <td class="num">0</td><td class="num">5.9%</td>
+  <td>mejievent.com &times;3</td>
+</tr>
+
+<tr data-o="inherited" data-send="no" data-k="mejiai construction hvac plumbers electricians stopped bounce">
+  <td class="name">MejiAI, Construction and trades<span class="cid">d5db8ea5 &middot; created 19 Nov 2025</span></td>
+  <td><span class="pill p-inherited">Inherited</span></td>
+  <td><span class="pill p-stopped">Stopped</span></td>
+  <td class="num">259</td><td class="num">216</td><td class="num">1</td><td class="num">0.5%</td>
+  <td class="num">0</td><td class="num">5.6%</td>
+  <td>mejiai.com &times;3</td>
+</tr>
+
+<tr data-o="inherited" data-send="no" data-k="vayne chatbots event management paused">
+  <td class="name">Event Management, Chatbots, Vayne<span class="cid">486e263f &middot; created 24 Nov 2025</span></td>
+  <td><span class="pill p-inherited">Inherited</span></td>
+  <td><span class="pill p-paused">Paused</span></td>
+  <td class="num">1,207</td><td class="num">1,925</td><td class="num">22</td><td class="num">1.1%</td>
+  <td class="num">2</td><td class="num">3.9%</td>
+  <td>mejiai.com &times;3</td>
+</tr>
+
+<tr data-o="ours" data-send="no" data-k="piece 2 corporate decision makers a mejievent completed">
+  <td class="name">Piece 2A, Corporate Decision-Makers<span class="cid">c3daf05c &middot; created 6 Jun 2026</span></td>
+  <td><span class="pill p-ours">Ours</span></td>
+  <td><span class="pill p-done">Completed</span></td>
+  <td class="num">589</td><td class="num">1,131</td><td class="num">1</td><td class="num">0.1%</td>
+  <td class="num">0</td><td class="num">2.9%</td>
+  <td>mejievent.com &times;3</td>
+</tr>
+
+<tr data-o="ours" data-send="no" data-k="piece 2 corporate organisers b mejievent paused no bulk load">
+  <td class="name">Piece 2B, Corporate Organisers<span class="cid">5d677062 &middot; created 6 Jun 2026</span></td>
+  <td><span class="pill p-ours">Ours</span></td>
+  <td><span class="pill p-paused">Paused</span></td>
+  <td class="num">434</td><td class="num">807</td><td class="num">3</td><td class="num">0.4%</td>
+  <td class="num">0</td><td class="num">3.7%</td>
+  <td>mejievent.com &times;3</td>
+</tr>
+
+<tr data-o="ours" data-send="yes" data-k="piece 1 christmas warm re-engagement mejimedia.com live best">
+  <td class="name">Piece 1, Christmas Warm Re-engagement<span class="cid">00fc708d &middot; created 7 Jun 2026</span></td>
+  <td><span class="pill p-ours">Ours</span></td>
+  <td><span class="pill p-live">Active</span></td>
+  <td class="num">907</td><td class="num">2,452</td><td class="num">103</td><td class="num"><mark>4.2%</mark></td>
+  <td class="num">14</td><td class="num">1.3%</td>
+  <td>gurmej@mejimedia.com <em>(sole)</em></td>
+</tr>
+
+<tr data-o="ours" data-send="no" data-k="piece 3 christmas cold 3 cities mejixmas completed best bounce">
+  <td class="name">Piece 3, Christmas Cold, 3 Cities<span class="cid">f9e61441 &middot; created 26 Jun 2026</span></td>
+  <td><span class="pill p-ours">Ours</span></td>
+  <td><span class="pill p-done">Completed</span></td>
+  <td class="num">569</td><td class="num">1,122</td><td class="num">10</td><td class="num">0.9%</td>
+  <td class="num">3</td><td class="num"><mark>0.4%</mark></td>
+  <td>mejixmas.com &times;2</td>
+</tr>
+
+</tbody>
+</table>
+</div>
+<div class="empty" id="empty">Nothing matches that filter.</div>
+
+<div class="callout orange">
+  <div class="callout-title">Reading the two "Stopped" campaigns</div>
+  <p>Big Companies in UK and MejiAI Construction both sit in the same non-active state, and both are the
+  only two campaigns in the account above a 5 percent bounce rate (5.9 and 5.6). That is the band where
+  Instantly's bounce protection halts a campaign, so the cause is near certain. The precise meaning of the
+  underlying status code is <strong>not</strong> verified against Instantly's docs, so it is reported here as
+  "stopped" rather than given a label the API has not confirmed.</p>
+</div>
+
+<h2 id="timeline">How it got here</h2>
+<ul class="tl">
+  <li><div class="when">Oct to Nov 2025</div><div class="what">Account built out before our engagement</div>
+    <div class="why">12 mailboxes created across mejimedia.co, mejievent.com, mejiai.com and banterexp.com. Five campaigns launched inside three weeks, covering three separate businesses.</div></li>
+  <li class="bad"><div class="when">Nov 2025 to Jan 2026</div><div class="what">Two campaigns stop themselves on bounce rate</div>
+    <div class="why">MejiAI Construction runs for a single day. Big Companies in UK stops with 258 people never emailed and 9 frozen part-way through the sequence. Neither was restarted.</div></li>
+  <li><div class="when">Feb 2026</div><div class="what">Christmas Bookers goes quiet</div>
+    <div class="why">Last send 5 Feb 2026. The campaign still reads as active, but its three sending mailboxes are on a domain that no longer resolves.</div></li>
+  <li class="ours"><div class="when">1 Jun 2026</div><div class="what">We diagnose mejimedia.co as NXDOMAIN</div>
+    <div class="why">The domain does not exist in public DNS: no A record, no MX. Instantly had auto-disabled all three mailboxes for degrading the warmup pool. Reactivation is structurally impossible, since the reactivation code is sent to an address that cannot receive mail. Piece 1 is rerouted to a single working mailbox.</div></li>
+  <li class="ours"><div class="when">6 to 8 Jun 2026</div><div class="what">The three-piece pilot goes live</div>
+    <div class="why">Piece 2 splits corporate cold into Decision-Makers and Organisers. Piece 1 launches warm re-engagement to past attendees on gurmej@mejimedia.com alone.</div></li>
+  <li class="bad"><div class="when">9 Jun 2026</div><div class="what">Double-send bug caught and fixed the same day</div>
+    <div class="why">All three live campaigns were sending touch 1 and its follow-up about 20 minutes apart. Instantly's per-step delay is the gap <em>before the next</em> email, and the loaders had set it on the wrong step. Fixed, verified clean at the next sending window, and guarded in the loader scripts. Roughly 50 leads had already been double-sent.</div></li>
+  <li class="bad"><div class="when">19 Jun 2026</div><div class="what">Piece 2B auto-pauses at 5.2 percent bounce</div>
+    <div class="why">The organiser and EA segment is the bounce-prone one. Response was a standing no-bulk-load rule: verify through NeverBounce, drip in batches of 50 or fewer, check the bounce rate between batches. Enforced in the loader, not left to memory.</div></li>
+  <li class="ours"><div class="when">26 Jun 2026</div><div class="what">Piece 3 launches on its own domain</div>
+    <div class="why">Christmas cold, restricted to the three venue cities. It goes on to finish its list with a 0.4 percent bounce rate, the cleanest in the account.</div></li>
+  <li class="ours"><div class="when">1 Jul 2026</div><div class="what">Corporate audience retargeted, Piece 3 ramped</div>
+    <div class="why">The June-generation corporate list (880 remaining leads on the 11 to 50 staff CEO/MD targeting) was the wrong ICP and was retired. New targeting is 201 to 2000 staff functional bookers, split by seniority rather than company size. Piece 3 daily limit raised 50 to 90.</div></li>
+  <li><div class="when">17 to 20 Jul 2026</div><div class="what">Piece 3 completes, Piece 1 bounce spike handled</div>
+    <div class="why">36 twice-unverifiable leads removed from Piece 1 on owner approval.</div></li>
+  <li><div class="when">Aug 2026</div><div class="what">Corporate lists run dry, Make capacity doubled</div>
+    <div class="why">Piece 2A completes. Make operations tier moved 20k to 40k on 28 Aug, which also re-anchored the billing cycle to the 28th.</div></li>
+  <li class="ours"><div class="when">3 to 8 Sep 2026</div><div class="what">September relaunch prepared, held on client answers</div>
+    <div class="why">Campaign status report and launch line-up sent to Gurmej. Plan is to upgrade A and B in place rather than retire them, plus a new Version C for named accounts. Nothing sends until two answers arrive.</div></li>
+</ul>
+
+<h2 id="mailboxes">The mailbox estate</h2>
+<p class="sub">16 mailboxes across 6 domains. Routing is one domain per piece, deliberately, so a
+deliverability problem in one audience cannot contaminate another.</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Domain</th><th class="num">Boxes</th><th class="num">Per day</th><th class="num">Total/day</th><th>Health</th><th>Assigned to</th></tr></thead>
+<tbody>
+<tr><td class="name">mejievent.com</td><td class="num">3</td><td class="num">30</td><td class="num">90</td>
+  <td><span class="pill p-live">Warm, score 100</span></td><td>Corporate cold (Piece 2 A and B)</td></tr>
+<tr><td class="name">mejixmas.com</td><td class="num">2</td><td class="num">45</td><td class="num">90</td>
+  <td><span class="pill p-live">Warm, score 100</span></td><td>Christmas cold (Piece 3), list finished, capacity free</td></tr>
+<tr><td class="name">mejimedia.com</td><td class="num">1</td><td class="num">90</td><td class="num">90</td>
+  <td><span class="pill p-live">Warm, score 100</span></td><td>Christmas warm re-engagement (Piece 1)</td></tr>
+<tr><td class="name">christmasofficeparty.co.uk</td><td class="num">1</td><td class="num">30</td><td class="num">30</td>
+  <td><span class="pill p-live">Warm, score 100</span></td><td><em>Reserved.</em> Added 16 Jul 2026 as the second sender for the inbound enquiry pipeline; not outbound capacity</td></tr>
+<tr><td class="name">mejiai.com</td><td class="num">3</td><td class="num">30</td><td class="num">90</td>
+  <td><span class="pill p-live">Warm, score 100</span></td><td>MejiAI and Vayne, outside the Christmas engagement</td></tr>
+<tr><td class="name">banterexp.com</td><td class="num">3</td><td class="num">30</td><td class="num">90</td>
+  <td><span class="pill p-live">Warm, score 100</span></td><td>Banter reactivation, parked</td></tr>
+<tr><td class="name">mejimedia.co</td><td class="num">3</td><td class="num">30</td><td class="num">0</td>
+  <td><span class="pill p-dead">Dead, unrecoverable</span></td><td>Christmas Bookers, which is why it cannot send</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout green">
+  <div class="callout-title">Spare capacity for a Christmas push, without touching corporate</div>
+  <p>The Christmas side and the corporate side sit on different domains, so they do not compete.
+  Available right now for Christmas: <strong>180 emails a day</strong> from gurmej@mejimedia.com (90)
+  and the two mejixmas boxes (45 each). A 2,400 person list at three touches needs about 150 a day
+  across seven weeks, so mailboxes are not the constraint on the Christmas side. Corporate has its own
+  separate 90 a day. bookings@christmasofficeparty.co.uk is deliberately excluded from that 180: it was
+  created as the second sender for the inbound enquiry pipeline, and putting cold outbound on the
+  enquirer-facing brand domain is the one thing that build exists to prevent.</p>
+</div>
+
+<h2 id="changed">What we changed</h2>
+<div class="grid2">
+  <div class="card">
+    <h4>Infrastructure</h4>
+    <ul>
+      <li><strong>Found the dead domain.</strong> mejimedia.co has no DNS at all; its three mailboxes were pool-banned by Instantly and cannot be recovered. Piece 1 was rerouted to a single working sender.</li>
+      <li><strong>Separated the audiences by domain.</strong> One domain per piece, with a hard no-cross-wire rule and a validator hook that fails client drafts which mix them up.</li>
+      <li><strong>Added a second Christmas domain</strong> (mejixmas.com) and warmed it before use.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>Sending mechanics</h4>
+    <ul>
+      <li><strong>Fixed the double-send.</strong> Instantly's step delay is the gap before the next email, not after the current one. The loaders now guard it.</li>
+      <li><strong>Stopped bulk-loading the bounce-prone segment.</strong> Organisers go through NeverBounce, in batches of 50 or fewer, with a bounce check between batches.</li>
+      <li><strong>Ramped what was working.</strong> Piece 3 went from 50 to 90 a day once its bounce rate proved clean.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>Targeting</h4>
+    <ul>
+      <li><strong>Retired our own June corporate list.</strong> 880 remaining leads on the original 11 to 50 staff CEO/MD targeting, replaced with 201 to 2000 staff functional bookers.</li>
+      <li><strong>Split by seniority, not company size.</strong> Deciders and event owners in A, organisers in B, because the two segments bounce and reply very differently.</li>
+      <li><strong>Kept Christmas cold to the three venue cities</strong> rather than going UK-wide.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>Measurement</h4>
+    <ul>
+      <li><strong>Verified what the API actually means.</strong> Status 1 includes people never emailed, which had been double-counting fresh leads in our own reporting.</li>
+      <li><strong>Bounced leads confirmed</strong> as the negative lead status, matching exactly on 8 of 9 campaigns.</li>
+      <li><strong>Weekly reporting and a reply-SLA monitor</strong> built and run unattended.</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="evolution">How each of our campaigns evolved</h2>
+<p class="sub">The per-campaign version of the timeline above: what each audience was at creation and every
+point it changed, from the canonical routing record (<code>context/pilot-routing.md</code>). P1 and P3 kept
+their purpose throughout; P2's audience definition was replaced twice and its purpose changes again in September.</p>
+
+<h3>Piece 1, Christmas Warm Re-engagement &middot; <code>00fc708d</code></h3>
+<p class="sub">Warm re-engagement of past M&amp;M attendees from day one, superseding Christmas Bookers.
+Every change was hygiene or pacing, never retargeting; the list only ever shrank.</p>
+<ul class="tl">
+  <li class="ours"><div class="when">8 Jun</div><div class="what">Created with 945 leads</div>
+    <div class="why">The 983 past attendees minus 38 known-dead addresses. Venue-personalised touch 1 per lead
+    (ICC 430, Empire Leicester 199, ICB 169, generic fallback 147), sole sender gurmej@mejimedia.com.</div></li>
+  <li><div class="when">7 Jul</div><div class="what">Ramped 40 to 90 a day</div>
+    <div class="why">Best converter in the account; the single warm mailbox was the ceiling, so this was the
+    last limit bump available without a second warm domain.</div></li>
+  <li><div class="when">12 Jul</div><div class="what">945 to 943, first-touch priority on</div>
+    <div class="why">327 leads had never been first-touched; the cause was throughput plus ordering, not
+    verification. prioritize_new_leads set, 2 NeverBounce-invalid removed, the 130 unknowns kept on the
+    owner's call (warm leads presume lower bounce).</div></li>
+  <li class="bad"><div class="when">20 Jul</div><div class="what">943 to 907</div>
+    <div class="why">Bounce spike traced to the kept unknowns; 36 twice-unverifiable leads deleted on owner
+    approval. The list has sat at 907 since, and the campaign is the template for the September Christmas push.</div></li>
+</ul>
+
+<h3>Piece 2, Corporate Cold A + B &middot; <code>c3daf05c</code> / <code>5d677062</code></h3>
+<p class="sub">Three audience generations, and the meaning of the A/B split itself changed once.</p>
+<ul class="tl">
+  <li class="ours"><div class="when">6 to 7 Jun</div><div class="what">Generation 1: 11 to 50 staff, split by role</div>
+    <div class="why">A = CEO/MD (239 leads), B = PA/EA/Office Manager/HR (213). UK-wide, our own Apollo
+    sourcing. The AI icebreaker opener was cut before launch on Gurmej's direction ("the less AI the better").</div></li>
+  <li><div class="when">18 to 19 Jun</div><div class="what">Generation 1.5: same ICP tightened, then the bounce lesson</div>
+    <div class="why">+472 leads restricted to event-buying sectors (A 511, B 413). B auto-paused at 5.2%
+    bounce the next day; the fix (verify, delete 44, resume at 25 a day) created the standing no-bulk-load
+    rule for the organiser segment.</div></li>
+  <li class="ours"><div class="when">1 Jul</div><div class="what">Generation 2: audience replaced, split now by seniority</div>
+    <div class="why">The 880 remaining generation-1 leads retired. New ICP: 201 to 2000 staff functional
+    bookers (People/HR, Office Managers, EAs, Events Managers), A = deciders, B = organisers. The first batch
+    (78 A / 50 B) surfaced the Mimecast finding: the decision-maker segment, not the organisers, is the
+    bounce-prone one.</div></li>
+  <li class="bad"><div class="when">7 Jul</div><div class="what">Purpose suspended on client direction</div>
+    <div class="why">"Pause it. No point pushing more contacts through until the copy is right." A was already
+    complete; B has been paused since. Same exchange widened the ICP band to 50 to 2000 staff for September
+    and handed the autumn date-scarcity hook to the Christmas pieces for good.</div></li>
+  <li class="ours"><div class="when">Sep, planned</div><div class="what">Upgrade in place, plus Version C</div>
+    <div class="why">Owner pivot 4 Sep: A and B get the approved 29 Jul sequences, a fresh 50 to 2000 UK-wide
+    list and a resume with history kept, not retirement. Only Version C (12 named accounts plus lookalikes) is
+    a new campaign. Blocked on Gurmej's two answers.</div></li>
+</ul>
+
+<h3>Piece 3, Christmas Cold, 3 Cities &middot; <code>f9e61441</code></h3>
+<p class="sub">Purpose deliberately narrow and never widened: cold Christmas outreach in Birmingham, Leicester
+and Wolverhampton only. The audience story is a finite universe worked to exhaustion.</p>
+<ul class="tl">
+  <li class="ours"><div class="when">26 Jun</div><div class="what">Created with 529 NeverBounce-clean leads</div>
+    <div class="why">City-branched venue and theme personalisation in the lead payload, two mejixmas.com senders,
+    2-touch sequence.</div></li>
+  <li><div class="when">1 Jul</div><div class="what">Ramped 50 to 90 a day</div>
+    <div class="why">Bounce had proven clean at 0%.</div></li>
+  <li><div class="when">7 to 8 Jul</div><div class="what">Topped up to 569, and the universe bottomed out</div>
+    <div class="why">Gurmej's go: top up before the list runs out. +26, then +14 after NeverBounce credits were
+    reloaded. The finding underneath: the 3-city universe is a finite ~600-lead list, so the 1,500 to 2,000 a
+    month volume target was formally reassigned to P2.</div></li>
+  <li><div class="when">17 to 21 Jul</div><div class="what">Completed; opportunity count corrected to 1</div>
+    <div class="why">Finished its list on its own. Gurmej flagged one of the 2 tagged opportunities (Indian
+    Brewery) as a competitor venue doing research; indianbrewery.com is suppressed from all future sourcing.
+    Any revival (new source or wider geography) is a Gurmej decision; the mejixmas mailboxes stay reserved.</div></li>
+</ul>
+
+<h2 id="retired">Retired and dead</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Thing</th><th>What happened</th><th>Recoverable</th></tr></thead>
+<tbody>
+<tr><td class="name">3 mejimedia.co mailboxes</td><td>Domain does not exist in DNS. Instantly disabled them for harming the warmup pool. The reactivation code is sent to an address that cannot receive mail.</td><td><span class="pill p-dead">No</span></td></tr>
+<tr><td class="name">Christmas Bookers campaign</td><td>Superseded by Piece 1 warm re-engagement. Still reads active but its only senders are the dead mailboxes.</td><td>Only by swapping senders</td></tr>
+<tr><td class="name">Big Companies in UK</td><td>Superseded by the A/B split. Stopped on bounce with 258 people never emailed and 9 frozen mid-sequence.</td><td>Decision pending with Gurmej</td></tr>
+<tr><td class="name">The June P2 list, 880 leads</td><td>Our own first corporate ICP (11 to 50 staff, CEO/MD), not the inherited one. Retired 1 Jul 2026, replaced with the 201 to 2000 staff targeting. Big Companies in UK coincidentally also holds exactly 880 leads; that list was never retired and its finish/retire/fold decision is still with Gurmej.</td><td>Deliberately not</td></tr>
+<tr><td class="name">MejiAI Construction, Vayne, Banter</td><td>Different product lines, parked outside the Christmas engagement by client direction.</td><td>Out of scope, not broken</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="work">What needs work</h2>
+
+<div class="callout red">
+  <div class="callout-title">1. There is effectively no opt-out record</div>
+  <p>The account-wide block list holds <strong>one address</strong>. The campaigns carry no unsubscribe
+  link by deliberate choice, so Instantly has recorded <strong>zero</strong> unsubscribes across all 20,132
+  emails ever sent. The only opt-out signal that exists is 52 people manually tagged "not interested" plus
+  whatever sits in the reply threads. Re-mailing the Christmas lists without rebuilding a stop list first
+  would re-contact people who already asked to stop.</p>
+</div>
+
+<div class="callout orange">
+  <div class="callout-title">2. Corporate has produced no opportunities in three attempts</div>
+  <p>3,906 emails, 1,903 people, 9 replies, 0 tagged interested, across the inherited campaign and both of
+  ours. Gurmej is giving it until the end of September. Worth knowing that more volume would test reach,
+  not whether the message lands.</p>
+</div>
+
+<div class="callout orange">
+  <div class="callout-title">3. The September relaunch is blocked on two client answers</div>
+  <p>Nothing can send until Gurmej gives the word on what to do with Big Companies in UK, and supplies
+  three to five inbox addresses for placement testing. The wait comes out of the month he is judging.</p>
+</div>
+
+<div class="callout">
+  <div class="callout-title">4. Smaller open items</div>
+  <p><strong>mejievent.com DMARC is still on monitor-only</strong>, which is weaker than it should be for the
+  domain carrying the corporate volume. <strong>The placement seed file is empty.</strong>
+  <strong>bookings@christmasofficeparty.co.uk has been warm and idle since 16 Jul</strong>, waiting on the
+  inbound multi-inbox build (A1/A3 send router, A2 dual-inbox reply detection) that has not shipped;
+  it is reserved for that, not spare outbound capacity.
+  <strong>Christmas Bookers needs its senders swapped</strong> before it could ever run again.</p>
+</div>
+
+<h3>Reproducing these numbers</h3>
+<div class="codeblock">
+  <button class="copy">Copy</button>
+<pre>GET  https://api.instantly.ai/api/v2/accounts?limit=100
+GET  https://api.instantly.ai/api/v2/campaigns?limit=100
+GET  https://api.instantly.ai/api/v2/campaigns/analytics?id={campaign_id}
+POST https://api.instantly.ai/api/v2/leads/list      {"campaign":"{id}","limit":100}
+GET  https://api.instantly.ai/api/v2/block-lists-entries?limit=100
+
+# A User-Agent header is REQUIRED. The urllib default gets a
+# Cloudflare 403 (error code 1010). Key: INSTANTLY_API_KEY in
+# workspace/clients/meji-media/context/.env</pre>
+</div>
+
+<div class="footer">
+  <p>Meji Media &middot; UnpauseAI &middot; admin@unpauseai.com &middot; 2026<br>
+  Last updated: 2026-09-08. All campaign, lead and mailbox figures pulled live from the Instantly v2 API
+  on 2026-09-08. History sourced from the client routing record and the communications log.
+  Internal document, not for client circulation.</p>
+</div>
+
+</div>
+
+<script>
+(function(){
+  var d=document.documentElement;
+  document.getElementById('themeBtn').addEventListener('click',function(){
+    var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+    d.setAttribute('data-theme',c);
+    try{localStorage.setItem('theme',c);}catch(e){}
+  });
+
+  document.querySelectorAll('.copy').forEach(function(b){
+    b.addEventListener('click',function(){
+      var t=b.parentElement.querySelector('pre').innerText;
+      navigator.clipboard.writeText(t).then(function(){
+        var o=b.textContent;b.textContent='Copied';setTimeout(function(){b.textContent=o;},1200);
+      });
+    });
+  });
+
+  var q=document.getElementById('q'),
+      rows=Array.prototype.slice.call(document.querySelectorAll('#ct tbody tr')),
+      chips=Array.prototype.slice.call(document.querySelectorAll('.chip')),
+      hint=document.querySelector('.hint'),
+      empty=document.getElementById('empty'),
+      mode='all';
+
+  function save(){try{localStorage.setItem('meji-estate-filter',JSON.stringify({q:q.value,mode:mode}));}catch(e){}}
+  function apply(){
+    var term=q.value.trim().toLowerCase(),n=0;
+    rows.forEach(function(r){
+      var okMode = mode==='all'
+        || (mode==='sendable' && r.dataset.send==='yes')
+        || (mode!=='sendable' && r.dataset.o===mode);
+      var hay=(r.dataset.k+' '+r.textContent).toLowerCase();
+      var okTerm=!term||hay.indexOf(term)>-1;
+      var show=okMode&&okTerm;
+      r.style.display=show?'':'none';
+      if(show)n++;
+    });
+    hint.textContent=n+' shown';
+    empty.style.display=n?'none':'block';
+    save();
+  }
+  q.addEventListener('input',apply);
+  chips.forEach(function(c){
+    c.addEventListener('click',function(){
+      mode=c.dataset.f;
+      chips.forEach(function(x){x.setAttribute('aria-pressed',String(x===c));});
+      apply();
+    });
+  });
+  try{
+    var s=JSON.parse(localStorage.getItem('meji-estate-filter')||'{}');
+    if(s.q){q.value=s.q;}
+    if(s.mode){mode=s.mode;chips.forEach(function(x){x.setAttribute('aria-pressed',String(x.dataset.f===mode));});}
+  }catch(e){}
+  apply();
+
+  document.addEventListener('keydown',function(e){
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();q.focus();q.select();}
+  });
+})();
+</script>
+</body>
+</html>
