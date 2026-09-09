@@ -132,14 +132,23 @@ $p=(Get-ChildItem "C:\Users\neuma_p1qrsic\Repo\agentic-ops1\workspace\hours-trac
 $xl=New-Object -ComObject Excel.Application; $xl.Visible=$false; $xl.DisplayAlerts=$false
 $wb=$xl.Workbooks.Open($p,$false,$true); $xl.CalculateFull()
 foreach($ws in $wb.Sheets){$s=$ws.Name; if($s -notin @("_meta")){
- "[$s] "+$ws.Range("B4").Text+" | "+$ws.Range("K3").Value2+"h / EUR "+$ws.Range("L3").Value2+" | "+$ws.Range("K14").Value2}}
+ $wk=(9..13 | ForEach-Object { [double]$ws.Range("K$_").Value2 } | Measure-Object -Sum).Sum
+ "[$s] "+$ws.Range("B4").Text+" | "+$ws.Range("K3").Value2+"h / EUR "+$ws.Range("L3").Value2+" | by-week sum "+$wk}}
 $wb.Close($false); $xl.Quit()
 ```
 
-`K14` (the Control check cell) must read `ties to table` on every tab
-written. `K13` is the week-of SUMPRODUCT for the last pre-anchored Monday
-and reads `0` when that week has no work, so don't probe it. Report the new
-per-tab total and the EUR figure logged this run.
+The by-week sum must equal the tab total in `K3`; that is the tie-out. Do not
+probe `K14` for a `ties to table` string: the MONTHLY books have no control-check
+cell (July, August and September all lack one), only the weekly books built by
+`build-brisken-week-sheet.py` do. Report the new per-tab total and the EUR
+figure logged this run.
+
+If the boundary work belongs to a month that has already rolled over, pass
+`--file workspace/hours-tracker/hours-tracker-YYYY-MM-<name>.xlsx` to every
+`log-brisken-hours.py` call; without it the tool writes into the latest month
+and the prior month stays unreachable. Roll a new month with
+`uv run tools/roll-hours-month.py --month YYYY-MM`, and check the outgoing
+month's `--status` for unlogged work before you do.
 
 ## Notes
 

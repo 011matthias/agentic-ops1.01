@@ -57,6 +57,7 @@ INDEX = ("tools/INDEX.md membership",
 PYTEST = ("enforcement-layer pytest suite",
           ["uv", "run", "--no-project", "--with", "pytest", "--with", "python-pptx",
            "--with", "requests", "--with", "httpx", "--with", "pyyaml",
+           "--with", "openpyxl",
            "pytest", "tools/tests"])
 
 

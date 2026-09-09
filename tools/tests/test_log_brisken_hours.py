@@ -62,9 +62,19 @@ def _tracker(path, rows=()):
 
 
 def _run(book, *args):
+    """Run the script against `book`, from a cwd that has no tracker of its own.
+
+    `cwd` is not cosmetic. The fallback `current_xlsx()` resolves the RELATIVE
+    path `workspace/hours-tracker`, so a test whose only isolation is `--file`
+    writes into the real billing workbook the moment `--file` stops working.
+    That is not hypothetical: mutating the `--file` assignment under
+    `regress_check.py` on 2026-09-09 put a synthetic row into the live
+    September book. Running from a bare tmp dir makes the fallback resolve to
+    nothing, so the blast radius of a broken flag is a clean failure.
+    """
     return subprocess.run(
         [sys.executable, str(SCRIPT), "--file", str(book), *args],
-        capture_output=True, text=True)
+        capture_output=True, text=True, cwd=book.parent)
 
 
 # --- --file targets a workbook that is not the latest month ----------------
