@@ -317,7 +317,7 @@ Independent of the strategy, actionable now.
 |---|---|
 | The checked-in leads migration declares 7 columns; the real table has 8, and the function's claim that it bootstraps on cold start is false | A fresh deploy 500s on every book-demo submission |
 | `/api/book-demo` writes to a table no page, export or API reads back | Lead capture is write-only; a form that stops persisting looks like a quiet week |
-| `BRISKEN_INQUIRY_RESEND_KEY` was never set on the OnePilot sites | Any submission there has never reached a human. Read `inquiries.jsonl` off both volumes before destroying them |
+| `BRISKEN_INQUIRY_RESEND_KEY` was never set on the OnePilot sites | Any contact-form submission there would never have reached a human. **Checked 2026-09-09: no `inquiries.jsonl` exists on either volume**, so nothing was submitted and nothing was lost. Both volumes did hold a `feedback.jsonl` of in-page review notes, now rescued to `deliverables/lead-generation/onepilot/REVIEW-FEEDBACK-2026-06.md` |
 | The old Wix OnePilot form was still taking submissions five days before the site moved, and the only two real inbound enquiries Brisken has ever had came through it | If it is still on, leads are landing where none of this reaches |
 | `DEV_RECIPIENTS` is `matthias.silva` only; `EXPENSE_RECON_NOTIFY_USER` is absent from the client `.env` | Criss has never received a result-ready mail |
 | `.scratch/brisken-rome-hub/index.html` (25,471 bytes, untracked, one laptop) has diverged from the tracked canonical (27,466 bytes) | The only item that gets strictly worse with time |
