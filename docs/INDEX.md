@@ -507,6 +507,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## vinted-reselling
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-10 | Vinted Watcher Volume Collapse + Egress Plumbing | client-dev | [→](docs/2026-09-10%20-%20Vinted%20Watcher%20Volume%20Collapse%20%2B%20Egress%20Plumbing/Checkpoint.md) |
 | 2026-09-09 | Vinted Listing Bot Seven Gaps | misc | [→](docs/2026-09-09%20-%20Vinted%20Listing%20Bot%20Seven%20Gaps/Checkpoint.md) |
 | 2026-09-09 | Vinted Watcher Precision + Portability | client-dev | [→](docs/2026-09-09%20-%20Vinted%20Watcher%20Precision%20%2B%20Portability/Checkpoint.md) |
 | 2026-09-08 | Vinted Watcher Outage Fix + Knowledge Base | client-dev | [Mini-Checkpoint-2](docs/2026-09-08%20-%20Vinted%20Watcher%20Outage%20Fix%20%2B%20Knowledge%20Base/Mini-Checkpoint-2.md) |

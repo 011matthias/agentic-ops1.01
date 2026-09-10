@@ -4,7 +4,7 @@ workstream: watcher
 group: ""
 spec: ""
 state: active
-updated: 2026-09-09
+updated: 2026-09-10
 ---
 
 Sourcing watcher + price/demand database. Polls the Vinted catalog API for
@@ -174,6 +174,74 @@ Recheck-Durchlauf hat Verkaeufe geloescht.
 Titel `Levi's 501 Jeans | Gr. W31`, Preisvorschlag 20,50 EUR (Kaeufer zahlt
 22,22 EUR), Marge 11,40 EUR, Vergleich Median 25,90 / p25 18,55 / p75 37,45
 ueber 94 Anzeigen der Zelle, plus drei offene Fragen (Farbe, Material, Masse).
+
+## Der Volumen-Einbruch vom 2026-09-10
+
+Der Owner meldete "kaum noch Benachrichtigungen". Er hat recht, und die Ursache
+ist das Sende-Budget aus PR #781.
+
+**Was das alte Volumen war.** `listings.alerted=1` pro Tag: 180 (09-06),
+171 (09-07), 181 (09-08), 319 (09-09), 9 (09-10 bis 09:46Z). Das "50+" aus dem
+Prompt war eine Untergrenze, keine Obergrenze; tatsaechlich liefen rund 177
+Pushes am Tag und der Owner war damit zufrieden. `SEND_BUDGET_PER_DAY = 60` hat
+das schon als Zielwert auf ein Drittel gekuerzt.
+
+**Warum es dann 9 statt 60 wurden.** `alert_priority` vergleicht einen
+Kandidaten nicht gegen einen Tageszaehler, sondern gegen die besten 60 der
+letzten 24 Wanduhr-Stunden. Das ist nicht dasselbe wie "60 pro Tag", und der
+Replay ueber alle 561 quality-tragenden Zeilen zeigt zwei Fehler:
+
+1. **Der Balken steigt innerhalb eines Tages monoton**, weil der Pool sich
+   fuellt: 50.9 um 20Z am 08., 88.5 um 12Z, 108.4 um 16Z, 114.7 um 19Z.
+   Durchgelassen pro Stunde am 09-09: 40, 26, 19, 10, 13, 11, 3, 6, 1, 0, 0.
+   Die letzten beiden Stunden des Tages senden nichts mehr.
+2. **Das Fenster ist 24 Stunden lang, der aktive Tag rund 13.** Der Pool
+   umfasst also immer zwei Wachphasen, und der naechste Morgen erbt den
+   Spitzenbalken des Vortages. Um 09:37Z am 10.: Pool 519 Zeilen, davon 473 vom
+   Vortag, Balken 114.8 = 88.5. Perzentil. Der Tagesdurchschnitt der Kandidaten
+   liegt bei 91.1. Verworfen wurden unter anderem Kandidaten mit 112.4, 110.1
+   und 105.8.
+
+**Die ntfy-Wand steht bei 319, nicht bei 177.** Am 09-09 gingen 319 Pushes
+durch, danach 147 Fehlschlaege zwischen 16Z und 20Z. Die drei Tage davor liefen
+mit je rund 180 ohne einen einzigen Fehlschlag. Das Kontingent wurde vom
+Nachhol-Schwall gesprengt, nie vom normalen Tag; 60 kuriert damit die falsche
+Zahl.
+
+**Richtige Form:** ein echter Tageszaehler (wie viele Pushes seit lokaler
+Mitternacht wirklich rausgingen), Deckel in der Naehe von 180 mit Luft unter der
+beobachteten Wand. Das Perzentil bleibt da, wo es hingehoert: auf der
+Klingel-Stufe, bei der es um Unterbrechung geht, nicht um Menge.
+
+### Zwei Nebenbefunde aus derselben Messung
+
+**Das Laender-Gate ist ein Vorbestand, kein Ausloeser, aber teuer.** Nach echtem
+Land (ueber `listings` gejoint): FR 415 Kandidaten / 42 gesendet, IT 160 / 12,
+NL 86 / 11, BE 52 / 7, gegen DE 248 / 154. `foreign_advantage_eur: 8` ist ein
+absoluter Betrag auf einen Vergleichsmedian von meist 25 bis 35 EUR und verlangt
+damit rund 25 Prozentpunkte zusaetzlichen Rabatt. Ein Angebot zu 11.20 EUR gegen
+Median 32.73, also 66% drunter, wird abgelehnt. Ein proportionaler Aufschlag
+waere die richtige Form; ob ein Auslandsangebot ueberhaupt schlechter
+weiterverkauft, ist mit 3 vertrauenswuerdigen gone-Events nicht messbar.
+
+**`alerts.country` ist immer NULL.** `record_alert` liest das Land aus `rec`,
+`score_and_alert` loest es aber in eine lokale Variable aus dem Verkaeuferprofil
+auf und schreibt es nie zurueck. 5 gefuellte Zeilen stehen 726 ueber den Join
+aufloesbaren gegenueber. Die Snapshot-Tabelle wurde gebaut, damit fuer den
+Backtest nichts verloren geht; auf dieser Dimension liefert sie nichts.
+
+### Was ausgeschlossen wurde
+
+Die 120 Katalog-404er lagen alle am 09-09 zwischen 10Z und 11Z und kamen nicht
+wieder. Der Zulauf ist gesund, rund 1000 neue Anzeigen pro Stunde. Der Task
+steht auf Ready, letzter Lauf mit Ergebnis 0.
+
+Die Naechte fehlen weiterhin: 671 Minuten Luecke von 21:10Z am 09. bis 08:21Z am
+10., weil `WakeToRun` auf `False` steht. Das ist ein Vorbestand und kostet die
+Nachtstunden, in denen ohnehin nur 1 bis 2 Pushes pro Stunde anfallen. Den
+Laptop jede Nacht alle fuenf Minuten zu wecken widerspricht der Entscheidung des
+Owners, den Laptop gerade NICHT zum Dauerlaeufer zu machen, also ist das seine
+Wahl und keine stille Umstellung.
 
 ## Elemente
 

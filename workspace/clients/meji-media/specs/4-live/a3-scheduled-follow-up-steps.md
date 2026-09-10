@@ -4,9 +4,9 @@ name: Scheduled Follow-Up Steps
 type: automation
 stage: live
 needs_fixes: false
-version: 3.1.0
+version: 3.2.0
 created: 2026-02-24
-updated: 2026-03-24
+updated: 2026-09-10
 orchestrator: make
 trigger:
   type: cron
@@ -33,13 +33,15 @@ make_production:
   google_connection: 13838215
   gmail_connection: 13838220
 last_changes:
+  - "2026-09-10: v3.2.0 - FAMILY EXCLUSION: fourth filterRows condition on module 2, column F (topic) not equal Family Party. Family rows already in the sheet are never selected for steps 2-4; no sheet write. Deployed via REST, live-vs-staged diff equal."
   - "2026-03-24: Production health check - 256 executions, 8436 ops, 0 errors. Interval corrected in spec: 3600s (60min) matching live schedule"
   - "2026-03-23: v3.1.0 - Hot lead fix: hot leads now enter follow-up sequence with fastest cadence (6h/24h)"
   - "2026-03-14: Interval changed from 900s to 3600s (15min to 60min) to reduce ops burn"
   - "2026-03-06: Fixed UTF-8 encoding in eu2 deployment (ASCII hyphens in scenario names)"
   - "2026-03-03: v3.0.0 - A/B testing (module 63 getCell Q, variant-suffixed template keys with ifempty fallback)"
   - "2026-02-25: Updated spec to match live implementation"
-next_steps: []
+next_steps:
+  - "Confirm the first post-change runs pick office rows only (ops pattern 1 + 15n, all status 1)."
 stage_history:
   - stage: spec
     date: 2026-02-24
