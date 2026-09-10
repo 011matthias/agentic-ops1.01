@@ -1922,3 +1922,113 @@ def test_ntfy_refusing_the_push_is_logged_not_swallowed(vw, monkeypatch, capsys,
     out = capsys.readouterr().out
     assert "429" in out and "quota" in out
     assert "send budget" in out, "the 429 must name what prevents it"
+
+
+# ------------------- 2026-09-10: the catch-up threw away the freshest listings
+#
+# The machine slept 669 minutes. On waking, every search logged "backlog
+# catch-up, alerts suppressed" and scored nothing, on the assumption that a
+# pile arriving after a gap is stale. Measured against that exact batch, the
+# assumption is backwards: of 456 listings collected, 48.9% were under 15
+# minutes old and 76.3% under 45, because page 1 of a catalogue search holds
+# the NEWEST 48 items and the real overnight backlog had already scrolled off
+# it. The branch was discarding the morning's freshest listings, 223 of them
+# under a quarter of an hour old.
+#
+# The gate needs BOTH a time gap AND more than BACKLOG_SUPPRESS new listings,
+# so every case here supplies a full batch; a handful after a gap is steady
+# state by design and must stay that way.
+
+def _rec_aged(vw, listing_id, minutes, **over):
+    epoch = int((datetime.now(timezone.utc) - timedelta(minutes=minutes)).timestamp())
+    photo = f"https://images1.vinted.net/t/02_00/f800/{epoch}.jpeg"
+    rec = {"id": listing_id, "search_tag": "t", "title": "Carhartt Jacke",
+           "brand": "Carhartt", "brand_norm": "carhartt", "size": "M",
+           "size_class": "m", "condition": "Sehr gut", "cond_tier": "very_good",
+           "garment_class": "jacket", "is_kid": 0, "country": "DE",
+           "price": 18.0, "total_price": 20.0, "currency": "EUR", "url": "u",
+           "photo_url": photo, "posted_at": vw.posted_at_of(photo),
+           "seller_id": 1, "seller_login": "s", "favourites": 0, "views": 0,
+           "promoted": 0, "seed": 0}
+    rec.update(over)
+    return rec
+
+
+def _batch(vw, start_id, minutes, n=20, **over):
+    return [_rec_aged(vw, start_id + i, minutes, **over) for i in range(n)]
+
+
+def _drive(vw, con, monkeypatch, recs, gap_hours):
+    """Run one poll_search over recs, with last_success gap_hours in the past."""
+    when = (datetime.now(timezone.utc) - timedelta(hours=gap_hours)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+    vw.meta_set(con, "last_success", when)
+    vw.meta_set(con, "seeded:t", when)
+    con.commit()
+    by_id = {r["id"]: r for r in recs}
+    monkeypatch.setattr(vw, "api_get", lambda *a, **k: {"items": [{"id": r["id"]} for r in recs]})
+    monkeypatch.setattr(vw, "parse_item", lambda item, tag, seed: by_id[item["id"]])
+    monkeypatch.setattr(vw.time, "sleep", lambda *_: None)
+    # notify returns False so MAX_ALERTS_PER_SEARCH never truncates the loop;
+    # what is under test is which candidates got SCORED.
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: False)
+    scored = []
+    real = vw.score_and_alert
+    monkeypatch.setattr(vw, "score_and_alert",
+                        lambda c, r, *a, **k: (scored.append(r["id"]),
+                                               real(c, r, *a, **k))[1])
+    settings = {"deal_ratio": 0.55, "min_comps": 5, "comp_window_days": 45,
+                "min_price": 5, "poll_per_page": 48, "size_classes": ["m"],
+                "min_margin": 0, "foreign_advantage_eur": 8,
+                "fake_risk_suppress": 0.7, "fake_risk_flag": 0.4,
+                "profile_suppress": 0.15, "profile_min_rated": 8}
+    vw.poll_search(None, con, {"tag": "t", "query": "q"}, settings, {})
+    return scored
+
+
+def test_a_fresh_listing_survives_the_catch_up(vw, con, paths, monkeypatch):
+    """223 of the 456 real ones were under 15 minutes old and were discarded."""
+    _comps(con, vw, n=10, price=40.0, brand_norm="carhartt", size_class="m")
+    scored = _drive(vw, con, monkeypatch, _batch(vw, 8100, 3), gap_hours=11)
+    assert len(scored) == 20, f"fresh listings were dropped after a gap: {len(scored)}"
+
+
+def test_a_genuinely_old_listing_is_still_dropped_in_a_catch_up(vw, con, paths, monkeypatch):
+    """The counterweight: the branch still exists to drop what really is stale."""
+    _comps(con, vw, n=10, price=40.0, brand_norm="carhartt", size_class="m")
+    scored = _drive(vw, con, monkeypatch, _batch(vw, 8200, 60 * 9), gap_hours=11)
+    assert scored == [], f"a stale batch was scored: {len(scored)}"
+
+
+def test_the_freshness_line_is_drawn_where_it_was_measured(vw, con, paths, monkeypatch):
+    """Either side of CATCH_UP_FRESH_MIN, so the constant is the contract."""
+    _comps(con, vw, n=10, price=40.0, brand_norm="carhartt", size_class="m")
+    just_inside = vw.CATCH_UP_FRESH_MIN - 5
+    just_outside = vw.CATCH_UP_FRESH_MIN + 15
+    recs = _batch(vw, 8300, just_inside, n=10) + _batch(vw, 8400, just_outside, n=10)
+    scored = _drive(vw, con, monkeypatch, recs, gap_hours=11)
+    assert all(i < 8400 for i in scored), f"a listing past the line was scored: {scored}"
+    assert len(scored) == 10, f"the fresh half was not fully scored: {len(scored)}"
+
+
+def test_an_unreadable_age_stays_suppressed_during_a_catch_up(vw, con, paths, monkeypatch):
+    """Unknown age is not evidence of freshness; be conservative after a gap."""
+    _comps(con, vw, n=10, price=40.0, brand_norm="carhartt", size_class="m")
+    recs = _batch(vw, 8500, 3, posted_at=None, photo_url=None)
+    assert _drive(vw, con, monkeypatch, recs, gap_hours=11) == []
+
+
+def test_steady_state_still_scores_everything(vw, con, paths, monkeypatch):
+    """No gap means no age filter: the test belongs to the catch-up branch only."""
+    _comps(con, vw, n=10, price=40.0, brand_norm="carhartt", size_class="m")
+    recs = _batch(vw, 8600, 3, n=10) + _batch(vw, 8700, 60 * 9, n=10)
+    scored = _drive(vw, con, monkeypatch, recs, gap_hours=0)
+    assert len(scored) == 20, f"steady state filtered by age: {len(scored)}"
+
+
+def test_a_small_batch_after_a_gap_is_not_a_catch_up(vw, con, paths, monkeypatch):
+    """A handful after a gap is the market being quiet, not a backlog."""
+    _comps(con, vw, n=10, price=40.0, brand_norm="carhartt", size_class="m")
+    recs = _batch(vw, 8800, 60 * 9, n=3)
+    scored = _drive(vw, con, monkeypatch, recs, gap_hours=11)
+    assert len(scored) == 3, "a small post-gap batch must still be scored normally"
