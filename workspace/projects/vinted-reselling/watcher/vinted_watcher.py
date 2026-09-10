@@ -126,6 +126,19 @@ MAX_ALERTS_PER_SEARCH = 3   # per cycle; a real steady-state cycle has 0-2 candi
 BACKLOG_SUPPRESS = 15       # only applied when a real gap preceded the cycle
 BACKLOG_GAP_MIN = 25        # minutes since last success that still count as steady state
 
+# What a catch-up cycle may still alert on, by REAL posting time.
+#
+# The gate above assumed the pile after a gap is old. Measured on the
+# 2026-09-10 morning batch, after the machine had slept 669 minutes, it is the
+# opposite: of 456 listings collected, 48.9% were under 15 minutes old and
+# 76.3% under 45, because page 1 holds the NEWEST 48 per search and the actual
+# overnight backlog had long scrolled off it. So the old branch discarded the
+# freshest listings of the morning, 223 of them under a quarter of an hour old,
+# and kept nothing. Age is knowable now (posted_at, from the photo epoch), so
+# the cycle scores what is genuinely fresh and suppresses only what is genuinely
+# old. Unknown age stays suppressed during a catch-up: conservative by default.
+CATCH_UP_FRESH_MIN = 45
+
 # Which normalised size classes are allowed to reach the phone. The resale
 # audience is widest here; everything else still lands in the database as comp
 # data. Jeans searches override this per search (W26-W31 for women's denim),
@@ -1948,21 +1961,30 @@ def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, set
         rec = parse_item(item, tag, seed=0)
         if upsert(con, rec):
             new_recs.append(rec)
-    if is_catch_up(con, len(new_recs)):
-        # Catch-up after a gap (PC off, first poll after seeding): these are
-        # not fresh-this-minute listings, so alerting on them races nothing.
-        # Record as comp data only.
-        log(f"{tag}: {len(new_recs)} new listings (backlog catch-up, alerts suppressed)")
+    catch_up = is_catch_up(con, len(new_recs))
+    if catch_up:
+        # A gap preceded this cycle, but the batch is not therefore stale: the
+        # catalogue page holds the newest listings, so most of what arrives
+        # after a night is minutes old. Keep the genuinely fresh ones and drop
+        # only what the clock says is actually old.
+        scorable = [r for r in new_recs
+                    if (age := post_age_min(r.get("posted_at"))) is not None
+                    and age <= CATCH_UP_FRESH_MIN]
+        log(f"{tag}: {len(new_recs)} new listings after a gap, "
+            f"{len(scorable)} still fresh enough to score")
     else:
-        alerts = 0
-        for rec in new_recs:
-            if alerts >= MAX_ALERTS_PER_SEARCH:
-                break
-            if score_and_alert(con, rec, search, settings, env, backlog_n=len(new_recs),
-                               client=client, seller_budget=seller_budget):
-                alerts += 1
-        if new_recs:
-            log(f"{tag}: {len(new_recs)} new listings, {alerts} alerted")
+        scorable = new_recs
+    alerts = 0
+    for rec in scorable:
+        if alerts >= MAX_ALERTS_PER_SEARCH:
+            break
+        if score_and_alert(con, rec, search, settings, env, backlog_n=len(new_recs),
+                           client=client, seller_budget=seller_budget):
+            alerts += 1
+    if new_recs and not catch_up:
+        log(f"{tag}: {len(new_recs)} new listings, {alerts} alerted")
+    elif catch_up and alerts:
+        log(f"{tag}: {alerts} alerted from the fresh part of the catch-up")
     con.commit()
     return True
 
