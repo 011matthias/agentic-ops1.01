@@ -76,6 +76,22 @@ def test_seed_and_render(client):
         assert needle in r.text
 
 
+def test_mails_render_as_prose_not_as_template_code(client):
+    """The reviewer reads the waves as mails, so the mail boxes must not
+    inherit base.html's operator-editor monospace, and a raw merge token must
+    come with the name it resolves to. Regression: the packet Dirk opened on
+    2026-09-09 showed every mail as 12px monospace headed 'Hi {{first_name}},'
+    with nothing saying the token fills in."""
+    seed(client)
+    body = client.get("/review/sept-test").text
+    prose = body.split(".rv-step textarea {", 1)[1].split("}", 1)[0]
+    assert "font-family: inherit" in prose, "mail boxes still inherit monospace"
+    assert "Names fill in per person" in body
+    assert "reads as Jane" in body, "the token is not shown resolved"
+    assert "querySelectorAll('.rv-step textarea')" in body, \
+        "mail boxes are not auto-sized to their content"
+
+
 def test_unknown_packet_is_404(client):
     assert client.get("/review/nope").status_code == 404
 
