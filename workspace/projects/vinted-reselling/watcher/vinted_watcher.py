@@ -119,11 +119,12 @@ MAX_ALERTS_PER_SEARCH = 3   # per cycle; a real steady-state cycle has 0-2 candi
 # tnf-jacke 62%. The scorer was effectively switched off for exactly the
 # searches with the most turnover.
 #
-# The count still matters, but only once time says a gap really happened: after
-# the watcher has been down for hours, a pile of listings IS stale, and alerting
-# on it races nothing. Within the normal cadence the same pile is simply the
-# market moving, and MAX_ALERTS_PER_SEARCH already keeps the phone civil.
-BACKLOG_SUPPRESS = 15       # only applied when a real gap preceded the cycle
+# The count is gone from the decision entirely as of 2026-09-10. It was kept as
+# a second condition behind the gap test, and on the first morning it ran it
+# discarded 449 of 456 listings, three quarters of them under 45 minutes old.
+# What a gap actually means is "screen this batch by age", and CATCH_UP_FRESH_MIN
+# below does that one listing at a time. Within the normal cadence nothing is
+# screened at all, and MAX_ALERTS_PER_SEARCH keeps the phone civil.
 BACKLOG_GAP_MIN = 25        # minutes since last success that still count as steady state
 
 # What a catch-up cycle may still alert on, by REAL posting time.
@@ -406,6 +407,7 @@ def load_config() -> dict:
     s.setdefault("size_classes", list(DEFAULT_SIZE_CLASSES))
     s.setdefault("min_margin", 0)
     s.setdefault("foreign_advantage_eur", 8)
+    s.setdefault("foreign_advantage_basis", "median")
     s.setdefault("fake_risk_suppress", 0.7)
     s.setdefault("fake_risk_flag", 0.4)
     s.setdefault("profile_suppress", 0.15)
@@ -1508,7 +1510,8 @@ def record_alert(con: sqlite3.Connection, rec: dict, ctx: dict) -> int:
         "condition": rec.get("condition"),
         "cond_tier": rec.get("cond_tier"),
         "garment_class": rec.get("garment_class"),
-        "country": rec.get("country"),
+        # ctx first: the seller-resolved country never lands on rec, by design.
+        "country": ctx.get("country") or rec.get("country"),
         "price_at_alert": rec.get("price"),
         "total_at_alert": rec.get("total_price"),
         "favourites_at_alert": rec.get("favourites"),
@@ -1550,8 +1553,95 @@ def record_alert(con: sqlite3.Connection, rec: dict, ctx: dict) -> int:
 # answered 429 for the rest of the day. Everything below the send budget is
 # still scored and still recorded in the alerts table, so nothing is lost for
 # the backtest; it just does not reach the phone.
-RING_BUDGET_PER_DAY = 15
+#
+# Neither number is a count of daily pushes, and reading them as one is how the
+# watcher fell to 9 pushes on 2026-09-10. They are the depth of the rank a
+# candidate has to reach in the day's own field, so early candidates pass while
+# the field is still small and the bar tightens as the day fills. Replayed
+# against the real 2026-09-09 stream (957 scored candidates, the busiest day on
+# record), SEND_BUDGET_PER_DAY yields:
+#     35 -> 126 pushes | 40 -> 145 | 50 -> 177 | 60 -> 202 | 80 -> 243
+# and RING_BUDGET_PER_DAY, at send 60:
+#     4 -> 20 loud | 6 -> 25 | 8 -> 32 | 10 -> 34 | 15 -> 47
+# 60/6 puts a heavy day at 202 pushes of which 25 ring, against the ~180 and 27
+# the owner was content with on 2026-09-08, and 1.6x below the 318-message wall
+# ntfy answered 429 at.
+RING_BUDGET_PER_DAY = 6
 SEND_BUDGET_PER_DAY = 60
+
+# The cutout, not the regulator. The budgets above shape the day; this is the
+# flat refusal that stops a second 2026-09-09 whatever the ranking does, and it
+# counts pushes that actually left rather than candidates that were ranked. The
+# busiest replayed day reaches 202, so it should never bind in normal weather.
+HARD_SEND_CEILING = 250
+
+
+def local_day_start_utc(now: datetime | None = None) -> str:
+    """Local midnight, expressed as the UTC stamp alerts are recorded in.
+
+    The day boundary has to be the operator's, not UTC's: the watch window runs
+    to roughly 23:00 local, so a UTC day would cut the evening off the day it
+    belongs to.
+    """
+    local = (now or datetime.now(timezone.utc)).astimezone()
+    start = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def ranking_pool(con: sqlite3.Connection) -> list[float]:
+    """Today's scored candidates, best first: the field a candidate is ranked in.
+
+    Two properties are load-bearing, and the version that reached 2026-09-10
+    had neither.
+
+    TODAY, not a rolling 24 hours. A rolling window spans two watch phases, so
+    every morning inherited the previous day's peak bar: at 08:20Z on
+    2026-09-10 the pool held 528 rows, 470 of them from the day before, and the
+    bar sat at the 88.6th percentile of a day that had already ended. The
+    morning is exactly when the watcher should be most permissive, because its
+    own field is still empty.
+
+    And no notify_failed rows. Those are messages ntfy refused, not finds; 147
+    of them (27.8% of that pool) were competing against real candidates and
+    pushing the bar up on the strength of pushes that never arrived.
+    """
+    try:
+        rows = con.execute(
+            """SELECT quality FROM alerts
+               WHERE alerted_at >= ? AND quality IS NOT NULL
+                 AND COALESCE(suppress_reason, '') != 'notify_failed'""",
+            (local_day_start_utc(),)).fetchall()
+    except sqlite3.Error:
+        return []
+    return sorted((r[0] for r in rows), reverse=True)
+
+
+def pushes_today(con: sqlite3.Connection) -> int:
+    """Pushes that actually left since local midnight."""
+    try:
+        row = con.execute(
+            "SELECT COUNT(*) FROM alerts WHERE sent=1 AND alerted_at >= ?",
+            (local_day_start_utc(),)).fetchone()
+    except sqlite3.Error:
+        return 0
+    return int(row[0] or 0)
+
+
+def send_bars(pool: list[float]) -> tuple[float, float] | None:
+    """(send_bar, ring_bar) for a sorted-descending pool; None while it is thin."""
+    if len(pool) < RING_BUDGET_PER_DAY:
+        return None
+    return (pool[min(SEND_BUDGET_PER_DAY, len(pool)) - 1],
+            pool[min(RING_BUDGET_PER_DAY, len(pool)) - 1])
+
+
+def _cold_start_priority(q: float, fake: float) -> int:
+    """The ladder for a day whose field is still too thin to rank against.
+
+    Deliberately generous: an empty morning should ring for the obvious ones
+    rather than stay silent while it learns.
+    """
+    return 2 if fake >= 0.4 else (5 if q >= 90 else (3 if q >= 55 else 2))
 
 
 # A young listing that already carries hearts, per the owner's 2026-09-08
@@ -1606,10 +1696,17 @@ def alert_priority(discount_pct: float, fake: float, country: str | None,
     set against an imagined stream rather than the real one.
 
     So the bar is relative. A candidate rings only if it beats the day's own
-    competition, measured on the candidates already recorded in the last 24
-    hours. That makes the loud tier self-limiting at roughly RING_BUDGET_PER_DAY
-    however the market behaves, and it means "the best of today" rather than
-    "above a number someone guessed".
+    competition, measured on the candidates already recorded since local
+    midnight. That makes the loud tier self-limiting however the market
+    behaves, and it means "the best of today" rather than "above a number
+    someone guessed".
+
+    "The day's own competition" was a rolling 24 hours until 2026-09-10, and
+    that is what silenced the watcher. A 24-hour window spans two watch phases,
+    so each morning was ranked against the previous day's finished field: the
+    08:20Z pool held 528 rows, 470 of them from the day before, and the bar sat
+    at 114.76. Nine pushes arrived that day, none of them loud. The window is
+    the local day now, and ranking_pool holds the reasoning.
 
     Returns 0 for "do not send at all". The first version of this capped the
     loud tier and let everything below it through silently, on the reasoning
@@ -1634,30 +1731,29 @@ def alert_priority(discount_pct: float, fake: float, country: str | None,
     q = alert_quality(discount_pct, margin_eur, fake, country, size_ok_core, prof,
                       fresh_likes=fresh_likes)
     if con is None:
-        return 2 if fake >= 0.4 else (5 if q >= 90 else (3 if q >= 55 else 2))
-    try:
-        window = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ")
-        # The stored quality, not a re-derivation from discount and margin: the
-        # score carries multipliers for size, country, fake risk and taste, so
-        # comparing a multiplied candidate against an unmultiplied baseline
-        # would let ordinary candidates clear the bar on the boost alone.
-        recent = [r[0] for r in con.execute(
-            """SELECT quality FROM alerts
-               WHERE alerted_at >= ? AND quality IS NOT NULL""",
-            (window,)).fetchall()]
-    except sqlite3.Error:
-        recent = []
-    if len(recent) < RING_BUDGET_PER_DAY:
-        # Too little history to rank against; be generous rather than silent.
-        return 2 if fake >= 0.4 else (5 if q >= 90 else (3 if q >= 55 else 2))
-    recent.sort(reverse=True)
-    ring_bar = recent[min(RING_BUDGET_PER_DAY, len(recent)) - 1]
-    send_bar = recent[min(SEND_BUDGET_PER_DAY, len(recent)) - 1]
-    if q < send_bar and len(recent) > SEND_BUDGET_PER_DAY:
+        return _cold_start_priority(q, fake)
+    if pushes_today(con) >= HARD_SEND_CEILING:
+        return 0          # the flat cutout; see HARD_SEND_CEILING
+    # The stored quality, not a re-derivation from discount and margin: the
+    # score carries multipliers for size, country, fake risk and taste, so
+    # comparing a multiplied candidate against an unmultiplied baseline would
+    # let ordinary candidates clear the bar on the boost alone.
+    pool = ranking_pool(con)
+    bars = send_bars(pool)
+    if bars is None:
+        # Too little of today's own field to rank against; generous, not silent.
+        return _cold_start_priority(q, fake)
+    send_bar, ring_bar = bars
+    if q < send_bar and len(pool) > SEND_BUDGET_PER_DAY:
         return 0          # outside today's send budget; recorded, not pushed
     if fake >= 0.4:
-        return 2          # a flagged listing never interrupts, whatever it scores
+        # A flagged listing never interrupts, whatever it scores. This test
+        # sits above the ring decision on purpose, and nothing may be inserted
+        # between them: a "ring the best if it has been quiet" clause placed
+        # here would ring precisely the listing under fake suspicion. The live
+        # case that proves it is the Stone Island piece of 2026-09-10T09:20:47Z,
+        # quality 136.344 and the day's second best, correctly quiet at 0.40.
+        return 2
     if q >= ring_bar:
         return 5
     return 3
@@ -1754,6 +1850,14 @@ def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: 
         "discount_pct": pct, "margin_eur": round(med - rec["total_price"], 2),
         "deal_ratio_used": deal_ratio, "min_comps_used": settings["min_comps"],
         "comp_window_used": settings["comp_window_days"],
+        # The resolved country travels in ctx, not back into rec. Writing it to
+        # rec here would satisfy `if country and not rec.get("country")` two
+        # lines above and skip the UPDATE that fills listings.country, which is
+        # the one column carrying correct location data today. Between
+        # 2026-09-08 and 2026-09-10 the country never reached the alerts row at
+        # all: 1194 of 1226 alerts read NULL while the gate above had used a
+        # real country, leaving the backtest blind on the dimension.
+        "country": country,
         "size_filter": ",".join(allowed), "fake_risk": fake, "fake_risk_reasons": reasons,
         "profile_score": taste, "cycle_backlog_n": backlog_n,
         "listing_age_min": listing_age_min(con, rec["id"]),
@@ -1771,12 +1875,19 @@ def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: 
     if min_margin and (med - rec["total_price"]) < min_margin:
         return drop("min_margin")
     # A listing outside Germany carries shipping the comp median does not, so
-    # it has to beat the same bar with headroom rather than merely reach it.
-    # Unknown country is treated as domestic: the field is forward-only, and
-    # penalising every pre-country row would silence the watcher for weeks.
+    # it has to clear the comparable price by that much rather than merely sit
+    # under it. Unknown country is treated as domestic: the field is
+    # forward-only, and penalising every pre-country row would silence the
+    # watcher for weeks.
+    #
+    # Which number the headroom is subtracted FROM is the owner's call, and
+    # `foreign_advantage_basis` is where he makes it. See the settings block in
+    # searches.yaml for the measurement behind the default.
     if country and country != "DE":
         headroom = float(settings.get("foreign_advantage_eur", 8))
-        if rec["total_price"] + headroom > deal_ratio * med:
+        basis = str(settings.get("foreign_advantage_basis", "median")).lower()
+        bar = deal_ratio * med if basis == "deal_gate" else med
+        if rec["total_price"] + headroom > bar:
             return drop("country")
     if taste is not None and taste < float(settings.get("profile_suppress", 0.15)):
         rated = con.execute(
@@ -1807,6 +1918,11 @@ def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: 
         # with its full context so the backtest sees the whole candidate stream;
         # only the push is withheld.
         return drop("send_budget")
+    if ntfy_quota_blocked(con):
+        # Held back by us because ntfy already refused today, which is a
+        # different fact from ntfy refusing this message, and the backtest has
+        # to be able to tell them apart.
+        return drop("ntfy_quota")
     lines = [
         f"{rec['brand']} | {rec['condition']} | Gr. {rec['size']} | {rec['garment_class']}",
         f"{rec['total_price']:.2f} EUR inkl. Gebuehr, Median vergleichbar {med:.2f} EUR ({pct}% drunter)",
@@ -1829,6 +1945,7 @@ def score_and_alert(con: sqlite3.Connection, rec: dict, search: dict, settings: 
         click=rec["url"],
         priority=prio,
         actions=feedback_actions(env, rec["id"]),
+        con=con,
     )
     alert_id = record_alert(con, rec, {
         **ctx, "sent": 1 if ok else 0, "priority": prio,
@@ -1918,11 +2035,36 @@ def feedback_actions(env: dict, listing_id: int) -> list[dict] | None:
     return [button("\U0001F44D", "good"), button("\U0001F44E", "bad"), button("Gekauft", "bought")]
 
 
+# ntfy's own code for "this topic has used its messages for the day", as
+# opposed to the short-window rate limits that share HTTP 429 and clear in
+# seconds. Only this one is worth latching on, because only this one is over
+# until the server's UTC day turns.
+NTFY_DAILY_LIMIT_CODE = 42908
+NTFY_QUOTA_KEY = "ntfy_quota_until"
+
+
+def ntfy_quota_blocked(con: sqlite3.Connection) -> bool:
+    """Is the day's ntfy quota known to be spent?"""
+    until = parse_ts(meta_get(con, NTFY_QUOTA_KEY))
+    return bool(until and until > datetime.now(timezone.utc))
+
+
+def _next_utc_rollover() -> str:
+    """When ntfy's daily counter resets. Its day is UTC, not the operator's."""
+    tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+    return tomorrow.replace(hour=0, minute=0, second=0, microsecond=0).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+
+
 def notify(env: dict, title: str, message: str, click: str | None = None,
-           priority: int = 4, actions: list[dict] | None = None) -> bool:
+           priority: int = 4, actions: list[dict] | None = None,
+           con: sqlite3.Connection | None = None) -> bool:
     topic = env.get("NTFY_TOPIC")
     if not topic:
         log("WARN: NTFY_TOPIC not configured; alert not sent")
+        return False
+    if con is not None and ntfy_quota_blocked(con):
+        log("ntfy daily quota is spent; holding every send until the UTC rollover")
         return False
     body = {"topic": topic, "title": title, "message": message, "priority": priority, "tags": ["shirt"]}
     if click:
@@ -1932,41 +2074,67 @@ def notify(env: dict, title: str, message: str, click: str | None = None,
     try:
         r = httpx.post("https://ntfy.sh/", json=body, timeout=15)
         if r.status_code != 200:
-            # Silence here is how 24 refusals produced no log line at all on
-            # 2026-09-09 while the phone stayed quiet: the daily quota was
-            # exhausted and nothing said so. 429 is the one worth naming,
-            # because it is self-inflicted rather than a network fault.
+            # Silence here is how 147 refusals produced no diagnosable line at
+            # all on 2026-09-09 while the phone stayed quiet. The status alone
+            # was not enough either: without the body there was no way to tell
+            # the daily quota from a momentary rate limit, which left "quota"
+            # a plausible guess rather than a fact for two days.
             detail = r.text.strip()[:200]
-            log(f"WARN: ntfy refused the push, HTTP {r.status_code}: {detail}"
-                + ("  (daily quota; the send budget is what prevents this)"
-                   if r.status_code == 429 else ""))
+            code = _ntfy_error_code(r)
+            log(f"WARN: ntfy refused the push, HTTP {r.status_code}"
+                + (f" code {code}" if code else "") + f": {detail}")
+            if r.status_code == 429 and code == NTFY_DAILY_LIMIT_CODE and con is not None:
+                # Stop asking. The 2026-09-09 run threw 147 messages at a
+                # closed door over four hours because nothing remembered the
+                # first refusal.
+                until = _next_utc_rollover()
+                meta_set(con, NTFY_QUOTA_KEY, until)
+                con.commit()
+                log(f"ntfy says the daily quota is exhausted; no further sends "
+                    f"until {until}")
         return r.status_code == 200
     except httpx.HTTPError as e:
         log(f"WARN: ntfy send failed: {e}")
         return False
 
 
+def _ntfy_error_code(response) -> int | None:
+    """ntfy's numeric error code from an error body; None when unreadable."""
+    try:
+        return int((response.json() or {}).get("code") or 0) or None
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
 # -------------------------------------------------------------------- cycle
 
-def is_catch_up(con: sqlite3.Connection, n_new: int) -> bool:
-    """Is this cycle working through a backlog, or just watching a busy market?
+def is_catch_up(con: sqlite3.Connection) -> bool:
+    """Did a real gap precede this cycle?
 
-    Both look identical from inside one poll: a lot of listings the database has
-    not seen. What tells them apart is whether time passed. If the previous
-    successful poll was five minutes ago, forty new listings are forty fresh
-    listings and racing for them is the entire point. If it was yesterday, the
-    same forty are stale and alerting on them wins nothing.
+    Only the clock answers that. The batch size cannot: a busy market and a
+    backlog both look like a lot of listings the database has not seen, and the
+    count-based rule used to throw the busy market away with the backlog.
+
+    What this function decides is which of two rules screens the batch, never
+    whether the batch is stale. After a gap the age of each listing decides,
+    one listing at a time, against CATCH_UP_FRESH_MIN.
+
+    The count test that used to sit here (n_new > BACKLOG_SUPPRESS) is gone,
+    and raising the threshold instead would have been worse than useless. At
+    08:20Z on 2026-09-10 it discarded 449 of 456 freshly collected listings
+    without scoring one, and 76.3% of them were under 45 minutes old. Its
+    comparison is a strict greater-than against a page size of 48, and across
+    1887 log lines the largest batch ever seen was exactly 48; set to 48 it
+    would never fire again, and the freshness check behind it would become
+    quiet dead code.
     """
     last = parse_ts(meta_get(con, "last_success"))
     if last is None:
-        # No successful poll on record: a fresh database, or the first cycle
-        # after a reset. Whatever arrives now has unknown age, so treat a large
-        # batch as backlog.
-        return n_new > BACKLOG_SUPPRESS
+        # A fresh database, or a corrupt stamp. The gap is unknown, so treat it
+        # as one and let the per-listing freshness check do the screening.
+        return True
     gap_min = (datetime.now(timezone.utc) - last).total_seconds() / 60.0
-    if gap_min <= BACKLOG_GAP_MIN:
-        return False
-    return n_new > BACKLOG_SUPPRESS
+    return gap_min > BACKLOG_GAP_MIN
 
 
 def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, settings: dict,
@@ -1998,7 +2166,7 @@ def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, set
         rec = parse_item(item, tag, seed=0)
         if upsert(con, rec):
             new_recs.append(rec)
-    catch_up = is_catch_up(con, len(new_recs))
+    catch_up = is_catch_up(con)
     if catch_up:
         # A gap preceded this cycle, but the batch is not therefore stale: the
         # catalogue page holds the newest listings, so most of what arrives
@@ -2188,6 +2356,41 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: 
             f"{price_moves} price change(s)")
 
 
+def log_volume(con: sqlite3.Connection) -> str:
+    """One line per cycle saying what the send path is currently doing.
+
+    The 2026-09-10 collapse was invisible for two days because nothing measured
+    volume: the alerts table held the evidence and no one had reason to look.
+    These four numbers are also the only way to prove the pool is day-scoped
+    after a deploy, since the table alone cannot show which rows a decision
+    ranked against.
+    """
+    pool = ranking_pool(con)
+    bars = send_bars(pool)
+    bar_text = ("send_bar=- ring_bar=- (cold start)" if bars is None
+                else f"send_bar={bars[0]:.3f} ring_bar={bars[1]:.3f}")
+    line = f"volume: pool_n={len(pool)} {bar_text} pushes_today={pushes_today(con)}"
+    log(line)
+    return line
+
+
+def daily_push_counts(con: sqlite3.Connection, days: int = 8) -> list[tuple[str, int, int]]:
+    """(local date, pushes, loud pushes) for the last `days` local days, newest first."""
+    local_now = datetime.now(timezone.utc).astimezone()
+    out = []
+    for back in range(days):
+        day = (local_now - timedelta(days=back)).replace(
+            hour=0, minute=0, second=0, microsecond=0)
+        start = day.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end = (day + timedelta(days=1)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        row = con.execute(
+            """SELECT COUNT(*), COALESCE(SUM(priority = 5), 0) FROM alerts
+               WHERE sent=1 AND alerted_at >= ? AND alerted_at < ?""",
+            (start, end)).fetchone()
+        out.append((day.strftime("%Y-%m-%d"), int(row[0] or 0), int(row[1] or 0)))
+    return out
+
+
 def acquire_lock() -> bool:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if LOCK_PATH.exists():
@@ -2226,7 +2429,7 @@ def check_liveness(con: sqlite3.Connection, env: dict) -> None:
     notify(env, "Vinted watcher steht",
            f"Seit {stale_min} min keine neuen Daten. Letzter Erfolg: "
            f"{last:%Y-%m-%d %H:%M}Z. Log pruefen.",
-           priority=5)
+           priority=5, con=con)
     meta_set(con, "stale_alerted", now_iso())
     con.commit()
     log(f"WARN: no successful poll for {stale_min} min; operator alerted")
@@ -2696,6 +2899,7 @@ def run_cycle() -> int:
         except SessionWall as e:
             log(f"cycle aborted: {e}")
             return 1
+        log_volume(con)
         if ok:
             # A poll got through, so whatever caused an earlier backoff is
             # over; leaving it set would skip cycles for no reason.
@@ -2732,6 +2936,24 @@ def print_status() -> None:
         "SELECT COUNT(*), COALESCE(SUM(sold_flag),0) FROM listings WHERE gone_at IS NOT NULL"
     ).fetchone()
     print(f"listings: {total}  alerted: {alerted}  gone: {gone}  (sold-flagged: {sold})")
+    # Volume, first-class: it is the thing that broke, and it was the one thing
+    # --status could not show.
+    daily = daily_push_counts(con, days=8)
+    week = daily[1:8]
+    mean = sum(d[1] for d in week) / len(week) if week else 0.0
+    mean_loud = sum(d[2] for d in week) / len(week) if week else 0.0
+    print(f"pushes: heute {daily[0][1]} ({daily[0][2]} laut)  "
+          f"gestern {daily[1][1]} ({daily[1][2]} laut)  "
+          f"Schnitt 7 Tage {mean:.1f} ({mean_loud:.1f} laut)")
+    pool = ranking_pool(con)
+    bars = send_bars(pool)
+    print(f"        Rang-Topf heute {len(pool)}  "
+          + ("noch unter dem Kaltstart-Schwellwert" if bars is None
+             else f"send_bar {bars[0]:.1f}  ring_bar {bars[1]:.1f}"))
+    quota = parse_ts(meta_get(con, NTFY_QUOTA_KEY))
+    if quota and quota > datetime.now(timezone.utc):
+        print(f"        ntfy-Tageskontingent erschoepft, Sendesperre bis "
+              f"{quota:%Y-%m-%dT%H:%M:%SZ}")
     last = parse_ts(meta_get(con, "last_success"))
     if last:
         stale = int((datetime.now(timezone.utc) - last).total_seconds() // 60)

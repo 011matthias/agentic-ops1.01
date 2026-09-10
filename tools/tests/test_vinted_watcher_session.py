@@ -376,7 +376,8 @@ def test_recheck_refuses_to_judge_without_a_proven_session(vw, con, paths, token
 def test_stall_is_reported_once_then_rearms_on_recovery(vw, con, paths, monkeypatch):
     sent = []
     monkeypatch.setattr(vw, "notify",
-                        lambda env, title, message, click=None, priority=4: sent.append(title) or True)
+                        lambda env, title, message, click=None, priority=4, con=None:
+                        sent.append(title) or True)
 
     stale = (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
     vw.meta_set(con, "last_success", stale)
@@ -816,16 +817,86 @@ def test_a_clean_listing_scores_no_risk(vw, con, paths):
 # ------------------------------------------------ precision upgrade: country
 
 def test_foreign_listings_need_price_headroom(vw, con, paths, monkeypatch):
-    """Shipping from abroad is not in the comp median, so the bar moves."""
+    """Shipping from abroad is not in the comp median, so the bar moves.
+
+    The default reading is the owner's own wording of criterion 5: at least the
+    headroom below the comparable price. Comps sit at 40, so 31 clears and 33
+    does not. Both still had to pass the ordinary deal gate first.
+    """
     monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
     _comps(con, vw, n=8, price=40.0)
-    # Bar is 0.55 * 40 = 22. A 21 EUR Italian listing clears the plain gate but
-    # not the gate plus 8 EUR of headroom.
     assert vw.score_and_alert(con, _rec(vw, total_price=21.0, country="IT"), {"tag": "t"},
-                              _settings(), {}) is False
+                              _settings(), {}) is True
+    assert vw.score_and_alert(con, _rec(vw, id=997, total_price=13.0, country="IT"),
+                              {"tag": "t"}, _settings(), {}) is True
+
+
+def test_the_foreign_headroom_basis_is_the_owners_switch(vw, con, paths, monkeypatch):
+    """Which number the 8 EUR comes off is config, and it is worth ~83% of the stream.
+
+    Under "deal_gate" the headroom is subtracted from 0.55 x median rather than
+    from the median: measured over 622 real foreign candidates that killed
+    83.1% of them, while 99.5% satisfied the criterion as it was written. The
+    default is the literal reading; the strict one stays reachable in one word.
+    """
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    _comps(con, vw, n=8, price=40.0)
+    strict = _settings(foreign_advantage_basis="deal_gate")
+    # 21 EUR clears 0.55 x 40 = 22 but not 22 minus 8 EUR of headroom.
+    assert vw.score_and_alert(con, _rec(vw, total_price=21.0, country="IT"), {"tag": "t"},
+                              strict, {}) is False
     assert con.execute("SELECT suppress_reason FROM alerts").fetchone()[0] == "country"
     assert vw.score_and_alert(con, _rec(vw, id=998, total_price=13.0, country="IT"),
-                              {"tag": "t"}, _settings(), {}) is True
+                              {"tag": "t"}, strict, {}) is True
+
+
+def test_an_unset_basis_falls_back_to_the_literal_reading(vw, con, paths, monkeypatch):
+    """The code default, not the yaml value: an old config must not resurrect the
+    strict gate silently. The yaml is the owner's to flip; this is the floor
+    under it."""
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    _comps(con, vw, n=8, price=40.0)
+    silent = _settings()
+    silent.pop("foreign_advantage_basis", None)
+    assert vw.score_and_alert(con, _rec(vw, total_price=21.0, country="IT"), {"tag": "t"},
+                              silent, {}) is True
+
+
+def test_the_resolved_country_reaches_the_alert_row_and_the_listing(vw, con, paths, monkeypatch):
+    """Two columns, and the obvious one-line fix fills one by emptying the other.
+
+    score_and_alert resolves the country into a local, and record_alert used to
+    read rec, so 1194 of 1226 alert rows carried NULL while the gate above them
+    had used a real country. Writing it back onto rec would satisfy the
+    `not rec.get("country")` guard and skip the UPDATE that fills
+    listings.country, which is the only column carrying correct location data
+    today; both assertions below have to hold at once.
+    """
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    _comps(con, vw, n=8, price=40.0)
+    con.execute("INSERT INTO listings (id, search_tag, brand, brand_norm, cond_tier,"
+                " garment_class, size_class, total_price, first_seen, last_seen)"
+                " VALUES (999,'t','Patagonia','patagonia','very_good','jacket','l',21.0,?,?)",
+                (vw.now_iso(), vw.now_iso()))
+    con.commit()
+    calls = []
+    payload = {"login": "x", "country_iso_code": "IT", "feedback_count": 60,
+               "feedback_reputation": 0.9}
+    client = httpx.Client(transport=_seller_server(vw, payload, calls), base_url=vw.BASE)
+    assert vw.score_and_alert(con, _rec(vw, total_price=21.0), {"tag": "t"},
+                              _settings(), {}, client=client, seller_budget=[3]) is True
+    assert con.execute("SELECT country FROM alerts").fetchone()[0] == "IT"
+    assert con.execute("SELECT country FROM listings WHERE id=999").fetchone()[0] == "IT"
+
+
+def test_a_suppressed_candidate_also_records_its_country(vw, con, paths, monkeypatch):
+    """The backtest needs the country of what was DROPPED most of all."""
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: True)
+    _comps(con, vw, n=8, price=40.0)
+    assert vw.score_and_alert(con, _rec(vw, total_price=21.0, country="IT"), {"tag": "t"},
+                              _settings(foreign_advantage_basis="deal_gate"), {}) is False
+    row = con.execute("SELECT suppress_reason, country FROM alerts").fetchone()
+    assert row == ("country", "IT")
 
 
 def test_domestic_and_unknown_country_use_the_plain_gate(vw, con, paths, monkeypatch):
@@ -1036,14 +1107,80 @@ def test_a_busy_day_does_not_multiply_the_ringing(vw, con, paths):
         scores.append((d, m))
         con.execute(
             "INSERT INTO alerts (listing_id, alerted_at, search_tag, discount_pct,"
-            " margin_eur, quality, sent) VALUES (?,?,'t',?,?,?,1)",
-            (7000 + i, now, d, m, vw.alert_quality(d, m, 0.0, 'DE', True, None)))
+            " margin_eur, quality, sent) VALUES (?,?,'t',?,?,?,?)",
+            (7000 + i, now, d, m, vw.alert_quality(d, m, 0.0, 'DE', True, None),
+             1 if i < 150 else 0))
     con.commit()
     rings = sum(1 for d, m in scores
                 if vw.alert_priority(d, 0.0, "DE", True, None, con=con, margin_eur=m) == 5)
     # Out of 400 candidates in one day, only a small head should ring.
     assert rings <= 60, f"{rings} of 400 would ring; the bar is not holding"
     assert rings >= 1, "the bar must not silence everything either"
+
+
+def _fill_day(vw, con, n, when=None, quality=200.0, sent=0, suppress=None, first_id=20000):
+    """n recorded candidates at one moment, all better than any test candidate."""
+    when = when or vw.now_iso()
+    for i in range(n):
+        con.execute(
+            "INSERT INTO alerts (listing_id, alerted_at, search_tag, quality, sent,"
+            " suppress_reason) VALUES (?,?,'t',?,?,?)",
+            (first_id + i, when, quality, sent, suppress))
+    con.commit()
+
+
+def test_yesterdays_field_does_not_set_todays_bar(vw, con, paths):
+    """The whole 2026-09-10 failure in one assertion.
+
+    The pool was a rolling 24 hours, so a morning was ranked against the
+    previous day's finished field: 470 of the 528 rows in the 08:20Z pool were
+    from the day before and the bar stood at the 88.6th percentile of a day
+    that was over. Nine pushes arrived, none of them loud.
+    """
+    yesterday = (datetime.now(timezone.utc) - timedelta(hours=20)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    _fill_day(vw, con, 200, when=yesterday, quality=500.0)
+    # A good candidate, hopeless against yesterday's field, alone in today's.
+    # Both bars read the same pool, so both are asserted: against a rolling
+    # window this is priority 0, silently withheld.
+    assert vw.alert_priority(60, 0.0, "DE", True, None, con=con, margin_eur=40) == 5
+    assert vw.ranking_pool(con) == [], "yesterday's rows are in today's pool"
+
+
+def test_messages_ntfy_refused_never_enter_the_pool(vw, con, paths):
+    """147 of the 528 pool rows (27.8%) were pushes that never arrived.
+
+    A notify_failed row is a refusal by the notification service, not a find.
+    Letting them compete raised the bar on the strength of alerts nobody saw.
+    """
+    _fill_day(vw, con, 200, quality=500.0, suppress="notify_failed")
+    assert vw.ranking_pool(con) == []
+    assert vw.alert_priority(50, 0.0, "DE", True, None, con=con, margin_eur=25) > 0
+    _fill_day(vw, con, 200, quality=500.0, suppress="send_budget", first_id=30000)
+    assert len(vw.ranking_pool(con)) == 200, "a withheld candidate is still a candidate"
+
+
+def test_the_hard_ceiling_stops_a_second_flood(vw, con, paths):
+    """The cutout behind the budgets: it counts pushes that actually left."""
+    _fill_day(vw, con, vw.HARD_SEND_CEILING - 1, sent=1, quality=1.0)
+    assert vw.alert_priority(70, 0.0, "DE", True, None, con=con, margin_eur=80) > 0
+    _fill_day(vw, con, 1, sent=1, quality=1.0, first_id=40000)
+    assert vw.pushes_today(con) == vw.HARD_SEND_CEILING
+    assert vw.alert_priority(70, 0.0, "DE", True, None, con=con, margin_eur=80) == 0
+
+
+def test_a_flagged_listing_cannot_be_promoted_past_the_fake_check(vw, con, paths):
+    """The regression the 2026-09-10 rework had to not introduce.
+
+    alert_priority returns 2 for fake risk before it ever considers the ring
+    bar, so no "it has been quiet, ring the best one" clause can be slipped in
+    above it. The live case: the Stone Island piece at 09:20:47Z, quality
+    136.344 and the day's second best, correctly silent at fake_risk 0.40.
+    """
+    _fill_day(vw, con, 50, quality=1.0)
+    top = vw.alert_priority(80, 0.0, "DE", True, None, con=con, margin_eur=90)
+    flagged = vw.alert_priority(80, 0.4, "DE", True, None, con=con, margin_eur=90)
+    assert top == 5, "the unflagged twin must be the loudest thing in the day"
+    assert flagged == 2, "a fake-risk flag must survive being the best of the day"
 
 # ------------------------------------------- precision upgrade: seller profile
 
@@ -1131,9 +1268,10 @@ def test_country_comes_from_the_seller_and_is_written_back(vw, con, paths, monke
                 " VALUES (999,'t','Patagonia','patagonia','very_good','jacket','l',21.0,?,?)",
                 (vw.now_iso(), vw.now_iso()))
     con.commit()
-    # 21 EUR clears the plain 0.55 x 40 gate but not the foreign headroom.
+    # 21 EUR clears the plain 0.55 x 40 gate but not that gate minus 8 EUR.
     assert vw.score_and_alert(con, _rec(vw, total_price=21.0), {"tag": "t"},
-                              _settings(), {}, client=client, seller_budget=[3]) is False
+                              _settings(foreign_advantage_basis="deal_gate"), {},
+                              client=client, seller_budget=[3]) is False
     assert con.execute("SELECT country FROM listings WHERE id=999").fetchone()[0] == "IT"
     assert con.execute("SELECT suppress_reason FROM alerts").fetchone()[0] == "country"
 
@@ -1223,6 +1361,7 @@ def test_a_wall_on_the_seller_endpoint_is_not_erased_by_a_good_catalog_poll(vw, 
     con = vw.db_connect()
     now = vw.now_iso()
     vw.meta_set(con, "seeded:t", now)           # steady-state path, so scoring runs
+    vw.meta_set(con, "last_success", now)       # ...and no gap, so no freshness screen
     for i in range(4):                          # comps so a candidate can score
         con.execute(
             "INSERT INTO listings (id, search_tag, brand, brand_norm, cond_tier,"
@@ -1344,33 +1483,37 @@ def test_a_busy_search_is_not_mistaken_for_a_backlog(vw, con, paths):
     vw.meta_set(con, "last_success",
                 (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ"))
     con.commit()
-    assert vw.is_catch_up(con, 40) is False
-    assert vw.is_catch_up(con, 48) is False
+    assert vw.is_catch_up(con) is False
 
 
-def test_a_real_gap_still_suppresses_a_pile(vw, con, paths):
-    """After hours offline the listings are stale and racing for them wins nothing."""
+def test_only_the_clock_decides_that_a_cycle_is_a_catch_up(vw, con, paths):
+    """Batch size says nothing, and reading it as a signal cost a whole morning.
+
+    On 2026-09-10 the count condition discarded 449 of 456 freshly collected
+    listings without scoring one, 76.3% of them under 45 minutes old. Raising
+    the threshold was not the fix either: the comparison is a strict
+    greater-than against a page size of 48, and the largest batch in 1887 log
+    lines was exactly 48, so at 48 the gate would never fire again and the
+    freshness check behind it would be dead code. The gap decides that a batch
+    needs screening; CATCH_UP_FRESH_MIN decides, per listing, what survives it.
+    """
     vw.meta_set(con, "last_success",
                 (datetime.now(timezone.utc) - timedelta(hours=20)).strftime("%Y-%m-%dT%H:%M:%SZ"))
     con.commit()
-    assert vw.is_catch_up(con, 40) is True
-    # A gap with only a trickle behind it is not a backlog either.
-    assert vw.is_catch_up(con, 3) is False
+    assert vw.is_catch_up(con) is True
+    vw.meta_set(con, "last_success",
+                (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    con.commit()
+    assert vw.is_catch_up(con) is False
 
 
-def test_without_a_success_record_a_large_batch_is_treated_as_stale(vw, con, paths):
-    """A fresh database has no age information, so it errs toward silence."""
+def test_an_unknown_gap_is_treated_as_one(vw, con, paths):
+    """A fresh database or a corrupt stamp has no age information to trust."""
     assert vw.meta_get(con, "last_success") is None
-    assert vw.is_catch_up(con, 40) is True
-    assert vw.is_catch_up(con, 2) is False
-
-
-def test_a_corrupt_success_stamp_does_not_wedge_the_gate(vw, con, paths):
-    """parse_ts never raises, and the gate must degrade to the old rule."""
+    assert vw.is_catch_up(con) is True
     vw.meta_set(con, "last_success", "not-a-timestamp")
     con.commit()
-    assert vw.is_catch_up(con, 40) is True
-    assert vw.is_catch_up(con, 2) is False
+    assert vw.is_catch_up(con) is True
 
 # ------------------- a public topic must not be able to break the feedback poll
 
@@ -1912,16 +2055,79 @@ def test_a_withheld_candidate_is_still_recorded_with_its_score(vw, con, paths, m
     assert row[2] is not None, "a withheld candidate must keep its score"
 
 
-def test_ntfy_refusing_the_push_is_logged_not_swallowed(vw, monkeypatch, capsys, paths):
-    class R:
-        status_code = 429
-        text = '{"error":"limit reached: daily message quota reached"}'
+class _Refusal:
+    """An ntfy error response, body and all."""
 
-    monkeypatch.setattr(vw.httpx, "post", lambda *a, **k: R())
+    def __init__(self, status=429, code=None, error="limit reached: daily message quota reached"):
+        self.status_code = status
+        self._payload = {"code": code, "error": error} if code else {"error": error}
+        self.text = json.dumps(self._payload)
+
+    def json(self):
+        return self._payload
+
+
+def test_ntfy_refusing_the_push_is_logged_with_status_and_body(vw, monkeypatch, capsys, paths):
+    """Neither half is optional.
+
+    The status alone left "daily quota" a plausible guess rather than a fact
+    for two days, because a short-window rate limit and an exhausted day share
+    HTTP 429 and only the body tells them apart.
+    """
+    monkeypatch.setattr(vw.httpx, "post",
+                        lambda *a, **k: _Refusal(code=vw.NTFY_DAILY_LIMIT_CODE))
     assert vw.notify({"NTFY_TOPIC": "t"}, "title", "msg") is False
     out = capsys.readouterr().out
-    assert "429" in out and "quota" in out
-    assert "send budget" in out, "the 429 must name what prevents it"
+    assert "429" in out
+    assert str(vw.NTFY_DAILY_LIMIT_CODE) in out, "the ntfy error code must be logged"
+    assert "daily message quota reached" in out, "the body must be logged verbatim"
+
+
+def test_the_daily_quota_code_stops_further_sends_until_the_rollover(vw, con, paths, monkeypatch):
+    """147 messages were thrown at a closed door over four hours on 2026-09-09.
+
+    Nothing remembered the first refusal, so every cycle re-learned it. Code
+    42908 means the day is over at ntfy's end; the latch runs to the UTC
+    rollover, because ntfy's day is UTC rather than the operator's.
+    """
+    posts = []
+    monkeypatch.setattr(vw.httpx, "post",
+                        lambda *a, **k: posts.append(1) or _Refusal(code=vw.NTFY_DAILY_LIMIT_CODE))
+    assert vw.notify({"NTFY_TOPIC": "t"}, "title", "msg", con=con) is False
+    assert len(posts) == 1
+    assert vw.ntfy_quota_blocked(con) is True
+    assert vw.notify({"NTFY_TOPIC": "t"}, "title", "msg", con=con) is False
+    assert len(posts) == 1, "a second send was attempted against a known-closed quota"
+    until = vw.parse_ts(vw.meta_get(con, vw.NTFY_QUOTA_KEY))
+    assert until.hour == 0 and until.minute == 0
+    assert until > datetime.now(timezone.utc)
+
+
+def test_a_momentary_rate_limit_does_not_latch_the_day(vw, con, paths, monkeypatch):
+    """429 is also the short-window limit, which clears in seconds. Latching on
+    it would silence a whole day for a hiccup."""
+    monkeypatch.setattr(vw.httpx, "post", lambda *a, **k: _Refusal(code=42901,
+                                                                   error="limit reached: 60 per hour"))
+    assert vw.notify({"NTFY_TOPIC": "t"}, "title", "msg", con=con) is False
+    assert vw.ntfy_quota_blocked(con) is False
+    # And a refusal with no readable code must not latch either.
+    monkeypatch.setattr(vw.httpx, "post", lambda *a, **k: _Refusal(status=503, error="oops"))
+    assert vw.notify({"NTFY_TOPIC": "t"}, "title", "msg", con=con) is False
+    assert vw.ntfy_quota_blocked(con) is False
+
+
+def test_a_held_candidate_is_recorded_as_held_not_as_a_failed_push(vw, con, paths, monkeypatch):
+    """A refusal by ntfy and a hold by us are different facts about a candidate,
+    and the backtest reads both out of this one column."""
+    monkeypatch.setattr(vw, "notify", lambda *a, **k: pytest.fail("sent into a closed quota"))
+    _comps(con, vw, n=8, price=40.0)
+    vw.meta_set(con, vw.NTFY_QUOTA_KEY,
+                (datetime.now(timezone.utc) + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    con.commit()
+    assert vw.score_and_alert(con, _rec(vw), {"tag": "t"}, _settings(), {}) is False
+    row = con.execute("SELECT suppress_reason, quality FROM alerts").fetchone()
+    assert row[0] == "ntfy_quota"
+    assert row[1] is not None, "a held candidate keeps its score for the backtest"
 
 
 # ------------------- 2026-09-10: the catch-up threw away the freshest listings
@@ -2026,12 +2232,20 @@ def test_steady_state_still_scores_everything(vw, con, paths, monkeypatch):
     assert len(scored) == 20, f"steady state filtered by age: {len(scored)}"
 
 
-def test_a_small_batch_after_a_gap_is_not_a_catch_up(vw, con, paths, monkeypatch):
-    """A handful after a gap is the market being quiet, not a backlog."""
+def test_batch_size_no_longer_decides_anything_after_a_gap(vw, con, paths, monkeypatch):
+    """Age decides, at every batch size, in both directions.
+
+    The old rule let a small batch skip the freshness screen entirely, so three
+    nine-hour-old listings were scored while forty-nine fresh ones were thrown
+    away. Both halves were wrong and both came from counting.
+    """
     _comps(con, vw, n=10, price=40.0, brand_norm="carhartt", size_class="m")
-    recs = _batch(vw, 8800, 60 * 9, n=3)
-    scored = _drive(vw, con, monkeypatch, recs, gap_hours=11)
-    assert len(scored) == 3, "a small post-gap batch must still be scored normally"
+    assert _drive(vw, con, monkeypatch, _batch(vw, 8800, 60 * 9, n=3), gap_hours=11) == [], \
+        "a small batch of genuinely old listings must still be screened out"
+    assert len(_drive(vw, con, monkeypatch, _batch(vw, 8900, 3, n=3), gap_hours=11)) == 3, \
+        "a small batch of fresh listings must be scored"
+    assert len(_drive(vw, con, monkeypatch, _batch(vw, 9000, 3, n=48), gap_hours=11)) == 48, \
+        "a full page of fresh listings must be scored; 48 is the page size"
 
 
 # ------------------------------- 2026-09-10: optional residential egress proxy
@@ -2097,3 +2311,100 @@ def test_redaction_survives_odd_urls(vw):
     assert vw.redact_proxy("http://h.example:1080") == "http://h.example:1080"
     assert vw.redact_proxy("socks5://u:p@h.example") == "socks5://<user:pass@>h.example"
     assert "?" in vw.redact_proxy("not a url at all")
+
+
+# --------------------------------------- 2026-09-10: volume had no instrument
+#
+# The collapse from ~180 pushes a day to 9 ran two days before anyone saw it.
+# The alerts table held the whole story and nothing read it out, so the first
+# signal was the owner noticing that his phone had gone quiet. These are the
+# instruments that make the next one visible within one cycle.
+
+def test_the_cycle_logs_what_the_send_path_is_doing(vw, con, paths):
+    """Four numbers, and the pool size is the one that cannot be recovered later.
+
+    The alerts table records what each decision WAS; only this line records
+    what it was measured against, which is the half that broke.
+    """
+    _fill_day(vw, con, 30, quality=100.0, sent=1)
+    line = vw.log_volume(con)
+    assert "pool_n=30" in line
+    assert "send_bar=" in line and "ring_bar=" in line
+    assert "pushes_today=30" in line
+    on_disk = (paths / vw.LOG_NAME).read_text(encoding="utf-8")
+    assert "pool_n=30" in on_disk, "the headless run writes to the file, not stdout"
+
+
+def test_the_cycle_line_says_so_when_the_day_is_still_cold(vw, con, paths):
+    """An empty morning has no bars, and printing 0.0 would read as a bar of zero."""
+    line = vw.log_volume(con)
+    assert "pool_n=0" in line and "cold start" in line
+
+
+def test_a_real_cycle_emits_the_volume_line(vw, paths, monkeypatch, capsys):
+    """The instrument has to be WIRED, not merely present.
+
+    A helper the cycle never calls is exactly the shape of the failure this
+    whole change is about: the alerts table could always have answered "how
+    many pushes today" and nothing ever asked it.
+    """
+    def handler(request):
+        if request.url.path == "/":
+            return httpx.Response(200, headers={
+                "set-cookie": f"access_token_web={make_jwt(12)}; Path=/"})
+        return httpx.Response(200, json={"items": []})
+
+    monkeypatch.setattr(vw, "new_client",
+                        lambda: httpx.Client(transport=httpx.MockTransport(handler),
+                                             base_url=vw.BASE))
+    monkeypatch.setattr(vw, "load_env", lambda: {})
+    monkeypatch.setattr(vw, "load_config", lambda: {
+        "settings": {"deal_ratio": 0.55, "min_comps": 1, "comp_window_days": 45,
+                     "min_price": 5, "poll_per_page": 48, "seed_pages": 1,
+                     "seed_per_page": 10, "size_classes": ["m"], "min_margin": 0,
+                     "foreign_advantage_eur": 8, "fake_risk_suppress": 0.7,
+                     "fake_risk_flag": 0.4, "profile_suppress": 0.15,
+                     "profile_min_rated": 8},
+        "searches": [{"tag": "t", "query": "q", "price_max": 100}]})
+    monkeypatch.setattr(vw.time, "sleep", lambda *_: None)
+    con = vw.db_connect()
+    vw.meta_set(con, "seeded:t", vw.now_iso())
+    con.commit()
+    con.close()
+    vw.LOCK_PATH.unlink(missing_ok=True)
+
+    vw.run_cycle()
+    assert "volume: pool_n=" in capsys.readouterr().out, \
+        "a cycle ran without reporting its volume"
+
+
+def test_status_reports_yesterday_and_the_weekly_mean(vw, con, paths, capsys):
+    """The number the owner would have looked at, had it existed."""
+    today = datetime.now(timezone.utc).astimezone()
+    for back, n, loud in ((0, 3, 1), (1, 12, 4), (2, 9, 2)):
+        when = (today - timedelta(days=back)).replace(hour=12, minute=0, second=0, microsecond=0)
+        stamp = when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for i in range(n):
+            con.execute(
+                "INSERT INTO alerts (listing_id, alerted_at, search_tag, sent, priority)"
+                " VALUES (?,?,'t',1,?)", (50000 + back * 100 + i, stamp, 5 if i < loud else 3))
+    con.commit()
+    counts = vw.daily_push_counts(con, days=8)
+    assert counts[0] == (today.strftime("%Y-%m-%d"), 3, 1)
+    assert counts[1][1:] == (12, 4)
+    assert counts[2][1:] == (9, 2)
+    assert sum(c[1] for c in counts[3:]) == 0, "days with no alerts read zero, not vanish"
+    vw.print_status()
+    out = capsys.readouterr().out
+    assert "pushes: heute 3 (1 laut)" in out
+    assert "gestern 12 (4 laut)" in out
+    assert "Schnitt 7 Tage 3.0" in out
+
+
+def test_status_names_an_active_ntfy_send_hold(vw, con, paths, capsys):
+    """A silent phone with a healthy watcher has exactly one other explanation."""
+    vw.meta_set(con, vw.NTFY_QUOTA_KEY,
+                (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    con.commit()
+    vw.print_status()
+    assert "Sendesperre" in capsys.readouterr().out

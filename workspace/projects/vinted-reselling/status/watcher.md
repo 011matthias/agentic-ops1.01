@@ -208,27 +208,82 @@ mit je rund 180 ohne einen einzigen Fehlschlag. Das Kontingent wurde vom
 Nachhol-Schwall gesprengt, nie vom normalen Tag; 60 kuriert damit die falsche
 Zahl.
 
-**Richtige Form:** ein echter Tageszaehler (wie viele Pushes seit lokaler
-Mitternacht wirklich rausgingen), Deckel in der Naehe von 180 mit Luft unter der
-beobachteten Wand. Das Perzentil bleibt da, wo es hingehoert: auf der
-Klingel-Stufe, bei der es um Unterbrechung geht, nicht um Menge.
+### Was dagegen gebaut wurde (2026-09-10)
 
-### Zwei Nebenbefunde aus derselben Messung
+Der Rang bleibt, sein Bezugsrahmen aendert sich: **der Vergleichstopf ist nur
+noch der heutige Tag** (ab lokaler Mitternacht), und `notify_failed`-Zeilen
+kommen nie hinein. Beide Balken, Senden und Klingeln, lesen denselben Topf.
 
-**Das Laender-Gate ist ein Vorbestand, kein Ausloeser, aber teuer.** Nach echtem
-Land (ueber `listings` gejoint): FR 415 Kandidaten / 42 gesendet, IT 160 / 12,
-NL 86 / 11, BE 52 / 7, gegen DE 248 / 154. `foreign_advantage_eur: 8` ist ein
-absoluter Betrag auf einen Vergleichsmedian von meist 25 bis 35 EUR und verlangt
-damit rund 25 Prozentpunkte zusaetzlichen Rabatt. Ein Angebot zu 11.20 EUR gegen
-Median 32.73, also 66% drunter, wird abgelehnt. Ein proportionaler Aufschlag
-waere die richtige Form; ob ein Auslandsangebot ueberhaupt schlechter
-weiterverkauft, ist mit 3 vertrauenswuerdigen gone-Events nicht messbar.
+Die unintuitive Stelle, die beim Lesen des Codes zweimal falsch verstanden
+wurde: **ein tagesbezogener Rang mit Budget 60 liefert nicht 60 Pushes.** Frueh
+am Tag kommt alles durch, weil der Topf noch klein ist; der Balken zieht erst
+an, wenn das Feld sich fuellt. Nachgespielt gegen die echten Zeilen des 09-09
+(957 bewertete Kandidaten, der volumenstaerkste Tag im Bestand):
 
-**`alerts.country` ist immer NULL.** `record_alert` liest das Land aus `rec`,
-`score_and_alert` loest es aber in eine lokale Variable aus dem Verkaeuferprofil
-auf und schreibt es nie zurueck. 5 gefuellte Zeilen stehen 726 ueber den Join
-aufloesbaren gegenueber. Die Snapshot-Tabelle wurde gebaut, damit fuer den
-Backtest nichts verloren geht; auf dieser Dimension liefert sie nichts.
+| SEND_BUDGET | 35 | 40 | 50 | 60 | 80 |
+|---|---|---|---|---|---|
+| Pushes | 126 | 145 | 177 | 202 | 243 |
+
+| RING_BUDGET (bei send 60) | 4 | 6 | 8 | 10 | 15 |
+|---|---|---|---|---|---|
+| laute Alarme | 20 | 25 | 32 | 34 | 47 |
+
+Gesetzt: **60 / 6**. Das ergibt am schwersten Tag 202 Pushes, davon 25 laut,
+gegen die rund 180 und 27, mit denen der Owner am 08-09 zufrieden war, und
+liegt Faktor 1,6 unter der beobachteten ntfy-Wand von 318. Dazu ein flacher
+Notaus, `HARD_SEND_CEILING = 250`, der echte Pushes seit lokaler Mitternacht
+zaehlt: das ist die Reissleine gegen einen zweiten Schwall, nicht der Regler,
+und im Nachspiel greift er nie.
+
+**Die Nachhol-Sperre entscheidet nur noch nach Zeit.** Die Zaehlbedingung ist
+raus; ob ein Zyklus nachholt, sagt allein die Luecke, und was ein Nachhol-Zyklus
+noch bewerten darf, sagt `CATCH_UP_FRESH_MIN` pro Anzeige. Die Schwelle auf 48
+zu heben waere schlimmer als nutzlos gewesen: der Vergleich ist ein striktes
+Groesser und die Seitengroesse ist 48, ueber 1887 Logzeilen war der Hoechstwert
+exakt 48. Die Sperre haette nie wieder gefeuert, die Frischepruefung dahinter
+waere stiller toter Code geworden.
+
+**`alerts.country` wird jetzt geschrieben.** `record_alert` las das Land aus
+`rec`, waehrend `score_and_alert` es in eine lokale Variable aufloest: 1194 von
+1226 Zeilen standen auf NULL, obwohl das Gate darueber ein echtes Land benutzt
+hatte. Es reist jetzt im `ctx`-Dict mit. Der naheliegende Einzeiler
+(`rec["country"] = country` hinter der Aufloesung) waere eine Falle gewesen: er
+erfuellt die Bedingung `not rec.get("country")` zwei Zeilen darunter und legt
+damit genau das UPDATE still, das `listings.country` fuellt, die einzige heute
+korrekte Laenderspalte. Beide Schreibwege sind getrennt getestet.
+
+**ntfy-Refusals sind jetzt lesbar und werden gemerkt.** Der Status allein hat
+nicht gereicht: Tageskontingent und kurzfristiges Rate-Limit teilen sich HTTP
+429, und nur der Body trennt sie. Bei Code 42908 haelt der Watcher bis zum
+UTC-Rollover die Sendungen an, statt 147 Mal gegen dieselbe Wand zu laufen.
+Zurueckgehaltene Kandidaten bekommen `suppress_reason='ntfy_quota'`, nicht
+`notify_failed`: eine Absage von ntfy und ein Zurueckhalten durch uns sind
+verschiedene Tatsachen ueber denselben Fund.
+
+**Sichtbarkeit.** Jeder Zyklus loggt `pool_n`, `send_bar`, `ring_bar` und
+`pushes_today`; `--status` zeigt Pushes heute / gestern / Schnitt der letzten
+sieben Tage, jeweils mit lautem Anteil, dazu eine aktive Sendesperre. Ohne die
+Zyklus-Zeile ist der Kern des Fixes nicht beweisbar: die alerts-Tabelle haelt
+fest, wie entschieden wurde, aber nicht, wogegen gemessen wurde.
+
+### Das Laender-Gate: Entscheidung des Owners, jetzt eine Config-Zeile
+
+Der Code las Kriterium 5 anders, als es formuliert war. Geschrieben stand
+"mindestens 8 EUR unter dem Median", gerechnet wurde "8 EUR unter 55% des
+Medians", also rund dreimal haerter. Gemessen an 622 betroffenen Zeilen seit dem
+08-09: die strenge Lesart toetet 83,1% aller auslaendischen Kandidaten, und das
+Ausland ist 59,3% des Stroms; 619 der 622 erfuellen das Kriterium im Wortlaut
+bereits. Unter den Verworfenen eine Mother-Jeans zu 84,70 gegen Median 157,15
+und vier Stone-Island-Teile mit je 41-42 EUR Marge. Die einzige belegbare
+Grundlage fuer irgendeinen Aufschlag: der rein deutsche Vergleichsmedian liegt
+0,29 EUR (Median) bis 3,02 EUR (Mittel) ueber dem gemischten. Nicht 8.
+
+Default ist jetzt der Wortlaut (`foreign_advantage_basis: median`), die strenge
+Lesart bleibt als `deal_gate` in einem Wort erreichbar. Das aendert, **welche**
+Angebote kommen, nicht wie viele: die zurueckgegebenen Zeilen haben alle
+`quality = NULL`, weil die Bewertung erst nach dem Land-Block laeuft, und
+wachsen im Nachspiel den Rang-Topf mit. Von 479 auf 957 Kandidaten am 09-09
+stiegen die Pushes nur von 167 auf 202, weil der Balken den Rest schluckt.
 
 ### Was ausgeschlossen wurde
 
@@ -248,19 +303,21 @@ Wahl und keine stille Umstellung.
 | Element | Zustand | Stand | Nächster Schritt | Blocker |
 |---|---|---|---|---|
 | Laufzeit-Baum | live | Eigener Worktree `agentic-ops1-watcher`, Junctions auf data/ und context/; Zyklen schreiben nach `data/watcher.log` | Nach Watcher-Merges nachziehen | - |
-| Poller + Comp-DB | live | v3 Präzisions-Upgrade 2026-09-08; ~33k Zeilen. **Backlog-Gate korrigiert**: zählte Artikel statt Zeit und liess 67% aller Listings ungeprüft | Datenqualität beobachten | - |
+| Poller + Comp-DB | live | v3 Präzisions-Upgrade 2026-09-08; ~57k Zeilen. **Backlog-Gate: die Zählbedingung ist seit 2026-09-10 ganz raus.** Sie warf am ersten Morgen, an dem sie lief, 449 von 456 frisch geholten Anzeigen weg, drei Viertel davon unter 45 Minuten alt; jetzt entscheidet die Lücke, ob gesiebt wird, und das Alter, was durchkommt | Datenqualität beobachten | - |
 | Session-Handling | live | Clean-slate refresh, 45-Min-Renewal, 401/403-Split, jetzt auch 5xx-Backoff | - | - |
 | Zustands-Mapping | live | **Defekt behoben 2026-09-08**: "Neu" / "Neu, mit Etikett" fielen auf `unknown`, 4.527 Zeilen waren von Alerts UND Comps ausgeschlossen. Rückwirkend repariert | - | - |
 | Größenklassen | live | `size_class` normalisiert drei Notationen; Alert-Filter s/m/l + W29-W34, pro Search überschreibbar | XL/52 je Produkt aus `--brand-report` entscheiden | - |
 | Marken-Normalisierung | live | `brand_norm` führt Ralph Lauren aus 6 Schreibweisen zu einem 2.069-Zeilen-Pool zusammen | - | - |
 | Fake-Risk | live | Regelbasiert inkl. Verkäuferprofil; ab 0.4 Warnzeile, ab 0.7 unterdrückt. Unterdrückung braucht **zwei** unabhängige Signale, der Preis allein warnt nur | Schwellen nachziehen, sobald Bewertungen da sind | Feedback-Daten |
 | Verkäuferprofil | live | `/api/v2/users/{id}` liefert Land + Reputation, gecacht pro Verkäufer, max 6 Abrufe/Zyklus | - | - |
-| Standort DE | live | Land kommt aus dem Verkäuferprofil (Katalog-Antwort hat keins); Ausland braucht 8 EUR Vorsprung | Schwelle nach 1 Woche Länderdaten nachmessen | Länderdaten |
+| Standort DE | live | Land kommt aus dem Verkäuferprofil (Katalog-Antwort hat keins). Ausland braucht 8 EUR unter dem Median, dem Wortlaut des Kriteriums; die dreimal härtere Lesart bleibt als `foreign_advantage_basis: deal_gate` erreichbar. `alerts.country` wird seit 2026-09-10 wirklich geschrieben | Schwelle nachmessen, sobald Outcome-Daten je Land existieren | gone-Events |
 | Post-Alter | live | Echte Post-Zeit aus der Foto-URL, rueckwirkend ueber 35.752 Zeilen, 0 zusaetzliche Vinted-Anfragen. Steht im Alert-Text und in jedem Snapshot | Nach 2 Wochen gegen Outcome-Daten pruefen | - |
 | Jung + gefragt | live | Herzen auf einem Listing unter 60 Min heben die Qualitaet um bis zu 35%, gedeckelt, innerhalb des Klingel-Budgets. Auf aelteren Listings zaehlen sie nicht | Vorzeichen mit Outcome-Daten pruefen | Outcome-Daten |
 | Alert-Snapshots | live | Jede Entscheidung friert Comps, Schwellen und Risiko ein, auch die unterdrückten. **2026-09-08 zwei Stunden ausgefallen** (fehlende Spalte `quality`), behoben und 34 Zeilen rekonstruiert | - | - |
 | Feedback-Kanal | live | 👍 / 👎 / Gekauft; **am Handy des Owners bestätigt** (Knöpfe rendern, Tap erreicht ntfy). Eine Bewertung überlebt jetzt auch ohne Snapshot | Taste-Daten sammeln | - |
-| Prioritäts-Stufen | live | **Relativ** statt absolut: laut wird nur, was die Konkurrenz der letzten 24h schlägt. Gemessen an einem echten Tag: 5% klingeln, 12% normal, 83% still | Nach einer Woche gegen echte Daten nachjustieren | - |
+| Prioritäts-Stufen | live | **Relativ, und seit 2026-09-10 gegen den heutigen Tag** statt gegen 24 Wanduhr-Stunden; `notify_failed` zählt nicht mit. Budgets 60 / 6 plus flacher Notaus bei 250 echten Pushes. Nachspiel 09-09: 202 Pushes, 25 laut | Abnahme 24h nach Deploy gegen A1-A8 | - |
+| Volumen-Sichtbarkeit | live | Pro Zyklus `pool_n / send_bar / ring_bar / pushes_today` ins Log; `--status` zeigt heute / gestern / 7-Tage-Schnitt mit lautem Anteil. Der Einbruch lief zwei Tage unbemerkt, weil nichts das Volumen gemessen hat | - | - |
+| ntfy-Kontingent | live | Refusal wird mit Status **und** Body geloggt; Code 42908 haelt die Sendungen bis zum UTC-Rollover an. Zurueckgehalten heisst `ntfy_quota`, nicht `notify_failed` | - | - |
 | Gone/Sold-Erkennung | live | **Verkauft wird jetzt von geloescht getrennt** (2026-09-09): 200 + Plugin `buyer_item_status` Theme SUCCESS = verkauft, 200 + `item_status` `is_closed:false` = lebt, 404 = geloescht. Der alte Marker `is_sold":true` stand auf keiner Seite, also war der Verkaufs-Zweig unerreichbar und jeder Verkauf wurde als "lebt" verbucht | Outcomes sammeln bis 100 je Zelle | Zeit |
 | Recheck-Auswahl | live | Dasselbe Budget (25 Seiten/Stunde), andere Reihenfolge: erst Alert-Kandidaten, dann das Fenster 12h-10d, dann der alte Aeltester-zuerst-Lauf | - | - |
 | Zeitreihen | live | `listing_events` haelt jede Bewegung von Preis, Favoriten, Aufrufen fest. Die Recheck-Seite liefert den zweiten Preispunkt Tage spaeter, den der Poll nie sieht (Median-Beobachtung 10 Minuten) | - | - |
@@ -338,9 +395,21 @@ Das Angebot ist dabei nur der Proxy; echte Nachfrage misst erst R4.
    Premium-Damenjeans in XS/S/M gelistet werden). Ein Signal ist keine Regel;
    wiederholt sich das, ist es eine Zeile Config.
 2. Nach einer Woche: Länderverteilung messen und die 8-EUR-Schwelle prüfen.
+   `alerts.country` traegt ab 2026-09-10 echte Werte, also ist das zum ersten
+   Mal aus der Snapshot-Tabelle allein beantwortbar.
 3. Nach 2 Wochen: die drei neuen Denim-Suchen gegen R1 bis R3 bewerten.
 4. Nach ~300 vertrauenswürdigen gone-Events: Backtest-Scorer als eigener PR,
    dann `/comd_optimize`.
+5. **Ob `quality` ueberhaupt die richtige Reihenfolge ist, ist ungeprueft.** Der
+   2026-09-10-Fix repariert, WIE VIELE Funde durchkommen, und laesst offen, ob
+   die Rangfolge stimmt. Gegen die Urteile des Owners gemessen wurde sie nie: es
+   gibt 78 Feedback-Zeilen, alle aus einem einzigen 3,7-Stunden-Fenster am
+   08-09. Solange das so bleibt, ist jede Gewichtung in `alert_quality` eine
+   Hypothese.
+6. **Ob Auslandsangebote schlechtere Kaeufe sind, ist nicht messbar.** 0 von
+   1030 Angeboten mit Laenderkennung tragen ein `gone_at`. Die echten
+   grenzueberschreitenden Versandkosten, die die 8 EUR darstellen sollen, stehen
+   nirgends im Schema.
 5. Das Vorzeichen der Herzen ist noch unbelegt. Trigger: sobald 100 alarmierte
    Listings ein gone-Event aus vertrauenswuerdiger Quelle haben, den Anteil
    "weg" bei 0 Herzen gegen >= 1 Herz testen, kontrolliert auf `search_tag`.
