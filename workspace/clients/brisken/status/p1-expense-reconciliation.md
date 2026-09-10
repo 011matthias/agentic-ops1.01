@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-09-09
+updated: 2026-09-10
 ---
 
 # Brisken / Expense Reconciliation (p1)
@@ -40,6 +40,34 @@ below still says a SPA half is "remaining" or "owner to apply", it is a
 record of that round, not the current state. Expect the not-applied list
 to fill again: the habit is that a backend round ships the same day its
 prompt is written.
+
+**July receipt gap, re-probed live 2026-09-10.** July batch `50622baec444`
+holds 32 receipts and NO statement; against the 111 July rows in Zoho Books
+(107 of them card 2838) that is 21 charges covered (14 exact, 7 across the
+EUR/USD rate with vendor agreement) and 90 with no receipt, worth USD 4,356
+plus EUR 900. Three blockers, none of them a search problem:
+
+1. **Zoho Expense, 6 of 8 orgs refuse us** (`400/6018` on every endpoint;
+   Cloud Services + GmbH answered OK in the same run, so the probe is proven).
+   The token resolves to **dirk.neumann@brisken.com, admin, active**, so it is
+   Dirk's own login that is disabled, not a service user. Corporate Services
+   carries 107 of the 111 July rows; Tech LTDA is the Brazilian spend.
+2. **The subscription group probably belongs to blocker 1, not to Criss's
+   mailbox.** Correcting the 2026-09-09 attribution: all 323 Zoho Expense 2026
+   rows in the readable orgs carry an attached receipt, and the vendors there
+   include OpenAI 21, Microsoft 6, Perplexity 4, GitHub, Eleven Labs, Wix. The
+   receipt EMAIL lands with Criss; the FILED receipt goes to Expense. Widening
+   the Graph allowlist is now a fallback, not the plan.
+3. **No July card statement exists within reach.** SharePoint's Chase archive
+   stops at `20260704` (June cycle) and card **2838 has zero statement files in
+   SharePoint in any year**; the local `Chase2838_full_activity.csv` ends in
+   June (0 July rows). So the tool cannot answer "which July receipts are
+   missing" for itself; the 111-row chase list comes from Zoho Books via a
+   scratch script. Owner deferred this ask 2026-09-10.
+
+Intake is clean (78 ingested, 19 dismissed, nothing pooled or held). Draft to
+Dirk for the Expense unlock is staged UNSENT at
+`context/drafts/zoho-expense-access-july-to-dirk.md` (comms critic OK).
 
 ## Elements (index)
 
