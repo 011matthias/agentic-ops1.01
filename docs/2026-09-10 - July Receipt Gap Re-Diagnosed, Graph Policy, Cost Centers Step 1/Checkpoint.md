@@ -216,8 +216,117 @@ token.
 ## How to Continue
 
 The cost-center build is at a clean seam: step 1 committed, suite green, nothing
-half-wired. Use the handoff prompt to resume at step 2. Everything else is either
-waiting on propagation (Criss's mailbox) or on an owner decision (item 50).
+half-wired. Everything else is either waiting on propagation (Criss's mailbox) or
+on an owner decision (item 50).
+
+The resume prompt below is the artifact, not a summary of one. Paste it whole
+into a fresh chat. It carries its own continuation protocol and re-emits it, so
+the chain does not lose the instruction at the next handoff.
+
+```
+Resume Brisken p1 (expense reconciliation), cost centers, backlog item 47.
+Continue at STEP 2 of 6. Step 1 is committed, green, and nothing is half-wired.
+
+WORKTREE: C:/Users/neuma_p1qrsic/Repo/agentic-ops1-cc
+BRANCH:   client/brisken/p1-cost-centers  (HEAD e299f50a, UNPUSHED)
+Work there, not in the primary clone: five sibling Claude sessions share it.
+
+=== HOW TO RUN THIS SESSION (carry this forward) ===
+When context pressure gets too high, do the following in this exact order:
+  1. PAUSE operation at a clean seam. Never stop mid-wiring.
+  2. CHECKPOINT (invoke /comd_checkpoint, never hand-roll it).
+  3. GENERATE a copy-pasteable prompt that resumes from the exact spot you
+     paused at, and INCLUDE THIS FIVE-LINE PROTOCOL VERBATIM inside that
+     prompt so the next session does the same.
+No leaving voids: if something is half-built, either finish it or revert it
+before you pause, and say in the prompt which you did and why.
+"Clean seam" means the suite is green and no caller is left pointing at a
+function that does not exist yet.
+=== END PROTOCOL ===
+
+Read first, in this order:
+  1. workspace/clients/brisken/status/p1-improvement-backlog.md, item 47.
+     That is the SPEC. Build to it; do not re-decide it. Items 50-54 are the
+     other open defects from 2026-09-10.
+  2. .../automations/expense-reconciliation/src/expense_recon/cost_centers.py
+     (what step 1 built)
+  3. docs/2026-09-10 - July Receipt Gap Re-Diagnosed, Graph Policy, Cost
+     Centers Step 1/Checkpoint.md, Working Notes
+
+DONE (step 1): settings["cost_centers"] = {name: {kind, note, active}} with
+whole-map replace at the settings edge; CostCenterRegistry with the chain
+override > trip > merchant > card; SETTINGS_DEFAULTS key; PUT validation in
+app.py; derived read-only cost_center_options on GET /api/settings. 24 tests in
+tests/test_cost_centers.py + tests/test_cost_centers_api.py. Suite 1511 -> 1535,
+ruff clean via `uvx ruff check --config <repo>/ruff.toml`.
+
+The contract that must not regress: an empty registry resolves nothing AND FLAGS
+NOTHING. Without it every row in every month reads needs_cost_center on day one.
+It is the only test here that fails silently. resolve() deliberately takes no
+person or category argument and a test asserts the signature.
+
+STEP 2, in this order:
+  a. cards.py normalize_cards_setting + the Card dataclass + card_to_dict:
+     add `default_cost_center` (a string; validate it is a defined cost-center
+     name only at RESOLUTION time, not at the settings edge, because cards and
+     cost centers are edited independently and edit order must not matter).
+  b. merchant_registry.py normalize_merchants_setting: add `cost_center`,
+     same reasoning.
+  c. service.build_expense_view (~line 4863; the per-row loop is ~5008, the row
+     dict output ~5095): resolve per row and emit the parallel fields from
+     CostCenterResolution.as_fields() -- cost_center, cost_center_source,
+     cost_center_source_label, needs_cost_center. Follow how `person` /
+     `person_source` are threaded through `card_res`; that is the pattern.
+  d. Trip resolution: trips (TripRow) carry no cost-center column. The reading
+     I chose but did NOT implement is that a trip batch resolves to a
+     same-named cost center of kind "trip", which needs no schema change.
+     FLAG THIS TO THE OWNER as an interpretation before relying on it; the
+     design says "trip" is a resolver but never says how a trip carries one.
+  e. cost_center into EXPENSE_HEADER_FIELDS (app.py ~3188, the
+     PUT /api/runs/{id}/expenses/{doc} allowlist) so the override rides the
+     existing field-override mechanism with no second path. Validate against
+     the registry; blank clears.
+
+Then steps 3-6: month report grouped by cost center (reuse the `sections`
+partition item 38 built for per-person trip reports, in build_expense_report_pdf),
+GET /api/cost-centers/totals for the cross-month roll-up, and the Lovable half
+(Settings editor + row picker). Carry the stated limit on both surfaces: this
+tool sees card and receipt spend only, never contractor invoices or salaries, so
+a cost-center figure is not a total project cost.
+
+Method, non-negotiable per rule_behaviors B2: every increment needs a test that
+runs THROUGH the caller, and you must watch it go red. Use
+  uv run --directory C:/Users/neuma_p1qrsic/Repo/agentic-ops1-cc tools/regress_check.py \
+    --test "uv run --directory <recon dir> pytest <file> -q" \
+    --file <src> --replace "<wired call>" --with "<disabled>"
+Step 1 proved BOTH the helper and the wiring this way. Do the same.
+
+ALSO OPEN, not cost centers:
+  - Criss's mailbox: Test-ApplicationAccessPolicy says Granted but enforcement
+    still 403 after 45 min. Re-probe with
+    `python .scratch/recon-july/policy_probe.py`. On OK, sweep her mailbox for
+    July receipts; the allowlist in rule_brisken_graph_first already carries her.
+    Dirk is the control in that probe -- if he ever fails, it is not propagation.
+  - Six commits sit local across client/brisken/p1-july-gap-attribution,
+    client/brisken/p1-cost-centers and docs/checkpoint-2026-09-10-brisken-july-cc.
+    EVERY git push on 2026-09-10 was refused by the permission classifier. Retry
+    once; if still refused, say so plainly rather than working around it.
+  - Backlog item 50 needs an OWNER DECISION, not a build: min_machines_running=1
+    and >512MB on brisken-expense-recon. The real risk is not Criss's upload, it
+    is that the app is the MX target for expenses.brisken.com and is currently
+    allowed to stop.
+
+Do not: click Join in Zoho Expense (provisions an empty org, recovers nothing),
+or POST test data to 074a7b8905d7 / 50622baec444 / a5f97a85b1d0 / 86929f2a909a /
+51a22ad72864 -- those are Criss's real months. Test batches: create with
+allow_empty, delete with POST /api/runs/{id}/delete and {"confirm": "<run id>"}
+(DELETE /api/expense-batches/{id} is a 405).
+
+Method warning from 2026-09-10, because it cost two wrong diagnoses in one
+session: an API error string names a symptom, not a cause. Read the RECORD
+behind it. 6018 "your account is disabled" meant "Expense was never set up",
+and a 403 on a mailbox meant an Exchange group, not a missing Graph scope.
+```
 
 ---
 
