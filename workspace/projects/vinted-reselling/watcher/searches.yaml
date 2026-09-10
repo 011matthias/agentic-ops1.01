@@ -50,7 +50,29 @@ settings:
   size_classes: [s, m, l, w29, w30, w31, w32, w33, w34]
 
   min_margin: 0           # EUR below the comp median a deal must clear; 0 = off
-  foreign_advantage_eur: 8   # non-DE listings must beat the bar by this much extra
+
+  # Kriterium 5, das Laender-Gate. Der Aufschlag steht fuer den
+  # grenzueberschreitenden Versand, den der Vergleichsmedian nicht enthaelt.
+  foreign_advantage_eur: 8
+  # Wovon die 8 EUR abgezogen werden. "median" ist der Wortlaut des Kriteriums
+  # (mindestens 8 EUR unter dem Median), "deal_gate" die Lesart, die der Code
+  # bis 2026-09-10 hatte: 8 EUR unter 55% des Medians, also rund dreimal haerter.
+  #
+  # Gemessen an 622 betroffenen Zeilen seit dem 08.09., deshalb steht hier
+  # jetzt "median":
+  #   - deal_gate toetet 83,1% aller auslaendischen Kandidaten, und das Ausland
+  #     ist 59,3% des Stroms. Verlangter Zusatzrabatt: 5,1 bis 51,9 Prozent-
+  #     punkte, Median 24,8.
+  #   - 619 der 622 (99,5%) erfuellen das Kriterium im Wortlaut bereits.
+  #   - Unter den Verworfenen: eine Mother-Jeans fuer 84,70 gegen Median 157,15,
+  #     dazu vier Stone-Island-Teile mit je 41-42 EUR Marge.
+  #   - Die einzige belegbare Grundlage fuer irgendeinen Aufschlag: der rein
+  #     deutsche Vergleichsmedian liegt 0,29 EUR (Median) bis 3,02 EUR (Mittel)
+  #     ueber dem gemischten. Nicht 8. Echte grenzueberschreitende Versandkosten
+  #     stehen nirgends im Schema.
+  # Das aendert, WELCHE Angebote kommen, nicht wie viele: die zurueckgegebenen
+  # Zeilen wachsen den Rang-Topf und heben die Latte mit.
+  foreign_advantage_basis: median
 
   fake_risk_suppress: 0.7    # at or above this the alert is withheld
   fake_risk_flag: 0.4        # at or above this the alert carries a warning line
