@@ -84,6 +84,33 @@ plus EUR 900. Three blockers, none of them a search problem:
    missing" for itself; the 111-row chase list comes from Zoho Books via a
    scratch script. Owner deferred this ask 2026-09-10.
 
+**Criss's mailbox: unblocked 2026-09-10, the fix was Exchange not Graph.** The
+receipt collection point was unreadable and the reflex ("expand the Graph
+scope") would not have worked: the app token already carries tenant-wide
+`Mail.Read`, and the refusal was `403 [RAOP] Blocked by tenant configured
+AppOnly AccessPolicy settings`. The Exchange Application Access Policy that
+`rule_brisken_graph_first` described as absent had since been created and was
+enforcing, so mailbox reach is **group membership**, not API permission. Proven
+by differential probe on one token in one run (dirk OK 2692, matthias OK 450,
+criss 403).
+
+Owner ran `.scratch/recon-july/add-criss-to-graph-policy.ps1` with an Exchange
+admin sign-in. Real scope group is **`sg-marketing-ops-mailboxes`** (not the
+runbook's remembered "GraphOps Allowed Mailboxes", which is why the script reads
+`ScopeName` off the live policy instead of trusting the file); members went 2 to
+3, `Test-ApplicationAccessPolicy` returned **Granted**, and the control mailbox
+`marketing@brisken.com` still returned **Denied**, so the policy is still
+restricting and the Granted means something. Our in-code allowlist was widened in
+the same session, since the two have to move together.
+
+Four routes an agent CANNOT take here, all tested, recorded in
+`context/graph-access-policy-runbook.md` so they are not re-derived: Graph group
+write (403, no `Group.*`/`Directory.*`/`Exchange.ManageAsApp`), Exchange app-only
+PowerShell (needs a certificate plus that role; we hold a client secret),
+`Connect-ExchangeOnline -Device` (works, but the code expires in 15 min unused),
+and Edge CDP (Chromium ignores `--remote-debugging-port` on the default
+`--user-data-dir`). The admin sign-in is irreducibly human.
+
 **Where the missing 89 can actually be recovered from.** Split by route rather
 than by blocker:
 
