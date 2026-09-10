@@ -19,7 +19,8 @@ This module gives cards one home: ``settings["cards"]``.
         "entity": "Corporate Services",
         "person": "Nicolas",
         "zoho_account": "1010 Chase Corporate",
-        "currency": "USD"
+        "currency": "USD",
+        "default_cost_center": "Lidar"
       }
     }
 
@@ -30,6 +31,17 @@ email." Person attribution rides the SAME card chain as ``entity`` — the
 LAST link, resolved from whichever card the chain lands on — and NEVER
 the mail sender: ``submitted_by`` stays ingest provenance (a claim about
 who mailed a file), by explicit owner ruling.
+
+``default_cost_center`` (backlog item 47) is the card's standing project
+or purpose, for a card that belongs to one of them. It is the WEAKEST
+link of the cost-center chain (override > trip > merchant > card), and it
+is stored as a plain string that is NOT validated against the cost-center
+registry here, on purpose: cards and cost centers are edited
+independently, so requiring the centre to exist first would make the edit
+ORDER matter. A name the registry does not define simply fails to resolve
+when the chain runs (``CostCenterRegistry.resolve`` ignores what it cannot
+canonicalize), which leaves the row unresolved rather than stamping
+something invented.
 
 Two design facts carried from production evidence:
 
@@ -173,6 +185,7 @@ class Card:
     aliases: tuple[str, ...] = ()
     entity: str = ""
     person: str = ""
+    default_cost_center: str = ""
     zoho_account: str | None = None
     currency: str = ""
     active: bool = True
@@ -202,6 +215,7 @@ def card_to_dict(card: Card) -> dict:
         "aliases": list(card.aliases),
         "entity": card.entity,
         "person": card.person,
+        "default_cost_center": card.default_cost_center,
         "zoho_account": card.zoho_account,
         "currency": card.currency,
         "active": card.active,
@@ -228,7 +242,10 @@ def normalize_cards_setting(raw: object) -> dict:
         if not isinstance(entry, dict):
             raise ValueError(f"cards[{slug!r}] must be an object")
         out: dict = {}
-        for skey in ("label", "label_pt", "entity", "person", "zoho_account"):
+        for skey in (
+            "label", "label_pt", "entity", "person", "default_cost_center",
+            "zoho_account",
+        ):
             value = str(entry.get(skey) or "").strip()
             if value:
                 out[skey] = value
@@ -301,6 +318,8 @@ def cards_to_setting(cards: dict[str, Card]) -> dict:
             entry["entity"] = card.entity
         if card.person:
             entry["person"] = card.person
+        if card.default_cost_center:
+            entry["default_cost_center"] = card.default_cost_center
         if card.zoho_account:
             entry["zoho_account"] = card.zoho_account
         if card.currency:
@@ -430,6 +449,9 @@ def _card_from_setting(slug: str, entry: dict) -> Card:
         aliases=tuple(str(a) for a in (entry.get("aliases") or [])),
         entity=str(entry.get("entity") or "").strip(),
         person=str(entry.get("person") or "").strip(),
+        default_cost_center=str(
+            entry.get("default_cost_center") or ""
+        ).strip(),
         zoho_account=(
             str(entry["zoho_account"]).strip()
             if str(entry.get("zoho_account") or "").strip()

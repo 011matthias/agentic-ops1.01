@@ -196,6 +196,10 @@ class TripRow:
     end_date: str     # YYYY-MM-DD, inclusive
     travelers: list[str]
     updated_at: str | None = None
+    # Item 47: the project or purpose this trip's spend belongs to.
+    # A trip is the strongest AUTOMATIC cost-center signal, because a
+    # human DECLARED it at creation rather than anything inferring it.
+    cost_center: str = ""
 
 
 @dataclass
@@ -349,7 +353,8 @@ class RunStore:
                 start_date TEXT NOT NULL,
                 end_date   TEXT NOT NULL,
                 travelers  TEXT NOT NULL,
-                updated_at TEXT
+                updated_at TEXT,
+                cost_center TEXT NOT NULL DEFAULT ''
             );
             CREATE INDEX IF NOT EXISTS idx_login_failures_ts
                 ON login_failures (ts);
@@ -394,6 +399,17 @@ class RunStore:
         }
         if "result" not in job_cols:
             self.conn.execute("ALTER TABLE jobs ADD COLUMN result TEXT")
+        # trips.cost_center (item 47, 2026-09-10): the live volume
+        # predates the column; "" on old rows reads as "unassigned",
+        # which is what every trip created before cost centers was.
+        trip_cols = {
+            row["name"]
+            for row in self.conn.execute("PRAGMA table_info(trips)").fetchall()
+        }
+        if "cost_center" not in trip_cols:
+            self.conn.execute(
+                "ALTER TABLE trips ADD COLUMN cost_center TEXT NOT NULL DEFAULT ''"
+            )
 
     # -- runs -------------------------------------------------------------
 
@@ -559,12 +575,13 @@ class RunStore:
         start_date: str,
         end_date: str,
         travelers: list[str],
+        cost_center: str = "",
     ) -> None:
         self.conn.execute(
             "INSERT INTO trips (trip_id, created_at, name, start_date, "
-            "end_date, travelers, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "end_date, travelers, updated_at, cost_center) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (trip_id, created_at, name, start_date, end_date,
-             json.dumps(travelers), created_at),
+             json.dumps(travelers), created_at, cost_center),
         )
         self.conn.commit()
 
@@ -589,12 +606,13 @@ class RunStore:
         end_date: str,
         travelers: list[str],
         updated_at: str,
+        cost_center: str = "",
     ) -> bool:
         cur = self.conn.execute(
             "UPDATE trips SET name = ?, start_date = ?, end_date = ?, "
-            "travelers = ?, updated_at = ? WHERE trip_id = ?",
+            "travelers = ?, updated_at = ?, cost_center = ? WHERE trip_id = ?",
             (name, start_date, end_date, json.dumps(travelers),
-             updated_at, trip_id),
+             updated_at, cost_center, trip_id),
         )
         self.conn.commit()
         return cur.rowcount > 0
@@ -625,6 +643,12 @@ class RunStore:
             end_date=row["end_date"],
             travelers=[str(t) for t in travelers],
             updated_at=row["updated_at"],
+            # Tolerant of a row read before the migration ran (a
+            # stored config must never be able to break a view).
+            cost_center=str(
+                (row["cost_center"] if "cost_center" in row.keys() else "")
+                or ""
+            ),
         )
 
     # -- intakes (testing mode) --------------------------------------------

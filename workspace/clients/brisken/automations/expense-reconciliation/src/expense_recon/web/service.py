@@ -3661,7 +3661,12 @@ def validate_trip_fields(payload: dict) -> tuple[dict | None, str | None]:
     """Clean a trip create/update payload. Returns (cleaned, None) or
     (None, error). ``travelers`` is a list of PERSON names (item 40's
     vocabulary), whole-list replace, may be empty while the roster is
-    still being collected."""
+    still being collected.
+
+    ``cost_center`` (item 47) is the trip's project or purpose, stored as
+    typed and NOT checked against the cost-center registry: trips and
+    cost centers are edited independently, so the edit ORDER must not
+    matter. Blank is a normal state and clears it."""
     if not isinstance(payload, dict):
         return None, "body must be an object"
     name = str(payload.get("name") or "").strip()[:200]
@@ -3693,6 +3698,7 @@ def validate_trip_fields(payload: dict) -> tuple[dict | None, str | None]:
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
         "travelers": travelers,
+        "cost_center": str(payload.get("cost_center") or "").strip()[:200],
     }, None
 
 
@@ -3790,6 +3796,9 @@ def trip_view(store: RunStore, trip: TripRow, batch: RunRow | None) -> dict:
         "start": trip.start_date,
         "end": trip.end_date,
         "travelers": list(trip.travelers),
+        # Item 47: parallel field, always present. A stale SPA reading
+        # it gets "" rather than undefined.
+        "cost_center": trip.cost_center,
         "created_at": trip.created_at,
         "updated_at": trip.updated_at,
         "batch_id": batch.run_id if batch is not None else None,

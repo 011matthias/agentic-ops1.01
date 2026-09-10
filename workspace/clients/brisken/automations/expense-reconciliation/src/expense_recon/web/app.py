@@ -1600,6 +1600,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     "start": trip_row.start_date,
                     "end": trip_row.end_date,
                     "travelers": list(trip_row.travelers),
+                    # Item 47: the trip is the strongest AUTOMATIC
+                    # cost-center signal for every row in its batch.
+                    "cost_center": trip_row.cost_center,
                 }
         return build_expense_view(
             run, overrides, field_overrides, edits, resolutions,
@@ -2748,6 +2751,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 "start": payload.get("start", current.start_date),
                 "end": payload.get("end", current.end_date),
                 "travelers": payload.get("travelers", current.travelers),
+                # Item 47: omitted keeps the stored value, "" clears it
+                # -- the same merge semantics as every field above.
+                "cost_center": payload.get(
+                    "cost_center", current.cost_center
+                ),
             } if isinstance(payload, dict) else None
             cleaned, err = validate_trip_fields(merged)
             if err is not None:
