@@ -935,15 +935,52 @@ def load_cookies(client: httpx.Client) -> None:
             continue
 
 
+def egress_proxy() -> str | None:
+    """The outbound proxy, if one is configured. Absent by default.
+
+    Vinted refuses datacenter IPs at the door: probed 2026-09-10 from a Fly
+    machine in Frankfurt, `GET https://www.vinted.de/` answered 403 on the very
+    first request, before a session could be minted. So the watcher cannot be
+    moved to a cloud host as-is, and a residential egress is the only route
+    that keeps a 24/7 host. This reads it from the environment rather than
+    hard-coding one, so the default build has no proxy and no dependency on a
+    third party.
+
+    Setting it is a deliberate act with consequences the config file cannot
+    carry: it routes around an access control Vinted chose, the traffic leaves
+    through somebody else's home connection, and a detection lands on the
+    owner's selling account rather than on an anonymous reader. Documented in
+    searches.yaml next to the key.
+    """
+    return load_env().get("EGRESS_PROXY_URL") or None
+
+
 def new_client() -> httpx.Client:
+    proxy = egress_proxy()
     client = httpx.Client(
         headers={"User-Agent": UA, "Accept-Language": "de-DE,de;q=0.9"},
         timeout=25,
         follow_redirects=True,
+        proxy=proxy,
     )
+    if proxy:
+        # Host only: the credentials live in the URL and must never reach a log.
+        log(f"egress via proxy {redact_proxy(proxy)}")
     if COOKIE_PATH.exists():
         load_cookies(client)
     return client
+
+
+def redact_proxy(url: str) -> str:
+    """A proxy URL with any credentials removed, safe to log."""
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except ValueError:
+        return "<unparseable>"
+    host = parts.hostname or "?"
+    port = f":{parts.port}" if parts.port else ""
+    creds = "<user:pass@>" if (parts.username or parts.password) else ""
+    return f"{parts.scheme}://{creds}{host}{port}"
 
 
 def refresh_session(client: httpx.Client) -> bool:
