@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-10 | July Receipt Gap Re-Diagnosed, Graph Policy, Cost Centers Step 1 | client-dev | [→](docs/2026-09-10%20-%20July%20Receipt%20Gap%20Re-Diagnosed%2C%20Graph%20Policy%2C%20Cost%20Centers%20Step%201/Checkpoint.md) |
 | 2026-09-09 | July Receipt Sweep + Anthropic Billing Switch | client-dev | [→](docs/2026-09-09%20-%20July%20Receipt%20Sweep%20%2B%20Anthropic%20Billing%20Switch/Checkpoint.md) |
 | 2026-09-09 | Brisken Ownership Handoff and Single-Application Target Architecture | client-dev | [→](docs/2026-09-09%20-%20Brisken%20Ownership%20Handoff%20and%20Single-Application%20Target%20Architecture/Checkpoint.md) |
 | 2026-09-08 | Brisken Card 3693 Correction | client-dev | [→](docs/2026-09-08%20-%20Brisken%20Card%203693%20Correction/Checkpoint.md) |
