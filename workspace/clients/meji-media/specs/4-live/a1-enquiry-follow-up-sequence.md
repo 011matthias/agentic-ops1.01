@@ -4,9 +4,9 @@ name: Enquiry Follow-Up Sequence
 type: automation
 stage: live
 needs_fixes: false
-version: 3.1.0
+version: 3.2.0
 created: 2026-02-24
-updated: 2026-03-24
+updated: 2026-09-10
 orchestrator: make
 trigger:
   type: webhook
@@ -34,12 +34,15 @@ make_production:
   gmail_connection: 13838220
   webhook_url: "https://hook.eu2.make.com/cva0g9j0ru2p9690nrxji8791grkhhya"
 last_changes:
+  - "2026-09-10: v3.2.0 - FAMILY EXCLUSION (client-approved 2026-09-09). Filter on module 50, enquiry_type = 0, so family enquiries (enquiry_type 1) stop after the webhook: no sheet row, no email, no hot-lead notification. Module 80 venue list gained event 151 (13 Dec Wolverhampton family event). Deployed via REST; verified by a synthetic family POST (1 op, status 1) and a live-vs-staged blueprint diff. NOTE: the live scenario has diverged from this spec since March (venue_key module 80 + MM Venue Config data store 154401 + platform ping module 90 are live but undocumented here); the blueprint is the truth."
   - "2026-03-24: Production health check - 42 executions, 473 ops, 0 errors. Live enquiry flow confirmed (id 14281 processed at 09:14 UTC)"
   - "2026-03-23: v3.1.0 - Hot lead fix: all leads now written with status=new, stopped=FALSE. Hot leads enter follow-up sequence with fastest cadence (6h/24h) instead of being excluded"
   - "2026-03-06: Fixed UTF-8 encoding in eu2 deployment (ASCII hyphens in scenario names)"
   - "2026-03-03: v3.0.0 - A/B testing (module 56, column Q, variant-suffixed template keys)"
   - "2026-02-25: Updated spec to match live implementation"
-next_steps: []
+next_steps:
+  - "Venue lookup rebuild (read the events table live instead of the hardcoded id list in module 80): approved by Jess 2026-09-01, DEFERRED by Gurmej 2026-09-09 to end of year. Re-raise before next season dates are entered."
+  - "Document modules 80/81/90 and the 21-column sheet mapping in this spec (live since April, never spec-ed)."
 stage_history:
   - stage: spec
     date: 2026-02-24
