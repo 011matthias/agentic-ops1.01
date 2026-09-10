@@ -79,6 +79,21 @@ def attempt_key_for(enrollment_id: int, step_no: int) -> str:
 # Pipeline stages, lowest to highest. Derived from the event log + judgment.
 STAGES = ("sourced", "sent", "replied", "qualifying", "booked", "held", "accepted")
 
+# Suppression classes that are CONTEXT rather than a refusal. Everything else
+# in suppression_entries hard-blocks a send, including an unknown or missing
+# note, so the deny-by-default floor is unchanged.
+#
+# 'crm' (1,396 rows: the address exists in Zoho) and 'customer-domain' (77
+# rows: the company is already a customer) describe nearly every warm Rome
+# contact Dirk personally met, so refusing on them meant an approved wave
+# could silently send to almost nobody. Measured 2026-09-10 against the
+# September review packet: they blocked 30 of its 62 recipients, including
+# all 23 of wave 2, while the board showed every one of them as contactable
+# (contacts.suppressed = 0). The ledger keeps the rows as context for review;
+# the send path stops treating "we know them" as "never write to them".
+# 'active-thread', 'opt-out' and 'bounce' keep refusing.
+ADVISORY_SUPPRESSION_NOTES = ("crm", "customer-domain")
+
 # Insertable contact columns (created_at / updated_at are managed by the store).
 CONTACT_COLUMNS = (
     "contact_id", "natural_key", "campaign",
@@ -1035,8 +1050,12 @@ class ContactStore:
         return cur.rowcount > 0
 
     def suppression_hit(self, addr: str) -> sqlite3.Row | None:
-        """The suppression_entries row blocking this recipient - the exact
-        email or its '@domain' row - or None. One indexed SELECT."""
+        """The suppression_entries row matching this recipient - the exact
+        email or its '@domain' row - or None. One indexed SELECT.
+
+        A hit is a FACT about the address, not a verdict: see
+        ``suppression_block`` for the subset that actually refuses a send.
+        """
         addr = (addr or "").strip().lower()
         if not addr or "@" not in addr:
             return None
@@ -1045,6 +1064,17 @@ class ContactStore:
             "SELECT * FROM suppression_entries WHERE entry IN (?, ?) LIMIT 1",
             (addr, domain),
         ).fetchone()
+
+    def suppression_block(self, addr: str) -> sqlite3.Row | None:
+        """The suppression row that must REFUSE a send to this address, or
+        None. Advisory classes are context, not a refusal; everything else
+        blocks, including an unknown or missing note, so the deny-by-default
+        floor is unchanged."""
+        row = self.suppression_hit(addr)
+        if row is None:
+            return None
+        note = (row["note"] or "").strip().lower()
+        return None if note in ADVISORY_SUPPRESSION_NOTES else row
 
     # -- truth scan (folder cache + run log) ------------------------------
 
