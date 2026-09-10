@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-10 | Fly Account Cleanup and Expense-Recon Recovery | system-infra | [→](docs/2026-09-10%20-%20Fly%20Account%20Cleanup%20and%20Expense-Recon%20Recovery/Checkpoint.md) |
 | 2026-09-10 | Brisken September Hours and Weekly Sheets | client-dev | [→](docs/2026-09-10%20-%20Brisken%20September%20Hours%20and%20Weekly%20Sheets/Checkpoint.md) |
 | 2026-09-09 | July Receipt Sweep + Anthropic Billing Switch | client-dev | [→](docs/2026-09-09%20-%20July%20Receipt%20Sweep%20%2B%20Anthropic%20Billing%20Switch/Checkpoint.md) |
 | 2026-09-09 | Brisken Ownership Handoff and Single-Application Target Architecture | client-dev | [→](docs/2026-09-09%20-%20Brisken%20Ownership%20Handoff%20and%20Single-Application%20Target%20Architecture/Checkpoint.md) |
