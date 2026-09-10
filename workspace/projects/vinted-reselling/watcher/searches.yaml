@@ -1,3 +1,25 @@
+# EGRESS_PROXY_URL (context/.env, NOT here: it carries credentials)
+#
+# Unset by default, and unset is the recommended state. Vinted refuses
+# datacenter IPs at the door (probed 2026-09-10 from Frankfurt: 403 on the
+# homepage, first request, before a session could be minted), so a cloud host
+# is not an option and a residential egress is the only way to run this
+# somewhere other than the owner's own machine.
+#
+# Three consequences that belong next to the switch, not in a checkpoint:
+#   1. It routes around an access control Vinted deliberately set. The watcher
+#      stops being a polite reader on a home line and becomes evasion.
+#   2. Residential pools are detected by BEHAVIOUR as well as address, so this
+#      is not a guaranteed fix, and a detection plausibly lands on the owner's
+#      SELLING account rather than on an anonymous reader. The risk moves from
+#      the tool to the business.
+#   3. Much of the residential-proxy supply is sourced from consumer devices
+#      whose owners were opted in through bundled SDKs. If this is used at all,
+#      use a provider with audited consent, not the cheapest per GB.
+#
+# The poll rate does not change because a proxy exists. Same cadence, same
+# read-only posture, no auto-buy, no auto-listing.
+
 # Vinted watcher config. Edit freely; the watcher reads this on every cycle.
 # tag: short stable id (used as the comp-grouping key in the database;
 #      renaming a tag orphans its history, so pick names you can keep).

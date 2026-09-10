@@ -2032,3 +2032,68 @@ def test_a_small_batch_after_a_gap_is_not_a_catch_up(vw, con, paths, monkeypatch
     recs = _batch(vw, 8800, 60 * 9, n=3)
     scored = _drive(vw, con, monkeypatch, recs, gap_hours=11)
     assert len(scored) == 3, "a small post-gap batch must still be scored normally"
+
+
+# ------------------------------- 2026-09-10: optional residential egress proxy
+#
+# Vinted refuses datacenter IPs at the door: probed from a Fly machine in
+# Frankfurt, GET https://www.vinted.de/ answered 403 on the first request,
+# before a session could be minted. A cloud move is therefore impossible as-is
+# and a residential egress is the only route to a 24/7 host. The switch is
+# off by default and its consequences are documented at the config, because it
+# converts a polite reader on a home line into evasion of a control Vinted set.
+#
+# What these tests protect is narrow and mechanical: the default stays absent,
+# a configured proxy actually reaches the HTTP client, and credentials in the
+# URL never reach the log file.
+
+def test_no_proxy_is_configured_by_default(vw, paths, monkeypatch):
+    monkeypatch.setattr(vw, "load_env", lambda: {})
+    assert vw.egress_proxy() is None
+    monkeypatch.setattr(vw, "load_env", lambda: {"EGRESS_PROXY_URL": ""})
+    assert vw.egress_proxy() is None, "an empty value must read as unset"
+
+
+def test_a_configured_proxy_reaches_the_client(vw, paths, monkeypatch):
+    monkeypatch.setattr(vw, "load_env", lambda: {"EGRESS_PROXY_URL": "http://p.example:8080"})
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            seen.update(kw)
+
+    monkeypatch.setattr(vw.httpx, "Client", FakeClient)
+    vw.new_client()
+    assert seen.get("proxy") == "http://p.example:8080"
+
+
+def test_the_client_is_built_without_a_proxy_when_unset(vw, paths, monkeypatch):
+    monkeypatch.setattr(vw, "load_env", lambda: {})
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            seen.update(kw)
+
+    monkeypatch.setattr(vw.httpx, "Client", FakeClient)
+    vw.new_client()
+    assert seen.get("proxy") is None
+
+
+def test_proxy_credentials_never_reach_the_log(vw, paths, monkeypatch, capsys):
+    """The URL carries a username and password; the log file is on disk."""
+    url = "http://sekretuser:sekretpass@resi.example:9000"
+    monkeypatch.setattr(vw, "load_env", lambda: {"EGRESS_PROXY_URL": url})
+    monkeypatch.setattr(vw.httpx, "Client", lambda **kw: object())
+    vw.new_client()
+    out = capsys.readouterr().out
+    assert "resi.example" in out and "9000" in out, "the host should be visible"
+    assert "sekretuser" not in out and "sekretpass" not in out
+    on_disk = (paths / vw.LOG_NAME).read_text(encoding="utf-8")
+    assert "sekretpass" not in on_disk, "the secret was written to the log file"
+
+
+def test_redaction_survives_odd_urls(vw):
+    assert vw.redact_proxy("http://h.example:1080") == "http://h.example:1080"
+    assert vw.redact_proxy("socks5://u:p@h.example") == "socks5://<user:pass@>h.example"
+    assert "?" in vw.redact_proxy("not a url at all")
