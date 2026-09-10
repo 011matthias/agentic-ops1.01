@@ -4,7 +4,7 @@ workstream: p2-onepilot-site
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-09-09
+updated: 2026-09-10
 general_ref: status/p2-lead-gen-general.md
 ---
 
@@ -14,19 +14,26 @@ The OnePilot marketing site prototype and its positioning assets. The OnePilot
 *vision* itself is shared context (in `status/p2-lead-gen-general.md`); this
 workstream is the concrete site build, blueprints, and review assets.
 
-The prototype is hosted for internal review (pre-Dirk) at
-brisken-onepilot-proto.fly.dev behind a name page (no access code, just share the
-URL); feedback writes to JSONL on the Fly volume
-(`project_brisken_onepilot_site_hosting` memory).
+The prototype WAS hosted for internal review (pre-Dirk) at
+brisken-onepilot-proto.fly.dev behind a name page; that host is destroyed as of
+2026-09-10 and the prototype currently has no live URL. The HTML deliverable in
+`deliverables/lead-generation/onepilot/` is the surviving artifact.
 
 **Stale warning (2026-09-09):** the element table below was last reviewed
 2026-07-22 and has not been re-verified against live state. Treat every row
 as unconfirmed until someone walks it.
 
-**Both Fly review sites are slated for retirement** in phase P1 of
-`../TARGET-ARCHITECTURE.md`: `brisken-onepilot` and
-`brisken-onepilot-proto` get destroyed, and `rome2026.brisken.com` 301s to
-brisken.com. **The data-loss precondition is now cleared (2026-09-09).** The
+**Both Fly review sites are RETIRED (destroyed 2026-09-10.)** `brisken-onepilot`
+and `brisken-onepilot-proto` no longer exist; both `.fly.dev` hostnames now
+resolve to nothing, and their volumes went with the apps. Any link still handed
+to Brisken pointing at either is dead. The remaining half of phase P1 in
+`../TARGET-ARCHITECTURE.md` is unchanged: `rome2026.brisken.com` still needs to
+301 to brisken.com.
+
+Before the destroy, the volumes were re-read and the rescue re-verified:
+`feedback.jsonl` was the only file on each (20,818 and 17,842 bytes, byte-equal
+to the rescued copies), and the digest is 245 lines with 29 + 22 = 51 raw JSONL
+entries. **The data-loss precondition was cleared 2026-09-09.** The
 volumes were read: no `inquiries.jsonl` exists on either, so no contact-form
 submission was ever stranded by the unset `BRISKEN_INQUIRY_RESEND_KEY`. What
 the volumes did hold was `feedback.jsonl`, 51 in-page review notes including
@@ -42,7 +49,7 @@ to destroy.
 |---|---|---|---|---|---|
 | TC deck-story alignment (2026-07-29) | live | ALL live client surfaces re-aligned to Dirk's 2026-07-27 TC deck (S1-55; canon `context/tc-story-canon.md`): TC = main product but a single use case of OnePilot, Digital Co-Worker = a feature of OnePilot. New APP/UC + LIVE/POC taxonomy, six governance controls + EU AI Act, remittance never-match-never-clear, Bank Fee POC; killed AI Digital Workforce / the Evonik-RWZ deck / ChatGPT claims. PR #492 merged; DEPLOYED + live-verified resources.brisken.com + brisken.com/treasury + onepilot.brisken.com. Em-dash ban held (owner call). | Rome hub aligned in-repo but NOT deployed: the live page still serves the 2026-07-13 pre-alignment copy. The deploy target was never missing (Vercel project `brisken-rome-hub`); its binding sat in a gitignored scratch dir, now tracked at `rome-hub/`. Retire-vs-deploy is an owner call, see `rome-hub/README.md`; S56+ deck WIP pass when Dirk sends; treasury alt="Siemens" -> "Siemens Energy"; MDH "central repository" owner call | Rome deploy target; Dirk S56+ | PR #492; `context/tc-story-canon.md`; memory `project_brisken_tc_story_alignment` |
 | Site prototype | in-progress | Spine + corrected band/SOC; internal review pre-Dirk | Incorporate review feedback | Dirk hierarchy decision | `deliverables/lead-generation/onepilot/brisken-onepilot-website-prototype.html` |
-| Hosting (name-gated Fly) | live | brisken-onepilot-proto.fly.dev serving | none | none | `onepilot-site/` (FastAPI) |
+| Hosting (name-gated Fly) | done | RETIRED 2026-09-10: `brisken-onepilot` and `brisken-onepilot-proto` destroyed, volumes gone with them, both hostnames dead. Review feedback rescued first (see above) | none, unless the prototype needs a host again | none | was `onepilot-site/` (FastAPI) |
 | Website blueprint | done | Build blueprint written | none | none | `deliverables/lead-generation/onepilot/brisken-onepilot-website-blueprint.md` |
 | Revision blueprint | done | §8 repositioning landed; hierarchy gate now answered (nested), so this is applicable | Apply to the prototype | none | `deliverables/lead-generation/onepilot/brisken-onepilot-revision-blueprint.md` |
 | TreasuryCentral restyle | in-progress | Restyle blueprint staged; hierarchy gate answered (nested) | Cut the prototype to the nested model | none | `deliverables/lead-generation/onepilot/brisken-treasurycentral-restyle-blueprint.md` |

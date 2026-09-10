@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-09-09
+updated: 2026-09-10
 ---
 
 # Brisken / Expense Reconciliation (p1)
@@ -29,6 +29,26 @@ The backend is hosted and running on real data at brisken-expense-recon.fly.dev
 (API-only since v31; gated by `EXPENSE_RECON_OPERATOR_CODE`). The UI is the
 Lovable SPA at brisken-reconcile-dash.lovable.app. Verify the deployed origin,
 not localhost, after backend edits (`flyctl deploy`).
+
+**Hosting changed 2026-09-10 after a ~50-minute outage.** The machine
+auto-stopped cleanly, then wedged in flyd (reported `stopped` when signalled,
+`active` when started), so every proxy auto-start was refused and both the UI
+and the port-25 MX 502'd until the owner reported it. Root cause underneath: the
+host holding the volume was out of capacity. Recovery was machine destroy,
+`volumes fork` onto a fresh host, redeploy of the identical image. Two standing
+consequences:
+
+- The live volume is now `recon_data_v2` (`vol_vgnplk8909y0q184`, zone 778b).
+  The old `recon_data` (`vol_4m3p65dn1nqkowzv`) is kept **unattached** as a
+  rollback copy; destroy it once the new one has run clean for a few days. Any
+  doc naming the old ID as live is stale.
+- Both services are **pinned always-on** (`auto_stop_machines: false`,
+  `min_machines_running: 1`, ~EUR 2/mo). Do not restore scale-to-zero: it put
+  the MX behind an auto-start that can fail.
+
+There is no `fly.toml` for this app in the repo; the config lives only on the
+platform. Recover it with `flyctl config show -a brisken-expense-recon`. Full
+detail: memory `project_brisken_expense_recon_fly_hosting`.
 
 **Every Lovable prompt is applied as of 2026-09-07** (the owner pasted and
 published the four pending prompts — R1 person/private, months
