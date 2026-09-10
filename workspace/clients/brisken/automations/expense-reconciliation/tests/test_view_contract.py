@@ -95,6 +95,11 @@ EXPENSE_BATCH_CONTRACT = {
     "coverage[]": "object",
     "coverage[].digits[]": "string",
     "coverage[].statements[]": "string",
+    # Item 47: the row picker's list. OBJECTS, not strings, unlike its two
+    # sibling option lists above: each entry carries the display-only `kind`
+    # that groups the roll-up, so the picker can show "Lidar (project)"
+    # without a second lookup. Empty while the owner has defined none.
+    "cost_center_options[]": "object",
     "duplicate_groups[]": "object",
     "duplicate_groups[].members[]": "string",
     "entity_options[]": "string",
@@ -185,6 +190,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "coverage[].digits[]",
     "coverage[].statements[]",
     "trip.travelers[]",
+    "cost_center_options[]",
 }
 
 RUN_MUST_COVER = {
@@ -553,9 +559,16 @@ def _trip_batch(client, monkeypatch_setattr) -> dict:
     company month no longer produces: a quarantined statement page
     (parse_issues[] + set_aside[]) and an unsupported upload
     (summary.upload_issues[] / upload_issue_details[])."""
+    # Item 47: define a cost center here so `cost_center_options[]` is
+    # observed FILLED. An empty list pins its path but not its element kind,
+    # which would make the "object" pin decorative -- the exact shape of
+    # unverified pin this file exists to prevent.
+    assert client.put("/api/settings", json={"cost_centers": {
+        "Lidar": {"kind": "project"}, "Marketing": {"kind": "function"},
+    }}).status_code == 200
     trip = client.post("/api/trips", json={
         "name": "Contract trip", "start": "2026-07-01", "end": "2026-07-10",
-        "travelers": ["Dirk Neumann", "Criss"],
+        "travelers": ["Dirk Neumann", "Criss"], "cost_center": "Lidar",
     })
     assert trip.status_code == 200, trip.text
     mock = MockLLMClient(extraction_responses=[
@@ -574,6 +587,7 @@ def _trip_batch(client, monkeypatch_setattr) -> dict:
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
     view = client.get(f"/api/expense-batches/{resp.json()['batch_id']}").json()
     assert view["trip"]["travelers"], view["trip"]
+    assert view["cost_center_options"], view["cost_center_options"]
     assert view["parse_issues"], view["summary"]
     assert view["summary"]["upload_issues"], view["summary"]
     return view

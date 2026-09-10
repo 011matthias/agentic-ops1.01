@@ -79,6 +79,10 @@ from ..output.zoho_expense_export import (
     write_zoho_expense_export,
 )
 from ..output.zoho_export import write_zoho_export
+from ..cost_centers import (
+    UNRESOLVED_SILENT as UNRESOLVED_COST_CENTER,
+)
+from ..cost_centers import CostCenterRegistry, CostCenterResolution
 from ..merchant_registry import MerchantRegistry, normalize_merchants_setting
 from .serialize import (
     categorization_from_dict,
@@ -3847,6 +3851,13 @@ EXPENSE_HEADER_FIELDS = frozenset({
     # POST .../expenses/{doc}/private sets both and enforces that a
     # confirmation names who gets reimbursed.
     "private", "reimburse_to",
+    # Item 47: the cost-center override, the top of that chain. It
+    # rides the existing field-override mechanism rather than a second
+    # path, so it lands in `edited_fields` like every other override
+    # and the export needs no new machinery. Blank clears it. Validated
+    # against the registry in the route, which is where settings are
+    # readable (`validate_expense_field` is pure by design).
+    "cost_center",
 })
 EXPENSE_CATEGORY_FIELDS = frozenset({"category", "zoho_account"})
 
@@ -4561,6 +4572,70 @@ def resolve_batch_row_cards(
     return out
 
 
+def resolve_batch_row_cost_centers(
+    receipts: list[Receipt],
+    field_overrides: dict[str, dict[str, str]],
+    *,
+    settings: dict | None,
+    trip: dict | None,
+    card_res: dict[str, dict],
+) -> dict[str, CostCenterResolution]:
+    """Per-document cost-center resolution for an expense batch (item 47):
+    ``{document_id: CostCenterResolution}``.
+
+    Runs the chain in `CostCenterRegistry.resolve` over four candidates, in
+    its precedence order:
+
+    1. the row's own ``cost_center`` field override -- a reviewer decision,
+       beats everything;
+    2. the batch's TRIP, whose cost center a human DECLARED at creation
+       (item 38), which is why it outranks anything inferred;
+    3. the merchant registry entry for this row's vendor;
+    4. the resolved card's ``default_cost_center``, the weakest link
+       because a card belongs to a project only loosely.
+
+    Person and category are deliberately absent: person cannot separate
+    "Nicolas in Brazil" from "Nicolas on Lidar" (both of Dirk's own
+    examples), and letting category co-vary destroys the point of cutting
+    the money a second way.
+
+    Both registries are read LIVE from settings rather than from the
+    batch's config snapshot, and that is the point: the whole first phase
+    of this feature is an EMPTY registry, and the day the owner defines the
+    first cost center the existing months must start resolving without a
+    refresh pass. The card's `default_cost_center` is the exception by
+    construction -- it rides the card snapshot like `person`, so it reaches
+    an existing batch through refresh-master-data.
+
+    An empty registry returns a silent unresolved for every row (resolves
+    nothing AND flags nothing), which is the contract this whole feature
+    rests on: a review state firing on 100% of rows is noise, not signal.
+    """
+    registry = CostCenterRegistry.from_settings(settings)
+    # The merchant sweep is the expensive link (a fuzzy match per row), and
+    # nothing it found could resolve against an empty registry, so it is
+    # skipped. The empty-registry CONTRACT is deliberately NOT re-stated
+    # here: it lives in `registry.resolve` alone, so a change that unwires
+    # it reddens these rows instead of being masked by a second copy.
+    merchants = MerchantRegistry.from_settings(settings) if registry else None
+    trip_cc = str((trip or {}).get("cost_center") or "").strip()
+    out: dict[str, CostCenterResolution] = {}
+    for r in receipts:
+        card = (card_res.get(r.document_id) or {}).get("card")
+        merchant_cc = None
+        if merchants:
+            match = merchants.resolve(r.vendor_clean, r.detected_vendor)
+            if match is not None:
+                merchant_cc = match.cost_center
+        out[r.document_id] = registry.resolve(
+            override=(field_overrides.get(r.document_id) or {}).get("cost_center"),
+            trip=trip_cc,
+            merchant=merchant_cc,
+            card=getattr(card, "default_cost_center", "") if card else "",
+        )
+    return out
+
+
 def build_card_review(resolution: dict[str, dict]) -> dict:
     """The batch's card-review strip, grouped server-side (the SPA renders,
     never judges): unresolved hints (with the rows they cover, generic
@@ -4699,6 +4774,7 @@ def _expense_review(
     person: str | None = None,
     private: bool = False,
     suggested_private: bool = False,
+    needs_cost_center: bool = False,
 ) -> dict:
     """Review-by-exception for one expense (receipt-spine). Missing core
     fields first (an expense cannot export cleanly without date / amount /
@@ -4713,6 +4789,13 @@ def _expense_review(
     registry work, not row work, so it must never hide a more actionable
     per-row exception. `None` keeps the pre-item-40 behavior (statement-
     workbench callers do not attribute persons).
+
+    `needs_cost_center` (backlog item 47) is checked LAST OF ALL, after
+    `person`, for the same reason and one stronger: the fix is registry
+    work in Settings, and the flag is silent entirely until the owner has
+    defined at least one cost center (the caller passes False while the
+    registry is empty). It must never hide a more actionable per-row
+    exception.
 
     `suggested_private` (backlog item 41) takes the entity check's slot:
     a payment method no registered card matches SUGGESTS private money,
@@ -4796,6 +4879,16 @@ def _expense_review(
             "No person owns this expense yet. Add a person to its paying "
             "card in Settings > Cards, so every expense is attributed.",
             "needs_person",
+        )
+    if review["state"] == "ready" and needs_cost_center:
+        # Item 47: registry work of the same class as needs_person, and
+        # ranked below it -- a row with no owner is the more actionable
+        # gap. Unreachable while the cost-center registry is empty.
+        return _review(
+            "check",
+            "No cost center on this expense yet. Pick the project or purpose "
+            "it belongs to, so project spend can be totalled.",
+            "needs_cost_center",
         )
     return review
 
@@ -4949,6 +5042,12 @@ def build_expense_view(
     # review states, the paid-through card step, and the card_review
     # strip — the same pass the export runs, so they cannot disagree.
     card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
+    # Item 47: the cost-center chain, over the same pass's cards. Silent
+    # for every row while the owner has defined no cost centers.
+    cost_res = resolve_batch_row_cost_centers(
+        receipts, field_overrides, settings=settings, trip=trip,
+        card_res=card_res,
+    )
     # The window this batch's dates are expected in, for the date guard
     # (backlog item 25). A company month derives it from the operator's
     # label first and the batch's own dates second, over the EDITED
@@ -5020,11 +5119,13 @@ def build_expense_view(
             "private": False, "reimburse_to": "", "suggested_private": False,
             "ambiguous": False, "card_map_blocked": False,
         }
+        cost = cost_res.get(r.document_id) or UNRESOLVED_COST_CENTER
         review = _expense_review(
             r, overrides, entity=res["entity"], period=period,
             person=res["person"],
             private=res["private"],
             suggested_private=res["suggested_private"],
+            needs_cost_center=cost.needs,
             # A hand-typed date, or a whole expense entered by hand, is the
             # reviewer's own value; the guard only questions the machine's.
             date_is_human=(
@@ -5111,6 +5212,11 @@ def build_expense_view(
             # Parallel fields; "" / "none" until the card carries a person.
             "person": res["person"],
             "person_source": res["person_source"],
+            # Item 47: which project or purpose this expense belongs to,
+            # with its provenance and a parallel human-readable label:
+            # an un-updated SPA degrades to correct text instead of
+            # somebody else's copy (contract rule 5).
+            **cost.as_fields(),
             # Item 41: the private-expense state. `reimburse_to_prefill` is
             # the ONE sanctioned use of the sender claim — offered only on
             # a suggested/confirmed private row, shown as the claim it is,
@@ -5264,6 +5370,12 @@ def build_expense_view(
         "n_needs_person": sum(
             1 for res in card_res.values() if not res.get("person")
         ),
+        # Item 47: rows with no cost center, once at least one is
+        # defined. Structurally 0 while the registry is empty, which is
+        # the whole first phase; the SPA hides the chip at 0.
+        "n_needs_cost_center": sum(
+            1 for c in cost_res.values() if c.needs
+        ),
         # Item 41: unconfirmed private-expense suggestions, and rows the
         # operator has confirmed private (reimbursement rows).
         "n_suggested_private": sum(
@@ -5369,6 +5481,13 @@ def build_expense_view(
         "category_options": list(EXPENSE_CATEGORIES),
         "account_options": _expense_account_options(run, settings),
         "entity_options": entity_options,
+        # Item 47: the row picker's list, active entries only, name-sorted,
+        # each with its display-only kind. Empty while the owner has defined
+        # none, which is the state the picker renders as "no cost centers
+        # defined yet" rather than as an error.
+        "cost_center_options": CostCenterRegistry.from_settings(
+            settings
+        ).options(),
         "parse_errors": parse_errors,
         "parse_issues": [
             {

@@ -3216,6 +3216,28 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # set both, so the flag alone is refused unless reimburse_to
             # is already stored — otherwise "owed to nobody" would read
             # as decided (adversarial review, 2026-09-06).
+            # Item 47: an override may only name a cost center the owner
+            # has DEFINED. This is the one place the name is checked,
+            # because it is the one place a human is picking from a list
+            # the tool showed her; the carriers (card / merchant / trip)
+            # stay unvalidated so edit order cannot matter. An inactive
+            # centre is accepted here on purpose: correcting history
+            # onto a retired project is a legitimate edit, and only
+            # DEFAULTS are barred from resurrecting one.
+            if field == "cost_center" and value:
+                registry = CostCenterRegistry.from_settings(
+                    store.get_settings()
+                )
+                canon = registry.canonical(value)
+                if canon is None:
+                    return JSONResponse(
+                        {"error": f"cost_center {value!r} is not a defined "
+                                  "cost center; define it in Settings first"},
+                        status_code=400,
+                    )
+                # Store the registry's own spelling, so a picked name and
+                # a typed one cannot read as two different centres.
+                value = canon
             if field == "private" and value == "1":
                 stored = store.get_expense_field_overrides(run_id).get(
                     document_id, {}
