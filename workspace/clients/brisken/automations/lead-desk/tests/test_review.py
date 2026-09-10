@@ -10,7 +10,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from lead_desk.web.app import create_app
-from lead_desk.web.review import build_review_view, seed_packet
+from lead_desk.maintenance import reconcile
+from lead_desk.web.review import (
+    build_review_view, packet_facts, seed_packet, unsendable_reason,
+)
 from lead_desk.web.store import ContactStore
 
 NOW = "2026-09-07T10:00:00Z"
@@ -201,3 +204,153 @@ def test_review_sits_behind_the_login_gate(tmp_path, monkeypatch):
     r = c.get("/review/sept-test", follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/login?next=%2Freview%2Fsept-test"
+
+
+# -- the roster cannot contain someone the engine would refuse ---------------
+#
+# Source: 2026-09-10. The live September packet asked Dirk to sign off on 62
+# people, of whom the send path would have refused 36 (wave 2: 23 listed, 0
+# sendable), and nothing on the page or in the seed path said so.
+
+def _packet_with(email, pid="sept-test"):
+    return {"packet_id": pid, "title": "T", "intro": "",
+            "items": [{"kind": "sequence", "title": "Wave 1",
+                       "body": {"audience": "a", "timing": "t",
+                                "recipients": [{"name": "Zed", "company": "Co",
+                                                "email": email}],
+                                "steps": [{"step_no": 1, "text": "hi"}]}}]}
+
+
+def test_seed_refuses_a_denied_domain_recipient(client):
+    with ContactStore(client.db) as store:
+        with pytest.raises(ValueError) as e:
+            seed_packet(store, _packet_with("someone@sap.com"), NOW)
+    assert "engine would refuse" in str(e.value)
+    assert "denied domain" in str(e.value)
+
+
+def test_seed_refuses_a_blocking_suppression_recipient(client):
+    with ContactStore(client.db) as store:
+        store.add_suppression_entry("gone@optout.com", "email", "rome-master",
+                                    NOW, note="opt-out")
+        with pytest.raises(ValueError) as e:
+            seed_packet(store, _packet_with("gone@optout.com"), NOW)
+    assert "opt-out" in str(e.value)
+
+
+def test_seed_allows_an_advisory_suppression_recipient(client):
+    """'crm' is context, not a refusal, so it must not block a roster."""
+    with ContactStore(client.db) as store:
+        store.add_suppression_entry("known@crm.com", "email", "zoho-crm", NOW,
+                                    note="crm")
+        rep = seed_packet(store, _packet_with("known@crm.com"), NOW)
+    assert rep["items"] == 1
+
+
+def test_allow_unsendable_is_an_explicit_override(client):
+    with ContactStore(client.db) as store:
+        rep = seed_packet(store, _packet_with("someone@sap.com"), NOW,
+                          allow_unsendable=True)
+    assert rep["items"] == 1
+
+
+def test_unsendable_reason_uses_the_send_paths_own_predicates(client):
+    with ContactStore(client.db) as store:
+        assert unsendable_reason(store, "x@sap.com").startswith("denied domain")
+        assert unsendable_reason(store, "") == "no usable address"
+        assert unsendable_reason(store, "fine@example.com") is None
+
+
+# -- headline figures are computed, never typed ------------------------------
+#
+# Source: 2026-09-10. Every figure in the packet's opening note was wrong and
+# the sentence's own arithmetic did not close (124 reached vs 34 + 71).
+
+def _event(store, cid, direction, typ, ts, subject=""):
+    store.add_event(contact_id=cid, ts=ts, channel="email",
+                    direction=direction, type=typ, subject=subject,
+                    detail=subject, source="test", created_by="test", now=NOW)
+
+
+def _contact(store, cid, email):
+    store.upsert_contact({"contact_id": cid, "natural_key": cid,
+                          "campaign": "rome-2026", "first_name": "F",
+                          "last_name": cid, "company": "Co", "email": email},
+                         NOW)
+
+
+def test_facts_arithmetic_closes_and_excludes_auto_replies(client):
+    with ContactStore(client.db) as store:
+        for i, em in enumerate(["a@x.com", "b@x.com", "c@x.com", "d@x.com"], 1):
+            _contact(store, f"c{i}", em)
+            _event(store, f"c{i}", "outbound", "sent", "2026-06-02T09:00:00Z")
+        # c1 answers for real; c2 only bounces an out-of-office back; c3 books
+        _event(store, "c1", "inbound", "reply", "2026-06-03T09:00:00Z", "Re: hi")
+        _event(store, "c2", "inbound", "reply", "2026-06-03T09:00:00Z",
+               "Automatic reply: hi")
+        _event(store, "c3", "booked", "booked", "2026-06-04T09:00:00Z", "Call")
+        f = packet_facts(store, "sept-test")
+
+    assert f["reached"] == 4
+    assert f["in_conversation"] == 2, "an out-of-office is not a conversation"
+    assert f["booked"] == 1
+    assert f["no_response"] == 2
+    assert f["in_conversation"] + f["no_response"] == f["reached"]
+
+
+def test_note_placeholders_render_as_live_numbers(client):
+    packet = {
+        "packet_id": "sept-test", "title": "T", "intro": "",
+        "items": [{"kind": "note", "title": "Where things stand",
+                   "body": {"text": "We wrote to {reached}; {no_response} "
+                                    "have not responded. Unknown {nope} "
+                                    "stays."}}]}
+    with ContactStore(client.db) as store:
+        seed_packet(store, packet, NOW)
+        _contact(store, "c1", "a@x.com")
+        _event(store, "c1", "outbound", "sent", "2026-06-02T09:00:00Z")
+    text = client.get("/review/sept-test").text
+    assert "We wrote to 1; 1 have not responded." in text
+    assert "{nope}" in text, "an unknown placeholder must be left alone"
+    assert "{reached}" not in text
+
+
+# -- the two stores are reconciled, and disagreement is named ----------------
+
+def test_an_overridden_roster_says_so_on_the_page(client):
+    """allow_unsendable is an override, not a way to hide the problem: the
+    page recomputes sendability at render, so a name that cannot be reached
+    is named to whoever is being asked to approve the wave."""
+    with ContactStore(client.db) as store:
+        seed_packet(store, _packet_with("someone@sap.com"), NOW,
+                    allow_unsendable=True)
+    body = client.get("/review/sept-test").text
+    assert "cannot be sent to" in body
+    assert "denied domain" in body
+    assert "Zed" in body
+
+
+def test_a_clean_roster_shows_no_warning(client):
+    with ContactStore(client.db) as store:
+        seed_packet(store, _packet_with("fine@example.com"), NOW)
+    assert "cannot be sent to" not in client.get("/review/sept-test").text
+
+
+def test_reconcile_names_the_board_vs_engine_gap(client):
+    with ContactStore(client.db) as store:
+        _contact(store, "c1", "quiet@optout.com")
+        store.add_suppression_entry("quiet@optout.com", "email", "rome-master",
+                                    NOW, note="opt-out")
+        rep = reconcile(store)
+    assert rep["divergent"] is True
+    assert rep["board_says_contactable_engine_refuses"] == 1
+    assert rep["detail_engine_refuses"][0]["email"] == "quiet@optout.com"
+    assert "opt-out" in rep["detail_engine_refuses"][0]["engine"]
+
+
+def test_reconcile_is_quiet_when_the_stores_agree(client):
+    with ContactStore(client.db) as store:
+        _contact(store, "c1", "fine@example.com")
+        rep = reconcile(store)
+    assert rep["divergent"] is False
+    assert rep["board_says_contactable_engine_refuses"] == 0
