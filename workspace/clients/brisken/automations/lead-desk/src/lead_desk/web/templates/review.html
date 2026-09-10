@@ -39,6 +39,19 @@
   {% endif %}
 </div>
 
+{% if v.unsendable %}
+<div class="card" style="border-color: var(--red)">
+  <h2>{{ v.unsendable | length }} name{{ '' if v.unsendable | length == 1 else 's' }} on these lists cannot be sent to</h2>
+  <p class="muted">Approving a wave does not reach these people. They are listed here rather than dropped quietly, so the lists below and what actually goes out stay the same thing.</p>
+  <div class="scroll-x"><table>
+    <tr><th>Name</th><th>Wave</th><th>Why</th></tr>
+    {% for u in v.unsendable %}
+    <tr><td>{{ u.name }}</td><td>{{ u.wave }}</td><td>{{ u.reason }}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
 {% for item in v['items'] %}
 <div class="card" id="item-{{ item.item_id }}">
   <h2>{{ loop.index }}. {{ item.title }}

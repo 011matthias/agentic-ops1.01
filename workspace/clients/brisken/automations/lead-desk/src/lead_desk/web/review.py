@@ -28,12 +28,123 @@ from __future__ import annotations
 
 import json
 
+from .cadence import deny_domains
 from .store import ContactStore
 
 PACKET_STATE_PREFIX = "review:"
 
 _KINDS = ("decision", "sequence", "note")
 _SEQ_STATUSES = ("approved", "edited", "changes")
+
+
+# Auto-reply shapes. An out-of-office is not a human answering, so it must
+# never count as a conversation or take someone off a follow-up list.
+_AUTO_SQL = (
+    "(lower(coalesce(subject,'')) LIKE 'automatic reply%' OR "
+    " lower(coalesce(subject,'')) LIKE 'automatische antwort%' OR "
+    " lower(coalesce(subject,'')) LIKE 'out of office%' OR "
+    " lower(coalesce(subject,'')) LIKE 'accepted:%' OR "
+    " lower(coalesce(subject,'')) LIKE 'declined:%')"
+)
+
+FACT_KEYS = ("reached", "in_conversation", "booked", "no_response",
+             "wave_people", "wave_mails")
+
+
+def packet_facts(store: ContactStore, packet_id: str,
+                 since: str | None = None) -> dict:
+    """The packet's headline figures, recomputed from the event log.
+
+    Definitions, so any number on the page can be re-derived:
+
+    - ``reached``          distinct contacts with an outbound event
+    - ``booked``           distinct contacts with a 'booked' event
+    - ``in_conversation``  contacts who replied for real (an inbound 'reply'
+                           that is not an auto-reply) OR have a booking
+    - ``no_response``      reached minus in_conversation, as a set difference
+                           so ``in_conversation + no_response == reached``
+                           holds by construction rather than by hope
+    - ``wave_people`` /    the distinct recipients across this packet's
+      ``wave_mails``       sequence items, and recipients x steps
+
+    These exist because the numbers used to be prose typed into the seed
+    file: on 2026-09-10 every one of them was wrong and the sentence's own
+    arithmetic did not close (it claimed 124 reached, 34 in conversation and
+    71 non-responders). A figure that is computed at render cannot go stale
+    and cannot be invented.
+    """
+    where = " AND ts >= ?" if since else ""
+    args = (since,) if since else ()
+
+    def ids(sql, extra=()):
+        return {r[0] for r in store.conn.execute(sql, (*extra, *args))}
+
+    reached = ids("SELECT DISTINCT contact_id FROM outreach_events "
+                  "WHERE direction='outbound'" + where)
+    replied = ids("SELECT DISTINCT contact_id FROM outreach_events "
+                  "WHERE direction='inbound' AND type='reply' "
+                  "AND NOT " + _AUTO_SQL + where)
+    booked = ids("SELECT DISTINCT contact_id FROM outreach_events "
+                 "WHERE type='booked'" + where)
+    convo = replied | booked
+
+    people, mails = set(), 0
+    for row in store.list_review_items(packet_id):
+        if row["kind"] != "sequence":
+            continue
+        body = json.loads(row["body"])
+        rec = body.get("recipients") or []
+        people |= {(r.get("email") or "").strip().lower() for r in rec if r.get("email")}
+        mails += len(rec) * len(body.get("steps") or [])
+    return {
+        "reached": len(reached),
+        "in_conversation": len(convo),
+        "booked": len(booked),
+        "no_response": len(reached - convo),
+        "wave_people": len(people),
+        "wave_mails": mails,
+    }
+
+
+def fill_facts(text: str, facts: dict) -> str:
+    """Substitute the known {fact} placeholders; anything else is left
+    alone, so an unrecognised brace can never be silently blanked."""
+    for k in FACT_KEYS:
+        text = text.replace("{" + k + "}", str(facts.get(k, "{" + k + "}")))
+    return text
+
+
+def unsendable_reason(store: ContactStore, email: str) -> str | None:
+    """Why the ENGINE would refuse this recipient, or None.
+
+    Deliberately the send path's own predicates rather than a lookalike, so
+    a roster can never be built against a laxer rule than the one that
+    actually fires at claim time.
+    """
+    addr = (email or "").strip().lower()
+    if not addr or "@" not in addr:
+        return "no usable address"
+    if addr.rsplit("@", 1)[1] in deny_domains(store):
+        return f"denied domain ({addr.rsplit('@', 1)[1]})"
+    row = store.suppression_block(addr)
+    if row is not None:
+        return f"suppression ledger ({row['note'] or row['kind']})"
+    return None
+
+
+def unsendable_recipients(store: ContactStore, packet: dict) -> list[dict]:
+    """Every recipient in a packet definition the engine would refuse."""
+    out = []
+    for pos, item in enumerate(packet.get("items") or [], start=1):
+        if item.get("kind") != "sequence":
+            continue
+        for r in (item.get("body") or {}).get("recipients") or []:
+            why = unsendable_reason(store, r.get("email") or "")
+            if why:
+                out.append({"item": pos, "title": item.get("title"),
+                            "name": r.get("name"), "email": r.get("email"),
+                            "reason": why})
+    return out
 
 
 def packet_meta(store: ContactStore, packet_id: str) -> dict | None:
@@ -47,12 +158,21 @@ def packet_meta(store: ContactStore, packet_id: str) -> dict | None:
 
 
 def seed_packet(store: ContactStore, packet: dict, now: str,
-                replace: bool = False) -> dict:
+                replace: bool = False,
+                allow_unsendable: bool = False) -> dict:
     """Load a packet definition (title, intro, items[]) into the DB.
 
     Refuses to overwrite an existing packet unless ``replace`` is set; a
     replace drops the prior items AND their responses (a reseed is a new
     review round).
+
+    Also refuses, unless ``allow_unsendable``, to seed a wave containing a
+    recipient the send path would reject. The reviewer approves a list on the
+    understanding that approving it makes it go; a name the engine will
+    silently drop at claim time makes the page a lie. On 2026-09-10 the live
+    September packet asked for sign-off on 62 people of whom 36 were
+    unsendable, wave 2 being 23 listed and 0 sendable, and nothing anywhere
+    said so.
     """
     packet_id = str(packet.get("packet_id") or "").strip()
     if not packet_id:
@@ -66,6 +186,15 @@ def seed_packet(store: ContactStore, packet: dict, now: str,
     items = packet.get("items") or []
     if not items:
         raise ValueError("packet has no items")
+    if not allow_unsendable:
+        bad = unsendable_recipients(store, packet)
+        if bad:
+            lines = "; ".join(f"{b['name'] or b['email']} [{b['reason']}]"
+                              for b in bad[:8])
+            more = f" and {len(bad) - 8} more" if len(bad) > 8 else ""
+            raise ValueError(
+                f"{len(bad)} recipient(s) the engine would refuse: "
+                f"{lines}{more}. Remove them or pass allow_unsendable.")
     for pos, item in enumerate(items, start=1):
         kind = item.get("kind")
         if kind not in _KINDS:
@@ -100,12 +229,19 @@ def build_review_view(store: ContactStore, packet_id: str) -> dict | None:
     rows = store.list_review_items(packet_id)
     if not rows:
         return None
+    facts = packet_facts(store, packet_id, (meta or {}).get("facts_since"))
+    # Recomputed at render, not trusted from seed time: a suppression entry
+    # or deny rule added after seeding must show up on the page rather than
+    # wait to be discovered at claim time.
+    unsendable = []
     items = []
     open_decisions = 0
     open_sequences = 0
     for r in rows:
         body = json.loads(r["body"])
         response = json.loads(r["response"]) if r["response"] else None
+        if r["kind"] == "note" and isinstance(body.get("text"), str):
+            body["text"] = fill_facts(body["text"], facts)
         item = {
             "item_id": r["item_id"], "kind": r["kind"], "title": r["title"],
             "body": body, "response": response,
@@ -121,6 +257,12 @@ def build_review_view(store: ContactStore, packet_id: str) -> dict | None:
         if r["kind"] == "sequence":
             if not response or response.get("status") == "changes":
                 open_sequences += 1
+            for rec in body.get("recipients") or []:
+                why = unsendable_reason(store, rec.get("email") or "")
+                if why:
+                    unsendable.append({"name": rec.get("name"),
+                                       "email": rec.get("email"),
+                                       "reason": why, "wave": r["title"]})
             # The editor prefills with the reviewer's latest text when there
             # is one, else the suggestion.
             latest = {s.get("step_no"): s for s in
@@ -132,6 +274,8 @@ def build_review_view(store: ContactStore, packet_id: str) -> dict | None:
         items.append(item)
     return {
         "packet_id": packet_id,
+        "facts": facts,
+        "unsendable": unsendable,
         "title": (meta or {}).get("title", packet_id),
         "intro": (meta or {}).get("intro", ""),
         "items": items,
