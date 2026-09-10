@@ -60,11 +60,12 @@ plus EUR 900. Three blockers, none of them a search problem:
    never filed.** Books holds the charges from the card feed with no attachment
    on 108 of 111 rows, and Expense is live only in Cloud Services, where the 8
    we already pulled came from. The remainder exists only as mail in inboxes and
-   photos on phones. UNCONFIRMED on one point: whether Corporate Services holds
-   Expense data under a different admin. Cheap check, owner has Dirk's access:
-   sign in at expense.zoho.com, switch org, see whether it offers a setup wizard
-   (never used) or a populated list (then it IS membership, fix in
-   Settings > Users & Roles). Re-run `.scratch/recon-july/ze_orgs_probe.py` after.
+   photos on phones. **CONFIRMED 2026-09-10** by the owner signing in as Dirk:
+   Expense serves a "Join your existing organizations" screen listing exactly
+   those six with a Join button, over the line "You belong to the following
+   organizations in other Zoho finance products." Not joined, never used.
+   Joining provisions an EMPTY org and recovers nothing, so it is not the move.
+
 2. **The mail intake is the working route, and Dirk is already using it.**
    Correcting the 2026-09-09 attribution twice over: the "sent to Criss /
    unreachable" group is neither reachable-via-Zoho nor stuck. `GET
@@ -82,6 +83,27 @@ plus EUR 900. Three blockers, none of them a search problem:
    June (0 July rows). So the tool cannot answer "which July receipts are
    missing" for itself; the 111-row chase list comes from Zoho Books via a
    scratch script. Owner deferred this ask 2026-09-10.
+
+**Where the missing 89 can actually be recovered from.** Split by route rather
+than by blocker:
+
+| Route | Charges | Value |
+|---|---|---|
+| Re-downloadable from a vendor billing portal | 44 | USD 3,398 + EUR 900 |
+| Only ever a paper slip or phone photo | 45 | USD 932 |
+
+About 79% of the missing money is not lost; a SaaS invoice history does not
+expire. Work list by size: Anthropic 12 charges / 1,158.15, LinkedIn 2 / 689.80,
+Crossmedia 1 / EUR 900, Lovable 5 / 255.00, SaaSRise 197.00, Network Solutions
+3 / 170.11, OpenAI 2 / 155.04, JPM Chase annual fee 150.00 (statement-only, no
+receipt exists), Pressmaster 135.00, AT&T 129.36, Supabase 92.70, Perplexity
+4 / 63.84, then a tail under 60. The 45 slips are Brazilian supermarkets, German
+restaurants and hotels averaging USD 21; a few (Twilio, Fireflies, Rize, GoDaddy,
+Proton) are portal-recoverable and landed in that bucket only because the
+keyword list missed them. Ingest once files exist: drop onto the Receipts page
+or `POST /api/receipts`, which routes each file by its own printed date; cap 500
+per ingest since item 45. Script: `.scratch/recon-july/routes.py` regenerates
+the split.
 
 Intake is clean (78 ingested, 19 dismissed, nothing pooled or held). A draft
 asking Dirk to re-enable his Expense login was written and then DELETED the
