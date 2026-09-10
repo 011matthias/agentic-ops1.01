@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-08
+updated: 2026-09-10
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -1405,6 +1405,8 @@ Open-month release (travel rows excluded).
 which projects/purposes — examples given: Nicolas's Brazil expenses, the
 Lidar project Nicolas works on, Matthias's work on this tool, marketing.
 
+**BUILD ORDERED 2026-09-10** (owner: add cost centers, with the configuration and setup discussed, into the UI and the backend). Nothing exists yet: `grep -rn cost_center src/` returns zero hits, so this is backend AND Lovable, in that order. The design below stands unchanged and is the spec; build to it rather than re-deciding it. Sequence: (1) `settings["cost_centers"]` whole-map replace + the empty-registry contract (resolve nothing, flag nothing) with its mutation test FIRST, (2) the resolution chain override > trip > learned merchant > card `default_cost_center` > unresolved, with person and category deliberately not resolvers, (3) the parallel API fields plus `cost_center_source_label`, (4) the month report grouped by cost center (reuses the `sections` partition item 38 built), (5) `GET /api/cost-centers/totals` for the cross-month roll-up, (6) the Settings editor and the row picker in Lovable. The stated limit rides both surfaces: this tool sees card and receipt spend only, never contractor invoices or salaries, so a cost-center figure is not a total project cost.
+
 **DESIGN ANSWERED 2026-09-08** in an owner decision round (four questions
 put with recommendations; three taken, D1 answered against the
 recommendation). Nothing was built — the build is a separate order.
@@ -1736,6 +1738,116 @@ report.
 
 None of this is scheduled. The float-total and the lock-bypass are the two
 worth doing regardless of what happens with item 48.
+
+### 50. The attach dialog dies with "Failed to fetch", and the app is allowed to stop (LIVE DEFECT, Criss 2026-09-10)
+
+**What Criss saw.** She mailed Matthias a screenshot at 10:00:43Z, subject
+"Error", no text. The image is the **Attach bank statement** dialog with
+`August2026.xlsx` chosen, card `card-2838 · 2838`, and a red **"Failed to
+fetch"** where a validation message would normally render.
+
+**What it is not.** Ruled out by probe the same day:
+
+- The endpoint is healthy: two statements attached to a throwaway month in
+  0.1s each, one per card.
+- CORS is clean on every path the dialog can provoke (200, 401, 404, and the
+  column-map 400), tested from the SPA's own origin. This mattered: a
+  response missing `Access-Control-Allow-Origin` surfaces as exactly this
+  message.
+- Not the failed deploys. v111/v112 failed at 10:42Z, **42 minutes after** her
+  error; v113 succeeded 10:44Z.
+
+**What it probably is, and the bigger bug beside it.** "Failed to fetch" is a
+browser-level rejection, so the request never got a response. The serving
+machine was replaced at 10:44 by v113 and its logs went with it, so the cause
+cannot be proven from here. But `fly.toml` says:
+
+```
+auto_stop_machines = true
+min_machines_running = 0     # one shared-cpu-1x 512MB machine, no redundancy
+```
+
+A stopped machine cold-starting under a multipart upload is where the
+connection drops. **And this app is the MX target for expenses.brisken.com.**
+A mail host allowed to stop is a mail host that can delay or refuse inbound
+receipts, which is worse than the upload it was noticed through, and would be
+invisible: a refused delivery leaves no row in our own inbound log.
+
+**Fix:** `min_machines_running = 1`, and more headroom than 512MB (the sync
+statement parse and the vision path share it). Both are production config on
+the client's app, so they need an owner order and a deploy. Add a probe that
+records whether the machine was stopped when a request failed, or the next
+occurrence is just as unprovable.
+
+### 51. A statement that parses to zero rows reports success (found by drill, 2026-09-10)
+
+While reproducing item 50 the attach returned `200 {"ok": true}` and the run
+recorded `statements[{... "n_rows": 0, "n_new": 0}]`. The file was a valid
+xlsx whose columns the parser could not read as charges, and nothing said so:
+no error, no advisory, no count in the response the SPA reads.
+
+The column-map 400 catches a MISSING required column. It does not catch a
+file that maps cleanly and yields nothing, which is what a wrong sheet, a
+header row in the wrong place, or a date format the parser rejects all look
+like. Criss would see a green attach and an unchanged month.
+
+**Fix:** refuse, or at minimum carry a loud advisory, when an attach adds zero
+charges. `n_rows == 0` on a freshly uploaded statement is never a legitimate
+outcome. Pin it with a test that mutates the guard and goes red.
+
+### 52. "Recibo nao estar abrindo" (Criss, 2026-09-08, August month)
+
+Reviewer note left on `074a7b8905d7`: the receipt will not open.
+
+Not the API: `GET /api/runs/{id}/receipts/{doc}/image` returns 200 for the
+rows tested. (A first probe 404'd on `.../receipts/{doc}` without `/image`
+and that was the probe's own wrong URL, not a defect. Named here because it
+is the third instrument-validity slip in one session.)
+
+**Lead worth checking first:** `0000__rendered-body.pdf` reports
+`receipt_image_available: true` and `has_receipt_image: false` at the same
+time, while the file itself serves 200. If the SPA gates its viewer on the
+second flag, that row refuses to open exactly as she describes. Needs a
+browser drive on the published SPA to confirm, then either the flag or the
+viewer's condition is wrong.
+
+### 53. Multiple statements per month works in the backend and may not in the UI (2026-09-10)
+
+Owner raised it as missing. It is not: `POST /api/expense-batches/{id}/
+statement` has appended by identity since PR 2b-2b-2 (#636, merged
+2026-08-25, live on v113), and a drill attached two statements for two cards
+to one month, both recorded in `statements[]`.
+
+What was never applied is the SPA half. `docs/lovable-coverage-prompt.md` is
+still in the not-applied column, so a month with two workbooks still offers
+one download button, and Criss's dialog is titled "Attach bank statement",
+singular, with no visible way to add a second. The capability exists and is
+unreachable, which is worse than absent because nobody goes looking for it.
+
+**Fix:** apply the coverage prompt, and add a second-statement affordance to
+the month page. Verify by bundle audit on the field names (`statements`,
+`coverage`) plus a browser drive, not by reading the prompt.
+
+### 54. OCR date misreads silently prevent a match (2026-09-10, July sweep)
+
+Two receipts sit in the July month unmatched purely because their extracted
+date is wrong:
+
+- **Crossmedia EUR 900.** File `2026-07-16__..._Crossmedia_360172592.pdf`,
+  charge `2026-07-16 900.00 EUR Crossmedia Invoice# 360172592` — the same
+  invoice number. Date read as **2026-03-30**. This one is certain.
+- **Anthropic USD 100**, receipt `2197-2579-4644`, date read as
+  **2026-06-21** against a file dated 07-03; intended for the 07-10 charge.
+
+Correcting the Crossmedia date alone closes the entire EUR gap on July.
+
+The general defect behind the two instances: a date the extractor read wrongly
+produces a receipt that will never pair, and nothing surfaces the near-miss.
+An amount that matches exactly while the date sits months away is a strong
+signal, and the workbench says nothing about it.
+
+**Fix:** surface amount-matches-date-doesn't as a review candidate rather
+than leaving the row unmatched and silent.
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
