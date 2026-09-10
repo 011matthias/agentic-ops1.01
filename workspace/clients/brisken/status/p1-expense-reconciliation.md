@@ -47,17 +47,35 @@ holds 32 receipts and NO statement; against the 111 July rows in Zoho Books
 EUR/USD rate with vendor agreement) and 90 with no receipt, worth USD 4,356
 plus EUR 900. Three blockers, none of them a search problem:
 
-1. **Zoho Expense, 6 of 8 orgs refuse us** (`400/6018` on every endpoint;
-   Cloud Services + GmbH answered OK in the same run, so the probe is proven).
-   The token resolves to **dirk.neumann@brisken.com, admin, active**, so it is
-   Dirk's own login that is disabled, not a service user. Corporate Services
-   carries 107 of the 111 July rows; Tech LTDA is the Brazilian spend.
-2. **The subscription group probably belongs to blocker 1, not to Criss's
-   mailbox.** Correcting the 2026-09-09 attribution: all 323 Zoho Expense 2026
-   rows in the readable orgs carry an attached receipt, and the vendors there
-   include OpenAI 21, Microsoft 6, Perplexity 4, GitHub, Eleven Labs, Wix. The
-   receipt EMAIL lands with Criss; the FILED receipt goes to Expense. Widening
-   the Graph allowlist is now a fallback, not the plan.
+1. **Zoho Expense was never SET UP in 6 of the 8 orgs; there is no disabled
+   user to re-enable.** The `400/6018` "your account is disabled" reads like a
+   membership problem and is not one. Dumping the full `/organizations` records
+   splits them cleanly: the two readable orgs carry `user_status: 1 / Active`,
+   `is_quick_setup_completed: true`, plans **Zoho One** (Cloud Services) and
+   **FREE** (GmbH); all six locked orgs carry plan **TRIAL**,
+   `is_quick_setup_completed: false`, and **no `user_status` field at all**.
+   GmbH being FREE and working proves this is not about paying. They are Zoho
+   *Books* orgs that Expense merely lists.
+   **Consequence for July: the receipts are probably not locked away, they were
+   never filed.** Books holds the charges from the card feed with no attachment
+   on 108 of 111 rows, and Expense is live only in Cloud Services, where the 8
+   we already pulled came from. The remainder exists only as mail in inboxes and
+   photos on phones. UNCONFIRMED on one point: whether Corporate Services holds
+   Expense data under a different admin. Cheap check, owner has Dirk's access:
+   sign in at expense.zoho.com, switch org, see whether it offers a setup wizard
+   (never used) or a populated list (then it IS membership, fix in
+   Settings > Users & Roles). Re-run `.scratch/recon-july/ze_orgs_probe.py` after.
+2. **The mail intake is the working route, and Dirk is already using it.**
+   Correcting the 2026-09-09 attribution twice over: the "sent to Criss /
+   unreachable" group is neither reachable-via-Zoho nor stuck. `GET
+   /api/inbound/log?detail=1` shows 16 forwards from dirk.neumann@brisken.com
+   between 2026-09-07 and **2026-09-10T06:43**, each self-filed by the month
+   printed on the receipt (2026-05/06/07/08/09) — Lovable, AT&T, Base44/Wix,
+   Pressmaster, Anthropic, Eleven Labs, OpenAI, i.e. exactly the vendors called
+   unreachable. One Lovable July receipt is in the July batch already. Two
+   forwards created zero documents, correctly: the AT&T "bill is ready to view"
+   and the "August transaction summary" are notices, not receipts, so those
+   charges stay uncovered.
 3. **No July card statement exists within reach.** SharePoint's Chase archive
    stops at `20260704` (June cycle) and card **2838 has zero statement files in
    SharePoint in any year**; the local `Chase2838_full_activity.csv` ends in
@@ -65,9 +83,14 @@ plus EUR 900. Three blockers, none of them a search problem:
    missing" for itself; the 111-row chase list comes from Zoho Books via a
    scratch script. Owner deferred this ask 2026-09-10.
 
-Intake is clean (78 ingested, 19 dismissed, nothing pooled or held). Draft to
-Dirk for the Expense unlock is staged UNSENT at
-`context/drafts/zoho-expense-access-july-to-dirk.md` (comms critic OK).
+Intake is clean (78 ingested, 19 dismissed, nothing pooled or held). A draft
+asking Dirk to re-enable his Expense login was written and then DELETED the
+same session: its central ask was believed false once the org records were
+read. Owner has Dirk's access and is doing the web-UI check directly.
+Method note worth keeping: two wrong diagnoses in one session, both from
+reading an error string instead of the record behind it. `6018 "account is
+disabled"` is not evidence a user was disabled, and "no receipt mail in the
+two mailboxes we read" is not evidence the receipt is unreachable.
 
 ## Elements (index)
 
