@@ -370,6 +370,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-10 | Meji Family Exclusion Deployed | client-dev | [Mini-Checkpoint-2](docs/2026-09-10%20-%20Meji%20Family%20Exclusion%20Deployed/Mini-Checkpoint-2.md) |
 | 2026-09-08 | Meji Instantly Estate And September Review Gate | client-dev | [→](docs/2026-09-08%20-%20Meji%20Instantly%20Estate%20And%20September%20Review%20Gate/Checkpoint.md) |
 | 2026-09-06 | Meji September Launch Line-Up + Jess Workload Proposal | client-dev | [→](docs/2026-09-06%20-%20Meji%20September%20Launch%20Line-Up%20%2B%20Jess%20Workload%20Proposal/Checkpoint.md) |
 | 2026-08-27 | Meji September Readiness + Make Credit Cliff | client-dev | [→](docs/2026-08-27%20-%20Meji%20September%20Readiness%20%2B%20Make%20Credit%20Cliff/Checkpoint.md) |
