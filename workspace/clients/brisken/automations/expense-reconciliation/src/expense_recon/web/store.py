@@ -144,6 +144,11 @@ SETTINGS_DEFAULTS: dict = {
     "entities": {},
     "merchants": {},
     "cards": {},
+    # Cost centers (item 47): owner-authored only. The empty default is
+    # load-bearing, not incidental — an empty registry resolves nothing AND
+    # flags nothing, so a tenant that has never defined one sees no
+    # cost-center review state at all. See cost_centers.py.
+    "cost_centers": {},
 }
 
 # Settings keys holding a {str: str} map. Values are kept as STRINGS: a

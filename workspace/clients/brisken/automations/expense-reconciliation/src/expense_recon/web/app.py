@@ -141,6 +141,10 @@ from .service import (
     validate_trip_fields,
 )
 from ..matching.types import EXPENSE_CATEGORIES
+from ..cost_centers import (
+    CostCenterRegistry,
+    normalize_cost_centers_setting,
+)
 from ..merchant_registry import normalize_merchants_setting
 from .store import (
     INTAKE_PROCESSING,
@@ -1773,6 +1777,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     and str(entry.get("zoho_account") or "").strip()
                     and not str(entry.get("category") or "").strip()
                 ),
+                # The picker's list: ACTIVE cost centers, name-sorted, each
+                # with its display-only kind. Derived and read-only; PUT
+                # ignores it, edits go to the `cost_centers` key. Empty
+                # until the owner defines one, and that is the whole
+                # contract (cost_centers.py).
+                "cost_center_options": CostCenterRegistry.from_settings(
+                    settings
+                ).options(),
             })
 
     @app.get("/api/cards")
@@ -1897,6 +1909,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if "cards" in body:
             try:
                 patch["cards"] = normalize_cards_setting(body["cards"])
+            except ValueError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+        # Cost centers (item 47): {name: {kind, note, active}}. Whole-map
+        # replace, same contract family as merchants / cards / entities.
+        # Owner-authored ONLY — nothing else in the tool ever writes this
+        # key, because the tool must never invent a cost center.
+        if "cost_centers" in body:
+            try:
+                patch["cost_centers"] = normalize_cost_centers_setting(
+                    body["cost_centers"]
+                )
             except ValueError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=400)
         # Mail-intake config (aliases -> person names, sender allowlist,
