@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-09-10
+updated: 2026-09-11
 ---
 
 # Brisken / Expense Reconciliation (p1)
@@ -46,9 +46,25 @@ consequences:
   `min_machines_running: 1`, ~EUR 2/mo). Do not restore scale-to-zero: it put
   the MX behind an auto-start that can fail.
 
-There is no `fly.toml` for this app in the repo; the config lives only on the
-platform. Recover it with `flyctl config show -a brisken-expense-recon`. Full
-detail: memory `project_brisken_expense_recon_fly_hosting`.
+`automations/expense-reconciliation/fly.toml` mirrors the platform config as
+of 2026-09-11 (always-on both services, `recon_data_v2`, 1024 MB). Until that
+day it still said scale-to-zero, `recon_data` and 512 MB, so a `flyctl deploy`
+from the module directory would have undone the 2026-09-10 recovery. Re-sync
+it from `flyctl config show -a brisken-expense-recon` whenever the platform
+side changes. Full detail: memory `project_brisken_expense_recon_fly_hosting`.
+
+**2026-09-11: July and August 2026 reconciled 0 because the Excel parser kept
+Chase's printed sign.** Criss's workbooks print purchases negative; the CSV
+parser had canonicalized that since 3.15 but the xlsx sibling never did, so
+every charge reached the matcher as -15.00 against a 15.00 receipt (Criss:
+"ele ve que tem recibo mas nao associa"). Fixed in the parser (Type column
+per row, else majority inference), the hosted column guess now maps Chase's
+`Type`, and an entity-less receipt (mailed / dropped, no card hint yet) is
+unscoped in the matcher instead of silently unpairable. The two live months
+are repaired in place by `POST /api/expense-batches/{id}/statements/reread`
+(rebuilds the charges from the stored files; a re-upload would have doubled
+the month). Backlog items 55 (this) and 56 (invoice+receipt copies make a
+pairing ambiguous) carry the detail.
 
 **Every Lovable prompt is applied as of 2026-09-07** (the owner pasted and
 published the four pending prompts — R1 person/private, months
@@ -87,6 +103,7 @@ this table is the index, not a second record.
 | Deterministic matcher | done | BLUEPRINT slice 3 |
 | Date+amount accuracy program (scorer + structure + tuning) | live (PRs #404/#405/#406, deployed 2026-07-23) | Owner directive "date+time+amount, most accurate": time verified nonexistent in all sources → date+amount. Pinned scorer `recon-match-accuracy` (95 labelled pairs, 2024 holdout guard) + FX_BASE_AMOUNT path + self-derived monthly rates + band-scoring fix + review-zone deferral + bilateral-uniqueness gate + tuned `fx_base_amount_match_pct=0.01`. Train composite 8.9→31.5, determ-correct 3→55/95, **0 wrong** at every step; live April re-run (no LLM) 20 clean + 13 teed-up review, byte-identical to local replay. Journal: `docs/optimize/brisken-recon-tuning-v1/`; ANNEALING 2026-07-23 entry |
 | Card as a matching signal (WS3) | live (PR #317, deployed 2026-07-22) | `Transaction.card_last4` + optional `card` column map (CSV/xlsx + hosted guess); card-scoped candidates now key on the CHARGE's card, not the account id. On the real 01-05 month software-vs-Food FX-false-pairs 4 -> 0. Also: `Match.card_score` (tie-break + workbench), card into the FX-judgment prompt, optional `matching.llm_second_pass_unmatched` (OFF) |
+| Excel statements canonicalize the sign too; statement re-read repairs a month in place | **shipped 2026-09-11** (backlog item 55) | `ingest/statement_xlsx.py` mirrors the CSV 3.15 paths; `inspect.guess_column_map` maps `Type`; `match_month` treats an empty receipt entity as unscoped; `POST .../statements/reread` + `service.reread_statements`. Tests: `test_statement_reread.py` (route-level, three regressions of the real source proven RED first) |
 | Sign canonicalization + refunds bucket + deterministic FX (Tier-1) | done (PR #285) | BLUEPRINT 3.15; no-LLM 0/36->29/36 on Criss's April |
 | Dev notifier: operator "run now" uploads fire an email | **live + scheduled 2026-07-22** | `tools/brisken-recon-notify.py`. Was doubly broken: unscheduled AND dead since the v31 cutover (logged in via the deleted `POST /login`, and all 4 mail links pointed into the deleted HTML UI, including the publish ping that goes to the USER). PR #373 moves it to `/api/login` + bearer, handles the throttle's 429, and points links at `APP_URL` (the SPA). Registered as Windows task `BriskenReconNotify` (15-min repeat), `LastTaskResult 0` over two fires, 0 missed; state baselined so the first fire did not mail the backlog. NOTE: the task runs from the PRIMARY clone (it needs the gitignored `context/.env`), which currently carries the fix as an uncommitted local edit identical to main — `git checkout -- tools/brisken-recon-notify.py` before pulling there |
 | Mail intake routing (the month pool) | live (PRs #599 + #601, deployed Fly v87 2026-08-24); **live 2026-09-06: ALL month batches deleted (post demo-test), 23 mails pooled (Aug 12 / Jul 5 / Sep 6), 7 more stranded "month deleted" awaiting per-archive re-ingest; the whole intake stream waits on a manual month-open (which itself needs a manual first-receipt upload — empty batch refused). Read-only audit: `%TEMP%/claude/recon-probe/manual_input_audit.py`; ranked findings in `docs/2026-09-06 - Expense-Recon Manual-Input Analysis/Checkpoint.md`** | Emailed receipts route by the month PRINTED on the receipt, not by whichever batch is open; mail whose month has no batch rests in the pool (`pooled`) and is claimed automatically on batch create / rename / boot / replay. Deleting a month pools its mail back. Arrival extraction warms the content-addressed cache, so the read costs nothing extra at batch time. `intake_mail.py` (`route_archived`, `claim_pooled`, `pool_deleted_batch`, `resolve_receipt_month`); SPA half `docs/lovable-month-pool-prompt.md` |

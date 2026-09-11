@@ -158,6 +158,30 @@ def test_entity_scope_prevents_cross_entity_match():
     assert out.unmatched_receipts == ["r_other"]
 
 
+def test_entity_less_receipt_is_unscoped_not_mismatched():
+    """A receipt with NO entity (mailed or dropped into the month before a
+    card hint or the reviewer named one) is unscoped: it pairs with a
+    charge that does name an entity. Before 2026-09-11 the bare
+    inequality dropped every such receipt from every pairing, and a month
+    whose receipts came in by mail reconciled 0 whatever the statement
+    said. The named-entity rule above (`test_entity_scope_prevents_cross_
+    entity_match`) is untouched: a receipt that NAMES another entity still
+    never pairs."""
+    txs = [tx("t1", "10.00", date(2026, 4, 26))]
+    unknown_entity_receipt = Receipt(
+        document_id="r_unknown",
+        legal_entity_id="",
+        detected_date=date(2026, 4, 26),
+        detected_total=Decimal("10.00"),
+        detected_currency="USD",
+        detected_vendor="VENDOR",
+    )
+    out = match_month(txs, [unknown_entity_receipt])
+    assert [m.document_id for m in out.matches] == ["r_unknown"]
+    assert out.unmatched_transactions == []
+    assert out.unmatched_receipts == []
+
+
 def test_reconciliation_guarantee_invariant_holds():
     """v2 spec §25.5: every transaction ends up in exactly one of
     matches / judgment_required / ambiguous / unmatched_transactions.

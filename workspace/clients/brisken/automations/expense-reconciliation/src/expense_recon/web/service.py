@@ -7573,6 +7573,172 @@ def read_statement_upload(
     return transactions, stmt_issues, new_cfg, entity
 
 
+def reread_statements(
+    store: RunStore,
+    run: RunRow,
+    *,
+    settings: dict | None,
+    now_iso: str,
+    learning_db_path: Path | None = None,
+    on_stage=None,
+) -> dict:
+    """Rebuild a month's charges from the statement files it already holds,
+    then re-match. The repair path for a month whose stored charges were
+    parsed wrong (2026-09-11: the Excel parser kept Chase's printed sign,
+    so July and August 2026 held every purchase as a negative amount and
+    reconciled 0 against receipts that were sitting right there).
+
+    Why a re-read and not a re-upload: `transaction_id` is content-derived
+    from the CANONICAL amount, so re-uploading the same file after the
+    parser fix would fold 111 new ids in beside the 111 old ones and double
+    the month. This reads every entry in `statements[]` from disk, in
+    upload order, through the same `read_statement_upload` + `merge` the
+    attach uses, and hands `rematch_month` the rebuilt set as a REPLACEMENT
+    (`replace_statements`), which is the one thing the append path may
+    never do.
+
+    Deny-by-default, nothing partial: a missing file, a column map that no
+    longer resolves, or a reviewer decision that cannot be carried over
+    aborts before anything is written. Decisions ride over by sheet row
+    (`statement_anchors`: old id -> row -> new id); a decision on a charge
+    with no anchor and no surviving id is the one case that refuses, so a
+    verdict is never silently orphaned.
+
+    The column map for each file is recovered the same way the attach
+    recovered it: the config's own map for the upload it still describes
+    (that one may carry the operator's manual picks), a fresh guess for any
+    earlier upload (the guess now maps the Type column, so the sign is
+    explicit where the export prints one).
+    """
+    entries = month_statements(run)
+    if not entries:
+        raise RunInputError(
+            "this month has no recorded statement upload to re-read"
+        )
+    work_dir = Path(run.work_dir)
+    cfg = run.config or {}
+    stmt_cfg = dict(cfg.get("statement") or {})
+    old_anchors: dict[str, dict] = dict(
+        (run.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}
+    )
+    old_ids = {
+        str(td.get("transaction_id"))
+        for td in (run.snapshot or {}).get("transactions") or []
+    }
+
+    transactions: list = []
+    issues: list = []
+    rebuilt: list[dict] = []
+    new_cfg: dict = cfg
+    entity = ""
+    for entry in entries:
+        stored = str(entry.get("file") or "")
+        stmt_path = work_dir / stored
+        if not stored or not stmt_path.is_file():
+            raise RunInputError(
+                f"statement file {stored or '?'} is missing from this "
+                "month's folder; nothing was changed"
+            )
+        account_id = str(
+            entry.get("account_id") or stmt_cfg.get("account_id") or ""
+        )
+        form = RunForm(
+            account_id=account_id,
+            account_legal_entities={},
+            account_card_currency=str(
+                stmt_cfg.get("account_card_currency") or "USD"
+            ),
+            sheet_name=entry.get("sheet_name") or None,
+            column_map_overrides={},
+            receipts_source="csv",
+            expense_column_map={},
+            receipts_default_currency="",
+            use_llm=False,
+            card_key=str(entry.get("card_key") or ""),
+        )
+        column_map: dict | None
+        if stmt_path.suffix.lower() == ".pdf":
+            column_map = None
+        elif stored == stmt_cfg.get("path") and stmt_cfg.get("column_map"):
+            column_map = dict(stmt_cfg["column_map"])
+        else:
+            column_map = _resolve_statement_map(stmt_path, form)
+        txs, stmt_issues, new_cfg, entity = read_statement_upload(
+            run,
+            stmt_name=stored,
+            column_map=column_map,
+            form=form,
+            settings=settings,
+            on_stage=on_stage,
+        )
+        merged = merge_transactions(transactions, txs)
+        transactions = merged.transactions
+        issues.extend(stmt_issues)
+        rebuilt.append(
+            build_statement_entry(
+                stored_name=stored,
+                upload_name=str(entry.get("upload_name") or stored),
+                account_id=(new_cfg.get("statement") or {}).get(
+                    "account_id", ""
+                ),
+                card_key=form.card_key,
+                sheet_name=(new_cfg.get("statement") or {}).get("sheet_name"),
+                transactions=txs,
+                n_new=len(merged.added),
+                uploaded_at=str(entry.get("uploaded_at") or now_iso),
+            )
+        )
+
+    # Carry the reviewer's verdicts over by sheet row. Every old id that has
+    # an anchor maps to the new id at the same (file, row); an id the re-read
+    # kept maps to itself. A DECISION on an id that has neither is the one
+    # thing that refuses the whole re-read: silently dropping a verdict is
+    # worse than leaving the month as it is.
+    new_ids = {t.transaction_id for t in transactions}
+    new_by_row: dict[tuple[str, int], str] = {}
+    for e in rebuilt:
+        for tid, row in (e.get("_anchors") or {}).items():
+            new_by_row[(str(e["file"]), int(row))] = tid
+    rekey: dict[str, str] = {}
+    for file_name, anchors in old_anchors.items():
+        for old_id, row in (anchors or {}).items():
+            if old_id in new_ids:
+                continue
+            target = new_by_row.get((str(file_name), int(row)))
+            if target is not None:
+                rekey[str(old_id)] = target
+    stranded = [
+        tid
+        for tid in store.get_decisions(run.run_id)
+        if tid in old_ids and tid not in new_ids and tid not in rekey
+    ]
+    if stranded:
+        raise RunInputError(
+            f"{len(stranded)} reviewer decision(s) sit on charges this "
+            "re-read would retire and no sheet row carries them over; "
+            "nothing was changed"
+        )
+
+    result = rematch_month(
+        store,
+        run,
+        transactions=transactions,
+        cfg=new_cfg,
+        entity=entity,
+        statement_issues=issues,
+        now_iso=now_iso,
+        learning_db_path=learning_db_path,
+        on_stage=on_stage,
+        replace_statements=rebuilt,
+        rekey_decisions=rekey,
+    )
+    result["n_statements"] = len(rebuilt)
+    result["n_transactions_before"] = len(old_ids)
+    result["n_transactions"] = len(transactions)
+    result["n_decisions_rekeyed"] = len(rekey)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Cross-run receipt claims (R4, backlog item 38)
 # ---------------------------------------------------------------------------
@@ -7870,8 +8036,20 @@ def rematch_month(
     learning_db_path: Path | None = None,
     on_stage=None,
     statement_entry: dict | None = None,
+    replace_statements: list[dict] | None = None,
+    rekey_decisions: dict[str, str] | None = None,
 ) -> dict:
     """Match a month's transactions against its receipt pool and commit.
+
+    `replace_statements` (the statement re-read, 2026-09-11) is the one
+    caller allowed to REPLACE the month's charge set instead of growing it:
+    it hands in the `statements[]` entries it rebuilt from the stored files,
+    and the commit swaps the whole `statements[]` + `statement_anchors`
+    blocks for them. The never-drop invariant below is then judged against
+    the UPLOADS rather than the ids (a re-read changes ids by design), and
+    `rekey_decisions` carries the reviewer's verdicts from the ids the
+    re-read retires to the ids the same sheet rows now have, inside the
+    same lock, before the settlements are read.
 
     Extracted from `execute_statement_attach` (PR 2b-1) so the living
     month has ONE implementation of "reconcile what this month currently
@@ -8067,17 +8245,38 @@ def rematch_month(
         if fresh is None:
             raise RunInputError("this batch was deleted while it reconciled")
         committing = {t.transaction_id for t in transactions}
-        dropped = [
-            str(td.get("transaction_id"))
-            for td in (fresh.snapshot or {}).get("transactions") or []
-            if td.get("transaction_id") not in committing
-        ]
-        if dropped:
-            raise RunInputError(
-                f"another statement upload added {len(dropped)} charge(s) to "
-                "this month while it reconciled; nothing was written, so no "
-                "charge was lost. Upload again."
-            )
+        if replace_statements is not None:
+            # The re-read replaces ids on purpose, so the never-drop check
+            # moves up one level: the set of UPLOADS this commit rebuilt has
+            # to be exactly the set the month holds right now. An upload
+            # that landed while the files were being re-read is not in the
+            # rebuilt set, and committing would erase its charges.
+            fresh_files = [
+                str(e.get("file") or "") for e in month_statements(fresh)
+            ]
+            rebuilt_files = [
+                str(e.get("file") or "") for e in replace_statements
+            ]
+            if fresh_files != rebuilt_files:
+                raise RunInputError(
+                    "another statement upload landed on this month while its "
+                    "files were re-read; nothing was written, so no charge "
+                    "was lost. Run the re-read again."
+                )
+            if rekey_decisions:
+                store.rekey_decisions(run.run_id, rekey_decisions)
+        else:
+            dropped = [
+                str(td.get("transaction_id"))
+                for td in (fresh.snapshot or {}).get("transactions") or []
+                if td.get("transaction_id") not in committing
+            ]
+            if dropped:
+                raise RunInputError(
+                    f"another statement upload added {len(dropped)} charge(s) "
+                    "to this month while it reconciled; nothing was written, "
+                    "so no charge was lost. Upload again."
+                )
         fresh_cfg = fresh.config or {}
         if fresh_cfg.get("expense") is not None:
             cfg = {**cfg, "expense": fresh_cfg["expense"]}
@@ -8226,7 +8425,21 @@ def rematch_month(
         # not against the ones this call read minutes ago: the advisory's
         # whole job is to compare this file with what is already loaded.
         statement_advice = None
-        if statement_entry is not None:
+        if replace_statements is not None:
+            # The re-read rebuilt every upload the month holds; replace the
+            # whole block and its anchors, judging each entry's advisory
+            # against the entries before it exactly as the appends did.
+            rebuilt_entries: list[dict] = []
+            rebuilt_anchors: dict[str, dict] = {}
+            for raw in replace_statements:
+                entry = dict(raw)
+                anchors = entry.pop("_anchors", {})
+                entry["advisory"] = statement_advisory(rebuilt_entries, entry)
+                rebuilt_entries.append(entry)
+                rebuilt_anchors[entry["file"]] = anchors
+            new_snapshot[STATEMENTS_KEY] = rebuilt_entries
+            new_snapshot[STATEMENT_ANCHORS_KEY] = rebuilt_anchors
+        elif statement_entry is not None:
             prior = list((fresh.snapshot or {}).get(STATEMENTS_KEY) or [])
             entry = dict(statement_entry)
             anchors = entry.pop("_anchors", {})

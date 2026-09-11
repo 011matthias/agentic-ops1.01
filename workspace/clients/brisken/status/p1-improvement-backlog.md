@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-08
+updated: 2026-09-11
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -2001,6 +2001,74 @@ can. Criss raised the underlying problem in her r1 feedback
 on, and what tells her the category on such a receipt (items? card?
 entity?) — that answer is Merchants-editor data entry now, not code.
 
+### 55. Excel statements reached the matcher with the printed sign (LIVE DEFECT, Criss 2026-09-11, SHIPPED same day)
+
+Criss, on August 2026 (PT): "ele ve que tem recibo mas nao associa com o que
+la embaixo ele mostra que tem" - the tool shows the receipt in the pool and
+never links it to the charge above. Read off the live API before touching
+code: July `50622baec444` 112 charges / 50 receipts / 0 reconciled, August
+`074a7b8905d7` 111 / 31 / 0, every charge `pending` with zero candidates,
+exact same-day same-amount pairs in both (LOVABLE 15.00 on 08-31, OBSIDIAN
+96.00 on 08-30, ZOHOCORP 576.00 on 08-30, PRESSMASTER 135.00 on 08-23).
+Both months hold a Chase multi-card workbook (`Card, Transaction Date, Post
+Date, Description, Category, Type, Amount, Memo`): purchases printed
+negative, one payment positive, `refunds` empty.
+
+**Cause, in the parser.** `statement_csv` has canonicalized the sign since
+3.15 (a mapped `type` column per row, else the majority inference with a
+warning); `statement_xlsx` had neither and kept the printed sign, so the
+matcher compared `-15.00` with `15.00`. Nothing else was wrong: the same
+file through the CSV parser matches. Two more things stood behind it once
+the sign was right, measured on the real August file offline: the hosted
+column guess never mapped Chase's `Type`, so the sign was only ever
+inferred; and `match_month` dropped any receipt whose entity differed from
+the charge's, which for a mailed or dropped receipt (entity `""` until a
+card hint or the reviewer names one) meant every one of them. 23 of
+August's 31 receipts and 46 of July's 50 have no entity.
+
+**Fix (this round).** Parser: the xlsx parser mirrors both CSV paths.
+Guess: `type` is mapped on `^type$` / `^transaction type$` only (an `Account
+Type` column would abs() every credit into a purchase). Matcher: an empty
+entity on either side is unscoped; a receipt that NAMES another entity still
+never pairs (`test_entity_scope_prevents_cross_entity_match` untouched).
+Repair: `POST /api/expense-batches/{id}/statements/reread` rebuilds the
+charges from the files in `statements[]` and replaces the set - a re-upload
+could not do it, because `transaction_id` derives from the canonical amount
+and the corrected rows would have folded in beside the wrong ones. Decisions
+ride over by sheet row through `statement_anchors`; a missing file, an
+unresolvable map, a stranded decision or an upload that landed mid-read
+refuses with nothing written. Offline on the real files after the fix:
+August 5 exact + 4 FX-judgment + 23 charges with candidates to pick, 7
+receipts still unmatched; July 13 + 27 + 12, 6 unmatched. Before: 0 and 0.
+
+Also fixed on the way: `fly.toml` in the module still said scale-to-zero,
+`recon_data` and 512 MB while the platform runs always-on, `recon_data_v2`
+and 1024 MB, so a deploy from the module directory would have undone the
+2026-09-10 recovery. It now mirrors `flyctl config show`.
+
+### 56. An invoice and its receipt for one purchase make the pairing ambiguous (2026-09-11, found by item 55)
+
+Stripe-style vendors (Lovable, Anthropic, Pressmaster) mail BOTH an invoice
+PDF and a receipt PDF for one charge; the drop and the mail intake keep both,
+and `find_duplicate_receipts` flags them as a group (same vendor, date, total,
+currency). The matcher still sees two candidates for one charge and files the
+pair as **ambiguous**, so the reviewer picks one of two identical documents
+for every such purchase: in August, 23 of the 31 receipts sit in such pairs
+and the LOVABLE 15.00 / OBSIDIAN 96.00 / ZOHOCORP 576.00 charges are
+"ambiguous" rather than exact. The duplicate resolution
+(`POST /api/runs/{id}/duplicates/resolve`) is display-only and never
+narrows the pool.
+
+Proposal, not built: collapse a duplicate group to ONE candidate in the
+matcher pool (`rematch_month`, before `match_month`), keeping copy 1 and
+leaving the extras in the snapshot flagged as duplicates, unless the group
+was resolved as "not a duplicate" (two real purchases, same day, same
+amount). A receipt-side collapse is the smaller change; the alternative is
+teaching the matcher that candidates within one duplicate group count as
+one. Owner call: whether an unresolved group may be collapsed automatically
+or only after the reviewer confirms it. Until then the pairs surface as
+candidates and Criss picks.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
@@ -2021,6 +2089,7 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 31 | Excel statements canonicalize the sign; Chase's `Type` column is guessed; an entity-less receipt is unscoped in the matcher; `POST .../statements/reread` rebuilds a month's charges from its stored files without doubling it | Criss's July and August 2026 reconciled 0 of 111/112 with the receipts in the pool ("ele ve que tem recibo mas nao associa"): the xlsx parser kept Chase's printed negative purchases, the CSV parser had canonicalized them since 3.15, and the matcher compared -15.00 with 15.00. The repair had to be a re-read, not a re-upload, because content-derived ids would have folded the corrected rows in beside the wrong ones. Three regressions of the real source proven RED first (Type path, majority inference, entity rule), offline on the real August file 0 -> 5 exact + 4 judgment + 23 with candidates. Item 55; item 56 records the invoice+receipt-pair ambiguity it uncovered | 2026-09-11, this round |
 | 30 | The card screen shows the cards that actually charge. `GET /api/cards` gains `seen_undefined[]`: the card identities the loaded months charge but the registry cannot name, busiest first, each carrying the digits to define it as, its charge count and the months it appears in | `/api/cards` composed the settings registry plus the shipped presets and nothing else, so it listed 2838 and four cards carrying no charges, while 3645 (46 charges), 3876 (19) and 0340 (10) appeared nowhere on the very screen where a card gets defined. The reviewer's actual move, define the card these charges are on, was the one move the screen could not start. Identity comes from the same `_charge_card_identity` the `coverage[]` panel uses, because two derivations would be two answers about the same plastic. One defect caught by its own test before it could reach the table: the suggested name first came off the internal match key, which strips leading zeros on purpose so Chase's "0340" and the Zoho payment mode's "340" land on one key, and a reviewer would have been offered "340" for a card they know as 0340. Human-facing fields now show what the statement printed; the key stays normalized. Four regressions of the real source, each proven RED first, and a fifth candidate dropped with its reason recorded (a fast path with no observable behaviour, so a test for it would assert the implementation) | PR #651, 2026-08-28, deployed Fly `7acbd983`; suite 1398 passed / 2 skipped, calibrate green, CI green; live `/api/cards` on the real Brisken data returns the three undefined cards with the leading zero intact. SPA half `docs/lovable-card-definition-prompt.md`, applied by the owner 2026-09-06 |
 | 29 | Duplicates the reviewer can see on the row. Every member of a live duplicate group carries `duplicate` on its own row (`expenses[]` on the grid; `rows[]`, `unmatched_receipts[]` and `assignable_receipts[]` on the workbench), naming the group, this row's place in it, and the first copy it repeats. `summary.n_duplicate_copies` is how many copies are redundant, its own name because it is its own question. A dismissal clears the marker from every row, the count and the document; the reconciliation PDF now names the groups instead of counting them | Owner: "we need to build in a function that recognizes duplicates". It already did, and had since Tier-1 #4: the live April batch carried the Pressmaster FZCO invoice at 135.00 USD as two files, correctly grouped. The gap was that `duplicate_groups` is a side list of ids, so the 40-row grid above it showed both copies with nothing to tell them apart and finding the duplicate meant noticing the amount twice by eye. A flag nobody sees is not a flag. The hand-match picker is included because it holds every receipt: it is the one place both copies could be assigned to two different charges, and it is what keeps the new count backed by rows on screen. One defect fixed alongside: `POST /duplicates/resolve` always replied with the workbench summary, so on an expense batch the grid header's own fields were missing from the reply to its own click. Seven regressions of the real source, each proven RED first | this round, 2026-08-28; suite 1392 passed / 2 skipped, calibrate green, CI green; live check on the April batch shows both Pressmaster rows marked and `n_duplicate_copies` 1; SPA half `docs/lovable-duplicates-prompt.md` (owner applies) |
 | 28 | Per-card coverage: `coverage[]` on both review payloads answers which cards a month has loaded, from which uploads, over what span, and how far each has got, with the run summary's own four bucket counts and unreconciled money per card; the reconciliation document gains a coverage table and sections its charge listing per card; `charge_states` becomes the ONE place a charge's effective bucket is decided | Backlog item 29 PR 3. `statements[]` answered the FILE question and nothing answered the CARD one, which is how the loading is actually organized: a card arrives across several files and one file prints several cards, so neither list derives from the other. The live January month is the argument: 80 charges over THREE card identities, zero reconciled, and one flat USD 20,228.68 that tells a reviewer nothing about which pile of receipts to find. Registry cards with nothing loaded get a row on purpose, because "which cards have I not loaded" is unanswerable from a list of the ones she has. Adversarial review found both of the round's defects, both in card identity: an unknown-card key could collide with a registry slug and attribute money to the wrong plastic, and alias-only card names ("CorpServ") fell to the no-card row. Eleven regressions of the real source, each proven RED first | this round, 2026-08-26; suite 1375 passed / 2 skipped, calibrate exit 0, ruff clean on the diff; SPA half `docs/lovable-coverage-prompt.md` (owner applies) |

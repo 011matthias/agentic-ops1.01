@@ -226,6 +226,31 @@ row is recorded per upload rather than on the charge; anchoring on the charge
 would leave the closing cycle blank wherever a mid-month partial got there
 first.
 
+### Re-reading a month's statements (added 2026-09-11)
+
+`POST /api/expense-batches/{id}/statements/reread` rebuilds the month's
+charges from the statement files it already holds and re-matches. No body.
+Returns `{ok, job_id}`; poll `GET /jobs/{job_id}` exactly as for an attach
+(`done`, or `error` with the reason). `400` when the month has no statement.
+
+This exists because a re-upload cannot repair a month: `transaction_id` is
+content-derived from the CANONICAL amount, so a file re-parsed with a
+corrected sign yields new ids and the fold puts the corrected rows in beside
+the wrong ones. The re-read reads every `statements[]` entry from disk in
+upload order and REPLACES the charge set; `statements[]` keeps the same
+entries (same `file`, `upload_name`, `uploaded_at`), rebuilt, and
+`statement_anchors` is rebuilt with them. Reviewer decisions are carried to
+the new ids by sheet row through the anchors. Nothing is written when a
+file is missing, a column map no longer resolves, a decision cannot be
+carried over, or another upload landed while the files were being re-read;
+the job reports the reason.
+
+Trigger case: the Excel parser kept Chase's printed sign until 2026-09-11,
+so July and August 2026 held every purchase as a negative amount and
+reconciled 0 against receipts that were in the pool. The SPA needs nothing
+new to display the result; the parse warning `sign convention inferred`
+appears in `parse_issues` when the workbook has no Type column.
+
 ## Per-card coverage: `coverage[]` (added 2026-08-26)
 
 `statements[]` answers the FILE question. This answers the CARD question,
