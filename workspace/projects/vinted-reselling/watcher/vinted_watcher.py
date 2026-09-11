@@ -273,16 +273,57 @@ WALL_URL = re.compile(r"/login|/member/general|captcha|challenge|consent", re.I)
 #     would mark 100% of listings sold.
 #   - HTTP 404 as a proxy for sold -- a sold listing answers 200 and keeps
 #     answering it for days. 404 is deletion, which is not a sale.
-BUYER_STATUS = re.compile(
-    r'\\"name\\":\\"buyer_item_status\\".{0,240}?\\"title\\":\\"([^"\\]{0,40})\\"'
-    r'.{0,80}?\\"theme\\":\\"([A-Z_]{0,20})\\"')
+#
+# 2026-09-11: Vinted reshaped the payload, and the anchored regexes that had
+# read `name` then `title` then `theme` in that order matched nothing. Two
+# things changed at once. The keys of each plugin object now come alphabetically
+# (`data` first, `name` and `type` last), so the theme precedes the name it
+# belongs to; and the `item_status` plugin is gone from live pages, which now
+# carry `buy`, `make_offer` and `ask_seller` plugins instead, none of which a
+# sold page has. From 09-09T10:11Z every hourly recheck read all 25 pages as
+# "unknown" and discarded the batch as a wall, 39 runs in a row, so no alert
+# candidate had an outcome recorded while the pages were answering perfectly.
+# The reader below finds a plugin's data block by the name it sits next to,
+# whichever side of it the block is on, so a third reordering does not blind it
+# again. Both shapes are pinned as real-byte fixtures under
+# tools/fixtures/vinted-item-page/.
 ITEM_STATUS = re.compile(
     r'\\"name\\":\\"item_status\\".{0,400}?\\"is_closed\\":(true|false)'
     r'.{0,80}?\\"item_closing_action\\":(null|\\"[a-z_]{0,30}\\")')
+PLUGIN_DATA = re.compile(r'\\"data\\":\{([^{}]{0,600})\}')
+PLUGIN_REACH = 500          # a plugin's data block sits within this of its name
+RESERVED = re.compile(r'\\"is_reserved\\":true')
 # The sold panel's title is localised, so the theme carries the meaning and the
 # title is kept only as evidence. SUCCESS is the sold panel; anything else is a
 # closure we have not seen yet and must not guess at.
 SOLD_THEME = "SUCCESS"
+
+
+def plugin_data(body: str, name: str) -> str | None:
+    """The flat `data` block of the sidebar plugin called `name`, or None.
+
+    Anchored on the name and takes the nearest flat data block on either side
+    of it, so the key order Vinted ships the object in does not matter. The
+    plugins that carry a verdict (buyer_item_status, buy, ask_seller) all have
+    flat data; a nested block would belong to a neighbour like `summary`.
+    """
+    anchor = re.search(r'\\"name\\":\\"' + re.escape(name) + r'\\"', body or "")
+    if not anchor:
+        return None
+    lo = max(0, anchor.start() - PLUGIN_REACH)
+    window = body[lo:anchor.end() + PLUGIN_REACH]
+    pos = anchor.start() - lo
+    best = None
+    for m in PLUGIN_DATA.finditer(window):
+        dist = min(abs(m.start() - pos), abs(m.end() - pos))
+        if best is None or dist < best[0]:
+            best = (dist, m.group(1))
+    return best[1] if best else None
+
+
+def _field(data: str, key: str) -> str | None:
+    m = re.search(r'\\"' + re.escape(key) + r'\\":\\"([^"\\]{0,60})\\"', data or "")
+    return m.group(1) if m else None
 
 
 # The item's own price, as the page carries it. Two price shapes appear in the
@@ -328,9 +369,9 @@ def item_page_verdict(status_code: int, body: str) -> tuple[str, str]:
         return "gone", str(status_code)
     if status_code != 200:
         return "unknown", f"http_{status_code}"
-    m = BUYER_STATUS.search(body)
-    if m:
-        title, theme = m.group(1), m.group(2)
+    data = plugin_data(body, "buyer_item_status")
+    if data is not None:
+        theme, title = _field(data, "theme") or "", _field(data, "title") or ""
         verdict = "sold" if theme == SOLD_THEME else "closed"
         return verdict, f"buyer_item_status:{theme}:{title}"[:60]
     m = ITEM_STATUS.search(body)
@@ -341,6 +382,14 @@ def item_page_verdict(status_code: int, body: str) -> tuple[str, str]:
         # A closed item whose closing action says it sold is still a sale.
         return ("sold" if "sold" in action and "not" not in action else "closed",
                 f"item_status:closed:{action}"[:60])
+    # The 2026-09-11 shape carries no item_status at all; what a live page has
+    # and a sold page lacks is the buy button, shipped as its own plugin.
+    if plugin_data(body, "buy") is not None:
+        return "alive", "buy_plugin"
+    if RESERVED.search(body):
+        # No buy plugin and a reservation flag: closed for now, not a sale. Not
+        # yet seen on a real page, so the verdict stays the conservative one.
+        return "closed", "reserved"
     return "unknown", "no_status_plugin"
 
 
@@ -2229,11 +2278,18 @@ def recheck_queue(con: sqlite3.Connection, limit: int) -> list[tuple[int, str]]:
                 picked[item_id] = url
 
     # Tier 1: alerted, not yet resolved, given a few hours to actually happen.
+    # Least recently observed first, and nothing seen inside the last twelve
+    # hours: without that guard the tier re-bought the same 25 oldest alerted
+    # rows every hour, because a page that answers "alive" leaves the row
+    # exactly as eligible as before. With ~1,100 alerted rows open that is the
+    # whole budget spent on 2% of the cohort, forever.
+    seen_before = stamp(hours=RECHECK_INTERVAL_MIN / 60 * 12)
     take("""SELECT l.id, l.url FROM listings l
             WHERE l.gone_at IS NULL AND l.url IS NOT NULL
               AND EXISTS (SELECT 1 FROM alerts a WHERE a.listing_id = l.id)
-              AND l.first_seen < ?
-            ORDER BY l.first_seen ASC LIMIT ?""", (stamp(hours=RECHECK_MIN_AGE_H),))
+              AND l.first_seen < ? AND l.last_seen < ?
+            ORDER BY l.last_seen ASC, l.first_seen ASC LIMIT ?""",
+         (stamp(hours=RECHECK_MIN_AGE_H), seen_before))
     # Tier 2: inside the window where the page still distinguishes sold from gone.
     take("""SELECT id, url FROM listings
             WHERE gone_at IS NULL AND url IS NOT NULL

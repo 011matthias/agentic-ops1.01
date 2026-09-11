@@ -245,6 +245,75 @@ def test_an_unknown_buyer_status_theme_is_closed_not_sold(vw):
     assert vw.item_page_verdict(200, body)[0] == "closed"
 
 
+# ------------------------------- 6b. the 2026-09-11 page shape (keys reordered)
+#
+# Vinted reshaped the flight payload: plugin keys now come alphabetically, so
+# `data` (with the theme) precedes `name`, and live pages carry a `buy` plugin
+# instead of `item_status`. The anchored regexes read every page as unknown
+# from 09-09T10:11Z, and 39 hourly rechecks in a row were discarded as a wall
+# while the pages were answering perfectly. Both fixtures below are real bytes.
+
+def test_the_2026_09_11_sold_page_reads_as_sold(vw):
+    verdict, evidence = vw.item_page_verdict(200, snippet("item_sold_v2.snippet.html"))
+    assert verdict == "sold"
+    assert "SUCCESS" in evidence and "Verkauft" in evidence
+
+
+def test_the_2026_09_11_live_page_reads_as_alive(vw):
+    assert vw.item_page_verdict(200, snippet("item_alive_v2.snippet.html")) == ("alive", "buy_plugin")
+
+
+def test_the_price_is_still_read_off_the_2026_09_11_page(vw):
+    """The recheck's second job; a verdict fix that lost the price would be half a fix."""
+    assert vw.item_page_price(snippet("item_alive_v2.snippet.html")) == 50.0
+    assert vw.item_page_price(snippet("item_sold_v2.snippet.html")) == 40.0
+
+
+def test_the_key_order_inside_a_plugin_does_not_matter(vw):
+    """Both orders Vinted has shipped, and the two the reader has not seen yet."""
+    old = (r'{\"name\":\"buyer_item_status\",\"type\":\"buyer_item_status\",\"section\":\"sidebar\",'
+           r'\"data\":{\"item_id\":1,\"title\":\"Verkauft\",\"theme\":\"SUCCESS\"},\"exposures\":[]}')
+    new = (r'{\"data\":{\"item_id\":1,\"theme\":\"SUCCESS\",\"title\":\"Verkauft\"},\"exposures\":[],'
+           r'\"name\":\"buyer_item_status\",\"section\":\"sidebar\",\"type\":\"buyer_item_status\"}')
+    title_first = (r'{\"data\":{\"title\":\"Verkauft\",\"item_id\":1,\"theme\":\"SUCCESS\"},'
+                   r'\"name\":\"buyer_item_status\"}')
+    name_between = (r'{\"section\":\"sidebar\",\"name\":\"buyer_item_status\",'
+                    r'\"data\":{\"theme\":\"SUCCESS\",\"item_id\":1}}')
+    for body in (old, new, title_first, name_between):
+        assert vw.item_page_verdict(200, body)[0] == "sold", body
+
+
+def test_a_neighbouring_plugins_fields_are_not_read_as_the_status(vw):
+    """The summary plugin next door carries a nested block full of titles. The
+    reader must take the status plugin's own flat data, not the nearest word."""
+    body = (r'{\"data\":{\"item_id\":1,\"theme\":\"EXPIRED\"},\"exposures\":[],'
+            r'\"name\":\"buyer_item_status\",\"section\":\"sidebar\",\"type\":\"buyer_item_status\"},'
+            r'{\"data\":{\"item_id\":1,\"lines\":[{\"elements\":[{\"style\":\"title\",\"type\":\"text\",'
+            r'\"value\":\"Verkauft\"}]}],\"theme\":\"SUCCESS\",\"title\":\"Verkauft\"},'
+            r'\"name\":\"summary\",\"type\":\"summary\"}')
+    verdict, evidence = vw.item_page_verdict(200, body)
+    assert verdict == "closed", "the neighbour's SUCCESS theme was read as this plugin's"
+    assert evidence.startswith("buyer_item_status:EXPIRED")
+
+
+def test_a_reserved_page_without_a_buy_button_is_closed_not_sold(vw):
+    body = r'{\"data\":{\"can_buy\":false,\"is_reserved\":true,\"item_id\":1},\"name\":\"ask_seller\"}'
+    assert vw.item_page_verdict(200, body) == ("closed", "reserved")
+
+
+def test_a_reserved_flag_does_not_override_a_live_buy_button(vw):
+    """Only the absence of the buy plugin makes a reservation flag decisive."""
+    body = (r'{\"data\":{\"is_reserved\":true,\"item_id\":1},\"name\":\"ask_seller\"},'
+            r'{\"data\":{\"item_id\":1},\"name\":\"buy\",\"type\":\"buy\"}')
+    assert vw.item_page_verdict(200, body)[0] == "alive"
+
+
+def test_the_buy_plugin_name_is_matched_whole(vw):
+    """`buy` must not be found inside `buyer_item_status` or `buyer_protection`."""
+    body = r'{\"data\":{\"item_id\":1},\"name\":\"buyer_protection\",\"type\":\"buyer_protection\"}'
+    assert vw.item_page_verdict(200, body)[0] == "unknown"
+
+
 # ------------------------------------------- 7a. the verdict reaches the database
 
 def _recheck(vw, con, monkeypatch, pages):
@@ -274,6 +343,30 @@ def test_a_sale_is_written_to_the_database_not_read_as_still_alive(vw, con, monk
     assert row[0] is not None, "a sold listing must be closed out, not bumped"
     assert row[1] == 1, "the sale must be flagged as a sale"
     assert "SUCCESS" in row[2]
+
+
+def test_a_batch_of_2026_09_11_pages_is_read_not_discarded_as_a_wall(vw, con, monkeypatch, capsys):
+    """The live failure, end to end: 25 pages in the new shape, all answering 200.
+
+    The old reader called every one of them unknown, the systemic-ceiling guard
+    (correctly) refused to record a batch that was 100% unreadable, and the
+    log said "that is a wall, not a market" 39 times while no alert candidate
+    got an outcome. Through recheck_gone: the sales land, the live ones stay
+    open, nothing is discarded.
+    """
+    pages = {}
+    for i in range(1, 26):
+        vw.upsert(con, listing(id=i, url=f"https://x/items/{i}", posted_at="2026-01-01T00:00:00Z"))
+        pages[f"https://x/items/{i}"] = (200, snippet(
+            "item_sold_v2.snippet.html" if i <= 5 else "item_alive_v2.snippet.html"))
+    con.execute("UPDATE listings SET first_seen='2026-01-01T00:00:00Z', last_seen='2026-01-01T00:00:00Z'")
+    con.commit()
+    _recheck(vw, con, monkeypatch, pages)
+    sold = con.execute("SELECT COUNT(*) FROM listings WHERE sold_flag=1 AND gone_at IS NOT NULL").fetchone()[0]
+    open_ = con.execute("SELECT COUNT(*) FROM listings WHERE gone_at IS NULL").fetchone()[0]
+    assert sold == 5, f"{sold} of 5 sales recorded"
+    assert open_ == 20, f"{open_} of 20 live listings left open"
+    assert "no status plugin" not in capsys.readouterr().out, "the batch was discarded as a wall"
 
 
 def test_a_deleted_listing_is_closed_out_but_not_flagged_sold(vw, con, monkeypatch):
@@ -353,3 +446,26 @@ def test_the_alerted_cohort_is_bought_first_with_the_fixed_budget(vw, con):
     picked = [i for i, _ in vw.recheck_queue(con, 25)]
     assert {37, 38, 39} <= set(picked), "alerted listings must not wait behind the backlog"
     assert len(picked) == 25, "the budget is spent, not exceeded"
+
+
+def test_an_alerted_listing_just_read_as_alive_is_not_bought_again_next_hour(vw, con):
+    """A page that answers "alive" leaves the row as eligible as before, so
+    without a guard the tier re-fetched the same 25 oldest alerted rows every
+    hour and the other ~1,100 never got a turn."""
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    stamp = lambda **kw: (now - timedelta(**kw)).strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
+    for i in (1, 2, 3):
+        vw.upsert(con, listing(id=i, url=f"https://x/items/{i}"))
+        con.execute("INSERT INTO alerts (listing_id, alerted_at, search_tag) VALUES (?, ?, 't')",
+                    (i, stamp(days=3)))
+    # all three alerted three days ago; 1 was read alive an hour ago, 2 a day
+    # ago, 3 never since its first sighting.
+    con.execute("UPDATE listings SET first_seen=?", (stamp(days=3),))
+    con.execute("UPDATE listings SET last_seen=? WHERE id=1", (stamp(hours=1),))
+    con.execute("UPDATE listings SET last_seen=? WHERE id=2", (stamp(days=1),))
+    con.execute("UPDATE listings SET last_seen=? WHERE id=3", (stamp(days=3),))
+    con.commit()
+    picked = [i for i, _ in vw.recheck_queue(con, 2)]
+    assert 1 not in picked, "read an hour ago; buying it again is the starvation bug"
+    assert picked == [3, 2], "least recently observed first"
