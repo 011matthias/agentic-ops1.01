@@ -251,12 +251,20 @@ worked out at ~600), 3-5 test inboxes, which `enquiry_status` value means booked
 (one line from Jess), and the Big Companies UK finish/retire/fold call
 (recommendation: retire).
 
-## 2026-09-09: Gurmej answered the review page (read back 2026-09-11)
+## 2026-09-09: the review page was answered (read back 2026-09-11)
 
 Four of the five blockers above are now CLOSED, two of them by removal rather than
-supply. He answered 8 of 10 packet items on 09-09 between 08:50 and 08:57Z; the
+supply. 8 of 10 packet items were answered on 09-09 between 08:50 and 08:57Z; the
 answers sat unread for two days. Full detail and the read-back recipe are in the
 comms-log entry of the same date.
+
+Two caveats travel with these answers. ATTRIBUTION IS INFERRED: the name field was
+blank on every response, so what is proven is that a Meji passcode holder answered,
+not specifically Gurmej. THEY ARE NOT DEFAULTS: checked at source, the control starts
+unselected and refuses to save without a pick, and one answer went against our
+on-page recommendation with a typed reason, which rules out a blanket rubber-stamp.
+For the four answers that matched our recommendation, considered agreement cannot be
+distinguished from following our lead.
 
 - past-customer export: **no further export** ("We already finished the past bookers
   list"), so there is nothing to source.
@@ -270,6 +278,7 @@ comms-log entry of the same date.
 - Copy: Version B and Version C approved unedited; **Version A (Deciders) was never
   answered**.
 
-STILL OWED BY HIM: the `enquiry_status` value that means booked (he picked "it is
-tracked" and left the box empty, so it is answered in form only), Version A sign-off,
-and the 3-5 test inboxes.
+STILL OWED: the `enquiry_status` value that means booked, Version A sign-off, and the
+3-5 test inboxes. The booked field is the weakest answer in the set: "it is tracked"
+was our own recommended option and the free-text box was left empty, so treat it as a
+click rather than as information about how bookings are recorded.
