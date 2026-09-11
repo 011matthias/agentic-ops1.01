@@ -341,10 +341,12 @@ def test_pull_folder_outbound_maps_filters_and_raises_retry_on_429():
 # -- the scan grounds what came BACK, not only what went out -----------------
 #
 # Source: 2026-09-11. The scan walked every folder but pulled only owner-sent
-# mail, so a reply filed into a per-company folder never reached the event
-# log. Of the 62 people in the September review packet, 12 had written to us
-# per the mailboxes and 2 of those were in the log; the board therefore called
-# Kamil Jellonek and Thomas Mehlkopf non-responders.
+# mail, so an inbound message the live inbox poll missed could never be
+# recovered afterwards. Of the 62 people in the September review packet, 12
+# had written to us per the mailboxes and 2 of those were in the log; the
+# board therefore called Kamil Jellonek and Thomas Mehlkopf non-responders.
+# Filed mail is a separate blind spot (dirk.neumann has 1851 folders) but was
+# not the cause of that case: Jellonek's reply was sitting in the Inbox.
 
 def inbound_msg(imid, frm, subject="RE: Rome intro", headers=None,
                 preview="thanks, interested"):
