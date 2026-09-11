@@ -4,7 +4,7 @@ workstream: ops-radar
 group: ""
 spec: ""
 state: active
-updated: 2026-09-08
+updated: 2026-09-11
 ---
 
 # Meji Media / Opportunity Radar
@@ -250,3 +250,26 @@ export (P1 has reached all 907), the cold geography/source pick (3-city universe
 worked out at ~600), 3-5 test inboxes, which `enquiry_status` value means booked
 (one line from Jess), and the Big Companies UK finish/retire/fold call
 (recommendation: retire).
+
+## 2026-09-09: Gurmej answered the review page (read back 2026-09-11)
+
+Four of the five blockers above are now CLOSED, two of them by removal rather than
+supply. He answered 8 of 10 packet items on 09-09 between 08:50 and 08:57Z; the
+answers sat unread for two days. Full detail and the read-back recipe are in the
+comms-log entry of the same date.
+
+- past-customer export: **no further export** ("We already finished the past bookers
+  list"), so there is nothing to source.
+- Christmas cold: **stop for this season**, so no geography pick is needed.
+- Big Companies UK: **retire**, matching the standing recommendation.
+- Christmas re-engagement: **go, with suppression built first**. His own condition,
+  which makes the stop-list build the critical path for the whole Christmas side
+  rather than optional hygiene. Audience is the ~2,459 already in the campaigns.
+- Second sending domain: **prove the current mailboxes first**, so the ~12 h / ~$440
+  announced on 09-03/09-04 is NOT authorised.
+- Copy: Version B and Version C approved unedited; **Version A (Deciders) was never
+  answered**.
+
+STILL OWED BY HIM: the `enquiry_status` value that means booked (he picked "it is
+tracked" and left the box empty, so it is answered in form only), Version A sign-off,
+and the 3-5 test inboxes.
