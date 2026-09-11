@@ -97,6 +97,16 @@ _HEURISTICS: dict[str, list[re.Pattern[str]]] = {
         re.compile(r"^card\s*last\s*4$", re.I),
         re.compile(r"^last\s*4$", re.I),
     ],
+    # 3.15: the debit/credit label column (Chase prints `Type` = Sale /
+    # Payment / Return). Mapping it makes the sign canonicalization explicit
+    # per row instead of inferred from the file's sign majority. Tight on
+    # purpose: `Account Type` or `Card Type` is not a debit/credit label,
+    # and a wrongly mapped Type column would abs() every credit into a
+    # purchase, which is worse than the inference.
+    "type": [
+        re.compile(r"^type$", re.I),
+        re.compile(r"^transaction\s*type$", re.I),
+    ],
 }
 
 
@@ -126,6 +136,7 @@ def guess_column_map(headers: list[str]) -> tuple[dict[str, str], list[str]]:
         "original_currency",
         "fx_rate",
         "card",
+        "type",
     ):
         for header in headers_clean:
             if header in claimed:
@@ -201,6 +212,7 @@ def format_output(
         "posting_date",
         "transaction_currency",
         "card",
+        "type",
     )
     ordered: dict[str, str] = {}
     for key in ordered_keys:

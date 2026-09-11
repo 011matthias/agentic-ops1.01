@@ -860,6 +860,33 @@ class RunStore:
             for r in rows
         }
 
+    def rekey_decisions(self, run_id: str, mapping: dict[str, str]) -> int:
+        """Move a run's decisions from old transaction ids to new ones.
+
+        A statement re-read (2026-09-11) re-parses the stored files, and a
+        content-derived id changes whenever the parse changes the canonical
+        amount (the sign fix is exactly that). The reviewer's verdicts are
+        keyed on the old ids; this carries each one over to the id the same
+        sheet row now has, so a re-read never orphans a decision. OR REPLACE:
+        if the target id already holds a row, the moved verdict wins, which
+        cannot happen unless two old rows collapse onto one new one. Returns
+        the number of rows moved.
+        """
+        if not mapping:
+            return 0
+        moved = 0
+        for old_id, new_id in mapping.items():
+            if old_id == new_id:
+                continue
+            cur = self.conn.execute(
+                "UPDATE OR REPLACE decisions SET transaction_id = ? "
+                "WHERE run_id = ? AND transaction_id = ?",
+                (new_id, run_id, old_id),
+            )
+            moved += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+        self.conn.commit()
+        return moved
+
     def set_decision(
         self,
         run_id: str,
