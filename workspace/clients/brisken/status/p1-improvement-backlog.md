@@ -2046,6 +2046,11 @@ Also fixed on the way: `fly.toml` in the module still said scale-to-zero,
 and 1024 MB, so a deploy from the module directory would have undone the
 2026-09-10 recovery. It now mirrors `flyctl config show`.
 
+Follow-up (void 7 of the 2026-09-11 list): a repaired parser cannot repair
+the months it already parsed except through this curl-only re-read. Store
+a parser fingerprint per `statements[]` entry (the extraction cache does
+this for vision) and flag or re-read stale months on load. Not built.
+
 ### 56. An invoice and its receipt for one purchase make the pairing ambiguous (2026-09-11, found by item 55)
 
 Stripe-style vendors (Lovable, Anthropic, Pressmaster) mail BOTH an invoice
@@ -2068,6 +2073,92 @@ teaching the matcher that candidates within one duplicate group count as
 one. Owner call: whether an unresolved group may be collapsed automatically
 or only after the reviewer confirms it. Until then the pairs surface as
 candidates and Criss picks.
+
+Void 6 of the 2026-09-11 list is this item. The ruling is still open; the
+2026-09-11 evening session asks it as a decision with a recommendation
+before any code.
+
+### The 2026-09-11 void list (items 57-64, ranked; 6 = item 56, 7 = the re-read under item 55)
+
+Ten functionality voids found in the same session that fixed item 55, each
+grounded in the live July / August data. Items 57 and 58 are the first
+round; 59 and 56 need an owner ruling before code.
+
+### 57. Readiness said "ready to post" on a zero-match month (2026-09-11)
+
+August 2026 carried `ready_to_post: true` with 0 of 111 charges matched and
+31 receipts in the pool, four of them exact same-day same-amount pairs of
+a charge (LOVABLE 15.00, OBSIDIAN 96.00, ZOHOCORP 576.00, PRESSMASTER
+135.00). Readiness checks undecided rows and unmapped accounts only, so a
+month the matcher could not see at all read as finished. Rule: when the
+matcher proposed nothing and exact pairs sit in the pool, the sign, the
+entity, the currency or the card scoping is broken; refuse readiness and
+name which. Surface it on both review payloads (`summary.month_health`).
+Built 2026-09-11 evening, this round.
+
+### 58. No notification on living-month re-matches (2026-09-11)
+
+`tools/brisken-recon-notify.py` pings on new runs only. Attaches, re-reads
+and mail-driven re-matches (every path through `rematch_month`) report
+nothing, so the 2026-09-10 uploads that reconciled 0 were invisible to the
+dev until Criss wrote. Each commit of `rematch_month` now records one event
+(`rematch_log` in the snapshot, surfaced as `rematches[]` on
+`/api/operator/state`), and the notifier mails one line per event:
+"August 2026: 14 of 111, pool 7 (statement)". Built 2026-09-11 evening,
+this round.
+
+### 59. A multi-card workbook stamps every charge with the upload's entity (2026-09-11)
+
+August was uploaded as `account_id` card-2838, so all 111 rows read
+Corporate Services, while `coverage[]` shows cards 3645 (40 charges) and
+3876 (37) as "not in your card list" with a blank entity. The parsed card
+column is already on every row (`card_last4`); the entity should resolve
+per row through the card registry, and a card the registry does not know
+should not inherit the upload's entity. OWNER RULING NEEDED before code:
+blank entity for unknown cards (recommended: a visible gap beats a wrong
+posting) or inherit the upload's entity.
+
+### 60. A charge with waiting candidates renders "No receipt found" (2026-09-11)
+
+LOVABLE 25.00 on 2026-08-05: `initial_bucket: review`, `effective_bucket:
+unmatched`, section `attention`, two candidates (0027 ambiguous, 0028
+exact 99%), neither chosen, and the SPA prints "No receipt found" while
+both receipts show elsewhere as "Awaiting decision". The row is in the
+attention section with candidates, so the label the SPA derives from the
+bucket is the wrong half; decide bucket-vs-label on the backend first, then
+hand the SPA half as a Lovable prompt.
+
+### 61. Receipts routed by receipt date never meet the neighbouring statement period (2026-09-11)
+
+August's workbook starts 07-31, July's 06-30; a receipt dated the 31st
+goes to that calendar month's batch and never sees the next statement
+(July's GOOGLE 71.64 on 07-01 has its receipt dated 06-30). Trips already
+borrow across batches (R4, `trip_pool_for_month`); extend the same pool
+idea to adjacent company months under the `receipt_claims` protocol so one
+receipt still settles exactly one charge.
+
+### 62. Receipts that never appear on a card statement stay unmatched forever (2026-09-11)
+
+Bank transfer, cash, PayPal: the Lovable invoice reads "Pay with a bank
+transfer", the Redis 13,200.00 and Konsultancy 15,972.00 invoices in July
+will never post to a card. They sit in the unmatched pool and the counts
+indefinitely. Add a "settled outside the card" disposition that retires
+them from the pool and the counts while keeping them in the month.
+
+### 63. Same-currency candidates use the 20% probable band meant for FX pairs (2026-09-11)
+
+ADOBE 16.23 was offered a Lovable 15.00 receipt, ANTHROPIC 104.95 an
+Obsidian 96.00 one (offline run on the real August file). Same currency +
+different amount + different vendor should not be a candidate. Run
+`calibrate` as the regression gate for the change.
+
+### 64. Two small parser gaps (2026-09-11)
+
+`statements[]` does not record the column map or the card currency an
+upload used, so a re-read re-guesses both; record them per entry. And an
+unrecognized `Type` label is treated as a purchase and abs'd (a German
+"Lastschrift" export would flip its credits); unknown labels should keep
+the printed sign in both `statement_csv` and `statement_xlsx`.
 
 ## Related but tracked elsewhere (do not duplicate here)
 
