@@ -29,8 +29,11 @@ class FakeMailer:
         self.folders: dict[str, list[dict]] = {}    # mailbox -> folder rows
         self.messages: dict[str, list[dict]] = {}   # folder_id -> messages
         self.fail: dict[str, Exception] = {}        # folder_id -> raises
+        self.inbound: dict[str, list[dict]] = {}    # folder_id -> raw messages
+        self.fail_inbound: dict[str, Exception] = {}
         self.listed: list[str] = []
         self.pulled: list[tuple[str, str, str]] = []  # (mbx, folder, since)
+        self.pulled_in: list[tuple[str, str, str]] = []
 
     def list_mail_folders(self, mailbox):
         self.listed.append(mailbox)
@@ -42,6 +45,13 @@ class FakeMailer:
         if exc is not None:
             raise exc
         return [dict(m) for m in self.messages.get(folder_id, [])]
+
+    def pull_folder_inbound(self, mailbox, folder_id, since_iso):
+        self.pulled_in.append((mailbox, folder_id, since_iso))
+        exc = self.fail_inbound.get(folder_id)
+        if exc is not None:
+            raise exc
+        return [dict(m) for m in self.inbound.get(folder_id, [])]
 
 
 def folder(fid, path="Sent Items", count=3):
@@ -326,3 +336,115 @@ def test_pull_folder_outbound_maps_filters_and_raises_retry_on_429():
         m.pull_folder_outbound(DIRK_SMTP, "f1", "2026-07-01T00:00:00Z")
     with pytest.raises(NotAllowlisted):
         m.pull_folder_outbound("other@evil.com", "f1", "2026-07-01T00:00:00Z")
+
+
+# -- the scan grounds what came BACK, not only what went out -----------------
+#
+# Source: 2026-09-11. The scan walked every folder but pulled only owner-sent
+# mail, so a reply filed into a per-company folder never reached the event
+# log. Of the 62 people in the September review packet, 12 had written to us
+# per the mailboxes and 2 of those were in the log; the board therefore called
+# Kamil Jellonek and Thomas Mehlkopf non-responders.
+
+def inbound_msg(imid, frm, subject="RE: Rome intro", headers=None,
+                preview="thanks, interested"):
+    return {"id": f"g-{imid}", "internetMessageId": imid,
+            "subject": subject, "bodyPreview": preview,
+            "from": {"emailAddress": {"address": frm}},
+            "toRecipients": [{"emailAddress": {"address": DIRK_SMTP}}],
+            "ccRecipients": [],
+            "receivedDateTime": "2026-07-14T10:00:00Z",
+            "sentDateTime": "2026-07-14T10:00:00Z",
+            "internetMessageHeaders": headers or []}
+
+
+def events_of(store, cid):
+    return [(r["direction"], r["type"]) for r in store.conn.execute(
+        "SELECT direction, type FROM outreach_events WHERE contact_id = ?",
+        (cid,))]
+
+
+def test_scan_ingests_a_filed_reply(tmp_path):
+    """The failure this pull exists for: a reply sitting in a company folder
+    rather than the Inbox, which the live sweep can never see."""
+    with ContactStore(tmp_path / "t.sqlite") as s:
+        make_contact(s, "c1", "kamil@partnersgroup.com")
+        m = FakeMailer()
+        m.folders[DIRK_SMTP] = [folder("f1", path="Partners Group")]
+        m.inbound["f1"] = [inbound_msg("<r1@x>", "kamil@partnersgroup.com")]
+        rep = scan(s, m)
+        assert rep["inbound_inserted"] == 1
+        assert rep["folders_failed"] == []
+        assert events_of(s, "c1") == [("inbound", "reply")]
+
+
+def test_scan_does_not_promote_an_out_of_office(tmp_path):
+    """Classified by the live sweep's own rules, so the deep scan cannot
+    promote a stage the Inbox poll would have left alone."""
+    with ContactStore(tmp_path / "t.sqlite") as s:
+        make_contact(s, "c1", "ooo@example.com")
+        m = FakeMailer()
+        m.folders[DIRK_SMTP] = [folder("f1")]
+        m.inbound["f1"] = [inbound_msg(
+            "<a1@x>", "ooo@example.com", subject="Automatic reply: Rome",
+            headers=[{"name": "Auto-Submitted", "value": "auto-replied"}])]
+        scan(s, m)
+        assert events_of(s, "c1") == [("inbound", "note")]
+
+
+def test_a_message_the_live_sweep_took_dedupes(tmp_path):
+    """Same classifier and same event_hash basis, so re-grounding is a no-op
+    rather than a second reply on the timeline."""
+    with ContactStore(tmp_path / "t.sqlite") as s:
+        make_contact(s, "c1", "kamil@partnersgroup.com")
+        m = FakeMailer()
+        m.folders[DIRK_SMTP] = [folder("f1")]
+        m.inbound["f1"] = [inbound_msg("<r1@x>", "kamil@partnersgroup.com")]
+        first = scan(s, m)
+        m2 = FakeMailer()
+        m2.folders[DIRK_SMTP] = [folder("f1", count=99)]   # force a re-pull
+        m2.inbound["f1"] = [inbound_msg("<r1@x>", "kamil@partnersgroup.com")]
+        second = scan(s, m2)
+        assert first["inbound_inserted"] == 1
+        assert second["inbound_inserted"] == 0
+        assert second["deduped"] >= 1
+        assert events_of(s, "c1") == [("inbound", "reply")]
+
+
+def test_a_broken_inbound_pull_is_reported_not_swallowed(tmp_path):
+    with ContactStore(tmp_path / "t.sqlite") as s:
+        make_contact(s, "c1", "kamil@partnersgroup.com")
+        m = FakeMailer()
+        m.folders[DIRK_SMTP] = [folder("f1")]
+        m.fail_inbound["f1"] = RuntimeError("boom")
+        rep = scan(s, m)
+        assert any("inbound: " in f["error"] for f in rep["folders_failed"])
+        assert rep["folders_scanned"] == 1, "the outbound half still counted"
+
+
+def test_owner_sent_mail_is_not_read_as_inbound():
+    """pull_folder_inbound drops owner-sent client-side, because a 'ne'
+    filter Graph silently ignores would return everything and read as if
+    nothing came in."""
+    from lead_desk.graph_mail import GraphMailer
+
+    class Resp:
+        status_code = 200
+        text = ""
+
+        @staticmethod
+        def json():
+            return {"value": [
+                {"id": "1", "internetMessageId": "<mine@x>",
+                 "from": {"emailAddress": {"address": DIRK_SMTP}}},
+                {"id": "2", "internetMessageId": "<theirs@x>",
+                 "from": {"emailAddress": {"address": "them@x.com"}}},
+            ]}
+
+    class Http:
+        def get(self, url, headers=None, timeout=None):
+            return Resp()
+
+    got = GraphMailer(token="t", http=Http()).pull_folder_inbound(
+        DIRK_SMTP, "f1", "2026-07-01T00:00:00Z")
+    assert [g["internetMessageId"] for g in got] == ["<theirs@x>"]

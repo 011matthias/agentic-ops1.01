@@ -1,4 +1,4 @@
-"""Scheduled deep truth reconcile: read-only ALL-FOLDERS outbound scan.
+"""Scheduled deep truth reconcile: read-only ALL-FOLDERS scan, both ways.
 
 Live capture (the cloud-worker tick) polls only sentitems/inbox/calendar
 every ~15 minutes, and Dirk files sent mail into per-company folders - so a
@@ -10,6 +10,17 @@ owner-sent corpus for changed folders, and feeds anything the DB does not
 know through the one sanctioned ingress (``service.ingest_event``): known
 messages dedupe via event_hash, unknown addresses park in the unmatched
 queue, no contact is ever auto-created.
+
+Both directions, since 2026-09-11. The scan used to pull only what the
+owner SENT, so what came BACK was grounded solely by the live capture's
+Inbox-only poll and a reply filed into a per-company folder was invisible
+forever. Measured over the 62 people in the September review packet: 12 had
+written to us according to the mailboxes and 2 of those appeared in the event
+log, so the board called Kamil Jellonek and Thomas Mehlkopf non-responders
+while their replies sat filed away. Inbound messages are classified by
+``capture.inbox_to_payloads`` (the live sweep's own bounce / auto-reply /
+reply rules), so an out-of-office still cannot promote a stage and a message
+the live sweep already took dedupes on event_hash.
 
 Read-only against Graph: GETs only, no sends, no drafts, nothing in the
 mailbox changes. Every ``FULL_SCAN_EVERY``-th run ignores the count diff
@@ -37,6 +48,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from .capture import inbox_to_payloads
 from .cloud_worker import filter_payloads
 from .graph_mail import ALLOWED_MAILBOXES, GraphMailer, GraphRetryError
 from .sync import have_creds
@@ -97,6 +109,25 @@ def _pull_with_retry(mailer, mailbox: str, folder_id: str, since_iso: str,
     return None, last
 
 
+def _pull_inbound_with_retry(mailer, mailbox: str, folder_id: str,
+                             since_iso: str, sleep) -> tuple[list[dict] | None,
+                                                             str | None]:
+    """``_pull_with_retry`` for the inbound half. Same policy: a folder that
+    stays broken is reported, never raised."""
+    last = ""
+    for delay in (0, *RETRY_BACKOFF):
+        if delay:
+            sleep(delay)
+        try:
+            return mailer.pull_folder_inbound(
+                mailbox, folder_id, since_iso), None
+        except GraphRetryError as exc:
+            last = str(exc)[:200]
+        except Exception as exc:  # noqa: BLE001 - non-retryable read error
+            return None, str(exc)[:200]
+    return None, last
+
+
 def run_scan(store: ContactStore, mailer, *, window_days: int = 14,
              full: bool = False, now: datetime | None = None,
              sleep=time.sleep, dry_run: bool = False) -> dict:
@@ -117,7 +148,8 @@ def run_scan(store: ContactStore, mailer, *, window_days: int = 14,
     folders_scanned = 0
     folders_failed: list[dict] = []
     corpus = 0
-    counts = {"inserted": 0, "deduped": 0, "queued": 0, "would_ingest": 0}
+    counts = {"inserted": 0, "deduped": 0, "queued": 0,
+              "would_ingest": 0, "inbound_inserted": 0}
 
     for mbx in ALLOWED_MAILBOXES:
         try:
@@ -140,21 +172,34 @@ def run_scan(store: ContactStore, mailer, *, window_days: int = 14,
                 folders_failed.append({"mailbox": mbx, "path": f["path"],
                                        "error": err})
                 continue
+            inbound, in_err = _pull_inbound_with_retry(
+                mailer, mbx, f["id"], since_iso, sleep)
+            if in_err is not None:
+                # The outbound half succeeded, so the folder is scanned; the
+                # inbound half is reported rather than discarded silently,
+                # because a missed reply is the failure this pull exists for.
+                folders_failed.append({"mailbox": mbx, "path": f["path"],
+                                       "error": f"inbound: {in_err}"})
+                inbound = []
             folders_scanned += 1
-            corpus += len(msgs)
+            corpus += len(msgs) + len(inbound)
             # filter_payloads drops own-domain recipients and worker sends
             # whose readback missed the imid (same pre-ingest guard the
             # live capture pass runs).
             payloads = filter_payloads(
                 store, [p for m in msgs for p in outbound_to_payloads(m)])
+            in_payloads = filter_payloads(
+                store, inbox_to_payloads(inbound, mbx))
             if dry_run:
-                counts["would_ingest"] += len(payloads)
+                counts["would_ingest"] += len(payloads) + len(in_payloads)
                 continue
             hit = False
-            for payload in payloads:
+            for payload in (*payloads, *in_payloads):
                 res = ingest_event(store, payload)
                 if res.get("inserted"):
                     counts["inserted"] += 1
+                    if payload.get("direction") == "inbound":
+                        counts["inbound_inserted"] += 1
                     hit = True
                 elif res.get("queued"):
                     counts["queued"] += 1
