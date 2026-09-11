@@ -407,13 +407,14 @@ class GraphMailer:
 
         The mirror of ``pull_folder_outbound``, and the reason it exists: the
         deep scan walked every folder but pulled only what the owner SENT, so
-        what came BACK was grounded solely by the live capture's Inbox-only
-        poll. A reply the owner filed into a per-company folder was invisible
-        to the tool forever. Measured 2026-09-10 over the 62 people in the
+        a missed inbound message was permanent. Live capture polls
+        ``mailFolders/inbox`` on a bounded window and nothing ever re-read
+        inbound history. Measured 2026-09-10 over the 62 people in the
         September review packet: 12 had written to us according to the
-        mailboxes and only 2 of those appeared in the event log, so the board
-        called Kamil Jellonek and Thomas Mehlkopf non-responders while their
-        replies sat filed away.
+        mailboxes and only 2 appeared in the event log, so the board called
+        Kamil Jellonek and Thomas Mehlkopf non-responders. Jellonek's reply
+        was in the Inbox, not filed, so the live poll's miss is unexplained;
+        what this pull fixes is that it stayed missing forever.
 
         Returns RAW Graph message dicts, not a normalized shape, so
         ``capture.inbox_to_payloads`` can classify them with the same

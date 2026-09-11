@@ -12,15 +12,24 @@ messages dedupe via event_hash, unknown addresses park in the unmatched
 queue, no contact is ever auto-created.
 
 Both directions, since 2026-09-11. The scan used to pull only what the
-owner SENT, so what came BACK was grounded solely by the live capture's
-Inbox-only poll and a reply filed into a per-company folder was invisible
-forever. Measured over the 62 people in the September review packet: 12 had
-written to us according to the mailboxes and 2 of those appeared in the event
-log, so the board called Kamil Jellonek and Thomas Mehlkopf non-responders
-while their replies sat filed away. Inbound messages are classified by
-``capture.inbox_to_payloads`` (the live sweep's own bounce / auto-reply /
-reply rules), so an out-of-office still cannot promote a stage and a message
-the live sweep already took dedupes on event_hash.
+owner SENT, which made a missed inbound message permanent: live capture polls
+``mailFolders/inbox`` on a bounded window, and nothing ever re-read inbound
+history, so anything that poll did not catch could never be recovered.
+
+Measured over the 62 people in the September review packet: 12 had written to
+us according to the mailboxes and 2 of those appeared in the event log, so the
+board called Kamil Jellonek and Thomas Mehlkopf non-responders. Why the live
+poll missed Jellonek's 2026-06-19 reply is NOT established; it sat in
+matthias.silva's Inbox (``Posteingang``), which capture does poll. What is
+established is that no mechanism existed to find it afterwards. A second,
+independent blind spot is real but was not the cause here: dirk.neumann's
+mailbox carries 1851 folders, and filed mail is invisible to an inbox-only
+poll by construction.
+
+Inbound messages are classified by ``capture.inbox_to_payloads`` (the live
+sweep's own bounce / auto-reply / reply rules), so an out-of-office still
+cannot promote a stage and a message the live sweep already took dedupes on
+event_hash.
 
 Read-only against Graph: GETs only, no sends, no drafts, nothing in the
 mailbox changes. Every ``FULL_SCAN_EVERY``-th run ignores the count diff
