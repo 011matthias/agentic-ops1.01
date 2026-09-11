@@ -4,7 +4,7 @@ name: Enquiry Follow-Up Sequence
 type: automation
 stage: live
 needs_fixes: false
-version: 3.2.0
+version: 3.2.1
 created: 2026-02-24
 updated: 2026-09-10
 orchestrator: make
@@ -34,13 +34,15 @@ make_production:
   gmail_connection: 13838220
   webhook_url: "https://hook.eu2.make.com/cva0g9j0ru2p9690nrxji8791grkhhya"
 last_changes:
-  - "2026-09-10: v3.2.0 - FAMILY EXCLUSION (client-approved 2026-09-09). Filter on module 50, enquiry_type = 0, so family enquiries (enquiry_type 1) stop after the webhook: no sheet row, no email, no hot-lead notification. Module 80 venue list gained event 151 (13 Dec Wolverhampton family event). Deployed via REST; verified by a synthetic family POST (1 op, status 1) and a live-vs-staged blueprint diff. NOTE: the live scenario has diverged from this spec since March (venue_key module 80 + MM Venue Config data store 154401 + platform ping module 90 are live but undocumented here); the blueprint is the truth."
+  - "2026-09-11: v3.2.1 - FAMILY EXCLUSION corrected to FAIL-OPEN. Module 50 filter is enquiry_type text-notequal 1, so only family enquiries are blocked and any payload with a missing or unexpected enquiry_type is processed as before. Module 80 reverted to its pre-change value (the venue list is inside the scope Gurmej deferred). Verified on 25 h of real traffic: A0 forwarded 26 rows, A1 ran 26 times, 25 full-path and 1 filtered, the filtered one a real family enquiry."
+  - "2026-09-10: v3.2.0 - first family-exclusion attempt, WRONG, superseded within hours. It passed only enquiry_type text-equal 0, which fails CLOSED, and office enquiry 16046 was dropped with no reply and no sheet row. Lesson: A0 hand-builds its JSON body with unescaped customer free-text in notes immediately before enquiry_type, so a positive match on that field is unsafe. NOTE: the live scenario has diverged from this spec since March (venue_key module 80 + MM Venue Config data store 154401 + platform ping module 90 are live but undocumented here); the blueprint is the truth."
   - "2026-03-24: Production health check - 42 executions, 473 ops, 0 errors. Live enquiry flow confirmed (id 14281 processed at 09:14 UTC)"
   - "2026-03-23: v3.1.0 - Hot lead fix: all leads now written with status=new, stopped=FALSE. Hot leads enter follow-up sequence with fastest cadence (6h/24h) instead of being excluded"
   - "2026-03-06: Fixed UTF-8 encoding in eu2 deployment (ASCII hyphens in scenario names)"
   - "2026-03-03: v3.0.0 - A/B testing (module 56, column Q, variant-suffixed template keys)"
   - "2026-02-25: Updated spec to match live implementation"
 next_steps:
+  - "Harden A0 (8841775) module 3: it builds the webhook JSON body by hand and interpolates customer free-text unescaped, with enquiry_type immediately after notes. Prime suspect for the 16046 drop."
   - "Venue lookup rebuild (read the events table live instead of the hardcoded id list in module 80): approved by Jess 2026-09-01, DEFERRED by Gurmej 2026-09-09 to end of year. Re-raise before next season dates are entered."
   - "Document modules 80/81/90 and the 21-column sheet mapping in this spec (live since April, never spec-ed)."
 stage_history:
