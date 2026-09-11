@@ -52,6 +52,19 @@
 </div>
 {% endif %}
 
+{% if v.responded %}
+<div class="card" style="border-color: var(--orange, #d97706)">
+  <h2>{{ v.responded | length }} {{ 'person' if v.responded | length == 1 else 'people' }} on these lists have already answered</h2>
+  <p class="muted">These are on a follow-up list, and the mailbox says they came back to us. Nothing here removes them automatically; decide whether each still belongs in the wave before approving it.</p>
+  <div class="scroll-x"><table>
+    <tr><th>Name</th><th>Wave</th><th>What we heard</th></tr>
+    {% for u in v.responded %}
+    <tr><td>{{ u.name }}</td><td>{{ u.wave }}</td><td>{{ u.reason }}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
 {% for item in v['items'] %}
 <div class="card" id="item-{{ item.item_id }}">
   <h2>{{ loop.index }}. {{ item.title }}

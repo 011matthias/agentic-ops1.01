@@ -336,6 +336,41 @@ def test_a_clean_roster_shows_no_warning(client):
     assert "cannot be sent to" not in client.get("/review/sept-test").text
 
 
+def test_a_roster_member_who_has_answered_is_flagged(client):
+    """The roster is static seed data while the mailbox keeps moving. A reply
+    that lands (or is recovered by the deep scan) after seeding must not leave
+    somebody sitting on a follow-up list unremarked. Source 2026-09-11: the
+    inbound grounding recovered real replies from Volkswagen, Zalando and
+    LeverX that the tool had never recorded."""
+    with ContactStore(client.db) as store:
+        seed_packet(store, _packet_with("zed@example.com"), NOW)
+        _contact(store, "c1", "zed@example.com")
+        _event(store, "c1", "inbound", "reply", "2026-07-10T09:00:00Z",
+               "AW: Picking up our Rome conversation")
+    body = client.get("/review/sept-test").text
+    assert "have already answered" in body or "has already answered" in body
+    assert "replied on 2026-07-10" in body
+    assert "Zed" in body
+
+
+def test_an_out_of_office_does_not_count_as_answering(client):
+    """Treating an auto-reply as an answer would quietly shrink a wave."""
+    with ContactStore(client.db) as store:
+        seed_packet(store, _packet_with("zed@example.com"), NOW)
+        _contact(store, "c1", "zed@example.com")
+        _event(store, "c1", "inbound", "reply", "2026-07-10T09:00:00Z",
+               "Automatic reply: out of office")
+    assert "already answered" not in client.get("/review/sept-test").text
+
+
+def test_a_silent_roster_shows_no_answered_card(client):
+    with ContactStore(client.db) as store:
+        seed_packet(store, _packet_with("zed@example.com"), NOW)
+        _contact(store, "c1", "zed@example.com")
+        _event(store, "c1", "outbound", "sent", "2026-07-01T09:00:00Z")
+    assert "already answered" not in client.get("/review/sept-test").text
+
+
 def test_reconcile_names_the_board_vs_engine_gap(client):
     with ContactStore(client.db) as store:
         _contact(store, "c1", "quiet@optout.com")
