@@ -1739,7 +1739,7 @@ report.
 None of this is scheduled. The float-total and the lock-bypass are the two
 worth doing regardless of what happens with item 48.
 
-### 50. The attach dialog dies with "Failed to fetch", and the app is allowed to stop (LIVE DEFECT, Criss 2026-09-10)
+### 50. The attach dialog dies with "Failed to fetch", and the app is allowed to stop (hosting half CLOSED 2026-09-11)
 
 **What Criss saw.** She mailed Matthias a screenshot at 10:00:43Z, subject
 "Error", no text. The image is the **Attach bank statement** dialog with
@@ -1778,6 +1778,19 @@ statement parse and the vision path share it). Both are production config on
 the client's app, so they need an owner order and a deploy. Add a probe that
 records whether the machine was stopped when a request failed, or the next
 occurrence is just as unprovable.
+
+**HOSTING HALF CLOSED 2026-09-11.** The `fly.toml` quoted above is not what
+the live machine was actually running, which is why this was worth reading
+the record rather than the file: `flyctl machine status --display-config`
+showed `min_machines_running: 1` ALREADY set on both services (8080 web and
+2525 MX) with `autostop_machines` unset, so the app was not in fact allowed
+to stop. Only the memory half was still open. Raised to 1024MB on owner
+order (`flyctl scale memory 1024`); verified after: 1024MB, `min_machines_running: 1`
+on both ports, `/healthz` 200. The cold-start theory for Criss's "Failed to
+fetch" therefore loses its mechanism -- a machine pinned always-on does not
+cold-start -- so the dialog error remains UNEXPLAINED and the probe that
+records machine state at failure time is still the thing that would make a
+recurrence provable. That probe is the open half of this item.
 
 ### 51. A statement that parses to zero rows reports success (found by drill, 2026-09-10)
 
