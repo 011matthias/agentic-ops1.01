@@ -401,6 +401,54 @@ class GraphMailer:
         walk(None, "")
         return out
 
+    def pull_folder_inbound(self, mailbox: str, folder_id: str,
+                            since_iso: str) -> list[dict]:
+        """Messages in ONE folder that somebody ELSE sent, since the bound.
+
+        The mirror of ``pull_folder_outbound``, and the reason it exists: the
+        deep scan walked every folder but pulled only what the owner SENT, so
+        what came BACK was grounded solely by the live capture's Inbox-only
+        poll. A reply the owner filed into a per-company folder was invisible
+        to the tool forever. Measured 2026-09-10 over the 62 people in the
+        September review packet: 12 had written to us according to the
+        mailboxes and only 2 of those appeared in the event log, so the board
+        called Kamil Jellonek and Thomas Mehlkopf non-responders while their
+        replies sat filed away.
+
+        Returns RAW Graph message dicts, not a normalized shape, so
+        ``capture.inbox_to_payloads`` can classify them with the same
+        bounce/auto-reply/reply rules and the same event_hash basis as the
+        live sweep. A message the live sweep already ingested therefore
+        dedupes instead of double-logging.
+
+        Owner-sent mail is dropped here rather than in the ``$filter``: a
+        ``ne`` against a navigation property is not reliably supported, and a
+        filter the server silently ignores would return everything and read
+        as if nothing came in.
+        """
+        mbx = assert_allowlisted(mailbox)
+        try:
+            items = self._get_all(
+                f"{GRAPH}/users/{mbx}/mailFolders/{folder_id}/messages"
+                f"?$filter=receivedDateTime ge {since_iso} "
+                "and isDraft eq false"
+                "&$select=id,internetMessageId,subject,from,toRecipients,"
+                "ccRecipients,sentDateTime,receivedDateTime,"
+                "internetMessageHeaders,bodyPreview&$top=100")
+        except GraphSendError as exc:
+            if exc.status_code in (429, 503):
+                raise GraphRetryError(exc.status_code, str(exc)) from exc
+            raise
+        owner = mbx.lower()
+        out = []
+        for m in items:
+            addr = (((m.get("from") or {}).get("emailAddress") or {})
+                    .get("address") or "").strip().lower()
+            if not addr or addr == owner:
+                continue
+            out.append(m)
+        return out
+
     def pull_folder_outbound(self, mailbox: str, folder_id: str,
                              since_iso: str) -> list[dict]:
         """Messages in ONE folder sent BY the mailbox owner since the bound
