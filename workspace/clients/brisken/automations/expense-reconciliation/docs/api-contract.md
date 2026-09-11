@@ -251,6 +251,57 @@ reconciled 0 against receipts that were in the pool. The SPA needs nothing
 new to display the result; the parse warning `sign convention inferred`
 appears in `parse_issues` when the workbook has no Type column.
 
+## Month health: `summary.month_health` (added 2026-09-11, item 57)
+
+On BOTH payloads, always present:
+
+```json
+"month_health": {
+  "checked": true,
+  "state": "broken",
+  "reason": "zero_match_with_exact_pairs",
+  "n_exact_pairs": 4,
+  "suspects": ["sign"],
+  "detail": "The matcher proposed nothing for this month, yet 4 receipts in the pool are the same amount on the same day as a charge. Something in the inputs is broken: the statement's sign (purchases arrived as credits). Fix that and re-read the statement before posting anything."
+}
+```
+
+`checked` is false before a statement is loaded or while the pool is
+empty (then `state` is `ok` and the rest is empty). `state` is `broken`
+exactly when the matcher put no receipt beside any charge, in any tier,
+while at least one receipt in the pool is the same absolute amount within
+one day of a charge. `suspects` (fixed order: `sign`, `currency`, `entity`,
+`card`, `unknown`) names the input that dropped those pairs, from the
+matcher's own scoping rules; `unknown` means a pair looked pairable and
+was still not proposed. `detail` is one English sentence for the banner;
+`reason` and `suspects` are the codes to localize on.
+
+`ready_to_post` is now `n_undecided == 0 AND month_health.state == "ok"`.
+On 2026-09-10 August 2026 read `ready_to_post: true` with 0 of 111 matched
+and 31 receipts in the pool: nothing was undecided because nothing had been
+proposed. The SPA's post gate reads `ready_to_post` as before; when it is
+false with `n_undecided == 0`, `month_health.detail` says why. Renders in
+`docs/lovable-month-health-prompt.md`.
+
+## Re-match events: `rematches[]` on `GET /api/operator/state` (added 2026-09-11, item 58)
+
+Not a review payload; polled by the dev-side notifier
+(`tools/brisken-recon-notify.py`). Every commit of `rematch_month` appends
+one event to the month's snapshot (`rematch_log`, capped at 50):
+
+```json
+{"event_id": "1f3c9a2b7e4d", "run_id": "074a7b8905d7", "label": "August 2026",
+ "at": "2026-09-11T14:24:46+00:00", "trigger": "reread",
+ "n_transactions": 111, "n_matched": 14, "n_review": 7, "n_unmatched_tx": 89,
+ "n_receipts": 31, "n_unmatched_rec": 7, "match_rate": 12.6}
+```
+
+`trigger` is one of `statement` (attach), `reread`, `receipts` (mail, drop,
+folder), `cards`, `master_data`, `set_aside`, `trip`. Oldest first. The
+notifier diffs on `event_id` and mails one line per event ("August 2026:
+14 of 111, pool 7 (reread, 2026-09-11T14:24:46+00:00)"); an event with no
+id is never announced.
+
 ## Per-card coverage: `coverage[]` (added 2026-08-26)
 
 `statements[]` answers the FILE question. This answers the CARD question,

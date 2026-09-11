@@ -118,6 +118,9 @@ EXPENSE_BATCH_CONTRACT = {
     # PR 2b-2b-2: the statement uploads this month has taken. The month page
     # is where the next one is uploaded, so the grid carries it too.
     "statements[]": "object",
+    # Item 57: which inputs the month-health rule suspects (sign /
+    # currency / entity / card / unknown); empty on a healthy month.
+    "summary.month_health.suspects[]": "string",
     "summary.upload_issues[]": "string",
     # Item 20: the same rejections with a stable code beside the prose. The
     # prose list stays `string[]` on purpose — enriching it in place is the
@@ -149,6 +152,8 @@ RUN_CONTRACT = {
     "rows[].candidates[]": "object",
     "rows[].candidates[].receipt.line_items[]": "object",
     "statements[]": "object",
+    # Item 57: same field as on the expense batch view; see above.
+    "summary.month_health.suspects[]": "string",
     "summary.setup_advisories[]": "object",
     "unmatched_receipts[]": "object",
     "unmatched_receipts[].line_items[]": "object",

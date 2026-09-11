@@ -25,7 +25,7 @@ import re
 import threading
 import uuid
 from dataclasses import dataclass, replace
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import NamedTuple
 from decimal import Decimal
 from pathlib import Path
@@ -80,6 +80,12 @@ from ..output.zoho_expense_export import (
 )
 from ..output.zoho_export import write_zoho_export
 from ..merchant_registry import MerchantRegistry, normalize_merchants_setting
+from .month_health import (
+    HEALTH_OK,
+    card_scoping_on,
+    month_health,
+    unchecked as unchecked_month_health,
+)
 from .serialize import (
     categorization_from_dict,
     categorization_to_dict,
@@ -2395,6 +2401,14 @@ def build_view(
             continue
         rec_by_id.setdefault(br.document_id, br)
     by_tx = _candidates_by_tx(outcome)
+    # Item 57: the structural check readiness cannot answer on its own. A
+    # month the matcher could not see (sign / entity / currency / card
+    # broken) has nothing undecided BECAUSE nothing was proposed; this
+    # names the broken input and closes the post gate below.
+    health = month_health(
+        transactions, receipts, outcome,
+        card_scoping=card_scoping_on(run.config),
+    )
 
     # Slice 10: receiptless-charge categorizations (extra snapshot key;
     # absent on pre-Slice-10 runs => empty map, rows render as before).
@@ -2903,9 +2917,12 @@ def build_view(
         "n_duplicate_copies": (
             n_extra_copies(charge_dup_flags) + n_extra_copies(receipt_dup_flags)
         ),
-        # PR A — "Ready to post?" bar.
+        # PR A — "Ready to post?" bar. Item 57: a broken month is never
+        # ready, whatever the reviewer has (not) decided; `month_health`
+        # says which input is broken.
         "n_undecided": n_undecided,
-        "ready_to_post": n_undecided == 0,
+        "ready_to_post": n_undecided == 0 and health["state"] == HEALTH_OK,
+        "month_health": health,
         "n_unmapped_accounts": n_unmapped,
         "unreconciled_by_ccy": {
             ccy: f"{amt:,.2f}" for ccy, amt in sorted(unreconciled.items())
@@ -5238,6 +5255,10 @@ def build_expense_view(
         # AND the core fields). The batch page's headline count until
         # 2026-08-22, when it was mislabelled as "categorized".
         "n_ready": n_ready,
+        # Item 57: the same verdict the workbench carries, so whichever
+        # payload the SPA renders for a reconciling month says the month
+        # is broken. `checked: false` before a statement is loaded.
+        "month_health": run_month_health(run),
         "n_review": sum(
             1 for e in expenses if e["review"]["state"] in ("check", "pick")
         ),
@@ -5801,7 +5822,7 @@ def assign_batch_cards(
     # Outside the lock; see rematch_after_change. An assignment that does not
     # reach the matcher is the R3 F1 failure (silent 0-match month), so the
     # re-match is the point of allowing this at all.
-    rematch = rematch_after_change(store, run.run_id)
+    rematch = rematch_after_change(store, run.run_id, trigger="cards")
     if rematch is not None:
         out["rematch"] = rematch
     return out
@@ -6004,7 +6025,7 @@ def refresh_batch_master_data(
         out = _refresh_batch_master_data_locked(
             store, run, now_iso=now_iso, operator=operator
         )
-    rematch = rematch_after_change(store, run.run_id)
+    rematch = rematch_after_change(store, run.run_id, trigger="master_data")
     if rematch is not None:
         out["rematch"] = rematch
     return out
@@ -6180,6 +6201,41 @@ def month_transactions(run: RunRow) -> list:
 # Parallel field, per the SPA contract (docs/api-contract.md rule 1):
 # nothing existing changes type or meaning, so a stale SPA renders exactly
 # what it rendered before.
+
+
+def run_month_health(run: RunRow) -> dict:
+    """Item 57 for a caller that has not unpacked the snapshot (the expense
+    grid). Reads the same committed pool and outcome the workbench judges,
+    so the two payloads cannot disagree about whether a month is broken.
+    Unchecked before the first statement: there is nothing to judge."""
+    if not has_statement(run):
+        return unchecked_month_health()
+    try:
+        transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
+    except (KeyError, TypeError, ValueError):
+        return unchecked_month_health()
+    return month_health(
+        transactions, receipts, outcome,
+        card_scoping=card_scoping_on(run.config),
+    )
+
+
+# Item 58: every commit of `rematch_month` records one event here, so the
+# dev-side notifier can announce a re-match by its counts ("August 2026: 14
+# of 111, pool 7") instead of only a new run. Capped: the snapshot is not
+# a log, and fifty events outlive any notifier polling window.
+REMATCH_LOG_KEY = "rematch_log"
+REMATCH_LOG_CAP = 50
+
+
+def append_rematch_event(existing, event: dict, cap: int = REMATCH_LOG_CAP) -> list[dict]:
+    """The log with `event` appended and the oldest entries dropped past
+    `cap`. Tolerates a malformed stored value (drops it rather than raising:
+    a corrupt log must never block a commit)."""
+    log = [e for e in (existing or []) if isinstance(e, dict)] if isinstance(existing, list) else []
+    log.append(dict(event))
+    return log[-cap:] if cap > 0 else log
+
 
 STATEMENTS_KEY = "statements"
 # {stored file name: {transaction_id: sheet row}} — each upload's own row
@@ -6954,7 +7010,8 @@ def restore_set_aside_file(
             store, run, file, now_iso, learning_db_path=learning_db_path
         )
     rematch = rematch_after_change(
-        store, run.run_id, learning_db_path=learning_db_path
+        store, run.run_id, learning_db_path=learning_db_path,
+        trigger="set_aside",
     )
     if rematch is not None:
         out["rematch"] = rematch
@@ -7171,6 +7228,7 @@ def add_receipts_to_expense_batch(
         rematch = rematch_after_change(
             store, run.run_id,
             learning_db_path=learning_db_path, on_stage=on_stage,
+            trigger="receipts",
         )
         if rematch is not None:
             result["rematch"] = rematch
@@ -7518,6 +7576,7 @@ def execute_statement_attach(
             n_new=len(merged.added),
             uploaded_at=now_iso,
         ),
+        trigger="statement",
     )
 
 
@@ -7731,6 +7790,7 @@ def reread_statements(
         on_stage=on_stage,
         replace_statements=rebuilt,
         rekey_decisions=rekey,
+        trigger="reread",
     )
     result["n_statements"] = len(rebuilt)
     result["n_transactions_before"] = len(old_ids)
@@ -7886,7 +7946,8 @@ def rematch_months_after_trip_change(
         if not dates or max(dates) < t0 or min(dates) > t1:
             continue
         rematch = rematch_after_change(
-            store, candidate.run_id, learning_db_path=learning_db_path
+            store, candidate.run_id, learning_db_path=learning_db_path,
+            trigger="trip",
         )
         if rematch is not None:
             results.append({"run_id": candidate.run_id, **rematch})
@@ -8038,8 +8099,14 @@ def rematch_month(
     statement_entry: dict | None = None,
     replace_statements: list[dict] | None = None,
     rekey_decisions: dict[str, str] | None = None,
+    trigger: str = "",
 ) -> dict:
     """Match a month's transactions against its receipt pool and commit.
+
+    `trigger` (item 58) names what caused this re-match ("statement",
+    "reread", "receipts", "cards", "master_data", "set_aside", "trip") and
+    rides on the `rematch_log` event the commit records; it changes nothing
+    about the match itself.
 
     `replace_statements` (the statement re-read, 2026-09-11) is the one
     caller allowed to REPLACE the month's charge set instead of growing it:
@@ -8491,6 +8558,26 @@ def rematch_month(
             cfg, transactions, receipts,
             has_coa=bool(cfg.get("coa_validation")),
         )
+        # Item 58: one event per commit, appended to the FRESH row's log so
+        # a re-match that committed while this one ran keeps its entry.
+        new_snapshot[REMATCH_LOG_KEY] = append_rematch_event(
+            (fresh.snapshot or {}).get(REMATCH_LOG_KEY),
+            {
+                "event_id": uuid.uuid4().hex[:12],
+                # The COMMIT clock, in the app's own format, never the
+                # caller's `now_iso` (an upload's timestamp, or empty on the
+                # incremental paths): events from every path sort together.
+                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "trigger": str(trigger or ""),
+                "n_transactions": n_tx,
+                "n_matched": len(outcome.matches),
+                "n_review": n_review,
+                "n_unmatched_tx": len(outcome.unmatched_transactions),
+                "n_receipts": len(receipts),
+                "n_unmatched_rec": len(outcome.unmatched_receipts),
+                "match_rate": summary["match_rate"],
+            },
+        )
         store.update_run_config(run.run_id, cfg)
         store.update_run_snapshot(run.run_id, new_snapshot)
         store.update_run_summary(run.run_id, summary)
@@ -8538,6 +8625,7 @@ def rematch_after_change(
     *,
     learning_db_path: Path | None = None,
     on_stage=None,
+    trigger: str = "",
 ) -> dict | None:
     """Re-reconcile a statement-bearing month whose inputs just changed.
 
@@ -8581,6 +8669,7 @@ def rematch_after_change(
         entity=str((cfg.get("statement") or {}).get("legal_entity_id") or ""),
         learning_db_path=learning_db_path,
         on_stage=on_stage,
+        trigger=trigger,
     )
 
 

@@ -63,11 +63,13 @@ def test_apply_to_state_marks_all_visible():
         "seen_runs": ["r8", "r9"],
         "seen_published": ["r9"],
         "seen_feedback_count": 3,
+        "seen_rematches": [],
     }
     # idempotent second pass announces nothing
     assert mod.diff_state(state, remote) == ([], [])
     assert mod.diff_runs(state, remote) == []
     assert mod.diff_feedback(state, remote) == 0
+    assert mod.diff_rematches(state, remote) == []
 
 
 def test_new_operator_run_announced_once_regardless_of_publish():
@@ -123,3 +125,46 @@ def test_sender_is_hard_allowlisted():
     assert mod.ALLOWED_SENDERS == frozenset(
         {"matthias.silva@brisken.com", "dirk.neumann@brisken.com"}
     )
+
+
+# ── living-month re-matches (backlog item 58, 2026-09-11) ─────────────
+
+
+def _rematch(event_id, **extra):
+    base = {
+        "event_id": event_id, "run_id": "r1", "label": "August 2026",
+        "at": "2026-09-11T14:24:46", "trigger": "statement",
+        "n_transactions": 111, "n_matched": 14, "n_review": 7,
+        "n_unmatched_rec": 7, "n_receipts": 31, "match_rate": 12.6,
+    }
+    base.update(extra)
+    return base
+
+
+def test_rematches_diff_on_event_id_and_skip_idless_events():
+    mod = _load()
+    remote = {"rematches": [_rematch("e1"), _rematch("e2"), _rematch(None)]}
+    new = mod.diff_rematches({"seen_rematches": ["e1"]}, remote)
+    assert [e["event_id"] for e in new] == ["e2"]
+    assert [e["event_id"] for e in mod.diff_rematches({}, remote)] == ["e1", "e2"]
+
+
+def test_apply_to_state_records_rematches_and_baseline_migrates_them():
+    mod = _load()
+    remote = {"rematches": [_rematch("e1"), _rematch("e2")]}
+    assert mod.apply_to_state({}, remote)["seen_rematches"] == ["e1", "e2"]
+    # A pre-upgrade state file (other keys present, no seen_rematches)
+    # baselines the visible events so the backlog is not announced ...
+    migrated = mod.baseline_new_run_tracking({"seen_runs": ["r1"]}, remote)
+    assert migrated["seen_rematches"] == ["e1", "e2"]
+    assert mod.diff_rematches(migrated, remote) == []
+    # ... while a truly fresh state announces everything, as for runs.
+    assert "seen_rematches" not in mod.baseline_new_run_tracking({}, remote)
+
+
+def test_rematch_line_reads_as_one_line_with_the_counts():
+    mod = _load()
+    line = mod.rematch_line(_rematch("e1"))
+    assert line == "August 2026: 14 of 111, pool 7 (statement, 2026-09-11T14:24:46)"
+    bare = mod.rematch_line({"event_id": "e2", "run_id": "abc"})
+    assert bare == "abc: ? of ?, pool ?"
