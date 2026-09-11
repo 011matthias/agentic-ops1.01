@@ -115,6 +115,7 @@ from .service import (
     execute_statement_attach,
     find_trip_batch,
     has_statement,
+    REMATCH_LOG_KEY,
     is_trip_batch,
     release_trip_batch_slot,
     prepare_statement_attach,
@@ -1218,6 +1219,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 "feedback": {
                     "count": len(_read_feedback()),
                 },
+                # Item 58: every commit of `rematch_month` (attach, re-read,
+                # receipts, cards, master data, set-aside, trip) left one
+                # event in the month's `rematch_log`; the notifier diffs on
+                # `event_id` and mails one line per event. Oldest first;
+                # the sort is stable, so two events in one second keep the
+                # order their month appended them in.
+                "rematches": sorted(
+                    (
+                        {"run_id": r.run_id, "label": r.label, **ev}
+                        for r in all_runs
+                        for ev in ((r.snapshot or {}).get(REMATCH_LOG_KEY) or [])
+                        if isinstance(ev, dict) and ev.get("event_id")
+                    ),
+                    key=lambda ev: str(ev.get("at") or ""),
+                ),
             }
         )
 
