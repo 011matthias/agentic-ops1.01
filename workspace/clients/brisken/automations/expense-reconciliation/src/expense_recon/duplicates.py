@@ -13,6 +13,12 @@ Two deterministic passes that FLAG, never drop:
 Both are advisory. They return id groups for the reviewer to confirm and
 change nothing about the reconciliation, so they cannot break the
 reconciliation guarantee. Pure functions; no LLM, no I/O.
+
+One consumer does act on a receipt group: ``collapsed_duplicate_copies``
+(item 56, owner ruling 2026-09-11) names the copies a re-match keeps OUT of
+the candidate pool, so an invoice and its receipt stop presenting as two
+indistinguishable candidates for one charge. It still drops nothing: every
+copy stays in the snapshot, the counts and the exports.
 """
 from __future__ import annotations
 
@@ -178,3 +184,38 @@ def find_duplicate_receipts(receipts: list[Receipt]) -> list[list[str]]:
     groups = [sorted(set(ids)) for ids in buckets.values() if len(set(ids)) >= 2]
     groups.sort()
     return groups
+
+
+def collapsed_duplicate_copies(
+    receipts: list[Receipt], resolutions: dict[str, str] | None = None
+) -> set[str]:
+    """The document ids a duplicate group contributes BEYOND its first copy,
+    for every group the reviewer has not ruled "not a duplicate".
+
+    Owner ruling 2026-09-11 (backlog item 56). Stripe-style vendors mail
+    both an invoice PDF and a receipt PDF for one purchase; both land, both
+    are the same merchant + date + total + currency, and the matcher saw
+    two indistinguishable candidates for one charge and filed the pairing
+    as AMBIGUOUS. In August 23 of 31 receipts sat in such pairs, so the
+    reviewer was asked to pick between two copies of the same document a
+    dozen times a month. Removing the extra copies from the candidate pool
+    turns each of those into the exact match it always was.
+
+    Only the pool shrinks. Every copy stays in the month's snapshot, its
+    counts, its exports and its duplicate markers; a suppressed copy simply
+    surfaces as unmatched, flagged as the copy it is.
+
+    ``ignore`` is the escape hatch and it is load-bearing: two real
+    purchases from one merchant on one day for one amount are a real thing
+    (two identical coffees, two seats on the same booking), and a reviewer
+    who has ruled a group "not a duplicate" gets both copies back in the
+    pool on the next re-match. A ``confirmed`` group stays collapsed;
+    acknowledging a duplicate is not un-duplicating it.
+    """
+    resolutions = resolutions or {}
+    out: set[str] = set()
+    for members in find_duplicate_receipts(receipts):
+        if resolutions.get(duplicate_group_id("receipt", members)) == "ignore":
+            continue
+        out.update(members[1:])
+    return out

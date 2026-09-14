@@ -126,6 +126,7 @@ from .service import (
     ready_confirm_pairs,
     prepare_intake_run,
     prepare_run,
+    rematch_after_change,
     refresh_batch_master_data,
     regenerate_expense_export,
     regenerate_reconciled,
@@ -397,6 +398,26 @@ def _run_receipts_drop_job(
             )
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+
+
+def _resolve_duplicate_rematch(
+    db_path: Path, learning_db_path: Path, run_id: str
+) -> dict | None:
+    """Re-match a reconciling month after a duplicate resolution (item 56).
+
+    The resolution decides the matcher's pool: an unresolved or confirmed
+    group is collapsed to one candidate, an `ignore` group is not. Without
+    this the ruling would be recorded and inert until the month's next
+    change, which is exactly the "allowed but inert" failure
+    `rematch_after_change` exists to prevent. Its own error contract
+    applies: a failure rides back in the reply, it never fails the
+    resolution that is already written.
+    """
+    with RunStore(db_path) as store:
+        return rematch_after_change(
+            store, run_id,
+            learning_db_path=learning_db_path, trigger="duplicates",
+        )
 
 
 def _run_reread_statements_job(
@@ -1777,6 +1798,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             store.set_duplicate_resolution(run_id, group_id, resolution, _now_iso())
+            reconciling = has_statement(run)
+        # Item 56: the resolution decides what the matcher's pool holds (an
+        # `ignore` group is NOT collapsed), so a reconciling month has to
+        # re-match or the ruling is allowed but inert -- the same reasoning
+        # as every other living-month change. Off the event loop, because
+        # rematch takes the batch lock and can call the model.
+        rematch = None
+        if reconciling:
+            rematch = await run_in_threadpool(
+                _resolve_duplicate_rematch,
+                app.state.db_path, app.state.learning_db_path, run_id,
+            )
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
             # Dispatch on the run's mode, exactly as GET /api/runs/{id}
             # does. Duplicate groups are flagged in BOTH payloads, so an
             # expense batch can be resolved from the grid; replying with
@@ -1792,7 +1829,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     store.get_category_overrides(run_id),
                     store.get_duplicate_resolutions(run_id),
                 )
-        return JSONResponse({"ok": True, "summary": view["summary"]})
+        out = {"ok": True, "summary": view["summary"]}
+        if rematch is not None:
+            out["rematch"] = rematch
+        return JSONResponse(out)
 
     # §16 export policy. The policy is snapshotted into each new run's
     # config at creation, so changing it affects future runs, never
