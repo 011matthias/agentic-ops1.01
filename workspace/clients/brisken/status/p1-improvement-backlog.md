@@ -2269,6 +2269,35 @@ are built from different sources. Make the column and the count answer
 "has a page in the report", and build both reports from the one live
 overlay.
 
+**SHIPPED 2026-09-15. Neither half reproduced on the live months, and both
+mechanisms are reachable.** Read before building: August 31 expenses, 31
+called attached, 31 receipt pages in the built report; July 51, 51, 51. Zero
+"could not be rendered" captions on either month, and the expense set is
+identical across the two documents (31/31 and 51/51), because no delete is
+pending on either. So the fixtures are constructed, like item 60's.
+`expenses[].receipt_in_report` (parallel boolean, ABSENT until known) and
+`summary.n_receipts_in_report` (absent while ANY row is undecided) answer
+"has a PAGE", decided by `prepare_evidence` — the function the builder uses
+to admit a page — recorded at report-build time by `web/receipt_pages.py`
+and keyed to the file's `size:mtime_ns`, so replacing a receipt returns the
+row to unknown rather than serving a stale verdict. The report's own Receipt
+column now reads the same verdicts. `build_reconciliation_report` takes the
+expense overlay and hands the live pool to `build_view` rather than
+filtering its output, because the unmatched list, the duplicates, the
+candidates and the counts are all derived in there. The renderability check
+itself is untouched (item 67 owns per-file failure handling). Tests:
+`test_receipt_coverage.py` (8, route-level through both report routes and
+the grid); three regress proofs RED first.
+
+**One live finding this item does not cover, left open.** July's expense
+report listing has 54 rows for 51 expenses (the account fan-out), and rows
+52-54 read "none" in the Receipt column although every expense has a file:
+`aligned` is false there, so the evidence falls back to one caption per
+receipt numbered 1..51 while the listing numbers 1..54. The captions past
+the first fan-out row therefore name the wrong expense number. That is the
+numbering fallback in `build_expense_report`, not the coverage question, and
+it wants its own item.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
@@ -2289,6 +2318,7 @@ overlay.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 35 | The Receipt column answers "is it in the report": `expenses[].receipt_in_report` (parallel boolean, absent until the verdict is known) and `summary.n_receipts_in_report` (absent while any row is undecided), both decided by `prepare_evidence`, the function the builder uses to admit a page. The report's own listing column reads the same verdicts. And `GET /runs/{id}/reconciliation-report.pdf` is built from the reviewer's live overlay, the pair the expense report and the grid already use | Item 68, carved from item 49. "Attached" was an answer about a file, given before renderability was known, so a password-protected PDF or a receipt whose image lives inside an uploaded expense-report PDF counted as covered while its caption page, thirty pages later, said the file could not be rendered. The caption pages were right the whole time. Second half: the reconciliation document read the stored receipt pool, which only catches up at the next re-match, so an expense the reviewer deleted left the expense report at once and stayed in the one document whose entire job is to be the evidence that a month is complete. The live pool is handed to `build_view` rather than filtered out of its output, because the unmatched list, the duplicates, the candidates and the counts are all derived in there and a second derivation is exactly what let the two documents disagree. Renderability is decided once and RECORDED (keyed to the file's size and mtime, so a replaced receipt returns to "unknown" instead of serving a stale verdict); deciding it per payload would put a decode of every receipt in front of the grid. Read live first and reported: neither half reproduces on August or July today, so the fixtures are constructed. Three regressions of the real source proven RED first | 2026-09-15, this round; suite 1550 -> 1559; SPA half `docs/lovable-receipt-coverage-prompt.md` (owner applies) |
 | 34 | A candidate another charge holds says so: `rows[].candidates[].held_by` names the holding charge (parallel, absent when nobody else holds it), and `summary.n_charges_receipt_taken` counts rows whose every candidate is held elsewhere | Item 60. A charge can carry candidates and still be bucketed `unmatched`, because `candidates[]` keeps every receipt the matcher paired with it while the bucket reflects the ASSIGNMENT, and one receipt settles one charge. The bucket was right; the SPA's bucket-derived label was not, so it said "No receipt found" about a receipt sitting on the row above. Two things worth keeping from the build: the reported instance no longer reproduced (item 56's collapse had given that charge its own exact match), so the fixture had to be constructed rather than observed, and the first construction was wrong in an instructive way (two identical charges competing for one receipt leaves the loser in `unmatched_transactions`, which carries no candidates at all). The real path is a reassignment, driven through `POST /manual-match`. Two regressions of the real source proven RED first | 2026-09-15, this round; suite 1547 -> 1550; SPA half `docs/lovable-receipt-taken-prompt.md` (owner applies) |
 | 33 | A charge's legal entity comes from ITS card (`stamp_charge_entities`), blank when the registry cannot name that card, counted by `summary.n_charges_no_entity`; and an invoice and its receipt are ONE matcher candidate (`collapsed_duplicate_copies`), with a `not a duplicate` ruling re-matching the month | Items 59 + 56, round 2 of the void list, both on owner rulings taken the same day. A Chase workbook filed as card-2838 posted all 111 of August's charges to Corporate Services while 77 were on cards 3645 / 3876, which the coverage panel already called "not in your card list": a wrong posting is silent, a blank one is a count on screen and one card definition away from fixed. And 23 of August's 31 receipts sat in invoice+receipt pairs that reached the reviewer as `ambiguous` picks between two copies of the same document; collapsing the pool turns each into the exact match it always was, while every copy stays in the snapshot, the counts, the exports and its duplicate marker. The `ignore` escape hatch (two real purchases, same merchant, same day, same amount) re-expands the pool, and the resolve route now re-matches so the ruling is not recorded-and-inert. Five regressions of the real source proven RED first, one of them re-run after the first mutation turned out to be a semantic no-op | 2026-09-14, this round; suite 1547 passed / 2 skipped; SPA half `docs/lovable-charge-entity-prompt.md` (owner applies) |
 | 32 | A broken month is never "ready to post": `summary.month_health` on both payloads (`state` broken when the matcher proposed nothing while exact same-day same-amount pairs sit in the pool; `suspects` names sign / currency / entity / card from the matcher's own scoping rules), and `ready_to_post` = no undecided AND health ok. Every commit of `rematch_month` leaves one event (`rematch_log`, trigger + counts) that `/api/operator/state` lists as `rematches[]` and `brisken-recon-notify.py` mails as one line per event | Items 57 + 58, round 1 of the 2026-09-11 void list. August 2026 as uploaded on 2026-09-10 read `ready_to_post: true` with 0 of 111 matched and 31 receipts in the pool: nothing was undecided because nothing had been proposed, and nobody was told, because the notifier pinged on new runs only. The rule only ever refuses; a healthy month is judged by the reviewer's decisions as before, and a month with no exact pair is not its business. Three regressions of the real source proven RED first (readiness wiring, grid wiring, the log append); the 2026-09-10 state reproduced through the real attach route (no Type column, inference off) reads `broken` / `sign` | 2026-09-11 evening, this round; suite 1538 collected; SPA half `docs/lovable-month-health-prompt.md` (owner applies) |

@@ -87,6 +87,7 @@ from .month_health import (
     month_health,
     unchecked as unchecked_month_health,
 )
+from .receipt_pages import known_receipt_pages, record_receipt_pages
 from .serialize import (
     categorization_from_dict,
     categorization_to_dict,
@@ -5004,6 +5005,9 @@ def build_expense_view(
                 n_learned_lines += 1
 
     expenses = []
+    # Item 68: document_id -> the file behind it, or None. Filled in the row
+    # loop below and spent once, after it, against the recorded verdicts.
+    receipt_paths: dict[str, Path | None] = {}
     totals: dict[str, Decimal] = {}
     # Two different questions, two counters: `n_ready` is "needs nothing
     # from the reviewer", `n_categorized` is "has a category" (computed
@@ -5137,15 +5141,21 @@ def build_expense_view(
         # mapped page, a file in receipts/, or (post-graduation attach) a
         # glob hit where the image endpoint actually serves it from.
         source_name = r.document_id
-        has_file = (receipts_dir / r.document_id).is_file()
+        receipt_path = receipts_dir / r.document_id
+        has_file = receipt_path.is_file()
         if not has_file:
             hit = _attached_receipt_file(
                 receipts_dir.parent, r.document_id
             )
             if hit is not None:
                 has_file = True
+                receipt_path = hit
                 # attach files are stored `{key}__{original-name}`
                 source_name = hit.name.split("__", 1)[-1]
+        # Item 68: the exact file the report builder would read for this
+        # row — the same resolution `_evidence_item` does — so the verdict
+        # read back below is keyed to the bytes it was decided about.
+        receipt_paths[r.document_id] = receipt_path if has_file else None
         rv["receipt_image_available"] = (
             r.receipt_image_page is not None or has_file
         )
@@ -5306,6 +5316,20 @@ def build_expense_view(
             if hit is not None:
                 e["settled_by"] = hit
 
+    # Item 68: `receipt_image_available` answers "is there a file the app can
+    # show you". This answers the different question the reader of the report
+    # is actually asking: did that file become a PAGE. The two part company on
+    # a file that exists and cannot be rendered, and on a receipt whose image
+    # is a page inside an uploaded expense-report PDF — previewable in the
+    # app, absent from the document. PARALLEL field per the contract's rule 1:
+    # present only where the verdict is known, so the SPA's existing two
+    # states keep rendering byte-identically everywhere else.
+    pages_known = known_receipt_pages(run.work_dir, receipt_paths)
+    for e in expenses:
+        verdict = pages_known.get(e["document_id"])
+        if verdict is not None:
+            e["receipt_in_report"] = verdict
+
     has_image_info = any(r.has_receipt_image for r in receipts)
     n_categorized, n_uncategorized = categorized_counts(posted)
     set_aside = set_aside_view(run.snapshot or {})
@@ -5383,6 +5407,16 @@ def build_expense_view(
         # paid for. Absent on company months, like the row flag.
         summary["n_roster_mismatch"] = sum(
             1 for e in expenses if e.get("roster_mismatch")
+        )
+    # Item 68: how many expenses have a receipt PAGE in the built report.
+    # ABSENT while any row's verdict is still unknown, rather than present
+    # and quietly short by the rows nobody has decided yet — an undercount
+    # here would read as "receipts are missing" and send somebody hunting
+    # for files that are fine. Once the month's report has been built the
+    # count is complete and stays complete until a receipt's bytes change.
+    if len(pages_known) == len(expenses):
+        summary["n_receipts_in_report"] = sum(
+            1 for known in pages_known.values() if known
         )
 
     # Phase 5 pickers: entities the reviewer can assign (the real entities
@@ -5669,6 +5703,10 @@ def build_expense_report(
     )
     suspect: list[int] = []
     evidence: list[dict] = []
+    # Item 68: the file each document resolved to, so the renderability
+    # verdict this build decides can be recorded against the exact bytes it
+    # was decided about.
+    evidence_paths: dict[str, Path | None] = {}
 
     def _evidence_item(r, numbers: list[int], extra_detail: str = "") -> dict:
         if outside_period(r.detected_date, period) and not (
@@ -5682,6 +5720,9 @@ def build_expense_report(
             path = hit if hit is not None else None
         item: dict = {
             "rows": numbers,
+            # Item 68: which expense this evidence belongs to. The builder
+            # ignores it; the verdict recorder keys on it.
+            "document_id": r.document_id,
             "label": r.detected_vendor or "(no vendor)",
             "detail": "  ·  ".join(x for x in (
                 str(r.detected_date or ""),
@@ -5691,6 +5732,7 @@ def build_expense_report(
                 extra_detail,
             ) if x),
         }
+        evidence_paths[r.document_id] = path
         if path is not None:
             item["name"] = _display_name(path.name)
             item["data"] = path.read_bytes()
@@ -5770,6 +5812,7 @@ def build_expense_report(
         prepared_note=note,
         reimbursements=reimbursements,
         sections=sections,
+        on_prepared=_record_report_pages(run.work_dir, evidence_paths),
     )
 
 
@@ -5778,6 +5821,8 @@ def build_reconciliation_report(
     decisions: dict,
     overrides: dict,
     resolutions: dict[str, str] | None = None,
+    field_overrides: dict[str, dict[str, str]] | None = None,
+    edits: list[dict] | None = None,
 ) -> bytes:
     """The statement reconciliation as a document (owner directive
     2026-08-23: nothing imports this either, so what serves the work is
@@ -5788,11 +5833,45 @@ def build_reconciliation_report(
     every receipt the run holds: matched ones captioned with the charge they
     settle, unmatched ones captioned as unmatched, because a receipt nobody
     could place is exactly what a reader needs to see.
+
+    `field_overrides` / `edits` are the expense-mode overlay (item 68). They
+    are not an extra source: they are THE source, the same one the expense
+    report and the review grid are built from. Without them this document
+    read the stored receipt pool, which only catches up with the reviewer at
+    the next re-match — so an expense deleted on a statement-less month left
+    the expense report at once and stayed here, caption page, receipt pages
+    and all, in a document whose whole job is to be the evidence that a
+    month is complete. The overlay is idempotent by construction
+    (`apply_expense_edits`), so applying it to an already-baked pool changes
+    nothing; on a pool that was never baked the two reports now agree the
+    moment the reviewer acts. Omitted => the pre-item-68 behaviour, which is
+    what the CLI and the offline callers want.
     """
     from ..output.reconciliation_report_pdf import build_reconciliation_report_pdf
 
+    _, snapshot_receipts, _, _ = snapshot_from_dict(run.snapshot)
+    receipts = snapshot_receipts
+    if field_overrides or edits:
+        receipts = apply_expense_edits(
+            snapshot_receipts, field_overrides or {}, edits or [],
+            category_overrides=overrides,
+            default_entity=(
+                ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+            ),
+        )
+    if {r.document_id for r in receipts} != {
+        r.document_id for r in snapshot_receipts
+    }:
+        # Hand `build_view` the live pool rather than post-filtering its
+        # output: the unmatched list, the duplicate groups, the candidates
+        # and the counts are all derived there, and re-deriving any of them
+        # here would be a second implementation of the same rules — the
+        # exact shape that let the two documents disagree in the first place.
+        run = replace(run, snapshot={
+            **(run.snapshot or {}),
+            "receipts": [receipt_to_dict(r) for r in receipts],
+        })
     view = build_view(run, decisions, overrides, resolutions)
-    _, receipts, _, _ = snapshot_from_dict(run.snapshot)
     charge_by_doc: dict[str, dict] = {}
     for row in view.get("rows") or []:
         doc = row.get("chosen_document_id")
@@ -5801,11 +5880,13 @@ def build_reconciliation_report(
 
     receipts_dir = Path(run.work_dir) / "receipts"
     evidence: list[dict] = []
+    evidence_paths: dict[str, Path | None] = {}
     for r in receipts:
         path = receipts_dir / r.document_id
         if not path.is_file():
             hit = _attached_receipt_file(receipts_dir.parent, r.document_id)
             path = hit if hit is not None else None
+        evidence_paths[r.document_id] = path
         charge = charge_by_doc.get(r.document_id)
         if charge is not None:
             label = (
@@ -5824,7 +5905,9 @@ def build_reconciliation_report(
                  if r.detected_total is not None else ""),
                 "no charge on the statement settles this receipt",
             ) if x)
-        item: dict = {"label": label, "detail": detail}
+        item: dict = {
+            "label": label, "detail": detail, "document_id": r.document_id,
+        }
         if path is not None:
             item["name"] = _display_name(path.name)
             item["data"] = path.read_bytes()
@@ -5833,7 +5916,35 @@ def build_reconciliation_report(
     label = run.label or run.run_id
     return build_reconciliation_report_pdf(
         view, title=f"Reconciliation — {label}", evidence=evidence,
+        on_prepared=_record_report_pages(run.work_dir, evidence_paths),
     )
+
+
+def _record_report_pages(work_dir, evidence_paths: dict[str, "Path | None"]):
+    """An `on_prepared` callback that records which documents got a page.
+
+    Item 68. Renderability is decided once, inside the builder, with the
+    bytes in hand; this is how that verdict leaves the build. The review
+    grid reads it back and stops calling an unrenderable file "attached",
+    and neither side gets its own opinion about what a page is: the answer
+    on the screen is literally the answer the builder acted on.
+
+    Evidence without a `document_id` (a caller that predates the key) is
+    skipped rather than guessed at — a wrong key would poison the cache for
+    a document that is perfectly fine.
+    """
+    def _on_prepared(prepared) -> None:
+        verdicts: dict[str, tuple[Path | None, bool]] = {}
+        for item, pdf_bytes in prepared:
+            document_id = str(item.get("document_id") or "")
+            if not document_id:
+                continue
+            verdicts[document_id] = (
+                evidence_paths.get(document_id), pdf_bytes is not None,
+            )
+        record_receipt_pages(work_dir, verdicts)
+
+    return _on_prepared
 
 
 def assign_batch_cards(

@@ -161,6 +161,7 @@ name answers the same one:
 | `n_set_aside` | how many files the quarantine is still holding back |
 | `n_duplicate_groups` | how many duplicate SITUATIONS were flagged |
 | `n_duplicate_copies` | how many copies are redundant (every copy after the first in a group the reviewer has not dismissed) |
+| `n_receipts_in_report` | how many expenses have a receipt PAGE in the built report (item 68). Not "how many have a file": a file that cannot be rendered is a file, and the caption page says so while the Receipt column used to say "attached". ABSENT until every row's verdict is known, so the count is never quietly short |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -1151,3 +1152,59 @@ their receipts stay in the evidence pages. The CSV keeps them as rows
 (mixed-entity ruling: one file) with `Legal Entity` = `(private expense)`
 and `Paid Through` = `Private ({person})` — the same strings the grid
 shows.
+
+## "Attached" is a file; a page is a page: `receipt_in_report` (item 68)
+
+The Receipt column read **attached** the moment a file was found on disk.
+Renderability is decided later, with the bytes in hand, so a
+password-protected PDF or a truncated image was a file that existed and a
+page that never appeared: the column said "attached", the count of covered
+expenses agreed, and thirty pages later that same receipt's caption read
+"this file could not be rendered into the report". The caption pages were
+the truth the whole time.
+
+`expenses[].receipt_in_report` is the column's third state. Boolean,
+PARALLEL per rule 1: `receipt_image_available` keeps its own meaning
+(the app can serve you this file) and its own renderer, unchanged.
+
+```json
+{ "receipt_image_available": true,
+  "source_file": "invoice-IUS25300.pdf",
+  "receipt_in_report": false }
+```
+
+The two disagree in exactly two situations, and both are real: a file that
+cannot be decoded, and a receipt whose image is a page inside an uploaded
+expense-report PDF (previewable in the app, never carried into the document).
+
+**ABSENT, not null, until the verdict is known.** The verdict comes from
+`output/_pdf_common.prepare_evidence` — the function the builder uses to
+admit a page — recorded by whichever report was built last and read back by
+the view (`web/receipt_pages.py`). Deciding it per payload would put a decode
+of every receipt in the month in front of the grid. So a row with a file and
+no built report carries no key at all; a row with no file is decided from the
+start, because nothing on disk cannot become a page. The verdict is keyed to
+the file's `size:mtime_ns`, so replacing a receipt returns the row to
+"unknown" instead of serving last week's answer.
+
+`summary.n_receipts_in_report` follows the same rule one level up: absent
+while ANY row is undecided. A count that quietly omitted the undecided rows
+would read as "receipts are missing" and send somebody hunting for files that
+are fine.
+
+## One deletion, both documents (item 68)
+
+`GET /runs/{id}/reconciliation-report.pdf` is built from the reviewer's live
+overlay, the same `apply_expense_edits` pair the expense report and the grid
+are built from. It used to read the stored receipt pool, which only catches
+up at the next re-match, so an expense the reviewer deleted left the expense
+report at once and stayed in the reconciliation report — caption page,
+receipt pages and all, in the document whose entire job is to be the evidence
+that a month is complete.
+
+The overlay is handed to `build_view` rather than filtered out of its output:
+the unmatched list, the duplicate groups, the candidates and the counts are
+all derived in there, and re-deriving any of them at the report would be a
+second implementation of the same rules, which is the shape that let the two
+documents disagree in the first place. `apply_expense_edits` is idempotent, so
+a month whose pool was already baked renders byte-for-byte as before.

@@ -68,6 +68,7 @@ def build_expense_report_pdf(
     prepared_note: str = "",
     reimbursements: Sequence[dict] | None = None,
     sections: Sequence[dict] | None = None,
+    on_prepared=None,
 ) -> bytes:
     """Render the month's report: listing first, then the receipts.
 
@@ -105,6 +106,12 @@ def build_expense_report_pdf(
     numbering continuous across sections (`start` is the 1-based global
     row number of the slice's first row, and the slices cover `rows`
     exactly). Omitted => the single flat table, unchanged.
+
+    `on_prepared` (item 68), when given, is called once with the prepared
+    evidence — `[(item, pdf_bytes|None)]` — the moment renderability has
+    been decided and before anything is drawn. It is how the caller learns
+    which documents actually got a page, without deciding it a second time:
+    one expensive pass, two consumers.
     """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -151,13 +158,26 @@ def build_expense_report_pdf(
             _esc(f"{len(rows)} expenses  ·  {totals_line}"), styles["sub"]
         ))
 
-    # Which listing rows actually have a document behind them. The column
+    # Renderability is decided HERE, before a single row is drawn, because
+    # the Receipt column below is an answer to "is the receipt in this
+    # report" and that question cannot be answered by the presence of a
+    # file (item 68). A password-protected PDF or a truncated image is a
+    # file that exists and a page that never appears, and the column used
+    # to call it "attached" while the caption page thirty pages later said
+    # the file could not be rendered. The caption pages were right.
+    items = list(evidence or [])
+    prepared = prepare_evidence(items)
+    if on_prepared is not None:
+        on_prepared(prepared)
+
+    # Which listing rows actually have a page behind them. The column
     # cannot promise a PAGE number (the captions are laid out after this
-    # table is built), so it states the one thing it knows for certain.
+    # table is built), so it states the one thing it now knows for certain.
     documented: set[int] = set()
-    for item in (evidence or []):
-        if item.get("data"):
-            documented.update(int(n) for n in item.get("rows") or [])
+    for item, pdf_bytes in prepared:
+        if pdf_bytes is None:
+            continue
+        documented.update(int(n) for n in item.get("rows") or [])
 
     head = [Paragraph(_esc(name), styles["cellhead"]) for name, _w in _LISTING]
 
@@ -269,13 +289,11 @@ def build_expense_report_pdf(
         story.append(Paragraph(_esc(prepared_note), styles["sub"]))
 
     # ── caption pages: one per document, its pages appended behind ─────
-    # Renderability is decided BEFORE the caption is written, so a file that
-    # exists but cannot be turned into pages says so on its caption instead
-    # of leaving a caption with nothing behind it (which reads as "the
-    # receipt is here" to anyone flipping through).
-    items = list(evidence or [])
-    prepared = prepare_evidence(items)
-
+    # Renderability was decided ABOVE, before the listing was written, so a
+    # file that exists but cannot be turned into pages says so on its
+    # caption instead of leaving a caption with nothing behind it (which
+    # reads as "the receipt is here" to anyone flipping through) — and the
+    # Receipt column in the listing says the same thing.
     for item, pdf_bytes in prepared:
         story.append(PageBreak())
         numbers = [int(n) for n in item.get("rows") or []]
