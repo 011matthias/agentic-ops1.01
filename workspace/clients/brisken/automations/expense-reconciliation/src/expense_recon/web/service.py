@@ -41,6 +41,7 @@ from ..cli import NON_RECEIPT_LABELS, ConfigError, generate_expenses, reconcile
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
 from ..duplicates import (
+    collapsed_duplicate_copies,
     duplicate_group_id,
     duplicate_row_flags,
     find_duplicate_charges,
@@ -1455,7 +1456,15 @@ def validate_manual_match(
     rec = next((r for r in receipts if r.document_id == document_id), None)
     if rec is None:
         return "Unknown receipt for this run."
-    if rec.legal_entity_id != tx.legal_entity_id:
+    # The matcher's own rule since 2026-09-11: an EMPTY entity on either
+    # side is unscoped (a mailed receipt before its card is known, a charge
+    # on a card the registry cannot name, item 59); only two NAMED entities
+    # that differ refuse.
+    if (
+        rec.legal_entity_id
+        and tx.legal_entity_id
+        and rec.legal_entity_id != tx.legal_entity_id
+    ):
         return "Receipt and charge belong to different legal entities."
     return None
 
@@ -2923,6 +2932,11 @@ def build_view(
         "n_undecided": n_undecided,
         "ready_to_post": n_undecided == 0 and health["state"] == HEALTH_OK,
         "month_health": health,
+        # Item 59: charges whose card the registry cannot name carry no
+        # entity; the fix is defining the card once, not a row edit.
+        "n_charges_no_entity": sum(
+            1 for t in transactions if not (t.legal_entity_id or "").strip()
+        ),
         "n_unmapped_accounts": n_unmapped,
         "unreconciled_by_ccy": {
             ccy: f"{amt:,.2f}" for ccy, amt in sorted(unreconciled.items())
@@ -5329,6 +5343,11 @@ def build_expense_view(
     # so every charge rolled up has a state that was computed for it.
     charges, charge_state_map = month_charge_states(run, decisions or {})
     coverage, _keys = month_coverage(run, charges, charge_state_map)
+    # Item 59: same count the workbench carries, from the same charge set
+    # the coverage panel rolls up. 0 before a statement is loaded.
+    summary["n_charges_no_entity"] = sum(
+        1 for t in charges if not (t.legal_entity_id or "").strip()
+    )
 
     return {
         "run_id": run.run_id,
@@ -6612,6 +6631,51 @@ def _charge_card_identity(tx, cards: dict) -> _CardIdentity:
 
     observed = tx.card_last4 if _card_keys(tx.card_last4) else tx.account_id
     return _identity_from_observed(observed, cards)
+
+
+def stamp_charge_entities(transactions: list, cards: dict) -> list:
+    """Item 59 (owner ruling 2026-09-11): a charge's legal entity comes from
+    ITS card, not from the card the upload was filed under.
+
+    The parsers stamp the upload's entity on every row, which on a Chase
+    multi-card workbook filed as card-2838 put all 111 August charges under
+    Corporate Services while 77 of them sat on cards 3645 and 3876. Here,
+    for every row that PRINTED a card (the per-row `card_last4` the WS3
+    column map fills), the entity is the registry card's entity, and a
+    card the registry cannot name, or names without an entity, leaves the
+    row BLANK: a visible gap beats a wrong posting, and the coverage panel
+    already lists that card as "not in your card list". A row with no card
+    column keeps what the upload said: the account id IS the card there,
+    and `resolve_entity` already read the registry for it.
+
+    Resolution is `resolve_card` on the same observed string the matcher's
+    scoping and the coverage identity use, ambiguity to nothing, so the row,
+    the coverage row and the card scoping cannot disagree about which
+    plastic a charge is on. An empty registry stamps nothing: a batch that
+    predates the card registry keeps the upload's entity on every row.
+
+    Ids are content-derived without the entity, so re-stamping on every
+    re-match (this runs inside `rematch_month`, which every attach, re-read,
+    card assignment and master-data refresh passes through) never moves a
+    charge or its decisions.
+    """
+    from ..cards import resolve_card
+    from ..matching.deterministic import _card_keys
+
+    if not cards or not transactions:
+        return transactions
+    out: list = []
+    for tx in transactions:
+        if not _card_keys(tx.card_last4):
+            out.append(tx)
+            continue
+        card = resolve_card(tx.card_last4, cards, on_ambiguity="none")
+        entity = (card.entity or "") if card is not None else ""
+        out.append(
+            replace(tx, legal_entity_id=entity)
+            if entity != (tx.legal_entity_id or "") else tx
+        )
+    return out
 
 
 def _statement_card_identities(
@@ -8199,6 +8263,13 @@ def rematch_month(
         for r in receipts
     ]
 
+    # Item 59: the charge side of the same rule. Each charge that printed a
+    # card carries THAT card's entity from the batch's registry snapshot
+    # (blank when the registry cannot name it), so the entity scope below
+    # and the coverage panel read one truth. Stamped before the match and
+    # committed with the snapshot; ids do not hash the entity.
+    transactions = stamp_charge_entities(transactions, _batch_cards(cfg))
+
     llm_client, tracker, _source = _batch_llm_client(cfg)
     # Judgments already paid for on this run answer from the snapshot;
     # only genuinely new pairs reach the model.
@@ -8227,6 +8298,19 @@ def rematch_month(
         [r for r in receipts if r.document_id not in foreign_claims]
         if foreign_claims else receipts
     )
+    # Item 56 (owner ruling 2026-09-11): an invoice and its receipt for one
+    # purchase are ONE candidate. Without this the matcher sees two
+    # indistinguishable documents for one charge and files the pairing as
+    # ambiguous, which in August was 23 of 31 receipts and a reviewer
+    # picking between two copies of the same document a dozen times. The
+    # suppressed copies rejoin `unmatched_receipts` below, keeping the
+    # reconciliation guarantee and their duplicate markers; a group the
+    # reviewer ruled "not a duplicate" (`ignore`) is never collapsed.
+    collapsed = collapsed_duplicate_copies(
+        pool, store.get_duplicate_resolutions(run.run_id)
+    )
+    if collapsed:
+        pool = [r for r in pool if r.document_id not in collapsed]
     # R4b (item 38 ruling 3): the pool spans trips. Receipts from trips
     # overlapping this month's charge span join the candidate set --
     # already excluding anything another run settled (the same advisory
@@ -8256,11 +8340,11 @@ def rematch_month(
     )
     # Excluded receipts still belong to this month's pool and its totals;
     # they are unmatched HERE because they are settled elsewhere.
-    if foreign_claims:
+    if foreign_claims or collapsed:
         _in_pool = {r.document_id for r in receipts}
         _have = set(outcome.unmatched_receipts)
         outcome.unmatched_receipts.extend(
-            d for d in foreign_claims
+            d for d in (*foreign_claims, *sorted(collapsed))
             if d in _in_pool and d not in _have
         )
     # A borrowed receipt the matcher did not consume simply stays in its

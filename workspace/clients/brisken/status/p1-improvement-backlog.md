@@ -2074,9 +2074,17 @@ one. Owner call: whether an unresolved group may be collapsed automatically
 or only after the reviewer confirms it. Until then the pairs surface as
 candidates and Criss picks.
 
-Void 6 of the 2026-09-11 list is this item. The ruling is still open; the
-2026-09-11 evening session asks it as a decision with a recommendation
-before any code.
+**RULED + SHIPPED 2026-09-14 (void 6).** Owner ruling: collapse
+automatically. `duplicates.collapsed_duplicate_copies` names every copy
+after the first in each unresolved or confirmed group;
+`rematch_month` keeps those out of the candidate pool, so the pair is one
+exact match instead of two indistinguishable candidates. Nothing is
+dropped: the copy stays in the snapshot, the counts and the exports, and
+surfaces as unmatched with its `duplicate` marker. A group ruled `ignore`
+(two real purchases, same merchant, same day, same amount) is not
+collapsed, and `POST /api/runs/{id}/duplicates/resolve` now re-matches a
+reconciling month so that ruling is not recorded-and-inert. Tests:
+`test_duplicate_collapse.py` (5, route-level); three regress proofs.
 
 ### The 2026-09-11 void list (items 57-64, ranked; 6 = item 56, 7 = the re-read under item 55)
 
@@ -2114,9 +2122,22 @@ Corporate Services, while `coverage[]` shows cards 3645 (40 charges) and
 3876 (37) as "not in your card list" with a blank entity. The parsed card
 column is already on every row (`card_last4`); the entity should resolve
 per row through the card registry, and a card the registry does not know
-should not inherit the upload's entity. OWNER RULING NEEDED before code:
-blank entity for unknown cards (recommended: a visible gap beats a wrong
-posting) or inherit the upload's entity.
+should not inherit the upload's entity.
+
+**RULED + SHIPPED 2026-09-14.** Owner ruling: blank entity for unknown
+cards. `service.stamp_charge_entities` resolves each row that printed a
+card through the batch's registry snapshot (`resolve_card`, ambiguity to
+nothing, the same identity the coverage panel and the card scoping use)
+and leaves the entity empty when the registry cannot name the card or
+names it without an entity; a workbook with no card column keeps the
+upload's entity, because there the account id IS the card. Re-stamped on
+every re-match, so defining the card once and refreshing master data fills
+the rows in place. `summary.n_charges_no_entity` on both payloads counts
+the gap. The hand-match guard was sharpened to the matcher's own rule
+(empty on either side is unscoped; only two NAMED entities refuse), since
+a charge can now legitimately carry none. Tests: `test_charge_entity.py`
+(6, route-level); two regress proofs. SPA half:
+`docs/lovable-charge-entity-prompt.md`.
 
 ### 60. A charge with waiting candidates renders "No receipt found" (2026-09-11)
 
@@ -2180,6 +2201,7 @@ the printed sign in both `statement_csv` and `statement_xlsx`.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 33 | A charge's legal entity comes from ITS card (`stamp_charge_entities`), blank when the registry cannot name that card, counted by `summary.n_charges_no_entity`; and an invoice and its receipt are ONE matcher candidate (`collapsed_duplicate_copies`), with a `not a duplicate` ruling re-matching the month | Items 59 + 56, round 2 of the void list, both on owner rulings taken the same day. A Chase workbook filed as card-2838 posted all 111 of August's charges to Corporate Services while 77 were on cards 3645 / 3876, which the coverage panel already called "not in your card list": a wrong posting is silent, a blank one is a count on screen and one card definition away from fixed. And 23 of August's 31 receipts sat in invoice+receipt pairs that reached the reviewer as `ambiguous` picks between two copies of the same document; collapsing the pool turns each into the exact match it always was, while every copy stays in the snapshot, the counts, the exports and its duplicate marker. The `ignore` escape hatch (two real purchases, same merchant, same day, same amount) re-expands the pool, and the resolve route now re-matches so the ruling is not recorded-and-inert. Five regressions of the real source proven RED first, one of them re-run after the first mutation turned out to be a semantic no-op | 2026-09-14, this round; suite 1547 passed / 2 skipped; SPA half `docs/lovable-charge-entity-prompt.md` (owner applies) |
 | 32 | A broken month is never "ready to post": `summary.month_health` on both payloads (`state` broken when the matcher proposed nothing while exact same-day same-amount pairs sit in the pool; `suspects` names sign / currency / entity / card from the matcher's own scoping rules), and `ready_to_post` = no undecided AND health ok. Every commit of `rematch_month` leaves one event (`rematch_log`, trigger + counts) that `/api/operator/state` lists as `rematches[]` and `brisken-recon-notify.py` mails as one line per event | Items 57 + 58, round 1 of the 2026-09-11 void list. August 2026 as uploaded on 2026-09-10 read `ready_to_post: true` with 0 of 111 matched and 31 receipts in the pool: nothing was undecided because nothing had been proposed, and nobody was told, because the notifier pinged on new runs only. The rule only ever refuses; a healthy month is judged by the reviewer's decisions as before, and a month with no exact pair is not its business. Three regressions of the real source proven RED first (readiness wiring, grid wiring, the log append); the 2026-09-10 state reproduced through the real attach route (no Type column, inference off) reads `broken` / `sign` | 2026-09-11 evening, this round; suite 1538 collected; SPA half `docs/lovable-month-health-prompt.md` (owner applies) |
 | 31 | Excel statements canonicalize the sign; Chase's `Type` column is guessed; an entity-less receipt is unscoped in the matcher; `POST .../statements/reread` rebuilds a month's charges from its stored files without doubling it | Criss's July and August 2026 reconciled 0 of 111/112 with the receipts in the pool ("ele ve que tem recibo mas nao associa"): the xlsx parser kept Chase's printed negative purchases, the CSV parser had canonicalized them since 3.15, and the matcher compared -15.00 with 15.00. The repair had to be a re-read, not a re-upload, because content-derived ids would have folded the corrected rows in beside the wrong ones. Three regressions of the real source proven RED first (Type path, majority inference, entity rule), offline on the real August file 0 -> 5 exact + 4 judgment + 23 with candidates. Item 55; item 56 records the invoice+receipt-pair ambiguity it uncovered | 2026-09-11, this round |
 | 30 | The card screen shows the cards that actually charge. `GET /api/cards` gains `seen_undefined[]`: the card identities the loaded months charge but the registry cannot name, busiest first, each carrying the digits to define it as, its charge count and the months it appears in | `/api/cards` composed the settings registry plus the shipped presets and nothing else, so it listed 2838 and four cards carrying no charges, while 3645 (46 charges), 3876 (19) and 0340 (10) appeared nowhere on the very screen where a card gets defined. The reviewer's actual move, define the card these charges are on, was the one move the screen could not start. Identity comes from the same `_charge_card_identity` the `coverage[]` panel uses, because two derivations would be two answers about the same plastic. One defect caught by its own test before it could reach the table: the suggested name first came off the internal match key, which strips leading zeros on purpose so Chase's "0340" and the Zoho payment mode's "340" land on one key, and a reviewer would have been offered "340" for a card they know as 0340. Human-facing fields now show what the statement printed; the key stays normalized. Four regressions of the real source, each proven RED first, and a fifth candidate dropped with its reason recorded (a fast path with no observable behaviour, so a test for it would assert the implementation) | PR #651, 2026-08-28, deployed Fly `7acbd983`; suite 1398 passed / 2 skipped, calibrate green, CI green; live `/api/cards` on the real Brisken data returns the three undefined cards with the leading zero intact. SPA half `docs/lovable-card-definition-prompt.md`, applied by the owner 2026-09-06 |

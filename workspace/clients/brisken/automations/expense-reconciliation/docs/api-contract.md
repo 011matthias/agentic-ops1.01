@@ -153,6 +153,7 @@ name answers the same one:
 | `n_review` | how many are flagged for a look (`check` or `pick`) |
 | `n_needs_entity` | how many still need a legal entity (a confirmed private row needs none by design, so it does not count — item 41 sharpened the question the name always asked) |
 | `n_needs_person` | how many rows no person owns yet (item 40; the fix is a person on the card, not a row edit) |
+| `n_charges_no_entity` | how many CHARGES carry no legal entity, because the card they printed is not in the registry or has no entity (item 59; the fix is defining that card, not a row edit). Charges, not expenses: `n_needs_entity` answers the receipt-side question |
 | `n_roster_mismatch` | trip batches only (absent on company months): how many rows a person OUTSIDE the trip's roster paid for (item 38 x 40) |
 | `n_suggested_private` | how many rows are suggested as private expenses, unconfirmed (item 41) |
 | `n_private` | how many rows the operator confirmed private (reimbursement rows) |
@@ -301,6 +302,46 @@ folder), `cards`, `master_data`, `set_aside`, `trip`. Oldest first. The
 notifier diffs on `event_id` and mails one line per event ("August 2026:
 14 of 111, pool 7 (reread, 2026-09-11T14:24:46+00:00)"); an event with no
 id is never announced.
+
+## An invoice and its receipt are one candidate (added 2026-09-14, item 56)
+
+No new field. The matcher's candidate pool now holds only the FIRST copy of
+each duplicate receipt group (`find_duplicate_receipts`: same normalized
+merchant + date + total + currency), so a Stripe-style invoice-plus-receipt
+pair produces one exact match instead of two indistinguishable candidates
+and an `ambiguous` pairing. Owner ruling 2026-09-11.
+
+Everything else is unchanged and load-bearing: the suppressed copy stays in
+`receipts`, in `n_receipts`, in the exports, and in `unmatched_receipts[]`
+carrying its `duplicate` marker, so the reconciliation guarantee holds and
+the reviewer can still see both documents. A group resolved `ignore` ("not
+a duplicate": two real purchases, same merchant, same day, same amount) is
+NOT collapsed, and `POST /api/runs/{id}/duplicates/resolve` now re-matches
+a reconciling month so that ruling takes effect immediately; its reply
+gains `rematch` (the same object every living-month change returns, absent
+on a batch with no statement).
+
+## A charge's entity comes from its card (added 2026-09-14, item 59)
+
+`rows[].legal_entity_id` and `unmatched_transactions[]` charges: for a row
+whose statement printed a card (the per-row `card_last4` column), the
+entity is the entity of the card the batch's registry snapshot resolves
+that number to, and it is **empty** when the registry does not know the
+card or knows it without an entity. A row with no card column keeps the
+upload's entity (there the account id is the card). Stamped on every
+re-match, so defining the card in Settings and refreshing the month's
+master data fills the rows in place; ids and decisions never move.
+
+Owner ruling 2026-09-11: a visible gap beats a wrong posting. Before this,
+a Chase multi-card workbook filed as card-2838 put all 111 August charges
+under Corporate Services while 77 sat on cards 3645 / 3876, which the
+coverage panel already listed as "not in your card list".
+
+`summary.n_charges_no_entity` (both payloads; 0 before a statement) counts
+those rows; the fix it points at is one card definition, not a row edit.
+The hand-match guard (`POST /api/runs/{id}/manual-match`) follows the
+matcher's rule: an empty entity on either side is unscoped, only two named
+entities that differ refuse. Renders in `docs/lovable-charge-entity-prompt.md`.
 
 ## Per-card coverage: `coverage[]` (added 2026-08-26)
 
