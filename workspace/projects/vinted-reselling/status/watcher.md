@@ -4,7 +4,7 @@ workstream: watcher
 group: ""
 spec: ""
 state: active
-updated: 2026-09-11
+updated: 2026-09-14
 ---
 
 Sourcing watcher + price/demand database. Polls the Vinted catalog API for
@@ -348,6 +348,56 @@ Drei Fragen an den Owner, ohne die keine Umstellung sauber ist: ist "20 EUR"
 der Kauf-Gesamtpreis inkl. Gebuehr oder der Wiederverkaufswert; ist die
 15-EUR-Schwelle netto oder brutto; welcher Tag hat den Eindruck gepraegt
 (09.09. und 10.09. waren bei lauten teuren Pushes schwerer als heute).
+
+## STOP: die API sperrt uns aus (seit 2026-09-14T19:35Z)
+
+Der Watcher sammelt nichts. Zwei getrennte Dinge nach dem 11.09.:
+
+1. **73 Stunden aus** (11.09. 18:11Z bis 14.09. 19:35Z, keine einzige Logzeile
+   am 12. und 13.). Der Laptop war aus; `WakeToRun=False` ist die Entscheidung
+   des Owners, kein Fehler. Die Liveness-Warnung hat beim Neustart korrekt
+   gefeuert: "no successful poll for 4404 min; operator alerted".
+2. **Seit dem Neustart wird jeder Abruf abgewiesen.** 16 Zyklen, alle 12 Suchen,
+   100% Fehlschlag. Die Session wird sauber gemintet (Token gueltig bis
+   15.09. 19:35Z) und die Startseite antwortet 200, aber
+   `/api/v2/catalog/items` **und** `/api/v2/items/{id}` verweigern.
+
+Die Form der Absage ist der Punkt: **403 mit HTML-Sperrseite bei einer einfachen
+Anfrage, 404 wenn `Accept: application/json` mitgeht** - und genau das schickt
+`api_get`. Der 403-Zweig feuert also nie, es wird kein Backoff gesetzt, und der
+Watcher schickt 12 Anfragen alle 5 Minuten in eine Wand (bisher rund 190
+abgewiesene Anfragen). Dieselbe Fehlerform wie die 147 ntfy-Wiederholungen, die
+#794 abgestellt hat, nur auf der anderen Seite des Systems. An den Parametern
+liegt es nicht: mit `order`, ohne `order`, nur `search_text`, ganz ohne - alle
+404.
+
+Naechste Schritte im Checkpoint vom 14.09.: entscheiden ob der Task pausiert
+wird, die Header gegen eine echte Browser-Session vergleichen (CDP,
+`reference_user_edge_cdp_9222`), und in `api_get` ein 404 auf den Katalog als
+Wand behandeln.
+
+## Erste Outcome-Daten auf Alert-Kandidaten (11.09., n=37)
+
+Drei Recheck-Laeufe am 11.09. (15:47, 16:52, 17:57Z) haben 37 Alert-Kandidaten
+aufgeloest, 32 davon verkauft. Zum ersten Mal ueberhaupt Verkaufsdaten auf
+unseren eigenen Kandidaten statt auf populaeren Seed-Zeilen.
+
+| Kaufpreis | aufgeloest | verkauft |
+|---|---|---|
+| <10 | 1 | 1 |
+| 10-15 | 9 | 9 |
+| 15-20 | 10 | 7 |
+| 20-30 | 7 | 5 |
+| 30-50 | 7 | 7 |
+| 50+ | 3 | 3 |
+
+Kein Preisgefaelle. Zwei Einschraenkungen wiegen schwerer als die Zahlen: die
+"~69h bis Verkauf" sind ein Artefakt davon, wann der Recheck lief (alle Zeilen
+zuerst am 08.09. gesehen, am 11.09. aufgeloest), also keine
+Geschwindigkeitsmessung; und unterdrueckte Kandidaten verkauften 9 von 10 gegen
+23 von 27 bei gepushten, der erste Hinweis darauf, dass die Rangfolge nicht
+nachweislich die Gewinner trifft. 3022 Alert-Zeilen sind unaufgeloest, und die
+Kohorten vom 06.-08.09. verlieren ab dem 16.09. die Verkauft/Weg-Unterscheidung.
 
 ## Elemente
 

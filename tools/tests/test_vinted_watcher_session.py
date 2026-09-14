@@ -1137,7 +1137,14 @@ def test_yesterdays_field_does_not_set_todays_bar(vw, con, paths):
     from the day before and the bar stood at the 88.6th percentile of a day
     that was over. Nine pushes arrived, none of them loud.
     """
-    yesterday = (datetime.now(timezone.utc) - timedelta(hours=20)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Derived from the boundary under test, not from "20 hours ago". A fixed
+    # offset only lands on the previous local day for part of the clock: at
+    # 21:03 UTC on a UTC runner, now minus 20h is 01:03 the SAME day, the 200
+    # rows counted as today's, and this assertion read 0 instead of 5. The test
+    # was green on every run before 20:00 local and red after it.
+    yesterday = (vw.parse_ts(vw.local_day_start_utc())
+                 - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert yesterday < vw.local_day_start_utc(), "the fixture rows must predate today"
     _fill_day(vw, con, 200, when=yesterday, quality=500.0)
     # A good candidate, hopeless against yesterday's field, alone in today's.
     # Both bars read the same pool, so both are asserted: against a rolling
