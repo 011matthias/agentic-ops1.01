@@ -4,7 +4,7 @@ workstream: enquiry-automation
 group: ""
 spec: a0, a1, a2, a3
 state: live
-updated: 2026-09-11
+updated: 2026-09-15
 ---
 
 # meji-media / enquiry-automation
@@ -23,7 +23,8 @@ gitignored `context/`.
 | Fail-closed filter defect (2026-09-10) | done | The first filter passed only enquiry_type 0 and silently dropped office enquiry 16046. Corrected the same day at 12:02Z. Root-cause candidate: A0 hand-builds its JSON body with unescaped customer free-text immediately before enquiry_type. | Harden A0's payload construction (escape notes, or send a structured body) | not scheduled | comms-log 2026-09-09 entry |
 | Venue lookup rebuild (live read of the events table instead of the hardcoded id list) | paused | DEFERRED by Gurmej 09-09 to the end of the year. An event-151 line was added 09-10 and REVERTED 09-11: the venue list sits inside the deferred scope and is not to be touched. | Re-raise before next season's dates are entered | Gurmej's call | comms-log 2026-09-09 + Block 32 |
 | Second inbound sender (bookings@ router + dual-inbox reply detection) | paused | Mailbox warmed since July; router and A2 dual-inbox work not started. bookings@ must not carry cold campaigns until this ships. | Scope with the owner once the Christmas launch questions are answered | owner priority | `context/inbound-enquiry-multiinbox-scope.md` |
-| Booked-lead suppression off the client's own database | blocked | Needs the enquiry_status value that means booked | Ask Jess in the next room message | One line from Jess | comms-log 2026-09-08 "Still unsent" |
+| Booked-lead suppression off the client's own database | done | Compiled 2026-09-15. No client ask was needed: `enquiry_status` has no booked value, bookings live in `parties`, joined to the campaign audience on `leader_email`. 35 of the 1,552 campaign people match. All 291 `parties` rows were created in 2026, so the table is this-season-only and a match means "booked for this Christmas", not a historic booking. | Re-pull immediately before any send; the table grew to 291 rows by 09-14 19:30 | - | `context/suppression/2026-09-15-stop-list.md` |
+| Christmas stop-list (the gate on Gurmej's re-engagement go) | ready | Compiled 2026-09-15 from a live pull of the three Christmas campaigns and a read of all 355 inbound messages. Two tiers on owner direction: 25 for the account-wide block list (asked out, or dead address), 82 excluded from this wave only (booked, sorted elsewhere, complained, live deals) and deliberately NOT blocked, since blocking a booked customer would kill next season's re-engagement. Net mailable 1,445. | OWNER GO #1 for the remaining 24 block-list writes | owner go | `context/suppression/2026-09-15-stop-list.md` |
 
 ## Open decisions / gates
 
