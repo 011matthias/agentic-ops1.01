@@ -89,7 +89,7 @@ Delivered in the reply as one fenced block (per
 
 brisken platform: unknown plan (pre-flight could not read `infrastructure.yaml`
 platform section); Fly app `brisken-expense-recon` pinned always-on, live
-**v116** as of 2026-09-14.
+**v117** as of 2026-09-15 (item 60 deploy; v116 was the 2026-09-14 round).
 
 Live months after PR #815 (items 56 + 59) and the owner-approved refresh:
 July 2026 27 clean + 11 review of 111 charges / 50 receipts; August 2026 14
@@ -170,7 +170,7 @@ workspace/clients/brisken/automations/expense-reconciliation.
 
 THE PROBLEM
 The matcher pairs too few receipts with charges on Criss's real months. Live
-on Fly v116 (2026-09-14): July 2026 has 111 charges and 50 receipts, 27
+on Fly v117 (2026-09-15): July 2026 has 111 charges and 50 receipts, 27
 matched clean and 11 in review; August has 111 charges and 31 receipts, 14
 clean and 3 in review. Every receipt that ends in review or unmatched is a
 manual step for Criss. The goal: raise the share of receipts that resolve
