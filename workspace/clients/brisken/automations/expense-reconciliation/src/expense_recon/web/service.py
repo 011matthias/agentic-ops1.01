@@ -2409,6 +2409,11 @@ def build_view(
         except (KeyError, TypeError, ValueError):
             continue
         rec_by_id.setdefault(br.document_id, br)
+    # Where each borrowed receipt lives. Read once here because both the
+    # candidate rows below and the settled-row badge further down name it,
+    # and item 61 made the map hold two kinds (a trip, a neighbouring
+    # month). Empty on every month borrowing nothing, which is most of them.
+    borrow_sources = (run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {}
     by_tx = _candidates_by_tx(outcome)
     # Item 57: the structural check readiness cannot answer on its own. A
     # month the matcher could not see (sign / entity / currency / card
@@ -2498,6 +2503,17 @@ def build_view(
         if st["held_doc"]:
             holder_by_doc[st["held_doc"]] = tx_id_
     tx_by_id_all = {t.transaction_id: t for t in transactions}
+
+    def _from_batch(document_id: str) -> dict:
+        """`{"from_batch": {...}}` when this candidate's receipt is borrowed
+        from another batch, else `{}` so the key is absent rather than null.
+
+        Item 61: a borrowed receipt was anonymous until it was CHOSEN (the
+        row's `settled_by` badge), so an offered one read as if it belonged
+        to this month. Same object on both sides now, and it names a trip or
+        a neighbouring month by the same key."""
+        src = borrowed_source_view(borrow_sources.get(document_id))
+        return {"from_batch": src} if src else {}
 
     def _held_by(document_id: str, by_tx_id: str) -> dict:
         """`{"held_by": {...}}` when another charge holds this receipt, else
@@ -2598,6 +2614,10 @@ def build_view(
                     # Parallel field, ABSENT (not false) everywhere else,
                     # so a month with no reject renders as it did before.
                     **_rejected_pairing(status),
+                    # Item 61: the batch this candidate's receipt lives in,
+                    # when it is not this one. Parallel field, ABSENT on
+                    # every candidate from the month's own pool.
+                    **_from_batch(m.document_id),
                 }
             )
         # PR B — a hand-made manual match: the held receipt was never an
@@ -2617,6 +2637,7 @@ def build_view(
                     "vendor_pct": None,
                     "receipt": _receipt_view(rec_by_id[held_doc], overrides),
                     "fx": _fx_breakdown(tx, rec_by_id[held_doc]),
+                    **_from_batch(held_doc),
                 }
             )
 
@@ -2925,18 +2946,18 @@ def build_view(
             if hit is not None:
                 rec["settled_by"] = hit
     # R4b, the month side of the same provenance: a charge settled with a
-    # receipt borrowed from a trip names the trip. Absent on every row
-    # settled from the month's own pool.
-    borrow_sources = (run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {}
+    # borrowed receipt names where the receipt came from. Absent on every
+    # row settled from the month's own pool. Item 61 added the second kind:
+    # a trip entry still renders `{run_id, trip_id, label}` byte for byte,
+    # and a neighbouring month's carries `kind: "adjacent"` instead of a
+    # trip id, so the badge can say which it is without guessing.
     if borrow_sources:
         for row in rows:
-            entry = borrow_sources.get(row.get("chosen_document_id"))
-            if isinstance(entry, dict):
-                row["settled_by"] = {
-                    "run_id": entry.get("run_id"),
-                    "trip_id": entry.get("trip_id"),
-                    "label": entry.get("label"),
-                }
+            src = borrowed_source_view(
+                borrow_sources.get(row.get("chosen_document_id"))
+            )
+            if src is not None:
+                row["settled_by"] = src
 
     n_tx = len(transactions)
     n_unknown_currency = sum(1 for r in receipts if r.detected_currency is None)
@@ -3025,6 +3046,14 @@ def build_view(
         # undoes.
         "n_rejected_pairings": sum(
             1 for r in rows for c in r["candidates"] if c.get("rejected")
+        ),
+        # Item 61: receipts this month is using from the months either side
+        # of it. Counted off the committed source map, so it is what the
+        # month actually holds rather than what the pool offered; 0 on every
+        # month whose neighbours lent it nothing.
+        "n_adjacent_borrowed": sum(
+            1 for e in borrow_sources.values()
+            if isinstance(e, dict) and e.get("kind") == ADJACENT_BORROW_KIND
         ),
         # PR C — memory legibility.
         "n_learned_lines": n_learned_lines,
@@ -8406,6 +8435,22 @@ def rematch_month(
         store, run, transactions,
         own_doc_ids={r.document_id for r in receipts},
     )
+    # Item 61: and it spans the ADJACENT company months. A receipt printed
+    # on the last day of a month is filed in THAT month while its charge
+    # posts on the 1st, inside this statement's period; the neighbours'
+    # receipts whose dates fall in this period join the same borrowed set,
+    # so everything downstream (the claims re-check, the snapshot copies,
+    # the view) treats both borrow kinds identically. Empty on a month with
+    # no neighbouring batch, and the match input is then unchanged.
+    adjacent, adjacent_origins = adjacent_pool_for_month(
+        store, run, transactions,
+        own_doc_ids=(
+            {r.document_id for r in receipts} | set(borrowed_origins)
+        ),
+    )
+    if adjacent:
+        borrowed = [*borrowed, *adjacent]
+        borrowed_origins = {**borrowed_origins, **adjacent_origins}
     match_input = [*pool, *borrowed] if borrowed else pool
     outcome = match_month(transactions, match_input, match_cfg)
 
@@ -8863,3 +8908,167 @@ def _rematch_or_error(*args, **kwargs) -> dict:
         return rematch_month(*args, **kwargs)
     except Exception as exc:  # noqa: BLE001 - reported, never raised
         return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+# ---------------------------------------------------------------------------
+# The adjacent-month pool (backlog item 61)
+# ---------------------------------------------------------------------------
+# A receipt is routed to a batch by the month PRINTED ON IT, while a charge
+# lands in the statement that BILLED it, and the two boundaries do not line
+# up: August's workbook opens on 07-31 and July's on 06-30, so a subscription
+# invoiced on the last day of a month posts on the 1st of the next statement
+# and its receipt is already filed one batch away. Live on 2026-09-15: August
+# holds two Google receipts dated 08-31 (71.64 and 75.09) whose charges post
+# on 09-01, while August's own 08-01 Google 71.64 charge sits unmatched with
+# no candidate at all.
+#
+# So the month's candidate pool spans its NEIGHBOURS the way it already spans
+# trips (R4b): same borrowed_receipts / receipt_sources keys, same claims
+# arbitration, same one-receipt-one-charge guarantee. Eligibility is the
+# statement's OWN period rather than a calendar month, because the period is
+# the thing that actually decides whether a charge could be on this workbook.
+
+ADJACENT_BORROW_KIND = "adjacent"
+# Only reached by a month that has no statement yet, where there are no
+# charges to derive a period from and nothing to match either. The calendar
+# month plus this margin is the widest window such a month could plausibly
+# bill, and it keeps the helper answerable instead of undefined.
+ADJACENT_FALLBACK_DAYS = 3
+
+
+def statement_period_for_month(
+    run: RunRow, transactions: list
+) -> tuple[date, date] | None:
+    """The span of dates this run's statement actually covers.
+
+    Derived from the run's OWN charges (min..max transaction date), which is
+    the only source that knows where the workbook was cut: Chase opens
+    August on 07-31 and July on 06-30, and no calendar rule predicts that.
+    The label's calendar month widened by `ADJACENT_FALLBACK_DAYS` is the
+    fallback for a month with no statement yet, and None when the label does
+    not name a month either."""
+    dates = [t.transaction_date for t in transactions if t.transaction_date]
+    if dates:
+        return min(dates), max(dates)
+    ym = month_from_label(run.label)
+    if ym is None:
+        return None
+    year, month = ym
+    first = date(year, month, 1)
+    nxt = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    return (
+        first - timedelta(days=ADJACENT_FALLBACK_DAYS),
+        nxt - timedelta(days=1) + timedelta(days=ADJACENT_FALLBACK_DAYS),
+    )
+
+
+def adjacent_pool_for_month(
+    store: RunStore,
+    run: RunRow,
+    transactions: list,
+    own_doc_ids: set[str],
+) -> tuple[list, dict[str, dict]]:
+    """The receipts this month's statement may settle from the company
+    months either side of it (item 61). Returns `(receipts, origins)`;
+    `origins` maps each borrowed document to
+    `{run_id, label, kind: "adjacent"}`.
+
+    Neighbours are decided by LABEL (`month_from_label`), previous and next,
+    so "August 2026" reaches "July 2026" and "September 2026" and nothing
+    else; a batch whose label names no month neither borrows nor lends.
+    Eligibility is the statement period above: a receipt joins only when its
+    printed date falls inside the span this run's charges actually cover,
+    which is what keeps the borrow narrow rather than a second month's worth
+    of noise.
+
+    The exclusions are `trip_pool_for_month`'s, for the same reasons: a trip
+    batch is not a neighbour, a receipt another run has already claimed is
+    out (the advisory read of the cross-batch never-settle guard), a
+    confirmed private expense is not company-card money, and a document id
+    this month's own pool already holds is dropped. That last one bites
+    harder here than it does on trips, because neighbouring months are
+    ingested the same way and collide by construction: July and August share
+    four ids today, all `NNNN__rendered-body.pdf`. The colliding receipt
+    simply is not borrowed; offering two receipts under one id would corrupt
+    the matcher's consumption set and the view's lookup."""
+    if is_trip_batch(run):
+        return [], {}
+    ym = month_from_label(run.label)
+    if ym is None:
+        return [], {}
+    period = statement_period_for_month(run, transactions)
+    if period is None:
+        return [], {}
+    lo, hi = period
+    year, month = ym
+    wanted = {
+        (year - 1, 12) if month == 1 else (year, month - 1),
+        (year + 1, 1) if month == 12 else (year, month + 1),
+    }
+    neighbours = []
+    for other in store.list_runs():
+        if other.run_id == run.run_id:
+            continue
+        if (other.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if is_trip_batch(other):
+            continue
+        oym = month_from_label(other.label)
+        if oym not in wanted:
+            continue
+        neighbours.append((oym, str(other.run_id), other))
+    # Deterministic order, so which side wins an id collision is a fact
+    # rather than a store-ordering accident: the previous month first.
+    neighbours.sort(key=lambda n: (n[0], n[1]))
+
+    borrowed: list = []
+    origins: dict[str, dict] = {}
+    for _oym, _rid, other in neighbours:
+        o_field = store.get_expense_field_overrides(other.run_id)
+        o_receipts, o_kwargs = _expense_export_inputs(
+            other,
+            store.get_category_overrides(other.run_id),
+            o_field,
+            store.get_expense_edits(other.run_id),
+        )
+        private = _private_reimbursements(o_field)
+        claims = store.get_claims_on_receipts(other.run_id)
+        entity_by_doc = o_kwargs.get("entity_by_doc") or {}
+        for r in o_receipts:
+            doc = r.document_id
+            if doc in own_doc_ids or doc in origins or doc in private:
+                continue
+            if r.detected_date is None or not (lo <= r.detected_date <= hi):
+                continue
+            c = claims.get(doc)
+            if c is not None and c["claimed_by_run_id"] != run.run_id:
+                continue
+            ent = entity_by_doc.get(doc)
+            if ent and ent != r.legal_entity_id:
+                r = replace(r, legal_entity_id=ent)
+            borrowed.append(r)
+            origins[doc] = {
+                "run_id": other.run_id,
+                "label": other.label or other.run_id,
+                "kind": ADJACENT_BORROW_KIND,
+            }
+    return borrowed, origins
+
+
+def borrowed_source_view(entry: object) -> dict | None:
+    """One `receipt_sources` entry as the SPA reads it, or None.
+
+    The map holds both borrow kinds: a trip entry carries `trip_id`, an
+    adjacent-month entry carries `kind: "adjacent"`. Each key is emitted
+    only when the entry has it, so a trip's object is exactly the
+    `{run_id, trip_id, label}` the workbench already renders and an
+    adjacent one is `{run_id, label, kind}`. Absent, never null."""
+    if not isinstance(entry, dict):
+        return None
+    out: dict = {"run_id": entry.get("run_id")}
+    if entry.get("trip_id"):
+        out["trip_id"] = entry.get("trip_id")
+    out["label"] = entry.get("label")
+    if entry.get("kind"):
+        out["kind"] = entry.get("kind")
+    return out
