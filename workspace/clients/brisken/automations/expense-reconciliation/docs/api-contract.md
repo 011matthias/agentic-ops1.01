@@ -162,6 +162,7 @@ name answers the same one:
 | `n_set_aside` | how many files the quarantine is still holding back |
 | `n_duplicate_groups` | how many duplicate SITUATIONS were flagged |
 | `n_duplicate_copies` | how many copies are redundant (every copy after the first in a group the reviewer has not dismissed) |
+| `n_rejected_pairings` | run payload only: how many (charge, receipt) pairings the reviewer has turned down (item 16). Pairings, not rows: a rejected charge that never had a candidate refused nothing and counts nothing |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -328,6 +329,45 @@ so a reviewer handing the receipt back clears it.
 `unmatched` whose every candidate is held elsewhere. Those rows are not "no
 receipt found"; they are waiting on a contested pick. Renders in
 `docs/lovable-receipt-taken-prompt.md`.
+
+## A pairing the reviewer turned down: `rejected` (added 2026-09-15, item 16)
+
+`rows[].candidates[].rejected`, parallel and **absent** (not `false`) unless
+the reviewer's current verdict on that charge is `rejected`:
+
+```json
+"rejected": true
+```
+
+Rejecting sends the charge to unmatched and releases its receipts, but
+`candidates[]` comes from the RAW outcome, so every receipt just pushed away
+re-renders under the row exactly as it did before, offered again as though it
+were still on the table. Nothing said a pairing had been turned down, so no
+affordance could answer "what now" (2026-07-27 note).
+
+**Charge-level, deliberately.** `apply_decisions` pass 3, `effective_settlements`
+and `sync_claim_for_decision` all read the STATUS alone and ignore
+`chosen_document_id`; a bulk reject writes that column NULL. A flag keyed on a
+named document would therefore leave the commonest path unmarked. So the flag
+lands on every candidate of a rejected charge, which is what the verdict
+actually means: none of these.
+
+`summary.n_rejected_pairings` (run payload only, like every count derived from
+`rows[]`) counts the flagged candidates.
+
+**The undo path already existed; what was missing was knowing there was
+anything to undo.** `POST /api/runs/{id}/decisions` with
+`{"transaction_id": ..., "status": "pending"}` resets the charge: the store
+takes the write under the same lock as any verdict, `sync_claim_for_decision`
+re-derives the claim from the snapshot's own match (releasing it when there is
+none, and refusing nothing when another run settled the receipt meanwhile), and
+the next `build_view` gives the charge its receipt back. No `DELETE` route was
+added, because a second spelling of an existing reversal is a second thing to
+keep correct. `tests/test_rejected_pairings.py` drives that reversal end to end
+rather than asserting it ought to work.
+
+Both the flag and the count read the CURRENT verdict, so the reset clears them
+in the same response. Renders in `docs/lovable-rejected-pairing-prompt.md`.
 
 ## An invoice and its receipt are one candidate (added 2026-09-14, item 56)
 
