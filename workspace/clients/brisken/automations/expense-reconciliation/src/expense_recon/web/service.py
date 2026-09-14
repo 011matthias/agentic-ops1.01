@@ -2518,6 +2518,27 @@ def build_view(
                 if htx.transaction_date else None,
             }
         }
+
+    # Item 16: a rejected verdict releases the charge's whole proposal --
+    # `apply_decisions` pass 3 sends the charge to unmatched and consumes
+    # none of its receipts -- but `candidates` still come from the raw
+    # outcome, so every receipt the reviewer just pushed away re-renders
+    # underneath the row exactly as it did before, offered again as if it
+    # were still on the table. Nothing in the payload said a pairing had
+    # been turned down, so no affordance could answer "what now". The flag
+    # is the fact that was missing, and it reads the CURRENT verdict, so
+    # resetting the charge to pending clears it.
+    #
+    # Charge-level, because a reject is: `apply_decisions`,
+    # `effective_settlements` and `sync_claim_for_decision` all read the
+    # status alone and ignore `chosen_document_id`, and a bulk reject
+    # writes that column NULL, so marking only a named document would
+    # leave the commonest path unmarked.
+    def _rejected_pairing(charge_status: str) -> dict:
+        """`{"rejected": True}` on every candidate of a rejected charge,
+        else `{}` so the key is absent rather than false."""
+        return {"rejected": True} if charge_status == STATUS_REJECTED else {}
+
     for tx in transactions:
         tx_id = tx.transaction_id
         decision = decisions.get(tx_id)
@@ -2573,6 +2594,10 @@ def build_view(
                     # null) on a candidate nobody else holds, so a month with
                     # no contested receipt renders exactly as before.
                     **_held_by(m.document_id, tx_id),
+                    # Item 16: the reviewer turned this pairing down.
+                    # Parallel field, ABSENT (not false) everywhere else,
+                    # so a month with no reject renders as it did before.
+                    **_rejected_pairing(status),
                 }
             )
         # PR B — a hand-made manual match: the held receipt was never an
@@ -2991,6 +3016,15 @@ def build_view(
             if r["effective_bucket"] == "unmatched"
             and r["candidates"]
             and all(c.get("held_by") for c in r["candidates"])
+        ),
+        # Item 16: (charge, receipt) pairings the reviewer turned down.
+        # Pairings, not rows: a rejected charge that never had a
+        # candidate contributes nothing, because no pairing was refused.
+        # Reversible until export, and `POST .../decisions` with
+        # `"pending"` is the reversal, so this falls as the reviewer
+        # undoes.
+        "n_rejected_pairings": sum(
+            1 for r in rows for c in r["candidates"] if c.get("rejected")
         ),
         # PR C — memory legibility.
         "n_learned_lines": n_learned_lines,
