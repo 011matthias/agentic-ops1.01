@@ -959,15 +959,27 @@ def replace_intake_files(
             )
 
     # Validation passed for everything requested; now touch the disk.
+    # Item 66: archive every file this call is about to destroy BEFORE writing
+    # anything. Pre-fix a swap wrote the new bytes over the old ones when the
+    # name matched and unlinked the old file when it did not, so either way
+    # the superseded upload left the volume with no copy and no record. The
+    # replaced file now survives the replacement; it is moved aside, never
+    # deleted, so it is still there when the batch commits and afterwards.
+    archive_dir = work_dir / "superseded"
+    doomed: list[str] = []
+    if new_stmt_name is not None:
+        doomed += [n for n in (intake.statement_name, new_stmt_name) if n]
+    if new_rcpt_name is not None:
+        doomed += [n for n in (intake.receipts_name, new_rcpt_name) if n]
+    for name in dict.fromkeys(doomed):
+        prior = work_dir / name
+        if prior.is_file():
+            _archive_superseded_file(prior, archive_dir, now_iso)
     if new_stmt_name is not None:
         (work_dir / new_stmt_name).write_bytes(statement_bytes)
-        if intake.statement_name and intake.statement_name != new_stmt_name:
-            (work_dir / intake.statement_name).unlink(missing_ok=True)
         detect_note = _detect_note(work_dir / new_stmt_name)
     if new_rcpt_name is not None:
         (work_dir / new_rcpt_name).write_bytes(receipts_bytes)
-        if intake.receipts_name and intake.receipts_name != new_rcpt_name:
-            (work_dir / intake.receipts_name).unlink(missing_ok=True)
 
     store.update_intake_files(
         intake.intake_id,
@@ -1475,6 +1487,92 @@ MANUAL_RECEIPT_SUFFIXES = frozenset(
 )
 
 
+# --------------------------------------------------------------------------
+# Stored-file retention (backlog item 66)
+# --------------------------------------------------------------------------
+# Two paths used to destroy bytes this system had already accepted: replacing
+# a file on a queued upload deleted the file it replaced, and re-attaching a
+# receipt to the same charge under the same name wrote straight over it.
+# Neither kept a prior version and neither left a record, in a system whose
+# whole purpose is retaining what arrived
+# (docs/electronic-storage-system-description.md section 12, rows 3 and 14).
+# Nothing here deletes: a superseded file is moved aside under a versioned
+# name and stays on the volume.
+
+
+def _archive_superseded_file(path: Path, archive_dir: Path, now_iso: str) -> str:
+    """Move `path` into `archive_dir` under a versioned name; return that
+    name. The rename keeps the bytes on the same volume and takes them out of
+    every glob the live resolvers use, so an archived copy can never be served
+    in place of the current one."""
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    stamp = re.sub(r"[^0-9]", "", now_iso or "")[:14] or "00000000000000"
+    target = archive_dir / f"{stamp}__{path.name}"
+    n = 1
+    while target.exists():
+        n += 1
+        target = archive_dir / f"{stamp}-{n}__{path.name}"
+    path.replace(target)
+    return target.name
+
+
+def _store_manual_receipt(
+    dest_dir: Path,
+    fs_tx: str,
+    fs_name: str,
+    file_bytes: bytes,
+    now_iso: str,
+) -> tuple[Path, list[dict]]:
+    """Store one hand-attached receipt for a charge without ever writing over
+    stored bytes.
+
+    A charge holds exactly ONE current file. Every file it already holds is
+    archived first, which closes both halves of the pre-fix defect: a
+    re-attach under the SAME name destroyed the earlier bytes in place, and
+    one under a DIFFERENT name left two files behind, from which the image
+    endpoint and `_attached_receipt_file` both take `sorted(...)[0]` and so
+    could serve the superseded version. Re-uploading byte-identical content is
+    a no-op. Returns the current path and one record per archived file.
+    """
+    dest = dest_dir / f"{fs_tx}__{fs_name}"
+    existing = sorted(p for p in dest_dir.glob(f"{fs_tx}__*") if p.is_file())
+    if [p.name for p in existing] == [dest.name] and dest.read_bytes() == file_bytes:
+        return dest, []  # the stored file already IS this upload
+    archive_dir = dest_dir / "superseded"
+    superseded = [
+        {
+            "stored": p.name,
+            "archived": _archive_superseded_file(p, archive_dir, now_iso),
+            "at": now_iso,
+        }
+        for p in existing
+    ]
+    dest.write_bytes(file_bytes)
+    return dest, superseded
+
+
+def _record_receipt_file(
+    snapshot: dict | None,
+    document_id: str,
+    stored: str,
+    superseded: list[dict],
+    now_iso: str,
+) -> dict:
+    """The snapshot's record of which file backs an attached receipt and what
+    that attachment replaced, keyed by document id. `superseded` accumulates,
+    so a charge re-attached three times names all three prior versions and the
+    archived file each one became. Stored only; neither view payload exposes
+    it, because item 66 asks for a record, not an SPA field."""
+    files = dict((snapshot or {}).get("receipt_files") or {})
+    entry = dict(files.get(document_id) or {})
+    files[document_id] = {
+        "stored": stored,
+        "at": now_iso,
+        "superseded": list(entry.get("superseded") or []) + list(superseded),
+    }
+    return files
+
+
 def attach_emailed_receipt(
     store,
     run: "RunRow",
@@ -1522,8 +1620,13 @@ def attach_emailed_receipt(
     # both name parts so the file lands IN manual-receipts, not a subdir.
     fs_tx = re.sub(r"[^A-Za-z0-9._-]", "_", transaction_id)
     fs_name = re.sub(r"[^A-Za-z0-9._-]", "_", safe_name)
-    dest = dest_dir / f"{fs_tx}__{fs_name}"
-    dest.write_bytes(file_bytes)
+    # Item 66: a re-attach archives whatever this charge already holds under a
+    # versioned name instead of writing over it. `superseded` is recorded on
+    # the snapshot below, inside the same commit, so the replacement is not
+    # only survivable but findable.
+    dest, superseded = _store_manual_receipt(
+        dest_dir, fs_tx, fs_name, file_bytes, now_iso
+    )
 
     # One manual receipt per charge: a stable id makes re-upload replace.
     document_id = f"manual:{transaction_id}"
@@ -1555,20 +1658,44 @@ def attach_emailed_receipt(
             receipt_name=safe_name,
         )
 
-    receipts = [r for r in receipts if r.document_id != document_id]
-    receipts.append(receipt)
-    if document_id not in outcome.unmatched_receipts:
-        outcome.unmatched_receipts.append(document_id)
+    # Commit under the batch writer lock against a FRESH re-read, the shape
+    # `rematch_month` already uses (item 66). The read at the top of this
+    # function happened before the vision call, which takes seconds; rebuilding
+    # the period record from `dict(run.snapshot)` afterwards silently threw
+    # away everything another writer had committed in between -- a mailed-in
+    # receipt, a card assignment, a re-match -- because the whole record was
+    # rewritten from a stale copy, with no lock held and no re-read.
+    with _BATCH_ADD_LOCK:  # item 66: manual per-charge attach
+        fresh = store.get_run(run.run_id)
+        if fresh is None:
+            # Deleted while the receipt was being read. Refuse honestly rather
+            # than write a snapshot UPDATE that matches zero rows.
+            return "This batch no longer exists (it was deleted).", None
+        run = fresh
+        fresh_tx, receipts, outcome, _ = snapshot_from_dict(fresh.snapshot)
+        if not any(t.transaction_id == transaction_id for t in fresh_tx):
+            # A statement re-read retires transaction ids by design. Confirming
+            # a decision against a charge the month no longer holds would
+            # strand it, so refuse with the sentence the up-front check uses.
+            return "Unknown transaction for this run.", None
+        receipts = [r for r in receipts if r.document_id != document_id]
+        receipts.append(receipt)
+        if document_id not in outcome.unmatched_receipts:
+            outcome.unmatched_receipts.append(document_id)
 
-    # Preserve extra snapshot keys (charge_categorizations, version):
-    # revise only the two entries this attachment touches.
-    new_snapshot = dict(run.snapshot)
-    new_snapshot["receipts"] = [receipt_to_dict(r) for r in receipts]
-    new_snapshot["outcome"] = outcome_to_dict(outcome)
-    store.update_run_snapshot(run.run_id, new_snapshot)
-    store.set_decision(
-        run.run_id, transaction_id, STATUS_CONFIRMED, document_id, now_iso
-    )
+        # Preserve extra snapshot keys (charge_categorizations, version):
+        # revise only the entries this attachment touches.
+        new_snapshot = dict(fresh.snapshot)
+        new_snapshot["receipts"] = [receipt_to_dict(r) for r in receipts]
+        new_snapshot["outcome"] = outcome_to_dict(outcome)
+        if superseded:
+            new_snapshot["receipt_files"] = _record_receipt_file(
+                fresh.snapshot, document_id, dest.name, superseded, now_iso
+            )
+        store.update_run_snapshot(run.run_id, new_snapshot)
+        store.set_decision(
+            run.run_id, transaction_id, STATUS_CONFIRMED, document_id, now_iso
+        )
     # R4: a confirmed manual attach settles its receipt -- record the
     # claim. The receipt was just created in this run, so no other run can
     # hold it; the sync is for the registry, not for a conflict.
@@ -1910,11 +2037,46 @@ def ingest_receipts_folder_into_run(
         "issue_details": issue_details,
     }
 
-    new_snapshot = dict(run.snapshot)
-    new_snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
-    new_snapshot["outcome"] = outcome_to_dict(merged)
-    new_snapshot["folder_ingest"] = summary
-    store.update_run_snapshot(run.run_id, new_snapshot)
+    # Commit under the batch writer lock against a FRESH re-read, the shape
+    # `rematch_month` already uses (item 66). Everything above runs vision over
+    # a whole folder and then the matcher, which is minutes; rebuilding the
+    # period record from `dict(run.snapshot)` afterwards rewrote it from the
+    # row read before any of that started, so a concurrent write was erased
+    # with no trace and no error.
+    with _BATCH_ADD_LOCK:  # item 66: bulk receipt-folder ingest
+        fresh = store.get_run(run.run_id)
+        if fresh is None:
+            raise RunInputError("This batch no longer exists (it was deleted).")
+        fresh_tx, fresh_receipts, _, _ = snapshot_from_dict(fresh.snapshot)
+        # Never drop a charge the month already holds. `merged` buckets the
+        # charges this ingest read minutes ago, so a statement upload that
+        # landed in between would leave its charges in no bucket at all and
+        # break the reconciliation guarantee. Refuse instead: nothing is
+        # written, so nothing is lost, and the folder can be re-uploaded.
+        committing = {t.transaction_id for t in transactions}
+        dropped = [
+            t.transaction_id for t in fresh_tx
+            if t.transaction_id not in committing
+        ]
+        if dropped:
+            raise RunInputError(
+                f"another statement upload added {len(dropped)} charge(s) to "
+                "this month while the folder was read; nothing was written, so "
+                "no charge was lost. Upload the folder again."
+            )
+        # Receipts that arrived mid-ingest (mail, a hand attach) join the pool
+        # as unmatched rather than vanishing -- the same treatment the
+        # `rematch_month` commit gives them.
+        known_ids = {r.document_id for r in pool}
+        extra = [r for r in fresh_receipts if r.document_id not in known_ids]
+        if extra:
+            pool = pool + extra
+            merged.unmatched_receipts.extend(r.document_id for r in extra)
+        new_snapshot = dict(fresh.snapshot)
+        new_snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
+        new_snapshot["outcome"] = outcome_to_dict(merged)
+        new_snapshot["folder_ingest"] = summary
+        store.update_run_snapshot(run.run_id, new_snapshot)
     return summary
 
 
