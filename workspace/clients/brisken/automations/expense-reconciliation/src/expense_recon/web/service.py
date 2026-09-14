@@ -2481,6 +2481,43 @@ def build_view(
     coverage, coverage_key_by_tx = month_coverage(
         run, transactions, states
     )
+    # Item 60: which charge currently HOLDS each receipt, under the effective
+    # verdict. `candidates` come from the raw outcome (every receipt the
+    # matcher scored against this charge) while the bucket comes from the
+    # assignment, and one receipt settles one charge. So a charge whose
+    # candidates were all won by other charges renders with candidates and a
+    # bucket of `unmatched`, and the SPA, deriving its label from the bucket,
+    # said "No receipt found" about a receipt that is sitting on the row
+    # above. Naming the holder is the fact the label was missing; it is the
+    # charge's own id on its own row, so a candidate is only ever "taken"
+    # from somebody else's perspective.
+    holder_by_doc: dict[str, str] = {}
+    for m in effective.matches:
+        holder_by_doc.setdefault(m.document_id, m.transaction_id)
+    for tx_id_, st in states.items():
+        if st["held_doc"]:
+            holder_by_doc[st["held_doc"]] = tx_id_
+    tx_by_id_all = {t.transaction_id: t for t in transactions}
+
+    def _held_by(document_id: str, by_tx_id: str) -> dict:
+        """`{"held_by": {...}}` when another charge holds this receipt, else
+        `{}` so the key is absent rather than null."""
+        holder = holder_by_doc.get(document_id)
+        if not holder or holder == by_tx_id:
+            return {}
+        htx = tx_by_id_all.get(holder)
+        if htx is None:
+            return {}
+        return {
+            "held_by": {
+                "transaction_id": holder,
+                "vendor": htx.vendor_from_statement,
+                "amount": _fmt_amount(htx.amount),
+                "currency": htx.transaction_currency,
+                "date": htx.transaction_date.isoformat()
+                if htx.transaction_date else None,
+            }
+        }
     for tx in transactions:
         tx_id = tx.transaction_id
         decision = decisions.get(tx_id)
@@ -2531,6 +2568,11 @@ def build_view(
                     # Cross-currency comparison (charge vs receipt vs Zoho's
                     # own conversion); None for same-currency pairs.
                     "fx": _fx_breakdown(tx, r),
+                    # Item 60: the charge that currently holds this receipt,
+                    # when it is not this one. Parallel field, ABSENT (not
+                    # null) on a candidate nobody else holds, so a month with
+                    # no contested receipt renders exactly as before.
+                    **_held_by(m.document_id, tx_id),
                 }
             )
         # PR B — a hand-made manual match: the held receipt was never an
@@ -2941,6 +2983,15 @@ def build_view(
         "unreconciled_by_ccy": {
             ccy: f"{amt:,.2f}" for ccy, amt in sorted(unreconciled.items())
         },
+        # Item 60: charges the tool found receipts for that another charge
+        # now holds. Its own name because it is its own question: these rows
+        # are not "no receipt found", they are waiting on a contested pick.
+        "n_charges_receipt_taken": sum(
+            1 for r in rows
+            if r["effective_bucket"] == "unmatched"
+            and r["candidates"]
+            and all(c.get("held_by") for c in r["candidates"])
+        ),
         # PR C — memory legibility.
         "n_learned_lines": n_learned_lines,
         # L4 — missing receipt images (0 when the source has no image info).
