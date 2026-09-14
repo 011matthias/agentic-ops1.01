@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-11
+updated: 2026-09-15
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -2219,6 +2219,55 @@ upload used, so a re-read re-guesses both; record them per entry. And an
 unrecognized `Type` label is treated as a purchase and abs'd (a German
 "Lastschrift" export would flip its credits); unknown labels should keep
 the printed sign in both `statement_csv` and `statement_xlsx`.
+
+### The 2026-09-15 parallel round (items 61-68 + 16 + 17, one session each)
+
+Ten open items run as ten simultaneous sessions, each on its own worktree
+under `automations/expense-reconciliation/docs/PARALLEL-ROUND-PROTOCOL.md`.
+Items 65-68 carve the four standalone defects out of item 49 so each has a
+number a session can own and a Shipped row can close; item 49 stays the
+evidence record (section 12 of the storage-system description).
+
+### 65. Report totals: binary float sums, and a row dropped from the total in silence (item 49, wrong money)
+
+Amounts are stored as strings so no precision is lost, and the report
+totals then sum them in binary floating point. Beside that, a row whose
+amount cannot be parsed is dropped from the PDF total with nothing on the
+report saying so, so a month can print a total that is quietly short by one
+receipt. Sum in `Decimal`, and give an unparseable amount a visible place:
+a caption on the report and a count on the payload, never a silent drop.
+
+### 66. Two write paths rewrite the period record without the batch lock (item 49, silent data loss)
+
+The manual per-charge attach and the bulk folder ingest each rewrite the
+whole period record outside `_BATCH_ADD_LOCK`, so a concurrent write on
+either side can be lost. Separately, replacing a file on a queued upload
+deletes the file it replaces, and re-attaching a receipt to the same charge
+under the same filename overwrites the stored bytes, both with no version
+and no record. Take the lock on both paths under a fresh re-read (the
+`rematch_month` commit shape), and stop the byte overwrite.
+
+### 67. One unrenderable receipt makes the whole month's report a 500 (item 49)
+
+The renderability check opens a PDF's index only, so a password-protected
+or structurally damaged receipt passes it and then fails during assembly:
+the request 500s and NO report is produced for the whole month, with no
+caption, no partial output and no message naming the file. Render what
+renders, caption what does not with the file named, and surface the
+blocked file on the payload so the reviewer can find it without a log. The
+in-memory assembly on a 512 MB machine is the same wall from a different
+side; stream or bound it.
+
+### 68. The receipt column overstates coverage, and the two reports can disagree (item 49)
+
+The Receipt column reads "attached" once the file was read off disk, which
+is decided before renderability is known, so the count of expenses with a
+usable receipt page can be too high; the caption pages are the truth. And
+an expense the reviewer deleted leaves the expense report immediately but
+stays in the reconciliation report until the next re-match, because the two
+are built from different sources. Make the column and the count answer
+"has a page in the report", and build both reports from the one live
+overlay.
 
 ## Related but tracked elsewhere (do not duplicate here)
 
