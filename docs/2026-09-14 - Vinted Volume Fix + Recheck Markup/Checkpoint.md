@@ -87,6 +87,37 @@ Ops status: `vinted-reselling` has no `infrastructure.yaml` and no comms log; ne
 
 ---
 
+## Correction, same evening
+
+The "API wall" reading above is wrong, and the status file carries the corrected
+version. The 403s came from probe requests that omitted `Accept:
+application/json`; Vinted renders an HTML error page to a browser-shaped request
+to an API path. With the header `api_get` actually sends, the picture is:
+`/api/v2/catalog/items` returns 404 with the app's own JSON error
+(`code 104, not_found`) for every parameter shape tried, while
+`/api/v2/catalog/filters` on the same `search_text`, `/api/v2/users/{id}`, and
+the web item page all return 200. Nonsense API paths return Vinted's HTML 404
+page, so the JSON-versus-HTML difference proves the route still exists and is
+refusing the query at application level.
+
+So the client is not blocked and the session is healthy: the catalog endpoint is
+retired. Three consequences replace next steps 1-3:
+
+- Treating 404 as a wall would be the wrong fix. Nothing is being walled; a
+  backoff would only quiet the retries, which at 12 requests per 5 minutes is
+  the smaller problem.
+- The recheck path works end to end (verified: a live item page read as `sold`
+  with the correct price). It is blocked solely by `recheck_gone`'s
+  `session_proven` gate, which only a successful catalog poll can set. That
+  gate's premise, "a wall on the catalog means a wall everywhere", is falsified
+  here, and 3,022 rows of perishable outcome data sit behind it against a 09-16
+  cliff. This is now the most urgent item and it is independent of the catalog.
+- The search page `/catalog?search_text=` is server-rendered and carries every
+  field the watcher needs, but at 7.2 MB per search (5.7 MB for the RSC
+  variant); no lighter payload was found. At the current cadence that is ~1 GB
+  an hour, 250x today, which breaks the politeness constraint. The mobile app's
+  API base and headers are the next lead before that parser is considered.
+
 ## Next Steps
 
 1. **Decide whether to pause the scheduled task** while the wall stands. It is currently firing 144 refused requests an hour. Reversible either way; the cost of pausing is no collection, the cost of not pausing is hammering a wall that may be behaviour-scored.
