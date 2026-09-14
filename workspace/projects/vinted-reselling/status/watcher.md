@@ -349,7 +349,7 @@ der Kauf-Gesamtpreis inkl. Gebuehr oder der Wiederverkaufswert; ist die
 15-EUR-Schwelle netto oder brutto; welcher Tag hat den Eindruck gepraegt
 (09.09. und 10.09. waren bei lauten teuren Pushes schwerer als heute).
 
-## STOP: die API sperrt uns aus (seit 2026-09-14T19:35Z)
+## STOP: der Katalog-Endpunkt ist weg (seit 2026-09-14T19:35Z)
 
 Der Watcher sammelt nichts. Zwei getrennte Dinge nach dem 11.09.:
 
@@ -357,24 +357,55 @@ Der Watcher sammelt nichts. Zwei getrennte Dinge nach dem 11.09.:
    am 12. und 13.). Der Laptop war aus; `WakeToRun=False` ist die Entscheidung
    des Owners, kein Fehler. Die Liveness-Warnung hat beim Neustart korrekt
    gefeuert: "no successful poll for 4404 min; operator alerted".
-2. **Seit dem Neustart wird jeder Abruf abgewiesen.** 16 Zyklen, alle 12 Suchen,
-   100% Fehlschlag. Die Session wird sauber gemintet (Token gueltig bis
-   15.09. 19:35Z) und die Startseite antwortet 200, aber
-   `/api/v2/catalog/items` **und** `/api/v2/items/{id}` verweigern.
+2. **Seit dem Neustart liefert `/api/v2/catalog/items` 404**, bei allen 12
+   Suchen, in jedem Zyklus.
 
-Die Form der Absage ist der Punkt: **403 mit HTML-Sperrseite bei einer einfachen
-Anfrage, 404 wenn `Accept: application/json` mitgeht** - und genau das schickt
-`api_get`. Der 403-Zweig feuert also nie, es wird kein Backoff gesetzt, und der
-Watcher schickt 12 Anfragen alle 5 Minuten in eine Wand (bisher rund 190
-abgewiesene Anfragen). Dieselbe Fehlerform wie die 147 ntfy-Wiederholungen, die
-#794 abgestellt hat, nur auf der anderen Seite des Systems. An den Parametern
-liegt es nicht: mit `order`, ohne `order`, nur `search_text`, ganz ohne - alle
-404.
+**Es ist keine Sperre.** Der erste Befund am Abend des 14.09. lautete "die API
+sperrt uns aus", abgeleitet aus 403-HTML-Seiten. Das war falsch und ist hier
+korrigiert: die 403 kamen nur, weil die Probe-Anfragen keinen
+`Accept: application/json` mitschickten, und Vinted rendert einem
+browserfoermigen Request eine HTML-Fehlerseite. Mit dem Header, den `api_get`
+tatsaechlich sendet, sieht es so aus:
 
-Naechste Schritte im Checkpoint vom 14.09.: entscheiden ob der Task pausiert
-wird, die Header gegen eine echte Browser-Session vergleichen (CDP,
-`reference_user_edge_cdp_9222`), und in `api_get` ein 404 auf den Katalog als
-Wand behandeln.
+| Aufruf | Antwort |
+|---|---|
+| `/api/v2/catalog/items` (jede Parameterform) | 404 `{"code":104,"message_code":"not_found"}`, also **JSON aus der App** |
+| `/api/v2/catalog/filters`, gleiches `search_text` | **200**, Filterliste |
+| `/api/v2/users/{id}` | **200**, volles Profil |
+| Artikelseite `/items/{slug}` | **200**, Parser liest `sold` und Preis korrekt |
+| Unsinnspfade (`/api/v2/items`, `/api/v2/search/items`, ...) | 404 mit Vinteds **HTML**-404-Seite |
+
+Der Unterschied JSON-Fehler gegen HTML-404-Seite ist der Beweis: die Route
+existiert noch und weist unsere Abfrage auf Anwendungsebene ab. Die Session ist
+gesund, der Client ist nicht blockiert, und **der Recheck-Pfad funktioniert
+vollstaendig**. Durchprobiert und alle 404: ohne `order`, `order=relevance`,
+nur `search_text`, ohne `search_text`, `catalog_ids`, `brand_ids`, `time`,
+`search_session_id`, `per_page` 24 und 48, `/api/v3/`.
+
+**Wo die Daten jetzt liegen.** Die Suchseite `/catalog?search_text=...` ist
+server-gerendert und traegt die Treffer im Flight-Payload, mit allem was der
+Watcher braucht (`id`, `title`, `url`, `favouriteCount`, `price`,
+`totalItemPrice`, `serviceFee`). Kosten: **7,2 MB pro Suche**, die
+RSC-Variante 5,7 MB, kein leichterer Payload gefunden. Bei 12 Suchen alle 5
+Minuten waeren das rund 1 GB pro Stunde, also das 250-fache von heute. Das
+verletzt die Hoeflichkeitszusage und kann nicht einfach eingebaut werden.
+
+### Was daraus folgt
+
+- **Der Recheck haengt nur an einem Gatter, nicht an einem Defekt.**
+  `recheck_gone` laeuft nur mit `session_proven`, und das wird ausschliesslich
+  durch einen erfolgreichen Katalog-Poll gesetzt. Die Praemisse dieses Gatters
+  ("Wand am Katalog heisst Wand ueberall") ist hier widerlegt. 3022 offene
+  Alert-Zeilen warten auf Outcome-Daten, und die Kohorten vom 06.-08.09.
+  verlieren ab dem 16.09. die Verkauft/Weg-Unterscheidung. Das ist der
+  dringendste Punkt, und er ist unabhaengig vom Katalog-Problem.
+- **404 als Wand behandeln** waere jetzt der falsche Fix: es ist kein Backoff-
+  Problem, sondern ein weggefallener Endpunkt. Ein Backoff wuerde nur das
+  Hammern stoppen, und das ist bei 12 Anfragen alle 5 Minuten die kleinere
+  Sorge.
+- **Offen bleibt der Lesepfad.** Die Mobile-App nutzt eine andere API-Basis und
+  andere Header als die Web-v2; das ist die naechste Spur, bevor man den
+  7,2-MB-Seitenparser ueberhaupt erwaegt.
 
 ## Erste Outcome-Daten auf Alert-Kandidaten (11.09., n=37)
 
