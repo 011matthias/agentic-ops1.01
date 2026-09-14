@@ -154,6 +154,7 @@ name answers the same one:
 | `n_needs_entity` | how many still need a legal entity (a confirmed private row needs none by design, so it does not count — item 41 sharpened the question the name always asked) |
 | `n_needs_person` | how many rows no person owns yet (item 40; the fix is a person on the card, not a row edit) |
 | `n_charges_no_entity` | how many CHARGES carry no legal entity, because the card they printed is not in the registry or has no entity (item 59; the fix is defining that card, not a row edit). Charges, not expenses: `n_needs_entity` answers the receipt-side question |
+| `n_charges_receipt_taken` | how many charges are bucketed `unmatched` while every candidate they hold is held by another charge (item 60; the fix is a pick, not a missing receipt) |
 | `n_roster_mismatch` | trip batches only (absent on company months): how many rows a person OUTSIDE the trip's roster paid for (item 38 x 40) |
 | `n_suggested_private` | how many rows are suggested as private expenses, unconfirmed (item 41) |
 | `n_private` | how many rows the operator confirmed private (reimbursement rows) |
@@ -302,6 +303,30 @@ folder), `cards`, `master_data`, `set_aside`, `trip`. Oldest first. The
 notifier diffs on `event_id` and mails one line per event ("August 2026:
 14 of 111, pool 7 (reread, 2026-09-11T14:24:46+00:00)"); an event with no
 id is never announced.
+
+## A candidate another charge holds: `held_by` (added 2026-09-15, item 60)
+
+`rows[].candidates[].held_by`, parallel and **absent** (not null) unless
+another charge currently holds that receipt:
+
+```json
+"held_by": {"transaction_id": "…", "vendor": "SUPABASE",
+            "amount": "92.70", "currency": "USD", "date": "2026-08-19"}
+```
+
+`candidates[]` comes from the raw outcome, which keeps every receipt the
+matcher paired with this charge; the bucket comes from the effective verdict
+after `apply_decisions`, and one receipt settles exactly one charge. So a
+charge that loses its receipt keeps the candidate on display and falls to
+`unmatched`, and a label derived from the bucket calls that "No receipt
+found" about a receipt sitting on another row (reported 2026-09-11). The
+holder is the fact that label was missing. It follows the EFFECTIVE verdict,
+so a reviewer handing the receipt back clears it.
+
+`summary.n_charges_receipt_taken` (both payloads) counts charges bucketed
+`unmatched` whose every candidate is held elsewhere. Those rows are not "no
+receipt found"; they are waiting on a contested pick. Renders in
+`docs/lovable-receipt-taken-prompt.md`.
 
 ## An invoice and its receipt are one candidate (added 2026-09-14, item 56)
 

@@ -56,6 +56,8 @@ missing.
 
 | Prompt | Verified by |
 |---|---|
+| `lovable-month-health-prompt.md` (item 57) | `chunk-runs._runId` reads `month_health` + `n_exact_pairs`; `chunk-i18n` carries `wb.health.*` + `zero_match_with_exact_pairs` (bundle audit 2026-09-15, 48 files / 975 KB, controls validated). The blocked bar itself has no live case: both months are `state: ok` |
+| `lovable-charge-entity-prompt.md` (item 59) | `chunk-runs._runId` reads `n_charges_no_entity`; `chunk-i18n` carries `chargesNoEntity` + `cardNotDefined`. CHARGES WITHOUT A COMPANY renders 0 on both live months (browser-driven). The "Card not defined" chip has no live case: every card is defined |
 | `lovable-receipts-drop-prompt.md` v1 (#709 text; §1 page + §3 badge + §4 empty state + §2 upload-area removal) | `chunk-receipts` reads `n_filed`/`n_needs_month`/`needs_month`; `/api/receipts` POST; "Recibos" nav + "Dos recibos" badge strings in i18n (bundle audit 2026-09-08; badge wiring + §4 to be eyeballed on the next browser drive) |
 | `lovable-mail-intake-prompt.md` | Email intake section in Settings; alias rows; "Receipts can be emailed to any-name@expenses.brisken.com" |
 | `lovable-intake-quickwins-prompt.md` §1 §2 | Files column; Month column with real labels |
@@ -98,10 +100,9 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
+| `lovable-receipt-taken-prompt.md` (2026-09-15: a charge whose receipt another charge holds says so instead of "No receipt found") | some chunk reads `held_by` and `n_charges_receipt_taken`; the i18n chunk carries `wb.charge.receiptTaken`. Until then a dispossessed charge still reads "No receipt found" | Backend live (item 60); the SPA half is this prompt |
 | `lovable-receipts-drop-prompt.md` DELTA (2026-09-08: §1 cap copy + chunking, §2 full create-UI removal, §3 nav, §4 Open-month release) | rejected copy reads reason `upload-cap` + `limit`; intake chunk POSTs a `label`-only `/api/expense-batches` and reads `pool_month`; no chunk references "Start a new month" or `/expenses/new` for company months | Backend already deployed (cap 80→500 + upload-cap ledger rows, 2026-09-08); §2-§4 need NO backend — the create route stays as plumbing. Nav + button death are chrome — verify by browser drive, not bundle grep. Nothing gates data entry |
 | `lovable-brisken-domain-prompt.md` half 2 (2026-09-08: API base URL to `api.expenses.brisken.com`) | some chunk contains `api.expenses.brisken.com` AND no chunk contains `brisken-expense-recon.fly.dev` — grep BOTH, since the old host keeps answering and a half-applied change reads as a mix | Half 1 (the Lovable custom domain for `expenses.brisken.com`) is owner-side and gates nothing: the DNS records here wait on the `lovable_verify` value Lovable emits. Backend ready: cert live on the API host, CORS allows the SPA host (PR #751) |
-| `lovable-month-health-prompt.md` (2026-09-11: the "Ready to post?" bar renders a blocked state when `summary.month_health.state === "broken"`) | some chunk reads `month_health` and the i18n chunk carries `wb.health.title`; until then `ready_to_post: false` with `n_undecided: 0` shows the bar's old undecided copy on a broken month | Backend live (item 57); the SPA half is this prompt |
-| `lovable-charge-entity-prompt.md` (2026-09-14: a charge on a card the registry cannot name shows "Card not defined" and the CHARGES WITHOUT A COMPANY tile) | some chunk reads `n_charges_no_entity` and the i18n chunk carries `wb.charge.cardNotDefined`; until then an empty `rows[].legal_entity_id` renders as a blank cell, which is honest but silent | Backend live (item 59); the SPA half is this prompt |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
@@ -110,6 +111,8 @@ holds. Verify by field names, not display copy.
 
 | Prompt | Needs |
 |---|---|
+| `lovable-month-health-prompt.md`, the blocked bar itself | A month with `month_health.state: "broken"`. Both live months are `ok`, which is the correct state and not something to manufacture in Criss's data; the renderer's presence is bundle-audited |
+| `lovable-charge-entity-prompt.md`, the "Card not defined" chip | A charge whose card the registry cannot name. All nine cards are defined, so `n_charges_no_entity` is 0 everywhere; same reasoning |
 | `lovable-issue-codes-prompt.md` | A batch carrying `upload_issues`. All six live batches have zero |
 | `lovable-re-ingest-prompt.md` | An archive with `batch_deleted: true` AND delivered files AND a non-terminal status |
 | `lovable-month-pool-prompt.md` §7 §8 §9 | Creating, renaming and deleting a month. §8 refers to "the existing rename dialog": there is none, which is why prompt 1 builds it |
