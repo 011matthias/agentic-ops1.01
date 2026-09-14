@@ -2139,6 +2139,22 @@ a charge can now legitimately carry none. Tests: `test_charge_entity.py`
 (6, route-level); two regress proofs. SPA half:
 `docs/lovable-charge-entity-prompt.md`.
 
+**What the live months actually showed, against the prediction.** The
+expectation going in was that ~77 of August's charges would move to a
+blank company. They did not, and the reason matters: cards 3645, 3876 and
+0340 ARE defined in the live registry (all nine cards carry an entity; the
+owner finished the item-26/40 data entry at some point after these
+batches were uploaded). What the coverage panel called "not in your card
+list" was the BATCH's registry snapshot, frozen at upload time, not the
+live registry. Refreshing each month's master data pulled the current
+registry in and every charge resolved to its real card: `n_charges_no_entity`
+0 on both months, the three "not in your card list" rows replaced by
+"Credit Card Chase Visa - 3645 / 3876 / 0340", each Corporate Services.
+The gap the item was written against was stale-snapshot, not missing data.
+Lesson for the next read: `coverage[].known` answers "did THIS BATCH know
+the card", never "is the card defined"; ask `/api/settings` for the
+second question.
+
 ### 60. A charge with waiting candidates renders "No receipt found" (2026-09-11)
 
 LOVABLE 25.00 on 2026-08-05: `initial_bucket: review`, `effective_bucket:

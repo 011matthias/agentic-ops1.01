@@ -80,7 +80,18 @@ cannot name that card (item 59, ruling "blank beats a wrong posting";
 `n_charges_no_entity` counts the gap, one card definition closes it), and
 an invoice and its receipt are one matcher candidate (item 56, ruling
 "collapse automatically"; a `not a duplicate` ruling re-expands the pool
-and re-matches the month). Items 60-64 are the next rounds.
+and re-matches the month). Deployed v116 and both live months refreshed on
+an owner yes: July 24 to 27 reconciled and 15 to 11 review, August 7 to 3
+review, every ambiguous invoice+receipt pick gone on both, zero new model
+calls (the judgment cache keys on charge ids, which a refresh preserves).
+The prediction that ~77 August charges would go entity-less was WRONG and
+the correction is worth keeping: all nine cards ARE defined in the live
+registry with entities, and "not in your card list" was the batch's
+upload-time registry SNAPSHOT, not the live one. The refresh pulled the
+current registry in, so those rows now read "Credit Card Chase Visa - 3645
+/ 3876 / 0340". `coverage[].known` answers "did this batch know the card";
+`/api/settings` answers "is the card defined". Items 60-64 are the next
+rounds.
 
 **Every Lovable prompt is applied as of 2026-09-07** (the owner pasted and
 published the four pending prompts — R1 person/private, months
