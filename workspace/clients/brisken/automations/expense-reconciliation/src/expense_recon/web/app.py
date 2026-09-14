@@ -3437,8 +3437,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             trip = store.get_trip(
                 str((run.config or {}).get("trip_id") or "")
             ) if batch_type(run) == BATCH_TYPE_TRIP else None
+            # Item 47: the cost-center registry is read LIVE from
+            # settings, the same way the grid reads it, so the report
+            # and the screen partition on the same names.
+            settings = store.get_settings()
         pdf = build_expense_report(
-            run, overrides, field_overrides, edits, trip=trip
+            run, overrides, field_overrides, edits, trip=trip,
+            settings=settings,
         )
         safe = re.sub(r"[^A-Za-z0-9._-]+", "-", label).strip("-") or run_id
         return Response(

@@ -68,6 +68,8 @@ def build_expense_report_pdf(
     prepared_note: str = "",
     reimbursements: Sequence[dict] | None = None,
     sections: Sequence[dict] | None = None,
+    sections_heading: str = "",
+    sections_note: str = "",
 ) -> bytes:
     """Render the month's report: listing first, then the receipts.
 
@@ -105,6 +107,18 @@ def build_expense_report_pdf(
     numbering continuous across sections (`start` is the 1-based global
     row number of the slice's first row, and the slices cover `rows`
     exactly). Omitted => the single flat table, unchanged.
+
+    A section may instead carry its own `caption` (the heading over its
+    table) and `label` (the name in its sums line); item 47 partitions a
+    company month per cost center this way:
+
+        {"caption": "Lidar (project)", "label": "Lidar", "start": 1,
+         "count": 3}
+
+    `sections_heading` / `sections_note` render once above the first
+    section: a heading for the partition and the standing note that
+    qualifies its sums (for cost centers, the stated limit that this is
+    card-and-receipt spend, not total project cost).
     """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -184,14 +198,25 @@ def build_expense_report_pdf(
         return t
 
     if sections:
-        # Trip report: one listing table per person, numbering continuous,
-        # per-person sums beneath each — the reimbursements block's shape,
-        # applied to the listing itself.
+        # Sectioned listing: one table per section, numbering continuous,
+        # per-section sums beneath each; the reimbursements block's shape,
+        # applied to the listing itself. A trip sections per person
+        # (item 38: `person` / `on_roster`); a company month sections per
+        # cost center (item 47: `caption` / `label`).
+        if sections_heading:
+            story.append(Spacer(1, 12))
+            story.append(Paragraph(_esc(sections_heading), styles["caption"]))
+        if sections_note:
+            story.append(Paragraph(_esc(sections_note), styles["capsub"]))
         for sec in sections:
-            person = str(sec.get("person") or "(person not named)")
-            caption = person
-            if sec.get("on_roster") is False:
-                caption += "  (not on the trip roster)"
+            if sec.get("caption"):
+                caption = str(sec["caption"])
+                label = str(sec.get("label") or caption)
+            else:
+                label = str(sec.get("person") or "(person not named)")
+                caption = label
+                if sec.get("on_roster") is False:
+                    caption += "  (not on the trip roster)"
             start = int(sec.get("start") or 1)
             count = int(sec.get("count") or 0)
             numbered = [
@@ -215,7 +240,7 @@ def build_expense_report_pdf(
                 for ccy, amount in sorted(sec_totals.items())
             ) or "no amounts read"
             story.append(Paragraph(
-                _esc(f"{person}: {len(numbered)} "
+                _esc(f"{label}: {len(numbered)} "
                      f"expense{'s' if len(numbered) != 1 else ''}"
                      f"  ·  {sec_line}"),
                 styles["sub"],

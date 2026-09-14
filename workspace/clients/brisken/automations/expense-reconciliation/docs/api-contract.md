@@ -1112,3 +1112,24 @@ number (B4).
 accepted: a genuinely shared cost lands wholly on one side and that roll-up
 is slightly wrong. If a real shared cost turns up, the v2 shape is per line
 item through the `books_as` fan-out, not operator-typed percentages.
+
+### The month report grouped by cost center (step 3, added 2026-09-15)
+
+`GET /runs/{id}/expense-report.pdf` on a COMPANY month partitions the
+listing per cost center once the chain resolves or flags any row: the same
+`sections` mechanism the trip report uses per person, keyed on the row's
+resolved `cost_center`. Named centres come in name order, each captioned
+`Name (kind)` with its own row count and per-currency sums, numbering
+continuous across sections; rows with no cost center form a FINAL section
+captioned "Unassigned (no cost center)", never hidden. Above the partition
+sit the heading "Listing by cost center" and the standing note that carries
+the stated limit: card and receipt spend only, not total project cost.
+
+While no cost center is defined the report is the flat listing it always
+was. The report does not re-check the registry; it partitions only when a
+row resolves or flags, so the empty-registry contract keeps its single home
+in `CostCenterRegistry.resolve` and the flat listing follows from it. A trip
+batch's report is unchanged whatever the registry holds (item 38: sectioned
+per person). The report reads the registry LIVE from settings, as the grid
+does, so the two partition on the same names. Pinned by
+`tests/test_cost_center_report.py`.

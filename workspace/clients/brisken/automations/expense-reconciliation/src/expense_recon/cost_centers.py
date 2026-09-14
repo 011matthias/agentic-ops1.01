@@ -70,6 +70,17 @@ _SOURCE_LABELS = {
     SOURCE_NONE: "",
 }
 
+# The stated limit, carried on every surface that rolls spend up by cost
+# center (the month report's partition, the cross-month totals). This tool
+# sees money that flows through a Brisken card or a receipt and nothing
+# else, so a figure here that reads as a project total and is not one is
+# worse than no figure (B4).
+COST_CENTER_SCOPE_NOTE = (
+    "Card and receipt spend only. Contractor invoices, salaries and "
+    "anything paid another way never enter this tool, so a cost-center "
+    "figure here is not a total project cost."
+)
+
 
 @dataclass(frozen=True)
 class CostCenterResolution:

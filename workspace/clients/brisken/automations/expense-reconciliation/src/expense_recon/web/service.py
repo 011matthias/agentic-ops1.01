@@ -79,6 +79,7 @@ from ..output.zoho_expense_export import (
     write_zoho_expense_export,
 )
 from ..output.zoho_export import write_zoho_export
+from ..cost_centers import COST_CENTER_SCOPE_NOTE
 from ..cost_centers import (
     UNRESOLVED_SILENT as UNRESOLVED_COST_CENTER,
 )
@@ -5613,6 +5614,7 @@ def build_expense_report(
     field_overrides: dict[str, dict[str, str]],
     edits: list[dict],
     trip: "TripRow | None" = None,
+    settings: dict | None = None,
 ) -> bytes:
     """The month's report PDF: the listing, then every receipt (owner
     directive 2026-08-23 — nothing imports the output any more, so the
@@ -5640,6 +5642,16 @@ def build_expense_report(
     row-to-document fan-out cannot be aligned the report falls back to
     the flat listing rather than mislabelling a section boundary, the
     same fallback the evidence captions already take.
+
+    A COMPANY month (item 47) sections the listing PER COST CENTER once
+    the chain resolves or flags any row: named centres in name order,
+    then an unassigned section, never hidden, with the stated limit above
+    the partition (card-and-receipt spend, not total project cost). With
+    no cost center defined the chain is silent for every row and the flat
+    listing stays exactly as it was; that decision is derived from
+    `CostCenterRegistry.resolve` (the empty-registry contract's only
+    home) rather than re-checked here. `settings` is the live settings
+    map both registries read from.
     """
     from ..output.month_report_pdf import build_expense_report_pdf
 
@@ -5651,14 +5663,24 @@ def build_expense_report(
     private = [r for r in receipts if r.document_id in private_by_doc]
 
     sections: list[dict] | None = None
-    person_groups: dict[str, list] | None = None
-    ordered_people: list[str] = []
+    sections_heading = ""
+    sections_note = ""
+    # A partition of the company listing into contiguous slices: the
+    # ordered keys, the receipts under each, and a function giving the
+    # caption fields a section carries. A trip keys on person (item 38);
+    # a company month keys on cost center (item 47). Either way the
+    # listing is rebuilt in section order and the export's own fan-out
+    # widths decide where each slice starts.
+    groups: dict[str, list] | None = None
+    ordered_keys: list[str] = []
+    section_fields = None  # key -> the section's caption fields
     roster: list[str] = list(trip.travelers) if trip is not None else []
+    # The same card pass the grid runs: it names the person a trip
+    # sections on and the card whose default a cost center falls back to.
+    card_res_report = resolve_batch_row_cards(
+        company, run.config, field_overrides
+    )
     if is_trip_batch(run):
-        card_res_report = resolve_batch_row_cards(
-            company, run.config, field_overrides
-        )
-
         def _person_of(r) -> str:
             res = card_res_report.get(r.document_id) or {}
             return str(res.get("person") or "").strip()
@@ -5670,31 +5692,75 @@ def build_expense_report(
                     return (0, i, "")
             return (1, 0, pf) if p else (2, 0, "")
 
-        person_groups = {}
+        groups = {}
         for r in company:
-            person_groups.setdefault(_person_of(r), []).append(r)
-        ordered_people = sorted(person_groups, key=_order_key)
-        company = [r for p in ordered_people for r in person_groups[p]]
+            groups.setdefault(_person_of(r), []).append(r)
+        ordered_keys = sorted(groups, key=_order_key)
+        roster_fold = {t.strip().casefold() for t in roster}
+
+        def _person_fields(p: str) -> dict:
+            return {
+                "person": p,
+                "on_roster": (p.casefold() in roster_fold) if p else None,
+            }
+
+        section_fields = _person_fields
+    else:
+        # Item 47: the chain over the same card pass, exactly as the grid
+        # runs it. It partitions only once it resolves or flags a row: an
+        # empty registry is silent for every row, so a month with no cost
+        # center defined keeps its flat listing. That silence is decided
+        # in `CostCenterRegistry.resolve` alone and deliberately NOT
+        # re-checked here, so the contract stays load-bearing.
+        cost_res = resolve_batch_row_cost_centers(
+            company, field_overrides, settings=settings, trip=None,
+            card_res=card_res_report,
+        )
+        if any(c.name or c.needs for c in cost_res.values()):
+            registry = CostCenterRegistry.from_settings(settings)
+            groups = {}
+            for r in company:
+                groups.setdefault(
+                    cost_res[r.document_id].name or "", []
+                ).append(r)
+            # Named centres in name order; the unassigned slice LAST and
+            # never dropped: a row nobody attributed is exactly what the
+            # reader of a cost-center roll-up needs to see.
+            ordered_keys = sorted(
+                groups, key=lambda k: (1, "") if not k else (0, k.casefold())
+            )
+
+            def _cost_center_fields(name: str) -> dict:
+                if not name:
+                    return {"caption": "Unassigned (no cost center)",
+                            "label": "Unassigned"}
+                kind = str(
+                    (registry.entries.get(name) or {}).get("kind") or ""
+                )
+                return {"caption": f"{name} ({kind})" if kind else name,
+                        "label": name}
+
+            section_fields = _cost_center_fields
+            sections_heading = "Listing by cost center"
+            sections_note = COST_CENTER_SCOPE_NOTE
+    if groups is not None:
+        company = [r for k in ordered_keys for r in groups[k]]
 
     rows = build_expense_rows(company, **kwargs)
 
     widths = [max(1, len(expense_posting_parts(r))) for r in company]
     aligned = sum(widths) == len(rows)
 
-    if person_groups is not None and aligned:
+    if groups is not None and section_fields is not None and aligned:
         sections = []
         pos = 1
-        roster_fold = {t.strip().casefold() for t in roster}
-        for p in ordered_people:
+        for key in ordered_keys:
             count = sum(
                 max(1, len(expense_posting_parts(r)))
-                for r in person_groups[p]
+                for r in groups[key]
             )
             sections.append({
-                "person": p,
-                "on_roster": (p.casefold() in roster_fold) if p else None,
-                "start": pos,
-                "count": count,
+                **section_fields(key), "start": pos, "count": count,
             })
             pos += count
     receipts_dir = Path(run.work_dir) / "receipts"
@@ -5807,6 +5873,8 @@ def build_expense_report(
         prepared_note=note,
         reimbursements=reimbursements,
         sections=sections,
+        sections_heading=sections_heading,
+        sections_note=sections_note,
     )
 
 
