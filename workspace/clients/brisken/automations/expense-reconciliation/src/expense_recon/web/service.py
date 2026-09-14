@@ -6377,6 +6377,8 @@ def build_statement_entry(
     transactions: list,
     n_new: int,
     uploaded_at: str,
+    column_map: dict | None = None,
+    card_currency: str = "",
 ) -> dict:
     """One `statements[]` row: what this upload was and what it added.
 
@@ -6388,8 +6390,18 @@ def build_statement_entry(
     `n_rows` is what the file held, `n_new` what the fold put in the month.
     The difference is charges the month already had, which is the ordinary
     result of a partial followed by the full cycle rather than a problem.
+
+    `column_map` and `card_currency` record HOW this upload was read (item
+    64). Both are parallel fields and both are ABSENT on every entry written
+    before 2026-09-15, never null, so a reader can tell "not recorded" from
+    "recorded as nothing". A PDF statement has no column map and gets no
+    key. Before they existed, a re-read recovered the map from
+    `config.statement`, which only ever describes the LATEST upload, and
+    applied that upload's currency to every file in the month.
     """
     period_start, period_end = _statement_period(transactions)
+    recorded_map = dict(column_map) if column_map else None
+    currency = (card_currency or "").strip().upper()
     return {
         "file": stored_name,
         "upload_name": upload_name,
@@ -6409,6 +6421,10 @@ def build_statement_entry(
         # Filled in at commit time by `statement_advisory`, against the
         # entries the month holds at that moment.
         "advisory": None,
+        # How this upload was read (item 64), for the re-read to reuse
+        # instead of guessing again. Absent, not null, when unrecorded.
+        **({"column_map": recorded_map} if recorded_map else {}),
+        **({"card_currency": currency} if currency else {}),
         # This file's own id-to-row map. Underscored and popped at commit
         # into `statement_anchors`, so it never reaches the SPA: it is a
         # per-row map the size of the statement, and nothing renders it.
@@ -7690,6 +7706,13 @@ def execute_statement_attach(
             transactions=transactions,
             n_new=len(merged.added),
             uploaded_at=now_iso,
+            # Read back off the block `read_statement_upload` just wrote, the
+            # same source `account_id` and `sheet_name` come from, so the
+            # entry records what the parser was actually handed.
+            column_map=(new_cfg.get("statement") or {}).get("column_map"),
+            card_currency=(new_cfg.get("statement") or {}).get(
+                "account_card_currency", ""
+            ),
         ),
         trigger="statement",
     )
@@ -7778,11 +7801,14 @@ def reread_statements(
     with no anchor and no surviving id is the one case that refuses, so a
     verdict is never silently orphaned.
 
-    The column map for each file is recovered the same way the attach
-    recovered it: the config's own map for the upload it still describes
-    (that one may carry the operator's manual picks), a fresh guess for any
-    earlier upload (the guess now maps the Type column, so the sign is
-    explicit where the export prints one).
+    The column map and the card currency for each file are the ones that
+    upload recorded (item 64). Falling back, in order: the config's own map
+    for the upload it still describes, then a fresh guess. The fallbacks
+    only reach entries written before 2026-09-15, and both are worse than
+    what they replace: `config.statement` describes the LATEST upload only,
+    so on a multi-statement month it lends its map and its currency to files
+    that were read with neither, and a guess cannot reproduce the operator's
+    manual picks at all.
     """
     entries = month_statements(run)
     if not entries:
@@ -7819,8 +7845,15 @@ def reread_statements(
         form = RunForm(
             account_id=account_id,
             account_legal_entities={},
+            # This upload's OWN currency when it recorded one (item 64).
+            # `config.statement` describes only the latest upload, so on a
+            # month holding a USD and a EUR card statement the fallback
+            # re-reads both at whichever currency arrived last, and a charge
+            # whose currency moved stops matching its receipt.
             account_card_currency=str(
-                stmt_cfg.get("account_card_currency") or "USD"
+                entry.get("card_currency")
+                or stmt_cfg.get("account_card_currency")
+                or "USD"
             ),
             sheet_name=entry.get("sheet_name") or None,
             column_map_overrides={},
@@ -7833,6 +7866,11 @@ def reread_statements(
         column_map: dict | None
         if stmt_path.suffix.lower() == ".pdf":
             column_map = None
+        elif entry.get("column_map"):
+            # The map this upload was actually read with (item 64), which
+            # may carry the operator's manual picks for headers the guess
+            # cannot name at all.
+            column_map = dict(entry["column_map"])
         elif stored == stmt_cfg.get("path") and stmt_cfg.get("column_map"):
             column_map = dict(stmt_cfg["column_map"])
         else:
@@ -7860,6 +7898,10 @@ def reread_statements(
                 transactions=txs,
                 n_new=len(merged.added),
                 uploaded_at=str(entry.get("uploaded_at") or now_iso),
+                # Re-record what THIS re-read used, so an entry written
+                # before item 64 carries both from here on.
+                column_map=column_map,
+                card_currency=form.account_card_currency,
             )
         )
 
