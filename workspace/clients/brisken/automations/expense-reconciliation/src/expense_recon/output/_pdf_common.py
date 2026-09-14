@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import os
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 # The container installs fonts-dejavu-core (Dockerfile); a dev box usually
@@ -185,3 +186,82 @@ def esc(text) -> str:
         .replace("<", "&lt;")
         .replace(">", "&gt;")
     )
+
+
+# ── money: one parse, one sum, in Decimal (backlog item 65) ─────────
+#
+# Amounts are carried as STRINGS from the extractor to the export so that no
+# precision is lost on the way; the store sums them in Decimal
+# (`store/reports.py::_currency_totals`). A report that re-sums them in
+# binary float throws that away, which is what section 12 row 13 of
+# `docs/electronic-storage-system-description.md` discloses. These four are
+# the report side of that arithmetic, shared by both documents so the two
+# can never drift into summing a month differently.
+#
+# The second half of row 13 is the silent drop: a row whose amount would not
+# parse was skipped with `continue`, so a month could print a total short by
+# one receipt with nothing on the page saying so. `sum_amounts` hands the
+# unreadable rows BACK instead of swallowing them; the caller owes every one
+# of them a visible place.
+
+UNREADABLE_CAPTION = "amount unreadable, not in total"
+
+
+def parse_amount(text) -> Decimal | None:
+    """One amount cell to a Decimal, or None when it cannot be read.
+
+    Blank reads as zero: an empty cell has always counted as nothing, and
+    that is a different event from a cell nobody can parse. A non-finite
+    value is unreadable rather than a number, because `Decimal("NaN")`
+    parses happily and would turn a whole currency's total into "nan" --
+    one bad row poisoning every good one is worse than one row dropped.
+    """
+    raw = str(text if text is not None else "").strip().replace(",", "")
+    if not raw:
+        return Decimal("0")
+    try:
+        value = Decimal(raw)
+    except InvalidOperation:
+        return None
+    return value if value.is_finite() else None
+
+
+def sum_amounts(entries) -> tuple[dict[str, Decimal], list[int]]:
+    """Per-currency totals in Decimal, plus the listing numbers of the rows
+    whose amount could not be read.
+
+    `entries` yields `(listing_number, currency, amount_text)` per row. An
+    empty currency buckets under "?" rather than vanishing, the same way
+    the store buckets one under "UNKNOWN".
+    """
+    totals: dict[str, Decimal] = {}
+    unreadable: list[int] = []
+    for number, currency, text in entries:
+        value = parse_amount(text)
+        if value is None:
+            unreadable.append(int(number))
+            continue
+        ccy = str(currency or "") or "?"
+        totals[ccy] = totals.get(ccy, Decimal("0")) + value
+    return totals, unreadable
+
+
+def format_totals(totals: dict[str, Decimal], empty: str) -> str:
+    """The "EUR 1,234.56  ·  USD 20.00" line, or `empty` when nothing
+    summed."""
+    return "  ·  ".join(
+        f"{ccy} {amount:,.2f}" for ccy, amount in sorted(totals.items())
+    ) or empty
+
+
+def excluded_note(numbers: list[int]) -> str:
+    """The footer line that makes a dropped row visible, naming the expense
+    numbers so the reader can find them. Empty when every amount read: a
+    clean report says nothing rather than "0 receipts excluded"."""
+    if not numbers:
+        return ""
+    listed = ", ".join(str(n) for n in sorted(set(numbers)))
+    count = len(set(numbers))
+    if count == 1:
+        return f"1 receipt excluded from the total: expense {listed}."
+    return f"{count} receipts excluded from the total: expenses {listed}."

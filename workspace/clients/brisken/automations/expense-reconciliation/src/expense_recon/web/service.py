@@ -5433,6 +5433,13 @@ def build_expense_view(
     summary["n_charges_no_entity"] = sum(
         1 for t in charges if not (t.legal_entity_id or "").strip()
     )
+    # Item 65: expenses whose amount could not be read, so they are in no
+    # total -- `totals_by_ccy` above skips them and the report's listing
+    # cannot print them. The payload half of the report's "excluded from
+    # the total" footer; 0 on a month where every amount parsed.
+    summary["n_amounts_unreadable"] = sum(
+        1 for r in receipts if r.detected_total is None
+    )
 
     return {
         "run_id": run.run_id,
