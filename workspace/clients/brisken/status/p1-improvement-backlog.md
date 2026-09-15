@@ -1949,7 +1949,7 @@ unreachable, which is worse than absent because nobody goes looking for it.
 the month page. Verify by bundle audit on the field names (`statements`,
 `coverage`) plus a browser drive, not by reading the prompt.
 
-### 54. OCR date misreads silently prevent a match (2026-09-10, July sweep)
+### 54. OCR date misreads silently prevent a match (2026-09-10, July sweep; CLOSED 2026-09-15, neither instance is a misread, not built)
 
 Two receipts sit in the July month unmatched purely because their extracted
 date is wrong:
@@ -1969,6 +1969,48 @@ signal, and the workbench says nothing about it.
 
 **Fix:** surface amount-matches-date-doesn't as a review candidate rather
 than leaving the row unmatched and silent.
+
+**CLOSED 2026-09-15: both instances were read correctly, and the general rule
+would only have added wrong suggestions.** Checked before any code, against
+four independent records: the stored extraction, the printed document (both
+PDFs pulled from the image endpoint and read), the item-69 human labels in the
+July live bundle, and the live run payload.
+
+- **Crossmedia** prints `Invoice Date : 30 Mar 2026`, `Balance Due €900,00`.
+  2026-03-30 is the invoice date, extracted correctly. The "charge" quoted
+  above is not a card charge: it comes from
+  `context/zoho-receipts-july-2026/july-2026-charges-without-a-receipt.csv`,
+  a bank-transfer payment. July's only statement (`July2026.xlsx`) holds 112
+  charges, all USD, none of them 900. Label: `no_charge:bank_transfer`. This
+  is item 62's case, already shipped on the backend (`settled-outside`); what
+  is left is the SPA paste of `docs/lovable-settled-outside-prompt.md`.
+- **Anthropic USD 100** prints `Date paid June 21, 2026` on `Visa - 3645`,
+  service period `Jun 21–Jul 21`. Extracted correctly. Its charge belongs to
+  June, whose month carries no statement. Label: `no_charge:neighbour_period`.
+  Item 61's adjacent pool is the mechanism that pairs it once June has one.
+
+**The rule, measured before building it.** Every (free charge, free receipt)
+pair with the same currency and the exact amount, over both live statement
+months: July 4 pairs, August 3. With a vendor floor of 0.5 the ones a
+far-date rule would surface are July's Anthropic 06-21 receipt against the
+ANTHROPIC 100.00 charges of 07-10 (vendor 1.00, 19 days) and 07-21 (0.52, 30
+days). The labels say both are wrong. Without the floor July adds LOVABLE
+100.00 (vendor 0.20), and August adds Google 71.64 08-31 against both 08-01
+Google Workspace charges (labelled `no_charge:neighbour_period`, it posts in
+September) and a collapsed duplicate copy of a Lovable 50 invoice against
+BASE44 50 (labelled `excluded`). Zero right answers out of every candidate. The exact-amount population in these months is
+recurring subscriptions at identical amounts, so "same amount, far date" says
+"same subscription, different period" far more often than "misread date".
+
+**What would reopen it:** one live receipt whose EXTRACTED date differs from
+its PRINTED date while a free charge carries its exact amount. The class is
+real on the receipt grid (item 25's wrong years, item 28's residue of a wrong
+day inside the right month), and item 25's `date_outside_period` already
+flags the out-of-window half there. No statement month has produced an
+instance yet. A rebuild would also need a guard against the subscription
+pattern above (card agreement plus no second same-vendor same-amount charge
+is the first thing to measure), because without one it misleads on exactly
+the months Criss works in.
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
