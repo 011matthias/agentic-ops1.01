@@ -341,3 +341,89 @@ def test_global_off_switch(tmp_path):
     r = run_hook(HOOK, {"hook_event_name": "PostToolUse", "tool_name": "Bash",
                         "tool_input": {"command": "flyctl deploy -a x"}}, env=e)
     assert not r.stdout.strip()
+
+
+# ---- One marker per session ---------------------------------------------
+#
+# The marker used to be a single file in the machine's temp dir while this repo
+# runs concurrent sessions by design. On 2026-09-15 a sibling session's Fly
+# deploy blocked an unrelated session's Stop, naming a deploy that session had
+# never run. The reverse is the expensive one: any session's browser drive
+# closed any other session's marker.
+#
+# These drive the REAL per-session path (no explicit DEPLOY_CONSUMER_MARKER),
+# pointing only the directory at tmp_path.
+
+
+def sess_env(tmp_path) -> dict:
+    return {
+        "AGENTIC_OPS_SESSION_STATE": "",
+        "DEPLOY_CONSUMER_MARKER": "",
+        "DEPLOY_CONSUMER_MARKER_DIR": str(tmp_path),
+    }
+
+
+def post_as(tmp_path, session: str, tool: str, command: str | None = None,
+            response: dict | None = None) -> str:
+    payload = {"hook_event_name": "PostToolUse", "tool_name": tool,
+               "session_id": session}
+    if command is not None:
+        payload["tool_input"] = {"command": command}
+    if response is not None:
+        payload["tool_response"] = response
+    r = run_hook(HOOK, payload, env=sess_env(tmp_path))
+    assert r.returncode == 0, r.stderr
+    if not r.stdout.strip():
+        return ""
+    return json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+
+
+def stop_as(tmp_path, session: str, text: str) -> str | None:
+    r = run_hook(
+        HOOK,
+        {"hook_event_name": "Stop", "session_id": session,
+         "transcript_path": transcript(tmp_path, text),
+         "stop_hook_active": False},
+        env=sess_env(tmp_path),
+    )
+    assert r.returncode == 0, r.stderr
+    if not r.stdout.strip():
+        return None
+    obj = json.loads(r.stdout)
+    return obj.get("reason") if obj.get("decision") == "block" else None
+
+
+def test_a_siblings_deploy_does_not_block_this_session(tmp_path):
+    post_as(tmp_path, "session-A", "Bash", "flyctl deploy -a brisken-recon")
+    assert stop_as(tmp_path, "session-B", CLAIM) is None
+
+
+def test_the_deploying_session_is_still_blocked(tmp_path):
+    post_as(tmp_path, "session-A", "Bash", "flyctl deploy -a brisken-recon")
+    reason = stop_as(tmp_path, "session-A", CLAIM)
+    assert reason is not None and "CONSUMER NOT DRIVEN" in reason
+
+
+def test_a_siblings_browser_drive_does_not_close_this_marker(tmp_path):
+    """The expensive direction: another session's snapshot must not stand in
+    for the drive this session still owes."""
+    post_as(tmp_path, "session-A", "Bash", "flyctl deploy -a brisken-recon")
+    post_as(tmp_path, "session-B", "mcp__playwright__browser_snapshot",
+            response={"ok": True})
+    reason = stop_as(tmp_path, "session-A", CLAIM)
+    assert reason is not None and "CONSUMER NOT DRIVEN" in reason
+
+
+def test_own_browser_drive_still_closes_it(tmp_path):
+    post_as(tmp_path, "session-A", "Bash", "flyctl deploy -a brisken-recon")
+    post_as(tmp_path, "session-A", "mcp__playwright__browser_snapshot",
+            response={"ok": True})
+    assert stop_as(tmp_path, "session-A", CLAIM) is None
+
+
+def test_a_payload_without_a_session_id_still_tracks(tmp_path):
+    """No session_id falls back to the shared path. Occasionally shared beats
+    silently untracked."""
+    post_as(tmp_path, "", "Bash", "flyctl deploy -a brisken-recon")
+    reason = stop_as(tmp_path, "", CLAIM)
+    assert reason is not None and "CONSUMER NOT DRIVEN" in reason
