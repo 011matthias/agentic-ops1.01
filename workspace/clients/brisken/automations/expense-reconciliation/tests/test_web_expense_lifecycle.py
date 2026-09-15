@@ -273,22 +273,18 @@ def test_statement_attach_graduates_batch(client, monkeypatch):
     )
     assert resp.status_code == 200
 
-    # The expense-edit overlay is frozen: pool = reconciliation provenance.
-    frozen = client.put(
+    # The expense-edit overlay is NOT frozen since item 70: an edit on a
+    # reconciling month is taken and re-matches the month, reversibly
+    # (tests/test_month_edits.py owns that behavior). A booking field such as
+    # tax changes no pairing, so it takes no re-match.
+    edit = client.put(
         f"/api/runs/{batch_id}/expenses/{doc}",
-        json={"field": "vendor", "value": "X"},
+        json={"field": "tax", "value": "6.00"},
     )
-    assert frozen.status_code == 400
-    assert "workbench" in frozen.json()["error"]
-    assert client.post(
-        f"/api/runs/{batch_id}/expenses", json={"vendor": "Y", "total": "1"}
-    ).status_code == 400
-    assert client.request(
-        "DELETE", f"/api/runs/{batch_id}/expenses/{doc}"
-    ).status_code == 400
-    # But the MONTH itself is not frozen (2b-2, the living month): a receipt
-    # that arrives after the statement joins and the month re-matches. Only
-    # the four overlay routes above stay closed.
+    assert edit.status_code == 200, edit.text
+    assert "rematch" not in edit.json()
+    # And the MONTH itself is not frozen (2b-2, the living month): a receipt
+    # that arrives after the statement joins and the month re-matches.
     late = client.post(
         f"/api/expense-batches/{batch_id}/receipts",
         files=[("files", ("late.jpg", JPG + b"9", "application/octet-stream"))],

@@ -154,6 +154,11 @@ from .service import (
     clear_receipt_settled_outside,
     set_receipt_settled_outside,
 )
+from .service import (  # item 70
+    EXPENSE_MATCH_FIELDS,
+    category_edit_account,
+    category_edit_receipt,
+)
 from ..matching.types import EXPENSE_CATEGORIES
 from ..cost_centers import (
     CostCenterRegistry,
@@ -432,6 +437,27 @@ def _resolve_duplicate_rematch(
         return rematch_after_change(
             store, run_id,
             learning_db_path=learning_db_path, trigger="duplicates",
+        )
+
+
+def _expense_edit_rematch(
+    db_path: Path, learning_db_path: Path, run_id: str
+) -> dict | None:
+    """Re-match a reconciling month after an expense edit that can change
+    what pairs with what (item 70).
+
+    The five expense-edit routes stayed closed on a statement month because
+    a re-match bakes the overlay into the pool, so an edit surface was only
+    worth reopening together with the re-match the edit has to trigger.
+    This is that re-match. Same contract as every other living-month
+    caller: it runs AFTER the edit is committed and outside any batch-lock
+    span, and a failure rides back in the reply instead of failing an edit
+    that is already written. Returns None on a month with no statement.
+    """
+    with RunStore(db_path) as store:
+        return rematch_after_change(
+            store, run_id,
+            learning_db_path=learning_db_path, trigger="expense_edit",
         )
 
 
@@ -2499,14 +2525,44 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         line_index = body.get("line_index")
         category = body.get("category")
         zoho_account = body.get("zoho_account")
-        if not document_id or not isinstance(line_index, int):
+        # Item 70: `line_index` absent or null reclassifies the WHOLE receipt
+        # (the SPA sent 0 and a 33-line receipt came out reading two
+        # categories). An explicit int keeps the per-line edit it always was.
+        if (
+            not document_id
+            or isinstance(line_index, bool)
+            or (line_index is not None and not isinstance(line_index, int))
+        ):
             return JSONResponse({"error": "bad request"}, status_code=400)
         with open_store() as store:
-            if store.get_run(run_id) is None:
+            run = store.get_run(run_id)
+            if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
-            store.set_category_override(
-                run_id, document_id, line_index, category, zoho_account, _now_iso()
-            )
+            rec = category_edit_receipt(store, run, document_id)
+            if line_index is None:
+                if rec is None:
+                    return JSONResponse(
+                        {"error": "unknown expense"}, status_code=404
+                    )
+                indices = list(range(len(rec.line_items))) or [0]  # every line
+            else:
+                indices = [line_index]
+            overrides = store.get_category_overrides(run_id)
+            now = _now_iso()
+            for i in indices:
+                base = (
+                    rec.line_items[i].categorization
+                    if rec is not None and 0 <= i < len(rec.line_items)
+                    else None
+                )
+                # A changed category drops the account chosen for the old
+                # one; an explicit account, or an unchanged category, keeps.
+                account = category_edit_account(
+                    category, zoho_account, overrides.get((document_id, i)), base
+                )
+                store.set_category_override(
+                    run_id, document_id, i, category, account, now
+                )
         return JSONResponse({"ok": True})
 
     @app.post("/api/runs/{run_id}/manual-match")
@@ -2748,33 +2804,35 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             )
         return run, None
 
-    def _mutable_expense_run_or_error(store: RunStore, run_id: str):
-        """Like `_expense_run_or_error`, but additionally refuses a batch
-        whose statement is attached.
+    async def _expense_edit_reply(
+        run_id: str, rematch_needed: bool, extra: dict | None = None
+    ) -> JSONResponse:
+        """The reply every expense-edit route gives (item 70).
 
-        Since 2b-2 this guards the four expense-edit OVERLAY routes only.
-        The month itself no longer closes: receipts, restores, card
-        assignments and master-data refreshes are allowed all month and
-        each re-matches (`service.rematch_after_change`).
-
-        What keeps the overlay out is not the risk of applying an edit
-        twice -- it is idempotent by construction, and `apply_expense_edits`
-        is written that way on purpose. It is that a re-match BAKES the
-        overlay into the receipt pool, so an edit surface is only worth
-        reopening once every edit it takes stays reversible and honestly
-        attributed. PR #628 restored the extraction baseline that both of
-        those rest on; reopening these four is its own round, with the
-        re-match an edit has to trigger."""
-        run, err = _expense_run_or_error(store, run_id)
-        if err is not None:
-            return None, err
-        if has_statement(run):
-            return None, JSONResponse(
-                {"error": "a statement is attached; review this month in "
-                          "the reconciliation workbench"},
-                status_code=400,
+        The five edit routes used to refuse a month with a statement
+        (`_mutable_expense_run_or_error`, retired here): a re-match BAKES the
+        overlay into the pool, so the surface stayed closed until its edits
+        were reversible (PR #628's extraction baseline) and each edit that
+        can move a pairing triggered the re-match it needs. This is that
+        re-match. Off the event loop, because `rematch_after_change` takes
+        the batch lock and can call the model; after the edit is committed;
+        its result or error under `rematch`, absent when nothing re-matched.
+        The summary is read AFTER it, so it describes the re-matched month."""
+        rematch = None
+        if rematch_needed:
+            rematch = await run_in_threadpool(
+                _expense_edit_rematch,
+                app.state.db_path, app.state.learning_db_path, run_id,
             )
-        return run, None
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            view = _expense_view(store, run)
+        out = {"ok": True, **(extra or {}), "summary": view["summary"]}
+        if rematch is not None:
+            out["rematch"] = rematch
+        return JSONResponse(jsonable_encoder(out))
 
     @app.post("/api/expense-batches")
     async def post_expense_batch(
@@ -3346,9 +3404,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         Repeatable since PR 2b-2b-2: a statement arrives per card and often
         twice (a mid-month partial, then the full cycle), so this appends by
         identity rather than refusing. That is why the gate below is the
-        plain expense-run check and not `_mutable_expense_run_or_error` —
-        the lift is deliberate, and pinned by `tests/test_living_month.py`
-        so it cannot be reverted by accident either."""
+        plain expense-run check (the statement-refusing variant is retired
+        since item 70) — the lift is deliberate, and pinned by
+        `tests/test_living_month.py` so it cannot be reverted by accident
+        either."""
         if not _receipt_first_on():
             return _flag_off()
         with open_store() as store:
@@ -3461,14 +3520,18 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 {"error": "legal_entity is required"}, status_code=400
             )
         with open_store() as store:
-            run, err = _mutable_expense_run_or_error(store, run_id)
+            run, err = _expense_run_or_error(store, run_id)
             if err is not None:
                 return err
+            before = (
+                store.get_expense_field_overrides(run_id).get(document_id) or {}
+            ).get("legal_entity") or ""
             store.set_expense_field_override(
                 run_id, document_id, "legal_entity", entity, _now_iso()
             )
-            view = _expense_view(store, run)
-        return JSONResponse({"ok": True, "summary": view["summary"]})
+            # Matching is entity-scoped, so a changed entity can move a pair.
+            rematch_needed = has_statement(run) and before != entity
+        return await _expense_edit_reply(run_id, rematch_needed)
 
     @app.post("/api/runs/{run_id}/expenses/{document_id:path}/private")
     async def post_expense_private(run_id: str, document_id: str, request: Request):
@@ -3495,7 +3558,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 status_code=400,
             )
         with open_store() as store:
-            run, err = _mutable_expense_run_or_error(store, run_id)
+            run, err = _expense_run_or_error(store, run_id)
             if err is not None:
                 return err
             now = _now_iso()
@@ -3506,8 +3569,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 run_id, document_id, "reimburse_to",
                 reimburse_to if private else None, now
             )
-            view = _expense_view(store, run)
-        return JSONResponse({"ok": True, "summary": view["summary"]})
+        # No re-match (item 70): the private flag and who is reimbursed never
+        # reach the matcher; the card chain derives a row's entity without it.
+        return await _expense_edit_reply(run_id, False)
 
     @app.put("/api/runs/{run_id}/expenses/{document_id:path}")
     async def put_expense_field(run_id: str, document_id: str, request: Request):
@@ -3537,9 +3601,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return JSONResponse({"error": err_msg}, status_code=400)
 
         with open_store() as store:
-            run, err = _mutable_expense_run_or_error(store, run_id)
+            run, err = _expense_run_or_error(store, run_id)
             if err is not None:
                 return err
+            rematch_needed = False
             # Item 41: a private confirmation is the PAIR (flag + who
             # gets reimbursed). This one-field-at-a-time route cannot
             # set both, so the flag alone is refused unless reimburse_to
@@ -3611,7 +3676,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     )
                     if field == "category":
                         category = value or None
-                        account = ov.get("zoho_account")
+                        # Item 70: a changed category drops the account
+                        # chosen for the old one instead of keeping it.
+                        account = category_edit_account(category, None, ov, base)
                     else:
                         account = value or None
                         # apply_overrides only fires on an override WITH a
@@ -3623,11 +3690,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         run_id, document_id, i, category, account, _now_iso()
                     )
             else:
+                before = (
+                    store.get_expense_field_overrides(run_id).get(document_id)
+                    or {}
+                ).get(field) or ""
                 store.set_expense_field_override(
                     run_id, document_id, field, value or None, _now_iso()
                 )
-            view = _expense_view(store, run)
-        return JSONResponse({"ok": True, "summary": view["summary"]})
+                # Item 70: only a field the matcher reads, and only when it
+                # actually changed, pays for a re-match.
+                rematch_needed = (
+                    has_statement(run)
+                    and field in EXPENSE_MATCH_FIELDS
+                    and before != value
+                )
+        return await _expense_edit_reply(run_id, rematch_needed)
 
     @app.post("/api/runs/{run_id}/expenses")
     async def post_expense_add(run_id: str, request: Request):
@@ -3665,39 +3742,49 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
         document_id = f"manual:{uuid.uuid4().hex[:12]}"
         with open_store() as store:
-            run, err = _mutable_expense_run_or_error(store, run_id)
+            run, err = _expense_run_or_error(store, run_id)
             if err is not None:
                 return err
             store.set_expense_edit(run_id, document_id, "add", payload, _now_iso())
-            view = _expense_view(store, run)
-        return JSONResponse({
-            "ok": True, "document_id": document_id, "summary": view["summary"],
-        })
+            # Item 70: the add joins the matcher's pool on a reconciling month.
+            rematch_needed = has_statement(run)
+        return await _expense_edit_reply(
+            run_id, rematch_needed, {"document_id": document_id}
+        )
 
     @app.delete("/api/runs/{run_id}/expenses/{document_id:path}")
     async def delete_expense(run_id: str, document_id: str):
         """Remove one expense from the batch (soft: an edit-table row, the
-        snapshot is never rewritten). Deleting a manual add overwrites its
-        add row, so it simply disappears."""
+        snapshot is never rewritten by the delete itself; on a reconciling
+        month the re-match that follows bakes the pool without it).
+        Deleting a manual add overwrites its add row, so it simply
+        disappears."""
         if not _receipt_first_on():
             return _flag_off()
         with open_store() as store:
-            run, err = _mutable_expense_run_or_error(store, run_id)
+            run, err = _expense_run_or_error(store, run_id)
             if err is not None:
                 return err
+            prior_edits = store.get_expense_edits(run_id)
             known = {
                 r["document_id"] for r in run.snapshot.get("receipts", [])
             } | {
-                e["document_id"] for e in store.get_expense_edits(run_id)
+                e["document_id"] for e in prior_edits
             }
             if document_id not in known:
                 return JSONResponse({"error": "unknown expense"}, status_code=404)
+            already = any(
+                e["document_id"] == document_id and e["op"] == "delete"
+                for e in prior_edits
+            )
             store.set_expense_edit(run_id, document_id, "delete", None, _now_iso())
             # R4: a deleted expense settles nothing any more -- whichever
             # run's charge claimed this receipt releases it.
             store.delete_claims_for_receipt(run_id, document_id)
-            view = _expense_view(store, run)
-        return JSONResponse({"ok": True, "summary": view["summary"]})
+            # Item 70: the receipt leaves the matcher's pool, so its charge
+            # has to be re-matched or it keeps pairing with nothing real.
+            rematch_needed = has_statement(run) and not already
+        return await _expense_edit_reply(run_id, rematch_needed)
 
     @app.get("/runs/{run_id}/expenses.csv")
     def download_expenses_csv(run_id: str):

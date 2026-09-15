@@ -692,3 +692,40 @@ def test_receipt_in_report_is_absent_or_a_bool_never_null(payloads):
                 continue
             assert isinstance(summary["n_receipts_in_report"], int), summary
             assert 0 <= summary["n_receipts_in_report"] <= summary["n_receipts"]
+
+
+def test_posting_category_proposed_is_absent_or_true_never_false(
+    tmp_path, monkeypatch
+):
+    """Item 70. `rows[].posting_category_proposed` says the row's
+    `posting_category` came from the candidate a needs-review row's Confirm
+    would take, because the row holds no receipt yet. Parallel field per
+    rule 1: `true` on exactly those rows and ABSENT (never `false`, never
+    null) everywhere else, so a month nobody reclassified renders
+    byte-identically to before.
+
+    Seeded on the synthetic run: `t3` is the ambiguous row with two
+    candidates and no verdict; a reviewer category on candidate `d2` (the
+    second one) must surface there and only there.
+    """
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    app = create_app(tmp_path)
+    with TestClient(app) as client:
+        before = _synthetic_run(client, tmp_path)
+        store = RunStore(tmp_path / "recon-web.sqlite")
+        store.set_category_override(
+            "contract-synth", "d2", 0, "Office Supplies & Consumables", None,
+            "2026-09-15T00:00:00",
+        )
+        store.close()
+        after = client.get("/api/runs/contract-synth").json()
+
+    assert all("posting_category_proposed" not in r for r in before["rows"])
+    flagged = [r for r in after["rows"] if "posting_category_proposed" in r]
+    assert [r["transaction_id"] for r in flagged] == ["t3"], flagged
+    (row,) = flagged
+    assert row["posting_category_proposed"] is True
+    assert row["effective_bucket"] == "review"
+    assert row["chosen_document_id"] is None
+    assert row["posting_category"]["category"] == "Office Supplies & Consumables"

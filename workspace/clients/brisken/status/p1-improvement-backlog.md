@@ -2660,6 +2660,90 @@ the first fan-out row therefore name the wrong expense number. That is the
 numbering fallback in `build_expense_report`, not the coverage question, and
 it wants its own item.
 
+### 70. Changes in a month that did not stick (Criss 2026-09-14, owner report 2026-09-15)
+
+Criss, app feedback 2026-09-14 06:57 UTC, July: "Qdo entro na categoria e
+eu coloco a categoria certa, nao acontece nada... permanece sem categoria
+mesmo dando refresh." Owner approved the full fix 2026-09-15. Three causes,
+audited the same day against the live months:
+
+- **A. A reclassified needs-review row saved and never showed.** `POST
+  /api/runs/{id}/categories` stored the override on the candidate receipt,
+  but `build_view` resolved `posting_category` from the HELD receipt, and a
+  review row holds none until it is confirmed. 12 July rows and 3 August rows.
+- **B. On a month with a statement, five expense-edit routes answered 400**
+  ("a statement is attached; review this month in the reconciliation
+  workbench") through `_mutable_expense_run_or_error`: the field PUT, the
+  entity PUT, private, manual add, delete. Both live months have statements,
+  so company, category, paid-through and cost center could be set nowhere on
+  July or August. Deliberate since item 29's overlay-route round: a re-match
+  bakes the overlay into the pool, so the surface waited for reversible edits
+  (PR #628) and the re-match an edit has to trigger.
+- **C. Reclassify half-applied.** The SPA always sent `line_index: 0`, so a
+  33-line Lidl receipt read two categories, and it sent no account, so the old
+  one survived (iCloud: "Software & Subscriptions" booked to the account
+  chosen for "Utilities & Premises"). The grid's PUT category path carried the
+  stored account the same way.
+
+**Shipped (branch `client/brisken/p1-month-edits`).**
+
+- B: the refusal gate is retired; all five routes take the edit all month and
+  reply through one helper that runs `rematch_after_change` (trigger
+  `expense_edit`) off the event loop, after the edit is committed, with its
+  result or error under `rematch` (absent when nothing re-matched). Every other
+  validation stands.
+- **The re-match field list, from the matcher, not from intuition:**
+  `match_month`, `reference_match` and `matching/judgment.py` read
+  detected_date, detected_total, detected_currency, detected_vendor,
+  detected_reference and legal_entity_id (plus payment_mode, which no edit
+  writes). So a re-match follows `vendor`, `date`, `total`, `currency`,
+  `reference` (when the value changed), a changed `legal_entity`, a manual
+  add and a delete. Differs from the brief twice: `reference` IS in the list
+  (a tie-break the matcher reads), and `private` / `reimburse_to` are NOT
+  (the card chain derives a row's entity from override / card / stamped value
+  and never from the private flag, so confirming a private expense moves no
+  pairing). Never: category, zoho_account, tax, tax_label, paid_through,
+  cost_center, customer.
+- **The reversibility hole the reopening exposed, fixed:** `rematch_month`
+  baked from the snapshot pool, which is already baked, so a CLEARED edit left
+  the old value in the matcher's pool (measured before the fix: total edited
+  to 99.99 then cleared, grid 42.50, pool still 99.99, charge unmatched). It
+  now bakes from `baseline_receipts(run)`. Two supporting changes:
+  `apply_expense_edits` rebuilds a baked manual add from its payload in place
+  (a manual add edited before its first bake had no baseline to revert to),
+  and a manual re-attach drops the superseded file's baseline entry.
+- A: a review row holding no receipt resolves `posting_category` from the
+  candidate carrying a reviewer category edit, else `candidates[0]` (what the
+  SPA's Confirm takes), and carries `posting_category_proposed: true`, absent
+  everywhere else. Readiness, `resolve_review` and every count unchanged; the
+  reconciliation PDF leaves its posts-to column blank on such a row.
+- C: `line_index` absent or null reclassifies every line of the receipt
+  (resolved from the effective set, 404 for an unknown receipt); an explicit
+  int keeps the per-line edit. **Account rule:** no deterministic category ->
+  account map exists (`EXPENSE_CATEGORY_ROOT_GROUP` names a root group, not a
+  postable leaf; registry and memory are per merchant), so a changed category
+  keeps no account: an override inherits the line's own account only when it
+  keeps the line's category (read time, `apply_overrides` and
+  `_row_posting_category`), and a category edit without an explicit account
+  stores none unless the category is unchanged (both routes). The export then
+  books the row to the category label with no chart wired and to `(account
+  unmapped - assign)` with one, never a guessed account. Rows whose stale
+  account was already baked into a live month's pool correct at that month's
+  next re-match (the bake now starts from the baseline); the expense CSV reads
+  the baseline and is correct at once.
+
+**Evidence.** Suite 1724 -> 1746 passed (2 skipped), calibrate exit 0, ruff
+clean on the diff. `tests/test_month_edits.py` (21, all through the routes)
+plus a contract pin in `tests/test_view_contract.py`; the closed-door pins in
+`test_living_month.py` and `test_web_expense_lifecycle.py` now pin the open
+door. Seven regress proofs, each RED first with the right failure: route
+refusal re-added (400 "a statement is attached"), re-match call disabled
+(8 red, `KeyError: 'rematch'`), bake from the snapshot (the total-revert
+test), proposed category off, line 0 only (the every-line test), account
+inheritance at read time (3 export tests; the workbench posting test), the
+PUT store keeping the old account, and the manual add not rebuilt. SPA half
+`docs/lovable-month-edits-prompt.md` (owner applies).
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
