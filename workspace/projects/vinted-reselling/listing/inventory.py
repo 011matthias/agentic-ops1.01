@@ -30,6 +30,7 @@ Modes:
   --record LISTING_ID       file the draft into my own listings
   --mine                    my listings and how they are doing
   --sold MY_ID --price EUR  close one out as sold
+  --backfill-live DIR       file already-published listings from a driver run
 """
 
 import argparse
@@ -387,6 +388,101 @@ def mark_sold(con: sqlite3.Connection, my_id: int, sold_price: float,
     return cur.rowcount > 0
 
 
+def keywords_from(description: str) -> list[str]:
+    """Pull the 'Wird auch gesucht als' terms back out of a shipped description.
+
+    Vinted has no hashtag field, so the keywords ship as a sentence at the foot
+    of the description and there is nowhere else to read them from. Recovering
+    them here is what lets a later sale be attributed to the terms that carried
+    it.
+    """
+    for line in (description or "").splitlines():
+        if "Wird auch gesucht als" in line:
+            tail = line.split(":", 1)[1] if ":" in line else ""
+            return [t.strip(" .") for t in tail.split(",") if t.strip(" .")]
+    return []
+
+
+def backfill_live(con: sqlite3.Connection, driver_dir: Path,
+                  listed_at: str | None = None) -> dict:
+    """File listings a publishing driver already put live into my_listings.
+
+    Reads the driver's own JSON: results.json says what actually published and
+    under which Vinted item id, items.json carries the structured fields that
+    were typed into the form, descriptions.json the shipped copy. Batch files
+    (items-b2.json and friends) are merged over the base, the way the driver
+    itself merges them.
+
+    Idempotent on vinted_item_id: an item already in the ledger is left alone,
+    so this can be re-run after each batch without duplicating a row. Nothing
+    here contacts Vinted.
+    """
+    def load(name):
+        p = driver_dir / name
+        if not p.exists():
+            return {}
+        d = json.loads(p.read_text(encoding="utf-8"))
+        d.pop("_note", None)
+        return d
+
+    results = load("results.json")
+    specs, copy = load("items.json"), load("descriptions.json")
+    # What a later enrichment pass actually saved onto the live listings.
+    # descriptions.json is the pre-publish text and does not carry it.
+    enrich, enriched = load("enrich.json"), load("enrich-results.json")
+    LIVE_ENRICH = {"saved", "already enriched"}
+    for extra in sorted(driver_dir.glob("items-b*.json")):
+        specs.update(load(extra.name))
+    for extra in sorted(driver_dir.glob("descriptions-b*.json")):
+        copy.update(load(extra.name))
+    if not results:
+        return {"error": f"kein results.json unter {driver_dir}"}
+
+    have = {r[0] for r in con.execute(
+        "SELECT vinted_item_id FROM my_listings WHERE vinted_item_id IS NOT NULL")}
+    added, skipped, unpublished = [], [], []
+    ts = now_iso()
+    for num in sorted(results):
+        r = results[num]
+        if not r.get("published") or not r.get("id"):
+            unpublished.append(num)
+            continue
+        if r["id"] in have:
+            skipped.append(num)
+            continue
+        spec, c = specs.get(num, {}), copy.get(num, {})
+        desc = c.get("desc", "")
+        # Keywords, in order of what is actually live: an enrichment pass that
+        # reported saving, then a keyword line written into the description
+        # itself, then none.
+        state = (enriched.get(num) or {}).get("status")
+        if state in LIVE_ENRICH and (enrich.get(num) or {}).get("keywords"):
+            kw = [t.strip() for t in enrich[num]["keywords"].split(",") if t.strip()]
+            kw_note = f"keyword line live ({state})"
+        else:
+            kw = keywords_from(desc)
+            kw_note = ("keyword line in the description" if kw
+                       else "NO KEYWORD LINE LIVE")
+            if not kw and (enrich.get(num) or {}).get("keywords"):
+                kw_note += "; text prepared in enrich.json, never applied"
+        mat = spec.get("material") or (enrich.get(num) or {}).get("material") or None
+        con.execute(
+            """INSERT INTO my_listings (vinted_item_id, title, brand, garment_class,
+                   size, condition, color, material, keywords, description,
+                   ask_price, listed_at, status, url, notes, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (r["id"], c.get("title") or r.get("title"), spec.get("brand"),
+             (spec.get("category") or [None, None, None])[2] if spec.get("category") else None,
+             spec.get("size"), spec.get("condition"), spec.get("color"),
+             mat, json.dumps(kw, ensure_ascii=False),
+             desc, spec.get("price"), listed_at, "live", r.get("url"),
+             f"item {num}; {kw_note}; status is what the publish run "
+             f"recorded, not re-checked against Vinted", ts, ts))
+        added.append(num)
+    con.commit()
+    return {"added": added, "skipped": skipped, "unpublished": unpublished}
+
+
 def mine(con: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in con.execute(
         "SELECT * FROM my_listings ORDER BY COALESCE(listed_at, created_at) DESC")]
@@ -455,6 +551,10 @@ def main() -> None:
     ap.add_argument("--record", type=int, metavar="LISTING_ID",
                     help="file the draft into my_listings")
     ap.add_argument("--mine", action="store_true", help="my own listings")
+    ap.add_argument("--backfill-live", metavar="DIR",
+                    help="file already-published listings from a driver run's JSON")
+    ap.add_argument("--listed-at", metavar="YYYY-MM-DD",
+                    help="with --backfill-live: the date those listings went live")
     ap.add_argument("--sold", type=int, metavar="MY_ID")
     ap.add_argument("--price", type=float, help="with --sold, or override the ask on --record")
     ap.add_argument("--color"), ap.add_argument("--material")
@@ -478,6 +578,22 @@ def main() -> None:
             print(f"my_listings {args.sold} als verkauft eingetragen" if ok
                   else f"keine eigene Anzeige mit id {args.sold}")
             sys.exit(0 if ok else 1)
+
+        if args.backfill_live:
+            d = Path(args.backfill_live)
+            if not d.is_dir():
+                print(f"kein Verzeichnis: {d}")
+                sys.exit(2)
+            res = backfill_live(con, d, args.listed_at)
+            if res.get("error"):
+                print(res["error"])
+                sys.exit(1)
+            print(f"eingetragen {len(res['added'])}, "
+                  f"schon vorhanden {len(res['skipped'])}, "
+                  f"nicht veroeffentlicht {len(res['unpublished'])}")
+            if res["unpublished"]:
+                print("  ohne Veroeffentlichung: " + ", ".join(res["unpublished"]))
+            return
 
         if args.mine:
             rows = mine(con)
