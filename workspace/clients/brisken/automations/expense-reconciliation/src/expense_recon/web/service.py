@@ -1196,8 +1196,10 @@ def apply_overrides(
                         li,
                         categorization=Categorization(
                             category=ov["category"],
+                            # Item 70: the line's own account only survives
+                            # an override that keeps its category.
                             zoho_account=ov.get("zoho_account")
-                            or (base.zoho_account if base else None),
+                            or override_base_account(ov["category"], base),
                             confidence=1.0,
                             source=ClassificationSource.LINE,
                             reasoning="reclassified by reviewer",
@@ -1693,6 +1695,15 @@ def attach_emailed_receipt(
         new_snapshot = dict(fresh.snapshot)
         new_snapshot["receipts"] = [receipt_to_dict(r) for r in receipts]
         new_snapshot["outcome"] = outcome_to_dict(outcome)
+        # Item 70: a re-attach replaces the document with a DIFFERENT file, so
+        # the old file's extraction must not stay its baseline: the re-match
+        # bakes from the baseline, and would resurrect the superseded read.
+        baseline = new_snapshot.get(EXTRACTED_RECEIPTS_KEY)
+        if isinstance(baseline, list):
+            new_snapshot[EXTRACTED_RECEIPTS_KEY] = [
+                d for d in baseline
+                if not (isinstance(d, dict) and d.get("document_id") == document_id)
+            ]
         if superseded:
             new_snapshot["receipt_files"] = _record_receipt_file(
                 fresh.snapshot, document_id, dest.name, superseded, now_iso
@@ -2309,9 +2320,9 @@ def _row_posting_category(
             base = li.categorization
             if ov and ov.get("category"):
                 category = ov["category"]
-                account = ov.get("zoho_account") or (
-                    base.zoho_account if base else None
-                )
+                # Item 70: same rule as `apply_overrides` -- a reclassified
+                # line never keeps the account chosen for its old category.
+                account = ov.get("zoho_account") or override_base_account(category, base)
                 src = "EDITED"
             elif base is not None:
                 category = base.category
@@ -2906,6 +2917,16 @@ def build_view(
         posting_category = _row_posting_category(
             matched_rec, overrides, charge_cat_view
         )
+        # Item 70: a needs-review row holds no receipt until confirmed, so a
+        # category set on its candidate saved and never showed. Show the one
+        # the Confirm would book, flagged as proposed. Display only: the
+        # readiness below still reads `matched_rec`, which stays None.
+        proposed_flag: dict = {}
+        if matched_rec is None and effective_bucket == "review":
+            proposed = proposed_posting_category(cands, rec_by_id, overrides)
+            if proposed is not None:
+                posting_category = proposed
+                proposed_flag = {"posting_category_proposed": True}
         review = resolve_review(
             is_posted=is_posted,
             effective_bucket=effective_bucket,
@@ -2947,6 +2968,10 @@ def build_view(
                 # SPA can show categorization on reconciled rows too. None when
                 # the matched receipt is not categorized (e.g. a folder upload).
                 "posting_category": posting_category,
+                # Item 70: `posting_category` came from the candidate the
+                # Confirm would take, not a held receipt. Parallel field,
+                # ABSENT (not false) on every other row.
+                **proposed_flag,
                 # Review-by-exception state (2026-07-27): ready / check / pick
                 # / none + a plain "why". Server-computed so the SPA groups and
                 # bulk-confirms on it, never re-derives it.
@@ -4807,23 +4832,30 @@ def apply_expense_edits(
                 ),
             )
         out.append(r)
-    # A manual add whose document already sits in the pool is skipped: after
-    # a statement attach BAKES the effective receipts into the snapshot, the
-    # edit rows stay (they still feed learning), and this guard keeps the
-    # overlay idempotent instead of duplicating every manual expense.
-    existing_ids = {r.document_id for r in out}
+    # A manual add whose document already sits in the pool is never appended
+    # twice: after a statement attach BAKES the effective receipts into the
+    # snapshot, the edit rows stay (they still feed learning), and this guard
+    # keeps the overlay idempotent instead of duplicating every manual expense.
+    #
+    # Item 70: the baked copy is REPLACED in place rather than kept. Once the
+    # edit routes reopened on a reconciling month, a manual add can be edited
+    # and its edit cleared after a bake, and the baked copy still carries the
+    # cleared value. The add's payload is its extraction, so rebuilding from
+    # it keeps the overlay both idempotent and reversible, at the same pool
+    # position so the matcher's input order does not move.
+    position = {r.document_id: i for i, r in enumerate(out)}
     for e in edits:
-        if (
-            e["op"] != "add"
-            or e["document_id"] in deleted
-            or e["document_id"] in existing_ids
-        ):
+        if e["op"] != "add" or e["document_id"] in deleted:
             continue
         r = _manual_expense_receipt(e["document_id"], e["payload"], default_entity)
         fields = field_overrides.get(r.document_id)
         if fields:
             r = _apply_header_overrides(r, fields)
-        out.append(r)
+        if r.document_id in position:
+            out[position[r.document_id]] = r
+        else:
+            position[r.document_id] = len(out)
+            out.append(r)
     return out
 
 
@@ -9225,8 +9257,13 @@ def rematch_month(
     overrides = store.get_category_overrides(run.run_id)
     field_overrides = store.get_expense_field_overrides(run.run_id)
     edits = store.get_expense_edits(run.run_id)
+    # Item 70: bake from the EXTRACTION baseline, not from `receipts0`. The
+    # snapshot pool is already baked, so a re-match after a CLEARED edit laid
+    # the overlay on the old edit and the matcher kept pairing on a value the
+    # reviewer took back. Same membership and order as the snapshot.
+    bake_input = baseline_receipts(run)
     receipts = apply_expense_edits(
-        receipts0, field_overrides, edits,
+        bake_input, field_overrides, edits,
         category_overrides=overrides, default_entity=batch_entity,
     )
     receipts = apply_overrides(receipts, overrides)
@@ -10140,3 +10177,123 @@ def clear_receipt_settled_outside(
                 snapshot.pop(SETTLED_OUTSIDE_KEY, None)
             store.update_run_snapshot(run.run_id, snapshot)
     return {"ok": True, "document_id": document_id, "removed": removed}
+
+
+# ---------------------------------------------------------------------------
+# Item 70: changes in a month that did not stick (Criss 2026-09-14)
+# ---------------------------------------------------------------------------
+# The expense-edit fields the matcher actually reads. Enumerated from the
+# matcher and the judgment layer, not from intuition: `match_month`,
+# `reference_match` and `matching/judgment.py` read detected_date,
+# detected_total, detected_currency, detected_vendor, detected_reference and
+# legal_entity_id (plus payment_mode, which no edit route writes). An edit to
+# any other field changes what a row BOOKS to, never what it PAIRS with, so it
+# is not worth a re-match (time, and model calls for pairs not yet judged).
+# `private` / `reimburse_to` are deliberately absent: the card chain derives a
+# row's entity from the override / card / stamped value and never from the
+# private flag, so confirming a private expense moves no pairing.
+EXPENSE_MATCH_FIELDS = frozenset({
+    "vendor", "date", "total", "currency", "legal_entity", "reference",
+})
+
+
+def override_base_account(override_category: str | None, base) -> str | None:
+    """The account a category override inherits from the line's own
+    categorization: the line's account when the override KEEPS the line's
+    category, None when it changes it.
+
+    An account is chosen for a category (the categorizer's pick from the
+    chart, the report's account, a merchant default). Reclassifying the line
+    to a different category makes that account stale, and inheriting it is
+    how an iCloud receipt came to read "Software & Subscriptions" booked to
+    the account picked for "Utilities & Premises". There is no deterministic
+    category -> account map to fall back to (`EXPENSE_CATEGORY_ROOT_GROUP`
+    names a root GROUP, not a postable leaf), so a changed category books to
+    no account: the export shows its visible "(account unmapped - assign)"
+    placeholder when a chart is wired and the category label when none is,
+    never a guessed account."""
+    if base is None or not override_category:
+        return None
+    if base.category != override_category:
+        return None
+    return base.zoho_account
+
+
+def category_edit_account(
+    category: str | None,
+    zoho_account: str | None,
+    existing_override: dict | None,
+    base,
+) -> str | None:
+    """The account to STORE with a category edit that may or may not name one.
+
+    An explicit account always wins. Without one, the account the line
+    already had survives only when the category did not actually change
+    (re-sending the current category keeps a reviewer-picked account);
+    a changed category stores none, and `override_base_account` then stops
+    the line's own stale account from coming back at read time."""
+    if zoho_account:
+        return zoho_account
+    ov = existing_override or {}
+    current = ov.get("category") or (base.category if base is not None else None)
+    if category and category == current:
+        return ov.get("zoho_account") or None
+    return None
+
+
+def category_edit_receipt(store: RunStore, run: RunRow, document_id: str):
+    """The receipt a category edit targets, from the EFFECTIVE set (the
+    extraction baseline with the expense overlay laid on it), so a manual add
+    and a bare receipt resolve the way the expense grid shows them. A receipt
+    borrowed from another batch for a candidate pairing is found among the
+    snapshot's borrowed copies. None when the run holds no such receipt."""
+    default_entity = (
+        ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+    )
+    effective = apply_expense_edits(
+        baseline_receipts(run),
+        store.get_expense_field_overrides(run.run_id),
+        store.get_expense_edits(run.run_id),
+        category_overrides=store.get_category_overrides(run.run_id),
+        default_entity=default_entity,
+    )
+    rec = next((r for r in effective if r.document_id == document_id), None)
+    if rec is not None:
+        return rec
+    for bd in (run.snapshot or {}).get(BORROWED_RECEIPTS_KEY) or []:
+        if isinstance(bd, dict) and bd.get("document_id") == document_id:
+            try:
+                return receipt_from_dict(bd)
+            except (KeyError, TypeError, ValueError):
+                return None
+    return None
+
+
+def proposed_posting_category(
+    candidates: list[dict],
+    rec_by_id: dict,
+    overrides: dict,
+) -> dict | None:
+    """The posting category a needs-review row will book to once confirmed.
+
+    A review row holds no receipt until the reviewer confirms one, so its
+    `posting_category` resolved to nothing and a category the reviewer set on
+    the candidate saved and never showed. The SPA's Confirm takes the chosen
+    candidate or else the first one; this reads the candidate carrying a
+    reviewer category edit first (the one she just reclassified), then the
+    first candidate in emitted order. Display only: readiness and the booking
+    still follow the receipt actually confirmed."""
+    edited = {
+        doc for (doc, _line), ov in (overrides or {}).items()
+        if (ov or {}).get("category")
+    }
+    order = [c.get("document_id") for c in candidates or []]
+    picks = [d for d in order if d in edited][:1] + order[:1]
+    for doc in picks:
+        rec = rec_by_id.get(doc)
+        if rec is None:
+            continue
+        hit = _row_posting_category(rec, overrides, None)
+        if hit is not None:
+            return hit
+    return None

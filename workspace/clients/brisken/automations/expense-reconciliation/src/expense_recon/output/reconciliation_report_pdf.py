@@ -344,7 +344,12 @@ def _charge_table(rows: list[dict], styles: dict):
         [Paragraph(esc(name), styles["cellhead"]) for name, _w in _CHARGES]
     ]
     for n, row in enumerate(rows, start=1):
-        posting = row.get("posting_category") or {}
+        # Item 70: a proposed category (a needs-review row's candidate) is
+        # not a booking yet, so the document keeps its column blank there.
+        posting = (
+            {} if row.get("posting_category_proposed")
+            else row.get("posting_category") or {}
+        )
         matched_vendor = ""
         for cand in row.get("candidates") or []:
             if cand.get("document_id") == row.get("chosen_document_id"):

@@ -1907,3 +1907,76 @@ could reach the app AFTER the failure, so an empty list is not proof that
 nothing failed. The table keeps the newest 500 rows; it shares a 1GB volume
 with receipts, and a diagnostic log that can grow without limit is a second
 fault. Pinned by `tests/test_client_error_probe.py`.
+
+## Edits on a month with a statement: the five routes reopen + `rematch` (item 70, 2026-09-15)
+
+Until item 70 these five routes answered `400` "a statement is attached;
+review this month in the reconciliation workbench" on any month with a
+statement, which is both live months:
+
+- `PUT /api/runs/{id}/expenses/{document_id}` (`{field, value}`)
+- `PUT /api/runs/{id}/expenses/{document_id}/entity`
+- `POST /api/runs/{id}/expenses/{document_id}/private`
+- `POST /api/runs/{id}/expenses` (manual add)
+- `DELETE /api/runs/{id}/expenses/{document_id}`
+
+They now take the edit all month. Every other validation is unchanged (unknown
+field, category enum, undefined cost center, private without `reimburse_to`,
+unknown expense `404`). The reply shape is unchanged, plus one parallel field:
+
+```json
+{ "ok": true, "summary": { "...": "the expense grid summary" },
+  "rematch": { "n_transactions": 111, "n_matched": 15, "n_review": 7,
+               "n_unmatched_tx": 89, "n_refunds": 0, "entity_mismatch": null,
+               "judgments_reused": 40, "judgments_new": 1,
+               "statement_advisory": null } }
+```
+
+`rematch` is **absent** unless the month has a statement AND the edit can
+change what pairs with what: `vendor`, `date`, `total`, `currency`,
+`reference` (a field PUT whose value actually changed), a changed
+`legal_entity`, a manual add, a delete. Those are the receipt attributes the
+matcher and the judgment layer read (`match_month`, `reference_match`,
+`matching/judgment.py`). A booking field (`category`, `zoho_account`, `tax`,
+`tax_label`, `paid_through`, `cost_center`, `customer`, `private`,
+`reimburse_to`) never re-matches. A failed re-match does not fail the edit,
+which is already saved: `rematch` is then `{"error": "..."}` and the next
+change retries. The `summary` is read after the re-match. Each re-match
+commits a `rematch_log` event with `trigger: "expense_edit"` (a new value for
+the `rematches[]` list above).
+
+Edits stay reversible on a reconciling month: a re-match bakes from the
+extraction baseline (`extracted_receipts`) plus the overlay, so a cleared edit
+(`value: ""`) restores the extracted value in the grid, the export, and the
+pool the matcher sees. A manual add is rebuilt from its payload on each
+re-match for the same reason.
+
+## Reclassify: the whole receipt, and the account follows the category (item 70)
+
+`POST /api/runs/{id}/categories` `{document_id, line_index?, category,
+zoho_account?}`:
+
+- `line_index` **absent or null** applies the category to every line of that
+  receipt (resolved from the effective set, so a manual add works; `404`
+  "unknown expense" when the run holds no such receipt). An explicit integer
+  still edits that one line. A non-integer `line_index` is `400`.
+- Account rule, the same one `PUT .../expenses/{doc}` with `field: "category"`
+  follows: an explicit `zoho_account` is stored as sent. Without one, the
+  account survives only when the category did not change; a changed category
+  stores no account, and the line's own account (chosen for its old category)
+  is no longer inherited. No deterministic category -> account map exists, so
+  the row then books to what the export derives for a category with no
+  account: the category label when no chart is wired, the visible
+  `(account unmapped - assign)` placeholder when one is.
+
+## A needs-review row's proposed category: `posting_category_proposed` (item 70)
+
+`GET /api/runs/{id}` -> `rows[].posting_category_proposed`, `true` or
+**absent** (never `false`, never null). Present only on a row whose bucket is
+`review` and which holds no receipt, when `posting_category` was resolved from
+a candidate: the candidate carrying a reviewer category edit first, else
+`candidates[0]`, which is what the SPA's Confirm takes. Display only:
+`review`, `n_undecided`, `n_unmapped` and every other count still read the
+held receipt (none), and the reconciliation PDF leaves its posts-to column
+blank on such a row. Pinned by `tests/test_view_contract.py` and
+`tests/test_month_edits.py`; renders in `docs/lovable-month-edits-prompt.md`.

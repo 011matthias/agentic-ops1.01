@@ -124,6 +124,7 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
+| `lovable-month-edits-prompt.md` (2026-09-15, item 70: edits on a statement month, whole-receipt reclassify, proposed category on a review row) | some chunk reads `posting_category_proposed` and `rematch`; the i18n chunk carries `wb.category.proposedNote` and `expx.review.toast.rematchFailed`; `ExpensesReviewGrid` no longer renders `fieldset disabled={hasStatement}`; the Reclassify POST body carries no `line_index` | Backend on branch `client/brisken/p1-month-edits`; paste only after it deploys, or the unlocked grid meets the old 400 |
 | `lovable-card-chips-prompt.md` (2026-09-15, item 71: the card list leaves the top of the month; card chips in the filter bar, one attention banner, collapsed card-review strip, the filter-count fix) | `wb.filter.card.empty`, `cov.attn.receiptsNoCharges`, `expx.cards.strip.summary.choose` | No backend gate. **Browser-drive to verify** with the four checks at the end of the prompt (chip counts on July, the 1176 / 9693 banner on August, the collapsed strip, the first charge row on screen one) |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
