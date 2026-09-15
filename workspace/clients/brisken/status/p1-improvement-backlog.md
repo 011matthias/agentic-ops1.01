@@ -1556,10 +1556,7 @@ currency, with a row count and an explicit unassigned bucket.
 Re-pin `tests/test_view_contract.py` and `docs/api-contract.md` in the same
 round (rule 4), and ship the SPA half in the same round (rule 2).
 
-**Lovable half (DRAFTED, not pasteable yet).** Kept here rather than in
-`docs/lovable-*.md` on purpose: a prompt in that folder is one PROMPT-STATUS
-audits as pasteable, and every field below is unbuilt. Promote it to its own
-prompt doc in the build round, once the backend emits the fields.
+**Lovable half: PROMOTED 2026-09-15 to `automations/expense-reconciliation/docs/lovable-cost-centers-prompt.md`** (registered in PROMPT-STATUS as not applied; §1 + §2 ship first because both maps are whole-map replace). The backend emits every field the prompt names (steps 1-5). The draft below is the design record the prompt was written from.
 
 1. *Settings > Cost centers.* A list editor over the whole `cost_centers`
    map: name, `kind` (project / function / trip / blank), optional note,
