@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 
 from expense_recon.matching.types import Match, MatchOutcome, MatchType
-from expense_recon.runlog import RunLog, TxDecision, decisions_from_outcome
+from expense_recon.runlog import RunLog, decisions_from_outcome
 
 
 def _outcome() -> MatchOutcome:

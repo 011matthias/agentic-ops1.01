@@ -2,7 +2,6 @@
 generation. CI-safe via MockLLMClient (no API key)."""
 from __future__ import annotations
 
-import pytest
 
 from expense_recon.cli import generate_expenses
 from expense_recon.llm.client import (

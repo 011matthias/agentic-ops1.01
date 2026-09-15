@@ -25,7 +25,7 @@ from expense_recon.matching.types import (
     Receipt,
     Transaction,
 )
-from expense_recon.web.serialize import categorization_to_dict, snapshot_to_dict
+from expense_recon.web.serialize import snapshot_to_dict
 from expense_recon.web.service import (
     _matched_category_review,
     ready_confirm_pairs,

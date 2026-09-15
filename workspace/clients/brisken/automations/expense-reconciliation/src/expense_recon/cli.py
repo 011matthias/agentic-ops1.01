@@ -72,6 +72,11 @@ What this slice does NOT do (deferred):
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotations only; no runtime import cost
+    from collections.abc import Callable
+
 import argparse
 import json
 import logging

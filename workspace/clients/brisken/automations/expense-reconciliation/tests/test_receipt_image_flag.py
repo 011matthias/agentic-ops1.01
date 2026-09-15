@@ -58,7 +58,6 @@ def test_reconciled_csv_marks_yes_and_missing():
     outcome = match_month(txs, receipts)
     rows = build_reconciled_rows(outcome, txs, receipts)
     col = RECONCILED_COLUMNS.index("Receipt Image")
-    by_tx = {row[0 + 0]: row for row in rows}  # Account col is same; key on desc
     values = {row[3]: row[col] for row in rows}  # Description -> Receipt Image
     assert values["VENDOR 0"] == "Yes"
     assert values["VENDOR 1"] == "MISSING"

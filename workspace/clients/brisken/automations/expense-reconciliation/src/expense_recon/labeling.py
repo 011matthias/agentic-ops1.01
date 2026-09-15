@@ -50,7 +50,6 @@ import argparse
 import csv
 import json
 import re
-import sys
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
