@@ -151,6 +151,8 @@ from .service import (
     validate_expense_field,
     validate_manual_match,
     validate_trip_fields,
+    clear_receipt_settled_outside,
+    set_receipt_settled_outside,
 )
 from ..matching.types import EXPENSE_CATEGORIES
 from ..cost_centers import (
@@ -3810,5 +3812,92 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse(
             {"ok": True, "table": table, "legal_entity_id": legal_entity_id}
         )
+
+    # ── Settled outside the card (backlog item 62) ──────────────────────
+    # A receipt paid by bank transfer, cash or PayPal never posts to a card,
+    # so no statement line will ever settle it and it sat in the unmatched
+    # pool forever (July 2026: Redis 13,200.00 USD, Konsultancy 15,972.00
+    # EUR, 360Crossmedia 900.00 EUR). This retires it from the
+    # reconciliation side while it stays an expense of the month.
+
+    @app.post("/api/runs/{run_id}/receipts/{document_id:path}/settled-outside")
+    async def post_receipt_settled_outside(
+        run_id: str, document_id: str, request: Request
+    ):
+        """Mark one receipt settled outside the card.
+
+        Body `{"how": "bank_transfer"|"cash"|"paypal"|"other", "note": ""}`.
+        Threadpool: the write takes the batch lock, and an `async def`
+        blocking on that lock parks the event loop (see the lock's own
+        note in service.py)."""
+        body = await request.json() if await request.body() else {}
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+        try:
+            result = await run_in_threadpool(
+                _settled_outside_write,
+                run_id, document_id, body.get("how"), body.get("note"),
+            )
+        except RunInputError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        return JSONResponse(result)
+
+    @app.delete(
+        "/api/runs/{run_id}/receipts/{document_id:path}/settled-outside"
+    )
+    async def delete_receipt_settled_outside(run_id: str, document_id: str):
+        """Undo it: the receipt rejoins the pool, the counts and the pair
+        scan exactly as it was."""
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+        try:
+            result = await run_in_threadpool(
+                _settled_outside_write, run_id, document_id, None, None,
+                True,
+            )
+        except RunInputError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        return JSONResponse(result)
+
+    def _settled_outside_write(
+        run_id: str,
+        document_id: str,
+        how: str | None,
+        note: str | None,
+        clear: bool = False,
+    ) -> dict:
+        """One locked write, then the caller's own payload rebuilt from it.
+
+        Replies with the summary of whichever view this batch renders, the
+        way duplicates/resolve does, so the SPA never has to guess which
+        counts moved."""
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                raise RunInputError("This batch no longer exists.")
+            if clear:
+                out = clear_receipt_settled_outside(store, run, document_id)
+            else:
+                out = set_receipt_settled_outside(
+                    store, run, document_id, how or "", note or "", _now_iso()
+                )
+            run = store.get_run(run_id)
+            if run is None:
+                raise RunInputError("This batch no longer exists.")
+            if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
+                view = _expense_view(store, run)
+            else:
+                view = build_view(
+                    run,
+                    store.get_decisions(run_id),
+                    store.get_category_overrides(run_id),
+                    store.get_duplicate_resolutions(run_id),
+                    settled_elsewhere=_settled_elsewhere(store, run_id),
+                )
+        return {**out, "summary": jsonable_encoder(view["summary"])}
 
     return app
