@@ -41,6 +41,16 @@ use `git -C`, `uv run --directory`, and absolute paths.
   entity item predicted 77 rows moving and 0 moved; the 2026-09-15
   receipt-taken item no longer reproduced at all. Report that kind of gap,
   then build the fix on a constructed fixture.
+- A gap that does not reproduce is not the same as a claim that is false.
+  For a matching-class item, grep the human labels first (`notes.csv` /
+  `labels.csv` in the main clone's gitignored
+  `context/expense-reconciliation/expense-reports/csv/by-month/*_live_*`)
+  and read the printed document the item names. If every named instance is
+  refuted AND the proposed rule, measured on both live payloads, surfaces
+  only pairs the labels call wrong, do not build: close the item with the
+  evidence and the condition that would reopen it. Item 54 (2026-09-15) was
+  both: its two "OCR date misreads" were read correctly, and its rule
+  flagged only recurring same-amount subscriptions.
 - Reads are autonomous. A synthetic receipt dropped into a live month is
   deleted in the same session, no exceptions. Any production mutation beyond
   a deploy (a refresh, a reset, a TEST batch, a manual match on Criss's data)
