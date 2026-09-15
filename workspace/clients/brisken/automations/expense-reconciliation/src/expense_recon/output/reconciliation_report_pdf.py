@@ -254,12 +254,15 @@ def build_reconciliation_report_pdf(
             story.append(Paragraph(esc(str(item["detail"])), styles["capsub"]))
         story.append(Spacer(1, 6))
         name = str(item.get("name") or "")
+        note = str(item.get("render_note") or "")
         if pdf_bytes is not None:
-            story.append(Paragraph(esc(name), styles["capsub"]))
-        elif item.get("data"):
             story.append(Paragraph(
-                esc(f"{name}: this file could not be rendered into the report; "
-                    f"open it in the app."),
+                esc(f"{name}: {note}" if note else name), styles["capsub"]
+            ))
+        elif item.get("data"):
+            why = note or "this file could not be rendered into the report"
+            story.append(Paragraph(
+                esc(f"{name}: {why}; open it in the app."),
                 styles["capsub"],
             ))
         else:
