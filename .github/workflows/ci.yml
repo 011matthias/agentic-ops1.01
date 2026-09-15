@@ -40,8 +40,18 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: '3.12'
+      # The expense-recon module joined this scope 2026-09-15. It had never
+      # been linted by CI, which is why twelve findings accumulated in it
+      # before PR #856 cleared them by hand; a gate that only runs locally
+      # runs when somebody remembers. Verified before adding, by injecting an
+      # F401 into the module and watching this exact command fail: the root
+      # ruff.toml's E9+F ruleset does reach these paths.
       - name: Ruff (real-bug ruleset)
-        run: uv run --no-project --with ruff ruff check tools .claude/hooks tools/tests
+        run: >-
+          uv run --no-project --with ruff ruff check
+          tools .claude/hooks tools/tests
+          workspace/clients/brisken/automations/expense-reconciliation/src
+          workspace/clients/brisken/automations/expense-reconciliation/tests
       - name: tools/INDEX.md membership
         run: uv run tools/check-index.py
       - name: Run enforcement-layer test suite
