@@ -6,6 +6,7 @@
 #     "pypdf==6.13.2",
 #     "pypdfium2==5.9.0",
 #     "pillow==12.2.0",
+#     "rapidfuzz==3.14.5",
 # ]
 # ///
 """Guard for the brisken-recon-tuning optimize runs (anti-overfit floor).
