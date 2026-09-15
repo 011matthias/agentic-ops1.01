@@ -1785,6 +1785,41 @@ while ANY row is undecided. A count that quietly omitted the undecided rows
 would read as "receipts are missing" and send somebody hunting for files that
 are fine.
 
+## `receipt_image_available` is resolved against disk (item 52, 2026-09-15)
+
+Same field, same meaning, no shape change: **true when
+`GET /api/runs/{id}/receipts/{doc}/image` would serve this receipt.** What
+changed is that both payloads now get that answer from the same place.
+
+It used to be computed twice. `expenses[]` resolved it against the files on
+disk and was right. `unmatched_receipts[]`, `rows[].candidates[].receipt`
+and `duplicate_receipts[]` resolved it from the SHAPE of the document id: a
+vision-mapped page, or an id beginning `manual:` or `folder:`. A receipt
+that arrives by mail or through the receipts drop is named
+`NNNN__original-name.pdf` and is none of those, so the run payload reported
+`false` for all 17 unmatched receipts of the live August month while the
+endpoint served every one of them `200`. A consumer that trusted the field
+would have refused to open a receipt that was there.
+
+`service.receipt_image_file` is now the one resolver, gated exactly as the
+endpoint gates itself: the `manual:` / `folder:` globs apply to every run,
+the receipts-dir lookup only to a receipt-first batch. An id-shape test
+cannot answer this question at all, because what the endpoint serves depends
+on what is on disk, and the two drift the moment a new way of getting a
+receipt into a month is added.
+
+Read it as an answer about the FILE, not about the reviewer's screen:
+`receipt_in_report` above still answers "is there a page in the document",
+and `has_receipt_image` still answers "did the source name a comprovante".
+All three can differ on one row and each is right about its own question.
+
+**Unrelated to the SPA defect this was found under.** Criss's "Recibo nao
+estar abrindo" is the Review-expenses grid's **View receipt** button doing
+nothing on every row of every month: a browser drive on 2026-09-15 showed
+the click firing no request at all, and the published bundle references
+neither `receipt_image_available` nor `has_receipt_image`. That half is
+`docs/lovable-view-receipt-prompt.md`.
+
 ## One deletion, both documents (item 68)
 
 `GET /runs/{id}/reconciliation-report.pdf` is built from the reviewer's live
