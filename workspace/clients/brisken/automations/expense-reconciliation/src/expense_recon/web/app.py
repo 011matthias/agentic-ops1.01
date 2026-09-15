@@ -2423,22 +2423,38 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if upload is None or not getattr(upload, "filename", None):
             return JSONResponse({"error": "file required"}, status_code=400)
         data = await upload.read()
-        with open_store() as store:
-            run = store.get_run(run_id)
-            if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
-            err, document_id = attach_emailed_receipt(
-                store, run, transaction_id, upload.filename, data, _now_iso()
+        filename = upload.filename
+
+        # Off the event loop: since item 66 attach_emailed_receipt takes the
+        # batch writer lock to commit against a fresh re-read, and an OCR
+        # ingest can hold that lock for MINUTES. Blocking on it here would park
+        # the loop and stop every endpoint including /healthz, so Fly's health
+        # check fails and the restart kills that same ingest. The form read
+        # above has to be awaited, so the handler stays async and hands the
+        # locked span to the threadpool, exactly as post_restore_set_aside and
+        # post_batch_cards do. See tests/test_web_batch_lock_threadpool.py.
+        def _work():
+            with open_store() as store:
+                run = store.get_run(run_id)
+                if run is None:
+                    return JSONResponse(
+                        {"error": "run not found"}, status_code=404
+                    )
+                err, document_id = attach_emailed_receipt(
+                    store, run, transaction_id, filename, data, _now_iso()
+                )
+                if err:
+                    return JSONResponse({"error": err}, status_code=400)
+                run = store.get_run(run_id)  # snapshot changed above
+                decisions = store.get_decisions(run_id)
+                overrides = store.get_category_overrides(run_id)
+            view = build_view(run, decisions, overrides)
+            return JSONResponse(
+                {"ok": True, "document_id": document_id,
+                 "summary": view["summary"]}
             )
-            if err:
-                return JSONResponse({"error": err}, status_code=400)
-            run = store.get_run(run_id)  # snapshot changed above
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-        view = build_view(run, decisions, overrides)
-        return JSONResponse(
-            {"ok": True, "document_id": document_id, "summary": view["summary"]}
-        )
+
+        return await run_in_threadpool(_work)
 
     @app.post("/api/runs/{run_id}/receipts/folder")
     async def post_receipts_folder(
@@ -3582,8 +3598,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
             resolutions = store.get_duplicate_resolutions(run_id)
+            # Item 68: the reviewer's live overlay, the same pair the
+            # expense report and the grid are built from. Without it this
+            # document showed an expense the reviewer had already deleted.
+            field_overrides = store.get_expense_field_overrides(run_id)
+            edits = store.get_expense_edits(run_id)
             label = run.label or run_id
-        pdf = build_reconciliation_report(run, decisions, overrides, resolutions)
+        pdf = build_reconciliation_report(
+            run, decisions, overrides, resolutions,
+            field_overrides=field_overrides, edits=edits,
+        )
         safe = re.sub(r"[^A-Za-z0-9._-]+", "-", label).strip("-") or run_id
         return Response(
             content=pdf,

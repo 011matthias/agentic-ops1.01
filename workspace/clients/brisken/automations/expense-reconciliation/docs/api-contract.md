@@ -166,6 +166,7 @@ name answers the same one:
 | `n_duplicate_copies` | how many copies are redundant (every copy after the first in a group the reviewer has not dismissed) |
 | `n_rejected_pairings` | run payload only: how many (charge, receipt) pairings the reviewer has turned down (item 16). Pairings, not rows: a rejected charge that never had a candidate refused nothing and counts nothing |
 | `n_amounts_unreadable` | how many expenses carry an amount no total could read, so they are in no total (item 65): `totals_by_ccy` skips them and the report's listing cannot print them. The fix is reading the amount off the receipt, not a re-run |
+| `n_receipts_in_report` | how many expenses have a receipt PAGE in the built report (item 68). Not "how many have a file": a file that cannot be rendered is a file, and the caption page says so while the Receipt column used to say "attached". ABSENT until every row's verdict is known, so the count is never quietly short |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -1709,3 +1710,62 @@ go.
 Neither new field is a list, so the `test_view_contract.py` pin table is
 unchanged; their exact shapes are asserted in `tests/test_settled_outside.py`.
 Renders in `docs/lovable-settled-outside-prompt.md`.
+## "Attached" is a file; a page is a page: `receipt_in_report` (item 68)
+
+The Receipt column read **attached** the moment a file was found on disk.
+Renderability is decided later, with the bytes in hand, so a
+password-protected PDF or a truncated image was a file that existed and a
+page that never appeared: the column said "attached", the count of covered
+expenses agreed, and thirty pages later that same receipt's caption read
+"this file could not be rendered into the report". The caption pages were
+the truth the whole time.
+
+`expenses[].receipt_in_report` is the column's third state. Boolean,
+PARALLEL per rule 1: `receipt_image_available` keeps its own meaning
+(the app can serve you this file) and its own renderer, unchanged.
+
+```json
+{ "receipt_image_available": true,
+  "source_file": "invoice-IUS25300.pdf",
+  "receipt_in_report": false }
+```
+
+The two disagree in exactly two situations, and both are real: a file that
+cannot be decoded, and a receipt whose image is a page inside an uploaded
+expense-report PDF (previewable in the app, never carried into the document).
+
+**ABSENT, not null, until the verdict is known.** It is DERIVED, not decided
+a second time: item 67's `receipt_render` (`"ok"` / `"failed"`, written back
+by `prepare_evidence` during the build and persisted on
+`summary.receipt_render`) carries the verdict for every row that HAD a file,
+and a row with no file needs no build at all, because nothing on disk can
+become a page. So a row with a file and no report yet carries no key. One
+fact, one channel: deciding renderability per payload would also put a decode
+of every receipt in the month in front of the grid.
+
+Why both fields exist: `receipt_render` answers "did this file break", which
+is what sends somebody to fix a file. `receipt_in_report` is the positive
+form over EVERY expense, which is what a coverage count can be summed from
+and what the grid's third state renders.
+
+`summary.n_receipts_in_report` follows the same rule one level up: absent
+while ANY row is undecided. A count that quietly omitted the undecided rows
+would read as "receipts are missing" and send somebody hunting for files that
+are fine.
+
+## One deletion, both documents (item 68)
+
+`GET /runs/{id}/reconciliation-report.pdf` is built from the reviewer's live
+overlay, the same `apply_expense_edits` pair the expense report and the grid
+are built from. It used to read the stored receipt pool, which only catches
+up at the next re-match, so an expense the reviewer deleted left the expense
+report at once and stayed in the reconciliation report — caption page,
+receipt pages and all, in the document whose entire job is to be the evidence
+that a month is complete.
+
+The overlay is handed to `build_view` rather than filtered out of its output:
+the unmatched list, the duplicate groups, the candidates and the counts are
+all derived in there, and re-deriving any of them at the report would be a
+second implementation of the same rules, which is the shape that let the two
+documents disagree in the first place. `apply_expense_edits` is idempotent, so
+a month whose pool was already baked renders byte-for-byte as before.

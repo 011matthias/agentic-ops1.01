@@ -12,6 +12,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-15 | Expense-Recon Item 67 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2067/Mini-Checkpoint-2.md) |
+| 2026-09-15 | Expense-Recon Item 62 | client-dev | [Mini-Checkpoint-1](docs/2026-09-15%20-%20Expense-Recon%20Item%2062/Mini-Checkpoint-1.md) |
 | 2026-09-15 | Expense-Recon Item 63 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2063/Mini-Checkpoint-2.md) |
 | 2026-09-15 | Brisken P1 Cost Centers Backend Complete | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Cost%20Centers%20Backend%20Complete/Checkpoint.md) |
 | 2026-09-15 | Expense-Recon Item 17 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2017/Mini-Checkpoint-2.md) |
@@ -386,6 +387,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-15 | Meji Christmas Suppression Build | client-dev | [→](docs/2026-09-15%20-%20Meji%20Christmas%20Suppression%20Build/Checkpoint.md) |
 | 2026-09-10 | Meji Family Exclusion Deployed | client-dev | [Mini-Checkpoint-2](docs/2026-09-10%20-%20Meji%20Family%20Exclusion%20Deployed/Mini-Checkpoint-2.md) |
 | 2026-09-08 | Meji Instantly Estate And September Review Gate | client-dev | [→](docs/2026-09-08%20-%20Meji%20Instantly%20Estate%20And%20September%20Review%20Gate/Checkpoint.md) |
 | 2026-09-06 | Meji September Launch Line-Up + Jess Workload Proposal | client-dev | [→](docs/2026-09-06%20-%20Meji%20September%20Launch%20Line-Up%20%2B%20Jess%20Workload%20Proposal/Checkpoint.md) |
