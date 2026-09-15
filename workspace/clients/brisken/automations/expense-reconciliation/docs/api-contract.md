@@ -1470,6 +1470,58 @@ Live at the time of the change: August 2026 (`074a7b8905d7`) and July 2026
 amounts to the cent, with zero unreadable rows on either. The float error was
 real but below the printed digit (August accumulated USD `2663.9500000000007`
 against an exact `2663.95`).
+## A receipt that produced no page: `receipt_render` (added 2026-09-15, item 67)
+
+`expenses[].receipt_render`, parallel and **absent** until a report has been
+built for the month:
+
+```json
+"receipt_render": "ok"
+```
+
+`"ok"` means the receipt's pages are in the month report. `"failed"` means the
+stored file could not be turned into pages at all, so the report carries a
+caption naming the file and the reason and nothing behind it. An expense with
+no receipt document carries no key either way.
+
+Absent is load-bearing here, which is why this is not a count that starts at
+zero. Renderability is not knowable before a report is assembled: the file has
+to be opened and its pages copied. So a month nobody has built a report for
+says nothing rather than "fine", and `summary.n_receipts_unrenderable` follows
+the same rule, appearing only once a build has recorded at least one receipt (a
+month whose expenses carry no files records none, so it stays absent there too).
+A 0 that actually meant "nobody looked" would be the rule-5 failure exactly: an
+affirmative
+claim that resolves itself, on a field whose whole job is telling a reviewer to
+go and look.
+
+Behind it: the renderability test used to open a PDF's index and nothing else.
+A password-protected receipt, or one whose page tree is damaged, passed it and
+then raised while the document was being assembled, so the request 500ed and
+the period produced NO report: no caption, no partial output, nothing naming
+the file, and the month stayed unreproducible until somebody deleted the file
+by hand (`docs/electronic-storage-system-description.md` 7.3). The probe now
+copies each page into a throwaway writer, which is the operation that fails,
+and assembly guards every file on its own, so one receipt can cost its own
+pages and nothing more.
+
+The state is recorded by the report route and stored on the run summary
+(`summary["receipt_render"]`, keyed by document id), because a report build is
+the only moment the answer exists. Rebuilding after the file is fixed moves it
+back to `"ok"`.
+
+Bounded assembly, same item: a receipt contributes at most
+`_pdf_common.MAX_RECEIPT_PAGES` (60) pages to the document, and its caption
+says how many pages the file has and that the rest are in the app. The report
+is assembled in the memory of one 1024 MB machine holding every receipt plus
+the finished document, so a single pathological upload could otherwise decide
+whether the month reports at all. Sixty is far above the real corpus: the two
+live months hold 151 receipt pages between them and their largest single
+receipt is an 11-page AWS invoice.
+
+A capped receipt stays `"ok"`. Its pages ARE in the report; `"failed"` is
+reserved for a file that produced none, which is the one a reviewer has to act
+on. Renders in `docs/lovable-render-failed-prompt.md`.
 ## How an upload was read: `statements[].column_map` + `card_currency` (added 2026-09-15, item 64)
 
 Both are PARALLEL fields per rule 1, and both are **absent, never null**, on
@@ -1531,3 +1583,31 @@ There is no hand-written map with a case per value, so `"info"` degrades
 exactly as `"warning"` already does, to plain muted text. That is why no
 parallel `severity_label` was added here; the next enum whose SPA consumer
 maps values by hand still needs one.
+## What the workbench's filter and sort controls read (item 17, 2026-09-15)
+
+No new field. The control bar already ships (search, BUCKET, STATUS, SORT,
+six FILTERS toggles), and every axis it needs is on the row today. This
+section is the read: which field answers which control, and the two that mean
+something other than what their name suggests. Measured against the live
+August `074a7b8905d7` and July `50622baec444` payloads on 2026-09-15.
+
+| Control | Field | Note |
+|---|---|---|
+| Sort by date | `rows[].date` | ISO `YYYY-MM-DD`, non-empty on all 223 live rows. Lexical sort is chronological |
+| Sort A-Z by vendor | `rows[].vendor` | `vendor_from_statement`, the acquirer's own text. Compare it with a case-insensitive collator (`localeCompare`), which is what the published SPA already does: a codepoint sort would put every ALL-CAPS vendor ahead of every Mixed-Case one and land `ANNUAL MEMBERSHIP FEE` before `AngelaClaudiaDos`. No normalized vendor is on the row and none is needed for this |
+| Sort by amount | `rows[].amount` | **A display string, not a number.** `_fmt_amount` is `f"{v:,.2f}"`, so August carries `1,574.24`, `2,484.00` and `-7,823.16`. `Number()` returns `NaN` and `parseFloat` returns 1, 2 and -7. Strip the group separators before comparing |
+| Filter by card | `rows[].coverage_key` -> `coverage[].key` | Two shapes live (`3645` bare, `card-2838` prefixed), because a key is the registry's card key or, failing that, the charge's own digit token. Never parse it: join it to `coverage[]` and render that row's `label`. There is no `card_last4` on a row |
+| Filter unmatched | `rows[].effective_bucket` | `unmatched` / `reconciled` / `review` / `refund`. This is the reconciliation state, and the field the operator's "unmatched elements" means |
+| Filter by lane | `rows[].section` | **Not the same question.** `is_posted` (her yellow fill) overrides everything, so on July `section: "posted"` holds 85 rows spanning 49 unmatched, 24 reconciled, 11 review and 1 refund. A filter that read "unmatched" off `section` would report 24 of July's 73 unmatched charges |
+| Filter by entity | `rows[].legal_entity_id` | Single-valued on both live months (`Corporate Services`, 223 of 223). The option is real; the discrimination is not, yet |
+| Filter has-candidates | `rows[].candidates` | Always a list; presence is `length > 0` (August 17 of 111, July 38 of 112) |
+| Filter / group by review state | `rows[].review.state` | `ready` / `check` / `pick` / `none`. Collapses on a posted month: all 85 of July's posted rows are `none`, so it stops discriminating exactly where `effective_bucket` keeps working |
+
+`rows[].status` is `pending` on all 223 live rows, so it is not a sort axis;
+the STATUS control's Pending / Confirmed / Rejected reads the reviewer's
+decision overlay, not this field.
+
+The filter-count requirement is load-bearing rather than decorative: six of
+August's nine `coverage[]` cards carry zero charges, so a card filter built
+from that list without per-option counts offers six options that match
+nothing.

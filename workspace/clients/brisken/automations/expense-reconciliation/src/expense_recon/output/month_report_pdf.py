@@ -328,12 +328,20 @@ def build_expense_report_pdf(
             story.append(Paragraph(_esc(str(item["detail"])), styles["capsub"]))
         story.append(Spacer(1, 6))
         name = str(item.get("name") or "")
+        # `render_note` is what `prepare_evidence` found: the reason a file
+        # produced no pages, or (on a file that did) the part of it that was
+        # left out. Naming it here is the whole point of the caption for a
+        # blocked file: the reviewer has to be able to find the file without
+        # reading a log, and the report itself is the only place they look.
+        note = str(item.get("render_note") or "")
         if pdf_bytes is not None:
-            story.append(Paragraph(_esc(name), styles["capsub"]))
-        elif item.get("data"):
             story.append(Paragraph(
-                _esc(f"{name}: this file could not be rendered into the "
-                     f"report; open it in the app."),
+                _esc(f"{name}: {note}" if note else name), styles["capsub"]
+            ))
+        elif item.get("data"):
+            why = note or "this file could not be rendered into the report"
+            story.append(Paragraph(
+                _esc(f"{name}: {why}; open it in the app."),
                 styles["capsub"],
             ))
         else:

@@ -12,6 +12,9 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-15 | Brisken P1 Cost Centers Backend Complete | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Cost%20Centers%20Backend%20Complete/Checkpoint.md) |
+| 2026-09-15 | Expense-Recon Item 64 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2064/Mini-Checkpoint-2.md) |
+| 2026-09-15 | Expense-Recon Item 16 | client-dev | [Mini-Checkpoint-1](docs/2026-09-15%20-%20Expense-Recon%20Item%2016/Mini-Checkpoint-1.md) |
+| 2026-09-15 | Expense-Recon Item 65 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2065/Mini-Checkpoint-2.md) |
 | 2026-09-15 | Expense-Recon Item 61 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2061/Mini-Checkpoint-2.md) |
 | 2026-09-15 | Expense-Recon Matching Program Prompt | client-dev | [→](docs/2026-09-15%20-%20Expense-Recon%20Matching%20Program%20Prompt/Checkpoint.md) |
 | 2026-09-15 | Expense-Recon Parallel Round Setup | client-dev | [→](docs/2026-09-15%20-%20Expense-Recon%20Parallel%20Round%20Setup/Checkpoint.md) |

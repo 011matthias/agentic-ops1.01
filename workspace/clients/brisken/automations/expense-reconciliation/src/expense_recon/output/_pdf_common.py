@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import os
+import tempfile
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -133,24 +134,89 @@ def is_pdf(data: bytes) -> bool:
     return data[:5] == b"%PDF-"
 
 
+# One receipt must not decide how big the whole document gets. The report is
+# assembled in the memory of a single 1024 MB machine, holding every receipt
+# in the month plus the assembled document, and an individual upload may be
+# 15 MB; a 900-page scan appended whole is how that machine runs out. Sixty
+# pages is far above anything the two live months hold (the largest receipt
+# there is an 11-page AWS invoice, 151 receipt pages across both months), so
+# the cap bounds the pathological case without touching the real one.
+MAX_RECEIPT_PAGES = 60
+
+
+def probe_pdf(pdf_bytes: bytes) -> tuple[int | None, str]:
+    """Do to a receipt exactly what assembly will do, and report what
+    happened. Returns `(n_pages, note)`; `n_pages is None` means the file
+    cannot be turned into pages and `note` says why, in words a caption can
+    print.
+
+    The point is that the probe opens no LESS than assembly opens.
+    `PdfReader(...)` on its own parses the index and nothing else, so a
+    password-protected receipt passed it and then raised at `add_page` while
+    the document was being stitched, which lost the WHOLE month's report to a
+    500 with nothing naming the file (`docs/electronic-storage-system-
+    description.md` 7.3). Enumerating the pages and copying each one into a
+    throwaway writer is the operation that fails, so failing it here is what
+    makes the caption truthful. Ingest's own tolerance does not cover this:
+    `receipts_folder._pdf_text` reads at most `MAX_PDF_PAGES` (4) pages, so a
+    PDF damaged on page 5 is extracted fine and only breaks in the report.
+
+    An encrypted file is reported rather than opened. Nothing here guesses a
+    password, so the reviewer sees which file needs one instead of a report
+    that silently dropped it.
+    """
+    from pypdf import PdfReader, PdfWriter
+
+    try:
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        if reader.is_encrypted:
+            return None, ("the file is password-protected, so the report "
+                          "cannot open it")
+        probe = PdfWriter()
+        for page in list(reader.pages)[:MAX_RECEIPT_PAGES]:
+            probe.add_page(page)
+        n_pages = len(reader.pages)
+    except Exception as exc:  # noqa: BLE001 - unreadable = not renderable
+        return None, f"the file could not be read ({type(exc).__name__})"
+    if n_pages > MAX_RECEIPT_PAGES:
+        return n_pages, (
+            f"{n_pages} pages; the first {MAX_RECEIPT_PAGES} are included "
+            f"here, open the file in the app for the rest"
+        )
+    return n_pages, ""
+
+
 def prepare_evidence(items: list[dict]) -> list[tuple[dict, bytes | None]]:
     """Decide renderability BEFORE captions are written, so a file that
     exists but cannot be turned into pages says so instead of leaving a
-    caption with nothing behind it (which reads as "the receipt is here")."""
-    from pypdf import PdfReader
+    caption with nothing behind it (which reads as "the receipt is here").
 
+    Per item, the outcome is also written back onto the evidence dict:
+    `receipt_render` is `"ok"` or `"failed"` (set only where the item has
+    `data`, so an expense with no document keeps neither key), and
+    `render_note` is the caption's reason. That is the channel the caller
+    reads the result on: the builders return one `bytes`, and the count of
+    receipts that produced no page is something the review screen has to be
+    able to state without anyone reading a log.
+    """
     prepared: list[tuple[dict, bytes | None]] = []
     for item in items:
         data = item.get("data")
         if not data:
+            item.pop("receipt_render", None)
+            item.pop("render_note", None)
             prepared.append((item, None))
             continue
         pdf_bytes = data if is_pdf(data) else image_to_pdf(data)
-        if pdf_bytes is not None:
-            try:
-                PdfReader(io.BytesIO(pdf_bytes))
-            except Exception:  # noqa: BLE001 - unreadable = not renderable
+        if pdf_bytes is None:
+            note = ("this file is not a readable image, so it could not be "
+                    "rendered into the report")
+        else:
+            n_pages, note = probe_pdf(pdf_bytes)
+            if n_pages is None:
                 pdf_bytes = None
+        item["receipt_render"] = "failed" if pdf_bytes is None else "ok"
+        item["render_note"] = note
         prepared.append((item, pdf_bytes))
     return prepared
 
@@ -170,11 +236,27 @@ def stitch(document_pdf: bytes, prepared: list[tuple[dict, bytes | None]]) -> by
         writer.add_page(base.pages[lead_end + i])
         if pdf_bytes is None:
             continue
-        for page in PdfReader(io.BytesIO(pdf_bytes)).pages:
-            writer.add_page(page)
-    out = io.BytesIO()
-    writer.write(out)
-    return out.getvalue()
+        # Per file, because the alternative is the whole month. One receipt
+        # that raised here used to abort the assembly, so the request 500ed
+        # and the period produced NO report at all: not a partial one, not a
+        # caption, nothing naming the file. `probe_pdf` has already run these
+        # same operations over these same bytes, so a failure reaching this
+        # point is the residual case rather than the expected one; the caption
+        # is laid out before stitching and cannot be rewritten from here,
+        # which is why the decision belongs in `prepare_evidence` and this is
+        # only the belt that keeps the rest of the document.
+        try:
+            pages = list(PdfReader(io.BytesIO(pdf_bytes)).pages)
+            for page in pages[:MAX_RECEIPT_PAGES]:
+                writer.add_page(page)
+        except Exception:  # noqa: BLE001 - one receipt never costs the month
+            continue
+    # Spooled, not `BytesIO().getvalue()`: that held the serialized document
+    # twice at once, on the same machine this assembly already fills.
+    with tempfile.TemporaryFile() as fh:
+        writer.write(fh)
+        fh.seek(0)
+        return fh.read()
 
 
 def esc(text) -> str:
