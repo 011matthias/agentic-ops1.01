@@ -19,11 +19,15 @@ where a matching round is worth spending.
 Two inputs, one attribution:
 
 * a LIVE month, replayed locally from the hosted app's own snapshot with no
-  model call (`--live DB --run-id ID`): the candidate pool is assembled the
-  way `service.rematch_month` assembles it (reviewer edits baked, charge
-  entities stamped from the card registry, foreign claims out, duplicate
-  copies collapsed, trip receipts borrowed), the deterministic matcher runs,
-  and the judgment layer answers from the snapshot's judgment cache.
+  model call (`--live DB --run-id ID`): the candidate pool is assembled by
+  CALLING the functions `service.rematch_month` calls, in its order (the
+  extraction baseline, reviewer edits baked, cards inherited between copies
+  of one document, charge entities stamped from the card registry, foreign
+  claims out, duplicate copies collapsed, trip / adjacent receipts borrowed),
+  the deterministic matcher runs, and the judgment layer answers from the
+  snapshot's judgment cache. Labels are read at the DOCUMENT level: a kept
+  copy labelled `excluded` whose collapsed twin carries the verdict inherits
+  it, so which copy the collapse keeps does not move the measurement.
 * a LABEL BUNDLE (`--bundle DIR [--asset TUNING.json]`): the six scorer
   bundles and the live-month bundles built through `expense-recon label`,
   replayed exactly as `tools/scorers/recon-match-accuracy.py` replays them.
@@ -97,11 +101,36 @@ BOUNDARY_DAYS = 2
 # Loading
 # ---------------------------------------------------------------------------
 
-def _import_module():
+MODULE_FILE: Path | None = None
+
+
+def _import_module() -> Path:
+    """Put MODULE_SRC first on sys.path and PROVE the import took it.
+
+    A path that exists but cannot be imported from (reviewer reproduction,
+    2026-09-15: an over-MAX_PATH scratch copy) falls through to the venv's
+    editable module with exit 0, and a "before" table then silently equals
+    the "after". So the resolved `expense_recon.__file__` has to sit under
+    MODULE_SRC, or the run stops here; the path is printed in every month /
+    bundle header line so a reader can see which tree measured what."""
+    global MODULE_FILE
     if not MODULE_SRC.is_dir():
         raise SystemExit(f"ERROR: module src not found: {MODULE_SRC}")
     if str(MODULE_SRC) not in sys.path:
         sys.path.insert(0, str(MODULE_SRC))
+    import expense_recon
+
+    got = Path(expense_recon.__file__).resolve()
+    want = MODULE_SRC.resolve()
+    if want not in got.parents:
+        raise SystemExit(
+            f"ERROR: RECON_MODULE_SRC={MODULE_SRC} was put first on sys.path but "
+            f"`expense_recon` imported from {got}; the measurement would not be "
+            "of that tree. Check the path (length, permissions, a missing "
+            "expense_recon/__init__.py)."
+        )
+    MODULE_FILE = got
+    return got
 
 
 class _CacheOnlyClient:
@@ -131,6 +160,7 @@ class _CacheOnlyClient:
 def load_live(db: Path, run_id: str, learning: Path | None) -> dict:
     """A live month's pool, config and outcomes, assembled as rematch_month does."""
     _import_module()
+    from expense_recon import duplicates
     from expense_recon.cli import _apply_ambiguous_judgment, _apply_judgment, build_match_cfg
     from expense_recon.duplicates import collapsed_duplicate_copies
     from expense_recon.learning.consult import MatchMemory
@@ -150,11 +180,21 @@ def load_live(db: Path, run_id: str, learning: Path | None) -> dict:
     overrides = store.get_category_overrides(run_id)
     field_overrides = store.get_expense_field_overrides(run_id)
     edits = store.get_expense_edits(run_id)
+    # Item 70: `rematch_month` bakes from the EXTRACTION baseline, not the
+    # (already baked) snapshot pool. Same membership and order.
+    baseline = getattr(service, "baseline_receipts", None)
+    bake_input = baseline(run) if baseline is not None else receipts0
     receipts = service.apply_expense_edits(
-        receipts0, field_overrides, edits,
+        bake_input, field_overrides, edits,
         category_overrides=overrides, default_entity=batch_entity,
     )
     receipts = service.apply_overrides(receipts, overrides)
+    # Item 69 round A: the kept copy of a document inherits the card its
+    # copies name, before the card chain. The module's own function, in the
+    # module's own order, so this replay stays `rematch_month`.
+    inherit = getattr(duplicates, "inherit_card_from_copies", None)
+    if inherit is not None:
+        receipts = inherit(receipts)
     card_res = service.resolve_batch_row_cards(receipts, cfg, field_overrides)
     receipts = [
         (
@@ -221,8 +261,16 @@ def load_live(db: Path, run_id: str, learning: Path | None) -> dict:
 
 
 def load_bundle(bundle: Path, asset: Path | None) -> dict:
-    """A label bundle replayed the way the pinned scorer replays it."""
+    """A label bundle, its pool assembled the way `rematch_month` assembles
+    a live month's (review F2, 2026-09-15): the module's card inheritance
+    between copies of one document (no reviewer resolutions, no operator
+    hints in a bundle), then `collapsed_duplicate_copies`, then the
+    deterministic matcher. The pinned scorer (`recon-match-accuracy.py`)
+    replays `match_month` on the RAW bundle receipts and never sees pool
+    assembly, so its floor cannot move with a duplicate-key change; this
+    table is where such a change is measured on the bundles."""
     _import_module()
+    from expense_recon import duplicates
     from expense_recon.cli import build_match_cfg
     from expense_recon.labeling import _load_bundle
     from expense_recon.matching.deterministic import MatchingConfig, match_month
@@ -236,11 +284,20 @@ def load_bundle(bundle: Path, asset: Path | None) -> dict:
         match_cfg = MatchingConfig.from_file(asset)
     else:
         match_cfg = build_match_cfg(cfg, config_dir) or MatchingConfig()
-    raw = match_month(transactions, receipts, match_cfg)
+    inherit = getattr(duplicates, "inherit_card_from_copies", None)
+    if inherit is not None:
+        receipts = inherit(receipts)
+    collapse = getattr(duplicates, "collapsed_duplicate_copies", None)
+    collapsed = collapse(receipts, {}) if collapse is not None else set()
+    pool = [r for r in receipts if r.document_id not in collapsed] if collapsed else receipts
+    raw = match_month(transactions, pool, match_cfg)
+    if collapsed:
+        have = set(raw.unmatched_receipts)
+        raw.unmatched_receipts.extend(d for d in sorted(collapsed) if d not in have)
     return {
         "label": bundle.name, "id": bundle.name, "cfg": cfg, "match_cfg": match_cfg,
-        "transactions": transactions, "receipts": receipts, "match_input": receipts,
-        "collapsed": set(), "foreign": {},
+        "transactions": transactions, "receipts": receipts, "match_input": pool,
+        "collapsed": collapsed, "foreign": {},
         "raw": raw, "judged": raw, "effective": raw, "stored": None,
         "judgment_hits": 0, "judgment_misses": 0, "n_decisions": 0,
     }
@@ -390,18 +447,54 @@ def _norm_ref(s: str | None) -> str:
 
 
 def _reference_twins(receipts) -> dict[str, list[str]]:
-    """document_id -> other documents with the same (reference, total, currency)."""
+    """document_id -> other documents with the same (reference, total, currency).
+
+    The module's own rule (`duplicates.find_duplicate_receipts_by_reference`,
+    item 69 round A) when it exports one, so the attribution classes and the
+    app's collapse agree on what a copy is; the older local key otherwise
+    (a pre-round-A module, via RECON_MODULE_SRC)."""
+    try:
+        from expense_recon.duplicates import find_duplicate_receipts_by_reference
+    except ImportError:
+        find_duplicate_receipts_by_reference = None
+    out: dict[str, list[str]] = {}
+    if find_duplicate_receipts_by_reference is not None:
+        for docs in find_duplicate_receipts_by_reference(receipts):
+            for d in docs:
+                out[d] = [x for x in docs if x != d]
+        return out
     by_key: dict[tuple, list[str]] = defaultdict(list)
     for r in receipts:
         ref = _norm_ref(r.detected_reference)
         if len(ref) >= 5 and r.detected_total is not None:
             by_key[(ref, str(r.detected_total), (r.detected_currency or "").upper())].append(r.document_id)
-    out: dict[str, list[str]] = {}
     for docs in by_key.values():
         if len(docs) >= 2:
             for d in docs:
                 out[d] = [x for x in docs if x != d]
     return out
+
+
+def _document_label(doc: str, labels: dict, twins: dict[str, list[str]], collapsed: set[str]):
+    """The label of the DOCUMENT this copy is one of.
+
+    The labeler decided each purchase once: one copy carries `confirmed` /
+    `no_charge`, the other copies `excluded`. Which copy the app keeps in the
+    pool is the collapse's choice (the first sorted member), not the
+    labeler's, so a kept copy labelled `excluded` whose collapsed twin carries
+    the verdict inherits that verdict. A copy still LIVE beside another live
+    copy keeps `excluded`: that is the undetected-duplicate case, attributed
+    as such. Returns (status, transaction_id, evidence, via)."""
+    status, ltx, evidence = labels.get(doc, ("", "", ""))
+    if status != "excluded" or doc in collapsed:
+        return status, ltx, evidence, None
+    for t in twins.get(doc, []):
+        if t not in collapsed:
+            continue
+        ts = labels.get(t)
+        if ts and ts[0] in ("confirmed", "no_charge"):
+            return ts[0], ts[1], ts[2], t
+    return status, ltx, evidence, None
 
 
 def attribute(month: dict, labels: dict[str, tuple[str, str]]) -> list[dict]:
@@ -438,7 +531,7 @@ def attribute(month: dict, labels: dict[str, tuple[str, str]]) -> list[dict]:
     rows = []
     for r in receipts:
         doc = r.document_id
-        status, ltx, evidence = labels.get(doc, ("", "", ""))
+        status, ltx, evidence, via = _document_label(doc, labels, twins, collapsed)
         usd = _usd(r, tx_ccy, cfg, trace["derived"])
         bucket, held = "unmatched", None
         if doc in e_match:
@@ -452,7 +545,8 @@ def attribute(month: dict, labels: dict[str, tuple[str, str]]) -> list[dict]:
             "total": str(r.detected_total) if r.detected_total is not None else None,
             "currency": r.detected_currency, "usd": str(usd) if usd is not None else None,
             "vendor": r.detected_vendor, "payment_mode": r.payment_mode,
-            "label": status or "unlabeled", "label_tx": ltx or None,
+            "label": (status or "unlabeled") + (f" (via copy {via[:24]})" if via else ""),
+            "label_tx": ltx or None,
             "bucket": bucket, "teed_up": False, "cls": None, "detail": "",
         }
         pm_keys = _card_keys(r.payment_mode)
@@ -463,15 +557,33 @@ def attribute(month: dict, labels: dict[str, tuple[str, str]]) -> list[dict]:
             return (f"{t.transaction_date} {t.vendor_from_statement!r} {t.amount} card={t.card_last4}"
                     if t else m.transaction_id)
 
+        live_twins = [d for d in twins.get(doc, []) if d not in collapsed]
         # 1. duplicate copies, whatever the label
         if doc in collapsed:
-            if status == "confirmed":
+            if status == "confirmed" and not live_twins:
                 row["cls"], row["detail"] = "dup_false_positive", f"collapsed, but labelled to {ltx}"
+            elif status == "confirmed":
+                # The live twin carries the group's verdict. When the labeler
+                # gave the twin a DIFFERENT verdict (another charge, or no
+                # charge), the collapse hid a real second purchase: the twin
+                # is not a copy of this document, and this one's charge is
+                # now unreachable (review F8f, 2026-09-15).
+                twin = live_twins[0]
+                twin_status, twin_tx, _ = labels.get(twin, ("", "", ""))
+                if twin_status in ("confirmed", "no_charge") and twin_tx != ltx:
+                    row["cls"] = "dup_false_positive"
+                    row["detail"] = (
+                        f"collapsed under {twin[:30]}, labelled to {ltx[:16]} while the "
+                        f"kept copy is {twin_status}"
+                        + (f" to {twin_tx[:16]}" if twin_tx else "")
+                    )
+                else:
+                    row["cls"] = "dup_copy_collapsed"
+                    row["detail"] = f"kept copy {twin[:30]} carries this label ({ltx[:12]})"
             else:
-                row["cls"], row["detail"] = "dup_copy_collapsed", "item 56 keeps it out of the pool"
+                row["cls"], row["detail"] = "dup_copy_collapsed", "item 56 / 69 keeps it out of the pool"
             rows.append(row)
             continue
-        live_twins = [d for d in twins.get(doc, []) if d not in collapsed]
         if status == "excluded" and live_twins:
             # The label excluded it and another live copy of the same purchase
             # is in the pool: this is the copy item 56's detector did not see
@@ -724,7 +836,7 @@ def main(argv: list[str]) -> int:
             out_rows[name] = rows
             stored = m["stored"]
             diffs = parity_diffs(stored, m["judged"])
-            print(f"[{name}] pool={len(m['match_input'])} of {len(m['receipts'])} receipts, {len(m['transactions'])} charges; "
+            print(f"[{name}] module={MODULE_FILE} pool={len(m['match_input'])} of {len(m['receipts'])} receipts, {len(m['transactions'])} charges; "
                   f"judgment cache hits={m['judgment_hits']} misses={m['judgment_misses']}; decisions={m['n_decisions']}; "
                   f"parity with the hosted outcome: {'OK' if not diffs else 'DIFFERS (the next live re-match will move these)'}")
             for d in diffs:
@@ -735,7 +847,8 @@ def main(argv: list[str]) -> int:
         rows = attribute(m, load_labels(lp))
         months.append((b.name, rows))
         out_rows[b.name] = rows
-        print(f"[{b.name}] {len(m['receipts'])} receipts, {len(m['transactions'])} charges, labels={'yes' if lp and Path(lp).exists() else 'NO'}")
+        print(f"[{b.name}] module={MODULE_FILE} pool={len(m['match_input'])} of {len(m['receipts'])} receipts, "
+              f"{len(m['transactions'])} charges, labels={'yes' if lp and Path(lp).exists() else 'NO'}")
     if not months:
         ap.error("nothing to attribute: give --live/--run-id or --bundle")
     print()
