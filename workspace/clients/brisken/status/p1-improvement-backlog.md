@@ -2353,17 +2353,6 @@ under the same filename overwrites the stored bytes, both with no version
 and no record. Take the lock on both paths under a fresh re-read (the
 `rematch_month` commit shape), and stop the byte overwrite.
 
-### 67. One unrenderable receipt makes the whole month's report a 500 (item 49)
-
-The renderability check opens a PDF's index only, so a password-protected
-or structurally damaged receipt passes it and then fails during assembly:
-the request 500s and NO report is produced for the whole month, with no
-caption, no partial output and no message naming the file. Render what
-renders, caption what does not with the file named, and surface the
-blocked file on the payload so the reviewer can find it without a log. The
-in-memory assembly on a 512 MB machine is the same wall from a different
-side; stream or bound it.
-
 ### 68. The receipt column overstates coverage, and the two reports can disagree (item 49)
 
 The Receipt column reads "attached" once the file was read off disk, which
@@ -2374,6 +2363,128 @@ stays in the reconciliation report until the next re-match, because the two
 are built from different sources. Make the column and the count answer
 "has a page in the report", and build both reports from the one live
 overlay.
+
+### 69. Matching improvement program: measure first, then two structural rounds (2026-09-15)
+
+Owner program (prompt in the 2026-09-15 checkpoint "Expense-Recon Matching
+Program Prompt"): raise the share of receipts that resolve deterministically
+and correctly on Criss's real months, zero wrong auto-matches, coverage
+reported apart from matching, none of the refuted tuning levers re-run.
+
+**Phase 0 is done (2026-09-15).** Both live months replayed locally from
+the hosted snapshot with no model call, byte-identical to the outcome the
+app committed (`tools/recon-match-attribution.py --live`). Labelled through
+the existing `expense-recon label` flow into two bundles beside the six
+scorer bundles (`context/.../by-month/July-2026_live_50622baec444`,
+`August-2026_live_074a7b8905d7`; 82 decisions, notes.csv carries each
+rationale; a no_charge label records WHY in its evidence column). Zero
+reviewer decisions exist on either month, so every label is the labeler's
+call under the exclusion discipline: 12 excluded as ambiguous, duplicate
+copies excluded, bank transfers and private cards no_charge.
+
+Attribution, one gate per receipt in code order, live v117 code:
+
+| class | July (51) | August (31) |
+|---|---|---|
+| resolved clean, correct | 26 ($2,658) | 7 ($1,147) |
+| wrong auto-match | 1 ($173: Hostinger re-mail copy dated 07-28 took ANTHROPIC 205.56, 16% off) | 5 ($251: Lovable 50 took BASE44 50 exact; Perplexity 25 took ISABELE 24.84; Lovable 25 took RECANTO 26.94; Anthropic 100 took ATT 105.23; an Anthropic invoice copy 51.38 took ANTHROPIC 51.16 while its receipt copy held the 51.38 charge) |
+| matched, unverifiable | 0 | 2 (Zoho Books 576 took MICROSOFT 718.20 at 19.8%, a copy of the ZOHO invoice that holds the real charge; Anthropic 52.59 took one of eight ANTHROPIC charges between 50.52 and 54.12 with no exact) |
+| duplicate copy, collapsed (item 56) | 2 | 8 |
+| duplicate copy, undetected | 1 (Redis invoice + body) | 2 (Anthropic 100 receipt copy; the Petit Train card slip) |
+| duplicate false positive | 1 (Google 71.64: two Workspace accounts, two charges on 07-01, collapsed as one) | 0 |
+| demoted by the uniqueness gate, correct charge teed up in review | 10 ($181) | 2 ($246) |
+| coverage: card statement not loaded (9693, 1176) | 0 | 2 (+2 counted under wrong) |
+| coverage: charge posts in the neighbouring period (item 61) | 1 | 2 (+1 under wrong) |
+| coverage: cash / debit / EC-Karte | 1 | 1 |
+| coverage: bank-transfer invoice | 3 ($32,810) | 0 |
+| excluded as ambiguous | 4 | 0 |
+| no date read (private debit) | 1 | 0 |
+
+In the prompt's shape. July: 51 receipts; 27 matched clean (26 right, 1
+wrong); 11 in review (10 with the correct charge teed up, 1 ambiguous); 1
+unmatched with a charge on the statement (the Google twin); 6 unmatched with
+no charge on any loaded statement; 3 duplicate copies; 3 excluded. August:
+31 receipts; 14 matched clean (7 right, 5 wrong, 2 unverifiable); 3 in review
+(2 correct, 1 a duplicate copy offered a wrong charge); 0 unmatched with a
+charge; 5 unmatched with no charge; 10 duplicate copies. The "14 clean" the
+app reports for August is 7 right and 7 not.
+
+**The six-bundle scorer was broken and is repaired.** Every confirmed label
+still carried the positional ids (`chase-2838-family:177`) the parsers stopped
+producing at PR 2a (2026-08-25), so `recon-match-accuracy.py` exited on the
+first bundle and the anti-overfit guard had been non-functional since (the
+item-63 session hit the same wall). All 95 labels re-keyed through
+`{account_id}:{source_row}` with no collision (`labels.positional.csv` kept
+beside each); scorer and guard reproduce the 2026-07-23 record exactly (train
+49.5, all 65.2, 55/95 deterministic, 0 wrong, guard 4/4). One label corrected
+with evidence in its row: `ER-00214#025` "Decarestauran te" belongs to the
+same-day `MP *DECARESTAURAN` 28.84 (vendor identical, 2.2% off Zoho's base
+amount), not the FENIX charge three days later that the labeler's 2% E3 tier
+had proposed; train 49.5 -> 49.8, all 65.5. Second breakage, NOT fixed
+(pinned file): the scorer's inline dependency list predates `rapidfuzz`, so
+`uv run tools/scorers/recon-match-accuracy.py` fails on import; it runs
+through the module venv (`uv run --directory <module> python
+tools/scorers/recon-match-accuracy.py ...`), and the one-line re-pin needs the
+`SCORER_LOCK_ALLOW=1` seam (owner order). The same attribution runs on the six
+bundles (`--bundle DIR --asset config/match-tuning.json`): 55/95 clean, 36
+demoted by the uniqueness gate with the correct charge teed up, 0 wrong.
+
+**Plan (each round simulated against the labels on all eight datasets before
+it is built; `.scratch`-class simulator, not shipped):**
+
+- Round 0 is the sibling's item 63 (PR #829, the probable band needs the
+  merchant to agree): August wrong 5 -> 2, July 1 -> 0, nothing else moves.
+  Taken as given.
+- Round A, one purchase is one candidate by its number: `find_duplicate_
+  receipts` gains a second key (invoice/receipt reference + total + currency,
+  vendor spelling and date ignored), and the kept copy inherits a payment
+  mode / entity it lacks from its copies. With #829: August wrong 2 -> 0 (the
+  Lovable 50 invoice inherits its receipt copy's card 1176, Consulting, and
+  leaves the Corporate Services statement's scope; the Anthropic 51.38 copy
+  collapses), July wrong -> 0 without #829, August review 3 -> 2. Predicted
+  zero wrong on both months. No recall gain; precision is the goal's hard
+  constraint and "wrong money beats wrong text".
+- Round B, a clean pair keeps its match when its rivals are spoken for or
+  name another merchant: two refinements of the bilateral-uniqueness gate in
+  `match_month`, never a threshold. (1) A rival charge that holds a
+  bank-printed exact candidate with another receipt, or a rival receipt with
+  an exact candidate elsewhere, is spoken for and does not block uniqueness.
+  (2) A demoted clean pair auto-resolves when its own vendor agreement is at
+  least 0.5 and beats every rival's by 0.25 (`_vendor_score`, aliases
+  included); vendor is used only to PROMOTE a pair that already carries clean
+  rate evidence, never to reject one, which is the opposite direction from
+  the refuted vendor gate. Plus the masked-BIN fix in `_card_keys` (a digit
+  run followed by a mask character is a card PREFIX, so
+  `42463153XXXXXX38` stops reading as an absent card). Simulated for the two
+  gate refinements: July clean 26 -> 31 (review 10 -> 5), August 7 -> 8, six
+  bundles 55 -> 71 of 95 (holdout 13 -> 19 of 22), wrong 0 everywhere,
+  scorer train 49.8 -> 56.8. The masked-BIN fix is reasoned, not simulated:
+  it should add the Petit Train receipt in August (7 -> 9 with round A).
+- Stop after B: the next class (the Google twins, two identical charges for
+  two identical receipts) recovers at most 1 receipt a month, under the
+  3-a-month floor; recorded below. Coverage classes stay coverage: item 61
+  (live, waits for the June and September statements), item 62 (sibling),
+  the 9693 / 1176 card statements (owner's call to load them).
+
+**Decisions (the prompt's items 56 and 59 were ruled and shipped 2026-09-14;
+nothing to rule there):**
+
+1. The July Google pair (`0036` / `0037`, 71.64 each) was confirmed as a
+   duplicate by the reviewer on 2026-09-14; the statement holds TWO `GOOGLE
+   *Workspace` 71.64 charges on 07-01 and the receipts carry distinct Google
+   invoice numbers and account refs (`...2544`, `...9129`, the same two that
+   recur in August at 75.09 and 71.64). Recommend resetting that group to
+   "not a duplicate" (`POST /api/runs/50622baec444/duplicates/resolve`, a live
+   write, per-action yes): both receipts return to the pool, the two
+   identical pairs tie, the reviewer picks once; today one charge stays
+   unmatched for good.
+2. Accept the fixture correction above (train baseline 49.5 -> 49.8 before any
+   matcher change).
+3. Re-pin the scorer with `rapidfuzz` in its inline deps (SCORER_LOCK_ALLOW=1,
+   its own PR); until then the module-venv invocation is the floor.
+4. Go on rounds A then B as above, each: RED-first regression, both scorers
+   both directions, calibrate + suite, ship per B6, deploy, live re-match of
+   July and August through `rematch_month`, SPA drive of one changed row.
 
 ## Related but tracked elsewhere (do not duplicate here)
 
@@ -2395,7 +2506,8 @@ overlay.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-| 41 | A receipt settled outside the card leaves the reconciliation pool without leaving the month: `POST`/`DELETE /api/runs/{id}/receipts/{doc}/settled-outside` (`how` = bank_transfer / cash / paypal / other, plus a note), counted by `summary.n_settled_outside` on both payloads, carried on the grid row as `settled_outside {how, note, at}` and suggested (never applied) as `unmatched_receipts[].suggested_settled_outside` | Item 62. July's Redis 13,200.00 USD, Konsultancy 15,972.00 EUR and 360Crossmedia 900.00 EUR invoices were paid by bank transfer, so no statement line will ever settle them and they sat in the pool, the counts and month health's pair scan forever. Bookkeeping, not matching: applied at VIEW time from a snapshot key, so it costs no model call and the undo is immediate. **The live read killed the item's own premise:** all three named invoices carry an EMPTY `payment_mode`, so the auto-suggestion fires on none of them, and the one live receipt reading "Pay $15.00 with a bank transfer" (August, Lovable) is MATCHED to a card charge, because that string is an invoice's payment-OPTION line rather than a record of tender. No unmatched receipt on either month carries a non-card tender today; the disposition is what retires the three, and the fixture is constructed. Two owner rulings: the row still PRINTS in the month report behind a caption naming the tender (real company spend whose evidence is the invoice; dropping it would hide ~30k of July from the accountant), and the chip fires on the payment-option line too, with the caveat recorded. `n_receipts` deliberately does not move; `receipt_match_rate` is read over the receipts a card COULD settle, so a month whose only stragglers were paid by transfer reads 100%. The route refuses a receipt that currently settles a charge, so the month can never claim both that a card paid it and that none did. Four regressions of the real source proven RED first | PR #843, 2026-09-15, this round; suite 1550 -> 1565, and 1675 after rebasing onto the siblings that landed meanwhile; SPA half `docs/lovable-settled-outside-prompt.md` (owner applies) |
+| 42 | A receipt settled outside the card leaves the reconciliation pool without leaving the month: `POST`/`DELETE /api/runs/{id}/receipts/{doc}/settled-outside` (`how` = bank_transfer / cash / paypal / other, plus a note), counted by `summary.n_settled_outside` on both payloads, carried on the grid row as `settled_outside {how, note, at}` and suggested (never applied) as `unmatched_receipts[].suggested_settled_outside` | Item 62. July's Redis 13,200.00 USD, Konsultancy 15,972.00 EUR and 360Crossmedia 900.00 EUR invoices were paid by bank transfer, so no statement line will ever settle them and they sat in the pool, the counts and month health's pair scan forever. Bookkeeping, not matching: applied at VIEW time from a snapshot key, so it costs no model call and the undo is immediate. **The live read killed the item's own premise:** all three named invoices carry an EMPTY `payment_mode`, so the auto-suggestion fires on none of them, and the one live receipt reading "Pay $15.00 with a bank transfer" (August, Lovable) is MATCHED to a card charge, because that string is an invoice's payment-OPTION line rather than a record of tender. No unmatched receipt on either month carries a non-card tender today; the disposition is what retires the three, and the fixture is constructed. Two owner rulings: the row still PRINTS in the month report behind a caption naming the tender (real company spend whose evidence is the invoice; dropping it would hide ~30k of July from the accountant), and the chip fires on the payment-option line too, with the caveat recorded. `n_receipts` deliberately does not move; `receipt_match_rate` is read over the receipts a card COULD settle, so a month whose only stragglers were paid by transfer reads 100%. The route refuses a receipt that currently settles a charge, so the month can never claim both that a card paid it and that none did. Four regressions of the real source proven RED first | PR #843, 2026-09-15, this round; suite 1550 -> 1565, and 1675 after rebasing onto the siblings that landed meanwhile; SPA half `docs/lovable-settled-outside-prompt.md` (owner applies) |
+| 41 | One unrenderable receipt no longer costs the month its report. The renderability probe copies each page into a throwaway writer, which is the operation assembly performs, so a password-protected or damaged receipt is caught BEFORE its caption is written; assembly guards every file on its own; the caption names the file and the reason; `expenses[].receipt_render` and `summary.n_receipts_unrenderable` put that on the review screen (both absent until a report was built); and a receipt contributes at most 60 pages so one upload cannot decide whether the month reports at all | Item 67, carved from item 49. The old check was `PdfReader(BytesIO(bytes))` and nothing else, which parses the index: a password-protected receipt passed it and raised at `add_page`, the request 500ed, and the period produced NO report, no caption, no partial output, nothing naming the file. Two live facts shaped the build. The defect does not reproduce on Criss's data today: both months render (200; 4.27 MB August, 8.81 MB July) and a read-only census of all 102 stored receipts found 0 encrypted and 0 whose pages the reader cannot copy, so the fixtures are constructed. And ingest tolerance is not the reason it has not bitten: `receipts_folder` skips a file whose extraction raises, but `_pdf_text` reads at most 4 pages while assembly copies all of them, so a PDF damaged on page 5 is extracted happily and only breaks in the report. The damaged fixture proved the sharper point: it constructs AND enumerates its pages, and only the page COPY raises, so a probe that counted pages would have passed it too. Three regressions of the real source proven RED first, and a fourth mutation was discarded as a semantic no-op after `regress_check` reported it green | 2026-09-15, this round; suite 1550 -> 1561; SPA half `docs/lovable-render-failed-prompt.md` (owner applies) |
 | 40 | Workbench filter/sort, read against the published page: NO backend change, and `docs/api-contract.md` gains the field guide for the controls (which field answers which control, and the two that do not mean what their name says). SPA delta in `docs/lovable-workbench-filter-sort-prompt.md` | Item 17, and the round's lesson is the read. The item's home, PR #454/#455's Lovable half, turned out to be published already, with a control bar the backlog text predates: search, BUCKET, STATUS, SORT, six FILTERS toggles. Vendor A-Z, the operator's "alphabetic", already works - so the one parallel field this round was scoped to add (`vendor_sort_key`, built, tested green at 1557, regress-proven) was measured against the live sort, found redundant against a better client-side collator, and reverted rather than shipped for the sake of shipping. The drive found the real defect instead: `amount` is `f"{v:,.2f}"`, so `parseFloat("1,574.24")` is 1 and August's two largest unmatched charges (2,484.00 and 1,574.24) render at the BOTTOM of "Amount, high to low", below a 1.16 charge. Two traps recorded beside it: `section` is a display lane where `is_posted` wins (July's 85 `posted` rows are really 49 unmatched / 24 reconciled / 11 review / 1 refund, so an "unmatched" filter keyed on it reports 24 of 73), and `coverage_key` has two live shapes, so a card filter joins `coverage[]` rather than parsing it | 2026-09-15, this round; docs only, no deploy, no regress proof and none invented; suite unchanged at 1550 passed / 2 skipped after the revert; SPA half `docs/lovable-workbench-filter-sort-prompt.md` (owner applies) |
 | 39 | The tip band is merchant-scoped: a same-currency pair whose amounts differ stays a candidate only when the two sides agree on the vendor by the matcher's own `_vendor_score`, or when either side names no vendor (absence is missing evidence, not conflicting evidence, so the receipt returns to the pool and the guarantee holds). `amount_probable_min_vendor_score` ships at 0.50, file-tunable, 0.0 disables. Exact amounts and every FX path untouched | Item 63. The 20% band is the restaurant-tip allowance, and a tip never changes who was paid, but the band ignored the merchant: it offered ADOBE 16.23 a Lovable 15.00 receipt and ANTHROPIC 104.95 an Obsidian 96.00 one. The live months were worse than the item knew, with five wrong pairs not offered but BOUND (`chosen`) — MICROSOFT 718.20 settled by Zoho Books 576.00, ATT*BILL PAYMENT 105.23 by Anthropic 100.00. Not a knee: 41 different-merchant pairs all scored <= 0.40 against 30 true pairs all at exactly 1.00, and the cut is flat from 0.45 to 0.90. FX deliberately excluded (S1 measured vendor non-separable there, 26/55 true pairs <0.2) | PR #829, 2026-09-15; August pairs 71 -> 30 with 41 different-merchant gone and all 30 true kept, exact 5 -> 5, calibrate invariant OK / no double-binding both sides; suite 1557 -> 1570 collected |
 | 37 | Report totals are formed in `Decimal`, and a row the total cannot read has a visible place instead of a silent drop. `output/_pdf_common.py` owns the arithmetic for both documents (`parse_amount` / `sum_amounts` / `format_totals` / `excluded_note`); the month report's header total and its per-person section sums both go through it. An unreadable amount gets a caption on its own listing row (`amount unreadable, not in total`) and a footer naming the numbers (`2 receipts excluded from the total: expenses 4, 7.`), both silent at zero. `summary.n_amounts_unreadable` is the payload half (parallel scalar), counting expenses whose amount was never read, which is the same population `totals_by_ccy` already skipped in silence | Section 12 row 13 of the storage-system description discloses both halves: amounts are carried as strings so no precision is lost, and the report threw that away by re-summing in binary float, while a cell that would not parse was skipped with `continue`. **Live first, and the prediction was wrong in the useful direction:** both months' reports were built through the route and their printed totals equal a Decimal sum over the same amounts to the cent, with zero unreadable rows on either. Through the app the Amount cell is always a finite two-decimal string (`_amount` formats a Decimal; `validate_expense_field` refuses a non-finite total at the edge), so the drop path is unreachable from the route and the float error stays below the printed digit (August accumulated USD `2663.9500000000007` against an exact `2663.95`). What shipped is therefore the arithmetic class removed plus defence in depth on a public builder whose row contract is "export rows", not two decimals; `NaN` is the trap that made it worth doing, because it parses as both and a float sum would have carried it into every other row's total | PR #831, 2026-09-15, Fly release TBD; suite 1550 -> 1562 passed / 2 skipped; three regress proofs RED first (the silent drop, the float sum, the payload count). SPA half `docs/lovable-amounts-unreadable-prompt.md` (Pending; renders nothing at 0, which is both live months) |
