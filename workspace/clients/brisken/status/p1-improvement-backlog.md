@@ -2372,6 +2372,128 @@ are built from different sources. Make the column and the count answer
 "has a page in the report", and build both reports from the one live
 overlay.
 
+### 69. Matching improvement program: measure first, then two structural rounds (2026-09-15)
+
+Owner program (prompt in the 2026-09-15 checkpoint "Expense-Recon Matching
+Program Prompt"): raise the share of receipts that resolve deterministically
+and correctly on Criss's real months, zero wrong auto-matches, coverage
+reported apart from matching, none of the refuted tuning levers re-run.
+
+**Phase 0 is done (2026-09-15).** Both live months replayed locally from
+the hosted snapshot with no model call, byte-identical to the outcome the
+app committed (`tools/recon-match-attribution.py --live`). Labelled through
+the existing `expense-recon label` flow into two bundles beside the six
+scorer bundles (`context/.../by-month/July-2026_live_50622baec444`,
+`August-2026_live_074a7b8905d7`; 82 decisions, notes.csv carries each
+rationale; a no_charge label records WHY in its evidence column). Zero
+reviewer decisions exist on either month, so every label is the labeler's
+call under the exclusion discipline: 12 excluded as ambiguous, duplicate
+copies excluded, bank transfers and private cards no_charge.
+
+Attribution, one gate per receipt in code order, live v117 code:
+
+| class | July (51) | August (31) |
+|---|---|---|
+| resolved clean, correct | 26 ($2,658) | 7 ($1,147) |
+| wrong auto-match | 1 ($173: Hostinger re-mail copy dated 07-28 took ANTHROPIC 205.56, 16% off) | 5 ($251: Lovable 50 took BASE44 50 exact; Perplexity 25 took ISABELE 24.84; Lovable 25 took RECANTO 26.94; Anthropic 100 took ATT 105.23; an Anthropic invoice copy 51.38 took ANTHROPIC 51.16 while its receipt copy held the 51.38 charge) |
+| matched, unverifiable | 0 | 2 (Zoho Books 576 took MICROSOFT 718.20 at 19.8%, a copy of the ZOHO invoice that holds the real charge; Anthropic 52.59 took one of eight ANTHROPIC charges between 50.52 and 54.12 with no exact) |
+| duplicate copy, collapsed (item 56) | 2 | 8 |
+| duplicate copy, undetected | 1 (Redis invoice + body) | 2 (Anthropic 100 receipt copy; the Petit Train card slip) |
+| duplicate false positive | 1 (Google 71.64: two Workspace accounts, two charges on 07-01, collapsed as one) | 0 |
+| demoted by the uniqueness gate, correct charge teed up in review | 10 ($181) | 2 ($246) |
+| coverage: card statement not loaded (9693, 1176) | 0 | 2 (+2 counted under wrong) |
+| coverage: charge posts in the neighbouring period (item 61) | 1 | 2 (+1 under wrong) |
+| coverage: cash / debit / EC-Karte | 1 | 1 |
+| coverage: bank-transfer invoice | 3 ($32,810) | 0 |
+| excluded as ambiguous | 4 | 0 |
+| no date read (private debit) | 1 | 0 |
+
+In the prompt's shape. July: 51 receipts; 27 matched clean (26 right, 1
+wrong); 11 in review (10 with the correct charge teed up, 1 ambiguous); 1
+unmatched with a charge on the statement (the Google twin); 6 unmatched with
+no charge on any loaded statement; 3 duplicate copies; 3 excluded. August:
+31 receipts; 14 matched clean (7 right, 5 wrong, 2 unverifiable); 3 in review
+(2 correct, 1 a duplicate copy offered a wrong charge); 0 unmatched with a
+charge; 5 unmatched with no charge; 10 duplicate copies. The "14 clean" the
+app reports for August is 7 right and 7 not.
+
+**The six-bundle scorer was broken and is repaired.** Every confirmed label
+still carried the positional ids (`chase-2838-family:177`) the parsers stopped
+producing at PR 2a (2026-08-25), so `recon-match-accuracy.py` exited on the
+first bundle and the anti-overfit guard had been non-functional since (the
+item-63 session hit the same wall). All 95 labels re-keyed through
+`{account_id}:{source_row}` with no collision (`labels.positional.csv` kept
+beside each); scorer and guard reproduce the 2026-07-23 record exactly (train
+49.5, all 65.2, 55/95 deterministic, 0 wrong, guard 4/4). One label corrected
+with evidence in its row: `ER-00214#025` "Decarestauran te" belongs to the
+same-day `MP *DECARESTAURAN` 28.84 (vendor identical, 2.2% off Zoho's base
+amount), not the FENIX charge three days later that the labeler's 2% E3 tier
+had proposed; train 49.5 -> 49.8, all 65.5. Second breakage, NOT fixed
+(pinned file): the scorer's inline dependency list predates `rapidfuzz`, so
+`uv run tools/scorers/recon-match-accuracy.py` fails on import; it runs
+through the module venv (`uv run --directory <module> python
+tools/scorers/recon-match-accuracy.py ...`), and the one-line re-pin needs the
+`SCORER_LOCK_ALLOW=1` seam (owner order). The same attribution runs on the six
+bundles (`--bundle DIR --asset config/match-tuning.json`): 55/95 clean, 36
+demoted by the uniqueness gate with the correct charge teed up, 0 wrong.
+
+**Plan (each round simulated against the labels on all eight datasets before
+it is built; `.scratch`-class simulator, not shipped):**
+
+- Round 0 is the sibling's item 63 (PR #829, the probable band needs the
+  merchant to agree): August wrong 5 -> 2, July 1 -> 0, nothing else moves.
+  Taken as given.
+- Round A, one purchase is one candidate by its number: `find_duplicate_
+  receipts` gains a second key (invoice/receipt reference + total + currency,
+  vendor spelling and date ignored), and the kept copy inherits a payment
+  mode / entity it lacks from its copies. With #829: August wrong 2 -> 0 (the
+  Lovable 50 invoice inherits its receipt copy's card 1176, Consulting, and
+  leaves the Corporate Services statement's scope; the Anthropic 51.38 copy
+  collapses), July wrong -> 0 without #829, August review 3 -> 2. Predicted
+  zero wrong on both months. No recall gain; precision is the goal's hard
+  constraint and "wrong money beats wrong text".
+- Round B, a clean pair keeps its match when its rivals are spoken for or
+  name another merchant: two refinements of the bilateral-uniqueness gate in
+  `match_month`, never a threshold. (1) A rival charge that holds a
+  bank-printed exact candidate with another receipt, or a rival receipt with
+  an exact candidate elsewhere, is spoken for and does not block uniqueness.
+  (2) A demoted clean pair auto-resolves when its own vendor agreement is at
+  least 0.5 and beats every rival's by 0.25 (`_vendor_score`, aliases
+  included); vendor is used only to PROMOTE a pair that already carries clean
+  rate evidence, never to reject one, which is the opposite direction from
+  the refuted vendor gate. Plus the masked-BIN fix in `_card_keys` (a digit
+  run followed by a mask character is a card PREFIX, so
+  `42463153XXXXXX38` stops reading as an absent card). Simulated for the two
+  gate refinements: July clean 26 -> 31 (review 10 -> 5), August 7 -> 8, six
+  bundles 55 -> 71 of 95 (holdout 13 -> 19 of 22), wrong 0 everywhere,
+  scorer train 49.8 -> 56.8. The masked-BIN fix is reasoned, not simulated:
+  it should add the Petit Train receipt in August (7 -> 9 with round A).
+- Stop after B: the next class (the Google twins, two identical charges for
+  two identical receipts) recovers at most 1 receipt a month, under the
+  3-a-month floor; recorded below. Coverage classes stay coverage: item 61
+  (live, waits for the June and September statements), item 62 (sibling),
+  the 9693 / 1176 card statements (owner's call to load them).
+
+**Decisions (the prompt's items 56 and 59 were ruled and shipped 2026-09-14;
+nothing to rule there):**
+
+1. The July Google pair (`0036` / `0037`, 71.64 each) was confirmed as a
+   duplicate by the reviewer on 2026-09-14; the statement holds TWO `GOOGLE
+   *Workspace` 71.64 charges on 07-01 and the receipts carry distinct Google
+   invoice numbers and account refs (`...2544`, `...9129`, the same two that
+   recur in August at 75.09 and 71.64). Recommend resetting that group to
+   "not a duplicate" (`POST /api/runs/50622baec444/duplicates/resolve`, a live
+   write, per-action yes): both receipts return to the pool, the two
+   identical pairs tie, the reviewer picks once; today one charge stays
+   unmatched for good.
+2. Accept the fixture correction above (train baseline 49.5 -> 49.8 before any
+   matcher change).
+3. Re-pin the scorer with `rapidfuzz` in its inline deps (SCORER_LOCK_ALLOW=1,
+   its own PR); until then the module-venv invocation is the floor.
+4. Go on rounds A then B as above, each: RED-first regression, both scorers
+   both directions, calibrate + suite, ship per B6, deploy, live re-match of
+   July and August through `rematch_month`, SPA drive of one changed row.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
