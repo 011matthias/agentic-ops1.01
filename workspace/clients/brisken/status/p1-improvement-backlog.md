@@ -1834,7 +1834,7 @@ in `docs/api-contract.md`. **The item stays OPEN until the SPA half ships**:
 PROMPT-STATUS as not applied, and until it is pasted the browser reports
 nothing and the backend records nothing.
 
-### 51. A statement that parses to zero rows reports success (found by drill, 2026-09-10)
+### 51. A statement that parses to zero rows reports success (SHIPPED 2026-09-15 - see Shipped row 44)
 
 While reproducing item 50 the attach returned `200 {"ok": true}` and the run
 recorded `statements[{... "n_rows": 0, "n_new": 0}]`. The file was a valid
@@ -1849,6 +1849,31 @@ like. Criss would see a green attach and an unchanged month.
 **Fix:** refuse, or at minimum carry a loud advisory, when an attach adds zero
 charges. `n_rows == 0` on a freshly uploaded statement is never a legitimate
 outcome. Pin it with a test that mutates the guard and goes red.
+
+**SHIPPED 2026-09-15: refused, not advised.** Reproducing it through the real
+route found the item understated by one step. The month does not merely stay
+unchanged: `rematch_month` stamps `has_statement: True` on commit, so a month
+that took an empty file GRADUATED to the reconciliation workbench holding zero
+charges, which on screen is what a month whose statement reconciled looks like.
+That settled refuse-vs-advise. The upload is now refused before the fold
+(`execute_statement_attach`), so no charge, no `statements[]` entry, no
+`statement_anchors` entry and no graduation; the reason rides the job's
+existing `error` status, the same channel the re-read already refuses on.
+
+Keyed on `n_rows`, never on `n_new`: zero NEW charges is the same file arriving
+twice, which the fold exists to absorb, and refusing that would break the
+living month. The message names the file and the worksheet, because the wrong
+worksheet is the likeliest cause.
+
+**The re-read half, found while fixing this one.** The same shape reaches
+`reread_statements`, where it is worse: the re-read REPLACES the charge set, so
+a stored file that recorded rows and now reads none takes its charges out of a
+live month silently. That is the identical failure mode the function's own
+deny-by-default contract already covers for a missing file and an unresolvable
+column map, so it was closed in the same round. Exempt when the entry was
+already recorded with `n_rows: 0`, so the guard cannot wedge a month that took
+an empty file before it existed; a live probe of all 6 months confirmed none
+holds such an entry today, so the exemption is precaution, not repair.
 
 ### 52. "Recibo nao estar abrindo" (Criss, 2026-09-08, August month)
 
@@ -2572,6 +2597,7 @@ it wants its own item.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 44 | A statement upload that parses to no charge at all is refused before the fold, on the job's existing `error` status, and the same guard closes the re-read door where a stored file that recorded rows and now reads none would replace a live month's charges with nothing | Item 51. The drill's file was a valid workbook whose columns mapped cleanly and whose rows read as nothing, which is what a wrong worksheet, a header row below the first row and a rejected date format all look like; the column-map 400 does not catch it, because that guard fires on a MISSING column and this file has every column it needs. Reproducing it through the route found the item understated: the month did not stay put, it graduated to the workbench holding zero charges, indistinguishable on screen from a month that reconciled. Keyed on `n_rows` and never on `n_new`, so the same file arriving twice still lands. One existing test used an empty workbook as the vehicle for a different property ("recorded and empty is not not-recorded"); the refusal makes that state unreachable for a workbook, so it was rewritten to pin the refusal's writeback half, and `statement_anchors` now cites the PDF statement, which is where the distinction still lives | PR #859, 2026-09-15; suite 1712 -> 1719; both wiring points regress-checked green to red to green; contract section added; no new field and no SPA half |
 | 43 | The two writers that rewrote a period record from a stale copy now commit under `_BATCH_ADD_LOCK` against a fresh re-read (the manual per-charge attach and the bulk receipt-folder ingest, the `rematch_month` commit shape), and no write destroys stored bytes any more: a re-attach archives the file the charge already holds under a versioned name and the snapshot records the replacement (`receipt_files`), a queued-upload replacement archives instead of deleting | Item 66. Both paths read the record, worked for seconds to minutes (vision, then the matcher), and then rebuilt the WHOLE record from the copy they had read, unlocked. A concurrent mail intake, card assignment or re-match was erased with no error on either side, which is the worst shape a data loss can take: the reviewer's evidence for the gap is its absence. The file half was the same defect against bytes rather than rows, in a system whose stated purpose is retaining what arrived. One correction to the item as written: keeping only the same-NAME re-attach from overwriting would have left the different-name case, where both files stay in the glob the image endpoint reads and `sorted(...)[0]` can serve the superseded one, so a charge now holds exactly ONE current file and every earlier one is archived. Four regressions of the real source proven RED first, the interleaving one driven through both routes at once | PR #846, 2026-09-15; suite 1550 -> 1557 (1562 after rebasing onto #828); no payload change, so no SPA half |
 | 42 | A receipt settled outside the card leaves the reconciliation pool without leaving the month: `POST`/`DELETE /api/runs/{id}/receipts/{doc}/settled-outside` (`how` = bank_transfer / cash / paypal / other, plus a note), counted by `summary.n_settled_outside` on both payloads, carried on the grid row as `settled_outside {how, note, at}` and suggested (never applied) as `unmatched_receipts[].suggested_settled_outside` | Item 62. July's Redis 13,200.00 USD, Konsultancy 15,972.00 EUR and 360Crossmedia 900.00 EUR invoices were paid by bank transfer, so no statement line will ever settle them and they sat in the pool, the counts and month health's pair scan forever. Bookkeeping, not matching: applied at VIEW time from a snapshot key, so it costs no model call and the undo is immediate. **The live read killed the item's own premise:** all three named invoices carry an EMPTY `payment_mode`, so the auto-suggestion fires on none of them, and the one live receipt reading "Pay $15.00 with a bank transfer" (August, Lovable) is MATCHED to a card charge, because that string is an invoice's payment-OPTION line rather than a record of tender. No unmatched receipt on either month carries a non-card tender today; the disposition is what retires the three, and the fixture is constructed. Two owner rulings: the row still PRINTS in the month report behind a caption naming the tender (real company spend whose evidence is the invoice; dropping it would hide ~30k of July from the accountant), and the chip fires on the payment-option line too, with the caveat recorded. `n_receipts` deliberately does not move; `receipt_match_rate` is read over the receipts a card COULD settle, so a month whose only stragglers were paid by transfer reads 100%. The route refuses a receipt that currently settles a charge, so the month can never claim both that a card paid it and that none did. Four regressions of the real source proven RED first | PR #843, 2026-09-15, this round; suite 1550 -> 1565, and 1675 after rebasing onto the siblings that landed meanwhile; SPA half `docs/lovable-settled-outside-prompt.md` (owner applies) |
 | 41 | One unrenderable receipt no longer costs the month its report. The renderability probe copies each page into a throwaway writer, which is the operation assembly performs, so a password-protected or damaged receipt is caught BEFORE its caption is written; assembly guards every file on its own; the caption names the file and the reason; `expenses[].receipt_render` and `summary.n_receipts_unrenderable` put that on the review screen (both absent until a report was built); and a receipt contributes at most 60 pages so one upload cannot decide whether the month reports at all | Item 67, carved from item 49. The old check was `PdfReader(BytesIO(bytes))` and nothing else, which parses the index: a password-protected receipt passed it and raised at `add_page`, the request 500ed, and the period produced NO report, no caption, no partial output, nothing naming the file. Two live facts shaped the build. The defect does not reproduce on Criss's data today: both months render (200; 4.27 MB August, 8.81 MB July) and a read-only census of all 102 stored receipts found 0 encrypted and 0 whose pages the reader cannot copy, so the fixtures are constructed. And ingest tolerance is not the reason it has not bitten: `receipts_folder` skips a file whose extraction raises, but `_pdf_text` reads at most 4 pages while assembly copies all of them, so a PDF damaged on page 5 is extracted happily and only breaks in the report. The damaged fixture proved the sharper point: it constructs AND enumerates its pages, and only the page COPY raises, so a probe that counted pages would have passed it too. Three regressions of the real source proven RED first, and a fourth mutation was discarded as a semantic no-op after `regress_check` reported it green | 2026-09-15, this round; suite 1550 -> 1561; SPA half `docs/lovable-render-failed-prompt.md` (owner applies) |
