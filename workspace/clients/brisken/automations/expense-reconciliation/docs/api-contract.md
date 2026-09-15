@@ -1193,6 +1193,85 @@ their receipts stay in the evidence pages. The CSV keeps them as rows
 and `Paid Through` = `Private ({person})` — the same strings the grid
 shows.
 
+## The adjacent-month pool: `from_batch` + `kind` (added 2026-09-15)
+
+Backlog item 61. A receipt is filed by the month printed ON it; a charge
+lands in the statement that BILLED it. Chase opens August's workbook on
+07-31 and July's on 06-30, so a subscription invoiced on the last day of a
+month posts on the 1st of the next statement while its receipt is already
+one batch away. Live that day: August held Google receipts dated 08-31 for
+71.64 and 75.09 whose charges post 09-01, and August's own 08-01 Google
+71.64 charge sat unmatched with no candidate at all.
+
+A month's candidate pool now spans the company months either side of it,
+through the same machinery the trip pool uses: the same
+`borrowed_receipts` / `receipt_sources` snapshot keys, the same
+`receipt_claims` arbitration, the same never-absorbed rule (the borrowed
+receipt stays an expense of its own month; `n_receipts`, the export and
+the report never take it).
+
+Two rules decide what is borrowed, and both are narrow on purpose:
+
+- **Neighbours by LABEL.** `month_from_label` on this run's label, previous
+  and next. A batch whose label names no month neither borrows nor lends,
+  and a month two away contributes nothing.
+- **Eligibility by this statement's OWN period**, min..max of the run's
+  transaction dates. The period is the only source that knows where the
+  workbook was cut; no calendar rule predicts 07-31. A month with no
+  statement yet falls back to its label's calendar month widened by
+  `ADJACENT_FALLBACK_DAYS` (3), which is only reachable where there is
+  nothing to match anyway.
+
+### `receipt_sources` holds two kinds
+
+```json
+"receipt_sources": {
+  "0011__5672824933.pdf": { "run_id": "50622baec444",
+                            "label": "July 2026",
+                            "kind": "adjacent" }
+}
+```
+
+A TRIP entry is unchanged (`{run_id, trip_id, label}`, no `kind`). An
+adjacent-month entry carries `kind: "adjacent"` and no `trip_id`. Read the
+kind, never the absence of a trip id.
+
+| Payload | Path | Shape |
+|---|---|---|
+| Run | `rows[].settled_by` | trip: `{run_id, trip_id, label}`; adjacent: `{run_id, label, kind}` |
+| Run | `rows[].candidates[].from_batch` | same object as the row's, for a candidate whose receipt is borrowed |
+
+`from_batch` (NEW) is the fix for a borrowed receipt being anonymous until
+it was chosen: the row's badge named the source only once the pairing won,
+so an OFFERED candidate read as if it belonged to this month. It is
+ABSENT (not null) on every candidate from the month's own pool, which is
+almost all of them, and it names a trip or a neighbouring month by the same
+key. Both borrow kinds populate it, so a trip-borrowed candidate is named
+too.
+
+`summary.n_adjacent_borrowed` counts the adjacent entries in
+`receipt_sources`, so it is what the month actually HOLDS rather than what
+the pool offered. 0 on every month whose neighbours lent it nothing.
+
+### What the other side shows, with no new field
+
+The lending month names the borrower through the claims table that was
+already there: its receipt appears in `expenses[].settled_by` /
+`unmatched_receipts[].settled_by` shaped `{run_id, label, transaction_id}`,
+and the receipt drops out of its own month's candidate pool on that
+month's next re-match. One receipt still settles exactly one charge.
+
+### The id collision, stated
+
+Receipt ids are position-prefixed per batch (`0000__a.jpg`), so two
+different receipts can share an id across batches. The month's own copy
+wins and the colliding neighbour receipt is simply not borrowed. This bites
+harder than it does on trips because neighbouring months are ingested the
+same way: July and August shared four ids on 2026-09-15, all
+`NNNN__rendered-body.pdf`. Offering two receipts under one id would corrupt
+the matcher's consumption set and the view's lookup, which is worse than a
+narrower pool.
+
 ## Report totals are formed in Decimal (added 2026-09-15, item 65)
 
 Amounts travel as strings from the extractor to the export precisely so no
