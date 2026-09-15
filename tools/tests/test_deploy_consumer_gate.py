@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from hooklib import run_hook
 
 HOOK = "deploy-consumer-gate.py"
@@ -34,10 +36,21 @@ def env(tmp_path) -> dict:
     }
 
 
-def post(tmp_path, tool: str, command: str | None = None) -> str:
+def post(
+    tmp_path,
+    tool: str,
+    command: str | None = None,
+    *,
+    background: bool = False,
+    response: dict | None = None,
+) -> str:
     payload = {"hook_event_name": "PostToolUse", "tool_name": tool}
     if command is not None:
         payload["tool_input"] = {"command": command}
+    if background:
+        payload.setdefault("tool_input", {})["run_in_background"] = True
+    if response is not None:
+        payload["tool_response"] = response
     r = run_hook(HOOK, payload, env=env(tmp_path))
     assert r.returncode == 0, r.stderr
     if not r.stdout.strip():
@@ -90,8 +103,13 @@ def test_deploy_then_verified_claim_is_blocked(tmp_path):
 
 
 def test_deploy_then_browser_drive_then_claim_passes(tmp_path):
+    """Navigating gets you to the page; the SNAPSHOT is what sees it. Until
+    2026-09-15 the navigate alone closed this, which is how the gate came to
+    print "closed" about a drive that had asserted nothing."""
     post(tmp_path, "Bash", "flyctl deploy -a brisken-expense-recon")
     post(tmp_path, "mcp__playwright__browser_navigate")
+    assert stop(tmp_path, CLAIM) is not None
+    post(tmp_path, "mcp__playwright__browser_snapshot")
     assert stop(tmp_path, CLAIM) is None
 
 
@@ -148,7 +166,7 @@ def test_curl_closes_a_server_rendered_deploy(tmp_path):
 
 def test_browser_drive_closes_a_server_rendered_deploy_too(tmp_path):
     post(tmp_path, "Bash", "vercel --prod")
-    assert "CONSUMER DRIVEN" in post(tmp_path, "mcp__playwright__browser_navigate")
+    assert "CONSUMER DRIVEN" in post(tmp_path, "mcp__playwright__browser_snapshot")
 
 
 def test_vercel_deploy_then_claim_without_any_check_is_blocked(tmp_path):
@@ -157,9 +175,95 @@ def test_vercel_deploy_then_claim_without_any_check_is_blocked(tmp_path):
 
 
 def test_agent_browser_closes_marker(tmp_path):
+    """`open` reaches the page and reads nothing back; `snapshot` is the
+    observation."""
     post(tmp_path, "Bash", "fly deploy")
-    assert "CONSUMER DRIVEN" in post(tmp_path, "Bash", "agent-browser open https://x")
+    assert post(tmp_path, "Bash", "agent-browser open https://x") == ""
+    assert stop(tmp_path, CLAIM) is not None
+    assert "CONSUMER DRIVEN" in post(tmp_path, "Bash", "agent-browser snapshot -i")
     assert stop(tmp_path, CLAIM) is None
+
+
+# ---- A drive has to have actually observed something --------------------
+#
+# 2026-09-15: the gate printed CONSUMER DRIVEN for a backgrounded command
+# that had asserted nothing and later timed out. A gate closable by
+# something that proves nothing protects less than it appears to, because
+# its own advisory then reads back as evidence.
+
+
+@pytest.mark.parametrize("cmd", [
+    "agent-browser open https://x",
+    "agent-browser click @e3",
+    "agent-browser fill @e2 hello",
+    "agent-browser close",
+])
+def test_navigation_only_commands_leave_the_marker_open(tmp_path, cmd):
+    post(tmp_path, "Bash", "fly deploy")
+    assert post(tmp_path, "Bash", cmd) == "", cmd
+    assert stop(tmp_path, CLAIM) is not None
+
+
+@pytest.mark.parametrize("cmd", [
+    "agent-browser snapshot -i -c",
+    "agent-browser screenshot out.png",
+    "agent-browser get text @e1",
+    "agent-browser get url",
+    "agent-browser find role button click --name Save",
+    "agent-browser eval --stdin",
+    "agent-browser wait --text Arriving",
+])
+def test_observing_commands_close_the_marker(tmp_path, cmd):
+    post(tmp_path, "Bash", "fly deploy")
+    assert "CONSUMER DRIVEN" in post(tmp_path, "Bash", cmd), cmd
+
+
+def test_a_backgrounded_drive_does_not_close_the_marker(tmp_path):
+    """The 2026-09-15 shape: the command had produced no output yet."""
+    post(tmp_path, "Bash", "fly deploy")
+    text = post(
+        tmp_path, "Bash", "agent-browser snapshot -i", background=True,
+    )
+    assert "DRIVE NOT COMPLETE" in text
+    assert "backgrounded" in text
+    assert stop(tmp_path, CLAIM) is not None
+
+
+def test_a_failed_drive_does_not_close_the_marker(tmp_path):
+    post(tmp_path, "Bash", "fly deploy")
+    text = post(
+        tmp_path, "Bash", "agent-browser snapshot -i",
+        response={"is_error": True},
+    )
+    assert "DRIVE NOT COMPLETE" in text
+    assert stop(tmp_path, CLAIM) is not None
+
+
+def test_a_nonzero_exit_does_not_close_the_marker(tmp_path):
+    post(tmp_path, "Bash", "fly deploy")
+    assert "DRIVE NOT COMPLETE" in post(
+        tmp_path, "Bash", "agent-browser snapshot -i",
+        response={"returncode": 1},
+    )
+
+
+def test_an_unreadable_response_still_closes_the_marker(tmp_path):
+    """Fail-open on the response shape. A gate that refuses to close on a
+    drive that DID happen becomes noise, and noise gets approved
+    reflexively -- the failure mode this whole hook exists to avoid."""
+    post(tmp_path, "Bash", "fly deploy")
+    assert "CONSUMER DRIVEN" in post(
+        tmp_path, "Bash", "agent-browser snapshot -i", response={"x": "y"},
+    )
+
+
+def test_a_backgrounded_navigation_says_nothing_extra(tmp_path):
+    """Navigation is silent whether or not it is backgrounded: it was never
+    going to close the marker, so there is nothing to explain."""
+    post(tmp_path, "Bash", "fly deploy")
+    assert post(
+        tmp_path, "Bash", "agent-browser open https://x", background=True,
+    ) == ""
 
 
 def test_playwright_snapshot_closes_marker(tmp_path):
