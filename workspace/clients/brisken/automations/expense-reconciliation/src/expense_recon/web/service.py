@@ -5073,6 +5073,11 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
     exactly what it had: the landing screen must render regardless.
     """
     summary = dict(run.summary or {})
+    # Item 67 stores the per-document render outcomes on the run summary, one
+    # entry per receipt. The list screen has no use for them and this is the
+    # one place the stored summary is served through as-is, so they stop here;
+    # the batch page reads them as `receipt_render` per row and one count.
+    summary.pop("receipt_render", None)
     snapshot = run.snapshot or {}
     # A run whose summary predates expense counts, or whose snapshot has no
     # receipts block yet (created, ingest still running or failed), keeps
@@ -5485,6 +5490,18 @@ def build_expense_view(
             if hit is not None:
                 e["settled_by"] = hit
 
+    # Item 67: what the last report build did with this expense's receipt.
+    # "ok" means its pages are in the document; "failed" means the file could
+    # not be turned into pages at all, so the report carries a caption naming
+    # it and nothing behind that caption. ABSENT until a report has been built
+    # for the month, because renderability is not knowable before then: a
+    # missing key means "not established", never "fine".
+    render_state = (run.summary or {}).get("receipt_render") or {}
+    for e in expenses:
+        state = (render_state.get(e.get("document_id")) or {}).get("render")
+        if state:
+            e["receipt_render"] = state
+
     has_image_info = any(r.has_receipt_image for r in receipts)
     n_categorized, n_uncategorized = categorized_counts(posted)
     set_aside = set_aside_view(run.snapshot or {})
@@ -5591,6 +5608,15 @@ def build_expense_view(
     summary["n_amounts_unreadable"] = sum(
         1 for r in receipts if r.detected_total is None
     )
+    # Item 67: how many of this month's receipts produced no page in the
+    # report. Present only once a report has been built, the same rule the
+    # row's `receipt_render` follows: a 0 that actually means "nobody has
+    # built one yet" is the confidently-wrong shape contract rule 5 exists to
+    # prevent, and this count's whole job is telling a reviewer to go look.
+    if render_state:
+        summary["n_receipts_unrenderable"] = sum(
+            1 for e in expenses if e.get("receipt_render") == "failed"
+        )
 
     return {
         "run_id": run.run_id,
@@ -5776,6 +5802,7 @@ def build_expense_report(
     edits: list[dict],
     trip: "TripRow | None" = None,
     settings: dict | None = None,
+    render_outcomes: dict | None = None,
 ) -> bytes:
     """The month's report PDF: the listing, then every receipt (owner
     directive 2026-08-23 — nothing imports the output any more, so the
@@ -5955,6 +5982,10 @@ def build_expense_report(
                 extra_detail,
             ) if x),
         }
+        # The document this evidence proves, so the build's per-file render
+        # outcome can be keyed back to the ROW that is missing its pages
+        # (item 67). The builders ignore keys they do not use.
+        item["document_id"] = r.document_id
         if path is not None:
             item["name"] = _display_name(path.name)
             item["data"] = path.read_bytes()
@@ -6025,7 +6056,7 @@ def build_expense_report(
             subtitle = (
                 f"{trip.start_date} to {trip.end_date}  ·  travelers: {who}"
             )
-    return build_expense_report_pdf(
+    pdf = build_expense_report_pdf(
         rows,
         EXPENSE_COLUMNS,
         title=title,
@@ -6037,6 +6068,22 @@ def build_expense_report(
         sections_heading=sections_heading,
         sections_note=sections_note,
     )
+    # Item 67: `prepare_evidence` wrote each file's render outcome back onto
+    # its evidence dict during the build. The builder returns one `bytes`, so
+    # this dict is the channel; a caller that passes one gets
+    # {document_id: {"render", "note"}} for every expense that HAD a file,
+    # which is what lets the review screen name the blocked receipt instead of
+    # the reviewer finding out by opening the PDF.
+    if render_outcomes is not None:
+        for item in evidence:
+            doc = str(item.get("document_id") or "")
+            if not doc or "receipt_render" not in item:
+                continue
+            render_outcomes[doc] = {
+                "render": item["receipt_render"],
+                "note": str(item.get("render_note") or ""),
+            }
+    return pdf
 
 
 def build_cost_center_totals(

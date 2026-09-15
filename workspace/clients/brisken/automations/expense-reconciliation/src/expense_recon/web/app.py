@@ -3618,10 +3618,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # settings, the same way the grid reads it, so the report
             # and the screen partition on the same names.
             settings = store.get_settings()
+        outcomes: dict = {}
         pdf = build_expense_report(
             run, overrides, field_overrides, edits, trip=trip,
             settings=settings,
+            render_outcomes=outcomes,
         )
+        # Item 67: building the report is the only moment renderability is
+        # known, so it is the moment the answer gets recorded. The grid reads
+        # it back off the run summary; the run is re-read here rather than
+        # reusing the row from before the build, which took seconds and may
+        # have raced another writer.
+        with open_store() as store:
+            fresh = store.get_run(run_id)
+            if fresh is not None and (fresh.summary or {}).get(
+                "receipt_render"
+            ) != outcomes:
+                summary = dict(fresh.summary or {})
+                summary["receipt_render"] = outcomes
+                store.update_run_summary(run_id, summary)
         safe = re.sub(r"[^A-Za-z0-9._-]+", "-", label).strip("-") or run_id
         return Response(
             content=pdf,

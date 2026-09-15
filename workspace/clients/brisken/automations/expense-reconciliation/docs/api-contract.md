@@ -1469,3 +1469,55 @@ Live at the time of the change: August 2026 (`074a7b8905d7`) and July 2026
 amounts to the cent, with zero unreadable rows on either. The float error was
 real but below the printed digit (August accumulated USD `2663.9500000000007`
 against an exact `2663.95`).
+## A receipt that produced no page: `receipt_render` (added 2026-09-15, item 67)
+
+`expenses[].receipt_render`, parallel and **absent** until a report has been
+built for the month:
+
+```json
+"receipt_render": "ok"
+```
+
+`"ok"` means the receipt's pages are in the month report. `"failed"` means the
+stored file could not be turned into pages at all, so the report carries a
+caption naming the file and the reason and nothing behind it. An expense with
+no receipt document carries no key either way.
+
+Absent is load-bearing here, which is why this is not a count that starts at
+zero. Renderability is not knowable before a report is assembled: the file has
+to be opened and its pages copied. So a month nobody has built a report for
+says nothing rather than "fine", and `summary.n_receipts_unrenderable` follows
+the same rule, appearing only once a build has recorded at least one receipt (a
+month whose expenses carry no files records none, so it stays absent there too).
+A 0 that actually meant "nobody looked" would be the rule-5 failure exactly: an
+affirmative
+claim that resolves itself, on a field whose whole job is telling a reviewer to
+go and look.
+
+Behind it: the renderability test used to open a PDF's index and nothing else.
+A password-protected receipt, or one whose page tree is damaged, passed it and
+then raised while the document was being assembled, so the request 500ed and
+the period produced NO report: no caption, no partial output, nothing naming
+the file, and the month stayed unreproducible until somebody deleted the file
+by hand (`docs/electronic-storage-system-description.md` 7.3). The probe now
+copies each page into a throwaway writer, which is the operation that fails,
+and assembly guards every file on its own, so one receipt can cost its own
+pages and nothing more.
+
+The state is recorded by the report route and stored on the run summary
+(`summary["receipt_render"]`, keyed by document id), because a report build is
+the only moment the answer exists. Rebuilding after the file is fixed moves it
+back to `"ok"`.
+
+Bounded assembly, same item: a receipt contributes at most
+`_pdf_common.MAX_RECEIPT_PAGES` (60) pages to the document, and its caption
+says how many pages the file has and that the rest are in the app. The report
+is assembled in the memory of one 1024 MB machine holding every receipt plus
+the finished document, so a single pathological upload could otherwise decide
+whether the month reports at all. Sixty is far above the real corpus: the two
+live months hold 151 receipt pages between them and their largest single
+receipt is an 11-page AWS invoice.
+
+A capped receipt stays `"ok"`. Its pages ARE in the report; `"failed"` is
+reserved for a file that produced none, which is the one a reviewer has to act
+on. Renders in `docs/lovable-render-failed-prompt.md`.
