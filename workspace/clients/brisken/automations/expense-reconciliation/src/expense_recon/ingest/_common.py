@@ -60,9 +60,9 @@ OPTIONAL_KEYS: tuple[str, ...] = (
 # Type-column values that mark a CREDIT (money back to the card): the
 # canonical sign is negative and the transaction is partitioned into the
 # refunds bucket, never pair-matched to a purchase receipt (LD-5 A5).
-# Anything else (Sale, Fee, an unknown label) is treated as a purchase;
-# an ambiguous label like "Adjustment" deliberately stays a purchase so
-# it surfaces for review rather than silently landing in refunds.
+# A recognised label that is NOT here (Sale, Fee) is a purchase; see
+# DEBIT_TYPE_VALUES below for the other half of that vocabulary, and for
+# what a label in neither set now does.
 CREDIT_TYPE_VALUES: frozenset[str] = frozenset(
     {"payment", "return", "refund", "credit", "reversal"}
 )
@@ -71,6 +71,34 @@ CREDIT_TYPE_VALUES: frozenset[str] = frozenset(
 def is_credit_type(type_value: str) -> bool:
     """True when a statement Type-column value marks a credit/refund."""
     return type_value.strip().lower() in CREDIT_TYPE_VALUES
+
+
+# Type-column values that mark a DEBIT (a purchase on the card): canonical
+# sign positive. This set exists so that "recognised" has a definition wider
+# than "is a credit" (backlog item 64). Until 2026-09-15 both parsers read
+# ANY label `is_credit_type` did not claim as a purchase and abs'd the row,
+# so a German export's "Lastschrift" would have had every credit flipped
+# into a purchase, silently. A label in NEITHER set is one this parser does
+# not know, and an unknown label is not evidence of direction: the row keeps
+# the sign the export printed. "adjustment" stays a DEBIT deliberately, as
+# before: ambiguous, but read as a purchase so it surfaces for review rather
+# than landing in refunds.
+DEBIT_TYPE_VALUES: frozenset[str] = frozenset(
+    {"sale", "purchase", "charge", "debit", "fee", "interest", "adjustment"}
+)
+
+# A Type column mapped to the wrong source column (a Description, say) makes
+# every row its own unknown label. Cap the per-label notes so a mis-mapped
+# column reports once as a summary rather than five hundred times.
+UNKNOWN_TYPE_ISSUE_CAP = 10
+
+
+def is_known_type(type_value: str) -> bool:
+    """True when a Type-column value is a label this parser recognises,
+    credit or debit. False means the parser has no opinion on the row's
+    direction, so the printed sign stands."""
+    value = type_value.strip().lower()
+    return value in CREDIT_TYPE_VALUES or value in DEBIT_TYPE_VALUES
 
 
 def infer_sign_flip(amounts: "list[Decimal]") -> bool:
@@ -130,6 +158,54 @@ class ParseIssue:
             f"{self.file_name} row {self.line_number}: {self.message}",
             line_number=self.line_number,
         )
+
+
+def unknown_type_issues(
+    counts: Mapping[str, int], file_name: str
+) -> list[ParseIssue]:
+    """One advisory per distinct unrecognised Type label, naming the label
+    and how many rows carried it (backlog item 64).
+
+    Severity `info`: nothing failed and nothing was inferred, so this is
+    neither an `error` nor the `warning` the sign inference earns. It is the
+    record that the parser declined to canonicalize those rows, which is the
+    only way an operator can tell a kept sign from an endorsed one.
+
+    `line_number` 0 per the whole-file convention in `docs/api-contract.md`:
+    the rows are scattered through the file, so pointing at one of them, or
+    at the header, would be worse than pointing at none.
+    """
+    issues: list[ParseIssue] = []
+    ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0].lower()))
+    for label, n in ordered[:UNKNOWN_TYPE_ISSUE_CAP]:
+        issues.append(
+            ParseIssue(
+                file_name=file_name,
+                line_number=0,
+                message=(
+                    f"Type {label!r} is not a label this parser recognises "
+                    f"({n} row{'s' if n != 1 else ''}), so those rows kept "
+                    f"the sign the export printed."
+                ),
+                severity="info",
+            )
+        )
+    rest = ordered[UNKNOWN_TYPE_ISSUE_CAP:]
+    if rest:
+        issues.append(
+            ParseIssue(
+                file_name=file_name,
+                line_number=0,
+                message=(
+                    f"{len(rest)} further Type labels this parser does not "
+                    f"recognise ({sum(n for _, n in rest)} rows), all keeping "
+                    f"the sign the export printed. A Type column this varied "
+                    f"is usually mapped to the wrong source column."
+                ),
+                severity="info",
+            )
+        )
+    return issues
 
 
 _DATE_FORMATS: tuple[str, ...] = ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d")
