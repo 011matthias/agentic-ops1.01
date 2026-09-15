@@ -1,8 +1,16 @@
 # Fly.io config for the hosted Brisken expense-reconciliation workbench.
-# Frankfurt (EU) for data residency. Scales to zero when idle; a request
-# cold-starts it. The run database + receipt files live on the recon_data
-# volume mounted at /data. Access is gated by EXPENSE_RECON_ACCESS_CODE
-# (set as a Fly secret, never committed).
+# Frankfurt (EU) for data residency. Pinned ALWAYS-ON since 2026-09-10
+# (both services: the port-25 MX for expenses.brisken.com sits behind the
+# same machine, and an auto-start that fails takes the mailbox down with
+# the UI; never restore scale-to-zero). The run database + receipt files
+# live on the recon_data_v2 volume mounted at /data (forked 2026-09-10;
+# the old recon_data is an unattached rollback copy). Access is gated by
+# EXPENSE_RECON_OPERATOR_CODE (set as a Fly secret, never committed).
+#
+# This file mirrors `flyctl config show -a brisken-expense-recon` as of
+# 2026-09-11. `flyctl deploy` from this directory ships THIS config, so a
+# stale copy here would silently undo the platform-side settings above;
+# re-sync it whenever the platform config changes.
 app = "brisken-expense-recon"
 primary_region = "fra"
 
@@ -29,9 +37,9 @@ primary_region = "fra"
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = false
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
   [[http_service.checks]]
     interval = "30s"
@@ -42,23 +50,25 @@ primary_region = "fra"
 
 # Inbound SMTP (mail intake). Raw TCP pass-through: the app's aiosmtpd
 # listener speaks the protocol; the Fly proxy just forwards port 25 from
-# the dedicated IPv4 and wakes the machine on a connection (senders retry
-# per SMTP semantics if they race a cold start).
+# the dedicated IPv4. Always-on, like the HTTP service above: an MX target
+# has to answer at any hour.
 [[services]]
   protocol = "tcp"
   internal_port = 2525
-  auto_stop_machines = true
+  auto_stop_machines = false
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
   [[services.ports]]
     port = 25
 
 [mounts]
-  source = "recon_data"
+  source = "recon_data_v2"
   destination = "/data"
 
+# 1024 MB since 2026-09-11 (owner order, backlog item 50: the live machine
+# was raised to 1024 on 2026-09-11 and a deploy at 512 would shrink it).
 [[vm]]
-  memory = "512mb"
+  memory = "1024mb"
   cpu_kind = "shared"
   cpus = 1

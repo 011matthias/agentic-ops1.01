@@ -4,7 +4,7 @@ workstream: watcher
 group: ""
 spec: ""
 state: active
-updated: 2026-09-09
+updated: 2026-09-14
 ---
 
 Sourcing watcher + price/demand database. Polls the Vinted catalog API for
@@ -175,26 +175,283 @@ Titel `Levi's 501 Jeans | Gr. W31`, Preisvorschlag 20,50 EUR (Kaeufer zahlt
 22,22 EUR), Marge 11,40 EUR, Vergleich Median 25,90 / p25 18,55 / p75 37,45
 ueber 94 Anzeigen der Zelle, plus drei offene Fragen (Farbe, Material, Masse).
 
+## Der Volumen-Einbruch vom 2026-09-10
+
+Der Owner meldete "kaum noch Benachrichtigungen". Er hat recht, und die Ursache
+ist das Sende-Budget aus PR #781.
+
+**Was das alte Volumen war.** `listings.alerted=1` pro Tag: 180 (09-06),
+171 (09-07), 181 (09-08), 319 (09-09), 9 (09-10 bis 09:46Z). Das "50+" aus dem
+Prompt war eine Untergrenze, keine Obergrenze; tatsaechlich liefen rund 177
+Pushes am Tag und der Owner war damit zufrieden. `SEND_BUDGET_PER_DAY = 60` hat
+das schon als Zielwert auf ein Drittel gekuerzt.
+
+**Warum es dann 9 statt 60 wurden.** `alert_priority` vergleicht einen
+Kandidaten nicht gegen einen Tageszaehler, sondern gegen die besten 60 der
+letzten 24 Wanduhr-Stunden. Das ist nicht dasselbe wie "60 pro Tag", und der
+Replay ueber alle 561 quality-tragenden Zeilen zeigt zwei Fehler:
+
+1. **Der Balken steigt innerhalb eines Tages monoton**, weil der Pool sich
+   fuellt: 50.9 um 20Z am 08., 88.5 um 12Z, 108.4 um 16Z, 114.7 um 19Z.
+   Durchgelassen pro Stunde am 09-09: 40, 26, 19, 10, 13, 11, 3, 6, 1, 0, 0.
+   Die letzten beiden Stunden des Tages senden nichts mehr.
+2. **Das Fenster ist 24 Stunden lang, der aktive Tag rund 13.** Der Pool
+   umfasst also immer zwei Wachphasen, und der naechste Morgen erbt den
+   Spitzenbalken des Vortages. Um 09:37Z am 10.: Pool 519 Zeilen, davon 473 vom
+   Vortag, Balken 114.8 = 88.5. Perzentil. Der Tagesdurchschnitt der Kandidaten
+   liegt bei 91.1. Verworfen wurden unter anderem Kandidaten mit 112.4, 110.1
+   und 105.8.
+
+**Die ntfy-Wand steht bei 319, nicht bei 177.** Am 09-09 gingen 319 Pushes
+durch, danach 147 Fehlschlaege zwischen 16Z und 20Z. Die drei Tage davor liefen
+mit je rund 180 ohne einen einzigen Fehlschlag. Das Kontingent wurde vom
+Nachhol-Schwall gesprengt, nie vom normalen Tag; 60 kuriert damit die falsche
+Zahl.
+
+### Was dagegen gebaut wurde (2026-09-10)
+
+Der Rang bleibt, sein Bezugsrahmen aendert sich: **der Vergleichstopf ist nur
+noch der heutige Tag** (ab lokaler Mitternacht), und `notify_failed`-Zeilen
+kommen nie hinein. Beide Balken, Senden und Klingeln, lesen denselben Topf.
+
+Die unintuitive Stelle, die beim Lesen des Codes zweimal falsch verstanden
+wurde: **ein tagesbezogener Rang mit Budget 60 liefert nicht 60 Pushes.** Frueh
+am Tag kommt alles durch, weil der Topf noch klein ist; der Balken zieht erst
+an, wenn das Feld sich fuellt. Nachgespielt gegen die echten Zeilen des 09-09
+(957 bewertete Kandidaten, der volumenstaerkste Tag im Bestand):
+
+| SEND_BUDGET | 35 | 40 | 50 | 60 | 80 |
+|---|---|---|---|---|---|
+| Pushes | 126 | 145 | 177 | 202 | 243 |
+
+| RING_BUDGET (bei send 60) | 4 | 6 | 8 | 10 | 15 |
+|---|---|---|---|---|---|
+| laute Alarme | 20 | 25 | 32 | 34 | 47 |
+
+Gesetzt: **60 / 6**. Das ergibt am schwersten Tag 202 Pushes, davon 25 laut,
+gegen die rund 180 und 27, mit denen der Owner am 08-09 zufrieden war, und
+liegt Faktor 1,6 unter der beobachteten ntfy-Wand von 318. Dazu ein flacher
+Notaus, `HARD_SEND_CEILING = 250`, der echte Pushes seit lokaler Mitternacht
+zaehlt: das ist die Reissleine gegen einen zweiten Schwall, nicht der Regler,
+und im Nachspiel greift er nie.
+
+**Die Nachhol-Sperre entscheidet nur noch nach Zeit.** Die Zaehlbedingung ist
+raus; ob ein Zyklus nachholt, sagt allein die Luecke, und was ein Nachhol-Zyklus
+noch bewerten darf, sagt `CATCH_UP_FRESH_MIN` pro Anzeige. Die Schwelle auf 48
+zu heben waere schlimmer als nutzlos gewesen: der Vergleich ist ein striktes
+Groesser und die Seitengroesse ist 48, ueber 1887 Logzeilen war der Hoechstwert
+exakt 48. Die Sperre haette nie wieder gefeuert, die Frischepruefung dahinter
+waere stiller toter Code geworden.
+
+**`alerts.country` wird jetzt geschrieben.** `record_alert` las das Land aus
+`rec`, waehrend `score_and_alert` es in eine lokale Variable aufloest: 1194 von
+1226 Zeilen standen auf NULL, obwohl das Gate darueber ein echtes Land benutzt
+hatte. Es reist jetzt im `ctx`-Dict mit. Der naheliegende Einzeiler
+(`rec["country"] = country` hinter der Aufloesung) waere eine Falle gewesen: er
+erfuellt die Bedingung `not rec.get("country")` zwei Zeilen darunter und legt
+damit genau das UPDATE still, das `listings.country` fuellt, die einzige heute
+korrekte Laenderspalte. Beide Schreibwege sind getrennt getestet.
+
+**ntfy-Refusals sind jetzt lesbar und werden gemerkt.** Der Status allein hat
+nicht gereicht: Tageskontingent und kurzfristiges Rate-Limit teilen sich HTTP
+429, und nur der Body trennt sie. Bei Code 42908 haelt der Watcher bis zum
+UTC-Rollover die Sendungen an, statt 147 Mal gegen dieselbe Wand zu laufen.
+Zurueckgehaltene Kandidaten bekommen `suppress_reason='ntfy_quota'`, nicht
+`notify_failed`: eine Absage von ntfy und ein Zurueckhalten durch uns sind
+verschiedene Tatsachen ueber denselben Fund.
+
+**Sichtbarkeit.** Jeder Zyklus loggt `pool_n`, `send_bar`, `ring_bar` und
+`pushes_today`; `--status` zeigt Pushes heute / gestern / Schnitt der letzten
+sieben Tage, jeweils mit lautem Anteil, dazu eine aktive Sendesperre. Ohne die
+Zyklus-Zeile ist der Kern des Fixes nicht beweisbar: die alerts-Tabelle haelt
+fest, wie entschieden wurde, aber nicht, wogegen gemessen wurde.
+
+### Das Laender-Gate: Entscheidung des Owners, jetzt eine Config-Zeile
+
+Der Code las Kriterium 5 anders, als es formuliert war. Geschrieben stand
+"mindestens 8 EUR unter dem Median", gerechnet wurde "8 EUR unter 55% des
+Medians", also rund dreimal haerter. Gemessen an 622 betroffenen Zeilen seit dem
+08-09: die strenge Lesart toetet 83,1% aller auslaendischen Kandidaten, und das
+Ausland ist 59,3% des Stroms; 619 der 622 erfuellen das Kriterium im Wortlaut
+bereits. Unter den Verworfenen eine Mother-Jeans zu 84,70 gegen Median 157,15
+und vier Stone-Island-Teile mit je 41-42 EUR Marge. Die einzige belegbare
+Grundlage fuer irgendeinen Aufschlag: der rein deutsche Vergleichsmedian liegt
+0,29 EUR (Median) bis 3,02 EUR (Mittel) ueber dem gemischten. Nicht 8.
+
+Default ist jetzt der Wortlaut (`foreign_advantage_basis: median`), die strenge
+Lesart bleibt als `deal_gate` in einem Wort erreichbar. Das aendert, **welche**
+Angebote kommen, nicht wie viele: die zurueckgegebenen Zeilen haben alle
+`quality = NULL`, weil die Bewertung erst nach dem Land-Block laeuft, und
+wachsen im Nachspiel den Rang-Topf mit. Von 479 auf 957 Kandidaten am 09-09
+stiegen die Pushes nur von 167 auf 202, weil der Balken den Rest schluckt.
+
+### Was ausgeschlossen wurde
+
+Die 120 Katalog-404er lagen alle am 09-09 zwischen 10Z und 11Z und kamen nicht
+wieder. Der Zulauf ist gesund, rund 1000 neue Anzeigen pro Stunde. Der Task
+steht auf Ready, letzter Lauf mit Ergebnis 0.
+
+Die Naechte fehlen weiterhin: 671 Minuten Luecke von 21:10Z am 09. bis 08:21Z am
+10., weil `WakeToRun` auf `False` steht. Das ist ein Vorbestand und kostet die
+Nachtstunden, in denen ohnehin nur 1 bis 2 Pushes pro Stunde anfallen. Den
+Laptop jede Nacht alle fuenf Minuten zu wecken widerspricht der Entscheidung des
+Owners, den Laptop gerade NICHT zum Dauerlaeufer zu machen, also ist das seine
+Wahl und keine stille Umstellung.
+
+## Die Preisklassen-Frage (2026-09-11, offen)
+
+Der Owner: "Die meisten Meldungen sind viel zu teuer; ueber 20 EUR gibt es auf
+Vinted kaum Flip-Potenzial." Gemessen an den 665 Pushes seit dem 08.09., den 8
+echten Bewertungen (75 der 87 Taps sind der Knopf-Test) und dem ersten sauberen
+Tag nach dem Volumen-Fix (184 Pushes bis 14Z, 25 laut), gegen vier unabhaengige
+Widerleger auf der DB-Kopie:
+
+- **Der Eindruck ist das Klingeln, nicht die Menge.** 103 von 184 Pushes lagen
+  unter 20 EUR; der laute Anteil steigt aber von 0% (unter 10) auf 50% (ueber
+  50), weil `alert_quality` die absolute Marge (Deckel 80) addiert. 18 der 25
+  lauten heute, 23 der 28 am 09.09., waren ueber 20 EUR. Das ist der Code.
+- **Auf der Marge hat er es andersherum.** Netto nach Kaeufergebuehr (exakt
+  5% + 0,70, auf 83k Zeilen gefittet) und Einliefer-Versand: unter 20 EUR
+  Median 1-11 EUR, 4-40% ueber seiner 15-EUR-Schwelle; ueber 20 EUR 17-44 EUR,
+  56-100%. Haelt unter jedem Stresstest (10-15 EUR Auslandsversand, Verkauf am
+  p25 statt Median). Seine zwei eigenen Kaeufe (Levi's 9,10, adidas 11,20)
+  bringen netto 8-12 EUR, unter der genannten Schwelle.
+- **Tempo ist vermutlich das, was er spuert, und da halb bestaetigt.**
+  Marktweit verschwinden Angebote unter 10 EUR in den ersten 45 Minuten rund
+  doppelt so oft wie solche ueber 20. Unsere gepushten Kandidaten ueber 20
+  verschwinden aber mindestens so schnell wie die unter 20 (n~70, nicht
+  signifikant). Ob ein Alert je flippt: 0 von 1121 haben ein Ergebnis, weil der
+  Recheck seit dem 09.09. blind war (siehe Gone/Sold-Erkennung).
+- **Die 8 Bewertungen:** beide positiven sind guenstige DE-Teile, alle sechs
+  schlechten Ausland/unbekannt, fuenf davon Stone Island, vier der sechs drei
+  Taps in fuenf Sekunden. "Wiederverkaufswert um 27 EUR" und "inlaendisch"
+  passen gleich gut; der Kaufpreis am schlechtesten.
+- **Hebel, nachgespielt am heutigen Topf:** eine Preisobergrenze aendert die
+  Mischung, nicht die Menge (20 EUR: 174 Pushes, 0% teuer; 25: 170, 21%; 30:
+  175, 31%), weil der Rang-Topf mit guenstigen Kandidaten nachfuellt. Der Knopf
+  existiert pro Suche (`price_max`). Die teuren Pushes sitzen knapp ueber der
+  Linie (Median 26,95, p75 37,45: TNF, Carhartt-Jacken, Stone Island). Ein
+  25-EUR-Deckel beendet Agolde und Mother, die er selbst am 08.09. mit
+  Medianen ueber 100 aufgenommen hat. Eine Netto-Margen-Schwelle ist der
+  falsche Hebel: sie wirft 79 der 103 guenstigen und 8 der 81 teuren Pushes raus
+  (Netto = Brutto minus Konstante, r = 0,9997). Den Margen-Deckel in der Formel
+  zu senken bewegt die laute Stufe kaum (Deckel 30: 15 von 28 laut ueber 20).
+- **Nebenbefunde:** das woertliche Laender-Gate ist ueber einem Median von
+  17,8 EUR wirkungslos, weil `total <= 0,55 * Median` es schon impliziert; die
+  Comps ignorieren `size_class`, was die teuren Mediane um 6-8% (p25 9-19%)
+  ueberzeichnet; 59% der teuren Pushes heute waren Ausland, und der echte
+  grenzueberschreitende Versand steht nirgends (das `shipping`-Plugin der Seite
+  traegt nur die item_id; die 2,99-EUR-Quote im Payload ist noch nicht
+  zugeordnet).
+
+Drei Fragen an den Owner, ohne die keine Umstellung sauber ist: ist "20 EUR"
+der Kauf-Gesamtpreis inkl. Gebuehr oder der Wiederverkaufswert; ist die
+15-EUR-Schwelle netto oder brutto; welcher Tag hat den Eindruck gepraegt
+(09.09. und 10.09. waren bei lauten teuren Pushes schwerer als heute).
+
+## STOP: der Katalog-Endpunkt ist weg (seit 2026-09-14T19:35Z)
+
+Der Watcher sammelt nichts. Zwei getrennte Dinge nach dem 11.09.:
+
+1. **73 Stunden aus** (11.09. 18:11Z bis 14.09. 19:35Z, keine einzige Logzeile
+   am 12. und 13.). Der Laptop war aus; `WakeToRun=False` ist die Entscheidung
+   des Owners, kein Fehler. Die Liveness-Warnung hat beim Neustart korrekt
+   gefeuert: "no successful poll for 4404 min; operator alerted".
+2. **Seit dem Neustart liefert `/api/v2/catalog/items` 404**, bei allen 12
+   Suchen, in jedem Zyklus.
+
+**Es ist keine Sperre.** Der erste Befund am Abend des 14.09. lautete "die API
+sperrt uns aus", abgeleitet aus 403-HTML-Seiten. Das war falsch und ist hier
+korrigiert: die 403 kamen nur, weil die Probe-Anfragen keinen
+`Accept: application/json` mitschickten, und Vinted rendert einem
+browserfoermigen Request eine HTML-Fehlerseite. Mit dem Header, den `api_get`
+tatsaechlich sendet, sieht es so aus:
+
+| Aufruf | Antwort |
+|---|---|
+| `/api/v2/catalog/items` (jede Parameterform) | 404 `{"code":104,"message_code":"not_found"}`, also **JSON aus der App** |
+| `/api/v2/catalog/filters`, gleiches `search_text` | **200**, Filterliste |
+| `/api/v2/users/{id}` | **200**, volles Profil |
+| Artikelseite `/items/{slug}` | **200**, Parser liest `sold` und Preis korrekt |
+| Unsinnspfade (`/api/v2/items`, `/api/v2/search/items`, ...) | 404 mit Vinteds **HTML**-404-Seite |
+
+Der Unterschied JSON-Fehler gegen HTML-404-Seite ist der Beweis: die Route
+existiert noch und weist unsere Abfrage auf Anwendungsebene ab. Die Session ist
+gesund, der Client ist nicht blockiert, und **der Recheck-Pfad funktioniert
+vollstaendig**. Durchprobiert und alle 404: ohne `order`, `order=relevance`,
+nur `search_text`, ohne `search_text`, `catalog_ids`, `brand_ids`, `time`,
+`search_session_id`, `per_page` 24 und 48, `/api/v3/`.
+
+**Wo die Daten jetzt liegen.** Die Suchseite `/catalog?search_text=...` ist
+server-gerendert und traegt die Treffer im Flight-Payload, mit allem was der
+Watcher braucht (`id`, `title`, `url`, `favouriteCount`, `price`,
+`totalItemPrice`, `serviceFee`). Kosten: **7,2 MB pro Suche**, die
+RSC-Variante 5,7 MB, kein leichterer Payload gefunden. Bei 12 Suchen alle 5
+Minuten waeren das rund 1 GB pro Stunde, also das 250-fache von heute. Das
+verletzt die Hoeflichkeitszusage und kann nicht einfach eingebaut werden.
+
+### Was daraus folgt
+
+- **Der Recheck haengt nur an einem Gatter, nicht an einem Defekt.**
+  `recheck_gone` laeuft nur mit `session_proven`, und das wird ausschliesslich
+  durch einen erfolgreichen Katalog-Poll gesetzt. Die Praemisse dieses Gatters
+  ("Wand am Katalog heisst Wand ueberall") ist hier widerlegt. 3022 offene
+  Alert-Zeilen warten auf Outcome-Daten, und die Kohorten vom 06.-08.09.
+  verlieren ab dem 16.09. die Verkauft/Weg-Unterscheidung. Das ist der
+  dringendste Punkt, und er ist unabhaengig vom Katalog-Problem.
+- **404 als Wand behandeln** waere jetzt der falsche Fix: es ist kein Backoff-
+  Problem, sondern ein weggefallener Endpunkt. Ein Backoff wuerde nur das
+  Hammern stoppen, und das ist bei 12 Anfragen alle 5 Minuten die kleinere
+  Sorge.
+- **Offen bleibt der Lesepfad.** Die Mobile-App nutzt eine andere API-Basis und
+  andere Header als die Web-v2; das ist die naechste Spur, bevor man den
+  7,2-MB-Seitenparser ueberhaupt erwaegt.
+
+## Erste Outcome-Daten auf Alert-Kandidaten (11.09., n=37)
+
+Drei Recheck-Laeufe am 11.09. (15:47, 16:52, 17:57Z) haben 37 Alert-Kandidaten
+aufgeloest, 32 davon verkauft. Zum ersten Mal ueberhaupt Verkaufsdaten auf
+unseren eigenen Kandidaten statt auf populaeren Seed-Zeilen.
+
+| Kaufpreis | aufgeloest | verkauft |
+|---|---|---|
+| <10 | 1 | 1 |
+| 10-15 | 9 | 9 |
+| 15-20 | 10 | 7 |
+| 20-30 | 7 | 5 |
+| 30-50 | 7 | 7 |
+| 50+ | 3 | 3 |
+
+Kein Preisgefaelle. Zwei Einschraenkungen wiegen schwerer als die Zahlen: die
+"~69h bis Verkauf" sind ein Artefakt davon, wann der Recheck lief (alle Zeilen
+zuerst am 08.09. gesehen, am 11.09. aufgeloest), also keine
+Geschwindigkeitsmessung; und unterdrueckte Kandidaten verkauften 9 von 10 gegen
+23 von 27 bei gepushten, der erste Hinweis darauf, dass die Rangfolge nicht
+nachweislich die Gewinner trifft. 3022 Alert-Zeilen sind unaufgeloest, und die
+Kohorten vom 06.-08.09. verlieren ab dem 16.09. die Verkauft/Weg-Unterscheidung.
+
 ## Elemente
 
 | Element | Zustand | Stand | Nächster Schritt | Blocker |
 |---|---|---|---|---|
 | Laufzeit-Baum | live | Eigener Worktree `agentic-ops1-watcher`, Junctions auf data/ und context/; Zyklen schreiben nach `data/watcher.log` | Nach Watcher-Merges nachziehen | - |
-| Poller + Comp-DB | live | v3 Präzisions-Upgrade 2026-09-08; ~33k Zeilen. **Backlog-Gate korrigiert**: zählte Artikel statt Zeit und liess 67% aller Listings ungeprüft | Datenqualität beobachten | - |
+| Poller + Comp-DB | live | v3 Präzisions-Upgrade 2026-09-08; ~57k Zeilen. **Backlog-Gate: die Zählbedingung ist seit 2026-09-10 ganz raus.** Sie warf am ersten Morgen, an dem sie lief, 449 von 456 frisch geholten Anzeigen weg, drei Viertel davon unter 45 Minuten alt; jetzt entscheidet die Lücke, ob gesiebt wird, und das Alter, was durchkommt | Datenqualität beobachten | - |
 | Session-Handling | live | Clean-slate refresh, 45-Min-Renewal, 401/403-Split, jetzt auch 5xx-Backoff | - | - |
 | Zustands-Mapping | live | **Defekt behoben 2026-09-08**: "Neu" / "Neu, mit Etikett" fielen auf `unknown`, 4.527 Zeilen waren von Alerts UND Comps ausgeschlossen. Rückwirkend repariert | - | - |
 | Größenklassen | live | `size_class` normalisiert drei Notationen; Alert-Filter s/m/l + W29-W34, pro Search überschreibbar | XL/52 je Produkt aus `--brand-report` entscheiden | - |
 | Marken-Normalisierung | live | `brand_norm` führt Ralph Lauren aus 6 Schreibweisen zu einem 2.069-Zeilen-Pool zusammen | - | - |
 | Fake-Risk | live | Regelbasiert inkl. Verkäuferprofil; ab 0.4 Warnzeile, ab 0.7 unterdrückt. Unterdrückung braucht **zwei** unabhängige Signale, der Preis allein warnt nur | Schwellen nachziehen, sobald Bewertungen da sind | Feedback-Daten |
 | Verkäuferprofil | live | `/api/v2/users/{id}` liefert Land + Reputation, gecacht pro Verkäufer, max 6 Abrufe/Zyklus | - | - |
-| Standort DE | live | Land kommt aus dem Verkäuferprofil (Katalog-Antwort hat keins); Ausland braucht 8 EUR Vorsprung | Schwelle nach 1 Woche Länderdaten nachmessen | Länderdaten |
+| Standort DE | live | Land kommt aus dem Verkäuferprofil (Katalog-Antwort hat keins). Ausland braucht 8 EUR unter dem Median, dem Wortlaut des Kriteriums; die dreimal härtere Lesart bleibt als `foreign_advantage_basis: deal_gate` erreichbar. `alerts.country` wird seit 2026-09-10 wirklich geschrieben | Schwelle nachmessen, sobald Outcome-Daten je Land existieren | gone-Events |
 | Post-Alter | live | Echte Post-Zeit aus der Foto-URL, rueckwirkend ueber 35.752 Zeilen, 0 zusaetzliche Vinted-Anfragen. Steht im Alert-Text und in jedem Snapshot | Nach 2 Wochen gegen Outcome-Daten pruefen | - |
 | Jung + gefragt | live | Herzen auf einem Listing unter 60 Min heben die Qualitaet um bis zu 35%, gedeckelt, innerhalb des Klingel-Budgets. Auf aelteren Listings zaehlen sie nicht | Vorzeichen mit Outcome-Daten pruefen | Outcome-Daten |
 | Alert-Snapshots | live | Jede Entscheidung friert Comps, Schwellen und Risiko ein, auch die unterdrückten. **2026-09-08 zwei Stunden ausgefallen** (fehlende Spalte `quality`), behoben und 34 Zeilen rekonstruiert | - | - |
 | Feedback-Kanal | live | 👍 / 👎 / Gekauft; **am Handy des Owners bestätigt** (Knöpfe rendern, Tap erreicht ntfy). Eine Bewertung überlebt jetzt auch ohne Snapshot | Taste-Daten sammeln | - |
-| Prioritäts-Stufen | live | **Relativ** statt absolut: laut wird nur, was die Konkurrenz der letzten 24h schlägt. Gemessen an einem echten Tag: 5% klingeln, 12% normal, 83% still | Nach einer Woche gegen echte Daten nachjustieren | - |
-| Gone/Sold-Erkennung | live | **Verkauft wird jetzt von geloescht getrennt** (2026-09-09): 200 + Plugin `buyer_item_status` Theme SUCCESS = verkauft, 200 + `item_status` `is_closed:false` = lebt, 404 = geloescht. Der alte Marker `is_sold":true` stand auf keiner Seite, also war der Verkaufs-Zweig unerreichbar und jeder Verkauf wurde als "lebt" verbucht | Outcomes sammeln bis 100 je Zelle | Zeit |
-| Recheck-Auswahl | live | Dasselbe Budget (25 Seiten/Stunde), andere Reihenfolge: erst Alert-Kandidaten, dann das Fenster 12h-10d, dann der alte Aeltester-zuerst-Lauf | - | - |
+| Prioritäts-Stufen | live | **Relativ, und seit 2026-09-10 gegen den heutigen Tag** statt gegen 24 Wanduhr-Stunden; `notify_failed` zählt nicht mit. Budgets 60 / 6 plus flacher Notaus bei 250 echten Pushes. Nachspiel 09-09: 202 Pushes, 25 laut | Abnahme 24h nach Deploy gegen A1-A8 | - |
+| Volumen-Sichtbarkeit | live | Pro Zyklus `pool_n / send_bar / ring_bar / pushes_today` ins Log; `--status` zeigt heute / gestern / 7-Tage-Schnitt mit lautem Anteil. Der Einbruch lief zwei Tage unbemerkt, weil nichts das Volumen gemessen hat | - | - |
+| ntfy-Kontingent | live | Refusal wird mit Status **und** Body geloggt; Code 42908 haelt die Sendungen bis zum UTC-Rollover an. Zurueckgehalten heisst `ntfy_quota`, nicht `notify_failed` | - | - |
+| Gone/Sold-Erkennung | live | **Zweimal blind gewesen.** 2026-09-09: der alte Marker `is_sold":true` stand auf keiner Seite, jeder Verkauf wurde als "lebt" verbucht. 2026-09-11: Vinted hat die Schluessel jedes Plugin-Objekts alphabetisch sortiert (`data` vor `name`) und `item_status` von lebenden Seiten entfernt; die verankerten Regexe lasen ab 09-09T10:11Z jede Seite als unbekannt, 39 Stunden-Laeufe in Folge wurden als Wand verworfen, **0 von 1121 Alert-Kandidaten hat je ein Ergebnis bekommen.** Der Leser sucht den Datenblock jetzt ueber den Namen, in beliebiger Schluesselreihenfolge; lebend = `buy`-Plugin vorhanden, verkauft = `buyer_item_status` Theme SUCCESS, 404 = geloescht. Beide Seitenformen liegen als Real-Byte-Fixtures unter `tools/fixtures/vinted-item-page/` | Outcomes sammeln bis 100 je Zelle; Kohorten 06.-08.09. verlieren ab 16.-18.09. die Verkauft/Weg-Unterscheidung (RECHECK_MAX_AGE_D=10) | Zeit |
+| Recheck-Auswahl | live | Dasselbe Budget (25 Seiten/Stunde), Reihenfolge: erst Alert-Kandidaten, dann das Fenster 12h-10d, dann der alte Aeltester-zuerst-Lauf. **Tier 1 seit 2026-09-11 mit 12h-Wiederbesuchs-Sperre und zuletzt-gesehen-zuerst**: vorher haette es stuendlich dieselben 25 aeltesten lebenden Alert-Zeilen gekauft, weil eine "lebt"-Antwort die Zeile so wahlberechtigt laesst wie zuvor | - | - |
 | Zeitreihen | live | `listing_events` haelt jede Bewegung von Preis, Favoriten, Aufrufen fest. Die Recheck-Seite liefert den zweiten Preispunkt Tage spaeter, den der Poll nie sieht (Median-Beobachtung 10 Minuten) | - | - |
 | Brand-Report | live | `--brand-report`: Volumen, Median, Spread, Marge am Gate, Größen-Nachfrage, Keep/Drop | Wöchentlich laufen lassen | - |
 | Damen-Jeans | live | Probes gelaufen: agolde (Median 126,70) und mother-denim aufgenommen, citizens-of-humanity bei ratio 0.50, 7 for all mankind abgelehnt (Median 18,55). Alle drei geseedet | Nach 2 Wochen gegen R1-R3 bewerten | - |
@@ -270,9 +527,21 @@ Das Angebot ist dabei nur der Proxy; echte Nachfrage misst erst R4.
    Premium-Damenjeans in XS/S/M gelistet werden). Ein Signal ist keine Regel;
    wiederholt sich das, ist es eine Zeile Config.
 2. Nach einer Woche: Länderverteilung messen und die 8-EUR-Schwelle prüfen.
+   `alerts.country` traegt ab 2026-09-10 echte Werte, also ist das zum ersten
+   Mal aus der Snapshot-Tabelle allein beantwortbar.
 3. Nach 2 Wochen: die drei neuen Denim-Suchen gegen R1 bis R3 bewerten.
 4. Nach ~300 vertrauenswürdigen gone-Events: Backtest-Scorer als eigener PR,
    dann `/comd_optimize`.
+5. **Ob `quality` ueberhaupt die richtige Reihenfolge ist, ist ungeprueft.** Der
+   2026-09-10-Fix repariert, WIE VIELE Funde durchkommen, und laesst offen, ob
+   die Rangfolge stimmt. Gegen die Urteile des Owners gemessen wurde sie nie: es
+   gibt 78 Feedback-Zeilen, alle aus einem einzigen 3,7-Stunden-Fenster am
+   08-09. Solange das so bleibt, ist jede Gewichtung in `alert_quality` eine
+   Hypothese.
+6. **Ob Auslandsangebote schlechtere Kaeufe sind, ist nicht messbar.** 0 von
+   1030 Angeboten mit Laenderkennung tragen ein `gone_at`. Die echten
+   grenzueberschreitenden Versandkosten, die die 8 EUR darstellen sollen, stehen
+   nirgends im Schema.
 5. Das Vorzeichen der Herzen ist noch unbelegt. Trigger: sobald 100 alarmierte
    Listings ein gone-Event aus vertrauenswuerdiger Quelle haben, den Anteil
    "weg" bei 0 Herzen gegen >= 1 Herz testen, kontrolliert auf `search_tag`.

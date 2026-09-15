@@ -30,6 +30,80 @@ The backend is hosted and running on real data at brisken-expense-recon.fly.dev
 Lovable SPA at brisken-reconcile-dash.lovable.app. Verify the deployed origin,
 not localhost, after backend edits (`flyctl deploy`).
 
+**Hosting changed 2026-09-10 after a ~50-minute outage.** The machine
+auto-stopped cleanly, then wedged in flyd (reported `stopped` when signalled,
+`active` when started), so every proxy auto-start was refused and both the UI
+and the port-25 MX 502'd until the owner reported it. Root cause underneath: the
+host holding the volume was out of capacity. Recovery was machine destroy,
+`volumes fork` onto a fresh host, redeploy of the identical image. Two standing
+consequences:
+
+- The live volume is now `recon_data_v2` (`vol_vgnplk8909y0q184`, zone 778b).
+  The old `recon_data` (`vol_4m3p65dn1nqkowzv`) is kept **unattached** as a
+  rollback copy; destroy it once the new one has run clean for a few days. Any
+  doc naming the old ID as live is stale.
+- Both services are **pinned always-on** (`auto_stop_machines: false`,
+  `min_machines_running: 1`, ~EUR 2/mo). Do not restore scale-to-zero: it put
+  the MX behind an auto-start that can fail.
+
+`automations/expense-reconciliation/fly.toml` mirrors the platform config as
+of 2026-09-11 (always-on both services, `recon_data_v2`, 1024 MB). Until that
+day it still said scale-to-zero, `recon_data` and 512 MB, so a `flyctl deploy`
+from the module directory would have undone the 2026-09-10 recovery. Re-sync
+it from `flyctl config show -a brisken-expense-recon` whenever the platform
+side changes. Full detail: memory `project_brisken_expense_recon_fly_hosting`.
+
+**2026-09-11: July and August 2026 reconciled 0 because the Excel parser kept
+Chase's printed sign.** Criss's workbooks print purchases negative; the CSV
+parser had canonicalized that since 3.15 but the xlsx sibling never did, so
+every charge reached the matcher as -15.00 against a 15.00 receipt (Criss:
+"ele ve que tem recibo mas nao associa"). Fixed in the parser (Type column
+per row, else majority inference), the hosted column guess now maps Chase's
+`Type`, and an entity-less receipt (mailed / dropped, no card hint yet) is
+unscoped in the matcher instead of silently unpairable. The two live months
+are repaired in place by `POST /api/expense-batches/{id}/statements/reread`
+(rebuilds the charges from the stored files; a re-upload would have doubled
+the month). Backlog items 55 (this) and 56 (invoice+receipt copies make a
+pairing ambiguous) carry the detail.
+
+**2026-09-11 evening: the void list (backlog items 57-64) is on record and
+round 1 shipped.** Readiness can no longer say "ready to post" on a month
+the matcher could not see: `summary.month_health` on both payloads names
+the broken input (sign / currency / entity / card) whenever exact same-day
+same-amount pairs sit unproposed, and `ready_to_post` is false while it
+does (item 57; August as uploaded on 2026-09-10 would have read `broken`,
+suspect `sign`). Every commit of `rematch_month` now leaves an event the
+dev notifier mails as one line ("August 2026: 14 of 111, pool 7") (item
+58). **Round 2 (2026-09-14)** took both open rulings and shipped them: a
+charge's entity now comes from ITS card and is blank when the registry
+cannot name that card (item 59, ruling "blank beats a wrong posting";
+`n_charges_no_entity` counts the gap, one card definition closes it), and
+an invoice and its receipt are one matcher candidate (item 56, ruling
+"collapse automatically"; a `not a duplicate` ruling re-expands the pool
+and re-matches the month). Deployed v116 and both live months refreshed on
+an owner yes: July 24 to 27 reconciled and 15 to 11 review, August 7 to 3
+review, every ambiguous invoice+receipt pick gone on both, zero new model
+calls (the judgment cache keys on charge ids, which a refresh preserves).
+The prediction that ~77 August charges would go entity-less was WRONG and
+the correction is worth keeping: all nine cards ARE defined in the live
+registry with entities, and "not in your card list" was the batch's
+upload-time registry SNAPSHOT, not the live one. The refresh pulled the
+current registry in, so those rows now read "Credit Card Chase Visa - 3645
+/ 3876 / 0340". `coverage[].known` answers "did this batch know the card";
+`/api/settings` answers "is the card defined".
+
+**Round 3 (2026-09-15): both round-1/2 Lovable prompts are APPLIED and item
+60 shipped.** The owner published; the bundle audit (48 files, 975 KB, with
+known-present control fields validating the crawl first) finds
+`month_health`, `n_exact_pairs`, `n_charges_no_entity` and the matching i18n
+keys, and the CHARGES WITHOUT A COMPANY tile renders on both months. Two
+renderers have no live case to exercise them and are recorded as such: the
+blocked readiness bar (both months are healthy) and the "Card not defined"
+chip (every card is defined). Item 60 then shipped:
+`rows[].candidates[].held_by` names the charge holding a candidate receipt,
+so a dispossessed charge stops reading as "No receipt found". Items 61-64
+are the next rounds.
+
 **Every Lovable prompt is applied as of 2026-09-07** (the owner pasted and
 published the four pending prompts — R1 person/private, months
 origin+refusals, R3 trips, R4 settled-by — bundle-verified same day),
@@ -196,6 +270,12 @@ this table is the index, not a second record.
 | Deterministic matcher | done | BLUEPRINT slice 3 |
 | Date+amount accuracy program (scorer + structure + tuning) | live (PRs #404/#405/#406, deployed 2026-07-23) | Owner directive "date+time+amount, most accurate": time verified nonexistent in all sources → date+amount. Pinned scorer `recon-match-accuracy` (95 labelled pairs, 2024 holdout guard) + FX_BASE_AMOUNT path + self-derived monthly rates + band-scoring fix + review-zone deferral + bilateral-uniqueness gate + tuned `fx_base_amount_match_pct=0.01`. Train composite 8.9→31.5, determ-correct 3→55/95, **0 wrong** at every step; live April re-run (no LLM) 20 clean + 13 teed-up review, byte-identical to local replay. Journal: `docs/optimize/brisken-recon-tuning-v1/`; ANNEALING 2026-07-23 entry |
 | Card as a matching signal (WS3) | live (PR #317, deployed 2026-07-22) | `Transaction.card_last4` + optional `card` column map (CSV/xlsx + hosted guess); card-scoped candidates now key on the CHARGE's card, not the account id. On the real 01-05 month software-vs-Food FX-false-pairs 4 -> 0. Also: `Match.card_score` (tie-break + workbench), card into the FX-judgment prompt, optional `matching.llm_second_pass_unmatched` (OFF) |
+| Excel statements canonicalize the sign too; statement re-read repairs a month in place | **shipped 2026-09-11** (backlog item 55) | `ingest/statement_xlsx.py` mirrors the CSV 3.15 paths; `inspect.guess_column_map` maps `Type`; `match_month` treats an empty receipt entity as unscoped; `POST .../statements/reread` + `service.reread_statements`. Tests: `test_statement_reread.py` (route-level, three regressions of the real source proven RED first) |
+| A broken month is never "ready to post"; every re-match is announced | **shipped 2026-09-11 evening** (backlog items 57 + 58, void-list round 1) | `web/month_health.py`: `summary.month_health` on BOTH payloads (`state` broken when the matcher proposed nothing while exact same-day same-amount pairs sit in the pool; `suspects` names sign / currency / entity / card from the matcher's own scoping rules); `ready_to_post` = no undecided AND health ok. `rematch_log` in the snapshot (one event per `rematch_month` commit, trigger + counts, capped 50) -> `rematches[]` on `/api/operator/state` -> `brisken-recon-notify.py` mails one line per event. Tests: `test_month_health.py`, `test_rematch_log.py`, `tools/tests/test_recon_notify_diff.py`; three regress proofs RED first. SPA half: `docs/lovable-month-health-prompt.md` (owner applies) |
+| A charge's entity comes from its card; an invoice and its receipt are one candidate | **shipped 2026-09-14** (backlog items 59 + 56, void-list round 2, both owner-ruled) | `service.stamp_charge_entities` (per-row entity via `resolve_card`, blank for a card the registry cannot name) + `summary.n_charges_no_entity`; `duplicates.collapsed_duplicate_copies` keeps every copy after the first out of the matcher pool unless the group is ruled `ignore`, and `POST /api/runs/{id}/duplicates/resolve` re-matches a reconciling month. Tests: `test_charge_entity.py`, `test_duplicate_collapse.py`; five regress proofs RED first. SPA half: `docs/lovable-charge-entity-prompt.md` (APPLIED 2026-09-15, bundle-audited) |
+| A candidate another charge holds says so | **shipped 2026-09-15** (backlog item 60) | `rows[].candidates[].held_by` (parallel, absent when uncontested) + `summary.n_charges_receipt_taken`, both from the EFFECTIVE verdict so a reassignment moves them. Tests: `test_receipt_taken.py` (3, route-level via `POST /manual-match`); two regress proofs RED first. SPA half: `docs/lovable-receipt-taken-prompt.md` (owner applies) |
+| The parallel round: items 61-68 + 16 + 17, ten sessions at once | **open 2026-09-15** (setup #824) | Protocol `automations/expense-reconciliation/docs/PARALLEL-ROUND-PROTOCOL.md`: own worktree per item, append-only edits to the shared files, merge-not-rebase, probe the live API before deploying (a sibling's release carries your merge), own `agent-browser --session`, Lovable prompt as text, checkpoint on a fresh `docs/` worktree, cleanup ending in three empty outputs. Items 65-68 are the four standalone defects carved out of item 49. CI does not run the module suite; each PR carries its local count and regress line |
+| A month's pool reaches the months either side of it | **shipped 2026-09-15** (backlog item 61) | `service.adjacent_pool_for_month` joins the trip pool inside `rematch_month`: neighbours are decided by LABEL (`month_from_label`, previous and next), eligibility by this statement's OWN period (`statement_period_for_month`, min..max of its charges; the label's calendar month widened by 3 days only where no statement exists). Borrowed copies ride the existing `borrowed_receipts` / `receipt_sources` keys with `kind: "adjacent"`, so the claims protocol is untouched and one receipt still settles one charge. `rows[].candidates[].from_batch` names where a borrowed candidate lives (new, parallel, absent on own-pool candidates, and it names a TRIP borrow too) + `summary.n_adjacent_borrowed`. Live evidence: August holds two 08-31 Google receipts (71.64 / 75.09) whose charges post 09-01, and its own 08-01 Google 71.64 charge has no candidate at all. Tests: `test_adjacent_month_pool.py` (6, four route-level); one regress proof RED first. SPA half: `docs/lovable-adjacent-month-prompt.md` (owner applies) |
 | Sign canonicalization + refunds bucket + deterministic FX (Tier-1) | done (PR #285) | BLUEPRINT 3.15; no-LLM 0/36->29/36 on Criss's April |
 | Dev notifier: operator "run now" uploads fire an email | **live + scheduled 2026-07-22** | `tools/brisken-recon-notify.py`. Was doubly broken: unscheduled AND dead since the v31 cutover (logged in via the deleted `POST /login`, and all 4 mail links pointed into the deleted HTML UI, including the publish ping that goes to the USER). PR #373 moves it to `/api/login` + bearer, handles the throttle's 429, and points links at `APP_URL` (the SPA). Registered as Windows task `BriskenReconNotify` (15-min repeat), `LastTaskResult 0` over two fires, 0 missed; state baselined so the first fire did not mail the backlog. NOTE: the task runs from the PRIMARY clone (it needs the gitignored `context/.env`), which currently carries the fix as an uncommitted local edit identical to main — `git checkout -- tools/brisken-recon-notify.py` before pulling there |
 | Mail intake routing (the month pool) | live (PRs #599 + #601, deployed Fly v87 2026-08-24); **live 2026-09-06: ALL month batches deleted (post demo-test), 23 mails pooled (Aug 12 / Jul 5 / Sep 6), 7 more stranded "month deleted" awaiting per-archive re-ingest; the whole intake stream waits on a manual month-open (which itself needs a manual first-receipt upload — empty batch refused). Read-only audit: `%TEMP%/claude/recon-probe/manual_input_audit.py`; ranked findings in `docs/2026-09-06 - Expense-Recon Manual-Input Analysis/Checkpoint.md`** | Emailed receipts route by the month PRINTED on the receipt, not by whichever batch is open; mail whose month has no batch rests in the pool (`pooled`) and is claimed automatically on batch create / rename / boot / replay. Deleting a month pools its mail back. Arrival extraction warms the content-addressed cache, so the read costs nothing extra at batch time. `intake_mail.py` (`route_archived`, `claim_pooled`, `pool_deleted_batch`, `resolve_receipt_month`); SPA half `docs/lovable-month-pool-prompt.md` |
@@ -261,6 +341,7 @@ this table is the index, not a second record.
 | Feedback capture on every page (owner directive) | **live** — PRs #544+#545, deployed + UI-verified 2026-08-19 | `POST /api/feedback` accepts explicit `run_id` (path parse `/runs/{id}` stays as fallback), so notes on expense-batch pages attribute to the batch whatever the SPA route is called. Widget history: live notes prove the double-click capture worked on `/`, `/runs/{id}`, `/memory` (Criss's r1 notes carried pos/selector/anchor) but was never mounted on the receipt-first batch pages. 2 regression tests (fail on pre-fix src). **SPA global mount (double-click on every page incl. batches, popover EN/PT, explicit run_id) is the remaining Lovable half — prompt `docs/lovable-feedback-capture-prompt.md`.** |
 | Set-aside strip + one-click restore (receipt-first usability loop, iter 4) | **shipped** — PR #538, 2026-08-16 | Quarantined uploads become first-class snapshot `set_aside` entries (file, display, reason code, stored extraction); grid exposes `view.set_aside` + `summary.n_set_aside`; mid-month exclusions survive later adds (previously vanished on the next add's ingest-summary overwrite); `POST /api/expense-batches/{id}/set-aside/restore` reuses the stored reading (no fresh vision call) + normal memory/registry/categorize pass; legacy May run derives the strip from parse warnings and restores by re-extraction. 5 regression tests (fail on pre-fix src); suite 1068/2. **SPA strip render is the remaining Lovable half — prompt `docs/lovable-set-aside-prompt.md`, owner to apply.** |
 | Extraction cache + CLI merchant registry (receipt-first usability loop, iter 3) | **shipped** — PR #536, 2026-08-15; Fly deploy same session (see backlog Shipped table) | Same photo, same answer: `llm/extraction_cache.py` stores the RAW vision payload keyed on prompt/schema fingerprint + model + document content hash (file name excluded); `OpenAIClient.extract_receipt` answers identical content from the store (hits free, parse stays live so parser fixes apply to cached readings). On via `llm.extraction_cache_path` (config-dir relative, resolved in `run()`) or `EXPENSE_RECON_EXTRACTION_CACHE`; fly.toml sets `/data/extraction-cache.sqlite`. Trigger: the 2026-08-15 pre-fix baseline drifted on 8 of 9 smoke10 rows vs 2026-08-13 incl. a BRL→EUR currency flip + 50.50→50.00 tax drift. Companion (backlog item 2): CLI expense runs build the web path's MerchantRegistry from `expense.merchants` / `expense.merchants_path` (loud ConfigError when configured-but-broken), and `zoho_expense_export` prefers `canonical_vendor` over raw OCR (grid display rule). Verified: suite 1063/2 (+20 tests incl. drift reproduced without cache); smoke10 run twice on fixed code → CSVs byte-identical, cache 10 rows all from run 1 (run 2: zero extraction calls). Residual watch: categorize calls uncached (backlog item 4) |
+| A rejected pairing says so, and the undo is the route that made it | **shipped 2026-09-15** (backlog item 16, PR #828) | `rows[].candidates[].rejected` on every candidate of a rejected charge (parallel, absent otherwise) + `summary.n_rejected_pairings`, both read from the CURRENT verdict. Charge-level because the engine is: `apply_decisions`, `effective_settlements` and `sync_claim_for_decision` read the status alone, and a bulk reject writes `chosen_document_id` NULL. No `DELETE` route: `POST .../decisions` with `"status": "pending"` already resets the charge under the lock, re-derives the claim and hands the receipt back, and the test drives that reversal end to end. Live finding: ZERO rejected decisions exist in production (all 223 charge rows on the two statement months are `pending`), so the fixture is constructed and the SPA half has no live case to exercise it. Tests: `test_rejected_pairings.py` (5, route-level through the decision and bulk routes); two regress proofs RED first. SPA half: `docs/lovable-rejected-pairing-prompt.md` (owner applies) |
 
 ## Open decisions / gates
 

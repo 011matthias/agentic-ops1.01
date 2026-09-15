@@ -154,6 +154,29 @@ def test_guess_maps_the_card_column():
     assert missing == []
 
 
+def test_guess_maps_the_type_column():
+    """3.15: the hosted upload path guesses the column map, so Chase's
+    `Type` (Sale / Payment / Return) has to be recognised there or the
+    sign is only ever inferred from the file's majority. Explicit beats
+    inferred: a refund-heavy month cannot fool a per-row label."""
+    headers = ["Card", "Transaction Date", "Post Date", "Description",
+               "Category", "Type", "Amount", "Memo"]
+    mapping, missing = guess_column_map(headers)
+    assert mapping["type"] == "Type"
+    assert mapping["card"] == "Card"
+    assert missing == []
+
+
+def test_type_patterns_do_not_claim_account_or_card_type():
+    """`Account Type` / `Card Type` describe the account, not the row's
+    debit/credit direction. Claiming one would abs() every credit into a
+    purchase, which is worse than the majority inference."""
+    mapping, _ = guess_column_map(
+        ["Date", "Description", "Amount", "Account Type", "Card Type"]
+    )
+    assert "type" not in mapping
+
+
 def test_card_patterns_do_not_claim_cardholder_columns():
     """`Card Member` is the cardholder's name, not the card. Claiming it
     would scope every receipt to a card that is really a person, hiding

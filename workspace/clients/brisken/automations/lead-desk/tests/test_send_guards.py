@@ -150,6 +150,76 @@ def test_claim_blocks_suppression_list_email_and_domain(tmp_path):
     assert {b["kind"] for b in alert["blocked"]} == {"suppression-list"}
 
 
+def test_advisory_suppression_classes_do_not_block(tmp_path):
+    """'crm' and 'customer-domain' are context, not a refusal.
+
+    Regression (2026-09-10): the guard refused on ANY ledger row, so the
+    1,396 'crm' rows (the address exists in Zoho) and 77 'customer-domain'
+    rows blocked 30 of the 62 people in the September review packet, all 23
+    of wave 2 among them, while the board showed every one as contactable.
+    An approved wave would have sent to almost nobody.
+    """
+    store = _store(tmp_path)
+    make_campaign(store, emails=["known@crm.com", "buyer@customer.com",
+                                 "ok@example.com"])
+    store.add_suppression_entry("known@crm.com", "email", "zoho-crm", BASE,
+                                note="crm")
+    store.add_suppression_entry("@customer.com", "domain", "zoho-crm", BASE,
+                                note="customer-domain")
+    res = cadence.claim_sends(store, WORKER_ID, 5, at=IN_WINDOW)
+    assert sorted(c["to"] for c in res["claims"]) == [
+        "buyer@customer.com", "known@crm.com", "ok@example.com"]
+    assert _alert(store) is None
+
+
+def test_blocking_suppression_classes_still_refuse(tmp_path):
+    """Everything that is not advisory still refuses, and an unknown or
+    missing note refuses too, so the deny-by-default floor is unchanged."""
+    store = _store(tmp_path)
+    make_campaign(store, emails=["live@thread.com", "gone@optout.com",
+                                 "hard@bounce.com", "mystery@unknown.com",
+                                 "nonote@blank.com", "ok@example.com"])
+    store.add_suppression_entry("live@thread.com", "email", "graph-90d", BASE,
+                                note="active-thread")
+    store.add_suppression_entry("gone@optout.com", "email", "rome-master", BASE,
+                                note="opt-out")
+    store.add_suppression_entry("hard@bounce.com", "email", "rome-sendlog", BASE,
+                                note="bounce")
+    store.add_suppression_entry("mystery@unknown.com", "email", "x", BASE,
+                                note="something-new")
+    store.add_suppression_entry("nonote@blank.com", "email", "x", BASE)
+    res = cadence.claim_sends(store, WORKER_ID, 9, at=IN_WINDOW)
+    assert [c["to"] for c in res["claims"]] == ["ok@example.com"]
+    assert _alert(store)["count"] == 5
+
+
+def test_worker_backstop_agrees_with_claim_on_advisory(tmp_path):
+    """The execute-time backstop uses the same predicate as claim, so a
+    'crm' row cannot pass claim and then be refused at the Graph POST."""
+    store = _store(tmp_path)
+    make_campaign(store, emails=["a@example.com"])
+    claims = cadence.claim_sends(store, WORKER_ID, 5, at=IN_WINDOW)["claims"]
+
+    class Mailer:
+        def __init__(self):
+            self.sent = []
+
+        def send_auto(self, send):
+            self.sent.append(send)
+
+        def readback_sent(self, mailbox, to, subject, since, **kw):
+            return {"id": "m1", "internetMessageId": "<m1@brisken>",
+                    "conversationId": "c1"}
+
+    m = Mailer()
+    store.add_suppression_entry("a@example.com", "email", "zoho-crm", BASE,
+                                note="crm")
+    out = execute_one(store, m, claims[0], Journal(tmp_path / "j.jsonl"),
+                      now=IN_WINDOW)
+    assert out != "recipient_suppressed"
+    assert [s["to"] for s in m.sent] == ["a@example.com"]
+
+
 # -- unpinned template leak ---------------------------------------------------
 
 def test_unpinned_template_blocks(tmp_path):

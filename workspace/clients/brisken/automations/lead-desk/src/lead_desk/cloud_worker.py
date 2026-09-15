@@ -258,7 +258,7 @@ def execute_one(store: ContactStore, mailer, send: dict, journal: Journal,
 
     # Suppression-list backstop, same shape: an entry imported between claim
     # and execution (or a claim-time guard regression) never reaches Graph.
-    sup = store.suppression_hit(send["to"])
+    sup = store.suppression_block(send["to"])
     if sup is not None:
         journal.write(akey, "nacked", reason=f"recipient suppressed: {send['to']}")
         cadence.resolve_result(store, {

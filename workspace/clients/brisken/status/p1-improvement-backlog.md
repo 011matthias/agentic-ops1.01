@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-10
+updated: 2026-09-15
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -1980,11 +1980,22 @@ carried no legal entity and 0340 was absent entirely; the 0340 rows alone
 accounted for 8 of the 29 unresolved April entity rows. No code needed then
 or now; listed here so it is not mistaken for a defect in the chain.
 
-### 16. Rejected matches need a "what now" (2026-07-27 note, untracked)
+### 16. Rejected matches need a "what now" (SHIPPED PR #828 - see Shipped row 35)
 
 STATUS_REJECTED sends the transaction back to unmatched and is reversible
 pre-export, but no rejected bucket exists in the API and no affordance
-answers "what happens to rejected matches?". Spec fresh.
+answers "what happens to rejected matches?". Shipped 2026-09-15: no bucket
+was added, because the reject is not a place a charge goes; it is a verdict
+on a pairing. `rows[].candidates[].rejected` marks every candidate of a
+rejected charge (parallel, absent otherwise) and
+`summary.n_rejected_pairings` counts them, so the SPA stops re-offering a
+receipt the reviewer just pushed away. The undo turned out to exist already:
+`POST .../decisions` with `"status": "pending"` resets the charge under the
+same lock, re-derives the claim and hands the receipt back, so no `DELETE`
+route was added and the test drives that reversal end to end instead.
+Charge-level by construction: `apply_decisions`, `effective_settlements` and
+`sync_claim_for_decision` all read the status alone, and a bulk reject writes
+`chosen_document_id` NULL.
 
 ### 17. Workbench filter/sort (2026-07-27 note, untracked)
 
@@ -2123,6 +2134,265 @@ can. Criss raised the underlying problem in her r1 feedback
 on, and what tells her the category on such a receipt (items? card?
 entity?) — that answer is Merchants-editor data entry now, not code.
 
+### 55. Excel statements reached the matcher with the printed sign (LIVE DEFECT, Criss 2026-09-11, SHIPPED same day)
+
+Criss, on August 2026 (PT): "ele ve que tem recibo mas nao associa com o que
+la embaixo ele mostra que tem" - the tool shows the receipt in the pool and
+never links it to the charge above. Read off the live API before touching
+code: July `50622baec444` 112 charges / 50 receipts / 0 reconciled, August
+`074a7b8905d7` 111 / 31 / 0, every charge `pending` with zero candidates,
+exact same-day same-amount pairs in both (LOVABLE 15.00 on 08-31, OBSIDIAN
+96.00 on 08-30, ZOHOCORP 576.00 on 08-30, PRESSMASTER 135.00 on 08-23).
+Both months hold a Chase multi-card workbook (`Card, Transaction Date, Post
+Date, Description, Category, Type, Amount, Memo`): purchases printed
+negative, one payment positive, `refunds` empty.
+
+**Cause, in the parser.** `statement_csv` has canonicalized the sign since
+3.15 (a mapped `type` column per row, else the majority inference with a
+warning); `statement_xlsx` had neither and kept the printed sign, so the
+matcher compared `-15.00` with `15.00`. Nothing else was wrong: the same
+file through the CSV parser matches. Two more things stood behind it once
+the sign was right, measured on the real August file offline: the hosted
+column guess never mapped Chase's `Type`, so the sign was only ever
+inferred; and `match_month` dropped any receipt whose entity differed from
+the charge's, which for a mailed or dropped receipt (entity `""` until a
+card hint or the reviewer names one) meant every one of them. 23 of
+August's 31 receipts and 46 of July's 50 have no entity.
+
+**Fix (this round).** Parser: the xlsx parser mirrors both CSV paths.
+Guess: `type` is mapped on `^type$` / `^transaction type$` only (an `Account
+Type` column would abs() every credit into a purchase). Matcher: an empty
+entity on either side is unscoped; a receipt that NAMES another entity still
+never pairs (`test_entity_scope_prevents_cross_entity_match` untouched).
+Repair: `POST /api/expense-batches/{id}/statements/reread` rebuilds the
+charges from the files in `statements[]` and replaces the set - a re-upload
+could not do it, because `transaction_id` derives from the canonical amount
+and the corrected rows would have folded in beside the wrong ones. Decisions
+ride over by sheet row through `statement_anchors`; a missing file, an
+unresolvable map, a stranded decision or an upload that landed mid-read
+refuses with nothing written. Offline on the real files after the fix:
+August 5 exact + 4 FX-judgment + 23 charges with candidates to pick, 7
+receipts still unmatched; July 13 + 27 + 12, 6 unmatched. Before: 0 and 0.
+
+Also fixed on the way: `fly.toml` in the module still said scale-to-zero,
+`recon_data` and 512 MB while the platform runs always-on, `recon_data_v2`
+and 1024 MB, so a deploy from the module directory would have undone the
+2026-09-10 recovery. It now mirrors `flyctl config show`.
+
+Follow-up (void 7 of the 2026-09-11 list): a repaired parser cannot repair
+the months it already parsed except through this curl-only re-read. Store
+a parser fingerprint per `statements[]` entry (the extraction cache does
+this for vision) and flag or re-read stale months on load. Not built.
+
+### 56. An invoice and its receipt for one purchase make the pairing ambiguous (2026-09-11, found by item 55)
+
+Stripe-style vendors (Lovable, Anthropic, Pressmaster) mail BOTH an invoice
+PDF and a receipt PDF for one charge; the drop and the mail intake keep both,
+and `find_duplicate_receipts` flags them as a group (same vendor, date, total,
+currency). The matcher still sees two candidates for one charge and files the
+pair as **ambiguous**, so the reviewer picks one of two identical documents
+for every such purchase: in August, 23 of the 31 receipts sit in such pairs
+and the LOVABLE 15.00 / OBSIDIAN 96.00 / ZOHOCORP 576.00 charges are
+"ambiguous" rather than exact. The duplicate resolution
+(`POST /api/runs/{id}/duplicates/resolve`) is display-only and never
+narrows the pool.
+
+Proposal, not built: collapse a duplicate group to ONE candidate in the
+matcher pool (`rematch_month`, before `match_month`), keeping copy 1 and
+leaving the extras in the snapshot flagged as duplicates, unless the group
+was resolved as "not a duplicate" (two real purchases, same day, same
+amount). A receipt-side collapse is the smaller change; the alternative is
+teaching the matcher that candidates within one duplicate group count as
+one. Owner call: whether an unresolved group may be collapsed automatically
+or only after the reviewer confirms it. Until then the pairs surface as
+candidates and Criss picks.
+
+**RULED + SHIPPED 2026-09-14 (void 6).** Owner ruling: collapse
+automatically. `duplicates.collapsed_duplicate_copies` names every copy
+after the first in each unresolved or confirmed group;
+`rematch_month` keeps those out of the candidate pool, so the pair is one
+exact match instead of two indistinguishable candidates. Nothing is
+dropped: the copy stays in the snapshot, the counts and the exports, and
+surfaces as unmatched with its `duplicate` marker. A group ruled `ignore`
+(two real purchases, same merchant, same day, same amount) is not
+collapsed, and `POST /api/runs/{id}/duplicates/resolve` now re-matches a
+reconciling month so that ruling is not recorded-and-inert. Tests:
+`test_duplicate_collapse.py` (5, route-level); three regress proofs.
+
+### The 2026-09-11 void list (items 57-64, ranked; 6 = item 56, 7 = the re-read under item 55)
+
+Ten functionality voids found in the same session that fixed item 55, each
+grounded in the live July / August data. Items 57 and 58 are the first
+round; 59 and 56 need an owner ruling before code.
+
+### 57. Readiness said "ready to post" on a zero-match month (2026-09-11)
+
+August 2026 carried `ready_to_post: true` with 0 of 111 charges matched and
+31 receipts in the pool, four of them exact same-day same-amount pairs of
+a charge (LOVABLE 15.00, OBSIDIAN 96.00, ZOHOCORP 576.00, PRESSMASTER
+135.00). Readiness checks undecided rows and unmapped accounts only, so a
+month the matcher could not see at all read as finished. Rule: when the
+matcher proposed nothing and exact pairs sit in the pool, the sign, the
+entity, the currency or the card scoping is broken; refuse readiness and
+name which. Surface it on both review payloads (`summary.month_health`).
+Built 2026-09-11 evening, this round.
+
+### 58. No notification on living-month re-matches (2026-09-11)
+
+`tools/brisken-recon-notify.py` pings on new runs only. Attaches, re-reads
+and mail-driven re-matches (every path through `rematch_month`) report
+nothing, so the 2026-09-10 uploads that reconciled 0 were invisible to the
+dev until Criss wrote. Each commit of `rematch_month` now records one event
+(`rematch_log` in the snapshot, surfaced as `rematches[]` on
+`/api/operator/state`), and the notifier mails one line per event:
+"August 2026: 14 of 111, pool 7 (statement)". Built 2026-09-11 evening,
+this round.
+
+### 59. A multi-card workbook stamps every charge with the upload's entity (2026-09-11)
+
+August was uploaded as `account_id` card-2838, so all 111 rows read
+Corporate Services, while `coverage[]` shows cards 3645 (40 charges) and
+3876 (37) as "not in your card list" with a blank entity. The parsed card
+column is already on every row (`card_last4`); the entity should resolve
+per row through the card registry, and a card the registry does not know
+should not inherit the upload's entity.
+
+**RULED + SHIPPED 2026-09-14.** Owner ruling: blank entity for unknown
+cards. `service.stamp_charge_entities` resolves each row that printed a
+card through the batch's registry snapshot (`resolve_card`, ambiguity to
+nothing, the same identity the coverage panel and the card scoping use)
+and leaves the entity empty when the registry cannot name the card or
+names it without an entity; a workbook with no card column keeps the
+upload's entity, because there the account id IS the card. Re-stamped on
+every re-match, so defining the card once and refreshing master data fills
+the rows in place. `summary.n_charges_no_entity` on both payloads counts
+the gap. The hand-match guard was sharpened to the matcher's own rule
+(empty on either side is unscoped; only two NAMED entities refuse), since
+a charge can now legitimately carry none. Tests: `test_charge_entity.py`
+(6, route-level); two regress proofs. SPA half:
+`docs/lovable-charge-entity-prompt.md`.
+
+**What the live months actually showed, against the prediction.** The
+expectation going in was that ~77 of August's charges would move to a
+blank company. They did not, and the reason matters: cards 3645, 3876 and
+0340 ARE defined in the live registry (all nine cards carry an entity; the
+owner finished the item-26/40 data entry at some point after these
+batches were uploaded). What the coverage panel called "not in your card
+list" was the BATCH's registry snapshot, frozen at upload time, not the
+live registry. Refreshing each month's master data pulled the current
+registry in and every charge resolved to its real card: `n_charges_no_entity`
+0 on both months, the three "not in your card list" rows replaced by
+"Credit Card Chase Visa - 3645 / 3876 / 0340", each Corporate Services.
+The gap the item was written against was stale-snapshot, not missing data.
+Lesson for the next read: `coverage[].known` answers "did THIS BATCH know
+the card", never "is the card defined"; ask `/api/settings` for the
+second question.
+
+### 60. A charge with waiting candidates renders "No receipt found" (2026-09-11)
+
+LOVABLE 25.00 on 2026-08-05: `initial_bucket: review`, `effective_bucket:
+unmatched`, section `attention`, two candidates (0027 ambiguous, 0028
+exact 99%), neither chosen, and the SPA prints "No receipt found" while
+both receipts show elsewhere as "Awaiting decision". The row is in the
+attention section with candidates, so the label the SPA derives from the
+bucket is the wrong half; decide bucket-vs-label on the backend first, then
+hand the SPA half as a Lovable prompt.
+
+**SHIPPED 2026-09-15. The label was the wrong half, and the bucket is
+right.** `candidates[]` comes from the RAW outcome, which keeps every
+receipt the matcher paired with the charge; the bucket comes from the
+EFFECTIVE verdict after `apply_decisions`, and one receipt settles exactly
+one charge. So a charge that loses its receipt keeps the candidate on
+display and falls to `unmatched` truthfully; what was missing was WHO has
+it. `rows[].candidates[].held_by` names the holding charge (parallel,
+ABSENT when nobody else holds it), and `summary.n_charges_receipt_taken`
+counts rows whose every candidate is held elsewhere. It follows the
+effective verdict, so handing the receipt back clears it. Tests:
+`test_receipt_taken.py` (3, route-level, the steal driven through
+`POST /manual-match`); two regress proofs. SPA half:
+`docs/lovable-receipt-taken-prompt.md`.
+
+**The reported instance no longer reproduces.** Read live before building:
+both months now show ZERO rows with candidates in the `unmatched` bucket,
+because item 56's duplicate collapse gave the LOVABLE 25.00 charge its own
+exact match. The mechanism is still reachable (any reassignment produces
+it), which is why the fix shipped, but the fixture had to be built rather
+than observed. A first attempt to reproduce it with two identical charges
+competing for one receipt was WRONG: the loser lands in
+`unmatched_transactions`, which carries no candidates at all.
+
+### 62. Receipts that never appear on a card statement stay unmatched forever (2026-09-11)
+
+Bank transfer, cash, PayPal: the Lovable invoice reads "Pay with a bank
+transfer", the Redis 13,200.00 and Konsultancy 15,972.00 invoices in July
+will never post to a card. They sit in the unmatched pool and the counts
+indefinitely. Add a "settled outside the card" disposition that retires
+them from the pool and the counts while keeping them in the month.
+
+### 63. Same-currency candidates use the 20% probable band meant for FX pairs (2026-09-11)
+
+ADOBE 16.23 was offered a Lovable 15.00 receipt, ANTHROPIC 104.95 an
+Obsidian 96.00 one (offline run on the real August file). Same currency +
+different amount + different vendor should not be a candidate. Run
+`calibrate` as the regression gate for the change.
+
+### 64. Two small parser gaps (2026-09-11)
+
+`statements[]` does not record the column map or the card currency an
+upload used, so a re-read re-guesses both; record them per entry. And an
+unrecognized `Type` label is treated as a purchase and abs'd (a German
+"Lastschrift" export would flip its credits); unknown labels should keep
+the printed sign in both `statement_csv` and `statement_xlsx`.
+
+### The 2026-09-15 parallel round (items 61-68 + 16 + 17, one session each)
+
+Ten open items run as ten simultaneous sessions, each on its own worktree
+under `automations/expense-reconciliation/docs/PARALLEL-ROUND-PROTOCOL.md`.
+Items 65-68 carve the four standalone defects out of item 49 so each has a
+number a session can own and a Shipped row can close; item 49 stays the
+evidence record (section 12 of the storage-system description).
+
+### 65. Report totals: binary float sums, and a row dropped from the total in silence (item 49, wrong money)
+
+Amounts are stored as strings so no precision is lost, and the report
+totals then sum them in binary floating point. Beside that, a row whose
+amount cannot be parsed is dropped from the PDF total with nothing on the
+report saying so, so a month can print a total that is quietly short by one
+receipt. Sum in `Decimal`, and give an unparseable amount a visible place:
+a caption on the report and a count on the payload, never a silent drop.
+
+### 66. Two write paths rewrite the period record without the batch lock (item 49, silent data loss)
+
+The manual per-charge attach and the bulk folder ingest each rewrite the
+whole period record outside `_BATCH_ADD_LOCK`, so a concurrent write on
+either side can be lost. Separately, replacing a file on a queued upload
+deletes the file it replaces, and re-attaching a receipt to the same charge
+under the same filename overwrites the stored bytes, both with no version
+and no record. Take the lock on both paths under a fresh re-read (the
+`rematch_month` commit shape), and stop the byte overwrite.
+
+### 67. One unrenderable receipt makes the whole month's report a 500 (item 49)
+
+The renderability check opens a PDF's index only, so a password-protected
+or structurally damaged receipt passes it and then fails during assembly:
+the request 500s and NO report is produced for the whole month, with no
+caption, no partial output and no message naming the file. Render what
+renders, caption what does not with the file named, and surface the
+blocked file on the payload so the reviewer can find it without a log. The
+in-memory assembly on a 512 MB machine is the same wall from a different
+side; stream or bound it.
+
+### 68. The receipt column overstates coverage, and the two reports can disagree (item 49)
+
+The Receipt column reads "attached" once the file was read off disk, which
+is decided before renderability is known, so the count of expenses with a
+usable receipt page can be too high; the caption pages are the truth. And
+an expense the reviewer deleted leaves the expense report immediately but
+stays in the reconciliation report until the next re-match, because the two
+are built from different sources. Make the column and the count answer
+"has a page in the report", and build both reports from the one live
+overlay.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
@@ -2143,6 +2413,12 @@ entity?) — that answer is Merchants-editor data entry now, not code.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 36 | A month's candidate pool reaches the company months either side of it: `adjacent_pool_for_month` joins the trip pool inside `rematch_month`, neighbours decided by LABEL and eligibility by this statement's OWN period (`statement_period_for_month`, min..max of its charges). Borrowed copies ride the existing `borrowed_receipts` / `receipt_sources` keys with `kind: "adjacent"`, so the claims protocol is untouched and one receipt still settles one charge. `rows[].candidates[].from_batch` names where a borrowed candidate lives, and `summary.n_adjacent_borrowed` counts what the month actually holds | Item 61. A receipt is filed by the month printed ON it while a charge lands in the statement that BILLED it, and Chase does not cut those at the same place: August's workbook opens 07-31, July's 06-30. The named instance did NOT reproduce (July's 06-30 Google receipt is in July's batch and matched, because month routing stamped it from the 07-01 mail, not the printed date), and the literal count the item predicted is 0 on both live months. The real instance is the one the item's own mechanism produces at the OTHER end: August holds two Google receipts dated 08-31 (71.64 and 75.09) for charges that post 09-01, while its own 08-01 Google 71.64 charge carries no candidate at all. Today exactly one receipt would move (June's 06-30 Fenix 55.74 BRL into July, where no charge matches it); the fix is for September's statement and every month after. The period rule rather than a calendar rule is the recommendation the PR states: no calendar predicts a workbook that opens on the 31st. One regression of the real source proven RED first, through the caller | 2026-09-15, this round; suite 1550 -> 1556; SPA half `docs/lovable-adjacent-month-prompt.md` (owner applies) |
+| 35 | A rejected pairing says so, and the page can offer the way back: `rows[].candidates[].rejected` on every candidate of a rejected charge (parallel, absent otherwise) and `summary.n_rejected_pairings` | Item 16. Rejecting frees the receipt and stays reversible until export, but `candidates[]` comes from the RAW outcome, so the receipt just pushed away re-rendered under the row exactly as before, offered again as though it were still on the table, with nothing saying it had been turned down. Two findings shaped the build. The live one: ZERO rejected decisions exist in production. All 223 charge rows across the two months with statements are `pending`, and the four receipt-only batches carry no charge rows at all, so the symptom cannot be observed and the fixture is constructed. The design one: the flag has to be charge-level, because `apply_decisions`, `effective_settlements` and `sync_claim_for_decision` all read the status alone and ignore `chosen_document_id`, and a bulk reject writes that column NULL, so a flag keyed on a named document would leave the commonest path unmarked. The undo needed no route: `POST .../decisions` with `"status": "pending"` already resets the charge, re-derives the claim and returns the receipt; a second spelling of an existing reversal is a second thing to keep correct, so the test drives the existing one end to end rather than asserting it ought to work. Two regressions of the real source proven RED first | PR #828, 2026-09-15, this round; suite 1550 -> 1555; SPA half `docs/lovable-rejected-pairing-prompt.md` (owner applies) |
+| 34 | A candidate another charge holds says so: `rows[].candidates[].held_by` names the holding charge (parallel, absent when nobody else holds it), and `summary.n_charges_receipt_taken` counts rows whose every candidate is held elsewhere | Item 60. A charge can carry candidates and still be bucketed `unmatched`, because `candidates[]` keeps every receipt the matcher paired with it while the bucket reflects the ASSIGNMENT, and one receipt settles one charge. The bucket was right; the SPA's bucket-derived label was not, so it said "No receipt found" about a receipt sitting on the row above. Two things worth keeping from the build: the reported instance no longer reproduced (item 56's collapse had given that charge its own exact match), so the fixture had to be constructed rather than observed, and the first construction was wrong in an instructive way (two identical charges competing for one receipt leaves the loser in `unmatched_transactions`, which carries no candidates at all). The real path is a reassignment, driven through `POST /manual-match`. Two regressions of the real source proven RED first | 2026-09-15, this round; suite 1547 -> 1550; SPA half `docs/lovable-receipt-taken-prompt.md` (owner applies) |
+| 33 | A charge's legal entity comes from ITS card (`stamp_charge_entities`), blank when the registry cannot name that card, counted by `summary.n_charges_no_entity`; and an invoice and its receipt are ONE matcher candidate (`collapsed_duplicate_copies`), with a `not a duplicate` ruling re-matching the month | Items 59 + 56, round 2 of the void list, both on owner rulings taken the same day. A Chase workbook filed as card-2838 posted all 111 of August's charges to Corporate Services while 77 were on cards 3645 / 3876, which the coverage panel already called "not in your card list": a wrong posting is silent, a blank one is a count on screen and one card definition away from fixed. And 23 of August's 31 receipts sat in invoice+receipt pairs that reached the reviewer as `ambiguous` picks between two copies of the same document; collapsing the pool turns each into the exact match it always was, while every copy stays in the snapshot, the counts, the exports and its duplicate marker. The `ignore` escape hatch (two real purchases, same merchant, same day, same amount) re-expands the pool, and the resolve route now re-matches so the ruling is not recorded-and-inert. Five regressions of the real source proven RED first, one of them re-run after the first mutation turned out to be a semantic no-op | 2026-09-14, this round; suite 1547 passed / 2 skipped; SPA half `docs/lovable-charge-entity-prompt.md` (owner applies) |
+| 32 | A broken month is never "ready to post": `summary.month_health` on both payloads (`state` broken when the matcher proposed nothing while exact same-day same-amount pairs sit in the pool; `suspects` names sign / currency / entity / card from the matcher's own scoping rules), and `ready_to_post` = no undecided AND health ok. Every commit of `rematch_month` leaves one event (`rematch_log`, trigger + counts) that `/api/operator/state` lists as `rematches[]` and `brisken-recon-notify.py` mails as one line per event | Items 57 + 58, round 1 of the 2026-09-11 void list. August 2026 as uploaded on 2026-09-10 read `ready_to_post: true` with 0 of 111 matched and 31 receipts in the pool: nothing was undecided because nothing had been proposed, and nobody was told, because the notifier pinged on new runs only. The rule only ever refuses; a healthy month is judged by the reviewer's decisions as before, and a month with no exact pair is not its business. Three regressions of the real source proven RED first (readiness wiring, grid wiring, the log append); the 2026-09-10 state reproduced through the real attach route (no Type column, inference off) reads `broken` / `sign` | 2026-09-11 evening, this round; suite 1538 collected; SPA half `docs/lovable-month-health-prompt.md` (owner applies) |
+| 31 | Excel statements canonicalize the sign; Chase's `Type` column is guessed; an entity-less receipt is unscoped in the matcher; `POST .../statements/reread` rebuilds a month's charges from its stored files without doubling it | Criss's July and August 2026 reconciled 0 of 111/112 with the receipts in the pool ("ele ve que tem recibo mas nao associa"): the xlsx parser kept Chase's printed negative purchases, the CSV parser had canonicalized them since 3.15, and the matcher compared -15.00 with 15.00. The repair had to be a re-read, not a re-upload, because content-derived ids would have folded the corrected rows in beside the wrong ones. Three regressions of the real source proven RED first (Type path, majority inference, entity rule), offline on the real August file 0 -> 5 exact + 4 judgment + 23 with candidates. Item 55; item 56 records the invoice+receipt-pair ambiguity it uncovered | 2026-09-11, this round |
 | 30 | The card screen shows the cards that actually charge. `GET /api/cards` gains `seen_undefined[]`: the card identities the loaded months charge but the registry cannot name, busiest first, each carrying the digits to define it as, its charge count and the months it appears in | `/api/cards` composed the settings registry plus the shipped presets and nothing else, so it listed 2838 and four cards carrying no charges, while 3645 (46 charges), 3876 (19) and 0340 (10) appeared nowhere on the very screen where a card gets defined. The reviewer's actual move, define the card these charges are on, was the one move the screen could not start. Identity comes from the same `_charge_card_identity` the `coverage[]` panel uses, because two derivations would be two answers about the same plastic. One defect caught by its own test before it could reach the table: the suggested name first came off the internal match key, which strips leading zeros on purpose so Chase's "0340" and the Zoho payment mode's "340" land on one key, and a reviewer would have been offered "340" for a card they know as 0340. Human-facing fields now show what the statement printed; the key stays normalized. Four regressions of the real source, each proven RED first, and a fifth candidate dropped with its reason recorded (a fast path with no observable behaviour, so a test for it would assert the implementation) | PR #651, 2026-08-28, deployed Fly `7acbd983`; suite 1398 passed / 2 skipped, calibrate green, CI green; live `/api/cards` on the real Brisken data returns the three undefined cards with the leading zero intact. SPA half `docs/lovable-card-definition-prompt.md`, applied by the owner 2026-09-06 |
 | 29 | Duplicates the reviewer can see on the row. Every member of a live duplicate group carries `duplicate` on its own row (`expenses[]` on the grid; `rows[]`, `unmatched_receipts[]` and `assignable_receipts[]` on the workbench), naming the group, this row's place in it, and the first copy it repeats. `summary.n_duplicate_copies` is how many copies are redundant, its own name because it is its own question. A dismissal clears the marker from every row, the count and the document; the reconciliation PDF now names the groups instead of counting them | Owner: "we need to build in a function that recognizes duplicates". It already did, and had since Tier-1 #4: the live April batch carried the Pressmaster FZCO invoice at 135.00 USD as two files, correctly grouped. The gap was that `duplicate_groups` is a side list of ids, so the 40-row grid above it showed both copies with nothing to tell them apart and finding the duplicate meant noticing the amount twice by eye. A flag nobody sees is not a flag. The hand-match picker is included because it holds every receipt: it is the one place both copies could be assigned to two different charges, and it is what keeps the new count backed by rows on screen. One defect fixed alongside: `POST /duplicates/resolve` always replied with the workbench summary, so on an expense batch the grid header's own fields were missing from the reply to its own click. Seven regressions of the real source, each proven RED first | this round, 2026-08-28; suite 1392 passed / 2 skipped, calibrate green, CI green; live check on the April batch shows both Pressmaster rows marked and `n_duplicate_copies` 1; SPA half `docs/lovable-duplicates-prompt.md` (owner applies) |
 | 28 | Per-card coverage: `coverage[]` on both review payloads answers which cards a month has loaded, from which uploads, over what span, and how far each has got, with the run summary's own four bucket counts and unreconciled money per card; the reconciliation document gains a coverage table and sections its charge listing per card; `charge_states` becomes the ONE place a charge's effective bucket is decided | Backlog item 29 PR 3. `statements[]` answered the FILE question and nothing answered the CARD one, which is how the loading is actually organized: a card arrives across several files and one file prints several cards, so neither list derives from the other. The live January month is the argument: 80 charges over THREE card identities, zero reconciled, and one flat USD 20,228.68 that tells a reviewer nothing about which pile of receipts to find. Registry cards with nothing loaded get a row on purpose, because "which cards have I not loaded" is unanswerable from a list of the ones she has. Adversarial review found both of the round's defects, both in card identity: an unknown-card key could collide with a registry slug and attribute money to the wrong plastic, and alias-only card names ("CorpServ") fell to the no-card row. Eleven regressions of the real source, each proven RED first | this round, 2026-08-26; suite 1375 passed / 2 skipped, calibrate exit 0, ruff clean on the diff; SPA half `docs/lovable-coverage-prompt.md` (owner applies) |

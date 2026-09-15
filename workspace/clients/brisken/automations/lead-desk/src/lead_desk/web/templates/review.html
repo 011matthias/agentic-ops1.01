@@ -10,7 +10,16 @@
   .rv-option .det { color: var(--muted); font-size: 12.5px; }
   .rv-reco { margin-left: 8px; }
   .rv-step { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin: 10px 0; }
-  .rv-step textarea { min-height: 120px; }
+  /* The reviewer reads these as mails, not as templates, so they override
+     the operator-editor monospace base.html sets on every textarea. */
+  .rv-step textarea {
+    min-height: 120px; font-family: inherit; font-size: 14.5px; line-height: 1.6;
+    color: var(--text); background: var(--surface); padding: 12px 14px;
+    overflow-y: auto; resize: vertical;
+  }
+  .rv-step input[type=text] { font-size: 14.5px; }
+  .rv-step > b { font-size: 14px; }
+  .rv-hint { color: var(--muted); font-size: 12.5px; margin: 4px 0 12px; }
   .rv-meta { color: var(--muted); font-size: 12px; margin-top: 6px; }
   .rv-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
   .rv-note { white-space: pre-wrap; }
@@ -29,6 +38,32 @@
     {% if v.open_sequences %}<span class="chip warn"><span class="n">{{ v.open_sequences }}</span> wording review{{ '' if v.open_sequences == 1 else 's' }} open</span>{% endif %}
   {% endif %}
 </div>
+
+{% if v.unsendable %}
+<div class="card" style="border-color: var(--red)">
+  <h2>{{ v.unsendable | length }} name{{ '' if v.unsendable | length == 1 else 's' }} on these lists cannot be sent to</h2>
+  <p class="muted">Approving a wave does not reach these people. They are listed here rather than dropped quietly, so the lists below and what actually goes out stay the same thing.</p>
+  <div class="scroll-x"><table>
+    <tr><th>Name</th><th>Wave</th><th>Why</th></tr>
+    {% for u in v.unsendable %}
+    <tr><td>{{ u.name }}</td><td>{{ u.wave }}</td><td>{{ u.reason }}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
+{% if v.responded %}
+<div class="card" style="border-color: var(--orange, #d97706)">
+  <h2>{{ v.responded | length }} {{ 'person' if v.responded | length == 1 else 'people' }} on these lists have already answered</h2>
+  <p class="muted">These are on a follow-up list, and the mailbox says they came back to us. Nothing here removes them automatically; decide whether each still belongs in the wave before approving it.</p>
+  <div class="scroll-x"><table>
+    <tr><th>Name</th><th>Wave</th><th>What we heard</th></tr>
+    {% for u in v.responded %}
+    <tr><td>{{ u.name }}</td><td>{{ u.wave }}</td><td>{{ u.reason }}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
 
 {% for item in v['items'] %}
 <div class="card" id="item-{{ item.item_id }}">
@@ -76,6 +111,11 @@
       {% if item.body.timing %} &nbsp; <b style="color:var(--text)">When:</b> {{ item.body.timing }}{% endif %}
       {% if item.body.from_line %} &nbsp; <b style="color:var(--text)">From:</b> {{ item.body.from_line }}{% endif %}
     </p>
+    {% set ex_name = (item.body.recipients[0].name or '').split(' ')[0]
+                     if item.body.recipients else '' %}
+    {% if ex_name %}
+    <p class="rv-hint">Names fill in per person when the mail goes out: {{ '{{first_name}}' }} reads as {{ ex_name }} for the first person on this list.</p>
+    {% endif %}
     {% if item.body.recipients %}
     <details class="rv-recipients">
       <summary>Show the {{ item.body.recipients | length }} recipients</summary>
@@ -112,4 +152,18 @@
   {% endif %}
 </div>
 {% endfor %}
+
+<script>
+  // Grow each mail box to its content so a whole mail is readable without an
+  // inner scrollbar; a mail the reviewer has to scroll inside reads as a form
+  // field rather than as the text that will arrive.
+  (function () {
+    function fit(t) { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }
+    var boxes = document.querySelectorAll('.rv-step textarea');
+    for (var i = 0; i < boxes.length; i++) {
+      fit(boxes[i]);
+      boxes[i].addEventListener('input', function () { fit(this); });
+    }
+  })();
+</script>
 {% endblock %}

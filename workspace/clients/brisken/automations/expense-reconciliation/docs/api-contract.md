@@ -155,12 +155,15 @@ name answers the same one:
 | `n_needs_entity` | how many still need a legal entity (a confirmed private row needs none by design, so it does not count — item 41 sharpened the question the name always asked) |
 | `n_needs_person` | how many rows no person owns yet (item 40; the fix is a person on the card, not a row edit) |
 | `n_needs_cost_center` | how many rows carry no cost center yet (item 47). Structurally 0 while no cost center is defined |
+| `n_charges_no_entity` | how many CHARGES carry no legal entity, because the card they printed is not in the registry or has no entity (item 59; the fix is defining that card, not a row edit). Charges, not expenses: `n_needs_entity` answers the receipt-side question |
+| `n_charges_receipt_taken` | how many charges are bucketed `unmatched` while every candidate they hold is held by another charge (item 60; the fix is a pick, not a missing receipt) |
 | `n_roster_mismatch` | trip batches only (absent on company months): how many rows a person OUTSIDE the trip's roster paid for (item 38 x 40) |
 | `n_suggested_private` | how many rows are suggested as private expenses, unconfirmed (item 41) |
 | `n_private` | how many rows the operator confirmed private (reimbursement rows) |
 | `n_set_aside` | how many files the quarantine is still holding back |
 | `n_duplicate_groups` | how many duplicate SITUATIONS were flagged |
 | `n_duplicate_copies` | how many copies are redundant (every copy after the first in a group the reviewer has not dismissed) |
+| `n_rejected_pairings` | run payload only: how many (charge, receipt) pairings the reviewer has turned down (item 16). Pairings, not rows: a rejected charge that never had a candidate refused nothing and counts nothing |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -227,6 +230,185 @@ only. One charge occupies a row in every file that prints it, which is why the
 row is recorded per upload rather than on the charge; anchoring on the charge
 would leave the closing cycle blank wherever a mid-month partial got there
 first.
+
+### Re-reading a month's statements (added 2026-09-11)
+
+`POST /api/expense-batches/{id}/statements/reread` rebuilds the month's
+charges from the statement files it already holds and re-matches. No body.
+Returns `{ok, job_id}`; poll `GET /jobs/{job_id}` exactly as for an attach
+(`done`, or `error` with the reason). `400` when the month has no statement.
+
+This exists because a re-upload cannot repair a month: `transaction_id` is
+content-derived from the CANONICAL amount, so a file re-parsed with a
+corrected sign yields new ids and the fold puts the corrected rows in beside
+the wrong ones. The re-read reads every `statements[]` entry from disk in
+upload order and REPLACES the charge set; `statements[]` keeps the same
+entries (same `file`, `upload_name`, `uploaded_at`), rebuilt, and
+`statement_anchors` is rebuilt with them. Reviewer decisions are carried to
+the new ids by sheet row through the anchors. Nothing is written when a
+file is missing, a column map no longer resolves, a decision cannot be
+carried over, or another upload landed while the files were being re-read;
+the job reports the reason.
+
+Trigger case: the Excel parser kept Chase's printed sign until 2026-09-11,
+so July and August 2026 held every purchase as a negative amount and
+reconciled 0 against receipts that were in the pool. The SPA needs nothing
+new to display the result; the parse warning `sign convention inferred`
+appears in `parse_issues` when the workbook has no Type column.
+
+## Month health: `summary.month_health` (added 2026-09-11, item 57)
+
+On BOTH payloads, always present:
+
+```json
+"month_health": {
+  "checked": true,
+  "state": "broken",
+  "reason": "zero_match_with_exact_pairs",
+  "n_exact_pairs": 4,
+  "suspects": ["sign"],
+  "detail": "The matcher proposed nothing for this month, yet 4 receipts in the pool are the same amount on the same day as a charge. Something in the inputs is broken: the statement's sign (purchases arrived as credits). Fix that and re-read the statement before posting anything."
+}
+```
+
+`checked` is false before a statement is loaded or while the pool is
+empty (then `state` is `ok` and the rest is empty). `state` is `broken`
+exactly when the matcher put no receipt beside any charge, in any tier,
+while at least one receipt in the pool is the same absolute amount within
+one day of a charge. `suspects` (fixed order: `sign`, `currency`, `entity`,
+`card`, `unknown`) names the input that dropped those pairs, from the
+matcher's own scoping rules; `unknown` means a pair looked pairable and
+was still not proposed. `detail` is one English sentence for the banner;
+`reason` and `suspects` are the codes to localize on.
+
+`ready_to_post` is now `n_undecided == 0 AND month_health.state == "ok"`.
+On 2026-09-10 August 2026 read `ready_to_post: true` with 0 of 111 matched
+and 31 receipts in the pool: nothing was undecided because nothing had been
+proposed. The SPA's post gate reads `ready_to_post` as before; when it is
+false with `n_undecided == 0`, `month_health.detail` says why. Renders in
+`docs/lovable-month-health-prompt.md`.
+
+## Re-match events: `rematches[]` on `GET /api/operator/state` (added 2026-09-11, item 58)
+
+Not a review payload; polled by the dev-side notifier
+(`tools/brisken-recon-notify.py`). Every commit of `rematch_month` appends
+one event to the month's snapshot (`rematch_log`, capped at 50):
+
+```json
+{"event_id": "1f3c9a2b7e4d", "run_id": "074a7b8905d7", "label": "August 2026",
+ "at": "2026-09-11T14:24:46+00:00", "trigger": "reread",
+ "n_transactions": 111, "n_matched": 14, "n_review": 7, "n_unmatched_tx": 89,
+ "n_receipts": 31, "n_unmatched_rec": 7, "match_rate": 12.6}
+```
+
+`trigger` is one of `statement` (attach), `reread`, `receipts` (mail, drop,
+folder), `cards`, `master_data`, `set_aside`, `trip`. Oldest first. The
+notifier diffs on `event_id` and mails one line per event ("August 2026:
+14 of 111, pool 7 (reread, 2026-09-11T14:24:46+00:00)"); an event with no
+id is never announced.
+
+## A candidate another charge holds: `held_by` (added 2026-09-15, item 60)
+
+`rows[].candidates[].held_by`, parallel and **absent** (not null) unless
+another charge currently holds that receipt:
+
+```json
+"held_by": {"transaction_id": "…", "vendor": "SUPABASE",
+            "amount": "92.70", "currency": "USD", "date": "2026-08-19"}
+```
+
+`candidates[]` comes from the raw outcome, which keeps every receipt the
+matcher paired with this charge; the bucket comes from the effective verdict
+after `apply_decisions`, and one receipt settles exactly one charge. So a
+charge that loses its receipt keeps the candidate on display and falls to
+`unmatched`, and a label derived from the bucket calls that "No receipt
+found" about a receipt sitting on another row (reported 2026-09-11). The
+holder is the fact that label was missing. It follows the EFFECTIVE verdict,
+so a reviewer handing the receipt back clears it.
+
+`summary.n_charges_receipt_taken` (both payloads) counts charges bucketed
+`unmatched` whose every candidate is held elsewhere. Those rows are not "no
+receipt found"; they are waiting on a contested pick. Renders in
+`docs/lovable-receipt-taken-prompt.md`.
+
+## A pairing the reviewer turned down: `rejected` (added 2026-09-15, item 16)
+
+`rows[].candidates[].rejected`, parallel and **absent** (not `false`) unless
+the reviewer's current verdict on that charge is `rejected`:
+
+```json
+"rejected": true
+```
+
+Rejecting sends the charge to unmatched and releases its receipts, but
+`candidates[]` comes from the RAW outcome, so every receipt just pushed away
+re-renders under the row exactly as it did before, offered again as though it
+were still on the table. Nothing said a pairing had been turned down, so no
+affordance could answer "what now" (2026-07-27 note).
+
+**Charge-level, deliberately.** `apply_decisions` pass 3, `effective_settlements`
+and `sync_claim_for_decision` all read the STATUS alone and ignore
+`chosen_document_id`; a bulk reject writes that column NULL. A flag keyed on a
+named document would therefore leave the commonest path unmarked. So the flag
+lands on every candidate of a rejected charge, which is what the verdict
+actually means: none of these.
+
+`summary.n_rejected_pairings` (run payload only, like every count derived from
+`rows[]`) counts the flagged candidates.
+
+**The undo path already existed; what was missing was knowing there was
+anything to undo.** `POST /api/runs/{id}/decisions` with
+`{"transaction_id": ..., "status": "pending"}` resets the charge: the store
+takes the write under the same lock as any verdict, `sync_claim_for_decision`
+re-derives the claim from the snapshot's own match (releasing it when there is
+none, and refusing nothing when another run settled the receipt meanwhile), and
+the next `build_view` gives the charge its receipt back. No `DELETE` route was
+added, because a second spelling of an existing reversal is a second thing to
+keep correct. `tests/test_rejected_pairings.py` drives that reversal end to end
+rather than asserting it ought to work.
+
+Both the flag and the count read the CURRENT verdict, so the reset clears them
+in the same response. Renders in `docs/lovable-rejected-pairing-prompt.md`.
+
+## An invoice and its receipt are one candidate (added 2026-09-14, item 56)
+
+No new field. The matcher's candidate pool now holds only the FIRST copy of
+each duplicate receipt group (`find_duplicate_receipts`: same normalized
+merchant + date + total + currency), so a Stripe-style invoice-plus-receipt
+pair produces one exact match instead of two indistinguishable candidates
+and an `ambiguous` pairing. Owner ruling 2026-09-11.
+
+Everything else is unchanged and load-bearing: the suppressed copy stays in
+`receipts`, in `n_receipts`, in the exports, and in `unmatched_receipts[]`
+carrying its `duplicate` marker, so the reconciliation guarantee holds and
+the reviewer can still see both documents. A group resolved `ignore` ("not
+a duplicate": two real purchases, same merchant, same day, same amount) is
+NOT collapsed, and `POST /api/runs/{id}/duplicates/resolve` now re-matches
+a reconciling month so that ruling takes effect immediately; its reply
+gains `rematch` (the same object every living-month change returns, absent
+on a batch with no statement).
+
+## A charge's entity comes from its card (added 2026-09-14, item 59)
+
+`rows[].legal_entity_id` and `unmatched_transactions[]` charges: for a row
+whose statement printed a card (the per-row `card_last4` column), the
+entity is the entity of the card the batch's registry snapshot resolves
+that number to, and it is **empty** when the registry does not know the
+card or knows it without an entity. A row with no card column keeps the
+upload's entity (there the account id is the card). Stamped on every
+re-match, so defining the card in Settings and refreshing the month's
+master data fills the rows in place; ids and decisions never move.
+
+Owner ruling 2026-09-11: a visible gap beats a wrong posting. Before this,
+a Chase multi-card workbook filed as card-2838 put all 111 August charges
+under Corporate Services while 77 sat on cards 3645 / 3876, which the
+coverage panel already listed as "not in your card list".
+
+`summary.n_charges_no_entity` (both payloads; 0 before a statement) counts
+those rows; the fix it points at is one card definition, not a row edit.
+The hand-match guard (`POST /api/runs/{id}/manual-match`) follows the
+matcher's rule: an empty entity on either side is unscoped, only two named
+entities that differ refuse. Renders in `docs/lovable-charge-entity-prompt.md`.
 
 ## Per-card coverage: `coverage[]` (added 2026-08-26)
 
@@ -1165,3 +1347,81 @@ override onto a retired project). With no cost center defined,
 `cost_centers` is empty and every row is in `unassigned`: the roll-up
 stating a fact, not a review state; the row-level flag stays silent per the
 empty-registry contract. Pinned by `tests/test_cost_center_totals.py`.
+## The adjacent-month pool: `from_batch` + `kind` (added 2026-09-15)
+
+Backlog item 61. A receipt is filed by the month printed ON it; a charge
+lands in the statement that BILLED it. Chase opens August's workbook on
+07-31 and July's on 06-30, so a subscription invoiced on the last day of a
+month posts on the 1st of the next statement while its receipt is already
+one batch away. Live that day: August held Google receipts dated 08-31 for
+71.64 and 75.09 whose charges post 09-01, and August's own 08-01 Google
+71.64 charge sat unmatched with no candidate at all.
+
+A month's candidate pool now spans the company months either side of it,
+through the same machinery the trip pool uses: the same
+`borrowed_receipts` / `receipt_sources` snapshot keys, the same
+`receipt_claims` arbitration, the same never-absorbed rule (the borrowed
+receipt stays an expense of its own month; `n_receipts`, the export and
+the report never take it).
+
+Two rules decide what is borrowed, and both are narrow on purpose:
+
+- **Neighbours by LABEL.** `month_from_label` on this run's label, previous
+  and next. A batch whose label names no month neither borrows nor lends,
+  and a month two away contributes nothing.
+- **Eligibility by this statement's OWN period**, min..max of the run's
+  transaction dates. The period is the only source that knows where the
+  workbook was cut; no calendar rule predicts 07-31. A month with no
+  statement yet falls back to its label's calendar month widened by
+  `ADJACENT_FALLBACK_DAYS` (3), which is only reachable where there is
+  nothing to match anyway.
+
+### `receipt_sources` holds two kinds
+
+```json
+"receipt_sources": {
+  "0011__5672824933.pdf": { "run_id": "50622baec444",
+                            "label": "July 2026",
+                            "kind": "adjacent" }
+}
+```
+
+A TRIP entry is unchanged (`{run_id, trip_id, label}`, no `kind`). An
+adjacent-month entry carries `kind: "adjacent"` and no `trip_id`. Read the
+kind, never the absence of a trip id.
+
+| Payload | Path | Shape |
+|---|---|---|
+| Run | `rows[].settled_by` | trip: `{run_id, trip_id, label}`; adjacent: `{run_id, label, kind}` |
+| Run | `rows[].candidates[].from_batch` | same object as the row's, for a candidate whose receipt is borrowed |
+
+`from_batch` (NEW) is the fix for a borrowed receipt being anonymous until
+it was chosen: the row's badge named the source only once the pairing won,
+so an OFFERED candidate read as if it belonged to this month. It is
+ABSENT (not null) on every candidate from the month's own pool, which is
+almost all of them, and it names a trip or a neighbouring month by the same
+key. Both borrow kinds populate it, so a trip-borrowed candidate is named
+too.
+
+`summary.n_adjacent_borrowed` counts the adjacent entries in
+`receipt_sources`, so it is what the month actually HOLDS rather than what
+the pool offered. 0 on every month whose neighbours lent it nothing.
+
+### What the other side shows, with no new field
+
+The lending month names the borrower through the claims table that was
+already there: its receipt appears in `expenses[].settled_by` /
+`unmatched_receipts[].settled_by` shaped `{run_id, label, transaction_id}`,
+and the receipt drops out of its own month's candidate pool on that
+month's next re-match. One receipt still settles exactly one charge.
+
+### The id collision, stated
+
+Receipt ids are position-prefixed per batch (`0000__a.jpg`), so two
+different receipts can share an id across batches. The month's own copy
+wins and the colliding neighbour receipt is simply not borrowed. This bites
+harder than it does on trips because neighbouring months are ingested the
+same way: July and August shared four ids on 2026-09-15, all
+`NNNN__rendered-body.pdf`. Offering two receipts under one id would corrupt
+the matcher's consumption set and the view's lookup, which is worse than a
+narrower pool.

@@ -25,7 +25,7 @@ import re
 import threading
 import uuid
 from dataclasses import dataclass, replace
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import NamedTuple
 from decimal import Decimal
 from pathlib import Path
@@ -41,6 +41,7 @@ from ..cli import NON_RECEIPT_LABELS, ConfigError, generate_expenses, reconcile
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
 from ..duplicates import (
+    collapsed_duplicate_copies,
     duplicate_group_id,
     duplicate_row_flags,
     find_duplicate_charges,
@@ -85,6 +86,12 @@ from ..cost_centers import (
 )
 from ..cost_centers import CostCenterRegistry, CostCenterResolution
 from ..merchant_registry import MerchantRegistry, normalize_merchants_setting
+from .month_health import (
+    HEALTH_OK,
+    card_scoping_on,
+    month_health,
+    unchecked as unchecked_month_health,
+)
 from .serialize import (
     categorization_from_dict,
     categorization_to_dict,
@@ -1454,7 +1461,15 @@ def validate_manual_match(
     rec = next((r for r in receipts if r.document_id == document_id), None)
     if rec is None:
         return "Unknown receipt for this run."
-    if rec.legal_entity_id != tx.legal_entity_id:
+    # The matcher's own rule since 2026-09-11: an EMPTY entity on either
+    # side is unscoped (a mailed receipt before its card is known, a charge
+    # on a card the registry cannot name, item 59); only two NAMED entities
+    # that differ refuse.
+    if (
+        rec.legal_entity_id
+        and tx.legal_entity_id
+        and rec.legal_entity_id != tx.legal_entity_id
+    ):
         return "Receipt and charge belong to different legal entities."
     return None
 
@@ -2399,7 +2414,20 @@ def build_view(
         except (KeyError, TypeError, ValueError):
             continue
         rec_by_id.setdefault(br.document_id, br)
+    # Where each borrowed receipt lives. Read once here because both the
+    # candidate rows below and the settled-row badge further down name it,
+    # and item 61 made the map hold two kinds (a trip, a neighbouring
+    # month). Empty on every month borrowing nothing, which is most of them.
+    borrow_sources = (run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {}
     by_tx = _candidates_by_tx(outcome)
+    # Item 57: the structural check readiness cannot answer on its own. A
+    # month the matcher could not see (sign / entity / currency / card
+    # broken) has nothing undecided BECAUSE nothing was proposed; this
+    # names the broken input and closes the post gate below.
+    health = month_health(
+        transactions, receipts, outcome,
+        card_scoping=card_scoping_on(run.config),
+    )
 
     # Slice 10: receiptless-charge categorizations (extra snapshot key;
     # absent on pre-Slice-10 runs => empty map, rows render as before).
@@ -2463,6 +2491,75 @@ def build_view(
     coverage, coverage_key_by_tx = month_coverage(
         run, transactions, states
     )
+    # Item 60: which charge currently HOLDS each receipt, under the effective
+    # verdict. `candidates` come from the raw outcome (every receipt the
+    # matcher scored against this charge) while the bucket comes from the
+    # assignment, and one receipt settles one charge. So a charge whose
+    # candidates were all won by other charges renders with candidates and a
+    # bucket of `unmatched`, and the SPA, deriving its label from the bucket,
+    # said "No receipt found" about a receipt that is sitting on the row
+    # above. Naming the holder is the fact the label was missing; it is the
+    # charge's own id on its own row, so a candidate is only ever "taken"
+    # from somebody else's perspective.
+    holder_by_doc: dict[str, str] = {}
+    for m in effective.matches:
+        holder_by_doc.setdefault(m.document_id, m.transaction_id)
+    for tx_id_, st in states.items():
+        if st["held_doc"]:
+            holder_by_doc[st["held_doc"]] = tx_id_
+    tx_by_id_all = {t.transaction_id: t for t in transactions}
+
+    def _from_batch(document_id: str) -> dict:
+        """`{"from_batch": {...}}` when this candidate's receipt is borrowed
+        from another batch, else `{}` so the key is absent rather than null.
+
+        Item 61: a borrowed receipt was anonymous until it was CHOSEN (the
+        row's `settled_by` badge), so an offered one read as if it belonged
+        to this month. Same object on both sides now, and it names a trip or
+        a neighbouring month by the same key."""
+        src = borrowed_source_view(borrow_sources.get(document_id))
+        return {"from_batch": src} if src else {}
+
+    def _held_by(document_id: str, by_tx_id: str) -> dict:
+        """`{"held_by": {...}}` when another charge holds this receipt, else
+        `{}` so the key is absent rather than null."""
+        holder = holder_by_doc.get(document_id)
+        if not holder or holder == by_tx_id:
+            return {}
+        htx = tx_by_id_all.get(holder)
+        if htx is None:
+            return {}
+        return {
+            "held_by": {
+                "transaction_id": holder,
+                "vendor": htx.vendor_from_statement,
+                "amount": _fmt_amount(htx.amount),
+                "currency": htx.transaction_currency,
+                "date": htx.transaction_date.isoformat()
+                if htx.transaction_date else None,
+            }
+        }
+
+    # Item 16: a rejected verdict releases the charge's whole proposal --
+    # `apply_decisions` pass 3 sends the charge to unmatched and consumes
+    # none of its receipts -- but `candidates` still come from the raw
+    # outcome, so every receipt the reviewer just pushed away re-renders
+    # underneath the row exactly as it did before, offered again as if it
+    # were still on the table. Nothing in the payload said a pairing had
+    # been turned down, so no affordance could answer "what now". The flag
+    # is the fact that was missing, and it reads the CURRENT verdict, so
+    # resetting the charge to pending clears it.
+    #
+    # Charge-level, because a reject is: `apply_decisions`,
+    # `effective_settlements` and `sync_claim_for_decision` all read the
+    # status alone and ignore `chosen_document_id`, and a bulk reject
+    # writes that column NULL, so marking only a named document would
+    # leave the commonest path unmarked.
+    def _rejected_pairing(charge_status: str) -> dict:
+        """`{"rejected": True}` on every candidate of a rejected charge,
+        else `{}` so the key is absent rather than false."""
+        return {"rejected": True} if charge_status == STATUS_REJECTED else {}
+
     for tx in transactions:
         tx_id = tx.transaction_id
         decision = decisions.get(tx_id)
@@ -2513,6 +2610,19 @@ def build_view(
                     # Cross-currency comparison (charge vs receipt vs Zoho's
                     # own conversion); None for same-currency pairs.
                     "fx": _fx_breakdown(tx, r),
+                    # Item 60: the charge that currently holds this receipt,
+                    # when it is not this one. Parallel field, ABSENT (not
+                    # null) on a candidate nobody else holds, so a month with
+                    # no contested receipt renders exactly as before.
+                    **_held_by(m.document_id, tx_id),
+                    # Item 16: the reviewer turned this pairing down.
+                    # Parallel field, ABSENT (not false) everywhere else,
+                    # so a month with no reject renders as it did before.
+                    **_rejected_pairing(status),
+                    # Item 61: the batch this candidate's receipt lives in,
+                    # when it is not this one. Parallel field, ABSENT on
+                    # every candidate from the month's own pool.
+                    **_from_batch(m.document_id),
                 }
             )
         # PR B — a hand-made manual match: the held receipt was never an
@@ -2532,6 +2642,7 @@ def build_view(
                     "vendor_pct": None,
                     "receipt": _receipt_view(rec_by_id[held_doc], overrides),
                     "fx": _fx_breakdown(tx, rec_by_id[held_doc]),
+                    **_from_batch(held_doc),
                 }
             )
 
@@ -2840,18 +2951,18 @@ def build_view(
             if hit is not None:
                 rec["settled_by"] = hit
     # R4b, the month side of the same provenance: a charge settled with a
-    # receipt borrowed from a trip names the trip. Absent on every row
-    # settled from the month's own pool.
-    borrow_sources = (run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {}
+    # borrowed receipt names where the receipt came from. Absent on every
+    # row settled from the month's own pool. Item 61 added the second kind:
+    # a trip entry still renders `{run_id, trip_id, label}` byte for byte,
+    # and a neighbouring month's carries `kind: "adjacent"` instead of a
+    # trip id, so the badge can say which it is without guessing.
     if borrow_sources:
         for row in rows:
-            entry = borrow_sources.get(row.get("chosen_document_id"))
-            if isinstance(entry, dict):
-                row["settled_by"] = {
-                    "run_id": entry.get("run_id"),
-                    "trip_id": entry.get("trip_id"),
-                    "label": entry.get("label"),
-                }
+            src = borrowed_source_view(
+                borrow_sources.get(row.get("chosen_document_id"))
+            )
+            if src is not None:
+                row["settled_by"] = src
 
     n_tx = len(transactions)
     n_unknown_currency = sum(1 for r in receipts if r.detected_currency is None)
@@ -2908,13 +3019,47 @@ def build_view(
         "n_duplicate_copies": (
             n_extra_copies(charge_dup_flags) + n_extra_copies(receipt_dup_flags)
         ),
-        # PR A — "Ready to post?" bar.
+        # PR A — "Ready to post?" bar. Item 57: a broken month is never
+        # ready, whatever the reviewer has (not) decided; `month_health`
+        # says which input is broken.
         "n_undecided": n_undecided,
-        "ready_to_post": n_undecided == 0,
+        "ready_to_post": n_undecided == 0 and health["state"] == HEALTH_OK,
+        "month_health": health,
+        # Item 59: charges whose card the registry cannot name carry no
+        # entity; the fix is defining the card once, not a row edit.
+        "n_charges_no_entity": sum(
+            1 for t in transactions if not (t.legal_entity_id or "").strip()
+        ),
         "n_unmapped_accounts": n_unmapped,
         "unreconciled_by_ccy": {
             ccy: f"{amt:,.2f}" for ccy, amt in sorted(unreconciled.items())
         },
+        # Item 60: charges the tool found receipts for that another charge
+        # now holds. Its own name because it is its own question: these rows
+        # are not "no receipt found", they are waiting on a contested pick.
+        "n_charges_receipt_taken": sum(
+            1 for r in rows
+            if r["effective_bucket"] == "unmatched"
+            and r["candidates"]
+            and all(c.get("held_by") for c in r["candidates"])
+        ),
+        # Item 16: (charge, receipt) pairings the reviewer turned down.
+        # Pairings, not rows: a rejected charge that never had a
+        # candidate contributes nothing, because no pairing was refused.
+        # Reversible until export, and `POST .../decisions` with
+        # `"pending"` is the reversal, so this falls as the reviewer
+        # undoes.
+        "n_rejected_pairings": sum(
+            1 for r in rows for c in r["candidates"] if c.get("rejected")
+        ),
+        # Item 61: receipts this month is using from the months either side
+        # of it. Counted off the committed source map, so it is what the
+        # month actually holds rather than what the pool offered; 0 on every
+        # month whose neighbours lent it nothing.
+        "n_adjacent_borrowed": sum(
+            1 for e in borrow_sources.values()
+            if isinstance(e, dict) and e.get("kind") == ADJACENT_BORROW_KIND
+        ),
         # PR C — memory legibility.
         "n_learned_lines": n_learned_lines,
         # L4 — missing receipt images (0 when the source has no image info).
@@ -5354,6 +5499,10 @@ def build_expense_view(
         # AND the core fields). The batch page's headline count until
         # 2026-08-22, when it was mislabelled as "categorized".
         "n_ready": n_ready,
+        # Item 57: the same verdict the workbench carries, so whichever
+        # payload the SPA renders for a reconciling month says the month
+        # is broken. `checked: false` before a statement is loaded.
+        "month_health": run_month_health(run),
         "n_review": sum(
             1 for e in expenses if e["review"]["state"] in ("check", "pick")
         ),
@@ -5430,6 +5579,11 @@ def build_expense_view(
     # so every charge rolled up has a state that was computed for it.
     charges, charge_state_map = month_charge_states(run, decisions or {})
     coverage, _keys = month_coverage(run, charges, charge_state_map)
+    # Item 59: same count the workbench carries, from the same charge set
+    # the coverage panel rolls up. 0 before a statement is loaded.
+    summary["n_charges_no_entity"] = sum(
+        1 for t in charges if not (t.legal_entity_id or "").strip()
+    )
 
     return {
         "run_id": run.run_id,
@@ -6117,7 +6271,7 @@ def assign_batch_cards(
     # Outside the lock; see rematch_after_change. An assignment that does not
     # reach the matcher is the R3 F1 failure (silent 0-match month), so the
     # re-match is the point of allowing this at all.
-    rematch = rematch_after_change(store, run.run_id)
+    rematch = rematch_after_change(store, run.run_id, trigger="cards")
     if rematch is not None:
         out["rematch"] = rematch
     return out
@@ -6320,7 +6474,7 @@ def refresh_batch_master_data(
         out = _refresh_batch_master_data_locked(
             store, run, now_iso=now_iso, operator=operator
         )
-    rematch = rematch_after_change(store, run.run_id)
+    rematch = rematch_after_change(store, run.run_id, trigger="master_data")
     if rematch is not None:
         out["rematch"] = rematch
     return out
@@ -6523,6 +6677,41 @@ def month_transactions(run: RunRow) -> list:
 # Parallel field, per the SPA contract (docs/api-contract.md rule 1):
 # nothing existing changes type or meaning, so a stale SPA renders exactly
 # what it rendered before.
+
+
+def run_month_health(run: RunRow) -> dict:
+    """Item 57 for a caller that has not unpacked the snapshot (the expense
+    grid). Reads the same committed pool and outcome the workbench judges,
+    so the two payloads cannot disagree about whether a month is broken.
+    Unchecked before the first statement: there is nothing to judge."""
+    if not has_statement(run):
+        return unchecked_month_health()
+    try:
+        transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
+    except (KeyError, TypeError, ValueError):
+        return unchecked_month_health()
+    return month_health(
+        transactions, receipts, outcome,
+        card_scoping=card_scoping_on(run.config),
+    )
+
+
+# Item 58: every commit of `rematch_month` records one event here, so the
+# dev-side notifier can announce a re-match by its counts ("August 2026: 14
+# of 111, pool 7") instead of only a new run. Capped: the snapshot is not
+# a log, and fifty events outlive any notifier polling window.
+REMATCH_LOG_KEY = "rematch_log"
+REMATCH_LOG_CAP = 50
+
+
+def append_rematch_event(existing, event: dict, cap: int = REMATCH_LOG_CAP) -> list[dict]:
+    """The log with `event` appended and the oldest entries dropped past
+    `cap`. Tolerates a malformed stored value (drops it rather than raising:
+    a corrupt log must never block a commit)."""
+    log = [e for e in (existing or []) if isinstance(e, dict)] if isinstance(existing, list) else []
+    log.append(dict(event))
+    return log[-cap:] if cap > 0 else log
+
 
 STATEMENTS_KEY = "statements"
 # {stored file name: {transaction_id: sheet row}} — each upload's own row
@@ -6899,6 +7088,51 @@ def _charge_card_identity(tx, cards: dict) -> _CardIdentity:
 
     observed = tx.card_last4 if _card_keys(tx.card_last4) else tx.account_id
     return _identity_from_observed(observed, cards)
+
+
+def stamp_charge_entities(transactions: list, cards: dict) -> list:
+    """Item 59 (owner ruling 2026-09-11): a charge's legal entity comes from
+    ITS card, not from the card the upload was filed under.
+
+    The parsers stamp the upload's entity on every row, which on a Chase
+    multi-card workbook filed as card-2838 put all 111 August charges under
+    Corporate Services while 77 of them sat on cards 3645 and 3876. Here,
+    for every row that PRINTED a card (the per-row `card_last4` the WS3
+    column map fills), the entity is the registry card's entity, and a
+    card the registry cannot name, or names without an entity, leaves the
+    row BLANK: a visible gap beats a wrong posting, and the coverage panel
+    already lists that card as "not in your card list". A row with no card
+    column keeps what the upload said: the account id IS the card there,
+    and `resolve_entity` already read the registry for it.
+
+    Resolution is `resolve_card` on the same observed string the matcher's
+    scoping and the coverage identity use, ambiguity to nothing, so the row,
+    the coverage row and the card scoping cannot disagree about which
+    plastic a charge is on. An empty registry stamps nothing: a batch that
+    predates the card registry keeps the upload's entity on every row.
+
+    Ids are content-derived without the entity, so re-stamping on every
+    re-match (this runs inside `rematch_month`, which every attach, re-read,
+    card assignment and master-data refresh passes through) never moves a
+    charge or its decisions.
+    """
+    from ..cards import resolve_card
+    from ..matching.deterministic import _card_keys
+
+    if not cards or not transactions:
+        return transactions
+    out: list = []
+    for tx in transactions:
+        if not _card_keys(tx.card_last4):
+            out.append(tx)
+            continue
+        card = resolve_card(tx.card_last4, cards, on_ambiguity="none")
+        entity = (card.entity or "") if card is not None else ""
+        out.append(
+            replace(tx, legal_entity_id=entity)
+            if entity != (tx.legal_entity_id or "") else tx
+        )
+    return out
 
 
 def _statement_card_identities(
@@ -7297,7 +7531,8 @@ def restore_set_aside_file(
             store, run, file, now_iso, learning_db_path=learning_db_path
         )
     rematch = rematch_after_change(
-        store, run.run_id, learning_db_path=learning_db_path
+        store, run.run_id, learning_db_path=learning_db_path,
+        trigger="set_aside",
     )
     if rematch is not None:
         out["rematch"] = rematch
@@ -7514,6 +7749,7 @@ def add_receipts_to_expense_batch(
         rematch = rematch_after_change(
             store, run.run_id,
             learning_db_path=learning_db_path, on_stage=on_stage,
+            trigger="receipts",
         )
         if rematch is not None:
             result["rematch"] = rematch
@@ -7861,6 +8097,7 @@ def execute_statement_attach(
             n_new=len(merged.added),
             uploaded_at=now_iso,
         ),
+        trigger="statement",
     )
 
 
@@ -7914,6 +8151,173 @@ def read_statement_upload(
     except ConfigError as exc:
         raise RunInputError(str(exc)) from exc
     return transactions, stmt_issues, new_cfg, entity
+
+
+def reread_statements(
+    store: RunStore,
+    run: RunRow,
+    *,
+    settings: dict | None,
+    now_iso: str,
+    learning_db_path: Path | None = None,
+    on_stage=None,
+) -> dict:
+    """Rebuild a month's charges from the statement files it already holds,
+    then re-match. The repair path for a month whose stored charges were
+    parsed wrong (2026-09-11: the Excel parser kept Chase's printed sign,
+    so July and August 2026 held every purchase as a negative amount and
+    reconciled 0 against receipts that were sitting right there).
+
+    Why a re-read and not a re-upload: `transaction_id` is content-derived
+    from the CANONICAL amount, so re-uploading the same file after the
+    parser fix would fold 111 new ids in beside the 111 old ones and double
+    the month. This reads every entry in `statements[]` from disk, in
+    upload order, through the same `read_statement_upload` + `merge` the
+    attach uses, and hands `rematch_month` the rebuilt set as a REPLACEMENT
+    (`replace_statements`), which is the one thing the append path may
+    never do.
+
+    Deny-by-default, nothing partial: a missing file, a column map that no
+    longer resolves, or a reviewer decision that cannot be carried over
+    aborts before anything is written. Decisions ride over by sheet row
+    (`statement_anchors`: old id -> row -> new id); a decision on a charge
+    with no anchor and no surviving id is the one case that refuses, so a
+    verdict is never silently orphaned.
+
+    The column map for each file is recovered the same way the attach
+    recovered it: the config's own map for the upload it still describes
+    (that one may carry the operator's manual picks), a fresh guess for any
+    earlier upload (the guess now maps the Type column, so the sign is
+    explicit where the export prints one).
+    """
+    entries = month_statements(run)
+    if not entries:
+        raise RunInputError(
+            "this month has no recorded statement upload to re-read"
+        )
+    work_dir = Path(run.work_dir)
+    cfg = run.config or {}
+    stmt_cfg = dict(cfg.get("statement") or {})
+    old_anchors: dict[str, dict] = dict(
+        (run.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}
+    )
+    old_ids = {
+        str(td.get("transaction_id"))
+        for td in (run.snapshot or {}).get("transactions") or []
+    }
+
+    transactions: list = []
+    issues: list = []
+    rebuilt: list[dict] = []
+    new_cfg: dict = cfg
+    entity = ""
+    for entry in entries:
+        stored = str(entry.get("file") or "")
+        stmt_path = work_dir / stored
+        if not stored or not stmt_path.is_file():
+            raise RunInputError(
+                f"statement file {stored or '?'} is missing from this "
+                "month's folder; nothing was changed"
+            )
+        account_id = str(
+            entry.get("account_id") or stmt_cfg.get("account_id") or ""
+        )
+        form = RunForm(
+            account_id=account_id,
+            account_legal_entities={},
+            account_card_currency=str(
+                stmt_cfg.get("account_card_currency") or "USD"
+            ),
+            sheet_name=entry.get("sheet_name") or None,
+            column_map_overrides={},
+            receipts_source="csv",
+            expense_column_map={},
+            receipts_default_currency="",
+            use_llm=False,
+            card_key=str(entry.get("card_key") or ""),
+        )
+        column_map: dict | None
+        if stmt_path.suffix.lower() == ".pdf":
+            column_map = None
+        elif stored == stmt_cfg.get("path") and stmt_cfg.get("column_map"):
+            column_map = dict(stmt_cfg["column_map"])
+        else:
+            column_map = _resolve_statement_map(stmt_path, form)
+        txs, stmt_issues, new_cfg, entity = read_statement_upload(
+            run,
+            stmt_name=stored,
+            column_map=column_map,
+            form=form,
+            settings=settings,
+            on_stage=on_stage,
+        )
+        merged = merge_transactions(transactions, txs)
+        transactions = merged.transactions
+        issues.extend(stmt_issues)
+        rebuilt.append(
+            build_statement_entry(
+                stored_name=stored,
+                upload_name=str(entry.get("upload_name") or stored),
+                account_id=(new_cfg.get("statement") or {}).get(
+                    "account_id", ""
+                ),
+                card_key=form.card_key,
+                sheet_name=(new_cfg.get("statement") or {}).get("sheet_name"),
+                transactions=txs,
+                n_new=len(merged.added),
+                uploaded_at=str(entry.get("uploaded_at") or now_iso),
+            )
+        )
+
+    # Carry the reviewer's verdicts over by sheet row. Every old id that has
+    # an anchor maps to the new id at the same (file, row); an id the re-read
+    # kept maps to itself. A DECISION on an id that has neither is the one
+    # thing that refuses the whole re-read: silently dropping a verdict is
+    # worse than leaving the month as it is.
+    new_ids = {t.transaction_id for t in transactions}
+    new_by_row: dict[tuple[str, int], str] = {}
+    for e in rebuilt:
+        for tid, row in (e.get("_anchors") or {}).items():
+            new_by_row[(str(e["file"]), int(row))] = tid
+    rekey: dict[str, str] = {}
+    for file_name, anchors in old_anchors.items():
+        for old_id, row in (anchors or {}).items():
+            if old_id in new_ids:
+                continue
+            target = new_by_row.get((str(file_name), int(row)))
+            if target is not None:
+                rekey[str(old_id)] = target
+    stranded = [
+        tid
+        for tid in store.get_decisions(run.run_id)
+        if tid in old_ids and tid not in new_ids and tid not in rekey
+    ]
+    if stranded:
+        raise RunInputError(
+            f"{len(stranded)} reviewer decision(s) sit on charges this "
+            "re-read would retire and no sheet row carries them over; "
+            "nothing was changed"
+        )
+
+    result = rematch_month(
+        store,
+        run,
+        transactions=transactions,
+        cfg=new_cfg,
+        entity=entity,
+        statement_issues=issues,
+        now_iso=now_iso,
+        learning_db_path=learning_db_path,
+        on_stage=on_stage,
+        replace_statements=rebuilt,
+        rekey_decisions=rekey,
+        trigger="reread",
+    )
+    result["n_statements"] = len(rebuilt)
+    result["n_transactions_before"] = len(old_ids)
+    result["n_transactions"] = len(transactions)
+    result["n_decisions_rekeyed"] = len(rekey)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -8063,7 +8467,8 @@ def rematch_months_after_trip_change(
         if not dates or max(dates) < t0 or min(dates) > t1:
             continue
         rematch = rematch_after_change(
-            store, candidate.run_id, learning_db_path=learning_db_path
+            store, candidate.run_id, learning_db_path=learning_db_path,
+            trigger="trip",
         )
         if rematch is not None:
             results.append({"run_id": candidate.run_id, **rematch})
@@ -8213,8 +8618,26 @@ def rematch_month(
     learning_db_path: Path | None = None,
     on_stage=None,
     statement_entry: dict | None = None,
+    replace_statements: list[dict] | None = None,
+    rekey_decisions: dict[str, str] | None = None,
+    trigger: str = "",
 ) -> dict:
     """Match a month's transactions against its receipt pool and commit.
+
+    `trigger` (item 58) names what caused this re-match ("statement",
+    "reread", "receipts", "cards", "master_data", "set_aside", "trip") and
+    rides on the `rematch_log` event the commit records; it changes nothing
+    about the match itself.
+
+    `replace_statements` (the statement re-read, 2026-09-11) is the one
+    caller allowed to REPLACE the month's charge set instead of growing it:
+    it hands in the `statements[]` entries it rebuilt from the stored files,
+    and the commit swaps the whole `statements[]` + `statement_anchors`
+    blocks for them. The never-drop invariant below is then judged against
+    the UPLOADS rather than the ids (a re-read changes ids by design), and
+    `rekey_decisions` carries the reviewer's verdicts from the ids the
+    re-read retires to the ids the same sheet rows now have, inside the
+    same lock, before the settlements are read.
 
     Extracted from `execute_statement_attach` (PR 2b-1) so the living
     month has ONE implementation of "reconcile what this month currently
@@ -8297,6 +8720,13 @@ def rematch_month(
         for r in receipts
     ]
 
+    # Item 59: the charge side of the same rule. Each charge that printed a
+    # card carries THAT card's entity from the batch's registry snapshot
+    # (blank when the registry cannot name it), so the entity scope below
+    # and the coverage panel read one truth. Stamped before the match and
+    # committed with the snapshot; ids do not hash the entity.
+    transactions = stamp_charge_entities(transactions, _batch_cards(cfg))
+
     llm_client, tracker, _source = _batch_llm_client(cfg)
     # Judgments already paid for on this run answer from the snapshot;
     # only genuinely new pairs reach the model.
@@ -8325,6 +8755,19 @@ def rematch_month(
         [r for r in receipts if r.document_id not in foreign_claims]
         if foreign_claims else receipts
     )
+    # Item 56 (owner ruling 2026-09-11): an invoice and its receipt for one
+    # purchase are ONE candidate. Without this the matcher sees two
+    # indistinguishable documents for one charge and files the pairing as
+    # ambiguous, which in August was 23 of 31 receipts and a reviewer
+    # picking between two copies of the same document a dozen times. The
+    # suppressed copies rejoin `unmatched_receipts` below, keeping the
+    # reconciliation guarantee and their duplicate markers; a group the
+    # reviewer ruled "not a duplicate" (`ignore`) is never collapsed.
+    collapsed = collapsed_duplicate_copies(
+        pool, store.get_duplicate_resolutions(run.run_id)
+    )
+    if collapsed:
+        pool = [r for r in pool if r.document_id not in collapsed]
     # R4b (item 38 ruling 3): the pool spans trips. Receipts from trips
     # overlapping this month's charge span join the candidate set --
     # already excluding anything another run settled (the same advisory
@@ -8335,6 +8778,22 @@ def rematch_month(
         store, run, transactions,
         own_doc_ids={r.document_id for r in receipts},
     )
+    # Item 61: and it spans the ADJACENT company months. A receipt printed
+    # on the last day of a month is filed in THAT month while its charge
+    # posts on the 1st, inside this statement's period; the neighbours'
+    # receipts whose dates fall in this period join the same borrowed set,
+    # so everything downstream (the claims re-check, the snapshot copies,
+    # the view) treats both borrow kinds identically. Empty on a month with
+    # no neighbouring batch, and the match input is then unchanged.
+    adjacent, adjacent_origins = adjacent_pool_for_month(
+        store, run, transactions,
+        own_doc_ids=(
+            {r.document_id for r in receipts} | set(borrowed_origins)
+        ),
+    )
+    if adjacent:
+        borrowed = [*borrowed, *adjacent]
+        borrowed_origins = {**borrowed_origins, **adjacent_origins}
     match_input = [*pool, *borrowed] if borrowed else pool
     outcome = match_month(transactions, match_input, match_cfg)
 
@@ -8354,11 +8813,11 @@ def rematch_month(
     )
     # Excluded receipts still belong to this month's pool and its totals;
     # they are unmatched HERE because they are settled elsewhere.
-    if foreign_claims:
+    if foreign_claims or collapsed:
         _in_pool = {r.document_id for r in receipts}
         _have = set(outcome.unmatched_receipts)
         outcome.unmatched_receipts.extend(
-            d for d in foreign_claims
+            d for d in (*foreign_claims, *sorted(collapsed))
             if d in _in_pool and d not in _have
         )
     # A borrowed receipt the matcher did not consume simply stays in its
@@ -8410,17 +8869,38 @@ def rematch_month(
         if fresh is None:
             raise RunInputError("this batch was deleted while it reconciled")
         committing = {t.transaction_id for t in transactions}
-        dropped = [
-            str(td.get("transaction_id"))
-            for td in (fresh.snapshot or {}).get("transactions") or []
-            if td.get("transaction_id") not in committing
-        ]
-        if dropped:
-            raise RunInputError(
-                f"another statement upload added {len(dropped)} charge(s) to "
-                "this month while it reconciled; nothing was written, so no "
-                "charge was lost. Upload again."
-            )
+        if replace_statements is not None:
+            # The re-read replaces ids on purpose, so the never-drop check
+            # moves up one level: the set of UPLOADS this commit rebuilt has
+            # to be exactly the set the month holds right now. An upload
+            # that landed while the files were being re-read is not in the
+            # rebuilt set, and committing would erase its charges.
+            fresh_files = [
+                str(e.get("file") or "") for e in month_statements(fresh)
+            ]
+            rebuilt_files = [
+                str(e.get("file") or "") for e in replace_statements
+            ]
+            if fresh_files != rebuilt_files:
+                raise RunInputError(
+                    "another statement upload landed on this month while its "
+                    "files were re-read; nothing was written, so no charge "
+                    "was lost. Run the re-read again."
+                )
+            if rekey_decisions:
+                store.rekey_decisions(run.run_id, rekey_decisions)
+        else:
+            dropped = [
+                str(td.get("transaction_id"))
+                for td in (fresh.snapshot or {}).get("transactions") or []
+                if td.get("transaction_id") not in committing
+            ]
+            if dropped:
+                raise RunInputError(
+                    f"another statement upload added {len(dropped)} charge(s) "
+                    "to this month while it reconciled; nothing was written, "
+                    "so no charge was lost. Upload again."
+                )
         fresh_cfg = fresh.config or {}
         if fresh_cfg.get("expense") is not None:
             cfg = {**cfg, "expense": fresh_cfg["expense"]}
@@ -8569,7 +9049,21 @@ def rematch_month(
         # not against the ones this call read minutes ago: the advisory's
         # whole job is to compare this file with what is already loaded.
         statement_advice = None
-        if statement_entry is not None:
+        if replace_statements is not None:
+            # The re-read rebuilt every upload the month holds; replace the
+            # whole block and its anchors, judging each entry's advisory
+            # against the entries before it exactly as the appends did.
+            rebuilt_entries: list[dict] = []
+            rebuilt_anchors: dict[str, dict] = {}
+            for raw in replace_statements:
+                entry = dict(raw)
+                anchors = entry.pop("_anchors", {})
+                entry["advisory"] = statement_advisory(rebuilt_entries, entry)
+                rebuilt_entries.append(entry)
+                rebuilt_anchors[entry["file"]] = anchors
+            new_snapshot[STATEMENTS_KEY] = rebuilt_entries
+            new_snapshot[STATEMENT_ANCHORS_KEY] = rebuilt_anchors
+        elif statement_entry is not None:
             prior = list((fresh.snapshot or {}).get(STATEMENTS_KEY) or [])
             entry = dict(statement_entry)
             anchors = entry.pop("_anchors", {})
@@ -8621,6 +9115,26 @@ def rematch_month(
             cfg, transactions, receipts,
             has_coa=bool(cfg.get("coa_validation")),
         )
+        # Item 58: one event per commit, appended to the FRESH row's log so
+        # a re-match that committed while this one ran keeps its entry.
+        new_snapshot[REMATCH_LOG_KEY] = append_rematch_event(
+            (fresh.snapshot or {}).get(REMATCH_LOG_KEY),
+            {
+                "event_id": uuid.uuid4().hex[:12],
+                # The COMMIT clock, in the app's own format, never the
+                # caller's `now_iso` (an upload's timestamp, or empty on the
+                # incremental paths): events from every path sort together.
+                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "trigger": str(trigger or ""),
+                "n_transactions": n_tx,
+                "n_matched": len(outcome.matches),
+                "n_review": n_review,
+                "n_unmatched_tx": len(outcome.unmatched_transactions),
+                "n_receipts": len(receipts),
+                "n_unmatched_rec": len(outcome.unmatched_receipts),
+                "match_rate": summary["match_rate"],
+            },
+        )
         store.update_run_config(run.run_id, cfg)
         store.update_run_snapshot(run.run_id, new_snapshot)
         store.update_run_summary(run.run_id, summary)
@@ -8668,6 +9182,7 @@ def rematch_after_change(
     *,
     learning_db_path: Path | None = None,
     on_stage=None,
+    trigger: str = "",
 ) -> dict | None:
     """Re-reconcile a statement-bearing month whose inputs just changed.
 
@@ -8711,6 +9226,7 @@ def rematch_after_change(
         entity=str((cfg.get("statement") or {}).get("legal_entity_id") or ""),
         learning_db_path=learning_db_path,
         on_stage=on_stage,
+        trigger=trigger,
     )
 
 
@@ -8735,3 +9251,167 @@ def _rematch_or_error(*args, **kwargs) -> dict:
         return rematch_month(*args, **kwargs)
     except Exception as exc:  # noqa: BLE001 - reported, never raised
         return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+# ---------------------------------------------------------------------------
+# The adjacent-month pool (backlog item 61)
+# ---------------------------------------------------------------------------
+# A receipt is routed to a batch by the month PRINTED ON IT, while a charge
+# lands in the statement that BILLED it, and the two boundaries do not line
+# up: August's workbook opens on 07-31 and July's on 06-30, so a subscription
+# invoiced on the last day of a month posts on the 1st of the next statement
+# and its receipt is already filed one batch away. Live on 2026-09-15: August
+# holds two Google receipts dated 08-31 (71.64 and 75.09) whose charges post
+# on 09-01, while August's own 08-01 Google 71.64 charge sits unmatched with
+# no candidate at all.
+#
+# So the month's candidate pool spans its NEIGHBOURS the way it already spans
+# trips (R4b): same borrowed_receipts / receipt_sources keys, same claims
+# arbitration, same one-receipt-one-charge guarantee. Eligibility is the
+# statement's OWN period rather than a calendar month, because the period is
+# the thing that actually decides whether a charge could be on this workbook.
+
+ADJACENT_BORROW_KIND = "adjacent"
+# Only reached by a month that has no statement yet, where there are no
+# charges to derive a period from and nothing to match either. The calendar
+# month plus this margin is the widest window such a month could plausibly
+# bill, and it keeps the helper answerable instead of undefined.
+ADJACENT_FALLBACK_DAYS = 3
+
+
+def statement_period_for_month(
+    run: RunRow, transactions: list
+) -> tuple[date, date] | None:
+    """The span of dates this run's statement actually covers.
+
+    Derived from the run's OWN charges (min..max transaction date), which is
+    the only source that knows where the workbook was cut: Chase opens
+    August on 07-31 and July on 06-30, and no calendar rule predicts that.
+    The label's calendar month widened by `ADJACENT_FALLBACK_DAYS` is the
+    fallback for a month with no statement yet, and None when the label does
+    not name a month either."""
+    dates = [t.transaction_date for t in transactions if t.transaction_date]
+    if dates:
+        return min(dates), max(dates)
+    ym = month_from_label(run.label)
+    if ym is None:
+        return None
+    year, month = ym
+    first = date(year, month, 1)
+    nxt = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    return (
+        first - timedelta(days=ADJACENT_FALLBACK_DAYS),
+        nxt - timedelta(days=1) + timedelta(days=ADJACENT_FALLBACK_DAYS),
+    )
+
+
+def adjacent_pool_for_month(
+    store: RunStore,
+    run: RunRow,
+    transactions: list,
+    own_doc_ids: set[str],
+) -> tuple[list, dict[str, dict]]:
+    """The receipts this month's statement may settle from the company
+    months either side of it (item 61). Returns `(receipts, origins)`;
+    `origins` maps each borrowed document to
+    `{run_id, label, kind: "adjacent"}`.
+
+    Neighbours are decided by LABEL (`month_from_label`), previous and next,
+    so "August 2026" reaches "July 2026" and "September 2026" and nothing
+    else; a batch whose label names no month neither borrows nor lends.
+    Eligibility is the statement period above: a receipt joins only when its
+    printed date falls inside the span this run's charges actually cover,
+    which is what keeps the borrow narrow rather than a second month's worth
+    of noise.
+
+    The exclusions are `trip_pool_for_month`'s, for the same reasons: a trip
+    batch is not a neighbour, a receipt another run has already claimed is
+    out (the advisory read of the cross-batch never-settle guard), a
+    confirmed private expense is not company-card money, and a document id
+    this month's own pool already holds is dropped. That last one bites
+    harder here than it does on trips, because neighbouring months are
+    ingested the same way and collide by construction: July and August share
+    four ids today, all `NNNN__rendered-body.pdf`. The colliding receipt
+    simply is not borrowed; offering two receipts under one id would corrupt
+    the matcher's consumption set and the view's lookup."""
+    if is_trip_batch(run):
+        return [], {}
+    ym = month_from_label(run.label)
+    if ym is None:
+        return [], {}
+    period = statement_period_for_month(run, transactions)
+    if period is None:
+        return [], {}
+    lo, hi = period
+    year, month = ym
+    wanted = {
+        (year - 1, 12) if month == 1 else (year, month - 1),
+        (year + 1, 1) if month == 12 else (year, month + 1),
+    }
+    neighbours = []
+    for other in store.list_runs():
+        if other.run_id == run.run_id:
+            continue
+        if (other.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if is_trip_batch(other):
+            continue
+        oym = month_from_label(other.label)
+        if oym not in wanted:
+            continue
+        neighbours.append((oym, str(other.run_id), other))
+    # Deterministic order, so which side wins an id collision is a fact
+    # rather than a store-ordering accident: the previous month first.
+    neighbours.sort(key=lambda n: (n[0], n[1]))
+
+    borrowed: list = []
+    origins: dict[str, dict] = {}
+    for _oym, _rid, other in neighbours:
+        o_field = store.get_expense_field_overrides(other.run_id)
+        o_receipts, o_kwargs = _expense_export_inputs(
+            other,
+            store.get_category_overrides(other.run_id),
+            o_field,
+            store.get_expense_edits(other.run_id),
+        )
+        private = _private_reimbursements(o_field)
+        claims = store.get_claims_on_receipts(other.run_id)
+        entity_by_doc = o_kwargs.get("entity_by_doc") or {}
+        for r in o_receipts:
+            doc = r.document_id
+            if doc in own_doc_ids or doc in origins or doc in private:
+                continue
+            if r.detected_date is None or not (lo <= r.detected_date <= hi):
+                continue
+            c = claims.get(doc)
+            if c is not None and c["claimed_by_run_id"] != run.run_id:
+                continue
+            ent = entity_by_doc.get(doc)
+            if ent and ent != r.legal_entity_id:
+                r = replace(r, legal_entity_id=ent)
+            borrowed.append(r)
+            origins[doc] = {
+                "run_id": other.run_id,
+                "label": other.label or other.run_id,
+                "kind": ADJACENT_BORROW_KIND,
+            }
+    return borrowed, origins
+
+
+def borrowed_source_view(entry: object) -> dict | None:
+    """One `receipt_sources` entry as the SPA reads it, or None.
+
+    The map holds both borrow kinds: a trip entry carries `trip_id`, an
+    adjacent-month entry carries `kind: "adjacent"`. Each key is emitted
+    only when the entry has it, so a trip's object is exactly the
+    `{run_id, trip_id, label}` the workbench already renders and an
+    adjacent one is `{run_id, label, kind}`. Absent, never null."""
+    if not isinstance(entry, dict):
+        return None
+    out: dict = {"run_id": entry.get("run_id")}
+    if entry.get("trip_id"):
+        out["trip_id"] = entry.get("trip_id")
+    out["label"] = entry.get("label")
+    if entry.get("kind"):
+        out["kind"] = entry.get("kind")
+    return out

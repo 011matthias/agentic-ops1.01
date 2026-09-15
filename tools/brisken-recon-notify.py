@@ -15,6 +15,9 @@ Microsoft Graph:
 * new intake (legacy user-upload flow)   -> mail the dev
 * newly published run (result is ready)  -> mail the user (Chris) + dev
 * new reviewer feedback (double-click widget) -> mail the dev
+* living-month re-match (attach, re-read, mailed or dropped receipt, card
+  assignment; backlog item 58) -> one line per event to the dev:
+  "August 2026: 14 of 111, pool 7 (statement, <when>)"
 
 Since 2026-07-20 the separate user page is gone and Criss uploads via the
 operator "run now" form, which creates a run (not an intake). The
@@ -116,6 +119,38 @@ def diff_feedback(state: dict, remote: dict) -> int:
     return max(0, count - seen)
 
 
+def diff_rematches(state: dict, remote: dict) -> list[dict]:
+    """Pure diff: living-month re-matches not yet announced to the dev.
+
+    `remote["rematches"]` is every event the months' `rematch_log` holds
+    (backlog item 58: one per commit of `rematch_month`, whatever caused it
+    -- a statement attach, a re-read, a mailed or dropped receipt, a card
+    assignment). `state["seen_rematches"]` holds announced `event_id`s. An
+    event without an id is never announced (it could not be deduped).
+    """
+    seen = set(state.get("seen_rematches", []))
+    return [
+        e
+        for e in remote.get("rematches", [])
+        if e.get("event_id") and e.get("event_id") not in seen
+    ]
+
+
+def rematch_line(event: dict) -> str:
+    """One line per re-match: "August 2026: 14 of 111, pool 7 (statement,
+    2026-09-11T14:24:46)". Counts are the month's matched charges over its
+    charges, and the receipts still unmatched afterwards."""
+    label = event.get("label") or event.get("run_id") or "?"
+    line = (
+        f"{label}: {event.get('n_matched', '?')} of "
+        f"{event.get('n_transactions', '?')}, pool {event.get('n_unmatched_rec', '?')}"
+    )
+    extras = [str(x) for x in (event.get("trigger"), event.get("at")) if x]
+    if extras:
+        line += f" ({', '.join(extras)})"
+    return line
+
+
 def apply_to_state(state: dict, remote: dict) -> dict:
     """Mark everything currently visible as seen (after announcing)."""
     return {
@@ -137,6 +172,13 @@ def apply_to_state(state: dict, remote: dict) -> dict:
             }
         ),
         "seen_feedback_count": int((remote.get("feedback") or {}).get("count", 0)),
+        "seen_rematches": sorted(
+            {
+                e.get("event_id")
+                for e in remote.get("rematches", [])
+                if e.get("event_id")
+            }
+        ),
     }
 
 
@@ -155,6 +197,17 @@ def baseline_new_run_tracking(state: dict, remote: dict) -> dict:
                 r.get("run_id")
                 for r in remote.get("operator_runs", [])
                 if r.get("run_id")
+            }
+        )
+    # Same migration for re-match events (item 58, 2026-09-11): a state file
+    # from before the log existed must not announce every month's history.
+    if state and "seen_rematches" not in state:
+        state = dict(state)
+        state["seen_rematches"] = sorted(
+            {
+                e.get("event_id")
+                for e in remote.get("rematches", [])
+                if e.get("event_id")
             }
         )
     return state
@@ -293,8 +346,12 @@ def main() -> int:
     new_intakes, new_publishes = diff_state(state, remote)
     new_runs = diff_runs(state, remote)
     new_feedback = diff_feedback(state, remote)
+    new_rematches = diff_rematches(state, remote)
 
-    if not new_intakes and not new_runs and not new_publishes and not new_feedback:
+    if (
+        not new_intakes and not new_runs and not new_publishes
+        and not new_feedback and not new_rematches
+    ):
         print("nothing new")
         return 0
 
@@ -346,6 +403,19 @@ def main() -> int:
                 f"{r.get('run_id')} goes to the dev copy only"
             )
         plans.append((subject, body, recipients))
+    if new_rematches:
+        n = len(new_rematches)
+        subject = f"Expense recon: {n} re-match{'es' if n != 1 else ''}"
+        body = (
+            "Months re-matched in the expense tool (one line each: matched "
+            "charges of all charges, receipts still in the pool).\n\n"
+            + "\n".join(
+                f"- {rematch_line(e)}  {APP_URL}/runs/{e.get('run_id')}"
+                for e in new_rematches
+            )
+            + "\n"
+        )
+        plans.append((subject, body, DEV_RECIPIENTS))
     if new_feedback:
         notes = fetch_feedback_entries(session)[-new_feedback:]
         subject = (

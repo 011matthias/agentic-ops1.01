@@ -23,6 +23,7 @@ never a gate.
     lead-desk-maint clean-orphan-state --data /data
     lead-desk-maint suppression-import --data /data --csv list.csv [--apply]
     lead-desk-maint truth-audit --data /data
+    lead-desk-maint reconcile --data /data   # exits 1 on divergence
 """
 from __future__ import annotations
 
@@ -189,6 +190,73 @@ def rekey_anon_contacts(store: ContactStore, dry_run: bool = False) -> dict:
     }
 
 
+def reconcile(store: ContactStore) -> dict:
+    """Where the board's truth and the send path's truth disagree.
+
+    The board reads ``contacts.suppressed``, which the master-sheet sync
+    recomputes on every pass. The send path reads ``suppression_entries``,
+    which the sync never touches. Nothing reconciled the two, so a contact
+    could read as perfectly contactable on the board and be refused at claim
+    time. On 2026-09-10 that gap held 90 contacts, 36 of whom had been put in
+    front of the client for sign-off on a list that could not send.
+
+    A report, never a gate: it names the disagreement so a human decides
+    which side is right, rather than one side silently winning.
+    """
+    from .web.review import unsendable_reason
+
+    board_ok_engine_refuses, board_blocks_engine_allows = [], []
+    for r in store.conn.execute(
+            "SELECT contact_id, first_name, last_name, company, email, "
+            "suppressed, suppress_reason FROM contacts "
+            "WHERE merged_into IS NULL AND coalesce(email,'') != ''"):
+        why = unsendable_reason(store, r["email"])
+        if why and not r["suppressed"]:
+            board_ok_engine_refuses.append({
+                "contact_id": r["contact_id"],
+                "name": f"{r['first_name'] or ''} {r['last_name'] or ''}".strip(),
+                "company": r["company"], "email": r["email"], "engine": why})
+        elif r["suppressed"] and not why:
+            board_blocks_engine_allows.append({
+                "contact_id": r["contact_id"],
+                "name": f"{r['first_name'] or ''} {r['last_name'] or ''}".strip(),
+                "company": r["company"], "email": r["email"],
+                "board": r["suppress_reason"]})
+
+    packets = {}
+    for row in store.conn.execute(
+            "SELECT DISTINCT packet_id FROM review_items"):
+        pid = row["packet_id"]
+        listed = refused = 0
+        who = []
+        for item in store.list_review_items(pid):
+            if item["kind"] != "sequence":
+                continue
+            for rec in (json.loads(item["body"]).get("recipients") or []):
+                listed += 1
+                why = unsendable_reason(store, rec.get("email") or "")
+                if why:
+                    refused += 1
+                    who.append({"name": rec.get("name"),
+                                "email": rec.get("email"), "reason": why})
+        if listed:
+            packets[pid] = {"listed": listed, "engine_would_refuse": refused,
+                            "who": who}
+
+    divergent = bool(board_ok_engine_refuses) or bool(
+        any(p["engine_would_refuse"] for p in packets.values()))
+    return {
+        "divergent": divergent,
+        "board_says_contactable_engine_refuses":
+            len(board_ok_engine_refuses),
+        "board_says_suppressed_engine_allows":
+            len(board_blocks_engine_allows),
+        "detail_engine_refuses": board_ok_engine_refuses[:40],
+        "detail_board_refuses": board_blocks_engine_allows[:40],
+        "review_packets": packets,
+    }
+
+
 def _suppression_entry(row: dict) -> tuple[str, str, str, str] | None:
     """(entry, kind, source, note) for one CSV row, normalized to the
     suppression_entries convention (emails bare lowercase, domains as
@@ -306,6 +374,14 @@ def main(argv: list[str] | None = None) -> int:
     sr.add_argument("--file", required=True, help="packet JSON (packet_id, title, intro, items)")
     sr.add_argument("--replace", action="store_true",
                     help="reseed over an existing packet (drops its responses)")
+    sr.add_argument("--allow-unsendable", action="store_true",
+                    help="seed even though the engine would refuse some "
+                         "recipient (records the override; do not use to get "
+                         "past a roster you have not looked at)")
+    rc = sub.add_parser("reconcile",
+                        help="where the board's truth and the send path's "
+                             "truth disagree (report, never a gate)")
+    rc.add_argument("--data", default=os.environ.get("LEAD_DESK_DATA", "lead-desk-data"))
     args = p.parse_args(argv)
 
     db = Path(args.data).resolve() / "lead-desk.sqlite"
@@ -322,12 +398,15 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "seed-review":
             from .web.review import seed_packet
             packet = json.loads(Path(args.file).read_text(encoding="utf-8"))
-            report = seed_packet(store, packet, now_iso(), replace=args.replace)
+            report = seed_packet(store, packet, now_iso(), replace=args.replace,
+                                 allow_unsendable=args.allow_unsendable)
+        elif args.cmd == "reconcile":
+            report = reconcile(store)
         else:
             report = truth_audit(store)
-    if args.cmd == "truth-audit":
+    if args.cmd in ("truth-audit", "reconcile"):
         print(json.dumps(report, indent=1, default=str))
-        return 0
+        return 1 if args.cmd == "reconcile" and report["divergent"] else 0
     for k, v in report.items():
         print(f"{k}: {v}")
     if args.cmd == "rekey-anon" and not args.dry_run and not report["events_unchanged"]:

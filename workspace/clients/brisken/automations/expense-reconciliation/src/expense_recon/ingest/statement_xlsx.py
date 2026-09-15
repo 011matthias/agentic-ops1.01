@@ -43,10 +43,24 @@ running-amount column IS a formula she copy-pastes. A light second pass
 cells and emits one ``ParseIssue(severity="warning")`` per affected
 column, so a formula-derived column mapped as ``amount`` is visibly
 flagged instead of silently trusted. Warnings never abort a run.
+
+Sign canonicalization (3.15, added here 2026-09-11)
+---------------------------------------------------
+Same two paths as the CSV sibling, because the Excel export of the same
+bank prints the same convention: a mapped ``type`` column decides per
+row (``Sale`` is a purchase, ``Payment`` / ``Return`` / ``Refund`` /
+``Credit`` a credit); without one the file's sign majority is inferred
+and surfaced as a warning. Canonical is purchase = positive, credit =
+negative, and ``is_credit`` follows the canonical sign. Before this the
+Excel parser kept the printed sign verbatim, so Criss's Chase workbooks
+(purchases printed negative) reached the matcher as ``-15.00`` against
+a ``15.00`` receipt and July and August 2026 reconciled 0 of 111 each
+while the receipts sat in the pool unmatched.
 """
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -60,6 +74,8 @@ from ._common import (
     ParseIssue,
     StatementParseError,
     assign_content_ids,
+    infer_sign_flip,
+    is_credit_type,
     parse_amount,
     parse_date,
     validate_required_map,
@@ -358,6 +374,19 @@ def parse_statement_xlsx_tolerant(
                 card_last4: str | None = None
                 if "card" in column_map:
                     card_last4 = _coerce_str(mapped.get("card")) or None
+
+                # 3.15 sign canonicalization, Type-column path (mirrors
+                # statement_csv): the export's own debit/credit label
+                # decides, not the printed sign. A row with an empty Type
+                # cell keeps its printed sign and derives is_credit from it.
+                is_credit = False
+                if "type" in column_map:
+                    raw_type = _coerce_str(mapped.get("type"))
+                    if raw_type:
+                        is_credit = is_credit_type(raw_type)
+                        amount = -abs(amount) if is_credit else abs(amount)
+                    else:
+                        is_credit = amount < 0
             except (KeyError, ValueError) as exc:
                 issues.append(
                     ParseIssue(
@@ -393,11 +422,44 @@ def parse_statement_xlsx_tolerant(
                     original_currency=original_currency,
                     fx_rate=fx_rate,
                     entry_status=_row_entry_status(row_cells, mapped_indices),
+                    is_credit=is_credit,
                     card_last4=card_last4,
                 )
             )
     finally:
         wb.close()
+
+    # 3.15 sign canonicalization, no-Type path (mirrors statement_csv):
+    # without a debit/credit column the file's convention is inferred from
+    # the sign majority. A majority-negative workbook prints purchases as
+    # negatives (the Chase export Criss uploads), so every sign flips to
+    # reach the canonical convention; the inference is surfaced as a
+    # warning, never silent. After canonicalization, credit = negative.
+    if "type" not in column_map and transactions:
+        flip = infer_sign_flip([t.amount for t in transactions])
+        if flip:
+            n_neg = sum(1 for t in transactions if t.amount < 0)
+            issues.append(
+                ParseIssue(
+                    file_name=file_name,
+                    line_number=1,
+                    message=(
+                        f"sign convention inferred: {n_neg} of "
+                        f"{len(transactions)} amounts are negative, so this "
+                        f"export prints purchases as negatives; all signs "
+                        f"flipped to canonical (purchase = positive, credit "
+                        f"= negative). Map a 'type' column to make this "
+                        f"explicit."
+                    ),
+                    severity="warning",
+                )
+            )
+            transactions = [replace(t, amount=-t.amount) for t in transactions]
+        transactions = [
+            replace(t, is_credit=t.amount < 0) if (t.amount < 0) != t.is_credit
+            else t
+            for t in transactions
+        ]
 
     issues.extend(
         _scan_formula_columns(path, sheet_name, column_map, file_name)

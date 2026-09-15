@@ -124,15 +124,18 @@ from .service import (
     execute_statement_attach,
     find_trip_batch,
     has_statement,
+    REMATCH_LOG_KEY,
     is_trip_batch,
     release_trip_batch_slot,
     prepare_statement_attach,
+    reread_statements,
     forget_memory_vendor,
     ingest_receipts_folder_into_run,
     matched_autopick_decisions,
     ready_confirm_pairs,
     prepare_intake_run,
     prepare_run,
+    rematch_after_change,
     refresh_batch_master_data,
     regenerate_expense_export,
     regenerate_reconciled,
@@ -408,6 +411,66 @@ def _run_receipts_drop_job(
             )
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+
+
+def _resolve_duplicate_rematch(
+    db_path: Path, learning_db_path: Path, run_id: str
+) -> dict | None:
+    """Re-match a reconciling month after a duplicate resolution (item 56).
+
+    The resolution decides the matcher's pool: an unresolved or confirmed
+    group is collapsed to one candidate, an `ignore` group is not. Without
+    this the ruling would be recorded and inert until the month's next
+    change, which is exactly the "allowed but inert" failure
+    `rematch_after_change` exists to prevent. Its own error contract
+    applies: a failure rides back in the reply, it never fails the
+    resolution that is already written.
+    """
+    with RunStore(db_path) as store:
+        return rematch_after_change(
+            store, run_id,
+            learning_db_path=learning_db_path, trigger="duplicates",
+        )
+
+
+def _run_reread_statements_job(
+    db_path: Path, job_id: str, run_id: str, learning_db_path: Path,
+) -> None:
+    """Rebuild a month's charges from its stored statement files and
+    re-match, off the request (the match can take minutes with the LLM).
+    Same job shape as the attach so the SPA's poller reads it unchanged."""
+    try:
+        with RunStore(db_path) as store:
+            run = store.get_run(run_id)
+            if run is None:
+                store.set_job_status(
+                    job_id, JOB_ERROR, error="run not found",
+                    updated_at=_now_iso(),
+                )
+                return
+            settings = store.get_settings()
+            result = reread_statements(
+                store, run,
+                settings=settings, now_iso=_now_iso(),
+                learning_db_path=learning_db_path,
+                on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
+            )
+            warnings = [
+                result[k] for k in ("entity_mismatch", "statement_advisory")
+                if result.get(k)
+            ]
+            if warnings:
+                store.set_job_stage(
+                    job_id, f"warning: {'; '.join(warnings)}", _now_iso()
+                )
+            store.set_job_status(
+                job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
+            )
+    except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
+            )
 
 
 def _run_attach_statement_job(
@@ -1190,6 +1253,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 "feedback": {
                     "count": len(_read_feedback()),
                 },
+                # Item 58: every commit of `rematch_month` (attach, re-read,
+                # receipts, cards, master data, set-aside, trip) left one
+                # event in the month's `rematch_log`; the notifier diffs on
+                # `event_id` and mails one line per event. Oldest first;
+                # the sort is stable, so two events in one second keep the
+                # order their month appended them in.
+                "rematches": sorted(
+                    (
+                        {"run_id": r.run_id, "label": r.label, **ev}
+                        for r in all_runs
+                        for ev in ((r.snapshot or {}).get(REMATCH_LOG_KEY) or [])
+                        if isinstance(ev, dict) and ev.get("event_id")
+                    ),
+                    key=lambda ev: str(ev.get("at") or ""),
+                ),
             }
         )
 
@@ -1736,6 +1814,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             store.set_duplicate_resolution(run_id, group_id, resolution, _now_iso())
+            reconciling = has_statement(run)
+        # Item 56: the resolution decides what the matcher's pool holds (an
+        # `ignore` group is NOT collapsed), so a reconciling month has to
+        # re-match or the ruling is allowed but inert -- the same reasoning
+        # as every other living-month change. Off the event loop, because
+        # rematch takes the batch lock and can call the model.
+        rematch = None
+        if reconciling:
+            rematch = await run_in_threadpool(
+                _resolve_duplicate_rematch,
+                app.state.db_path, app.state.learning_db_path, run_id,
+            )
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
             # Dispatch on the run's mode, exactly as GET /api/runs/{id}
             # does. Duplicate groups are flagged in BOTH payloads, so an
             # expense batch can be resolved from the grid; replying with
@@ -1751,7 +1845,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     store.get_category_overrides(run_id),
                     store.get_duplicate_resolutions(run_id),
                 )
-        return JSONResponse({"ok": True, "summary": view["summary"]})
+        out = {"ok": True, "summary": view["summary"]}
+        if rematch is not None:
+            out["rematch"] = rematch
+        return JSONResponse(out)
 
     # §16 export policy. The policy is snapshotted into each new run's
     # config at creation, so changing it affects future runs, never
@@ -3163,6 +3260,38 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             _run_attach_statement_job, app.state.db_path, job_id, run_id,
             stmt_name, column_map, form, app.state.learning_db_path,
             statement.filename or "",
+        )
+        return JSONResponse({"ok": True, "job_id": job_id})
+
+    @app.post("/api/expense-batches/{run_id}/statements/reread")
+    async def post_batch_statements_reread(
+        run_id: str, background: BackgroundTasks,
+    ):
+        """Rebuild the month's charges from the statement files it already
+        holds and re-match (2026-09-11). The repair for a month whose stored
+        charges were parsed wrong: re-uploading the same file cannot fix it,
+        because content-derived ids would fold the corrected rows in beside
+        the wrong ones and double the month. Runs in the background ->
+        {job_id}; poll GET /jobs/{id}. Refuses (job error, nothing written)
+        when a statement file is missing, a column map no longer resolves,
+        or a reviewer decision cannot be carried over by sheet row."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            run, err = _expense_run_or_error(store, run_id)
+            if err is None and not has_statement(run):
+                err = JSONResponse(
+                    {"error": "this month has no statement to re-read"},
+                    status_code=400,
+                )
+        if err is not None:
+            return err
+        job_id = uuid.uuid4().hex[:12]
+        with open_store() as store:
+            store.create_job(job_id, None, _now_iso())
+        background.add_task(
+            _run_reread_statements_job, app.state.db_path, job_id, run_id,
+            app.state.learning_db_path,
         )
         return JSONResponse({"ok": True, "job_id": job_id})
 

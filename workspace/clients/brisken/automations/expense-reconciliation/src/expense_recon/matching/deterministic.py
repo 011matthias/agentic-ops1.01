@@ -1186,8 +1186,22 @@ def match_month(
     cands_by_tx: dict[str, list[_Candidate]] = {}
     for tx in transactions:
         for receipt in receipts:
-            if receipt.legal_entity_id != tx.legal_entity_id:
-                continue  # entity scope per v2 spec §4.2
+            # Entity scope per v2 spec §4.2: a receipt that NAMES another
+            # entity never pairs with this charge. An UNKNOWN entity (the
+            # empty string) is unscoped rather than a mismatch: receipts
+            # mailed or dropped into a month carry no entity until a card
+            # hint or the reviewer assigns one, and the classic path
+            # (`reconcile()`) stamps the config entity on every receipt, so
+            # nothing there changes. Before 2026-09-11 the bare inequality
+            # dropped every entity-less receipt from every pairing, and a
+            # month whose receipts came in by mail reconciled 0 no matter
+            # what the statement said.
+            if (
+                receipt.legal_entity_id
+                and tx.legal_entity_id
+                and receipt.legal_entity_id != tx.legal_entity_id
+            ):
+                continue
             scope = receipt_scope.get(receipt.document_id)
             if scope is not None and not (scope & tx_card_keys[tx.transaction_id]):
                 continue  # receipt's payment mode names a different card
