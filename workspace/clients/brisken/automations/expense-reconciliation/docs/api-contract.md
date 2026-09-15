@@ -1980,3 +1980,35 @@ a candidate: the candidate carrying a reviewer category edit first, else
 held receipt (none), and the reconciliation PDF leaves its posts-to column
 blank on such a row. Pinned by `tests/test_view_contract.py` and
 `tests/test_month_edits.py`; renders in `docs/lovable-month-edits-prompt.md`.
+
+## Duplicate groups found by the document's number: `basis` (item 69 round A)
+
+`GET /api/runs/{id}` and `GET /api/expense-batches/{id}` ->
+`duplicate_groups[].basis`, the string `"reference"` or **absent** (never
+null, never `"vendor_date"`). Present only on a receipt group that ONLY the
+second duplicate key finds: identical normalized reference (upper-cased
+alphanumerics of the receipt's reference, at least 5 characters, not the
+receipt's own date or total printed as digits) + total + currency, whatever
+the vendor spelling or the printed date. A Stripe invoice PDF and its
+receipt PDF print the vendor differently, and a re-mailed copy carries the
+mail's date; the vendor/date key never saw those, and the copy that named
+no card then took a stranger's charge of the same amount.
+
+Groups from the two keys never merge. A reference group whose membership
+equals a vendor/date group IS that group (same `group_id`, `basis` absent);
+overlapping-but-different memberships are two groups, and a row in both
+carries the marker (`duplicate`) of the group in which it is the extra copy,
+so the marker never hides a collapse. Reviewer resolutions
+(`POST /api/runs/{id}/duplicates/resolve`) work on reference groups exactly
+as on the others: `ignore` puts every copy back in the pool and re-matches,
+`confirmed` keeps it collapsed; the ruling does not change `basis`.
+`n_duplicate_groups` and `n_duplicate_copies` count both kinds.
+
+One behaviour beside the field: the kept copy of a reference group inherits
+the card its copies name (and the entity, when exactly one is named), so its
+row shows `payment_hint` / `card` / `legal_entity_id` from its copy and the
+matcher scopes it to that card's statement. Parallel field per rule 1; a
+month with no reference-only group renders byte-identically to before.
+Pinned by `tests/test_view_contract.py`; no SPA change is needed (the
+duplicates prompt already renders groups and row markers; `basis` is
+optional display).

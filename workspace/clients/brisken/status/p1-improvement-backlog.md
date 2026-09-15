@@ -2577,8 +2577,11 @@ demoted by the uniqueness gate with the correct charge teed up, 0 wrong.
 it is built; `.scratch`-class simulator, not shipped):**
 
 - Round 0 is the sibling's item 63 (PR #829, the probable band needs the
-  merchant to agree): August wrong 5 -> 2, July 1 -> 0, nothing else moves.
-  Taken as given.
+  merchant to agree): August wrong 5 -> 3 (not 2, corrected 2026-09-15 on
+  the origin/main measurement: freeing the ATT pairing let the Anthropic 100
+  invoice bind BASE44 100.00, exact amount, 4 days, which the vendor floor of
+  item 63 does not guard because it applies to non-exact amounts only),
+  July 1 -> 0, nothing else moves. Taken as given.
 - Round A, one purchase is one candidate by its number: `find_duplicate_
   receipts` gains a second key (invoice/receipt reference + total + currency,
   vendor spelling and date ignored), and the kept copy inherits a payment
@@ -2659,6 +2662,114 @@ receipt numbered 1..51 while the listing numbers 1..54. The captions past
 the first fan-out row therefore name the wrong expense number. That is the
 numbering fallback in `build_expense_report`, not the coverage question, and
 it wants its own item.
+
+**Round A shipped (2026-09-15, branch `client/brisken/p1-matching-round-a`,
+not yet merged or deployed).** One purchase is one candidate by its number.
+`duplicates.find_duplicate_receipts_by_reference` is the second key:
+upper-cased alphanumerics of `detected_reference` (at least 5 characters;
+a digit-only string equal to the receipt's own date in YYYYMMDD / DDMMYYYY /
+MMDDYYYY / YYMMDD / DDMMYY / MMDDYY or to the digits of its total is no
+reference) + total + currency, vendor spelling and date ignored.
+`find_duplicate_receipt_groups` lists the vendor/date groups first, then the
+reference-only groups; a reference group whose membership equals a
+vendor/date group is that group (same id), overlapping memberships stay two
+groups, nothing merges, so every saved resolution keeps its group.
+`duplicate_groups[]` gains `basis: "reference"` on the reference-only groups
+(parallel, absent on every vendor/date group; pinned in
+`test_view_contract.py`, documented in `api-contract.md`).
+`collapsed_duplicate_copies` collapses both kinds the same way (every member
+after the first sorted one, unless that group is ruled `ignore`); a row in
+two live groups carries the marker of the group in which it is the extra
+copy. `inherit_card_from_copies`, over the full effective list, gives every
+member of a reference group with no card-bearing payment mode the card its
+copies name (only when every card-bearing copy names the same card) and an
+empty entity the one entity the group names; applied in `rematch_month`
+before `resolve_batch_row_cards`, so the card chain derives the entity from
+the inherited card and the Lovable 50 invoice leaves the Corporate Services
+scope. **Persistence choice:** the inherited payment mode and entity persist
+into the snapshot's `receipts` exactly as the entity bake does (they ride
+`snapshot_to_dict` with it), and are re-derived from the extraction baseline
+on every re-match (item 70), so nothing accumulates; the grid and the export
+apply the same function after the overlay, so the row's `payment_hint` /
+`card` / `legal_entity_id`, the workbench's rendered receipt and the match
+outcome say one thing (the coverage panel reads charges and is unaffected).
+The attribution tool now CALLS `baseline_receipts`, `inherit_card_from_copies`
+and `collapsed_duplicate_copies` in the app's order (no re-implementation),
+uses the module's reference rule for its twin classes, and reads labels at
+the document level: a kept copy labelled `excluded` whose collapsed twin
+carries the verdict inherits it, so the measurement does not depend on which
+copy the collapse keeps (the same aliasing the Phase 0 simulator used).
+
+What the extractor puts in `detected_reference`, read off the DB copy of both
+months: a real invoice / receipt number on most rows (`H0LHY2WQ-0032` and
+`H0LHY2WQ0032` for one Lovable purchase, `DZ9BH3VA0037` on both Anthropic
+copies, `IUS25300` on the Redis invoice and its rendered body, `H_46243348`
+on both Hostinger bodies, `16530` on both Petit Train documents); Anthropic's
+account id `NQTJA4FE` on five July receipts with five different totals (the
+total in the key keeps them apart); 4-digit till counters on the Karlsruhe
+slips (`4563`, `1514`, under the floor); 5-15 digit NFC-e / CV numbers on
+the Brazilian receipts, none equal to a date or a total. Twin groups the key
+finds: July 2 new (Redis invoice + body; the Hostinger re-mail copy, which
+Phase 0 had counted under "wrong", not "undetected") plus the Lovable 200
+and Aposto pairs where both keys agree; August 3 new (the Petit Train slip,
+the Anthropic 100 copy, the Anthropic 51.38 copy, likewise counted under
+"wrong" in Phase 0) plus 4 pairs where both keys agree (Pressmaster, Lovable
+50, Anthropic 52.59, Lovable 25 on 08-05). Neither the Google twins (distinct
+invoice numbers) nor the Zoho Books / ZOHO Corporation pair (distinct
+references) twin.
+
+Measured, labels as judge, before = origin/main `c19325ae`, after = this
+branch, `tools/recon-match-attribution.py --live` on the DB copy:
+
+| class | July before | July after | August before | August after |
+|---|---|---|---|---|
+| resolved_clean | 26 ($2,658) | 26 | 7 ($1,147) | 7 |
+| wrong_exact_no_charge | 0 | 0 | 1 ($50 Lovable 50 -> BASE44) | 0 |
+| wrong_probable_no_charge | 0 | 0 | 1 ($100 Anthropic 100 -> BASE44) | 0 |
+| wrong_dup_copy | 0 | 0 | 1 ($51.38 Anthropic copy -> ANTHROPIC 51.16) | 0 |
+| matched_unverifiable | 0 | 0 | 1 ($52.59) | 0 |
+| dup_copy_collapsed | 2 | 4 | 8 | 11 |
+| dup_copy_undetected | 2 | 0 | 2 | 0 |
+| dup_false_positive | 1 (Google) | 1 | 0 | 0 |
+| demoted_uniqueness | 10 | 10 | 2 | 1 |
+| demoted_card | 0 | 0 | 0 | 1 |
+| coverage_unloaded_card | 0 | 0 | 2 | 4 |
+| coverage_neighbour_period | 1 | 1 | 3 | 3 |
+| coverage_non_card_tender | 1 | 1 | 1 | 1 |
+| coverage_bank_transfer | 3 | 3 | 0 | 0 |
+| coverage_unknown_card | 0 | 0 | 1 | 1 |
+| excluded_ambiguous | 4 | 4 | 1 | 2 |
+| unlabeled_unmatched | 1 | 1 | 0 | 0 |
+| review (correct teed up / other) | 10 / 2 | 10 / 2 | 2 / 1 | 2 / 1 |
+
+Pairs that moved, August: `0025` Lovable 50 invoice, took BASE44 50.00 ->
+unmatched, coverage_unloaded_card (label `no_charge:unloaded_card`; the grid
+now shows it on card 1176 / Consulting); `0015` Anthropic 100 invoice, took
+BASE44 100.00 -> unmatched, coverage_unloaded_card (same label); `0021`
+Anthropic 51.38 invoice, took ANTHROPIC 51.16 -> exact match to ANTHROPIC
+51.38 on card 3645 (the label's verdict, carried by its copy `0022`, which
+is now collapsed); `0016` Anthropic 100 receipt copy, undetected ->
+collapsed; `0018` Petit Train billet (in review, correct charge teed up) ->
+collapsed, with `0000` SARL TRAIN'S kept and in review with the same correct
+charge teed up (demoted_card: its `42463153XXXXXX38` masked BIN reads as an
+absent card, the round-B fix); `0023` Anthropic 52.59 invoice, an
+unverifiable match to ANTHROPIC 52.46 -> ambiguous on that charge (label
+`excluded`; with card 3645 inherited it competes with `0021`, which the
+matcher lists as a candidate there although it holds an exact elsewhere).
+July: `0002` Hostinger re-mail copy and `0070` Redis body, undetected ->
+collapsed; nothing else moved. Six bundles: 55/95 clean, 0 wrong, byte-
+identical class tables (`load_bundle` replays as the scorer does and is
+untouched). Scorer + guard: train 49.8, holdout 15.7, all 65.5, 55/95
+deterministic, determ_wrong 0, guard 4/4 PASS, calibrate exit 0; the floor
+held exactly. Suite 1746 -> 1785 passed / 2 skipped; four regress proofs RED
+first (the second key, the collapse of reference groups, the inheritance
+call in `rematch_month`, the `basis` field). Deviations from the prediction:
+August review stays 3 (predicted 2): the copy offered a wrong charge left
+review and `0023` entered it from an unverifiable match, which is the
+precision direction (matched_unverifiable 1 -> 0); August wrong 3 -> 0, July
+0 -> 0, no clean pair lost anywhere, as predicted. No SPA change is needed:
+the duplicates prompt already renders groups and row markers, and `basis` is
+optional display.
 
 ### 70. Changes in a month that did not stick (Criss 2026-09-14, owner report 2026-09-15)
 

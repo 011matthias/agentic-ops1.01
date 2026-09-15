@@ -729,3 +729,66 @@ def test_posting_category_proposed_is_absent_or_true_never_false(
     assert row["effective_bucket"] == "review"
     assert row["chosen_document_id"] is None
     assert row["posting_category"]["category"] == "Office Supplies & Consumables"
+
+
+def test_duplicate_group_basis_is_absent_or_reference_never_null(
+    tmp_path, monkeypatch, payloads
+):
+    """Item 69 round A. `duplicate_groups[].basis` says a receipt group was
+    found ONLY by the reference key (normalized reference + total +
+    currency, vendor spelling and date ignored). Parallel field per rule 1:
+    `"reference"` on exactly those groups and ABSENT (never null, never
+    `"vendor_date"`) on every group the vendor/date key finds, so a month
+    without such a group renders byte-identically to before.
+
+    Seeded on its own synthetic run so the module fixtures stay what they
+    were: `d5`/`d6` are a vendor/date pair (basis absent), `d7`/`d8` share
+    a reference but not a vendor spelling or a date (basis reference).
+    """
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    for view_name, views in payloads.items():
+        for view in views:
+            for group in view.get("duplicate_groups") or []:
+                if "basis" in group:
+                    assert group["basis"] == "reference", (view_name, group)
+                    assert group["kind"] == "receipt", (view_name, group)
+
+    app = create_app(tmp_path)
+    with TestClient(app) as client:
+        t1 = _transaction("t1", 7)
+        r5 = _receipt("d5", 11, "TWICE", "31", items=[_item("31")])
+        r6 = _receipt("d6", 11, "TWICE", "31", items=[_item("31")])
+        r7 = Receipt(
+            document_id="d7", legal_entity_id="le1", detected_date=date(2026, 4, 12),
+            detected_total=Decimal("51.38"), detected_currency="USD",
+            detected_vendor="Anthropic, PBC", detected_reference="DZ9BH3VA-0036",
+        )
+        r8 = Receipt(
+            document_id="d8", legal_entity_id="le1", detected_date=date(2026, 4, 13),
+            detected_total=Decimal("51.38"), detected_currency="USD",
+            detected_vendor="Anthropic, PBC (@anthropic)",
+            detected_reference="DZ9BH3VA0036",
+        )
+        outcome = MatchOutcome(
+            matches=[], unmatched_transactions=["t1"],
+            unmatched_receipts=["d5", "d6", "d7", "d8"], ambiguous=[],
+        )
+        snapshot = snapshot_to_dict([t1], [r5, r6, r7, r8], outcome, [])
+        store = RunStore(tmp_path / "recon-web.sqlite")
+        store.create_run(
+            run_id="contract-basis", created_at="2026-09-15T00:00:00",
+            label="basis", operator=None, summary={}, snapshot=snapshot,
+            config={}, work_dir=str(tmp_path), llm_enabled=False, has_coa=False,
+        )
+        store.close()
+        view = client.get("/api/runs/contract-basis").json()
+
+    groups = {tuple(g["members"]): g for g in view["duplicate_groups"]}
+    assert set(groups) == {("d5", "d6"), ("d7", "d8")}, sorted(groups)
+    assert "basis" not in groups[("d5", "d6")]
+    assert groups[("d7", "d8")]["basis"] == "reference"
+    assert groups[("d7", "d8")]["kind"] == "receipt"
+    # every group, whichever key found it, keeps the one pinned shape
+    for g in view["duplicate_groups"]:
+        assert set(g) - {"basis"} == {"group_id", "kind", "members", "resolution"}, g
