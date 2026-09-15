@@ -5878,6 +5878,126 @@ def build_expense_report(
     )
 
 
+def build_cost_center_totals(
+    store: RunStore,
+    *,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> dict:
+    """The cross-month roll-up (item 47, step 5): per cost center, per
+    currency, over every expense batch the store holds, months and trips
+    alike. The only surface that aggregates ACROSS batches: "what has
+    Lidar cost since January" is the question a project raises, and no
+    month report can answer it.
+
+    Rows are the export's own rows (`_expense_export_inputs`), resolved
+    through the same chain the grid and the month report run, so the
+    three cannot disagree about where a row belongs. Confirmed private
+    expenses are left out: they are reimbursements owed, not company
+    spend. The range is inclusive on the row's (edited) expense date; a
+    row that carries no date cannot be excluded by a range, so it always
+    counts and `n_undated` says how many such rows the figures contain.
+
+    Every ACTIVE cost center is listed, at zero when nothing reached it;
+    an inactive one appears only while history still sits on it. The
+    unassigned bucket is explicit and never hidden. With no cost center
+    defined the list is empty and every row is unassigned: the roll-up
+    stating a fact, not a review state (the review state stays silent per
+    the empty-registry contract, which this function does not re-check).
+
+    The stated limit rides in `note`: card and receipt spend only, never
+    contractor invoices or salaries, so none of these figures is a total
+    project cost.
+    """
+    settings = store.get_settings()
+    registry = CostCenterRegistry.from_settings(settings)
+
+    def _bucket() -> dict:
+        return {"n_rows": 0, "batches": set(), "totals": {}}
+
+    by_center: dict[str, dict] = {}
+    unassigned = _bucket()
+    n_batches = 0
+    n_rows = 0
+    n_undated = 0
+    for run in store.list_runs():
+        if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        n_batches += 1
+        overrides = store.get_category_overrides(run.run_id)
+        field_overrides = store.get_expense_field_overrides(run.run_id)
+        edits = store.get_expense_edits(run.run_id)
+        trip = None
+        if is_trip_batch(run):
+            trip_row = store.get_trip(
+                str((run.config or {}).get("trip_id") or "")
+            )
+            if trip_row is not None:
+                trip = {"cost_center": trip_row.cost_center}
+        receipts, _kwargs = _expense_export_inputs(
+            run, overrides, field_overrides, edits
+        )
+        private_by_doc = _private_reimbursements(field_overrides)
+        company = [r for r in receipts if r.document_id not in private_by_doc]
+        card_res = resolve_batch_row_cards(company, run.config, field_overrides)
+        cost_res = resolve_batch_row_cost_centers(
+            company, field_overrides, settings=settings, trip=trip,
+            card_res=card_res,
+        )
+        for r in company:
+            d = r.detected_date
+            if d is None:
+                n_undated += 1
+            else:
+                if date_from is not None and d < date_from:
+                    continue
+                if date_to is not None and d > date_to:
+                    continue
+            name = cost_res[r.document_id].name
+            bucket = by_center.setdefault(name, _bucket()) if name else unassigned
+            bucket["n_rows"] += 1
+            bucket["batches"].add(run.run_id)
+            if r.detected_total is not None:
+                ccy = r.detected_currency or "?"
+                bucket["totals"][ccy] = (
+                    bucket["totals"].get(ccy, Decimal("0")) + r.detected_total
+                )
+            n_rows += 1
+    for name, entry in registry.entries.items():
+        if entry.get("active", True) is not False:
+            by_center.setdefault(name, _bucket())
+
+    def _emit(bucket: dict) -> dict:
+        return {
+            "n_rows": bucket["n_rows"],
+            "n_batches": len(bucket["batches"]),
+            "totals": {
+                ccy: _fmt_amount(amt)
+                for ccy, amt in sorted(bucket["totals"].items())
+            },
+        }
+
+    centers = []
+    for name in sorted(by_center, key=str.casefold):
+        entry = registry.entries.get(name) or {}
+        centers.append({
+            "name": name,
+            "kind": str(entry.get("kind") or ""),
+            "active": entry.get("active", True) is not False,
+            **_emit(by_center[name]),
+        })
+    return {
+        "from": date_from.isoformat() if date_from else None,
+        "to": date_to.isoformat() if date_to else None,
+        "note": COST_CENTER_SCOPE_NOTE,
+        "cost_centers": centers,
+        "unassigned": _emit(unassigned),
+        "n_batches": n_batches,
+        "n_rows": n_rows,
+        "n_undated": n_undated,
+    }
+
+
 def build_reconciliation_report(
     run: RunRow,
     decisions: dict,
@@ -6323,6 +6443,33 @@ def _refresh_batch_master_data_locked(
             if n_person_moved:
                 changes.append(
                     {"field": "row_persons", "n_rows_changed": n_person_moved}
+                )
+            # Item 47: a card's `default_cost_center` reaches an existing
+            # batch only through this refresh, so the audit says how many
+            # rows' RESOLVED cost center it moved. The chain runs on both
+            # sides with the batch's real trip, so a trip that outranks
+            # the card default masks the move here exactly as on the row.
+            trip_cc = None
+            if is_trip_batch(run):
+                trip_row = store.get_trip(
+                    str((run.config or {}).get("trip_id") or "")
+                )
+                if trip_row is not None:
+                    trip_cc = {"cost_center": trip_row.cost_center}
+            cc_before = resolve_batch_row_cost_centers(
+                receipts, fo, settings=settings, trip=trip_cc, card_res=before,
+            )
+            cc_after = resolve_batch_row_cost_centers(
+                receipts, fo, settings=settings, trip=trip_cc, card_res=after,
+            )
+            n_cc_moved = sum(
+                1
+                for doc in cc_before
+                if cc_before[doc].name != cc_after.get(doc, cc_before[doc]).name
+            )
+            if n_cc_moved:
+                changes.append(
+                    {"field": "row_cost_centers", "n_rows_changed": n_cc_moved}
                 )
         except Exception:  # noqa: BLE001 - impact count must not break refresh
             pass

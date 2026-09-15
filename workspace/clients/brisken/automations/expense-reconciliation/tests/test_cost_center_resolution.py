@@ -369,3 +369,42 @@ def test_an_undefined_card_default_leaves_the_row_unresolved(
     row = _row(client, batch)
     assert row["cost_center"] is None
     assert row["needs_cost_center"] is True
+
+
+# --- the card default reaches an existing batch through refresh ----------
+
+
+def test_refresh_master_data_counts_the_rows_whose_cost_center_it_moves(
+    client, monkeypatch,
+):
+    """A card's `default_cost_center` rides the card snapshot like
+    `person`, so it reaches an EXISTING batch only through
+    refresh-master-data, whose `changes` then says how many rows' resolved
+    cost center moved (`row_cost_centers`, item 40's `row_persons`
+    contract). Before the refresh the snapshot stays authoritative."""
+    plain = {"corp-1672": {"label": "Corporate card (Chase)",
+                           "digits": ["1672"], "entity": "Corporate Services",
+                           "person": "Nicolas"}}
+    client.put("/api/settings", json={"cards": plain, "cost_centers": CENTERS})
+    _patch_ocr(monkeypatch, _extraction(payment_hint="Visa ...1672"))
+    batch = _create_batch(client)
+    assert _row(client, batch)["cost_center"] is None
+
+    client.put("/api/settings", json={"cards": CARDS})  # corp-1672 -> Lidar
+    assert _row(client, batch)["cost_center"] is None  # snapshot, not live
+
+    resp = client.post(f"/api/expense-batches/{batch}/refresh-master-data")
+    assert resp.status_code == 200, resp.text
+    changes = {c["field"]: c for c in resp.json()["changes"]}
+    assert "cards" in changes
+    assert changes["row_cost_centers"]["n_rows_changed"] == 1
+    assert "row_persons" not in changes  # the person did not move
+
+    row = _row(client, batch)
+    assert row["cost_center"] == "Lidar"
+    assert row["cost_center_source"] == "card"
+
+    # A second refresh moves nothing and says so by omission.
+    resp = client.post(f"/api/expense-batches/{batch}/refresh-master-data")
+    assert resp.status_code == 200, resp.text
+    assert "row_cost_centers" not in {c["field"] for c in resp.json()["changes"]}

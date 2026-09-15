@@ -57,11 +57,19 @@ import shutil
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import BackgroundTasks, Body, FastAPI, Form, Request, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Body,
+    FastAPI,
+    Form,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
@@ -97,6 +105,7 @@ from .service import (
     available_entities,
     baseline_receipts,
     batch_list_summary,
+    build_cost_center_totals,
     build_expense_report,
     build_reconciliation_report,
     build_expense_view,
@@ -2691,6 +2700,45 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 and not is_trip_batch(r)
             ]
         return JSONResponse({"batches": batches})
+
+    @app.get("/api/cost-centers/totals")
+    def cost_center_totals(
+        date_from: str | None = Query(default=None, alias="from"),
+        date_to: str | None = Query(default=None, alias="to"),
+    ):
+        """The cross-month cost-center roll-up (item 47, step 5): per
+        cost center, per currency, with a row count and an explicit
+        unassigned bucket, over every expense batch, months and trips.
+        `from` / `to` are inclusive ISO dates on the row's expense date;
+        either may be omitted. The payload's `note` carries the stated
+        limit: card and receipt spend only, not total project cost."""
+        if not _receipt_first_on():
+            return _flag_off()
+        bounds: dict[str, date | None] = {}
+        for key, raw in (("from", date_from), ("to", date_to)):
+            text = str(raw or "").strip()
+            if not text:
+                bounds[key] = None
+                continue
+            try:
+                bounds[key] = date.fromisoformat(text)
+            except ValueError:
+                return JSONResponse(
+                    {"error": f"{key} must be a date like 2026-01-31, "
+                              f"got {text!r}"},
+                    status_code=400,
+                )
+        if bounds["from"] and bounds["to"] and bounds["from"] > bounds["to"]:
+            return JSONResponse(
+                {"error": f"from ({bounds['from']}) is after to "
+                          f"({bounds['to']})"},
+                status_code=400,
+            )
+        with open_store() as store:
+            payload = build_cost_center_totals(
+                store, date_from=bounds["from"], date_to=bounds["to"],
+            )
+        return JSONResponse(payload)
 
     # ── Trips (item 38): the travel half of the expense split. A trip is
     # an entity of its own — named, date-ranged, variable roster — because

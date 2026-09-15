@@ -1086,7 +1086,10 @@ retired project is legitimate) but never stamped as a default.
   rejected, two names differing only in case refused rather than silently
   collapsed).
 - `cards[].default_cost_center` rides the card snapshot like `person`, so it
-  reaches an EXISTING batch through `POST .../refresh-master-data`. The cards
+  reaches an EXISTING batch through `POST .../refresh-master-data`, whose
+  `changes` then carries `{"field": "row_cost_centers", "n_rows_changed": N}`
+  when the refresh moved any row's RESOLVED cost center (item 40's
+  `row_persons` contract; omitted when nothing moved). The cards
   map stays WHOLE-MAP REPLACE: an SPA build that does not read and write
   `default_cost_center` in its Settings > Cards editor erases it on save.
 - The trip object gains `cost_center`; `POST` / `PUT /api/trips` accept it,
@@ -1133,3 +1136,32 @@ batch's report is unchanged whatever the registry holds (item 38: sectioned
 per person). The report reads the registry LIVE from settings, as the grid
 does, so the two partition on the same names. Pinned by
 `tests/test_cost_center_report.py`.
+
+### Cross-month totals: `GET /api/cost-centers/totals` (step 5, added 2026-09-15)
+
+The only surface that aggregates ACROSS batches. "What has Lidar cost since
+January" is the question a project raises, and no month report can answer
+it. Query: `from` and `to`, each an optional inclusive ISO date on the row's
+(edited) expense date; a malformed date or `from` after `to` is a 400 with
+`{"error": <prose>}`.
+
+| Path | Element | Meaning |
+|---|---|---|
+| `from`, `to` | string \| null | the range as applied, echoed back |
+| `note` | string | the stated limit, verbatim (`COST_CENTER_SCOPE_NOTE`) |
+| `cost_centers[]` | object | one per centre, name-sorted: `{name, kind, active, n_rows, n_batches, totals}` |
+| `cost_centers[].totals` | object | `{currency: amount}`, amounts formatted like every other money string (`1,234.50`) |
+| `unassigned` | object | `{n_rows, n_batches, totals}`; explicit, never hidden |
+| `n_batches` | int | expense batches SCANNED (months and trips), not those in range |
+| `n_rows` | int | rows counted into the buckets |
+| `n_undated` | int | rows counted that carry no date; a range cannot exclude them |
+
+Rows are the export's own rows resolved through the same chain the grid and
+the month report run, so the three cannot disagree about where a row
+belongs. Confirmed private expenses are left out: reimbursements owed, not
+company spend. Every ACTIVE centre is listed, at zero when nothing reached
+it; an inactive one appears only while history still sits on it (a reviewer
+override onto a retired project). With no cost center defined,
+`cost_centers` is empty and every row is in `unassigned`: the roll-up
+stating a fact, not a review state; the row-level flag stays silent per the
+empty-registry contract. Pinned by `tests/test_cost_center_totals.py`.
