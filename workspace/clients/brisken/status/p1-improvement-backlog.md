@@ -1405,6 +1405,8 @@ Open-month release (travel rows excluded).
 which projects/purposes — examples given: Nicolas's Brazil expenses, the
 Lidar project Nicolas works on, Matthias's work on this tool, marketing.
 
+**BUILD ORDERED 2026-09-10** (owner: add cost centers, with the configuration and setup discussed, into the UI and the backend). Nothing exists yet: `grep -rn cost_center src/` returns zero hits, so this is backend AND Lovable, in that order. The design below stands unchanged and is the spec; build to it rather than re-deciding it. Sequence: (1) `settings["cost_centers"]` whole-map replace + the empty-registry contract (resolve nothing, flag nothing) with its mutation test FIRST, (2) the resolution chain override > trip > learned merchant > card `default_cost_center` > unresolved, with person and category deliberately not resolvers, (3) the parallel API fields plus `cost_center_source_label`, (4) the month report grouped by cost center (reuses the `sections` partition item 38 built), (5) `GET /api/cost-centers/totals` for the cross-month roll-up, (6) the Settings editor and the row picker in Lovable. The stated limit rides both surfaces: this tool sees card and receipt spend only, never contractor invoices or salaries, so a cost-center figure is not a total project cost.
+
 **DESIGN ANSWERED 2026-09-08** in an owner decision round (four questions
 put with recommendations; three taken, D1 answered against the
 recommendation). Nothing was built — the build is a separate order.
@@ -1554,10 +1556,7 @@ currency, with a row count and an explicit unassigned bucket.
 Re-pin `tests/test_view_contract.py` and `docs/api-contract.md` in the same
 round (rule 4), and ship the SPA half in the same round (rule 2).
 
-**Lovable half (DRAFTED, not pasteable yet).** Kept here rather than in
-`docs/lovable-*.md` on purpose: a prompt in that folder is one PROMPT-STATUS
-audits as pasteable, and every field below is unbuilt. Promote it to its own
-prompt doc in the build round, once the backend emits the fields.
+**Lovable half: PROMOTED 2026-09-15 to `automations/expense-reconciliation/docs/lovable-cost-centers-prompt.md`** (registered in PROMPT-STATUS as not applied; §1 + §2 ship first because both maps are whole-map replace). The backend emits every field the prompt names (steps 1-5). The draft below is the design record the prompt was written from.
 
 1. *Settings > Cost centers.* A list editor over the whole `cost_centers`
    map: name, `kind` (project / function / trip / blank), optional note,
@@ -1736,6 +1735,129 @@ report.
 
 None of this is scheduled. The float-total and the lock-bypass are the two
 worth doing regardless of what happens with item 48.
+
+### 50. The attach dialog dies with "Failed to fetch", and the app is allowed to stop (hosting half CLOSED 2026-09-11)
+
+**What Criss saw.** She mailed Matthias a screenshot at 10:00:43Z, subject
+"Error", no text. The image is the **Attach bank statement** dialog with
+`August2026.xlsx` chosen, card `card-2838 · 2838`, and a red **"Failed to
+fetch"** where a validation message would normally render.
+
+**What it is not.** Ruled out by probe the same day:
+
+- The endpoint is healthy: two statements attached to a throwaway month in
+  0.1s each, one per card.
+- CORS is clean on every path the dialog can provoke (200, 401, 404, and the
+  column-map 400), tested from the SPA's own origin. This mattered: a
+  response missing `Access-Control-Allow-Origin` surfaces as exactly this
+  message.
+- Not the failed deploys. v111/v112 failed at 10:42Z, **42 minutes after** her
+  error; v113 succeeded 10:44Z.
+
+**What it probably is, and the bigger bug beside it.** "Failed to fetch" is a
+browser-level rejection, so the request never got a response. The serving
+machine was replaced at 10:44 by v113 and its logs went with it, so the cause
+cannot be proven from here. But `fly.toml` says:
+
+```
+auto_stop_machines = true
+min_machines_running = 0     # one shared-cpu-1x 512MB machine, no redundancy
+```
+
+A stopped machine cold-starting under a multipart upload is where the
+connection drops. **And this app is the MX target for expenses.brisken.com.**
+A mail host allowed to stop is a mail host that can delay or refuse inbound
+receipts, which is worse than the upload it was noticed through, and would be
+invisible: a refused delivery leaves no row in our own inbound log.
+
+**Fix:** `min_machines_running = 1`, and more headroom than 512MB (the sync
+statement parse and the vision path share it). Both are production config on
+the client's app, so they need an owner order and a deploy. Add a probe that
+records whether the machine was stopped when a request failed, or the next
+occurrence is just as unprovable.
+
+**HOSTING HALF CLOSED 2026-09-11.** The `fly.toml` quoted above is not what
+the live machine was actually running, which is why this was worth reading
+the record rather than the file: `flyctl machine status --display-config`
+showed `min_machines_running: 1` ALREADY set on both services (8080 web and
+2525 MX) with `autostop_machines` unset, so the app was not in fact allowed
+to stop. Only the memory half was still open. Raised to 1024MB on owner
+order (`flyctl scale memory 1024`); verified after: 1024MB, `min_machines_running: 1`
+on both ports, `/healthz` 200. The cold-start theory for Criss's "Failed to
+fetch" therefore loses its mechanism -- a machine pinned always-on does not
+cold-start -- so the dialog error remains UNEXPLAINED and the probe that
+records machine state at failure time is still the thing that would make a
+recurrence provable. That probe is the open half of this item.
+
+### 51. A statement that parses to zero rows reports success (found by drill, 2026-09-10)
+
+While reproducing item 50 the attach returned `200 {"ok": true}` and the run
+recorded `statements[{... "n_rows": 0, "n_new": 0}]`. The file was a valid
+xlsx whose columns the parser could not read as charges, and nothing said so:
+no error, no advisory, no count in the response the SPA reads.
+
+The column-map 400 catches a MISSING required column. It does not catch a
+file that maps cleanly and yields nothing, which is what a wrong sheet, a
+header row in the wrong place, or a date format the parser rejects all look
+like. Criss would see a green attach and an unchanged month.
+
+**Fix:** refuse, or at minimum carry a loud advisory, when an attach adds zero
+charges. `n_rows == 0` on a freshly uploaded statement is never a legitimate
+outcome. Pin it with a test that mutates the guard and goes red.
+
+### 52. "Recibo nao estar abrindo" (Criss, 2026-09-08, August month)
+
+Reviewer note left on `074a7b8905d7`: the receipt will not open.
+
+Not the API: `GET /api/runs/{id}/receipts/{doc}/image` returns 200 for the
+rows tested. (A first probe 404'd on `.../receipts/{doc}` without `/image`
+and that was the probe's own wrong URL, not a defect. Named here because it
+is the third instrument-validity slip in one session.)
+
+**Lead worth checking first:** `0000__rendered-body.pdf` reports
+`receipt_image_available: true` and `has_receipt_image: false` at the same
+time, while the file itself serves 200. If the SPA gates its viewer on the
+second flag, that row refuses to open exactly as she describes. Needs a
+browser drive on the published SPA to confirm, then either the flag or the
+viewer's condition is wrong.
+
+### 53. Multiple statements per month works in the backend and may not in the UI (2026-09-10)
+
+Owner raised it as missing. It is not: `POST /api/expense-batches/{id}/
+statement` has appended by identity since PR 2b-2b-2 (#636, merged
+2026-08-25, live on v113), and a drill attached two statements for two cards
+to one month, both recorded in `statements[]`.
+
+What was never applied is the SPA half. `docs/lovable-coverage-prompt.md` is
+still in the not-applied column, so a month with two workbooks still offers
+one download button, and Criss's dialog is titled "Attach bank statement",
+singular, with no visible way to add a second. The capability exists and is
+unreachable, which is worse than absent because nobody goes looking for it.
+
+**Fix:** apply the coverage prompt, and add a second-statement affordance to
+the month page. Verify by bundle audit on the field names (`statements`,
+`coverage`) plus a browser drive, not by reading the prompt.
+
+### 54. OCR date misreads silently prevent a match (2026-09-10, July sweep)
+
+Two receipts sit in the July month unmatched purely because their extracted
+date is wrong:
+
+- **Crossmedia EUR 900.** File `2026-07-16__..._Crossmedia_360172592.pdf`,
+  charge `2026-07-16 900.00 EUR Crossmedia Invoice# 360172592` — the same
+  invoice number. Date read as **2026-03-30**. This one is certain.
+- **Anthropic USD 100**, receipt `2197-2579-4644`, date read as
+  **2026-06-21** against a file dated 07-03; intended for the 07-10 charge.
+
+Correcting the Crossmedia date alone closes the entire EUR gap on July.
+
+The general defect behind the two instances: a date the extractor read wrongly
+produces a receipt that will never pair, and nothing surfaces the near-miss.
+An amount that matches exactly while the date sits months away is a strong
+signal, and the workbench says nothing about it.
+
+**Fix:** surface amount-matches-date-doesn't as a review candidate rather
+than leaving the row unmatched and silent.
 
 ### 26. Card registry gaps put 8 rows in MISSING ENTITY (owner-side, 2026-08-23)
 
@@ -2222,15 +2344,6 @@ Items 65-68 carve the four standalone defects out of item 49 so each has a
 number a session can own and a Shipped row can close; item 49 stays the
 evidence record (section 12 of the storage-system description).
 
-### 65. Report totals: binary float sums, and a row dropped from the total in silence (item 49, wrong money)
-
-Amounts are stored as strings so no precision is lost, and the report
-totals then sum them in binary floating point. Beside that, a row whose
-amount cannot be parsed is dropped from the PDF total with nothing on the
-report saying so, so a month can print a total that is quietly short by one
-receipt. Sum in `Decimal`, and give an unparseable amount a visible place:
-a caption on the report and a count on the payload, never a silent drop.
-
 ### 66. Two write paths rewrite the period record without the batch lock (item 49, silent data loss)
 
 The manual per-charge attach and the bulk folder ingest each rewrite the
@@ -2283,6 +2396,7 @@ overlay.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 37 | Report totals are formed in `Decimal`, and a row the total cannot read has a visible place instead of a silent drop. `output/_pdf_common.py` owns the arithmetic for both documents (`parse_amount` / `sum_amounts` / `format_totals` / `excluded_note`); the month report's header total and its per-person section sums both go through it. An unreadable amount gets a caption on its own listing row (`amount unreadable, not in total`) and a footer naming the numbers (`2 receipts excluded from the total: expenses 4, 7.`), both silent at zero. `summary.n_amounts_unreadable` is the payload half (parallel scalar), counting expenses whose amount was never read, which is the same population `totals_by_ccy` already skipped in silence | Section 12 row 13 of the storage-system description discloses both halves: amounts are carried as strings so no precision is lost, and the report threw that away by re-summing in binary float, while a cell that would not parse was skipped with `continue`. **Live first, and the prediction was wrong in the useful direction:** both months' reports were built through the route and their printed totals equal a Decimal sum over the same amounts to the cent, with zero unreadable rows on either. Through the app the Amount cell is always a finite two-decimal string (`_amount` formats a Decimal; `validate_expense_field` refuses a non-finite total at the edge), so the drop path is unreachable from the route and the float error stays below the printed digit (August accumulated USD `2663.9500000000007` against an exact `2663.95`). What shipped is therefore the arithmetic class removed plus defence in depth on a public builder whose row contract is "export rows", not two decimals; `NaN` is the trap that made it worth doing, because it parses as both and a float sum would have carried it into every other row's total | PR #831, 2026-09-15, Fly release TBD; suite 1550 -> 1562 passed / 2 skipped; three regress proofs RED first (the silent drop, the float sum, the payload count). SPA half `docs/lovable-amounts-unreadable-prompt.md` (Pending; renders nothing at 0, which is both live months) |
 | 36 | A month's candidate pool reaches the company months either side of it: `adjacent_pool_for_month` joins the trip pool inside `rematch_month`, neighbours decided by LABEL and eligibility by this statement's OWN period (`statement_period_for_month`, min..max of its charges). Borrowed copies ride the existing `borrowed_receipts` / `receipt_sources` keys with `kind: "adjacent"`, so the claims protocol is untouched and one receipt still settles one charge. `rows[].candidates[].from_batch` names where a borrowed candidate lives, and `summary.n_adjacent_borrowed` counts what the month actually holds | Item 61. A receipt is filed by the month printed ON it while a charge lands in the statement that BILLED it, and Chase does not cut those at the same place: August's workbook opens 07-31, July's 06-30. The named instance did NOT reproduce (July's 06-30 Google receipt is in July's batch and matched, because month routing stamped it from the 07-01 mail, not the printed date), and the literal count the item predicted is 0 on both live months. The real instance is the one the item's own mechanism produces at the OTHER end: August holds two Google receipts dated 08-31 (71.64 and 75.09) for charges that post 09-01, while its own 08-01 Google 71.64 charge carries no candidate at all. Today exactly one receipt would move (June's 06-30 Fenix 55.74 BRL into July, where no charge matches it); the fix is for September's statement and every month after. The period rule rather than a calendar rule is the recommendation the PR states: no calendar predicts a workbook that opens on the 31st. One regression of the real source proven RED first, through the caller | 2026-09-15, this round; suite 1550 -> 1556; SPA half `docs/lovable-adjacent-month-prompt.md` (owner applies) |
 | 37 | Both statement parsers keep the printed sign for a `Type` label they do not recognise, reporting one info-severity `parse_issues` note per distinct label with its row count; each `statements[]` entry records the `column_map` and `card_currency` it was read with, and the re-read reuses them | Item 64, two gaps that are inert on today's data and both silent when they bite. (a) Canonicalization ran on "is it a credit", so every OTHER label was read as a purchase and abs'd: a German export's "Lastschrift" would have turned its credits into charges with nothing on screen. "Recognised" now means "in the credit set or the debit set", which is load-bearing: `Sale` and `Fee` are not credits either, and reading those as unknown would flip all 109 August purchases. (b) The re-read recovered each file's map from `config.statement`, which describes only the LATEST upload, so on a two-statement month the earlier file was re-guessed (losing the operator's manual picks) and every file was re-read at the last upload's currency, which moves a charge's currency and stops it matching its receipt. Live check first: both months hold one statement each, carrying only `Sale` / `Payment` / `Fee`, so neither gap reproduces in production and both fixtures are constructed | 2026-09-15, PR #830; suite 1550 -> 1557; three regressions of the real source proven RED first; SPA half `docs/lovable-statement-record-prompt.md` (owner applies) |
 | 35 | A rejected pairing says so, and the page can offer the way back: `rows[].candidates[].rejected` on every candidate of a rejected charge (parallel, absent otherwise) and `summary.n_rejected_pairings` | Item 16. Rejecting frees the receipt and stays reversible until export, but `candidates[]` comes from the RAW outcome, so the receipt just pushed away re-rendered under the row exactly as before, offered again as though it were still on the table, with nothing saying it had been turned down. Two findings shaped the build. The live one: ZERO rejected decisions exist in production. All 223 charge rows across the two months with statements are `pending`, and the four receipt-only batches carry no charge rows at all, so the symptom cannot be observed and the fixture is constructed. The design one: the flag has to be charge-level, because `apply_decisions`, `effective_settlements` and `sync_claim_for_decision` all read the status alone and ignore `chosen_document_id`, and a bulk reject writes that column NULL, so a flag keyed on a named document would leave the commonest path unmarked. The undo needed no route: `POST .../decisions` with `"status": "pending"` already resets the charge, re-derives the claim and returns the receipt; a second spelling of an existing reversal is a second thing to keep correct, so the test drives the existing one end to end rather than asserting it ought to work. Two regressions of the real source proven RED first | PR #828, 2026-09-15, this round; suite 1550 -> 1555; SPA half `docs/lovable-rejected-pairing-prompt.md` (owner applies) |
