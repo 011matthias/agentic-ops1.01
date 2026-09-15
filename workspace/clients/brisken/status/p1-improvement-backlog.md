@@ -2791,6 +2791,248 @@ Not applied), with four browser checks to run after the publish. Optional
 backend nicety, not built: a per-card receipt count on `coverage[]` would
 spare the workbench the batch fetch the banner needs.
 
+### The 2026-09-15 feedback wave (7 notes, read off `/feedback.jsonl`)
+
+The in-app widget has collected 42 notes since 2026-07-15. Seven were left on
+2026-09-15 (six on July `50622baec444`, one on August `074a7b8905d7`), and the
+whole file was read for the first time that evening. Notes #36 and #35 are
+already answered by items 71 and 70 and are waiting on a Lovable paste, not on
+code. Note #34 (2026-09-10) is the report item 27 was parked on and nobody saw
+for five days.
+
+One cause runs through the rest: **the tool states conclusions it has not
+established, and asks about the ones it has.** It auto-commits pairs whose
+vendors disagree, demotes pairs it already solved, calls a card payoff a
+refund, and calls two real charges one duplicate. Every label prints as fact
+rather than as a claim with a basis, so the reviewer cannot tell which of the
+tool's statements to trust.
+
+Owner decisions, 2026-09-15: apply item 71 as written; clean rows confirm
+themselves but only AFTER the precision work; delete charge-side duplicate
+detection; honest labels are the first round. Items 72-74 are that first round,
+75 and 76 follow. Ranking rule holds: wrong money beats wrong text.
+
+### 72. A statement row has a type; a card payment is not a refund (note #42)
+
+**Criss/owner, July, anchored on `Payment Thank You-Mobile / Corporate
+Services`:** "how can this item be 'refund' if you dont even know which card it
+was payed with and the criteria for a refund is the fact that it was payed with
+by a non company card".
+
+Live: that row is **-9,664.81 USD** with `initial_bucket: "refund"`; August
+carries the same shape at -7,823.16. Both are Chase's descriptor for the
+cardholder paying down the credit line. Neither is a refund.
+
+`ingest/_common.py:62-73` collapses `payment, return, refund, credit, reversal`
+into one `is_credit` boolean; `matching/deterministic.py:1206-1212` puts all
+five into `MatchOutcome.refunds`; `web/service.py:2668-2680` renders that as the
+bucket the SPA prints "Refund" and `output/report_xlsx.py:744-751` prints
+`REFUND`. There is no row-type taxonomy anywhere, and no transfer concept.
+
+Build: a parallel `row_type` on `Transaction` (`purchase | payment | refund |
+reversal | fee | interest`), read from the Type column where one is mapped
+(item 55 made that mapping exist on xlsx) and falling back to today's sign
+inference. **Keep `is_credit`**: it is what the matcher partitions on, and
+nothing about matching changes here. Display derives from `row_type`. Exclude
+`payment` rows from `month_health.py:107-109`, which currently reads any credit
+as evidence of a broken sign convention. Pin `rows[].row_type` in
+`test_view_contract.py` and document it in `api-contract.md` (rule 1).
+
+The owner's stated criterion ("refund = paid with a non-company card") is item
+41's `suggested_private` rule, which lives on receipts
+(`web/service.py:4980-4987`) and never emits "refund". The two mechanisms are
+unrelated; say so when this ships rather than silently building something else.
+
+Secondary, same item: a charge row that printed no card inherits the UPLOAD's
+entity (`web/service.py:7563-7600`), which is why this payment row reads
+"Corporate Services" when nothing identified a card. Carry the provenance so
+the SPA can show an inherited entity as inherited.
+
+### 73. Duplicates mean one thing each (notes #37 and #41)
+
+**Owner, July:** "duplicates can only exist as the same receipt injected twice.
+otherwise there are no duplicates in the statement since our truth of
+transactions with the card is grounded there. If there are 2 from the same
+vendor, that is because its true." And, on the Possible duplicates panel: "the
+definition of duplicates needs to be defined in a way that only ACTUAL
+duplicates appear here".
+
+`duplicates.py` answers three different questions with one key, one group id,
+one panel and two buttons. Item 33 defined a duplicate as byte-identical
+content; item 56 deliberately re-used the vendor+date+total+currency key to mean
+"one purchase, two documents" so a Stripe invoice+receipt pair stops reading as
+ambiguous. Those two intents now share everything, so "Real duplicate" is asked
+to mean both "this is a redundant copy" and "these two files are one purchase".
+
+**(a) Delete charge-side detection.** Every charge group on both live months is
+a set of genuinely distinct transactions: July 4x `COMPUTER` 15.96 (07-21,
+07-22), 2x `POSTO SANTOS` 9.80 (07-18, 07-19), 2x `GOOGLE *Workspace` 71.64
+(both 07-01); August 2x `OPENAI` 86.06 (08-08, 08-10). Remove
+`find_duplicate_charges` (`duplicates.py:118-163`) from the view builders
+(`web/service.py:3122-3176`, `:5742-5763`), the payload, the counts and
+`output/reconciliation_report_pdf.py:166-210`. Double-ingest is already
+prevented by stable transaction identity (item 29), so the detector has no
+remaining job. Keep the `kind` discriminator so the SPA does not break; it just
+never carries `"charge"` again.
+
+**(b) Split the receipt side in two.** `find_duplicate_receipts`
+(`duplicates.py:166-186`) keys on normalized vendor + exact date + `str(total)`
++ currency, which is a statement about printed facts, not about identity. It
+has no reference number and no content hash even though `detected_reference` is
+populated by vision, CSV and ER-PDF, is persisted, and is already the matcher's
+strongest tie-break (`matching/deterministic.py:129-144`).
+
+- `same_document`: established by identity (content hash where available, else
+  reference + total + currency). Collapse silently, report what was collapsed,
+  never ask.
+- `one_purchase_two_documents`: the invoice-plus-receipt pair. Six of August's
+  nine groups are literally `Invoice-*.pdf` plus `Receipt-*.pdf`. Collapse into
+  one candidate, let the kept copy inherit the payment mode and entity it lacks,
+  never ask. **This is item 69 Round A**; build it here rather than twice.
+- Everything else is not a duplicate.
+
+**(c) The July Google group is live damage, not a hypothetical.** Group
+`03ba84fadeebe2a5` (`0036__...google_com__5608449734.pdf` and
+`0037__...brisken_com__5614551183.pdf`) carries `resolution: confirmed`, and a
+confirmed group stays collapsed (`web/service.py:9330-9333`), so one of the two
+real 71.64 charges on 07-01 can never be matched. Two Workspace accounts, two
+distinct Google invoice numbers, two true charges. Reset it with `POST
+/api/runs/50622baec444/duplicates/resolve` `{"resolution": "ignore"}`. **Live
+write on Criss's data: per-action yes required** (PARALLEL-ROUND-PROTOCOL §3).
+The code fix alone does not undo it.
+
+### 74. The Unmatched list says why (note #40)
+
+**Owner, July, anchored on `Unmatched73`:** "receipts from this month inserted
+by general receipt injection function in the tool or per email should be matched
+to the receiptless items in the month automatically".
+
+**They already are.** Every arrival path funnels through
+`add_receipts_to_expense_batch` (`web/service.py:8204-8272`), which calls
+`rematch_after_change(..., trigger="receipts")` unconditionally at `:8256-8264`:
+the in-app upload (`app.py:3148-3196`), the receipts drop (`app.py:3198-3253` →
+`intake_mail.py:3807`) and email intake (`intake_mail.py:1843`). The pool is the
+whole month, not a delta (`baseline_receipts(run)`, `web/service.py:9264`), and
+it explicitly includes charges already sitting in Unmatched. The app has no
+manual "re-match" button because it needs none.
+
+So the note is not about a missing trigger. It is about a list that does not say
+what it contains. Measured on the live payloads:
+
+- **8 of August's 17 unmatched receipts and 3 of July's 14 are collapsed
+  duplicate copies** whose twin is reconciled, put back into
+  `unmatched_receipts` by `web/service.py:9390-9397` so the reconciliation
+  invariant holds. They read as misses.
+- Of the remainder, **only 2 per month have an exact same-currency amount twin
+  among the unmatched charges**. The rest were never card charges on a loaded
+  statement: Redis 13,200 and Konsultancy 15,972 are bank transfers, the German
+  EUR receipts are DEBIT/EC, and cards 1176 and 9693 have no statement loaded.
+
+Build: a parallel `reason_code` per unmatched receipt, from facts the payload
+already holds. `duplicate_copy` · `card_statement_not_loaded` ·
+`not_a_card_charge` · `charge_in_neighbouring_period` (item 61) ·
+`no_charge_on_any_loaded_statement`. Same on the charge side. "Unmatched 73"
+then resolves into a short actionable list plus a long explained remainder.
+Item 69 already classifies these receipts exactly this way in its attribution
+table; this puts the same classification on the screen.
+
+Residue, not built: a re-match happens silently. Item 58's notification is
+dev-facing (`/api/operator/state` plus an email). The reviewer has no way to
+tell "the tool tried and found nothing" from "the tool did not try".
+
+### 75. Reconciled means reconciled, and clean rows confirm themselves (notes #38, #39)
+
+**Owner, July, on `Awaiting decision`:** "why do you need manual confirming on a
+date, vendor and amount match?" And on the `Reconciled26` header: "things that
+are reconciled and there are no mismatches should not need confirmation."
+
+Three separate mechanisms wear that label, and the tool is wrong in both
+directions at once.
+
+1. **It auto-commits on evidence that excludes the vendor.** The `EXACT` tier
+   (`matching/deterministic.py:642-661`) is amount + date ±1 + currency; the
+   vendor is not consulted. Live August: `BASE44 50.00 2026-08-22` took
+   `0025__Invoice-H0LHY2WQ-0032.pdf` (Lovable Labs) as `match_type: "exact"`,
+   `confidence: 0.99`, `requires_review: false`, `vendor_pct: 40`, reason
+   "Exact amount, date within 1 day(s), same currency". Item 63 (#829) added a
+   vendor floor to the PROBABLE band (`_same_currency_band_allowed`,
+   `:529-552`); EXACT has none.
+2. **It demotes pairs it already solved.** All 12 of July's review rows are
+   `fx_judgment`, and **7 carry `vendor_pct: 100` with `date_pct: 100`**
+   (POSTO SANTOS x2, POSTO ARCA DE NOE, SUPERMERCADO FENIX x2, Enchilada
+   Karlsruhe, WILLAMS RONALD), the amount differing only by the exchange rate.
+   The bilateral uniqueness gate (`:1286-1358`) strips a clean rate-derived
+   pair of its auto-resolution when any rival clean candidate merely EXISTS on
+   either side; the rival need not be better or even plausible on vendor. The
+   row's own reason says it: "another charge or receipt agrees just as cleanly".
+   Item 69 counts 10 of July's 11 review receipts with the correct charge
+   already at `candidates[0]`.
+3. **"Reconciled" is not "no mismatches".** `PROBABLE` (amount up to 20% off)
+   and `POSSIBLE` (receipt has no date) land in `outcome.matches` too
+   (`:1279`, `:1393-1396`), so they render in the Reconciled section carrying
+   `requires_review: true`. Three August rows are exactly that, and reconciled
+   `vendor_pct` runs down to 22. Item 69 measured August's 14 "clean" as 7 right
+   and 7 not.
+
+And `rows[].status` is `pending` on **all 223 live rows**, so the SPA prints
+"Awaiting decision" on finished work as readily as on real questions. Same shape
+as item 60: the backend was right and the label was wrong.
+
+Build, and only after the round-2 precision work lands, because auto-confirming
+August's present reconciled set would bless 7 wrong rows:
+
+- A row confirms itself when `effective_bucket == "reconciled"`, the chosen
+  candidate has `requires_review: false`, and `review.state == "ready"`. The
+  selection already exists as `ready_confirm_pairs`
+  (`web/service.py:2499-2520`) behind `POST
+  /api/runs/{id}/decisions/confirm-ready` (`web/app.py:2418-2459`).
+- Record that a row was auto-confirmed and by which rule, so it can be found and
+  reversed.
+- Give the SPA a field that separates "nothing to do" from "your turn", instead
+  of deriving the label from `status == "pending"`.
+- Move `PROBABLE`/`POSSIBLE` rows carrying `requires_review: true` out of
+  Reconciled. That is a precondition, not a nicety.
+
+Worth stating when this ships: confirmation buys less than it looks like today.
+`export_approved_only` defaults to `False` (`web/store.py:140`), so unconfirmed
+clean rows already flow to the Zoho journal; the sign-off gates only the "Ready
+to post?" tile.
+
+### 76. Dates read in the source locale, and a corrected date moves the receipt (note #34)
+
+**Criss, 2026-09-10, batch `4ceaeb461386`, anchored on `2026-01-04`:** "A leitura
+da data está errada. Em Portugues usamos dd-mm-aa ou aa-mm-dd."
+
+This is the report item 27 was parked on ("Still parked until Criss reports one"),
+and it arrived five days before anyone read it.
+
+Live state of that batch: it is labelled **"January 2026"** and holds exactly one
+expense, `20260704_Receipt_Food_ParadaObrigatoria.pdf`. The filename says 4 July.
+`date` now reads `2026-07-05` with `edited_fields: ["date"]`, so the date was
+corrected by hand; the receipt is still in the January batch and the label still
+says January.
+
+Two defects, and the second is the expensive one:
+
+- **The locale prior.** Criss is describing the source convention: Brazilian and
+  German receipts print day-first. Item 25 fixed a year-reading class by
+  tightening the prompt and MEASURING (6 of 11 moved, 24 of 25 byte-identical);
+  do the same here against the receipts already on the volume rather than
+  assuming. Item 27's residue is the same class: `receipt_12` reads 2026-04-22
+  against a printed 02/04/2026, `receipt_34` reads 2026-04-23 against 21/04/2026.
+- **A misread date misfiles the receipt, and correcting it does not move it.**
+  `batch_period` judges a date against the batch's month plus two neighbours, so
+  a July receipt read as January passed the January guard, created or joined a
+  January batch, and stayed there after the correction. When an edit moves a date
+  outside the batch's window, offer the move and carry it out; every edit route
+  already runs `rematch_after_change` since item 70.
+- Fix the live January batch once the behaviour exists. Live write, per-action
+  yes.
+
+Item 27 noted that better year reading makes this class harder to see, not
+easier: an error that used to land in 2023 and trip the guard now lands in the
+right month. That trade is now real rather than predicted.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
