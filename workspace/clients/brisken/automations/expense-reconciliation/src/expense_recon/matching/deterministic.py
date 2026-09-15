@@ -221,6 +221,7 @@ _TUNABLE_FLOAT = frozenset({
     "high_confidence", "probable_confidence", "possible_confidence",
     "blend_amount_weight", "blend_date_weight", "blend_vendor_weight",
     "blend_card_weight", "fx_judgment_suggest_floor",
+    "amount_probable_min_vendor_score",
 })
 _TUNABLE_BOOL = frozenset({
     "card_scoping", "fx_self_derived_rates", "fx_self_derived_review",
@@ -381,6 +382,29 @@ class MatchingConfig:
     # month of multi-card data says it is worth folding into the sort.
     blend_card_weight: float = 0.0
 
+    # ── Vendor floor on the same-currency probable band (2026-09-15) ──
+    # `amount_probable_tolerance_pct` is the restaurant-tip allowance: it
+    # exists so a card charge that carries a tip still reaches the receipt
+    # that printed before the tip. A tip does not change WHO was paid, so
+    # a same-currency pair that spends that allowance must still agree on
+    # the merchant. Without this floor the 20% band pairs any two
+    # unrelated same-currency charges of similar size: on the real August
+    # month it offered ADOBE 16.23 a Lovable 15.00 receipt and ANTHROPIC
+    # 104.95 an Obsidian 96.00 one, and bound five such pairs outright.
+    # Measured on that month, the two populations do not overlap: all 41
+    # different-merchant pairs scored <= 0.40 and all 30 true
+    # ANTHROPIC/"Anthropic, PBC" pairs scored exactly 1.00, and the cut is
+    # flat (identical 30 keep / 41 drop) anywhere from 0.45 to 0.90, so
+    # 0.50 sits in the middle of an empty gap rather than on a knee.
+    # Applies ONLY to the same-currency band. FX pairs keep the band
+    # untouched: the S1 optimize run measured vendor as non-separable
+    # there (26/55 true pairs below 0.2, banks truncating foreign vendor
+    # strings to aggregators), so the same floor would cost real recall.
+    # A confirmed alias pins `_vendor_score` to 1.0, so once a reviewer
+    # has accepted a truncated bank string for a merchant it keeps
+    # matching. 0.0 disables the floor.
+    amount_probable_min_vendor_score: float = 0.5
+
     @classmethod
     def from_dict(cls, data: Mapping) -> "MatchingConfig":
         """Build a config from a tuning dict (the optimize-loop asset).
@@ -497,6 +521,32 @@ def _blend_score(
     return max(0, min(100, round(s * 100.0)))
 
 
+def _same_currency_band_allowed(
+    tx: Transaction,
+    receipt: Receipt,
+    cfg: MatchingConfig,
+    vendor_score: float,
+) -> bool:
+    """May a same-currency pair spend the probable (tip) amount band?
+
+    Only when the two sides do not NAME different merchants. A tip
+    explains a different amount; it never explains a different payee. So
+    the band stays open when the vendors agree by the matcher's own
+    comparison, and when either side names no vendor at all (nothing to
+    contradict — an unnamed side is missing evidence, not conflicting
+    evidence, and the reconciliation guarantee says never drop on
+    absence). It closes when both sides name a merchant and they
+    disagree. Exact-amount pairs never reach here; neither do FX pairs.
+    """
+    if cfg.amount_probable_min_vendor_score <= 0.0:
+        return True
+    if not (receipt.detected_vendor or "").strip():
+        return True
+    if not (tx.vendor_from_statement or "").strip():
+        return True
+    return vendor_score >= cfg.amount_probable_min_vendor_score
+
+
 def _match_on_amount(
     tx: Transaction,
     receipt: Receipt,
@@ -530,6 +580,15 @@ def _match_on_amount(
         and (diff / charge_amount) <= cfg.amount_probable_tolerance_pct
     )
     if not (amount_exact or amount_probable):
+        return None
+
+    # The tip band is merchant-scoped (2026-09-15, backlog item 63): a
+    # same-currency pair that needs it must still agree on who was paid.
+    if (
+        amount_probable
+        and fx_currency is None
+        and not _same_currency_band_allowed(tx, receipt, cfg, vendor_score)
+    ):
         return None
 
     if amount_exact:

@@ -2,11 +2,13 @@
 
 A human-editable registry stored under `settings["merchants"]` (like
 `card_accounts` / `entities`), the highest-priority DETERMINISTIC source
-for two facts about a receipt's merchant:
+for three facts about a receipt's merchant:
 
   * the canonical DISPLAY name, so "COMERCIO DE X LTDA", "X Ltda", and a
-    fuzzy OCR variant all read as one brand on the grid and the export, and
-  * a default category / Zoho account for that brand.
+    fuzzy OCR variant all read as one brand on the grid and the export,
+  * a default category / Zoho account for that brand, and
+  * a default COST CENTER for it (backlog item 47), the project or purpose
+    this brand's spend belongs to.
 
 Consulted in `generate_expenses` ONLY (mirrors the Phase-6 `ExpenseMemory`
 contract); `reconcile()` never sees it. It sits ABOVE the learned SQLite
@@ -21,6 +23,7 @@ Shape:
             "category": "<one of EXPENSE_CATEGORIES>" | None,
             "zoho_account": "<chart label>" | None,
             "multi_category": True,            # optional (2026-08-19)
+            "cost_center": "<defined name>" | None,   # optional (item 47)
         },
         ...
     }
@@ -30,7 +33,16 @@ facts: the canonical NAME still resolves (spelling stability), but no
 default category/account is stamped — the vendor legitimately books to
 different categories, so each receipt is judged on its own contents
 (learned/LLM path) and the grid's variance chip makes the outcome
-auditable.
+auditable. It does NOT suppress ``cost_center``: a vendor that books to
+several categories can still belong wholly to one project, and the two
+dimensions are deliberately independent (item 47 D2 refuses category as a
+cost-center resolver for exactly that reason).
+
+``cost_center`` is stored as typed and is NOT checked against the
+cost-center registry here: merchants and cost centers are edited
+independently, so the edit ORDER must not matter. A name the registry does
+not define fails to resolve at resolution time and leaves the row
+unassigned, rather than stamping a centre nobody defined.
 
 Matching (`resolve`): normalized-exact on the canonical name or any alias,
 then rapidfuzz `token_set_ratio >= threshold` over the same strings, else
@@ -65,6 +77,9 @@ class MerchantMatch:
     score: float              # 100.0 for an exact hit, else the token_set_ratio
     kind: str                 # "exact" | "fuzzy"
     source: str = "registry"
+    # Item 47: the brand's default project / purpose. None when unset, and
+    # unaffected by `multi_category` (which decouples CATEGORY only).
+    cost_center: str | None = None
 
 
 class MerchantRegistry:
@@ -177,6 +192,7 @@ class MerchantRegistry:
                 matched_alias=original,
                 score=float(score),
                 kind=kind,
+                cost_center=(entry.get("cost_center") or None),
             )
         category = (entry.get("category") or None)
         return MerchantMatch(
@@ -186,6 +202,7 @@ class MerchantRegistry:
             matched_alias=original,
             score=float(score),
             kind=kind,
+            cost_center=(entry.get("cost_center") or None),
         )
 
     @classmethod
@@ -239,5 +256,11 @@ def normalize_merchants_setting(raw: object) -> dict:
         # truthy so existing entries keep their exact shape.
         if entry.get("multi_category"):
             cleaned["multi_category"] = True
+        # Item 47: the brand's default cost center, stored only when set
+        # for the same reason. Not validated against the cost-center
+        # registry (edit order must not matter -- see the module docstring).
+        cost_center = str(entry.get("cost_center") or "").strip()
+        if cost_center:
+            cleaned["cost_center"] = cost_center
         out[canonical] = cleaned
     return out
