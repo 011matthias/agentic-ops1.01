@@ -76,8 +76,10 @@ from ._common import (
     assign_content_ids,
     infer_sign_flip,
     is_credit_type,
+    is_known_type,
     parse_amount,
     parse_date,
+    unknown_type_issues,
     validate_required_map,
 )
 
@@ -282,6 +284,8 @@ def parse_statement_xlsx_tolerant(
     file_name = path.name
     transactions: list[Transaction] = []
     issues: list[ParseIssue] = []
+    # item 64: {Type label the parser does not recognise: rows carrying it}.
+    unknown_types: dict[str, int] = {}
     # Normal (not read-only) load: L1 needs real Cell objects with full
     # style access for the fill classification. data_only=True gives the
     # cached VALUE of a formula cell (the L6 scan below flags those).
@@ -378,15 +382,22 @@ def parse_statement_xlsx_tolerant(
                 # 3.15 sign canonicalization, Type-column path (mirrors
                 # statement_csv): the export's own debit/credit label
                 # decides, not the printed sign. A row with an empty Type
-                # cell keeps its printed sign and derives is_credit from it.
+                # cell keeps its printed sign and derives is_credit from it,
+                # and since item 64 so does a row whose label this parser
+                # does not recognise.
                 is_credit = False
                 if "type" in column_map:
                     raw_type = _coerce_str(mapped.get("type"))
-                    if raw_type:
+                    if not raw_type:
+                        is_credit = amount < 0
+                    elif is_known_type(raw_type):
                         is_credit = is_credit_type(raw_type)
                         amount = -abs(amount) if is_credit else abs(amount)
                     else:
                         is_credit = amount < 0
+                        unknown_types[raw_type] = (
+                            unknown_types.get(raw_type, 0) + 1
+                        )
             except (KeyError, ValueError) as exc:
                 issues.append(
                     ParseIssue(
@@ -428,6 +439,10 @@ def parse_statement_xlsx_tolerant(
             )
     finally:
         wb.close()
+
+    # item 64 (mirrors statement_csv): one advisory per distinct label the
+    # Type column carried that this parser could not read.
+    issues.extend(unknown_type_issues(unknown_types, file_name))
 
     # 3.15 sign canonicalization, no-Type path (mirrors statement_csv):
     # without a debit/credit column the file's convention is inferred from
