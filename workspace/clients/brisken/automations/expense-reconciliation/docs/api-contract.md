@@ -1531,6 +1531,34 @@ There is no hand-written map with a case per value, so `"info"` degrades
 exactly as `"warning"` already does, to plain muted text. That is why no
 parallel `severity_label` was added here; the next enum whose SPA consumer
 maps values by hand still needs one.
+## What the workbench's filter and sort controls read (item 17, 2026-09-15)
+
+No new field. The control bar already ships (search, BUCKET, STATUS, SORT,
+six FILTERS toggles), and every axis it needs is on the row today. This
+section is the read: which field answers which control, and the two that mean
+something other than what their name suggests. Measured against the live
+August `074a7b8905d7` and July `50622baec444` payloads on 2026-09-15.
+
+| Control | Field | Note |
+|---|---|---|
+| Sort by date | `rows[].date` | ISO `YYYY-MM-DD`, non-empty on all 223 live rows. Lexical sort is chronological |
+| Sort A-Z by vendor | `rows[].vendor` | `vendor_from_statement`, the acquirer's own text. Compare it with a case-insensitive collator (`localeCompare`), which is what the published SPA already does: a codepoint sort would put every ALL-CAPS vendor ahead of every Mixed-Case one and land `ANNUAL MEMBERSHIP FEE` before `AngelaClaudiaDos`. No normalized vendor is on the row and none is needed for this |
+| Sort by amount | `rows[].amount` | **A display string, not a number.** `_fmt_amount` is `f"{v:,.2f}"`, so August carries `1,574.24`, `2,484.00` and `-7,823.16`. `Number()` returns `NaN` and `parseFloat` returns 1, 2 and -7. Strip the group separators before comparing |
+| Filter by card | `rows[].coverage_key` -> `coverage[].key` | Two shapes live (`3645` bare, `card-2838` prefixed), because a key is the registry's card key or, failing that, the charge's own digit token. Never parse it: join it to `coverage[]` and render that row's `label`. There is no `card_last4` on a row |
+| Filter unmatched | `rows[].effective_bucket` | `unmatched` / `reconciled` / `review` / `refund`. This is the reconciliation state, and the field the operator's "unmatched elements" means |
+| Filter by lane | `rows[].section` | **Not the same question.** `is_posted` (her yellow fill) overrides everything, so on July `section: "posted"` holds 85 rows spanning 49 unmatched, 24 reconciled, 11 review and 1 refund. A filter that read "unmatched" off `section` would report 24 of July's 73 unmatched charges |
+| Filter by entity | `rows[].legal_entity_id` | Single-valued on both live months (`Corporate Services`, 223 of 223). The option is real; the discrimination is not, yet |
+| Filter has-candidates | `rows[].candidates` | Always a list; presence is `length > 0` (August 17 of 111, July 38 of 112) |
+| Filter / group by review state | `rows[].review.state` | `ready` / `check` / `pick` / `none`. Collapses on a posted month: all 85 of July's posted rows are `none`, so it stops discriminating exactly where `effective_bucket` keeps working |
+
+`rows[].status` is `pending` on all 223 live rows, so it is not a sort axis;
+the STATUS control's Pending / Confirmed / Rejected reads the reviewer's
+decision overlay, not this field.
+
+The filter-count requirement is load-bearing rather than decorative: six of
+August's nine `coverage[]` cards carry zero charges, so a card filter built
+from that list without per-option counts offers six options that match
+nothing.
 ## Settled outside the card (added 2026-09-15, item 62)
 
 Some receipts never post to a card at all. July 2026 holds a Redis invoice for
