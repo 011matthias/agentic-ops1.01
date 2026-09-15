@@ -18,6 +18,11 @@ credits, 3.10 / LD-5 A5) `refunds`. No silent drops.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotations only; the body imports Path itself
+    from pathlib import Path
+
 import difflib
 import re
 from dataclasses import dataclass, field, replace

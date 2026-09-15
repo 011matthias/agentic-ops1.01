@@ -54,7 +54,6 @@ from .ingest.chart_of_accounts import (
     ChartOfAccounts,
 )
 from .matching.types import (
-    Categorization,
     ClassificationSource,
     LineItem,
     Receipt,

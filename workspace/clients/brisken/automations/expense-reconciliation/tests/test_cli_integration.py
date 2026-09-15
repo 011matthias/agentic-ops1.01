@@ -33,7 +33,6 @@ import openpyxl
 from expense_recon.cli import ConfigError, run
 from expense_recon.matching.judgment import STUB_REASON, judge_fx_match
 from expense_recon.matching.types import (
-    ClassificationSource,
     MatchType,
     Receipt,
     Transaction,

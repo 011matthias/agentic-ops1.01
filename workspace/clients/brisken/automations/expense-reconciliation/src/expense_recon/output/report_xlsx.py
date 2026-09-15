@@ -21,7 +21,7 @@ Row coloring per LD-4:
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path

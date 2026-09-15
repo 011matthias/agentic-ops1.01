@@ -10,7 +10,6 @@ import json
 from datetime import date
 from decimal import Decimal
 
-import pytest
 
 from expense_recon.matching.types import (
     Categorization,
