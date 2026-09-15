@@ -1531,3 +1531,101 @@ There is no hand-written map with a case per value, so `"info"` degrades
 exactly as `"warning"` already does, to plain muted text. That is why no
 parallel `severity_label` was added here; the next enum whose SPA consumer
 maps values by hand still needs one.
+## Settled outside the card (added 2026-09-15, item 62)
+
+Some receipts never post to a card at all. July 2026 holds a Redis invoice for
+13,200.00 USD, a Konsultancy Finance one for 15,972.00 EUR and a 360Crossmedia
+one for 900.00 EUR, all paid by bank transfer. No statement line will ever
+settle them, so they sat in `unmatched_receipts`, in the pool counts and in
+month health's exact-pair scan with no disposition that could retire them.
+
+This is that disposition, and it is bookkeeping rather than matching. It is
+applied at VIEW time from a snapshot key, never by re-matching, so it costs no
+model call and the undo is immediate.
+
+### The routes
+
+```
+POST   /api/runs/{run_id}/receipts/{document_id}/settled-outside
+       {"how": "bank_transfer" | "cash" | "paypal" | "other", "note": ""}
+DELETE /api/runs/{run_id}/receipts/{document_id}/settled-outside
+```
+
+Both reply `{ok, document_id, ..., summary}` where `summary` is the summary of
+whichever payload this batch renders (grid before a statement, workbench
+after), the way `duplicates/resolve` does, so the SPA never has to guess which
+counts moved. POST also returns `settled_outside`; DELETE returns `removed`
+(boolean) and is idempotent, so an undo clicked twice is not an error.
+
+`400` on an unknown `how`, on a receipt that is not in this month, and on a
+receipt that currently settles a charge — rejecting that match frees it first.
+Marking it while a charge holds it would leave the month claiming both that a
+card paid it and that none did. The write takes the batch lock against a fresh
+re-read (the `rematch_month` commit shape).
+
+### The run payload: it leaves the reconciliation side
+
+The receipt leaves `unmatched_receipts`, and with it `n_unmatched_rec` and
+month health's exact-pair scan. A receipt no card can carry must never be an
+exact pair the matcher "missed", or a healthy month reads broken.
+
+| Key | Question it answers |
+|---|---|
+| `summary.n_settled_outside` | how many receipts the reviewer settled outside the card |
+
+`n_receipts` does NOT move: the receipt is still in the month, still in the
+grid, still in the report. `n_receipts_matched` and `receipt_match_rate` are
+read over the receipts a card COULD settle (`n_receipts - n_settled_outside`),
+so a month whose only stragglers were paid by transfer reads 100%, which is
+the true answer — nothing is left for the statement to explain.
+
+Scoped to receipts the EFFECTIVE outcome leaves unmatched, so a receipt that
+holds a charge renders as the match it is rather than disappearing from both
+sides of the screen.
+
+### The expense payload: nothing is removed
+
+`expenses[].settled_outside`, parallel and **absent** (not null) unless set:
+
+```json
+"settled_outside": {"how": "bank_transfer", "note": "wire sent 2026-08-11",
+                    "at": "2026-09-15T09:12:44"}
+```
+
+`summary.n_settled_outside` carries the same name and the same question here.
+
+### The suggestion: `suggested_settled_outside`
+
+`unmatched_receipts[].suggested_settled_outside`, parallel and **absent**
+unless the receipt's `payment_mode` reads as a tender no card statement
+carries. NEVER auto-applied; the reviewer confirms every one.
+
+```json
+"suggested_settled_outside": {"how": "bank_transfer",
+                              "evidence": "Pay $15.00 with a bank transfer"}
+```
+
+A mode that names a card wins outright, so `Electronic Funds Transfer ...2838`
+suggests nothing: it names the card it posted to.
+
+Owner ruling 2026-09-15: an invoice's payment-OPTION line counts as a signal,
+not only a statement of how the thing was actually paid. **Read the live months
+before trusting it.** On 2026-09-15 all three named July invoices carried an
+EMPTY `payment_mode`, so the chip fires on none of them, and the one live
+receipt whose mode reads "Pay $15.00 with a bank transfer" (August, Lovable,
+15.00 USD) is MATCHED to a card charge. The chip renders only on
+already-unmatched receipts and fires on a handful a month, so a wrong one costs
+a glance while a missing one costs a receipt stuck in the pool forever.
+
+### The report keeps the row
+
+The month report still prints a settled-outside expense, behind a caption
+naming the tender ("paid by bank transfer" / "paid in cash" / "paid by PayPal"
+/ "settled outside the card"). Owner ruling 2026-09-15: it is real company
+spend whose evidence is the invoice, and dropping the row would hide roughly
+30k of July's spend from the accountant. Only the reconciliation side lets it
+go.
+
+Neither new field is a list, so the `test_view_contract.py` pin table is
+unchanged; their exact shapes are asserted in `tests/test_settled_outside.py`.
+Renders in `docs/lovable-settled-outside-prompt.md`.
