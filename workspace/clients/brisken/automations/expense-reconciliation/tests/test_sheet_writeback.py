@@ -1,6 +1,6 @@
 """Sheet writeback tests — L3 (2026-07-15 walkthrough).
 
-Chris's own workbook comes back with ONE appended "Zoho Account (tool)"
+Chris's own workbook comes back with ONE appended "Posting account (tool)"
 column; her values, fills, and formulas survive byte-identical (the
 load is data_only=False so formulas are never collapsed to cached
 values).
@@ -87,6 +87,37 @@ def _writeback_col(ws) -> int | None:
     hits = [c.column for c in ws[1] if c.value == WRITEBACK_HEADER]
     assert len(hits) <= 1, "writeback header must appear at most once"
     return hits[0] if hits else None
+
+
+def test_a_workbook_written_back_before_the_rename_reuses_its_column(tmp_path):
+    """The 2026-09-15 rename must not append a SECOND account column.
+
+    This module finds its column by header text. Criss has workbooks already
+    carrying the old "Zoho Account (tool)" header, so the lookup accepts both
+    spellings forever and writes only the new one into a fresh column. Without
+    the fallback she gets two account columns side by side, one of them stale,
+    with no error to tell her which is current.
+    """
+    src = tmp_path / "chris.xlsx"
+    _write_workbook(src)
+    wb = load_workbook(src)
+    ws = wb.active
+    legacy_col = ws.max_column + 1
+    ws.cell(row=1, column=legacy_col, value="Zoho Account (tool)")
+    ws.cell(row=2, column=legacy_col, value="(stale from last month)")
+    wb.save(src)
+    before = load_workbook(src).active.max_column
+
+    outcome = MatchOutcome(unmatched_transactions=["card-1:2"])
+    out = write_sheet_writeback(src, tmp_path / "out.xlsx", outcome, [_tx(2)], [])
+
+    ws = load_workbook(out).active
+    assert ws.max_column == before, "the old header should be reused, not duplicated"
+    assert ws.cell(row=1, column=legacy_col).value == "Zoho Account (tool)"
+    assert ws.cell(row=2, column=legacy_col).value == "(no receipt matched)"
+    headers = [c.value for c in ws[1]]
+    assert headers.count(WRITEBACK_HEADER) == 0
+    assert headers.count("Zoho Account (tool)") == 1
 
 
 def test_column_appended_with_bold_header(tmp_path):
@@ -200,7 +231,7 @@ def test_already_posted_wins_over_match(tmp_path):
     )
 
     ws = load_workbook(out).active
-    assert ws.cell(row=2, column=4).value == "(already in Zoho)"
+    assert ws.cell(row=2, column=4).value == "(already posted)"
 
 
 def test_review_and_unmatched_placeholders(tmp_path):

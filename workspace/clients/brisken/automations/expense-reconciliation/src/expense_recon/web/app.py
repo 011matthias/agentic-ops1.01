@@ -3806,7 +3806,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
         return FileResponse(
             path,
-            filename=f"zoho-expenses-{run_id}.csv",
+            filename=f"expenses-{run_id}.csv",
             media_type="text/csv",
         )
 

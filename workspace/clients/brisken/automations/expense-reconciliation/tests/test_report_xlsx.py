@@ -186,7 +186,7 @@ def _charge_cat(source=ClassificationSource.LEARNED):
         category="Software & Subscriptions",
         zoho_account="Other Infra and IT Costs for Cloud Business",
         confidence=1.0, source=source,
-        reasoning="from your Zoho Books posting history",
+        reasoning="from your earlier posting history",
     )
 
 
@@ -199,7 +199,7 @@ def test_unmatched_sheet_carries_charge_category_columns(tmp_path):
     ws = load_workbook(out)["Unmatched"]
     rows = list(ws.iter_rows(values_only=True))
     header = rows[1]
-    assert header[5:8] == ("Category", "Zoho A/C", "Source")
+    assert header[5:8] == ("Category", "Posting account", "Source")
     tx_row = next(r for r in rows if r[2] == "MYSTERY LLC")
     assert tx_row[5] == "Software & Subscriptions"
     assert tx_row[6] == "Other Infra and IT Costs for Cloud Business"
@@ -218,7 +218,7 @@ def test_unmatched_card_tab_row_carries_category_and_source(tmp_path):
         if r[1] == "MYSTERY LLC"
     )
     # CARD_TAB_COLUMNS: Date, Vendor, Line item, Qty, Amount, Category,
-    # Source, Zoho A/C, Note
+    # Source, Posting account, Note
     assert row[5] == "Software & Subscriptions"
     assert row[6] == "LEARNED"
     assert row[7] == "Other Infra and IT Costs for Cloud Business"

@@ -97,14 +97,14 @@ RECONCILED_COLUMNS = (
     # ── expense enrichment (blank when unmatched) ──
     "Expense ID",
     "Report Number",
-    "Zoho Category",
+    "Expense report category",
     # ── the tool's OWN categorization for a matched receipt (LLM / keyword /
-    #    learned), shown beside the report's "Zoho Category" so the reviewer
+    #    learned), shown beside the report's "Expense report category" so the reviewer
     #    sees both. Under categorization.override_er_category the AI account is
     #    what actually posts; otherwise the report's account posts and these
     #    are the verify pass. Blank when unmatched. ──
     "AI Category",
-    "AI Zoho Account",
+    "AI posting account",
     "AI Category Source",
     # ── WS2 top-level adjudication verdict for a matched receipt (2026-07-21):
     #    "kept ER" (report + tool share a Zoho root-group, report kept),
@@ -126,7 +126,7 @@ RECONCILED_COLUMNS = (
     # ── receiptless-charge categorization (Slice 10; blank unless the
     #    line is an unmatched charge the side-map categorized) ──
     "Charge Category",
-    "Charge Zoho Account",
+    "Charge posting account",
     "Charge Category Source",
     # ── §17 disposition (business / personal / reimbursable / do-not-export;
     #    "business" is the default for every line) ──
@@ -190,7 +190,7 @@ def _ai_category_cells(rec: "Receipt | None") -> tuple[str, str, str]:
     """The tool's OWN (category, posting account, tier) for a matched
     receipt, aggregated across its line items — distinct non-blank values
     joined with '; '. This is what the LLM / keyword / learned pass decided,
-    surfaced beside the report's own "Zoho Category" for comparison. Blank
+    surfaced beside the report's own "Expense report category" for comparison. Blank
     when unmatched or when no line carries a category (a REVIEW-with-no-signal
     receipt stays blank, not noise — mirrors the Slice-10 receiptless rule)."""
     if rec is None:

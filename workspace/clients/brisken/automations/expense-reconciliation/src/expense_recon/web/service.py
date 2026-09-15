@@ -631,7 +631,7 @@ def _setup_advisories(
     # Per-card and Zoho-optional (Cards R2, 2026-08-21, feedback notes
     # 9/11): name the actual card, say the account is optional, and say
     # what the gap costs. The old advisory fired only on an EMPTY map and
-    # called the account required ("This card has no Zoho bank account"),
+    # called the account required ("This card has no bank account"),
     # which is the wording the owner pushed back on.
     acct = ""
     stmt = cfg.get("statement")
@@ -651,8 +651,8 @@ def _setup_advisories(
         out.append({
             "setting": "cards",
             "message": (
-                f"Card '{acct}' has no Zoho paid-through account set "
-                "(optional: only the Zoho journal export uses it). Journal "
+                f"Card '{acct}' has no posting account set "
+                "(optional: only the data export uses it). Export "
                 "entries balance to a visible 'Card: ...' placeholder until "
                 "one is set in Settings > Cards."
             ),
@@ -1306,7 +1306,7 @@ def apply_decisions(
             continue  # nothing to claim / receipt already taken -> unmatched
         orig = next((m for m in cands if m.document_id == chosen), None)
         reason = (
-            "already posted in Zoho (reviewer)"
+            "already posted in the books (reviewer)"
             if status_for(tx_id) == STATUS_ALREADY_POSTED
             else "confirmed by reviewer"
         )

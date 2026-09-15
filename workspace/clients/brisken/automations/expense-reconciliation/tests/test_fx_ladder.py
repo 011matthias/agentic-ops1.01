@@ -68,7 +68,7 @@ def test_base_amount_clean_resolves_deterministically():
     assert m is not None
     assert m.match_type is MatchType.FX_BASE_AMOUNT
     assert not m.requires_review
-    assert "Zoho's per-receipt rate" in m.reason
+    assert "the report's own per-receipt rate" in m.reason
 
 
 def test_base_amount_works_without_a_printed_total():

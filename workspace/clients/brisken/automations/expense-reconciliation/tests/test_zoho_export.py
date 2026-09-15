@@ -631,7 +631,7 @@ def _learned_cat(account="Travel: Flights", category="Travel & Transport",
                  source=ClassificationSource.LEARNED):
     return Categorization(
         category=category, zoho_account=account, confidence=1.0,
-        source=source, reasoning="from your Zoho Books posting history",
+        source=source, reasoning="from your earlier posting history",
     )
 
 

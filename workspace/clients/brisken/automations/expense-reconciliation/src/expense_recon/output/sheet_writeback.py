@@ -2,7 +2,7 @@
 
 Chris uploads her own per-card .xlsx workbook as the statement. After
 reconciliation this module writes HER OWN workbook back with ONE new
-column appended — ``"Zoho Account (tool)"``, the resolved Zoho posting
+column appended — ``"Posting account (tool)"``, the resolved posting
 account per statement row — and touches nothing else. Her existing
 columns are never overwritten; her values, fills, and formulas survive
 because the workbook is loaded with ``data_only=False``. Loading with
@@ -23,7 +23,7 @@ of any other shape (PDF-parsed transactions) are skipped defensively:
 they have no sheet row to anchor to.
 
 Idempotent: re-running against an already written-back workbook finds
-the existing ``"Zoho Account (tool)"`` header and reuses that column
+the existing header (either spelling) and reuses that column
 instead of appending a second one; the rows it writes are overwritten
 in place.
 
@@ -51,16 +51,21 @@ from ..matching.types import (
     Receipt,
     Transaction,
 )
-from .zoho_export import _resolve_account
+from .posting_common import _resolve_account
 
 if TYPE_CHECKING:
     from ..ingest.chart_of_accounts import ChartOfAccounts
 
-WRITEBACK_HEADER = "Zoho Account (tool)"
+WRITEBACK_HEADER = "Posting account (tool)"
+
+# Workbooks written back before the 2026-09-15 rename carry the old header.
+# The lookup accepts it forever and writes only the new one, so an existing
+# column is REUSED rather than duplicated beside a second account column.
+_LEGACY_WRITEBACK_HEADERS = ("Zoho Account (tool)",)
 
 # Placeholders per outcome bucket. `(uncategorized - assign)` mirrors
-# the zoho_export flag so the two surfaces speak the same language.
-_ALREADY_POSTED = "(already in Zoho)"
+# the expense-export flag so the two surfaces speak the same language.
+_ALREADY_POSTED = "(already posted)"
 _UNCATEGORIZED = "(uncategorized - assign)"
 _NEEDS_REVIEW = "(needs review)"
 _NO_RECEIPT = "(no receipt matched)"
@@ -108,8 +113,9 @@ def _anchor_row(
 def _writeback_column(ws) -> int:
     """Find the writeback column in row 1, or create it at
     ``max_column + 1`` with a bold header."""
+    accepted = (WRITEBACK_HEADER, *_LEGACY_WRITEBACK_HEADERS)
     for cell in ws[1]:
-        if cell.value == WRITEBACK_HEADER:
+        if cell.value in accepted:
             return cell.column
     col = ws.max_column + 1
     header = ws.cell(row=1, column=col, value=WRITEBACK_HEADER)

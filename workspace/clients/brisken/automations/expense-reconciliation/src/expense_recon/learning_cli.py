@@ -176,7 +176,7 @@ def cmd_set(args) -> int:
     if not args.account:
         print(
             "note: no --account given; the rule carries the category only. "
-            "Add --account with the real Zoho Books account name to make the "
+            "Add --account with the real posting account name to make the "
             "charge postable through the COA gate."
         )
     return 0

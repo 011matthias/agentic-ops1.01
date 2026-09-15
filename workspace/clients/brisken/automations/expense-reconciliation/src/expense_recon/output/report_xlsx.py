@@ -58,7 +58,7 @@ CARD_TAB_COLUMNS = (
     "Amount",
     "Category",
     "Source",
-    "Zoho A/C",
+    "Posting account",
     "Note",
     # §17 disposition (business / personal / reimbursable / do-not-export;
     # "business" default). Appended last so existing column indices hold.
@@ -194,7 +194,7 @@ def _build_rows(
         bits = [base] if base else []
         # L1: her sheet's fill-color annotation, carried into the note.
         if tx.entry_status == "posted":
-            bits.append("already in Zoho (yellow row)")
+            bits.append("already posted (yellow row)")
         elif tx.entry_status == "subscription":
             bits.append("subscription (gray row)")
         if has_image_info and not rec.has_receipt_image:
@@ -498,7 +498,7 @@ def _write_summary(
         ws.append(["Refunds / credits (own bucket, never receipt-matched)", n_refunds])
     ws.append(["Unmatched receipts", n_unmatched_rec])
     if n_already_posted:
-        ws.append(["Already posted in Zoho (yellow rows)", n_already_posted])
+        ws.append(["Already posted (yellow rows)", n_already_posted])
     if n_subscription:
         ws.append(["Subscriptions (gray rows)", n_subscription])
     ws.append(["Reconciliation invariant", "OK" if invariant_ok else "BROKEN — investigate"])
@@ -622,7 +622,7 @@ def _write_unmatched(
     ws.cell(row=ws.max_row, column=1).font = HEADER_FONT
     _write_header_row(
         ws,
-        ("Card", "Date", "Vendor", "Amount", "Currency", "Category", "Zoho A/C", "Source"),
+        ("Card", "Date", "Vendor", "Amount", "Currency", "Category", "Posting account", "Source"),
         start_row=2,
     )
     for tx_id in outcome.unmatched_transactions:
