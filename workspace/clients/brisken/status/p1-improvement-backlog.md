@@ -3017,6 +3017,75 @@ mirroring it. Ruff clean on the diff; `preflight-hooks.py --full` OK (1509
 passed, 1 skipped). No SPA change and no Lovable prompt: `reason` is already
 rendered verbatim on every candidate.
 
+**Round B shipped (2026-09-15, PR #877, merge `5af6a9a4`, Fly v131, both
+live months re-matched through `refresh-master-data` the same evening).**
+
+**What the live re-match did, read off the app afterwards.** July: `n_review`
+12 -> 7 and `n_matched` 31, 11 judgments reused, **0 new model calls**;
+`n_unmatched_tx` unchanged at 73, because the five receipts that resolved
+came out of the review pile, not off the unmatched-charge list. August:
+`n_review` 3 -> 2, raw `n_matched` 8 -> 9, 2 judgments reused, 0 new. A fresh
+DB copy pulled after the write reads **parity OK with the hosted outcome on
+both months**, and its attribution equals the predicted table exactly: July
+31 clean / 0 wrong / 0 unverifiable / 5 in review with the correct charge
+teed up; August 8 clean / 0 wrong / 1 in review. September was not
+re-matched and did not need to be: round B changes matching only, and
+September holds no statement.
+
+**A live sighting of item 72, in passing.** August's re-match event reported
+`n_unmatched_tx` 99 while the run summary re-derived 100 immediately after.
+That is the raw-vs-effective split exactly as item 72 describes it: the
+effective layer drops `0023`'s probable pairing because the receipt is
+consumed by its tie elsewhere, freeing that charge back to unmatched, while
+the committed event counted it. Same for `n_matched` 9 raw vs 8
+label-confirmed clean. Item 72 is untouched by this round and its live
+instance is intact.
+
+**Which clause carried each pair, off the live API.** Four of July's five
+were vendor dominance and one was spoken-for: `SUPERMEC SAO JOSE` 10.23
+("Kept deterministic: the rival pairing is spoken for."), and
+`Enchilada Karlsruhe` 34.39 (1.00 vs best rival 0.11),
+`WILLAMS RONALD DA SIL` 1.97 (1.00 vs 0.05), `SUPERMERCADO FENIX` 9.82
+(1.00 vs 0.36), `MP *24HBEBIDAS` 24.88 (0.82 vs 0.27). All five read
+`effective_bucket: "reconciled"`, `is_chosen: true`,
+`requires_review: false`. August carries no "Kept deterministic" clause at
+all, which is the right tell: its single gain came from the masked-BIN fix,
+and that pair became uncontradicted rather than rescued from a rival, so its
+reason is untouched.
+
+**SPA drive (agent-browser, session `recon-roundb`, `expenses.brisken.com`,
+logged in through a script reading the vault so the code never reached the
+transcript).** July's workbench renders **RECONCILED 31 / REVIEW 7** (26 / 12
+before), and the Jul 13 `Enchilada Karlsruhe` 34.39 row holds its own
+receipt, "Enchilada Karlsruhe · 99% · CROSS-CURRENCY · 30.00 EUR", with no
+fallback ("No receipt found", "--", a blank cell) in its place. The row's
+state column reads "Awaiting decision" with Reject / Confirm match, which is
+the reviewer-confirmation state and NOT a fallback: the pre-existing
+reconciled rows on the same page (the ANTHROPIC exact matches) read
+identically, which is the comparison that rules out the 2026-08-24
+consumer-gate failure mode.
+
+**Stated as a split, because it is one.** The reason clause itself was
+verified on the authenticated API for all five rows; it was NOT observed
+rendering in the SPA. The row's "Details" control surfaced no reason text in
+the accessibility tree or in the cell's HTML after clicking and hovering, so
+the SPA appears to have no renderer for `reason` at that spot. The changed
+STATE is verified in the browser; the changed STRING is verified at the API
+only. No Lovable prompt is proposed for it: the clause is explanatory, the
+reconciled state is what the reviewer acts on, and inventing a renderer the
+owner did not ask for is scope the round does not carry.
+
+**Where item 69 now stands.** Both live months: 0 wrong, 0 unverifiable.
+July 51 receipts, 31 matched clean and right (26 before round B, 26 before
+round A); August 31 receipts, 8 matched clean and right (7 / 7). The program's
+two structural rounds are done and the stop condition holds: the next class
+(July's two Google Workspace charges against two identical receipts) recovers
+at most one receipt a month, under the three-a-month floor, and the owner
+ruled on 2026-09-15 that the reviewer's duplicate ruling there stands. What
+remains is coverage, not matching: cards 9693 and 1176 have no statement
+loaded, June and September have no statement (item 61), and cash, debit and
+bank transfers never post to a card (item 62).
+
 ### 70. Changes in a month that did not stick (Criss 2026-09-14, owner report 2026-09-15)
 
 Criss, app feedback 2026-09-14 06:57 UTC, July: "Qdo entro na categoria e
