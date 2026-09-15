@@ -162,6 +162,7 @@ name answers the same one:
 | `n_duplicate_groups` | how many duplicate SITUATIONS were flagged |
 | `n_duplicate_copies` | how many copies are redundant (every copy after the first in a group the reviewer has not dismissed) |
 | `n_rejected_pairings` | run payload only: how many (charge, receipt) pairings the reviewer has turned down (item 16). Pairings, not rows: a rejected charge that never had a candidate refused nothing and counts nothing |
+| `n_amounts_unreadable` | how many expenses carry an amount no total could read, so they are in no total (item 65): `totals_by_ccy` skips them and the report's listing cannot print them. The fix is reading the amount off the receipt, not a re-run |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -1270,3 +1271,46 @@ same way: July and August shared four ids on 2026-09-15, all
 `NNNN__rendered-body.pdf`. Offering two receipts under one id would corrupt
 the matcher's consumption set and the view's lookup, which is worse than a
 narrower pool.
+
+## Report totals are formed in Decimal (added 2026-09-15, item 65)
+
+Amounts travel as strings from the extractor to the export precisely so no
+precision is lost, and the store sums them in Decimal
+(`store/reports.py::_currency_totals`). The two PDF total sites did not: they
+re-summed the printed cells in binary float, and a cell that would not parse
+was skipped with `continue`, so a month could print a total quietly short by
+one receipt. Section 12 row 13 of
+`docs/electronic-storage-system-description.md` discloses both halves.
+
+`output/_pdf_common.py` now owns the arithmetic for both documents:
+`parse_amount` (blank is zero, non-finite is unreadable), `sum_amounts`
+(per-currency Decimal totals plus the listing numbers it could not read),
+`format_totals`, `excluded_note`. The month report's header total and its
+per-person section sums both go through them, so a per-person line and the
+month's line cannot disagree about the arithmetic they used.
+
+An unreadable amount now has two visible places, never a silent drop:
+
+- a caption on its own listing row, `amount unreadable, not in total`
+- a footer line naming the numbers,
+  `2 receipts excluded from the total: expenses 4, 7.`
+
+Both are silent when every amount read, which is the case on every month the
+app has produced: `_amount` formats a Decimal to two places and
+`validate_expense_field` refuses a non-finite total at the edge, so no input
+the app accepts reaches the builder unreadable. The guard is defence in depth
+on a builder whose row contract is "export rows", not two decimals.
+
+`summary.n_amounts_unreadable` is the payload half, on the expense batch
+view. PARALLEL (rule 1): a scalar count beside the existing ones, nothing
+existing changed type or meaning. It counts expenses whose amount was never
+read (`detected_total is None`) -- the same condition `totals_by_ccy` already
+skipped in silence. `NaN` deserves its own mention: it PARSES as a Decimal
+and as a float, and a float sum would carry it into every other row, so one
+unreadable receipt would have turned a whole currency's total into `nan`.
+
+Live at the time of the change: August 2026 (`074a7b8905d7`) and July 2026
+(`50622baec444`) both printed totals equal to a Decimal sum over the same
+amounts to the cent, with zero unreadable rows on either. The float error was
+real but below the printed digit (August accumulated USD `2663.9500000000007`
+against an exact `2663.95`).

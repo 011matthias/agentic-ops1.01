@@ -34,11 +34,15 @@ import io
 from collections.abc import Sequence
 
 from ._pdf_common import (
+    UNREADABLE_CAPTION,
     esc as _esc,
+    excluded_note,
+    format_totals,
     make_styles,
     prepare_evidence,
     register_fonts,
     stitch,
+    sum_amounts,
     table_style,
 )
 
@@ -126,29 +130,28 @@ def build_expense_report_pdf(
     styles = make_styles(body_font, bold_font)
 
     # ── totals, computed from the rows the export writes ────────────
-    totals: dict[str, float] = {}
-    for row in rows:
-        ccy = cell(row, "Currency Code") or "?"
-        try:
-            totals[ccy] = totals.get(ccy, 0.0) + float(
-                (cell(row, "Expense Amount") or "0").replace(",", "")
-            )
-        except ValueError:
-            continue
-    totals_line = "  ·  ".join(
-        f"{ccy} {amount:,.2f}" for ccy, amount in sorted(totals.items())
-    ) or "no expenses"
+    # In Decimal, because the amounts are strings for exactly that reason
+    # (item 65; section 12 row 13). `unreadable` is the listing numbers of
+    # the rows whose amount would not parse: each one gets a caption on its
+    # own row below and a line in the footer, rather than being dropped
+    # from the total with nothing on the page saying so.
+    totals, unreadable = sum_amounts(
+        (n, cell(row, "Currency Code"), cell(row, "Expense Amount"))
+        for n, row in enumerate(rows, start=1)
+    )
+    unreadable_rows = set(unreadable)
+    totals_text = format_totals(totals, "no expenses")
 
     story: list = [
         Paragraph(_esc(title), styles["title"]),
         Paragraph(
-            _esc(subtitle or f"{len(rows)} expenses  ·  {totals_line}"),
+            _esc(subtitle or f"{len(rows)} expenses  ·  {totals_text}"),
             styles["sub"],
         ),
     ]
     if subtitle:
         story.append(Paragraph(
-            _esc(f"{len(rows)} expenses  ·  {totals_line}"), styles["sub"]
+            _esc(f"{len(rows)} expenses  ·  {totals_text}"), styles["sub"]
         ))
 
     # Which listing rows actually have a document behind them. The column
@@ -162,6 +165,12 @@ def build_expense_report_pdf(
     head = [Paragraph(_esc(name), styles["cellhead"]) for name, _w in _LISTING]
 
     def _listing_row(n: int, row: Sequence[str]) -> list:
+        # An amount the total could not read says so on its own row, so a
+        # reader adding the column up by hand finds the gap where it is
+        # rather than a total that is quietly short (item 65).
+        amount = _esc(cell(row, "Expense Amount"))
+        if n in unreadable_rows:
+            amount += f'<br/><font size="6">{_esc(UNREADABLE_CAPTION)}</font>'
         return [
             Paragraph(str(n), styles["cell"]),
             Paragraph(_esc(cell(row, "Expense Date")), styles["cell"]),
@@ -169,7 +178,7 @@ def build_expense_report_pdf(
             Paragraph(_esc(cell(row, "Expense Account")), styles["cell"]),
             Paragraph(_esc(cell(row, "Legal Entity")), styles["cell"]),
             Paragraph(_esc(cell(row, "Paid Through")), styles["cell"]),
-            Paragraph(_esc(cell(row, "Expense Amount")), styles["cellr"]),
+            Paragraph(amount, styles["cellr"]),
             Paragraph(_esc(cell(row, "Currency Code")), styles["cell"]),
             Paragraph("attached" if n in documented else "none", styles["cell"]),
         ]
@@ -201,19 +210,13 @@ def build_expense_report_pdf(
             story.append(Spacer(1, 10))
             story.append(Paragraph(_esc(caption), styles["caption"]))
             story.append(_listing_table(numbered))
-            sec_totals: dict[str, float] = {}
-            for _n, row in numbered:
-                ccy = cell(row, "Currency Code") or "?"
-                try:
-                    sec_totals[ccy] = sec_totals.get(ccy, 0.0) + float(
-                        (cell(row, "Expense Amount") or "0").replace(",", "")
-                    )
-                except ValueError:
-                    continue
-            sec_line = "  ·  ".join(
-                f"{ccy} {amount:,.2f}"
-                for ccy, amount in sorted(sec_totals.items())
-            ) or "no amounts read"
+            # Same Decimal sum as the header total, over this slice only,
+            # so a per-person line and the month's line cannot disagree.
+            sec_totals, _sec_unreadable = sum_amounts(
+                (n, cell(row, "Currency Code"), cell(row, "Expense Amount"))
+                for n, row in numbered
+            )
+            sec_line = format_totals(sec_totals, "no amounts read")
             story.append(Paragraph(
                 _esc(f"{person}: {len(numbered)} "
                      f"expense{'s' if len(numbered) != 1 else ''}"
@@ -222,6 +225,12 @@ def build_expense_report_pdf(
             ))
     else:
         story.append(_listing_table(list(enumerate(rows, start=1))))
+
+    # The footer half of item 65: the rows the total left out, counted and
+    # named. Silent when every amount read.
+    excluded = excluded_note(unreadable)
+    if excluded:
+        story.append(Paragraph(_esc(excluded), styles["sub"]))
 
     # ── reimbursements owed (item 41): per person, with sums ────────
     if reimbursements:
@@ -256,12 +265,15 @@ def build_expense_report_pdf(
                             repeatRows=1)
             g_table.setStyle(table_style())
             story.append(g_table)
-            totals = group.get("totals") or {}
-            totals_line = "  ·  ".join(
-                f"{ccy} {amount}" for ccy, amount in sorted(totals.items())
+            # Already summed in Decimal by the caller and handed over
+            # preformatted, one string per currency; renamed off `totals`
+            # so it cannot shadow the listing's own sum above.
+            owed = group.get("totals") or {}
+            owed_line = "  ·  ".join(
+                f"{ccy} {amount}" for ccy, amount in sorted(owed.items())
             ) or "no amounts read"
             story.append(Paragraph(
-                _esc(f"Owed to {person}: {totals_line}"), styles["sub"]
+                _esc(f"Owed to {person}: {owed_line}"), styles["sub"]
             ))
 
     if prepared_note:
