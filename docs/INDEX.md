@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-15 | Brisken P1 Item 54 Refuted Before Build | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Item%2054%20Refuted%20Before%20Build/Checkpoint.md) |
 | 2026-09-15 | Brisken P1 Statement And Receipt Defects, CI Ruff Scope, Consumer Gate | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Statement%20And%20Receipt%20Defects%2C%20CI%20Ruff%20Scope%2C%20Consumer%20Gate/Checkpoint.md) |
 | 2026-09-15 | Brisken P1 Failure Probe And Cleanup Round | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Failure%20Probe%20And%20Cleanup%20Round/Checkpoint.md) |
 | 2026-09-15 | Expense-Recon Item 66 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2066/Mini-Checkpoint-2.md) |
