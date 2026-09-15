@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-09-07
+updated: 2026-09-15
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
