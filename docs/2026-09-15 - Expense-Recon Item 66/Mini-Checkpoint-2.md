@@ -65,11 +65,17 @@ to main, the PR was open and non-draft with its head matching the pushed ref,
 the queue was drained, and commit authorship matched a sibling's exactly. The
 owner authorised the merge on the local evidence.
 
+**It was not the clone or the credentials.** This checkpoint's own docs PR
+(#854), pushed from the same machine with the same `gh` auth minutes later,
+got all five checks immediately. Whatever suppressed the suite was specific to
+the two item-66 code branches.
+
 ## Next Steps
 
-1. Watch whether the next PR from this clone gets an Actions suite. If the
-   stall persists beyond this session's branches, it is a repo-level problem
-   worth raising rather than a per-PR fluke.
+1. Watch whether a future code PR touching the expense-recon module gets an
+   Actions suite. The docs PR proves the clone and the auth are fine, so the
+   next datum worth having is whether the suppression follows the paths in the
+   diff or was a one-off on those two branches.
 2. Items 60, 62, 68 and 69 remain open in the backlog.
 3. `p2-lead-gen-general.md` (86d), `p2-product-decks.md`, `p2-rome.md` and
    `p2-targeting.md` (54-55d) are flagged stale by the SessionStart sweep.
