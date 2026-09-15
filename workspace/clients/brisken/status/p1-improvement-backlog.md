@@ -250,6 +250,91 @@ banner, the CSV button) in the next code round rather than on layer 2's
 own schedule, and drop the paid-through warning outright if the journal
 export goes with layer 4.
 
+**Owner ruling 2026-09-15: "rename or delete whatever is necessary to make the
+app better."** The open product question in this item (whether the deliverable
+documents should carry GL account codes at all) is answered, with evidence
+rather than by preference: on the live July workbook, 341 cells carry an account
+value, and **64 of them are a real GL code the category alone does not give**
+("Meals & Entertainment" resolving to "E100010-31 - Travel Expense | Food");
+236 are the fallback echo of the category and 41 are blank. So the account layer
+stays and gets renamed. What has no job left is the Zoho SHAPE: the journal
+export emits 3 of July's 26 reconciled charges and every account line is a
+placeholder. Layers 2-4 are therefore a rename, plus one deletion.
+
+**Ordered plan, from a four-way inventory (106 classified items, 2026-09-15).**
+Three constraints set the order, and every round is a consequence of one:
+
+1. A removal inverts the usual order. For an ADD the backend ships first; for a
+   DELETE the consumer stops calling first. The published bundle calls
+   `/runs/{id}/zoho.csv` from TWO lazy chunks (`chunk-runs._runId` via
+   `sum.dl.zoho`, and `chunk-classic`), so the Lovable prompt publishes and is
+   re-audited BEFORE the route dies. The visible labels no longer say "Zoho", so
+   only the route string finds them.
+2. The journal file is load-bearing before it is deletable: `zoho_export.py`
+   defines nine helpers that two surviving modules import.
+3. A parallel field is two deploys with a publish between them, and the snapshot
+   reader has to be tolerant one deploy EARLIER, because `serialize.py:69` reads
+   `d["zoho_account"]` with a bare subscript.
+
+| Round | What | Gate |
+|---|---|---|
+| 1 | Lift the nine shared posting helpers to `output/posting_common.py` | **SHIPPED PR #881** |
+| 3 | Backend-owned human strings + the download filename | **SHIPPED PR #881** |
+| 6a | Writeback column to "Posting account (tool)", old header read forever | **SHIPPED PR #881** |
+| 2 | Dead code + free internal renames (`read_journal_csv`, `_carry_zoho_account`, `zoho_account_for`, `ClassificationResult.zoho_account`, `LineVerdict.zoho_account`, `from_api`) | backend only |
+| 4 | Delete the journal artifact | **SPA-GATED**: prompt publishes, re-audit, THEN the backend PR |
+| 5 | Rename `zoho_expense_export.py` + `EXPENSE_COLUMNS` to plain English | backend only, atomic |
+| 6b | The remaining pure-copy i18n strings | Lovable paste |
+| 7 | ADD the parallel fields (`posting_account` beside `zoho_account`), accept both on every write | backend only, additive |
+| 8 | SPA flips to the new keys, then re-audit | **SPA PUBLISH** |
+| 9 | Remove the old keys + the internal renames that waited on them | backend only |
+| 10 | Reissue the two June client deliverables | comms-gated |
+
+**Round 7 is where the silent failures live.** Three, all found by reading:
+`normalize_cards_setting` and `normalize_merchants_setting` DROP unknown keys
+instead of rejecting them and `settings["cards"]` is whole-map replace, so a
+backend that stopped accepting `zoho_account` would answer 200 and erase every
+card's posting account on the next Settings save; `app.py:2281`
+`keep_account = "zoho_account" not in body` is a load-bearing absent-means-keep
+contract the SPA exploits deliberately, so the parallel version must compute
+absence across BOTH spellings; and `merchants_inert` derives from
+`entry.get("zoho_account")`, so renaming without it gives a permanently empty
+hint list with no error. `test_view_contract.py` green is NOT evidence for any
+of this: it records list element kinds, and every field here is a scalar inside
+an object.
+
+**Round 5's sharp edge:** `month_report_pdf.py:138` builds a name-to-index map
+and returns `""` on a miss, so renaming an `EXPENSE_COLUMNS` entry silently
+blanks the month report listing and the per-currency totals with no exception.
+Nine literals must move in the same commit, and the rename needs a
+`regress_check` proof that a test goes red THROUGH the PDF builder.
+
+**Decisions taken, do not re-ask.** `export_approved_only` is deleted with the
+journal in round 4: its only consumer is `regenerate_zoho`, and the SPA ships a
+live Settings toggle whose help text names "the Zoho journal", so the moment the
+route dies it becomes a control that changes nothing. The two SQLite columns
+(`category_overrides.zoho_account`, `merchant_category.zoho_account`) are NOT
+migrated; they are mapped at the read boundary in round 9, because neither store
+has a RENAME path and a live-volume migration for a name no human reads is the
+worst risk-to-benefit trade here. `has_coa` and `coa_gate.py` keep their names:
+"COA" is ordinary accounting vocabulary, not a vendor name.
+
+**Kept deliberately, in every round:** "Zoho Expense report PDF". That is the
+real name of a file format Criss receives, and the backend error has to match
+the SPA dropdown label or it stops telling her which file to pick. Also
+`docs/electronic-storage-system-description.md`, where naming Zoho Books as the
+external book of record is what the GoBD audit-trail argument rests on.
+
+**Vocabulary, decided once** so she does not read three words for one thing:
+**Account** in the report PDFs (already there), **Posting account** wherever a
+distinction is needed (workbook, CSV, Settings, writeback), **Expense report
+category** only for the source document's own category.
+
+**Open, needs a live read before round 9:** the legacy `card_accounts` /
+`card_entities` settings keys are composed at read time (`cards.py:572`), so
+retiring them silently drops any card mapping still living only in the legacy
+map. Read the settings row on the volume first.
+
 ### 24. The output is a document now (owner directive 2026-08-23)
 
 **Owner:** there is no target application at all. "The output should be first
