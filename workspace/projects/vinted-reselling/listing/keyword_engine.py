@@ -399,7 +399,9 @@ def foreign_brands(text: str, own_brand: str) -> list[str]:
     # example that prompted this carried "#niketrack" and "#adidastrack" on a
     # Lonsdale garment. Word boundaries alone would wave those through, so
     # compound tokens are also matched on a prefix.
-    compounds = [t.lstrip("#").lower() for t in re.findall(r"#\w+|\b\w{8,}\b", low)]
+    tokens = re.findall(r"#\w+|\b\w{8,}\b", low)
+    hash_compounds = [t.lstrip("#") for t in tokens if t.startswith("#")]
+    word_compounds = [t for t in tokens if not t.startswith("#")]
     found = []
     for key, spellings in KNOWN_BRANDS.items():
         if key == own:
@@ -408,11 +410,43 @@ def foreign_brands(text: str, own_brand: str) -> list[str]:
             if re.search(r"(?<![a-z])" + re.escape(spelling) + r"(?![a-z])", low):
                 found.append(spelling)
                 break
-            if len(spelling) >= 4 and any(c.startswith(spelling) or spelling in c
-                                          for c in compounds):
+            if len(spelling) >= 4 and _smuggled_in_compound(spelling, hash_compounds,
+                                                            word_compounds):
                 found.append(spelling)
                 break
     return found
+
+
+# Nouns that make a plain compound a real brand smuggle rather than an ordinary
+# German word. Reuses the catalog vocabulary, plus footwear, which has no
+# garment class of its own.
+_COMPOUND_NOUNS = {n for nouns in CLASS_MARKET_NOUNS.values() for n in nouns} | {
+    "schuhe", "sneaker", "sneakers", "boots", "turnschuhe", "laufschuhe", "cap",
+}
+
+
+def _smuggled_in_compound(spelling: str, hash_compounds: list[str],
+                          word_compounds: list[str]) -> bool:
+    """Prefix-match a brand inside a compound token.
+
+    Hashtags keep the loose rule this branch was built for ("#niketrack" on a
+    Lonsdale garment). A plain word does NOT, because German prose collides with
+    it: "dieselbe" and "dieselben" both start with the brand Diesel and both used
+    to be reported as a catalog-rules violation, which is a false positive
+    against ordinary text. So a plain compound only counts when what follows the
+    brand is actually a garment word, which is what smuggling looks like
+    ("nikelaufschuhe") and what an inflected demonstrative never is.
+    """
+    for c in hash_compounds:
+        if c.startswith(spelling) or spelling in c:
+            return True
+    for c in word_compounds:
+        if not c.startswith(spelling):
+            continue
+        rest = c[len(spelling):]
+        if any(noun in rest for noun in _COMPOUND_NOUNS):
+            return True
+    return False
 
 
 # ------------------------------------------------------------------ suggest
