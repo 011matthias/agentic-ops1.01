@@ -663,3 +663,32 @@ def test_probe_detects_a_string_to_object_flip():
     # and the nested-list merge keeps a filled list visible behind an empty one
     merged = probe({"rows": [{"candidates": []}, {"candidates": [{"id": "x"}]}]})
     assert merged["rows[].candidates[]"] == {"object"}
+
+
+def test_receipt_in_report_is_absent_or_a_bool_never_null(payloads):
+    """Item 68. `receipt_in_report` answers "does this expense have a PAGE in
+    the built report", which is not the question `receipt_image_available`
+    answers ("can the app show you a file"). Parallel field per rule 1, and
+    ABSENT until the verdict is known: never null, because a null renders as
+    false and would call a perfectly good receipt missing.
+
+    No report is built in this fixture, so the only rows that can carry it
+    are the ones with no file at all — nothing on disk cannot become a page,
+    and establishing that needs no build. `summary.n_receipts_in_report`
+    keeps the same discipline: absent while any row is undecided, so the
+    count is never quietly short by the rows nobody has decided yet.
+    """
+    for view_name, views in payloads.items():
+        for view in views:
+            for expense in view.get("expenses") or []:
+                if "receipt_in_report" not in expense:
+                    continue
+                assert isinstance(expense["receipt_in_report"], bool), (
+                    view_name, expense["document_id"],
+                    expense["receipt_in_report"],
+                )
+            summary = view.get("summary") or {}
+            if "n_receipts_in_report" not in summary:
+                continue
+            assert isinstance(summary["n_receipts_in_report"], int), summary
+            assert 0 <= summary["n_receipts_in_report"] <= summary["n_receipts"]

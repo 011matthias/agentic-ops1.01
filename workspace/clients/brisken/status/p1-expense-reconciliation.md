@@ -104,6 +104,25 @@ chip (every card is defined). Item 60 then shipped:
 so a dispossessed charge stops reading as "No receipt found". Items 61-64
 are the next rounds.
 
+**Parallel round (2026-09-15), item 68: the Receipt column answers "is it in
+the report".** "Attached" was an answer about a FILE, decided before
+renderability is known, so an unrenderable receipt counted as covered while
+its own caption page said the file could not be rendered.
+`expenses[].receipt_in_report` and `summary.n_receipts_in_report` answer
+"has a PAGE", derived from item 67's `receipt_render` (which item 67 records
+from `prepare_evidence`, the function the builder uses to admit a page)
+rather than decided a second time, and ABSENT until known rather than
+guessed. The reconciliation report is now built from
+the reviewer's live overlay, so an expense she deletes leaves both documents
+at once instead of sitting in the reconciliation one until the next re-match.
+Read live first: neither half reproduces on August or July today (31 of 31
+and 51 of 51 attached AND paged, identical expense sets across the two
+documents), so the fixtures are constructed. SPA half
+`docs/lovable-receipt-coverage-prompt.md`. One live finding left open: July's
+listing has 54 rows for 51 expenses and rows 52-54 read "none" although every
+expense has a file, because the evidence numbering falls back to one caption
+per receipt when the account fan-out does not align.
+
 **Every Lovable prompt is applied as of 2026-09-07** (the owner pasted and
 published the four pending prompts — R1 person/private, months
 origin+refusals, R3 trips, R4 settled-by — bundle-verified same day),
