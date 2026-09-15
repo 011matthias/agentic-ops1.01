@@ -146,3 +146,8 @@ holds. Verify by field names, not display copy.
 
 `api-contract.md` is the internal backend/SPA contract. It is never pasted
 into Lovable; it is what the prompts are written against.
+
+Item 69 round A (2026-09-15, duplicate groups by the document's number,
+`duplicate_groups[].basis`): no SPA change is needed. The duplicates prompt
+already renders every group and every row marker, a reference group renders
+through the same shape, and `basis` is optional display. No prompt written.

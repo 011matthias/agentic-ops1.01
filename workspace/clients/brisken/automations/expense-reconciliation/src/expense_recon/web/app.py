@@ -3800,7 +3800,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             overrides = store.get_category_overrides(run_id)
             field_overrides = store.get_expense_field_overrides(run_id)
             edits = store.get_expense_edits(run_id)
-        path = regenerate_expense_export(run, overrides, field_overrides, edits)
+            dup_resolutions = store.get_duplicate_resolutions(run_id)
+        path = regenerate_expense_export(
+            run, overrides, field_overrides, edits, dup_resolutions
+        )
         return FileResponse(
             path,
             filename=f"zoho-expenses-{run_id}.csv",
@@ -3865,11 +3868,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # settings, the same way the grid reads it, so the report
             # and the screen partition on the same names.
             settings = store.get_settings()
+            dup_resolutions = store.get_duplicate_resolutions(run_id)
         outcomes: dict = {}
         pdf = build_expense_report(
             run, overrides, field_overrides, edits, trip=trip,
             settings=settings,
             render_outcomes=outcomes,
+            dup_resolutions=dup_resolutions,
         )
         # Item 67: building the report is the only moment renderability is
         # known, so it is the moment the answer gets recorded. The grid reads

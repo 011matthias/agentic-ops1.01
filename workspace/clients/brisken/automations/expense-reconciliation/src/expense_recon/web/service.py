@@ -45,7 +45,8 @@ from ..duplicates import (
     duplicate_group_id,
     duplicate_row_flags,
     find_duplicate_charges,
-    find_duplicate_receipts,
+    find_duplicate_receipt_groups,
+    inherit_card_from_copies,
     n_extra_copies,
 )
 from ..ingest._common import merge_transactions
@@ -2022,7 +2023,7 @@ def ingest_receipts_folder_into_run(
     # detector so the headline count matches the §18 duplicate panel the
     # reviewer then works.
     dup_new_docs: set[str] = set()
-    for grp in find_duplicate_receipts(pool):
+    for grp, _basis in find_duplicate_receipt_groups(pool):
         grp_new = [d for d in grp if d in new_ids]
         if grp_new and any(d not in new_ids for d in grp):
             dup_new_docs.update(grp_new)
@@ -3138,6 +3139,10 @@ def build_view(
         ]
         for grp in find_duplicate_charges(transactions)
     ]
+    # Both receipt keys (vendor/date, then reference-only; item 69 round A),
+    # listed once so the legacy list, `duplicate_groups` and the counts read
+    # the same groups.
+    receipt_groups = find_duplicate_receipt_groups(receipts)
     duplicate_receipts = [
         [
             _receipt_view(
@@ -3146,7 +3151,7 @@ def build_view(
             )
             for d in grp if d in rec_by_id
         ]
-        for grp in find_duplicate_receipts(receipts)
+        for grp, _basis in receipt_groups
     ]
 
     # §18: a flat, SPA-facing view of the duplicate groups with a stable,
@@ -3165,15 +3170,21 @@ def build_view(
             "members": members,
             "resolution": resolutions.get(gid),
         })
-    for grp in find_duplicate_receipts(receipts):
+    # Item 69 round A: a group only the reference key finds says so with
+    # `basis: "reference"`; ABSENT on every vendor/date group, so the
+    # payload for a month without such a group is byte-identical.
+    for grp, basis in receipt_groups:
         members = [d for d in grp if d in rec_by_id]
         gid = duplicate_group_id("receipt", members)
-        duplicate_groups.append({
+        entry = {
             "group_id": gid,
             "kind": "receipt",
             "members": members,
             "resolution": resolutions.get(gid),
-        })
+        }
+        if basis:
+            entry["basis"] = basis  # run view
+        duplicate_groups.append(entry)
 
     # §18 (2026-08-28): the same groups, carried ON the row. A group is only
     # actionable if the reviewer can see which row is in it; until now the
@@ -5428,6 +5439,14 @@ def build_expense_view(
         orig_receipts, field_overrides, edits,
         category_overrides=overrides, default_entity=default_entity,
     )
+    # Item 69 round A: the same card inheritance `rematch_month` bakes, so the
+    # row's card / entity and the match outcome cannot disagree. Applied to
+    # every batch, statement or not: on a collecting month (September 2026 on
+    # deploy) a card-less invoice copy leaves "No legal entity yet" the moment
+    # its receipt copy names the card. A group ruled `ignore` lends nothing,
+    # and an operator-assigned hint word is never overwritten (grid).
+    grid_hints = _batch_card_hints(run.config)
+    receipts = inherit_card_from_copies(receipts, resolutions, grid_hints)  # grid
     receipts_dir = Path(run.work_dir) / "receipts"
     intake_provenance = (run.snapshot or {}).get("intake_provenance") or {}
     # Override-applied twins for the `books_as` fan-out (backlog item 2):
@@ -5744,15 +5763,20 @@ def build_expense_view(
     resolutions = resolutions or {}
     rec_ids = {r.document_id for r in receipts}
     duplicate_groups = []
-    for grp in find_duplicate_receipts(receipts):
+    # Item 69 round A: `basis: "reference"` on a group only the reference
+    # key finds, ABSENT on every vendor/date group.
+    for grp, basis in find_duplicate_receipt_groups(receipts):
         members = [d for d in grp if d in rec_ids]
         gid = duplicate_group_id("receipt", members)
-        duplicate_groups.append({
+        entry = {
             "group_id": gid,
             "kind": "receipt",
             "members": members,
             "resolution": resolutions.get(gid),
-        })
+        }
+        if basis:
+            entry["basis"] = basis  # grid
+        duplicate_groups.append(entry)
 
     # The same groups carried ON the row (2026-08-28). This is the one
     # that matters most: an expense batch is where a twice-forwarded
@@ -6034,6 +6058,7 @@ def _expense_export_inputs(
     overrides: dict,
     field_overrides: dict[str, dict[str, str]],
     edits: list[dict],
+    dup_resolutions: dict[str, str] | None = None,
 ) -> tuple[list, dict]:
     """`(receipts, kwargs)` for the expense export — the overlay order the
     view uses (`apply_expense_edits` then `apply_overrides`) plus the card /
@@ -6041,7 +6066,11 @@ def _expense_export_inputs(
 
     Extracted so the CSV and the month's PDF report are built from ONE setup:
     the report quotes the export's rows, and a change to how a row resolves
-    reaches both or neither."""
+    reaches both or neither.
+
+    `dup_resolutions` (item 69 round A) is the run's duplicate resolutions,
+    so a group the reviewer ruled "not a duplicate" lends no card here
+    either; a caller without a store in hand passes None (no group ruled)."""
     # The extraction baseline, for the same reason the grid uses it: the
     # export applies the overlay, and on an attached month the stored receipt
     # block already has it baked in. Grid and export move together.
@@ -6053,6 +6082,10 @@ def _expense_export_inputs(
         receipts, field_overrides, edits,
         category_overrides=overrides, default_entity=default_entity,
     )
+    # Item 69 round A: the grid's card inheritance, so grid and export move
+    # together on a copy that borrowed its card.
+    export_hints = _batch_card_hints(run.config)
+    receipts = inherit_card_from_copies(receipts, dup_resolutions, export_hints)  # export
     receipts = apply_overrides(receipts, overrides)
     coa_gate = _coa_gate_from_config(run.config, run.work_dir)
     chart = getattr(coa_gate, "chart", None) if coa_gate is not None else None
@@ -6106,11 +6139,12 @@ def regenerate_expense_export(
     overrides: dict,
     field_overrides: dict[str, dict[str, str]],
     edits: list[dict],
+    dup_resolutions: dict[str, str] | None = None,
 ) -> Path:
     """Write the expense CSV for a batch with every reviewer edit applied.
     Returns the path."""
     receipts, kwargs = _expense_export_inputs(
-        run, overrides, field_overrides, edits
+        run, overrides, field_overrides, edits, dup_resolutions
     )
     out_path = Path(run.work_dir) / "expenses.csv"
     write_zoho_expense_export(receipts, out_path, **kwargs)
@@ -6125,6 +6159,7 @@ def build_expense_report(
     trip: "TripRow | None" = None,
     settings: dict | None = None,
     render_outcomes: dict | None = None,
+    dup_resolutions: dict[str, str] | None = None,
 ) -> bytes:
     """The month's report PDF: the listing, then every receipt (owner
     directive 2026-08-23 — nothing imports the output any more, so the
@@ -6166,7 +6201,7 @@ def build_expense_report(
     from ..output.month_report_pdf import build_expense_report_pdf
 
     receipts, kwargs = _expense_export_inputs(
-        run, overrides, field_overrides, edits
+        run, overrides, field_overrides, edits, dup_resolutions
     )
     private_by_doc = _private_reimbursements(field_overrides)
     company = [r for r in receipts if r.document_id not in private_by_doc]
@@ -6477,7 +6512,8 @@ def build_cost_center_totals(
             if trip_row is not None:
                 trip = {"cost_center": trip_row.cost_center}
         receipts, _kwargs = _expense_export_inputs(
-            run, overrides, field_overrides, edits
+            run, overrides, field_overrides, edits,
+            store.get_duplicate_resolutions(run.run_id),
         )
         private_by_doc = _private_reimbursements(field_overrides)
         company = [r for r in receipts if r.document_id not in private_by_doc]
@@ -8967,6 +9003,7 @@ def trip_pool_for_month(
             store.get_category_overrides(batch.run_id),
             t_field,
             store.get_expense_edits(batch.run_id),
+            store.get_duplicate_resolutions(batch.run_id),
         )
         private = _private_reimbursements(t_field)
         claims = store.get_claims_on_receipts(batch.run_id)
@@ -9267,6 +9304,21 @@ def rematch_month(
         category_overrides=overrides, default_entity=batch_entity,
     )
     receipts = apply_overrides(receipts, overrides)
+    # Item 69 round A: the kept copy of a document inherits the card its
+    # copies name, BEFORE the card chain below, so the chain derives the
+    # entity from the inherited card and an invoice copy whose receipt copy
+    # names another entity's card leaves this statement's scope (August
+    # 2026: the Lovable 50 invoice took BASE44 50.00 on Corporate Services
+    # while its receipt named card 1176, Consulting). Computed over the
+    # full effective list, so a copy item 56 collapses below still lends.
+    # The inherited values persist into the snapshot's `receipts` with the
+    # entity bake, and are re-derived from the extraction baseline on every
+    # re-match (item 70), so nothing accumulates. A group the reviewer ruled
+    # `ignore` lends nothing (the card-less copy's own charge is then free
+    # to match), and a hint word the operator assigned is kept.
+    dup_resolutions = store.get_duplicate_resolutions(run.run_id)
+    bake_hints = _batch_card_hints(cfg)
+    receipts = inherit_card_from_copies(receipts, dup_resolutions, bake_hints)  # before the card chain
     # Cards R3: bake the SAME per-receipt entity the grid and the export
     # showed (override -> hint assignment -> card registry -> stamped
     # value) into the pool the matcher sees. Matching is entity-scoped
@@ -9937,6 +9989,7 @@ def adjacent_pool_for_month(
             store.get_category_overrides(other.run_id),
             o_field,
             store.get_expense_edits(other.run_id),
+            store.get_duplicate_resolutions(other.run_id),
         )
         private = _private_reimbursements(o_field)
         claims = store.get_claims_on_receipts(other.run_id)

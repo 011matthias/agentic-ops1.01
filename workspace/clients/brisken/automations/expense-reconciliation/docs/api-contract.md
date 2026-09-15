@@ -1980,3 +1980,43 @@ a candidate: the candidate carrying a reviewer category edit first, else
 held receipt (none), and the reconciliation PDF leaves its posts-to column
 blank on such a row. Pinned by `tests/test_view_contract.py` and
 `tests/test_month_edits.py`; renders in `docs/lovable-month-edits-prompt.md`.
+
+## Duplicate groups found by the document's number: `basis` (item 69 round A)
+
+`GET /api/runs/{id}` and `GET /api/expense-batches/{id}` ->
+`duplicate_groups[].basis`, the string `"reference"` or **absent** (never
+null, never `"vendor_date"`). Present only on a receipt group that ONLY the
+second duplicate key finds: identical normalized reference (upper-cased
+alphanumerics of the receipt's reference, at least 5 characters, not the
+receipt's own date or total printed as digits) + total + currency, whatever
+the vendor spelling or the printed date. A Stripe invoice PDF and its
+receipt PDF print the vendor differently, and a re-mailed copy carries the
+mail's date; the vendor/date key never saw those, and the copy that named
+no card then took a stranger's charge of the same amount.
+
+Groups from the two keys never merge. A reference group whose membership
+equals a vendor/date group IS that group (same `group_id`, `basis` absent);
+overlapping-but-different memberships are two groups, and a row in both
+carries the marker (`duplicate`) of the group in which it is the extra copy,
+so the marker never hides a collapse. Reviewer resolutions
+(`POST /api/runs/{id}/duplicates/resolve`) work on reference groups exactly
+as on the others: `ignore` puts that group's copies back in the pool and
+re-matches (a document that is ALSO in another live group leaves the pool
+while either group is live), `confirmed` keeps it collapsed; the ruling does
+not change `basis`. `n_duplicate_groups` and `n_duplicate_copies` count
+both kinds. A reference whose receipts carry different totals is an account
+id, not a document number, and forms no group.
+
+One behaviour beside the field: on every group the reference key finds
+(basis `"reference"` AND the groups both keys find, where `basis` is
+absent), a copy that names no card inherits the card its copies name (and
+the entity, when exactly one is named), so its row's `payment_hint` /
+`card` / `legal_entity_id` / `entity_source` can come from its copy, and the
+matcher scopes it to that card's statement. A group ruled `ignore` lends
+nothing, and a payment mode the operator assigned through `POST
+/api/expense-batches/{id}/cards` is never rewritten. So a month with a
+reference pair can render differently from before this round on those
+four row fields; `basis` itself is parallel per rule 1 and absent on every
+vendor/date group. Pinned by `tests/test_view_contract.py`; no SPA change
+is needed (the duplicates prompt already renders groups and row markers;
+`basis` is optional display).
