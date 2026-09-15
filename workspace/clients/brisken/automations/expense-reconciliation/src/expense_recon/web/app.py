@@ -57,11 +57,19 @@ import shutil
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import BackgroundTasks, Body, FastAPI, Form, Request, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Body,
+    FastAPI,
+    Form,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
@@ -97,6 +105,7 @@ from .service import (
     available_entities,
     baseline_receipts,
     batch_list_summary,
+    build_cost_center_totals,
     build_expense_report,
     build_reconciliation_report,
     build_expense_view,
@@ -144,6 +153,10 @@ from .service import (
     validate_trip_fields,
 )
 from ..matching.types import EXPENSE_CATEGORIES
+from ..cost_centers import (
+    CostCenterRegistry,
+    normalize_cost_centers_setting,
+)
 from ..merchant_registry import normalize_merchants_setting
 from .store import (
     INTAKE_PROCESSING,
@@ -1674,6 +1687,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     "start": trip_row.start_date,
                     "end": trip_row.end_date,
                     "travelers": list(trip_row.travelers),
+                    # Item 47: the trip is the strongest AUTOMATIC
+                    # cost-center signal for every row in its batch.
+                    "cost_center": trip_row.cost_center,
                 }
         return build_expense_view(
             run, overrides, field_overrides, edits, resolutions,
@@ -1870,6 +1886,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     and str(entry.get("zoho_account") or "").strip()
                     and not str(entry.get("category") or "").strip()
                 ),
+                # The picker's list: ACTIVE cost centers, name-sorted, each
+                # with its display-only kind. Derived and read-only; PUT
+                # ignores it, edits go to the `cost_centers` key. Empty
+                # until the owner defines one, and that is the whole
+                # contract (cost_centers.py).
+                "cost_center_options": CostCenterRegistry.from_settings(
+                    settings
+                ).options(),
             })
 
     @app.get("/api/cards")
@@ -1994,6 +2018,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if "cards" in body:
             try:
                 patch["cards"] = normalize_cards_setting(body["cards"])
+            except ValueError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+        # Cost centers (item 47): {name: {kind, note, active}}. Whole-map
+        # replace, same contract family as merchants / cards / entities.
+        # Owner-authored ONLY — nothing else in the tool ever writes this
+        # key, because the tool must never invent a cost center.
+        if "cost_centers" in body:
+            try:
+                patch["cost_centers"] = normalize_cost_centers_setting(
+                    body["cost_centers"]
+                )
             except ValueError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=400)
         # Mail-intake config (aliases -> person names, sender allowlist,
@@ -2763,6 +2798,45 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             ]
         return JSONResponse({"batches": batches})
 
+    @app.get("/api/cost-centers/totals")
+    def cost_center_totals(
+        date_from: str | None = Query(default=None, alias="from"),
+        date_to: str | None = Query(default=None, alias="to"),
+    ):
+        """The cross-month cost-center roll-up (item 47, step 5): per
+        cost center, per currency, with a row count and an explicit
+        unassigned bucket, over every expense batch, months and trips.
+        `from` / `to` are inclusive ISO dates on the row's expense date;
+        either may be omitted. The payload's `note` carries the stated
+        limit: card and receipt spend only, not total project cost."""
+        if not _receipt_first_on():
+            return _flag_off()
+        bounds: dict[str, date | None] = {}
+        for key, raw in (("from", date_from), ("to", date_to)):
+            text = str(raw or "").strip()
+            if not text:
+                bounds[key] = None
+                continue
+            try:
+                bounds[key] = date.fromisoformat(text)
+            except ValueError:
+                return JSONResponse(
+                    {"error": f"{key} must be a date like 2026-01-31, "
+                              f"got {text!r}"},
+                    status_code=400,
+                )
+        if bounds["from"] and bounds["to"] and bounds["from"] > bounds["to"]:
+            return JSONResponse(
+                {"error": f"from ({bounds['from']}) is after to "
+                          f"({bounds['to']})"},
+                status_code=400,
+            )
+        with open_store() as store:
+            payload = build_cost_center_totals(
+                store, date_from=bounds["from"], date_to=bounds["to"],
+            )
+        return JSONResponse(payload)
+
     # ── Trips (item 38): the travel half of the expense split. A trip is
     # an entity of its own — named, date-ranged, variable roster — because
     # only a human knows those, so it can never be auto-created. Its
@@ -2822,6 +2896,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 "start": payload.get("start", current.start_date),
                 "end": payload.get("end", current.end_date),
                 "travelers": payload.get("travelers", current.travelers),
+                # Item 47: omitted keeps the stored value, "" clears it
+                # -- the same merge semantics as every field above.
+                "cost_center": payload.get(
+                    "cost_center", current.cost_center
+                ),
             } if isinstance(payload, dict) else None
             cleaned, err = validate_trip_fields(merged)
             if err is not None:
@@ -3314,6 +3393,28 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # set both, so the flag alone is refused unless reimburse_to
             # is already stored — otherwise "owed to nobody" would read
             # as decided (adversarial review, 2026-09-06).
+            # Item 47: an override may only name a cost center the owner
+            # has DEFINED. This is the one place the name is checked,
+            # because it is the one place a human is picking from a list
+            # the tool showed her; the carriers (card / merchant / trip)
+            # stay unvalidated so edit order cannot matter. An inactive
+            # centre is accepted here on purpose: correcting history
+            # onto a retired project is a legitimate edit, and only
+            # DEFAULTS are barred from resurrecting one.
+            if field == "cost_center" and value:
+                registry = CostCenterRegistry.from_settings(
+                    store.get_settings()
+                )
+                canon = registry.canonical(value)
+                if canon is None:
+                    return JSONResponse(
+                        {"error": f"cost_center {value!r} is not a defined "
+                                  "cost center; define it in Settings first"},
+                        status_code=400,
+                    )
+                # Store the registry's own spelling, so a picked name and
+                # a typed one cannot read as two different centres.
+                value = canon
             if field == "private" and value == "1":
                 stored = store.get_expense_field_overrides(run_id).get(
                     document_id, {}
@@ -3513,8 +3614,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             trip = store.get_trip(
                 str((run.config or {}).get("trip_id") or "")
             ) if batch_type(run) == BATCH_TYPE_TRIP else None
+            # Item 47: the cost-center registry is read LIVE from
+            # settings, the same way the grid reads it, so the report
+            # and the screen partition on the same names.
+            settings = store.get_settings()
         pdf = build_expense_report(
-            run, overrides, field_overrides, edits, trip=trip
+            run, overrides, field_overrides, edits, trip=trip,
+            settings=settings,
         )
         safe = re.sub(r"[^A-Za-z0-9._-]+", "-", label).strip("-") or run_id
         return Response(

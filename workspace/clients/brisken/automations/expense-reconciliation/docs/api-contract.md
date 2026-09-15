@@ -54,6 +54,7 @@ receives after `jsonable_encoder`.
 | `summary.upload_issues[]` | string (English prose; unchanged by design) |
 | `summary.upload_issue_details[]` | object `{code, file, suffix, limit}` |
 | `account_options[]` · `category_options[]` · `entity_options[]` | string |
+| `cost_center_options[]` | object `{name, kind, note}` (item 47: OBJECTS, unlike its three sibling option lists) |
 
 ### Run
 
@@ -153,6 +154,7 @@ name answers the same one:
 | `n_review` | how many are flagged for a look (`check` or `pick`) |
 | `n_needs_entity` | how many still need a legal entity (a confirmed private row needs none by design, so it does not count — item 41 sharpened the question the name always asked) |
 | `n_needs_person` | how many rows no person owns yet (item 40; the fix is a person on the card, not a row edit) |
+| `n_needs_cost_center` | how many rows carry no cost center yet (item 47). Structurally 0 while no cost center is defined |
 | `n_charges_no_entity` | how many CHARGES carry no legal entity, because the card they printed is not in the registry or has no entity (item 59; the fix is defining that card, not a row edit). Charges, not expenses: `n_needs_entity` answers the receipt-side question |
 | `n_charges_receipt_taken` | how many charges are bucketed `unmatched` while every candidate they hold is held by another charge (item 60; the fix is a pick, not a missing receipt) |
 | `n_roster_mismatch` | trip batches only (absent on company months): how many rows a person OUTSIDE the trip's roster paid for (item 38 x 40) |
@@ -1193,6 +1195,159 @@ their receipts stay in the evidence pages. The CSV keeps them as rows
 and `Paid Through` = `Private ({person})` — the same strings the grid
 shows.
 
+## Cost centers: which project or purpose the money belongs to (added 2026-09-10)
+
+Backlog item 47, owner directive 2026-09-08. A cost-center DIMENSION on the
+expense row, sibling to category, legal entity and person, resolved through
+the same chain the rest of the tool uses and never guessed silently. All
+fields are PARALLEL (rule 1): nothing existing changes type or meaning, so a
+stale SPA renders exactly what it renders now.
+
+**The registry is owner-authored.** `settings["cost_centers"]` is a flat map
+`{name: {kind, note, active}}`, whole-map replace like `cards` / `merchants`
+/ `entities`. `kind` is one of `project` / `function` / `trip` / blank, is
+display-only, and never participates in resolution. The tool never invents a
+cost center and never learns a new NAME.
+
+**The empty-registry contract, which everything else rests on.** An empty
+registry resolves nothing AND FLAGS NOTHING. Until the owner has defined at
+least one cost center, every row reads `cost_center: null`,
+`cost_center_source: ""`, `needs_cost_center: false`, and
+`n_needs_cost_center` is 0. A review state that fired on 100% of rows would
+be noise rather than signal, and the field has to be inert while it waits for
+data entry, not loud. Pinned by
+`test_an_empty_registry_resolves_nothing_and_flags_nothing`.
+
+**Expense rows** gain:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `expenses[].cost_center` | string \| null | the resolved name; `null` when unresolved |
+| `expenses[].cost_center_source` | string | `override` \| `trip` \| `merchant` \| `card` \| `""` |
+| `expenses[].cost_center_source_label` | string | the parallel human-readable label (rule 5) |
+| `expenses[].needs_cost_center` | boolean | the review flag; always false while the registry is empty |
+
+`cost_center_source_label` is not optional politeness: rule 5 says an
+enum-ish field the SPA maps by hand ships WITH a parallel label, so an
+un-updated consumer degrades to correct text instead of somebody else's copy
+(the `pooled` / `routing` / `claiming` to "Arriving" hole).
+
+**Resolution order**, highest first, first hit wins:
+
+1. the row's own `cost_center` field override (a reviewer decision);
+2. the batch's TRIP, whose `cost_center` a human DECLARED at creation
+   (item 38) rather than anything inferring it;
+3. the merchant registry entry's `cost_center` for the row's vendor;
+4. the resolved card's `default_cost_center`;
+5. otherwise unresolved.
+
+Person is deliberately NOT a resolver: it cannot separate "Nicolas in
+Brazil" from "Nicolas on Lidar", which are two of the owner's own examples,
+so a person-first chain would fill one of them in wrong and confidently.
+Category is not one either, because letting the two dimensions co-vary
+destroys the point of cutting the money a second way. `resolve()` takes
+neither argument and a test asserts the signature.
+
+**Where a name is validated, and where it deliberately is not.** The three
+CARRIERS store the name as typed: `cards[].default_cost_center`,
+`merchants[].cost_center`, and the trip's `cost_center` are not checked
+against the registry at the settings edge, because those screens are edited
+independently and the edit ORDER must not matter. A name the registry does
+not define simply fails to resolve, leaving the row unassigned rather than
+stamping something invented. The one place a name IS checked is the row
+override (`PUT /api/runs/{id}/expenses/{doc}` with `field: "cost_center"`),
+which 400s on an undefined name and stores the registry's own spelling, so a
+picked name and a typed one cannot read as two centres. Blank clears it.
+An INACTIVE centre is accepted as an override (correcting history onto a
+retired project is legitimate) but never stamped as a default.
+
+**Settings and carriers**:
+
+- `GET /api/settings` emits `cost_centers` plus the derived read-only
+  `cost_center_options`; `PUT /api/settings` accepts `cost_centers`,
+  normalized and validated at the edge (blank name dropped, unknown `kind`
+  rejected, two names differing only in case refused rather than silently
+  collapsed).
+- `cards[].default_cost_center` rides the card snapshot like `person`, so it
+  reaches an EXISTING batch through `POST .../refresh-master-data`, whose
+  `changes` then carries `{"field": "row_cost_centers", "n_rows_changed": N}`
+  when the refresh moved any row's RESOLVED cost center (item 40's
+  `row_persons` contract; omitted when nothing moved). The cards
+  map stays WHOLE-MAP REPLACE: an SPA build that does not read and write
+  `default_cost_center` in its Settings > Cards editor erases it on save.
+- The trip object gains `cost_center`; `POST` / `PUT /api/trips` accept it,
+  with the same merge semantics as every other trip field (omitted keeps,
+  `""` clears), so a roster save that does not mention it cannot erase it.
+- Both registries are read LIVE from settings rather than from the batch's
+  config snapshot, deliberately: the day the owner defines the first cost
+  center, existing months must start resolving without a refresh pass.
+
+**Review**: a row that would otherwise be ready reads `check` with
+`reason_code: "needs_cost_center"` (the prose rides in `reason`). It fires
+LAST OF ALL, after `needs_person`, because it is registry work of the same
+class and must never hide a more actionable per-row exception.
+
+**The stated limit, which both surfaces must carry.** This tool only sees
+money that flows through a Brisken card or a receipt. Contractor invoices,
+salaries and anything paid another way never enter it, so "what did Lidar
+cost" answered from here is CARD-AND-RECEIPT SPEND, not total project cost.
+A number that reads as a project total and is not one is worse than no
+number (B4).
+
+**v1 refuses splits.** One expense, one cost center. Named consequence,
+accepted: a genuinely shared cost lands wholly on one side and that roll-up
+is slightly wrong. If a real shared cost turns up, the v2 shape is per line
+item through the `books_as` fan-out, not operator-typed percentages.
+
+### The month report grouped by cost center (step 3, added 2026-09-15)
+
+`GET /runs/{id}/expense-report.pdf` on a COMPANY month partitions the
+listing per cost center once the chain resolves or flags any row: the same
+`sections` mechanism the trip report uses per person, keyed on the row's
+resolved `cost_center`. Named centres come in name order, each captioned
+`Name (kind)` with its own row count and per-currency sums, numbering
+continuous across sections; rows with no cost center form a FINAL section
+captioned "Unassigned (no cost center)", never hidden. Above the partition
+sit the heading "Listing by cost center" and the standing note that carries
+the stated limit: card and receipt spend only, not total project cost.
+
+While no cost center is defined the report is the flat listing it always
+was. The report does not re-check the registry; it partitions only when a
+row resolves or flags, so the empty-registry contract keeps its single home
+in `CostCenterRegistry.resolve` and the flat listing follows from it. A trip
+batch's report is unchanged whatever the registry holds (item 38: sectioned
+per person). The report reads the registry LIVE from settings, as the grid
+does, so the two partition on the same names. Pinned by
+`tests/test_cost_center_report.py`.
+
+### Cross-month totals: `GET /api/cost-centers/totals` (step 5, added 2026-09-15)
+
+The only surface that aggregates ACROSS batches. "What has Lidar cost since
+January" is the question a project raises, and no month report can answer
+it. Query: `from` and `to`, each an optional inclusive ISO date on the row's
+(edited) expense date; a malformed date or `from` after `to` is a 400 with
+`{"error": <prose>}`.
+
+| Path | Element | Meaning |
+|---|---|---|
+| `from`, `to` | string \| null | the range as applied, echoed back |
+| `note` | string | the stated limit, verbatim (`COST_CENTER_SCOPE_NOTE`) |
+| `cost_centers[]` | object | one per centre, name-sorted: `{name, kind, active, n_rows, n_batches, totals}` |
+| `cost_centers[].totals` | object | `{currency: amount}`, amounts formatted like every other money string (`1,234.50`) |
+| `unassigned` | object | `{n_rows, n_batches, totals}`; explicit, never hidden |
+| `n_batches` | int | expense batches SCANNED (months and trips), not those in range |
+| `n_rows` | int | rows counted into the buckets |
+| `n_undated` | int | rows counted that carry no date; a range cannot exclude them |
+
+Rows are the export's own rows resolved through the same chain the grid and
+the month report run, so the three cannot disagree about where a row
+belongs. Confirmed private expenses are left out: reimbursements owed, not
+company spend. Every ACTIVE centre is listed, at zero when nothing reached
+it; an inactive one appears only while history still sits on it (a reviewer
+override onto a retired project). With no cost center defined,
+`cost_centers` is empty and every row is in `unassigned`: the roll-up
+stating a fact, not a review state; the row-level flag stays silent per the
+empty-registry contract. Pinned by `tests/test_cost_center_totals.py`.
 ## The adjacent-month pool: `from_batch` + `kind` (added 2026-09-15)
 
 Backlog item 61. A receipt is filed by the month printed ON it; a charge
