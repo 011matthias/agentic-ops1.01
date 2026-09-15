@@ -1736,7 +1736,7 @@ report.
 None of this is scheduled. The float-total and the lock-bypass are the two
 worth doing regardless of what happens with item 48.
 
-### 50. The attach dialog dies with "Failed to fetch", and the app is allowed to stop (hosting half CLOSED 2026-09-11)
+### 50. The attach dialog dies with "Failed to fetch", and the app is allowed to stop (hosting half CLOSED 2026-09-11; PROBE BUILT 2026-09-15)
 
 **What Criss saw.** She mailed Matthias a screenshot at 10:00:43Z, subject
 "Error", no text. The image is the **Attach bank statement** dialog with
@@ -1788,6 +1788,51 @@ fetch" therefore loses its mechanism -- a machine pinned always-on does not
 cold-start -- so the dialog error remains UNEXPLAINED and the probe that
 records machine state at failure time is still the thing that would make a
 recurrence provable. That probe is the open half of this item.
+
+**PROBE BUILT 2026-09-15** (backend; the SPA half is written and waiting).
+The design follows from the one fact that makes this item hard: a fetch that
+rejects never reached the app, so NO server-side log can ever contain it and
+no amount of logging would have helped. The only instrument that can see it
+is the client, so the client reports and the server stamps.
+
+- `web/machine.py`: one home for this process's identity and age, read by
+  `/healthz` and by every report, so the two cannot disagree about which
+  machine answered. Uptime is monotonic, so an NTP correction cannot age a
+  process.
+- `GET /healthz` keeps `status` untouched and gains a parallel `server`
+  block (machine, region, app, started_at, uptime_s), empty off Fly rather
+  than invented.
+- `POST /api/client-errors` records one client-side failure; `GET` reads
+  them back newest-first. Authenticated like every other API route: the
+  failures worth catching happen inside a live session, so the gate costs
+  no coverage and keeps an unauthenticated write off a public host.
+- **The decisive field is `process_predates_failure`.** If the client says
+  the failure was N seconds ago and this process has been up for less than
+  N, the process did not exist when the request was made and the machine
+  was replaced underneath it. That is the question this item asks, answered
+  from the row alone rather than from logs that die with the machine. It is
+  driven by the client's own `seconds_ago`, never by comparing two clocks:
+  a browser clock skewed by minutes would fabricate or hide a restart.
+  Unknown stays `null` and never collapses to `false`, because a fabricated
+  restart would send the next investigation back to the hosting theory that
+  already cost this item a cycle.
+- The probe never becomes a second failure: any body is recorded rather
+  than rejected, the reply is always 200, and a retry loop is dropped
+  (`recorded: false`, 20/caller/minute) so it cannot push the interesting
+  rows out of the bounded 500-row table.
+
+**The stated limit, which the payload carries and every reader must keep.**
+A row exists only when the browser could reach the app AFTER the failure.
+An empty log is not proof that nothing failed. Fly's machine event log is
+the corroborating source and outlives the machine, so a report timestamp is
+enough to look the event up later.
+
+12 tests in `tests/test_client_error_probe.py`, all through the routes;
+six wiring points regress-checked green to red to green. Contract section
+in `docs/api-contract.md`. **The item stays OPEN until the SPA half ships**:
+`docs/lovable-failure-probe-prompt.md` is written and registered in
+PROMPT-STATUS as not applied, and until it is pasted the browser reports
+nothing and the backend records nothing.
 
 ### 51. A statement that parses to zero rows reports success (found by drill, 2026-09-10)
 

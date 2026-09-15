@@ -173,7 +173,7 @@ from .store import (
     VALID_STATUSES,
     RunStore,
 )
-from . import auth, ratelimit
+from . import auth, machine, ratelimit
 
 log = logging.getLogger("expense_recon.web")
 
@@ -708,7 +708,141 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
     @app.get("/healthz")
     def healthz():
-        return JSONResponse({"status": "ok"})
+        """Liveness, plus what this process IS (item 50).
+
+        `status` is unchanged and still the only field a caller needs.
+        The parallel `server` block answers the question the September
+        "Failed to fetch" could not: whether the machine answering now is
+        the one that was answering a moment ago. A `uptime_s` of a few
+        seconds means this process has just replaced another.
+        """
+        return JSONResponse({"status": "ok", "server": machine.snapshot()})
+
+    # ── The client-failure probe (backlog item 50) ──────────────────────
+    # A fetch that rejects in the browser never reached this app, so no
+    # amount of server logging can ever contain it; the only instrument
+    # that can see it is the client itself. These two routes are where the
+    # browser's account lands, stamped with this process's identity and
+    # age so the decisive question is answerable from the row alone: if
+    # the failure was N seconds ago and this process has been up for less
+    # than N, it did not exist when the request was made and the machine
+    # was replaced underneath it. Fly's machine event log corroborates and
+    # outlives the machine, so the timestamp is enough to look it up.
+    #
+    # The probe must never become a second failure the operator sees: it
+    # answers 200 to anything, saying whether it recorded and why not.
+
+    _CLIENT_ERROR_BURST = 20  # per caller per minute; beyond that, drop
+
+    def _capped(value: object, limit: int) -> str:
+        return str(value if value is not None else "")[:limit]
+
+    @app.post("/api/client-errors")
+    async def post_client_error(request: Request):
+        """Record one client-side failure (the SPA calls this when a fetch
+        rejects). Authenticated like every other API route: the failures
+        worth catching happen inside a live session, so the gate costs no
+        coverage and keeps an unauthenticated write off a public host.
+
+        `seconds_ago` drives the machine comparison rather than
+        `occurred_at`, deliberately: the client's wall clock can be skewed
+        by minutes against the server's, and a skewed clock would fabricate
+        or hide a restart. Elapsed time measured inside the one browser is
+        immune to that.
+        """
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001 - a broken client is the point here
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+
+        seconds_ago: float | None
+        try:
+            raw_ago = body.get("seconds_ago")
+            seconds_ago = None if raw_ago is None else float(raw_ago)
+            if seconds_ago is not None and (
+                seconds_ago < 0 or seconds_ago != seconds_ago  # NaN
+            ):
+                seconds_ago = None
+        except (TypeError, ValueError):
+            seconds_ago = None
+
+        def _int_or_none(value: object) -> int | None:
+            try:
+                return None if value is None else int(value)
+            except (TypeError, ValueError):
+                return None
+
+        online = body.get("online")
+        snap = machine.snapshot()
+        now = time.time()
+        caller = ratelimit.client_ip(request)
+        detail = body.get("detail")
+        try:
+            detail_text = json.dumps(detail)[:2000] if detail is not None else ""
+        except (TypeError, ValueError):
+            detail_text = ""
+
+        row = {
+            "received_at": datetime.now(timezone.utc).isoformat(),
+            "received_ts": now,
+            "operator": getattr(request.state, "operator", "") or "",
+            "caller": caller,
+            "kind": _capped(body.get("kind") or "fetch-failed", 40),
+            "url": _capped(body.get("url"), 500),
+            "method": _capped(body.get("method"), 10).upper(),
+            "message": _capped(body.get("message"), 500),
+            "occurred_at": _capped(body.get("occurred_at"), 40),
+            "seconds_ago": seconds_ago,
+            "duration_ms": _int_or_none(body.get("duration_ms")),
+            "online": None if online is None else int(bool(online)),
+            "detail": detail_text,
+            "machine": snap["machine"],
+            "region": snap["region"],
+            "process_started_at": snap["started_at"],
+            "uptime_s": snap["uptime_s"],
+            "process_predates_failure": (
+                None if (pp := machine.process_predates(seconds_ago)) is None
+                else int(pp)
+            ),
+        }
+
+        with open_store() as store:
+            # A broken client can retry in a loop, and an unbounded loop
+            # would push the interesting older rows out of a bounded
+            # table. Dropping the overflow protects the signal.
+            recent = store.count_client_errors_since(now - 60.0, caller)
+            if recent >= _CLIENT_ERROR_BURST:
+                return JSONResponse({
+                    "ok": True, "recorded": False, "reason": "rate-limited",
+                    "server": snap,
+                })
+            row_id = store.record_client_error(row)
+        return JSONResponse({
+            "ok": True, "recorded": True, "id": row_id, "server": snap,
+            "process_predates_failure": row["process_predates_failure"],
+        })
+
+    @app.get("/api/client-errors")
+    def list_client_errors(limit: int = 50):
+        """The reports, newest first, with what this process is right now.
+
+        The stated limit, which every reader has to carry: a row exists
+        only when the browser could reach us AFTER the failure. An empty
+        list is not evidence that nothing failed.
+        """
+        with open_store() as store:
+            rows = store.list_client_errors(limit)
+        return JSONResponse({
+            "client_errors": rows,
+            "server": machine.snapshot(),
+            "note": (
+                "A client-side failure is recorded only if the browser "
+                "could reach this app afterwards. An empty list is not "
+                "proof that nothing failed."
+            ),
+        })
 
     # ── Intake (testing mode): saves the documents, runs nothing. The
     # operator runs the pipeline from the queue; the dev-side notifier
