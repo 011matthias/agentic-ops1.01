@@ -2744,6 +2744,53 @@ inheritance at read time (3 export tests; the workbench posting test), the
 PUT store keeping the old account, and the manual add not rebuilt. SPA half
 `docs/lovable-month-edits-prompt.md` (owner applies).
 
+### 71. The card list at the top of a month buries the work (owner, 2026-09-15; SPA prompt written)
+
+**Owner:** "the card list at the start of a month's page makes everything
+harder to overview; come up with something better." Measured on the live
+pages at 1440x900 (read-only drive, 2026-09-15):
+
+- **Workbench `/runs/{id}`**: "Coverage by card" is 9 rows on both months
+  (July 4 with charges and 5 "nothing loaded yet"; August 3 and 6), 424px,
+  plus a Statements box (one file each, no advisory, the same download the
+  summary bar already offers). The first charge row sits at y=1563 (July),
+  about 1.7 screens down under the 301px sticky header.
+- **Review expenses `/expenses/{id}`**: the same two panels plus the card
+  review strip, 941px on July (11 groups, 25 receipts) and 673px on August
+  (7 groups, 8 receipts). First expense row 2.3 to 3 screens down.
+- **What the reviewer decides from it this month: almost nothing.** Every
+  card is `known`, `n_charges_no_entity` is 0 on both months, 24 of July's
+  25 strip receipts and all 8 of August's are `suggested_private` (a
+  decision the rows already offer). The one real signal is August's: cards
+  1176 (Consulting) and 9693 (Cloud Services) have 2 receipts each in
+  `card_review.resolved[]` and no charge on any loaded statement, and the
+  table renders those two exactly like the four cards that have neither.
+
+**Found on the way, live:**
+
+1. The Card filter's option counts are all the month total ("112" on every
+   card, including five with no charges): `countWith(patch, skip)` in
+   `RunWorkbench.tsx` applies the option and then skips the same dimension.
+   `lovable-workbench-filter-sort-prompt.md` had been marked applied by
+   bundle grep only; this drive is its first behavioral check.
+2. The strip prints "Card ending 42463153" for the hint
+   `42463153XXXXXX38`, whose ending is 38 (item 35's canonical grouping
+   half, still open, and the same masked-BIN shape item 69's round B fixes
+   in the matcher's `_card_keys`).
+3. The strip's "no card number readable" private note appears under units
+   that carry a card number (2544, 9129).
+
+**Owner pick (2026-09-15): card chips + an action-only banner.** Coverage
+becomes a chip row in the filter bar (`3876 · 48`, empty cards folded behind
+one link), the statements box becomes one line unless there are several
+files or an advisory, a banner renders only for a card the month did not
+know, a card with receipts but no charges, or charges without a company, and
+the strip collapses to one line. SPA only; every field was read off the live
+payloads first. Prompt: `docs/lovable-card-chips-prompt.md` (PROMPT-STATUS,
+Not applied), with four browser checks to run after the publish. Optional
+backend nicety, not built: a per-card receipt count on `coverage[]` would
+spare the workbench the batch fetch the banner needs.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
