@@ -79,7 +79,7 @@ def test_empty_lookup_is_a_noop():
 
 def test_zoho_seeded_hit_carries_books_history_provenance():
     # An L2-seeded row (source_run "zoho-seed:{org}") is a LEARNED Tier-1
-    # hit whose reasoning names the Zoho Books posting history, not a
+    # hit whose reasoning names the earlier posting history, not a
     # reviewer decision.
     lookup = MerchantCategoryLookup([
         MerchantCategory(
@@ -95,7 +95,7 @@ def test_zoho_seeded_hit_carries_books_history_provenance():
     assert cat.category == "Software & Subscriptions"
     assert cat.zoho_account == "Other Infra and IT Costs for Cloud Business"
     assert cat.confidence == 1.0
-    assert cat.reasoning == "from your Zoho Books posting history"
+    assert cat.reasoning == "from your earlier posting history"
 
 
 def test_override_recommit_updates_audit_trail(tmp_path):

@@ -179,7 +179,7 @@ def test_zoho_export_card_account_uncovered_warns(tmp_path, capsys):
     # WARN does not change exit code
     assert rc == 0
     # Cards R2 wording: per-card, token-resolution aware, Zoho-optional.
-    assert "matches no card with a Zoho account" in out
+    assert "matches no card with a posting account" in out
 
 
 def test_doctor_routes_through_cli_main(tmp_path, capsys):

@@ -393,7 +393,7 @@ def _writeback_column_values(client, batch_id, name, tmp_path) -> dict[int, str]
     out.write_bytes(resp.content)
     ws = load_workbook(out).active
     col = next(
-        c.column for c in ws[1] if c.value == "Zoho Account (tool)"
+        c.column for c in ws[1] if c.value == "Posting account (tool)"
     )
     return {
         r: ws.cell(row=r, column=col).value

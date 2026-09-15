@@ -999,7 +999,7 @@ def match_one(
                     f"report's own conversion {receipt.base_amount} "
                     f"{tx.transaction_currency} (receipt "
                     f"{receipt.detected_total} {receipt.detected_currency} at "
-                    f"Zoho's per-receipt rate): deviation "
+                    f"the report's own per-receipt rate): deviation "
                     f"{float(base_dev) * 100:.1f}%."
                 ),
             )
@@ -1043,7 +1043,7 @@ def match_one(
                     f"report's own conversion {receipt.base_amount}: deviation "
                     f"{float(base_dev) * 100:.1f}% (above "
                     f"{float(cfg.fx_base_amount_match_pct) * 100:.0f}% — too "
-                    f"loose to auto-match; a single Zoho per-line rate can "
+                    f"loose to auto-match; a single per-line rate from the report can "
                     f"drift). Requires FX judgment."
                 ),
                 requires_review=True,
