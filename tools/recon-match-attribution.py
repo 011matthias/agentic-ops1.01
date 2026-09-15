@@ -88,7 +88,6 @@ REPO = Path(__file__).resolve().parents[1]
 _MODULE_SRC_DEFAULT = REPO / "workspace/clients/brisken/automations/expense-reconciliation/src"
 MODULE_SRC = Path(os.environ.get("RECON_MODULE_SRC") or _MODULE_SRC_DEFAULT)
 
-RATE_DERIVED = ("fx_base_amount", "fx_reference")
 NON_CARD_TENDER = re.compile(
     r"\b(debit|ec[- ]?karte|girocard|maestro|cash|dinheiro|pix|bank transfer|"
     r"transfer[êe]ncia|boleto|paypal|cheque|check)\b",
@@ -365,22 +364,31 @@ def trace_candidates(transactions, receipts, cfg) -> dict:
                 "vendor_signal": vendor_sig,
                 "status": "clean" if m.match_type != MatchType.FX_JUDGMENT else "judgment",
             }
-    claimants: dict[str, set[str]] = defaultdict(set)
-    docs: dict[str, set[str]] = defaultdict(set)
-    for (tx_id, doc), c in cands.items():
-        if c["type"] in RATE_DERIVED:
-            claimants[doc].add(tx_id)
-            docs[tx_id].add(doc)
-    for (tx_id, doc), c in cands.items():
-        if c["type"] not in RATE_DERIVED:
+    # The gate itself is the matcher's, imported, not re-implemented here
+    # (2026-09-15, round B): this tool is the judge of what the matcher
+    # does, so a second copy of the rules is a measurement that can quietly
+    # stop measuring. `kept_by` records which clause saved a pair that had
+    # rivals ("spoken_for" / "vendor_dominance"), "unique" when it never
+    # had any.
+    from expense_recon.matching.deterministic import uniqueness_verdicts
+
+    verdicts = uniqueness_verdicts(
+        [
+            (tx_id, doc, c["match"].match_type, c["card_signal"], c["vendor_signal"])
+            for (tx_id, doc), c in cands.items()
+        ],
+        cfg,
+    )
+    for key, v in verdicts.items():
+        c = cands[key]
+        if v.keep:
+            c["kept_by"] = v.basis
             continue
-        unique = len(claimants[doc]) == 1 and len(docs[tx_id]) == 1
-        contradicts = cfg.card_scoping and c["card_signal"] == 0.0
-        if contradicts:
+        if v.kind == "card":
             c["status"] = "demoted_card"
-        elif not unique:
+        else:
             c["status"] = "demoted_uniqueness"
-            c["rivals"] = (sorted(claimants[doc] - {tx_id}), sorted(docs[tx_id] - {doc}))
+            c["rivals"] = (list(v.rival_txs), list(v.rival_docs))
     return {"cands": cands, "present": present, "scope": scope, "derived": derived, "purchases": purchases}
 
 

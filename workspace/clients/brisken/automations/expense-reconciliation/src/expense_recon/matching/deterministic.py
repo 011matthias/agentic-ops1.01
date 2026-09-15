@@ -36,6 +36,11 @@ _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 # A card-identifying digit run (last-4 / account number) inside a statement
 # marker or a Zoho payment-mode label.
 _DIGIT_RUN = re.compile(r"\d{3,}")
+# Characters a printed card number is masked with. A digit run IMMEDIATELY
+# FOLLOWED by one of these is the leading BIN, not an identifier (see
+# `_card_keys`). A mask that PRECEDES the run ("******0340", "...9693") is
+# the ordinary spelling of a last-4 and is left alone.
+_MASK_CHARS = "Xx*#•●"
 
 
 def _normalize(s: str) -> str:
@@ -52,11 +57,27 @@ def _card_keys(s: str | None) -> set[str]:
     Each digit run of 3+ contributes its leading-zero-stripped form and its
     leading-zero-stripped last-4, so "0340" and "340" land on the same key
     and "CorpServ 2838/1672" overlaps the "2838" marker. Empty when the
-    string carries no card-like number (then no scoping is applied)."""
+    string carries no card-like number (then no scoping is applied).
+
+    Masked BIN (2026-09-15, backlog item 69 round B). A digit run
+    IMMEDIATELY FOLLOWED by a mask character is the card's leading BIN,
+    which names the ISSUER, not the card: "42463153XXXXXX38" prints the
+    first 8 digits of a Visa and hides the rest, and the trailing "38" is
+    too short to be a last-4. Read as an identifier it became a card the
+    statement does not contain, so the card-contradiction gate demoted the
+    receipt's true pair (the August SARL TRAIN'S billet) and the card chain
+    read it as an absent card at the same time. Skipping the run makes the
+    string carry NO card, which is what it actually says, and unknown-card
+    is never evidence against a pair anywhere downstream. A mask that
+    PRECEDES a run ("VISA - ******0340", "...9693") is untouched: that is
+    the ordinary spelling of a last-4."""
     if not s:
         return set()
     keys: set[str] = set()
-    for run in _DIGIT_RUN.findall(s):
+    for m in _DIGIT_RUN.finditer(s):
+        if m.end() < len(s) and s[m.end()] in _MASK_CHARS:
+            continue  # a masked BIN prefix: the issuer, not this card
+        run = m.group()
         keys.add(run.lstrip("0") or "0")
         keys.add(run[-4:].lstrip("0") or "0")
     return keys
@@ -227,9 +248,11 @@ _TUNABLE_FLOAT = frozenset({
     "blend_amount_weight", "blend_date_weight", "blend_vendor_weight",
     "blend_card_weight", "fx_judgment_suggest_floor",
     "amount_probable_min_vendor_score",
+    "uniqueness_vendor_dominance_min", "uniqueness_vendor_dominance_margin",
 })
 _TUNABLE_BOOL = frozenset({
     "card_scoping", "fx_self_derived_rates", "fx_self_derived_review",
+    "uniqueness_spoken_for",
 })
 
 
@@ -409,6 +432,31 @@ class MatchingConfig:
     # has accepted a truncated bank string for a merchant it keeps
     # matching. 0.0 disables the floor.
     amount_probable_min_vendor_score: float = 0.5
+
+    # ── Two refinements of the bilateral-uniqueness gate (2026-09-15) ──
+    # The gate withdraws a clean rate-derived pair's auto-resolution right
+    # whenever ANY other clean rate-derived pair shares its receipt or its
+    # charge. Measured on the six labelled bundles it demoted 36 of 95
+    # receipts and on the two live months another 11, with the correct
+    # charge already sitting first in review: the rival that blocked them
+    # was usually not a rival at all.
+    #
+    # `uniqueness_spoken_for`: a rival that is already claimed by
+    # bank-printed EXACT evidence elsewhere cannot also take this pairing,
+    # so it does not block. False restores the pre-2026-09-15 gate.
+    uniqueness_spoken_for: bool = True
+    # `uniqueness_vendor_dominance_*`: a pair that still has a live rival
+    # keeps its auto-resolution right when the merchant agrees on IT and on
+    # no rival. Vendor only ever PROMOTES a pair that already carries clean
+    # rate evidence; it never rejects one, which is the opposite direction
+    # from the vendor floor the S1 optimize run refuted for FX (26 of 55
+    # true FX pairs score below 0.2 because banks truncate foreign vendor
+    # strings to an aggregator, so a floor would cost real recall — a
+    # dominance rule leaves those pairs exactly where they are). A
+    # confirmed alias pins `_vendor_score` to 1.0, so a reviewer's earlier
+    # acceptance carries the merchant forward. `min` 0.0 disables the rule.
+    uniqueness_vendor_dominance_min: float = 0.5
+    uniqueness_vendor_dominance_margin: float = 0.25
 
     @classmethod
     def from_dict(cls, data: Mapping) -> "MatchingConfig":
@@ -1178,6 +1226,151 @@ def _ties(a: _Candidate, b: _Candidate) -> bool:
     )
 
 
+# The evidence classes the bilateral-uniqueness gate governs. Exact
+# evidence (same-currency EXACT / PROBABLE, statement-original-amount
+# exact-FX) is bank-printed on both sides and is never subject to it.
+RATE_DERIVED_TYPES = (MatchType.FX_BASE_AMOUNT, MatchType.FX_REFERENCE)
+
+_WHY_CARD = (
+    "the receipt's payment card is absent from this statement "
+    "(paid on another card)"
+)
+_WHY_RIVAL = "another charge or receipt agrees just as cleanly"
+
+
+@dataclass(frozen=True)
+class UniquenessVerdict:
+    """What the bilateral-uniqueness gate decided about ONE rate-derived
+    candidate pair, and why.
+
+    `keep` is the auto-resolution right, nothing else: a demoted pair, its
+    scores and its reason all survive into the judgment layer, only the
+    right to resolve without a human is withdrawn. `basis` names why a kept
+    pair was kept ("unique" when it never had a rival, so the reason string
+    is left exactly as it was); `kind` names which gate demoted it. `note`
+    is the clause to append to the reason, empty when there is nothing to
+    add.
+    """
+
+    keep: bool
+    basis: str
+    kind: str
+    note: str
+    rival_txs: tuple[str, ...]
+    rival_docs: tuple[str, ...]
+    vendor_signal: float
+    best_rival_vendor: float
+
+
+def uniqueness_verdicts(
+    candidates: "list[tuple[str, str, MatchType, float, float]]",
+    cfg: MatchingConfig,
+) -> dict[tuple[str, str], UniquenessVerdict]:
+    """The bilateral-uniqueness gate, over the FULL candidate set of a run.
+
+    One rule, two callers: `match_month` applies these verdicts, and
+    `tools/recon-match-attribution.py` reads them to classify a receipt. The
+    tool used to mirror the rules by hand, which is exactly how a
+    measurement drifts away from the thing it measures.
+
+    `candidates` is every (tx_id, document_id, match_type, card_signal,
+    vendor_signal) the matcher generated BEFORE assignment — exact
+    candidates included, because they are what makes a rival "spoken for".
+    The returned map covers the rate-derived pairs only; every other type
+    is ungated.
+
+    The gate, in the order it decides:
+
+    1. **Card contradiction.** The charge's card and the receipt's Zoho
+       payment mode both name a card and they differ: demoted, always, and
+       neither refinement below can rescue it. A surviving contradiction
+       means the receipt was paid on a card absent from this statement, so
+       the clean rate agreement is a same-vendor / same-day coincidence
+       (14/14 no_charge auto-matches on the labelled fixture carry an
+       absent card; 0/55 true pairs do).
+    2. **Unique.** No other rate-derived candidate shares the receipt or
+       the charge: kept, reason untouched.
+    3. **Spoken for** (`uniqueness_spoken_for`). A rival CHARGE that holds
+       an EXACT candidate with some receipt, or a rival RECEIPT that holds
+       an EXACT candidate with some charge, is already accounted for by
+       bank-printed evidence and will take that pairing in the assignment;
+       it cannot also take this one, so it does not block. When every rival
+       is spoken for, the pair is effectively unique and is kept.
+    4. **Vendor dominance** (`uniqueness_vendor_dominance_*`). A pair with a
+       live rival left is kept when the merchant agrees on it
+       (>= `min`) and beats every rate-derived rival by at least `margin`.
+       Vendor PROMOTES a pair that already carries clean rate evidence; it
+       never rejects one.
+    5. Otherwise demoted.
+    """
+    claimants_by_doc: dict[str, set[str]] = {}
+    docs_by_tx: dict[str, set[str]] = {}
+    vendor_of: dict[tuple[str, str], float] = {}
+    exact_txs: set[str] = set()
+    exact_docs: set[str] = set()
+    for tx_id, doc, match_type, _card, vendor in candidates:
+        if match_type is MatchType.EXACT:
+            exact_txs.add(tx_id)
+            exact_docs.add(doc)
+        if match_type in RATE_DERIVED_TYPES:
+            claimants_by_doc.setdefault(doc, set()).add(tx_id)
+            docs_by_tx.setdefault(tx_id, set()).add(doc)
+            vendor_of[(tx_id, doc)] = vendor
+
+    out: dict[tuple[str, str], UniquenessVerdict] = {}
+    for tx_id, doc, match_type, card, vendor in candidates:
+        if match_type not in RATE_DERIVED_TYPES:
+            continue
+        rival_txs = tuple(sorted(claimants_by_doc[doc] - {tx_id}))
+        rival_docs = tuple(sorted(docs_by_tx[tx_id] - {doc}))
+        rival_vendors = [vendor_of[(r, doc)] for r in rival_txs]
+        rival_vendors += [vendor_of[(tx_id, d)] for d in rival_docs]
+        best_rival = max(rival_vendors) if rival_vendors else 0.0
+
+        def _v(keep: bool, basis: str, kind: str, note: str) -> UniquenessVerdict:
+            return UniquenessVerdict(
+                keep=keep,
+                basis=basis,
+                kind=kind,
+                note=note,
+                rival_txs=rival_txs,
+                rival_docs=rival_docs,
+                vendor_signal=vendor,
+                best_rival_vendor=best_rival,
+            )
+
+        key = (tx_id, doc)
+        if cfg.card_scoping and card == 0.0:
+            out[key] = _v(False, "", "card", _WHY_CARD)
+            continue
+        if not rival_txs and not rival_docs:
+            out[key] = _v(True, "unique", "", "")
+            continue
+        if cfg.uniqueness_spoken_for:
+            blocking = [r for r in rival_txs if r not in exact_txs]
+            blocking += [d for d in rival_docs if d not in exact_docs]
+            if not blocking:
+                out[key] = _v(
+                    True, "spoken_for", "", "the rival pairing is spoken for"
+                )
+                continue
+        if (
+            cfg.uniqueness_vendor_dominance_min > 0.0
+            and vendor >= cfg.uniqueness_vendor_dominance_min
+            and best_rival <= vendor - cfg.uniqueness_vendor_dominance_margin
+        ):
+            out[key] = _v(
+                True,
+                "vendor_dominance",
+                "",
+                f"the merchant agrees ({vendor:.2f}) and no rival's does "
+                f"(best {best_rival:.2f})",
+            )
+            continue
+        out[key] = _v(False, "", "uniqueness", _WHY_RIVAL)
+    return out
+
+
 def match_month(
     transactions: list[Transaction],
     receipts: list[Receipt],
@@ -1298,46 +1491,48 @@ def match_month(
     # evidence (same-currency EXACT/PROBABLE, statement-original-amount
     # exact-FX) is bank-printed on both sides and is NOT subject to this
     # gate — its baseline precision was clean.
-    _RATE_DERIVED = (MatchType.FX_BASE_AMOUNT, MatchType.FX_REFERENCE)
-    claimants_by_doc: dict[str, set[str]] = {}
-    docs_by_tx: dict[str, set[str]] = {}
-    for tx_id, cands in cands_by_tx.items():
-        for c in cands:
-            if c.match.match_type in _RATE_DERIVED:
-                claimants_by_doc.setdefault(c.match.document_id, set()).add(tx_id)
-                docs_by_tx.setdefault(tx_id, set()).add(c.match.document_id)
+    #
+    # The rules live in `uniqueness_verdicts` (above), which is also what
+    # `tools/recon-match-attribution.py` reads, so the measurement and the
+    # matcher cannot drift apart. Round B (2026-09-15) added the two
+    # refinements it documents: a rival already spoken for by bank-printed
+    # EXACT evidence does not block, and a pair whose merchant agrees while
+    # no rival's does keeps its auto-resolution right.
+    verdicts = uniqueness_verdicts(
+        [
+            (tx_id, c.match.document_id, c.match.match_type,
+             c.card_signal, c.vendor_signal)
+            for tx_id, cands in cands_by_tx.items()
+            for c in cands
+        ],
+        cfg,
+    )
     for tx_id, cands in cands_by_tx.items():
         for i, c in enumerate(cands):
-            if c.match.match_type not in _RATE_DERIVED:
+            verdict = verdicts.get((tx_id, c.match.document_id))
+            if verdict is None:
+                continue  # not rate-derived: ungated
+            if verdict.keep:
+                if not verdict.note:
+                    continue  # bilaterally unique all along; say nothing new
+                # Kept by a round-B refinement. The pair stays exactly the
+                # deterministic match it was; only the reason gains the
+                # sentence that says WHY the rival did not stop it, because
+                # the workbench renders `reason` verbatim.
+                cands[i] = _Candidate(
+                    match=replace(
+                        c.match,
+                        reason=(
+                            c.match.reason.rstrip(".")
+                            + f". Kept deterministic: {verdict.note}."
+                        ),
+                    ),
+                    is_determ=c.is_determ,
+                    ref_signal=c.ref_signal,
+                    card_signal=c.card_signal,
+                    vendor_signal=c.vendor_signal,
+                )
                 continue
-            doc = c.match.document_id
-            unique = (
-                len(claimants_by_doc.get(doc, ())) == 1
-                and len(docs_by_tx.get(tx_id, ())) == 1
-            )
-            # Card-contradiction gate (2026-07-23, matcher-v2). A rate-derived
-            # pair also forfeits its auto-resolution right when the charge's
-            # card and the receipt's Zoho payment mode both name a card and
-            # they DIFFER (card_signal == 0.0). Card scoping (above) has already
-            # dropped contradicted pairs whose receipt names a card PRESENT in
-            # the statement, so a surviving 0.0 here means the receipt was paid
-            # on a card entirely ABSENT from this statement — its true charge
-            # sits on another card's statement, and the clean base-amount hit to
-            # a present-card charge is a same-vendor / same-day coincidence
-            # (measured: 14/14 no_charge auto-matches on the labelled fixture
-            # carry an absent card; 0/55 true deterministic pairs do). payment_mode
-            # is an independent, always-present Zoho field — never part of the
-            # labeling evidence tiers E1–E4 — so this is a real signal, not a
-            # re-derivation of the base-amount agreement the fixture was built on.
-            card_contradicts = cfg.card_scoping and c.card_signal == 0.0
-            if unique and not card_contradicts:
-                continue  # bilaterally unique, card not contradicted: keep it
-            why = (
-                "the receipt's payment card is absent from this statement "
-                "(paid on another card)"
-                if card_contradicts
-                else "another charge or receipt agrees just as cleanly"
-            )
             demoted = replace(
                 c.match,
                 match_type=MatchType.FX_JUDGMENT,
@@ -1346,7 +1541,7 @@ def match_month(
                 reason=(
                     c.match.reason.rstrip(".")
                     + f". Demoted to judgment: this rate-derived pairing is "
-                    f"not conclusive ({why})."
+                    f"not conclusive ({verdict.note})."
                 ),
             )
             cands[i] = _Candidate(
