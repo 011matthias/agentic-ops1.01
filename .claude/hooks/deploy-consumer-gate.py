@@ -48,6 +48,32 @@ The response check fails OPEN on purpose. A gate that refuses to close on a
 drive that actually happened becomes noise, and noise gets approved reflexively
 -- which is the exact failure this hook exists to avoid.
 
+WRITING ABOUT A DEPLOY IS NOT DEPLOYING (fixed 2026-09-15)
+----------------------------------------------------------
+The gate scans the whole Bash command string, and a commit message arrives
+inside it. Committing the session-scope fix below opened a marker, because the
+message explains the bug and so contains the words "fly deploy". Heredoc bodies
+consumed by a message-writing command, and the values of -m / --body / --title,
+are therefore dropped before matching. A heredoc piped to a shell is left
+alone: that one really does run.
+
+ONE MARKER PER SESSION (fixed 2026-09-15)
+-----------------------------------------
+The marker was a single file in the machine's temp dir, and this repo runs
+concurrent sessions by design -- SessionStart warns about them and hands out a
+worktree recipe. One shared file across four live sessions fails both ways. A
+sibling's Fly deploy blocked an unrelated session's Stop, naming a deploy that
+session had never run (2026-09-15, marker opened at 21:19:15 by another
+session). And in the direction that actually costs something, a browser drive
+in ANY session closed a marker opened by ANY other, so a sibling's unrelated
+snapshot would wave through exactly the undriven deploy this gate exists to
+catch.
+
+So the marker is keyed on the payload's `session_id`, the same session boundary
+session-pressure-meter uses. A payload without one falls back to the shared
+path rather than dropping the marker: occasionally shared beats silently
+untracked.
+
 TWO DEPLOY CLASSES
 ------------------
 An app deploy (fly / railway / wrangler) puts a client-side renderer between
@@ -88,6 +114,7 @@ Fail-open per the project hook contract: any error exits 0.
 from __future__ import annotations
 
 import datetime
+import glob
 import json
 import os
 import re
@@ -104,9 +131,39 @@ except Exception:
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 # Env seam so the suite can exercise the marker lifecycle without touching the
 # developer's live session state (mirrors AGENTIC_OPS_SESSION_STATE).
-MARKER_FILE = os.environ.get("DEPLOY_CONSUMER_MARKER") or os.path.join(
-    tempfile.gettempdir(), "agentic-ops-deploy-consumer.txt"
-)
+MARKER_PREFIX = "agentic-ops-deploy-consumer"
+
+
+def marker_dir() -> str:
+    """Where marker files live. Seam so the suite can exercise per-session
+    paths without writing into the real temp dir."""
+    return os.environ.get("DEPLOY_CONSUMER_MARKER_DIR") or tempfile.gettempdir()
+
+
+def marker_path(session_id: str = "") -> str:
+    """The marker file for ONE session.
+
+    A single shared file cannot work here: this repo runs concurrent sessions
+    by design, so one session's deploy would block every other session's Stop,
+    and, in the direction that actually costs something, any session's browser
+    drive would close a marker another session opened. Keyed on session_id, the
+    same boundary session-pressure-meter uses.
+
+    An explicit DEPLOY_CONSUMER_MARKER still wins, and a payload with no
+    session_id falls back to the old shared path rather than losing the marker
+    entirely: a gate that silently stops tracking is worse than one that is
+    occasionally shared.
+    """
+    explicit = os.environ.get("DEPLOY_CONSUMER_MARKER")
+    if explicit:
+        return explicit
+    safe = re.sub(r"[^A-Za-z0-9_-]", "", str(session_id or ""))[:64]
+    name = f"{MARKER_PREFIX}-{safe}.txt" if safe else f"{MARKER_PREFIX}.txt"
+    return os.path.join(marker_dir(), name)
+
+
+# Re-resolved in main() once the payload's session_id is known.
+MARKER_FILE = marker_path()
 # A marker older than this is assumed dead (machine left on, session over) so a
 # forgotten deploy can never nag or block indefinitely. Mirrors the
 # platform-not-live marker TTL in post-action-gate.
@@ -219,12 +276,33 @@ def read_marker() -> tuple[str, str] | None:
     return kind, label
 
 
+def sweep_stale_markers() -> None:
+    """Drop marker files past the TTL.
+
+    Per-session files would otherwise accumulate one per session forever. The
+    TTL already decides that an old marker is dead; this just stops the dead
+    ones piling up on disk. Best effort: a failure here must never affect the
+    decision being made.
+    """
+    try:
+        cutoff = time.time() - MARKER_TTL_SEC
+        for path in glob.glob(os.path.join(marker_dir(), f"{MARKER_PREFIX}-*.txt")):
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    os.remove(path)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+
 def write_marker(kind: str, label: str) -> None:
     try:
         with open(MARKER_FILE, "w", encoding="utf-8") as f:
             f.write(f"{time.time()}\t{kind}\t{label}")
     except Exception:
         pass
+    sweep_stale_markers()
 
 
 def clear_marker() -> None:
@@ -242,6 +320,35 @@ def deploy_label(view: str) -> str:
         return m.group(1) or m.group(2)
     m = re.search(r"\b(fly(?:ctl)?\s+deploy|vercel[\w-]*|railway\s+up|wrangler\s+deploy)", view)
     return m.group(1) if m else "the deploy"
+
+
+# Commands whose payload is PROSE: what follows is written down, not run.
+# Kept to the message-writing verbs, so a heredoc piped to a shell is still
+# read as commands.
+PROSE_COMMANDS = r"(?:git\s+(?:commit|tag)|gh\s+(?:pr|issue|release)\s+\w+)"
+# Flags whose value is always prose, wherever they appear.
+PROSE_FLAGS = r"(?:-m|--message|--body|--title|--notes|--description)"
+
+
+def strip_authored_prose(cmd: str) -> str:
+    """Drop text the command WRITES, keeping text it RUNS.
+
+    Committing the session-scope fix opened a marker: the message explains the
+    bug, so it contains the words "fly deploy", and the gate scans the whole
+    command string. Writing about a deploy is not deploying, and a gate that
+    cannot tell the two apart teaches its reader to dismiss it.
+
+    Two removals. A heredoc body, but only when a message-writing command is
+    consuming it -- `bash <<'EOF' ... flyctl deploy ... EOF` genuinely deploys
+    and must still be caught. And the value of a message flag anywhere, because
+    -m and --body never carry commands.
+    """
+    out = re.sub(
+        PROSE_COMMANDS + r"[^\n]*?<<-?\s*['\"]?(\w+)['\"]?\s*\n.*?\n\1\b",
+        " ", cmd, flags=re.DOTALL | re.IGNORECASE)
+    out = re.sub(PROSE_FLAGS + r"\s+'[^']*'", " ", out)
+    out = re.sub(PROSE_FLAGS + r'\s+"[^"]*"', " ", out)
+    return out
 
 
 def matches_any(text: str, patterns) -> bool:
@@ -444,7 +551,7 @@ def handle_post(event: dict) -> int:
     cmd = (event.get("tool_input") or {}).get("command", "") or ""
     if not cmd:
         return 0
-    view = normalize_command(cmd)
+    view = normalize_command(strip_authored_prose(cmd))
 
     if matches_any(view, BROWSER_OBSERVE_CMD_PATTERNS):
         if not pending:
@@ -510,6 +617,10 @@ def main() -> int:
 
     if os.environ.get("DEPLOY_CONSUMER_GATE_OFF"):
         return 0
+
+    # Bind the marker to the session that owns it, before either arm reads it.
+    global MARKER_FILE
+    MARKER_FILE = marker_path(event.get("session_id") or "")
 
     # Route by event shape. A PostToolUse payload always carries tool_name; a
     # Stop payload never does. hook_event_name is honored first when present.
