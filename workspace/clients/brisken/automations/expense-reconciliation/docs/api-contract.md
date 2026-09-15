@@ -86,7 +86,8 @@ receives after `jsonable_encoder`.
   "severity": "warning" }
 ```
 
-`severity` is `"error"` or `"warning"`. `line` is `0` for a whole-file issue.
+`severity` is `"error"`, `"warning"` or, since item 64, `"info"`. `line` is
+`0` for a whole-file issue.
 The SPA renders `file` (with `:line` when non-zero) as a muted prefix and
 `message` as the body, and keeps a `typeof item === "string"` fallback so an
 older cached payload cannot crash the page.
@@ -1469,3 +1470,64 @@ Live at the time of the change: August 2026 (`074a7b8905d7`) and July 2026
 amounts to the cent, with zero unreadable rows on either. The float error was
 real but below the printed digit (August accumulated USD `2663.9500000000007`
 against an exact `2663.95`).
+## How an upload was read: `statements[].column_map` + `card_currency` (added 2026-09-15, item 64)
+
+Both are PARALLEL fields per rule 1, and both are **absent, never null**, on
+every entry written before 2026-09-15 (which on 2026-09-15 is every entry in
+production: the two live months each hold one statement, recorded on
+2026-09-10).
+
+```json
+{ "file": "July2026.xlsx",
+  "upload_name": "July2026.xlsx",
+  "...": "the keys above, unchanged",
+  "column_map": { "transaction_date": "Date", "vendor": "Description",
+                  "amount": "Amount", "type": "Type", "card": "Card" },
+  "card_currency": "USD" }
+```
+
+| Key | Question it answers |
+|---|---|
+| `column_map` | which source column each logical field was read from, operator overrides included. Absent on a PDF statement, which has no tabular map, and on entries recorded before this shipped |
+| `card_currency` | the card currency this upload was read at, upper-cased. A charge with no `transaction_currency` column takes it as its own currency |
+
+The re-read (`POST /api/expense-batches/{id}/statements/reread`) reuses both
+instead of re-deriving them. What it used to do, and why that was wrong:
+`config.statement` describes only the LATEST upload, so on a month holding two
+statements the earlier file was re-guessed, losing any column the operator had
+mapped by hand and failing outright on headers the guess cannot name; and
+every file was re-read at the last upload's currency, so a EUR statement
+beside a USD one came back USD and its charges stopped matching their
+receipts. The old paths remain as ordered fallbacks for pre-2026-09-15
+entries: the config's map for the upload it still describes, then a fresh
+guess. A re-read re-records both on the entries it rebuilds, so a month
+repairs its own record the first time it is re-read.
+
+### A Type label the parser does not recognise (item 64)
+
+`parse_issues[]` grows a third `severity`, `"info"`, carried by one entry per
+distinct unrecognised Type label, with `line` `0` (whole-file):
+
+```json
+{ "file": "August2026.xlsx", "line": 0, "severity": "info",
+  "message": "Type 'Lastschrift' is not a label this parser recognises (3 rows), so those rows kept the sign the export printed." }
+```
+
+Sign canonicalization now runs only on labels the parser knows: the credit
+set (`payment` / `return` / `refund` / `credit` / `reversal`) and the debit
+set (`sale` / `purchase` / `charge` / `debit` / `fee` / `interest` /
+`adjustment`). Anything else keeps the sign the export printed and
+`is_credit` derived from it. Before this, every unrecognised label was read
+as a purchase and `abs()`d, so a German export's "Lastschrift" turned its
+credits into charges silently. A mis-mapped Type column (a Description
+column, say) makes every row its own label, so the notes are capped at ten
+plus one summary line.
+
+**On rule 5, deliberately.** This grows an enum the SPA reads, so the
+published bundle was checked before the value shipped rather than after. The
+one consumer is `chunk-expenses._batchId`, which tests
+`e?.severity === "error"` for amber text and renders `message` otherwise.
+There is no hand-written map with a case per value, so `"info"` degrades
+exactly as `"warning"` already does, to plain muted text. That is why no
+parallel `severity_label` was added here; the next enum whose SPA consumer
+maps values by hand still needs one.
