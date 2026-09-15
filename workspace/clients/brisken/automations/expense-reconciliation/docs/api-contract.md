@@ -1769,3 +1769,74 @@ all derived in there, and re-deriving any of them at the report would be a
 second implementation of the same rules, which is the shape that let the two
 documents disagree in the first place. `apply_expense_edits` is idempotent, so
 a month whose pool was already baked renders byte-for-byte as before.
+
+## The client-failure probe: `/api/client-errors` + `healthz.server` (added 2026-09-15)
+
+Backlog item 50. A fetch that rejects in the browser ("Failed to fetch")
+never reached this app, so no server-side log can ever contain it. That is
+why Criss's 2026-09-10 attach-dialog failure is still unexplained: the
+machine serving that hour was replaced and its logs went with it, and the
+cold-start theory died when the live machine turned out to be pinned
+always-on. The only instrument that can see this class of failure is the
+client, so the client reports it and the server stamps what it was at the
+moment the report arrived.
+
+**`GET /healthz`** keeps `status` exactly as it was and gains a parallel
+`server` block:
+
+| Path | Element | Meaning |
+|---|---|---|
+| `server.machine` | string | `FLY_MACHINE_ID`; `""` off Fly, never invented |
+| `server.region` | string | `FLY_REGION`; `""` off Fly |
+| `server.app` | string | `FLY_APP_NAME`; `""` off Fly |
+| `server.started_at` | string | wall-clock ISO time this process started |
+| `server.uptime_s` | number | seconds since start, on the monotonic clock |
+
+**`POST /api/client-errors`** records one client-side failure. Authenticated
+like every other API route: the failures worth catching happen inside a live
+session, so the gate costs no coverage and keeps an unauthenticated write off
+a public host. Body fields are all optional; anything missing or malformed
+degrades rather than failing.
+
+| Field | Element | Meaning |
+|---|---|---|
+| `kind` | string | defaults to `fetch-failed`; capped at 40 |
+| `url`, `method`, `message` | string | what was being called and how it failed; capped 500/10/500 |
+| `occurred_at` | string | the client's own clock, for a human reading the row |
+| `seconds_ago` | number | elapsed time between the failure and this report |
+| `duration_ms` | number | how long the request ran before rejecting |
+| `online` | boolean | `navigator.onLine` at the failure |
+| `detail` | object | free-form context; serialized and capped at 2000 chars |
+
+`seconds_ago` drives the machine comparison rather than `occurred_at`,
+deliberately: a browser's wall clock can be skewed by minutes against the
+server's, and a skewed clock would fabricate or hide a restart. Elapsed time
+measured inside the one browser is immune to that.
+
+The reply is always `200`, carrying `ok`, `recorded`, the `server` block, and
+`process_predates_failure`. The probe must never become a second failure the
+operator sees, so a malformed body is recorded rather than rejected, and a
+report dropped by the burst cap answers `recorded: false` with
+`reason: "rate-limited"` instead of a `429`. The cap is 20 reports per caller
+per minute; beyond that the overflow is dropped so a retry loop cannot push
+the interesting older rows out of a bounded table.
+
+**`process_predates_failure`** is the decisive field and the reason the probe
+exists. `true` means this process was already running when the request was
+made, so no restart explains the failure. `false` means it was not: the
+process is younger than the failure, so the machine was replaced or restarted
+underneath the request, which is exactly the question September could not
+answer. `null` means the client could not say when the failure happened, and
+it stays `null` rather than collapsing to `false`, because a fabricated
+"the machine restarted" would send the next investigation back to the hosting
+theory that already cost this item a cycle. Fly's machine event log
+corroborates and outlives the machine, so a report timestamp is enough to look
+the event up later.
+
+**`GET /api/client-errors?limit=`** returns the reports newest first, the
+current `server` block, and a standing `note`. The stated limit rides that
+note and every reader has to carry it: a row exists only when the browser
+could reach the app AFTER the failure, so an empty list is not proof that
+nothing failed. The table keeps the newest 500 rows; it shares a 1GB volume
+with receipts, and a diagnostic log that can grow without limit is a second
+fault. Pinned by `tests/test_client_error_probe.py`.

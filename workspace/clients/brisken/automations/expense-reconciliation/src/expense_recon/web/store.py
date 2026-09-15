@@ -356,6 +356,29 @@ class RunStore:
                 updated_at TEXT,
                 cost_center TEXT NOT NULL DEFAULT ''
             );
+            CREATE TABLE IF NOT EXISTS client_errors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                received_at TEXT NOT NULL,
+                received_ts REAL NOT NULL,
+                operator TEXT NOT NULL,
+                caller TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                url TEXT NOT NULL,
+                method TEXT NOT NULL,
+                message TEXT NOT NULL,
+                occurred_at TEXT NOT NULL,
+                seconds_ago REAL,
+                duration_ms INTEGER,
+                online INTEGER,
+                detail TEXT NOT NULL,
+                machine TEXT NOT NULL,
+                region TEXT NOT NULL,
+                process_started_at TEXT NOT NULL,
+                uptime_s REAL NOT NULL,
+                process_predates_failure INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_client_errors_ts
+                ON client_errors (received_ts);
             CREATE INDEX IF NOT EXISTS idx_login_failures_ts
                 ON login_failures (ts);
             CREATE INDEX IF NOT EXISTS idx_login_failures_ip_ts
@@ -1325,3 +1348,54 @@ class RunStore:
     def prune_login_failures(self, before: float) -> None:
         self.conn.execute("DELETE FROM login_failures WHERE ts < ?", (float(before),))
         self.conn.commit()
+
+    # -- client-side failure reports (backlog item 50) ---------------------
+    # A fetch that rejects never reached this app, so nothing server-side
+    # can contain it; these rows are the browser's own account, stamped
+    # with what THIS process was at the moment the account arrived. The
+    # table is deliberately bounded: it shares a 1GB volume with receipts,
+    # and a diagnostic log that can grow without limit is a second fault.
+
+    CLIENT_ERROR_KEEP = 500
+
+    def record_client_error(self, row: dict) -> int:
+        cur = self.conn.execute(
+            """
+            INSERT INTO client_errors (
+                received_at, received_ts, operator, caller, kind, url,
+                method, message, occurred_at, seconds_ago, duration_ms,
+                online, detail, machine, region, process_started_at,
+                uptime_s, process_predates_failure
+            ) VALUES (
+                :received_at, :received_ts, :operator, :caller, :kind, :url,
+                :method, :message, :occurred_at, :seconds_ago, :duration_ms,
+                :online, :detail, :machine, :region, :process_started_at,
+                :uptime_s, :process_predates_failure
+            )
+            """,
+            row,
+        )
+        self.conn.execute(
+            "DELETE FROM client_errors WHERE id NOT IN ("
+            "  SELECT id FROM client_errors ORDER BY id DESC LIMIT ?"
+            ")",
+            (int(self.CLIENT_ERROR_KEEP),),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def list_client_errors(self, limit: int = 50) -> list[dict]:
+        """Newest first, so the investigation opens on the last failure."""
+        rows = self.conn.execute(
+            "SELECT * FROM client_errors ORDER BY id DESC LIMIT ?",
+            (max(1, int(limit)),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def count_client_errors_since(self, since: float, caller: str) -> int:
+        row = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM client_errors "
+            "WHERE caller = ? AND received_ts >= ?",
+            (caller, float(since)),
+        ).fetchone()
+        return int(row["n"])
