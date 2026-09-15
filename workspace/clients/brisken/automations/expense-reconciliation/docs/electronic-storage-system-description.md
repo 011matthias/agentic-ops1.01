@@ -863,7 +863,7 @@ Disclosed in full. None of these is yet remediated.
 | 10 | 4.02(1) | Reproduction strips the index key from the caption for sequence-numbered records | Medium |
 | 11 | 4.01(3) | No page numbers; image orientation metadata not applied; transparency discarded; image receipts downsampled and re-compressed | Medium |
 | 12 | 4.01(2)(a) | Reports do not disclose that values are machine-extracted; no measured error rate | Medium |
-| 13 | 4.01(2)(a) | Report totals computed in binary floating point; an unparseable row is dropped from the PDF total without notice | Medium |
+| 13 | 4.01(2)(a) | ~~Report totals computed in binary floating point; an unparseable row is dropped from the PDF total without notice~~ REMEDIATED 2026-09-15 (backlog item 65): both PDF total sites sum in `Decimal` through `output/_pdf_common.py`, and a row whose amount cannot be read carries a caption on the row plus a footer naming the excluded expense numbers, with `summary.n_amounts_unreadable` on the batch payload | Closed |
 | 14 | 4.01(2)(a) | Manual attach and bulk folder ingest rewrite the period record without the lock, so a concurrent write can be lost | Medium |
 | 15 | 4.01(1), 4.01(6) | No bulk retrieval; several classes of stored document reach no report; borrowed receipts have no pages behind them | Medium |
 | 16 | 4.01(1) | A lost stored file is indistinguishable from an expense that never had one; the listing can overstate how many receipts are usable | Medium |
