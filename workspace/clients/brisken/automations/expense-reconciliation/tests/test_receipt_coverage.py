@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import io
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 
@@ -186,39 +185,6 @@ def test_the_listing_column_reads_none_for_the_receipt_with_no_page(
     # both said "attached" because both had a file.
     assert "attached" in text
     assert "none" in text
-
-
-def test_the_reconciliation_report_records_its_own_verdicts(
-    client, monkeypatch
-):
-    """Either report teaches the grid. A month reconciles before anyone
-    downloads the month report, and the reviewer should not have to build the
-    other document to find out what is in this one."""
-    batch_id = _two_receipt_month(client, monkeypatch)
-    assert client.get(
-        f"/runs/{batch_id}/reconciliation-report.pdf"
-    ).status_code == 200
-
-    grid = _grid(client, batch_id)
-    assert _by_vendor(grid, "Readable Cafe")["receipt_in_report"] is True
-    assert _by_vendor(grid, "Broken Bytes")["receipt_in_report"] is False
-
-
-def test_a_replaced_receipt_takes_its_verdict_with_it(client, monkeypatch):
-    """The verdict is about bytes, not about a name. Swap the bytes and the
-    field goes ABSENT again rather than answering last week's question."""
-    batch_id = _two_receipt_month(client, monkeypatch)
-    assert client.get(f"/runs/{batch_id}/expense-report.pdf").status_code == 200
-    grid = _grid(client, batch_id)
-    doc_id = _by_vendor(grid, "Broken Bytes")["document_id"]
-
-    stored = Path(client._data_root) / "runs" / batch_id / "receipts" / doc_id
-    assert stored.is_file(), stored
-    stored.write_bytes(GOOD + b"\x00padding-so-the-size-moves")
-
-    grid = _grid(client, batch_id)
-    assert "receipt_in_report" not in _by_vendor(grid, "Broken Bytes")
-    assert "n_receipts_in_report" not in grid["summary"]
 
 
 # ── (a) one deletion, both documents ────────────────────────────────

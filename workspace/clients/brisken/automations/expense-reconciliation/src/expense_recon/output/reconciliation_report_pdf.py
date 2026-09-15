@@ -84,7 +84,6 @@ def build_reconciliation_report_pdf(
     *,
     title: str,
     evidence: Sequence[dict] | None = None,
-    on_prepared=None,
 ) -> bytes:
     """Render the reconciliation document from the workbench's OWN view.
 
@@ -92,10 +91,6 @@ def build_reconciliation_report_pdf(
     review screen states — a reader and a reviewer cannot be looking at
     different reconciliations. `evidence` is one entry per receipt document
     (see `month_report_pdf`), captioned with the charge it settles.
-
-    `on_prepared` (item 68): called once with the prepared evidence the
-    moment renderability is decided, so the caller learns which documents
-    got a page without paying for the decode twice.
     """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -250,8 +245,6 @@ def build_reconciliation_report_pdf(
     # ── evidence ────────────────────────────────────────────────────
     items = list(evidence or [])
     prepared = prepare_evidence(items)
-    if on_prepared is not None:
-        on_prepared(prepared)
     for item, pdf_bytes in prepared:
         story.append(PageBreak())
         story.append(Paragraph(
@@ -261,12 +254,15 @@ def build_reconciliation_report_pdf(
             story.append(Paragraph(esc(str(item["detail"])), styles["capsub"]))
         story.append(Spacer(1, 6))
         name = str(item.get("name") or "")
+        note = str(item.get("render_note") or "")
         if pdf_bytes is not None:
-            story.append(Paragraph(esc(name), styles["capsub"]))
-        elif item.get("data"):
             story.append(Paragraph(
-                esc(f"{name}: this file could not be rendered into the report; "
-                    f"open it in the app."),
+                esc(f"{name}: {note}" if note else name), styles["capsub"]
+            ))
+        elif item.get("data"):
+            why = note or "this file could not be rendered into the report"
+            story.append(Paragraph(
+                esc(f"{name}: {why}; open it in the app."),
                 styles["capsub"],
             ))
         else:

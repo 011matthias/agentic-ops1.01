@@ -80,6 +80,11 @@ from ..output.zoho_expense_export import (
     write_zoho_expense_export,
 )
 from ..output.zoho_export import write_zoho_export
+from ..cost_centers import COST_CENTER_SCOPE_NOTE
+from ..cost_centers import (
+    UNRESOLVED_SILENT as UNRESOLVED_COST_CENTER,
+)
+from ..cost_centers import CostCenterRegistry, CostCenterResolution
 from ..merchant_registry import MerchantRegistry, normalize_merchants_setting
 from .month_health import (
     HEALTH_OK,
@@ -87,7 +92,6 @@ from .month_health import (
     month_health,
     unchecked as unchecked_month_health,
 )
-from .receipt_pages import known_receipt_pages, record_receipt_pages
 from .serialize import (
     categorization_from_dict,
     categorization_to_dict,
@@ -3807,7 +3811,12 @@ def validate_trip_fields(payload: dict) -> tuple[dict | None, str | None]:
     """Clean a trip create/update payload. Returns (cleaned, None) or
     (None, error). ``travelers`` is a list of PERSON names (item 40's
     vocabulary), whole-list replace, may be empty while the roster is
-    still being collected."""
+    still being collected.
+
+    ``cost_center`` (item 47) is the trip's project or purpose, stored as
+    typed and NOT checked against the cost-center registry: trips and
+    cost centers are edited independently, so the edit ORDER must not
+    matter. Blank is a normal state and clears it."""
     if not isinstance(payload, dict):
         return None, "body must be an object"
     name = str(payload.get("name") or "").strip()[:200]
@@ -3839,6 +3848,7 @@ def validate_trip_fields(payload: dict) -> tuple[dict | None, str | None]:
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
         "travelers": travelers,
+        "cost_center": str(payload.get("cost_center") or "").strip()[:200],
     }, None
 
 
@@ -3936,6 +3946,9 @@ def trip_view(store: RunStore, trip: TripRow, batch: RunRow | None) -> dict:
         "start": trip.start_date,
         "end": trip.end_date,
         "travelers": list(trip.travelers),
+        # Item 47: parallel field, always present. A stale SPA reading
+        # it gets "" rather than undefined.
+        "cost_center": trip.cost_center,
         "created_at": trip.created_at,
         "updated_at": trip.updated_at,
         "batch_id": batch.run_id if batch is not None else None,
@@ -3984,6 +3997,13 @@ EXPENSE_HEADER_FIELDS = frozenset({
     # POST .../expenses/{doc}/private sets both and enforces that a
     # confirmation names who gets reimbursed.
     "private", "reimburse_to",
+    # Item 47: the cost-center override, the top of that chain. It
+    # rides the existing field-override mechanism rather than a second
+    # path, so it lands in `edited_fields` like every other override
+    # and the export needs no new machinery. Blank clears it. Validated
+    # against the registry in the route, which is where settings are
+    # readable (`validate_expense_field` is pure by design).
+    "cost_center",
 })
 EXPENSE_CATEGORY_FIELDS = frozenset({"category", "zoho_account"})
 
@@ -4698,6 +4718,70 @@ def resolve_batch_row_cards(
     return out
 
 
+def resolve_batch_row_cost_centers(
+    receipts: list[Receipt],
+    field_overrides: dict[str, dict[str, str]],
+    *,
+    settings: dict | None,
+    trip: dict | None,
+    card_res: dict[str, dict],
+) -> dict[str, CostCenterResolution]:
+    """Per-document cost-center resolution for an expense batch (item 47):
+    ``{document_id: CostCenterResolution}``.
+
+    Runs the chain in `CostCenterRegistry.resolve` over four candidates, in
+    its precedence order:
+
+    1. the row's own ``cost_center`` field override -- a reviewer decision,
+       beats everything;
+    2. the batch's TRIP, whose cost center a human DECLARED at creation
+       (item 38), which is why it outranks anything inferred;
+    3. the merchant registry entry for this row's vendor;
+    4. the resolved card's ``default_cost_center``, the weakest link
+       because a card belongs to a project only loosely.
+
+    Person and category are deliberately absent: person cannot separate
+    "Nicolas in Brazil" from "Nicolas on Lidar" (both of Dirk's own
+    examples), and letting category co-vary destroys the point of cutting
+    the money a second way.
+
+    Both registries are read LIVE from settings rather than from the
+    batch's config snapshot, and that is the point: the whole first phase
+    of this feature is an EMPTY registry, and the day the owner defines the
+    first cost center the existing months must start resolving without a
+    refresh pass. The card's `default_cost_center` is the exception by
+    construction -- it rides the card snapshot like `person`, so it reaches
+    an existing batch through refresh-master-data.
+
+    An empty registry returns a silent unresolved for every row (resolves
+    nothing AND flags nothing), which is the contract this whole feature
+    rests on: a review state firing on 100% of rows is noise, not signal.
+    """
+    registry = CostCenterRegistry.from_settings(settings)
+    # The merchant sweep is the expensive link (a fuzzy match per row), and
+    # nothing it found could resolve against an empty registry, so it is
+    # skipped. The empty-registry CONTRACT is deliberately NOT re-stated
+    # here: it lives in `registry.resolve` alone, so a change that unwires
+    # it reddens these rows instead of being masked by a second copy.
+    merchants = MerchantRegistry.from_settings(settings) if registry else None
+    trip_cc = str((trip or {}).get("cost_center") or "").strip()
+    out: dict[str, CostCenterResolution] = {}
+    for r in receipts:
+        card = (card_res.get(r.document_id) or {}).get("card")
+        merchant_cc = None
+        if merchants:
+            match = merchants.resolve(r.vendor_clean, r.detected_vendor)
+            if match is not None:
+                merchant_cc = match.cost_center
+        out[r.document_id] = registry.resolve(
+            override=(field_overrides.get(r.document_id) or {}).get("cost_center"),
+            trip=trip_cc,
+            merchant=merchant_cc,
+            card=getattr(card, "default_cost_center", "") if card else "",
+        )
+    return out
+
+
 def build_card_review(resolution: dict[str, dict]) -> dict:
     """The batch's card-review strip, grouped server-side (the SPA renders,
     never judges): unresolved hints (with the rows they cover, generic
@@ -4836,6 +4920,7 @@ def _expense_review(
     person: str | None = None,
     private: bool = False,
     suggested_private: bool = False,
+    needs_cost_center: bool = False,
 ) -> dict:
     """Review-by-exception for one expense (receipt-spine). Missing core
     fields first (an expense cannot export cleanly without date / amount /
@@ -4850,6 +4935,13 @@ def _expense_review(
     registry work, not row work, so it must never hide a more actionable
     per-row exception. `None` keeps the pre-item-40 behavior (statement-
     workbench callers do not attribute persons).
+
+    `needs_cost_center` (backlog item 47) is checked LAST OF ALL, after
+    `person`, for the same reason and one stronger: the fix is registry
+    work in Settings, and the flag is silent entirely until the owner has
+    defined at least one cost center (the caller passes False while the
+    registry is empty). It must never hide a more actionable per-row
+    exception.
 
     `suggested_private` (backlog item 41) takes the entity check's slot:
     a payment method no registered card matches SUGGESTS private money,
@@ -4934,6 +5026,16 @@ def _expense_review(
             "card in Settings > Cards, so every expense is attributed.",
             "needs_person",
         )
+    if review["state"] == "ready" and needs_cost_center:
+        # Item 47: registry work of the same class as needs_person, and
+        # ranked below it -- a row with no owner is the more actionable
+        # gap. Unreachable while the cost-center registry is empty.
+        return _review(
+            "check",
+            "No cost center on this expense yet. Pick the project or purpose "
+            "it belongs to, so project spend can be totalled.",
+            "needs_cost_center",
+        )
     return review
 
 
@@ -4971,6 +5073,11 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
     exactly what it had: the landing screen must render regardless.
     """
     summary = dict(run.summary or {})
+    # Item 67 stores the per-document render outcomes on the run summary, one
+    # entry per receipt. The list screen has no use for them and this is the
+    # one place the stored summary is served through as-is, so they stop here;
+    # the batch page reads them as `receipt_render` per row and one count.
+    summary.pop("receipt_render", None)
     snapshot = run.snapshot or {}
     # A run whose summary predates expense counts, or whose snapshot has no
     # receipts block yet (created, ingest still running or failed), keeps
@@ -5068,9 +5175,10 @@ def build_expense_view(
                 n_learned_lines += 1
 
     expenses = []
-    # Item 68: document_id -> the file behind it, or None. Filled in the row
-    # loop below and spent once, after it, against the recorded verdicts.
-    receipt_paths: dict[str, Path | None] = {}
+    # Item 68: document_id -> whether a file was found behind it. Item 67's
+    # render state covers the files; this covers the rows that have none,
+    # which are decided without any report build.
+    has_file_by_doc: dict[str, bool] = {}
     totals: dict[str, Decimal] = {}
     # Two different questions, two counters: `n_ready` is "needs nothing
     # from the reviewer", `n_categorized` is "has a category" (computed
@@ -5089,6 +5197,12 @@ def build_expense_view(
     # review states, the paid-through card step, and the card_review
     # strip — the same pass the export runs, so they cannot disagree.
     card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
+    # Item 47: the cost-center chain, over the same pass's cards. Silent
+    # for every row while the owner has defined no cost centers.
+    cost_res = resolve_batch_row_cost_centers(
+        receipts, field_overrides, settings=settings, trip=trip,
+        card_res=card_res,
+    )
     # The window this batch's dates are expected in, for the date guard
     # (backlog item 25). A company month derives it from the operator's
     # label first and the batch's own dates second, over the EDITED
@@ -5160,11 +5274,13 @@ def build_expense_view(
             "private": False, "reimburse_to": "", "suggested_private": False,
             "ambiguous": False, "card_map_blocked": False,
         }
+        cost = cost_res.get(r.document_id) or UNRESOLVED_COST_CENTER
         review = _expense_review(
             r, overrides, entity=res["entity"], period=period,
             person=res["person"],
             private=res["private"],
             suggested_private=res["suggested_private"],
+            needs_cost_center=cost.needs,
             # A hand-typed date, or a whole expense entered by hand, is the
             # reviewer's own value; the guard only questions the machine's.
             date_is_human=(
@@ -5215,10 +5331,9 @@ def build_expense_view(
                 receipt_path = hit
                 # attach files are stored `{key}__{original-name}`
                 source_name = hit.name.split("__", 1)[-1]
-        # Item 68: the exact file the report builder would read for this
-        # row — the same resolution `_evidence_item` does — so the verdict
-        # read back below is keyed to the bytes it was decided about.
-        receipt_paths[r.document_id] = receipt_path if has_file else None
+        # Item 68: whether the report builder would find anything to read
+        # for this row, resolved exactly the way `_evidence_item` does.
+        has_file_by_doc[r.document_id] = has_file
         rv["receipt_image_available"] = (
             r.receipt_image_page is not None or has_file
         )
@@ -5257,6 +5372,11 @@ def build_expense_view(
             # Parallel fields; "" / "none" until the card carries a person.
             "person": res["person"],
             "person_source": res["person_source"],
+            # Item 47: which project or purpose this expense belongs to,
+            # with its provenance and a parallel human-readable label:
+            # an un-updated SPA degrades to correct text instead of
+            # somebody else's copy (contract rule 5).
+            **cost.as_fields(),
             # Item 41: the private-expense state. `reimburse_to_prefill` is
             # the ONE sanctioned use of the sender claim — offered only on
             # a suggested/confirmed private row, shown as the claim it is,
@@ -5379,19 +5499,35 @@ def build_expense_view(
             if hit is not None:
                 e["settled_by"] = hit
 
-    # Item 68: `receipt_image_available` answers "is there a file the app can
-    # show you". This answers the different question the reader of the report
-    # is actually asking: did that file become a PAGE. The two part company on
-    # a file that exists and cannot be rendered, and on a receipt whose image
-    # is a page inside an uploaded expense-report PDF — previewable in the
-    # app, absent from the document. PARALLEL field per the contract's rule 1:
-    # present only where the verdict is known, so the SPA's existing two
-    # states keep rendering byte-identically everywhere else.
-    pages_known = known_receipt_pages(run.work_dir, receipt_paths)
+    # Item 67: what the last report build did with this expense's receipt.
+    # "ok" means its pages are in the document; "failed" means the file could
+    # not be turned into pages at all, so the report carries a caption naming
+    # it and nothing behind that caption. ABSENT until a report has been built
+    # for the month, because renderability is not knowable before then: a
+    # missing key means "not established", never "fine".
+    render_state = (run.summary or {}).get("receipt_render") or {}
     for e in expenses:
-        verdict = pages_known.get(e["document_id"])
-        if verdict is not None:
-            e["receipt_in_report"] = verdict
+        state = (render_state.get(e.get("document_id")) or {}).get("render")
+        if state:
+            e["receipt_render"] = state
+    # Item 68: `receipt_image_available` answers "is there a file the app can
+    # show you", and item 67's `receipt_render` answers "did that file
+    # break". Neither answers the one the reader of the report is holding:
+    # does this expense have a PAGE. It is the positive form, it covers the
+    # rows the render state says nothing about (no file, so no page, and no
+    # build needed to know it), and it is what a coverage count can be
+    # summed from. Derived from 67's state rather than decided again: one
+    # fact, one channel. PARALLEL and ABSENT until known, per rule 1.
+    pages_known: dict[str, bool] = {}
+    for e in expenses:
+        doc = e["document_id"]
+        if not has_file_by_doc.get(doc, False):
+            pages_known[doc] = False
+        elif e.get("receipt_render"):
+            pages_known[doc] = e["receipt_render"] == "ok"
+        else:
+            continue
+        e["receipt_in_report"] = pages_known[doc]
 
     has_image_info = any(r.has_receipt_image for r in receipts)
     n_categorized, n_uncategorized = categorized_counts(posted)
@@ -5427,6 +5563,12 @@ def build_expense_view(
         # the fix is a person on the card, not a per-row edit.
         "n_needs_person": sum(
             1 for res in card_res.values() if not res.get("person")
+        ),
+        # Item 47: rows with no cost center, once at least one is
+        # defined. Structurally 0 while the registry is empty, which is
+        # the whole first phase; the SPA hides the chip at 0.
+        "n_needs_cost_center": sum(
+            1 for c in cost_res.values() if c.needs
         ),
         # Item 41: unconfirmed private-expense suggestions, and rows the
         # operator has confirmed private (reimbursement rows).
@@ -5475,8 +5617,8 @@ def build_expense_view(
     # ABSENT while any row's verdict is still unknown, rather than present
     # and quietly short by the rows nobody has decided yet — an undercount
     # here would read as "receipts are missing" and send somebody hunting
-    # for files that are fine. Once the month's report has been built the
-    # count is complete and stays complete until a receipt's bytes change.
+    # for files that are fine. Complete once the month's report has been
+    # built, which is also when item 67's render state arrives.
     if len(pages_known) == len(expenses):
         summary["n_receipts_in_report"] = sum(
             1 for known in pages_known.values() if known
@@ -5496,6 +5638,22 @@ def build_expense_view(
     summary["n_charges_no_entity"] = sum(
         1 for t in charges if not (t.legal_entity_id or "").strip()
     )
+    # Item 65: expenses whose amount could not be read, so they are in no
+    # total -- `totals_by_ccy` above skips them and the report's listing
+    # cannot print them. The payload half of the report's "excluded from
+    # the total" footer; 0 on a month where every amount parsed.
+    summary["n_amounts_unreadable"] = sum(
+        1 for r in receipts if r.detected_total is None
+    )
+    # Item 67: how many of this month's receipts produced no page in the
+    # report. Present only once a report has been built, the same rule the
+    # row's `receipt_render` follows: a 0 that actually means "nobody has
+    # built one yet" is the confidently-wrong shape contract rule 5 exists to
+    # prevent, and this count's whole job is telling a reviewer to go look.
+    if render_state:
+        summary["n_receipts_unrenderable"] = sum(
+            1 for e in expenses if e.get("receipt_render") == "failed"
+        )
 
     return {
         "run_id": run.run_id,
@@ -5548,6 +5706,13 @@ def build_expense_view(
         "category_options": list(EXPENSE_CATEGORIES),
         "account_options": _expense_account_options(run, settings),
         "entity_options": entity_options,
+        # Item 47: the row picker's list, active entries only, name-sorted,
+        # each with its display-only kind. Empty while the owner has defined
+        # none, which is the state the picker renders as "no cost centers
+        # defined yet" rather than as an error.
+        "cost_center_options": CostCenterRegistry.from_settings(
+            settings
+        ).options(),
         "parse_errors": parse_errors,
         "parse_issues": [
             {
@@ -5673,6 +5838,8 @@ def build_expense_report(
     field_overrides: dict[str, dict[str, str]],
     edits: list[dict],
     trip: "TripRow | None" = None,
+    settings: dict | None = None,
+    render_outcomes: dict | None = None,
 ) -> bytes:
     """The month's report PDF: the listing, then every receipt (owner
     directive 2026-08-23 — nothing imports the output any more, so the
@@ -5700,6 +5867,16 @@ def build_expense_report(
     row-to-document fan-out cannot be aligned the report falls back to
     the flat listing rather than mislabelling a section boundary, the
     same fallback the evidence captions already take.
+
+    A COMPANY month (item 47) sections the listing PER COST CENTER once
+    the chain resolves or flags any row: named centres in name order,
+    then an unassigned section, never hidden, with the stated limit above
+    the partition (card-and-receipt spend, not total project cost). With
+    no cost center defined the chain is silent for every row and the flat
+    listing stays exactly as it was; that decision is derived from
+    `CostCenterRegistry.resolve` (the empty-registry contract's only
+    home) rather than re-checked here. `settings` is the live settings
+    map both registries read from.
     """
     from ..output.month_report_pdf import build_expense_report_pdf
 
@@ -5711,14 +5888,24 @@ def build_expense_report(
     private = [r for r in receipts if r.document_id in private_by_doc]
 
     sections: list[dict] | None = None
-    person_groups: dict[str, list] | None = None
-    ordered_people: list[str] = []
+    sections_heading = ""
+    sections_note = ""
+    # A partition of the company listing into contiguous slices: the
+    # ordered keys, the receipts under each, and a function giving the
+    # caption fields a section carries. A trip keys on person (item 38);
+    # a company month keys on cost center (item 47). Either way the
+    # listing is rebuilt in section order and the export's own fan-out
+    # widths decide where each slice starts.
+    groups: dict[str, list] | None = None
+    ordered_keys: list[str] = []
+    section_fields = None  # key -> the section's caption fields
     roster: list[str] = list(trip.travelers) if trip is not None else []
+    # The same card pass the grid runs: it names the person a trip
+    # sections on and the card whose default a cost center falls back to.
+    card_res_report = resolve_batch_row_cards(
+        company, run.config, field_overrides
+    )
     if is_trip_batch(run):
-        card_res_report = resolve_batch_row_cards(
-            company, run.config, field_overrides
-        )
-
         def _person_of(r) -> str:
             res = card_res_report.get(r.document_id) or {}
             return str(res.get("person") or "").strip()
@@ -5730,31 +5917,75 @@ def build_expense_report(
                     return (0, i, "")
             return (1, 0, pf) if p else (2, 0, "")
 
-        person_groups = {}
+        groups = {}
         for r in company:
-            person_groups.setdefault(_person_of(r), []).append(r)
-        ordered_people = sorted(person_groups, key=_order_key)
-        company = [r for p in ordered_people for r in person_groups[p]]
+            groups.setdefault(_person_of(r), []).append(r)
+        ordered_keys = sorted(groups, key=_order_key)
+        roster_fold = {t.strip().casefold() for t in roster}
+
+        def _person_fields(p: str) -> dict:
+            return {
+                "person": p,
+                "on_roster": (p.casefold() in roster_fold) if p else None,
+            }
+
+        section_fields = _person_fields
+    else:
+        # Item 47: the chain over the same card pass, exactly as the grid
+        # runs it. It partitions only once it resolves or flags a row: an
+        # empty registry is silent for every row, so a month with no cost
+        # center defined keeps its flat listing. That silence is decided
+        # in `CostCenterRegistry.resolve` alone and deliberately NOT
+        # re-checked here, so the contract stays load-bearing.
+        cost_res = resolve_batch_row_cost_centers(
+            company, field_overrides, settings=settings, trip=None,
+            card_res=card_res_report,
+        )
+        if any(c.name or c.needs for c in cost_res.values()):
+            registry = CostCenterRegistry.from_settings(settings)
+            groups = {}
+            for r in company:
+                groups.setdefault(
+                    cost_res[r.document_id].name or "", []
+                ).append(r)
+            # Named centres in name order; the unassigned slice LAST and
+            # never dropped: a row nobody attributed is exactly what the
+            # reader of a cost-center roll-up needs to see.
+            ordered_keys = sorted(
+                groups, key=lambda k: (1, "") if not k else (0, k.casefold())
+            )
+
+            def _cost_center_fields(name: str) -> dict:
+                if not name:
+                    return {"caption": "Unassigned (no cost center)",
+                            "label": "Unassigned"}
+                kind = str(
+                    (registry.entries.get(name) or {}).get("kind") or ""
+                )
+                return {"caption": f"{name} ({kind})" if kind else name,
+                        "label": name}
+
+            section_fields = _cost_center_fields
+            sections_heading = "Listing by cost center"
+            sections_note = COST_CENTER_SCOPE_NOTE
+    if groups is not None:
+        company = [r for k in ordered_keys for r in groups[k]]
 
     rows = build_expense_rows(company, **kwargs)
 
     widths = [max(1, len(expense_posting_parts(r))) for r in company]
     aligned = sum(widths) == len(rows)
 
-    if person_groups is not None and aligned:
+    if groups is not None and section_fields is not None and aligned:
         sections = []
         pos = 1
-        roster_fold = {t.strip().casefold() for t in roster}
-        for p in ordered_people:
+        for key in ordered_keys:
             count = sum(
                 max(1, len(expense_posting_parts(r)))
-                for r in person_groups[p]
+                for r in groups[key]
             )
             sections.append({
-                "person": p,
-                "on_roster": (p.casefold() in roster_fold) if p else None,
-                "start": pos,
-                "count": count,
+                **section_fields(key), "start": pos, "count": count,
             })
             pos += count
     receipts_dir = Path(run.work_dir) / "receipts"
@@ -5766,10 +5997,6 @@ def build_expense_report(
     )
     suspect: list[int] = []
     evidence: list[dict] = []
-    # Item 68: the file each document resolved to, so the renderability
-    # verdict this build decides can be recorded against the exact bytes it
-    # was decided about.
-    evidence_paths: dict[str, Path | None] = {}
 
     def _evidence_item(r, numbers: list[int], extra_detail: str = "") -> dict:
         if outside_period(r.detected_date, period) and not (
@@ -5795,7 +6022,10 @@ def build_expense_report(
                 extra_detail,
             ) if x),
         }
-        evidence_paths[r.document_id] = path
+        # The document this evidence proves, so the build's per-file render
+        # outcome can be keyed back to the ROW that is missing its pages
+        # (item 67). The builders ignore keys they do not use.
+        item["document_id"] = r.document_id
         if path is not None:
             item["name"] = _display_name(path.name)
             item["data"] = path.read_bytes()
@@ -5866,7 +6096,7 @@ def build_expense_report(
             subtitle = (
                 f"{trip.start_date} to {trip.end_date}  ·  travelers: {who}"
             )
-    return build_expense_report_pdf(
+    pdf = build_expense_report_pdf(
         rows,
         EXPENSE_COLUMNS,
         title=title,
@@ -5875,8 +6105,145 @@ def build_expense_report(
         prepared_note=note,
         reimbursements=reimbursements,
         sections=sections,
-        on_prepared=_record_report_pages(run.work_dir, evidence_paths),
+        sections_heading=sections_heading,
+        sections_note=sections_note,
     )
+    # Item 67: `prepare_evidence` wrote each file's render outcome back onto
+    # its evidence dict during the build. The builder returns one `bytes`, so
+    # this dict is the channel; a caller that passes one gets
+    # {document_id: {"render", "note"}} for every expense that HAD a file,
+    # which is what lets the review screen name the blocked receipt instead of
+    # the reviewer finding out by opening the PDF.
+    if render_outcomes is not None:
+        for item in evidence:
+            doc = str(item.get("document_id") or "")
+            if not doc or "receipt_render" not in item:
+                continue
+            render_outcomes[doc] = {
+                "render": item["receipt_render"],
+                "note": str(item.get("render_note") or ""),
+            }
+    return pdf
+
+
+def build_cost_center_totals(
+    store: RunStore,
+    *,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> dict:
+    """The cross-month roll-up (item 47, step 5): per cost center, per
+    currency, over every expense batch the store holds, months and trips
+    alike. The only surface that aggregates ACROSS batches: "what has
+    Lidar cost since January" is the question a project raises, and no
+    month report can answer it.
+
+    Rows are the export's own rows (`_expense_export_inputs`), resolved
+    through the same chain the grid and the month report run, so the
+    three cannot disagree about where a row belongs. Confirmed private
+    expenses are left out: they are reimbursements owed, not company
+    spend. The range is inclusive on the row's (edited) expense date; a
+    row that carries no date cannot be excluded by a range, so it always
+    counts and `n_undated` says how many such rows the figures contain.
+
+    Every ACTIVE cost center is listed, at zero when nothing reached it;
+    an inactive one appears only while history still sits on it. The
+    unassigned bucket is explicit and never hidden. With no cost center
+    defined the list is empty and every row is unassigned: the roll-up
+    stating a fact, not a review state (the review state stays silent per
+    the empty-registry contract, which this function does not re-check).
+
+    The stated limit rides in `note`: card and receipt spend only, never
+    contractor invoices or salaries, so none of these figures is a total
+    project cost.
+    """
+    settings = store.get_settings()
+    registry = CostCenterRegistry.from_settings(settings)
+
+    def _bucket() -> dict:
+        return {"n_rows": 0, "batches": set(), "totals": {}}
+
+    by_center: dict[str, dict] = {}
+    unassigned = _bucket()
+    n_batches = 0
+    n_rows = 0
+    n_undated = 0
+    for run in store.list_runs():
+        if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        n_batches += 1
+        overrides = store.get_category_overrides(run.run_id)
+        field_overrides = store.get_expense_field_overrides(run.run_id)
+        edits = store.get_expense_edits(run.run_id)
+        trip = None
+        if is_trip_batch(run):
+            trip_row = store.get_trip(
+                str((run.config or {}).get("trip_id") or "")
+            )
+            if trip_row is not None:
+                trip = {"cost_center": trip_row.cost_center}
+        receipts, _kwargs = _expense_export_inputs(
+            run, overrides, field_overrides, edits
+        )
+        private_by_doc = _private_reimbursements(field_overrides)
+        company = [r for r in receipts if r.document_id not in private_by_doc]
+        card_res = resolve_batch_row_cards(company, run.config, field_overrides)
+        cost_res = resolve_batch_row_cost_centers(
+            company, field_overrides, settings=settings, trip=trip,
+            card_res=card_res,
+        )
+        for r in company:
+            d = r.detected_date
+            if d is None:
+                n_undated += 1
+            else:
+                if date_from is not None and d < date_from:
+                    continue
+                if date_to is not None and d > date_to:
+                    continue
+            name = cost_res[r.document_id].name
+            bucket = by_center.setdefault(name, _bucket()) if name else unassigned
+            bucket["n_rows"] += 1
+            bucket["batches"].add(run.run_id)
+            if r.detected_total is not None:
+                ccy = r.detected_currency or "?"
+                bucket["totals"][ccy] = (
+                    bucket["totals"].get(ccy, Decimal("0")) + r.detected_total
+                )
+            n_rows += 1
+    for name, entry in registry.entries.items():
+        if entry.get("active", True) is not False:
+            by_center.setdefault(name, _bucket())
+
+    def _emit(bucket: dict) -> dict:
+        return {
+            "n_rows": bucket["n_rows"],
+            "n_batches": len(bucket["batches"]),
+            "totals": {
+                ccy: _fmt_amount(amt)
+                for ccy, amt in sorted(bucket["totals"].items())
+            },
+        }
+
+    centers = []
+    for name in sorted(by_center, key=str.casefold):
+        entry = registry.entries.get(name) or {}
+        centers.append({
+            "name": name,
+            "kind": str(entry.get("kind") or ""),
+            "active": entry.get("active", True) is not False,
+            **_emit(by_center[name]),
+        })
+    return {
+        "from": date_from.isoformat() if date_from else None,
+        "to": date_to.isoformat() if date_to else None,
+        "note": COST_CENTER_SCOPE_NOTE,
+        "cost_centers": centers,
+        "unassigned": _emit(unassigned),
+        "n_batches": n_batches,
+        "n_rows": n_rows,
+        "n_undated": n_undated,
+    }
 
 
 def build_reconciliation_report(
@@ -5943,13 +6310,11 @@ def build_reconciliation_report(
 
     receipts_dir = Path(run.work_dir) / "receipts"
     evidence: list[dict] = []
-    evidence_paths: dict[str, Path | None] = {}
     for r in receipts:
         path = receipts_dir / r.document_id
         if not path.is_file():
             hit = _attached_receipt_file(receipts_dir.parent, r.document_id)
             path = hit if hit is not None else None
-        evidence_paths[r.document_id] = path
         charge = charge_by_doc.get(r.document_id)
         if charge is not None:
             label = (
@@ -5979,35 +6344,7 @@ def build_reconciliation_report(
     label = run.label or run.run_id
     return build_reconciliation_report_pdf(
         view, title=f"Reconciliation — {label}", evidence=evidence,
-        on_prepared=_record_report_pages(run.work_dir, evidence_paths),
     )
-
-
-def _record_report_pages(work_dir, evidence_paths: dict[str, "Path | None"]):
-    """An `on_prepared` callback that records which documents got a page.
-
-    Item 68. Renderability is decided once, inside the builder, with the
-    bytes in hand; this is how that verdict leaves the build. The review
-    grid reads it back and stops calling an unrenderable file "attached",
-    and neither side gets its own opinion about what a page is: the answer
-    on the screen is literally the answer the builder acted on.
-
-    Evidence without a `document_id` (a caller that predates the key) is
-    skipped rather than guessed at — a wrong key would poison the cache for
-    a document that is perfectly fine.
-    """
-    def _on_prepared(prepared) -> None:
-        verdicts: dict[str, tuple[Path | None, bool]] = {}
-        for item, pdf_bytes in prepared:
-            document_id = str(item.get("document_id") or "")
-            if not document_id:
-                continue
-            verdicts[document_id] = (
-                evidence_paths.get(document_id), pdf_bytes is not None,
-            )
-        record_receipt_pages(work_dir, verdicts)
-
-    return _on_prepared
 
 
 def assign_batch_cards(
@@ -6393,6 +6730,33 @@ def _refresh_batch_master_data_locked(
                 changes.append(
                     {"field": "row_persons", "n_rows_changed": n_person_moved}
                 )
+            # Item 47: a card's `default_cost_center` reaches an existing
+            # batch only through this refresh, so the audit says how many
+            # rows' RESOLVED cost center it moved. The chain runs on both
+            # sides with the batch's real trip, so a trip that outranks
+            # the card default masks the move here exactly as on the row.
+            trip_cc = None
+            if is_trip_batch(run):
+                trip_row = store.get_trip(
+                    str((run.config or {}).get("trip_id") or "")
+                )
+                if trip_row is not None:
+                    trip_cc = {"cost_center": trip_row.cost_center}
+            cc_before = resolve_batch_row_cost_centers(
+                receipts, fo, settings=settings, trip=trip_cc, card_res=before,
+            )
+            cc_after = resolve_batch_row_cost_centers(
+                receipts, fo, settings=settings, trip=trip_cc, card_res=after,
+            )
+            n_cc_moved = sum(
+                1
+                for doc in cc_before
+                if cc_before[doc].name != cc_after.get(doc, cc_before[doc]).name
+            )
+            if n_cc_moved:
+                changes.append(
+                    {"field": "row_cost_centers", "n_rows_changed": n_cc_moved}
+                )
         except Exception:  # noqa: BLE001 - impact count must not break refresh
             pass
         store.update_run_config(run.run_id, cfg)
@@ -6551,6 +6915,8 @@ def build_statement_entry(
     transactions: list,
     n_new: int,
     uploaded_at: str,
+    column_map: dict | None = None,
+    card_currency: str = "",
 ) -> dict:
     """One `statements[]` row: what this upload was and what it added.
 
@@ -6562,8 +6928,18 @@ def build_statement_entry(
     `n_rows` is what the file held, `n_new` what the fold put in the month.
     The difference is charges the month already had, which is the ordinary
     result of a partial followed by the full cycle rather than a problem.
+
+    `column_map` and `card_currency` record HOW this upload was read (item
+    64). Both are parallel fields and both are ABSENT on every entry written
+    before 2026-09-15, never null, so a reader can tell "not recorded" from
+    "recorded as nothing". A PDF statement has no column map and gets no
+    key. Before they existed, a re-read recovered the map from
+    `config.statement`, which only ever describes the LATEST upload, and
+    applied that upload's currency to every file in the month.
     """
     period_start, period_end = _statement_period(transactions)
+    recorded_map = dict(column_map) if column_map else None
+    currency = (card_currency or "").strip().upper()
     return {
         "file": stored_name,
         "upload_name": upload_name,
@@ -6583,6 +6959,10 @@ def build_statement_entry(
         # Filled in at commit time by `statement_advisory`, against the
         # entries the month holds at that moment.
         "advisory": None,
+        # How this upload was read (item 64), for the re-read to reuse
+        # instead of guessing again. Absent, not null, when unrecorded.
+        **({"column_map": recorded_map} if recorded_map else {}),
+        **({"card_currency": currency} if currency else {}),
         # This file's own id-to-row map. Underscored and popped at commit
         # into `statement_anchors`, so it never reaches the SPA: it is a
         # per-row map the size of the statement, and nothing renders it.
@@ -7864,6 +8244,13 @@ def execute_statement_attach(
             transactions=transactions,
             n_new=len(merged.added),
             uploaded_at=now_iso,
+            # Read back off the block `read_statement_upload` just wrote, the
+            # same source `account_id` and `sheet_name` come from, so the
+            # entry records what the parser was actually handed.
+            column_map=(new_cfg.get("statement") or {}).get("column_map"),
+            card_currency=(new_cfg.get("statement") or {}).get(
+                "account_card_currency", ""
+            ),
         ),
         trigger="statement",
     )
@@ -7952,11 +8339,14 @@ def reread_statements(
     with no anchor and no surviving id is the one case that refuses, so a
     verdict is never silently orphaned.
 
-    The column map for each file is recovered the same way the attach
-    recovered it: the config's own map for the upload it still describes
-    (that one may carry the operator's manual picks), a fresh guess for any
-    earlier upload (the guess now maps the Type column, so the sign is
-    explicit where the export prints one).
+    The column map and the card currency for each file are the ones that
+    upload recorded (item 64). Falling back, in order: the config's own map
+    for the upload it still describes, then a fresh guess. The fallbacks
+    only reach entries written before 2026-09-15, and both are worse than
+    what they replace: `config.statement` describes the LATEST upload only,
+    so on a multi-statement month it lends its map and its currency to files
+    that were read with neither, and a guess cannot reproduce the operator's
+    manual picks at all.
     """
     entries = month_statements(run)
     if not entries:
@@ -7993,8 +8383,15 @@ def reread_statements(
         form = RunForm(
             account_id=account_id,
             account_legal_entities={},
+            # This upload's OWN currency when it recorded one (item 64).
+            # `config.statement` describes only the latest upload, so on a
+            # month holding a USD and a EUR card statement the fallback
+            # re-reads both at whichever currency arrived last, and a charge
+            # whose currency moved stops matching its receipt.
             account_card_currency=str(
-                stmt_cfg.get("account_card_currency") or "USD"
+                entry.get("card_currency")
+                or stmt_cfg.get("account_card_currency")
+                or "USD"
             ),
             sheet_name=entry.get("sheet_name") or None,
             column_map_overrides={},
@@ -8007,6 +8404,11 @@ def reread_statements(
         column_map: dict | None
         if stmt_path.suffix.lower() == ".pdf":
             column_map = None
+        elif entry.get("column_map"):
+            # The map this upload was actually read with (item 64), which
+            # may carry the operator's manual picks for headers the guess
+            # cannot name at all.
+            column_map = dict(entry["column_map"])
         elif stored == stmt_cfg.get("path") and stmt_cfg.get("column_map"):
             column_map = dict(stmt_cfg["column_map"])
         else:
@@ -8034,6 +8436,10 @@ def reread_statements(
                 transactions=txs,
                 n_new=len(merged.added),
                 uploaded_at=str(entry.get("uploaded_at") or now_iso),
+                # Re-record what THIS re-read used, so an entry written
+                # before item 64 carries both from here on.
+                column_map=column_map,
+                card_currency=form.account_card_currency,
             )
         )
 

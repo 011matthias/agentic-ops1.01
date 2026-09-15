@@ -27,7 +27,10 @@ client-credentials. Secrets in the gitignored
 Mint: `POST https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token`,
 `grant_type=client_credentials`, `scope=https://graph.microsoft.com/.default`.
 Granted roles (2026-07-14): `Mail.Read`, `Mail.ReadWrite`, `Mail.Send`,
-`Calendars.Read`, `Sites.Selected`, `Tasks.ReadWrite.All`. Full detail:
+`Calendars.Read`, `Sites.Selected`, `Tasks.ReadWrite.All`. Re-read off the
+token 2026-09-10, `Sites.ReadWrite.All` is ALSO granted now, which this
+rule's SharePoint row predates: re-test app-only SharePoint before reaching
+for the delegated `Files.ReadWrite.All` workaround. Full detail:
 [[reference_brisken_graph_app_creds]].
 
 ## In scope → Graph only
@@ -49,13 +52,48 @@ any write by diffing the whole sheet vs a pre-edit snapshot.
 
 ## HARD mailbox allowlist (non-negotiable)
 
-The credential is not yet restricted by an Exchange Application Access
-Policy, so at the Microsoft layer it can act as ANY mailbox. Every
-`Mail.*` / `Calendars.*` call MUST hard-allowlist the mailbox to
-EXACTLY `dirk.neumann@brisken.com` and `matthias.silva@brisken.com`,
-asserted in code before the call. No other mailbox, ever, regardless of
-input. This is a compensating control until the Access Policy exists;
-get that policy done when convenient, do not treat it as optional.
+**The Exchange Application Access Policy is LIVE as of 2026-09-10** (it was
+absent when this rule was written). Proven by differential probe on one
+token in one run: dirk OK 2685 items, matthias OK 450 items, criss
+**403 "Blocked by tenant configured AppOnly AccessPolicy settings"**. So
+Microsoft itself now refuses a mailbox outside the policy group, and the
+in-code allowlist is belt and braces rather than the only control.
+
+Two things follow. **Graph API permissions are not the lever for mailbox
+reach**: the token already carries tenant-wide `Mail.Read`, so a blocked
+mailbox is an Exchange group-membership problem, and adding scopes changes
+nothing. And **the two must be widened together**: adding a mailbox here
+without adding it to the policy group yields a 403, adding it to the group
+without adding it here yields a refusal in our own code.
+
+Every `Mail.*` / `Calendars.*` call MUST hard-allowlist the mailbox to
+EXACTLY these three, asserted in code before the call:
+
+- `dirk.neumann@brisken.com`
+- `matthias.silva@brisken.com`
+- `cristiane.cavalcanti@brisken.com` (added 2026-09-10, owner directive)
+
+No other mailbox, ever, regardless of input. Criss is allowed HERE but is
+not yet in the policy group, so she still 403s at Exchange; the one
+outstanding command is in `context/graph-access-policy-runbook.md`.
+
+**Why Criss was added (2026-09-10).** She is the receipt collection point
+for Brisken: Dirk forwards receipts to her, and GitHub, Regus and a run of
+SaaS vendors bill her directly. The July-2026 reconciliation stalled at 89
+card charges with no receipt precisely because her mailbox was out of
+reach, and every other source was searched and ruled out with a working
+control: Zoho Books returns "Receipt not attached" for 108 of 111 July rows
+when each is asked for its FILE (not its `has_attachment` flag), the Books
+document inbox across all 8 orgs holds only AP bills, SharePoint's 8,263
+finance files hold statements and no card receipts, and Zoho Expense was
+never joined in 6 of the 8 orgs so there is nothing there to read
+([[reference_brisken_zoho_expense_orgs]]). Mail is the only place these
+receipts exist.
+
+Scope of the addition: READ only, and the same invasive-action gate below
+still governs anything that writes or sends. The auto-ack recipient guard
+in `graph_notify` is unchanged. Widening the allowlist is an owner
+decision, not an agent one; a fourth mailbox needs its own directive.
 
 ## Invasive-action gate still applies
 
