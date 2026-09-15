@@ -792,3 +792,12 @@ def test_duplicate_group_basis_is_absent_or_reference_never_null(
     # every group, whichever key found it, keeps the one pinned shape
     for g in view["duplicate_groups"]:
         assert set(g) - {"basis"} == {"group_id", "kind", "members", "resolution"}, g
+    # The legacy `duplicate_receipts` list (the Jinja workbench's shape: one
+    # list of receipt views per group) reads the SAME groups, in the same
+    # order, whichever key found them: length and members aligned with the
+    # receipt groups of `duplicate_groups`.
+    receipt_groups = [g for g in view["duplicate_groups"] if g["kind"] == "receipt"]
+    assert len(view["duplicate_receipts"]) == len(receipt_groups) == 2
+    assert [
+        [r["document_id"] for r in grp] for grp in view["duplicate_receipts"]
+    ] == [g["members"] for g in receipt_groups]

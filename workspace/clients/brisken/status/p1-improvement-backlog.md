@@ -2508,6 +2508,37 @@ are built from different sources. Make the column and the count answer
 "has a page in the report", and build both reports from the one live
 overlay.
 
+**SHIPPED 2026-09-15 (PR #838). Neither half reproduced on the live months, and both
+mechanisms are reachable.** Read before building: August 31 expenses, 31
+called attached, 31 receipt pages in the built report; July 51, 51, 51. Zero
+"could not be rendered" captions on either month, and the expense set is
+identical across the two documents (31/31 and 51/51), because no delete is
+pending on either. So the fixtures are constructed, like item 60's.
+`expenses[].receipt_in_report` (parallel boolean, ABSENT until known) and
+`summary.n_receipts_in_report` (absent while ANY row is undecided) answer
+"has a PAGE". Item 67 landed first with the channel this needed, so the
+verdict is DERIVED from its `receipt_render` rather than decided a second
+time: 67 answers "did this file break", 68 is the positive form over every
+expense (a row with no file has no page, and that needs no build), which is
+what a coverage count can be summed from. The report's own Receipt column
+now reads the pages `prepare_evidence` admitted instead of the files it was
+handed. `build_reconciliation_report` takes the
+expense overlay and hands the live pool to `build_view` rather than
+filtering its output, because the unmatched list, the duplicates, the
+candidates and the counts are all derived in there. The renderability check
+itself is untouched (item 67 owns per-file failure handling). Tests:
+`test_receipt_coverage.py` (8, route-level through both report routes and
+the grid); three regress proofs RED first.
+
+**One live finding this item does not cover, left open.** July's expense
+report listing has 54 rows for 51 expenses (the account fan-out), and rows
+52-54 read "none" in the Receipt column although every expense has a file:
+`aligned` is false there, so the evidence falls back to one caption per
+receipt numbered 1..51 while the listing numbers 1..54. The captions past
+the first fan-out row therefore name the wrong expense number. That is the
+numbering fallback in `build_expense_report`, not the coverage question, and
+it wants its own item.
+
 ### 69. Matching improvement program: measure first, then two structural rounds (2026-09-15)
 
 Owner program (prompt in the 2026-09-15 checkpoint "Expense-Recon Matching
@@ -2632,36 +2663,10 @@ nothing to rule there):**
 4. Go on rounds A then B as above, each: RED-first regression, both scorers
    both directions, calibrate + suite, ship per B6, deploy, live re-match of
    July and August through `rematch_month`, SPA drive of one changed row.
-**SHIPPED 2026-09-15 (PR #838). Neither half reproduced on the live months, and both
-mechanisms are reachable.** Read before building: August 31 expenses, 31
-called attached, 31 receipt pages in the built report; July 51, 51, 51. Zero
-"could not be rendered" captions on either month, and the expense set is
-identical across the two documents (31/31 and 51/51), because no delete is
-pending on either. So the fixtures are constructed, like item 60's.
-`expenses[].receipt_in_report` (parallel boolean, ABSENT until known) and
-`summary.n_receipts_in_report` (absent while ANY row is undecided) answer
-"has a PAGE". Item 67 landed first with the channel this needed, so the
-verdict is DERIVED from its `receipt_render` rather than decided a second
-time: 67 answers "did this file break", 68 is the positive form over every
-expense (a row with no file has no page, and that needs no build), which is
-what a coverage count can be summed from. The report's own Receipt column
-now reads the pages `prepare_evidence` admitted instead of the files it was
-handed. `build_reconciliation_report` takes the
-expense overlay and hands the live pool to `build_view` rather than
-filtering its output, because the unmatched list, the duplicates, the
-candidates and the counts are all derived in there. The renderability check
-itself is untouched (item 67 owns per-file failure handling). Tests:
-`test_receipt_coverage.py` (8, route-level through both report routes and
-the grid); three regress proofs RED first.
 
-**One live finding this item does not cover, left open.** July's expense
-report listing has 54 rows for 51 expenses (the account fan-out), and rows
-52-54 read "none" in the Receipt column although every expense has a file:
-`aligned` is false there, so the evidence falls back to one caption per
-receipt numbered 1..51 while the listing numbers 1..54. The captions past
-the first fan-out row therefore name the wrong expense number. That is the
-numbering fallback in `build_expense_report`, not the coverage question, and
-it wants its own item.
+Decision 1 (Google pair) ruled 2026-09-15: leave the reviewer's ruling; the
+group stays confirmed and one Google charge stays unmatched. Decision 3
+ruled 2026-09-15: re-pinned, PR #871.
 
 **Round A shipped (2026-09-15, branch `client/brisken/p1-matching-round-a`,
 not yet merged or deployed).** One purchase is one candidate by its number.
@@ -2752,14 +2757,23 @@ is now collapsed); `0016` Anthropic 100 receipt copy, undetected ->
 collapsed; `0018` Petit Train billet (in review, correct charge teed up) ->
 collapsed, with `0000` SARL TRAIN'S kept and in review with the same correct
 charge teed up (demoted_card: its `42463153XXXXXX38` masked BIN reads as an
-absent card, the round-B fix); `0023` Anthropic 52.59 invoice, an
-unverifiable match to ANTHROPIC 52.46 -> ambiguous on that charge (label
-`excluded`; with card 3645 inherited it competes with `0021`, which the
-matcher lists as a candidate there although it holds an exact elsewhere).
-July: `0002` Hostinger re-mail copy and `0070` Redis body, undetected ->
-collapsed; nothing else moved. Six bundles: 55/95 clean, 0 wrong, byte-
-identical class tables (`load_bundle` replays as the scorer does and is
-untouched). Scorer + guard: train 49.8, holdout 15.7, all 65.5, 55/95
+absent card, the round-B fix); `0023` Anthropic 52.59 invoice (label
+`excluded`), an unverifiable match to ANTHROPIC 52.46 (`6d474e9e8e964bd4`,
+08-03) -> with card 3645 inherited it also ties with `0021` on ANTHROPIC
+50.52 (`c632cb75a5098253`, 08-03), a charge on which the matcher lists
+`0021` as a candidate although `0021` holds an exact match to 51.38
+elsewhere; the RAW outcome keeps `0023` -> 52.46 as a probable match, the
+effective layer drops it because the receipt is tied on the other charge,
+and 52.46 is the charge that leaves the reconciled list (the persistence
+split is item 72; round B's "spoken for" in tie detection resolves this
+instance). July: `0002` Hostinger re-mail copy and `0070` Redis body,
+undetected -> collapsed; nothing else moved. Six bundles: 55/95 clean, 0
+wrong, class tables unchanged; NOTE (review, 2026-09-15): the pinned scorer
+replays `match_month` on the raw bundle receipts and does not see pool
+assembly, so its floor is unchanged by construction, and the "byte-identical"
+bundle tables this paragraph first reported were the same raw replay; the
+attribution bundle tables in the review paragraph below are the measurement
+of this round. Scorer + guard: train 49.8, holdout 15.7, all 65.5, 55/95
 deterministic, determ_wrong 0, guard 4/4 PASS, calibrate exit 0; the floor
 held exactly. Suite 1746 -> 1785 passed / 2 skipped; four regress proofs RED
 first (the second key, the collapse of reference groups, the inheritance
@@ -2770,6 +2784,77 @@ precision direction (matched_unverifiable 1 -> 0); August wrong 3 -> 0, July
 0 -> 0, no clean pair lost anywhere, as predicted. No SPA change is needed:
 the duplicates prompt already renders groups and row markers, and `basis` is
 optional display.
+
+**Round A review fixes (2026-09-15, same branch, eight findings applied).**
+(1) A normalized reference that appears on two or more receipts of one list
+with DIFFERENT totals is an account id, not a document number, and no
+receipt carrying it gets a reference key (`duplicates.reference_keys`, the
+list-level rule that `find_duplicate_receipts_by_reference` and the
+inheritance now read): July's five Anthropic top-ups `0047`-`0051` all carry
+`NQTJA4FE`, bundle 01-10-2024_ER-00181 has two Bella Sky receipts on one
+folio; the totals kept them apart by luck, and two top-ups of one amount
+under one account id would have twinned and lost a match silently. A
+digit-only reference is measured against the 5-character floor without its
+leading zeros (`00144` / `00184` on 01-06-2025_ER-00194 are the till
+counters `144` / `184`). Measured: silences `NQTJA4FE` on July, nothing on
+August, every real twin shares one total; both live-month tables and the
+six bundle tables are unchanged from the tables above. (2) The pinned
+scorer replays `match_month` on the RAW bundle receipts and never sees pool
+assembly (inheritance, collapse), so its floor cannot move with a
+duplicate-key change; `recon-match-attribution.py --bundle` now assembles
+the pool as `rematch_month` does (inheritance with an empty resolution map,
+then `collapsed_duplicate_copies`) and is the measurement of this round on
+the bundles: no bundle holds a reference or vendor/date twin (pool = N of N
+on all six under the `c19325ae`, the round-A and the fixed module alike),
+so the class tables equal the raw ones, 55/95 clean, 0 wrong. (3) A
+reviewer's `ignore` on a reference group now also stops the card lend
+(`inherit_card_from_copies(receipts, resolutions, card_hints)` at all three
+callers: `rematch_month`, `build_expense_view`, `_expense_export_inputs`,
+the last reached by the CSV route, the month PDF, the cost-center roll-up
+and the trip / adjacent pools), so the card-less copy takes its own charge
+after the ruling (`test_not_a_duplicate_frees_the_card_less_copy_for_its_
+own_charge`, through `POST /duplicates/resolve`, the grid and the CSV);
+consequence in the earlier re-expand test: the copy naming the statement's
+card wins the charge outright and the card-less copy is unmatched, no
+longer an ambiguous pair. (4) A member whose current payment mode is a hint
+the operator assigned in the batch (`expense.card_hints`) is never
+rewritten, because `resolve_hinted_card_ex` keys that assignment on the
+exact stored string (route test through `POST /cards`; both live months
+carry no hints today). (5) The export wiring has a test that bites: `GET
+/runs/{id}/expenses.csv` carries `Legal Entity` Consulting on the
+borrowed-card row. (6) September 2026 (`51a22ad72864`, no statement, 33
+expenses on today's DB copy): the grid and the export apply the inheritance
+on deploy with no re-match. Measured `build_expense_view` +
+`regenerate_expense_export` on the DB copy, before (`c19325ae`) -> after:
+`n_needs_entity` 21 -> 17, duplicate groups 7 -> 8 (the new one is `0015`
+Invoice-890D70BF-0032 + `0016` Receipt-2547-4241-0916, basis reference);
+four rows leave "No legal entity yet": `0003` Invoice-EF742DD0-0061, `0013`
+Invoice-890D70BF-0033 and `0015` take card 9693 / Cloud Services from their
+receipt copies, `0019` Invoice-214D91B6-0006 takes card 1176 / Consulting
+from `0020`; the CSV (34 rows) changes on exactly those four rows (`Legal
+Entity` from the placeholder to the entity; `Paid Through` from the
+placeholder to `Chase Visa | 9693 | Cloud Expenses` on the three 9693 rows,
+unchanged on the 1176 row because that card has no Zoho account set). The
+owner will see MISSING ENTITY drop by four on September when this deploys.
+(7) The attribution tool proves `RECON_MODULE_SRC` was the tree imported
+(`SystemExit` otherwise; the resolved module path in every month / bundle
+header line), so a "before" run can no longer silently measure the venv's
+module. (8) The collapsed branch of the attribution classes consults the
+live twin's label: a collapsed `confirmed` receipt whose kept twin is
+confirmed / no_charge to a different verdict is `dup_false_positive` naming
+the other charge. Pinned as today's behaviour for round B to flip
+consciously (`test_a_masked_bin_lends_today_and_round_b_flips_it`):
+`_card_keys("42463153XXXXXX38")` is `{"42463153", "3153"}`, so the
+inheritance treats the SARL TRAIN'S slip `0000` as card-bearing and lends
+that string to the `PAYE` billet `0018` (persisted `0018` payment_mode
+"PAYE" -> "42463153XXXXXX38"), while the card chain reads it as an absent
+card; the masked-BIN fix in `_card_keys` closes both. Suite 1785 -> 1800
+passed / 2 skipped; eleven regress proofs RED first (the account-id rule,
+the padded floor, the ignore skip and its wiring in `rematch_month` and in
+the CSV route, the export wiring, the grid wiring, the hint skip and its
+grid wiring, the reference groups in the receipts-add headline, the legacy
+`duplicate_receipts` alignment). Scorer 49.8 / 15.7 / 65.5, 55/95,
+determ_wrong 0, guard 4/4, calibrate exit 0 on all six bundles, unchanged.
 
 ### 70. Changes in a month that did not stick (Criss 2026-09-14, owner report 2026-09-15)
 
@@ -2901,6 +2986,40 @@ payloads first. Prompt: `docs/lovable-card-chips-prompt.md` (PROMPT-STATUS,
 Not applied), with four browser checks to run after the publish. Optional
 backend nicety, not built: a per-card receipt count on `coverage[]` would
 spare the workbench the batch fetch the banner needs.
+
+### 72. `rematch_month` persists the raw outcome while the view shows the effective one (2026-09-15, found by the round-A review)
+
+Live instance, August 2026 after the round-A re-match on the DB copy:
+receipt `0023` (Anthropic 52.59 invoice, label `excluded`) sits in TWO raw
+buckets, a probable match on `6d474e9e8e964bd4` (ANTHROPIC 52.46, 08-03)
+and an ambiguous tie on `c632cb75a5098253` (ANTHROPIC 50.52, 08-03) beside
+`0021` (which holds an exact match to 51.38). `rematch_month` commits the
+RAW outcome: `summary.n_matched` 8 counts the 52.46 pairing, the
+`rematch_log` event carries the same counts, and `receipt_claims` is synced
+from the raw matches (`effective_settlements` over `outcome.matches`, so
+`0023` -> 52.46 is a claim). The effective layer (`apply_decisions`, which
+`build_view` and `charge_states` read) drops that match because the receipt
+is consumed by the tie on the other charge, so the workbench, the coverage
+panel and the reconciliation PDF show 52.46 as "no receipt" with
+`chosen_document_id` null while the persisted numbers say it is matched.
+
+Which SPA-facing surfaces read which layer (read off `app.py` /
+`service.py`): `GET /api/runs/{id}` and the reports build from
+`build_view` (effective); the months list (`GET /api/expense-batches`,
+`batch_list_summary`) re-derives only `n_expenses` / `n_receipts` /
+`n_categorized` and serves the stored `n_matched` / `n_review` /
+`match_rate` (raw); `GET /api/operator/state` `rematches[]` is the
+persisted `rematch_log` (raw); `receipt_claims` (the cross-run settlement
+protocol, R4) is raw. A month can therefore list as further along than its
+own workbench says.
+
+Cause and fix pointer: round B extends "spoken for" to tie detection (a
+tied deterministic candidate whose receipt holds an EXACT candidate on
+another charge does not tie), which resolves this instance (`0021` is
+spoken for by 51.38 -> no tie on 50.52 -> `0023` -> 52.46 deterministically).
+The persistence split itself stays open here: the commit should persist
+the effective outcome, or the list / log / claims should read the effective
+layer; decide which when round B lands and the instance is gone.
 
 ## Related but tracked elsewhere (do not duplicate here)
 

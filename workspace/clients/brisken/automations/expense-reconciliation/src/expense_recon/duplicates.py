@@ -240,10 +240,13 @@ def reference_key(receipt: Receipt) -> str | None:
     total (with or without the cents), is no reference.
     """
     ref = _NON_ALNUM_UPPER.sub("", (receipt.detected_reference or "").upper())
-    if len(ref) < _MIN_REFERENCE_LEN:
-        return None
     if not ref.isdigit():
-        return ref
+        return ref if len(ref) >= _MIN_REFERENCE_LEN else None
+    # A digit-only reference is measured without its leading zeros: a till
+    # counter printed padded ("00144", "00184" on the 01-06-2025 bundle) is
+    # still the counter "144", under the floor, not a five-digit number.
+    if len(ref.lstrip("0")) < _MIN_REFERENCE_LEN:
+        return None
     d = receipt.detected_date
     if d is not None and ref in {d.strftime(layout) for layout in _DATE_LAYOUTS}:
         return None
@@ -275,9 +278,10 @@ def find_duplicate_receipts_by_reference(receipts: list[Receipt]) -> list[list[s
     invoice took BASE44 50.00; an Anthropic 51.38 invoice took ANTHROPIC
     51.16 while its receipt copy held the real 51.38 charge).
     """
+    keys = reference_keys(receipts)
     buckets: dict[tuple, list[str]] = defaultdict(list)
     for r in receipts:
-        ref = reference_key(r)
+        ref = keys.get(r.document_id)
         if ref is None or r.detected_total is None:
             continue
         key = (ref, str(r.detected_total), (r.detected_currency or "").upper())
@@ -286,6 +290,39 @@ def find_duplicate_receipts_by_reference(receipts: list[Receipt]) -> list[list[s
     groups = [sorted(set(ids)) for ids in buckets.values() if len(set(ids)) >= 2]
     groups.sort()
     return groups
+
+
+def reference_keys(receipts: list[Receipt]) -> dict[str, str]:
+    """``document_id -> reference_key`` over ONE list, with the account ids
+    taken out: a normalized reference that appears on two or more receipts
+    of the list with DIFFERENT totals is not a document number, and no
+    receipt carrying it gets a key.
+
+    The per-receipt rule cannot see this; only the list can. July 2026
+    carries Anthropic's account id ``NQTJA4FE`` on five top-ups (48.49 /
+    45.44 / 45.35 / 47.23 / 48.31), bundle 01-10-2024_ER-00181 two Bella
+    Sky Hotel receipts on one folio ``37939838``. Today the totals keep them
+    apart; two top-ups of one amount under one account id would twin, the
+    second would leave the pool, and its charge would sit unmatched with no
+    candidate while the collapsed receipt renders as a copy: a silent lost
+    match. Every real twin shares one total, so the rule costs nothing
+    (measured on both live months and the six bundles, 2026-09-15: it
+    silences ``NQTJA4FE`` and the folio, moves no group). A receipt with no
+    total does not vote.
+    """
+    per_doc: dict[str, str] = {}
+    totals_by_ref: dict[str, set[str]] = defaultdict(set)
+    for r in receipts:
+        ref = reference_key(r)
+        if ref is None:
+            continue
+        per_doc[r.document_id] = ref
+        if r.detected_total is not None:
+            totals_by_ref[ref].add(str(r.detected_total))
+    account_ids = {ref for ref, totals in totals_by_ref.items() if len(totals) > 1}
+    if not account_ids:
+        return per_doc
+    return {doc: ref for doc, ref in per_doc.items() if ref not in account_ids}
 
 
 def find_duplicate_receipt_groups(
@@ -314,10 +351,27 @@ def find_duplicate_receipt_groups(
     return out
 
 
-def inherit_card_from_copies(receipts: list[Receipt]) -> list[Receipt]:
+def inherit_card_from_copies(
+    receipts: list[Receipt],
+    resolutions: dict[str, str] | None = None,
+    card_hints: dict[str, str] | None = None,
+) -> list[Receipt]:
     """The same list, where every copy of one document (by its reference)
     that names no card carries the card its copies name, and every copy
     with no legal entity carries the one entity its copies name.
+
+    ``resolutions`` is the run's duplicate resolutions (group id ->
+    ``ignore`` / ``confirmed``): a group the reviewer ruled "not a
+    duplicate" lends nothing, because the ruling says the two documents are
+    two purchases, and a card lent across them would keep the card-less one
+    scoped to the other's card while its own charge sits on the statement
+    unmatched (reviewer probe 2026-09-15: after ``ignore`` the group
+    re-expanded but the invoice copy still carried the receipt copy's card).
+    ``card_hints`` is the batch's operator hint -> card assignments
+    (``expense.card_hints``): a member whose CURRENT payment mode is one the
+    operator assigned keeps it, because ``resolve_hinted_card_ex`` keys that
+    assignment on the exact stored string and rewriting "Link" to the twin's
+    card label would silently lose the operator's ruling to the twin's card.
 
     Item 69 round A (2026-09-15). ``collapsed_duplicate_copies`` keeps one
     copy of a document in the pool, and for a Stripe pair the kept copy is
@@ -343,9 +397,13 @@ def inherit_card_from_copies(receipts: list[Receipt]) -> list[Receipt]:
       only when exactly one is named across the group; a member that names
       one keeps it.
     """
+    resolutions = resolutions or {}
+    hinted = {k for k in (card_hints or {}) if k}
     by_id = {r.document_id: r for r in receipts}
     patched: dict[str, Receipt] = {}
     for members in find_duplicate_receipts_by_reference(receipts):
+        if resolutions.get(duplicate_group_id("receipt", members)) == "ignore":  # lends nothing
+            continue
         group = [by_id[d] for d in members if d in by_id]
         card_modes = [r.payment_mode for r in group if _card_keys(r.payment_mode)]
         lend_mode: str | None = None
@@ -357,7 +415,11 @@ def inherit_card_from_copies(receipts: list[Receipt]) -> list[Receipt]:
         lend_entity = next(iter(entities)) if len(entities) == 1 else None
         for r in group:
             kw: dict = {}
-            if lend_mode is not None and not _card_keys(r.payment_mode):
+            if (
+                lend_mode is not None
+                and not _card_keys(r.payment_mode)
+                and (r.payment_mode or "").strip() not in hinted
+            ):
                 kw["payment_mode"] = lend_mode
             if lend_entity is not None and not (r.legal_entity_id or "").strip():
                 kw["legal_entity_id"] = lend_entity

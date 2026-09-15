@@ -101,11 +101,36 @@ BOUNDARY_DAYS = 2
 # Loading
 # ---------------------------------------------------------------------------
 
-def _import_module():
+MODULE_FILE: Path | None = None
+
+
+def _import_module() -> Path:
+    """Put MODULE_SRC first on sys.path and PROVE the import took it.
+
+    A path that exists but cannot be imported from (reviewer reproduction,
+    2026-09-15: an over-MAX_PATH scratch copy) falls through to the venv's
+    editable module with exit 0, and a "before" table then silently equals
+    the "after". So the resolved `expense_recon.__file__` has to sit under
+    MODULE_SRC, or the run stops here; the path is printed in every month /
+    bundle header line so a reader can see which tree measured what."""
+    global MODULE_FILE
     if not MODULE_SRC.is_dir():
         raise SystemExit(f"ERROR: module src not found: {MODULE_SRC}")
     if str(MODULE_SRC) not in sys.path:
         sys.path.insert(0, str(MODULE_SRC))
+    import expense_recon
+
+    got = Path(expense_recon.__file__).resolve()
+    want = MODULE_SRC.resolve()
+    if want not in got.parents:
+        raise SystemExit(
+            f"ERROR: RECON_MODULE_SRC={MODULE_SRC} was put first on sys.path but "
+            f"`expense_recon` imported from {got}; the measurement would not be "
+            "of that tree. Check the path (length, permissions, a missing "
+            "expense_recon/__init__.py)."
+        )
+    MODULE_FILE = got
+    return got
 
 
 class _CacheOnlyClient:
@@ -236,8 +261,16 @@ def load_live(db: Path, run_id: str, learning: Path | None) -> dict:
 
 
 def load_bundle(bundle: Path, asset: Path | None) -> dict:
-    """A label bundle replayed the way the pinned scorer replays it."""
+    """A label bundle, its pool assembled the way `rematch_month` assembles
+    a live month's (review F2, 2026-09-15): the module's card inheritance
+    between copies of one document (no reviewer resolutions, no operator
+    hints in a bundle), then `collapsed_duplicate_copies`, then the
+    deterministic matcher. The pinned scorer (`recon-match-accuracy.py`)
+    replays `match_month` on the RAW bundle receipts and never sees pool
+    assembly, so its floor cannot move with a duplicate-key change; this
+    table is where such a change is measured on the bundles."""
     _import_module()
+    from expense_recon import duplicates
     from expense_recon.cli import build_match_cfg
     from expense_recon.labeling import _load_bundle
     from expense_recon.matching.deterministic import MatchingConfig, match_month
@@ -251,11 +284,20 @@ def load_bundle(bundle: Path, asset: Path | None) -> dict:
         match_cfg = MatchingConfig.from_file(asset)
     else:
         match_cfg = build_match_cfg(cfg, config_dir) or MatchingConfig()
-    raw = match_month(transactions, receipts, match_cfg)
+    inherit = getattr(duplicates, "inherit_card_from_copies", None)
+    if inherit is not None:
+        receipts = inherit(receipts)
+    collapse = getattr(duplicates, "collapsed_duplicate_copies", None)
+    collapsed = collapse(receipts, {}) if collapse is not None else set()
+    pool = [r for r in receipts if r.document_id not in collapsed] if collapsed else receipts
+    raw = match_month(transactions, pool, match_cfg)
+    if collapsed:
+        have = set(raw.unmatched_receipts)
+        raw.unmatched_receipts.extend(d for d in sorted(collapsed) if d not in have)
     return {
         "label": bundle.name, "id": bundle.name, "cfg": cfg, "match_cfg": match_cfg,
-        "transactions": transactions, "receipts": receipts, "match_input": receipts,
-        "collapsed": set(), "foreign": {},
+        "transactions": transactions, "receipts": receipts, "match_input": pool,
+        "collapsed": collapsed, "foreign": {},
         "raw": raw, "judged": raw, "effective": raw, "stored": None,
         "judgment_hits": 0, "judgment_misses": 0, "n_decisions": 0,
     }
@@ -521,8 +563,23 @@ def attribute(month: dict, labels: dict[str, tuple[str, str]]) -> list[dict]:
             if status == "confirmed" and not live_twins:
                 row["cls"], row["detail"] = "dup_false_positive", f"collapsed, but labelled to {ltx}"
             elif status == "confirmed":
-                row["cls"] = "dup_copy_collapsed"
-                row["detail"] = f"kept copy {live_twins[0][:30]} carries this label ({ltx[:12]})"
+                # The live twin carries the group's verdict. When the labeler
+                # gave the twin a DIFFERENT verdict (another charge, or no
+                # charge), the collapse hid a real second purchase: the twin
+                # is not a copy of this document, and this one's charge is
+                # now unreachable (review F8f, 2026-09-15).
+                twin = live_twins[0]
+                twin_status, twin_tx, _ = labels.get(twin, ("", "", ""))
+                if twin_status in ("confirmed", "no_charge") and twin_tx != ltx:
+                    row["cls"] = "dup_false_positive"
+                    row["detail"] = (
+                        f"collapsed under {twin[:30]}, labelled to {ltx[:16]} while the "
+                        f"kept copy is {twin_status}"
+                        + (f" to {twin_tx[:16]}" if twin_tx else "")
+                    )
+                else:
+                    row["cls"] = "dup_copy_collapsed"
+                    row["detail"] = f"kept copy {twin[:30]} carries this label ({ltx[:12]})"
             else:
                 row["cls"], row["detail"] = "dup_copy_collapsed", "item 56 / 69 keeps it out of the pool"
             rows.append(row)
@@ -779,7 +836,7 @@ def main(argv: list[str]) -> int:
             out_rows[name] = rows
             stored = m["stored"]
             diffs = parity_diffs(stored, m["judged"])
-            print(f"[{name}] pool={len(m['match_input'])} of {len(m['receipts'])} receipts, {len(m['transactions'])} charges; "
+            print(f"[{name}] module={MODULE_FILE} pool={len(m['match_input'])} of {len(m['receipts'])} receipts, {len(m['transactions'])} charges; "
                   f"judgment cache hits={m['judgment_hits']} misses={m['judgment_misses']}; decisions={m['n_decisions']}; "
                   f"parity with the hosted outcome: {'OK' if not diffs else 'DIFFERS (the next live re-match will move these)'}")
             for d in diffs:
@@ -790,7 +847,8 @@ def main(argv: list[str]) -> int:
         rows = attribute(m, load_labels(lp))
         months.append((b.name, rows))
         out_rows[b.name] = rows
-        print(f"[{b.name}] {len(m['receipts'])} receipts, {len(m['transactions'])} charges, labels={'yes' if lp and Path(lp).exists() else 'NO'}")
+        print(f"[{b.name}] module={MODULE_FILE} pool={len(m['match_input'])} of {len(m['receipts'])} receipts, "
+              f"{len(m['transactions'])} charges, labels={'yes' if lp and Path(lp).exists() else 'NO'}")
     if not months:
         ap.error("nothing to attribute: give --live/--run-id or --bundle")
     print()

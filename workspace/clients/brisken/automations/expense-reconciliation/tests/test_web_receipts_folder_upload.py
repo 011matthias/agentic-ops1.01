@@ -307,6 +307,32 @@ def test_folder_flags_duplicate_of_existing_receipt(client, monkeypatch):
     )
 
 
+def test_folder_flags_a_copy_the_reference_key_alone_finds(client, monkeypatch):
+    """Item 69 round A: the headline counts a new file that twins an
+    existing receipt by its NUMBER only. rcpt-004 is Amazon 200.00 on
+    2026-04-07 with reference `RT3-9923`; the upload spells the vendor and
+    the reference differently and carries a re-mail's date, so the
+    vendor/date key sees nothing and only the reference key twins them."""
+    run_id = _create_run(client)
+    _patch_ocr(
+        monkeypatch,
+        _extraction(
+            date="2026-04-09", total="200.00", vendor="Amazon.com Services",
+            reference="RT3 9923",
+        ),
+    )
+    resp = _upload_folder(client, run_id, [("amazon-again.jpg", JPG)])
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+
+    run = _run(client, run_id)
+    assert run.snapshot["folder_ingest"]["n_possible_duplicates"] == 1
+    assert run.snapshot["folder_ingest"]["n_ingested"] == 1
+    view = _view(client, run_id)
+    (group,) = [g for g in view["duplicate_groups"] if g["kind"] == "receipt"]
+    assert group["basis"] == "reference"
+    assert "rcpt-004" in group["members"]
+
+
 # ── .zip expansion ─────────────────────────────────────────────────
 
 
