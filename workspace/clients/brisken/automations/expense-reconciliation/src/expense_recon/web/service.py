@@ -2424,8 +2424,18 @@ def build_view(
     # month the matcher could not see (sign / entity / currency / card
     # broken) has nothing undecided BECAUSE nothing was proposed; this
     # names the broken input and closes the post gate below.
+    # Item 62: receipts the reviewer settled outside the card (bank
+    # transfer, cash, PayPal). They stay in the month and in the grid; the
+    # RECONCILIATION side lets them go, starting here -- a receipt no card
+    # will ever carry must not count as an exact pair the matcher "missed"
+    # and so must never make a healthy month read broken.
+    settled_outside = settled_outside_map(run.snapshot or {})
+    health_receipts = (
+        [r for r in receipts if r.document_id not in settled_outside]
+        if settled_outside else receipts
+    )
     health = month_health(
-        transactions, receipts, outcome,
+        transactions, health_receipts, outcome,
         card_scoping=card_scoping_on(run.config),
     )
 
@@ -2761,11 +2771,27 @@ def build_view(
     # Unmatched receipts come straight from the resolved outcome, so a
     # receipt freed by a reject (or stolen by a manual match) reappears
     # here and can be re-assigned.
+    # Item 62: scoped to what the EFFECTIVE outcome leaves unmatched, so a
+    # receipt that (however it got there) holds a charge renders as the
+    # match it is rather than disappearing from both sides of the screen.
+    settled_outside_ids = {
+        d for d in effective.unmatched_receipts
+        if d in settled_outside and d in rec_by_id
+    }
     unmatched_receipts = [
         _receipt_view(rec_by_id[d], overrides)
         for d in effective.unmatched_receipts
-        if d in rec_by_id
+        if d in rec_by_id and d not in settled_outside_ids
     ]
+    # The suggestion, never the disposition: a mode the scan read as a
+    # tender no card statement carries. Parallel and ABSENT when there is
+    # no signal, so a receipt with an empty payment mode -- which is what
+    # July's Redis, Konsultancy and 360Crossmedia invoices actually carry
+    # -- offers nothing and waits for the reviewer.
+    for rec in unmatched_receipts:
+        hit = suggested_settled_outside(rec.get("payment_mode"))
+        if hit is not None:
+            rec["suggested_settled_outside"] = hit
 
     # PR D — for each unmatched charge, the closest free receipt by amount
     # ("closest was $58.40, 4 days off"), so Chris sees the near-miss the
@@ -2965,6 +2991,8 @@ def build_view(
                 row["settled_by"] = src
 
     n_tx = len(transactions)
+    # Item 62: the pool a card statement can actually settle.
+    n_matchable_receipts = len(receipts) - len(settled_outside_ids)
     n_unknown_currency = sum(1 for r in receipts if r.detected_currency is None)
     # L4 noise guard: the missing-image badge renders only when this run's
     # receipt source carries image references at all.
@@ -2984,19 +3012,29 @@ def build_view(
         # 3.10: credits, partitioned before matching, never receipt-matched.
         "n_refunds": n_refunds,
         "n_unmatched_rec": len(unmatched_receipts),
+        # Item 62: its own name, its own question -- how many receipts the
+        # reviewer settled outside the card. `n_receipts` still answers
+        # "how many receipts are in the month" and does NOT move: they are
+        # still in the month, still in the grid, still in the report.
+        "n_settled_outside": len(settled_outside_ids),
         # See the run-summary note above: charge-based `match_rate` under-reads
         # a receiptless-heavy month; `receipt_match_rate` reports receipts
         # placed (reconciled + review) over receipts that exist. The SPA leads
         # with the receipt rate and keeps the charge rate as a labelled
         # secondary figure. (2026-07-27)
         "match_rate": round(n_reconciled / n_tx * 100, 1) if n_tx else 0.0,
-        "n_receipts_matched": max(len(receipts) - len(unmatched_receipts), 0),
+        "n_receipts_matched": max(
+            n_matchable_receipts - len(unmatched_receipts), 0
+        ),
+        # Over the receipts a card COULD settle. A month whose only
+        # stragglers were paid by transfer reads 100%, which is the true
+        # answer: nothing is left for the statement to explain.
         "receipt_match_rate": (
             round(
-                (len(receipts) - len(unmatched_receipts))
-                / len(receipts) * 100, 1
+                (n_matchable_receipts - len(unmatched_receipts))
+                / n_matchable_receipts * 100, 1
             )
-            if receipts else 0.0
+            if n_matchable_receipts else 0.0
         ),
         "invariant_ok": (
             n_reconciled + n_review + n_unmatched_tx + n_refunds
@@ -5502,6 +5540,17 @@ def build_expense_view(
         if state:
             e["receipt_render"] = state
 
+    # Item 62: the disposition rides the grid row, absent unless set. This
+    # view removes NOTHING -- the receipt is still an expense of this month
+    # and still prints in the report; only the reconciliation pool on the
+    # run payload lets it go.
+    grid_settled_outside = settled_outside_map(run.snapshot or {})
+    if grid_settled_outside:
+        for e in expenses:
+            hit = grid_settled_outside.get(e.get("document_id"))
+            if hit is not None:
+                e["settled_outside"] = hit
+
     has_image_info = any(r.has_receipt_image for r in receipts)
     n_categorized, n_uncategorized = categorized_counts(posted)
     set_aside = set_aside_view(run.snapshot or {})
@@ -5510,6 +5559,8 @@ def build_expense_view(
         "n_expenses": len(expenses),
         "n_receipts": len(expenses),
         "n_set_aside": sum(1 for e in set_aside if not e["restored"]),
+        # Item 62, same name and same question as the run payload.
+        "n_settled_outside": len(grid_settled_outside),
         "n_categorized": n_categorized,
         "n_uncategorized": n_uncategorized,
         # Rows the reviewer can leave alone entirely (category AND entity
@@ -5992,10 +6043,19 @@ def build_expense_report(
         return item
 
     n = 1
+    # Item 62 (owner ruling 2026-09-15): a receipt settled outside the card
+    # STILL prints. It is real company spend whose evidence is the invoice,
+    # and dropping it would hide the spend from the accountant; the caption
+    # names the tender so the reader knows why no card line matches it.
+    report_settled_outside = settled_outside_map(run.snapshot or {})
     for r, width in zip(company, widths):
         numbers = list(range(n, n + width)) if aligned else [n]
         n += width if aligned else 1
-        evidence.append(_evidence_item(r, numbers))
+        so = report_settled_outside.get(r.document_id)
+        evidence.append(_evidence_item(
+            r, numbers,
+            extra_detail=settled_outside_caption(so["how"]) if so else "",
+        ))
 
     # The reimbursements-owed section: one numbered row per private
     # expense (no account fan-out — a reimbursement is owed whole),
@@ -9511,3 +9571,201 @@ def borrowed_source_view(entry: object) -> dict | None:
     if entry.get("kind"):
         out["kind"] = entry.get("kind")
     return out
+# ── Settled outside the card (backlog item 62) ──────────────────────────
+# Some receipts never post to a card at all. July 2026 holds a Redis
+# invoice for 13,200.00 USD, a Konsultancy Finance one for 15,972.00 EUR
+# and a 360Crossmedia one for 900.00 EUR; every one was paid by bank
+# transfer, so no card statement will ever settle them. They sat in
+# `unmatched_receipts` and in the pool counts with no disposition that
+# could ever retire them, which is the whole of backlog item 62.
+#
+# This is that disposition, and it is bookkeeping rather than matching.
+# The receipt stays in the month, in the snapshot, in the expense grid and
+# in the month report, behind a caption naming the tender (owner ruling
+# 2026-09-15: a bank transfer is real company spend whose evidence is the
+# invoice, and dropping the row would hide that spend from the
+# accountant). What it leaves is the RECONCILIATION side: the unmatched
+# list, the pool counts, and month health's exact-pair scan.
+#
+# Applied at VIEW time from a snapshot key, never by re-matching, so the
+# disposition costs no model call and the undo is immediate. It is scoped
+# to receipts the EFFECTIVE outcome leaves unmatched, so a receipt that
+# holds a charge renders as the match it is instead of vanishing from both
+# sides of the screen.
+
+SETTLED_OUTSIDE_KEY = "settled_outside"
+SETTLED_OUTSIDE_HOWS = ("bank_transfer", "cash", "paypal", "other")
+SETTLED_OUTSIDE_NOTE_MAX = 500
+
+# What the month report prints under the expense number. English here
+# because the PDF is English throughout; the SPA localizes from `how`.
+SETTLED_OUTSIDE_CAPTION = {
+    "bank_transfer": "paid by bank transfer",
+    "cash": "paid in cash",
+    "paypal": "paid by PayPal",
+    "other": "settled outside the card",
+}
+
+# A mode that names a card wins outright: "Electronic Funds Transfer
+# ...2838" is a transfer that names the card it posted to, so it suggests
+# nothing. Four consecutive digits is the card-tail shape ("...2838",
+# "x3876", "124631******3876"); an amount like "15.00" never matches it.
+_CARD_TOKEN_RE = re.compile(
+    r"visa|master|maestro|amex|american\s+express|discover|elo\b|"
+    r"card|karte|cart[aã]o|cr[eé]dito|d[eé]bito|debit|credit|\d{4}",
+    re.IGNORECASE,
+)
+
+# Tenders a card statement will never carry. Word-bounded, so "cashback"
+# is not cash and "PAYE" is not PayPal.
+_TENDER_PATTERNS = (
+    ("bank_transfer", re.compile(
+        r"\b(?:bank|wire|electronic\s+funds?)\s+transfers?\b"
+        r"|\btransfer[eê]ncia\b|\btransferencia\b|\b[uü]berweisung\b"
+        r"|\bsepa\b|\btef\b|\bach\b|\bvirement\b|\bbonifico\b",
+        re.IGNORECASE)),
+    ("paypal", re.compile(r"\bpay\s?pal\b", re.IGNORECASE)),
+    ("cash", re.compile(
+        r"\bcash\b|\bdinheiro\b|\besp[eè]ces\b|\bcontanti\b|\bbargeld\b"
+        r"|\bem\s+esp[eé]cie\b",
+        re.IGNORECASE)),
+)
+
+
+def settled_outside_map(snapshot: dict | None) -> dict[str, dict]:
+    """The month's dispositions, document_id -> `{how, note, at}`.
+
+    Absent on every month that has none, so a snapshot written before this
+    key existed reads as an empty map and renders exactly as it did."""
+    stored = (snapshot or {}).get(SETTLED_OUTSIDE_KEY)
+    if not isinstance(stored, dict):
+        return {}
+    out: dict[str, dict] = {}
+    for doc_id, entry in stored.items():
+        if not isinstance(entry, dict):
+            continue
+        how = entry.get("how")
+        if how not in SETTLED_OUTSIDE_HOWS:
+            continue
+        out[str(doc_id)] = {
+            "how": how,
+            "note": str(entry.get("note") or ""),
+            "at": entry.get("at"),
+        }
+    return out
+
+
+def settled_outside_caption(how: str) -> str:
+    """The month report's caption for one tender."""
+    return SETTLED_OUTSIDE_CAPTION.get(how, SETTLED_OUTSIDE_CAPTION["other"])
+
+
+def suggested_settled_outside(payment_mode: str | None) -> dict | None:
+    """The suggestion chip for one unmatched receipt, or None.
+
+    Reads the payment mode the scan lifted off the document (item 28) and
+    names the tender when it reads as something a card statement will
+    never carry. NEVER auto-applied: the reviewer confirms every one.
+
+    Owner ruling 2026-09-15: an invoice's payment-OPTION line ("Pay $15.00
+    with a bank transfer") counts as a signal, not only a statement of how
+    the thing was actually paid. The honest caveat is that the one live
+    instance of that wording sits on an August Lovable receipt that DID
+    post to a card. The chip renders only on already-unmatched receipts
+    and fires on a handful a month, so a wrong one costs a glance while a
+    missing one costs a receipt stuck in the pool forever.
+    """
+    text = (payment_mode or "").strip()
+    if not text or _CARD_TOKEN_RE.search(text):
+        return None
+    for how, pattern in _TENDER_PATTERNS:
+        if pattern.search(text):
+            return {"how": how, "evidence": text[:120]}
+    return None
+
+
+def _settled_outside_unmatched_ids(store: RunStore, run: RunRow) -> set[str]:
+    """Which of this month's receipts the effective outcome leaves
+    unmatched, read the way `build_view` reads it so the route and the
+    screen cannot disagree about what is settled."""
+    transactions, receipts, outcome, _pe = snapshot_from_dict(run.snapshot)
+    effective = apply_decisions(
+        outcome, transactions, receipts, store.get_decisions(run.run_id)
+    )
+    return set(effective.unmatched_receipts)
+
+
+def set_receipt_settled_outside(
+    store: RunStore,
+    run: RunRow,
+    document_id: str,
+    how: str,
+    note: str,
+    now_iso: str,
+) -> dict:
+    """Mark one receipt as settled outside the card.
+
+    Serialized under the batch-mutation lock against a FRESH re-read, the
+    `rematch_month` commit shape: a mid-month add or a restore running
+    concurrently must not be clobbered by a read-modify-write working from
+    a stale row.
+
+    Refuses a receipt that currently settles a charge. Rejecting that
+    match frees it first; marking it here while a charge holds it would
+    leave the month claiming both that a card paid it and that none did.
+    """
+    how = (how or "").strip().lower()
+    if how not in SETTLED_OUTSIDE_HOWS:
+        raise RunInputError(
+            "Say how it was settled: " + ", ".join(SETTLED_OUTSIDE_HOWS) + "."
+        )
+    note = (note or "").strip()[:SETTLED_OUTSIDE_NOTE_MAX]
+    with _BATCH_ADD_LOCK:
+        fresh = store.get_run(run.run_id)
+        if fresh is None:
+            raise RunInputError("This batch no longer exists (it was deleted).")
+        run = fresh
+        snapshot = dict(run.snapshot or {})
+        _tx, receipts, _outcome, _pe = snapshot_from_dict(snapshot)
+        if not any(r.document_id == document_id for r in receipts):
+            raise RunInputError("That receipt is not in this month.")
+        if document_id not in _settled_outside_unmatched_ids(store, run):
+            raise RunInputError(
+                "That receipt is settled against a charge on the statement. "
+                "Reject that match first, then mark it settled outside the "
+                "card."
+            )
+        entries = settled_outside_map(snapshot)
+        entries[document_id] = {"how": how, "note": note, "at": now_iso}
+        snapshot[SETTLED_OUTSIDE_KEY] = entries
+        store.update_run_snapshot(run.run_id, snapshot)
+    return {"ok": True, "document_id": document_id,
+            "settled_outside": entries[document_id]}
+
+
+def clear_receipt_settled_outside(
+    store: RunStore,
+    run: RunRow,
+    document_id: str,
+) -> dict:
+    """The undo, shaped like the duplicates `ignore` resolution: the
+    receipt rejoins the pool, the counts and the pair scan exactly as it
+    was, because nothing about it was ever changed.
+
+    Idempotent, so an undo clicked twice is not an error the second time;
+    `removed` says whether this call was the one that did it."""
+    with _BATCH_ADD_LOCK:
+        fresh = store.get_run(run.run_id)
+        if fresh is None:
+            raise RunInputError("This batch no longer exists (it was deleted).")
+        run = fresh
+        snapshot = dict(run.snapshot or {})
+        entries = settled_outside_map(snapshot)
+        removed = entries.pop(document_id, None) is not None
+        if removed:
+            if entries:
+                snapshot[SETTLED_OUTSIDE_KEY] = entries
+            else:
+                snapshot.pop(SETTLED_OUTSIDE_KEY, None)
+            store.update_run_snapshot(run.run_id, snapshot)
+    return {"ok": True, "document_id": document_id, "removed": removed}
