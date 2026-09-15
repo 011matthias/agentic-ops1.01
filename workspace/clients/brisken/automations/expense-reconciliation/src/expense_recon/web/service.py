@@ -2169,7 +2169,20 @@ def _fx_breakdown(tx: "Transaction", receipt: "Receipt | None") -> dict | None:
     }
 
 
-def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
+def _receipt_view(
+    r: Receipt,
+    overrides: dict[tuple[str, int], dict],
+    *,
+    work_dir: Path,
+    expense_mode: bool,
+) -> dict:
+    """One receipt, as both review payloads render it.
+
+    `work_dir` and `expense_mode` are required rather than defaulted: they
+    decide `receipt_image_available`, and a caller that forgets them would
+    silently tell the reviewer that every receipt is unopenable. That is the
+    shape item 52's defect had.
+    """
     items = []
     for i, li in enumerate(r.line_items):
         ov = overrides.get((r.document_id, i))
@@ -2217,13 +2230,17 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
         # only when the run-level `has_image_info` flag is set (noise guard).
         "has_receipt_image": r.has_receipt_image,
         # Receipt preview (2026-07-25): True when the backend can serve this
-        # receipt's image via GET /api/runs/{id}/receipts/{doc}/image (a
-        # vision-mapped ER-PDF page, or an operator-uploaded file — the
-        # single-file `manual:` attach or a bulk `folder:` receipt).
+        # receipt's image via GET /api/runs/{id}/receipts/{doc}/image — a
+        # vision-mapped ER-PDF page, or a file the endpoint would find.
+        # Resolved against DISK by `receipt_image_file`, never from the shape
+        # of the document id: a mail-arrived receipt is neither `manual:` nor
+        # `folder:` and the id test called every one of them unavailable.
         "receipt_image_available": (
             r.receipt_image_page is not None
-            or r.document_id.startswith("manual:")
-            or r.document_id.startswith("folder:")
+            or receipt_image_file(
+                work_dir, r.document_id, expense_mode=expense_mode
+            )
+            is not None
         ),
         "reference": r.detected_reference or "",
         "report_number": r.report_number or "",
@@ -2566,6 +2583,11 @@ def build_view(
     renders byte-identically to before the field existed."""
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
     rec_by_id = {r.document_id: r for r in receipts}
+    # What `receipt_image_available` is resolved against (item 52). Read
+    # once per payload; `receipt_image_file` gates the receipts-dir branch
+    # on the mode exactly as the image endpoint does.
+    rv_work_dir = Path(run.work_dir)
+    rv_expense_mode = run_mode(run) == MODE_EXPENSE_GENERATION
     # R4b: borrowed trip receipts referenced by the outcome ride the
     # snapshot as copies; fold them into the lookup so a cross-batch
     # pairing renders its receipt. They are NOT part of `receipts`: the
@@ -2778,7 +2800,13 @@ def build_view(
                     # receipt's Zoho payment mode. 50 means neither side named
                     # a card, so it neither corroborates nor contradicts.
                     "card_pct": round(m.card_score * 100),
-                    "receipt": _receipt_view(r, overrides) if r else None,
+                    "receipt": (
+                        _receipt_view(
+                            r, overrides, work_dir=rv_work_dir,
+                            expense_mode=rv_expense_mode,
+                        )
+                        if r else None
+                    ),
                     # Cross-currency comparison (charge vs receipt vs Zoho's
                     # own conversion); None for same-currency pairs.
                     "fx": _fx_breakdown(tx, r),
@@ -2812,7 +2840,11 @@ def build_view(
                     "amount_pct": None,
                     "date_pct": None,
                     "vendor_pct": None,
-                    "receipt": _receipt_view(rec_by_id[held_doc], overrides),
+                    "receipt": _receipt_view(
+                        rec_by_id[held_doc], overrides,
+                        work_dir=rv_work_dir,
+                        expense_mode=rv_expense_mode,
+                    ),
                     "fx": _fx_breakdown(tx, rec_by_id[held_doc]),
                     **_from_batch(held_doc),
                 }
@@ -2941,7 +2973,10 @@ def build_view(
         if d in settled_outside and d in rec_by_id
     }
     unmatched_receipts = [
-        _receipt_view(rec_by_id[d], overrides)
+        _receipt_view(
+            rec_by_id[d], overrides,
+            work_dir=rv_work_dir, expense_mode=rv_expense_mode,
+        )
         for d in effective.unmatched_receipts
         if d in rec_by_id and d not in settled_outside_ids
     ]
@@ -3079,7 +3114,13 @@ def build_view(
         for grp in find_duplicate_charges(transactions)
     ]
     duplicate_receipts = [
-        [_receipt_view(rec_by_id[d], overrides) for d in grp if d in rec_by_id]
+        [
+            _receipt_view(
+                rec_by_id[d], overrides,
+                work_dir=rv_work_dir, expense_mode=rv_expense_mode,
+            )
+            for d in grp if d in rec_by_id
+        ]
         for grp in find_duplicate_receipts(receipts)
     ]
 
@@ -5512,31 +5553,30 @@ def build_expense_view(
                 if res["reimburse_to"] else "Private"
             )
             pt_source = "private"
-        rv = _receipt_view(r, overrides)
+        rv = _receipt_view(
+            r, overrides, work_dir=receipts_dir.parent, expense_mode=True,
+        )
         # An expense batch's receipt files live under the run's receipts
         # dir named `<document_id>`. HONEST availability: a manual expense
         # add has a `manual:` id and NO file — the generic prefix claim
-        # rendered a View button that 404s (note 8). A real document has a
-        # mapped page, a file in receipts/, or (post-graduation attach) a
-        # glob hit where the image endpoint actually serves it from.
-        source_name = r.document_id
-        receipt_path = receipts_dir / r.document_id
-        has_file = receipt_path.is_file()
-        if not has_file:
-            hit = _attached_receipt_file(
-                receipts_dir.parent, r.document_id
-            )
-            if hit is not None:
-                has_file = True
-                receipt_path = hit
-                # attach files are stored `{key}__{original-name}`
-                source_name = hit.name.split("__", 1)[-1]
+        # rendered a View button that 404s (note 8). `receipt_image_file`
+        # is that resolution, and since item 52 it is also what fills
+        # `receipt_image_available` on BOTH payloads, so the run payload
+        # can no longer answer the same question differently.
+        hit = receipt_image_file(
+            receipts_dir.parent, r.document_id, expense_mode=True
+        )
+        has_file = hit is not None
+        # attach files are stored `{key}__{original-name}`; a file sitting
+        # in receipts/ IS the document id.
+        source_name = (
+            r.document_id
+            if hit is None or hit.parent == receipts_dir
+            else hit.name.split("__", 1)[-1]
+        )
         # Item 68: whether the report builder would find anything to read
         # for this row, resolved exactly the way `_evidence_item` does.
         has_file_by_doc[r.document_id] = has_file
-        rv["receipt_image_available"] = (
-            r.receipt_image_page is not None or has_file
-        )
         # Which upload/mail this row came from (spool prefix stripped);
         # empty for rows the operator typed in with no document.
         rv["source_file"] = _display_name(source_name) if has_file else ""
@@ -7823,6 +7863,42 @@ def _display_name(stored: str) -> str:
     """The upload's own filename, without the `NNNN__` spool prefix the
     receipts dir adds for ordering."""
     return re.sub(r"^\d{4}__", "", stored)
+
+
+def receipt_image_file(
+    work_dir: Path, document_id: str, *, expense_mode: bool
+) -> Path | None:
+    """The file `GET /api/runs/{id}/receipts/{doc}/image` would serve for
+    this document, or None when that route would 404.
+
+    One implementation of "can this receipt be shown", because the answer is
+    the ENDPOINT's and nothing else can give it. It was previously guessed
+    twice: the batch payload resolved it from disk (correct), and the run
+    payload from the SHAPE of the document id -- `manual:` or `folder:` or a
+    vision-mapped page. Every receipt that arrives by mail or through the
+    receipts drop has a plain `NNNN__name.pdf` id and matches none of those,
+    so the run payload answered `false` for all 17 unmatched receipts of
+    Criss's live August month while the endpoint served every one of them
+    200 (item 52, measured 2026-09-15).
+
+    Ordered and gated exactly as the endpoint is: the `manual:` / `folder:`
+    globs apply to every run, and the receipts-dir branch only to a
+    receipt-first batch. The resolved path is confined to the receipts dir
+    the same way, so a crafted id cannot address a file outside it.
+    """
+    hit = _attached_receipt_file(work_dir, document_id)
+    if hit is not None:
+        return hit
+    if not expense_mode:
+        return None
+    exp_dir = (work_dir / "receipts").resolve()
+    try:
+        target = (exp_dir / document_id).resolve()
+    except (OSError, ValueError):
+        return None
+    if exp_dir in target.parents and target.is_file():
+        return target
+    return None
 
 
 def _attached_receipt_file(work_dir: Path, document_id: str) -> Path | None:
