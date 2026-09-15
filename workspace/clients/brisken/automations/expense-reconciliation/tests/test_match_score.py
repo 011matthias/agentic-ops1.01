@@ -49,10 +49,16 @@ def test_exact_match_with_matching_vendor_scores_high():
     assert m.score >= 90
 
 
+# A weak pair here is weak on AMOUNT and DATE, not on vendor: since
+# backlog item 63 a same-currency pair that spends the probable amount
+# band has to agree on the merchant, so a different-vendor fixture is no
+# longer a match at all and could not carry a score to assert on.
+
+
 def test_score_is_bounded_0_100():
     out = match_month(
-        [tx("t1", "57.50", date(2026, 4, 22), vendor="A")],
-        [receipt("r1", "50.00", date(2026, 4, 26), vendor="Z")],
+        [tx("t1", "57.50", date(2026, 4, 22), vendor="ACME SUPPLY CO")],
+        [receipt("r1", "50.00", date(2026, 4, 26), vendor="Acme Supply")],
     )
     m = out.matches[0]
     assert 0 <= m.score <= 100
@@ -64,8 +70,8 @@ def test_strong_match_outscores_weak_match():
         [receipt("rs", "50.00", date(2026, 4, 12), vendor="Hilton")],
     ).matches[0]
     weak = match_month(
-        [tx("w", "50.00", date(2026, 4, 12), vendor="UNKNOWN CO")],
-        [receipt("rw", "57.00", date(2026, 4, 16), vendor="totally different")],
+        [tx("w", "50.00", date(2026, 4, 12), vendor="DINER TWELVE")],
+        [receipt("rw", "57.00", date(2026, 4, 16), vendor="Diner Twelve")],
     ).matches[0]
     assert strong.score > weak.score
 
