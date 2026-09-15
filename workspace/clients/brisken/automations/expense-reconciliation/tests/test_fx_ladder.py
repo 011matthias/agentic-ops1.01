@@ -171,8 +171,17 @@ def test_derived_rate_resolves_via_reference_path():
 
 def test_contested_receipt_is_demoted_to_judgment():
     """Two charges agree equally cleanly with one receipt's base amount:
-    neither may auto-match; both candidates defer."""
-    t1, t2 = _tx("2838:1", "9.69"), _tx("2838:2", "9.69", vendor="OTHER")
+    neither may auto-match; both candidates defer.
+
+    Both rivals carry the receipt's merchant, so the round-B vendor
+    dominance rule (2026-09-15) cannot separate them either. Before round B
+    this fixture gave the second charge the vendor "OTHER", which made the
+    first one dominant; that shape is now
+    `test_vendor_dominance_keeps_the_pair_whose_merchant_agrees` and this
+    one pins what the gate is actually for: equal evidence resolves for
+    nobody.
+    """
+    t1, t2 = _tx("2838:1", "9.69"), _tx("2838:2", "9.69")
     outcome = match_month([t1, t2], [_receipt()], MatchingConfig())
     assert outcome.matches == []
     assert {m.match_type for m in outcome.judgment_required} <= {
@@ -184,8 +193,11 @@ def test_contested_receipt_is_demoted_to_judgment():
 
 
 def test_charge_with_two_clean_receipts_is_demoted():
+    """One charge, two equally-clean receipts, same merchant on both: the
+    charge resolves for neither (round-B note: the receipts must agree on
+    the merchant, or dominance separates them by design)."""
     r1 = _receipt("ER#1")
-    r2 = _receipt("ER#2", vendor="Someone Else")
+    r2 = _receipt("ER#2")
     outcome = match_month([_tx()], [r1, r2], MatchingConfig())
     assert outcome.matches == []
 

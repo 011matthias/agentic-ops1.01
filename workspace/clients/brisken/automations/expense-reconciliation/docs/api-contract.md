@@ -2020,3 +2020,38 @@ four row fields; `basis` itself is parallel per rule 1 and absent on every
 vendor/date group. Pinned by `tests/test_view_contract.py`; no SPA change
 is needed (the duplicates prompt already renders groups and row markers;
 `basis` is optional display).
+
+## Why a rate-derived pair kept its match: the `reason` clause (item 69 round B)
+
+**No new field, and no field retyped.** The bilateral-uniqueness gate now
+lets a clean rate-derived pair (`match_type` `fx_base_amount` /
+`fx_reference`) keep its auto-resolution right in two cases it used to
+withdraw it: when every rival is already claimed by a bank-printed EXACT
+match elsewhere ("spoken for"), and when the merchant agrees on this pair
+and on no rival ("vendor dominance"). Both are decided in
+`matching.deterministic.uniqueness_verdicts`, which `match_month` applies
+and `tools/recon-match-attribution.py` reads, so the matcher and its judge
+cannot drift apart.
+
+What a consumer sees is `rows[].candidates[].reason` on such a pair,
+carrying one more sentence after the evidence:
+
+```
+"... Kept deterministic: the rival pairing is spoken for."
+"... Kept deterministic: the merchant agrees (1.00) and no rival's does (best 0.31)."
+```
+
+A pair that never had a rival keeps its reason exactly as before, so no
+existing string moves. The demotion clause is unchanged
+("Demoted to judgment: this rate-derived pairing is not conclusive (...)"),
+and a card-contradicted pair is still demoted whatever its rivals or its
+merchant say. `reason` is already free prose the SPA renders verbatim; a
+consumer that matches on it should keep matching on the leading evidence
+text, never on the whole string.
+
+The consequence a month shows: rows that read "Awaiting decision" with the
+right charge sitting first now read reconciled, with `requires_review`
+false on the chosen candidate. Measured on the two live months, July moved
+5 receipts and August 1 (that one through the masked-BIN fix in
+`_card_keys`, where a digit run immediately followed by a mask character is
+the issuer's BIN and names no card at all). No SPA change is needed.

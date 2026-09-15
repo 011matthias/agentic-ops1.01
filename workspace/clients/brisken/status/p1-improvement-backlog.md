@@ -2874,6 +2874,149 @@ grid wiring, the reference groups in the receipts-add headline, the legacy
 `duplicate_receipts` alignment). Scorer 49.8 / 15.7 / 65.5, 55/95,
 determ_wrong 0, guard 4/4, calibrate exit 0 on all six bundles, unchanged.
 
+**Round B built and measured (2026-09-15, this branch).** A clean pair keeps
+its match when its rivals are spoken for or name another merchant. Three
+changes in `matching/deterministic.py`, no threshold moved.
+
+`uniqueness_verdicts(candidates, cfg)` is now the gate, public, taking the
+FULL candidate set before assignment and returning a verdict per
+rate-derived pair. `match_month` applies it and
+`tools/recon-match-attribution.py`'s `trace_candidates` imports it instead
+of mirroring the rules, so the matcher and the judge that measures it cannot
+drift apart (that was a real exposure: the tool carried its own copy of the
+rules and would have gone on reporting the old gate's classes). The verdict
+decides in order: a contradicted card is demoted, always, and neither
+refinement can rescue it; a pair with no rate-derived rival is kept with its
+reason untouched; **(1) spoken for** subtracts any rival CHARGE that holds an
+EXACT candidate with some receipt, or rival RECEIPT that holds an EXACT
+candidate with some charge, because bank-printed evidence has already
+claimed it and it cannot take this pairing too; **(2) vendor dominance**
+keeps a pair that still has a live rival when its own `_vendor_score` is
+>= `uniqueness_vendor_dominance_min` (0.5) and beats every rate-derived
+rival's by `uniqueness_vendor_dominance_margin` (0.25). Vendor only ever
+PROMOTES a pair that already carries clean rate evidence, the opposite
+direction from the FX vendor floor the S1 run refuted. Knobs
+`uniqueness_spoken_for` (bool), `uniqueness_vendor_dominance_min` and
+`_margin` (float), in `_TUNABLE_BOOL` / `_TUNABLE_FLOAT` and written into
+`config/match-tuning.json` at the same values, so `test_match_tuning.py`'s
+`from_file(TUNING_FILE) == MatchingConfig()` proves the lockstep; `min` 0.0
+disables rule 2, and both knobs off is exactly the 2026-07-23 gate. A pair
+kept by (1) or (2) says so in its reason, which the SPA renders verbatim
+("... Kept deterministic: the rival pairing is spoken for." / "... the
+merchant agrees (1.00) and no rival's does (best 0.31)."); a pair that never
+had a rival keeps its reason byte for byte, so no existing string moves.
+Documented in `api-contract.md` (no new field, none retyped).
+
+Third change, the masked BIN in `_card_keys`: a digit run IMMEDIATELY
+followed by a mask character (`X x * #` or a bullet) is the issuer's BIN, so
+`_card_keys("42463153XXXXXX38")` is now the empty set (unknown card, no
+scoping) instead of `{"42463153", "3153"}` (a card absent from every
+statement). Round A deliberately pinned the old behaviour so round B had to
+flip it consciously; `test_a_masked_bin_lends_today_and_round_b_flips_it` is
+now `test_a_masked_bin_no_longer_lends_round_b_flipped_it` and asserts the
+`PAYE` billet keeps `PAYE`. Every existing spelling keeps its keys
+(`"VISA - ******0340"` -> `{"340"}`, `"CorpServ 2838/1672 (Chase)"` ->
+`{"2838", "1672"}`, `"************3876"` -> `{"3876"}`, `"...2544"` ->
+`{"2544"}`), all pinned. **Correction to this round's prompt:** it listed
+those as `{"2838","838","1672","672"}` and `{"3876","876"}`; `_card_keys`
+emits the run and its leading-zero-stripped LAST FOUR, which for a 4-digit
+run is the run itself, so the three-digit forms never existed. The tests pin
+what the function actually returns. **Boundary, stated rather than assumed:**
+the rule is "immediately followed", so a grouped spelling
+(`"4246 3153 **** **38"`) still reads its groups as identifiers. Neither
+live month contains one, and widening across separators would drop a real
+card out of an ordinary label like `"Card 1234 - XYZ Ltd"`, where losing the
+card also loses the contradiction gate's protection. Pinned as a boundary
+test; reopen with a spelling that occurs, not with a hypothesis. `cards.py`
+keeps its own digit logic for the card-review strip (item 35's
+canonical-grouping half is still open) and is untouched here: it still
+prints `42463153` as a card ending.
+
+Measured, labels as judge, on a DB copy pulled after round A's live re-match
+(before = `origin/main` `63209b67`, after = this branch, same copy,
+`RECON_MODULE_SRC` proving which tree measured each). Both months' BEFORE
+read parity OK with the hosted outcome, so the baseline IS what Criss sees
+today:
+
+| class | July before | July after | August before | August after |
+|---|---|---|---|---|
+| resolved_clean | 26 ($2,658.25) | **31 ($2,739.28)** | 7 ($1,147.34) | **8 ($1,184.53)** |
+| wrong (any) | 0 | 0 | 0 | 0 |
+| matched_unverifiable | 0 | 0 | 0 | 0 |
+| demoted_uniqueness | 10 ($181.13) | **5 ($100.10)** | 1 ($209.21) | 1 ($209.21) |
+| demoted_card | 0 | 0 | 1 ($37.19) | **0** |
+| dup_copy_collapsed | 4 | 4 | 11 | 11 |
+| dup_false_positive | 1 | 1 | 0 | 0 |
+| coverage (all four classes) | 5 | 5 | 9 | 9 |
+| excluded_ambiguous | 4 | 4 | 2 | 2 |
+| unlabeled_unmatched | 1 | 1 | 0 | 0 |
+| review (correct teed up / other) | 10 / 1 | 5 / 1 | 2 / 1 | 1 / 1 |
+
+Six bundles: deterministic 55 -> **70 of 95**, demoted_uniqueness 36 -> 21,
+wrong 0 throughout. Pinned scorer + guard (standalone since PR #871): train
+49.8 -> **56.8**, holdout 15.7 -> **19.2**, all 65.5 -> **76.0**, determ_ok
+55/95 -> 70/95, determ_wrong 0, nc_matched 0, invariant OK, guard 4/4 PASS,
+calibrate exit 0 on all six. No split dropped, no resolved_clean receipt
+lost anywhere.
+
+Every one of the six live-month gains is label-confirmed and lands on a
+charge whose merchant is visibly the receipt's: `0031` Enchilada Karlsruhe
+30.00 EUR -> `ENCHILADA KARLSRUHE` 34.39 (the rival was `Wix.com` 34.36),
+`0052` -> `WILLAMS RONALD DA SIL` 1.97 (rival `BEATRYZ RI` 1.98), `0057` ->
+`MP *24HBEBIDAS` 24.88, `0058` -> `SUPERMERCADO FENIX` 9.82 (rival
+`POSTO SANTOS` 9.80), `0063` -> `SUPERMEC SAO JOSE` 10.23 (rival
+`GITHUB INC.` 10.00), and August `0000` SARL TRAIN'S 32.00 EUR ->
+`PETIT TRAIN TOUR` 37.48 through the masked-BIN fix.
+
+**Deviations from the plan's prediction, all measured, none tuned away.**
+July landed exactly as predicted (26 -> 31, review 10 -> 5). August was
+predicted "7 -> 8 plus the Petit Train receipt from the masked-BIN fix"; the
+actual is 7 -> 8 total, because the Petit Train receipt IS the SARL TRAIN'S
+billet `0000` and the gate refinements moved nothing else in August. The
+prediction double-counted one receipt. Six bundles 55 -> 70, not 71;
+holdout 13 -> 18 of 22, not 19. Train scored 56.8, the predicted figure
+exactly.
+
+**The one honest cost, reported rather than netted out.** On the six
+bundles, 12 receipts moved `excluded_ambiguous` -> `matched_unverifiable`:
+receipts the labeler refused to rule on under the exclusion discipline,
+which the matcher now auto-resolves. Every one is a vendor-dominance
+promotion onto a charge naming the SAME merchant: `Hotel Giolli Nazionale`
+-> `HOTEL GIOLLI NAZIONALE`, `Mega Center Comercio De Materiais De
+Construcao Ltda` -> `MEGA CENTE CONSTR` (the truncation the vendor scorer
+was built for), `Bella Sky Hotel AP` -> `BELLA SKY HOTEL APS`, `Lagkagehuset`
+-> `271 LAGKAGEHUSET`, `NOVOTEL LISBOA` -> `REST NOVOTEL LISBOA` (twice, on
+distinct amounts), `FraSec Services GmbH` -> `FraSec Services GmbH / MW`,
+and five more of the same shape. None contradicts a label: no `no_charge`
+receipt was auto-matched anywhere (`nc_matched` 0 on every bundle) and
+`review_no_charge` is unchanged at 30/1/0/0/5/6. The class name means "the
+label set cannot verify it", not "the evidence is thin". Recorded because it
+is the precision surface a later round would have to re-examine if a wrong
+pair ever surfaces there.
+
+**Item 72's live instance is NOT closed, contrary to the plan's guess.**
+`0023` (Anthropic 52.59) is still `ambiguous` on August after the change,
+byte for byte. The plan expected the spoken-for rule to dissolve its tie
+with `0021` on ANTHROPIC 50.52. It does not: "spoken for" lives in the
+bilateral-uniqueness gate, and `0023` is stopped by pass-1 AMBIGUITY
+detection (`_ties` over deterministic candidates), a different mechanism the
+gate never reaches. Extending "spoken for" into tie detection is a real and
+probably correct change; it is not in round B's scope and was not made. Item
+72's persistence split stays open with its live instance intact.
+
+Suite 1800 -> **1831 passed / 2 skipped** (+31). Four regress proofs, each
+green -> RED -> green, one per fix: disabling `if
+cfg.uniqueness_spoken_for:` reddens the spoken-for shape AND the route test;
+disabling `cfg.uniqueness_vendor_dominance_min > 0.0` reddens the dominance
+shape and both keep-side margin cases; disabling the mask check in
+`_card_keys` reddens the masked-BIN pin and the flipped round-A test. The
+fourth is the wiring proof that matters most: mutating the MATCHER's
+spoken-for clause reddens `tools/tests/test_recon_match_attribution_gate.py`,
+which can only happen because the tool imports the shared gate rather than
+mirroring it. Ruff clean on the diff; `preflight-hooks.py --full` OK (1509
+passed, 1 skipped). No SPA change and no Lovable prompt: `reason` is already
+rendered verbatim on every candidate.
+
 ### 70. Changes in a month that did not stick (Criss 2026-09-14, owner report 2026-09-15)
 
 Criss, app feedback 2026-09-14 06:57 UTC, July: "Qdo entro na categoria e

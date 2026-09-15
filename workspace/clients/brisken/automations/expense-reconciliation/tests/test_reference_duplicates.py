@@ -668,24 +668,30 @@ def test_an_operator_assigned_hint_word_is_not_overwritten():
     assert ent[0].payment_mode == "Link" and ent[0].legal_entity_id == "Consulting"
 
 
-def test_a_masked_bin_lends_today_and_round_b_flips_it():
-    """Pins the August 2026 `0000` / `0018` Petit Train shape AS IT IS.
-    `_card_keys("42463153XXXXXX38")` reads the masked BIN as a card
-    ({"42463153", "3153"}), so the inheritance treats `0000` as
-    card-bearing and lends that string to the `PAYE` copy `0018`, while
-    the card chain reads the same string as an absent card. Round B's
-    masked-BIN fix in `_card_keys` (a digit run followed by a mask character
-    is a card PREFIX) closes both; when it lands, this test has to be
-    flipped consciously, not silently."""
+def test_a_masked_bin_no_longer_lends_round_b_flipped_it():
+    """The August 2026 `0000` / `0018` Petit Train shape, after round B.
+
+    Round A pinned this AS IT WAS and said the flip had to be conscious:
+    `_card_keys("42463153XXXXXX38")` read the masked BIN as a card
+    ({"42463153", "3153"}), so the inheritance treated `0000` as
+    card-bearing and lent that string to the `PAYE` copy `0018`, while the
+    card chain read the same string as an ABSENT card and the
+    card-contradiction gate demoted the receipt's true pair.
+
+    Round B (2026-09-15) made a digit run immediately followed by a mask
+    character a card PREFIX, so the string carries no card at all, which is
+    what it actually says. Nothing is lent, and on the live August month
+    `0000` went from `demoted_card` to a clean match on PETIT TRAIN TOUR.
+    """
     from expense_recon.matching.deterministic import _card_keys
 
-    assert _card_keys("42463153XXXXXX38") == {"42463153", "3153"}
+    assert _card_keys("42463153XXXXXX38") == set()
     train = _receipt("0000", "16530", total="37.19", currency="EUR",
                      vendor="SARL TRAIN'S", payment_mode="42463153XXXXXX38")
     billet = _receipt("0018", "16530", total="37.19", currency="EUR",
                       vendor="Le Petit Train", payment_mode="PAYE")
     out = inherit_card_from_copies([train, billet])
-    assert out[1].payment_mode == "42463153XXXXXX38"
+    assert out[1].payment_mode == "PAYE"
 
 
 # ── route: the reviewer's ignore frees the card-less copy (review F3) ────
