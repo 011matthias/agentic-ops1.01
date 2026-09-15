@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-15 | Expense-Recon Matching Round B | client-dev | [→](docs/2026-09-15%20-%20Expense-Recon%20Matching%20Round%20B/Checkpoint.md) |
 | 2026-09-15 | Expense-Recon Matching Round B | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Matching%20Round%20B/Mini-Checkpoint-2.md) |
 | 2026-09-15 | Brisken P1 Edits Stick, Card List, Scorer Repin, Matching Round A | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Edits%20Stick%2C%20Card%20List%2C%20Scorer%20Repin%2C%20Matching%20Round%20A/Checkpoint.md) |
 | 2026-09-15 | Brisken P1 Item 54 Refuted Before Build | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Item%2054%20Refuted%20Before%20Build/Checkpoint.md) |
