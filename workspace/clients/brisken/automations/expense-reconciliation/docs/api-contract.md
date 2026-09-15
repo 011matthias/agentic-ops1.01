@@ -259,6 +259,38 @@ reconciled 0 against receipts that were in the pool. The SPA needs nothing
 new to display the result; the parse warning `sign convention inferred`
 appears in `parse_issues` when the workbook has no Type column.
 
+### A statement that holds no charge is refused (added 2026-09-15, item 51)
+
+`POST /api/expense-batches/{id}/statement` still replies `{ok, job_id}`; the
+refusal arrives on the JOB, as `status: "error"` with the reason, exactly
+like the re-read's. No new field, and no new status: the SPA's existing
+attach poller already renders a job error.
+
+An upload whose columns map cleanly and whose rows the parser then reads as
+no charge at all is refused before anything is written. Nothing changes: no
+charge, no `statements[]` entry, no `statement_anchors` entry, and no
+graduation to the workbench, so the month stays the open expense batch it
+was. Until 2026-09-15 that upload finished `done`, recorded
+`statements[{"n_rows": 0, "n_new": 0}]`, and graduated the month, which on
+screen is indistinguishable from a statement that reconciled.
+
+The column-map `400` is the neighbouring guard and does not overlap: it
+fires on a file MISSING a required column, and this file has every column
+it needs. What produces it instead is the wrong worksheet, a header row
+below the first row, or a date format the parser does not read; the message
+names the file and the worksheet that was read.
+
+The refusal keys on `n_rows`, never on `n_new`. Zero NEW charges is the
+ordinary result of the same file arriving twice, which the fold absorbs and
+which stays a `done` job with an `n_new: 0` entry.
+
+`POST /api/expense-batches/{id}/statements/reread` refuses on the same
+shape, where it matters more: the re-read REPLACES the charge set, so a
+stored file that recorded rows and now reads none would take its charges
+out of the month silently. The job reports which file, nothing is written.
+An entry already recorded with `n_rows: 0` is exempt, so a month that took
+an empty file before this guard existed can still be re-read.
+
 ## Month health: `summary.month_health` (added 2026-09-11, item 57)
 
 On BOTH payloads, always present:

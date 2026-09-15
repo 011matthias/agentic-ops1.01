@@ -7086,10 +7086,11 @@ def statement_anchors(run: RunRow, file: str) -> dict[str, int] | None:
     charges it happened to introduce.
 
     "Recorded and EMPTY" is not "not recorded", and the difference is
-    load-bearing: a workbook that parsed no rows has a real, empty map, and
-    treating that as "no map" would drop the writeback back to placing every
-    charge in the month by its own row number, writing other files' accounts
-    into a workbook that has no charges at all.
+    load-bearing: a PDF statement has a real, empty map, and treating that
+    as "no map" would drop the writeback back to placing every charge in the
+    month by its own row number. The other way to reach an empty map used to
+    be a workbook that parsed no rows; since item 51 that upload is refused
+    before it is recorded, so a workbook always has the rows it printed.
     """
     per_file = (run.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}
     if file not in per_file:
@@ -7125,6 +7126,36 @@ def _statement_period(transactions: list) -> tuple[str | None, str | None]:
     if not dates:
         return None, None
     return min(dates).isoformat(), max(dates).isoformat()
+
+
+def statement_read_nothing(upload_name: str, sheet_name: str | None) -> str:
+    """The refusal for a statement file that mapped cleanly and then yielded
+    no charge at all (item 51).
+
+    The column-map 400 already catches a file MISSING a required column. It
+    cannot catch a file whose columns map fine and whose rows the parser
+    then reads as nothing, which is what a wrong worksheet, a header row
+    that is not the first row, and a date format the parser rejects all
+    look like from here. Before this refusal the attach returned
+    `200 {"ok": true}`, the job finished `done`, and the month recorded
+    `n_rows: 0` — and then graduated to the reconciliation workbench with
+    zero charges, so on screen it read as a month that had taken its
+    statement. Criss would have had no way to tell that from a month that
+    reconciled.
+
+    Deliberately keyed on `n_rows`, never on `n_new`. Zero NEW charges is
+    the ordinary result of the same file arriving twice, which the fold
+    exists to absorb; zero ROWS means the file held nothing, and that is
+    never a legitimate outcome for a statement.
+    """
+    where = f" (sheet {sheet_name})" if sheet_name else ""
+    return (
+        f"{upload_name}{where} mapped cleanly but held no charge the parser "
+        "could read, so nothing was added and this month is unchanged. The "
+        "usual causes are the wrong worksheet, a header row below the first "
+        "row, or a date format the parser does not read. Check the file and "
+        "attach it again."
+    )
 
 
 def build_statement_entry(
@@ -8445,6 +8476,17 @@ def execute_statement_attach(
         settings=settings,
         on_stage=on_stage,
     )
+    if not transactions:
+        # Item 51. Refuse before the fold, so the month keeps exactly the
+        # state it had: no charge, no `statements[]` entry, no graduation
+        # to the workbench. The saved upload stays on disk and is inert —
+        # nothing reads the work dir, only `statements[]`.
+        raise RunInputError(
+            statement_read_nothing(
+                upload_name or stmt_name,
+                (new_cfg.get("statement") or {}).get("sheet_name"),
+            )
+        )
     merged = merge_transactions(month_transactions(run), transactions)
 
     return rematch_month(
@@ -8643,6 +8685,19 @@ def reread_statements(
             settings=settings,
             on_stage=on_stage,
         )
+        if not txs and (entry.get("n_rows") or 0):
+            # Item 51 through the other door, and worse here: a re-read
+            # REPLACES the charge set, so a file that used to hold rows and
+            # now reads none takes its charges out of the month silently.
+            # Same deny-by-default as a missing file or an unresolvable map.
+            # Keyed on the RECORDED count so a month that already holds a
+            # zero-row entry (recorded before the attach refused one) can
+            # still be re-read rather than being wedged by this guard.
+            raise RunInputError(
+                f"statement file {stored} held {entry['n_rows']} charges "
+                "when it was uploaded and now reads none; nothing was "
+                "changed"
+            )
         merged = merge_transactions(transactions, txs)
         transactions = merged.transactions
         issues.extend(stmt_issues)
