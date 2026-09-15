@@ -48,6 +48,15 @@ The response check fails OPEN on purpose. A gate that refuses to close on a
 drive that actually happened becomes noise, and noise gets approved reflexively
 -- which is the exact failure this hook exists to avoid.
 
+WRITING ABOUT A DEPLOY IS NOT DEPLOYING (fixed 2026-09-15)
+----------------------------------------------------------
+The gate scans the whole Bash command string, and a commit message arrives
+inside it. Committing the session-scope fix below opened a marker, because the
+message explains the bug and so contains the words "fly deploy". Heredoc bodies
+consumed by a message-writing command, and the values of -m / --body / --title,
+are therefore dropped before matching. A heredoc piped to a shell is left
+alone: that one really does run.
+
 ONE MARKER PER SESSION (fixed 2026-09-15)
 -----------------------------------------
 The marker was a single file in the machine's temp dir, and this repo runs
@@ -313,6 +322,35 @@ def deploy_label(view: str) -> str:
     return m.group(1) if m else "the deploy"
 
 
+# Commands whose payload is PROSE: what follows is written down, not run.
+# Kept to the message-writing verbs, so a heredoc piped to a shell is still
+# read as commands.
+PROSE_COMMANDS = r"(?:git\s+(?:commit|tag)|gh\s+(?:pr|issue|release)\s+\w+)"
+# Flags whose value is always prose, wherever they appear.
+PROSE_FLAGS = r"(?:-m|--message|--body|--title|--notes|--description)"
+
+
+def strip_authored_prose(cmd: str) -> str:
+    """Drop text the command WRITES, keeping text it RUNS.
+
+    Committing the session-scope fix opened a marker: the message explains the
+    bug, so it contains the words "fly deploy", and the gate scans the whole
+    command string. Writing about a deploy is not deploying, and a gate that
+    cannot tell the two apart teaches its reader to dismiss it.
+
+    Two removals. A heredoc body, but only when a message-writing command is
+    consuming it -- `bash <<'EOF' ... flyctl deploy ... EOF` genuinely deploys
+    and must still be caught. And the value of a message flag anywhere, because
+    -m and --body never carry commands.
+    """
+    out = re.sub(
+        PROSE_COMMANDS + r"[^\n]*?<<-?\s*['\"]?(\w+)['\"]?\s*\n.*?\n\1\b",
+        " ", cmd, flags=re.DOTALL | re.IGNORECASE)
+    out = re.sub(PROSE_FLAGS + r"\s+'[^']*'", " ", out)
+    out = re.sub(PROSE_FLAGS + r'\s+"[^"]*"', " ", out)
+    return out
+
+
 def matches_any(text: str, patterns) -> bool:
     return any(re.search(p, text, re.IGNORECASE) for p in patterns)
 
@@ -513,7 +551,7 @@ def handle_post(event: dict) -> int:
     cmd = (event.get("tool_input") or {}).get("command", "") or ""
     if not cmd:
         return 0
-    view = normalize_command(cmd)
+    view = normalize_command(strip_authored_prose(cmd))
 
     if matches_any(view, BROWSER_OBSERVE_CMD_PATTERNS):
         if not pending:

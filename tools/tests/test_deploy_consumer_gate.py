@@ -427,3 +427,50 @@ def test_a_payload_without_a_session_id_still_tracks(tmp_path):
     post_as(tmp_path, "", "Bash", "flyctl deploy -a brisken-recon")
     reason = stop_as(tmp_path, "", CLAIM)
     assert reason is not None and "CONSUMER NOT DRIVEN" in reason
+
+
+# ---- Writing about a deploy is not deploying ----------------------------
+#
+# The gate sees the whole Bash command string, and a commit message lives
+# inside it. Committing the session-scope fix opened a marker, because the
+# message explains the bug and therefore contains the words "fly deploy".
+
+COMMIT_ABOUT_A_DEPLOY = """git commit -F - <<'EOF'
+hooks: scope the deploy-consumer marker
+
+A sibling's fly deploy opened the marker and blocked another session.
+EOF"""
+
+
+def test_a_commit_message_about_a_deploy_opens_nothing(tmp_path):
+    assert post(tmp_path, "Bash", COMMIT_ABOUT_A_DEPLOY) == ""
+
+
+def test_a_commit_dash_m_about_a_deploy_opens_nothing(tmp_path):
+    assert post(tmp_path, "Bash",
+                'git commit -m "note: flyctl deploy broke the marker"') == ""
+
+
+def test_a_pr_body_about_a_deploy_opens_nothing(tmp_path):
+    assert post(tmp_path, "Bash",
+                'gh pr create --title "x" --body "fixes the fly deploy gate"') == ""
+
+
+def test_a_heredoc_piped_to_a_shell_still_opens(tmp_path):
+    """The syntax is the same; the meaning is not. This one runs."""
+    out = post(tmp_path, "Bash", "bash <<'EOF'\nflyctl deploy -a brisken-recon\nEOF")
+    assert "CONSUMER NOT DRIVEN" in out
+
+
+def test_a_real_deploy_beside_a_commit_still_opens(tmp_path):
+    out = post(tmp_path, "Bash",
+               'flyctl deploy -a brisken-recon && git commit -m "ship it"')
+    assert "CONSUMER NOT DRIVEN" in out
+
+
+def test_a_commit_message_does_not_close_an_open_marker(tmp_path):
+    """The mirror of the same confusion: prose mentioning playwright must not
+    count as a drive."""
+    post(tmp_path, "Bash", "flyctl deploy -a brisken-recon")
+    post(tmp_path, "Bash", 'git commit -m "ran playwright snapshot earlier"')
+    assert stop(tmp_path, CLAIM) is not None
