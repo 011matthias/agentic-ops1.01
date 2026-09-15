@@ -2668,8 +2668,26 @@ Decision 1 (Google pair) ruled 2026-09-15: leave the reviewer's ruling; the
 group stays confirmed and one Google charge stays unmatched. Decision 3
 ruled 2026-09-15: re-pinned, PR #871.
 
-**Round A shipped (2026-09-15, branch `client/brisken/p1-matching-round-a`,
-not yet merged or deployed).** One purchase is one candidate by its number.
+**Round A shipped (2026-09-15, PR #874, merge `65031158`, Fly v130, and both
+live months re-matched through `refresh-master-data` the same evening).** One
+purchase is one candidate by its number.
+
+**What the live re-match did, read off the app afterwards.** July: unchanged,
+26 reconciled / 12 review / 73 unmatched charges, 16 judgments reused, 0 new
+model calls. August: matched 11 -> 8 and unmatched charges 96 -> 100, which is
+exactly the three wrong pairings plus the unverifiable one being released (2
+new judgments). On the live API afterwards, `0025` (Lovable 50 invoice) and
+`0015` (Anthropic 100 invoice) hold no charge, and `0021` holds the exact
+ANTHROPIC 51.38 on card 3645; the reference-keyed groups render 3 on August
+(Petit Train, Anthropic 100, Anthropic 51.38) and 2 on July (Hostinger bodies,
+Redis invoice + body). Browser-driven on August's workbench: both BASE44
+charges now read NEAR MISS / "Awaiting decision" with a "closest free receipt"
+note instead of holding a stranger's invoice, and the Aug 05 ANTHROPIC 51.38
+charge renders its own receipt at 99%. September was not re-matched and did
+not need to be: the grid and the export apply the inheritance to every batch,
+so its MISSING ENTITY count drops 21 -> 17 on the deploy alone (measured
+before the ship on a copy of the live DB).
+
 `duplicates.find_duplicate_receipts_by_reference` is the second key:
 upper-cased alphanumerics of `detected_reference` (at least 5 characters;
 a digit-only string equal to the receipt's own date in YYYYMMDD / DDMMYYYY /
