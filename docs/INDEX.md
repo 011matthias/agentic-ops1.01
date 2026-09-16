@@ -12,6 +12,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-16 | Expense-Recon Item 73 | client-dev | [→](docs/2026-09-16%20-%20Expense-Recon%20Item%2073/Checkpoint.md) |
+| 2026-09-16 | Expense-Recon Item 77 | client-dev | [→](docs/2026-09-16%20-%20Expense-Recon%20Item%2077/Checkpoint.md) |
 | 2026-09-16 | Expense-Recon Item 77 | client-dev | [Mini-Checkpoint-1](docs/2026-09-16%20-%20Expense-Recon%20Item%2077/Mini-Checkpoint-1.md) |
 | 2026-09-16 | Expense-Recon Item 73 | client-dev | [Mini-Checkpoint-2](docs/2026-09-16%20-%20Expense-Recon%20Item%2073/Mini-Checkpoint-2.md) |
 | 2026-09-16 | Expense-Recon Month Views Live | client-dev | [→](docs/2026-09-16%20-%20Expense-Recon%20Month%20Views%20Live/Checkpoint.md) |
@@ -540,6 +541,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## Brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-16 | Expense-Recon Item 74 | client-dev | [Mini-Checkpoint-2](docs/2026-09-16%20-%20Expense-Recon%20Item%2074/Mini-Checkpoint-2.md) |
 | 2026-08-21 | Brisken Intake Round 2 + Overview | client-dev | [→](docs/2026-08-21%20-%20Brisken%20Intake%20Round%202%20%2B%20Overview/Checkpoint.md) |
 | 2026-08-21 | Brisken Mail Intake Live | client-dev | [Mini-Checkpoint-2](docs/2026-08-21%20-%20Brisken%20Mail%20Intake%20Live/Mini-Checkpoint-2.md) |
 
