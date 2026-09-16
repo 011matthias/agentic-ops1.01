@@ -69,7 +69,8 @@ receives after `jsonable_encoder`.
 | `unmatched_receipts[].line_items[]` | object |
 | `duplicate_groups[]` | object |
 | `duplicate_groups[].members[]` | string |
-| `duplicate_charges[]` · `duplicate_receipts[]` | array of objects |
+| `duplicate_receipts[]` | array of objects |
+| `duplicate_charges[]` | array, ALWAYS EMPTY since item 74 (charge-side detection deleted) |
 | `duplicate_receipts[][].line_items[]` | object |
 | `summary.setup_advisories[]` | object |
 | `statements[]` | object |
@@ -167,6 +168,7 @@ name answers the same one:
 | `n_rejected_pairings` | run payload only: how many (charge, receipt) pairings the reviewer has turned down (item 16). Pairings, not rows: a rejected charge that never had a candidate refused nothing and counts nothing |
 | `n_amounts_unreadable` | how many expenses carry an amount no total could read, so they are in no total (item 65): `totals_by_ccy` skips them and the report's listing cannot print them. The fix is reading the amount off the receipt, not a re-run |
 | `n_receipts_in_report` | how many expenses have a receipt PAGE in the built report (item 68). Not "how many have a file": a file that cannot be rendered is a file, and the caption page says so while the Receipt column used to say "attached". ABSENT until every row's verdict is known, so the count is never quietly short |
+| `n_duplicate_groups_open` | how many duplicate groups NOBODY has decided (item 74), the only ones that belong in a to-do list. The tool decides every group a rung applies to, so this is 0 unless one escaped the whole ladder. `n_duplicate_groups` keeps counting every group, decided or not |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -2313,3 +2315,77 @@ the response schema only, so the instructions every other field is read under
 stay unchanged (measured: listing them in the instructions re-read a real
 invoice as a statement). Never a matcher input: the Chase export carries no time of day. Item 74's duplicate
 ladder may use them.
+
+
+## Duplicates mean one thing each: `state` + `decided_by` + `verdict`, `basis` as the rung (item 74, 2026-09-16)
+
+Owner rulings (notes #37, #41, #45, #46): two charges to one vendor are two
+charges; the tool decides every receipt group and never asks; a decided item
+leaves the to-do area.
+
+**Charges.** Charge-side duplicate detection is deleted (the detector, the
+charge groups, their row markers, their counts, their section in the
+reconciliation PDF). `duplicate_charges[]` stays on the run payload as an
+ALWAYS-EMPTY list and `kind` stays on every group, so a consumer that pairs
+groups with their detail lists by kind keeps working; `kind` is now always
+`"receipt"` and `rows[].duplicate` is always `null`.
+
+**Receipt groups.** Three keys only NOMINATE a group (vendor + date + total +
+currency; one document number + total + currency; identical bytes). A ladder
+then decides each one; the first rung that applies wins and is recorded as
+`basis`:
+
+| Rung | `basis` | Verdict | When |
+|---|---|---|---|
+| 1 | `hash` | copy | identical bytes (`receipt_digests` in the snapshot, `sha1[:16]`, persisted at add and by every re-match) |
+| 2 | `reference` | copy | one normalized document number + total + currency |
+| 3 | `printed_reference` | copy | one document's PDF text layer prints another's normalized number (a Stripe receipt carries its own number and prints the invoice's). Read locally, no model call; a rendered body has no text layer and falls through |
+| 4 | `distinct_reference` | distinct | every member carries a usable number, the numbers differ, rung 3 negative |
+| 5 | `receipt_card` | distinct | two members name cards that share no identifier |
+| 6 | `vendor_date` | copy | vendor + date + total + currency, nothing disagreeing |
+| 7 | `statement` | distinct | after a match: a set-aside copy has its OWN exact same-currency charge sitting unmatched (inside the matcher's entity and card scope) while its kept copy settled another. Run once per re-match; the month is matched once more and not checked again |
+
+This REPLACES item 69 round A's `basis`, which was `"reference"` or absent:
+`basis` is now present on every group a rung decided, one of the seven
+values above, never null. The published SPA reads none of these keys.
+
+`duplicate_groups[]` gains three parallel fields; `resolution` keeps its
+meaning:
+
+| Field | Values | Rule |
+|---|---|---|
+| `state` | `open` \| `decided` | always present |
+| `decided_by` | `tool` \| `reviewer` | present when decided, absent when open |
+| `verdict` | `copy` \| `distinct` | present when decided, absent when open |
+
+A reviewer's saved ruling outranks the ladder in both directions:
+`resolution: "confirmed"` reads `verdict: "copy"`, `"ignore"` reads
+`"distinct"`, both `decided_by: "reviewer"`, and `basis` keeps what the tool
+found (July's Google group reads `basis: "distinct_reference"`,
+`decided_by: "reviewer"`, `verdict: "copy"` until its ruling is reset). The
+statement check never overrules a reviewer. "Not a copy" is the undo that
+writes `ignore`; "Same document" writes `confirmed`.
+
+**Every group stays in the payload**, decided or not, in the same order as
+`duplicate_receipts[]`: the SPA pairs `duplicate_groups[i]` with
+`duplicate_receipts[i]` BY INDEX within a kind (round A pinned it), and
+filtering decided groups out of one list would put every later group's
+receipts under the wrong group. Partition at render time only.
+
+What follows from `verdict`: only a `copy` collapses out of the matcher's
+pool, only a `copy` puts `duplicate` markers on its rows, and only a `copy`
+counts toward `n_duplicate_copies`. `summary.n_duplicate_groups_open` (both
+payloads) counts `state: "open"`; `n_duplicate_groups` still counts every
+group. The reconciliation PDF lists only open groups under "What needs
+attention" and records decided copies under "Copies set aside (N)" with the
+evidence in words.
+
+Card inheritance between copies (round A) is unchanged: it still lends over
+reference groups a reviewer has not ruled `ignore`.
+
+Pinned by `tests/test_view_contract.py`
+(`test_duplicate_group_fields_are_absent_or_enum_never_null`), route-level in
+`tests/test_reference_duplicates.py` (one test per rung) and
+`tests/test_web_duplicates.py` (charge groups gone, the resolution mapping,
+the index alignment). SPA half: `docs/lovable-duplicates-decided-prompt.md`,
+folded into item 79's month page.

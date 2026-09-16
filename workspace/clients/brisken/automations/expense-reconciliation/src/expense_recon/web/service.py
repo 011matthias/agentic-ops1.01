@@ -41,13 +41,14 @@ from ..cli import NON_RECEIPT_LABELS, ConfigError, generate_expenses, reconcile
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
 from ..duplicates import (
-    collapsed_duplicate_copies,
-    duplicate_group_id,
+    STATE_OPEN,
+    copies_to_collapse,
+    decide_receipt_groups,
     duplicate_row_flags,
-    find_duplicate_charges,
     find_duplicate_receipt_groups,
     inherit_card_from_copies,
     n_extra_copies,
+    restore_copies_with_their_own_charge,
 )
 from ..ingest._common import merge_transactions
 from ..matching.types import (
@@ -3275,82 +3276,47 @@ def build_view(
         if r["effective_bucket"] == "unmatched"
     ]
 
-    # Tier-1 #4: advisory duplicate / double-charge groups (flag only).
-    tx_by_id = {t.transaction_id: t for t in transactions}
-    duplicate_charges = [
-        [
-            {
-                "transaction_id": tid,
-                "vendor": tx_by_id[tid].vendor_from_statement,
-                "date": tx_by_id[tid].transaction_date.isoformat()
-                if tx_by_id[tid].transaction_date
-                else "",
-                "amount": _fmt_amount(tx_by_id[tid].amount),
-                "currency": tx_by_id[tid].transaction_currency,
-                "account_id": tx_by_id[tid].account_id,
-            }
-            for tid in grp
-            if tid in tx_by_id
-        ]
-        for grp in find_duplicate_charges(transactions)
-    ]
-    # Both receipt keys (vendor/date, then reference-only; item 69 round A),
-    # listed once so the legacy list, `duplicate_groups` and the counts read
-    # the same groups.
-    receipt_groups = find_duplicate_receipt_groups(receipts)
+    # Item 74 (owner ruling 2026-09-15): charge-side duplicate detection is
+    # deleted. The statement is the truth of what was charged, so two charges
+    # to one vendor are two charges. `duplicate_charges` stays in the payload
+    # as an always-empty list and `kind` stays on every group, so a consumer
+    # that pairs the lists by kind does not break; neither ever carries a
+    # charge again.
+    duplicate_charges: list = []
+    # Receipt groups, every one DECIDED by the ladder (item 74), listed once
+    # so the legacy list, `duplicate_groups` and the counts read the same
+    # groups in the same order. Every group stays in both lists, decided or
+    # not: the SPA pairs `duplicate_groups` with `duplicate_receipts` BY
+    # INDEX within a kind, and filtering one list would mislabel rows.
+    resolutions = resolutions or {}
+    receipt_decisions = duplicate_decisions(run, receipts, resolutions)
     duplicate_receipts = [
         [
             _receipt_view(
                 rec_by_id[d], overrides,
                 work_dir=rv_work_dir, expense_mode=rv_expense_mode,
             )
-            for d in grp if d in rec_by_id
+            for d in dec.members if d in rec_by_id
         ]
-        for grp, _basis in receipt_groups
+        for dec in receipt_decisions
     ]
 
     # §18: a flat, SPA-facing view of the duplicate groups with a stable,
-    # content-derived group_id and the reviewer's advisory resolution. The
-    # legacy `duplicate_charges` / `duplicate_receipts` lists above stay
-    # exactly as-is for the Jinja workbench; this is additive. Advisory
-    # only — a resolution never changes a bucket or the invariant.
-    resolutions = resolutions or {}
-    duplicate_groups = []
-    for grp in find_duplicate_charges(transactions):
-        members = [tid for tid in grp if tid in tx_by_id]
-        gid = duplicate_group_id("charge", members)
-        duplicate_groups.append({
-            "group_id": gid,
-            "kind": "charge",
-            "members": members,
-            "resolution": resolutions.get(gid),
-        })
-    # Item 69 round A: a group only the reference key finds says so with
-    # `basis: "reference"`; ABSENT on every vendor/date group, so the
-    # payload for a month without such a group is byte-identical.
-    for grp, basis in receipt_groups:
-        members = [d for d in grp if d in rec_by_id]
-        gid = duplicate_group_id("receipt", members)
-        entry = {
-            "group_id": gid,
-            "kind": "receipt",
-            "members": members,
-            "resolution": resolutions.get(gid),
-        }
-        if basis:
-            entry["basis"] = basis  # run view
-        duplicate_groups.append(entry)
+    # content-derived group_id and the reviewer's resolution, plus (item 74)
+    # the rung that decided it (`basis`), who decided (`decided_by`), what
+    # it is (`verdict`) and whether anything is still open (`state`).
+    duplicate_groups = [duplicate_group_entry(dec) for dec in receipt_decisions]  # run view
 
     # §18 (2026-08-28): the same groups, carried ON the row. A group is only
     # actionable if the reviewer can see which row is in it; until now the
     # ids lived in a side list, so the two Pressmaster copies in the April
     # batch sat on screen with nothing to tell them apart from any other
     # pair of rows. Parallel field: `duplicate` is None on every row in no
-    # live group, and on every payload built before this.
-    charge_dup_flags = duplicate_row_flags(duplicate_groups, kind="charge")
+    # live group, and on every payload built before this. A charge row is
+    # never in a group any more (item 74) and keeps the field as None.
     receipt_dup_flags = duplicate_row_flags(duplicate_groups, kind="receipt")
     for row in rows:
-        row["duplicate"] = charge_dup_flags.get(row["transaction_id"])
+        row["duplicate"] = None
     for rec in unmatched_receipts:
         rec["duplicate"] = receipt_dup_flags.get(rec.get("document_id"))
     # `assignable_receipts` is the hand-match picker and holds EVERY
@@ -3458,14 +3424,18 @@ def build_view(
         "setup_advisories": run.summary.get("setup_advisories", []),
         "llm_cost_usd": run.summary.get("llm_cost_usd", "0"),
         "ai_unavailable": run.summary.get("ai_unavailable", False),
-        "n_duplicate_groups": len(duplicate_charges) + len(duplicate_receipts),
+        "n_duplicate_groups": len(duplicate_receipts),
         # How many COPIES are redundant (every copy after the first in a
         # live group): the question "is this month's count inflated, and by
         # how much". `n_duplicate_groups` answers a different one and keeps
         # its meaning. Not "rows": a duplicate receipt that matched a charge
         # counts here and is not one of `rows[]`.
-        "n_duplicate_copies": (
-            n_extra_copies(charge_dup_flags) + n_extra_copies(receipt_dup_flags)
+        "n_duplicate_copies": n_extra_copies(receipt_dup_flags),
+        # Item 74(d): how many groups nobody has decided, the only ones that
+        # belong in a to-do list. The tool decides every group it can, so
+        # this is 0 unless a group escaped every rung.
+        "n_duplicate_groups_open": sum(
+            1 for dec in receipt_decisions if dec.state == STATE_OPEN
         ),
         # PR A — "Ready to post?" bar. Item 57: a broken month is never
         # ready, whatever the reviewer has (not) decided; `month_health`
@@ -5975,25 +5945,13 @@ def build_expense_view(
             "varies": False, "categories": [], "n_vendor_receipts": 1,
         })
 
-    # §18 duplicate flags, receipt-kind only (no charges in an expense
-    # batch), with the reviewer's advisory resolutions attached.
+    # §18 duplicate groups, receipt-kind only (no charges in an expense
+    # batch), each decided by the item-74 ladder with the reviewer's rulings
+    # outranking it: the same decisions, evidence and fields the run payload
+    # carries, so the grid and the workbench cannot disagree on a group.
     resolutions = resolutions or {}
-    rec_ids = {r.document_id for r in receipts}
-    duplicate_groups = []
-    # Item 69 round A: `basis: "reference"` on a group only the reference
-    # key finds, ABSENT on every vendor/date group.
-    for grp, basis in find_duplicate_receipt_groups(receipts):
-        members = [d for d in grp if d in rec_ids]
-        gid = duplicate_group_id("receipt", members)
-        entry = {
-            "group_id": gid,
-            "kind": "receipt",
-            "members": members,
-            "resolution": resolutions.get(gid),
-        }
-        if basis:
-            entry["basis"] = basis  # grid
-        duplicate_groups.append(entry)
+    grid_decisions = duplicate_decisions(run, receipts, resolutions)
+    duplicate_groups = [duplicate_group_entry(dec) for dec in grid_decisions]  # grid
 
     # The same groups carried ON the row (2026-08-28). This is the one
     # that matters most: an expense batch is where a twice-forwarded
@@ -6118,6 +6076,10 @@ def build_expense_view(
         # quietly disagreed with the rows above it would be worse than one
         # that is honestly too high with the reason marked on screen.
         "n_duplicate_copies": n_extra_copies(dup_flags),
+        # Item 74(d): groups nobody has decided; same rule as the run view.
+        "n_duplicate_groups_open": sum(
+            1 for dec in grid_decisions if dec.state == STATE_OPEN
+        ),
         "totals_by_ccy": {
             ccy: f"{amt:,.2f}" for ccy, amt in sorted(totals.items())
         },
@@ -8671,8 +8633,13 @@ def _add_receipts_locked(
         p for p in sorted(receipts_dir.iterdir())
         if p.is_file() and p.name in referenced
     ]
+    # Item 74: the same digests, kept by stored name, so the batch snapshot
+    # persists them (`RECEIPT_DIGESTS_KEY`) the way a statement run's
+    # `folder:{digest}` id always has.
+    add_digests: dict[str, str] = {}
     for p in existing_files:
-        existing_hashes.add(hashlib.sha1(p.read_bytes()).hexdigest()[:16])
+        add_digests[p.name] = hashlib.sha1(p.read_bytes()).hexdigest()[:16]
+        existing_hashes.add(add_digests[p.name])
 
     _stage("ingesting")
     issues: list[str] = []
@@ -8719,6 +8686,7 @@ def _add_receipts_locked(
         dest = receipts_dir / f"{n_index:04d}__{fs_name}"
         n_index += 1
         dest.write_bytes(data)
+        add_digests[dest.name] = digest
         if provenance_by_digest and digest in provenance_by_digest:
             new_provenance[dest.name] = provenance_by_digest[digest]
         receipt = None
@@ -8816,6 +8784,12 @@ def _add_receipts_locked(
     new_snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
     new_snapshot["outcome"] = outcome_to_dict(outcome)
     new_snapshot["expense_ingest"] = summary
+    # Item 74: every stored receipt's byte digest, merged over what the
+    # snapshot already held (the ladder's rung 1 reads it).
+    new_snapshot[RECEIPT_DIGESTS_KEY] = {
+        **(run.snapshot.get(RECEIPT_DIGESTS_KEY) or {}),
+        **add_digests,
+    }
     # Merge, don't replace: creation-time entries (and a legacy run's
     # derived ones, normalized here on first add) stay restorable.
     all_set_aside = set_aside_entries(run.snapshot) + new_set_aside
@@ -9695,11 +9669,14 @@ def rematch_month(
     # suppressed copies rejoin `unmatched_receipts` below, keeping the
     # reconciliation guarantee and their duplicate markers; a group the
     # reviewer ruled "not a duplicate" (`ignore`) is never collapsed.
-    collapsed = collapsed_duplicate_copies(
-        pool, store.get_duplicate_resolutions(run.run_id)
+    # Item 74: the ladder decides each group first (identical bytes, one
+    # document number, a page printing the other's number, two numbers, two
+    # cards, vendor + date), and only a `copy` verdict collapses.
+    pool_before_collapse = pool
+    pool, collapsed, dup_decisions = duplicate_pool(
+        run, pool, dup_resolutions
     )
-    if collapsed:
-        pool = [r for r in pool if r.document_id not in collapsed]
+    receipt_digest_map = receipt_digests(run, receipts)
     # R4b (item 38 ruling 3): the pool spans trips. Receipts from trips
     # overlapping this month's charge span join the candidate set --
     # already excluding anything another run settled (the same advisory
@@ -9728,6 +9705,17 @@ def rematch_month(
         borrowed_origins = {**borrowed_origins, **adjacent_origins}
     match_input = [*pool, *borrowed] if borrowed else pool
     outcome = match_month(transactions, match_input, match_cfg)
+    # Item 74, rung 7, once per re-match: a copy set aside while its own
+    # exact charge sits unmatched (and its kept twin settled another) is two
+    # purchases. Restore those groups and match ONCE more; nothing checks
+    # again, so the month cannot oscillate.
+    statement_restored, pool, collapsed = duplicate_statement_pass(
+        pool_before_collapse, dup_decisions, collapsed, transactions,
+        outcome, match_cfg,
+    )
+    if statement_restored:
+        match_input = [*pool, *borrowed] if borrowed else pool
+        outcome = match_month(transactions, match_input, match_cfg)
 
     _stage("judging")
     tx_by_id = {t.transaction_id: t for t in transactions}
@@ -9956,6 +9944,18 @@ def rematch_month(
             (fresh.snapshot or {}).get(EXTRACTED_RECEIPTS_KEY),
             [receipt_to_dict(r) for r in receipts0] + list(extra),
         )
+        # Item 74: the byte digests the ladder's first rung read (merged over
+        # the fresh row, so a receipt added mid-match keeps the digest its add
+        # wrote), and the groups this match's statement check restored, which
+        # the views read as `basis: "statement"`. Rewritten on every re-match.
+        new_snapshot[RECEIPT_DIGESTS_KEY] = {
+            **((fresh.snapshot or {}).get(RECEIPT_DIGESTS_KEY) or {}),
+            **receipt_digest_map,
+        }
+        if statement_restored:
+            new_snapshot[DUPLICATE_STATEMENT_KEY] = sorted(statement_restored)
+        else:
+            new_snapshot.pop(DUPLICATE_STATEMENT_KEY, None)
         if charge_categorizations:
             new_snapshot["charge_categorizations"] = {
                 tx_id: categorization_to_dict(c)
@@ -10974,3 +10974,178 @@ def move_expense_to_month(
         if rematch is not None:
             out[key] = rematch
     return out
+
+
+# ── Item 74: duplicates mean one thing each ──────────────────────────
+#
+# The evidence the duplicate ladder reads (`duplicates.decide_receipt_groups`)
+# and the one place both view builders, `rematch_month` and the attribution
+# tool turn a month's receipts into decided groups.
+
+# Snapshot key: document id -> sha1(bytes)[:16], the same digest a statement
+# run's `folder:{digest}` id carries and the ingest dedupe compares. Persisted
+# at add time and backfilled by every re-match, so a DB copy with no files
+# still knows which receipts are byte-identical.
+RECEIPT_DIGESTS_KEY = "receipt_digests"
+# Snapshot key: the group ids the last re-match's statement check (rung 7)
+# restored as two purchases. Rewritten by every re-match, never accumulated.
+DUPLICATE_STATEMENT_KEY = "duplicate_statement_restored"
+
+_FILE_EVIDENCE: dict[tuple[str, int, int, str], "str | None"] = {}
+_FILE_EVIDENCE_MAX = 4096
+
+
+def _file_evidence(path: Path, kind: str) -> "str | None":
+    """`sha1` (the 16-hex digest) or `text` (the PDF text layer through the
+    ingest's own `_pdf_text`, None for anything that is not a PDF) of one
+    stored file, memoized on (path, mtime, size) so a page render does not
+    re-read every receipt. Unreadable -> None, never an exception."""
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    key = (str(path), st.st_mtime_ns, st.st_size, kind)
+    if key in _FILE_EVIDENCE:
+        return _FILE_EVIDENCE[key]
+    value: "str | None"
+    try:
+        if kind == "sha1":
+            value = hashlib.sha1(path.read_bytes()).hexdigest()[:16]
+        elif path.suffix.lower() == ".pdf":
+            from ..ingest.receipts_folder import _pdf_text
+
+            value = _pdf_text(path)
+        else:
+            value = None
+    except Exception:  # noqa: BLE001 - a damaged file is evidence of nothing
+        value = None
+    if len(_FILE_EVIDENCE) >= _FILE_EVIDENCE_MAX:
+        _FILE_EVIDENCE.clear()
+    _FILE_EVIDENCE[key] = value
+    return value
+
+
+def receipt_digests(
+    run: RunRow, receipts: list[Receipt], *, work_dir: "Path | None" = None
+) -> dict[str, str]:
+    """document id -> byte digest for every receipt whose bytes are known:
+    the persisted map first, then a statement run's `folder:{digest}` id
+    (which IS the digest), then the stored file itself. `work_dir` overrides
+    where the files are read from (a local copy of a hosted run)."""
+    stored = (run.snapshot or {}).get(RECEIPT_DIGESTS_KEY) or {}
+    expense_mode = run_mode(run) == MODE_EXPENSE_GENERATION
+    wd = Path(work_dir) if work_dir is not None else Path(run.work_dir)
+    out: dict[str, str] = {}
+    for r in receipts:
+        doc = r.document_id
+        if stored.get(doc):
+            out[doc] = str(stored[doc])
+            continue
+        if doc.startswith("folder:") and len(doc) > len("folder:"):
+            out[doc] = doc[len("folder:"):]
+            continue
+        path = receipt_image_file(wd, doc, expense_mode=expense_mode)
+        digest = _file_evidence(path, "sha1") if path is not None else None
+        if digest:
+            out[doc] = digest
+    return out
+
+
+def receipt_text_layer(run: RunRow, *, work_dir: "Path | None" = None):
+    """document id -> the stored PDF's text layer, or None (no file, not a
+    PDF, or a rendered body with no text layer). Resolved exactly as the
+    image endpoint resolves the file (`receipt_image_file`). No model call."""
+    expense_mode = run_mode(run) == MODE_EXPENSE_GENERATION
+    wd = Path(work_dir) if work_dir is not None else Path(run.work_dir)
+
+    def text_of(document_id: str) -> "str | None":
+        path = receipt_image_file(wd, document_id, expense_mode=expense_mode)
+        return _file_evidence(path, "text") if path is not None else None
+
+    return text_of
+
+
+def duplicate_decisions(
+    run: RunRow,
+    receipts: list[Receipt],
+    resolutions: "dict[str, str] | None",
+    *,
+    work_dir: "Path | None" = None,
+    with_statement_check: bool = True,
+) -> list:
+    """The month's receipt groups, each decided (`decide_receipt_groups`)
+    with this run's evidence. `with_statement_check` reads the last
+    re-match's rung-7 restorations off the snapshot; `rematch_month` passes
+    False because it is about to run that check itself."""
+    statement = (
+        (run.snapshot or {}).get(DUPLICATE_STATEMENT_KEY) or []
+        if with_statement_check else []
+    )
+    return decide_receipt_groups(
+        receipts,
+        digests=receipt_digests(run, receipts, work_dir=work_dir),
+        text_of=receipt_text_layer(run, work_dir=work_dir),
+        resolutions=resolutions or {},
+        statement_distinct=statement,
+    )
+
+
+def duplicate_group_entry(decision) -> dict:
+    """One `duplicate_groups[]` element. `resolution` keeps its meaning; the
+    item-74 fields are parallel: `state` always (`open` | `decided`),
+    `basis` / `decided_by` / `verdict` present when known and ABSENT
+    otherwise, never null."""
+    entry: dict = {
+        "group_id": decision.group_id,
+        "kind": "receipt",
+        "members": list(decision.members),
+        "resolution": decision.resolution,
+        "state": decision.state,
+    }
+    if decision.basis:
+        entry["basis"] = decision.basis
+    if decision.decided_by:
+        entry["decided_by"] = decision.decided_by
+    if decision.verdict:
+        entry["verdict"] = decision.verdict
+    return entry
+
+
+def duplicate_pool(
+    run: RunRow,
+    pool: list[Receipt],
+    resolutions: "dict[str, str] | None",
+    *,
+    work_dir: "Path | None" = None,
+):
+    """`(pool without collapsed copies, collapsed ids, decisions)`: the
+    candidate pool a re-match hands the matcher before the statement check.
+    Shared by `rematch_month` and `tools/recon-match-attribution.py`, so the
+    replay cannot assemble a different pool than the app."""
+    decisions = duplicate_decisions(
+        run, pool, resolutions, work_dir=work_dir, with_statement_check=False,
+    )
+    collapsed = copies_to_collapse(decisions)
+    kept = [r for r in pool if r.document_id not in collapsed] if collapsed else pool
+    return kept, collapsed, decisions
+
+
+def duplicate_statement_pass(
+    pool: list[Receipt],
+    decisions: list,
+    collapsed: set,
+    transactions: list,
+    outcome,
+    match_cfg,
+):
+    """Rung 7 over one match: `(restored group ids, kept pool, collapsed)`.
+    `pool` is the pool BEFORE the collapse. Nothing restored: the collapsed
+    set comes back unchanged. Otherwise the caller matches ONCE more on the
+    returned pool and does not check again."""
+    restored = restore_copies_with_their_own_charge(
+        decisions, pool, transactions, outcome, match_cfg, collapsed=collapsed,
+    )
+    if restored:
+        collapsed = copies_to_collapse(decisions, restored)
+    kept = [r for r in pool if r.document_id not in collapsed]
+    return restored, kept, collapsed

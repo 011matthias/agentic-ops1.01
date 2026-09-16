@@ -1371,6 +1371,44 @@ def uniqueness_verdicts(
     return out
 
 
+def receipt_card_scope(
+    receipt: Receipt, present_keys: set[str], cfg: MatchingConfig
+) -> set[str] | None:
+    """The card keys a receipt is scoped to, or None when it is unscoped:
+    scoping is off, its payment mode names no card, or the card it names is
+    not PRESENT among the statement's charges (``present_keys``). The one
+    rule ``match_month`` scopes by, public so the duplicate statement check
+    (item 74) reads the same scope instead of a copy of it."""
+    if not cfg.card_scoping:
+        return None
+    pm_keys = _card_keys(receipt.payment_mode)
+    if not pm_keys or not (pm_keys & present_keys):
+        return None
+    return pm_keys
+
+
+def pair_in_scope(
+    tx: Transaction,
+    receipt: Receipt,
+    tx_keys: set[str],
+    scope: set[str] | None,
+) -> bool:
+    """Whether a (charge, receipt) pair may be scored at all: a receipt
+    that NAMES another legal entity never pairs (an empty entity on either
+    side is unscoped), and a receipt scoped to a card (``receipt_card_scope``)
+    pairs only with charges on that card (``tx_keys``, the charge's
+    ``_tx_card_keys``)."""
+    if (
+        receipt.legal_entity_id
+        and tx.legal_entity_id
+        and receipt.legal_entity_id != tx.legal_entity_id
+    ):
+        return False
+    if scope is not None and not (scope & tx_keys):
+        return False
+    return True
+
+
 def match_month(
     transactions: list[Transaction],
     receipts: list[Receipt],
@@ -1426,13 +1464,10 @@ def match_month(
         present_keys |= keys
 
     receipt_scope: dict[str, set[str]] = {}
-    if cfg.card_scoping:
-        for r in receipts:
-            pm_keys = _card_keys(r.payment_mode)
-            if not pm_keys:
-                continue
-            if pm_keys & present_keys:
-                receipt_scope[r.document_id] = pm_keys
+    for r in receipts:
+        scope = receipt_card_scope(r, present_keys, cfg)
+        if scope is not None:
+            receipt_scope[r.document_id] = scope
 
     # Self-derived per-run reference rates (2026-07-23): computed once for
     # the month from the run's own inputs, consulted by match_one wherever
@@ -1452,16 +1487,13 @@ def match_month(
             # nothing there changes. Before 2026-09-11 the bare inequality
             # dropped every entity-less receipt from every pairing, and a
             # month whose receipts came in by mail reconciled 0 no matter
-            # what the statement said.
-            if (
-                receipt.legal_entity_id
-                and tx.legal_entity_id
-                and receipt.legal_entity_id != tx.legal_entity_id
+            # what the statement said. The card half: a receipt whose
+            # payment mode names a different card never pairs either.
+            if not pair_in_scope(
+                tx, receipt, tx_card_keys[tx.transaction_id],
+                receipt_scope.get(receipt.document_id),
             ):
                 continue
-            scope = receipt_scope.get(receipt.document_id)
-            if scope is not None and not (scope & tx_card_keys[tx.transaction_id]):
-                continue  # receipt's payment mode names a different card
             scored = match_one(tx, receipt, cfg, derived_rates)
             if scored is None:
                 continue

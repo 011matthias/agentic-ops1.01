@@ -254,8 +254,10 @@ def test_a_pre_statement_batch_takes_the_resolution_without_a_rematch(client, mo
 
 
 def test_the_collapse_is_receipt_side_only(client, monkeypatch):
-    """A duplicate CHARGE group is untouched: two real charges billed twice
-    are the thing the reviewer must see, not something to hide."""
+    """Two charges to one vendor are two charges (item 74, owner ruling
+    2026-09-15): the statement is the truth of what was charged, so neither
+    the collapse nor any duplicate marker touches the charge side, and no
+    charge group is raised at all."""
     _wire(
         monkeypatch,
         _extraction("Lovable Labs Incorporated", "15.00", "2026-08-31"),
@@ -289,6 +291,7 @@ def test_the_collapse_is_receipt_side_only(client, monkeypatch):
 
     view = _view(client, batch_id)
     assert view["summary"]["n_transactions"] == 2, "both charges are still there"
-    assert view["summary"]["n_duplicate_groups"] == 1
-    charge_dups = [r for r in view["rows"] if r.get("duplicate")]
-    assert len(charge_dups) == 2
+    assert view["summary"]["n_duplicate_groups"] == 0
+    assert view["duplicate_charges"] == []
+    assert [g for g in view["duplicate_groups"] if g["kind"] == "charge"] == []
+    assert [r for r in view["rows"] if r.get("duplicate")] == []

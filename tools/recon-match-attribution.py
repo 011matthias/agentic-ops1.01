@@ -156,8 +156,17 @@ class _CacheOnlyClient:
         return AmbiguousJudgmentResult(chosen_index=0, confidence=0.0, reasoning="LOCAL-UNJUDGED")
 
 
-def load_live(db: Path, run_id: str, learning: Path | None) -> dict:
-    """A live month's pool, config and outcomes, assembled as rematch_month does."""
+def load_live(
+    db: Path, run_id: str, learning: Path | None, files: Path | None = None
+) -> dict:
+    """A live month's pool, config and outcomes, assembled as rematch_month does.
+
+    `files` (item 74): a local directory holding `<run_id>/receipts/...`, the
+    hosted run's stored receipt files, read in place of the run's `/data`
+    work dir for the duplicate ladder's evidence (the byte digest a snapshot
+    does not yet carry, and the PDF text layer rung 3 reads). Without it a
+    rung that needs a file cannot fire, exactly as it could not on a host
+    that lost the file, and the header line says the evidence was absent."""
     _import_module()
     from expense_recon import duplicates
     from expense_recon.cli import _apply_ambiguous_judgment, _apply_judgment, build_match_cfg
@@ -210,9 +219,22 @@ def load_live(db: Path, run_id: str, learning: Path | None) -> dict:
         if c["claimed_by_run_id"] != run_id
     }
     pool = [r for r in receipts if r.document_id not in foreign] if foreign else receipts
-    collapsed = collapsed_duplicate_copies(pool, store.get_duplicate_resolutions(run_id))
-    if collapsed:
-        pool = [r for r in pool if r.document_id not in collapsed]
+    # Item 74: the app's own pool assembly (the duplicate ladder with its
+    # file evidence) when the module has it; the item-56 collapse otherwise,
+    # so a "before" run on an older tree still measures that tree.
+    dup_pool = getattr(service, "duplicate_pool", None)
+    statement_pass = getattr(service, "duplicate_statement_pass", None)
+    pool_before_collapse = pool
+    dup_decisions: list = []
+    work_dir = (Path(files) / run_id) if files is not None else None
+    if dup_pool is not None:
+        pool, collapsed, dup_decisions = dup_pool(
+            run, pool, store.get_duplicate_resolutions(run_id), work_dir=work_dir,
+        )
+    else:
+        collapsed = collapsed_duplicate_copies(pool, store.get_duplicate_resolutions(run_id))
+        if collapsed:
+            pool = [r for r in pool if r.document_id not in collapsed]
     borrowed, origins = service.trip_pool_for_month(
         store, run, transactions, own_doc_ids={r.document_id for r in receipts},
     )
@@ -230,6 +252,16 @@ def load_live(db: Path, run_id: str, learning: Path | None) -> dict:
     match_cfg = build_match_cfg(cfg, Path(run.work_dir), memory) or MatchingConfig()
 
     raw = match_month(transactions, match_input, match_cfg)
+    # Item 74 rung 7, as `rematch_month` runs it: once, then one re-match.
+    statement_restored: set = set()
+    if statement_pass is not None:
+        statement_restored, pool, collapsed = statement_pass(
+            pool_before_collapse, dup_decisions, collapsed, transactions,
+            raw, match_cfg,
+        )
+        if statement_restored:
+            match_input = [*pool, *borrowed] if borrowed else pool
+            raw = match_month(transactions, match_input, match_cfg)
     judged = match_month(transactions, match_input, match_cfg)
     model = str(((cfg.get("llm") or {}).get("model")) or "gpt-4o-mini")
     stub = _CacheOnlyClient(model)
@@ -256,6 +288,8 @@ def load_live(db: Path, run_id: str, learning: Path | None) -> dict:
         "raw": raw, "judged": judged, "effective": effective, "stored": stored_outcome,
         "judgment_hits": cache.hits, "judgment_misses": stub.misses,
         "n_decisions": len(decisions),
+        "dup_decisions": dup_decisions, "statement_restored": statement_restored,
+        "files": work_dir,
     }
 
 
@@ -827,6 +861,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--bundle", type=Path, action="append", default=[], help="label bundle directory (repeatable)")
     ap.add_argument("--asset", type=Path, help="match-tuning.json for bundle mode (default: the bundle's inline matching block)")
     ap.add_argument("--labels", type=Path, action="append", default=[], help="labels.csv per --run-id / --bundle, in order (bundle default: <bundle>/labels.csv)")
+    ap.add_argument("--files", type=Path, help="live mode: a directory holding <run_id>/receipts/ (the hosted receipt files), the duplicate ladder's evidence")
     ap.add_argument("--json", type=Path, help="write the per-receipt rows here")
     ap.add_argument("--examples", type=int, default=3)
     a = ap.parse_args(argv)
@@ -836,7 +871,7 @@ def main(argv: list[str]) -> int:
     out_rows: dict[str, list[dict]] = {}
     if a.live:
         for rid in a.run_id:
-            m = load_live(a.live, rid, a.learning)
+            m = load_live(a.live, rid, a.learning, a.files)
             lp = label_paths.pop(0) if label_paths else None
             rows = attribute(m, load_labels(lp))
             name = f"{m['label']} ({rid})"
@@ -849,6 +884,15 @@ def main(argv: list[str]) -> int:
                   f"parity with the hosted outcome: {'OK' if not diffs else 'DIFFERS (the next live re-match will move these)'}")
             for d in diffs:
                 print(f"    {d}")
+            # Item 74: what the duplicate ladder decided, group by group,
+            # and whether the rung-3/rung-1 evidence was on hand to read.
+            if m.get("dup_decisions"):
+                print(f"    duplicate groups ({len(m['dup_decisions'])}; evidence files: "
+                      f"{m['files'] if m.get('files') else 'NONE (rungs 1 and 3 blind)'}; "
+                      f"statement-restored: {sorted(m['statement_restored']) or 'none'})")
+                for dec in m["dup_decisions"]:
+                    print(f"      {dec.group_id} basis={dec.basis} verdict={dec.verdict} "
+                          f"decided_by={dec.decided_by} state={dec.state}")
     for b in a.bundle:
         m = load_bundle(b, a.asset)
         lp = label_paths.pop(0) if label_paths else (b / "labels.csv")

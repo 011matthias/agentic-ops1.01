@@ -1,18 +1,15 @@
-"""Duplicate / double-charge detection (Tier-1 #4).
+"""Duplicate receipt detection (Tier-1 #4, decided by the tool since item 74).
 
-Two deterministic passes that FLAG, never drop:
+Receipts only. The charge-side detector (``find_duplicate_charges``) is gone
+(owner ruling 2026-09-15, notes #37/#41): the card statement is the truth of
+what was charged, so two charges to one vendor are two charges, and every
+group it ever raised on the live months was a set of real, distinct
+transactions. Double ingest of one statement is prevented by stable
+transaction identity (item 29), which left the detector no job.
 
-* ``find_duplicate_charges`` - statement transactions that look like the
-  same charge billed twice: identical normalized merchant + exact amount
-  + currency, within a short date window of each other (a re-swipe, a
-  double-post, an auth that settled twice).
-* ``find_duplicate_receipts`` - the same receipt uploaded more than once:
-  identical normalized merchant + date + total + currency across two or
-  more distinct document ids.
-
-Both are advisory. They return id groups for the reviewer to confirm and
-change nothing about the reconciliation, so they cannot break the
-reconciliation guarantee. Pure functions; no LLM, no I/O.
+``find_duplicate_receipts`` finds the same receipt uploaded more than once:
+identical normalized merchant + date + total + currency across two or more
+distinct document ids. Pure functions; no LLM, no network.
 
 One consumer does act on a receipt group: ``collapsed_duplicate_copies``
 (item 56, owner ruling 2026-09-11) names the copies a re-match keeps OUT of
@@ -31,14 +28,24 @@ its receipt PDF print the vendor differently ("Anthropic, PBC" vs
 ``inherit_card_from_copies`` lets the kept copy borrow the card its copy
 names, so it stays inside that card's statement scope instead of binding a
 stranger's charge of the same amount.
+
+The tool decides (item 74, 2026-09-16, notes #45/#46). The keys above (plus
+a content-hash key) only NOMINATE a group; ``decide_receipt_groups`` runs a
+ladder over each one, first rung that applies wins, and records the rung as
+the group's ``basis``: identical bytes, one document number, one page
+printing the other's number, two different numbers, two different cards,
+vendor + date + total + currency. After a match,
+``restore_copies_with_their_own_charge`` (the statement check) returns a
+set-aside copy whose own exact charge sits unmatched. A reviewer's ruling
+outranks every rung. Nobody is asked: a copy is set aside and reported, and
+"Not a copy" stays as an undo.
 """
 from __future__ import annotations
 
 import hashlib
 import re
 from collections import defaultdict
-from dataclasses import replace
-from datetime import date
+from dataclasses import dataclass, replace
 
 from .matching.deterministic import _card_keys
 from .matching.types import Receipt, Transaction
@@ -46,7 +53,6 @@ from .matching.types import Receipt, Transaction
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _NON_ALNUM_UPPER = re.compile(r"[^A-Z0-9]+")
 _NON_DIGIT = re.compile(r"\D+")
-_MIN_DATE = date.min
 # A reference shorter than this is a till counter ("4563", "1514") that
 # repeats across unrelated receipts; only a longer one identifies a document.
 _MIN_REFERENCE_LEN = 5
@@ -96,6 +102,9 @@ def duplicate_row_flags(groups: list[dict], *, kind: str) -> dict[str, dict]:
     nothing: they have ruled it is not a duplicate, and a marker that
     outlives the ruling is a marker nobody trusts. A ``confirmed`` group
     keeps its marker, because acknowledging a duplicate is not removing it.
+    A group whose verdict is ``distinct`` (item 74: the tool or the reviewer
+    decided the documents are two purchases) yields nothing for the same
+    reason: it is not a duplicate, so no row says it is one.
 
     A document can sit in two live groups since the reference key (item 69
     round A): a vendor/date pair and a reference pair with overlapping but
@@ -110,6 +119,8 @@ def duplicate_row_flags(groups: list[dict], *, kind: str) -> dict[str, dict]:
     flags: dict[str, dict] = {}
     for group in groups:
         if group.get("kind") != kind or group.get("resolution") == "ignore":
+            continue
+        if group.get("verdict") == VERDICT_DISTINCT:
             continue
         members = [m for m in (group.get("members") or []) if m]
         if len(members) < 2:
@@ -144,60 +155,6 @@ def n_extra_copies(flags: dict[str, dict]) -> int:
 
 def _norm_vendor(v: str | None) -> str:
     return _NON_ALNUM.sub(" ", (v or "").lower()).strip()
-
-
-def _date_gap(a: date | None, b: date | None) -> int | None:
-    if a is None or b is None:
-        return None
-    return abs((a - b).days)
-
-
-def find_duplicate_charges(
-    transactions: list[Transaction], *, window_days: int = 3
-) -> list[list[str]]:
-    """Group transaction ids that look like the same charge billed more
-    than once.
-
-    A bucket is (normalized merchant, exact amount, currency). Within a
-    bucket, transactions are clustered by date proximity; only entries
-    within ``window_days`` of an adjacent one join a cluster, so the same
-    merchant + amount months apart (a legitimate recurring charge) does
-    NOT flag. Each returned group has 2+ ids. A transaction with no
-    amount is skipped (cannot be compared). Order is deterministic.
-    """
-    buckets: dict[tuple, list[Transaction]] = defaultdict(list)
-    for tx in transactions:
-        if tx.amount is None:
-            continue
-        key = (
-            _norm_vendor(tx.vendor_from_statement),
-            str(tx.amount),
-            tx.transaction_currency,
-        )
-        buckets[key].append(tx)
-
-    groups: list[list[str]] = []
-    for txs in buckets.values():
-        if len(txs) < 2:
-            continue
-        txs_sorted = sorted(
-            txs,
-            key=lambda t: (t.transaction_date is None, t.transaction_date or _MIN_DATE),
-        )
-        cluster = [txs_sorted[0]]
-        for prev, cur in zip(txs_sorted, txs_sorted[1:]):
-            gap = _date_gap(prev.transaction_date, cur.transaction_date)
-            if gap is not None and gap <= window_days:
-                cluster.append(cur)
-            else:
-                if len(cluster) >= 2:
-                    groups.append([t.transaction_id for t in cluster])
-                cluster = [cur]
-        if len(cluster) >= 2:
-            groups.append([t.transaction_id for t in cluster])
-
-    groups.sort()
-    return groups
 
 
 def find_duplicate_receipts(receipts: list[Receipt]) -> list[list[str]]:
@@ -327,19 +284,23 @@ def reference_keys(receipts: list[Receipt]) -> dict[str, str]:
 
 def find_duplicate_receipt_groups(
     receipts: list[Receipt],
+    digests: dict[str, str] | None = None,
 ) -> list[tuple[list[str], str | None]]:
-    """Every receipt duplicate group with the basis it was found on:
+    """Every CANDIDATE receipt duplicate group with the key that found it:
     ``(members, None)`` for a vendor/date group, ``(members, "reference")``
-    for a group ONLY the reference key finds.
+    for a group ONLY the reference key finds, ``(members, "hash")`` for a
+    group only identical bytes find (item 74; needs ``digests``, document id
+    -> byte digest). Which key found a group is not what the group IS:
+    ``decide_receipt_groups`` answers that.
 
-    Groups from the two keys are never merged into a bigger group. A group
-    is a set of members: a reference group whose membership equals a
-    vendor/date group IS that group (same members, same
-    ``duplicate_group_id``, basis None), and overlapping-but-different
-    memberships stay two groups. Reviewer resolutions are keyed by group id
-    and the live months hold saved ones, so an existing group's membership
-    must not move under the new key. Vendor/date groups come first, then
-    the reference-only groups, each in its detector's sorted order.
+    Groups from the keys are never merged into a bigger group. A group is a
+    set of members: a group whose membership equals an earlier key's group
+    IS that group (same members, same ``duplicate_group_id``), and
+    overlapping-but-different memberships stay separate groups. Reviewer
+    resolutions are keyed by group id and the live months hold saved ones,
+    so an existing group's membership must not move under a new key.
+    Vendor/date groups come first, then the reference-only groups, then the
+    hash-only groups, each in its detector's sorted order.
     """
     vendor_date = find_duplicate_receipts(receipts)
     known = {tuple(g) for g in vendor_date}
@@ -347,7 +308,14 @@ def find_duplicate_receipt_groups(
     for g in find_duplicate_receipts_by_reference(receipts):
         if tuple(g) in known:
             continue
+        known.add(tuple(g))
         out.append((g, REFERENCE_BASIS))
+    if digests:
+        for g in find_duplicate_receipts_by_hash(receipts, digests):
+            if tuple(g) in known:
+                continue
+            known.add(tuple(g))
+            out.append((g, BASIS_HASH))
     return out
 
 
@@ -431,10 +399,23 @@ def inherit_card_from_copies(
 
 
 def collapsed_duplicate_copies(
-    receipts: list[Receipt], resolutions: dict[str, str] | None = None
+    receipts: list[Receipt],
+    resolutions: dict[str, str] | None = None,
+    *,
+    digests: dict[str, str] | None = None,
+    text_of=None,
+    statement_distinct=None,
 ) -> set[str]:
     """The document ids a duplicate group contributes BEYOND its first copy,
-    for every group the reviewer has not ruled "not a duplicate".
+    for every group whose verdict is ``copy``.
+
+    Item 74 (2026-09-16): the verdict is ``decide_receipt_groups``'s, so a
+    group the ladder decides is two purchases (two different document
+    numbers nobody's page cross-prints, two different cards, the statement
+    check) is not collapsed, and a reviewer's ruling still outranks the
+    ladder in both directions. ``digests`` / ``text_of`` are the evidence
+    rungs 1 and 3 read; without them those rungs cannot fire, so a caller
+    deciding a live month passes both.
 
     Owner ruling 2026-09-11 (backlog item 56). Stripe-style vendors mail
     both an invoice PDF and a receipt PDF for one purchase; both land, both
@@ -458,13 +439,333 @@ def collapsed_duplicate_copies(
 
     Reference groups (item 69 round A) collapse exactly as vendor/date
     groups do: every member after the first of the sorted members, unless
-    the reviewer ruled THAT group ``ignore``. A document collapsed by one
-    group and kept by another is collapsed.
+    THAT group's verdict is not ``copy``. A document collapsed by one group
+    and kept by another is collapsed.
     """
-    resolutions = resolutions or {}
+    return copies_to_collapse(decide_receipt_groups(
+        receipts, digests=digests, text_of=text_of,
+        resolutions=resolutions, statement_distinct=statement_distinct,
+    ))
+
+
+# ── Item 74: the ladder that decides every receipt group ─────────────
+#
+# Owner rulings 2026-09-15/16 (notes #37, #41, #45, #46): two charges to one
+# vendor are two charges (charge-side detection is deleted), and the tool
+# decides every receipt group itself and never asks. A group is a CANDIDATE
+# from one of three keys (vendor/date, reference, content hash); the ladder
+# below decides what it is, first rung that applies wins, and records that
+# rung as the group's `basis`.
+
+BASIS_HASH = "hash"
+BASIS_REFERENCE = REFERENCE_BASIS
+BASIS_PRINTED_REFERENCE = "printed_reference"
+BASIS_DISTINCT_REFERENCE = "distinct_reference"
+BASIS_RECEIPT_CARD = "receipt_card"
+BASIS_VENDOR_DATE = "vendor_date"
+BASIS_STATEMENT = "statement"
+LADDER_BASES = (
+    BASIS_HASH, BASIS_REFERENCE, BASIS_PRINTED_REFERENCE,
+    BASIS_DISTINCT_REFERENCE, BASIS_RECEIPT_CARD, BASIS_VENDOR_DATE,
+    BASIS_STATEMENT,
+)
+
+VERDICT_COPY = "copy"
+VERDICT_DISTINCT = "distinct"
+STATE_OPEN = "open"
+STATE_DECIDED = "decided"
+DECIDED_BY_TOOL = "tool"
+DECIDED_BY_REVIEWER = "reviewer"
+
+# How a reviewer's stored resolution reads as a verdict. `confirmed` is
+# "Real duplicate", `ignore` is "Not a duplicate"; the words the store keeps
+# are unchanged, so every saved ruling on the live months keeps its meaning.
+_REVIEWER_VERDICT = {"confirmed": VERDICT_COPY, "ignore": VERDICT_DISTINCT}
+
+# A printed reference is looked for across at most this many adjacent
+# whitespace-separated tokens, so "2506 5524" printed with a space still
+# reads as `25065524` without the whole page collapsing into one string in
+# which any short digit key would find itself by accident.
+_PRINTED_TOKEN_WINDOW = 3
+
+
+def find_duplicate_receipts_by_hash(
+    receipts: list[Receipt], digests: dict[str, str]
+) -> list[list[str]]:
+    """Group document ids of receipts whose stored bytes are identical (the
+    same ``digests`` value). Receipts with no known digest are skipped.
+    Each group has 2+ distinct ids, sorted; order is deterministic."""
+    buckets: dict[str, list[str]] = defaultdict(list)
+    for r in receipts:
+        digest = (digests or {}).get(r.document_id)
+        if digest:
+            buckets[digest].append(r.document_id)
+    groups = [sorted(set(ids)) for ids in buckets.values() if len(set(ids)) >= 2]
+    groups.sort()
+    return groups
+
+
+def printed_reference_tokens(text: str | None) -> set[str]:
+    """Every normalized string a text layer prints across 1 to
+    ``_PRINTED_TOKEN_WINDOW`` adjacent tokens, in ``reference_key``'s own
+    alphabet (upper-cased alphanumerics), so a key is compared for EQUALITY
+    against something the page actually printed, never as a substring of
+    the whole page."""
+    tokens = [_NON_ALNUM_UPPER.sub("", t.upper()) for t in (text or "").split()]
+    tokens = [t for t in tokens if t]
     out: set[str] = set()
-    for members, _basis in find_duplicate_receipt_groups(receipts):
-        if resolutions.get(duplicate_group_id("receipt", members)) == "ignore":
-            continue
-        out.update(members[1:])
+    for n in range(1, _PRINTED_TOKEN_WINDOW + 1):
+        for i in range(len(tokens) - n + 1):
+            out.add("".join(tokens[i:i + n]))
     return out
+
+
+@dataclass(frozen=True)
+class ReceiptGroupDecision:
+    """One receipt group and what it is.
+
+    ``basis`` is the ladder rung the TOOL decided on (None only when no rung
+    applies, which the candidate keys make structurally impossible); a
+    reviewer's ruling does not rewrite it, so a group the reviewer overruled
+    still says what the tool found. ``verdict`` / ``decided_by`` are the
+    EFFECTIVE answer: the reviewer's when there is one (a reviewer verdict
+    outranks the tool), the tool's otherwise. ``state`` is ``open`` only
+    while nobody has decided."""
+
+    members: tuple[str, ...]
+    group_id: str
+    basis: str | None
+    tool_verdict: str | None
+    resolution: str | None
+    verdict: str | None
+    decided_by: str | None
+    state: str
+
+    @property
+    def is_copy(self) -> bool:
+        return self.verdict == VERDICT_COPY
+
+
+def _ladder(
+    members: list[str],
+    by_id: dict[str, Receipt],
+    keys: dict[str, str],
+    digests: dict[str, str],
+    text_of,
+) -> tuple[str | None, str | None]:
+    """Rungs 1 to 6 for one candidate group: ``(basis, verdict)``."""
+    group = [by_id[d] for d in members if d in by_id]
+    if len(group) < 2:
+        return None, None
+
+    # 1. hash: identical bytes.
+    group_digests = [digests.get(r.document_id) for r in group]
+    if all(group_digests) and len(set(group_digests)) == 1:
+        return BASIS_HASH, VERDICT_COPY
+
+    totals = {str(r.detected_total) for r in group}
+    currencies = {(r.detected_currency or "").upper() for r in group}
+    same_money = (
+        None not in {r.detected_total for r in group}
+        and len(totals) == 1 and len(currencies) == 1
+    )
+    group_keys = [keys.get(r.document_id) for r in group]
+
+    # 2. reference: one document number + total + currency.
+    if same_money and all(group_keys) and len(set(group_keys)) == 1:
+        return BASIS_REFERENCE, VERDICT_COPY
+
+    # 3. printed_reference: one document's text layer prints another's
+    # number (a Stripe receipt carries its own receipt number AND prints the
+    # invoice's). Linked pairwise; the group is one document when the links
+    # connect every member. Read only when some member has a number to find.
+    if any(group_keys) and text_of is not None:
+        printed = {}
+        for r in group:
+            try:
+                printed[r.document_id] = printed_reference_tokens(text_of(r.document_id))
+            except Exception:  # noqa: BLE001 - an unreadable file prints nothing
+                printed[r.document_id] = set()
+        ids = [r.document_id for r in group]
+        linked = {ids[0]}
+        grew = True
+        while grew:
+            grew = False
+            for a in ids:
+                if a in linked:
+                    continue
+                for b in linked:
+                    ka, kb = keys.get(a), keys.get(b)
+                    if (kb and kb in printed[a]) or (ka and ka in printed[b]):
+                        linked.add(a)
+                        grew = True
+                        break
+        if len(linked) == len(ids):
+            return BASIS_PRINTED_REFERENCE, VERDICT_COPY
+
+    # 4. distinct_reference: every member carries a usable number, the
+    # numbers differ, and no page prints another's (rung 3 was negative).
+    if all(group_keys) and len(set(group_keys)) > 1:
+        return BASIS_DISTINCT_REFERENCE, VERDICT_DISTINCT
+
+    # 5. receipt_card: two members name cards that share no identifier.
+    carded = [k for k in (_card_keys(r.payment_mode) for r in group) if k]
+    for i, a in enumerate(carded):
+        if any(not (a & b) for b in carded[i + 1:]):
+            return BASIS_RECEIPT_CARD, VERDICT_DISTINCT
+
+    # 6. vendor_date: vendor + date + total + currency, nothing disagreeing.
+    if (
+        same_money
+        and None not in {r.detected_date for r in group}
+        and len({r.detected_date for r in group}) == 1
+        and len({_norm_vendor(r.detected_vendor) for r in group}) == 1
+    ):
+        return BASIS_VENDOR_DATE, VERDICT_COPY
+    return None, None
+
+
+def decide_receipt_groups(
+    receipts: list[Receipt],
+    *,
+    digests: dict[str, str] | None = None,
+    text_of=None,
+    resolutions: dict[str, str] | None = None,
+    statement_distinct=None,
+) -> list[ReceiptGroupDecision]:
+    """Every receipt duplicate group with what it is, in the order
+    ``find_duplicate_receipt_groups`` lists the candidates (vendor/date,
+    then reference-only, then hash-only), which is the order the legacy
+    ``duplicate_receipts`` list and ``duplicate_groups`` share.
+
+    ``digests``: document id -> byte digest (rung 1). ``text_of``: document
+    id -> the PDF text layer or None (rung 3; called only for groups that
+    reach rung 3). ``resolutions``: the reviewer's stored rulings, which
+    outrank the tool. ``statement_distinct``: group ids the last re-match's
+    statement check (rung 7) restored; they read ``basis: "statement"``,
+    verdict distinct, decided by the tool.
+    """
+    digests = digests or {}
+    resolutions = resolutions or {}
+    restored = set(statement_distinct or ())
+    by_id = {r.document_id: r for r in receipts}
+    keys = reference_keys(receipts)
+    out: list[ReceiptGroupDecision] = []
+    for members, _key in find_duplicate_receipt_groups(receipts, digests):
+        gid = duplicate_group_id("receipt", members)
+        basis, tool_verdict = _ladder(members, by_id, keys, digests, text_of)
+        if gid in restored and tool_verdict == VERDICT_COPY:
+            basis, tool_verdict = BASIS_STATEMENT, VERDICT_DISTINCT
+        resolution = resolutions.get(gid)
+        reviewer = _REVIEWER_VERDICT.get(resolution) if resolution else None
+        if reviewer is not None:
+            verdict, decided_by = reviewer, DECIDED_BY_REVIEWER
+        elif tool_verdict is not None:
+            verdict, decided_by = tool_verdict, DECIDED_BY_TOOL
+        else:
+            verdict = decided_by = None
+        out.append(ReceiptGroupDecision(
+            members=tuple(members),
+            group_id=gid,
+            basis=basis,
+            tool_verdict=tool_verdict,
+            resolution=resolution,
+            verdict=verdict,
+            decided_by=decided_by,
+            state=STATE_DECIDED if verdict is not None else STATE_OPEN,
+        ))
+    return out
+
+
+def copies_to_collapse(
+    decisions: list[ReceiptGroupDecision], restored=()
+) -> set[str]:
+    """The document ids the candidate pool drops: every member after the
+    first of each group whose effective verdict is ``copy``, except a group
+    in ``restored`` (rung 7, applied only to the tool's own verdicts). A
+    document collapsed by one group and kept by another is collapsed."""
+    restored = set(restored or ())
+    out: set[str] = set()
+    for d in decisions:
+        if not d.is_copy:
+            continue
+        if d.group_id in restored and d.decided_by == DECIDED_BY_TOOL:
+            continue
+        out.update(d.members[1:])
+    return out
+
+
+def restore_copies_with_their_own_charge(
+    decisions: list[ReceiptGroupDecision],
+    receipts: list[Receipt],
+    transactions: list[Transaction],
+    outcome,
+    cfg=None,
+    *,
+    collapsed=(),
+) -> set[str]:
+    """Rung 7, the statement check, run once after a match: the group ids
+    whose set-aside copy has its OWN exact charge sitting unmatched.
+
+    A group qualifies when the TOOL called it a copy (a reviewer's ruling is
+    never overruled here), its kept copy settled a charge in this outcome,
+    and one of its set-aside copies pairs EXACTLY (the matcher's own
+    ``match_one`` tier: same currency, exact amount, date window) with a
+    charge nothing holds, inside the matcher's own entity and card scope.
+    Two documents that each have a charge are two purchases, whatever the
+    documents look like: the bank printed two lines. The kept-copy
+    condition keeps a lone document that merely resembles a stranger's
+    charge from being called two purchases. The caller re-matches once with
+    these groups restored; there is no second check.
+    """
+    from .matching.deterministic import (
+        MatchingConfig,
+        _tx_card_keys,
+        match_one,
+        pair_in_scope,
+        receipt_card_scope,
+    )
+    from .matching.types import MatchType
+
+    cfg = cfg or MatchingConfig()
+    collapsed = set(collapsed or ())
+    if not collapsed:
+        return set()
+    by_id = {r.document_id: r for r in receipts}
+    held_tx = {
+        m.transaction_id
+        for m in (*outcome.matches, *outcome.judgment_required, *outcome.ambiguous)
+    }
+    settled_docs = {m.document_id for m in outcome.matches}
+    charges = [t for t in transactions if not t.is_credit]
+    tx_keys = {t.transaction_id: _tx_card_keys(t) for t in charges}
+    present: set[str] = set()
+    for k in tx_keys.values():
+        present |= k
+    free = [t for t in charges if t.transaction_id not in held_tx]
+
+    restored: set[str] = set()
+    for d in decisions:
+        if d.decided_by != DECIDED_BY_TOOL or d.verdict != VERDICT_COPY:
+            continue
+        if d.members[0] not in settled_docs:
+            continue
+        for doc in d.members[1:]:
+            r = by_id.get(doc)
+            if r is None or doc not in collapsed:
+                continue
+            scope = receipt_card_scope(r, present, cfg)
+            hit = False
+            for t in free:
+                if (r.detected_currency or "") != t.transaction_currency:
+                    continue
+                if not pair_in_scope(t, r, tx_keys[t.transaction_id], scope):
+                    continue
+                m = match_one(t, r, cfg)
+                if m is not None and m.match_type == MatchType.EXACT:
+                    hit = True
+                    break
+            if hit:
+                restored.add(d.group_id)
+                break
+    return restored
