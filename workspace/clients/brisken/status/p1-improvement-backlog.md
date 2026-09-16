@@ -282,7 +282,7 @@ Three constraints set the order, and every round is a consequence of one:
 | 3 | Backend-owned human strings + the download filename | **SHIPPED PR #881** |
 | 6a | Writeback column to "Posting account (tool)", old header read forever | **SHIPPED PR #881** |
 | 2 | Dead code + free internal renames (`read_journal_csv`, `_carry_zoho_account`, `zoho_account_for`, `ClassificationResult.zoho_account`, `LineVerdict.zoho_account`, `from_api`) | backend only |
-| 4 | Delete the journal artifact | **SPA-GATED**: prompt publishes, re-audit, THEN the backend PR. Prompt written 2026-09-16: `docs/lovable-journal-callers-prompt.md` (three callers: the workbench Downloads button, the `/classic` Published-runs button, the Settings `export_approved_only` card). Gate: `zoho.csv` 0 hits in every chunk (2 today) |
+| 4 | Delete the journal artifact | **UNBLOCKED 2026-09-16 evening**: `docs/lovable-journal-callers-prompt.md` (the workbench Downloads button, the `/classic` Published-runs button, the Settings `export_approved_only` card) published by the owner; bundle audit reads `zoho.csv` and `export_approved_only` 0 in every chunk (2 and 1 that morning), July's Downloads row renders without Journal CSV. Next: the backend PR deleting the route, the journal module and `export_approved_only` with its store default |
 | 5 | Rename `zoho_expense_export.py` + `EXPENSE_COLUMNS` to plain English | backend only, atomic |
 | 6b | The remaining pure-copy i18n strings | Lovable paste |
 | 7 | ADD the parallel fields (`posting_account` beside `zoho_account`), accept both on every write | backend only, additive |
@@ -3892,10 +3892,15 @@ ANTHROPIC · 50.52 USD · Aug 03, 2026" with WAITING ON A PICK 1, no console
 errors. Known limit, recorded in `api-contract.md`: clearing a field edit
 deletes its row, so `updated_at` can read earlier than that clear.
 
-**Prompts shipped to `docs/` (PR #899), not yet pasted:** the owner pastes
-`lovable-month-views-prompt.md` and `lovable-journal-callers-prompt.md` in
-either order; each carries its own bundle signatures and drive checks, and
-PROMPT-STATUS lists both as Not applied.
+**Prompts APPLIED 2026-09-16 evening** (PR #899 text, published by the owner):
+both bundle audits pass with the controls hitting, and a cold browser drive
+read the cards, folds, captions, status line and the Expenses reconciliation
+line on July, August and September at the expected counts (evidence row in
+PROMPT-STATUS). Two residues: August view 2's new caption ("1 waits on a
+receipt another charge holds") was not observed because the drive's clicks on
+that card did not switch the view; and a `?view=` deep link opened on view 1
+with its query stripped, so the URL may not seed the view on load (unconfirmed,
+re-check by hand before writing a fix). PT pass not driven.
 
 **Open, and not blocking the paste:** PT wording of the new keys (Criss's read
 is the check); whether "ordered in their respective overview pages" meant the
