@@ -3390,6 +3390,15 @@ the to-do area) amend item 74 as (b) and (d). Amendments also appended to items
 of 73-77 is unchanged. Owner rulings 2026-09-16 are recorded in items 80, 77 and
 82; do not re-ask them.
 
+**2026-09-16 evening: notes #47-51 read (the store now holds 51), plus #33 which
+no item had cited.** All five new notes are Matthias on July, #48-51 on the
+Matching view between 18:08 and 18:16 UTC, after the item-79 views and the
+item 73/74/77/80/81 prompts were published. #47, #50 and #51 (controls that read
+as text) are item 85; #48 (what "posted in your workbook" means) is item 86; #49
+(a clean match still offers Reject / Confirm) amends item 76; #33 (a card that
+cannot be read or is not known) is item 87. Item 88 records an owner question
+from the same session, not a note.
+
 ### 73. A statement row has a type; a card payment is not a refund (note #42) (SHIPPED PR #905 - see Shipped row 48)
 
 **Criss/owner, July, anchored on `Payment Thank You-Mobile / Corporate
@@ -3736,6 +3745,26 @@ reaches five days. Widening `date_exact_window_days` while `EXACT` ignores the
 vendor would add wrong automatic matches of the BASE44/Lovable shape. Reopen
 only if a labelled month shows more than 5% of confirmed pairs outside one day
 after this item's vendor floor is live, measured with the S1 scorer.
+
+**Amendment 2026-09-16 evening, note #49 (Matthias, July Matching view, on the
+row's `Reject / Confirm match` cell):** "why is it asking this if its been
+matched with no uncertainties?" The row is charge `1f01a80db08f72b0`, AMAZON*
+Z11US7DF5 315.56 USD on 2026-07-24, candidate `0007__rendered-body.pdf` (276.08
+EUR): `match_type: fx_reference`, `confidence: 0.99`, `requires_review: false`,
+`vendor_pct` 57, `date_gap_zone: none`, `effective_bucket: reconciled`. It is
+also a yellow row in `July2026.xlsx` (`entry_status: posted`, `section:
+posted`). Read shortly after the note it carries `status: confirmed`, so it was
+probably confirmed after the note; the note stands for the class. Two things it
+adds to this item:
+
+- **A posted row never asks.** July has 85 posted rows. The measurement above
+  found posted rows block nothing (`review.state: none`), yet this one was
+  offered Reject / Confirm. The label half of this item has to cover the buttons
+  as well as the status text.
+- **The ruling does not reach this row.** "Exact pairs only" plus the working
+  vendor floor leaves an `fx_reference` pair at vendor 57 asking. That is correct
+  under the ruling, so do not widen it on this note. Show the owner which
+  non-exact clean pairs keep asking when this ships, with their count.
 
 ### 77. Dates read in the source locale, and a corrected date moves the receipt (note #34) (SHIPPED PR #910 - see Shipped row 49)
 
@@ -4171,6 +4200,89 @@ Build:
 
 Browser-drive July after publish: click each tile, and the list length equals
 the tile.
+
+### 85. Controls that read as text are buttons (notes #47, #50, #51)
+
+**Matthias, July, 2026-09-16:**
+- #47, Expenses view, on "Confirm private expense": "this should be real button".
+- #50, Matching view, on the duplicates panel's "5 decided / Hide": "make
+  "Hide/View" a button".
+- #51, Matching view, on the Matched card's "16 already posted in your workbook /
+  Show": "Make "Hide/Show" a button".
+
+Published bundle 2026-09-16: the "Confirm private expense" trigger
+(`expx.private.confirm`, `chunk-expenses._batchId`) is a `<button>` styled
+`text-[11px] underline underline-offset-2 text-muted-foreground`, so it reads as
+a grey link; the dialog's save behind it is a real button.
+
+SPA only, one Lovable prompt. Every action or toggle on the month pages uses the
+app's button component (outline, small), and a fold toggle names what it shows
+or hides, e.g. "Show 16 posted" / "Hide 16 posted". Before writing the prompt,
+list every underlined text control in `chunk-expenses._batchId` and
+`chunk-runs._runId` so all of them go in one prompt, not three. Browser-drive
+July after publish.
+
+### 86. "Already posted in your workbook" says what the workbook is (note #48)
+
+**Matthias, July Matching view, on "30 already posted in your workbook" under
+"Charges without a receipt 72":** "what is the workbook? where does this come
+from".
+
+The workbook is the Chase statement spreadsheet Criss uploads for the month
+(`July2026.xlsx`). She colours a row yellow once she has entered it in Zoho, and
+`ingest/statement_xlsx.py` reads the fill of the mapped cells: yellow ->
+`entry_status: posted`, gray -> `subscription`. July carries 85 posted rows
+(`summary.n_already_posted`). Nothing on the page says any of that, so the caption
+states a fact whose source the reader cannot see.
+
+Build, SPA copy only: the caption names the file and the rule, e.g. "30 marked
+yellow (already booked) in July2026.xlsx", with a tooltip for the gray rule. The
+statement's filename is already on `statements[].file`. PT wording goes to Criss.
+Worth deciding with item 23: "posted" means "entered in Zoho" in her process, and
+the app no longer mentions Zoho, so "already booked" is the neutral word.
+
+### 87. A card that cannot be read or is not known gets a fix that sticks (note #33)
+
+**Shared operator code, 2026-09-09, July Expenses view, anchored on "Assignments
+here apply to this month only; the tool will not remember them.":** "need to
+create a process to manually correct and fix this when card is not readable or
+not recognized from system database".
+
+No item cited this note for a week. The anchor is the card-review strip's notice.
+Pieces that exist: Cards R3 assignment on that strip (a digit-bearing hint learns
+as an alias; a digit-less tender assigns for the month only, by the 2026-08-22
+ruling), "Define card" from `/api/cards` `seen_undefined` (item 30), the
+suggested-private route for unknown tenders (item 41), and item 35's grouping.
+What the note says is missing is one clear path from "this receipt's card is
+wrong or unknown" to "fixed, and next month knows".
+
+First step is a read, not a build: drive July's strip as the note's author saw it,
+list which rows it holds and which of the paths above each one would take, and
+check whether "the tool will not remember them" is true for digit-bearing hints
+(R3 says they learn). If the notice is wrong for those rows, the copy is the
+defect. If the paths are right but scattered, this is one "fix card" action per
+row. Item 88's finding is adjacent: corrections made per month are not saved as
+rules unless someone presses Save corrections to memory.
+
+### 88. Corrections are learned only when someone presses a button nobody presses (owner question 2026-09-16)
+
+The owner asked what "Save corrections to memory" on the Expenses view is for. It
+calls `POST /api/runs/{id}/commit-memory`, which folds that month's hand edits
+(vendor spelling, category, company, paying account) and match decisions into
+the learning store, so the next receipt from the same vendor arrives pre-filled
+("Auto-filled from a prior correction"). `commit_to_memory` has exactly one
+caller, that route: editing an expense teaches nothing until the click.
+
+Live 2026-09-16 (`GET /api/memory`): 103 learned categories (the count recorded
+on 2026-08-21), 0 learned entities, 0 field corrections. July carries a
+hand-edited row (date, company, paying account) that is not in memory. So the
+July and August corrections have most likely never been saved as rules.
+
+Recommendation, not ruled: save a month's corrections automatically at a natural
+point (month sign-off, or each edit), and keep the Memory page as the undo. Trade-
+off to put to the owner: a one-off exception would also become a rule until
+someone deletes it there. Decide before building item 87, which depends on
+fixes being remembered.
 
 ## Related but tracked elsewhere (do not duplicate here)
 
