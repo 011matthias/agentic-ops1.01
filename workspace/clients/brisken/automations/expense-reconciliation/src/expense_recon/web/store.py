@@ -226,6 +226,13 @@ class Decision:
     # §17: None means "no explicit verdict" — the effective disposition is
     # then seeded by the service layer (Receipt.reimbursable, else business).
     disposition: str | None = None
+    # Item 76: who wrote the current `status`. "tool" only for a
+    # self-confirmation (`service.apply_self_confirmations`), with the rule
+    # that fired in `rule`; "reviewer" for every route a person drives. None
+    # on rows written before the column existed, every one of them by a
+    # person or by a disposition seed that left the status pending.
+    decided_by: str | None = None
+    rule: str | None = None
 
 
 class RunStore:
@@ -413,6 +420,13 @@ class RunStore:
         }
         if "disposition" not in decision_cols:
             self.conn.execute("ALTER TABLE decisions ADD COLUMN disposition TEXT")
+        # decisions.decided_by + decided_rule (item 76, 2026-09-16): NULL on
+        # the live volume's existing rows, read as "a person" for a verdict
+        # and as "no verdict" for a pending row (see Decision.decided_by).
+        if "decided_by" not in decision_cols:
+            self.conn.execute("ALTER TABLE decisions ADD COLUMN decided_by TEXT")
+        if "decided_rule" not in decision_cols:
+            self.conn.execute("ALTER TABLE decisions ADD COLUMN decided_rule TEXT")
         # jobs.result (receipts drop, 2026-09-08): the live volume predates
         # the column; NULL on old rows reads as "this job kind carries no
         # payload", which is true of every job kind before the drop.
@@ -899,7 +913,8 @@ class RunStore:
     def get_decisions(self, run_id: str) -> dict[str, Decision]:
         rows = self.conn.execute(
             "SELECT transaction_id, status, chosen_document_id, updated_at, "
-            "disposition FROM decisions WHERE run_id = ?",
+            "disposition, decided_by, decided_rule FROM decisions "
+            "WHERE run_id = ?",
             (run_id,),
         ).fetchall()
         return {
@@ -908,6 +923,8 @@ class RunStore:
                 chosen_document_id=r["chosen_document_id"],
                 updated_at=r["updated_at"],
                 disposition=r["disposition"],
+                decided_by=r["decided_by"],
+                rule=r["decided_rule"],
             )
             for r in rows
         }
@@ -946,21 +963,64 @@ class RunStore:
         status: str,
         chosen_document_id: str | None,
         updated_at: str,
+        decided_by: str = "reviewer",
+        rule: str | None = None,
     ) -> None:
         if status not in VALID_STATUSES:
             raise ValueError(f"invalid status {status!r}; expected {VALID_STATUSES}")
         # The ON CONFLICT SET deliberately excludes `disposition` (§17):
         # re-triaging a row never clears its disposition verdict.
+        # `decided_by` defaults to "reviewer" because every caller but one is
+        # a route a person drives; a reviewer's write, pending included, is
+        # what stops the tool from confirming that charge again (item 76).
         self.conn.execute(
             "INSERT INTO decisions (run_id, transaction_id, status, "
-            "chosen_document_id, updated_at) VALUES (?, ?, ?, ?, ?) "
+            "chosen_document_id, updated_at, decided_by, decided_rule) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(run_id, transaction_id) DO UPDATE SET "
             "status = excluded.status, "
             "chosen_document_id = excluded.chosen_document_id, "
-            "updated_at = excluded.updated_at",
-            (run_id, transaction_id, status, chosen_document_id, updated_at),
+            "updated_at = excluded.updated_at, "
+            "decided_by = excluded.decided_by, "
+            "decided_rule = excluded.decided_rule",
+            (run_id, transaction_id, status, chosen_document_id, updated_at,
+             decided_by, rule),
         )
         self.conn.commit()
+
+    def set_tool_decision(
+        self,
+        run_id: str,
+        transaction_id: str,
+        status: str,
+        chosen_document_id: str | None,
+        updated_at: str,
+        rule: str | None,
+    ) -> bool:
+        """The tool's own verdict (item 76), written only where no person has
+        spoken: no row yet, a row the tool wrote, or a legacy pending row
+        (NULL `decided_by`, which is a disposition seed or an un-attributed
+        reset). The condition sits in the UPDATE's WHERE, so a reviewer's
+        click that lands between the tool's read and this write is kept, not
+        overwritten. Returns whether the row now holds the tool's verdict."""
+        if status not in VALID_STATUSES:
+            raise ValueError(f"invalid status {status!r}; expected {VALID_STATUSES}")
+        cur = self.conn.execute(
+            "INSERT INTO decisions (run_id, transaction_id, status, "
+            "chosen_document_id, updated_at, decided_by, decided_rule) "
+            "VALUES (?, ?, ?, ?, ?, 'tool', ?) "
+            "ON CONFLICT(run_id, transaction_id) DO UPDATE SET "
+            "status = excluded.status, "
+            "chosen_document_id = excluded.chosen_document_id, "
+            "updated_at = excluded.updated_at, "
+            "decided_by = 'tool', "
+            "decided_rule = excluded.decided_rule "
+            "WHERE decisions.decided_by = 'tool' "
+            "OR (decisions.decided_by IS NULL AND decisions.status = 'pending')",
+            (run_id, transaction_id, status, chosen_document_id, updated_at, rule),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
 
     def set_disposition(
         self,

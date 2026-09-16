@@ -1092,3 +1092,35 @@ def test_month_move_and_printed_identifiers_are_absent_or_typed(
     assert row["time"] == "23:56"
     assert isinstance(row["invoice_number"], str)
     assert isinstance(row["receipt_number"], str)
+
+
+TURNS = ("decide", "confirmed", "rejected", "posted", "none")
+
+
+def test_every_run_row_carries_a_turn_and_a_verdict_names_its_author(payloads):
+    """Item 76. `rows[].turn` is on EVERY run row, one of a closed set, never
+    null: `decide` is the reviewer's move and the only one that offers
+    Reject / Confirm, and it is exactly the set `summary.n_undecided` counts.
+    `decided_by` is `tool` or `reviewer` on a row carrying a verdict and
+    ABSENT on a pending one; `decided_rule` is a string on a tool verdict and
+    absent otherwise. `summary.n_self_confirmed` is an int. A new turn value
+    is a rule-5 change (api-contract). Route-level behaviour:
+    `tests/test_self_confirm.py`."""
+    views = payloads["run"]
+    rows = [row for view in views for row in view["rows"]]
+    assert rows
+    for view in views:
+        assert isinstance(view["summary"]["n_self_confirmed"], int), view["summary"]
+        assert sum(r["turn"] == "decide" for r in view["rows"]) == (
+            view["summary"]["n_undecided"]
+        )
+    for row in rows:
+        assert row["turn"] in TURNS, row
+        if row["status"] == "pending":
+            assert "decided_by" not in row and "decided_rule" not in row, row
+        else:
+            assert row["decided_by"] in ("tool", "reviewer"), row
+        if row.get("decided_by") == "tool":
+            assert isinstance(row["decided_rule"], str) and row["decided_rule"], row
+        else:
+            assert "decided_rule" not in row, row
