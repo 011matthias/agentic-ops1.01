@@ -160,7 +160,9 @@ def test_structured_fields_are_surfaced_because_filters_run_first(ke):
     assert out["structured_fields"]["color"] == "Dunkelblau"
     thin = ke.suggest({"brand": "Nike", "type": "Hoodie", "garment_class": "sweater"})
     assert thin["structured_fields"]["size"] is None
-    assert "TBD" in thin["description"]
+    # Unknowns are questions for the seller, never TBD in text a buyer reads.
+    assert "TBD" not in thin["description"]
+    assert any(q.startswith("Groesse?") for q in thin["open_questions"])
 
 
 def test_the_real_tool_output_fails_on_every_defect_it_actually_has(ke):
@@ -413,3 +415,75 @@ def test_facts_that_say_it_keep_the_cell_term(ke, monkeypatch):
     out = ke.suggest(dict(DIESEL_33, style="Baggy"))
     assert "baggy jeans" in out["keywords"]
     assert out["keyword_candidates"] == []
+
+
+# ------------------------------------------------------- the text a buyer reads
+# 2026-09-16 owner: "a little less AI slop in the products' description and more
+# value". The old template published a "Details:" block restating the fields
+# plus "Farbe: TBD"; the hand-written batch-2 texts padded with sales phrases and
+# explained how the size had been worked out.
+
+CORTEIZ_28 = {
+    "brand": "Corteiz", "type": "Hoodie", "garment_class": "sweater", "size": "M",
+    "color": "Graumeliert",
+    "details": ["Weißer Alcatraz-Print im Oval auf der Brust",
+                "Kängurutasche, breite Rippbündchen an Saum und Ärmeln"],
+    "measurements": {"Länge": "ca. 60 cm"},
+    "flaws": "Kleiner dunkler Fleck, etwa 5 mm, knapp 2 cm über dem Saum",
+}
+
+
+def _text(ke, item):
+    return ke.suggest(dict(item), use_corpus=False)["description"]
+
+
+def test_the_text_carries_details_measurements_and_flaws_not_a_field_dump(ke):
+    text = _text(ke, CORTEIZ_28)
+    assert "Alcatraz-Print" in text
+    assert "Maße flach: Länge ca. 60 cm." in text
+    assert "dunkler Fleck" in text, "a known flaw is the most valuable line"
+    for dump in ("Details:", "- Marke:", "- Groesse:", "TBD"):
+        assert dump not in text
+
+
+def test_nothing_unknown_is_written(ke):
+    text = _text(ke, {"brand": "Hollister", "type": "T-Shirt", "garment_class": "shirt"})
+    assert text.startswith("Hollister T-Shirt.")
+    assert "TBD" not in text and "Maße" not in text
+
+
+def test_no_name_is_not_written_as_a_brand(ke):
+    assert not _text(ke, {"brand": "No Name", "type": "Jeans",
+                          "garment_class": "pants"}).startswith("No Name")
+
+
+def test_a_search_word_the_text_already_contains_is_not_repeated(ke):
+    out = ke.suggest(dict(CORTEIZ_28), use_corpus=False)
+    line = [ln for ln in out["description"].splitlines() if ln.startswith("Wird auch gesucht als")]
+    assert not line or "Hoodie" not in line[0]
+
+
+def test_seller_notes_from_a_prep_file_block_the_text(ke):
+    """Real LISTING.txt phrasing (items 06, 19, 22): Vinted buyers would read it."""
+    for leaked in ("Masse: Laenge ca. 57 cm, siehe Foto 2.",
+                   "HINWEIS: Auf den Fotos ist keine Groessenangabe lesbar.",
+                   "Masse: Fotos 4 bis 6 zeigen die Massbaender.",
+                   "Bitte vor dem Einstellen gegenpruefen."):
+        report = ke.validate("Lacoste Poloshirt Navy Gr. S", "Poloshirt. " + leaked, "Lacoste")
+        assert not report["ok"], leaked
+        assert any("Notiz an den Verkaeufer" in p for p in report["problems"])
+
+
+def test_sales_fluff_is_flagged(ke):
+    """Live text of item 34 as published 2026-09-16."""
+    live_34 = ("Tommy Hilfiger Madison in Mittelblau, der bequem geschnittene "
+               "Fünf-Taschen-Klassiker der Hauptlinie.")
+    report = ke.validate("Tommy Hilfiger Madison Jeans", live_34, "Tommy Hilfiger")
+    assert any("Werbefloskel" in w and "Klassiker" in w for w in report["warnings"])
+
+
+def test_a_plain_factual_text_raises_no_voice_flags(ke):
+    text = _text(ke, CORTEIZ_28)
+    report = ke.validate("Corteiz Alcatraz Hoodie Grau Gr. M", text, "Corteiz")
+    assert not any("Notiz an den Verkaeufer" in p for p in report["problems"])
+    assert not any("Werbefloskel" in w for w in report["warnings"])

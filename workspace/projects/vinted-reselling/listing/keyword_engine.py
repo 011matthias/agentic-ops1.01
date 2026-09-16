@@ -187,6 +187,9 @@ FIELD_ALIASES = {
     "rise": "rise", "leibhoehe": "rise", "leibhöhe": "rise", "bund": "rise",
     "closure": "closure", "verschluss": "closure",
     "style": "style", "stil": "style",
+    "details": "details", "merkmale": "details", "besonderheiten": "details",
+    "flaws": "flaws", "maengel": "flaws", "mängel": "flaws", "schaeden": "flaws",
+    "schäden": "flaws",
     "measurements": "measurements", "masse": "measurements", "maße": "measurements",
 }
 
@@ -587,57 +590,69 @@ def build_keywords(item: dict, mined: list[str] | None = None) -> tuple[list[str
 
 
 def build_description(item: dict, keywords: list[str]) -> str:
-    """Hook, style prose, detail block, measurements.
+    """What a buyer needs that the title and the filter fields do not already say.
 
-    Keywords land inside the prose rather than in a block at the end: the same
-    words carry the same search weight either way, and a wall of tags is a
-    documented reason for Vinted to hide the listing.
+    Two opposite failures, both live on 2026-09-16. The old template restated
+    every field in a "Details:" block and published "Farbe: TBD" and "Masse flach
+    gemessen: TBD" to buyers. The hand-written batch-2 texts went the other way:
+    "der bequem geschnittene Fuenf-Taschen-Klassiker der Hauptlinie", the colour
+    three times, and a paragraph on how the size had been worked out. Neither
+    helps anyone decide.
+
+    So, in this order and only where the fact was supplied: what it is and how it
+    is cut, the details a photo does not make obvious, one measurements line,
+    real flaws, the search words. Anything unknown is left out of the text and
+    returned by open_questions, because a TBD gets published and a question gets
+    answered.
     """
     brand = item.get("brand") or ""
-    typ = item.get("type") or "Artikel"
-    lines = []
+    if brand.strip().lower() in ("no name", "noname", "ohne marke"):
+        brand = ""
+    typ = item.get("type") or CLASS_NOUN.get(item.get("garment_class") or "") or "Artikel"
+    head = dedupe_words(" ".join(b for b in [brand, item.get("model"), typ] if b))
+    first = head
+    if item.get("color"):
+        first += f" in {item['color']}"
+    if item.get("material"):
+        first += f", {item['material']}"
+    paragraph = [first + "."]
 
-    era = item.get("era")
-    # The model belongs in the first line: on a Levi's it is the whole point of
-    # the garment, and a hook reading "Levi's Jeans" describes a category while
-    # "Levi's 501 Jeans" describes the item.
-    hook_bits = [b for b in [era, brand, item.get("model"), typ] if b]
-    lines.append(f"{dedupe_words(' '.join(hook_bits))}." if hook_bits else f"{typ}.")
-
-    style_bits = []
+    style = []
     for axis in ("cut", "rise", "wash", "closure", "fit"):
         if item.get(axis):
-            style_bits.append(item[axis])
-    cls_dims = CLASS_DIMENSIONS.get(item.get("garment_class") or "", {})
-    for axis in cls_dims:
+            style.append(item[axis])
+    for axis in CLASS_DIMENSIONS.get(item.get("garment_class") or "", {}):
         if item.get(axis):
-            style_bits.append(item[axis])
-    if style_bits:
-        lines.append("")
-        lines.append(", ".join(dict.fromkeys(style_bits)) + ".")
+            style.append(item[axis])
+    if item.get("era"):
+        style.append(item["era"])
+    style = list(dict.fromkeys(style))
+    if style:
+        paragraph.append(", ".join(style) + ".")
+    lines = [" ".join(paragraph)]
 
-    lines.append("")
-    lines.append("Details:")
-    for label, key in (("Marke", "brand"), ("Modell", "model"), ("Groesse", "size"),
-                       ("Material", "material"), ("Farbe", "color"),
-                       ("Zustand", "condition")):
-        value = item.get(key)
-        lines.append(f"- {label}: {value}" if value else f"- {label}: TBD")
+    details = item.get("details")
+    if isinstance(details, str):
+        details = [details]
+    if details:
+        lines.append(" ".join(d.strip().rstrip(".") + "." for d in details if d and d.strip()))
 
     measures = item.get("measurements") or {}
-    lines.append("")
-    if measures:
-        lines.append("Masse flach gemessen:")
-        for k, v in measures.items():
-            lines.append(f"- {k}: {v}")
-    else:
-        lines.append("Masse flach gemessen: TBD")
+    if isinstance(measures, dict) and measures:
+        lines.append("Maße flach: " + ", ".join(f"{k} {v}" for k, v in measures.items()) + ".")
 
-    extra = [k for k in keywords if k.lower() not in " ".join(lines).lower()]
+    flaws = item.get("flaws")
+    if isinstance(flaws, str):
+        flaws = [flaws]
+    if flaws:
+        lines.append(" ".join(f.strip().rstrip(".") + "." for f in flaws if f and f.strip()))
+
+    body = "\n\n".join(lines)
+    words_present = set(normalise_words(body))
+    extra = [k for k in keywords if not set(normalise_words(k)) <= words_present]
     if extra:
-        lines.append("")
-        lines.append("Wird auch gesucht als: " + ", ".join(extra) + ".")
-    return "\n".join(lines)
+        body += "\n\nWird auch gesucht als: " + ", ".join(extra) + "."
+    return body
 
 
 def mined_terms(item: dict) -> tuple[list[str], list[str]]:
@@ -724,7 +739,11 @@ def fact_words(item: dict, normalise) -> tuple[set[str], set[str]]:
     """
     justified, literal = set(), set()
     for key, value in item.items():
-        if key == "measurements" or not isinstance(value, str):
+        if key == "measurements":
+            continue
+        if isinstance(value, list):
+            value = " ".join(v for v in value if isinstance(v, str))
+        if not isinstance(value, str):
             continue
         words = normalise(value)
         literal.update(words)
@@ -924,10 +943,35 @@ def suggest(item: dict, use_corpus: bool = True) -> dict:
     }
     result["validation"] = validate(title, description, item.get("brand") or "",
                                    keywords)
+    still_open = [label for label, key in (("Material", "material"), ("Masse", "measurements"))
+                  if not item.get(key)]
+    if still_open:
+        result["validation"]["warnings"].append(
+            "noch offen: " + ", ".join(still_open)
+            + " (Material und Masse sind die haeufigsten Rueckfragen, Material ist "
+              "ausserdem ein Filterfeld)")
     return result
 
 
 # ----------------------------------------------------------------- validate
+
+# Text meant for the seller that leaked into what buyers read. The owner's
+# 2026-09-08 directive banned photo-number references and seller-facing notes;
+# LISTING.txt prep blocks are full of both ("siehe Foto 3", "HINWEIS: bitte am
+# Etikett pruefen"), so anything validated from them must be caught here.
+SELLER_NOTES = re.compile(
+    r"(siehe Fotos? \d|Fotos? \d+ (?:bis|und) \d+|\bHINWEIS\b|bitte (?:vor dem Einstellen|am "
+    r"(?:Innen)?etikett|gegenpr(?:ue|ü)fen|pr(?:ue|ü)fen)|Nullpunkt|nicht mit dem Band)",
+    re.I)
+
+# Words that sound like selling and tell a buyer nothing about the garment.
+# The batch-2 texts published on 2026-09-16 carried several.
+FLUFF = re.compile(
+    r"\b(Klassiker|zeitlos\w*|ein Muss|Must-have|Hingucker|perfekt f(?:ue|ü)r|"
+    r"hochwertig\w*|Liebhaber\w*|f(?:ue|ü)r die die Marke bekannt|traumhaft\w*|"
+    r"wundersch(?:oe|ö)n\w*)",
+    re.I)
+
 
 def validate(title: str, description: str, own_brand: str,
              keywords: list[str] | None = None) -> dict:
@@ -971,6 +1015,14 @@ def validate(title: str, description: str, own_brand: str,
 
     if len(title) > 80:
         warnings.append(f"Titel {len(title)} Zeichen; kuerzer als 80 liest sich besser")
+    notes = SELLER_NOTES.findall(description)
+    if notes:
+        problems.append("Notiz an den Verkaeufer im Text (" + ", ".join(dict.fromkeys(
+            n if isinstance(n, str) else n[0] for n in notes)) + "); Kaeufer sehen das")
+    fluff = FLUFF.findall(description)
+    if fluff:
+        warnings.append("Werbefloskel ohne Information: " + ", ".join(dict.fromkeys(fluff))
+                        + "; lieber sagen, was das Teil konkret hat")
     if "TBD" in description:
         missing = re.findall(r"- ([A-Za-zäöüÄÖÜ ]+): TBD", description)
         missing += ["Masse"] if "Masse flach gemessen: TBD" in description else []
