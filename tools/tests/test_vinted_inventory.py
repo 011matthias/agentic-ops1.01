@@ -509,3 +509,76 @@ def test_the_speed_split_waits_for_enough_timed_sales(kr, db):
     out = kr.demand(db, "levis", "pants")
     assert out["fast_terms"] == []
     assert "Tempo" in out["speed_note"]
+
+
+# ---- backfill_live: only APPLIED values reach the ledger ----------------
+#
+# enrich.json holds PREPARED keyword lines and materials. enrich-results.json
+# records which of them an enrichment pass actually saved onto the live
+# listing. Reading the prepared value as state put a material on nine ledger
+# rows whose live field is empty, and an adversarial reviewer then cited those
+# rows as evidence the work was done.
+
+
+def _driver_dir(tmp_path, *, enrich_status):
+    """A minimal publishing-driver output dir for one published item."""
+    d = tmp_path / "driver"
+    d.mkdir()
+    (d / "results.json").write_text(json.dumps({
+        "07": {"num": "07", "published": True, "id": 555,
+               "url": "https://www.vinted.de/items/555-x", "title": "Hose"},
+    }), encoding="utf-8")
+    (d / "items.json").write_text(json.dumps({
+        "07": {"brand": "Levi's", "size": "W31", "condition": "Good",
+               "color": "Blue", "price": 20,
+               "category": ["Men", "Clothing", "Jeans"]},
+    }), encoding="utf-8")
+    (d / "descriptions.json").write_text(json.dumps({
+        "07": {"title": "Hose", "desc": "Eine Hose."},
+    }), encoding="utf-8")
+    (d / "enrich.json").write_text(json.dumps({
+        "07": {"material": "Denim", "keywords": "Jeanshose, Denim, Herrenjeans"},
+    }), encoding="utf-8")
+    results = {} if enrich_status is None else {"07": {"status": enrich_status}}
+    (d / "enrich-results.json").write_text(json.dumps(results), encoding="utf-8")
+    return d
+
+
+def _row(con):
+    cur = con.execute("SELECT * FROM my_listings")
+    return dict(zip([c[0] for c in cur.description], cur.fetchone()))
+
+
+def test_a_prepared_material_that_was_never_applied_stays_out(inv, db, tmp_path):
+    """The bug. enrich.json says Denim, no pass ever saved it, so the live
+    field is empty and the ledger must say so."""
+    inv.backfill_live(db, _driver_dir(tmp_path, enrich_status=None))
+    r = _row(db)
+    assert r["material"] is None
+    assert "never applied" in (r["notes"] or "")
+
+
+def test_a_saved_material_does_reach_the_ledger(inv, db, tmp_path):
+    """The other direction: once a pass records the save, it is live."""
+    inv.backfill_live(db, _driver_dir(tmp_path, enrich_status="saved"))
+    assert _row(db)["material"] == "Denim"
+
+
+def test_a_prepared_keyword_line_that_was_never_applied_stays_out(inv, db, tmp_path):
+    inv.backfill_live(db, _driver_dir(tmp_path, enrich_status=None))
+    r = _row(db)
+    assert json.loads(r["keywords"]) == []
+    assert "NO KEYWORD LINE LIVE" in (r["notes"] or "")
+
+
+def test_a_saved_keyword_line_does_reach_the_ledger(inv, db, tmp_path):
+    inv.backfill_live(db, _driver_dir(tmp_path, enrich_status="saved"))
+    assert json.loads(_row(db)["keywords"]) == ["Jeanshose", "Denim", "Herrenjeans"]
+
+
+def test_backfill_is_idempotent_on_the_vinted_item_id(inv, db, tmp_path):
+    d = _driver_dir(tmp_path, enrich_status="saved")
+    first = inv.backfill_live(db, d)
+    second = inv.backfill_live(db, d)
+    assert len(first["added"]) == 1 and second["added"] == []
+    assert db.execute("SELECT COUNT(*) FROM my_listings").fetchone()[0] == 1

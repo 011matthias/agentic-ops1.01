@@ -465,7 +465,19 @@ def backfill_live(con: sqlite3.Connection, driver_dir: Path,
                        else "NO KEYWORD LINE LIVE")
             if not kw and (enrich.get(num) or {}).get("keywords"):
                 kw_note += "; text prepared in enrich.json, never applied"
-        mat = spec.get("material") or (enrich.get(num) or {}).get("material") or None
+        # Material follows the SAME surface rule as the keywords above, and for
+        # the same reason. enrich.json holds prepared values; only a recorded
+        # save puts one on the live listing. Reading the prepared value as
+        # state is how nine listings came to claim a material they do not have.
+        prepared_mat = (enrich.get(num) or {}).get("material") or None
+        if spec.get("material"):
+            mat = spec["material"]
+        elif state in LIVE_ENRICH:
+            mat = prepared_mat
+        else:
+            mat = None
+            if prepared_mat:
+                kw_note += f"; material {prepared_mat!r} prepared, never applied"
         con.execute(
             """INSERT INTO my_listings (vinted_item_id, title, brand, garment_class,
                    size, condition, color, material, keywords, description,
