@@ -379,10 +379,10 @@ def _check_llm(report: _Report, cfg: dict) -> None:
     report.ok("llm", f"model {model!r}, vision {vision!r}")
 
 
-def _check_zoho(report: _Report, cfg: dict, config_dir: Path) -> None:
+def _check_accounts_config(report: _Report, cfg: dict, config_dir: Path) -> None:
     z = cfg.get("zoho")
     if not isinstance(z, dict) or not z.get("enabled", True):
-        report.ok("zoho", "no `zoho:` block; no chart-of-accounts / journal export")
+        report.ok("accounts", "no `zoho:` block; no chart-of-accounts / journal export")
         return
 
     source = z.get("coa_source", "none")
@@ -397,13 +397,13 @@ def _check_zoho(report: _Report, cfg: dict, config_dir: Path) -> None:
         )
     elif source == "csv":
         if "coa_csv_path" not in z:
-            report.fail("zoho", "coa_source 'csv' requires coa_csv_path")
+            report.fail("accounts", "coa_source 'csv' requires coa_csv_path")
         else:
             coa = (config_dir / z["coa_csv_path"]).resolve()
             if not coa.exists():
-                report.fail("zoho", f"chart-of-accounts CSV not found: {coa}")
+                report.fail("accounts", f"chart-of-accounts CSV not found: {coa}")
             else:
-                report.ok("zoho", f"chart-of-accounts CSV present: {coa.name}")
+                report.ok("accounts", f"chart-of-accounts CSV present: {coa.name}")
     elif source == "none":
         # The default. The block still carries run config (card_accounts,
         # export flags); categories are simply not validated against a chart.
@@ -414,9 +414,9 @@ def _check_zoho(report: _Report, cfg: dict, config_dir: Path) -> None:
     if z.get("export_path"):
         export_parent = (config_dir / z["export_path"]).resolve().parent
         if not export_parent.exists():
-            report.fail("zoho", f"export_path directory does not exist: {export_parent}")
+            report.fail("accounts", f"export_path directory does not exist: {export_parent}")
         else:
-            report.ok("zoho", "journal export will be written")
+            report.ok("accounts", "journal export will be written")
         # The balancing credit wants a card->account mapping; exact key or
         # digit-token resolution through the card registry (Cards R2), the
         # same order the export applies. Optional: entries still balance
@@ -429,9 +429,9 @@ def _check_zoho(report: _Report, cfg: dict, config_dir: Path) -> None:
 
             if not resolve_account_map(acct, dict(card_accounts)):
                 report.warn(
-                    "zoho",
+                    "accounts",
                     f"statement account_id {acct!r} matches no card with a "
-                    f"Zoho account (optional); its balancing credit will be "
+                    f"posting account (optional); its balancing credit will be "
                     f"flagged unmapped",
                 )
 
@@ -468,7 +468,7 @@ def run_doctor(config_path: Path) -> int:
     _check_receipts(report, cfg, config_dir)
     _check_statement_source(report, cfg, config_dir)
     _check_llm(report, cfg)
-    _check_zoho(report, cfg, config_dir)
+    _check_accounts_config(report, cfg, config_dir)
     _check_output(report, cfg, config_dir)
 
     print(report.render())

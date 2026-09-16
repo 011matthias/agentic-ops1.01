@@ -10,7 +10,6 @@ import json
 from datetime import date
 from decimal import Decimal
 
-import pytest
 
 from expense_recon.matching.types import (
     Categorization,
@@ -94,7 +93,7 @@ def test_header_and_one_row_per_statement_line(tmp_path):
 
 def test_matched_row_carries_ai_category_and_account(tmp_path):
     """The tool's OWN category + posting account surface in the AI columns
-    for a matched row, beside the report's own Zoho Category, and stay blank
+    for a matched row, beside the report's own category column, and stay blank
     on an unmatched line."""
     matched_line = LineItem(
         description="Adobe subscription", line_total=Decimal("180"),
@@ -116,13 +115,13 @@ def test_matched_row_carries_ai_category_and_account(tmp_path):
         rows = list(csv.reader(fh))
     matched, unmatched = rows[1], rows[2]
     # The report's label and the tool's own label sit side by side.
-    assert matched[_C["Zoho Category"]] == "E100010-31 - Travel Expense | Food"
+    assert matched[_C["Expense report category"]] == "E100010-31 - Travel Expense | Food"
     assert matched[_C["AI Category"]] == "Software & Subscriptions"
-    assert matched[_C["AI Zoho Account"]] == "E600020-01 - Software & Subscriptions"
+    assert matched[_C["AI posting account"]] == "E600020-01 - Software & Subscriptions"
     assert matched[_C["AI Category Source"]] == ClassificationSource.VENDOR.value
     # Blank on the unmatched line (no receipt).
     assert unmatched[_C["AI Category"]] == ""
-    assert unmatched[_C["AI Zoho Account"]] == ""
+    assert unmatched[_C["AI posting account"]] == ""
     assert unmatched[_C["AI Category Source"]] == ""
 
 
@@ -144,7 +143,7 @@ def test_matched_row_carries_expense_enrichment():
     assert row[_C["Match Score"]] == "92"
     assert row[_C["Expense ID"]] == "r1"
     assert row[_C["Report Number"]] == "ER-00220"
-    assert row[_C["Zoho Category"]] == "E100010 - Travel Expense"
+    assert row[_C["Expense report category"]] == "E100010 - Travel Expense"
     assert row[_C["Payment Mode"]] == "1 - CorpServ 2838/1672 (Chase)"
     assert row[_C["Receipt URL"]] == "https://expense.zoho.example/r/1001"
     assert row[_C["Receipt Total"]] == "180.00"
@@ -338,7 +337,7 @@ def test_unmatched_line_carries_charge_categorization():
         category="Software & Subscriptions",
         zoho_account="Other Infra and IT Costs for Cloud Business",
         confidence=1.0, source=ClassificationSource.LEARNED,
-        reasoning="from your Zoho Books posting history",
+        reasoning="from your earlier posting history",
     )
     rows = build_reconciled_rows(
         outcome, [tx], [], charge_categorizations={"t2": cat}
@@ -346,7 +345,7 @@ def test_unmatched_line_carries_charge_categorization():
     row = rows[0]
     assert row[_C["Match Status"]] == "UNMATCHED"
     assert row[_C["Charge Category"]] == "Software & Subscriptions"
-    assert row[_C["Charge Zoho Account"]] == "Other Infra and IT Costs for Cloud Business"
+    assert row[_C["Charge posting account"]] == "Other Infra and IT Costs for Cloud Business"
     assert row[_C["Charge Category Source"]] == "LEARNED"
 
 
@@ -356,7 +355,7 @@ def test_matched_line_charge_columns_blank():
     rows = build_reconciled_rows(_matched(), [tx], [rec])
     row = rows[0]
     assert row[_C["Charge Category"]] == ""
-    assert row[_C["Charge Zoho Account"]] == ""
+    assert row[_C["Charge posting account"]] == ""
     assert row[_C["Charge Category Source"]] == ""
 
 

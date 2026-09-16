@@ -95,6 +95,11 @@ EXPENSE_BATCH_CONTRACT = {
     "coverage[]": "object",
     "coverage[].digits[]": "string",
     "coverage[].statements[]": "string",
+    # Item 47: the row picker's list. OBJECTS, not strings, unlike its two
+    # sibling option lists above: each entry carries the display-only `kind`
+    # that groups the roll-up, so the picker can show "Lidar (project)"
+    # without a second lookup. Empty while the owner has defined none.
+    "cost_center_options[]": "object",
     "duplicate_groups[]": "object",
     "duplicate_groups[].members[]": "string",
     "entity_options[]": "string",
@@ -118,6 +123,9 @@ EXPENSE_BATCH_CONTRACT = {
     # PR 2b-2b-2: the statement uploads this month has taken. The month page
     # is where the next one is uploaded, so the grid carries it too.
     "statements[]": "object",
+    # Item 57: which inputs the month-health rule suspects (sign /
+    # currency / entity / card / unknown); empty on a healthy month.
+    "summary.month_health.suspects[]": "string",
     "summary.upload_issues[]": "string",
     # Item 20: the same rejections with a stable code beside the prose. The
     # prose list stays `string[]` on purpose — enriching it in place is the
@@ -149,6 +157,8 @@ RUN_CONTRACT = {
     "rows[].candidates[]": "object",
     "rows[].candidates[].receipt.line_items[]": "object",
     "statements[]": "object",
+    # Item 57: same field as on the expense batch view; see above.
+    "summary.month_health.suspects[]": "string",
     "summary.setup_advisories[]": "object",
     "unmatched_receipts[]": "object",
     "unmatched_receipts[].line_items[]": "object",
@@ -185,6 +195,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "coverage[].digits[]",
     "coverage[].statements[]",
     "trip.travelers[]",
+    "cost_center_options[]",
 }
 
 RUN_MUST_COVER = {
@@ -553,9 +564,16 @@ def _trip_batch(client, monkeypatch_setattr) -> dict:
     company month no longer produces: a quarantined statement page
     (parse_issues[] + set_aside[]) and an unsupported upload
     (summary.upload_issues[] / upload_issue_details[])."""
+    # Item 47: define a cost center here so `cost_center_options[]` is
+    # observed FILLED. An empty list pins its path but not its element kind,
+    # which would make the "object" pin decorative -- the exact shape of
+    # unverified pin this file exists to prevent.
+    assert client.put("/api/settings", json={"cost_centers": {
+        "Lidar": {"kind": "project"}, "Marketing": {"kind": "function"},
+    }}).status_code == 200
     trip = client.post("/api/trips", json={
         "name": "Contract trip", "start": "2026-07-01", "end": "2026-07-10",
-        "travelers": ["Dirk Neumann", "Criss"],
+        "travelers": ["Dirk Neumann", "Criss"], "cost_center": "Lidar",
     })
     assert trip.status_code == 200, trip.text
     mock = MockLLMClient(extraction_responses=[
@@ -574,6 +592,7 @@ def _trip_batch(client, monkeypatch_setattr) -> dict:
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
     view = client.get(f"/api/expense-batches/{resp.json()['batch_id']}").json()
     assert view["trip"]["travelers"], view["trip"]
+    assert view["cost_center_options"], view["cost_center_options"]
     assert view["parse_issues"], view["summary"]
     assert view["summary"]["upload_issues"], view["summary"]
     return view
@@ -644,3 +663,141 @@ def test_probe_detects_a_string_to_object_flip():
     # and the nested-list merge keeps a filled list visible behind an empty one
     merged = probe({"rows": [{"candidates": []}, {"candidates": [{"id": "x"}]}]})
     assert merged["rows[].candidates[]"] == {"object"}
+
+
+def test_receipt_in_report_is_absent_or_a_bool_never_null(payloads):
+    """Item 68. `receipt_in_report` answers "does this expense have a PAGE in
+    the built report", which is not the question `receipt_image_available`
+    answers ("can the app show you a file"). Parallel field per rule 1, and
+    ABSENT until the verdict is known: never null, because a null renders as
+    false and would call a perfectly good receipt missing.
+
+    No report is built in this fixture, so the only rows that can carry it
+    are the ones with no file at all — nothing on disk cannot become a page,
+    and establishing that needs no build. `summary.n_receipts_in_report`
+    keeps the same discipline: absent while any row is undecided, so the
+    count is never quietly short by the rows nobody has decided yet.
+    """
+    for view_name, views in payloads.items():
+        for view in views:
+            for expense in view.get("expenses") or []:
+                if "receipt_in_report" not in expense:
+                    continue
+                assert isinstance(expense["receipt_in_report"], bool), (
+                    view_name, expense["document_id"],
+                    expense["receipt_in_report"],
+                )
+            summary = view.get("summary") or {}
+            if "n_receipts_in_report" not in summary:
+                continue
+            assert isinstance(summary["n_receipts_in_report"], int), summary
+            assert 0 <= summary["n_receipts_in_report"] <= summary["n_receipts"]
+
+
+def test_posting_category_proposed_is_absent_or_true_never_false(
+    tmp_path, monkeypatch
+):
+    """Item 70. `rows[].posting_category_proposed` says the row's
+    `posting_category` came from the candidate a needs-review row's Confirm
+    would take, because the row holds no receipt yet. Parallel field per
+    rule 1: `true` on exactly those rows and ABSENT (never `false`, never
+    null) everywhere else, so a month nobody reclassified renders
+    byte-identically to before.
+
+    Seeded on the synthetic run: `t3` is the ambiguous row with two
+    candidates and no verdict; a reviewer category on candidate `d2` (the
+    second one) must surface there and only there.
+    """
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    app = create_app(tmp_path)
+    with TestClient(app) as client:
+        before = _synthetic_run(client, tmp_path)
+        store = RunStore(tmp_path / "recon-web.sqlite")
+        store.set_category_override(
+            "contract-synth", "d2", 0, "Office Supplies & Consumables", None,
+            "2026-09-15T00:00:00",
+        )
+        store.close()
+        after = client.get("/api/runs/contract-synth").json()
+
+    assert all("posting_category_proposed" not in r for r in before["rows"])
+    flagged = [r for r in after["rows"] if "posting_category_proposed" in r]
+    assert [r["transaction_id"] for r in flagged] == ["t3"], flagged
+    (row,) = flagged
+    assert row["posting_category_proposed"] is True
+    assert row["effective_bucket"] == "review"
+    assert row["chosen_document_id"] is None
+    assert row["posting_category"]["category"] == "Office Supplies & Consumables"
+
+
+def test_duplicate_group_basis_is_absent_or_reference_never_null(
+    tmp_path, monkeypatch, payloads
+):
+    """Item 69 round A. `duplicate_groups[].basis` says a receipt group was
+    found ONLY by the reference key (normalized reference + total +
+    currency, vendor spelling and date ignored). Parallel field per rule 1:
+    `"reference"` on exactly those groups and ABSENT (never null, never
+    `"vendor_date"`) on every group the vendor/date key finds, so a month
+    without such a group renders byte-identically to before.
+
+    Seeded on its own synthetic run so the module fixtures stay what they
+    were: `d5`/`d6` are a vendor/date pair (basis absent), `d7`/`d8` share
+    a reference but not a vendor spelling or a date (basis reference).
+    """
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    for view_name, views in payloads.items():
+        for view in views:
+            for group in view.get("duplicate_groups") or []:
+                if "basis" in group:
+                    assert group["basis"] == "reference", (view_name, group)
+                    assert group["kind"] == "receipt", (view_name, group)
+
+    app = create_app(tmp_path)
+    with TestClient(app) as client:
+        t1 = _transaction("t1", 7)
+        r5 = _receipt("d5", 11, "TWICE", "31", items=[_item("31")])
+        r6 = _receipt("d6", 11, "TWICE", "31", items=[_item("31")])
+        r7 = Receipt(
+            document_id="d7", legal_entity_id="le1", detected_date=date(2026, 4, 12),
+            detected_total=Decimal("51.38"), detected_currency="USD",
+            detected_vendor="Anthropic, PBC", detected_reference="DZ9BH3VA-0036",
+        )
+        r8 = Receipt(
+            document_id="d8", legal_entity_id="le1", detected_date=date(2026, 4, 13),
+            detected_total=Decimal("51.38"), detected_currency="USD",
+            detected_vendor="Anthropic, PBC (@anthropic)",
+            detected_reference="DZ9BH3VA0036",
+        )
+        outcome = MatchOutcome(
+            matches=[], unmatched_transactions=["t1"],
+            unmatched_receipts=["d5", "d6", "d7", "d8"], ambiguous=[],
+        )
+        snapshot = snapshot_to_dict([t1], [r5, r6, r7, r8], outcome, [])
+        store = RunStore(tmp_path / "recon-web.sqlite")
+        store.create_run(
+            run_id="contract-basis", created_at="2026-09-15T00:00:00",
+            label="basis", operator=None, summary={}, snapshot=snapshot,
+            config={}, work_dir=str(tmp_path), llm_enabled=False, has_coa=False,
+        )
+        store.close()
+        view = client.get("/api/runs/contract-basis").json()
+
+    groups = {tuple(g["members"]): g for g in view["duplicate_groups"]}
+    assert set(groups) == {("d5", "d6"), ("d7", "d8")}, sorted(groups)
+    assert "basis" not in groups[("d5", "d6")]
+    assert groups[("d7", "d8")]["basis"] == "reference"
+    assert groups[("d7", "d8")]["kind"] == "receipt"
+    # every group, whichever key found it, keeps the one pinned shape
+    for g in view["duplicate_groups"]:
+        assert set(g) - {"basis"} == {"group_id", "kind", "members", "resolution"}, g
+    # The legacy `duplicate_receipts` list (the Jinja workbench's shape: one
+    # list of receipt views per group) reads the SAME groups, in the same
+    # order, whichever key found them: length and members aligned with the
+    # receipt groups of `duplicate_groups`.
+    receipt_groups = [g for g in view["duplicate_groups"] if g["kind"] == "receipt"]
+    assert len(view["duplicate_receipts"]) == len(receipt_groups) == 2
+    assert [
+        [r["document_id"] for r in grp] for grp in view["duplicate_receipts"]
+    ] == [g["members"] for g in receipt_groups]

@@ -4,10 +4,13 @@ workstream: lead-gen-general
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-06-21
+updated: 2026-09-15
 ---
 
 # Brisken / Lead Generation (group general reference)
+
+> **Correction pass 2026-09-15, not a refresh.** Only the rows named below were re-checked, against sources inside this repo. Every other row still carries its 2026-06-21 state and has NOT been re-verified; a p2-scoped session with live mailbox and Lead Desk access is what this file needs next.
+> Re-checked: the go-live gate (no longer accurate as written).
 
 Shared context for the p2 lead-generation group. The OnePilot vision and the
 marketing/strategy plan live here, at the group level, because they inform every
@@ -15,10 +18,16 @@ workstream (Rome, Outreach, OnePilot site, Targeting) rather than any single one
 Workstream-specific status lives in the per-workstream files indexed below. This
 file holds pointers, not copies.
 
-State: built to presentable across the board; the engine is gated on one Dirk
-go-live conversation (no Dirk contact yet, by directive). Cold email is retired;
-the motion is demand-gen + borrowed-trust + a precision-LinkedIn tail on a
-trigger-detection radar.
+State: the "no Dirk contact yet" framing is dead. Dirk has been sending since
+July: the Rome T3 touch-1 on 2026-07-21 (24 emails from his mailbox) and the GA
+wave on 2026-07-27 (19 sent, verified into Sent Items), and the campaigns
+workstream mailed him the review packet on 2026-09-08, whose answers are now its
+critical path. The engine itself runs on the Lead Desk, which is live with its
+sender dormant (kill_switch=1). Cold email is retired; the motion is demand-gen +
+borrowed-trust + a precision-LinkedIn tail on a trigger-detection radar.
+
+What remains gated, and by what, is NOT re-verified here: `context/lead-generation/dirk-go-live-sheet.md` is the authority and a p2 session should
+reconcile it against the July and September sends.
 
 ## Shared context (the things that belong to the group, not one workstream)
 

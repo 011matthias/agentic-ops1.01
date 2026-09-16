@@ -272,3 +272,43 @@ def test_the_suggestion_carries_both_lists(ke):
                       "condition": "Sehr gut"}, use_corpus=False)
     assert out["hashtags"] == ["levis501", "straight"]
     assert out["hashtag_candidates"] == []
+
+
+# ---- foreign_brands: a brand inside a compound token --------------------
+#
+# Word boundaries alone let "#niketrack" through on a Lonsdale garment, so a
+# brand is also matched as a prefix inside a long token. German prose collides
+# with that rule head-on: "dieselbe" starts with Diesel.
+
+
+@pytest.mark.parametrize("text", [
+    "Die Waschung ist dieselbe wie bei der anderen Hose.",
+    "Dieselben Masse habe ich zweimal genommen.",
+    "Es sind dieselbe Farbe und derselbe Schnitt.",
+])
+def test_inflected_german_words_are_not_brand_smuggling(ke, text):
+    """"dieselbe" is a demonstrative, not the brand Diesel."""
+    assert ke.foreign_brands(text, "Levis") == []
+
+
+@pytest.mark.parametrize("text", [
+    "#niketrack",
+    "#adidastrack und mehr",
+])
+def test_a_brand_hidden_in_a_hashtag_is_still_caught(ke, text):
+    """The case the compound branch was built for. Hashtags keep the loose
+    rule: anything after the brand counts."""
+    assert ke.foreign_brands(text, "Lonsdale") != []
+
+
+def test_a_brand_glued_to_a_garment_word_is_still_caught(ke):
+    """What smuggling looks like without a hash: brand plus garment noun."""
+    assert ke.foreign_brands("nikelaufschuhe guenstig", "Lonsdale") != []
+
+
+def test_a_plainly_written_foreign_brand_is_still_caught(ke):
+    assert "nike" in [b.lower() for b in ke.foreign_brands("Nike Schuhe dazu", "Lonsdale")]
+
+
+def test_the_items_own_brand_is_never_reported(ke):
+    assert ke.foreign_brands("Diesel Jeans, dieselbe Passform", "Diesel") == []

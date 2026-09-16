@@ -214,14 +214,19 @@ application-produced rendering, not bytes any sender transmitted; the raw
 message it was derived from is retained unchanged beside it.
 
 Second, while an upload is still queued, an operator may replace its
-statement or receipts file; the replacement is written and the superseded
-file is deleted from the volume, with no copy and no record of the
-replacement.
+statement or receipts file. The replacement is written and the superseded
+file is moved into a `superseded` directory beside it under a versioned
+name, where it remains; nothing on this path deletes a file that was
+accepted.
 
 Third, a receipt attached by hand to a single charge is stored under a name
-derived from that charge, so re-attaching a file with the same name for the
-same charge overwrites the stored bytes in place, again with no prior
-version retained.
+derived from that charge. A charge holds exactly one current file: on a
+re-attach, whatever it already held is moved into a `superseded` directory
+under a versioned name before the new bytes are written, and the period
+record names both the current file and each version it replaced. Two earlier
+behaviours ended there, a same-name re-attach overwriting the stored bytes in
+place, and a re-attach under a different name leaving two files from which
+retrieval could return the older one.
 
 Where a PDF must be converted to an image so the reading software can see
 it, that conversion happens in memory and is never written to disk.
@@ -414,13 +419,13 @@ document identifier; the mail archive directory, which links back to the
 period and the documents it produced; the attachment fingerprints recorded
 in the mail metadata; and the period label, normally a month.
 
-Two qualifications. For a receipt attached by hand to a charge the
-identifier does not resolve deterministically: the file is located by
-pattern-matching the charge key and taking the first match in sort order, so
-re-attaching to the same charge under a different filename leaves both files
-on disk and may serve the older one, while re-attaching under the same
-filename overwrites the earlier file's bytes with no record of the
-replacement. And a receipt this period borrowed from a trip does not resolve
+Two qualifications. For a receipt attached by hand to a charge the file
+is located by pattern-matching the charge key and taking the first match in
+sort order; that resolves to the current file because a re-attach archives
+every earlier one out of the searched directory, so exactly one match exists.
+Retrieval of a superseded version is not offered as a lookup: the file is
+retained and named in the period record, but reaching it means going to the
+volume. And a receipt this period borrowed from a trip does not resolve
 under this period's identifier at all (6.2).
 
 **6.4 Limits, disclosed.** There is no index on vendor, date, amount,
@@ -513,13 +518,18 @@ expense with no document prints a caption saying so. A file that exists but
 cannot be turned into pages normally prints a caption naming the file and
 saying it could not be rendered. Three limits are disclosed here.
 
-The renderability test opens a PDF's index only. A PDF whose contents cannot
-be read until later, such as a password-protected receipt or one whose page
-tree is damaged, passes that test and then fails while the report is being
-assembled. When that happens the request fails and no report is produced at
-all for the whole period: no caption, no partial report and no message
-naming the offending file. A single such receipt makes a period
-unreproducible until the file is removed by hand.
+The renderability test opened a PDF's index only until 2026-09-15. A PDF
+whose contents could not be read until later, such as a password-protected
+receipt or one whose page tree is damaged, passed that test and then failed
+while the report was being assembled, and the request failed with no report
+produced at all for the whole period. One such receipt made a period
+unreproducible until the file was removed by hand. The test now copies each
+page the way assembly does, which is the step that fails, so such a file is
+identified before its caption is written; and assembly handles each document
+separately, so a failure costs that document's pages and nothing else. The
+period reproduces, the caption names the file and the reason, and the
+review screen carries the same fact per expense and as a count, so the
+blocked file can be found without reading the report.
 
 A document the period's record references whose file is no longer on the
 volume prints the same caption as an expense that never had one, so a lost
@@ -557,12 +567,16 @@ period contains, and the stored file remains on the volume in either case.
 
 **7.5 Producing hardcopies.** Reports download as PDFs and print directly. A
 limit is disclosed: a report is assembled entirely in the memory of a single
-512 MB machine, holding every receipt in the period plus the whole assembled
+1024 MB machine, holding every receipt in the period plus the whole assembled
 document at once, and an individual receipt may be up to 15 MB. A
 sufficiently large period may therefore not be reproducible at all: the
 request fails with no report, no partial output and no message naming a
 cause. No maximum period size has been measured and no streaming or chunked
-reproduction path exists. For records not in a report, see 7.4 and 6.4: they
+reproduction path exists. Two bounds were added 2026-09-15: a single document
+contributes at most 60 pages, its caption stating how many pages the file has
+and that the remainder is available in the system, and the assembled document
+is spooled to disk rather than held twice in memory. Neither bound removes the
+limit; both stop one document from deciding whether the period reproduces. For records not in a report, see 7.4 and 6.4: they
 are ordinary files and can be printed, but the system offers no bulk export.
 
 ---
@@ -577,21 +591,17 @@ values are stored as strings, so no decimal precision is lost in the store;
 uploaded filenames are sanitised and archive expansion is protected against
 path traversal.
 
-Four qualifications belong with that list. Stored files are not immutable:
-replacing a wrongly attached file on a queued upload deletes the file it
-replaces, and re-attaching a receipt to the same charge under the same name
-overwrites it, in both cases with no prior version and no record kept. The
-generated reports do not preserve the stored precision: they convert amounts
+Three qualifications belong with that list. The generated reports do not
+preserve the stored precision: they convert amounts
 to binary floating point when writing the spreadsheet and when summing
 period and section totals for the PDF, and a row whose amount cannot be
 parsed is omitted from the PDF total without notice. Reviewer corrections
-are not held separately once a period is re-matched (5.2). And only some
-concurrent writes to a period are serialised: one in-process lock covers the
-mail-intake, add-receipts and delete-period paths, while the manual receipt
-attach and the bulk receipt-folder ingest rewrite the whole period record
-with no lock, so a write on either can be lost under a concurrent one.
-Because the lock is in-process it holds only while the application runs as a
-single machine, which the single attached volume currently enforces.
+are not held separately once a period is re-matched (5.2). And concurrent
+writes to a period are serialised by a single in-process lock, which every
+path that rewrites the period record now takes, committing against a re-read
+taken inside it. Because the lock is in-process it holds only while the
+application runs as a single machine, which the single attached volume
+currently enforces; that constraint is the one live limit on this control.
 
 What is **not** in place, and must be stated:
 
@@ -712,11 +722,11 @@ check of the stored records, and neither is offered here as satisfying
   contents may become material. A fixed ten-year cutoff does not meet that
   standard in those cases.
 - **The run store has no retention rule at all.** A single authenticated
-  request deletes a period in full. A record can also be destroyed short of
-  that: while an upload is still queued, re-posting a statement or receipts
-  file permanently deletes the file it replaces, with no version kept and no
-  record of the replacement; and re-attaching a receipt to the same charge
-  under the same filename overwrites the stored bytes in place.
+  request deletes a period in full, and that remains the live gap. The two
+  narrower routes to destroying a record are closed: re-posting a statement
+  or receipts file on a queued upload, and re-attaching a receipt to a
+  charge, both archive the superseded file under a versioned name rather
+  than deleting or overwriting it (4.4).
 - **Beneath both**, the platform's scheduled snapshots retain for five days.
 
 Nothing in the system currently guarantees that a record will still exist
@@ -847,13 +857,16 @@ through Graph; the only Graph call it makes is a send.
 
 ## 12. Known non-compliance and remediation status
 
-Disclosed in full. None of these is yet remediated.
+Disclosed in full. A row struck through and marked REMEDIATED names the
+date and the backlog item that closed it, and where only part of a row was
+closed the open part is left standing in plain text. Everything unmarked is
+open.
 
 | # | Requirement | What is wrong | Priority |
 |---|---|---|---|
 | 1 | 4.01(2)(b) | No stored digest for the run store, so alteration is undetectable | Highest |
 | 2 | 4.01(2)(b), 4.02(2) | One permission level; no per-person attribution on any stored record; no audit log; deletion effectively unrecorded | Highest |
-| 3 | 4.01(8) | No retention control over the run store; one request deletes a period; queued-file replacement and same-name re-attach destroy bytes silently | High |
+| 3 | 4.01(8) | No retention control over the run store; one request deletes a period. ~~Queued-file replacement and same-name re-attach destroy bytes silently~~ REMEDIATED 2026-09-15 (backlog item 66): both archive the superseded file under a versioned name instead of destroying it | High |
 | 4 | 4.01(2)(c) | No inspection or quality-assurance program | High |
 | 5 | 4.01(1) | Preservation: one volume, one region, no replication, no application-level backup or restore | High |
 | 6 | 4.01(2)(b) | Mail arrives over unauthenticated, unencrypted SMTP; no transport security and no means of establishing what the sender transmitted | High |
@@ -863,8 +876,8 @@ Disclosed in full. None of these is yet remediated.
 | 10 | 4.02(1) | Reproduction strips the index key from the caption for sequence-numbered records | Medium |
 | 11 | 4.01(3) | No page numbers; image orientation metadata not applied; transparency discarded; image receipts downsampled and re-compressed | Medium |
 | 12 | 4.01(2)(a) | Reports do not disclose that values are machine-extracted; no measured error rate | Medium |
-| 13 | 4.01(2)(a) | Report totals computed in binary floating point; an unparseable row is dropped from the PDF total without notice | Medium |
-| 14 | 4.01(2)(a) | Manual attach and bulk folder ingest rewrite the period record without the lock, so a concurrent write can be lost | Medium |
+| 13 | 4.01(2)(a) | ~~Report totals computed in binary floating point; an unparseable row is dropped from the PDF total without notice~~ REMEDIATED 2026-09-15 (backlog item 65): both PDF total sites sum in `Decimal` through `output/_pdf_common.py`, and a row whose amount cannot be read carries a caption on the row plus a footer naming the excluded expense numbers, with `summary.n_amounts_unreadable` on the batch payload | Closed |
+| 14 | 4.01(2)(a) | ~~Manual attach and bulk folder ingest rewrite the period record without the lock, so a concurrent write can be lost~~ REMEDIATED 2026-09-15 (backlog item 66): both now commit under the same lock as every other period writer, against a re-read taken inside it | Medium |
 | 15 | 4.01(1), 4.01(6) | No bulk retrieval; several classes of stored document reach no report; borrowed receipts have no pages behind them | Medium |
 | 16 | 4.01(1) | A lost stored file is indistinguishable from an expense that never had one; the listing can overstate how many receipts are usable | Medium |
 | 17 | 4.01(9) | Two databases hold record-derived data with no retention rule and survive deletion of the period they came from | Medium |

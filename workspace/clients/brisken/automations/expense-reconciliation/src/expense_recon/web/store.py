@@ -144,6 +144,11 @@ SETTINGS_DEFAULTS: dict = {
     "entities": {},
     "merchants": {},
     "cards": {},
+    # Cost centers (item 47): owner-authored only. The empty default is
+    # load-bearing, not incidental — an empty registry resolves nothing AND
+    # flags nothing, so a tenant that has never defined one sees no
+    # cost-center review state at all. See cost_centers.py.
+    "cost_centers": {},
 }
 
 # Settings keys holding a {str: str} map. Values are kept as STRINGS: a
@@ -191,6 +196,10 @@ class TripRow:
     end_date: str     # YYYY-MM-DD, inclusive
     travelers: list[str]
     updated_at: str | None = None
+    # Item 47: the project or purpose this trip's spend belongs to.
+    # A trip is the strongest AUTOMATIC cost-center signal, because a
+    # human DECLARED it at creation rather than anything inferring it.
+    cost_center: str = ""
 
 
 @dataclass
@@ -344,8 +353,32 @@ class RunStore:
                 start_date TEXT NOT NULL,
                 end_date   TEXT NOT NULL,
                 travelers  TEXT NOT NULL,
-                updated_at TEXT
+                updated_at TEXT,
+                cost_center TEXT NOT NULL DEFAULT ''
             );
+            CREATE TABLE IF NOT EXISTS client_errors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                received_at TEXT NOT NULL,
+                received_ts REAL NOT NULL,
+                operator TEXT NOT NULL,
+                caller TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                url TEXT NOT NULL,
+                method TEXT NOT NULL,
+                message TEXT NOT NULL,
+                occurred_at TEXT NOT NULL,
+                seconds_ago REAL,
+                duration_ms INTEGER,
+                online INTEGER,
+                detail TEXT NOT NULL,
+                machine TEXT NOT NULL,
+                region TEXT NOT NULL,
+                process_started_at TEXT NOT NULL,
+                uptime_s REAL NOT NULL,
+                process_predates_failure INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_client_errors_ts
+                ON client_errors (received_ts);
             CREATE INDEX IF NOT EXISTS idx_login_failures_ts
                 ON login_failures (ts);
             CREATE INDEX IF NOT EXISTS idx_login_failures_ip_ts
@@ -389,6 +422,17 @@ class RunStore:
         }
         if "result" not in job_cols:
             self.conn.execute("ALTER TABLE jobs ADD COLUMN result TEXT")
+        # trips.cost_center (item 47, 2026-09-10): the live volume
+        # predates the column; "" on old rows reads as "unassigned",
+        # which is what every trip created before cost centers was.
+        trip_cols = {
+            row["name"]
+            for row in self.conn.execute("PRAGMA table_info(trips)").fetchall()
+        }
+        if "cost_center" not in trip_cols:
+            self.conn.execute(
+                "ALTER TABLE trips ADD COLUMN cost_center TEXT NOT NULL DEFAULT ''"
+            )
 
     # -- runs -------------------------------------------------------------
 
@@ -554,12 +598,13 @@ class RunStore:
         start_date: str,
         end_date: str,
         travelers: list[str],
+        cost_center: str = "",
     ) -> None:
         self.conn.execute(
             "INSERT INTO trips (trip_id, created_at, name, start_date, "
-            "end_date, travelers, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "end_date, travelers, updated_at, cost_center) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (trip_id, created_at, name, start_date, end_date,
-             json.dumps(travelers), created_at),
+             json.dumps(travelers), created_at, cost_center),
         )
         self.conn.commit()
 
@@ -584,12 +629,13 @@ class RunStore:
         end_date: str,
         travelers: list[str],
         updated_at: str,
+        cost_center: str = "",
     ) -> bool:
         cur = self.conn.execute(
             "UPDATE trips SET name = ?, start_date = ?, end_date = ?, "
-            "travelers = ?, updated_at = ? WHERE trip_id = ?",
+            "travelers = ?, updated_at = ?, cost_center = ? WHERE trip_id = ?",
             (name, start_date, end_date, json.dumps(travelers),
-             updated_at, trip_id),
+             updated_at, cost_center, trip_id),
         )
         self.conn.commit()
         return cur.rowcount > 0
@@ -620,6 +666,12 @@ class RunStore:
             end_date=row["end_date"],
             travelers=[str(t) for t in travelers],
             updated_at=row["updated_at"],
+            # Tolerant of a row read before the migration ran (a
+            # stored config must never be able to break a view).
+            cost_center=str(
+                (row["cost_center"] if "cost_center" in row.keys() else "")
+                or ""
+            ),
         )
 
     # -- intakes (testing mode) --------------------------------------------
@@ -859,6 +911,33 @@ class RunStore:
             )
             for r in rows
         }
+
+    def rekey_decisions(self, run_id: str, mapping: dict[str, str]) -> int:
+        """Move a run's decisions from old transaction ids to new ones.
+
+        A statement re-read (2026-09-11) re-parses the stored files, and a
+        content-derived id changes whenever the parse changes the canonical
+        amount (the sign fix is exactly that). The reviewer's verdicts are
+        keyed on the old ids; this carries each one over to the id the same
+        sheet row now has, so a re-read never orphans a decision. OR REPLACE:
+        if the target id already holds a row, the moved verdict wins, which
+        cannot happen unless two old rows collapse onto one new one. Returns
+        the number of rows moved.
+        """
+        if not mapping:
+            return 0
+        moved = 0
+        for old_id, new_id in mapping.items():
+            if old_id == new_id:
+                continue
+            cur = self.conn.execute(
+                "UPDATE OR REPLACE decisions SET transaction_id = ? "
+                "WHERE run_id = ? AND transaction_id = ?",
+                (new_id, run_id, old_id),
+            )
+            moved += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+        self.conn.commit()
+        return moved
 
     def set_decision(
         self,
@@ -1269,3 +1348,54 @@ class RunStore:
     def prune_login_failures(self, before: float) -> None:
         self.conn.execute("DELETE FROM login_failures WHERE ts < ?", (float(before),))
         self.conn.commit()
+
+    # -- client-side failure reports (backlog item 50) ---------------------
+    # A fetch that rejects never reached this app, so nothing server-side
+    # can contain it; these rows are the browser's own account, stamped
+    # with what THIS process was at the moment the account arrived. The
+    # table is deliberately bounded: it shares a 1GB volume with receipts,
+    # and a diagnostic log that can grow without limit is a second fault.
+
+    CLIENT_ERROR_KEEP = 500
+
+    def record_client_error(self, row: dict) -> int:
+        cur = self.conn.execute(
+            """
+            INSERT INTO client_errors (
+                received_at, received_ts, operator, caller, kind, url,
+                method, message, occurred_at, seconds_ago, duration_ms,
+                online, detail, machine, region, process_started_at,
+                uptime_s, process_predates_failure
+            ) VALUES (
+                :received_at, :received_ts, :operator, :caller, :kind, :url,
+                :method, :message, :occurred_at, :seconds_ago, :duration_ms,
+                :online, :detail, :machine, :region, :process_started_at,
+                :uptime_s, :process_predates_failure
+            )
+            """,
+            row,
+        )
+        self.conn.execute(
+            "DELETE FROM client_errors WHERE id NOT IN ("
+            "  SELECT id FROM client_errors ORDER BY id DESC LIMIT ?"
+            ")",
+            (int(self.CLIENT_ERROR_KEEP),),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def list_client_errors(self, limit: int = 50) -> list[dict]:
+        """Newest first, so the investigation opens on the last failure."""
+        rows = self.conn.execute(
+            "SELECT * FROM client_errors ORDER BY id DESC LIMIT ?",
+            (max(1, int(limit)),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def count_client_errors_since(self, since: float, caller: str) -> int:
+        row = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM client_errors "
+            "WHERE caller = ? AND received_ts >= ?",
+            (caller, float(since)),
+        ).fetchone()
+        return int(row["n"])

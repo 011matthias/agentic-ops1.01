@@ -36,6 +36,15 @@ still referenced), so the pending paste is now the DELTA in the reworked
 behavior only a live page could show ("can only accept 80 files") IS a
 publish signal — re-audit then, not at the next session boundary.
 
+**Re-audited 2026-09-15 evening (48 chunks, 1,012 KB, lazy route chunks
+crawled through their imports): 11 of the 14 prompts pasted since 2026-09-08
+are applied.** Instrument controls `period_suggestion`, `seen_undefined` and
+`n_duplicate_copies` all hit, so the crawl can see renderers. Still out:
+view-receipt (item 52), settled-outside (item 62) and the API host switch.
+The six assets `index.html` names are NOT the bundle: the renderers live in
+chunks reached only by dynamic import, and grepping those six alone reports
+every recent prompt as missing.
+
 Two display strings misread on the 2026-09-01 pass, both resolved by reading
 the surrounding key: `"Not a duplicate"` is `wb.dups.notDup` from the workbench
 duplicates panel, which predates `lovable-duplicates-prompt.md` and is not
@@ -56,6 +65,8 @@ missing.
 
 | Prompt | Verified by |
 |---|---|
+| `lovable-month-health-prompt.md` (item 57) | `chunk-runs._runId` reads `month_health` + `n_exact_pairs`; `chunk-i18n` carries `wb.health.*` + `zero_match_with_exact_pairs` (bundle audit 2026-09-15, 48 files / 975 KB, controls validated). The blocked bar itself has no live case: both months are `state: ok` |
+| `lovable-charge-entity-prompt.md` (item 59) | `chunk-runs._runId` reads `n_charges_no_entity`; `chunk-i18n` carries `chargesNoEntity` + `cardNotDefined`. CHARGES WITHOUT A COMPANY renders 0 on both live months (browser-driven). The "Card not defined" chip has no live case: every card is defined |
 | `lovable-receipts-drop-prompt.md` v1 (#709 text; §1 page + §3 badge + §4 empty state + §2 upload-area removal) | `chunk-receipts` reads `n_filed`/`n_needs_month`/`needs_month`; `/api/receipts` POST; "Recibos" nav + "Dos recibos" badge strings in i18n (bundle audit 2026-09-08; badge wiring + §4 to be eyeballed on the next browser drive) |
 | `lovable-mail-intake-prompt.md` | Email intake section in Settings; alias rows; "Receipts can be emailed to any-name@expenses.brisken.com" |
 | `lovable-intake-quickwins-prompt.md` §1 §2 | Files column; Month column with real labels |
@@ -88,6 +99,21 @@ missing.
 | `lovable-months-origin-refusals-prompt.md` | `created_by` read in the months chunk; `n_refused_ours`, `n_probes`, `kind_label` read in the inbound chunk (2026-09-07) |
 | `lovable-trips-prompt.md` | `trip_id` / `batch_type` / `pool_kind` / `trip_suggestion` / `n_pooled_travel` across the trips, inbound and NewExpenseBatch chunks (a dedicated `chunk-trips-*` exists). §5 verified: the settings chunk hydrates `travel_alias` from the intake object, re-syncs it on object change, and the save payload carries `travel_alias: C.trim()...` — alias entry through the SPA is now safe (2026-09-07) |
 | `lovable-r4-settled-by-prompt.md` | `settled_by` read in the run chunk (x3) and the batch chunk (2026-09-07) |
+| `lovable-receipt-taken-prompt.md` | `held_by` (x9) + `n_charges_receipt_taken` (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
+| `lovable-receipt-coverage-prompt.md` | `n_receipts_in_report` (x3) (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
+| `lovable-receipts-drop-prompt.md` | `upload-cap` present. Two leftovers from §2: the `/` route's page title and meta description still read "Start a new month", and the i18n chunk still carries `months.startMonth`. Cosmetic; the create UI itself is gone (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
+| `lovable-cost-centers-prompt.md` | `cost_centers` (x6), `default_cost_center` (x2), `/api/cost-centers/totals`. **Whole-map gate LIFTED**: the settings chunk saves per section (`b.mutate({cost_centers:e})`, `b.mutate({cards:e})`, `b.mutate({fx_reference_rates:e})`), so saving one editor never sends, and never erases, another's map. Cost centers can be typed (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
+| `lovable-rejected-pairing-prompt.md` | `n_rejected_pairings` (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
+| `lovable-amounts-unreadable-prompt.md` | `n_amounts_unreadable` (x3) (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
+| `lovable-adjacent-month-prompt.md` | `from_batch` (x7) + `n_adjacent_borrowed` (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
+| `lovable-render-failed-prompt.md` | `receipt_render` + `n_receipts_unrenderable` (x3) (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
+| `lovable-statement-record-prompt.md` | `card_currency` (x4), `column_map` (x3), `readAs` (x12) (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
+| `lovable-workbench-filter-sort-prompt.md` | the amount parse (`[^0-9.-]`) and `sort=` in the query string are present. The prompt asks for a browser drive and none has been run, so treat the row order as unverified (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
+| `lovable-failure-probe-prompt.md` | `/api/client-errors` + `seconds_ago`, both halves present. Item 50's SPA half is shipped; the probe is silent by design, so nothing on screen confirms it (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
+| `lovable-settled-outside-prompt.md` (item 62) | `n_settled_outside` (x1), `suggested_settled_outside` (x1), `/settled-outside` (x2), `wb.settledOutside` (x29) (bundle audit 2026-09-15 after the owner's 13:41-13:47 UTC publish, 49 chunks / 1,009 KB, the five controls found) |
+| `lovable-view-receipt-prompt.md` (item 52) | `receipt.view.failed` (x4), `application/pdf` (x3), same audit. **Browser-driven 2026-09-15:** on August's workbench `/runs/074a7b8905d7` a click opened the dialog "Receipt · SARL TRAIN'S · 32.00 EUR" with the PDF rendered in an `<iframe>` from a `blob:` URL. On Review expenses of a statement month the button is still unusable: the grid's `<fieldset disabled={hasStatement}>` disables it (31 of 31 buttons inside a disabled fieldset on August); `lovable-month-edits-prompt.md` (item 70) lifts that lock |
+| `lovable-brisken-domain-prompt.md` half 2 (API base URL) | `api.expenses.brisken.com` (x1) AND `brisken-expense-recon.fly.dev` (x0), same audit |
+| `lovable-workbench-filter-sort-prompt.md`, the row order | **Browser drive 2026-09-15 FAILED on the counts:** every Card option reads the total (July: "112" on all nine cards, including the five with 0 charges), because `countWith(patch, skip)` skips the dimension it just patched. Fix carried by `lovable-card-chips-prompt.md` section 1 |
 
 These four were drafted 2026-08-28/29, pasted from chat, and lived only in a
 gitignored scratch directory until 2026-09-01. They are in `docs/` now
@@ -98,8 +124,8 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
-| `lovable-receipts-drop-prompt.md` DELTA (2026-09-08: §1 cap copy + chunking, §2 full create-UI removal, §3 nav, §4 Open-month release) | rejected copy reads reason `upload-cap` + `limit`; intake chunk POSTs a `label`-only `/api/expense-batches` and reads `pool_month`; no chunk references "Start a new month" or `/expenses/new` for company months | Backend already deployed (cap 80→500 + upload-cap ledger rows, 2026-09-08); §2-§4 need NO backend — the create route stays as plumbing. Nav + button death are chrome — verify by browser drive, not bundle grep. Nothing gates data entry |
-| `lovable-brisken-domain-prompt.md` half 2 (2026-09-08: API base URL to `api.expenses.brisken.com`) | some chunk contains `api.expenses.brisken.com` AND no chunk contains `brisken-expense-recon.fly.dev` — grep BOTH, since the old host keeps answering and a half-applied change reads as a mix | Half 1 (the Lovable custom domain for `expenses.brisken.com`) is owner-side and gates nothing: the DNS records here wait on the `lovable_verify` value Lovable emits. Backend ready: cert live on the API host, CORS allows the SPA host (PR #751) |
+| `lovable-month-edits-prompt.md` (2026-09-15, item 70: edits on a statement month, whole-receipt reclassify, proposed category on a review row) | some chunk reads `posting_category_proposed` and `rematch`; the i18n chunk carries `wb.category.proposedNote` and `expx.review.toast.rematchFailed`; `ExpensesReviewGrid` no longer renders `fieldset disabled={hasStatement}`; the Reclassify POST body carries no `line_index` | Backend on branch `client/brisken/p1-month-edits`; paste only after it deploys, or the unlocked grid meets the old 400 |
+| `lovable-card-chips-prompt.md` (2026-09-15, item 71: the card list leaves the top of the month; card chips in the filter bar, one attention banner, collapsed card-review strip, the filter-count fix) | `wb.filter.card.empty`, `cov.attn.receiptsNoCharges`, `expx.cards.strip.summary.choose` | No backend gate. **Browser-drive to verify** with the four checks at the end of the prompt (chip counts on July, the 1176 / 9693 banner on August, the collapsed strip, the first charge row on screen one) |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
@@ -108,11 +134,20 @@ holds. Verify by field names, not display copy.
 
 | Prompt | Needs |
 |---|---|
+| `lovable-month-health-prompt.md`, the blocked bar itself | A month with `month_health.state: "broken"`. Both live months are `ok`, which is the correct state and not something to manufacture in Criss's data; the renderer's presence is bundle-audited |
+| `lovable-charge-entity-prompt.md`, the "Card not defined" chip | A charge whose card the registry cannot name. All nine cards are defined, so `n_charges_no_entity` is 0 everywhere; same reasoning |
 | `lovable-issue-codes-prompt.md` | A batch carrying `upload_issues`. All six live batches have zero |
+| `lovable-rejected-pairing-prompt.md`, the muted candidate and the undo | A charge with a `rejected` verdict. All 223 charge rows across the two live months are `pending` (probed 2026-09-15): nobody has rejected anything, and manufacturing one in Criss's data is a production mutation, not a test |
 | `lovable-re-ingest-prompt.md` | An archive with `batch_deleted: true` AND delivered files AND a non-terminal status |
 | `lovable-month-pool-prompt.md` §7 §8 §9 | Creating, renaming and deleting a month. §8 refers to "the existing rename dialog": there is none, which is why prompt 1 builds it |
+| `lovable-amounts-unreadable-prompt.md`, the line itself | An expense whose amount was never read. `n_amounts_unreadable` is 0 on both live months, which is the correct state and not something to manufacture in Criss's data; the report's caption and footer are route-tested on constructed fixtures |
 
 ## Not a Lovable prompt
 
 `api-contract.md` is the internal backend/SPA contract. It is never pasted
 into Lovable; it is what the prompts are written against.
+
+Item 69 round A (2026-09-15, duplicate groups by the document's number,
+`duplicate_groups[].basis`): no SPA change is needed. The duplicates prompt
+already renders every group and every row marker, a reference group renders
+through the same shape, and `basis` is optional display. No prompt written.

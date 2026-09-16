@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from hooklib import run_hook
 
 HOOK = "deploy-consumer-gate.py"
@@ -34,10 +36,21 @@ def env(tmp_path) -> dict:
     }
 
 
-def post(tmp_path, tool: str, command: str | None = None) -> str:
+def post(
+    tmp_path,
+    tool: str,
+    command: str | None = None,
+    *,
+    background: bool = False,
+    response: dict | None = None,
+) -> str:
     payload = {"hook_event_name": "PostToolUse", "tool_name": tool}
     if command is not None:
         payload["tool_input"] = {"command": command}
+    if background:
+        payload.setdefault("tool_input", {})["run_in_background"] = True
+    if response is not None:
+        payload["tool_response"] = response
     r = run_hook(HOOK, payload, env=env(tmp_path))
     assert r.returncode == 0, r.stderr
     if not r.stdout.strip():
@@ -90,8 +103,13 @@ def test_deploy_then_verified_claim_is_blocked(tmp_path):
 
 
 def test_deploy_then_browser_drive_then_claim_passes(tmp_path):
+    """Navigating gets you to the page; the SNAPSHOT is what sees it. Until
+    2026-09-15 the navigate alone closed this, which is how the gate came to
+    print "closed" about a drive that had asserted nothing."""
     post(tmp_path, "Bash", "flyctl deploy -a brisken-expense-recon")
     post(tmp_path, "mcp__playwright__browser_navigate")
+    assert stop(tmp_path, CLAIM) is not None
+    post(tmp_path, "mcp__playwright__browser_snapshot")
     assert stop(tmp_path, CLAIM) is None
 
 
@@ -148,7 +166,7 @@ def test_curl_closes_a_server_rendered_deploy(tmp_path):
 
 def test_browser_drive_closes_a_server_rendered_deploy_too(tmp_path):
     post(tmp_path, "Bash", "vercel --prod")
-    assert "CONSUMER DRIVEN" in post(tmp_path, "mcp__playwright__browser_navigate")
+    assert "CONSUMER DRIVEN" in post(tmp_path, "mcp__playwright__browser_snapshot")
 
 
 def test_vercel_deploy_then_claim_without_any_check_is_blocked(tmp_path):
@@ -157,9 +175,95 @@ def test_vercel_deploy_then_claim_without_any_check_is_blocked(tmp_path):
 
 
 def test_agent_browser_closes_marker(tmp_path):
+    """`open` reaches the page and reads nothing back; `snapshot` is the
+    observation."""
     post(tmp_path, "Bash", "fly deploy")
-    assert "CONSUMER DRIVEN" in post(tmp_path, "Bash", "agent-browser open https://x")
+    assert post(tmp_path, "Bash", "agent-browser open https://x") == ""
+    assert stop(tmp_path, CLAIM) is not None
+    assert "CONSUMER DRIVEN" in post(tmp_path, "Bash", "agent-browser snapshot -i")
     assert stop(tmp_path, CLAIM) is None
+
+
+# ---- A drive has to have actually observed something --------------------
+#
+# 2026-09-15: the gate printed CONSUMER DRIVEN for a backgrounded command
+# that had asserted nothing and later timed out. A gate closable by
+# something that proves nothing protects less than it appears to, because
+# its own advisory then reads back as evidence.
+
+
+@pytest.mark.parametrize("cmd", [
+    "agent-browser open https://x",
+    "agent-browser click @e3",
+    "agent-browser fill @e2 hello",
+    "agent-browser close",
+])
+def test_navigation_only_commands_leave_the_marker_open(tmp_path, cmd):
+    post(tmp_path, "Bash", "fly deploy")
+    assert post(tmp_path, "Bash", cmd) == "", cmd
+    assert stop(tmp_path, CLAIM) is not None
+
+
+@pytest.mark.parametrize("cmd", [
+    "agent-browser snapshot -i -c",
+    "agent-browser screenshot out.png",
+    "agent-browser get text @e1",
+    "agent-browser get url",
+    "agent-browser find role button click --name Save",
+    "agent-browser eval --stdin",
+    "agent-browser wait --text Arriving",
+])
+def test_observing_commands_close_the_marker(tmp_path, cmd):
+    post(tmp_path, "Bash", "fly deploy")
+    assert "CONSUMER DRIVEN" in post(tmp_path, "Bash", cmd), cmd
+
+
+def test_a_backgrounded_drive_does_not_close_the_marker(tmp_path):
+    """The 2026-09-15 shape: the command had produced no output yet."""
+    post(tmp_path, "Bash", "fly deploy")
+    text = post(
+        tmp_path, "Bash", "agent-browser snapshot -i", background=True,
+    )
+    assert "DRIVE NOT COMPLETE" in text
+    assert "backgrounded" in text
+    assert stop(tmp_path, CLAIM) is not None
+
+
+def test_a_failed_drive_does_not_close_the_marker(tmp_path):
+    post(tmp_path, "Bash", "fly deploy")
+    text = post(
+        tmp_path, "Bash", "agent-browser snapshot -i",
+        response={"is_error": True},
+    )
+    assert "DRIVE NOT COMPLETE" in text
+    assert stop(tmp_path, CLAIM) is not None
+
+
+def test_a_nonzero_exit_does_not_close_the_marker(tmp_path):
+    post(tmp_path, "Bash", "fly deploy")
+    assert "DRIVE NOT COMPLETE" in post(
+        tmp_path, "Bash", "agent-browser snapshot -i",
+        response={"returncode": 1},
+    )
+
+
+def test_an_unreadable_response_still_closes_the_marker(tmp_path):
+    """Fail-open on the response shape. A gate that refuses to close on a
+    drive that DID happen becomes noise, and noise gets approved
+    reflexively -- the failure mode this whole hook exists to avoid."""
+    post(tmp_path, "Bash", "fly deploy")
+    assert "CONSUMER DRIVEN" in post(
+        tmp_path, "Bash", "agent-browser snapshot -i", response={"x": "y"},
+    )
+
+
+def test_a_backgrounded_navigation_says_nothing_extra(tmp_path):
+    """Navigation is silent whether or not it is backgrounded: it was never
+    going to close the marker, so there is nothing to explain."""
+    post(tmp_path, "Bash", "fly deploy")
+    assert post(
+        tmp_path, "Bash", "agent-browser open https://x", background=True,
+    ) == ""
 
 
 def test_playwright_snapshot_closes_marker(tmp_path):
@@ -237,3 +341,136 @@ def test_global_off_switch(tmp_path):
     r = run_hook(HOOK, {"hook_event_name": "PostToolUse", "tool_name": "Bash",
                         "tool_input": {"command": "flyctl deploy -a x"}}, env=e)
     assert not r.stdout.strip()
+
+
+# ---- One marker per session ---------------------------------------------
+#
+# The marker used to be a single file in the machine's temp dir while this repo
+# runs concurrent sessions by design. On 2026-09-15 a sibling session's Fly
+# deploy blocked an unrelated session's Stop, naming a deploy that session had
+# never run. The reverse is the expensive one: any session's browser drive
+# closed any other session's marker.
+#
+# These drive the REAL per-session path (no explicit DEPLOY_CONSUMER_MARKER),
+# pointing only the directory at tmp_path.
+
+
+def sess_env(tmp_path) -> dict:
+    return {
+        "AGENTIC_OPS_SESSION_STATE": "",
+        "DEPLOY_CONSUMER_MARKER": "",
+        "DEPLOY_CONSUMER_MARKER_DIR": str(tmp_path),
+    }
+
+
+def post_as(tmp_path, session: str, tool: str, command: str | None = None,
+            response: dict | None = None) -> str:
+    payload = {"hook_event_name": "PostToolUse", "tool_name": tool,
+               "session_id": session}
+    if command is not None:
+        payload["tool_input"] = {"command": command}
+    if response is not None:
+        payload["tool_response"] = response
+    r = run_hook(HOOK, payload, env=sess_env(tmp_path))
+    assert r.returncode == 0, r.stderr
+    if not r.stdout.strip():
+        return ""
+    return json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+
+
+def stop_as(tmp_path, session: str, text: str) -> str | None:
+    r = run_hook(
+        HOOK,
+        {"hook_event_name": "Stop", "session_id": session,
+         "transcript_path": transcript(tmp_path, text),
+         "stop_hook_active": False},
+        env=sess_env(tmp_path),
+    )
+    assert r.returncode == 0, r.stderr
+    if not r.stdout.strip():
+        return None
+    obj = json.loads(r.stdout)
+    return obj.get("reason") if obj.get("decision") == "block" else None
+
+
+def test_a_siblings_deploy_does_not_block_this_session(tmp_path):
+    post_as(tmp_path, "session-A", "Bash", "flyctl deploy -a brisken-recon")
+    assert stop_as(tmp_path, "session-B", CLAIM) is None
+
+
+def test_the_deploying_session_is_still_blocked(tmp_path):
+    post_as(tmp_path, "session-A", "Bash", "flyctl deploy -a brisken-recon")
+    reason = stop_as(tmp_path, "session-A", CLAIM)
+    assert reason is not None and "CONSUMER NOT DRIVEN" in reason
+
+
+def test_a_siblings_browser_drive_does_not_close_this_marker(tmp_path):
+    """The expensive direction: another session's snapshot must not stand in
+    for the drive this session still owes."""
+    post_as(tmp_path, "session-A", "Bash", "flyctl deploy -a brisken-recon")
+    post_as(tmp_path, "session-B", "mcp__playwright__browser_snapshot",
+            response={"ok": True})
+    reason = stop_as(tmp_path, "session-A", CLAIM)
+    assert reason is not None and "CONSUMER NOT DRIVEN" in reason
+
+
+def test_own_browser_drive_still_closes_it(tmp_path):
+    post_as(tmp_path, "session-A", "Bash", "flyctl deploy -a brisken-recon")
+    post_as(tmp_path, "session-A", "mcp__playwright__browser_snapshot",
+            response={"ok": True})
+    assert stop_as(tmp_path, "session-A", CLAIM) is None
+
+
+def test_a_payload_without_a_session_id_still_tracks(tmp_path):
+    """No session_id falls back to the shared path. Occasionally shared beats
+    silently untracked."""
+    post_as(tmp_path, "", "Bash", "flyctl deploy -a brisken-recon")
+    reason = stop_as(tmp_path, "", CLAIM)
+    assert reason is not None and "CONSUMER NOT DRIVEN" in reason
+
+
+# ---- Writing about a deploy is not deploying ----------------------------
+#
+# The gate sees the whole Bash command string, and a commit message lives
+# inside it. Committing the session-scope fix opened a marker, because the
+# message explains the bug and therefore contains the words "fly deploy".
+
+COMMIT_ABOUT_A_DEPLOY = """git commit -F - <<'EOF'
+hooks: scope the deploy-consumer marker
+
+A sibling's fly deploy opened the marker and blocked another session.
+EOF"""
+
+
+def test_a_commit_message_about_a_deploy_opens_nothing(tmp_path):
+    assert post(tmp_path, "Bash", COMMIT_ABOUT_A_DEPLOY) == ""
+
+
+def test_a_commit_dash_m_about_a_deploy_opens_nothing(tmp_path):
+    assert post(tmp_path, "Bash",
+                'git commit -m "note: flyctl deploy broke the marker"') == ""
+
+
+def test_a_pr_body_about_a_deploy_opens_nothing(tmp_path):
+    assert post(tmp_path, "Bash",
+                'gh pr create --title "x" --body "fixes the fly deploy gate"') == ""
+
+
+def test_a_heredoc_piped_to_a_shell_still_opens(tmp_path):
+    """The syntax is the same; the meaning is not. This one runs."""
+    out = post(tmp_path, "Bash", "bash <<'EOF'\nflyctl deploy -a brisken-recon\nEOF")
+    assert "CONSUMER NOT DRIVEN" in out
+
+
+def test_a_real_deploy_beside_a_commit_still_opens(tmp_path):
+    out = post(tmp_path, "Bash",
+               'flyctl deploy -a brisken-recon && git commit -m "ship it"')
+    assert "CONSUMER NOT DRIVEN" in out
+
+
+def test_a_commit_message_does_not_close_an_open_marker(tmp_path):
+    """The mirror of the same confusion: prose mentioning playwright must not
+    count as a drive."""
+    post(tmp_path, "Bash", "flyctl deploy -a brisken-recon")
+    post(tmp_path, "Bash", 'git commit -m "ran playwright snapshot earlier"')
+    assert stop(tmp_path, CLAIM) is not None

@@ -34,5 +34,8 @@
   "card_scoping": true,
   "blend_amount_weight": 0.55,
   "blend_date_weight": 0.3,
-  "blend_vendor_weight": 0.15
+  "blend_vendor_weight": 0.15,
+  "uniqueness_spoken_for": true,
+  "uniqueness_vendor_dominance_min": 0.5,
+  "uniqueness_vendor_dominance_margin": 0.25
 }

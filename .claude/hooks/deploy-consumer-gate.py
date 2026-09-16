@@ -29,6 +29,51 @@ This hook makes that coupling structural. A deploy opens a marker; only a real
 browser drive closes it; and while it is open, a Stop that CLAIMS verification
 is blocked with the specific thing still unchecked.
 
+WHAT "A REAL BROWSER DRIVE" MEANS (tightened 2026-09-15)
+--------------------------------------------------------
+Driving is not observing, and the first version conflated them. ANY
+agent-browser or Playwright call closed the marker, `agent-browser open <url>`
+and `browser_navigate` included -- commands that prove a page was requested and
+nothing about what it rendered. On 2026-09-15 the gate printed
+"[CONSUMER DRIVEN] ... closed" for a backgrounded command that had asserted
+nothing and then timed out.
+
+A gate closable by something that proves nothing is worse than no gate, because
+its own advisory reads back as evidence that the check was done. So closing now
+requires a command that READS PAGE STATE BACK, in the foreground, without
+reporting failure. Navigation and interaction leave the marker open and say
+nothing: they are a drive in progress, not a substitute for one.
+
+The response check fails OPEN on purpose. A gate that refuses to close on a
+drive that actually happened becomes noise, and noise gets approved reflexively
+-- which is the exact failure this hook exists to avoid.
+
+WRITING ABOUT A DEPLOY IS NOT DEPLOYING (fixed 2026-09-15)
+----------------------------------------------------------
+The gate scans the whole Bash command string, and a commit message arrives
+inside it. Committing the session-scope fix below opened a marker, because the
+message explains the bug and so contains the words "fly deploy". Heredoc bodies
+consumed by a message-writing command, and the values of -m / --body / --title,
+are therefore dropped before matching. A heredoc piped to a shell is left
+alone: that one really does run.
+
+ONE MARKER PER SESSION (fixed 2026-09-15)
+-----------------------------------------
+The marker was a single file in the machine's temp dir, and this repo runs
+concurrent sessions by design -- SessionStart warns about them and hands out a
+worktree recipe. One shared file across four live sessions fails both ways. A
+sibling's Fly deploy blocked an unrelated session's Stop, naming a deploy that
+session had never run (2026-09-15, marker opened at 21:19:15 by another
+session). And in the direction that actually costs something, a browser drive
+in ANY session closed a marker opened by ANY other, so a sibling's unrelated
+snapshot would wave through exactly the undriven deploy this gate exists to
+catch.
+
+So the marker is keyed on the payload's `session_id`, the same session boundary
+session-pressure-meter uses. A payload without one falls back to the shared
+path rather than dropping the marker: occasionally shared beats silently
+untracked.
+
 TWO DEPLOY CLASSES
 ------------------
 An app deploy (fly / railway / wrangler) puts a client-side renderer between
@@ -69,6 +114,7 @@ Fail-open per the project hook contract: any error exits 0.
 from __future__ import annotations
 
 import datetime
+import glob
 import json
 import os
 import re
@@ -85,9 +131,39 @@ except Exception:
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 # Env seam so the suite can exercise the marker lifecycle without touching the
 # developer's live session state (mirrors AGENTIC_OPS_SESSION_STATE).
-MARKER_FILE = os.environ.get("DEPLOY_CONSUMER_MARKER") or os.path.join(
-    tempfile.gettempdir(), "agentic-ops-deploy-consumer.txt"
-)
+MARKER_PREFIX = "agentic-ops-deploy-consumer"
+
+
+def marker_dir() -> str:
+    """Where marker files live. Seam so the suite can exercise per-session
+    paths without writing into the real temp dir."""
+    return os.environ.get("DEPLOY_CONSUMER_MARKER_DIR") or tempfile.gettempdir()
+
+
+def marker_path(session_id: str = "") -> str:
+    """The marker file for ONE session.
+
+    A single shared file cannot work here: this repo runs concurrent sessions
+    by design, so one session's deploy would block every other session's Stop,
+    and, in the direction that actually costs something, any session's browser
+    drive would close a marker another session opened. Keyed on session_id, the
+    same boundary session-pressure-meter uses.
+
+    An explicit DEPLOY_CONSUMER_MARKER still wins, and a payload with no
+    session_id falls back to the old shared path rather than losing the marker
+    entirely: a gate that silently stops tracking is worse than one that is
+    occasionally shared.
+    """
+    explicit = os.environ.get("DEPLOY_CONSUMER_MARKER")
+    if explicit:
+        return explicit
+    safe = re.sub(r"[^A-Za-z0-9_-]", "", str(session_id or ""))[:64]
+    name = f"{MARKER_PREFIX}-{safe}.txt" if safe else f"{MARKER_PREFIX}.txt"
+    return os.path.join(marker_dir(), name)
+
+
+# Re-resolved in main() once the payload's session_id is known.
+MARKER_FILE = marker_path()
 # A marker older than this is assumed dead (machine left on, session over) so a
 # forgotten deploy can never nag or block indefinitely. Mirrors the
 # platform-not-live marker TTL in post-action-gate.
@@ -112,7 +188,42 @@ FETCH_DEPLOY_PATTERNS = [
 
 # What actually renders the payload. A browser drive is the ONLY thing that
 # exercises the consumer; everything else reads the server.
+#
+# But driving is not observing, and the gate used to conflate them. Until
+# 2026-09-15 ANY agent-browser or Playwright call closed the marker,
+# including `agent-browser open <url>` -- which proves a page was requested
+# and nothing about what it rendered. That day the gate printed
+# "[CONSUMER DRIVEN] ... closed" for a backgrounded command that had
+# asserted nothing and went on to time out. A gate closable by a command
+# that proves nothing protects less than it appears to, which is worse than
+# not having it: its own advisory then reads as evidence.
+#
+# So closing needs a command that READS PAGE STATE BACK. Navigating,
+# clicking, typing and waiting are how you get to the state; snapshot, get,
+# eval, screenshot and find are how you see it. Only the second kind closes.
+BROWSER_OBSERVE_TOOLS = (
+    "mcp__playwright__browser_snapshot",
+    "mcp__playwright__browser_evaluate",
+    "mcp__playwright__browser_take_screenshot",
+    "mcp__playwright__browser_find",
+    "mcp__playwright__browser_console_messages",
+    "mcp__playwright__browser_network_requests",
+    "mcp__playwright__browser_run_code_unsafe",
+)
+# Navigation and interaction: real browser work, but it observes nothing.
 BROWSER_TOOL_PREFIXES = ("mcp__playwright__browser_",)
+# An agent-browser invocation that reads state back. `find` is included
+# because it asserts an element exists; `wait --text` because it asserts a
+# string appeared. `open`, `click`, `fill`, `press` and `close` are not.
+BROWSER_OBSERVE_CMD_PATTERNS = [
+    r"\bagent-browser\b[^|;&]*?\b(snapshot|screenshot|find|eval)\b",
+    r"\bagent-browser\b[^|;&]*?\bget\s+(text|html|attr|value|title|url|count)\b",
+    r"\bagent-browser\b[^|;&]*?\bwait\b[^|;&]*?--(text|fn)\b",
+    r"\bplaywright\b",
+    r"\bpytest\b.{0,80}\b(e2e|browser|playwright)\b",
+]
+# Any browser command at all, observing or not. Used only to stay QUIET: a
+# navigation is not a reason to re-advise, it is a drive in progress.
 BROWSER_CMD_PATTERNS = [
     r"\bagent-browser\b",
     r"\bplaywright\b",
@@ -165,12 +276,33 @@ def read_marker() -> tuple[str, str] | None:
     return kind, label
 
 
+def sweep_stale_markers() -> None:
+    """Drop marker files past the TTL.
+
+    Per-session files would otherwise accumulate one per session forever. The
+    TTL already decides that an old marker is dead; this just stops the dead
+    ones piling up on disk. Best effort: a failure here must never affect the
+    decision being made.
+    """
+    try:
+        cutoff = time.time() - MARKER_TTL_SEC
+        for path in glob.glob(os.path.join(marker_dir(), f"{MARKER_PREFIX}-*.txt")):
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    os.remove(path)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+
 def write_marker(kind: str, label: str) -> None:
     try:
         with open(MARKER_FILE, "w", encoding="utf-8") as f:
             f.write(f"{time.time()}\t{kind}\t{label}")
     except Exception:
         pass
+    sweep_stale_markers()
 
 
 def clear_marker() -> None:
@@ -188,6 +320,35 @@ def deploy_label(view: str) -> str:
         return m.group(1) or m.group(2)
     m = re.search(r"\b(fly(?:ctl)?\s+deploy|vercel[\w-]*|railway\s+up|wrangler\s+deploy)", view)
     return m.group(1) if m else "the deploy"
+
+
+# Commands whose payload is PROSE: what follows is written down, not run.
+# Kept to the message-writing verbs, so a heredoc piped to a shell is still
+# read as commands.
+PROSE_COMMANDS = r"(?:git\s+(?:commit|tag)|gh\s+(?:pr|issue|release)\s+\w+)"
+# Flags whose value is always prose, wherever they appear.
+PROSE_FLAGS = r"(?:-m|--message|--body|--title|--notes|--description)"
+
+
+def strip_authored_prose(cmd: str) -> str:
+    """Drop text the command WRITES, keeping text it RUNS.
+
+    Committing the session-scope fix opened a marker: the message explains the
+    bug, so it contains the words "fly deploy", and the gate scans the whole
+    command string. Writing about a deploy is not deploying, and a gate that
+    cannot tell the two apart teaches its reader to dismiss it.
+
+    Two removals. A heredoc body, but only when a message-writing command is
+    consuming it -- `bash <<'EOF' ... flyctl deploy ... EOF` genuinely deploys
+    and must still be caught. And the value of a message flag anywhere, because
+    -m and --body never carry commands.
+    """
+    out = re.sub(
+        PROSE_COMMANDS + r"[^\n]*?<<-?\s*['\"]?(\w+)['\"]?\s*\n.*?\n\1\b",
+        " ", cmd, flags=re.DOTALL | re.IGNORECASE)
+    out = re.sub(PROSE_FLAGS + r"\s+'[^']*'", " ", out)
+    out = re.sub(PROSE_FLAGS + r'\s+"[^"]*"', " ", out)
+    return out
 
 
 def matches_any(text: str, patterns) -> bool:
@@ -230,6 +391,20 @@ NON_CONSUMER_ADVISORY = (
     "waiting on its consumer. /healthz, curl and API reads all passed on "
     "2026-08-24 while the SPA showed 'Arriving' with a blank Month. This "
     "check does not close the pending consumer drive."
+)
+
+BACKGROUND_WHY = (
+    "it was backgrounded, so it has not produced any output yet"
+)
+FAILED_WHY = "it failed, so it rendered nothing to assert on"
+
+DRIVE_INCOMPLETE = (
+    "[DRIVE NOT COMPLETE] That was a browser command, but {why}, and "
+    "{label} is still waiting on its consumer. On 2026-09-15 this gate "
+    "printed 'closed' for exactly such a command, which then timed out; a "
+    "gate closable by something that proves nothing protects less than it "
+    "appears to. Re-run the drive in the foreground and read the page state "
+    "back (snapshot / get / eval), then assert the CHANGED value."
 )
 
 CONSUMER_CLEARED = (
@@ -316,12 +491,57 @@ def _server_check(pending: tuple[str, str], reason: str) -> int:
     return 0
 
 
+def backgrounded(event: dict) -> bool:
+    """A backgrounded command has not produced output yet, so whatever it
+    would have observed is not observed. This is the 2026-09-15 case
+    exactly: the drive that closed the gate was still running, and later
+    timed out."""
+    return bool((event.get("tool_input") or {}).get("run_in_background"))
+
+
+def failed(event: dict) -> bool:
+    """A drive that errored observed nothing either. Read conservatively:
+    an unreadable or absent response is treated as success, because this
+    gate must never refuse to close on a drive that actually happened --
+    that direction turns it into noise and gets it approved reflexively."""
+    resp = event.get("tool_response")
+    if isinstance(resp, dict):
+        if resp.get("is_error") or resp.get("isError"):
+            return True
+        if resp.get("interrupted"):
+            return True
+        code = resp.get("returncode", resp.get("exit_code"))
+        if isinstance(code, int) and code != 0:
+            return True
+    return False
+
+
+def _observation(event: dict, pending, reason: str) -> int:
+    """Close on an observation that really happened."""
+    if backgrounded(event):
+        log(f"NOT-YET {reason} backgrounded pending={pending}")
+        emit_post(DRIVE_INCOMPLETE.format(label=pending[1], why=BACKGROUND_WHY))
+        return 0
+    if failed(event):
+        log(f"NOT-YET {reason} failed pending={pending}")
+        emit_post(DRIVE_INCOMPLETE.format(label=pending[1], why=FAILED_WHY))
+        return 0
+    return _close(reason, pending)
+
+
 def handle_post(event: dict) -> int:
     tool = event.get("tool_name") or ""
     pending = read_marker()
 
     if tool.startswith(BROWSER_TOOL_PREFIXES):
-        return _close(f"tool={tool}", pending) if pending else 0
+        if not pending:
+            return 0
+        if tool in BROWSER_OBSERVE_TOOLS:
+            return _observation(event, pending, f"tool={tool}")
+        # browser_navigate / click / type: a drive in progress. Stay quiet
+        # rather than re-advising, and leave the marker open.
+        log(f"NAVIGATE-ONLY tool={tool} pending={pending}")
+        return 0
 
     if tool == "WebFetch":
         return _server_check(pending, "tool=WebFetch") if pending else 0
@@ -331,10 +551,16 @@ def handle_post(event: dict) -> int:
     cmd = (event.get("tool_input") or {}).get("command", "") or ""
     if not cmd:
         return 0
-    view = normalize_command(cmd)
+    view = normalize_command(strip_authored_prose(cmd))
 
+    if matches_any(view, BROWSER_OBSERVE_CMD_PATTERNS):
+        if not pending:
+            return 0
+        return _observation(event, pending, f"cmd={cmd[:60]}")
     if matches_any(view, BROWSER_CMD_PATTERNS):
-        return _close(f"cmd={cmd[:60]}", pending) if pending else 0
+        # A browser command that observes nothing (open / click / fill).
+        log(f"NAVIGATE-ONLY cmd={cmd[:60]} pending={pending}")
+        return 0
 
     for kind, patterns in (("browser", BROWSER_DEPLOY_PATTERNS),
                            ("fetch", FETCH_DEPLOY_PATTERNS)):
@@ -391,6 +617,10 @@ def main() -> int:
 
     if os.environ.get("DEPLOY_CONSUMER_GATE_OFF"):
         return 0
+
+    # Bind the marker to the session that owns it, before either arm reads it.
+    global MARKER_FILE
+    MARKER_FILE = marker_path(event.get("session_id") or "")
 
     # Route by event shape. A PostToolUse payload always carries tool_name; a
     # Stop payload never does. hook_event_name is honored first when present.

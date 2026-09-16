@@ -25,7 +25,7 @@ import re
 import threading
 import uuid
 from dataclasses import dataclass, replace
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import NamedTuple
 from decimal import Decimal
 from pathlib import Path
@@ -41,10 +41,12 @@ from ..cli import NON_RECEIPT_LABELS, ConfigError, generate_expenses, reconcile
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
 from ..duplicates import (
+    collapsed_duplicate_copies,
     duplicate_group_id,
     duplicate_row_flags,
     find_duplicate_charges,
-    find_duplicate_receipts,
+    find_duplicate_receipt_groups,
+    inherit_card_from_copies,
     n_extra_copies,
 )
 from ..ingest._common import merge_transactions
@@ -79,7 +81,18 @@ from ..output.zoho_expense_export import (
     write_zoho_expense_export,
 )
 from ..output.zoho_export import write_zoho_export
+from ..cost_centers import COST_CENTER_SCOPE_NOTE
+from ..cost_centers import (
+    UNRESOLVED_SILENT as UNRESOLVED_COST_CENTER,
+)
+from ..cost_centers import CostCenterRegistry, CostCenterResolution
 from ..merchant_registry import MerchantRegistry, normalize_merchants_setting
+from .month_health import (
+    HEALTH_OK,
+    card_scoping_on,
+    month_health,
+    unchecked as unchecked_month_health,
+)
 from .serialize import (
     categorization_from_dict,
     categorization_to_dict,
@@ -618,7 +631,7 @@ def _setup_advisories(
     # Per-card and Zoho-optional (Cards R2, 2026-08-21, feedback notes
     # 9/11): name the actual card, say the account is optional, and say
     # what the gap costs. The old advisory fired only on an EMPTY map and
-    # called the account required ("This card has no Zoho bank account"),
+    # called the account required ("This card has no bank account"),
     # which is the wording the owner pushed back on.
     acct = ""
     stmt = cfg.get("statement")
@@ -638,8 +651,8 @@ def _setup_advisories(
         out.append({
             "setting": "cards",
             "message": (
-                f"Card '{acct}' has no Zoho paid-through account set "
-                "(optional: only the Zoho journal export uses it). Journal "
+                f"Card '{acct}' has no posting account set "
+                "(optional: only the data export uses it). Export "
                 "entries balance to a visible 'Card: ...' placeholder until "
                 "one is set in Settings > Cards."
             ),
@@ -952,15 +965,27 @@ def replace_intake_files(
             )
 
     # Validation passed for everything requested; now touch the disk.
+    # Item 66: archive every file this call is about to destroy BEFORE writing
+    # anything. Pre-fix a swap wrote the new bytes over the old ones when the
+    # name matched and unlinked the old file when it did not, so either way
+    # the superseded upload left the volume with no copy and no record. The
+    # replaced file now survives the replacement; it is moved aside, never
+    # deleted, so it is still there when the batch commits and afterwards.
+    archive_dir = work_dir / "superseded"
+    doomed: list[str] = []
+    if new_stmt_name is not None:
+        doomed += [n for n in (intake.statement_name, new_stmt_name) if n]
+    if new_rcpt_name is not None:
+        doomed += [n for n in (intake.receipts_name, new_rcpt_name) if n]
+    for name in dict.fromkeys(doomed):
+        prior = work_dir / name
+        if prior.is_file():
+            _archive_superseded_file(prior, archive_dir, now_iso)
     if new_stmt_name is not None:
         (work_dir / new_stmt_name).write_bytes(statement_bytes)
-        if intake.statement_name and intake.statement_name != new_stmt_name:
-            (work_dir / intake.statement_name).unlink(missing_ok=True)
         detect_note = _detect_note(work_dir / new_stmt_name)
     if new_rcpt_name is not None:
         (work_dir / new_rcpt_name).write_bytes(receipts_bytes)
-        if intake.receipts_name and intake.receipts_name != new_rcpt_name:
-            (work_dir / intake.receipts_name).unlink(missing_ok=True)
 
     store.update_intake_files(
         intake.intake_id,
@@ -1172,8 +1197,10 @@ def apply_overrides(
                         li,
                         categorization=Categorization(
                             category=ov["category"],
+                            # Item 70: the line's own account only survives
+                            # an override that keeps its category.
                             zoho_account=ov.get("zoho_account")
-                            or (base.zoho_account if base else None),
+                            or override_base_account(ov["category"], base),
                             confidence=1.0,
                             source=ClassificationSource.LINE,
                             reasoning="reclassified by reviewer",
@@ -1279,7 +1306,7 @@ def apply_decisions(
             continue  # nothing to claim / receipt already taken -> unmatched
         orig = next((m for m in cands if m.document_id == chosen), None)
         reason = (
-            "already posted in Zoho (reviewer)"
+            "already posted in the books (reviewer)"
             if status_for(tx_id) == STATUS_ALREADY_POSTED
             else "confirmed by reviewer"
         )
@@ -1449,7 +1476,15 @@ def validate_manual_match(
     rec = next((r for r in receipts if r.document_id == document_id), None)
     if rec is None:
         return "Unknown receipt for this run."
-    if rec.legal_entity_id != tx.legal_entity_id:
+    # The matcher's own rule since 2026-09-11: an EMPTY entity on either
+    # side is unscoped (a mailed receipt before its card is known, a charge
+    # on a card the registry cannot name, item 59); only two NAMED entities
+    # that differ refuse.
+    if (
+        rec.legal_entity_id
+        and tx.legal_entity_id
+        and rec.legal_entity_id != tx.legal_entity_id
+    ):
         return "Receipt and charge belong to different legal entities."
     return None
 
@@ -1458,6 +1493,92 @@ MANUAL_RECEIPT_MAX_BYTES = 15 * 1024 * 1024
 MANUAL_RECEIPT_SUFFIXES = frozenset(
     {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif"}
 )
+
+
+# --------------------------------------------------------------------------
+# Stored-file retention (backlog item 66)
+# --------------------------------------------------------------------------
+# Two paths used to destroy bytes this system had already accepted: replacing
+# a file on a queued upload deleted the file it replaced, and re-attaching a
+# receipt to the same charge under the same name wrote straight over it.
+# Neither kept a prior version and neither left a record, in a system whose
+# whole purpose is retaining what arrived
+# (docs/electronic-storage-system-description.md section 12, rows 3 and 14).
+# Nothing here deletes: a superseded file is moved aside under a versioned
+# name and stays on the volume.
+
+
+def _archive_superseded_file(path: Path, archive_dir: Path, now_iso: str) -> str:
+    """Move `path` into `archive_dir` under a versioned name; return that
+    name. The rename keeps the bytes on the same volume and takes them out of
+    every glob the live resolvers use, so an archived copy can never be served
+    in place of the current one."""
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    stamp = re.sub(r"[^0-9]", "", now_iso or "")[:14] or "00000000000000"
+    target = archive_dir / f"{stamp}__{path.name}"
+    n = 1
+    while target.exists():
+        n += 1
+        target = archive_dir / f"{stamp}-{n}__{path.name}"
+    path.replace(target)
+    return target.name
+
+
+def _store_manual_receipt(
+    dest_dir: Path,
+    fs_tx: str,
+    fs_name: str,
+    file_bytes: bytes,
+    now_iso: str,
+) -> tuple[Path, list[dict]]:
+    """Store one hand-attached receipt for a charge without ever writing over
+    stored bytes.
+
+    A charge holds exactly ONE current file. Every file it already holds is
+    archived first, which closes both halves of the pre-fix defect: a
+    re-attach under the SAME name destroyed the earlier bytes in place, and
+    one under a DIFFERENT name left two files behind, from which the image
+    endpoint and `_attached_receipt_file` both take `sorted(...)[0]` and so
+    could serve the superseded version. Re-uploading byte-identical content is
+    a no-op. Returns the current path and one record per archived file.
+    """
+    dest = dest_dir / f"{fs_tx}__{fs_name}"
+    existing = sorted(p for p in dest_dir.glob(f"{fs_tx}__*") if p.is_file())
+    if [p.name for p in existing] == [dest.name] and dest.read_bytes() == file_bytes:
+        return dest, []  # the stored file already IS this upload
+    archive_dir = dest_dir / "superseded"
+    superseded = [
+        {
+            "stored": p.name,
+            "archived": _archive_superseded_file(p, archive_dir, now_iso),
+            "at": now_iso,
+        }
+        for p in existing
+    ]
+    dest.write_bytes(file_bytes)
+    return dest, superseded
+
+
+def _record_receipt_file(
+    snapshot: dict | None,
+    document_id: str,
+    stored: str,
+    superseded: list[dict],
+    now_iso: str,
+) -> dict:
+    """The snapshot's record of which file backs an attached receipt and what
+    that attachment replaced, keyed by document id. `superseded` accumulates,
+    so a charge re-attached three times names all three prior versions and the
+    archived file each one became. Stored only; neither view payload exposes
+    it, because item 66 asks for a record, not an SPA field."""
+    files = dict((snapshot or {}).get("receipt_files") or {})
+    entry = dict(files.get(document_id) or {})
+    files[document_id] = {
+        "stored": stored,
+        "at": now_iso,
+        "superseded": list(entry.get("superseded") or []) + list(superseded),
+    }
+    return files
 
 
 def attach_emailed_receipt(
@@ -1507,8 +1628,13 @@ def attach_emailed_receipt(
     # both name parts so the file lands IN manual-receipts, not a subdir.
     fs_tx = re.sub(r"[^A-Za-z0-9._-]", "_", transaction_id)
     fs_name = re.sub(r"[^A-Za-z0-9._-]", "_", safe_name)
-    dest = dest_dir / f"{fs_tx}__{fs_name}"
-    dest.write_bytes(file_bytes)
+    # Item 66: a re-attach archives whatever this charge already holds under a
+    # versioned name instead of writing over it. `superseded` is recorded on
+    # the snapshot below, inside the same commit, so the replacement is not
+    # only survivable but findable.
+    dest, superseded = _store_manual_receipt(
+        dest_dir, fs_tx, fs_name, file_bytes, now_iso
+    )
 
     # One manual receipt per charge: a stable id makes re-upload replace.
     document_id = f"manual:{transaction_id}"
@@ -1540,20 +1666,53 @@ def attach_emailed_receipt(
             receipt_name=safe_name,
         )
 
-    receipts = [r for r in receipts if r.document_id != document_id]
-    receipts.append(receipt)
-    if document_id not in outcome.unmatched_receipts:
-        outcome.unmatched_receipts.append(document_id)
+    # Commit under the batch writer lock against a FRESH re-read, the shape
+    # `rematch_month` already uses (item 66). The read at the top of this
+    # function happened before the vision call, which takes seconds; rebuilding
+    # the period record from `dict(run.snapshot)` afterwards silently threw
+    # away everything another writer had committed in between -- a mailed-in
+    # receipt, a card assignment, a re-match -- because the whole record was
+    # rewritten from a stale copy, with no lock held and no re-read.
+    with _BATCH_ADD_LOCK:  # item 66: manual per-charge attach
+        fresh = store.get_run(run.run_id)
+        if fresh is None:
+            # Deleted while the receipt was being read. Refuse honestly rather
+            # than write a snapshot UPDATE that matches zero rows.
+            return "This batch no longer exists (it was deleted).", None
+        run = fresh
+        fresh_tx, receipts, outcome, _ = snapshot_from_dict(fresh.snapshot)
+        if not any(t.transaction_id == transaction_id for t in fresh_tx):
+            # A statement re-read retires transaction ids by design. Confirming
+            # a decision against a charge the month no longer holds would
+            # strand it, so refuse with the sentence the up-front check uses.
+            return "Unknown transaction for this run.", None
+        receipts = [r for r in receipts if r.document_id != document_id]
+        receipts.append(receipt)
+        if document_id not in outcome.unmatched_receipts:
+            outcome.unmatched_receipts.append(document_id)
 
-    # Preserve extra snapshot keys (charge_categorizations, version):
-    # revise only the two entries this attachment touches.
-    new_snapshot = dict(run.snapshot)
-    new_snapshot["receipts"] = [receipt_to_dict(r) for r in receipts]
-    new_snapshot["outcome"] = outcome_to_dict(outcome)
-    store.update_run_snapshot(run.run_id, new_snapshot)
-    store.set_decision(
-        run.run_id, transaction_id, STATUS_CONFIRMED, document_id, now_iso
-    )
+        # Preserve extra snapshot keys (charge_categorizations, version):
+        # revise only the entries this attachment touches.
+        new_snapshot = dict(fresh.snapshot)
+        new_snapshot["receipts"] = [receipt_to_dict(r) for r in receipts]
+        new_snapshot["outcome"] = outcome_to_dict(outcome)
+        # Item 70: a re-attach replaces the document with a DIFFERENT file, so
+        # the old file's extraction must not stay its baseline: the re-match
+        # bakes from the baseline, and would resurrect the superseded read.
+        baseline = new_snapshot.get(EXTRACTED_RECEIPTS_KEY)
+        if isinstance(baseline, list):
+            new_snapshot[EXTRACTED_RECEIPTS_KEY] = [
+                d for d in baseline
+                if not (isinstance(d, dict) and d.get("document_id") == document_id)
+            ]
+        if superseded:
+            new_snapshot["receipt_files"] = _record_receipt_file(
+                fresh.snapshot, document_id, dest.name, superseded, now_iso
+            )
+        store.update_run_snapshot(run.run_id, new_snapshot)
+        store.set_decision(
+            run.run_id, transaction_id, STATUS_CONFIRMED, document_id, now_iso
+        )
     # R4: a confirmed manual attach settles its receipt -- record the
     # claim. The receipt was just created in this run, so no other run can
     # hold it; the sync is for the registry, not for a conflict.
@@ -1864,7 +2023,7 @@ def ingest_receipts_folder_into_run(
     # detector so the headline count matches the §18 duplicate panel the
     # reviewer then works.
     dup_new_docs: set[str] = set()
-    for grp in find_duplicate_receipts(pool):
+    for grp, _basis in find_duplicate_receipt_groups(pool):
         grp_new = [d for d in grp if d in new_ids]
         if grp_new and any(d not in new_ids for d in grp):
             dup_new_docs.update(grp_new)
@@ -1895,11 +2054,46 @@ def ingest_receipts_folder_into_run(
         "issue_details": issue_details,
     }
 
-    new_snapshot = dict(run.snapshot)
-    new_snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
-    new_snapshot["outcome"] = outcome_to_dict(merged)
-    new_snapshot["folder_ingest"] = summary
-    store.update_run_snapshot(run.run_id, new_snapshot)
+    # Commit under the batch writer lock against a FRESH re-read, the shape
+    # `rematch_month` already uses (item 66). Everything above runs vision over
+    # a whole folder and then the matcher, which is minutes; rebuilding the
+    # period record from `dict(run.snapshot)` afterwards rewrote it from the
+    # row read before any of that started, so a concurrent write was erased
+    # with no trace and no error.
+    with _BATCH_ADD_LOCK:  # item 66: bulk receipt-folder ingest
+        fresh = store.get_run(run.run_id)
+        if fresh is None:
+            raise RunInputError("This batch no longer exists (it was deleted).")
+        fresh_tx, fresh_receipts, _, _ = snapshot_from_dict(fresh.snapshot)
+        # Never drop a charge the month already holds. `merged` buckets the
+        # charges this ingest read minutes ago, so a statement upload that
+        # landed in between would leave its charges in no bucket at all and
+        # break the reconciliation guarantee. Refuse instead: nothing is
+        # written, so nothing is lost, and the folder can be re-uploaded.
+        committing = {t.transaction_id for t in transactions}
+        dropped = [
+            t.transaction_id for t in fresh_tx
+            if t.transaction_id not in committing
+        ]
+        if dropped:
+            raise RunInputError(
+                f"another statement upload added {len(dropped)} charge(s) to "
+                "this month while the folder was read; nothing was written, so "
+                "no charge was lost. Upload the folder again."
+            )
+        # Receipts that arrived mid-ingest (mail, a hand attach) join the pool
+        # as unmatched rather than vanishing -- the same treatment the
+        # `rematch_month` commit gives them.
+        known_ids = {r.document_id for r in pool}
+        extra = [r for r in fresh_receipts if r.document_id not in known_ids]
+        if extra:
+            pool = pool + extra
+            merged.unmatched_receipts.extend(r.document_id for r in extra)
+        new_snapshot = dict(fresh.snapshot)
+        new_snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
+        new_snapshot["outcome"] = outcome_to_dict(merged)
+        new_snapshot["folder_ingest"] = summary
+        store.update_run_snapshot(run.run_id, new_snapshot)
     return summary
 
 
@@ -1987,7 +2181,20 @@ def _fx_breakdown(tx: "Transaction", receipt: "Receipt | None") -> dict | None:
     }
 
 
-def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
+def _receipt_view(
+    r: Receipt,
+    overrides: dict[tuple[str, int], dict],
+    *,
+    work_dir: Path,
+    expense_mode: bool,
+) -> dict:
+    """One receipt, as both review payloads render it.
+
+    `work_dir` and `expense_mode` are required rather than defaulted: they
+    decide `receipt_image_available`, and a caller that forgets them would
+    silently tell the reviewer that every receipt is unopenable. That is the
+    shape item 52's defect had.
+    """
     items = []
     for i, li in enumerate(r.line_items):
         ov = overrides.get((r.document_id, i))
@@ -2035,13 +2242,17 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
         # only when the run-level `has_image_info` flag is set (noise guard).
         "has_receipt_image": r.has_receipt_image,
         # Receipt preview (2026-07-25): True when the backend can serve this
-        # receipt's image via GET /api/runs/{id}/receipts/{doc}/image (a
-        # vision-mapped ER-PDF page, or an operator-uploaded file — the
-        # single-file `manual:` attach or a bulk `folder:` receipt).
+        # receipt's image via GET /api/runs/{id}/receipts/{doc}/image — a
+        # vision-mapped ER-PDF page, or a file the endpoint would find.
+        # Resolved against DISK by `receipt_image_file`, never from the shape
+        # of the document id: a mail-arrived receipt is neither `manual:` nor
+        # `folder:` and the id test called every one of them unavailable.
         "receipt_image_available": (
             r.receipt_image_page is not None
-            or r.document_id.startswith("manual:")
-            or r.document_id.startswith("folder:")
+            or receipt_image_file(
+                work_dir, r.document_id, expense_mode=expense_mode
+            )
+            is not None
         ),
         "reference": r.detected_reference or "",
         "report_number": r.report_number or "",
@@ -2110,9 +2321,9 @@ def _row_posting_category(
             base = li.categorization
             if ov and ov.get("category"):
                 category = ov["category"]
-                account = ov.get("zoho_account") or (
-                    base.zoho_account if base else None
-                )
+                # Item 70: same rule as `apply_overrides` -- a reclassified
+                # line never keeps the account chosen for its old category.
+                account = ov.get("zoho_account") or override_base_account(category, base)
                 src = "EDITED"
             elif base is not None:
                 category = base.category
@@ -2384,6 +2595,11 @@ def build_view(
     renders byte-identically to before the field existed."""
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
     rec_by_id = {r.document_id: r for r in receipts}
+    # What `receipt_image_available` is resolved against (item 52). Read
+    # once per payload; `receipt_image_file` gates the receipts-dir branch
+    # on the mode exactly as the image endpoint does.
+    rv_work_dir = Path(run.work_dir)
+    rv_expense_mode = run_mode(run) == MODE_EXPENSE_GENERATION
     # R4b: borrowed trip receipts referenced by the outcome ride the
     # snapshot as copies; fold them into the lookup so a cross-batch
     # pairing renders its receipt. They are NOT part of `receipts`: the
@@ -2394,7 +2610,30 @@ def build_view(
         except (KeyError, TypeError, ValueError):
             continue
         rec_by_id.setdefault(br.document_id, br)
+    # Where each borrowed receipt lives. Read once here because both the
+    # candidate rows below and the settled-row badge further down name it,
+    # and item 61 made the map hold two kinds (a trip, a neighbouring
+    # month). Empty on every month borrowing nothing, which is most of them.
+    borrow_sources = (run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {}
     by_tx = _candidates_by_tx(outcome)
+    # Item 57: the structural check readiness cannot answer on its own. A
+    # month the matcher could not see (sign / entity / currency / card
+    # broken) has nothing undecided BECAUSE nothing was proposed; this
+    # names the broken input and closes the post gate below.
+    # Item 62: receipts the reviewer settled outside the card (bank
+    # transfer, cash, PayPal). They stay in the month and in the grid; the
+    # RECONCILIATION side lets them go, starting here -- a receipt no card
+    # will ever carry must not count as an exact pair the matcher "missed"
+    # and so must never make a healthy month read broken.
+    settled_outside = settled_outside_map(run.snapshot or {})
+    health_receipts = (
+        [r for r in receipts if r.document_id not in settled_outside]
+        if settled_outside else receipts
+    )
+    health = month_health(
+        transactions, health_receipts, outcome,
+        card_scoping=card_scoping_on(run.config),
+    )
 
     # Slice 10: receiptless-charge categorizations (extra snapshot key;
     # absent on pre-Slice-10 runs => empty map, rows render as before).
@@ -2458,6 +2697,75 @@ def build_view(
     coverage, coverage_key_by_tx = month_coverage(
         run, transactions, states
     )
+    # Item 60: which charge currently HOLDS each receipt, under the effective
+    # verdict. `candidates` come from the raw outcome (every receipt the
+    # matcher scored against this charge) while the bucket comes from the
+    # assignment, and one receipt settles one charge. So a charge whose
+    # candidates were all won by other charges renders with candidates and a
+    # bucket of `unmatched`, and the SPA, deriving its label from the bucket,
+    # said "No receipt found" about a receipt that is sitting on the row
+    # above. Naming the holder is the fact the label was missing; it is the
+    # charge's own id on its own row, so a candidate is only ever "taken"
+    # from somebody else's perspective.
+    holder_by_doc: dict[str, str] = {}
+    for m in effective.matches:
+        holder_by_doc.setdefault(m.document_id, m.transaction_id)
+    for tx_id_, st in states.items():
+        if st["held_doc"]:
+            holder_by_doc[st["held_doc"]] = tx_id_
+    tx_by_id_all = {t.transaction_id: t for t in transactions}
+
+    def _from_batch(document_id: str) -> dict:
+        """`{"from_batch": {...}}` when this candidate's receipt is borrowed
+        from another batch, else `{}` so the key is absent rather than null.
+
+        Item 61: a borrowed receipt was anonymous until it was CHOSEN (the
+        row's `settled_by` badge), so an offered one read as if it belonged
+        to this month. Same object on both sides now, and it names a trip or
+        a neighbouring month by the same key."""
+        src = borrowed_source_view(borrow_sources.get(document_id))
+        return {"from_batch": src} if src else {}
+
+    def _held_by(document_id: str, by_tx_id: str) -> dict:
+        """`{"held_by": {...}}` when another charge holds this receipt, else
+        `{}` so the key is absent rather than null."""
+        holder = holder_by_doc.get(document_id)
+        if not holder or holder == by_tx_id:
+            return {}
+        htx = tx_by_id_all.get(holder)
+        if htx is None:
+            return {}
+        return {
+            "held_by": {
+                "transaction_id": holder,
+                "vendor": htx.vendor_from_statement,
+                "amount": _fmt_amount(htx.amount),
+                "currency": htx.transaction_currency,
+                "date": htx.transaction_date.isoformat()
+                if htx.transaction_date else None,
+            }
+        }
+
+    # Item 16: a rejected verdict releases the charge's whole proposal --
+    # `apply_decisions` pass 3 sends the charge to unmatched and consumes
+    # none of its receipts -- but `candidates` still come from the raw
+    # outcome, so every receipt the reviewer just pushed away re-renders
+    # underneath the row exactly as it did before, offered again as if it
+    # were still on the table. Nothing in the payload said a pairing had
+    # been turned down, so no affordance could answer "what now". The flag
+    # is the fact that was missing, and it reads the CURRENT verdict, so
+    # resetting the charge to pending clears it.
+    #
+    # Charge-level, because a reject is: `apply_decisions`,
+    # `effective_settlements` and `sync_claim_for_decision` all read the
+    # status alone and ignore `chosen_document_id`, and a bulk reject
+    # writes that column NULL, so marking only a named document would
+    # leave the commonest path unmarked.
+    def _rejected_pairing(charge_status: str) -> dict:
+        """`{"rejected": True}` on every candidate of a rejected charge,
+        else `{}` so the key is absent rather than false."""
+        return {"rejected": True} if charge_status == STATUS_REJECTED else {}
+
     for tx in transactions:
         tx_id = tx.transaction_id
         decision = decisions.get(tx_id)
@@ -2504,10 +2812,29 @@ def build_view(
                     # receipt's Zoho payment mode. 50 means neither side named
                     # a card, so it neither corroborates nor contradicts.
                     "card_pct": round(m.card_score * 100),
-                    "receipt": _receipt_view(r, overrides) if r else None,
+                    "receipt": (
+                        _receipt_view(
+                            r, overrides, work_dir=rv_work_dir,
+                            expense_mode=rv_expense_mode,
+                        )
+                        if r else None
+                    ),
                     # Cross-currency comparison (charge vs receipt vs Zoho's
                     # own conversion); None for same-currency pairs.
                     "fx": _fx_breakdown(tx, r),
+                    # Item 60: the charge that currently holds this receipt,
+                    # when it is not this one. Parallel field, ABSENT (not
+                    # null) on a candidate nobody else holds, so a month with
+                    # no contested receipt renders exactly as before.
+                    **_held_by(m.document_id, tx_id),
+                    # Item 16: the reviewer turned this pairing down.
+                    # Parallel field, ABSENT (not false) everywhere else,
+                    # so a month with no reject renders as it did before.
+                    **_rejected_pairing(status),
+                    # Item 61: the batch this candidate's receipt lives in,
+                    # when it is not this one. Parallel field, ABSENT on
+                    # every candidate from the month's own pool.
+                    **_from_batch(m.document_id),
                 }
             )
         # PR B — a hand-made manual match: the held receipt was never an
@@ -2525,8 +2852,13 @@ def build_view(
                     "amount_pct": None,
                     "date_pct": None,
                     "vendor_pct": None,
-                    "receipt": _receipt_view(rec_by_id[held_doc], overrides),
+                    "receipt": _receipt_view(
+                        rec_by_id[held_doc], overrides,
+                        work_dir=rv_work_dir,
+                        expense_mode=rv_expense_mode,
+                    ),
                     "fx": _fx_breakdown(tx, rec_by_id[held_doc]),
+                    **_from_batch(held_doc),
                 }
             )
 
@@ -2586,6 +2918,16 @@ def build_view(
         posting_category = _row_posting_category(
             matched_rec, overrides, charge_cat_view
         )
+        # Item 70: a needs-review row holds no receipt until confirmed, so a
+        # category set on its candidate saved and never showed. Show the one
+        # the Confirm would book, flagged as proposed. Display only: the
+        # readiness below still reads `matched_rec`, which stays None.
+        proposed_flag: dict = {}
+        if matched_rec is None and effective_bucket == "review":
+            proposed = proposed_posting_category(cands, rec_by_id, overrides)
+            if proposed is not None:
+                posting_category = proposed
+                proposed_flag = {"posting_category_proposed": True}
         review = resolve_review(
             is_posted=is_posted,
             effective_bucket=effective_bucket,
@@ -2627,6 +2969,10 @@ def build_view(
                 # SPA can show categorization on reconciled rows too. None when
                 # the matched receipt is not categorized (e.g. a folder upload).
                 "posting_category": posting_category,
+                # Item 70: `posting_category` came from the candidate the
+                # Confirm would take, not a held receipt. Parallel field,
+                # ABSENT (not false) on every other row.
+                **proposed_flag,
                 # Review-by-exception state (2026-07-27): ready / check / pick
                 # / none + a plain "why". Server-computed so the SPA groups and
                 # bulk-confirms on it, never re-derives it.
@@ -2645,11 +2991,30 @@ def build_view(
     # Unmatched receipts come straight from the resolved outcome, so a
     # receipt freed by a reject (or stolen by a manual match) reappears
     # here and can be re-assigned.
+    # Item 62: scoped to what the EFFECTIVE outcome leaves unmatched, so a
+    # receipt that (however it got there) holds a charge renders as the
+    # match it is rather than disappearing from both sides of the screen.
+    settled_outside_ids = {
+        d for d in effective.unmatched_receipts
+        if d in settled_outside and d in rec_by_id
+    }
     unmatched_receipts = [
-        _receipt_view(rec_by_id[d], overrides)
+        _receipt_view(
+            rec_by_id[d], overrides,
+            work_dir=rv_work_dir, expense_mode=rv_expense_mode,
+        )
         for d in effective.unmatched_receipts
-        if d in rec_by_id
+        if d in rec_by_id and d not in settled_outside_ids
     ]
+    # The suggestion, never the disposition: a mode the scan read as a
+    # tender no card statement carries. Parallel and ABSENT when there is
+    # no signal, so a receipt with an empty payment mode -- which is what
+    # July's Redis, Konsultancy and 360Crossmedia invoices actually carry
+    # -- offers nothing and waits for the reviewer.
+    for rec in unmatched_receipts:
+        hit = suggested_settled_outside(rec.get("payment_mode"))
+        if hit is not None:
+            rec["suggested_settled_outside"] = hit
 
     # PR D — for each unmatched charge, the closest free receipt by amount
     # ("closest was $58.40, 4 days off"), so Chris sees the near-miss the
@@ -2774,9 +3139,19 @@ def build_view(
         ]
         for grp in find_duplicate_charges(transactions)
     ]
+    # Both receipt keys (vendor/date, then reference-only; item 69 round A),
+    # listed once so the legacy list, `duplicate_groups` and the counts read
+    # the same groups.
+    receipt_groups = find_duplicate_receipt_groups(receipts)
     duplicate_receipts = [
-        [_receipt_view(rec_by_id[d], overrides) for d in grp if d in rec_by_id]
-        for grp in find_duplicate_receipts(receipts)
+        [
+            _receipt_view(
+                rec_by_id[d], overrides,
+                work_dir=rv_work_dir, expense_mode=rv_expense_mode,
+            )
+            for d in grp if d in rec_by_id
+        ]
+        for grp, _basis in receipt_groups
     ]
 
     # §18: a flat, SPA-facing view of the duplicate groups with a stable,
@@ -2795,15 +3170,21 @@ def build_view(
             "members": members,
             "resolution": resolutions.get(gid),
         })
-    for grp in find_duplicate_receipts(receipts):
+    # Item 69 round A: a group only the reference key finds says so with
+    # `basis: "reference"`; ABSENT on every vendor/date group, so the
+    # payload for a month without such a group is byte-identical.
+    for grp, basis in receipt_groups:
         members = [d for d in grp if d in rec_by_id]
         gid = duplicate_group_id("receipt", members)
-        duplicate_groups.append({
+        entry = {
             "group_id": gid,
             "kind": "receipt",
             "members": members,
             "resolution": resolutions.get(gid),
-        })
+        }
+        if basis:
+            entry["basis"] = basis  # run view
+        duplicate_groups.append(entry)
 
     # §18 (2026-08-28): the same groups, carried ON the row. A group is only
     # actionable if the reviewer can see which row is in it; until now the
@@ -2835,20 +3216,22 @@ def build_view(
             if hit is not None:
                 rec["settled_by"] = hit
     # R4b, the month side of the same provenance: a charge settled with a
-    # receipt borrowed from a trip names the trip. Absent on every row
-    # settled from the month's own pool.
-    borrow_sources = (run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {}
+    # borrowed receipt names where the receipt came from. Absent on every
+    # row settled from the month's own pool. Item 61 added the second kind:
+    # a trip entry still renders `{run_id, trip_id, label}` byte for byte,
+    # and a neighbouring month's carries `kind: "adjacent"` instead of a
+    # trip id, so the badge can say which it is without guessing.
     if borrow_sources:
         for row in rows:
-            entry = borrow_sources.get(row.get("chosen_document_id"))
-            if isinstance(entry, dict):
-                row["settled_by"] = {
-                    "run_id": entry.get("run_id"),
-                    "trip_id": entry.get("trip_id"),
-                    "label": entry.get("label"),
-                }
+            src = borrowed_source_view(
+                borrow_sources.get(row.get("chosen_document_id"))
+            )
+            if src is not None:
+                row["settled_by"] = src
 
     n_tx = len(transactions)
+    # Item 62: the pool a card statement can actually settle.
+    n_matchable_receipts = len(receipts) - len(settled_outside_ids)
     n_unknown_currency = sum(1 for r in receipts if r.detected_currency is None)
     # L4 noise guard: the missing-image badge renders only when this run's
     # receipt source carries image references at all.
@@ -2868,19 +3251,29 @@ def build_view(
         # 3.10: credits, partitioned before matching, never receipt-matched.
         "n_refunds": n_refunds,
         "n_unmatched_rec": len(unmatched_receipts),
+        # Item 62: its own name, its own question -- how many receipts the
+        # reviewer settled outside the card. `n_receipts` still answers
+        # "how many receipts are in the month" and does NOT move: they are
+        # still in the month, still in the grid, still in the report.
+        "n_settled_outside": len(settled_outside_ids),
         # See the run-summary note above: charge-based `match_rate` under-reads
         # a receiptless-heavy month; `receipt_match_rate` reports receipts
         # placed (reconciled + review) over receipts that exist. The SPA leads
         # with the receipt rate and keeps the charge rate as a labelled
         # secondary figure. (2026-07-27)
         "match_rate": round(n_reconciled / n_tx * 100, 1) if n_tx else 0.0,
-        "n_receipts_matched": max(len(receipts) - len(unmatched_receipts), 0),
+        "n_receipts_matched": max(
+            n_matchable_receipts - len(unmatched_receipts), 0
+        ),
+        # Over the receipts a card COULD settle. A month whose only
+        # stragglers were paid by transfer reads 100%, which is the true
+        # answer: nothing is left for the statement to explain.
         "receipt_match_rate": (
             round(
-                (len(receipts) - len(unmatched_receipts))
-                / len(receipts) * 100, 1
+                (n_matchable_receipts - len(unmatched_receipts))
+                / n_matchable_receipts * 100, 1
             )
-            if receipts else 0.0
+            if n_matchable_receipts else 0.0
         ),
         "invariant_ok": (
             n_reconciled + n_review + n_unmatched_tx + n_refunds
@@ -2903,13 +3296,47 @@ def build_view(
         "n_duplicate_copies": (
             n_extra_copies(charge_dup_flags) + n_extra_copies(receipt_dup_flags)
         ),
-        # PR A — "Ready to post?" bar.
+        # PR A — "Ready to post?" bar. Item 57: a broken month is never
+        # ready, whatever the reviewer has (not) decided; `month_health`
+        # says which input is broken.
         "n_undecided": n_undecided,
-        "ready_to_post": n_undecided == 0,
+        "ready_to_post": n_undecided == 0 and health["state"] == HEALTH_OK,
+        "month_health": health,
+        # Item 59: charges whose card the registry cannot name carry no
+        # entity; the fix is defining the card once, not a row edit.
+        "n_charges_no_entity": sum(
+            1 for t in transactions if not (t.legal_entity_id or "").strip()
+        ),
         "n_unmapped_accounts": n_unmapped,
         "unreconciled_by_ccy": {
             ccy: f"{amt:,.2f}" for ccy, amt in sorted(unreconciled.items())
         },
+        # Item 60: charges the tool found receipts for that another charge
+        # now holds. Its own name because it is its own question: these rows
+        # are not "no receipt found", they are waiting on a contested pick.
+        "n_charges_receipt_taken": sum(
+            1 for r in rows
+            if r["effective_bucket"] == "unmatched"
+            and r["candidates"]
+            and all(c.get("held_by") for c in r["candidates"])
+        ),
+        # Item 16: (charge, receipt) pairings the reviewer turned down.
+        # Pairings, not rows: a rejected charge that never had a
+        # candidate contributes nothing, because no pairing was refused.
+        # Reversible until export, and `POST .../decisions` with
+        # `"pending"` is the reversal, so this falls as the reviewer
+        # undoes.
+        "n_rejected_pairings": sum(
+            1 for r in rows for c in r["candidates"] if c.get("rejected")
+        ),
+        # Item 61: receipts this month is using from the months either side
+        # of it. Counted off the committed source map, so it is what the
+        # month actually holds rather than what the pool offered; 0 on every
+        # month whose neighbours lent it nothing.
+        "n_adjacent_borrowed": sum(
+            1 for e in borrow_sources.values()
+            if isinstance(e, dict) and e.get("kind") == ADJACENT_BORROW_KIND
+        ),
         # PR C — memory legibility.
         "n_learned_lines": n_learned_lines,
         # L4 — missing receipt images (0 when the source has no image info).
@@ -3661,7 +4088,12 @@ def validate_trip_fields(payload: dict) -> tuple[dict | None, str | None]:
     """Clean a trip create/update payload. Returns (cleaned, None) or
     (None, error). ``travelers`` is a list of PERSON names (item 40's
     vocabulary), whole-list replace, may be empty while the roster is
-    still being collected."""
+    still being collected.
+
+    ``cost_center`` (item 47) is the trip's project or purpose, stored as
+    typed and NOT checked against the cost-center registry: trips and
+    cost centers are edited independently, so the edit ORDER must not
+    matter. Blank is a normal state and clears it."""
     if not isinstance(payload, dict):
         return None, "body must be an object"
     name = str(payload.get("name") or "").strip()[:200]
@@ -3693,6 +4125,7 @@ def validate_trip_fields(payload: dict) -> tuple[dict | None, str | None]:
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
         "travelers": travelers,
+        "cost_center": str(payload.get("cost_center") or "").strip()[:200],
     }, None
 
 
@@ -3790,6 +4223,9 @@ def trip_view(store: RunStore, trip: TripRow, batch: RunRow | None) -> dict:
         "start": trip.start_date,
         "end": trip.end_date,
         "travelers": list(trip.travelers),
+        # Item 47: parallel field, always present. A stale SPA reading
+        # it gets "" rather than undefined.
+        "cost_center": trip.cost_center,
         "created_at": trip.created_at,
         "updated_at": trip.updated_at,
         "batch_id": batch.run_id if batch is not None else None,
@@ -3838,6 +4274,13 @@ EXPENSE_HEADER_FIELDS = frozenset({
     # POST .../expenses/{doc}/private sets both and enforces that a
     # confirmation names who gets reimbursed.
     "private", "reimburse_to",
+    # Item 47: the cost-center override, the top of that chain. It
+    # rides the existing field-override mechanism rather than a second
+    # path, so it lands in `edited_fields` like every other override
+    # and the export needs no new machinery. Blank clears it. Validated
+    # against the registry in the route, which is where settings are
+    # readable (`validate_expense_field` is pure by design).
+    "cost_center",
 })
 EXPENSE_CATEGORY_FIELDS = frozenset({"category", "zoho_account"})
 
@@ -4400,23 +4843,30 @@ def apply_expense_edits(
                 ),
             )
         out.append(r)
-    # A manual add whose document already sits in the pool is skipped: after
-    # a statement attach BAKES the effective receipts into the snapshot, the
-    # edit rows stay (they still feed learning), and this guard keeps the
-    # overlay idempotent instead of duplicating every manual expense.
-    existing_ids = {r.document_id for r in out}
+    # A manual add whose document already sits in the pool is never appended
+    # twice: after a statement attach BAKES the effective receipts into the
+    # snapshot, the edit rows stay (they still feed learning), and this guard
+    # keeps the overlay idempotent instead of duplicating every manual expense.
+    #
+    # Item 70: the baked copy is REPLACED in place rather than kept. Once the
+    # edit routes reopened on a reconciling month, a manual add can be edited
+    # and its edit cleared after a bake, and the baked copy still carries the
+    # cleared value. The add's payload is its extraction, so rebuilding from
+    # it keeps the overlay both idempotent and reversible, at the same pool
+    # position so the matcher's input order does not move.
+    position = {r.document_id: i for i, r in enumerate(out)}
     for e in edits:
-        if (
-            e["op"] != "add"
-            or e["document_id"] in deleted
-            or e["document_id"] in existing_ids
-        ):
+        if e["op"] != "add" or e["document_id"] in deleted:
             continue
         r = _manual_expense_receipt(e["document_id"], e["payload"], default_entity)
         fields = field_overrides.get(r.document_id)
         if fields:
             r = _apply_header_overrides(r, fields)
-        out.append(r)
+        if r.document_id in position:
+            out[position[r.document_id]] = r
+        else:
+            position[r.document_id] = len(out)
+            out.append(r)
     return out
 
 
@@ -4549,6 +4999,70 @@ def resolve_batch_row_cards(
             "card_map_blocked": ambiguous
             or (card is not None and not card.zoho_account),
         }
+    return out
+
+
+def resolve_batch_row_cost_centers(
+    receipts: list[Receipt],
+    field_overrides: dict[str, dict[str, str]],
+    *,
+    settings: dict | None,
+    trip: dict | None,
+    card_res: dict[str, dict],
+) -> dict[str, CostCenterResolution]:
+    """Per-document cost-center resolution for an expense batch (item 47):
+    ``{document_id: CostCenterResolution}``.
+
+    Runs the chain in `CostCenterRegistry.resolve` over four candidates, in
+    its precedence order:
+
+    1. the row's own ``cost_center`` field override -- a reviewer decision,
+       beats everything;
+    2. the batch's TRIP, whose cost center a human DECLARED at creation
+       (item 38), which is why it outranks anything inferred;
+    3. the merchant registry entry for this row's vendor;
+    4. the resolved card's ``default_cost_center``, the weakest link
+       because a card belongs to a project only loosely.
+
+    Person and category are deliberately absent: person cannot separate
+    "Nicolas in Brazil" from "Nicolas on Lidar" (both of Dirk's own
+    examples), and letting category co-vary destroys the point of cutting
+    the money a second way.
+
+    Both registries are read LIVE from settings rather than from the
+    batch's config snapshot, and that is the point: the whole first phase
+    of this feature is an EMPTY registry, and the day the owner defines the
+    first cost center the existing months must start resolving without a
+    refresh pass. The card's `default_cost_center` is the exception by
+    construction -- it rides the card snapshot like `person`, so it reaches
+    an existing batch through refresh-master-data.
+
+    An empty registry returns a silent unresolved for every row (resolves
+    nothing AND flags nothing), which is the contract this whole feature
+    rests on: a review state firing on 100% of rows is noise, not signal.
+    """
+    registry = CostCenterRegistry.from_settings(settings)
+    # The merchant sweep is the expensive link (a fuzzy match per row), and
+    # nothing it found could resolve against an empty registry, so it is
+    # skipped. The empty-registry CONTRACT is deliberately NOT re-stated
+    # here: it lives in `registry.resolve` alone, so a change that unwires
+    # it reddens these rows instead of being masked by a second copy.
+    merchants = MerchantRegistry.from_settings(settings) if registry else None
+    trip_cc = str((trip or {}).get("cost_center") or "").strip()
+    out: dict[str, CostCenterResolution] = {}
+    for r in receipts:
+        card = (card_res.get(r.document_id) or {}).get("card")
+        merchant_cc = None
+        if merchants:
+            match = merchants.resolve(r.vendor_clean, r.detected_vendor)
+            if match is not None:
+                merchant_cc = match.cost_center
+        out[r.document_id] = registry.resolve(
+            override=(field_overrides.get(r.document_id) or {}).get("cost_center"),
+            trip=trip_cc,
+            merchant=merchant_cc,
+            card=getattr(card, "default_cost_center", "") if card else "",
+        )
     return out
 
 
@@ -4690,6 +5204,7 @@ def _expense_review(
     person: str | None = None,
     private: bool = False,
     suggested_private: bool = False,
+    needs_cost_center: bool = False,
 ) -> dict:
     """Review-by-exception for one expense (receipt-spine). Missing core
     fields first (an expense cannot export cleanly without date / amount /
@@ -4704,6 +5219,13 @@ def _expense_review(
     registry work, not row work, so it must never hide a more actionable
     per-row exception. `None` keeps the pre-item-40 behavior (statement-
     workbench callers do not attribute persons).
+
+    `needs_cost_center` (backlog item 47) is checked LAST OF ALL, after
+    `person`, for the same reason and one stronger: the fix is registry
+    work in Settings, and the flag is silent entirely until the owner has
+    defined at least one cost center (the caller passes False while the
+    registry is empty). It must never hide a more actionable per-row
+    exception.
 
     `suggested_private` (backlog item 41) takes the entity check's slot:
     a payment method no registered card matches SUGGESTS private money,
@@ -4788,6 +5310,16 @@ def _expense_review(
             "card in Settings > Cards, so every expense is attributed.",
             "needs_person",
         )
+    if review["state"] == "ready" and needs_cost_center:
+        # Item 47: registry work of the same class as needs_person, and
+        # ranked below it -- a row with no owner is the more actionable
+        # gap. Unreachable while the cost-center registry is empty.
+        return _review(
+            "check",
+            "No cost center on this expense yet. Pick the project or purpose "
+            "it belongs to, so project spend can be totalled.",
+            "needs_cost_center",
+        )
     return review
 
 
@@ -4825,6 +5357,11 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
     exactly what it had: the landing screen must render regardless.
     """
     summary = dict(run.summary or {})
+    # Item 67 stores the per-document render outcomes on the run summary, one
+    # entry per receipt. The list screen has no use for them and this is the
+    # one place the stored summary is served through as-is, so they stop here;
+    # the batch page reads them as `receipt_render` per row and one count.
+    summary.pop("receipt_render", None)
     snapshot = run.snapshot or {}
     # A run whose summary predates expense counts, or whose snapshot has no
     # receipts block yet (created, ingest still running or failed), keeps
@@ -4902,6 +5439,14 @@ def build_expense_view(
         orig_receipts, field_overrides, edits,
         category_overrides=overrides, default_entity=default_entity,
     )
+    # Item 69 round A: the same card inheritance `rematch_month` bakes, so the
+    # row's card / entity and the match outcome cannot disagree. Applied to
+    # every batch, statement or not: on a collecting month (September 2026 on
+    # deploy) a card-less invoice copy leaves "No legal entity yet" the moment
+    # its receipt copy names the card. A group ruled `ignore` lends nothing,
+    # and an operator-assigned hint word is never overwritten (grid).
+    grid_hints = _batch_card_hints(run.config)
+    receipts = inherit_card_from_copies(receipts, resolutions, grid_hints)  # grid
     receipts_dir = Path(run.work_dir) / "receipts"
     intake_provenance = (run.snapshot or {}).get("intake_provenance") or {}
     # Override-applied twins for the `books_as` fan-out (backlog item 2):
@@ -4922,6 +5467,10 @@ def build_expense_view(
                 n_learned_lines += 1
 
     expenses = []
+    # Item 68: document_id -> whether a file was found behind it. Item 67's
+    # render state covers the files; this covers the rows that have none,
+    # which are decided without any report build.
+    has_file_by_doc: dict[str, bool] = {}
     totals: dict[str, Decimal] = {}
     # Two different questions, two counters: `n_ready` is "needs nothing
     # from the reviewer", `n_categorized` is "has a category" (computed
@@ -4940,6 +5489,12 @@ def build_expense_view(
     # review states, the paid-through card step, and the card_review
     # strip — the same pass the export runs, so they cannot disagree.
     card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
+    # Item 47: the cost-center chain, over the same pass's cards. Silent
+    # for every row while the owner has defined no cost centers.
+    cost_res = resolve_batch_row_cost_centers(
+        receipts, field_overrides, settings=settings, trip=trip,
+        card_res=card_res,
+    )
     # The window this batch's dates are expected in, for the date guard
     # (backlog item 25). A company month derives it from the operator's
     # label first and the batch's own dates second, over the EDITED
@@ -5011,11 +5566,13 @@ def build_expense_view(
             "private": False, "reimburse_to": "", "suggested_private": False,
             "ambiguous": False, "card_map_blocked": False,
         }
+        cost = cost_res.get(r.document_id) or UNRESOLVED_COST_CENTER
         review = _expense_review(
             r, overrides, entity=res["entity"], period=period,
             person=res["person"],
             private=res["private"],
             suggested_private=res["suggested_private"],
+            needs_cost_center=cost.needs,
             # A hand-typed date, or a whole expense entered by hand, is the
             # reviewer's own value; the guard only questions the machine's.
             date_is_human=(
@@ -5047,26 +5604,30 @@ def build_expense_view(
                 if res["reimburse_to"] else "Private"
             )
             pt_source = "private"
-        rv = _receipt_view(r, overrides)
+        rv = _receipt_view(
+            r, overrides, work_dir=receipts_dir.parent, expense_mode=True,
+        )
         # An expense batch's receipt files live under the run's receipts
         # dir named `<document_id>`. HONEST availability: a manual expense
         # add has a `manual:` id and NO file — the generic prefix claim
-        # rendered a View button that 404s (note 8). A real document has a
-        # mapped page, a file in receipts/, or (post-graduation attach) a
-        # glob hit where the image endpoint actually serves it from.
-        source_name = r.document_id
-        has_file = (receipts_dir / r.document_id).is_file()
-        if not has_file:
-            hit = _attached_receipt_file(
-                receipts_dir.parent, r.document_id
-            )
-            if hit is not None:
-                has_file = True
-                # attach files are stored `{key}__{original-name}`
-                source_name = hit.name.split("__", 1)[-1]
-        rv["receipt_image_available"] = (
-            r.receipt_image_page is not None or has_file
+        # rendered a View button that 404s (note 8). `receipt_image_file`
+        # is that resolution, and since item 52 it is also what fills
+        # `receipt_image_available` on BOTH payloads, so the run payload
+        # can no longer answer the same question differently.
+        hit = receipt_image_file(
+            receipts_dir.parent, r.document_id, expense_mode=True
         )
+        has_file = hit is not None
+        # attach files are stored `{key}__{original-name}`; a file sitting
+        # in receipts/ IS the document id.
+        source_name = (
+            r.document_id
+            if hit is None or hit.parent == receipts_dir
+            else hit.name.split("__", 1)[-1]
+        )
+        # Item 68: whether the report builder would find anything to read
+        # for this row, resolved exactly the way `_evidence_item` does.
+        has_file_by_doc[r.document_id] = has_file
         # Which upload/mail this row came from (spool prefix stripped);
         # empty for rows the operator typed in with no document.
         rv["source_file"] = _display_name(source_name) if has_file else ""
@@ -5102,6 +5663,11 @@ def build_expense_view(
             # Parallel fields; "" / "none" until the card carries a person.
             "person": res["person"],
             "person_source": res["person_source"],
+            # Item 47: which project or purpose this expense belongs to,
+            # with its provenance and a parallel human-readable label:
+            # an un-updated SPA degrades to correct text instead of
+            # somebody else's copy (contract rule 5).
+            **cost.as_fields(),
             # Item 41: the private-expense state. `reimburse_to_prefill` is
             # the ONE sanctioned use of the sender claim — offered only on
             # a suggested/confirmed private row, shown as the claim it is,
@@ -5197,15 +5763,20 @@ def build_expense_view(
     resolutions = resolutions or {}
     rec_ids = {r.document_id for r in receipts}
     duplicate_groups = []
-    for grp in find_duplicate_receipts(receipts):
+    # Item 69 round A: `basis: "reference"` on a group only the reference
+    # key finds, ABSENT on every vendor/date group.
+    for grp, basis in find_duplicate_receipt_groups(receipts):
         members = [d for d in grp if d in rec_ids]
         gid = duplicate_group_id("receipt", members)
-        duplicate_groups.append({
+        entry = {
             "group_id": gid,
             "kind": "receipt",
             "members": members,
             "resolution": resolutions.get(gid),
-        })
+        }
+        if basis:
+            entry["basis"] = basis  # grid
+        duplicate_groups.append(entry)
 
     # The same groups carried ON the row (2026-08-28). This is the one
     # that matters most: an expense batch is where a twice-forwarded
@@ -5224,6 +5795,47 @@ def build_expense_view(
             if hit is not None:
                 e["settled_by"] = hit
 
+    # Item 67: what the last report build did with this expense's receipt.
+    # "ok" means its pages are in the document; "failed" means the file could
+    # not be turned into pages at all, so the report carries a caption naming
+    # it and nothing behind that caption. ABSENT until a report has been built
+    # for the month, because renderability is not knowable before then: a
+    # missing key means "not established", never "fine".
+    render_state = (run.summary or {}).get("receipt_render") or {}
+    for e in expenses:
+        state = (render_state.get(e.get("document_id")) or {}).get("render")
+        if state:
+            e["receipt_render"] = state
+    # Item 68: `receipt_image_available` answers "is there a file the app can
+    # show you", and item 67's `receipt_render` answers "did that file
+    # break". Neither answers the one the reader of the report is holding:
+    # does this expense have a PAGE. It is the positive form, it covers the
+    # rows the render state says nothing about (no file, so no page, and no
+    # build needed to know it), and it is what a coverage count can be
+    # summed from. Derived from 67's state rather than decided again: one
+    # fact, one channel. PARALLEL and ABSENT until known, per rule 1.
+    pages_known: dict[str, bool] = {}
+    for e in expenses:
+        doc = e["document_id"]
+        if not has_file_by_doc.get(doc, False):
+            pages_known[doc] = False
+        elif e.get("receipt_render"):
+            pages_known[doc] = e["receipt_render"] == "ok"
+        else:
+            continue
+        e["receipt_in_report"] = pages_known[doc]
+
+    # Item 62: the disposition rides the grid row, absent unless set. This
+    # view removes NOTHING -- the receipt is still an expense of this month
+    # and still prints in the report; only the reconciliation pool on the
+    # run payload lets it go.
+    grid_settled_outside = settled_outside_map(run.snapshot or {})
+    if grid_settled_outside:
+        for e in expenses:
+            hit = grid_settled_outside.get(e.get("document_id"))
+            if hit is not None:
+                e["settled_outside"] = hit
+
     has_image_info = any(r.has_receipt_image for r in receipts)
     n_categorized, n_uncategorized = categorized_counts(posted)
     set_aside = set_aside_view(run.snapshot or {})
@@ -5232,12 +5844,18 @@ def build_expense_view(
         "n_expenses": len(expenses),
         "n_receipts": len(expenses),
         "n_set_aside": sum(1 for e in set_aside if not e["restored"]),
+        # Item 62, same name and same question as the run payload.
+        "n_settled_outside": len(grid_settled_outside),
         "n_categorized": n_categorized,
         "n_uncategorized": n_uncategorized,
         # Rows the reviewer can leave alone entirely (category AND entity
         # AND the core fields). The batch page's headline count until
         # 2026-08-22, when it was mislabelled as "categorized".
         "n_ready": n_ready,
+        # Item 57: the same verdict the workbench carries, so whichever
+        # payload the SPA renders for a reconciling month says the month
+        # is broken. `checked: false` before a statement is loaded.
+        "month_health": run_month_health(run),
         "n_review": sum(
             1 for e in expenses if e["review"]["state"] in ("check", "pick")
         ),
@@ -5254,6 +5872,12 @@ def build_expense_view(
         # the fix is a person on the card, not a per-row edit.
         "n_needs_person": sum(
             1 for res in card_res.values() if not res.get("person")
+        ),
+        # Item 47: rows with no cost center, once at least one is
+        # defined. Structurally 0 while the registry is empty, which is
+        # the whole first phase; the SPA hides the chip at 0.
+        "n_needs_cost_center": sum(
+            1 for c in cost_res.values() if c.needs
         ),
         # Item 41: unconfirmed private-expense suggestions, and rows the
         # operator has confirmed private (reimbursement rows).
@@ -5298,6 +5922,16 @@ def build_expense_view(
         summary["n_roster_mismatch"] = sum(
             1 for e in expenses if e.get("roster_mismatch")
         )
+    # Item 68: how many expenses have a receipt PAGE in the built report.
+    # ABSENT while any row's verdict is still unknown, rather than present
+    # and quietly short by the rows nobody has decided yet — an undercount
+    # here would read as "receipts are missing" and send somebody hunting
+    # for files that are fine. Complete once the month's report has been
+    # built, which is also when item 67's render state arrives.
+    if len(pages_known) == len(expenses):
+        summary["n_receipts_in_report"] = sum(
+            1 for known in pages_known.values() if known
+        )
 
     # Phase 5 pickers: entities the reviewer can assign (the real entities
     # from the CoA provisioning + the card->entity map + the settings
@@ -5308,6 +5942,27 @@ def build_expense_view(
     # so every charge rolled up has a state that was computed for it.
     charges, charge_state_map = month_charge_states(run, decisions or {})
     coverage, _keys = month_coverage(run, charges, charge_state_map)
+    # Item 59: same count the workbench carries, from the same charge set
+    # the coverage panel rolls up. 0 before a statement is loaded.
+    summary["n_charges_no_entity"] = sum(
+        1 for t in charges if not (t.legal_entity_id or "").strip()
+    )
+    # Item 65: expenses whose amount could not be read, so they are in no
+    # total -- `totals_by_ccy` above skips them and the report's listing
+    # cannot print them. The payload half of the report's "excluded from
+    # the total" footer; 0 on a month where every amount parsed.
+    summary["n_amounts_unreadable"] = sum(
+        1 for r in receipts if r.detected_total is None
+    )
+    # Item 67: how many of this month's receipts produced no page in the
+    # report. Present only once a report has been built, the same rule the
+    # row's `receipt_render` follows: a 0 that actually means "nobody has
+    # built one yet" is the confidently-wrong shape contract rule 5 exists to
+    # prevent, and this count's whole job is telling a reviewer to go look.
+    if render_state:
+        summary["n_receipts_unrenderable"] = sum(
+            1 for e in expenses if e.get("receipt_render") == "failed"
+        )
 
     return {
         "run_id": run.run_id,
@@ -5360,6 +6015,13 @@ def build_expense_view(
         "category_options": list(EXPENSE_CATEGORIES),
         "account_options": _expense_account_options(run, settings),
         "entity_options": entity_options,
+        # Item 47: the row picker's list, active entries only, name-sorted,
+        # each with its display-only kind. Empty while the owner has defined
+        # none, which is the state the picker renders as "no cost centers
+        # defined yet" rather than as an error.
+        "cost_center_options": CostCenterRegistry.from_settings(
+            settings
+        ).options(),
         "parse_errors": parse_errors,
         "parse_issues": [
             {
@@ -5396,6 +6058,7 @@ def _expense_export_inputs(
     overrides: dict,
     field_overrides: dict[str, dict[str, str]],
     edits: list[dict],
+    dup_resolutions: dict[str, str] | None = None,
 ) -> tuple[list, dict]:
     """`(receipts, kwargs)` for the expense export — the overlay order the
     view uses (`apply_expense_edits` then `apply_overrides`) plus the card /
@@ -5403,7 +6066,11 @@ def _expense_export_inputs(
 
     Extracted so the CSV and the month's PDF report are built from ONE setup:
     the report quotes the export's rows, and a change to how a row resolves
-    reaches both or neither."""
+    reaches both or neither.
+
+    `dup_resolutions` (item 69 round A) is the run's duplicate resolutions,
+    so a group the reviewer ruled "not a duplicate" lends no card here
+    either; a caller without a store in hand passes None (no group ruled)."""
     # The extraction baseline, for the same reason the grid uses it: the
     # export applies the overlay, and on an attached month the stored receipt
     # block already has it baked in. Grid and export move together.
@@ -5415,6 +6082,10 @@ def _expense_export_inputs(
         receipts, field_overrides, edits,
         category_overrides=overrides, default_entity=default_entity,
     )
+    # Item 69 round A: the grid's card inheritance, so grid and export move
+    # together on a copy that borrowed its card.
+    export_hints = _batch_card_hints(run.config)
+    receipts = inherit_card_from_copies(receipts, dup_resolutions, export_hints)  # export
     receipts = apply_overrides(receipts, overrides)
     coa_gate = _coa_gate_from_config(run.config, run.work_dir)
     chart = getattr(coa_gate, "chart", None) if coa_gate is not None else None
@@ -5468,11 +6139,12 @@ def regenerate_expense_export(
     overrides: dict,
     field_overrides: dict[str, dict[str, str]],
     edits: list[dict],
+    dup_resolutions: dict[str, str] | None = None,
 ) -> Path:
     """Write the expense CSV for a batch with every reviewer edit applied.
     Returns the path."""
     receipts, kwargs = _expense_export_inputs(
-        run, overrides, field_overrides, edits
+        run, overrides, field_overrides, edits, dup_resolutions
     )
     out_path = Path(run.work_dir) / "expenses.csv"
     write_zoho_expense_export(receipts, out_path, **kwargs)
@@ -5485,6 +6157,9 @@ def build_expense_report(
     field_overrides: dict[str, dict[str, str]],
     edits: list[dict],
     trip: "TripRow | None" = None,
+    settings: dict | None = None,
+    render_outcomes: dict | None = None,
+    dup_resolutions: dict[str, str] | None = None,
 ) -> bytes:
     """The month's report PDF: the listing, then every receipt (owner
     directive 2026-08-23 — nothing imports the output any more, so the
@@ -5512,25 +6187,45 @@ def build_expense_report(
     row-to-document fan-out cannot be aligned the report falls back to
     the flat listing rather than mislabelling a section boundary, the
     same fallback the evidence captions already take.
+
+    A COMPANY month (item 47) sections the listing PER COST CENTER once
+    the chain resolves or flags any row: named centres in name order,
+    then an unassigned section, never hidden, with the stated limit above
+    the partition (card-and-receipt spend, not total project cost). With
+    no cost center defined the chain is silent for every row and the flat
+    listing stays exactly as it was; that decision is derived from
+    `CostCenterRegistry.resolve` (the empty-registry contract's only
+    home) rather than re-checked here. `settings` is the live settings
+    map both registries read from.
     """
     from ..output.month_report_pdf import build_expense_report_pdf
 
     receipts, kwargs = _expense_export_inputs(
-        run, overrides, field_overrides, edits
+        run, overrides, field_overrides, edits, dup_resolutions
     )
     private_by_doc = _private_reimbursements(field_overrides)
     company = [r for r in receipts if r.document_id not in private_by_doc]
     private = [r for r in receipts if r.document_id in private_by_doc]
 
     sections: list[dict] | None = None
-    person_groups: dict[str, list] | None = None
-    ordered_people: list[str] = []
+    sections_heading = ""
+    sections_note = ""
+    # A partition of the company listing into contiguous slices: the
+    # ordered keys, the receipts under each, and a function giving the
+    # caption fields a section carries. A trip keys on person (item 38);
+    # a company month keys on cost center (item 47). Either way the
+    # listing is rebuilt in section order and the export's own fan-out
+    # widths decide where each slice starts.
+    groups: dict[str, list] | None = None
+    ordered_keys: list[str] = []
+    section_fields = None  # key -> the section's caption fields
     roster: list[str] = list(trip.travelers) if trip is not None else []
+    # The same card pass the grid runs: it names the person a trip
+    # sections on and the card whose default a cost center falls back to.
+    card_res_report = resolve_batch_row_cards(
+        company, run.config, field_overrides
+    )
     if is_trip_batch(run):
-        card_res_report = resolve_batch_row_cards(
-            company, run.config, field_overrides
-        )
-
         def _person_of(r) -> str:
             res = card_res_report.get(r.document_id) or {}
             return str(res.get("person") or "").strip()
@@ -5542,31 +6237,75 @@ def build_expense_report(
                     return (0, i, "")
             return (1, 0, pf) if p else (2, 0, "")
 
-        person_groups = {}
+        groups = {}
         for r in company:
-            person_groups.setdefault(_person_of(r), []).append(r)
-        ordered_people = sorted(person_groups, key=_order_key)
-        company = [r for p in ordered_people for r in person_groups[p]]
+            groups.setdefault(_person_of(r), []).append(r)
+        ordered_keys = sorted(groups, key=_order_key)
+        roster_fold = {t.strip().casefold() for t in roster}
+
+        def _person_fields(p: str) -> dict:
+            return {
+                "person": p,
+                "on_roster": (p.casefold() in roster_fold) if p else None,
+            }
+
+        section_fields = _person_fields
+    else:
+        # Item 47: the chain over the same card pass, exactly as the grid
+        # runs it. It partitions only once it resolves or flags a row: an
+        # empty registry is silent for every row, so a month with no cost
+        # center defined keeps its flat listing. That silence is decided
+        # in `CostCenterRegistry.resolve` alone and deliberately NOT
+        # re-checked here, so the contract stays load-bearing.
+        cost_res = resolve_batch_row_cost_centers(
+            company, field_overrides, settings=settings, trip=None,
+            card_res=card_res_report,
+        )
+        if any(c.name or c.needs for c in cost_res.values()):
+            registry = CostCenterRegistry.from_settings(settings)
+            groups = {}
+            for r in company:
+                groups.setdefault(
+                    cost_res[r.document_id].name or "", []
+                ).append(r)
+            # Named centres in name order; the unassigned slice LAST and
+            # never dropped: a row nobody attributed is exactly what the
+            # reader of a cost-center roll-up needs to see.
+            ordered_keys = sorted(
+                groups, key=lambda k: (1, "") if not k else (0, k.casefold())
+            )
+
+            def _cost_center_fields(name: str) -> dict:
+                if not name:
+                    return {"caption": "Unassigned (no cost center)",
+                            "label": "Unassigned"}
+                kind = str(
+                    (registry.entries.get(name) or {}).get("kind") or ""
+                )
+                return {"caption": f"{name} ({kind})" if kind else name,
+                        "label": name}
+
+            section_fields = _cost_center_fields
+            sections_heading = "Listing by cost center"
+            sections_note = COST_CENTER_SCOPE_NOTE
+    if groups is not None:
+        company = [r for k in ordered_keys for r in groups[k]]
 
     rows = build_expense_rows(company, **kwargs)
 
     widths = [max(1, len(expense_posting_parts(r))) for r in company]
     aligned = sum(widths) == len(rows)
 
-    if person_groups is not None and aligned:
+    if groups is not None and section_fields is not None and aligned:
         sections = []
         pos = 1
-        roster_fold = {t.strip().casefold() for t in roster}
-        for p in ordered_people:
+        for key in ordered_keys:
             count = sum(
                 max(1, len(expense_posting_parts(r)))
-                for r in person_groups[p]
+                for r in groups[key]
             )
             sections.append({
-                "person": p,
-                "on_roster": (p.casefold() in roster_fold) if p else None,
-                "start": pos,
-                "count": count,
+                **section_fields(key), "start": pos, "count": count,
             })
             pos += count
     receipts_dir = Path(run.work_dir) / "receipts"
@@ -5591,6 +6330,9 @@ def build_expense_report(
             path = hit if hit is not None else None
         item: dict = {
             "rows": numbers,
+            # Item 68: which expense this evidence belongs to. The builder
+            # ignores it; the verdict recorder keys on it.
+            "document_id": r.document_id,
             "label": r.detected_vendor or "(no vendor)",
             "detail": "  ·  ".join(x for x in (
                 str(r.detected_date or ""),
@@ -5600,16 +6342,29 @@ def build_expense_report(
                 extra_detail,
             ) if x),
         }
+        # The document this evidence proves, so the build's per-file render
+        # outcome can be keyed back to the ROW that is missing its pages
+        # (item 67). The builders ignore keys they do not use.
+        item["document_id"] = r.document_id
         if path is not None:
             item["name"] = _display_name(path.name)
             item["data"] = path.read_bytes()
         return item
 
     n = 1
+    # Item 62 (owner ruling 2026-09-15): a receipt settled outside the card
+    # STILL prints. It is real company spend whose evidence is the invoice,
+    # and dropping it would hide the spend from the accountant; the caption
+    # names the tender so the reader knows why no card line matches it.
+    report_settled_outside = settled_outside_map(run.snapshot or {})
     for r, width in zip(company, widths):
         numbers = list(range(n, n + width)) if aligned else [n]
         n += width if aligned else 1
-        evidence.append(_evidence_item(r, numbers))
+        so = report_settled_outside.get(r.document_id)
+        evidence.append(_evidence_item(
+            r, numbers,
+            extra_detail=settled_outside_caption(so["how"]) if so else "",
+        ))
 
     # The reimbursements-owed section: one numbered row per private
     # expense (no account fan-out — a reimbursement is owed whole),
@@ -5670,7 +6425,7 @@ def build_expense_report(
             subtitle = (
                 f"{trip.start_date} to {trip.end_date}  ·  travelers: {who}"
             )
-    return build_expense_report_pdf(
+    pdf = build_expense_report_pdf(
         rows,
         EXPENSE_COLUMNS,
         title=title,
@@ -5679,7 +6434,146 @@ def build_expense_report(
         prepared_note=note,
         reimbursements=reimbursements,
         sections=sections,
+        sections_heading=sections_heading,
+        sections_note=sections_note,
     )
+    # Item 67: `prepare_evidence` wrote each file's render outcome back onto
+    # its evidence dict during the build. The builder returns one `bytes`, so
+    # this dict is the channel; a caller that passes one gets
+    # {document_id: {"render", "note"}} for every expense that HAD a file,
+    # which is what lets the review screen name the blocked receipt instead of
+    # the reviewer finding out by opening the PDF.
+    if render_outcomes is not None:
+        for item in evidence:
+            doc = str(item.get("document_id") or "")
+            if not doc or "receipt_render" not in item:
+                continue
+            render_outcomes[doc] = {
+                "render": item["receipt_render"],
+                "note": str(item.get("render_note") or ""),
+            }
+    return pdf
+
+
+def build_cost_center_totals(
+    store: RunStore,
+    *,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> dict:
+    """The cross-month roll-up (item 47, step 5): per cost center, per
+    currency, over every expense batch the store holds, months and trips
+    alike. The only surface that aggregates ACROSS batches: "what has
+    Lidar cost since January" is the question a project raises, and no
+    month report can answer it.
+
+    Rows are the export's own rows (`_expense_export_inputs`), resolved
+    through the same chain the grid and the month report run, so the
+    three cannot disagree about where a row belongs. Confirmed private
+    expenses are left out: they are reimbursements owed, not company
+    spend. The range is inclusive on the row's (edited) expense date; a
+    row that carries no date cannot be excluded by a range, so it always
+    counts and `n_undated` says how many such rows the figures contain.
+
+    Every ACTIVE cost center is listed, at zero when nothing reached it;
+    an inactive one appears only while history still sits on it. The
+    unassigned bucket is explicit and never hidden. With no cost center
+    defined the list is empty and every row is unassigned: the roll-up
+    stating a fact, not a review state (the review state stays silent per
+    the empty-registry contract, which this function does not re-check).
+
+    The stated limit rides in `note`: card and receipt spend only, never
+    contractor invoices or salaries, so none of these figures is a total
+    project cost.
+    """
+    settings = store.get_settings()
+    registry = CostCenterRegistry.from_settings(settings)
+
+    def _bucket() -> dict:
+        return {"n_rows": 0, "batches": set(), "totals": {}}
+
+    by_center: dict[str, dict] = {}
+    unassigned = _bucket()
+    n_batches = 0
+    n_rows = 0
+    n_undated = 0
+    for run in store.list_runs():
+        if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        n_batches += 1
+        overrides = store.get_category_overrides(run.run_id)
+        field_overrides = store.get_expense_field_overrides(run.run_id)
+        edits = store.get_expense_edits(run.run_id)
+        trip = None
+        if is_trip_batch(run):
+            trip_row = store.get_trip(
+                str((run.config or {}).get("trip_id") or "")
+            )
+            if trip_row is not None:
+                trip = {"cost_center": trip_row.cost_center}
+        receipts, _kwargs = _expense_export_inputs(
+            run, overrides, field_overrides, edits,
+            store.get_duplicate_resolutions(run.run_id),
+        )
+        private_by_doc = _private_reimbursements(field_overrides)
+        company = [r for r in receipts if r.document_id not in private_by_doc]
+        card_res = resolve_batch_row_cards(company, run.config, field_overrides)
+        cost_res = resolve_batch_row_cost_centers(
+            company, field_overrides, settings=settings, trip=trip,
+            card_res=card_res,
+        )
+        for r in company:
+            d = r.detected_date
+            if d is None:
+                n_undated += 1
+            else:
+                if date_from is not None and d < date_from:
+                    continue
+                if date_to is not None and d > date_to:
+                    continue
+            name = cost_res[r.document_id].name
+            bucket = by_center.setdefault(name, _bucket()) if name else unassigned
+            bucket["n_rows"] += 1
+            bucket["batches"].add(run.run_id)
+            if r.detected_total is not None:
+                ccy = r.detected_currency or "?"
+                bucket["totals"][ccy] = (
+                    bucket["totals"].get(ccy, Decimal("0")) + r.detected_total
+                )
+            n_rows += 1
+    for name, entry in registry.entries.items():
+        if entry.get("active", True) is not False:
+            by_center.setdefault(name, _bucket())
+
+    def _emit(bucket: dict) -> dict:
+        return {
+            "n_rows": bucket["n_rows"],
+            "n_batches": len(bucket["batches"]),
+            "totals": {
+                ccy: _fmt_amount(amt)
+                for ccy, amt in sorted(bucket["totals"].items())
+            },
+        }
+
+    centers = []
+    for name in sorted(by_center, key=str.casefold):
+        entry = registry.entries.get(name) or {}
+        centers.append({
+            "name": name,
+            "kind": str(entry.get("kind") or ""),
+            "active": entry.get("active", True) is not False,
+            **_emit(by_center[name]),
+        })
+    return {
+        "from": date_from.isoformat() if date_from else None,
+        "to": date_to.isoformat() if date_to else None,
+        "note": COST_CENTER_SCOPE_NOTE,
+        "cost_centers": centers,
+        "unassigned": _emit(unassigned),
+        "n_batches": n_batches,
+        "n_rows": n_rows,
+        "n_undated": n_undated,
+    }
 
 
 def build_reconciliation_report(
@@ -5687,6 +6581,8 @@ def build_reconciliation_report(
     decisions: dict,
     overrides: dict,
     resolutions: dict[str, str] | None = None,
+    field_overrides: dict[str, dict[str, str]] | None = None,
+    edits: list[dict] | None = None,
 ) -> bytes:
     """The statement reconciliation as a document (owner directive
     2026-08-23: nothing imports this either, so what serves the work is
@@ -5697,11 +6593,45 @@ def build_reconciliation_report(
     every receipt the run holds: matched ones captioned with the charge they
     settle, unmatched ones captioned as unmatched, because a receipt nobody
     could place is exactly what a reader needs to see.
+
+    `field_overrides` / `edits` are the expense-mode overlay (item 68). They
+    are not an extra source: they are THE source, the same one the expense
+    report and the review grid are built from. Without them this document
+    read the stored receipt pool, which only catches up with the reviewer at
+    the next re-match — so an expense deleted on a statement-less month left
+    the expense report at once and stayed here, caption page, receipt pages
+    and all, in a document whose whole job is to be the evidence that a
+    month is complete. The overlay is idempotent by construction
+    (`apply_expense_edits`), so applying it to an already-baked pool changes
+    nothing; on a pool that was never baked the two reports now agree the
+    moment the reviewer acts. Omitted => the pre-item-68 behaviour, which is
+    what the CLI and the offline callers want.
     """
     from ..output.reconciliation_report_pdf import build_reconciliation_report_pdf
 
+    _, snapshot_receipts, _, _ = snapshot_from_dict(run.snapshot)
+    receipts = snapshot_receipts
+    if field_overrides or edits:
+        receipts = apply_expense_edits(
+            snapshot_receipts, field_overrides or {}, edits or [],
+            category_overrides=overrides,
+            default_entity=(
+                ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+            ),
+        )
+    if {r.document_id for r in receipts} != {
+        r.document_id for r in snapshot_receipts
+    }:
+        # Hand `build_view` the live pool rather than post-filtering its
+        # output: the unmatched list, the duplicate groups, the candidates
+        # and the counts are all derived there, and re-deriving any of them
+        # here would be a second implementation of the same rules — the
+        # exact shape that let the two documents disagree in the first place.
+        run = replace(run, snapshot={
+            **(run.snapshot or {}),
+            "receipts": [receipt_to_dict(r) for r in receipts],
+        })
     view = build_view(run, decisions, overrides, resolutions)
-    _, receipts, _, _ = snapshot_from_dict(run.snapshot)
     charge_by_doc: dict[str, dict] = {}
     for row in view.get("rows") or []:
         doc = row.get("chosen_document_id")
@@ -5733,7 +6663,9 @@ def build_reconciliation_report(
                  if r.detected_total is not None else ""),
                 "no charge on the statement settles this receipt",
             ) if x)
-        item: dict = {"label": label, "detail": detail}
+        item: dict = {
+            "label": label, "detail": detail, "document_id": r.document_id,
+        }
         if path is not None:
             item["name"] = _display_name(path.name)
             item["data"] = path.read_bytes()
@@ -5801,7 +6733,7 @@ def assign_batch_cards(
     # Outside the lock; see rematch_after_change. An assignment that does not
     # reach the matcher is the R3 F1 failure (silent 0-match month), so the
     # re-match is the point of allowing this at all.
-    rematch = rematch_after_change(store, run.run_id)
+    rematch = rematch_after_change(store, run.run_id, trigger="cards")
     if rematch is not None:
         out["rematch"] = rematch
     return out
@@ -6004,7 +6936,7 @@ def refresh_batch_master_data(
         out = _refresh_batch_master_data_locked(
             store, run, now_iso=now_iso, operator=operator
         )
-    rematch = rematch_after_change(store, run.run_id)
+    rematch = rematch_after_change(store, run.run_id, trigger="master_data")
     if rematch is not None:
         out["rematch"] = rematch
     return out
@@ -6128,6 +7060,33 @@ def _refresh_batch_master_data_locked(
                 changes.append(
                     {"field": "row_persons", "n_rows_changed": n_person_moved}
                 )
+            # Item 47: a card's `default_cost_center` reaches an existing
+            # batch only through this refresh, so the audit says how many
+            # rows' RESOLVED cost center it moved. The chain runs on both
+            # sides with the batch's real trip, so a trip that outranks
+            # the card default masks the move here exactly as on the row.
+            trip_cc = None
+            if is_trip_batch(run):
+                trip_row = store.get_trip(
+                    str((run.config or {}).get("trip_id") or "")
+                )
+                if trip_row is not None:
+                    trip_cc = {"cost_center": trip_row.cost_center}
+            cc_before = resolve_batch_row_cost_centers(
+                receipts, fo, settings=settings, trip=trip_cc, card_res=before,
+            )
+            cc_after = resolve_batch_row_cost_centers(
+                receipts, fo, settings=settings, trip=trip_cc, card_res=after,
+            )
+            n_cc_moved = sum(
+                1
+                for doc in cc_before
+                if cc_before[doc].name != cc_after.get(doc, cc_before[doc]).name
+            )
+            if n_cc_moved:
+                changes.append(
+                    {"field": "row_cost_centers", "n_rows_changed": n_cc_moved}
+                )
         except Exception:  # noqa: BLE001 - impact count must not break refresh
             pass
         store.update_run_config(run.run_id, cfg)
@@ -6181,6 +7140,41 @@ def month_transactions(run: RunRow) -> list:
 # nothing existing changes type or meaning, so a stale SPA renders exactly
 # what it rendered before.
 
+
+def run_month_health(run: RunRow) -> dict:
+    """Item 57 for a caller that has not unpacked the snapshot (the expense
+    grid). Reads the same committed pool and outcome the workbench judges,
+    so the two payloads cannot disagree about whether a month is broken.
+    Unchecked before the first statement: there is nothing to judge."""
+    if not has_statement(run):
+        return unchecked_month_health()
+    try:
+        transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
+    except (KeyError, TypeError, ValueError):
+        return unchecked_month_health()
+    return month_health(
+        transactions, receipts, outcome,
+        card_scoping=card_scoping_on(run.config),
+    )
+
+
+# Item 58: every commit of `rematch_month` records one event here, so the
+# dev-side notifier can announce a re-match by its counts ("August 2026: 14
+# of 111, pool 7") instead of only a new run. Capped: the snapshot is not
+# a log, and fifty events outlive any notifier polling window.
+REMATCH_LOG_KEY = "rematch_log"
+REMATCH_LOG_CAP = 50
+
+
+def append_rematch_event(existing, event: dict, cap: int = REMATCH_LOG_CAP) -> list[dict]:
+    """The log with `event` appended and the oldest entries dropped past
+    `cap`. Tolerates a malformed stored value (drops it rather than raising:
+    a corrupt log must never block a commit)."""
+    log = [e for e in (existing or []) if isinstance(e, dict)] if isinstance(existing, list) else []
+    log.append(dict(event))
+    return log[-cap:] if cap > 0 else log
+
+
 STATEMENTS_KEY = "statements"
 # {stored file name: {transaction_id: sheet row}} — each upload's own row
 # map, kept out of `statements[]` because it is machinery for the sheet
@@ -6200,10 +7194,11 @@ def statement_anchors(run: RunRow, file: str) -> dict[str, int] | None:
     charges it happened to introduce.
 
     "Recorded and EMPTY" is not "not recorded", and the difference is
-    load-bearing: a workbook that parsed no rows has a real, empty map, and
-    treating that as "no map" would drop the writeback back to placing every
-    charge in the month by its own row number, writing other files' accounts
-    into a workbook that has no charges at all.
+    load-bearing: a PDF statement has a real, empty map, and treating that
+    as "no map" would drop the writeback back to placing every charge in the
+    month by its own row number. The other way to reach an empty map used to
+    be a workbook that parsed no rows; since item 51 that upload is refused
+    before it is recorded, so a workbook always has the rows it printed.
     """
     per_file = (run.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}
     if file not in per_file:
@@ -6241,6 +7236,36 @@ def _statement_period(transactions: list) -> tuple[str | None, str | None]:
     return min(dates).isoformat(), max(dates).isoformat()
 
 
+def statement_read_nothing(upload_name: str, sheet_name: str | None) -> str:
+    """The refusal for a statement file that mapped cleanly and then yielded
+    no charge at all (item 51).
+
+    The column-map 400 already catches a file MISSING a required column. It
+    cannot catch a file whose columns map fine and whose rows the parser
+    then reads as nothing, which is what a wrong worksheet, a header row
+    that is not the first row, and a date format the parser rejects all
+    look like from here. Before this refusal the attach returned
+    `200 {"ok": true}`, the job finished `done`, and the month recorded
+    `n_rows: 0` — and then graduated to the reconciliation workbench with
+    zero charges, so on screen it read as a month that had taken its
+    statement. Criss would have had no way to tell that from a month that
+    reconciled.
+
+    Deliberately keyed on `n_rows`, never on `n_new`. Zero NEW charges is
+    the ordinary result of the same file arriving twice, which the fold
+    exists to absorb; zero ROWS means the file held nothing, and that is
+    never a legitimate outcome for a statement.
+    """
+    where = f" (sheet {sheet_name})" if sheet_name else ""
+    return (
+        f"{upload_name}{where} mapped cleanly but held no charge the parser "
+        "could read, so nothing was added and this month is unchanged. The "
+        "usual causes are the wrong worksheet, a header row below the first "
+        "row, or a date format the parser does not read. Check the file and "
+        "attach it again."
+    )
+
+
 def build_statement_entry(
     *,
     stored_name: str,
@@ -6251,6 +7276,8 @@ def build_statement_entry(
     transactions: list,
     n_new: int,
     uploaded_at: str,
+    column_map: dict | None = None,
+    card_currency: str = "",
 ) -> dict:
     """One `statements[]` row: what this upload was and what it added.
 
@@ -6262,8 +7289,18 @@ def build_statement_entry(
     `n_rows` is what the file held, `n_new` what the fold put in the month.
     The difference is charges the month already had, which is the ordinary
     result of a partial followed by the full cycle rather than a problem.
+
+    `column_map` and `card_currency` record HOW this upload was read (item
+    64). Both are parallel fields and both are ABSENT on every entry written
+    before 2026-09-15, never null, so a reader can tell "not recorded" from
+    "recorded as nothing". A PDF statement has no column map and gets no
+    key. Before they existed, a re-read recovered the map from
+    `config.statement`, which only ever describes the LATEST upload, and
+    applied that upload's currency to every file in the month.
     """
     period_start, period_end = _statement_period(transactions)
+    recorded_map = dict(column_map) if column_map else None
+    currency = (card_currency or "").strip().upper()
     return {
         "file": stored_name,
         "upload_name": upload_name,
@@ -6283,6 +7320,10 @@ def build_statement_entry(
         # Filled in at commit time by `statement_advisory`, against the
         # entries the month holds at that moment.
         "advisory": None,
+        # How this upload was read (item 64), for the re-read to reuse
+        # instead of guessing again. Absent, not null, when unrecorded.
+        **({"column_map": recorded_map} if recorded_map else {}),
+        **({"card_currency": currency} if currency else {}),
         # This file's own id-to-row map. Underscored and popped at commit
         # into `statement_anchors`, so it never reaches the SPA: it is a
         # per-row map the size of the statement, and nothing renders it.
@@ -6556,6 +7597,51 @@ def _charge_card_identity(tx, cards: dict) -> _CardIdentity:
 
     observed = tx.card_last4 if _card_keys(tx.card_last4) else tx.account_id
     return _identity_from_observed(observed, cards)
+
+
+def stamp_charge_entities(transactions: list, cards: dict) -> list:
+    """Item 59 (owner ruling 2026-09-11): a charge's legal entity comes from
+    ITS card, not from the card the upload was filed under.
+
+    The parsers stamp the upload's entity on every row, which on a Chase
+    multi-card workbook filed as card-2838 put all 111 August charges under
+    Corporate Services while 77 of them sat on cards 3645 and 3876. Here,
+    for every row that PRINTED a card (the per-row `card_last4` the WS3
+    column map fills), the entity is the registry card's entity, and a
+    card the registry cannot name, or names without an entity, leaves the
+    row BLANK: a visible gap beats a wrong posting, and the coverage panel
+    already lists that card as "not in your card list". A row with no card
+    column keeps what the upload said: the account id IS the card there,
+    and `resolve_entity` already read the registry for it.
+
+    Resolution is `resolve_card` on the same observed string the matcher's
+    scoping and the coverage identity use, ambiguity to nothing, so the row,
+    the coverage row and the card scoping cannot disagree about which
+    plastic a charge is on. An empty registry stamps nothing: a batch that
+    predates the card registry keeps the upload's entity on every row.
+
+    Ids are content-derived without the entity, so re-stamping on every
+    re-match (this runs inside `rematch_month`, which every attach, re-read,
+    card assignment and master-data refresh passes through) never moves a
+    charge or its decisions.
+    """
+    from ..cards import resolve_card
+    from ..matching.deterministic import _card_keys
+
+    if not cards or not transactions:
+        return transactions
+    out: list = []
+    for tx in transactions:
+        if not _card_keys(tx.card_last4):
+            out.append(tx)
+            continue
+        card = resolve_card(tx.card_last4, cards, on_ambiguity="none")
+        entity = (card.entity or "") if card is not None else ""
+        out.append(
+            replace(tx, legal_entity_id=entity)
+            if entity != (tx.legal_entity_id or "") else tx
+        )
+    return out
 
 
 def _statement_card_identities(
@@ -6847,6 +7933,42 @@ def _display_name(stored: str) -> str:
     return re.sub(r"^\d{4}__", "", stored)
 
 
+def receipt_image_file(
+    work_dir: Path, document_id: str, *, expense_mode: bool
+) -> Path | None:
+    """The file `GET /api/runs/{id}/receipts/{doc}/image` would serve for
+    this document, or None when that route would 404.
+
+    One implementation of "can this receipt be shown", because the answer is
+    the ENDPOINT's and nothing else can give it. It was previously guessed
+    twice: the batch payload resolved it from disk (correct), and the run
+    payload from the SHAPE of the document id -- `manual:` or `folder:` or a
+    vision-mapped page. Every receipt that arrives by mail or through the
+    receipts drop has a plain `NNNN__name.pdf` id and matches none of those,
+    so the run payload answered `false` for all 17 unmatched receipts of
+    Criss's live August month while the endpoint served every one of them
+    200 (item 52, measured 2026-09-15).
+
+    Ordered and gated exactly as the endpoint is: the `manual:` / `folder:`
+    globs apply to every run, and the receipts-dir branch only to a
+    receipt-first batch. The resolved path is confined to the receipts dir
+    the same way, so a crafted id cannot address a file outside it.
+    """
+    hit = _attached_receipt_file(work_dir, document_id)
+    if hit is not None:
+        return hit
+    if not expense_mode:
+        return None
+    exp_dir = (work_dir / "receipts").resolve()
+    try:
+        target = (exp_dir / document_id).resolve()
+    except (OSError, ValueError):
+        return None
+    if exp_dir in target.parents and target.is_file():
+        return target
+    return None
+
+
 def _attached_receipt_file(work_dir: Path, document_id: str) -> Path | None:
     """The on-disk file behind a workbench-attached `manual:`/`folder:`
     receipt, resolved with the SAME glob the image endpoint serves from
@@ -6954,7 +8076,8 @@ def restore_set_aside_file(
             store, run, file, now_iso, learning_db_path=learning_db_path
         )
     rematch = rematch_after_change(
-        store, run.run_id, learning_db_path=learning_db_path
+        store, run.run_id, learning_db_path=learning_db_path,
+        trigger="set_aside",
     )
     if rematch is not None:
         out["rematch"] = rematch
@@ -7171,6 +8294,7 @@ def add_receipts_to_expense_batch(
         rematch = rematch_after_change(
             store, run.run_id,
             learning_db_path=learning_db_path, on_stage=on_stage,
+            trigger="receipts",
         )
         if rematch is not None:
             result["rematch"] = rematch
@@ -7496,6 +8620,17 @@ def execute_statement_attach(
         settings=settings,
         on_stage=on_stage,
     )
+    if not transactions:
+        # Item 51. Refuse before the fold, so the month keeps exactly the
+        # state it had: no charge, no `statements[]` entry, no graduation
+        # to the workbench. The saved upload stays on disk and is inert —
+        # nothing reads the work dir, only `statements[]`.
+        raise RunInputError(
+            statement_read_nothing(
+                upload_name or stmt_name,
+                (new_cfg.get("statement") or {}).get("sheet_name"),
+            )
+        )
     merged = merge_transactions(month_transactions(run), transactions)
 
     return rematch_month(
@@ -7517,7 +8652,15 @@ def execute_statement_attach(
             transactions=transactions,
             n_new=len(merged.added),
             uploaded_at=now_iso,
+            # Read back off the block `read_statement_upload` just wrote, the
+            # same source `account_id` and `sheet_name` come from, so the
+            # entry records what the parser was actually handed.
+            column_map=(new_cfg.get("statement") or {}).get("column_map"),
+            card_currency=(new_cfg.get("statement") or {}).get(
+                "account_card_currency", ""
+            ),
         ),
+        trigger="statement",
     )
 
 
@@ -7571,6 +8714,205 @@ def read_statement_upload(
     except ConfigError as exc:
         raise RunInputError(str(exc)) from exc
     return transactions, stmt_issues, new_cfg, entity
+
+
+def reread_statements(
+    store: RunStore,
+    run: RunRow,
+    *,
+    settings: dict | None,
+    now_iso: str,
+    learning_db_path: Path | None = None,
+    on_stage=None,
+) -> dict:
+    """Rebuild a month's charges from the statement files it already holds,
+    then re-match. The repair path for a month whose stored charges were
+    parsed wrong (2026-09-11: the Excel parser kept Chase's printed sign,
+    so July and August 2026 held every purchase as a negative amount and
+    reconciled 0 against receipts that were sitting right there).
+
+    Why a re-read and not a re-upload: `transaction_id` is content-derived
+    from the CANONICAL amount, so re-uploading the same file after the
+    parser fix would fold 111 new ids in beside the 111 old ones and double
+    the month. This reads every entry in `statements[]` from disk, in
+    upload order, through the same `read_statement_upload` + `merge` the
+    attach uses, and hands `rematch_month` the rebuilt set as a REPLACEMENT
+    (`replace_statements`), which is the one thing the append path may
+    never do.
+
+    Deny-by-default, nothing partial: a missing file, a column map that no
+    longer resolves, or a reviewer decision that cannot be carried over
+    aborts before anything is written. Decisions ride over by sheet row
+    (`statement_anchors`: old id -> row -> new id); a decision on a charge
+    with no anchor and no surviving id is the one case that refuses, so a
+    verdict is never silently orphaned.
+
+    The column map and the card currency for each file are the ones that
+    upload recorded (item 64). Falling back, in order: the config's own map
+    for the upload it still describes, then a fresh guess. The fallbacks
+    only reach entries written before 2026-09-15, and both are worse than
+    what they replace: `config.statement` describes the LATEST upload only,
+    so on a multi-statement month it lends its map and its currency to files
+    that were read with neither, and a guess cannot reproduce the operator's
+    manual picks at all.
+    """
+    entries = month_statements(run)
+    if not entries:
+        raise RunInputError(
+            "this month has no recorded statement upload to re-read"
+        )
+    work_dir = Path(run.work_dir)
+    cfg = run.config or {}
+    stmt_cfg = dict(cfg.get("statement") or {})
+    old_anchors: dict[str, dict] = dict(
+        (run.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}
+    )
+    old_ids = {
+        str(td.get("transaction_id"))
+        for td in (run.snapshot or {}).get("transactions") or []
+    }
+
+    transactions: list = []
+    issues: list = []
+    rebuilt: list[dict] = []
+    new_cfg: dict = cfg
+    entity = ""
+    for entry in entries:
+        stored = str(entry.get("file") or "")
+        stmt_path = work_dir / stored
+        if not stored or not stmt_path.is_file():
+            raise RunInputError(
+                f"statement file {stored or '?'} is missing from this "
+                "month's folder; nothing was changed"
+            )
+        account_id = str(
+            entry.get("account_id") or stmt_cfg.get("account_id") or ""
+        )
+        form = RunForm(
+            account_id=account_id,
+            account_legal_entities={},
+            # This upload's OWN currency when it recorded one (item 64).
+            # `config.statement` describes only the latest upload, so on a
+            # month holding a USD and a EUR card statement the fallback
+            # re-reads both at whichever currency arrived last, and a charge
+            # whose currency moved stops matching its receipt.
+            account_card_currency=str(
+                entry.get("card_currency")
+                or stmt_cfg.get("account_card_currency")
+                or "USD"
+            ),
+            sheet_name=entry.get("sheet_name") or None,
+            column_map_overrides={},
+            receipts_source="csv",
+            expense_column_map={},
+            receipts_default_currency="",
+            use_llm=False,
+            card_key=str(entry.get("card_key") or ""),
+        )
+        column_map: dict | None
+        if stmt_path.suffix.lower() == ".pdf":
+            column_map = None
+        elif entry.get("column_map"):
+            # The map this upload was actually read with (item 64), which
+            # may carry the operator's manual picks for headers the guess
+            # cannot name at all.
+            column_map = dict(entry["column_map"])
+        elif stored == stmt_cfg.get("path") and stmt_cfg.get("column_map"):
+            column_map = dict(stmt_cfg["column_map"])
+        else:
+            column_map = _resolve_statement_map(stmt_path, form)
+        txs, stmt_issues, new_cfg, entity = read_statement_upload(
+            run,
+            stmt_name=stored,
+            column_map=column_map,
+            form=form,
+            settings=settings,
+            on_stage=on_stage,
+        )
+        if not txs and (entry.get("n_rows") or 0):
+            # Item 51 through the other door, and worse here: a re-read
+            # REPLACES the charge set, so a file that used to hold rows and
+            # now reads none takes its charges out of the month silently.
+            # Same deny-by-default as a missing file or an unresolvable map.
+            # Keyed on the RECORDED count so a month that already holds a
+            # zero-row entry (recorded before the attach refused one) can
+            # still be re-read rather than being wedged by this guard.
+            raise RunInputError(
+                f"statement file {stored} held {entry['n_rows']} charges "
+                "when it was uploaded and now reads none; nothing was "
+                "changed"
+            )
+        merged = merge_transactions(transactions, txs)
+        transactions = merged.transactions
+        issues.extend(stmt_issues)
+        rebuilt.append(
+            build_statement_entry(
+                stored_name=stored,
+                upload_name=str(entry.get("upload_name") or stored),
+                account_id=(new_cfg.get("statement") or {}).get(
+                    "account_id", ""
+                ),
+                card_key=form.card_key,
+                sheet_name=(new_cfg.get("statement") or {}).get("sheet_name"),
+                transactions=txs,
+                n_new=len(merged.added),
+                uploaded_at=str(entry.get("uploaded_at") or now_iso),
+                # Re-record what THIS re-read used, so an entry written
+                # before item 64 carries both from here on.
+                column_map=column_map,
+                card_currency=form.account_card_currency,
+            )
+        )
+
+    # Carry the reviewer's verdicts over by sheet row. Every old id that has
+    # an anchor maps to the new id at the same (file, row); an id the re-read
+    # kept maps to itself. A DECISION on an id that has neither is the one
+    # thing that refuses the whole re-read: silently dropping a verdict is
+    # worse than leaving the month as it is.
+    new_ids = {t.transaction_id for t in transactions}
+    new_by_row: dict[tuple[str, int], str] = {}
+    for e in rebuilt:
+        for tid, row in (e.get("_anchors") or {}).items():
+            new_by_row[(str(e["file"]), int(row))] = tid
+    rekey: dict[str, str] = {}
+    for file_name, anchors in old_anchors.items():
+        for old_id, row in (anchors or {}).items():
+            if old_id in new_ids:
+                continue
+            target = new_by_row.get((str(file_name), int(row)))
+            if target is not None:
+                rekey[str(old_id)] = target
+    stranded = [
+        tid
+        for tid in store.get_decisions(run.run_id)
+        if tid in old_ids and tid not in new_ids and tid not in rekey
+    ]
+    if stranded:
+        raise RunInputError(
+            f"{len(stranded)} reviewer decision(s) sit on charges this "
+            "re-read would retire and no sheet row carries them over; "
+            "nothing was changed"
+        )
+
+    result = rematch_month(
+        store,
+        run,
+        transactions=transactions,
+        cfg=new_cfg,
+        entity=entity,
+        statement_issues=issues,
+        now_iso=now_iso,
+        learning_db_path=learning_db_path,
+        on_stage=on_stage,
+        replace_statements=rebuilt,
+        rekey_decisions=rekey,
+        trigger="reread",
+    )
+    result["n_statements"] = len(rebuilt)
+    result["n_transactions_before"] = len(old_ids)
+    result["n_transactions"] = len(transactions)
+    result["n_decisions_rekeyed"] = len(rekey)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -7661,6 +9003,7 @@ def trip_pool_for_month(
             store.get_category_overrides(batch.run_id),
             t_field,
             store.get_expense_edits(batch.run_id),
+            store.get_duplicate_resolutions(batch.run_id),
         )
         private = _private_reimbursements(t_field)
         claims = store.get_claims_on_receipts(batch.run_id)
@@ -7720,7 +9063,8 @@ def rematch_months_after_trip_change(
         if not dates or max(dates) < t0 or min(dates) > t1:
             continue
         rematch = rematch_after_change(
-            store, candidate.run_id, learning_db_path=learning_db_path
+            store, candidate.run_id, learning_db_path=learning_db_path,
+            trigger="trip",
         )
         if rematch is not None:
             results.append({"run_id": candidate.run_id, **rematch})
@@ -7870,8 +9214,26 @@ def rematch_month(
     learning_db_path: Path | None = None,
     on_stage=None,
     statement_entry: dict | None = None,
+    replace_statements: list[dict] | None = None,
+    rekey_decisions: dict[str, str] | None = None,
+    trigger: str = "",
 ) -> dict:
     """Match a month's transactions against its receipt pool and commit.
+
+    `trigger` (item 58) names what caused this re-match ("statement",
+    "reread", "receipts", "cards", "master_data", "set_aside", "trip") and
+    rides on the `rematch_log` event the commit records; it changes nothing
+    about the match itself.
+
+    `replace_statements` (the statement re-read, 2026-09-11) is the one
+    caller allowed to REPLACE the month's charge set instead of growing it:
+    it hands in the `statements[]` entries it rebuilt from the stored files,
+    and the commit swaps the whole `statements[]` + `statement_anchors`
+    blocks for them. The never-drop invariant below is then judged against
+    the UPLOADS rather than the ids (a re-read changes ids by design), and
+    `rekey_decisions` carries the reviewer's verdicts from the ids the
+    re-read retires to the ids the same sheet rows now have, inside the
+    same lock, before the settlements are read.
 
     Extracted from `execute_statement_attach` (PR 2b-1) so the living
     month has ONE implementation of "reconcile what this month currently
@@ -7932,11 +9294,31 @@ def rematch_month(
     overrides = store.get_category_overrides(run.run_id)
     field_overrides = store.get_expense_field_overrides(run.run_id)
     edits = store.get_expense_edits(run.run_id)
+    # Item 70: bake from the EXTRACTION baseline, not from `receipts0`. The
+    # snapshot pool is already baked, so a re-match after a CLEARED edit laid
+    # the overlay on the old edit and the matcher kept pairing on a value the
+    # reviewer took back. Same membership and order as the snapshot.
+    bake_input = baseline_receipts(run)
     receipts = apply_expense_edits(
-        receipts0, field_overrides, edits,
+        bake_input, field_overrides, edits,
         category_overrides=overrides, default_entity=batch_entity,
     )
     receipts = apply_overrides(receipts, overrides)
+    # Item 69 round A: the kept copy of a document inherits the card its
+    # copies name, BEFORE the card chain below, so the chain derives the
+    # entity from the inherited card and an invoice copy whose receipt copy
+    # names another entity's card leaves this statement's scope (August
+    # 2026: the Lovable 50 invoice took BASE44 50.00 on Corporate Services
+    # while its receipt named card 1176, Consulting). Computed over the
+    # full effective list, so a copy item 56 collapses below still lends.
+    # The inherited values persist into the snapshot's `receipts` with the
+    # entity bake, and are re-derived from the extraction baseline on every
+    # re-match (item 70), so nothing accumulates. A group the reviewer ruled
+    # `ignore` lends nothing (the card-less copy's own charge is then free
+    # to match), and a hint word the operator assigned is kept.
+    dup_resolutions = store.get_duplicate_resolutions(run.run_id)
+    bake_hints = _batch_card_hints(cfg)
+    receipts = inherit_card_from_copies(receipts, dup_resolutions, bake_hints)  # before the card chain
     # Cards R3: bake the SAME per-receipt entity the grid and the export
     # showed (override -> hint assignment -> card registry -> stamped
     # value) into the pool the matcher sees. Matching is entity-scoped
@@ -7953,6 +9335,13 @@ def rematch_month(
         )
         for r in receipts
     ]
+
+    # Item 59: the charge side of the same rule. Each charge that printed a
+    # card carries THAT card's entity from the batch's registry snapshot
+    # (blank when the registry cannot name it), so the entity scope below
+    # and the coverage panel read one truth. Stamped before the match and
+    # committed with the snapshot; ids do not hash the entity.
+    transactions = stamp_charge_entities(transactions, _batch_cards(cfg))
 
     llm_client, tracker, _source = _batch_llm_client(cfg)
     # Judgments already paid for on this run answer from the snapshot;
@@ -7982,6 +9371,19 @@ def rematch_month(
         [r for r in receipts if r.document_id not in foreign_claims]
         if foreign_claims else receipts
     )
+    # Item 56 (owner ruling 2026-09-11): an invoice and its receipt for one
+    # purchase are ONE candidate. Without this the matcher sees two
+    # indistinguishable documents for one charge and files the pairing as
+    # ambiguous, which in August was 23 of 31 receipts and a reviewer
+    # picking between two copies of the same document a dozen times. The
+    # suppressed copies rejoin `unmatched_receipts` below, keeping the
+    # reconciliation guarantee and their duplicate markers; a group the
+    # reviewer ruled "not a duplicate" (`ignore`) is never collapsed.
+    collapsed = collapsed_duplicate_copies(
+        pool, store.get_duplicate_resolutions(run.run_id)
+    )
+    if collapsed:
+        pool = [r for r in pool if r.document_id not in collapsed]
     # R4b (item 38 ruling 3): the pool spans trips. Receipts from trips
     # overlapping this month's charge span join the candidate set --
     # already excluding anything another run settled (the same advisory
@@ -7992,6 +9394,22 @@ def rematch_month(
         store, run, transactions,
         own_doc_ids={r.document_id for r in receipts},
     )
+    # Item 61: and it spans the ADJACENT company months. A receipt printed
+    # on the last day of a month is filed in THAT month while its charge
+    # posts on the 1st, inside this statement's period; the neighbours'
+    # receipts whose dates fall in this period join the same borrowed set,
+    # so everything downstream (the claims re-check, the snapshot copies,
+    # the view) treats both borrow kinds identically. Empty on a month with
+    # no neighbouring batch, and the match input is then unchanged.
+    adjacent, adjacent_origins = adjacent_pool_for_month(
+        store, run, transactions,
+        own_doc_ids=(
+            {r.document_id for r in receipts} | set(borrowed_origins)
+        ),
+    )
+    if adjacent:
+        borrowed = [*borrowed, *adjacent]
+        borrowed_origins = {**borrowed_origins, **adjacent_origins}
     match_input = [*pool, *borrowed] if borrowed else pool
     outcome = match_month(transactions, match_input, match_cfg)
 
@@ -8011,11 +9429,11 @@ def rematch_month(
     )
     # Excluded receipts still belong to this month's pool and its totals;
     # they are unmatched HERE because they are settled elsewhere.
-    if foreign_claims:
+    if foreign_claims or collapsed:
         _in_pool = {r.document_id for r in receipts}
         _have = set(outcome.unmatched_receipts)
         outcome.unmatched_receipts.extend(
-            d for d in foreign_claims
+            d for d in (*foreign_claims, *sorted(collapsed))
             if d in _in_pool and d not in _have
         )
     # A borrowed receipt the matcher did not consume simply stays in its
@@ -8067,17 +9485,38 @@ def rematch_month(
         if fresh is None:
             raise RunInputError("this batch was deleted while it reconciled")
         committing = {t.transaction_id for t in transactions}
-        dropped = [
-            str(td.get("transaction_id"))
-            for td in (fresh.snapshot or {}).get("transactions") or []
-            if td.get("transaction_id") not in committing
-        ]
-        if dropped:
-            raise RunInputError(
-                f"another statement upload added {len(dropped)} charge(s) to "
-                "this month while it reconciled; nothing was written, so no "
-                "charge was lost. Upload again."
-            )
+        if replace_statements is not None:
+            # The re-read replaces ids on purpose, so the never-drop check
+            # moves up one level: the set of UPLOADS this commit rebuilt has
+            # to be exactly the set the month holds right now. An upload
+            # that landed while the files were being re-read is not in the
+            # rebuilt set, and committing would erase its charges.
+            fresh_files = [
+                str(e.get("file") or "") for e in month_statements(fresh)
+            ]
+            rebuilt_files = [
+                str(e.get("file") or "") for e in replace_statements
+            ]
+            if fresh_files != rebuilt_files:
+                raise RunInputError(
+                    "another statement upload landed on this month while its "
+                    "files were re-read; nothing was written, so no charge "
+                    "was lost. Run the re-read again."
+                )
+            if rekey_decisions:
+                store.rekey_decisions(run.run_id, rekey_decisions)
+        else:
+            dropped = [
+                str(td.get("transaction_id"))
+                for td in (fresh.snapshot or {}).get("transactions") or []
+                if td.get("transaction_id") not in committing
+            ]
+            if dropped:
+                raise RunInputError(
+                    f"another statement upload added {len(dropped)} charge(s) "
+                    "to this month while it reconciled; nothing was written, "
+                    "so no charge was lost. Upload again."
+                )
         fresh_cfg = fresh.config or {}
         if fresh_cfg.get("expense") is not None:
             cfg = {**cfg, "expense": fresh_cfg["expense"]}
@@ -8226,7 +9665,21 @@ def rematch_month(
         # not against the ones this call read minutes ago: the advisory's
         # whole job is to compare this file with what is already loaded.
         statement_advice = None
-        if statement_entry is not None:
+        if replace_statements is not None:
+            # The re-read rebuilt every upload the month holds; replace the
+            # whole block and its anchors, judging each entry's advisory
+            # against the entries before it exactly as the appends did.
+            rebuilt_entries: list[dict] = []
+            rebuilt_anchors: dict[str, dict] = {}
+            for raw in replace_statements:
+                entry = dict(raw)
+                anchors = entry.pop("_anchors", {})
+                entry["advisory"] = statement_advisory(rebuilt_entries, entry)
+                rebuilt_entries.append(entry)
+                rebuilt_anchors[entry["file"]] = anchors
+            new_snapshot[STATEMENTS_KEY] = rebuilt_entries
+            new_snapshot[STATEMENT_ANCHORS_KEY] = rebuilt_anchors
+        elif statement_entry is not None:
             prior = list((fresh.snapshot or {}).get(STATEMENTS_KEY) or [])
             entry = dict(statement_entry)
             anchors = entry.pop("_anchors", {})
@@ -8278,6 +9731,26 @@ def rematch_month(
             cfg, transactions, receipts,
             has_coa=bool(cfg.get("coa_validation")),
         )
+        # Item 58: one event per commit, appended to the FRESH row's log so
+        # a re-match that committed while this one ran keeps its entry.
+        new_snapshot[REMATCH_LOG_KEY] = append_rematch_event(
+            (fresh.snapshot or {}).get(REMATCH_LOG_KEY),
+            {
+                "event_id": uuid.uuid4().hex[:12],
+                # The COMMIT clock, in the app's own format, never the
+                # caller's `now_iso` (an upload's timestamp, or empty on the
+                # incremental paths): events from every path sort together.
+                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "trigger": str(trigger or ""),
+                "n_transactions": n_tx,
+                "n_matched": len(outcome.matches),
+                "n_review": n_review,
+                "n_unmatched_tx": len(outcome.unmatched_transactions),
+                "n_receipts": len(receipts),
+                "n_unmatched_rec": len(outcome.unmatched_receipts),
+                "match_rate": summary["match_rate"],
+            },
+        )
         store.update_run_config(run.run_id, cfg)
         store.update_run_snapshot(run.run_id, new_snapshot)
         store.update_run_summary(run.run_id, summary)
@@ -8325,6 +9798,7 @@ def rematch_after_change(
     *,
     learning_db_path: Path | None = None,
     on_stage=None,
+    trigger: str = "",
 ) -> dict | None:
     """Re-reconcile a statement-bearing month whose inputs just changed.
 
@@ -8368,6 +9842,7 @@ def rematch_after_change(
         entity=str((cfg.get("statement") or {}).get("legal_entity_id") or ""),
         learning_db_path=learning_db_path,
         on_stage=on_stage,
+        trigger=trigger,
     )
 
 
@@ -8392,3 +9867,486 @@ def _rematch_or_error(*args, **kwargs) -> dict:
         return rematch_month(*args, **kwargs)
     except Exception as exc:  # noqa: BLE001 - reported, never raised
         return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+# ---------------------------------------------------------------------------
+# The adjacent-month pool (backlog item 61)
+# ---------------------------------------------------------------------------
+# A receipt is routed to a batch by the month PRINTED ON IT, while a charge
+# lands in the statement that BILLED it, and the two boundaries do not line
+# up: August's workbook opens on 07-31 and July's on 06-30, so a subscription
+# invoiced on the last day of a month posts on the 1st of the next statement
+# and its receipt is already filed one batch away. Live on 2026-09-15: August
+# holds two Google receipts dated 08-31 (71.64 and 75.09) whose charges post
+# on 09-01, while August's own 08-01 Google 71.64 charge sits unmatched with
+# no candidate at all.
+#
+# So the month's candidate pool spans its NEIGHBOURS the way it already spans
+# trips (R4b): same borrowed_receipts / receipt_sources keys, same claims
+# arbitration, same one-receipt-one-charge guarantee. Eligibility is the
+# statement's OWN period rather than a calendar month, because the period is
+# the thing that actually decides whether a charge could be on this workbook.
+
+ADJACENT_BORROW_KIND = "adjacent"
+# Only reached by a month that has no statement yet, where there are no
+# charges to derive a period from and nothing to match either. The calendar
+# month plus this margin is the widest window such a month could plausibly
+# bill, and it keeps the helper answerable instead of undefined.
+ADJACENT_FALLBACK_DAYS = 3
+
+
+def statement_period_for_month(
+    run: RunRow, transactions: list
+) -> tuple[date, date] | None:
+    """The span of dates this run's statement actually covers.
+
+    Derived from the run's OWN charges (min..max transaction date), which is
+    the only source that knows where the workbook was cut: Chase opens
+    August on 07-31 and July on 06-30, and no calendar rule predicts that.
+    The label's calendar month widened by `ADJACENT_FALLBACK_DAYS` is the
+    fallback for a month with no statement yet, and None when the label does
+    not name a month either."""
+    dates = [t.transaction_date for t in transactions if t.transaction_date]
+    if dates:
+        return min(dates), max(dates)
+    ym = month_from_label(run.label)
+    if ym is None:
+        return None
+    year, month = ym
+    first = date(year, month, 1)
+    nxt = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    return (
+        first - timedelta(days=ADJACENT_FALLBACK_DAYS),
+        nxt - timedelta(days=1) + timedelta(days=ADJACENT_FALLBACK_DAYS),
+    )
+
+
+def adjacent_pool_for_month(
+    store: RunStore,
+    run: RunRow,
+    transactions: list,
+    own_doc_ids: set[str],
+) -> tuple[list, dict[str, dict]]:
+    """The receipts this month's statement may settle from the company
+    months either side of it (item 61). Returns `(receipts, origins)`;
+    `origins` maps each borrowed document to
+    `{run_id, label, kind: "adjacent"}`.
+
+    Neighbours are decided by LABEL (`month_from_label`), previous and next,
+    so "August 2026" reaches "July 2026" and "September 2026" and nothing
+    else; a batch whose label names no month neither borrows nor lends.
+    Eligibility is the statement period above: a receipt joins only when its
+    printed date falls inside the span this run's charges actually cover,
+    which is what keeps the borrow narrow rather than a second month's worth
+    of noise.
+
+    The exclusions are `trip_pool_for_month`'s, for the same reasons: a trip
+    batch is not a neighbour, a receipt another run has already claimed is
+    out (the advisory read of the cross-batch never-settle guard), a
+    confirmed private expense is not company-card money, and a document id
+    this month's own pool already holds is dropped. That last one bites
+    harder here than it does on trips, because neighbouring months are
+    ingested the same way and collide by construction: July and August share
+    four ids today, all `NNNN__rendered-body.pdf`. The colliding receipt
+    simply is not borrowed; offering two receipts under one id would corrupt
+    the matcher's consumption set and the view's lookup."""
+    if is_trip_batch(run):
+        return [], {}
+    ym = month_from_label(run.label)
+    if ym is None:
+        return [], {}
+    period = statement_period_for_month(run, transactions)
+    if period is None:
+        return [], {}
+    lo, hi = period
+    year, month = ym
+    wanted = {
+        (year - 1, 12) if month == 1 else (year, month - 1),
+        (year + 1, 1) if month == 12 else (year, month + 1),
+    }
+    neighbours = []
+    for other in store.list_runs():
+        if other.run_id == run.run_id:
+            continue
+        if (other.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if is_trip_batch(other):
+            continue
+        oym = month_from_label(other.label)
+        if oym not in wanted:
+            continue
+        neighbours.append((oym, str(other.run_id), other))
+    # Deterministic order, so which side wins an id collision is a fact
+    # rather than a store-ordering accident: the previous month first.
+    neighbours.sort(key=lambda n: (n[0], n[1]))
+
+    borrowed: list = []
+    origins: dict[str, dict] = {}
+    for _oym, _rid, other in neighbours:
+        o_field = store.get_expense_field_overrides(other.run_id)
+        o_receipts, o_kwargs = _expense_export_inputs(
+            other,
+            store.get_category_overrides(other.run_id),
+            o_field,
+            store.get_expense_edits(other.run_id),
+            store.get_duplicate_resolutions(other.run_id),
+        )
+        private = _private_reimbursements(o_field)
+        claims = store.get_claims_on_receipts(other.run_id)
+        entity_by_doc = o_kwargs.get("entity_by_doc") or {}
+        for r in o_receipts:
+            doc = r.document_id
+            if doc in own_doc_ids or doc in origins or doc in private:
+                continue
+            if r.detected_date is None or not (lo <= r.detected_date <= hi):
+                continue
+            c = claims.get(doc)
+            if c is not None and c["claimed_by_run_id"] != run.run_id:
+                continue
+            ent = entity_by_doc.get(doc)
+            if ent and ent != r.legal_entity_id:
+                r = replace(r, legal_entity_id=ent)
+            borrowed.append(r)
+            origins[doc] = {
+                "run_id": other.run_id,
+                "label": other.label or other.run_id,
+                "kind": ADJACENT_BORROW_KIND,
+            }
+    return borrowed, origins
+
+
+def borrowed_source_view(entry: object) -> dict | None:
+    """One `receipt_sources` entry as the SPA reads it, or None.
+
+    The map holds both borrow kinds: a trip entry carries `trip_id`, an
+    adjacent-month entry carries `kind: "adjacent"`. Each key is emitted
+    only when the entry has it, so a trip's object is exactly the
+    `{run_id, trip_id, label}` the workbench already renders and an
+    adjacent one is `{run_id, label, kind}`. Absent, never null."""
+    if not isinstance(entry, dict):
+        return None
+    out: dict = {"run_id": entry.get("run_id")}
+    if entry.get("trip_id"):
+        out["trip_id"] = entry.get("trip_id")
+    out["label"] = entry.get("label")
+    if entry.get("kind"):
+        out["kind"] = entry.get("kind")
+    return out
+# ── Settled outside the card (backlog item 62) ──────────────────────────
+# Some receipts never post to a card at all. July 2026 holds a Redis
+# invoice for 13,200.00 USD, a Konsultancy Finance one for 15,972.00 EUR
+# and a 360Crossmedia one for 900.00 EUR; every one was paid by bank
+# transfer, so no card statement will ever settle them. They sat in
+# `unmatched_receipts` and in the pool counts with no disposition that
+# could ever retire them, which is the whole of backlog item 62.
+#
+# This is that disposition, and it is bookkeeping rather than matching.
+# The receipt stays in the month, in the snapshot, in the expense grid and
+# in the month report, behind a caption naming the tender (owner ruling
+# 2026-09-15: a bank transfer is real company spend whose evidence is the
+# invoice, and dropping the row would hide that spend from the
+# accountant). What it leaves is the RECONCILIATION side: the unmatched
+# list, the pool counts, and month health's exact-pair scan.
+#
+# Applied at VIEW time from a snapshot key, never by re-matching, so the
+# disposition costs no model call and the undo is immediate. It is scoped
+# to receipts the EFFECTIVE outcome leaves unmatched, so a receipt that
+# holds a charge renders as the match it is instead of vanishing from both
+# sides of the screen.
+
+SETTLED_OUTSIDE_KEY = "settled_outside"
+SETTLED_OUTSIDE_HOWS = ("bank_transfer", "cash", "paypal", "other")
+SETTLED_OUTSIDE_NOTE_MAX = 500
+
+# What the month report prints under the expense number. English here
+# because the PDF is English throughout; the SPA localizes from `how`.
+SETTLED_OUTSIDE_CAPTION = {
+    "bank_transfer": "paid by bank transfer",
+    "cash": "paid in cash",
+    "paypal": "paid by PayPal",
+    "other": "settled outside the card",
+}
+
+# A mode that names a card wins outright: "Electronic Funds Transfer
+# ...2838" is a transfer that names the card it posted to, so it suggests
+# nothing. Four consecutive digits is the card-tail shape ("...2838",
+# "x3876", "124631******3876"); an amount like "15.00" never matches it.
+_CARD_TOKEN_RE = re.compile(
+    r"visa|master|maestro|amex|american\s+express|discover|elo\b|"
+    r"card|karte|cart[aã]o|cr[eé]dito|d[eé]bito|debit|credit|\d{4}",
+    re.IGNORECASE,
+)
+
+# Tenders a card statement will never carry. Word-bounded, so "cashback"
+# is not cash and "PAYE" is not PayPal.
+_TENDER_PATTERNS = (
+    ("bank_transfer", re.compile(
+        r"\b(?:bank|wire|electronic\s+funds?)\s+transfers?\b"
+        r"|\btransfer[eê]ncia\b|\btransferencia\b|\b[uü]berweisung\b"
+        r"|\bsepa\b|\btef\b|\bach\b|\bvirement\b|\bbonifico\b",
+        re.IGNORECASE)),
+    ("paypal", re.compile(r"\bpay\s?pal\b", re.IGNORECASE)),
+    ("cash", re.compile(
+        r"\bcash\b|\bdinheiro\b|\besp[eè]ces\b|\bcontanti\b|\bbargeld\b"
+        r"|\bem\s+esp[eé]cie\b",
+        re.IGNORECASE)),
+)
+
+
+def settled_outside_map(snapshot: dict | None) -> dict[str, dict]:
+    """The month's dispositions, document_id -> `{how, note, at}`.
+
+    Absent on every month that has none, so a snapshot written before this
+    key existed reads as an empty map and renders exactly as it did."""
+    stored = (snapshot or {}).get(SETTLED_OUTSIDE_KEY)
+    if not isinstance(stored, dict):
+        return {}
+    out: dict[str, dict] = {}
+    for doc_id, entry in stored.items():
+        if not isinstance(entry, dict):
+            continue
+        how = entry.get("how")
+        if how not in SETTLED_OUTSIDE_HOWS:
+            continue
+        out[str(doc_id)] = {
+            "how": how,
+            "note": str(entry.get("note") or ""),
+            "at": entry.get("at"),
+        }
+    return out
+
+
+def settled_outside_caption(how: str) -> str:
+    """The month report's caption for one tender."""
+    return SETTLED_OUTSIDE_CAPTION.get(how, SETTLED_OUTSIDE_CAPTION["other"])
+
+
+def suggested_settled_outside(payment_mode: str | None) -> dict | None:
+    """The suggestion chip for one unmatched receipt, or None.
+
+    Reads the payment mode the scan lifted off the document (item 28) and
+    names the tender when it reads as something a card statement will
+    never carry. NEVER auto-applied: the reviewer confirms every one.
+
+    Owner ruling 2026-09-15: an invoice's payment-OPTION line ("Pay $15.00
+    with a bank transfer") counts as a signal, not only a statement of how
+    the thing was actually paid. The honest caveat is that the one live
+    instance of that wording sits on an August Lovable receipt that DID
+    post to a card. The chip renders only on already-unmatched receipts
+    and fires on a handful a month, so a wrong one costs a glance while a
+    missing one costs a receipt stuck in the pool forever.
+    """
+    text = (payment_mode or "").strip()
+    if not text or _CARD_TOKEN_RE.search(text):
+        return None
+    for how, pattern in _TENDER_PATTERNS:
+        if pattern.search(text):
+            return {"how": how, "evidence": text[:120]}
+    return None
+
+
+def _settled_outside_unmatched_ids(store: RunStore, run: RunRow) -> set[str]:
+    """Which of this month's receipts the effective outcome leaves
+    unmatched, read the way `build_view` reads it so the route and the
+    screen cannot disagree about what is settled."""
+    transactions, receipts, outcome, _pe = snapshot_from_dict(run.snapshot)
+    effective = apply_decisions(
+        outcome, transactions, receipts, store.get_decisions(run.run_id)
+    )
+    return set(effective.unmatched_receipts)
+
+
+def set_receipt_settled_outside(
+    store: RunStore,
+    run: RunRow,
+    document_id: str,
+    how: str,
+    note: str,
+    now_iso: str,
+) -> dict:
+    """Mark one receipt as settled outside the card.
+
+    Serialized under the batch-mutation lock against a FRESH re-read, the
+    `rematch_month` commit shape: a mid-month add or a restore running
+    concurrently must not be clobbered by a read-modify-write working from
+    a stale row.
+
+    Refuses a receipt that currently settles a charge. Rejecting that
+    match frees it first; marking it here while a charge holds it would
+    leave the month claiming both that a card paid it and that none did.
+    """
+    how = (how or "").strip().lower()
+    if how not in SETTLED_OUTSIDE_HOWS:
+        raise RunInputError(
+            "Say how it was settled: " + ", ".join(SETTLED_OUTSIDE_HOWS) + "."
+        )
+    note = (note or "").strip()[:SETTLED_OUTSIDE_NOTE_MAX]
+    with _BATCH_ADD_LOCK:
+        fresh = store.get_run(run.run_id)
+        if fresh is None:
+            raise RunInputError("This batch no longer exists (it was deleted).")
+        run = fresh
+        snapshot = dict(run.snapshot or {})
+        _tx, receipts, _outcome, _pe = snapshot_from_dict(snapshot)
+        if not any(r.document_id == document_id for r in receipts):
+            raise RunInputError("That receipt is not in this month.")
+        if document_id not in _settled_outside_unmatched_ids(store, run):
+            raise RunInputError(
+                "That receipt is settled against a charge on the statement. "
+                "Reject that match first, then mark it settled outside the "
+                "card."
+            )
+        entries = settled_outside_map(snapshot)
+        entries[document_id] = {"how": how, "note": note, "at": now_iso}
+        snapshot[SETTLED_OUTSIDE_KEY] = entries
+        store.update_run_snapshot(run.run_id, snapshot)
+    return {"ok": True, "document_id": document_id,
+            "settled_outside": entries[document_id]}
+
+
+def clear_receipt_settled_outside(
+    store: RunStore,
+    run: RunRow,
+    document_id: str,
+) -> dict:
+    """The undo, shaped like the duplicates `ignore` resolution: the
+    receipt rejoins the pool, the counts and the pair scan exactly as it
+    was, because nothing about it was ever changed.
+
+    Idempotent, so an undo clicked twice is not an error the second time;
+    `removed` says whether this call was the one that did it."""
+    with _BATCH_ADD_LOCK:
+        fresh = store.get_run(run.run_id)
+        if fresh is None:
+            raise RunInputError("This batch no longer exists (it was deleted).")
+        run = fresh
+        snapshot = dict(run.snapshot or {})
+        entries = settled_outside_map(snapshot)
+        removed = entries.pop(document_id, None) is not None
+        if removed:
+            if entries:
+                snapshot[SETTLED_OUTSIDE_KEY] = entries
+            else:
+                snapshot.pop(SETTLED_OUTSIDE_KEY, None)
+            store.update_run_snapshot(run.run_id, snapshot)
+    return {"ok": True, "document_id": document_id, "removed": removed}
+
+
+# ---------------------------------------------------------------------------
+# Item 70: changes in a month that did not stick (Criss 2026-09-14)
+# ---------------------------------------------------------------------------
+# The expense-edit fields the matcher actually reads. Enumerated from the
+# matcher and the judgment layer, not from intuition: `match_month`,
+# `reference_match` and `matching/judgment.py` read detected_date,
+# detected_total, detected_currency, detected_vendor, detected_reference and
+# legal_entity_id (plus payment_mode, which no edit route writes). An edit to
+# any other field changes what a row BOOKS to, never what it PAIRS with, so it
+# is not worth a re-match (time, and model calls for pairs not yet judged).
+# `private` / `reimburse_to` are deliberately absent: the card chain derives a
+# row's entity from the override / card / stamped value and never from the
+# private flag, so confirming a private expense moves no pairing.
+EXPENSE_MATCH_FIELDS = frozenset({
+    "vendor", "date", "total", "currency", "legal_entity", "reference",
+})
+
+
+def override_base_account(override_category: str | None, base) -> str | None:
+    """The account a category override inherits from the line's own
+    categorization: the line's account when the override KEEPS the line's
+    category, None when it changes it.
+
+    An account is chosen for a category (the categorizer's pick from the
+    chart, the report's account, a merchant default). Reclassifying the line
+    to a different category makes that account stale, and inheriting it is
+    how an iCloud receipt came to read "Software & Subscriptions" booked to
+    the account picked for "Utilities & Premises". There is no deterministic
+    category -> account map to fall back to (`EXPENSE_CATEGORY_ROOT_GROUP`
+    names a root GROUP, not a postable leaf), so a changed category books to
+    no account: the export shows its visible "(account unmapped - assign)"
+    placeholder when a chart is wired and the category label when none is,
+    never a guessed account."""
+    if base is None or not override_category:
+        return None
+    if base.category != override_category:
+        return None
+    return base.zoho_account
+
+
+def category_edit_account(
+    category: str | None,
+    zoho_account: str | None,
+    existing_override: dict | None,
+    base,
+) -> str | None:
+    """The account to STORE with a category edit that may or may not name one.
+
+    An explicit account always wins. Without one, the account the line
+    already had survives only when the category did not actually change
+    (re-sending the current category keeps a reviewer-picked account);
+    a changed category stores none, and `override_base_account` then stops
+    the line's own stale account from coming back at read time."""
+    if zoho_account:
+        return zoho_account
+    ov = existing_override or {}
+    current = ov.get("category") or (base.category if base is not None else None)
+    if category and category == current:
+        return ov.get("zoho_account") or None
+    return None
+
+
+def category_edit_receipt(store: RunStore, run: RunRow, document_id: str):
+    """The receipt a category edit targets, from the EFFECTIVE set (the
+    extraction baseline with the expense overlay laid on it), so a manual add
+    and a bare receipt resolve the way the expense grid shows them. A receipt
+    borrowed from another batch for a candidate pairing is found among the
+    snapshot's borrowed copies. None when the run holds no such receipt."""
+    default_entity = (
+        ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+    )
+    effective = apply_expense_edits(
+        baseline_receipts(run),
+        store.get_expense_field_overrides(run.run_id),
+        store.get_expense_edits(run.run_id),
+        category_overrides=store.get_category_overrides(run.run_id),
+        default_entity=default_entity,
+    )
+    rec = next((r for r in effective if r.document_id == document_id), None)
+    if rec is not None:
+        return rec
+    for bd in (run.snapshot or {}).get(BORROWED_RECEIPTS_KEY) or []:
+        if isinstance(bd, dict) and bd.get("document_id") == document_id:
+            try:
+                return receipt_from_dict(bd)
+            except (KeyError, TypeError, ValueError):
+                return None
+    return None
+
+
+def proposed_posting_category(
+    candidates: list[dict],
+    rec_by_id: dict,
+    overrides: dict,
+) -> dict | None:
+    """The posting category a needs-review row will book to once confirmed.
+
+    A review row holds no receipt until the reviewer confirms one, so its
+    `posting_category` resolved to nothing and a category the reviewer set on
+    the candidate saved and never showed. The SPA's Confirm takes the chosen
+    candidate or else the first one; this reads the candidate carrying a
+    reviewer category edit first (the one she just reclassified), then the
+    first candidate in emitted order. Display only: readiness and the booking
+    still follow the receipt actually confirmed."""
+    edited = {
+        doc for (doc, _line), ov in (overrides or {}).items()
+        if (ov or {}).get("category")
+    }
+    order = [c.get("document_id") for c in candidates or []]
+    picks = [d for d in order if d in edited][:1] + order[:1]
+    for doc in picks:
+        rec = rec_by_id.get(doc)
+        if rec is None:
+            continue
+        hit = _row_posting_category(rec, overrides, None)
+        if hit is not None:
+            return hit
+    return None

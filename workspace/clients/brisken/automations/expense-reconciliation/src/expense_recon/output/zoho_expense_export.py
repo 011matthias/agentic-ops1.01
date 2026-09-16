@@ -30,7 +30,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .zoho_export import (
+from .posting_common import (
     _DISPOSITION_REIMBURSABLE,
     _DISPOSITION_WITHHELD,
     _REIMBURSABLE_PLACEHOLDER,

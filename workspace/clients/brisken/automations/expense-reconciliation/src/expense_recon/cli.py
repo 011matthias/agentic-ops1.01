@@ -72,6 +72,11 @@ What this slice does NOT do (deferred):
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotations only; no runtime import cost
+    from collections.abc import Callable
+
 import argparse
 import json
 import logging
@@ -233,7 +238,7 @@ def _load_receipts(
         if not isinstance(column_map, dict) or not column_map:
             raise ConfigError(
                 "receipts.source 'expense_csv' needs a `column_map` "
-                "(logical field → Zoho export column header) in the config."
+                "(logical field → export column header) in the config."
             )
         return parse_expense_csv_tolerant(
             path=path,
@@ -1143,8 +1148,8 @@ def run(
                 zoho_cfg.get("export_receiptless_learned")
             ),
         )
-        logger.info("wrote Zoho journal export: %s", export_path)
-        print(f"Wrote Zoho export: {export_path}")
+        logger.info("wrote journal export: %s", export_path)
+        print(f"Wrote journal export: {export_path}")
 
     # Flat reconciled CSV (2026-06-16): the CSV twin of the xlsx report —
     # one row per statement line, enriched with its matched expense. Written
@@ -1253,8 +1258,8 @@ def _run_expense_generation(
         card_accounts=(cfg.get("expense") or {}).get("card_accounts"),
         receipt_urls=receipt_urls,
     )
-    logger.info("wrote Zoho Expenses export: %s", export_path)
-    print(f"Wrote Zoho Expenses export: {export_path}")
+    logger.info("wrote expenses export: %s", export_path)
+    print(f"Wrote expenses export: {export_path}")
     return export_path
 
 

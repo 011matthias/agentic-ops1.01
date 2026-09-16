@@ -11,6 +11,31 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-16 | Brisken Expense-Recon Feedback Wave + Zoho Decoupling | client-dev | [→](docs/2026-09-16%20-%20Brisken%20Expense-Recon%20Feedback%20Wave%20%2B%20Zoho%20Decoupling/Checkpoint.md) |
+| 2026-09-15 | Expense-Recon Matching Round B | client-dev | [→](docs/2026-09-15%20-%20Expense-Recon%20Matching%20Round%20B/Checkpoint.md) |
+| 2026-09-15 | Expense-Recon Matching Round B | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Matching%20Round%20B/Mini-Checkpoint-2.md) |
+| 2026-09-15 | Brisken P1 Edits Stick, Card List, Scorer Repin, Matching Round A | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Edits%20Stick%2C%20Card%20List%2C%20Scorer%20Repin%2C%20Matching%20Round%20A/Checkpoint.md) |
+| 2026-09-15 | Brisken P1 Item 54 Refuted Before Build | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Item%2054%20Refuted%20Before%20Build/Checkpoint.md) |
+| 2026-09-15 | Brisken P1 Statement And Receipt Defects, CI Ruff Scope, Consumer Gate | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Statement%20And%20Receipt%20Defects%2C%20CI%20Ruff%20Scope%2C%20Consumer%20Gate/Checkpoint.md) |
+| 2026-09-15 | Brisken P1 Failure Probe And Cleanup Round | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Failure%20Probe%20And%20Cleanup%20Round/Checkpoint.md) |
+| 2026-09-15 | Expense-Recon Item 66 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2066/Mini-Checkpoint-2.md) |
+| 2026-09-15 | Expense-Recon Item 68 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2068/Mini-Checkpoint-2.md) |
+| 2026-09-15 | Expense-Recon Item 67 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2067/Mini-Checkpoint-2.md) |
+| 2026-09-15 | Expense-Recon Item 62 | client-dev | [Mini-Checkpoint-1](docs/2026-09-15%20-%20Expense-Recon%20Item%2062/Mini-Checkpoint-1.md) |
+| 2026-09-15 | Expense-Recon Item 63 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2063/Mini-Checkpoint-2.md) |
+| 2026-09-15 | Brisken P1 Cost Centers Backend Complete | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Cost%20Centers%20Backend%20Complete/Checkpoint.md) |
+| 2026-09-15 | Expense-Recon Item 17 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2017/Mini-Checkpoint-2.md) |
+| 2026-09-15 | Expense-Recon Item 64 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2064/Mini-Checkpoint-2.md) |
+| 2026-09-15 | Expense-Recon Item 16 | client-dev | [Mini-Checkpoint-1](docs/2026-09-15%20-%20Expense-Recon%20Item%2016/Mini-Checkpoint-1.md) |
+| 2026-09-15 | Expense-Recon Item 65 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2065/Mini-Checkpoint-2.md) |
+| 2026-09-15 | Expense-Recon Item 61 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Item%2061/Mini-Checkpoint-2.md) |
+| 2026-09-15 | Expense-Recon Matching Program Prompt | client-dev | [→](docs/2026-09-15%20-%20Expense-Recon%20Matching%20Program%20Prompt/Checkpoint.md) |
+| 2026-09-15 | Expense-Recon Parallel Round Setup | client-dev | [→](docs/2026-09-15%20-%20Expense-Recon%20Parallel%20Round%20Setup/Checkpoint.md) |
+| 2026-09-15 | Expense-Recon Void List Round 3 | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Void%20List%20Round%203/Mini-Checkpoint-2.md) |
+| 2026-09-14 | Expense-Recon Void List Round 2 | client-dev | [→](docs/2026-09-14%20-%20Expense-Recon%20Void%20List%20Round%202/Checkpoint.md) |
+| 2026-09-11 | Expense-Recon Void List Round 1 | client-dev | [→](docs/2026-09-11%20-%20Expense-Recon%20Void%20List%20Round%201/Checkpoint.md) |
+| 2026-09-11 | Expense-Recon xlsx Sign Defect and Statement Re-read | client-dev | [→](docs/2026-09-11%20-%20Expense-Recon%20xlsx%20Sign%20Defect%20and%20Statement%20Re-read/Checkpoint.md) |
+| 2026-09-11 | Cost Centers Step 2, Criss's July Receipts, Item 50 Closed | client-dev | [→](docs/2026-09-11%20-%20Cost%20Centers%20Step%202%2C%20Criss%27s%20July%20Receipts%2C%20Item%2050%20Closed/Checkpoint.md) |
 | 2026-09-10 | Fly Account Cleanup and Expense-Recon Recovery | system-infra | [→](docs/2026-09-10%20-%20Fly%20Account%20Cleanup%20and%20Expense-Recon%20Recovery/Checkpoint.md) |
 | 2026-09-10 | Brisken September Hours and Weekly Sheets | client-dev | [→](docs/2026-09-10%20-%20Brisken%20September%20Hours%20and%20Weekly%20Sheets/Checkpoint.md) |
 | 2026-09-09 | July Receipt Sweep + Anthropic Billing Switch | client-dev | [→](docs/2026-09-09%20-%20July%20Receipt%20Sweep%20%2B%20Anthropic%20Billing%20Switch/Checkpoint.md) |
@@ -372,6 +397,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-14 | Meji Review Page Closed, Booked-Signal Derivable, Cleared to Build | client-dev | [→](docs/2026-09-14%20-%20Meji%20Review%20Page%20Closed%2C%20Booked-Signal%20Derivable%2C%20Cleared%20to%20Build/Checkpoint.md) |
+| 2026-09-15 | Meji Christmas Suppression Build | client-dev | [→](docs/2026-09-15%20-%20Meji%20Christmas%20Suppression%20Build/Checkpoint.md) |
 | 2026-09-10 | Meji Family Exclusion Deployed | client-dev | [Mini-Checkpoint-2](docs/2026-09-10%20-%20Meji%20Family%20Exclusion%20Deployed/Mini-Checkpoint-2.md) |
 | 2026-09-08 | Meji Instantly Estate And September Review Gate | client-dev | [→](docs/2026-09-08%20-%20Meji%20Instantly%20Estate%20And%20September%20Review%20Gate/Checkpoint.md) |
 | 2026-09-06 | Meji September Launch Line-Up + Jess Workload Proposal | client-dev | [→](docs/2026-09-06%20-%20Meji%20September%20Launch%20Line-Up%20%2B%20Jess%20Workload%20Proposal/Checkpoint.md) |
@@ -509,6 +535,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## vinted-reselling
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-14 | Vinted Volume Fix + Recheck Markup | client-dev | [→](docs/2026-09-14%20-%20Vinted%20Volume%20Fix%20%2B%20Recheck%20Markup/Checkpoint.md) |
 | 2026-09-10 | Vinted Watcher Volume Collapse + Egress Plumbing | client-dev | [→](docs/2026-09-10%20-%20Vinted%20Watcher%20Volume%20Collapse%20%2B%20Egress%20Plumbing/Checkpoint.md) |
 | 2026-09-09 | Vinted Listing Bot Seven Gaps | misc | [→](docs/2026-09-09%20-%20Vinted%20Listing%20Bot%20Seven%20Gaps/Checkpoint.md) |
 | 2026-09-09 | Vinted Watcher Precision + Portability | client-dev | [→](docs/2026-09-09%20-%20Vinted%20Watcher%20Precision%20%2B%20Portability/Checkpoint.md) |

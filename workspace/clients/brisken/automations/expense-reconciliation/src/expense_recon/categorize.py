@@ -453,7 +453,7 @@ def _learned_categorization(
     if hit is None or not hit.category:
         return None
     if hit.source_run and hit.source_run.startswith("zoho-seed"):
-        provenance = "from your Zoho Books posting history"
+        provenance = "from your earlier posting history"
     else:
         when = hit.last_confirmed_at[:7] if hit.last_confirmed_at else None
         provenance = (

@@ -107,7 +107,7 @@ def test_build_view_surfaces_suggestion_on_noreceipt_row():
                 category="Software & Subscriptions",
                 zoho_account="Other Infra and IT Costs for Cloud Business",
                 confidence=1.0, source=ClassificationSource.LEARNED,
-                reasoning="from your Zoho Books posting history",
+                reasoning="from your earlier posting history",
             )
         )
     }
@@ -120,7 +120,7 @@ def test_build_view_surfaces_suggestion_on_noreceipt_row():
     assert cc["zoho_account"] == "Other Infra and IT Costs for Cloud Business"
     assert cc["source"] == "LEARNED"
     assert cc["is_learned"] is True
-    assert "Zoho Books posting history" in cc["provenance"]
+    assert "earlier posting history" in cc["provenance"]
 
 
 def test_build_view_pre_slice10_snapshot_renders_none():

@@ -393,7 +393,7 @@ def _writeback_column_values(client, batch_id, name, tmp_path) -> dict[int, str]
     out.write_bytes(resp.content)
     ws = load_workbook(out).active
     col = next(
-        c.column for c in ws[1] if c.value == "Zoho Account (tool)"
+        c.column for c in ws[1] if c.value == "Posting account (tool)"
     )
     return {
         r: ws.cell(row=r, column=col).value
@@ -439,14 +439,24 @@ def test_the_writeback_annotates_only_its_own_workbook(client, monkeypatch, tmp_
     assert amex[2] != chase[2], (amex, chase)
 
 
-def test_a_workbook_that_held_no_rows_is_annotated_with_nothing(
+def test_a_workbook_that_held_no_rows_never_joins_the_month(
     client, monkeypatch, tmp_path
 ):
-    """"Recorded and empty" is not "not recorded". A workbook that parsed no
-    charges has a real, empty anchor map, and reading that as "no map" drops
-    the writeback back to placing every charge in the month by its own row
-    number, which would put the Amex accounts into a workbook that has no
-    charges at all."""
+    """Was: "recorded and empty is not not-recorded", with an empty workbook
+    as the vehicle. Since item 51 an upload that parses no charge is refused
+    before the fold, so a WORKBOOK can no longer be recorded with an empty
+    anchor map at all, and the hazard that motivated the distinction (a
+    "no map" reading dropping the writeback back to placing every charge in
+    the month by its own row number, into a workbook holding none) is
+    prevented a step earlier. The distinction itself still stands and is
+    still load-bearing for a PDF statement, whose charges have no tabular
+    row; `statement_anchors` says so.
+
+    What this pins is the writeback half of that refusal: the empty file
+    joins neither `statement_anchors` nor `statements[]`, and the workbook
+    already in the month is annotated exactly as it was.
+    `tests/test_statement_zero_rows.py` owns the refusal itself.
+    """
     _wire(monkeypatch)
     batch_id = _batch(client)
     _upload(client, batch_id, _xlsx(
@@ -454,11 +464,29 @@ def test_a_workbook_that_held_no_rows_is_annotated_with_nothing(
         ("2026-04-15", "42.50", "STAPLES"),
         ("2026-04-16", "10.00", "SECOND"),
     ), name="real.xlsx")
-    _upload(client, batch_id, _xlsx(tmp_path / "empty.xlsx"), name="empty.xlsx")
+
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/statement",
+        files={"statement": (
+            "empty.xlsx", _xlsx(tmp_path / "empty.xlsx"),
+            "application/octet-stream",
+        )},
+        data={
+            "account_id": "amex-9001",
+            "account_legal_entities": '{"amex-9001": "Corporate Services"}',
+            "account_card_currency": "USD",
+            "map_transaction_date": "Date",
+            "map_amount": "Amount",
+            "map_vendor": "Vendor",
+        },
+    )
+    assert client.get(
+        f"/jobs/{resp.json()['job_id']}"
+    ).json()["status"] == "error"
 
     anchors = (_run(client, batch_id).snapshot or {})["statement_anchors"]
-    assert anchors["empty.xlsx"] == {}
-    assert _writeback_column_values(client, batch_id, "empty.xlsx", tmp_path) == {}
+    assert "empty.xlsx" not in anchors
+    assert [e["file"] for e in _statements(client, batch_id)] == ["real.xlsx"]
     assert set(
         _writeback_column_values(client, batch_id, "real.xlsx", tmp_path)
     ) == {2, 3}

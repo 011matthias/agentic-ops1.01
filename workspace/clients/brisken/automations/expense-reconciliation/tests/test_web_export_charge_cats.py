@@ -47,7 +47,7 @@ def _run(work_dir, *, config=None) -> RunRow:
                 zoho_account=_ACCOUNT,
                 confidence=1.0,
                 source=ClassificationSource.LEARNED,
-                reasoning="from your Zoho Books posting history",
+                reasoning="from your earlier posting history",
             )
         )
     }
@@ -63,7 +63,7 @@ def test_reconciled_csv_carries_receiptless_charge_category(tmp_path):
     rows = list(csv.DictReader(path.read_text(encoding="utf-8").splitlines()))
     row = next(r for r in rows if r["Description"] == "ANTHROPIC")
     assert row["Charge Category"] == "Software & Subscriptions"
-    assert row["Charge Zoho Account"] == _ACCOUNT
+    assert row["Charge posting account"] == _ACCOUNT
     assert row["Charge Category Source"] == "LEARNED"
 
 

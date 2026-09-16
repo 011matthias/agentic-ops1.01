@@ -211,3 +211,35 @@ def test_the_receipt_column_states_attachment_not_a_page_number():
     assert "attached" in page1
     assert "none" in page1
     assert "p. 1" not in page1
+
+
+def test_a_captioned_section_renders_its_heading_note_and_label():
+    """Item 47: a section may carry its own `caption` and `label` instead
+    of a person, and the partition's heading and note render once above
+    the first section. Numbering stays continuous across the slices."""
+    pdf = build_expense_report_pdf(
+        ROWS, EXPENSE_COLUMNS, title="Expense report - August 2026",
+        sections=[
+            {"caption": "Lidar (project)", "label": "Lidar",
+             "start": 1, "count": 1},
+            {"caption": "Unassigned (no cost center)", "label": "Unassigned",
+             "start": 2, "count": 1},
+        ],
+        sections_heading="Listing by cost center",
+        sections_note="Card and receipt spend only.",
+    )
+    text = " ".join(_text(pdf, 0).split())
+    assert "Listing by cost center" in text
+    assert "Card and receipt spend only." in text
+    assert "Lidar (project)" in text and "Lidar: 1 expense" in text
+    assert "Unassigned (no cost center)" in text
+    assert "Unassigned: 1 expense" in text
+    assert text.index("Listing by cost center") < text.index("Lidar (project)")
+    assert text.index("Lidar: 1") < text.index("Unassigned: 1")
+    # A person section still reads the item-38 way in the same document.
+    pdf = build_expense_report_pdf(
+        ROWS, EXPENSE_COLUMNS, title="Trip report - Rome",
+        sections=[{"person": "Dirk", "on_roster": True, "start": 1,
+                   "count": 2}],
+    )
+    assert "Dirk: 2 expenses" in " ".join(_text(pdf, 0).split())

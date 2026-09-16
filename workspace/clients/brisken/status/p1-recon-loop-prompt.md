@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: loop-runbook
 state: active
-updated: 2026-09-07
+updated: 2026-09-15
 ---
 
 # Brisken expense tool: improvement loop, next round (paste into a fresh chat)
@@ -227,6 +227,36 @@ actions on any row. Match exact strings, and open the menu.
 
 The 2026-08-21 wave is fully worked through. Items 16, 17, 3, 4, 5, 8 in the
 backlog are small and unranked; none of them is urgent.
+
+### 4. Matching: done, do not reopen without new evidence
+
+The matching improvement program (item 69) is CLOSED as of 2026-09-15. Round
+A (PR #874, Fly v130) made one purchase one candidate by its document number;
+round B (PR #877, Fly v131) let a clean rate-derived pair keep its match when
+its rivals are spoken for or name another merchant, and fixed the masked-BIN
+card key. Both live months were re-matched after each. Where it landed, labels
+as judge: July 51 receipts, 31 matched clean and right (26 at the start of the
+program); August 31 receipts, 8 right (7 at the start, and 5 WRONG then, now
+0). Zero wrong and zero unverifiable auto-matches on both months. Six-bundle
+scorer 55/95 -> 70/95 deterministic, train 49.8 -> 56.8, holdout 15.7 -> 19.2,
+determ_wrong 0, guard 4/4.
+
+The stop is deliberate. The next matching class (July's two Google Workspace
+charges against two identical receipts) recovers at most one receipt a month,
+under the three-a-month floor, and the owner ruled the reviewer's duplicate
+ruling there stands. **What is left is coverage, not matching**: cards 9693
+and 1176 have no statement loaded, June and September have no statement (item
+61), and cash / debit / bank transfers never post to a card (item 62). A
+matching idea arriving without a labelled month behind it is not a round;
+re-measure with `tools/recon-match-attribution.py` against the two live-month
+bundles first, and never re-run the levers `docs/optimize/
+brisken-recon-tuning-v1/SUMMARY.md` refuted.
+
+One real matching thread stays open and is NOT part of the program: item 72,
+the raw-vs-effective persistence split. Round B did not close its live
+instance (that one is a pass-1 ambiguous tie, which the uniqueness gate never
+reaches) and the August re-match showed the split again live, reporting
+`n_unmatched_tx` 99 on the event and 100 on the summary a moment later.
 
 ## Owner-side, still open (hand the paths when asked, do not chase)
 

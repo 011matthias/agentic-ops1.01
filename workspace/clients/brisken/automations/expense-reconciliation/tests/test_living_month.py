@@ -13,10 +13,12 @@ restored, a card assigned, master data refreshed. Each is followed by
 re-reconcile is worse than one that is refused: the receipt would sit in the
 pool while the match outcome still described the month as it was before.
 
-Two things deliberately stay closed, each for its own reason and each pinned
-below: a second statement upload (append is its own round) and the four
+Two things deliberately stayed closed, each for its own reason: a second
+statement upload (append was its own round, opened in PR 2b-2b-2) and the
 expense-edit overlay routes (PR #628's note -- an edit surface is worth
-reopening only once its edits are reversible and honestly attributed).
+reopening only once its edits are reversible and honestly attributed). Both
+are open now and pinned open below; the overlay reopened in item 70 together
+with the re-match an edit has to trigger.
 """
 from __future__ import annotations
 
@@ -272,11 +274,14 @@ def test_a_second_statement_is_taken_not_refused(client, monkeypatch):
     assert len(_transactions(client, batch_id)) == before
 
 
-def test_the_expense_edit_overlay_stays_closed(client, monkeypatch):
-    """Not because re-applying an edit is dangerous -- it is idempotent by
-    construction -- but because a re-match bakes the overlay into the pool,
-    so the edit surface reopens only with the re-match an edit must trigger.
-    Pinned so the guard lift above cannot quietly take these with it."""
+def test_the_expense_edit_overlay_is_open_and_re_matches(client, monkeypatch):
+    """The door this file used to pin shut, opened in item 70. It stayed
+    closed because a re-match bakes the overlay into the pool, so the edit
+    surface could only reopen together with the re-match an edit must
+    trigger and with every edit reversible. Both now hold
+    (`tests/test_month_edits.py` owns the behavior); this pins that all five
+    routes answer on a reconciling month, and that the ones that can move a
+    pairing report their re-match."""
     _wire(monkeypatch, _extraction())
     batch_id = _create_batch(client)
     doc_id = _grid(client, batch_id)["expenses"][0]["document_id"]
@@ -286,18 +291,33 @@ def test_the_expense_edit_overlay_stays_closed(client, monkeypatch):
         f"/api/runs/{batch_id}/expenses/{doc_id}",
         json={"field": "vendor", "value": "X"},
     )
-    assert edit.status_code == 400
-    assert "workbench" in edit.json()["error"]
-    assert client.post(
-        f"/api/runs/{batch_id}/expenses", json={"vendor": "Y", "total": "1"}
-    ).status_code == 400
-    assert client.request(
-        "DELETE", f"/api/runs/{batch_id}/expenses/{doc_id}"
-    ).status_code == 400
-    assert client.put(
+    assert edit.status_code == 200, edit.text
+    assert "rematch" in edit.json()
+    entity = client.put(
         f"/api/runs/{batch_id}/expenses/{doc_id}/entity",
-        json={"legal_entity": "Corporate Services"},
-    ).status_code == 400
+        json={"legal_entity": "Cloud Services"},
+    )
+    assert entity.status_code == 200, entity.text
+    assert "rematch" in entity.json()
+    private = client.post(
+        f"/api/runs/{batch_id}/expenses/{doc_id}/private",
+        json={"private": True, "reimburse_to": "Dirk"},
+    )
+    assert private.status_code == 200, private.text
+    add = client.post(
+        f"/api/runs/{batch_id}/expenses", json={"vendor": "Y", "total": "1"}
+    )
+    assert add.status_code == 200, add.text
+    assert "rematch" in add.json()
+    delete = client.request(
+        "DELETE", f"/api/runs/{batch_id}/expenses/{doc_id}"
+    )
+    assert delete.status_code == 200, delete.text
+    assert "rematch" in delete.json()
+    assert not any(
+        "statement is attached" in r.text
+        for r in (edit, entity, private, add, delete)
+    )
 
 
 def test_a_failed_re_match_does_not_lose_the_receipt(client, monkeypatch):

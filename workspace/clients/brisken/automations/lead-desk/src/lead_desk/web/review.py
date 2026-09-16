@@ -132,6 +132,37 @@ def unsendable_reason(store: ContactStore, email: str) -> str | None:
     return None
 
 
+def responded_reason(store: ContactStore, email: str) -> str | None:
+    """When this person last answered us, or None.
+
+    A roster is static seed data while the mailbox keeps moving, so a reply
+    that lands (or is recovered) after seeding does not take anyone off a
+    follow-up list. Writing again to somebody who already answered is the
+    worst outcome this surface can produce, so the page re-asks the question
+    at every render instead of trusting the list it was given.
+
+    Auto-replies and meeting responses are excluded: an out-of-office is not
+    an answer, and treating it as one would quietly shrink a wave.
+    """
+    addr = (email or "").strip().lower()
+    if not addr:
+        return None
+    row = store.conn.execute(
+        "SELECT contact_id FROM contacts WHERE lower(coalesce(email,'')) = ? "
+        "OR lower(coalesce(alt_email,'')) = ? LIMIT 1", (addr, addr)).fetchone()
+    if row is None:
+        return None
+    hit = store.conn.execute(
+        "SELECT ts, type FROM outreach_events WHERE contact_id = ? AND ("
+        "  (direction = 'inbound' AND type = 'reply' AND NOT " + _AUTO_SQL + ")"
+        "  OR type = 'booked') ORDER BY ts DESC LIMIT 1",
+        (row["contact_id"],)).fetchone()
+    if hit is None:
+        return None
+    what = "a meeting" if hit["type"] == "booked" else "replied"
+    return f"{what} on {(hit['ts'] or '')[:10]}"
+
+
 def unsendable_recipients(store: ContactStore, packet: dict) -> list[dict]:
     """Every recipient in a packet definition the engine would refuse."""
     out = []
@@ -234,6 +265,7 @@ def build_review_view(store: ContactStore, packet_id: str) -> dict | None:
     # or deny rule added after seeding must show up on the page rather than
     # wait to be discovered at claim time.
     unsendable = []
+    responded = []
     items = []
     open_decisions = 0
     open_sequences = 0
@@ -263,6 +295,11 @@ def build_review_view(store: ContactStore, packet_id: str) -> dict | None:
                     unsendable.append({"name": rec.get("name"),
                                        "email": rec.get("email"),
                                        "reason": why, "wave": r["title"]})
+                answered = responded_reason(store, rec.get("email") or "")
+                if answered:
+                    responded.append({"name": rec.get("name"),
+                                      "email": rec.get("email"),
+                                      "reason": answered, "wave": r["title"]})
             # The editor prefills with the reviewer's latest text when there
             # is one, else the suggestion.
             latest = {s.get("step_no"): s for s in
@@ -276,6 +313,7 @@ def build_review_view(store: ContactStore, packet_id: str) -> dict | None:
         "packet_id": packet_id,
         "facts": facts,
         "unsendable": unsendable,
+        "responded": responded,
         "title": (meta or {}).get("title", packet_id),
         "intro": (meta or {}).get("intro", ""),
         "items": items,

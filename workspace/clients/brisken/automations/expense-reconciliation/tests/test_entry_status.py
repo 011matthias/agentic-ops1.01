@@ -1,6 +1,6 @@
 """L1 + L6 + L5 — the statement_xlsx batch (2026-07-15 walkthrough).
 
-L1: cell fill IS data (yellow row = already in Zoho, gray = subscription).
+L1: cell fill IS data (yellow row = already posted, gray = subscription).
 L6: a formula-derived mapped column gets a warning, never an abort.
 L5: optional original_amount / original_currency / fx_rate columns carry
 per-charge FX detail in tabular statements (xlsx AND csv symmetry).

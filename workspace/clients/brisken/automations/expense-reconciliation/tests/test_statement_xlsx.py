@@ -314,6 +314,125 @@ def test_bool_amount_rejected(tmp_path):
     assert exc.value.line_number == 2
 
 
+def _chase_rows(with_type: bool):
+    """Criss's real export shape (Chase, multi-card workbook): purchases
+    printed NEGATIVE, the one payment positive, a Type column saying which
+    is which. `with_type=False` drops that column so the majority
+    inference is what has to carry the sign."""
+    rows = [
+        (datetime(2026, 8, 31), "LOVABLE", "Sale", -15.00),
+        (datetime(2026, 8, 30), "OBSIDIAN", "Sale", -96.00),
+        (datetime(2026, 8, 30), "ZOHOCORP", "Sale", -576.00),
+        (datetime(2026, 8, 23), "PRESSMASTER DMCC", "Sale", -135.00),
+        (datetime(2026, 8, 4), "Payment Thank You-Mobile", "Payment", 7823.16),
+    ]
+    if with_type:
+        return ("Date", "Description", "Type", "Amount"), rows
+    return ("Date", "Description", "Amount"), [
+        (d, v, a) for d, v, _t, a in rows
+    ]
+
+
+def test_type_column_canonicalizes_sign_per_row(tmp_path):
+    """3.15 Type-column path, Excel sibling: `Sale` is a purchase (positive,
+    whatever the workbook printed), `Payment` a credit (negative,
+    is_credit). Before 2026-09-11 the Excel parser ignored a mapped Type
+    column and kept every printed sign."""
+    path = tmp_path / "chase.xlsx"
+    headers, rows = _chase_rows(with_type=True)
+    _write_xlsx(path, rows, headers=headers)
+    txs = parse_statement_xlsx(
+        path,
+        column_map={**DEFAULT_MAP, "type": "Type"},
+        account_id="card-2838",
+        legal_entity_id="Corporate Services",
+        account_card_currency="USD",
+    )
+    assert [t.amount for t in txs[:4]] == [
+        Decimal("15.00"), Decimal("96.00"), Decimal("576.00"), Decimal("135.00")
+    ]
+    assert all(not t.is_credit for t in txs[:4])
+    payment = txs[4]
+    assert payment.amount == Decimal("-7823.16") and payment.is_credit
+
+
+def test_no_type_column_majority_negative_flips_with_warning(tmp_path):
+    """3.15 no-Type path, Excel sibling of the CSV test of the same name:
+    a majority-negative workbook prints purchases as negatives; every sign
+    flips to canonical and the inference is a visible warning."""
+    from expense_recon.ingest.statement_xlsx import parse_statement_xlsx_tolerant
+
+    path = tmp_path / "chase-notype.xlsx"
+    headers, rows = _chase_rows(with_type=False)
+    _write_xlsx(path, rows, headers=headers)
+    txs, issues = parse_statement_xlsx_tolerant(
+        path,
+        column_map=DEFAULT_MAP,
+        account_id="card-2838",
+        legal_entity_id="Corporate Services",
+        account_card_currency="USD",
+    )
+    warnings = [i for i in issues if i.severity == "warning"]
+    assert len(warnings) == 1 and "sign convention inferred" in warnings[0].message
+    assert [t.amount for t in txs[:4]] == [
+        Decimal("15.00"), Decimal("96.00"), Decimal("576.00"), Decimal("135.00")
+    ]
+    assert all(not t.is_credit for t in txs[:4])
+    assert txs[4].amount == Decimal("-7823.16") and txs[4].is_credit
+
+
+def test_majority_positive_workbook_keeps_signs_and_flags_the_credit(amex_xlsx):
+    """A canonical workbook (one refund among six purchases) is untouched:
+    no flip, no warning, and the lone negative row is the credit."""
+    from expense_recon.ingest.statement_xlsx import parse_statement_xlsx_tolerant
+
+    txs, issues = parse_statement_xlsx_tolerant(
+        amex_xlsx,
+        column_map=DEFAULT_MAP,
+        account_id="brisken-amex-usd",
+        legal_entity_id="brisken-us",
+        account_card_currency="USD",
+    )
+    assert not [i for i in issues if i.severity == "warning"]
+    credits = [t for t in txs if t.is_credit]
+    assert [t.amount for t in credits] == [Decimal("-15.00")]
+    assert all(not t.is_credit for t in txs if t.amount > 0)
+
+
+def test_chase_workbook_reaches_the_matcher_with_matchable_amounts(tmp_path):
+    """The defect as Criss saw it, end to end through the parser: a Chase
+    workbook's purchases (printed -15.00) against a 15.00 receipt matched
+    nothing, because the matcher compared the printed sign. Through the
+    fixed parser the four receipts settle their four charges and the
+    payment lands in refunds, never paired."""
+    path = tmp_path / "august.xlsx"
+    headers, rows = _chase_rows(with_type=True)
+    _write_xlsx(path, rows, headers=headers)
+    txs = parse_statement_xlsx(
+        path,
+        column_map={**DEFAULT_MAP, "type": "Type"},
+        account_id="card-2838",
+        legal_entity_id="Corporate Services",
+        account_card_currency="USD",
+    )
+    receipts = [
+        Receipt(
+            document_id=f"r{i}",
+            legal_entity_id="Corporate Services",
+            detected_date=d.date(),
+            detected_total=Decimal(str(abs(a))),
+            detected_currency="USD",
+            detected_vendor=v,
+        )
+        for i, (d, v, _t, a) in enumerate(rows[:4])
+    ]
+    out = match_month(txs, receipts)
+    assert len(out.matches) == 4
+    assert all(m.match_type == MatchType.EXACT for m in out.matches)
+    assert out.refunds == [txs[4].transaction_id]
+    assert out.unmatched_receipts == []
+
+
 def test_integration_parser_to_matcher_happy_path(amex_xlsx):
     """End-to-end: .xlsx -> Transaction list -> match_month with
     synthetic receipts. Both seeded receipts produce EXACT matches;
@@ -347,4 +466,10 @@ def test_integration_parser_to_matcher_happy_path(amex_xlsx):
     outcome = match_month(txs, receipts)
     assert len(outcome.matches) == 2
     assert all(m.match_type == MatchType.EXACT for m in outcome.matches)
-    assert len(outcome.unmatched_transactions) == 5
+    # Four purchases stay unmatched; the AMAZON RETURN row is a credit,
+    # partitioned into its own refunds bucket (as the CSV sibling has
+    # done since 3.15), never left among the purchases a receipt could
+    # pair with.
+    assert len(outcome.unmatched_transactions) == 4
+    refund = next(t for t in txs if t.amount < 0)
+    assert outcome.refunds == [refund.transaction_id]
