@@ -159,6 +159,7 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
+| `lovable-turn-prompt.md` (2026-09-16, item 76: the status badge and the Reject / Confirm buttons follow `rows[].turn`; a booked row reads "Already booked" and never asks; a tool confirmation reads "Confirmed automatically" with its undo) | `n_self_confirmed`, `row.status.confirmedByTool`, `row.status.posted`, `row.status.none`, `wb.selfConfirmed.count` (not `decided_by` alone: the duplicates panel already reads one) | Backend live first (Fly, `turn` on July's rows). Browser-drive the seven checks at the end of the prompt; the self-confirmed rows appear only after each month's next re-match |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.

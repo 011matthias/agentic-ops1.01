@@ -169,6 +169,7 @@ name answers the same one:
 | `n_amounts_unreadable` | how many expenses carry an amount no total could read, so they are in no total (item 65): `totals_by_ccy` skips them and the report's listing cannot print them. The fix is reading the amount off the receipt, not a re-run |
 | `n_receipts_in_report` | how many expenses have a receipt PAGE in the built report (item 68). Not "how many have a file": a file that cannot be rendered is a file, and the caption page says so while the Receipt column used to say "attached". ABSENT until every row's verdict is known, so the count is never quietly short |
 | `n_duplicate_groups_open` | how many duplicate groups NOBODY has decided (item 74), the only ones that belong in a to-do list. The tool decides every group a rung applies to, so this is 0 unless one escaped the whole ladder. `n_duplicate_groups` keeps counting every group, decided or not |
+| `n_self_confirmed` | run payload only: how many rows carry a verdict the TOOL wrote under the self-confirmation rule (item 76). Falls as a reviewer takes one back; `n_undecided` keeps its question (pending pairings nobody has ratified) |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -2389,3 +2390,68 @@ Pinned by `tests/test_view_contract.py`
 `tests/test_web_duplicates.py` (charge groups gone, the resolution mapping,
 the index alignment). SPA half: `docs/lovable-duplicates-decided-prompt.md`,
 folded into item 79's month page.
+
+## Whose turn a row is, and who decided it: `turn` + `decided_by` + `decided_rule` (item 76, 2026-09-16)
+
+`rows[].status` is `pending` on every row nobody has decided, and that is
+nearly every row: all 223 on the two live months before this change. A label
+derived from it ("Awaiting decision") asked about a yellow row already booked
+in Criss's workbook as loudly as about a real open pairing, and offered Reject
+/ Confirm on both. `status` keeps its meaning; three parallel fields say what
+it could not.
+
+| Field | Values | When |
+|---|---|---|
+| `rows[].turn` | `decide` \| `confirmed` \| `rejected` \| `posted` \| `none` | every run row, never null |
+| `rows[].decided_by` | `tool` \| `reviewer` | present when `status` is not `pending`, ABSENT on a pending row |
+| `rows[].decided_rule` | string, today `exact_vendor_75` | present only when `decided_by` is `tool` |
+| `summary.n_self_confirmed` | int | run payload |
+
+`turn`, first match wins:
+
+1. `confirmed` / `rejected`: the verdict, by whoever gave it. A verdict
+   outranks the yellow fill, so a decided booked row keeps its undo.
+2. `posted`: booked in the workbook (yellow fill, or the reviewer's
+   already-posted verdict). Nothing to do; **never offers Reject / Confirm**.
+3. `decide`: a pending pairing the tool holds a receipt for (bucket
+   `reconciled` or `review`). The reviewer's turn, and the only value that
+   offers Reject / Confirm. The count of these rows is `summary.n_undecided`
+   by construction (pinned).
+4. `none`: no pairing to decide (bucket `unmatched` or `refund`). Attaching or
+   hand-matching a receipt stays available where it is today; there is no
+   verdict to give.
+
+**Clean exact pairs confirm themselves.** After every re-match commit
+(`rematch_month`: statement attach, receipts arriving, an edit to a match
+field, a master-data refresh, a duplicate ruling), the tool confirms each row
+that is pending, not booked, `reconciled`, category `ready`, with exactly ONE
+candidate that is chosen, `match_type: "exact"`, `requires_review: false`,
+`vendor_pct` 75 or more, and neither borrowed from another batch
+(`from_batch`), held by another charge (`held_by`) nor turned down
+(`rejected`). The write is an ordinary confirm (same receipt claim, same
+export, same reports) marked `decided_by: "tool"`, `decided_rule:
+"exact_vendor_75"`. Owner rulings 2026-09-16: exact pairs only, vendor floor
+75.
+
+It is re-judged on every re-match: a tool confirmation whose pair no longer
+qualifies goes back to `pending` (the vendor was corrected, a category moved
+to `check`). A person's verdict is never touched, pending included, and the
+store enforces it in the write itself, so a click landing mid-pass is kept.
+**The undo is the ordinary reset**: `POST /api/runs/{id}/decisions`
+`{"transaction_id", "status": "pending"}` records the reviewer, and the tool
+never confirms that charge again.
+
+The route result of a re-match (the job payload) carries `self_confirm:
+{confirmed, withdrawn, refused}`, or `{error}` when the pass failed; the match
+itself is committed either way. A month confirms itself at its NEXT re-match
+after deploy, not at deploy.
+
+Not changed, stated because the backlog proposed it: a `PROBABLE` or
+`POSSIBLE` pair flagged `requires_review` can still land in `reconciled`
+(neither live month has one on 2026-09-16). It never confirms itself and reads
+`decide`.
+
+Pinned by `tests/test_view_contract.py`
+(`test_every_run_row_carries_a_turn_and_a_verdict_names_its_author`),
+route-level in `tests/test_self_confirm.py`. SPA half:
+`docs/lovable-turn-prompt.md`.

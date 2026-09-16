@@ -3141,6 +3141,13 @@ def build_view(
                 "triage_score": max(
                     (c["score"] for c in cands if c["score"]), default=None
                 ),
+                # Item 76: whose move this row is (`decide` is the reviewer's
+                # turn, the `n_undecided` set; every other value is nothing
+                # to do, and says why), and who wrote the verdict when there
+                # is one. `decided_by` / `decided_rule` are ABSENT on a
+                # pending row.
+                "turn": row_turn(status, is_posted, effective_bucket),
+                **decided_by_view(decision),
             }
         )
 
@@ -3490,6 +3497,11 @@ def build_view(
         ),
         "n_subscription": sum(
             1 for t in transactions if t.entry_status == "subscription"
+        ),
+        # Item 76: rows whose current verdict the tool wrote under the
+        # self-confirmation rule. Falls as a reviewer takes one back.
+        "n_self_confirmed": sum(
+            1 for r in rows if r.get("decided_by") == DECIDED_BY_TOOL
         ),
     }
 
@@ -10094,6 +10106,14 @@ def rematch_month(
             f"but {described}; nothing will match across entities. Check "
             "the card / entity mapping."
         )
+    # Item 76: clean exact pairs confirm themselves, judged against the
+    # outcome just committed. After the lock, like every decision write. The
+    # match itself is committed already, so a failure here is reported in
+    # the result, never raised into the caller's success.
+    try:
+        self_confirm = apply_self_confirmations(store, run.run_id)
+    except Exception as exc:  # noqa: BLE001 - reported, never raised
+        self_confirm = {"error": f"{type(exc).__name__}: {exc}"}
     return {
         "n_transactions": n_tx,
         "n_matched": len(outcome.matches),
@@ -10105,6 +10125,7 @@ def rematch_month(
         "judgments_new": judgments.misses,
         # None on every re-match and on an upload that folded cleanly.
         "statement_advisory": statement_advice,
+        "self_confirm": self_confirm,
     }
 
 
@@ -11149,3 +11170,169 @@ def duplicate_statement_pass(
         collapsed = copies_to_collapse(decisions, restored)
     kept = [r for r in pool if r.document_id not in collapsed]
     return restored, kept, collapsed
+
+
+# ---------------------------------------------------------------------------
+# Whose turn a row is, and clean exact pairs confirm themselves (item 76)
+# ---------------------------------------------------------------------------
+# Notes #38 / #39 / #49 (owner, July): "things that are reconciled and there
+# are no mismatches should not need confirmation", and a yellow row already
+# booked in the workbook was still offered Reject / Confirm. `rows[].status`
+# read `pending` on all 223 live rows, so the SPA printed "Awaiting decision"
+# on finished work as loudly as on the 13 rows that were really the
+# reviewer's to decide.
+#
+# Owner rulings 2026-09-16: exact pairs only, and the vendor must agree at
+# 75 or better. Measured that evening, the six literal exact pairs on the two
+# live months are all right per the labels; at 75 five confirm themselves
+# and WEB*NETWORKSOLUTIONS 7.98 (vendor 46) keeps asking.
+
+TURN_DECIDE = "decide"
+TURN_CONFIRMED = "confirmed"
+TURN_REJECTED = "rejected"
+TURN_POSTED = "posted"
+TURN_NONE = "none"
+
+DECIDED_BY_TOOL = "tool"
+DECIDED_BY_REVIEWER = "reviewer"
+
+SELF_CONFIRM_RULE = "exact_vendor_75"
+SELF_CONFIRM_VENDOR_FLOOR = 75
+
+
+def row_turn(status: str, is_posted: bool, effective_bucket: str) -> str:
+    """Whose move a workbench row is.
+
+    `decide` is the reviewer's turn and the only value that should offer
+    Reject / Confirm: a pending pairing the tool holds a receipt for, on a
+    charge nobody has booked. It is exactly the set `summary.n_undecided`
+    counts. Everything else is nothing to do, and says why: an explicit
+    verdict (by the tool or a person), a charge already booked in the
+    workbook, or no pairing at all (no receipt, or a credit).
+
+    A verdict outranks the yellow fill so a confirmed or rejected booked row
+    still shows its undo."""
+    if status == STATUS_CONFIRMED:
+        return TURN_CONFIRMED
+    if status == STATUS_REJECTED:
+        return TURN_REJECTED
+    if is_posted:
+        return TURN_POSTED
+    if effective_bucket in ("reconciled", "review"):
+        return TURN_DECIDE
+    return TURN_NONE
+
+
+def decided_by_view(decision: "Decision | None") -> dict:
+    """`{"decided_by": ..., "decided_rule": ...}` for a row carrying a
+    verdict, else `{}` so both keys are ABSENT on a pending row. A verdict
+    written before the column existed reads `reviewer`, which is true: the
+    tool never wrote one before item 76."""
+    if decision is None or decision.status == STATUS_PENDING:
+        return {}
+    if decision.decided_by == DECIDED_BY_TOOL:
+        out = {"decided_by": DECIDED_BY_TOOL}
+        if decision.rule:
+            out["decided_rule"] = decision.rule
+        return out
+    return {"decided_by": DECIDED_BY_REVIEWER}
+
+
+def self_confirm_pairs(view: dict) -> dict[str, str]:
+    """`{transaction_id: document_id}` for the rows that confirm themselves.
+
+    Read off a `build_view` payload so the test is the one the page shows:
+    a pending, unbooked, reconciled row whose category is `ready`, with ONE
+    candidate, that candidate chosen, `exact`, not flagged for review, and
+    the vendor agreeing at `SELF_CONFIRM_VENDOR_FLOOR`. A candidate borrowed
+    from another batch, held by another charge, or turned down never
+    qualifies: each is a question the rule was not ruled on."""
+    out: dict[str, str] = {}
+    for r in view.get("rows", []):
+        if r.get("status") != STATUS_PENDING:
+            continue
+        if r.get("turn") != TURN_DECIDE or r.get("effective_bucket") != "reconciled":
+            continue
+        if (r.get("review") or {}).get("state") != "ready":
+            continue
+        cands = r.get("candidates") or []
+        if len(cands) != 1:
+            continue
+        c = cands[0]
+        if not c.get("is_chosen") or c.get("match_type") != MatchType.EXACT.value:
+            continue
+        if c.get("requires_review"):
+            continue
+        if (c.get("vendor_pct") or 0) < SELF_CONFIRM_VENDOR_FLOOR:
+            continue
+        if c.get("from_batch") or c.get("held_by") or c.get("rejected"):
+            continue
+        out[r["transaction_id"]] = c["document_id"]
+    return out
+
+
+def apply_self_confirmations(
+    store: RunStore, run_id: str, now_iso: str | None = None
+) -> dict:
+    """Bring the tool's own verdicts on one month in line with the rule.
+
+    Every tool verdict is judged afresh: the month is viewed as if the tool
+    had written none, the qualifying pairs are selected, and then
+    - a tool confirmation that no longer qualifies (a rival receipt arrived,
+      the category changed) goes back to pending, still marked as the
+      tool's, so it can qualify again later;
+    - a qualifying pair nobody has decided is confirmed, marked
+      `decided_by: tool` with the rule, and its receipt claim synced like
+      any confirm.
+    A person's verdict is never touched, pending included: resetting a
+    self-confirmed row to pending is how a reviewer takes it back, and the
+    store's conditional write keeps it that way.
+
+    Runs after every re-match commit (`rematch_month`), outside the batch
+    lock. Returns `{confirmed, withdrawn, refused}`."""
+    result = {"confirmed": 0, "withdrawn": 0, "refused": 0}
+    run = store.get_run(run_id)
+    if run is None or not has_statement(run):
+        return result
+    decisions = store.get_decisions(run_id)
+    tool_verdicts = {
+        tx: d for tx, d in decisions.items()
+        if d.decided_by == DECIDED_BY_TOOL and d.status != STATUS_PENDING
+    }
+    baseline = {tx: d for tx, d in decisions.items() if tx not in tool_verdicts}
+    view = build_view(
+        run, baseline, store.get_category_overrides(run_id),
+        store.get_duplicate_resolutions(run_id),
+    )
+    autopick = dict(matched_autopick_decisions(run, baseline))
+    wanted = {
+        tx: doc for tx, doc in self_confirm_pairs(view).items()
+        if autopick.get(tx) == doc
+    }
+    now = now_iso or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for tx, d in sorted(tool_verdicts.items()):
+        if d.status == STATUS_CONFIRMED and wanted.get(tx) == d.chosen_document_id:
+            continue
+        if store.set_tool_decision(run_id, tx, STATUS_PENDING, None, now, None):
+            sync_claim_for_decision(store, run, tx, STATUS_PENDING, None, now)
+            result["withdrawn"] += 1
+    for tx, doc in sorted(wanted.items()):
+        cur = tool_verdicts.get(tx)
+        if (
+            cur is not None and cur.status == STATUS_CONFIRMED
+            and cur.chosen_document_id == doc
+        ):
+            continue
+        if not store.set_tool_decision(
+            run_id, tx, STATUS_CONFIRMED, doc, now, SELF_CONFIRM_RULE
+        ):
+            continue  # a person decided this charge; theirs stands
+        if sync_claim_for_decision(
+            store, run, tx, STATUS_CONFIRMED, doc, now
+        ) is not None:
+            # Another batch settled the receipt meanwhile: undo our write.
+            store.set_tool_decision(run_id, tx, STATUS_PENDING, None, now, None)
+            result["refused"] += 1
+            continue
+        result["confirmed"] += 1
+    return result
