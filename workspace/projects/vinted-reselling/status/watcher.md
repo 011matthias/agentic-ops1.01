@@ -392,6 +392,20 @@ Belegt am laufenden System: erster Zyklus nach dem Merge (#889) 463 Zeilen,
 `brand_norm` 463/463, `cond_tier` 463/463, `size_class` 456/463, `posted_at`
 0/463 wie vorhergesagt. Alerts laufen wieder.
 
+**Nachtrag (#892): `url` ist jetzt ein Pfad, und das hat zwei Dinge still
+gebrochen.** Der neue Host liefert `/items/123-titel` statt einer absoluten URL.
+Das Feld war befuellt, also ging "url 12/12" durch. Aber ein Tipp auf die
+Benachrichtigung oeffnete nichts mehr (ntfy kann mit einem Pfad nichts anfangen;
+laut Rueckleseprobe auf dem Topic trugen 87 Alerts zwischen 10:00Z und 11:15Z
+nur den Pfad),
+und `recheck_gone` haette jede neue Zeile uebersprungen, weil httpx auf einem
+Pfad `UnsupportedProtocol` wirft und die Schleife das als `HTTPError` mit
+`continue` schluckt. `item_url()` macht die URL jetzt in `parse_item` absolut.
+Weil `upsert` die `url` beim Wiedersehen nicht ueberschreibt, wurden die 2.235
+bereits gespeicherten Pfade per Backfill korrigiert (0 Pfade uebrig, 0 doppelte
+Hosts). Erster Zyklus danach: 109/109 Zeilen absolut, beide Alerts mit
+klickbarem Link.
+
 **Nach jedem Merge, der den Watcher betrifft, den gepinnten Worktree nachziehen**
 (`git -C ~/Repo/agentic-ops1-watcher checkout --detach origin/main`); fuer #889
 ist das bereits geschehen.
