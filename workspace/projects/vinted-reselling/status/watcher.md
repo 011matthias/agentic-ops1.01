@@ -493,6 +493,25 @@ Geschwindigkeitsmessung; und unterdrueckte Kandidaten verkauften 9 von 10 gegen
 nachweislich die Gewinner trifft. 3022 Alert-Zeilen sind unaufgeloest, und die
 Kohorten vom 06.-08.09. verlieren ab dem 16.09. die Verkauft/Weg-Unterscheidung.
 
+## Beschreibungen und Hashtag-Begriffe (2026-09-16, #928 #929 #930)
+
+Vinteds Suche liest die Beschreibung und ignoriert die Raute: `y2kdenim` findet
+Anzeigen ohne das Wort im Titel, `#y2kdenim` liefert dieselben IDs in derselben
+Reihenfolge. Der Katalog-Payload hat keine Beschreibung, also war die
+Keyword-Recherche blind fuer die Hashtags, die Verkaeufer setzen.
+
+Der stuendliche Recheck speichert jetzt die Beschreibung jeder Seite, die er
+ohnehin laedt, in der Tabelle `descriptions` (lebende Seite: schema.org
+Product-Block; verkaufte Seite hat keinen, nur `<meta name="description">`).
+Erster Lauf 18:37Z: 25 Seiten, 21 Beschreibungen (12 verkauft/meta, 9
+lebend/ld_json), nur 3 davon mit Hashtags.
+
+`listing/keyword_research.py --tags */pants` wertet sie aus (zerlegt, eine
+Stimme pro Anzeige, Klassen-Rueckfall, fremde Marken raus) und vergleicht ab 30
+verkauften Beschreibungen verkauft gegen alle. Ab 40 Beschreibungen pro Klasse
+liefert es Begriffe. `keyword_engine --suggest` schreibt nur noch Begriffe, die
+die Fakten des Artikels vollstaendig belegen; der Rest kommt als Kandidat.
+
 ## Elemente
 
 | Element | Zustand | Stand | Nächster Schritt | Blocker |
