@@ -4064,6 +4064,52 @@ so it ships after 77 and only after a simulation on the six bundles and both
 live months with the S1 scorer and guard green; report which July and August
 pairs change bucket. Independent of item 79.
 
+### 83. A decided duplicate leaves the month's work (note #46, Criss)
+
+**Criss, July, anchored on `Duplicate charges (4) / Real duplicate / Not a
+duplicate`:** "Acoes resolvidas deveriam ser retiradas da area que constam para
+ser removidas." Restated by the owner 2026-09-16: once someone has ruled whether
+a duplicate is real, it should disappear from the month instead of staying where
+it waits for action. Item 74(d) recorded the author as uncertain (shared operator
+code, same IPv6 /64 as the owner's notes); the owner attributes it to Criss.
+
+Item 74 took the question away from the reviewer (the tool decides every group)
+and 74(d) folded decided groups into a collapsed "Copies set aside (N)" record.
+That answers the duplicates PANEL. It does not answer the month, and nothing has
+checked what Criss sees.
+
+**Live read 2026-09-16, both months after v138:** every group is `state:
+decided` (`n_duplicate_groups_open` 0; July 5 groups, 2 by reviewer and 3 by
+tool; August 11, all by tool). The set-aside copies are still in the month's
+work lists: `unmatched_receipts` carries July 4 of 13 and August 11 of 21 rows
+whose `duplicate.is_extra` is true, and `assignable_receipts` carries the same 4
+and 11. So the backend still presents a decided copy as a receipt waiting for a
+charge, and the Unmatched receipts count includes it. The SPA's item-79 month
+views fold `is_extra` rows into a collapsed record; whether that is what renders
+on July and August has not been driven.
+
+Done means: after a ruling (by the tool or a reviewer), the copy appears in no
+open list and no open count on the month (duplicates panel, unmatched receipts,
+the hand-match receipt picker), and stays reachable only in the set-aside record
+with its undo. A "Not a duplicate" ruling returns both receipts as ordinary
+receipts with no duplicate marker in any list.
+
+Build order:
+
+1. Browser-drive July and August cold, both languages, and write down every
+   place a set-aside copy still shows as open work. If the SPA already hides
+   them everywhere, the remaining defect is the counts, not the rows.
+2. Backend, if the drive confirms it: move `is_extra` copies out of
+   `unmatched_receipts` and `assignable_receipts` into a parallel list, and take
+   them out of the unmatched counts. The copies were put back into
+   `unmatched_receipts` on purpose so the reconciliation invariant holds
+   (recorded under item 75), so the invariant has to count the new list, and
+   the SPA's by-index pairing of `duplicate_groups` with
+   `duplicate_receipts` must not move. Item 75's `reason_code:
+   duplicate_copy` is the same set of rows seen from the other side; build
+   whichever lands first so the other reuses it.
+3. SPA half as one Lovable prompt, gated on the backend field being live.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
