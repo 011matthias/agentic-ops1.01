@@ -469,3 +469,33 @@ def test_an_alerted_listing_just_read_as_alive_is_not_bought_again_next_hour(vw,
     picked = [i for i, _ in vw.recheck_queue(con, 2)]
     assert 1 not in picked, "read an hour ago; buying it again is the starvation bug"
     assert picked == [3, 2], "least recently observed first"
+
+
+# ------------------------------------- 8. the recheck can reach what the parser stored
+
+
+def test_the_recheck_can_fetch_a_listing_the_parser_produced(vw, con, monkeypatch):
+    """The caller-level assertion for the 2026-09-16 relative-url break.
+
+    Builds the row through parse_item on the real svc-catalogue shape rather
+    than hand-writing an absolute url, so unwiring the absolutisation puts a
+    path into `listings.url`, httpx refuses it, recheck_gone swallows the
+    HTTPError, and no verdict is ever written."""
+    payload = {
+        "id": 55, "title": "Levis 501 W29 L30",
+        "url": "/items/55-levis-501-w29-l30",
+        "price": {"amount": "17.00", "currency_code": "EUR"},
+        "total_item_price": {"amount": "18.55", "currency_code": "EUR"},
+        "user": {"id": 104114213, "login": "someseller"},
+        "item_box": {"first_line": "Levi's", "second_line": "W29 \u00b7 Sehr gut"},
+    }
+    vw.upsert(con, vw.parse_item(payload, "levis-denim", seed=0))
+    stored = con.execute("SELECT url FROM listings WHERE id=55").fetchone()[0]
+    assert stored.startswith("https://"), "a path in this column is unfetchable"
+    con.execute("UPDATE listings SET first_seen='2026-01-01T00:00:00Z',"
+                " last_seen='2026-01-01T00:00:00Z' WHERE id=55")
+    con.commit()
+    _recheck(vw, con, monkeypatch, {stored: (200, snippet("item_sold.snippet.html"))})
+    row = con.execute("SELECT gone_at, sold_flag FROM listings WHERE id=55").fetchone()
+    assert row[0] is not None and row[1] == 1, (
+        "the recheck reached the page and recorded the sale")
