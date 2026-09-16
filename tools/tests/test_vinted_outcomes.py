@@ -499,3 +499,92 @@ def test_the_recheck_can_fetch_a_listing_the_parser_produced(vw, con, monkeypatc
     row = con.execute("SELECT gone_at, sold_flag FROM listings WHERE id=55").fetchone()
     assert row[0] is not None and row[1] == 1, (
         "the recheck reached the page and recorded the sale")
+
+
+# ------------------------------------------ 9. the description rides along
+# Vinted's search reads the description (2026-09-16: `y2kdenim` finds listings
+# whose titles lack the word), and the catalogue payload carries none, so the
+# item page the recheck already fetches is the only source. Both fixtures are
+# real bytes cut from pages served that day.
+
+
+def test_a_live_page_yields_its_description_from_the_product_block(vw):
+    text, source = vw.item_page_description(snippet("item_alive_description.snippet.html"))
+    assert source == "ld_json"
+    assert text.startswith("Jean vintage Levi\u2019s 525")
+    assert text.rstrip().endswith("#classicdenim")
+
+
+def test_a_sold_page_yields_its_description_from_the_meta_tag(vw):
+    """A sold page has no Product block at all; without the fallback most of
+    what the recheck visits would contribute nothing."""
+    text, source = vw.item_page_description(snippet("item_sold_description.snippet.html"))
+    assert source == "meta"
+    assert text == "Levi\u2019s 501 lichte spijkerbroek. Maat W27 / L26. In hele goede staat."
+
+
+def test_a_meta_tag_that_is_only_the_title_is_no_description(vw):
+    body = ('<meta property="og:title" content="Levi 501 | Vinted"/>'
+            '<meta name="description" content="Levi 501"/>')
+    assert vw.item_page_description(body) == (None, None)
+
+
+def test_a_page_without_either_source_yields_nothing(vw):
+    assert vw.item_page_description(snippet("item_alive_v2.snippet.html")) == (None, None)
+
+
+def _described(con):
+    return dict(con.execute("SELECT listing_id, source FROM descriptions").fetchall())
+
+
+def test_the_recheck_stores_descriptions_for_sold_and_live_pages(vw, con, monkeypatch):
+    """Through recheck_gone: the verdict plugin and the description come from
+    the same page, as they do live. A 404 contributes no text."""
+    pages = {}
+    for i in range(1, 6):
+        vw.upsert(con, listing(id=i, url=f"https://x/items/{i}"))
+    pages["https://x/items/1"] = (200, snippet("item_sold_v2.snippet.html")
+                                  + snippet("item_sold_description.snippet.html"))
+    pages["https://x/items/2"] = (200, snippet("item_alive_v2.snippet.html")
+                                  + snippet("item_alive_description.snippet.html"))
+    pages["https://x/items/3"] = (404, "")
+    for i in (4, 5):
+        pages[f"https://x/items/{i}"] = (200, snippet("item_alive_v2.snippet.html"))
+    con.execute("UPDATE listings SET first_seen='2026-01-01T00:00:00Z',"
+                " last_seen='2026-01-01T00:00:00Z'")
+    con.commit()
+    _recheck(vw, con, monkeypatch, pages)
+    assert con.execute("SELECT sold_flag FROM listings WHERE id=1").fetchone()[0] == 1
+    assert _described(con) == {1: "meta", 2: "ld_json"}
+    stored = con.execute("SELECT description FROM descriptions WHERE listing_id=2").fetchone()[0]
+    assert "#y2kdenim" in stored
+
+
+def test_a_discarded_recheck_stores_no_descriptions(vw, con, monkeypatch):
+    """A pass thrown away as a wall records nothing, descriptions included."""
+    pages = {}
+    for i in range(1, 6):
+        vw.upsert(con, listing(id=i, url=f"https://x/items/{i}"))
+        # every page carries a description but no status plugin: a soft wall
+        pages[f"https://x/items/{i}"] = (200, snippet("item_alive_description.snippet.html"))
+    con.execute("UPDATE listings SET first_seen='2026-01-01T00:00:00Z',"
+                " last_seen='2026-01-01T00:00:00Z'")
+    con.commit()
+    _recheck(vw, con, monkeypatch, pages)
+    assert _described(con) == {}
+
+
+def test_an_existing_database_gains_the_descriptions_table(vw, paths):
+    """The production database predates the table; connecting must add it."""
+    import sqlite3
+    old = sqlite3.connect(vw.DB_PATH)
+    old.execute("CREATE TABLE listings (id INTEGER PRIMARY KEY, search_tag TEXT NOT NULL, title TEXT)")
+    old.execute("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT)")
+    old.commit()
+    old.close()
+    con = vw.db_connect()
+    try:
+        cols = {r[1] for r in con.execute("PRAGMA table_info(descriptions)")}
+        assert {"listing_id", "description", "source", "fetched_at"} <= cols
+    finally:
+        con.close()
