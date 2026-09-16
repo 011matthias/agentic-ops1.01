@@ -2415,3 +2415,103 @@ def test_status_names_an_active_ntfy_send_hold(vw, con, paths, capsys):
     con.commit()
     vw.print_status()
     assert "Sendesperre" in capsys.readouterr().out
+
+
+# ---- The catalogue payload that replaced /api/v2/catalog/items ----------
+#
+# Vinted moved search to https://api.vinted.de/svc-catalogue/items. The item
+# lost brand_title, size_title and status; they live in `item_box` now. Left
+# unhandled that is a SILENT failure: brand_norm and size_class go NULL on
+# every new row, and those are the columns keyword_research cells are keyed on.
+
+NEW_SHAPE = {
+    "id": 10019766799,
+    "title": "Levis 501 W29 L30",
+    "url": "/items/10019766799-levis-501-w29-l30",
+    "price": {"amount": "17.00", "currency_code": "EUR"},
+    "total_item_price": {"amount": "18.55", "currency_code": "EUR"},
+    "user": {"id": 104114213, "login": "someseller", "business": False},
+    "photo": {"url": "https://images1.vinted.net/t/02_01fc2_abc/f800/x.webp"},
+    "favourite_count": 3,
+    "view_count": 0,
+    "promoted": False,
+    "item_box": {
+        "first_line": "Levi's",
+        "second_line": "W34 | DE 50 \u00b7 Sehr gut",
+        "accessibility_label": ("Levis 501, Marke: Levi's, Zustand: Sehr gut, "
+                                "Gr\u00f6\u00dfe: W34 | DE 50, 17.00 \u20ac, 18.55 \u20ac"),
+    },
+}
+
+OLD_SHAPE = {
+    "id": 9930463443,
+    "title": "Levis 501 W31 L30",
+    "url": "/items/9930463443-levis",
+    "brand_title": "Levi's",
+    "size_title": "W31 | DE 46",
+    "status": "Sehr gut",
+    "price": {"amount": "20.00", "currency_code": "EUR"},
+    "total_item_price": {"amount": "21.70", "currency_code": "EUR"},
+    "user": {"id": 3169259843, "login": "owner"},
+    "photo": {"url": "https://images1.vinted.net/t/02_x/f800/1757000000.jpeg"},
+    "favourite_count": 1,
+    "view_count": 0,
+    "promoted": False,
+}
+
+
+def test_item_box_yields_brand_size_and_condition(vw):
+    brand, size, cond = vw.item_box_fields(NEW_SHAPE)
+    assert brand == "Levi's"
+    assert size == "W34 | DE 50"
+    assert cond == "Sehr gut"
+
+
+def test_item_box_reads_english_labels_too(vw):
+    """The parser must not depend on the locale header it was written against."""
+    item = {"item_box": {
+        "first_line": "Levi's",
+        "second_line": "W34 \u00b7 Very good",
+        "accessibility_label": "x, Brand: Levi's, Condition: Very good, Size: W34, 1 \u20ac",
+    }}
+    brand, size, cond = vw.item_box_fields(item)
+    assert (brand, size, cond) == ("Levi's", "W34", "Very good")
+
+
+def test_item_box_falls_back_to_the_bullet_split(vw):
+    """No labelled string: second_line still carries "<size> - <condition>"."""
+    item = {"item_box": {"first_line": "Nike", "second_line": "M \u00b7 Gut"}}
+    assert vw.item_box_fields(item) == ("Nike", "M", "Gut")
+
+
+def test_item_box_handles_an_item_with_no_size(vw):
+    """Accessories render second_line as the condition alone."""
+    brand, size, cond = vw.item_box_fields(
+        {"item_box": {"first_line": "Nike", "second_line": "Gut"}})
+    assert (brand, cond) == ("Nike", "Gut") and size is None
+
+
+def test_parse_item_fills_the_cell_columns_from_the_new_shape(vw):
+    """The silent-failure case: these three are what cells are keyed on."""
+    rec = vw.parse_item(NEW_SHAPE, "levis-denim", seed=0)
+    assert rec["brand"] == "Levi's"
+    assert rec["brand_norm"] == "levis"
+    assert rec["size_class"] == "w34"
+    assert rec["condition"] == "Sehr gut"
+    assert rec["cond_tier"] == "very_good", "German labels must map to a tier"
+
+
+def test_parse_item_still_handles_the_old_shape(vw):
+    """A rollback on their side must not need one here."""
+    rec = vw.parse_item(OLD_SHAPE, "levis-denim", seed=0)
+    assert rec["brand"] == "Levi's"
+    assert rec["brand_norm"] == "levis"
+    assert rec["size_class"] == "w31"
+    assert rec["cond_tier"] == "very_good"
+
+
+def test_the_catalogue_url_is_the_new_host(vw):
+    """www paths return the marketing site's HTML 404, which reads as 'no
+    results' rather than 'wrong URL'. Pin the host so that cannot come back."""
+    assert vw.CATALOG_URL == "https://api.vinted.de/svc-catalogue/items"
+    assert vw.CATALOG_HEADERS["locale"] == "de-DE"
