@@ -821,3 +821,68 @@ def test_duplicate_group_basis_is_absent_or_reference_never_null(
     assert [
         [r["document_id"] for r in grp] for grp in view["duplicate_receipts"]
     ] == [g["members"] for g in receipt_groups]
+
+
+def test_date_gap_zone_is_absent_or_enum_never_null(
+    tmp_path, monkeypatch, payloads
+):
+    """Item 80. `rows[].candidates[].date_gap_days` (signed int, charge date
+    minus receipt date) and `date_gap_zone` (`none` / `lag` / `mismatch`)
+    say how far apart the two dates are. Parallel fields per rule 1: both
+    present together, or both ABSENT (never null) when either date is
+    missing, because a null zone would read as "no signal" about a pair
+    nobody could measure.
+
+    Seeded on its own synthetic run so the module fixtures stay what they
+    were: `t1`/`d1` is dated on both sides (present), `t2`/`d2` has a
+    receipt with no date (absent).
+    """
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    zones = {"none", "lag", "mismatch"}
+    seen = 0
+    for view in payloads["run"]:
+        for row in view["rows"]:
+            for cand in row["candidates"]:
+                keys = {"date_gap_days", "date_gap_zone"} & set(cand)
+                assert keys in (set(), {"date_gap_days", "date_gap_zone"}), cand
+                if keys:
+                    seen += 1
+                    assert type(cand["date_gap_days"]) is int, cand
+                    assert cand["date_gap_zone"] in zones, cand
+    assert seen, "no module fixture candidate carries a date gap"
+
+    app = create_app(tmp_path)
+    with TestClient(app) as client:
+        t1, t2 = _transaction("t1", 14), _transaction("t2", 14, "UNDATED", "33")
+        r1 = _receipt("d1", 12)
+        r2 = Receipt(
+            document_id="d2", legal_entity_id="le1", detected_date=None,
+            detected_total=Decimal("33"), detected_currency="USD",
+            detected_vendor="UNDATED", detected_reference="Rd2",
+        )
+        outcome = MatchOutcome(
+            matches=[
+                Match(transaction_id=tx, document_id=doc,
+                      match_type=MatchType.PROBABLE, confidence=0.8,
+                      reason="seeded", score=80, amount_score=1.0,
+                      date_score=0.8, vendor_score=1.0)
+                for tx, doc in (("t1", "d1"), ("t2", "d2"))
+            ],
+            unmatched_transactions=[], unmatched_receipts=[], ambiguous=[],
+        )
+        snapshot = snapshot_to_dict([t1, t2], [r1, r2], outcome, [])
+        store = RunStore(tmp_path / "recon-web.sqlite")
+        store.create_run(
+            run_id="contract-gap", created_at="2026-09-16T00:00:00",
+            label="gap", operator=None, summary={}, snapshot=snapshot,
+            config={}, work_dir=str(tmp_path), llm_enabled=False, has_coa=False,
+        )
+        store.close()
+        view = client.get("/api/runs/contract-gap").json()
+
+    cands = {r["transaction_id"]: r["candidates"][0] for r in view["rows"]}
+    assert cands["t1"]["date_gap_days"] == 2
+    assert cands["t1"]["date_gap_zone"] == "lag"
+    assert "date_gap_days" not in cands["t2"], cands["t2"]
+    assert "date_gap_zone" not in cands["t2"], cands["t2"]

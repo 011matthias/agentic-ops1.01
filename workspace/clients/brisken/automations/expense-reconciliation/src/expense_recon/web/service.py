@@ -2851,6 +2851,10 @@ def build_view(
                     # when it is not this one. Parallel field, ABSENT on
                     # every candidate from the month's own pool.
                     **_from_batch(m.document_id),
+                    # Item 80: charge date minus receipt date and its zone
+                    # (none / lag / mismatch). Label only; ABSENT when
+                    # either date is missing.
+                    **_candidate_date_gap(tx, r),
                 }
             )
         # PR B — a hand-made manual match: the held receipt was never an
@@ -2875,6 +2879,7 @@ def build_view(
                     ),
                     "fx": _fx_breakdown(tx, rec_by_id[held_doc]),
                     **_from_batch(held_doc),
+                    **_candidate_date_gap(tx, rec_by_id[held_doc]),
                 }
             )
 
@@ -10449,3 +10454,65 @@ def proposed_posting_category(
         if hit is not None:
             return hit
     return None
+
+
+DATE_GAP_ZONES: tuple[tuple[str, int, int], ...] = (
+    ("none", -1, 1),
+    ("lag", 2, 7),
+    ("lag", -3, -2),
+)
+"""Item 80 (note #44): how far a charge's date may sit from its receipt's
+before the gap is worth saying, as `(zone, lo, hi)` inclusive bounds on
+charge `transaction_date` minus receipt `detected_date` in calendar days.
+Anything outside every band is `"mismatch"`. Owner ruling 2026-09-16.
+
+A LABEL, not a matcher tunable: `date_exact_window_days`, `date_pct` and
+every score are untouched (item 76's note keeps EXACT's window at one day).
+
+Evidence, internal. Over 141 confirmed label pairs on eight statement
+months (the six bundles plus live July and August), charge Transaction Date
+minus receipt date was 0 days 124 times, +1 9, -1 3, -3 2 (one of them MSFT
+4.26 USD against a Hotel Ibis 4.00 EUR receipt, very likely a wrong label),
++5 and +6 once each (MEGA CENTE CONSTR, Zoho-era dates), +14 once
+(Namecheap, May). The one-day cases are midnight and time-zone boundaries
+(Anthropic receipts, a late bar tab in Brazil, Google's 06-30 invoice
+charged 07-01) and Amazon charging at shipment. Chase's Post Date minus
+Transaction Date was 0 days 7 times, 1 day 94, 2 days 26 (every 2-day case
+starting on a Friday): the processing lag lives in Post Date, which the
+matcher does not use (`inspect.guess_column_map` keeps it as
+`posting_date`).
+
+Evidence, external (fetched 2026-09-16). Visa Core Rules (Apr 2026): the
+Transaction Date is "the date on which a Transaction between a Cardholder
+and a Merchant or an Acquirer occurs", e-commerce "on or after the date on
+which the goods are shipped". Mastercard Transaction Processing Rules
+(Moneris-hosted copy): the DE 12 date is the exchange of goods, shipment,
+hotel checkout or ticket issue; presentment within 7 calendar days. Chase:
+the transaction date is the purchase, the posting date is when the issuer
+processes it, and a Saturday purchase may post Monday or Tuesday. Amazon
+charges at shipment, multi-item orders "after all items have shipped or
+five days after the order date, whichever occurs first". Stripe attempts
+invoice payment one hour after `invoice.created`. Weekends and Fed holidays
+move Post Date, not Transaction Date. No primary source gives a typical lag
+per merchant class; the +7 bound coincides with Mastercard's 7-day
+presentment window. URLs in `status/p1-improvement-backlog.md` item 80."""
+
+
+def date_gap_zone(gap_days: int) -> str:
+    """The `DATE_GAP_ZONES` band a signed day gap falls in, else
+    `"mismatch"`."""
+    for zone, lo, hi in DATE_GAP_ZONES:
+        if lo <= gap_days <= hi:
+            return zone
+    return "mismatch"
+
+
+def _candidate_date_gap(tx: "Transaction", receipt: "Receipt | None") -> dict:
+    """`{date_gap_days, date_gap_zone}` for one `rows[].candidates[]` entry,
+    or `{}` so both keys are ABSENT (never null) when the charge or the
+    receipt has no date. Parallel fields (api-contract rule 1): `date_pct`
+    beside them keeps meaning the matcher's score."""
+    if receipt is None or tx.transaction_date is None or receipt.detected_date is None:
+        return {}
+    gap = (tx.transaction_date - receipt.detected_date).days
+    return {"date_gap_days": gap, "date_gap_zone": date_gap_zone(gap)}
