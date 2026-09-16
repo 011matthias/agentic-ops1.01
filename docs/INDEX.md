@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-16 | Expense-Recon Feedback Notes 43-46 | client-dev | [→](docs/2026-09-16%20-%20Expense-Recon%20Feedback%20Notes%2043-46/Checkpoint.md) |
 | 2026-09-16 | Expense-Recon Prompts Verified, Item 76 Measured, Month Page Plan Prompt | client-dev | [→](docs/2026-09-16%20-%20Expense-Recon%20Prompts%20Verified%2C%20Item%2076%20Measured%2C%20Month%20Page%20Plan%20Prompt/Checkpoint.md) |
 | 2026-09-16 | Brisken Expense-Recon Feedback Wave + Zoho Decoupling | client-dev | [→](docs/2026-09-16%20-%20Brisken%20Expense-Recon%20Feedback%20Wave%20%2B%20Zoho%20Decoupling/Checkpoint.md) |
 | 2026-09-15 | Expense-Recon Matching Round B | client-dev | [→](docs/2026-09-15%20-%20Expense-Recon%20Matching%20Round%20B/Checkpoint.md) |
