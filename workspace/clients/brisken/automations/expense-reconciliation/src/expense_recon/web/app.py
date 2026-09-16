@@ -132,6 +132,7 @@ from .service import (
     forget_memory_vendor,
     ingest_receipts_folder_into_run,
     matched_autopick_decisions,
+    move_expense_to_month,
     ready_confirm_pairs,
     prepare_intake_run,
     prepare_run,
@@ -1864,7 +1865,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # snapshot never records (a field edit on a month with no
             # statement), and the edit tables are where they live.
             edited_at=store.latest_edit_at(run.run_id),
+            # Item 77: which batch a move offer would join. Called only for
+            # rows that carry an offer, so a month with none pays nothing.
+            month_batch=lambda month: _month_batch_id(store, month),
         )
+
+    def _month_batch_id(store: RunStore, month: str) -> str | None:
+        """The batch month routing picks for "YYYY-MM", or None."""
+        from .intake_mail import _open_batch_for_month, _ym
+
+        target = _open_batch_for_month(store, _ym(month))
+        return target.run_id if target is not None else None
 
     def _settled_elsewhere(store: RunStore, run_id: str) -> dict[str, dict]:
         """R4 (item 38): document_id -> {run_id, label, transaction_id} for
@@ -3794,6 +3805,60 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # has to be re-matched or it keeps pairing with nothing real.
             rematch_needed = has_statement(run) and not already
         return await _expense_edit_reply(run_id, rematch_needed)
+
+    @app.post("/api/runs/{run_id}/expenses/{document_id:path}/move")
+    def post_expense_move(
+        run_id: str, document_id: str, background: BackgroundTasks,
+        body: dict | None = Body(None),
+    ):
+        """Item 77: move one expense into the month its date names.
+        Body `{month: "YYYY-MM"}`, optional: the default is the month the
+        row's `month_move` offer names. Sync on purpose (the batch lock and
+        the re-match of both months run here, off the event loop). A month
+        created by the move claims its pooled mail afterwards, the way a
+        created month always does."""
+        if not _receipt_first_on():
+            return _flag_off()
+        month = str((body or {}).get("month") or "").strip()
+        with open_store() as store:
+            run, err = _expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            if not month:
+                row = next(
+                    (e for e in _expense_view(store, run)["expenses"]
+                     if e.get("document_id") == document_id),
+                    None,
+                )
+                if row is None:
+                    return JSONResponse(
+                        {"error": "unknown expense"}, status_code=404
+                    )
+                month = (row.get("month_move") or {}).get("month") or ""
+                if not month:
+                    return JSONResponse(
+                        {"error": "this expense's date is inside this month; "
+                                  "name a month to move it anyway"},
+                        status_code=400,
+                    )
+            try:
+                out = move_expense_to_month(
+                    store, run, document_id, month, _now_iso(),
+                    data_root=Path(app.state.data_root),
+                    learning_db_path=app.state.learning_db_path,
+                )
+            except RunInputError as exc:
+                status = 404 if str(exc) == "unknown expense" else 400
+                return JSONResponse({"error": str(exc)}, status_code=status)
+            source = store.get_run(run_id)
+            if source is not None:
+                out["summary"] = _expense_view(store, source)["summary"]
+        if out.get("created_batch"):
+            background.add_task(
+                _claim_pooled_quietly, app.state.db_path,
+                app.state.learning_db_path, Path(app.state.data_root),
+            )
+        return JSONResponse(jsonable_encoder(out))
 
     @app.get("/runs/{run_id}/expenses.csv")
     def download_expenses_csv(run_id: str):

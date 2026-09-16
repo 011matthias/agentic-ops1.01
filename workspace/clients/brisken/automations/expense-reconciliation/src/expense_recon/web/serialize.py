@@ -199,6 +199,10 @@ def receipt_to_dict(r: Receipt) -> dict:
         "vendor_source": r.vendor_source,
         # Non-receipt quarantine (2026-08-13).
         "document_type": r.document_type,
+        # Item 77 amendment (2026-09-16).
+        "detected_time": r.detected_time,
+        "invoice_number": r.invoice_number,
+        "receipt_number": r.receipt_number,
     }
 
 
@@ -235,6 +239,10 @@ def receipt_from_dict(d: dict) -> Receipt:
         vendor_source=d.get("vendor_source"),
         # .get keeps pre-2026-08-13 snapshots loadable (no quarantine key).
         document_type=d.get("document_type") or "receipt",
+        # .get keeps pre-2026-09-16 snapshots loadable (no item-77 keys).
+        detected_time=d.get("detected_time"),
+        invoice_number=d.get("invoice_number"),
+        receipt_number=d.get("receipt_number"),
     )
 
 
