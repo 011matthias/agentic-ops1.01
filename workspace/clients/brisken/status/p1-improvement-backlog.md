@@ -3862,13 +3862,26 @@ leaves `RowStatusBadge` and the Status cell untouched and says so, so write
 76's SPA half against the five cards (the Matched card's rows and the pill),
 not against today's bucket sections.
 
-**Backend alongside (not a gate for the prompt):** a real top-level
-`updated_at` on both payloads (the strip's "Last updated" is the creation date
-today: September reads Sep 07 while its last receipt arrived Sep 16), and
+**Backend alongside, SHIPPED 2026-09-16 (PR #900, Fly v133):** a real top-level
+`updated_at` on both payloads (the "Last updated" line printed the creation
+date: September read Sep 07 while its last receipt arrived Sep 16), and
 `candidates[].held_by` widened to receipts held by a pending review row (August
-`6d474e9e8e964bd4`, ANTHROPIC 52.46, shows its candidate `0023` with no holder
-while `c632cb75a5098253` holds it; `n_charges_receipt_taken` reads 0). Built on
-`client/brisken/p1-updated-at-held-by`.
+`6d474e9e8e964bd4`, ANTHROPIC 52.46, showed candidate `0023` with no holder
+while `c632cb75a5098253` held it, and `n_charges_receipt_taken` read 0). Suite
+1832 -> 1844, every wiring point regress-checked red first. Live after deploy:
+August `n_charges_receipt_taken` 1 with `held_by` naming `c632cb75a5098253`;
+`updated_at` present on both payloads of all three months. Consumer driven,
+before any prompt paste, because the published SPA already renders both
+fields: September's Review expenses reads "Last updated: Sep 16, 2026, 01:37
+PM", and August's workbench row reads "Receipt is on another charge ·
+ANTHROPIC · 50.52 USD · Aug 03, 2026" with WAITING ON A PICK 1, no console
+errors. Known limit, recorded in `api-contract.md`: clearing a field edit
+deletes its row, so `updated_at` can read earlier than that clear.
+
+**Prompts shipped to `docs/` (PR #899), not yet pasted:** the owner pastes
+`lovable-month-views-prompt.md` and `lovable-journal-callers-prompt.md` in
+either order; each carries its own bundle signatures and drive checks, and
+PROMPT-STATUS lists both as Not applied.
 
 **Open, and not blocking the paste:** PT wording of the new keys (Criss's read
 is the check); whether "ordered in their respective overview pages" meant the
