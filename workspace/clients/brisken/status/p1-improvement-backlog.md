@@ -4386,7 +4386,7 @@ defect. If the paths are right but scattered, this is one "fix card" action per
 row. Item 88's finding is adjacent: corrections made per month are not saved as
 rules unless someone presses Save corrections to memory.
 
-### 88. Corrections are learned only when someone presses a button nobody presses (owner question 2026-09-16)
+### 88. Corrections are learned only when someone presses a button nobody presses (owner question 2026-09-16) (SHIPPED PR #940 - see Shipped row 54)
 
 The owner asked what "Save corrections to memory" on the Expenses view is for. It
 calls `POST /api/runs/{id}/commit-memory`, which folds that month's hand edits
@@ -4412,6 +4412,23 @@ the undo.** Accepted trade-off: a one-off exception becomes a rule until someone
 deletes it there. Item 87 is unblocked by this ruling and still starts with a
 read of July's card strip, not a build.
 
+**Shipped 2026-09-16 (PR #940).** In code, the month's sign-off is **Publish**
+(`POST /api/runs/{id}/publish`). The SPA's copy says "Open a run, resolve every
+row, then hit Publish" and disables the button with "Resolve the blockers above
+before publishing". Publishing now saves the month's corrections through
+`commit_month_memory`, which the button uses too, and the reply carries
+`memory` (saved + learned / unchanged / error). A failed save never fails the
+publish. A digest of verdicts, overrides and edits, kept per run in a new
+`memory_commits` table, stops unpublish + publish or button + publish from
+counting the same corrections twice. The run summary could not hold it,
+because every re-match rebuilds it. The undo is the Memory page's per-merchant
+Forget (all five learned tables) and category edit; registry aliases are
+undone in the Merchants editor. **Nothing live has fired it yet:**
+`published_runs` is empty, so the first automatic save happens when a month is
+first published. Suite 1968 -> 1974 passed / 2 skipped; four regress proofs.
+SPA half: `docs/lovable-memory-at-signoff-prompt.md` (a publish toast with the
+count).
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
@@ -4432,6 +4449,7 @@ read of July's card strip, not a build.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 54 | Publishing a month saves its corrections to memory: the publish reply carries `memory` (saved + learned / unchanged / error), through `commit_month_memory`, the helper the button now uses too; a digest per run in `memory_commits` keeps a re-publish from counting the same corrections twice; a failed save never fails the publish. SPA half: `docs/lovable-memory-at-signoff-prompt.md` | Item 88, owner ruling 2026-09-16. `commit_to_memory` had one caller, a button nobody pressed, and the live learning store held 0 learned companies and 0 field corrections, so no month's corrections reached the next. No month has been published yet; the first save happens at the first publish. Suite 1968 -> 1974 / 2 skipped, four regress proofs | PR #940 |
 | 53 | The Expenses view's boxes open their rows: `expenses[].boxes[]` (a count name without `n_`) on every row, every box count summed from those rows, `summary.n_needs_company_or_person` for the merged MISSING ENTITY + NEEDS PERSON box, Categorized decided per row by `is_categorized` (every line), and a row whose receipt the app can show is never "missing its image" (both payloads). SPA half: `docs/lovable-expense-boxes-prompt.md` | Item 84. A box that opens its rows must list exactly its number, and two of them could not: Categorized's row rule differed from its count (three two-line receipts), and MISSING RECEIPT IMAGE 2 / 1 named receipts whose files the endpoint served. Suite 1958 -> 1968 / 2 skipped, five regress proofs | PR #935 |
 | 52 | The unmatched lists say what they hold: a decided duplicate copy leaves `unmatched_receipts`, `assignable_receipts`, `n_unmatched_rec` and the near-miss pool for `copies_set_aside[]` + `summary.n_copies_set_aside` (view-time split, stored outcome and duplicate lists untouched), and every unmatched receipt and charge carries `reason_code` (receipts: duplicate_copy / card_statement_not_loaded / not_a_card_charge / charge_in_neighbouring_period / no_charge_on_any_loaded_statement; charges: not_a_purchase / receipt_held_by_another_charge / already_booked / no_receipt_found). SPA half: `docs/lovable-unmatched-reasons-prompt.md` | Items 83 + 75, notes #40 and #46. August's "Receipts without a charge" was 21 rows of which 11 were copies of documents that had settled their charge, and no unmatched row on either list said why it was there. Receipt rules are item 69's attribution rules with the date edge read before the card: 11 of 14 labelled live receipts name the labelled kind (card-first 9), one wrong claim (a bank transfer dated 07-30). Suite 1929 -> 1958 / 2 skipped, four regress proofs | PR #932 |
 | 51 | A row says whose turn it is and clean exact pairs confirm themselves: `rows[].turn` (decide / confirmed / rejected / posted / none, `decide` == the `n_undecided` set), `rows[].decided_by` (tool / reviewer) + `decided_rule`, `summary.n_self_confirmed`; `apply_self_confirmations` after every `rematch_month` commit (exact, one candidate, category ready, vendor >= 75, not borrowed / held / rejected), withdrawn when it stops qualifying, never over a person's verdict (`RunStore.set_tool_decision` conditional upsert; `decisions.decided_by` / `decided_rule` migrated in place). SPA half: `docs/lovable-turn-prompt.md` | Item 76, notes #38/#39/#49. `status` was `pending` on all 223 live rows, so a booked row asked Reject / Confirm as loudly as the 13 real decisions, and a same-amount same-day same-vendor pair needed a click. Owner rulings 2026-09-16: exact pairs only, vendor floor 75. Predicted live: 5 of the 6 literal exact pairs confirm themselves at the next re-match; 2 clean `fx_reference` pairs (August) keep asking | PR #925, 2026-09-16; suite 1907 -> 1929 passed / 2 skipped; three regress proofs RED first (pass wiring in `rematch_month`, `turn` wiring, the store's reviewer guard) |
