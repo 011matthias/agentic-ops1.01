@@ -2515,3 +2515,42 @@ def test_the_catalogue_url_is_the_new_host(vw):
     results' rather than 'wrong URL'. Pin the host so that cannot come back."""
     assert vw.CATALOG_URL == "https://api.vinted.de/svc-catalogue/items"
     assert vw.CATALOG_HEADERS["locale"] == "de-DE"
+
+
+# --------------------------------------------------- the url is a path, not a URL
+# The 2026-09-16 catalogue move made `url` relative. The field stayed populated,
+# so "12 of 12 items populate url" passed while both consumers broke: ntfy's
+# click action has nothing to open with a path, and httpx raises
+# UnsupportedProtocol, which recheck_gone catches as HTTPError and skips.
+
+
+def test_the_item_url_is_absolute_on_the_new_shape(vw):
+    """The owner's symptom: tapping the notification stopped opening Vinted."""
+    rec = vw.parse_item(NEW_SHAPE, "levis-denim", seed=0)
+    assert rec["url"] == "https://www.vinted.de/items/10019766799-levis-501-w29-l30"
+
+
+def test_an_absolute_url_is_left_alone(vw):
+    """A rollback to the www payload must not double the host."""
+    item = dict(NEW_SHAPE, url="https://www.vinted.de/items/123-x")
+    assert vw.item_url(item) == "https://www.vinted.de/items/123-x"
+
+
+def test_a_missing_url_falls_back_to_the_id(vw):
+    """Vinted resolves /items/<id> without the slug, so the alert stays usable."""
+    item = dict(NEW_SHAPE)
+    item.pop("url")
+    assert vw.item_url(item) == "https://www.vinted.de/items/10019766799"
+
+
+def test_a_url_that_is_neither_yields_none_rather_than_a_broken_link(vw):
+    assert vw.item_url({"url": "", "id": None}) is None
+
+
+def test_a_relative_url_is_not_something_httpx_can_fetch(vw):
+    """Why the fix lives in the parser: this is the exception recheck_gone's
+    `except httpx.HTTPError` swallows, which is what made the second failure
+    silent rather than loud."""
+    assert issubclass(httpx.UnsupportedProtocol, httpx.HTTPError)
+    with httpx.Client() as c, pytest.raises(httpx.UnsupportedProtocol):
+        c.get("/items/10019766799-levis-501-w29-l30")

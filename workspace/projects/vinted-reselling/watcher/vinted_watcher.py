@@ -1246,6 +1246,29 @@ def item_box_fields(item: dict) -> tuple[str, str | None, str]:
     return brand, size, (cond or "")
 
 
+def item_url(item: dict) -> str | None:
+    """An absolute, openable item-page URL.
+
+    The svc-catalogue payload returns `url` as a path (`/items/123-title`)
+    where the www endpoint returned it absolute. A path is not a URL: ntfy's
+    click action has nothing to open with it, and httpx raises
+    UnsupportedProtocol on it, which recheck_gone catches as HTTPError and
+    then silently skips. Both failures are invisible from the payload, since
+    the field is populated either way. Absolutised once here so neither
+    consumer has to know which host the row came from.
+
+    Falls back to the id when `url` is missing: Vinted resolves /items/<id>
+    without the slug, so an alert stays clickable rather than arriving dead.
+    """
+    raw = (item.get("url") or "").strip()
+    if raw.startswith(("http://", "https://")):
+        return raw
+    if raw.startswith("/"):
+        return BASE + raw
+    item_id = item.get("id")
+    return f"{BASE}/items/{item_id}" if item_id else None
+
+
 def parse_item(item: dict, tag: str, seed: int) -> dict:
     price = float((item.get("price") or {}).get("amount") or 0)
     total = float((item.get("total_item_price") or {}).get("amount") or price)
@@ -1275,7 +1298,7 @@ def parse_item(item: dict, tag: str, seed: int) -> dict:
         "price": price,
         "total_price": total,
         "currency": (item.get("price") or {}).get("currency_code", "EUR"),
-        "url": item.get("url"),
+        "url": item_url(item),
         "photo_url": photo_url,
         "posted_at": posted_at_of(photo_url),
         "seller_id": user.get("id"),
