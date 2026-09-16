@@ -12,6 +12,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-16 | Expense-Recon Item 80 | client-dev | [→](docs/2026-09-16%20-%20Expense-Recon%20Item%2080/Checkpoint.md) |
+| 2026-09-16 | Expense-Recon Item 81 | client-dev | [→](docs/2026-09-16%20-%20Expense-Recon%20Item%2081/Checkpoint.md) |
 | 2026-09-16 | Expense-Recon Item 81 | client-dev | [Mini-Checkpoint-1](docs/2026-09-16%20-%20Expense-Recon%20Item%2081/Mini-Checkpoint-1.md) |
 | 2026-09-16 | Expense-Recon Item 80 | client-dev | [Mini-Checkpoint-1](docs/2026-09-16%20-%20Expense-Recon%20Item%2080/Mini-Checkpoint-1.md) |
 | 2026-09-16 | Expense-Recon Notes 43-46 Planned | client-dev | [→](docs/2026-09-16%20-%20Expense-Recon%20Notes%2043-46%20Planned/Checkpoint.md) |
