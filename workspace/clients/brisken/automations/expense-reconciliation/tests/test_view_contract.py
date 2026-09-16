@@ -143,8 +143,10 @@ RUN_CONTRACT = {
     "coverage[]": "object",
     "coverage[].digits[]": "string",
     "coverage[].statements[]": "string",
+    # Item 74: charge-side duplicate detection is deleted. The list stays in
+    # the payload, ALWAYS EMPTY, so a consumer pairing groups by kind does not
+    # break; its element pin went with the detector (nothing can fill it).
     "duplicate_charges[]": "array",
-    "duplicate_charges[][]": "object",
     "duplicate_groups[]": "object",
     "duplicate_groups[].members[]": "string",
     "duplicate_receipts[]": "array",
@@ -207,7 +209,6 @@ RUN_MUST_COVER = {
     "unmatched_receipts[]",
     "assignable_receipts[]",
     "duplicate_groups[]",
-    "duplicate_charges[]",
     "duplicate_receipts[]",
     "category_options[]",
     "summary.setup_advisories[]",
@@ -751,28 +752,60 @@ def test_posting_category_proposed_is_absent_or_true_never_false(
     assert row["posting_category"]["category"] == "Office Supplies & Consumables"
 
 
-def test_duplicate_group_basis_is_absent_or_reference_never_null(
+DUPLICATE_BASES = {
+    "hash", "reference", "printed_reference", "distinct_reference",
+    "receipt_card", "vendor_date", "statement",
+}
+DUPLICATE_ENUMS = {
+    "basis": DUPLICATE_BASES,
+    "state": {"open", "decided"},
+    "decided_by": {"tool", "reviewer"},
+    "verdict": {"copy", "distinct"},
+}
+
+
+def _assert_duplicate_group_shape(group, where) -> None:
+    assert group["kind"] == "receipt", (where, group)
+    assert group["state"] in DUPLICATE_ENUMS["state"], (where, group)
+    for key, allowed in DUPLICATE_ENUMS.items():
+        if key in group:
+            assert group[key] is not None, (where, key, group)
+            assert group[key] in allowed, (where, key, group)
+    # decided and its two answers travel together; open carries neither
+    decided = group["state"] == "decided"
+    assert ("verdict" in group) is decided, (where, group)
+    assert ("decided_by" in group) is decided, (where, group)
+    assert set(group) <= {
+        "group_id", "kind", "members", "resolution",
+        "basis", "state", "decided_by", "verdict",
+    }, (where, group)
+
+
+def test_duplicate_group_fields_are_absent_or_enum_never_null(
     tmp_path, monkeypatch, payloads
 ):
-    """Item 69 round A. `duplicate_groups[].basis` says a receipt group was
-    found ONLY by the reference key (normalized reference + total +
-    currency, vendor spelling and date ignored). Parallel field per rule 1:
-    `"reference"` on exactly those groups and ABSENT (never null, never
-    `"vendor_date"`) on every group the vendor/date key finds, so a month
-    without such a group renders byte-identically to before.
+    """Item 74 (2026-09-16). Every `duplicate_groups[]` element carries
+    `state` (`open` | `decided`), and `basis` (the ladder rung), `decided_by`
+    (`tool` | `reviewer`) and `verdict` (`copy` | `distinct`) as parallel
+    scalars that are either ABSENT or one of their values, never null. No
+    element is a charge any more. `summary.n_duplicate_groups_open` is an
+    integer on both payloads.
 
-    Seeded on its own synthetic run so the module fixtures stay what they
-    were: `d5`/`d6` are a vendor/date pair (basis absent), `d7`/`d8` share
-    a reference but not a vendor spelling or a date (basis reference).
+    `basis` grew from round A's lone `"reference"` to the seven rungs; per
+    api-contract rule 5 that is an enum growing, and the published SPA reads
+    none of these keys (it keys on `resolution`), so nothing it renders can
+    fall through. Seeded on its own synthetic run so the module fixtures stay
+    what they were: `d5`/`d6` are a vendor/date pair, `d7`/`d8` share a
+    reference but not a vendor spelling or a date.
     """
     monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     for view_name, views in payloads.items():
         for view in views:
             for group in view.get("duplicate_groups") or []:
-                if "basis" in group:
-                    assert group["basis"] == "reference", (view_name, group)
-                    assert group["kind"] == "receipt", (view_name, group)
+                _assert_duplicate_group_shape(group, view_name)
+            n_open = view["summary"]["n_duplicate_groups_open"]
+            assert isinstance(n_open, int) and not isinstance(n_open, bool), view_name
 
     app = create_app(tmp_path)
     with TestClient(app) as client:
@@ -806,16 +839,16 @@ def test_duplicate_group_basis_is_absent_or_reference_never_null(
 
     groups = {tuple(g["members"]): g for g in view["duplicate_groups"]}
     assert set(groups) == {("d5", "d6"), ("d7", "d8")}, sorted(groups)
-    assert "basis" not in groups[("d5", "d6")]
+    assert groups[("d5", "d6")]["basis"] == "vendor_date"
     assert groups[("d7", "d8")]["basis"] == "reference"
-    assert groups[("d7", "d8")]["kind"] == "receipt"
-    # every group, whichever key found it, keeps the one pinned shape
     for g in view["duplicate_groups"]:
-        assert set(g) - {"basis"} == {"group_id", "kind", "members", "resolution"}, g
-    # The legacy `duplicate_receipts` list (the Jinja workbench's shape: one
-    # list of receipt views per group) reads the SAME groups, in the same
-    # order, whichever key found them: length and members aligned with the
-    # receipt groups of `duplicate_groups`.
+        _assert_duplicate_group_shape(g, "contract-basis")
+        assert (g["state"], g["decided_by"], g["verdict"]) == ("decided", "tool", "copy")
+    assert view["summary"]["n_duplicate_groups_open"] == 0
+    assert view["duplicate_charges"] == []
+    # The legacy `duplicate_receipts` list (one list of receipt views per
+    # group) reads the SAME groups, in the same order, whichever key found
+    # them: length and members aligned with `duplicate_groups`.
     receipt_groups = [g for g in view["duplicate_groups"] if g["kind"] == "receipt"]
     assert len(view["duplicate_receipts"]) == len(receipt_groups) == 2
     assert [

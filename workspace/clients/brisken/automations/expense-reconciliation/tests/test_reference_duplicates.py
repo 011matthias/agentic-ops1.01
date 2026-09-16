@@ -351,8 +351,11 @@ def test_a_vendor_date_group_keeps_its_id_when_a_reference_group_overlaps(
     groups = {tuple(g["members"]): g for g in grid["duplicate_groups"]}
     assert set(groups) == {(a, b), (b, c)}, sorted(groups)
     assert groups[(a, b)]["group_id"] == duplicate_group_id("receipt", [a, b])
-    assert "basis" not in groups[(a, b)], "the old key's group renders as before"
+    # Item 74: every group now says which ladder rung decided it. A has no
+    # number, so the pair is decided on vendor + date; B and C share one.
+    assert groups[(a, b)]["basis"] == "vendor_date"
     assert groups[(b, c)]["basis"] == "reference"
+    assert {g["verdict"] for g in groups.values()} == {"copy"}
     assert grid["summary"]["n_duplicate_groups"] == 2
 
     markers = {e["document_id"]: e["duplicate"] for e in grid["expenses"]}
@@ -841,3 +844,295 @@ def test_a_collecting_batch_grid_and_export_apply_the_inheritance(
     by_ref = _csv_rows_by_reference(client, batch_id)
     assert by_ref["890D70BF-0032"]["Legal Entity"] == "Cloud Services"
     assert by_ref["890D70BF0032"]["Legal Entity"] == "Cloud Services"
+
+
+# ── item 74: the ladder, one rung per test, through the app ─────────────
+#
+# Owner rulings 2026-09-16 (notes #45/#46): the tool decides every receipt
+# group and never asks, first rung that applies wins, recorded as `basis`.
+# The answer key on the live months: rung 2 on ten groups, rung 3 on the two
+# August Stripe pairs, rung 4 on July's Google pair, rung 6 on three.
+
+
+def _text_pdf(*lines: str) -> bytes:
+    """A receipt PDF with a real text layer (over MIN_PDF_TEXT_CHARS, so the
+    ingest reads it as text and the ladder's rung 3 can read it too)."""
+    from reportlab.pdfgen import canvas
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    y = 720
+    for line in lines:
+        c.drawString(60, y, line)
+        y -= 18
+    c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def _batch_files(client, files, legal_entity="Corporate Services", label="August 2026"):
+    resp = client.post(
+        "/api/expense-batches",
+        data={"legal_entity": legal_entity, "label": label},
+    )
+    _done(client, resp)
+    batch_id = resp.json()["batch_id"]
+    _done(client, client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", (name, data, "application/octet-stream")) for name, data in files],
+    ))
+    return batch_id
+
+
+def _only_group(view):
+    (group,) = view["duplicate_groups"]
+    return group
+
+
+def _decided(group):
+    return (group.get("basis"), group.get("verdict"), group.get("decided_by"),
+            group.get("state"))
+
+
+def test_rung_1_identical_bytes_are_one_document_whatever_was_read(client, tmp_path):
+    """Two stored files with identical bytes whose readings disagree on the
+    vendor spelling and the number (so neither the vendor/date key nor the
+    reference key sees them): only the content hash finds them, and it
+    decides them a copy. The add route drops identical bytes itself, so the
+    two files are seeded the way a month holds them after two channels."""
+    from expense_recon.matching.types import MatchOutcome
+    from expense_recon.web.serialize import snapshot_to_dict
+    from expense_recon.web.store import RunStore
+
+    work_dir = tmp_path / "runs" / "hash1"
+    (work_dir / "receipts").mkdir(parents=True)
+    data = _text_pdf("Anthropic, PBC receipt 2428-2412-7739", "Amount paid $100.00") + b"%same"
+    (work_dir / "receipts" / "0000__Receipt-a.pdf").write_bytes(data)
+    (work_dir / "receipts" / "0001__rendered-body.pdf").write_bytes(data)
+    receipts = [
+        Receipt(document_id="0000__Receipt-a.pdf", legal_entity_id="",
+                detected_date=date(2026, 8, 21), detected_total=Decimal("100.00"),
+                detected_currency="USD", detected_vendor="Anthropic, PBC",
+                detected_reference="2428-2412-7739"),
+        Receipt(document_id="0001__rendered-body.pdf", legal_entity_id="",
+                detected_date=date(2026, 8, 20), detected_total=Decimal("100.00"),
+                detected_currency="USD", detected_vendor="Anthropic",
+                detected_reference="DZ9BH3VA0037"),
+    ]
+    snapshot = snapshot_to_dict(
+        [], receipts, MatchOutcome(unmatched_receipts=[r.document_id for r in receipts]), [],
+    )
+    store = RunStore(client._data_root / "recon-web.sqlite")
+    store.create_run(
+        run_id="hash1", created_at="2026-09-16T00:00:00", label="August 2026",
+        operator=None, summary={"mode": "expense_generation"}, snapshot=snapshot,
+        config={"mode": "expense_generation", "expense": {"legal_entity_id": ""}},
+        work_dir=str(work_dir), llm_enabled=False, has_coa=False,
+    )
+    store.close()
+
+    grid = _grid(client, "hash1")
+    group = _only_group(grid)
+    assert _decided(group) == ("hash", "copy", "tool", "decided")
+    assert grid["summary"]["n_duplicate_copies"] == 1
+    assert grid["summary"]["n_duplicate_groups_open"] == 0
+
+
+def test_rung_2_one_document_number_is_one_copy(client, monkeypatch):
+    _register_cards(client)
+    _wire(
+        monkeypatch,
+        _extraction("Anthropic, PBC", "51.38", "2026-08-05", "DZ9BH3VA-0036"),
+        _extraction("Anthropic, PBC (@anthropic)", "51.38", "2026-08-06",
+                    "DZ9BH3VA0036", payment_hint="Visa ...2838"),
+    )
+    batch_id = _batch(client, ["Invoice-DZ9BH3VA-0036.jpg", "Receipt-2462-7346-1610.jpg"])
+    group = _only_group(_grid(client, batch_id))
+    assert _decided(group) == ("reference", "copy", "tool", "decided")
+
+
+def test_rung_3_a_stripe_receipt_printing_its_invoice_number_is_one_copy(
+    client, monkeypatch
+):
+    """August 2026, `0008`/`0009` and `0012`/`0013`: the extractor read the
+    Stripe RECEIPT's own number (2247 1655 6392) instead of the invoice's, so
+    the two documents carry different references. The original item-74 line
+    ("a reference that disagrees must not collapse") would have split them.
+    The receipt's text layer prints the invoice's number, which is rung 3:
+    one purchase, one exact match, the copy set aside."""
+    pytest.importorskip("reportlab")
+    _wire(
+        monkeypatch,
+        _extraction("Lovable Labs Incorporated", "15.00", "2026-08-31",
+                    "HMVWDWIL-0029", payment_hint="Pay $15.00 with a bank transfer"),
+        _extraction("Lovable Labs Incorporated", "15.00", "2026-08-31",
+                    "2247 1655 6392", payment_hint="Visa ...2838"),
+    )
+    batch_id = _batch_files(client, [
+        ("Invoice-HMVWDWIL-0029.pdf", _text_pdf(
+            "Lovable Labs Incorporated", "Invoice number HMVWDWIL-0029",
+            "Date of issue August 31, 2026", "Amount due $15.00 USD",
+            "Pay $15.00 with a bank transfer",
+        )),
+        ("Receipt-2247-1655-6392.pdf", _text_pdf(
+            "Lovable Labs Incorporated", "Receipt number 2247-1655-6392",
+            "Invoice number HMVWDWIL-0029", "Date paid August 31, 2026",
+            "Amount paid $15.00", "Visa - 2838",
+        )),
+    ])
+    grid_group = _only_group(_grid(client, batch_id))
+    assert _decided(grid_group) == ("printed_reference", "copy", "tool", "decided")
+
+    _attach(client, batch_id, [(datetime(2026, 8, 31), "LOVABLE", "Sale", -15.00)])
+    view = _view(client, batch_id)
+    group = _only_group(view)
+    assert _decided(group) == ("printed_reference", "copy", "tool", "decided")
+    assert view["summary"]["n_reconciled"] == 1
+    assert view["summary"]["n_review"] == 0, "one document, not two candidates"
+    assert len(_row(view, "LOVABLE")["candidates"]) == 1
+    assert view["summary"]["n_duplicate_copies"] == 1
+    assert view["summary"]["n_duplicate_groups_open"] == 0
+
+
+def test_rung_4_two_google_invoices_with_their_own_numbers_are_two_purchases(
+    client, monkeypatch
+):
+    """July 2026 `03ba84fadeebe2a5`: two Workspace accounts, two invoices,
+    same vendor, same day, same 71.64, two different invoice numbers, and
+    neither page prints the other's. The old vendor/date key collapsed them
+    and one real charge could never match. Rung 4 keeps both: no marker, no
+    set-aside copy, both receipts back in the pool for the two charges."""
+    pytest.importorskip("reportlab")
+    _wire(
+        monkeypatch,
+        _extraction("Google LLC", "71.64", "2026-06-30", "5608449734"),
+        _extraction("Google LLC", "71.64", "2026-06-30", "5614551183"),
+    )
+    batch_id = _batch_files(client, [
+        ("google_com__5608449734.pdf", _text_pdf(
+            "Google LLC", "Invoice number: 5608449734", "Invoice date Jun 30, 2026",
+            "Google Workspace Business Starter", "Total in USD $71.64",
+        )),
+        ("brisken_com__5614551183.pdf", _text_pdf(
+            "Google LLC", "Invoice number: 5614551183", "Invoice date Jun 30, 2026",
+            "Google Workspace Business Starter", "Total in USD $71.64",
+        )),
+    ], label="July 2026")
+    _attach(client, batch_id, [
+        (datetime(2026, 7, 1), "GOOGLE *Workspace_bris", "Sale", -71.64),
+        (datetime(2026, 7, 1), "GOOGLE *Workspace_bris", "Sale", -71.64),
+    ])
+    view = _view(client, batch_id)
+    group = _only_group(view)
+    assert _decided(group) == ("distinct_reference", "distinct", "tool", "decided")
+    assert view["summary"]["n_duplicate_copies"] == 0
+    assert not any(r.get("duplicate") for r in view["unmatched_receipts"])
+    # both invoices are candidates again: no charge is left with nothing
+    assert all(r["candidates"] for r in view["rows"]), [
+        (r["vendor"], r["effective_bucket"]) for r in view["rows"]
+    ]
+
+
+def test_rung_5_two_slips_naming_different_cards_are_two_purchases(client, monkeypatch):
+    _wire(
+        monkeypatch,
+        _extraction("Posto Santos", "50.00", "2026-07-18", "", payment_hint="Visa ...2838"),
+        _extraction("Posto Santos", "50.00", "2026-07-18", "", payment_hint="Visa ...1672"),
+    )
+    batch_id = _batch(client, ["posto-a.jpg", "posto-b.jpg"], label="July 2026")
+    grid = _grid(client, batch_id)
+    assert _decided(_only_group(grid)) == ("receipt_card", "distinct", "tool", "decided")
+    assert all(e["duplicate"] is None for e in grid["expenses"])
+    assert grid["summary"]["n_duplicate_copies"] == 0
+
+
+def test_rung_6_two_scans_with_nothing_to_tell_them_apart_are_one_copy(
+    client, monkeypatch
+):
+    """July 2026 `3b0029eea1b11643`, the Aposto slip scanned twice: the only
+    number is a till counter under the floor, both name the same tender, so
+    vendor + date + total + currency decide it."""
+    _wire(
+        monkeypatch,
+        _extraction("Aposto Karlsruhe", "80.00", "2026-07-13", "4563",
+                    payment_hint="VISA CREDIT"),
+        _extraction("Aposto Karlsruhe", "80.00", "2026-07-13", "4563",
+                    payment_hint="VISA CREDIT"),
+    )
+    batch_id = _batch(client, ["aposto-1.jpg", "aposto-2.jpg"], label="July 2026")
+    grid = _grid(client, batch_id)
+    assert _decided(_only_group(grid)) == ("vendor_date", "copy", "tool", "decided")
+    assert grid["summary"]["n_duplicate_copies"] == 1
+
+
+def test_rung_7_a_copy_with_its_own_exact_charge_is_restored_once(client, monkeypatch):
+    """The statement check. Two slips the ladder calls one copy (rung 6),
+    and a statement that charged that exact amount twice on the day. After
+    the first match the kept slip holds one charge and the other sits
+    unmatched with an exact charge for the set-aside slip: the bank printed
+    two lines, so it is two purchases. The group is restored
+    (`basis: "statement"`), the month matched once more, and no copy is left
+    set aside."""
+    _wire(
+        monkeypatch,
+        _extraction("Aposto Karlsruhe", "80.00", "2026-07-13", ""),
+        _extraction("Aposto Karlsruhe", "80.00", "2026-07-13", ""),
+    )
+    batch_id = _batch(client, ["aposto-1.jpg", "aposto-2.jpg"], label="July 2026")
+    assert _decided(_only_group(_grid(client, batch_id))) == (
+        "vendor_date", "copy", "tool", "decided")
+
+    _attach(client, batch_id, [
+        (datetime(2026, 7, 13), "APOSTO KARLSRUHE", "Sale", -80.00),
+        (datetime(2026, 7, 13), "APOSTO KARLSRUHE", "Sale", -80.00),
+    ])
+    view = _view(client, batch_id)
+    group = _only_group(view)
+    assert _decided(group) == ("statement", "distinct", "tool", "decided")
+    assert view["summary"]["n_duplicate_copies"] == 0
+    assert not any(r.get("duplicate") for r in view["unmatched_receipts"])
+    assert all(r["candidates"] for r in view["rows"]), "both slips are candidates again"
+    # the grid reads the same verdict off the same snapshot
+    assert _decided(_only_group(_grid(client, batch_id)))[0] == "statement"
+
+
+def test_rung_7_does_not_fire_when_the_statement_charged_once(client, monkeypatch):
+    _wire(
+        monkeypatch,
+        _extraction("Aposto Karlsruhe", "80.00", "2026-07-13", ""),
+        _extraction("Aposto Karlsruhe", "80.00", "2026-07-13", ""),
+    )
+    batch_id = _batch(client, ["aposto-1.jpg", "aposto-2.jpg"], label="July 2026")
+    _attach(client, batch_id, [
+        (datetime(2026, 7, 13), "APOSTO KARLSRUHE", "Sale", -80.00),
+    ])
+    view = _view(client, batch_id)
+    assert _decided(_only_group(view)) == ("vendor_date", "copy", "tool", "decided")
+    assert view["summary"]["n_reconciled"] == 1
+    assert view["summary"]["n_duplicate_copies"] == 1
+
+
+def test_a_reviewer_confirmed_group_is_never_restored_by_the_statement_check(
+    client, monkeypatch
+):
+    """A reviewer verdict outranks the tool, the statement check included:
+    July's Google group stays set aside until its ruling is reset."""
+    _wire(
+        monkeypatch,
+        _extraction("Aposto Karlsruhe", "80.00", "2026-07-13", ""),
+        _extraction("Aposto Karlsruhe", "80.00", "2026-07-13", ""),
+    )
+    batch_id = _batch(client, ["aposto-1.jpg", "aposto-2.jpg"], label="July 2026")
+    group = _only_group(_grid(client, batch_id))
+    resp = client.post(
+        f"/api/runs/{batch_id}/duplicates/resolve",
+        json={"group_id": group["group_id"], "resolution": "confirmed"},
+    )
+    assert resp.status_code == 200, resp.text
+    _attach(client, batch_id, [
+        (datetime(2026, 7, 13), "APOSTO KARLSRUHE", "Sale", -80.00),
+        (datetime(2026, 7, 13), "APOSTO KARLSRUHE", "Sale", -80.00),
+    ])
+    view = _view(client, batch_id)
+    assert _decided(_only_group(view)) == ("vendor_date", "copy", "reviewer", "decided")
+    assert view["summary"]["n_duplicate_copies"] == 1

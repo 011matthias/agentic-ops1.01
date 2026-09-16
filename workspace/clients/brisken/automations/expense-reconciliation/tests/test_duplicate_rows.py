@@ -304,11 +304,13 @@ def test_deleting_the_extra_copy_settles_the_flag(client, monkeypatch):
 # ── 3. the workbench ────────────────────────────────────────────────────
 
 
-def test_a_charge_billed_twice_is_marked_on_both_charge_rows(
+def test_two_charges_to_one_vendor_are_two_charges_not_a_duplicate(
     client, monkeypatch
 ):
-    """The other half of the same question: not the same receipt twice, the
-    same charge twice on the statement."""
+    """Item 74 (owner ruling 2026-09-15, notes #37/#41): the statement is the
+    truth of what was charged. The same merchant and amount a day apart is
+    two charges, so no charge row carries a marker and no group is raised.
+    Every charge group on both live months was a set of real transactions."""
     _wire(monkeypatch)
     batch_id = _batch(client, n_files=1)
     _upload(client, batch_id, _csv(
@@ -318,14 +320,11 @@ def test_a_charge_billed_twice_is_marked_on_both_charge_rows(
     ))
 
     view = client.get(f"/api/runs/{batch_id}").json()
-    marked = [r for r in view["rows"] if r["duplicate"]]
-    assert len(marked) == 2, [(r["vendor"], r["duplicate"]) for r in view["rows"]]
-    assert {m["duplicate"]["kind"] for m in marked} == {"charge"}
-    assert sorted(m["duplicate"]["is_extra"] for m in marked) == [False, True]
-    assert view["summary"]["n_duplicate_copies"] == 1
-
-    aws = next(r for r in view["rows"] if r["vendor"] == "AWS")
-    assert aws["duplicate"] is None
+    assert [r["duplicate"] for r in view["rows"]] == [None, None, None]
+    assert view["duplicate_charges"] == []
+    assert [g for g in view["duplicate_groups"] if g["kind"] == "charge"] == []
+    assert view["summary"]["n_duplicate_copies"] == 0
+    assert view["summary"]["n_duplicate_groups"] == 0
 
 
 def test_the_duplicate_receipt_is_marked_in_the_hand_match_picker(
@@ -374,69 +373,64 @@ def test_the_same_merchant_a_month_apart_is_a_subscription_not_a_double(
 # ── 4. the document ─────────────────────────────────────────────────────
 
 
-def test_the_report_names_the_duplicate_instead_of_counting_it(
-    client, monkeypatch, tmp_path
-):
-    """"2 possible duplicate groups" sends the reader to go and find them.
-    The vendor, the date and the amount are what they were going to look
-    for."""
-    pytest.importorskip("reportlab")
-    pytest.importorskip("pypdf")
+def _report_text(client, batch_id, tmp_path, name) -> str:
     from pypdf import PdfReader
-
-    _wire(monkeypatch)
-    batch_id = _batch(client, n_files=1)
-    _upload(client, batch_id, _csv(
-        ("2026-04-15", "135.00", "PRESSMASTER FZCO"),
-        ("2026-04-16", "135.00", "PRESSMASTER FZCO"),
-    ))
 
     resp = client.get(f"/runs/{batch_id}/reconciliation-report.pdf")
     assert resp.status_code == 200, resp.text
-    path = tmp_path / "dup.pdf"
+    path = tmp_path / name
     path.write_bytes(resp.content)
-    text = " ".join(
+    return " ".join(
         " ".join(p.extract_text() or "" for p in PdfReader(str(path)).pages).split()
     )
-    assert "possible duplicate" in text, text[:300]
-    # Between the duplicate heading and the charge listing, which is the
-    # only slice the duplicate table occupies. Asserting the vendor over the
-    # WHOLE document proves nothing: it is in the charge listing regardless,
-    # so the assertion survived deleting the table entirely.
-    section = text[text.index("possible duplicate"):text.index("All charges")]
-    assert "Copies" in section, section
-    assert "PRESSMASTER FZCO" in section, section
+
+
+def test_the_report_records_a_copy_set_aside_instead_of_asking_about_it(
+    client, monkeypatch, tmp_path
+):
+    """Item 74 (notes #45/#46): the tool decides a copy and a decided item
+    leaves the to-do area. So the document no longer raises "possible
+    duplicate" for a copy the tool has set aside; it records it, named (the
+    vendor, the date, the amount) with the evidence it was decided on,
+    because a receipt kept out of the matching is a decision an auditor can
+    ask about."""
+    pytest.importorskip("reportlab")
+    pytest.importorskip("pypdf")
+
+    _wire(monkeypatch)
+    batch_id = _batch(client)  # two scans of one Pressmaster invoice
+    _upload(client, batch_id, _csv(("2026-04-15", "135.00", "PRESSMASTER FZCO")))
+
+    text = _report_text(client, batch_id, tmp_path, "copies.pdf")
+    assert "possible duplicate" not in text, text[:300]
+    assert "Copies set aside (1)" in text, text[:600]
+    # Between the record's heading and the charge listing, the only slice
+    # the record occupies: the vendor is in the charge listing regardless.
+    section = text[text.index("Copies set aside"):text.index("All charges")]
+    assert "Pressmaster FZCO" in section, section
     assert "135.00" in section, section
+    assert "same vendor, date and amount" in section, section
 
 
-def test_a_dismissed_group_is_not_an_exception_in_the_document(
+def test_a_group_ruled_not_a_copy_is_neither_an_exception_nor_a_copy(
     client, monkeypatch, tmp_path
 ):
     """A report that keeps raising a question the reviewer already answered
-    is a report they skim."""
+    is a report they skim, and a group the reviewer ruled two purchases is
+    not a copy set aside either."""
     pytest.importorskip("reportlab")
     pytest.importorskip("pypdf")
-    from pypdf import PdfReader
 
     _wire(monkeypatch)
-    batch_id = _batch(client, n_files=1)
-    _upload(client, batch_id, _csv(
-        ("2026-04-15", "135.00", "PRESSMASTER FZCO"),
-        ("2026-04-16", "135.00", "PRESSMASTER FZCO"),
-    ))
+    batch_id = _batch(client)
+    _upload(client, batch_id, _csv(("2026-04-15", "135.00", "PRESSMASTER FZCO")))
     view = client.get(f"/api/runs/{batch_id}").json()
-    gid = next(
-        g["group_id"] for g in view["duplicate_groups"] if g["kind"] == "charge"
-    )
+    (group,) = view["duplicate_groups"]
     client.post(
         f"/api/runs/{batch_id}/duplicates/resolve",
-        json={"group_id": gid, "action": "ignore"},
+        json={"group_id": group["group_id"], "action": "ignore"},
     )
 
-    resp = client.get(f"/runs/{batch_id}/reconciliation-report.pdf")
-    path = tmp_path / "dismissed.pdf"
-    path.write_bytes(resp.content)
-    text = " ".join(
-        " ".join(p.extract_text() or "" for p in PdfReader(str(path)).pages).split()
-    )
+    text = _report_text(client, batch_id, tmp_path, "dismissed.pdf")
     assert "possible duplicate" not in text, text[:300]
+    assert "Copies set aside" not in text, text[:600]

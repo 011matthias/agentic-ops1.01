@@ -1,13 +1,15 @@
-"""Duplicate / double-charge detection (Tier-1 #4)."""
+"""Duplicate receipt detection (Tier-1 #4). Charge-side detection was deleted
+in item 74 (owner ruling 2026-09-15: two charges to one vendor are two
+charges); `tests/test_web_duplicates.py` pins that at the route."""
 from datetime import date
 from decimal import Decimal
 
+from expense_recon import duplicates
 from expense_recon.duplicates import (
     duplicate_group_id,
-    find_duplicate_charges,
     find_duplicate_receipts,
 )
-from expense_recon.matching.types import Receipt, Transaction
+from expense_recon.matching.types import Receipt
 
 LE = "le"
 
@@ -16,36 +18,23 @@ LE = "le"
 
 
 def test_group_id_is_member_order_independent():
-    assert duplicate_group_id("charge", ["t2", "t1"]) == duplicate_group_id(
-        "charge", ["t1", "t2"]
+    assert duplicate_group_id("receipt", ["t2", "t1"]) == duplicate_group_id(
+        "receipt", ["t1", "t2"]
     )
 
 
 def test_group_id_is_kind_scoped():
-    """A charge group and a receipt group with the same member ids get
-    distinct ids, so their resolutions never collide."""
+    """A charge-kind id and a receipt-kind id with the same member ids
+    differ, so a resolution saved before item 74 on a charge group can never
+    land on a receipt group."""
     assert duplicate_group_id("charge", ["a", "b"]) != duplicate_group_id(
         "receipt", ["a", "b"]
     )
 
 
 def test_group_id_distinguishes_membership():
-    assert duplicate_group_id("charge", ["a", "b"]) != duplicate_group_id(
-        "charge", ["a", "c"]
-    )
-
-
-def tx(tid, amount, d, vendor="ACME", currency="USD"):
-    return Transaction(
-        transaction_id=tid,
-        legal_entity_id=LE,
-        account_id="card",
-        transaction_date=d,
-        posting_date=None,
-        amount=Decimal(amount),
-        transaction_currency=currency,
-        account_card_currency="USD",
-        vendor_from_statement=vendor,
+    assert duplicate_group_id("receipt", ["a", "b"]) != duplicate_group_id(
+        "receipt", ["a", "c"]
     )
 
 
@@ -60,38 +49,8 @@ def rc(rid, amount, d, vendor="ACME", currency="USD"):
     )
 
 
-def test_duplicate_charges_same_merchant_amount_within_window():
-    txs = [tx("a", "20.00", date(2026, 4, 10)), tx("b", "20.00", date(2026, 4, 11))]
-    assert find_duplicate_charges(txs, window_days=3) == [["a", "b"]]
-
-
-def test_duplicate_charges_ignores_far_apart_recurring():
-    # Same vendor + amount a month apart is a subscription, not a double-charge.
-    txs = [tx("a", "9.99", date(2026, 4, 1)), tx("b", "9.99", date(2026, 5, 1))]
-    assert find_duplicate_charges(txs, window_days=3) == []
-
-
-def test_duplicate_charges_distinguish_amount_and_merchant():
-    txs = [
-        tx("a", "20.00", date(2026, 4, 10)),
-        tx("b", "21.00", date(2026, 4, 10)),               # different amount
-        tx("c", "20.00", date(2026, 4, 10), vendor="OTHER"),  # different vendor
-    ]
-    assert find_duplicate_charges(txs) == []
-
-
-def test_duplicate_charges_skips_dateless_amountless():
-    txs = [
-        Transaction(
-            transaction_id="a", legal_entity_id=LE, account_id="card",
-            transaction_date=date(2026, 4, 10), posting_date=None,
-            amount=None, transaction_currency="USD",
-            account_card_currency="USD", vendor_from_statement="ACME",
-        ),
-        tx("b", "20.00", date(2026, 4, 10)),
-    ]
-    # The amountless one is skipped; a single remaining charge is not a dup.
-    assert find_duplicate_charges(txs) == []
+def test_the_charge_detector_is_gone():
+    assert not hasattr(duplicates, "find_duplicate_charges")
 
 
 def test_duplicate_receipts_same_fields_distinct_ids():

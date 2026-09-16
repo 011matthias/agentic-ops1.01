@@ -174,14 +174,27 @@ def build_reconciliation_report_pdf(
     story.append(Paragraph("What needs attention", styles["h2"]))
     unmatched_tx = list(view.get("unmatched_transactions") or [])
     unmatched_rec = list(view.get("unmatched_receipts") or [])
-    dup_groups = [
+    # Item 74: only a group nobody has decided is something to act on. The
+    # tool decides every group it can and a reviewer's ruling decides the
+    # rest; a decided copy leaves this section for the record below it
+    # (owner ruling 2026-09-16: resolved items leave the to-do area). A view
+    # built before `state` existed reads as today: open unless dismissed.
+    all_groups = [
         g for g in (view.get("duplicate_groups") or [])
-        if g.get("resolution") != "ignore"
+        if g.get("kind", "receipt") == "receipt"
+    ]
+    dup_groups = [
+        g for g in all_groups
+        if g.get("state", "open") == "open" and g.get("resolution") != "ignore"
+    ]
+    set_aside_groups = [
+        g for g in all_groups
+        if g.get("state") == "decided" and g.get("verdict") == "copy"
     ]
     if not (unmatched_tx or unmatched_rec or dup_groups):
         story.append(Paragraph(
             "Nothing. Every charge has a receipt, every receipt has a charge, "
-            "and no duplicates were found.", styles["capsub"],
+            "and no duplicate is left undecided.", styles["capsub"],
         ))
     else:
         if unmatched_tx:
@@ -221,6 +234,25 @@ def build_reconciliation_report_pdf(
                 ["What", "Date", "Amount", "Ccy", "Copies"],
                 *_duplicate_rows(dup_groups, view),
             ], [230, 60, 80, 40, 50], styles))
+
+    # ── copies set aside: decided, recorded, nothing to do ──────────
+    #
+    # A receipt kept out of the matching as a copy of another is a decision
+    # an auditor can ask about, so the document keeps the record of it: which
+    # document, and on what evidence (`basis`).
+    if set_aside_groups:
+        story.append(Spacer(1, 8))
+        story.append(Paragraph(
+            esc(f"Copies set aside ({len(set_aside_groups)})"), styles["capsub"],
+        ))
+        story.append(Spacer(1, 3))
+        story.append(_table([
+            ["What", "Date", "Amount", "Ccy", "Copies", "Why"],
+            *[
+                [*row, _basis_label(g)]
+                for row, g in zip(_duplicate_rows(set_aside_groups, view), set_aside_groups)
+            ],
+        ], [170, 55, 65, 35, 40, 105], styles))
 
     # ── the full charge listing ─────────────────────────────────────
     #
@@ -304,15 +336,13 @@ def _duplicate_rows(groups: list[dict], view: dict) -> list[list[str]]:
 
     "3 possible duplicate groups" is a number a reader can do nothing
     with; the vendor, the date and the amount are what sends somebody to
-    look. Names come from the payload's own lists (the charge rows, the
-    duplicate-receipt views) so the document cannot describe a charge
-    differently from the table below it, and a group whose members are
-    nowhere in this payload still prints, as its member count, rather
-    than being silently dropped.
+    look. Names come from the payload's own lists (the duplicate-receipt
+    views) so the document cannot describe a receipt differently from the
+    rest of the payload, and a group whose members are nowhere in this
+    payload still prints, as its member count, rather than being silently
+    dropped. Receipts only: charge-side duplicates were deleted (item 74).
     """
     named: dict[str, dict] = {}
-    for row in view.get("rows") or []:
-        named[str(row.get("transaction_id") or "")] = row
     for group in view.get("duplicate_receipts") or []:
         for rec in group:
             named[str(rec.get("document_id") or "")] = rec
@@ -332,14 +362,29 @@ def _duplicate_rows(groups: list[dict], view: dict) -> list[list[str]]:
             continue
         amount = first.get("amount") or first.get("total") or ""
         out.append([
-            f"{first.get('vendor') or '(no vendor)'}"
-            f"{' (charge)' if kind == 'charge' else ' (receipt)'}",
+            f"{first.get('vendor') or '(no vendor)'} (receipt)",
             str(first.get("date") or ""),
             str(amount),
             str(first.get("currency") or ""),
             str(len(members)),
         ])
     return out
+
+
+# Item 74: the evidence behind a copy, in the words the record prints. A
+# reviewer's ruling prints as that, whatever the tool found.
+_BASIS_LABELS = {
+    "hash": "identical file",
+    "reference": "same document number",
+    "printed_reference": "one prints the other's number",
+    "vendor_date": "same vendor, date and amount",
+}
+
+
+def _basis_label(group: dict) -> str:
+    if group.get("decided_by") == "reviewer":
+        return "set aside by a reviewer"
+    return _BASIS_LABELS.get(str(group.get("basis") or ""), "copy")
 
 
 def _period(entry: dict) -> str:
