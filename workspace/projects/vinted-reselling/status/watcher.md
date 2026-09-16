@@ -4,7 +4,7 @@ workstream: watcher
 group: ""
 spec: ""
 state: active
-updated: 2026-09-14
+updated: 2026-09-16
 ---
 
 Sourcing watcher + price/demand database. Polls the Vinted catalog API for
@@ -349,7 +349,56 @@ der Kauf-Gesamtpreis inkl. Gebuehr oder der Wiederverkaufswert; ist die
 15-EUR-Schwelle netto oder brutto; welcher Tag hat den Eindruck gepraegt
 (09.09. und 10.09. waren bei lauten teuren Pushes schwerer als heute).
 
-## STOP: der Katalog-Endpunkt ist weg (seit 2026-09-14T19:35Z)
+## GELOEST 2026-09-16: der Katalog-Endpunkt ist umgezogen, nicht weg
+
+Der Katalog liegt seit dem Umbau auf einem **anderen Host**:
+
+    vorher  https://www.vinted.de/api/v2/catalog/items
+    jetzt   https://api.vinted.de/svc-catalogue/items
+
+Die Analyse unten (Abschnitt "STOP") stimmt in allem, was sie geprueft hat:
+keine Sperre, Session gesund, jede Parameterform 404. Was sie nicht erreichen
+konnte, war der Host. Alle Proben blieben auf `www.vinted.de`, und dort
+antwortet inzwischen die Marketing-Seite mit ihrer HTML-404, weshalb der Fehler
+wie "keine Treffer" aussah statt wie "falsche URL".
+
+Gefunden, indem die echte Seite ueber CDP gefahren und beobachtet wurde, welcher
+Request die zweite Ergebnisseite holt. Der neue Pfad antwortet einer
+handgebauten Anfrage mit **200**, es braucht nur `Accept` und `Referer`, kein
+Token und kein CSRF. **Der 7,2-MB-Flight-Payload ist damit vom Tisch**; der Feed
+ist so guenstig wie vorher.
+
+**Die Nutzlast ist duenner geworden, und das war die stille Gefahr.**
+`brand_title`, `size_title` und `status` fehlen im Item und stecken jetzt in
+`item_box` (`first_line` = Marke, `second_line` = "<Groesse> · <Zustand>", dazu
+ein `accessibility_label` mit beidem unter lokalisierten Labels). Ohne
+Behandlung waeren `brand_norm` und `size_class` bei jeder neuen Zeile NULL, und
+genau auf diesen zwei Spalten stehen alle Zellen von `keyword_research`. Der
+Backfill gilt als erledigt, sie waeren also NULL geblieben.
+
+`locale` steht mit Absicht auf `de-DE`. Der erste gefixte Lauf hat jede Spalte
+korrekt geparst und trotzdem bei allen zwoelf Items `cond_tier="unknown"`
+geliefert, weil die Labels englisch kamen und `COND_TIERS` auf den deutschen
+Strings der bestehenden Zeilen sitzt ("Sehr gut": 61.597 Zeilen). Nichts ist
+gescheitert, eine Spalte hat nur aufgehoert, etwas zu bedeuten. Der Parser
+akzeptiert jetzt beide Sprachen.
+
+**`posted_at` ist echt verloren.** Es kam aus einem Epoch in der Foto-URL; die
+neuen URLs sind `.webp` ohne Epoch. Die Spalte bleibt NULL, und die
+Altersanalyse (Alter bei Erfassung) laesst sich aus neuen Zeilen nicht mehr
+rekonstruieren.
+
+Belegt am laufenden System: erster Zyklus nach dem Merge (#889) 463 Zeilen,
+`brand_norm` 463/463, `cond_tier` 463/463, `size_class` 456/463, `posted_at`
+0/463 wie vorhergesagt. Alerts laufen wieder.
+
+**Nach jedem Merge, der den Watcher betrifft, den gepinnten Worktree nachziehen**
+(`git -C ~/Repo/agentic-ops1-watcher checkout --detach origin/main`); fuer #889
+ist das bereits geschehen.
+
+---
+
+## Vorbefund vom 14.09. (korrekt, aber auf www.vinted.de beschraenkt)
 
 Der Watcher sammelt nichts. Zwei getrennte Dinge nach dem 11.09.:
 
