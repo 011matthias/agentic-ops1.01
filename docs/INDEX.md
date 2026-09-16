@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-16 | Expense-Recon Item 76 | client-dev | [Mini-Checkpoint-1](docs/2026-09-16%20-%20Expense-Recon%20Item%2076/Mini-Checkpoint-1.md) |
 | 2026-09-16 | Expense-Recon Item 73 | client-dev | [→](docs/2026-09-16%20-%20Expense-Recon%20Item%2073/Checkpoint.md) |
 | 2026-09-16 | Expense-Recon Item 77 | client-dev | [→](docs/2026-09-16%20-%20Expense-Recon%20Item%2077/Checkpoint.md) |
 | 2026-09-16 | Expense-Recon Item 77 | client-dev | [Mini-Checkpoint-1](docs/2026-09-16%20-%20Expense-Recon%20Item%2077/Mini-Checkpoint-1.md) |
