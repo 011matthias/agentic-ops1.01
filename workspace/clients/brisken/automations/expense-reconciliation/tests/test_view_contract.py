@@ -135,6 +135,8 @@ EXPENSE_BATCH_CONTRACT = {
     # months, so the path appears only via the trip fixture). The roster
     # is person NAMES, plain strings.
     "trip.travelers[]": "string",
+    # Item 84: the boxes a row belongs to, each a count name without `n_`.
+    "expenses[].boxes[]": "string",
 }
 
 RUN_CONTRACT = {
@@ -203,6 +205,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "coverage[].statements[]",
     "trip.travelers[]",
     "cost_center_options[]",
+    "expenses[].boxes[]",
 }
 
 RUN_MUST_COVER = {
@@ -1130,6 +1133,35 @@ def test_every_run_row_carries_a_turn_and_a_verdict_names_its_author(payloads):
             assert isinstance(row["decided_rule"], str) and row["decided_rule"], row
         else:
             assert "decided_rule" not in row, row
+
+
+def test_every_box_count_equals_the_rows_carrying_its_box(payloads):
+    """Item 84. `expenses[].boxes[]` is on EVERY expense row, a list of
+    names from `EXPENSE_BOXES` in that order, never null; and for every box
+    whose count `n_{box}` is on the summary, the count equals the number of
+    rows carrying the box, so a box that opens its rows lists exactly the
+    number it shows. `categorized` / `uncategorized` partition the rows. A
+    new box is a rule-5 change (api-contract). Route-level behaviour:
+    `tests/test_expense_boxes.py`."""
+    from expense_recon.web.service import EXPENSE_BOXES
+
+    views = payloads["expense_batch"]
+    seen: set[str] = set()
+    for view in views:
+        expenses = view["expenses"]
+        for e in expenses:
+            boxes = e["boxes"]
+            assert isinstance(boxes, list), e
+            assert boxes == [b for b in EXPENSE_BOXES if b in boxes], boxes
+            assert ("categorized" in boxes) != ("uncategorized" in boxes), boxes
+            seen.update(boxes)
+        for box in EXPENSE_BOXES:
+            key = f"n_{box}"
+            if key in view["summary"]:
+                assert view["summary"][key] == sum(
+                    1 for e in expenses if box in e["boxes"]
+                ), (key, view["summary"][key])
+    assert {"categorized", "uncategorized"} <= seen, seen
 
 
 def test_unmatched_reason_code_is_on_every_unmatched_item_and_nowhere_else(payloads):

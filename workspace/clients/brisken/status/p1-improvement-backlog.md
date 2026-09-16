@@ -4212,7 +4212,7 @@ held, 98 no receipt. Receipt match rate July 75.0% -> 78.0%, August 32.3% ->
 half: `docs/lovable-unmatched-reasons-prompt.md`. The July Hostinger and Redis
 groups a reviewer ruled "Not a copy" stay unmatched, as ruled.
 
-### 84. The Expenses view's tiles open the expenses they count (owner, 2026-09-16)
+### 84. The Expenses view's tiles open the expenses they count (owner, 2026-09-16) (SHIPPED PR #935 - see Shipped row 53)
 
 **Owner, on a screenshot of July's Expenses view tiles:** "these should be the
 overview boxes, that a user should be able click on and see all of the belonging
@@ -4284,6 +4284,26 @@ box opens those rows, and the suggested-private caption sits inside it. The
 backend still needs one row membership that equals the box's count (build
 step 1 unchanged); `n_needs_entity` and `n_needs_person` keep their names and
 questions per the counts table, and the box gets its own.
+
+**Shipped 2026-09-16 (PR #935).** `expenses[].boxes[]` names every box a row
+belongs to (a count name without `n_`), and every box count on the expense
+summary is now summed from those rows (`service.expense_boxes`), so a filter
+cannot show a different number than its tile. The two questions were resolved
+first, off the live payloads. **Categorized 49 vs 51** is three two-line
+receipts (July `0006`, `0062`; August `0019`) whose second line has no
+category: the row shows line 1's category, and `categorized_counts` requires
+every line. The count was right, and `is_categorized` gives the box that rule.
+**MISSING RECEIPT IMAGE was a false claim:** its 2 July rows (the `0000`
+rendered mail body, the moved Parada slip) and 1 August row read
+`has_receipt_image: false`, and the image endpoint served all three (200,
+PDF). A row now counts as missing only when the app can show no file AND no
+image is referenced, on both payloads, so the tile reads 0 on both months.
+MISSING ENTITY + NEEDS PERSON became `needs_company_or_person` /
+`n_needs_company_or_person` (rows missing either; the two old counts keep
+their questions). The box list also covers suggested private, private, cost
+center and not-in-report. Predicted live: July 49 / 3 / ready 14 / 33 / 24 /
+0, August 27 / 4 / 10 / 13 / 8 / 0. Suite 1958 -> 1968 passed / 2 skipped;
+five regress proofs bite. SPA half: `docs/lovable-expense-boxes-prompt.md`.
 
 ### 85. Controls that read as text are buttons (notes #47, #50, #51)
 
@@ -4394,6 +4414,7 @@ read of July's card strip, not a build.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 53 | The Expenses view's boxes open their rows: `expenses[].boxes[]` (a count name without `n_`) on every row, every box count summed from those rows, `summary.n_needs_company_or_person` for the merged MISSING ENTITY + NEEDS PERSON box, Categorized decided per row by `is_categorized` (every line), and a row whose receipt the app can show is never "missing its image" (both payloads). SPA half: `docs/lovable-expense-boxes-prompt.md` | Item 84. A box that opens its rows must list exactly its number, and two of them could not: Categorized's row rule differed from its count (three two-line receipts), and MISSING RECEIPT IMAGE 2 / 1 named receipts whose files the endpoint served. Suite 1958 -> 1968 / 2 skipped, five regress proofs | PR #935 |
 | 52 | The unmatched lists say what they hold: a decided duplicate copy leaves `unmatched_receipts`, `assignable_receipts`, `n_unmatched_rec` and the near-miss pool for `copies_set_aside[]` + `summary.n_copies_set_aside` (view-time split, stored outcome and duplicate lists untouched), and every unmatched receipt and charge carries `reason_code` (receipts: duplicate_copy / card_statement_not_loaded / not_a_card_charge / charge_in_neighbouring_period / no_charge_on_any_loaded_statement; charges: not_a_purchase / receipt_held_by_another_charge / already_booked / no_receipt_found). SPA half: `docs/lovable-unmatched-reasons-prompt.md` | Items 83 + 75, notes #40 and #46. August's "Receipts without a charge" was 21 rows of which 11 were copies of documents that had settled their charge, and no unmatched row on either list said why it was there. Receipt rules are item 69's attribution rules with the date edge read before the card: 11 of 14 labelled live receipts name the labelled kind (card-first 9), one wrong claim (a bank transfer dated 07-30). Suite 1929 -> 1958 / 2 skipped, four regress proofs | PR #932 |
 | 51 | A row says whose turn it is and clean exact pairs confirm themselves: `rows[].turn` (decide / confirmed / rejected / posted / none, `decide` == the `n_undecided` set), `rows[].decided_by` (tool / reviewer) + `decided_rule`, `summary.n_self_confirmed`; `apply_self_confirmations` after every `rematch_month` commit (exact, one candidate, category ready, vendor >= 75, not borrowed / held / rejected), withdrawn when it stops qualifying, never over a person's verdict (`RunStore.set_tool_decision` conditional upsert; `decisions.decided_by` / `decided_rule` migrated in place). SPA half: `docs/lovable-turn-prompt.md` | Item 76, notes #38/#39/#49. `status` was `pending` on all 223 live rows, so a booked row asked Reject / Confirm as loudly as the 13 real decisions, and a same-amount same-day same-vendor pair needed a click. Owner rulings 2026-09-16: exact pairs only, vendor floor 75. Predicted live: 5 of the 6 literal exact pairs confirm themselves at the next re-match; 2 clean `fx_reference` pairs (August) keep asking | PR #925, 2026-09-16; suite 1907 -> 1929 passed / 2 skipped; three regress proofs RED first (pass wiring in `rematch_month`, `turn` wiring, the store's reviewer guard) |
 | 50 | Duplicates are receipts only, and the tool decides every group: `find_duplicate_charges` deleted (`duplicate_charges` always `[]`, no charge group, no charge row marker, none in the reconciliation PDF); each receipt group is decided by a ladder recorded as `duplicate_groups[].basis` (hash / reference / printed_reference / distinct_reference / receipt_card / vendor_date, then the statement check once per re-match), with parallel `state` (open / decided), `decided_by` (tool / reviewer), `verdict` (copy / distinct) and `summary.n_duplicate_groups_open`. The byte digest is persisted in expense-batch snapshots (`receipt_digests`); rung 3 reads a PDF's own text layer locally, no model call. A reviewer's `confirmed` / `ignore` outranks the tool and never moves `basis`. The PDF lists decided copies under "Copies set aside" instead of asking. SPA half: `docs/lovable-duplicates-decided-prompt.md` | Item 74, notes #37/#41/#45/#46. The panel asked Criss "Real duplicate / Not a duplicate" about pairs nothing needed deciding on, and listed two real charges to one vendor as duplicate charges. Replayed on both live months with the real receipt files: all 16 groups land on the rung the answer key named (July 3 `reference`, 1 `distinct_reference`, 1 `vendor_date`; August 7 `reference`, 2 `printed_reference`, 2 `vendor_date`), and the statement check restores nothing. Matching measured identical before and after: July resolved_clean 31, August 8, wrong 0; bundles determ_ok 70/95, determ_wrong 0; scorer 76.0; guard 4/4. July's Google group `03ba84fadeebe2a5` reads `decided_by: reviewer, verdict: copy` because of a July "Real duplicate" click on two different invoices (5608449734, 5614551183); the tool reads it `distinct_reference`. Rung 7 fires only when the kept copy settled a charge, so identical documents against identical charges stay a pick | PR #914, 2026-09-16; suite 1900 -> 1907 passed / 2 skipped; four regress proofs RED first on the rebased tree (ladder wiring, rung 3 text-layer wiring, rung 7 re-match wiring, `state` field). Deployed Fly v138: live on both months, 16 groups on the answer-key rungs, `n_duplicate_groups_open` 0, no charge group; July's and August's Matching panels driven. Google reset owner-approved and sent (`resolution: ignore`, 200, July re-matched): the group reads `decided_by: reviewer, verdict: distinct`; n_reconciled 32 -> 31, n_review 7 -> 8, `n_charges_receipt_taken` 0 -> 1, copies 5 -> 4; charge `b7abd111d69921a3` holds both invoices as exact candidates and waits on Criss's pick |
