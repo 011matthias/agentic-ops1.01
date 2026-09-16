@@ -199,6 +199,44 @@ def test_a_reconciled_holder_still_wins_over_a_review_row(client):
     assert view["summary"]["n_charges_receipt_taken"] == 1
 
 
+def test_a_reviewer_pick_keeps_precedence_over_a_pending_review_row(client):
+    """The overlap the effective outcome CAN reach, and the reason the new
+    loop is a setdefault: a pending decision that names a document is the
+    reviewer's pick, recorded as that charge's `held_doc`, while
+    `apply_decisions` (which ignores `chosen_document_id` on a pending row)
+    still lets another review row keep the same receipt. The pick names the
+    holder; the review row does not overwrite it."""
+    picker, other = _tx("picker", 3), _tx("other", 5)
+    d1, d2 = "d1-invoice.pdf", "d2-invoice.pdf"
+    outcome = MatchOutcome(
+        matches=[], unmatched_transactions=[], unmatched_receipts=[],
+        judgment_required=[
+            _pair(picker.transaction_id, d1, MatchType.FX_JUDGMENT),
+            _pair(other.transaction_id, d2, MatchType.FX_JUDGMENT),
+        ],
+    )
+    snapshot = snapshot_to_dict([picker, other], [_rec(d1, 3), _rec(d2, 5)],
+                                outcome, [])
+    store = RunStore(client._data_root / "recon-web.sqlite")
+    try:
+        store.create_run(
+            run_id="held-pick", created_at="2026-09-01T00:00:00+00:00",
+            label="August 2026", operator=None, summary={}, snapshot=snapshot,
+            config={}, work_dir=str(client._data_root), llm_enabled=False,
+            has_coa=False,
+        )
+        store.set_decision("held-pick", "picker", "pending", d2,
+                           "2026-09-16T08:00:00+00:00")
+    finally:
+        store.close()
+    view = client.get("/api/runs/held-pick").json()
+
+    other_row = _row(view, "other")
+    assert _row(view, "picker")["chosen_document_id"] == d2
+    assert other_row["effective_bucket"] == "review"
+    assert _candidate(other_row, d2)["held_by"]["transaction_id"] == "picker"
+
+
 def test_a_month_with_no_contest_still_carries_no_held_by(client):
     """Absent, not null, when the review row's receipt is nobody else's."""
     review, other = _tx("review", 3), _tx("other", 9, vendor="LOVABLE",
