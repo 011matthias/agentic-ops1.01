@@ -5582,6 +5582,7 @@ def build_expense_view(
     trip: dict | None = None,
     settled_elsewhere: dict[str, dict] | None = None,
     edited_at: str | None = None,
+    month_batch=None,
 ) -> dict:
     """Compose the receipt-spine render model for an expense batch: one row
     per expense with the reviewer's edits applied, review-by-exception
@@ -5618,6 +5619,9 @@ def build_expense_view(
         orig_receipts, field_overrides, edits,
         category_overrides=overrides, default_entity=default_entity,
     )
+    # Item 77: typed-in expenses (a delete overwrites the add row, so these
+    # are the live ones), as opposed to receipts attached to a charge by hand.
+    manual_add_ids = {e["document_id"] for e in edits if e["op"] == "add"}
     # Item 69 round A: the same card inheritance `rematch_month` bakes, so the
     # row's card / entity and the match outcome cannot disagree. Applied to
     # every batch, statement or not: on a collecting month (September 2026 on
@@ -5909,6 +5913,40 @@ def build_expense_view(
                 res["person"] and roster
                 and str(res["person"]).strip().casefold() not in roster
             )
+        # Item 77: a reviewer-typed date that puts this receipt in another
+        # month offers the move (POST .../expenses/{id}/move). A `manual:` id
+        # that is not a typed-in add is a receipt attached to a charge by
+        # hand; it belongs to that charge, not to a month, so it is never
+        # offered. `month_batch` (the route's lookup) names the batch the
+        # move would join; absent when the move would create the month.
+        move_to = month_move_for_row(
+            r, period=period, is_trip=is_trip_batch(run),
+            date_is_human=(
+                "date" in field_overrides.get(r.document_id, {})
+                or r.document_id in manual_add_ids
+            ),
+        )
+        if move_to is not None and (
+            not r.document_id.startswith("manual:")
+            or r.document_id in manual_add_ids
+        ):
+            from .intake_mail import _month_human
+
+            offer = {"month": move_to, "label": _month_human(move_to)}
+            joins = month_batch(move_to) if month_batch is not None else None
+            if joins:
+                offer["batch_id"] = joins
+            expenses[-1]["month_move"] = offer
+        # Item 77 amendment: what the receipt prints beside its date and its
+        # labelled numbers. Absent when not read (every receipt read before
+        # the fields existed), never null.
+        for key, value in (
+            ("time", r.detected_time),
+            ("invoice_number", r.invoice_number),
+            ("receipt_number", r.receipt_number),
+        ):
+            if value:
+                expenses[-1][key] = value
 
     # Category-variance chip (backlog item 8): a vendor whose receipts in
     # THIS batch carry different (non-null) posting categories gets flagged
@@ -6101,6 +6139,8 @@ def build_expense_view(
         summary["n_roster_mismatch"] = sum(
             1 for e in expenses if e.get("roster_mismatch")
         )
+    # Item 77: rows whose typed date belongs to another month.
+    summary["n_month_moves"] = sum(1 for e in expenses if e.get("month_move"))
     # Item 68: how many expenses have a receipt PAGE in the built report.
     # ABSENT while any row's verdict is still unknown, rather than present
     # and quietly short by the rows nobody has decided yet — an undercount
@@ -10688,3 +10728,249 @@ def _candidate_date_gap(tx: "Transaction", receipt: "Receipt | None") -> dict:
         return {}
     gap = (tx.transaction_date - receipt.detected_date).days
     return {"date_gap_days": gap, "date_gap_zone": date_gap_zone(gap)}
+
+
+# ── Item 77: a corrected date moves the receipt to its month ─────────────
+# A misread date misfiles a receipt: the drop routes a file by the month
+# printed on it, so a 4 July slip read as a January date created a January
+# month and landed there. Correcting the date did not move it, because a typed
+# date is believed (item 25's release valve) and nothing else looks at where
+# the row lives. So the grid OFFERS the move (`expenses[].month_move`) on a
+# row whose reviewer-typed date falls outside the batch's window, and one POST
+# carries it out: the receipt joins its own month (created when absent, the
+# way a drop creates one) with its reading and every edit, and leaves this
+# one as a soft delete that names where it went.
+
+
+def month_move_for_row(
+    r: Receipt,
+    *,
+    period: tuple[date, date] | None,
+    date_is_human: bool,
+    is_trip: bool,
+) -> str | None:
+    """The "YYYY-MM" this row belongs in, or None when it belongs here.
+
+    Only a date the reviewer typed (or a whole expense entered by hand) can
+    move a row: a machine reading outside the window is item 25's
+    `date_outside_period` question, and moving on a reading the guard does
+    not trust would file the receipt by the same mistake twice. A trip spans
+    months freely, and a batch with no knowable month has no window to be
+    outside of."""
+    if is_trip or not date_is_human or r.detected_date is None:
+        return None
+    if not outside_period(r.detected_date, period):
+        return None
+    return f"{r.detected_date.year:04d}-{r.detected_date.month:02d}"
+
+
+def _month_move_source(store: RunStore, run: RunRow, document_id: str):
+    """(receipt, manual_payload) for a live expense of `run`, else raises.
+
+    A file-backed receipt comes from the extraction BASELINE, never the
+    baked pool: a statement month bakes the reviewer's edits into its
+    receipts, and the move carries those edits separately, so carrying the
+    baked copy too would apply them twice and make them unclearable."""
+    edits = store.get_expense_edits(run.run_id)
+    if any(
+        e["document_id"] == document_id and e["op"] == "delete" for e in edits
+    ):
+        raise RunInputError("This expense was already removed from this month.")
+    if document_id.startswith("manual:"):
+        add = next(
+            (e for e in edits
+             if e["document_id"] == document_id and e["op"] == "add"),
+            None,
+        )
+        if add is None:
+            raise RunInputError("unknown expense")
+        return None, dict(add.get("payload") or {})
+    rec = next(
+        (r for r in baseline_receipts(run) if r.document_id == document_id),
+        None,
+    )
+    if rec is None:
+        raise RunInputError("unknown expense")
+    return rec, None
+
+
+def move_expense_to_month(
+    store: RunStore,
+    run: RunRow,
+    document_id: str,
+    month: str,
+    now_iso: str,
+    *,
+    data_root: Path,
+    learning_db_path: Path | None = None,
+) -> dict:
+    """Move one expense of a company month into the month `month` names.
+
+    The target is the batch month routing would pick for that month
+    (`_open_batch_for_month`), created empty when there is none, under the
+    same materialize lock the drop and the mail intake hold, so a month
+    cannot be created twice. The receipt keeps its reading (no model call),
+    its file (copied; the source keeps its bytes), its header and category
+    edits and its intake provenance. Identical bytes already in the target
+    are not added twice: the target's own row stands and only the source
+    row goes. The source row becomes a soft delete whose payload names the
+    target, and its claims are released. Both months re-match afterwards,
+    outside the batch lock, exactly as any other edit does.
+    """
+    from .intake_mail import (
+        _MATERIALIZE_LOCK, _month_human, _open_batch_for_month, _ym,
+    )
+
+    ym = _ym(month)
+    if ym is None:
+        raise RunInputError('month must be "YYYY-MM"')
+    if run_mode(run) != MODE_EXPENSE_GENERATION:
+        raise RunInputError("not an expense batch")
+    if is_trip_batch(run):
+        raise RunInputError(
+            "A trip spans months; its receipts are not filed by month."
+        )
+    if month_from_label(run.label) == ym:
+        raise RunInputError(f"This expense is already in {_month_human(month)}.")
+    _month_move_source(store, run, document_id)  # fail before creating a month
+
+    created = False
+    with _MATERIALIZE_LOCK:
+        target = _open_batch_for_month(store, ym)
+        if target is None:
+            prepared = create_expense_batch(
+                Path(data_root),
+                files=[],
+                legal_entity="",
+                label=_month_human(month),
+                now_iso=now_iso,
+                operator=None,
+                learning_db_path=learning_db_path,
+                settings=store.get_settings(),
+                created_by="move",
+                allow_empty=True,
+            )
+            target = store.get_run(execute_expense_batch(store, prepared))
+            created = True
+    if target is None:
+        raise RunInputError(f"{_month_human(month)} could not be opened.")
+    if target.run_id == run.run_id:
+        raise RunInputError(f"This expense is already in {_month_human(month)}.")
+
+    with _BATCH_ADD_LOCK:
+        source = store.get_run(run.run_id)
+        target = store.get_run(target.run_id)
+        if source is None or target is None:
+            raise RunInputError("This batch no longer exists (it was deleted).")
+        rec, manual = _month_move_source(store, source, document_id)
+        field_ov = dict(
+            store.get_expense_field_overrides(source.run_id).get(document_id)
+            or {}
+        )
+        cat_ov = {
+            line: ov
+            for (doc, line), ov in store.get_category_overrides(
+                source.run_id
+            ).items()
+            if doc == document_id
+        }
+        already_there = False
+        if manual is not None:
+            new_doc = f"manual:{uuid.uuid4().hex[:12]}"
+            store.set_expense_edit(target.run_id, new_doc, "add", manual, now_iso)
+        else:
+            src_file = Path(source.work_dir) / "receipts" / document_id
+            if not src_file.is_file():
+                raise RunInputError(
+                    f"{_display_name(document_id)} is no longer on disk."
+                )
+            data = src_file.read_bytes()
+            digest = hashlib.sha1(data).hexdigest()[:16]
+            t_snapshot = dict(target.snapshot or {})
+            _, t_receipts, t_outcome, _ = snapshot_from_dict(t_snapshot)
+            t_dir = Path(target.work_dir) / "receipts"
+            t_dir.mkdir(parents=True, exist_ok=True)
+            same = next(
+                (
+                    r.document_id for r in t_receipts
+                    if (t_dir / r.document_id).is_file()
+                    and hashlib.sha1(
+                        (t_dir / r.document_id).read_bytes()
+                    ).hexdigest()[:16] == digest
+                ),
+                None,
+            )
+            if same is not None:
+                new_doc, already_there = same, True
+            else:
+                n_index = 0
+                for p in t_dir.iterdir():
+                    m = re.match(r"^(\d{4})__", p.name)
+                    if m:
+                        n_index = max(n_index, int(m.group(1)) + 1)
+                display = _display_name(document_id)
+                fs_name = re.sub(r"[^A-Za-z0-9._-]", "_", display) or "receipt"
+                new_doc = f"{n_index:04d}__{fs_name}"
+                (t_dir / new_doc).write_bytes(data)
+                pool = t_receipts + [replace(rec, document_id=new_doc)]
+                t_outcome.unmatched_receipts.append(new_doc)
+                t_snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
+                t_snapshot["outcome"] = outcome_to_dict(t_outcome)
+                provenance = (
+                    (source.snapshot or {}).get("intake_provenance") or {}
+                ).get(document_id)
+                if provenance:
+                    t_snapshot["intake_provenance"] = {
+                        **(t_snapshot.get("intake_provenance") or {}),
+                        new_doc: provenance,
+                    }
+                store.update_run_snapshot(target.run_id, t_snapshot)
+                n_cat, n_uncat = categorized_counts(pool)
+                store.update_run_summary(target.run_id, {
+                    **(target.summary or {}),
+                    "n_expenses": len(pool),
+                    "n_receipts": len(pool),
+                    "n_categorized": n_cat,
+                    "n_uncategorized": n_uncat,
+                })
+        if not already_there:
+            for field, value in field_ov.items():
+                store.set_expense_field_override(
+                    target.run_id, new_doc, field, value, now_iso
+                )
+            for line, ov in cat_ov.items():
+                store.set_category_override(
+                    target.run_id, new_doc, line,
+                    ov.get("category"), ov.get("zoho_account"), now_iso,
+                )
+        store.set_expense_edit(
+            source.run_id, document_id, "delete",
+            {"moved_to": target.run_id, "month": month, "document_id": new_doc},
+            now_iso,
+        )
+        store.delete_claims_for_receipt(source.run_id, document_id)
+        remaining = len(apply_expense_edits(
+            baseline_receipts(source),
+            store.get_expense_field_overrides(source.run_id),
+            store.get_expense_edits(source.run_id),
+        ))
+
+    out: dict = {
+        "ok": True,
+        "document_id": new_doc,
+        "batch_id": target.run_id,
+        "label": target.label,
+        "month": month,
+        "created_batch": created,
+        "already_in_batch": already_there,
+        "source": {"batch_id": source.run_id, "n_expenses": remaining},
+    }
+    for key, run_id in (("source_rematch", source.run_id),
+                        ("rematch", target.run_id)):
+        rematch = rematch_after_change(
+            store, run_id, learning_db_path=learning_db_path,
+            trigger="month_move",
+        )
+        if rematch is not None:
+            out[key] = rematch
+    return out
