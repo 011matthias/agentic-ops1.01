@@ -45,6 +45,13 @@ The six assets `index.html` names are NOT the bundle: the renderers live in
 chunks reached only by dynamic import, and grepping those six alone reports
 every recent prompt as missing.
 
+**Re-audited 2026-09-16 after the owner pasted and published month-edits
+(item 70) and card-chips (item 71): both applied, the Not-applied table is
+empty again.** Bundle: 49 chunks, 1,015 KB, all five controls hit, all six
+decisive keys present. Then driven in a browser, cold from the login gate at
+1440x900 (bundle presence alone is not the verification). Evidence is in each
+row below.
+
 Two display strings misread on the 2026-09-01 pass, both resolved by reading
 the surrounding key: `"Not a duplicate"` is `wb.dups.notDup` from the workbench
 duplicates panel, which predates `lovable-duplicates-prompt.md` and is not
@@ -111,9 +118,11 @@ missing.
 | `lovable-workbench-filter-sort-prompt.md` | the amount parse (`[^0-9.-]`) and `sort=` in the query string are present. The prompt asks for a browser drive and none has been run, so treat the row order as unverified (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
 | `lovable-failure-probe-prompt.md` | `/api/client-errors` + `seconds_ago`, both halves present. Item 50's SPA half is shipped; the probe is silent by design, so nothing on screen confirms it (bundle audit 2026-09-15 evening, 48 chunks / 1,012 KB) |
 | `lovable-settled-outside-prompt.md` (item 62) | `n_settled_outside` (x1), `suggested_settled_outside` (x1), `/settled-outside` (x2), `wb.settledOutside` (x29) (bundle audit 2026-09-15 after the owner's 13:41-13:47 UTC publish, 49 chunks / 1,009 KB, the five controls found) |
-| `lovable-view-receipt-prompt.md` (item 52) | `receipt.view.failed` (x4), `application/pdf` (x3), same audit. **Browser-driven 2026-09-15:** on August's workbench `/runs/074a7b8905d7` a click opened the dialog "Receipt · SARL TRAIN'S · 32.00 EUR" with the PDF rendered in an `<iframe>` from a `blob:` URL. On Review expenses of a statement month the button is still unusable: the grid's `<fieldset disabled={hasStatement}>` disables it (31 of 31 buttons inside a disabled fieldset on August); `lovable-month-edits-prompt.md` (item 70) lifts that lock |
+| `lovable-view-receipt-prompt.md` (item 52) | `receipt.view.failed` (x4), `application/pdf` (x3), same audit. **Browser-driven 2026-09-15:** on August's workbench `/runs/074a7b8905d7` a click opened the dialog "Receipt · SARL TRAIN'S · 32.00 EUR" with the PDF rendered in an `<iframe>` from a `blob:` URL. On Review expenses of a statement month the button is still unusable: the grid's `<fieldset disabled={hasStatement}>` disables it (31 of 31 buttons inside a disabled fieldset on August); `lovable-month-edits-prompt.md` (item 70) lifts that lock. **Browser-driven 2026-09-16 after that publish:** on August's Review expenses a View receipt click fired `GET .../receipts/0000__rendered-body.pdf/image` 200 and opened "Receipt · rendered-body.pdf" in an `<iframe>` on a `blob:` URL. Usable on both pages now |
 | `lovable-brisken-domain-prompt.md` half 2 (API base URL) | `api.expenses.brisken.com` (x1) AND `brisken-expense-recon.fly.dev` (x0), same audit |
-| `lovable-workbench-filter-sort-prompt.md`, the row order | **Browser drive 2026-09-15 FAILED on the counts:** every Card option reads the total (July: "112" on all nine cards, including the five with 0 charges), because `countWith(patch, skip)` skips the dimension it just patched. Fix carried by `lovable-card-chips-prompt.md` section 1 |
+| `lovable-workbench-filter-sort-prompt.md`, the row order | **Browser drive 2026-09-15 FAILED on the counts:** every Card option reads the total (July: "112" on all nine cards, including the five with 0 charges), because `countWith(patch, skip)` skips the dimension it just patched. Fix carried by `lovable-card-chips-prompt.md` section 1. **Fixed, driven 2026-09-16:** chips count per option, and clicking `3645 · 27` leaves "27 of 112 charges" |
+| `lovable-month-edits-prompt.md` (item 70) | `posting_category_proposed` (x1, `chunk-runs._runId`), `wb.category.proposedNote` + `expx.review.toast.rematchFailed` (i18n), bundle audit 2026-09-16. **Browser-driven 2026-09-16:** August Review expenses renders 0 disabled fieldsets and 0 of 412 buttons disabled; the proposed-category note shows 7 times on July's workbench, matching the 7 rows the API flags `posting_category_proposed`. Edit round-trip on a statement month: tax label on `0025__Invoice-H0LHY2WQ-0032.pdf` set to `TEST-0916` (PUT 200, the call that used to 400), survived a full reload, cleared, reload shows the empty placeholder; August counts identical before and after (8 / 2 / 100 / 1, READY 10). NOT verified: the §3 re-match-failure toast, which needs a re-match to genuinely fail |
+| `lovable-card-chips-prompt.md` (item 71) | `wb.filter.card.empty`, `cov.attn.receiptsNoCharges`, `expx.cards.strip.summary.choose` (i18n), bundle audit 2026-09-16. **Browser-driven 2026-09-16, the prompt's four checks:** (1) July has no coverage table on top, one statement line, chips `3876 · 48`, `2838 · 36`, `3645 · 27`, `0340 · 1`, `+ 5 cards with nothing this month`, no banner; 3645 active shows "Credit Card Chase Visa - 3645 · Dirk Neumann - Corp Services · Corporate Services · 3 matched · 0 need a look · 24 no receipt · USD 1,054.48". (2) August banner lists 1176 (Consulting) 4 receipts and 9693 (Cloud Services) 2 receipts; buckets 2 / 100 / 8 / 1. The prompt predicted 2 receipts and 3 / 96 / 11 / 1: those numbers predate the round A and B re-matches, the live data moved. (3) August strip collapsed to "8 receipts not matched to a company card · 8 look private · Review". (4) July's first charge row sits at 963px against a 945px viewport with "How this works" expanded (126px), so it clears the fold only with that block collapsed; was 1.7 screen heights |
 
 These four were drafted 2026-08-28/29, pasted from chat, and lived only in a
 gitignored scratch directory until 2026-09-01. They are in `docs/` now
@@ -122,10 +131,7 @@ and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
-| Prompt | Decisive field names | Gate |
-|---|---|---|
-| `lovable-month-edits-prompt.md` (2026-09-15, item 70: edits on a statement month, whole-receipt reclassify, proposed category on a review row) | some chunk reads `posting_category_proposed` and `rematch`; the i18n chunk carries `wb.category.proposedNote` and `expx.review.toast.rematchFailed`; `ExpensesReviewGrid` no longer renders `fieldset disabled={hasStatement}`; the Reclassify POST body carries no `line_index` | Backend on branch `client/brisken/p1-month-edits`; paste only after it deploys, or the unlocked grid meets the old 400 |
-| `lovable-card-chips-prompt.md` (2026-09-15, item 71: the card list leaves the top of the month; card chips in the filter bar, one attention banner, collapsed card-review strip, the filter-count fix) | `wb.filter.card.empty`, `cov.attn.receiptsNoCharges`, `expx.cards.strip.summary.choose` | No backend gate. **Browser-drive to verify** with the four checks at the end of the prompt (chip counts on July, the 1176 / 9693 banner on August, the collapsed strip, the first charge row on screen one) |
+None as of the 2026-09-16 re-audit.
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.

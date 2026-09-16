@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-15
+updated: 2026-09-16
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -3255,6 +3255,13 @@ inheritance at read time (3 export tests; the workbench posting test), the
 PUT store keeping the old account, and the manual add not rebuilt. SPA half
 `docs/lovable-month-edits-prompt.md` (owner applies).
 
+**Closed 2026-09-16.** Backend shipped PR #870, Fly v129. The SPA half was
+published and driven live: August's Review expenses has no disabled control
+left, View receipt opens there, and a tax-label edit on a statement month
+(`0025__Invoice-H0LHY2WQ-0032.pdf`, `TEST-0916`, reverted) answered 200 and
+survived a full reload. Evidence row in `PROMPT-STATUS.md`. Found on the way,
+recorded as item 78: a category cannot be cleared once set.
+
 ### 71. The card list at the top of a month buries the work (owner, 2026-09-15; SPA prompt written)
 
 **Owner:** "the card list at the start of a month's page makes everything
@@ -3301,6 +3308,10 @@ payloads first. Prompt: `docs/lovable-card-chips-prompt.md` (PROMPT-STATUS,
 Not applied), with four browser checks to run after the publish. Optional
 backend nicety, not built: a per-card receipt count on `coverage[]` would
 spare the workbench the batch fetch the banner needs.
+
+**Closed 2026-09-16.** Published and driven live; all four checks pass (the
+evidence row is in `PROMPT-STATUS.md`). One residue for item 79: July's first
+charge row is 18px under a 945px fold while "How this works" is expanded.
 
 ### 72. `rematch_month` persists the raw outcome while the view shows the effective one (2026-09-15, found by the round-A review)
 
@@ -3558,6 +3569,43 @@ Worth stating when this ships: confirmation buys less than it looks like today.
 clean rows already flow to the Zoho journal; the sign-off gates only the "Ready
 to post?" tile.
 
+**Owner rulings 2026-09-16:** work items 73-77 as one wave in order, 76 first,
+each shipped and deployed on its own; auto-confirm is **exact pairs only**.
+Do not re-ask either.
+
+**Measured 2026-09-16 on the live API, before any build.** The build as
+written above no longer matches the data, so read this first:
+
+- **The precondition is met.** Round B landed, and `requires_review` is false
+  on every reconciled row on both months (July 0 of 31, August 0 of 8). The
+  last bullet above (move PROBABLE/POSSIBLE out of Reconciled) has nothing
+  left to move today; keep a test that pins it.
+- **The ceremony is 13 rows, not 223.** `n_undecided` counts pending rows in
+  reconciled or review that are not posted: July 3 (28 of its 31 reconciled
+  rows are already posted and block nothing, `review.state: none`), August 10.
+- **"Exact pairs only", read literally, auto-confirms 6 of the 13 and one of
+  the six is this item's own bug.** Literal rule: chosen candidate
+  `match_type: exact`, `requires_review: false`, single candidate,
+  `review.state: ready`. July qualifies WEB*NETWORKSOLUTIONS 7.98 (vendor_pct
+  46), ELEVENLABS.IO 5.00 (75), ANTHROPIC 50.54 (100); August LOVABLE 15.00,
+  LOVABLE 25.00, ANTHROPIC 51.38 (all 100). The 46 is mechanism 1 above: an
+  exact pair on amount and date with the vendor disagreeing.
+- **Working rule, therefore: the literal rule plus vendor agreement.** That is
+  the faithful reading of the ruling, since the item's first finding is that
+  vendor-blind EXACT is wrong. Cost: July clears 2 of 3 instead of 3 of 3.
+  The owner can drop the floor to clear July fully; the threshold (75 vs 80)
+  is still to set against the six rows above.
+- **The labelling half is probably the larger win.** `rows[].status` is
+  `pending` on all 223 live rows, so posted work prints "Awaiting decision" as
+  loudly as the 13 rows that are the reviewer's turn. That half changes no
+  sign-off and should ship regardless of the auto-confirm threshold.
+- `ready_confirm_pairs` (`web/service.py`) is the existing selection to build
+  on, but `review.state == "ready"` is a CATEGORY verdict
+  (`_matched_category_review`), not a match-quality verdict, so the match
+  test has to be added beside it, not assumed from it.
+- Sequencing: item 79 (the month page restructure) is an IA change that sits
+  under 73-77; settle its order before building this.
+
 ### 77. Dates read in the source locale, and a corrected date moves the receipt (note #34)
 
 **Criss, 2026-09-10, batch `4ceaeb461386`, anchored on `2026-01-04`:** "A leitura
@@ -3592,6 +3640,38 @@ Two defects, and the second is the expensive one:
 Item 27 noted that better year reading makes this class harder to see, not
 easier: an error that used to land in 2023 and trip the guard now lands in the
 right month. That trade is now real rather than predicted.
+
+### 78. A category cannot be cleared once set (found 2026-09-16, driving item 70)
+
+The category dropdown on Review expenses offers the eight categories and no
+blank option, so a row that has a category can be recategorized but never put
+back to "Pick a category". Found when a reversible edit test on August's
+uncategorized `0025__Invoice-H0LHY2WQ-0032.pdf` had to move to the tax-label
+field instead. Three August rows are uncategorized today (Pressmaster FZCO
+135.00, two Lovable Labs 50.00 copies), so a mis-click on any of them is
+permanent from the UI. Check first whether the field PUT already accepts an
+empty category (then this is SPA only, one Lovable line: a "Clear category"
+option), and how a cleared category interacts with the item-70 account rule
+and with learned memory.
+
+### 79. A month's page is structured by what the reviewer is looking at (owner direction 2026-09-16)
+
+**Owner, verbatim:** "A month's page needs to be structured differently. A user
+needs overview and visibility of the following: 1) the expenses that were
+created just with receipts; 2) (if a statement has been attached) a separate
+overview of the transaction-expense matching. The transactionless receipts,
+receiptless transactions, needs-review, refund should all be ordered in their
+respective overview pages."
+
+Today the four classes share one workbench page as sections plus a side list:
+transactionless receipts = UNMATCHED RECEIPTS (and all of Review expenses on a
+month with no statement), receiptless transactions = Unmatched, needs review =
+Needs review, refund = Refund. Planning only so far; the self-contained
+planning prompt was handed to the owner on 2026-09-16 (walkthrough first in
+plain language, technical appendix second, owner decisions as questions). It
+is an information-architecture change underneath items 73-77, so the first
+decision is whether it ships before that wave or after it. Nothing built, no
+Lovable prompt in `docs/`.
 
 ## Related but tracked elsewhere (do not duplicate here)
 
