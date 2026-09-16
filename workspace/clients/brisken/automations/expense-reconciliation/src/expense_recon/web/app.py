@@ -112,7 +112,6 @@ from .service import (
     build_memory_view,
     build_view,
     bulk_decisions,
-    commit_to_memory,
     compare_runs,
     batch_type,
     claim_trip_batch_slot,
@@ -159,6 +158,11 @@ from .service import (  # item 70
     EXPENSE_MATCH_FIELDS,
     category_edit_account,
     category_edit_receipt,
+)
+from .service import (  # item 88
+    MEMORY_TRIGGER_BUTTON,
+    MEMORY_TRIGGER_PUBLISH,
+    commit_month_memory,
 )
 from ..matching.types import EXPENSE_CATEGORIES
 from ..cost_centers import (
@@ -1226,7 +1230,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     run.intake_id, INTAKE_READY,
                     run_id=run_id, updated_at=_now_iso(),
                 )
-        return JSONResponse({"ok": True, "run_id": run_id, "published": True})
+            # Item 88 (owner ruling 2026-09-16): publishing is the month's
+            # sign-off, and it saves the month's corrections to memory. The
+            # month is published either way; a failed save is logged and
+            # named in the reply, never swallowed and never a failed publish.
+            try:
+                memory = commit_month_memory(
+                    store, run, app.state.learning_db_path, _now_iso(),
+                    trigger=MEMORY_TRIGGER_PUBLISH, only_if_changed=True,
+                )
+            except Exception as exc:  # noqa: BLE001 - publish must not fail on memory
+                log.exception("publish %s: saving corrections to memory failed", run_id)
+                memory = {"saved": False, "error": str(exc)[:200]}
+        return JSONResponse({
+            "ok": True, "run_id": run_id, "published": True, "memory": memory,
+        })
 
     @app.post("/api/runs/{run_id}/unpublish")
     def unpublish_run(run_id: str):
@@ -3999,17 +4017,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-            field_overrides = store.get_expense_field_overrides(run_id)
-            edits = store.get_expense_edits(run_id)
             # Passing the open store lets the expense branch upsert the same
             # vendor / category edits into settings["merchants"] (2026-07-29,
-            # self-improving registry) in the same transaction context.
-            learned = commit_to_memory(
-                run, decisions, overrides, app.state.learning_db_path, _now_iso(),
-                field_overrides=field_overrides, edits=edits, settings_store=store,
-            )
+            # self-improving registry) in the same transaction context. Item
+            # 88: the same helper Publish uses, which records the save so a
+            # Publish right after it does not teach the same corrections twice.
+            learned = commit_month_memory(
+                store, run, app.state.learning_db_path, _now_iso(),
+                trigger=MEMORY_TRIGGER_BUTTON, only_if_changed=False,
+            )["learned"]
         return JSONResponse({"ok": True, "learned": learned})
 
     @app.get("/runs/{run_id}/report.xlsx")

@@ -11505,3 +11505,75 @@ def expense_boxes(
         "receipts_unrenderable": render_failed,
     }
     return [box for box in EXPENSE_BOXES if member[box]]
+
+
+# ── A month's corrections are saved to memory at sign-off (item 88) ─────
+# Owner ruling 2026-09-16: save a month's corrections to memory automatically
+# at month sign-off, with the Memory page as the undo. `commit_to_memory` had
+# one caller, the "Save corrections to memory" button, and the live store held
+# 0 learned entities and 0 field corrections: the button was never pressed.
+# The app's sign-off is Publish ("Open a run, resolve every row, then hit
+# Publish"), so publishing saves. Accepted trade-off (same ruling): a one-off
+# exception becomes a rule until someone deletes it on the Memory page.
+
+MEMORY_TRIGGER_BUTTON = "button"
+MEMORY_TRIGGER_PUBLISH = "publish"
+
+
+def memory_commit_digest(
+    decisions: dict,
+    overrides: dict,
+    field_overrides: dict,
+    edits: list[dict],
+) -> str:
+    """A digest of everything `commit_to_memory` can learn from on one run:
+    each decision's verdict and receipt, category overrides, header field
+    edits, whole-expense adds and deletes. Timestamps are left out, so
+    re-clicking a verdict that did not change changes nothing."""
+    payload = {
+        "decisions": sorted(
+            (tx, d.status, d.chosen_document_id or "")
+            for tx, d in (decisions or {}).items()
+        ),
+        "overrides": sorted(
+            (f"{doc}|{line}", json.dumps(v, sort_keys=True, default=str))
+            for (doc, line), v in (overrides or {}).items()
+        ),
+        "field_overrides": json.dumps(field_overrides or {}, sort_keys=True, default=str),
+        "edits": json.dumps(edits or [], sort_keys=True, default=str),
+    }
+    blob = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(blob).hexdigest()
+
+
+def commit_month_memory(
+    store: RunStore,
+    run: RunRow,
+    learning_db_path: Path,
+    now_iso: str,
+    *,
+    trigger: str,
+    only_if_changed: bool,
+) -> dict:
+    """Save one run's corrections to memory and record the save.
+
+    `{"saved": True, "learned": {...}}` after a save. With
+    `only_if_changed` (the publish path), `{"saved": False, "reason":
+    "unchanged"}` when the run's corrections are exactly what was last saved,
+    so publishing, unpublishing and publishing again does not count the same
+    corrections twice in the Memory page's counts. The button always saves."""
+    decisions = store.get_decisions(run.run_id)
+    overrides = store.get_category_overrides(run.run_id)
+    field_overrides = store.get_expense_field_overrides(run.run_id)
+    edits = store.get_expense_edits(run.run_id)
+    digest = memory_commit_digest(decisions, overrides, field_overrides, edits)
+    if only_if_changed:
+        last = store.get_memory_commit(run.run_id)
+        if last is not None and last["digest"] == digest:
+            return {"saved": False, "reason": "unchanged"}
+    learned = commit_to_memory(
+        run, decisions, overrides, learning_db_path, now_iso,
+        field_overrides=field_overrides, edits=edits, settings_store=store,
+    )
+    store.set_memory_commit(run.run_id, digest, now_iso, trigger)
+    return {"saved": True, "learned": learned}

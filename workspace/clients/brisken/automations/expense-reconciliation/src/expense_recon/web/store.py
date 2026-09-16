@@ -384,6 +384,12 @@ class RunStore:
                 uptime_s REAL NOT NULL,
                 process_predates_failure INTEGER
             );
+            CREATE TABLE IF NOT EXISTS memory_commits (
+                run_id       TEXT PRIMARY KEY,
+                digest       TEXT NOT NULL,
+                committed_at TEXT NOT NULL,
+                trigger      TEXT NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_client_errors_ts
                 ON client_errors (received_ts);
             CREATE INDEX IF NOT EXISTS idx_login_failures_ts
@@ -573,6 +579,10 @@ class RunStore:
         self.conn.execute(
             "DELETE FROM duplicate_resolutions WHERE run_id = ?", (run_id,)
         )
+        # Item 88: what was saved to memory for the run. The learned rows
+        # themselves stay (deleting a month never unlearns; the Memory page
+        # is the undo), only the record of the save goes.
+        self.conn.execute("DELETE FROM memory_commits WHERE run_id = ?", (run_id,))
         self.conn.execute(
             "DELETE FROM expense_field_overrides WHERE run_id = ?", (run_id,)
         )
@@ -1203,6 +1213,33 @@ class RunStore:
             (run_id,) * len(self._EDIT_TABLES),
         ).fetchone()
         return row["at"] if row and row["at"] else None
+
+    # -- memory_commits (item 88) -------------------------------------------
+
+    def get_memory_commit(self, run_id: str) -> dict | None:
+        """The last time this run's corrections were saved to memory:
+        `{digest, committed_at, trigger}`, or None when they never were."""
+        row = self.conn.execute(
+            "SELECT digest, committed_at, trigger FROM memory_commits "
+            "WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def set_memory_commit(
+        self, run_id: str, digest: str, committed_at: str, trigger: str
+    ) -> None:
+        """Record what was saved to memory, and by which trigger (`button` /
+        `publish`). Its own table because the run summary is rebuilt by
+        every re-match, which would forget the record."""
+        self.conn.execute(
+            "INSERT INTO memory_commits (run_id, digest, committed_at, trigger) "
+            "VALUES (?, ?, ?, ?) ON CONFLICT(run_id) DO UPDATE SET "
+            "digest = excluded.digest, committed_at = excluded.committed_at, "
+            "trigger = excluded.trigger",
+            (run_id, digest, committed_at, trigger),
+        )
+        self.conn.commit()
 
     # -- settings (§16 export policy; one row, id=1) -----------------------
 
