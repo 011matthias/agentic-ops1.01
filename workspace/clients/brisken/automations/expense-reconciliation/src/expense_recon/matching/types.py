@@ -320,6 +320,14 @@ class Receipt:
     detected_tax: Decimal | None = None
     tax_label: str | None = None
 
+    # Item 77 amendment (2026-09-16): printed time of day (HH:MM, 24-hour) and
+    # the two labelled document numbers, read off the receipt. None for every
+    # source that does not read the receipt, and for receipts read before the
+    # fields existed. Never a matcher input: the statement has no time.
+    detected_time: str | None = None
+    invoice_number: str | None = None
+    receipt_number: str | None = None
+
     # Merchant registry (2026-07-29): the short storefront brand for
     # `detected_vendor` with legal suffixes / distributor tails stripped
     # ("COMERCIO DE X LTDA" -> "X"). Populated by the vision extractor

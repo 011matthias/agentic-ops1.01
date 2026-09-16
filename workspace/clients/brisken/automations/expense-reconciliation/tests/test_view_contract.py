@@ -1004,3 +1004,58 @@ def test_every_run_row_carries_a_row_type_and_an_entity_source(payloads):
         assert row["entity_source"] in ("card", "batch", "none"), row
         if row["effective_bucket"] == "refund":
             assert row["row_type"] in ("payment", "refund", "reversal"), row
+
+
+def test_month_move_and_printed_identifiers_are_absent_or_typed(
+    tmp_path, monkeypatch, payloads
+):
+    """Item 77. `expenses[].month_move` is an object `{month, label,
+    batch_id?}` on a row whose typed date belongs to another month, and
+    ABSENT on every other row, never null; `time`, `invoice_number` and
+    `receipt_number` are strings when the receipt printed them and absent
+    otherwise. `summary.n_month_moves` is an int on every expense payload.
+
+    The module fixtures carry no offer and no identifier, so they pin the
+    absent half; a January month with a slip whose date is typed into April
+    pins the present half."""
+    import re
+
+    for view in payloads["expense_batch"]:
+        assert isinstance(view["summary"]["n_month_moves"], int), view["summary"]
+        for expense in view["expenses"]:
+            for key in ("month_move", "time", "invoice_number", "receipt_number"):
+                assert expense.get(key, "absent") is not None, (key, expense)
+
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    mock = MockLLMClient(extraction_responses=[_extraction(
+        date="2026-01-15", time="23:56", invoice_number="HMVWDWIL-0029",
+        receipt_number="2247-1655-6392",
+    )])
+    monkeypatch.setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
+    app = create_app(tmp_path)
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/expense-batches", data={"legal_entity": "", "label": "January 2026"},
+        ).json()
+        batch_id = created["batch_id"]
+        job = client.post(
+            f"/api/expense-batches/{batch_id}/receipts",
+            files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
+        ).json()
+        assert client.get(f"/jobs/{job['job_id']}").json()["status"] == "done"
+        assert client.put(
+            f"/api/runs/{batch_id}/expenses/0000__a.jpg",
+            json={"field": "date", "value": "2026-04-15"},
+        ).status_code == 200
+        view = client.get(f"/api/expense-batches/{batch_id}").json()
+
+    (row,) = view["expenses"]
+    offer = row["month_move"]
+    assert set(offer) == {"month", "label"}, offer  # no April batch to join yet
+    assert re.fullmatch(r"20\d{2}-(0[1-9]|1[0-2])", offer["month"])
+    assert isinstance(offer["label"], str) and offer["label"]
+    assert view["summary"]["n_month_moves"] == 1
+    assert row["time"] == "23:56"
+    assert isinstance(row["invoice_number"], str)
+    assert isinstance(row["receipt_number"], str)

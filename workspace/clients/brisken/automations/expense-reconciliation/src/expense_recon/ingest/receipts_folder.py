@@ -208,6 +208,9 @@ def _to_receipt(
         detected_vendor=extraction.vendor,
         vendor_clean=extraction.vendor_clean or clean_vendor_name(extraction.vendor),
         detected_reference=extraction.reference,
+        detected_time=extraction.time,
+        invoice_number=extraction.invoice_number,
+        receipt_number=extraction.receipt_number,
         detected_tax=_parse_decimal_lenient(extraction.tax),
         tax_label=extraction.tax_label,
         # Folder OCR has no ER "payment_mode"; the receipt's own card/tender
