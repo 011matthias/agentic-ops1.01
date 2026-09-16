@@ -3392,7 +3392,7 @@ of 73-77 is unchanged. Owner rulings 2026-09-16 are recorded in items 80, 77 and
 
 **2026-09-16 evening: notes #47-51 read (the store now holds 51), plus #33 which
 no item had cited.** All five new notes are Matthias on July, #48-51 on the
-Matching view between 18:08 and 18:16 UTC, after the item-79 views and the
+Matching view between 16:08 and 16:16 UTC (#47 at 13:45 UTC), after the item-79 views and the
 item 73/74/77/80/81 prompts were published. #47, #50 and #51 (controls that read
 as text) are item 85; #48 (what "posted in your workbook" means) is item 86; #49
 (a clean match still offers Reject / Confirm) amends item 76; #33 (a card that
