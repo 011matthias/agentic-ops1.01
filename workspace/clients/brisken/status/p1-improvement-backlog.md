@@ -282,7 +282,7 @@ Three constraints set the order, and every round is a consequence of one:
 | 3 | Backend-owned human strings + the download filename | **SHIPPED PR #881** |
 | 6a | Writeback column to "Posting account (tool)", old header read forever | **SHIPPED PR #881** |
 | 2 | Dead code + free internal renames (`read_journal_csv`, `_carry_zoho_account`, `zoho_account_for`, `ClassificationResult.zoho_account`, `LineVerdict.zoho_account`, `from_api`) | backend only |
-| 4 | Delete the journal artifact | **SPA-GATED**: prompt publishes, re-audit, THEN the backend PR |
+| 4 | Delete the journal artifact | **SPA-GATED**: prompt publishes, re-audit, THEN the backend PR. Prompt written 2026-09-16: `docs/lovable-journal-callers-prompt.md` (three callers: the workbench Downloads button, the `/classic` Published-runs button, the Settings `export_approved_only` card). Gate: `zoho.csv` 0 hits in every chunk (2 today) |
 | 5 | Rename `zoho_expense_export.py` + `EXPENSE_COLUMNS` to plain English | backend only, atomic |
 | 6b | The remaining pure-copy i18n strings | Lovable paste |
 | 7 | ADD the parallel fields (`posting_account` beside `zoho_account`), accept both on every write | backend only, additive |
@@ -3810,6 +3810,70 @@ review, refund, duplicates) shows open items as the work and moves decided ones
 an undo. Item 74(d)'s `state` / `decided_by` shape is the model. Items 80 and 81
 change single cells and do not depend on this item's order; if this item ships
 before 74, 74(d)'s SPA half goes into this item's duplicates page instead.
+
+**Planned and approved 2026-09-16; SPA prompt written, not pasted.** Grounded on
+the live API (July, August, September), a read-only browser drive of the
+published app, the backend code and SPA main `c9f30bf8b5`. What the drive found
+that the item text did not have:
+
+- The two pages are joined one way only: Review expenses links to the workbench,
+  the workbench links back to nothing but "Menu" and a "Dashboard" link to the
+  old upload form at `/`, and `/months` sends every statement month to `/runs`.
+  July's and August's Review expenses page is reachable only by URL.
+- `/runs/{id}` crashes ("This page didn't load") on every month without a
+  statement (September, June, May, January): the backend correctly serves the
+  expense payload there, and `RunWorkbench.tsx` reads `data.rows.length`
+  (FilterBar `totalRows`) and `data.unmatched_receipts.length` unguarded.
+- July has 85 of 112 charges posted in the workbook (49 unmatched, 28
+  reconciled, 7 review, 1 refund), rendered as open work, while the "Posted"
+  bucket chip reads 0 and cannot be turned back on once off.
+- The thirteen-tile bar pins 301 of 900 px; the workbench is 12,000 to 15,000 px
+  tall with every section stacked.
+- Six Category cells print `expx.review.badge.short.override; llm` and similar:
+  not a missing key (both key sets exist), `SourceBadge` keys on the
+  `"; "`-joined `posting_category.source`.
+
+**Decisions taken with the approved plan** (the recommendation on each owner
+question; reopen any by saying so): (1) two routes kept, one shared month strip
+with tabs Expenses / Matching on both; (2) `/months` link rule unchanged; (3) one
+view at a time; (4) the owner's order, receipts without a charge, charges
+without a receipt, needs review, credits, then Matched fifth; (5) decided rows
+stay in their view, folded, whole counts on the cards plus "N open"; (6) the tile
+bar retires into the cards, a status line and >0-only captions, match rate leaves
+the screen, only Menu and the strip stay sticky; (7) card 4 is "Credits on the
+statement" until item 73; (8) restructure first, not gated on 76, and 76 first
+in the wave per the owner ruling recorded under item 76; (9) no per-receipt
+match column on Expenses yet: a five-count line instead, the parallel
+`expenses[].reconciliation` field after 76; (10) item 23 round 4 as its own
+prompt; (11) two small backend fields alongside (below); (12) `/` and
+`/expenses` untouched here; (13) no "Confirm all ready" button before 76; (14)
+no Matching tab on a trip; (15) on a statement month, overview 1 is the whole
+Expenses view and its no-charge subset is card 1 of Matching.
+
+**The SPA half:** `automations/expense-reconciliation/docs/lovable-month-views-prompt.md`.
+It applies the design constraint above with today's fields: a copy set aside
+(`duplicate.is_extra`), a settled-outside receipt (`expenses[].settled_outside`),
+a posted row (`section === "posted"`) and a confirmed or already-posted row
+(`status`) fold into a collapsed record with the existing undo; a `rejected`
+row stays open. Duplicate groups with a `resolution` fold the same way,
+partitioned at render time only (the index pairing stays intact); when 74(d)
+ships `state`, its prompt swaps the test. **For item 76's session:** this prompt
+leaves `RowStatusBadge` and the Status cell untouched and says so, so write
+76's SPA half against the five cards (the Matched card's rows and the pill),
+not against today's bucket sections.
+
+**Backend alongside (not a gate for the prompt):** a real top-level
+`updated_at` on both payloads (the strip's "Last updated" is the creation date
+today: September reads Sep 07 while its last receipt arrived Sep 16), and
+`candidates[].held_by` widened to receipts held by a pending review row (August
+`6d474e9e8e964bd4`, ANTHROPIC 52.46, shows its candidate `0023` with no holder
+while `c632cb75a5098253` holds it; `n_charges_receipt_taken` reads 0). Built on
+`client/brisken/p1-updated-at-held-by`.
+
+**Open, and not blocking the paste:** PT wording of the new keys (Criss's read
+is the check); whether "ordered in their respective overview pages" meant the
+listed sequence or only "organised into" (any card is one click away either
+way); the first-row pixel position after the trim (the drive measures it).
 
 ### 80. A one-day gap is not a date mismatch (note #44)
 
