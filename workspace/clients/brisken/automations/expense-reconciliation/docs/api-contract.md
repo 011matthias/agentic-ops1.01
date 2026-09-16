@@ -44,6 +44,7 @@ receives after `jsonable_encoder`.
 | `expenses[].line_items[]` | object |
 | `expenses[].books_as[]` | object `{account, unassigned, amount}` |
 | `expenses[].edited_fields[]` | string |
+| `expenses[].boxes[]` | string, a count name without `n_` (item 84) |
 | `expenses[].category_variance.categories[]` | string |
 | `duplicate_groups[]` | object |
 | `duplicate_groups[].members[]` | string |
@@ -172,6 +173,7 @@ name answers the same one:
 | `n_receipts_in_report` | how many expenses have a receipt PAGE in the built report (item 68). Not "how many have a file": a file that cannot be rendered is a file, and the caption page says so while the Receipt column used to say "attached". ABSENT until every row's verdict is known, so the count is never quietly short |
 | `n_duplicate_groups_open` | how many duplicate groups NOBODY has decided (item 74), the only ones that belong in a to-do list. The tool decides every group a rung applies to, so this is 0 unless one escaped the whole ladder. `n_duplicate_groups` keeps counting every group, decided or not |
 | `n_self_confirmed` | run payload only: how many rows carry a verdict the TOOL wrote under the self-confirmation rule (item 76). Falls as a reviewer takes one back; `n_undecided` keeps its question (pending pairings nobody has ratified) |
+| `n_needs_company_or_person` | expense payload: how many rows miss their company or their person (item 84, owner ruling 2026-09-16: the Expenses view shows MISSING ENTITY and NEEDS PERSON as one box, because the fix is one action, pick the card or mark the receipt private). `n_needs_entity` and `n_needs_person` keep their questions |
 | `n_copies_set_aside` | run payload only: how many decided duplicate copies are set aside instead of listed as unmatched (items 83 + 75). `n_unmatched_rec` keeps its question (receipts waiting for a charge), and a set-aside copy was never one; `n_duplicate_copies` keeps counting every redundant copy, matched or not |
 
 `service.categorized_counts` is the single implementation of the categorized
@@ -2540,3 +2542,50 @@ unmatched charges = 47 `already_booked` + 1 `receipt_held_by_another_charge`
 Pinned by `tests/test_view_contract.py`
 (`test_unmatched_reason_code_is_on_every_unmatched_item_and_nowhere_else`),
 route-level in `tests/test_unmatched_reasons.py`.
+
+## The Expenses view's boxes open their rows: `expenses[].boxes` (item 84, 2026-09-16)
+
+Owner, on July's Expenses tiles: "these should be the overview boxes, that a
+user should be able click on and see all of the belonging data." A box that
+opens its rows has to list exactly the number it shows, so every expense row
+names the boxes it belongs to, and every box count on the expense payload's
+summary is the number of rows carrying that box (`service.expense_boxes`,
+one call per row). A box's name is its count's name without `n_`.
+
+| Box | Row is in it when | Count |
+|---|---|---|
+| `categorized` / `uncategorized` | EVERY line item carries a category / not (`service.is_categorized`, the `categorized_counts` rule) | `n_categorized` / `n_uncategorized` |
+| `ready` | `review.state` is `ready` | `n_ready` |
+| `needs_entity` | no company, and not confirmed private | `n_needs_entity` |
+| `needs_person` | no person | `n_needs_person` |
+| `needs_company_or_person` | either of the two above | `n_needs_company_or_person` (new) |
+| `needs_cost_center` | cost center required and missing | `n_needs_cost_center` |
+| `suggested_private` · `private` | suggested / confirmed private | `n_suggested_private` · `n_private` |
+| `missing_receipt_image` | the source records image references at all (`has_image_info`), and this row has no file the app can show (`receipt_image_available` false) AND no reference | `n_missing_receipt_image` |
+| `receipts_unrenderable` | `receipt_render` is `failed` | `n_receipts_unrenderable` (present once a report was built) |
+
+`expenses[].boxes` is on every row, in the table's order, never null;
+`categorized` and `uncategorized` partition the rows. A new box is a rule-5
+change.
+
+Two numbers the boxes corrected, read off the live months on 2026-09-16:
+
+- **Categorized is every line, not the shown category.** July read
+  CATEGORIZED 49 while 51 rows show a category, August 27 against 28. The
+  gap is three two-line receipts (July `0006`, `0062`; August `0019`) whose
+  first line has a category and whose second has none: `posting_category`
+  shows line 1, and the row still needs a category. The count was right; the
+  box lists those rows under `uncategorized`.
+- **MISSING RECEIPT IMAGE was false.** It counted `has_receipt_image` false
+  (July 2, August 1: two mailed bodies rendered to PDF and the moved Parada
+  slip), and the image endpoint served all three files (200, PDF). The count
+  now reads 0 on both months, and the run payload's `n_missing_receipt_image`
+  uses the same rule, so the name answers one question on both payloads.
+
+MISSING ENTITY and NEEDS PERSON were the same rows on both months (July 33,
+August 13). They merge into one box, not one count: the merged count is new,
+and the two old counts keep their questions.
+
+Pinned by `tests/test_view_contract.py`
+(`test_every_box_count_equals_the_rows_carrying_its_box`), route-level in
+`tests/test_expense_boxes.py`.

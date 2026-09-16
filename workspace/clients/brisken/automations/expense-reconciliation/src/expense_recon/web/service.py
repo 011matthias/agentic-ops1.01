@@ -1233,13 +1233,19 @@ def categorized_counts(receipts: list[Receipt]) -> tuple[int, int]:
     entity-less rows as uncategorized while the list screen counted the
     same batch honestly (operator note, 2026-08-22).
     """
-    n = sum(
-        1
-        for r in receipts
-        if r.line_items
-        and all(li.categorization and li.categorization.category for li in r.line_items)
-    )
+    n = sum(1 for r in receipts if is_categorized(r))
     return n, len(receipts) - n
+
+
+def is_categorized(receipt: Receipt) -> bool:
+    """`categorized_counts`' rule for ONE expense (item 84: the Categorized
+    box lists exactly the rows its count counts). Every line carries a
+    category; a row whose first line is categorized and whose second is not
+    shows a category and is still uncategorized."""
+    return bool(receipt.line_items) and all(
+        li.categorization and li.categorization.category
+        for li in receipt.line_items
+    )
 
 
 def apply_decisions(
@@ -3448,9 +3454,18 @@ def build_view(
     # L4 noise guard: the missing-image badge renders only when this run's
     # receipt source carries image references at all.
     has_image_info = any(r.has_receipt_image for r in receipts)
-    n_missing_receipt_image = (
-        sum(1 for r in receipts if not r.has_receipt_image) if has_image_info else 0
-    )
+    # Item 84: the expense payload's rule, so the one name answers one
+    # question on both payloads.
+    n_missing_receipt_image = sum(
+        1 for r in receipts
+        if receipt_image_missing(
+            has_image_info=has_image_info,
+            available=receipt_image_file(
+                rv_work_dir, r.document_id, expense_mode=rv_expense_mode
+            ) is not None,
+            referenced=r.has_receipt_image,
+        )
+    ) if has_image_info else 0
     summary = {
         "n_transactions": n_tx,
         "n_receipts": len(receipts),
@@ -5710,12 +5725,13 @@ def build_expense_view(
     # which are decided without any report build.
     has_file_by_doc: dict[str, bool] = {}
     totals: dict[str, Decimal] = {}
-    # Two different questions, two counters: `n_ready` is "needs nothing
-    # from the reviewer", `n_categorized` is "has a category" (computed
-    # after the loop over the same override-applied receipts the rows and
-    # the export are built from).
-    n_ready = 0
-    posted: list[Receipt] = []
+    # Two different questions, two boxes: `ready` is "needs nothing from the
+    # reviewer", `categorized` is "has a category" (item 84: both decided per
+    # row after the loop, over the same override-applied receipts the rows
+    # and the export are built from, and counted from the rows).
+    # document_id -> (receipt, card resolution, cost center): the inputs
+    # each row's `boxes` are decided from.
+    box_inputs: dict[str, tuple] = {}
     # Master data the export uses to resolve Paid Through, so the grid shows
     # the same account (and how it was chosen). coa is None here, matching
     # posting_category above: the grid renders raw names, the export resolves
@@ -5805,6 +5821,7 @@ def build_expense_view(
             "ambiguous": False, "card_map_blocked": False,
         }
         cost = cost_res.get(r.document_id) or UNRESOLVED_COST_CENTER
+        box_inputs[r.document_id] = (r, res, cost)
         review = _expense_review(
             r, overrides, entity=res["entity"], period=period,
             person=res["person"],
@@ -5882,9 +5899,6 @@ def build_expense_view(
                 ov_by_doc.get(r.document_id, r)
             )
         ]
-        if review["state"] == "ready":
-            n_ready += 1
-        posted.append(ov_by_doc.get(r.document_id, r))
         ccy = r.detected_currency or "?"
         if r.detected_total is not None:
             totals[ccy] = totals.get(ccy, Decimal("0")) + r.detected_total
@@ -6097,7 +6111,29 @@ def build_expense_view(
                 e["settled_outside"] = hit
 
     has_image_info = any(r.has_receipt_image for r in receipts)
-    n_categorized, n_uncategorized = categorized_counts(posted)
+    # Item 84: the boxes each row belongs to, decided once per row, and every
+    # box count below is the number of rows carrying that box, so a box that
+    # opens its rows can never list a different number than it shows.
+    for e in expenses:
+        receipt, res, cost = box_inputs[e["document_id"]]
+        e["boxes"] = expense_boxes(
+            categorized=is_categorized(ov_by_doc.get(e["document_id"], receipt)),
+            review_state=e["review"]["state"],
+            res=res,
+            needs_cost_center=cost.needs,
+            image_missing=receipt_image_missing(
+                has_image_info=has_image_info,
+                available=bool(e.get("receipt_image_available")),
+                referenced=receipt.has_receipt_image,
+            ),
+            render_failed=e.get("receipt_render") == "failed",
+        )
+
+    def n_box(box: str) -> int:
+        return sum(1 for e in expenses if box in e["boxes"])
+
+    n_categorized, n_uncategorized = n_box("categorized"), n_box("uncategorized")
+    n_ready = n_box("ready")
     set_aside = set_aside_view(run.snapshot or {})
     summary = {
         "mode": MODE_EXPENSE_GENERATION,
@@ -6124,35 +6160,27 @@ def build_expense_view(
         # `needs_entity` review population (never an export blocker).
         # A confirmed private row needs NO entity by design (item 41), so
         # it does not count as missing one.
-        "n_needs_entity": sum(
-            1 for res in card_res.values()
-            if not res["entity"] and not res.get("private")
-        ),
+        "n_needs_entity": n_box("needs_entity"),
         # Item 40: rows no person owns yet. Sits beside n_needs_entity;
         # the fix is a person on the card, not a per-row edit.
-        "n_needs_person": sum(
-            1 for res in card_res.values() if not res.get("person")
-        ),
+        "n_needs_person": n_box("needs_person"),
+        # Item 84 (owner ruling 2026-09-16): the two boxes above are one box
+        # on the page, because the fix is one action either way (pick the
+        # card, or mark the receipt private). Rows missing either.
+        "n_needs_company_or_person": n_box("needs_company_or_person"),
         # Item 47: rows with no cost center, once at least one is
         # defined. Structurally 0 while the registry is empty, which is
         # the whole first phase; the SPA hides the chip at 0.
-        "n_needs_cost_center": sum(
-            1 for c in cost_res.values() if c.needs
-        ),
+        "n_needs_cost_center": n_box("needs_cost_center"),
         # Item 41: unconfirmed private-expense suggestions, and rows the
         # operator has confirmed private (reimbursement rows).
-        "n_suggested_private": sum(
-            1 for res in card_res.values() if res.get("suggested_private")
-        ),
-        "n_private": sum(
-            1 for res in card_res.values() if res.get("private")
-        ),
+        "n_suggested_private": n_box("suggested_private"),
+        "n_private": n_box("private"),
         "n_learned_lines": n_learned_lines,
         "has_image_info": has_image_info,
-        "n_missing_receipt_image": (
-            sum(1 for r in receipts if not r.has_receipt_image)
-            if has_image_info else 0
-        ),
+        # Item 84: a row whose receipt the app can show is not missing its
+        # image, whatever the extraction recorded (`receipt_image_missing`).
+        "n_missing_receipt_image": n_box("missing_receipt_image"),
         "n_duplicate_groups": len(duplicate_groups),
         # Copies that are redundant (here, one per extra row: an expense
         # batch's spine IS the receipts). `totals_by_ccy` below still sums
@@ -6226,9 +6254,7 @@ def build_expense_view(
     # built one yet" is the confidently-wrong shape contract rule 5 exists to
     # prevent, and this count's whole job is telling a reviewer to go look.
     if render_state:
-        summary["n_receipts_unrenderable"] = sum(
-            1 for e in expenses if e.get("receipt_render") == "failed"
-        )
+        summary["n_receipts_unrenderable"] = n_box("receipts_unrenderable")
 
     return {
         "run_id": run.run_id,
@@ -11409,3 +11435,73 @@ def apply_self_confirmations(
             continue
         result["confirmed"] += 1
     return result
+
+
+# ── The Expenses view's boxes (backlog item 84, 2026-09-16) ─────────────
+# Owner: "these should be the overview boxes, that a user should be able to
+# click on and see all of the belonging data". A box that opens its rows has
+# to list exactly the number it shows, so each row names the boxes it belongs
+# to and each count is the number of rows carrying its box. A box's name is
+# its count's name without `n_`.
+
+EXPENSE_BOXES = (
+    "categorized",
+    "uncategorized",
+    "ready",
+    "needs_entity",
+    "needs_person",
+    "needs_company_or_person",
+    "needs_cost_center",
+    "suggested_private",
+    "private",
+    "missing_receipt_image",
+    "receipts_unrenderable",
+)
+
+
+def receipt_image_missing(
+    *, has_image_info: bool, available: bool, referenced: bool
+) -> bool:
+    """Whether a row counts as missing its receipt image.
+
+    The flag used to read only `has_receipt_image` (a receipt URL or file
+    name recorded at extraction), so a mailed body rendered to PDF, or a
+    receipt moved between months, read "missing" while the image endpoint
+    served its file (July 2026: 2 rows, August: 1, all three 200). A row is
+    missing its image only when the app can show no file for it AND no image
+    is referenced. `has_image_info` keeps the L4 noise guard: a source that
+    records no image references at all flags nothing."""
+    return has_image_info and not (available or referenced)
+
+
+def expense_boxes(
+    *,
+    categorized: bool,
+    review_state: str,
+    res: dict,
+    needs_cost_center: bool,
+    image_missing: bool,
+    render_failed: bool,
+) -> list[str]:
+    """The boxes one expense row belongs to, in `EXPENSE_BOXES` order.
+
+    `res` is the row's card resolution (`resolve_batch_row_cards`). The
+    entity rule is `n_needs_entity`'s (a confirmed private row needs none),
+    the person rule `n_needs_person`'s; `needs_company_or_person` is either
+    (owner ruling 2026-09-16: one box, because the fix is one action)."""
+    needs_entity = not res.get("entity") and not res.get("private")
+    needs_person = not res.get("person")
+    member = {
+        "categorized": categorized,
+        "uncategorized": not categorized,
+        "ready": review_state == "ready",
+        "needs_entity": needs_entity,
+        "needs_person": needs_person,
+        "needs_company_or_person": needs_entity or needs_person,
+        "needs_cost_center": needs_cost_center,
+        "suggested_private": bool(res.get("suggested_private")),
+        "private": bool(res.get("private")),
+        "missing_receipt_image": image_missing,
+        "receipts_unrenderable": render_failed,
+    }
+    return [box for box in EXPENSE_BOXES if member[box]]
