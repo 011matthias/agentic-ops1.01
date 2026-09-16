@@ -4110,6 +4110,68 @@ Build order:
    whichever lands first so the other reuses it.
 3. SPA half as one Lovable prompt, gated on the backend field being live.
 
+### 84. The Expenses view's tiles open the expenses they count (owner, 2026-09-16)
+
+**Owner, on a screenshot of July's Expenses view tiles:** "these should be the
+overview boxes, that a user should be able click on and see all of the belonging
+data. It already works like that in the matching page."
+
+The Matching view's cards (item 79) are one click to the rows they count. The
+Expenses view still has the older tile bar: EXPENSES, CATEGORIZED, NEEDS
+CATEGORY (with an "N suggested private" caption), READY, TOTALS, then a second
+row with MISSING ENTITY, NEEDS PERSON and MISSING RECEIPT IMAGE (the first two
+render only when their count is above 0). Published bundle 2026-09-16 (`chunk-expenses._batchId`):
+none is a filter. NEEDS PERSON is the only link, and it goes to `/settings`, not
+to the 33 expenses.
+
+**Live read 2026-09-16** (`GET /api/expense-batches/{id}`), tile vs a count
+rebuilt from `expenses[]`:
+
+| Tile | July tile | July rows | August tile | August rows | Row field |
+|---|---|---|---|---|---|
+| Expenses | 52 | 52 | 31 | 31 | all |
+| Categorized | 49 | 51 | 27 | 28 | `posting_category.category` set (does NOT reproduce) |
+| Needs category | 3 | not rebuilt | 4 | not rebuilt | `n_uncategorized` |
+| Suggested private (caption) | 24 | 24 | 8 | 8 | `suggested_private` |
+| Ready | 14 | 14 | 10 | 10 | `review.state == "ready"` |
+| Missing entity | 33 | 33 | 13 | 13 | `legal_entity_id` empty |
+| Needs person | 33 | 33 | 13 | 13 | `person` empty |
+| Missing receipt image | 2 | 2 | 1 | 1 | `has_receipt_image` false |
+
+Three things the table says before anyone writes a filter:
+
+- **A filter must show exactly its tile's number.** Categorized is counted by
+  `service.categorized_counts` (item 22), and the obvious row rule misses by 2
+  on July and 1 on August. The SPA cannot rebuild it; the row needs the verdict
+  the count uses.
+- **MISSING RECEIPT IMAGE may be the item-52 disagreement.** The tile counts
+  `has_receipt_image: false`, while `receipt_image_available` reads true on every
+  row of both months, and on 2026-09-15 item 52 found every July and August
+  receipt serving 200 from the image endpoint. Check whether these rows'
+  receipts open before turning the tile into a filter; a click that lists
+  receipts which open would be a new wrong claim.
+- **MISSING ENTITY and NEEDS PERSON are the same rows** (33 and 33 on July, 13
+  and 13 on August, identical document sets), and every suggested-private row is
+  inside them. Two tiles for one set is a design question for this item, not a
+  reason to drop either click.
+
+Build:
+
+1. Backend: one parallel per-row field naming the tiles a row belongs to (for
+   example `expenses[].tiles[]`), produced by the same code that produces each
+   `summary` count, so tile and filter cannot drift. Contract-test it, and add a
+   test that for every tile the count equals the rows carrying it.
+2. SPA: each tile with a count is a button that filters the Expenses list to
+   its rows, with the active tile marked and a way back to all expenses, on the
+   pattern of the Matching view's cards. NEEDS PERSON filters the rows; the link to
+   Settings > Cards moves into the filtered view. The "N suggested private"
+   caption is its own target. TOTALS stays a display.
+3. Decide first, in the same round: which receipt-image field the tile means,
+   and whether MISSING ENTITY and NEEDS PERSON stay two tiles.
+
+Browser-drive July after publish: click each tile, and the list length equals
+the tile.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
