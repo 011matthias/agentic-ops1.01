@@ -25,6 +25,7 @@ Modes:
 
 import argparse
 import base64
+import html
 import json
 import random
 import re
@@ -378,6 +379,58 @@ def item_page_price(body: str) -> float | None:
         return None
 
 
+LD_JSON = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re.S)
+META_DESCRIPTION = re.compile(r'<meta name="description" content="([^"]*)"')
+OG_TITLE = re.compile(r'<meta property="og:title" content="([^"]*)"')
+DESCRIPTION_MAX_CHARS = 5000
+
+
+def item_page_description(body: str) -> tuple[str | None, str | None]:
+    """The seller's description, read off an item page. Returns (text, source).
+
+    Two places carry it, and which one depends on the listing's state:
+
+    - a live page has a schema.org Product block whose `description` is the
+      text exactly as written;
+    - a SOLD page has no Product block at all (verified 2026-09-16 on item
+      9941113992), only `<meta name="description">`, which is the title, " - ",
+      then the same text. Over half of what the recheck visits is sold, so
+      without this fallback most of the corpus would be missing.
+
+    The title prefix is stripped with the page's own og:title rather than the
+    stored one, because the stored title is whatever the catalogue said days
+    ago and the page is what is served now. A meta tag that is only the title
+    means the seller wrote no description, which is None, not the title.
+    """
+    body = body or ""
+    for block in LD_JSON.findall(body):
+        try:
+            data = json.loads(block)
+        except ValueError:
+            continue
+        if isinstance(data, dict) and data.get("@type") == "Product":
+            text = data.get("description")
+            if isinstance(text, str) and text.strip():
+                return text.strip()[:DESCRIPTION_MAX_CHARS], "ld_json"
+    meta = META_DESCRIPTION.search(body)
+    if not meta:
+        return None, None
+    content = html.unescape(meta.group(1)).strip()
+    og = OG_TITLE.search(body)
+    title = html.unescape(og.group(1)).strip() if og else ""
+    if title.endswith(" | Vinted"):
+        title = title[: -len(" | Vinted")].rstrip()
+    if title and content.startswith(title + " - "):
+        text = content[len(title) + 3:].strip()
+        return (text[:DESCRIPTION_MAX_CHARS], "meta") if text else (None, None)
+    if title and content == title:
+        return None, None
+    # Unknown shape: keep it whole rather than guess where the title ends. The
+    # title words then count twice for this one listing, which the per-listing
+    # counting in keyword_research absorbs.
+    return (content[:DESCRIPTION_MAX_CHARS], "meta_unsplit") if content else (None, None)
+
+
 def item_page_verdict(status_code: int, body: str) -> tuple[str, str]:
     """Read a listing's fate off its item page. Returns (verdict, evidence).
 
@@ -635,6 +688,19 @@ CREATE TABLE IF NOT EXISTS my_listings (
     notes TEXT,
     created_at TEXT,
     updated_at TEXT
+);
+
+-- The description text of listings whose item page the recheck fetched. The
+-- catalogue payload carries no description, yet Vinted's search reads it
+-- (measured 2026-09-16: `y2kdenim` finds listings whose titles lack the word),
+-- which is where sellers put their search words. Kept out of `listings` because
+-- it is a per-fetch observation of up to a few KB, and every title scan in
+-- keyword_research reads that table whole. Latest fetch wins.
+CREATE TABLE IF NOT EXISTS descriptions (
+    listing_id INTEGER PRIMARY KEY,
+    description TEXT NOT NULL,
+    source TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
 );
 """
 
@@ -2409,7 +2475,7 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: 
         log("recheck skipped: session not proven this cycle")
         return
     rows = recheck_queue(con, RECHECK_BATCH)
-    verdicts = []      # (item_id, verdict: str, source: str)
+    verdicts = []      # (item_id, verdict, page_price, source, description)
     for item_id, item_url in rows:
         if not item_url:
             continue
@@ -2448,12 +2514,16 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: 
         # The page we already fetched carries the current price, so a still-live
         # listing yields a second observation days after the poll lost sight of
         # it. That is where price cuts actually live.
+        # The description rides along for the same reason: the page is already
+        # paid for, and it is the only place the seller's search words exist.
+        description = (item_page_description(r.text)
+                       if verdict in ("alive", "sold", "closed") else (None, None))
         verdicts.append((item_id, verdict,
                          item_page_price(r.text) if verdict == "alive" else None,
-                         source))
+                         source, description))
         time.sleep(random.uniform(1.5, 3.0))
 
-    counts = Counter(v for _, v, _, _ in verdicts)
+    counts = Counter(v for _, v, _, _, _ in verdicts)
     gone_n, sold_n = counts["gone"], counts["sold"]
     if verdicts and gone_n / len(verdicts) > GONE_RATE_CEILING:
         # A large simultaneous sweep of 404s is a session symptom every time,
@@ -2478,7 +2548,16 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: 
 
     ts = now_iso()
     price_moves = 0
-    for item_id, verdict, page_price, source in verdicts:
+    described = 0
+    for item_id, verdict, page_price, source, (desc_text, desc_source) in verdicts:
+        if desc_text and verdict != "unknown":
+            con.execute(
+                "INSERT INTO descriptions (listing_id, description, source, fetched_at)"
+                " VALUES (?, ?, ?, ?) ON CONFLICT(listing_id) DO UPDATE SET"
+                " description=excluded.description, source=excluded.source,"
+                " fetched_at=excluded.fetched_at",
+                (item_id, desc_text, desc_source, ts))
+            described += 1
         if verdict == "alive":
             price_moves += record_page_price(con, item_id, page_price, ts)
             con.execute("UPDATE listings SET last_seen=? WHERE id=?", (ts, item_id))
@@ -2494,7 +2573,7 @@ def recheck_gone(client: httpx.Client, con: sqlite3.Connection, session_proven: 
     if rows:
         log(f"recheck: {len(rows)} visited, {sold_n} sold, {gone_n} deleted, "
             f"{counts['closed']} closed, {counts['unknown']} unreadable, "
-            f"{price_moves} price change(s)")
+            f"{price_moves} price change(s), {described} description(s)")
 
 
 def log_volume(con: sqlite3.Connection) -> str:
