@@ -143,9 +143,16 @@ def test_the_tool_decides_every_group_and_nothing_is_open(client):
         "i": ("vendor_date", "copy", "tool", "decided"),
     }
     assert view["summary"]["n_duplicate_groups_open"] == 0
-    # only a copy carries row markers; a distinct pair is not a duplicate
-    marked = {r["document_id"] for r in view["unmatched_receipts"] if r["duplicate"]}
+    # only a copy carries row markers; a distinct pair is not a duplicate.
+    # Items 83 + 75: the extra copy of a decided group is set aside, not
+    # unmatched, and keeps its marker there.
+    marked = {
+        r["document_id"]
+        for r in (*view["unmatched_receipts"], *view["copies_set_aside"])
+        if r["duplicate"]
+    }
     assert marked == {"p1", "p2", "i1", "i2"}
+    assert {r["document_id"] for r in view["copies_set_aside"]} == {"p2", "i2"}
 
 
 def test_a_saved_resolution_maps_onto_verdict_and_decided_by(client):
@@ -170,8 +177,13 @@ def test_a_saved_resolution_maps_onto_verdict_and_decided_by(client):
     assert groups[GID["p"]]["resolution"] is None
     assert groups[GID["p"]]["decided_by"] == "tool"
     assert view["summary"]["n_duplicate_groups_open"] == 0
-    marked = {r["document_id"] for r in view["unmatched_receipts"] if r["duplicate"]}
+    marked = {
+        r["document_id"]
+        for r in (*view["unmatched_receipts"], *view["copies_set_aside"])
+        if r["duplicate"]
+    }
     assert marked == {"p1", "p2", "g1", "g2"}, "the reviewer's copy is marked, the ignored pair is not"
+    assert {r["document_id"] for r in view["copies_set_aside"]} == {"p2", "g2"}
 
 
 def test_the_resolve_route_moves_the_verdict_and_the_undo_moves_it_back(client):

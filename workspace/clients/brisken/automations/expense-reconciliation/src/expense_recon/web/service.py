@@ -3151,6 +3151,21 @@ def build_view(
             }
         )
 
+    # Receipt groups, every one DECIDED by the ladder (item 74). Decided once
+    # per payload (the ladder reads digests and text layers) and read twice:
+    # items 83 + 75 need the set-aside copies before the near-miss offer and
+    # the unmatched list are built, the duplicate lists below need the groups.
+    resolutions = resolutions or {}
+    receipt_decisions = duplicate_decisions(run, receipts, resolutions)
+    # Items 83 + 75 (note #46): a copy the tool or a reviewer has decided
+    # leaves every open list on the month. Exactly the copies the re-match
+    # keeps out of the pool (`copies_to_collapse`), and only while the
+    # effective outcome leaves them unmatched: a copy a reviewer hand-matched
+    # holds a charge and renders as that match.
+    set_aside_copy_ids = copies_to_collapse(receipt_decisions) & set(
+        effective.unmatched_receipts
+    )
+
     # Unmatched receipts come straight from the resolved outcome, so a
     # receipt freed by a reject (or stolen by a manual match) reappears
     # here and can be re-assigned.
@@ -3187,6 +3202,7 @@ def build_view(
         rec_by_id[d]
         for d in effective.unmatched_receipts
         if d in rec_by_id and rec_by_id[d].detected_total is not None
+        and d not in set_aside_copy_ids
     ]
 
     def _near_miss(tx: Transaction) -> dict | None:
@@ -3290,13 +3306,11 @@ def build_view(
     # that pairs the lists by kind does not break; neither ever carries a
     # charge again.
     duplicate_charges: list = []
-    # Receipt groups, every one DECIDED by the ladder (item 74), listed once
-    # so the legacy list, `duplicate_groups` and the counts read the same
-    # groups in the same order. Every group stays in both lists, decided or
-    # not: the SPA pairs `duplicate_groups` with `duplicate_receipts` BY
-    # INDEX within a kind, and filtering one list would mislabel rows.
-    resolutions = resolutions or {}
-    receipt_decisions = duplicate_decisions(run, receipts, resolutions)
+    # Receipt groups (`receipt_decisions`, decided above), listed once so the
+    # legacy list, `duplicate_groups` and the counts read the same groups in
+    # the same order. Every group stays in both lists, decided or not: the
+    # SPA pairs `duplicate_groups` with `duplicate_receipts` BY INDEX within
+    # a kind, and filtering one list would mislabel rows.
     duplicate_receipts = [
         [
             _receipt_view(
@@ -3373,9 +3387,63 @@ def build_view(
         row["row_type"] = row_type_of(row_tx)
         row["entity_source"] = charge_entity_source(row_tx, view_cards)
 
+    # Items 83 + 75 (notes #40, #46): the unmatched lists say what they hold.
+    # A decided copy moves out of `unmatched_receipts` and the hand-match
+    # picker into `copies_set_aside` (its marker and undo travel with it; the
+    # duplicate lists above are untouched, so the by-index pairing of
+    # `duplicate_groups` with `duplicate_receipts` does not move). Every
+    # receipt still sits in exactly one place: held by a charge, unmatched,
+    # settled outside, or set aside as a copy. And every unmatched receipt and
+    # charge carries a parallel `reason_code` (`unmatched_reasons`).
+    from ..unmatched_reasons import (
+        DUPLICATE_COPY,
+        charge_reason_code,
+        loaded_card_keys,
+        receipt_reason_code,
+    )
+
+    copies_set_aside = [
+        rec for rec in unmatched_receipts
+        if rec.get("document_id") in set_aside_copy_ids
+    ]
+    if copies_set_aside:
+        unmatched_receipts[:] = [
+            rec for rec in unmatched_receipts
+            if rec.get("document_id") not in set_aside_copy_ids
+        ]
+        assignable_receipts[:] = [
+            rec for rec in assignable_receipts
+            if rec.get("document_id") not in set_aside_copy_ids
+        ]
+    for rec in copies_set_aside:
+        rec["reason_code"] = DUPLICATE_COPY
+    reason_cards = loaded_card_keys(transactions)
+    reason_period = statement_period_for_month(run, transactions)
+    for rec in unmatched_receipts:
+        rec["reason_code"] = receipt_reason_code(
+            rec_by_id[rec["document_id"]],
+            loaded_cards=reason_cards,
+            period=reason_period,
+            settled_elsewhere="settled_by" in rec,
+        )
+    charge_reasons: dict[str, str] = {}
+    for row in rows:
+        if row["effective_bucket"] != "unmatched":
+            continue
+        row["reason_code"] = charge_reasons[row["transaction_id"]] = charge_reason_code(
+            row_type=row.get("row_type"),
+            entry_status=row.get("entry_status"),
+            candidates=row["candidates"],
+        )
+    for tx_entry in unmatched_transactions:
+        tx_entry["reason_code"] = charge_reasons[tx_entry["transaction_id"]]
+
     n_tx = len(transactions)
-    # Item 62: the pool a card statement can actually settle.
-    n_matchable_receipts = len(receipts) - len(settled_outside_ids)
+    # Item 62: the pool a card statement can actually settle. Items 83 + 75:
+    # a set-aside copy is not a second purchase for a card to settle either.
+    n_matchable_receipts = (
+        len(receipts) - len(settled_outside_ids) - len(copies_set_aside)
+    )
     n_unknown_currency = sum(1 for r in receipts if r.detected_currency is None)
     # L4 noise guard: the missing-image badge renders only when this run's
     # receipt source carries image references at all.
@@ -3400,6 +3468,10 @@ def build_view(
         # "how many receipts are in the month" and does NOT move: they are
         # still in the month, still in the grid, still in the report.
         "n_settled_outside": len(settled_outside_ids),
+        # Items 83 + 75: how many decided duplicate copies were set aside
+        # rather than listed as unmatched. `n_duplicate_copies` keeps its
+        # question (every redundant copy, matched or not).
+        "n_copies_set_aside": len(copies_set_aside),
         # See the run-summary note above: charge-based `match_rate` under-reads
         # a receiptless-heavy month; `receipt_match_rate` reports receipts
         # placed (reconciled + review) over receipts that exist. The SPA leads
@@ -3519,6 +3591,7 @@ def build_view(
         "unmatched_receipts": unmatched_receipts,
         "unmatched_transactions": unmatched_transactions,
         "assignable_receipts": assignable_receipts,
+        "copies_set_aside": copies_set_aside,
         "duplicate_charges": duplicate_charges,
         "duplicate_receipts": duplicate_receipts,
         "duplicate_groups": duplicate_groups,

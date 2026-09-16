@@ -77,6 +77,8 @@ receives after `jsonable_encoder`.
 | `coverage[]` | object |
 | `coverage[].digits[]` · `coverage[].statements[]` | string |
 | `category_options[]` | string |
+| `copies_set_aside[]` | object (the `unmatched_receipts[]` element shape; items 83 + 75) |
+| `copies_set_aside[].line_items[]` | object |
 
 ## `parse_issues` specifically
 
@@ -170,6 +172,7 @@ name answers the same one:
 | `n_receipts_in_report` | how many expenses have a receipt PAGE in the built report (item 68). Not "how many have a file": a file that cannot be rendered is a file, and the caption page says so while the Receipt column used to say "attached". ABSENT until every row's verdict is known, so the count is never quietly short |
 | `n_duplicate_groups_open` | how many duplicate groups NOBODY has decided (item 74), the only ones that belong in a to-do list. The tool decides every group a rung applies to, so this is 0 unless one escaped the whole ladder. `n_duplicate_groups` keeps counting every group, decided or not |
 | `n_self_confirmed` | run payload only: how many rows carry a verdict the TOOL wrote under the self-confirmation rule (item 76). Falls as a reviewer takes one back; `n_undecided` keeps its question (pending pairings nobody has ratified) |
+| `n_copies_set_aside` | run payload only: how many decided duplicate copies are set aside instead of listed as unmatched (items 83 + 75). `n_unmatched_rec` keeps its question (receipts waiting for a charge), and a set-aside copy was never one; `n_duplicate_copies` keeps counting every redundant copy, matched or not |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -2455,3 +2458,85 @@ Pinned by `tests/test_view_contract.py`
 (`test_every_run_row_carries_a_turn_and_a_verdict_names_its_author`),
 route-level in `tests/test_self_confirm.py`. SPA half:
 `docs/lovable-turn-prompt.md`.
+
+## The unmatched lists say what they hold: `copies_set_aside` + `reason_code` (items 83 + 75, 2026-09-16)
+
+Notes #40 and #46. July's "Unmatched receipts" held copies of documents that
+had already settled their charge (the re-match puts every collapsed copy back
+into the outcome's unmatched list so no receipt goes missing), and nothing on
+any unmatched row said why it was there. Run payload only.
+
+### A decided copy is set aside, not unmatched
+
+| Field | Shape | When |
+|---|---|---|
+| `copies_set_aside[]` | the `unmatched_receipts[]` element, `duplicate` marker included | every copy after the first in a group whose `verdict` is `copy` (decided by the tool or a reviewer) that the effective outcome leaves unmatched |
+| `summary.n_copies_set_aside` | int | always on the run payload; the list's length |
+
+Those copies are no longer in `unmatched_receipts[]`, `assignable_receipts[]`
+(the hand-match picker) or `n_unmatched_rec`, and no charge's `near_miss`
+points at one. `duplicate_groups[]` and `duplicate_receipts[]` do not change,
+so their by-index pairing holds. The undo is unchanged: "Not a copy" (`POST
+/api/runs/{id}/duplicates/resolve` `{"resolution": "ignore"}`) makes the group
+`distinct`, and both receipts are ordinary unmatched receipts at once, with no
+marker. A copy a reviewer hand-matched holds a charge and renders as that match.
+
+The receipt-side accounting, pinned route-level: every receipt of the month
+sits in exactly one of held by a charge, `unmatched_receipts`,
+settled outside the card, `copies_set_aside`, and
+
+`n_receipts == n_receipts_matched + n_unmatched_rec + n_settled_outside + n_copies_set_aside`.
+
+`receipt_match_rate` is read over `n_receipts - n_settled_outside -
+n_copies_set_aside`: a copy is not a second purchase for a card to settle.
+August 2026 read 32.3% (10 of 31) with its 11 copies counted as misses; the
+same month reads 50.0% (10 of 20). July moves from 75.0% to 78.0% (39 of 50). The stored run summary a re-match writes
+(`run.summary`, the notifier's "pool") keeps the matcher outcome's own counts;
+no screen reads it.
+
+### `reason_code`: one reason per unmatched item
+
+Present on every element of `unmatched_receipts[]`, `copies_set_aside[]` and
+`unmatched_transactions[]`, and on every `rows[]` element whose
+`effective_bucket` is `unmatched`. ABSENT everywhere else (a matched row, a
+credit, `assignable_receipts[]`). A new value is a rule-5 change.
+
+Receipts, first rule that applies wins:
+
+| Code | Rule |
+|---|---|
+| `duplicate_copy` | only in `copies_set_aside[]` |
+| `charge_in_neighbouring_period` | another month's charge already settled it (`settled_by`) |
+| `not_a_card_charge` | the payment mode names no card digits and reads as a non-card tender (debit, EC-Karte, girocard, maestro, cash, dinheiro, pix, bank transfer, transferência, boleto, paypal, cheque, check) |
+| `charge_in_neighbouring_period` | dated within 2 days of the statement's first or last charge date, or up to 31 days outside it |
+| `card_statement_not_loaded` | the payment mode names a card no loaded charge carries |
+| `no_charge_on_any_loaded_statement` | none of the above: the matcher found no charge on the loaded statement for it |
+
+These are readings of the receipt's own printed facts, not proofs. Measured on
+the 14 live receipts whose label names a coverage kind (July + August 2026):
+11 name the labelled kind; two bank-transfer invoices that print no payment
+method read `no_charge_on_any_loaded_statement`, which is true of them; one
+(Konsultancy, dated 07-30) reads `charge_in_neighbouring_period` and is a bank
+transfer. The rules come from item 69's attribution table
+(`tools/recon-match-attribution.py`), date read before card; the module
+docstring (`unmatched_reasons.py`) records why.
+
+Charges, first rule that applies wins. The receipt vocabulary does not
+describe a charge, so charges carry their own:
+
+| Code | Rule |
+|---|---|
+| `not_a_purchase` | `row_type` is not `purchase` (a fee, interest) |
+| `receipt_held_by_another_charge` | it has candidates and every one is `held_by` another charge (the `n_charges_receipt_taken` rule) |
+| `already_booked` | `entry_status` is `posted` (yellow in the reviewer's workbook) |
+| `no_receipt_found` | none of the above |
+
+Live 2026-09-16 (before deploy, predicted from the payloads): July 72
+unmatched charges = 47 `already_booked` + 1 `receipt_held_by_another_charge`
+(GOOGLE Workspace 71.64, itself a yellow row) + 24 `no_receipt_found`; August
+100 = 1 `not_a_purchase` (ANNUAL MEMBERSHIP FEE) + 1 held + 98
+`no_receipt_found`.
+
+Pinned by `tests/test_view_contract.py`
+(`test_unmatched_reason_code_is_on_every_unmatched_item_and_nowhere_else`),
+route-level in `tests/test_unmatched_reasons.py`.
