@@ -77,7 +77,7 @@ Backlog item 79 (owner direction: a month's page structured as a receipts overvi
 - Item 79 is live on `expenses.brisken.com` and verified by bundle audit and browser drive. The PT pass was not driven.
 - Item 23 round 4: the consumer half is live, and the backend route deletion is unblocked and not started.
 - Fly `brisken-expense-recon` is on v133 or later (siblings deploy on top).
-- PR #907 (records) is open, awaiting CI.
+- PR #907 (records) merged as `2a7783d6`.
 - Pending Lovable prompts from sibling sessions: date-gap (item 80), fx-reference (item 81), row-type (item 73). None of the three is in the bundle (`date_gap_zone`, `reference_gap_band`, `row_type` 0 hits).
 - Ops status for brisken: unknown plan, no `platform` section assessed (FastAPI on Fly; not a Make/n8n client).
 
@@ -85,12 +85,11 @@ Backlog item 79 (owner direction: a month's page structured as a receipts overvi
 
 ## Next Steps
 
-1. Merge PR #907 on CI green.
-2. Item 23 round 4 backend PR: delete `@app.get("/runs/{run_id}/zoho.csv")`, the journal module, and `export_approved_only` with its store default. Regress-check, deploy, then drive July's Downloads row.
-3. Re-check two drive residues by hand before writing any fix. First, August view 2's caption "1 waits on a receipt another charge holds". Second, whether `?view=unmatched` seeds the view on load: in a fresh session the query was stripped and view 1 opened.
-4. PT pass on July (strip, card labels, folds, "Mostrar linhas decididas"), and ask Criss to read the new PT keys.
-5. Before the owner pastes `lovable-date-gap-prompt.md`: its preamble still names `brisken-expense-recon.fly.dev` as the backend, so strip that phrase or it may repoint the API base.
-6. Remove merged worktrees (the classifier blocked removal this session): `agentic-ops1-deploy-0916`, `agentic-ops1-heldby`, `agentic-ops1-monthviews`, and after #907 merges `agentic-ops1-p79-applied` and `agentic-ops1-cp-monthviews`.
+1. Item 23 round 4 backend PR: delete `@app.get("/runs/{run_id}/zoho.csv")`, the journal module, and `export_approved_only` with its store default. Regress-check, deploy, then drive July's Downloads row.
+2. Re-check two drive residues by hand before writing any fix. First, August view 2's caption "1 waits on a receipt another charge holds". Second, whether `?view=unmatched` seeds the view on load: in a fresh session the query was stripped and view 1 opened.
+3. PT pass on July (strip, card labels, folds, "Mostrar linhas decididas"), and ask Criss to read the new PT keys.
+4. Before the owner pastes `lovable-date-gap-prompt.md`: its preamble still names `brisken-expense-recon.fly.dev` as the backend, so strip that phrase or it may repoint the API base.
+5. Remove merged worktrees (the classifier blocked removal this session): `agentic-ops1-deploy-0916`, `agentic-ops1-heldby`, `agentic-ops1-monthviews`, and after #907 merges `agentic-ops1-p79-applied` and `agentic-ops1-cp-monthviews`.
 
 ---
 
@@ -123,7 +122,7 @@ Backlog item 79 (owner direction: a month's page structured as a receipts overvi
 
 ## How to Continue
 
-`/comd_resume brisken`, confirm #907 merged, then take next step 2 (round 4 backend deletion) in a fresh worktree off origin/main. The SPA consumer half is proven gone, so the deletion needs no further gate.
+`/comd_resume brisken`, then take next step 1 (round 4 backend deletion) in a fresh worktree off origin/main. The SPA consumer half is proven gone, so the deletion needs no further gate.
 
 ---
 
