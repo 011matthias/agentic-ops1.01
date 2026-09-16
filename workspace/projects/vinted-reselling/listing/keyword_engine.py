@@ -688,6 +688,32 @@ TAG_ALIAS_GROUPS = [
 ]
 
 
+def normalise_words(text: str | None) -> list[str]:
+    """Same tokens as keyword_research.normalise, so a term and a fact compare
+    word for word no matter which module produced them."""
+    text = re.sub(r"[^0-9a-zA-ZäöüÄÖÜßéèêàçñ]+", " ", (text or "").lower())
+    return [w for w in text.split() if len(w) >= 2]
+
+
+def split_by_facts(terms: list[str], justified: set[str]) -> tuple[list[str], list[str]]:
+    """(confirmed, unconfirmed): which market terms this garment's facts vouch for.
+
+    The title-mined terms used to be appended unchecked. Run on batch-2 item 33
+    (Diesel jeans, facts: Jeans, Denim, W33, Gut) on 2026-09-16, that wrote
+    "jeans baggy fit", "washed blau" and "fit washed" into the description of a
+    pair nobody had called baggy, washed or blue, because they are what a small
+    diesel/pants cell happens to say. A word in the description is a claim to
+    the buyer, and an untrue one is both a return and the "nicht zugehoerige"
+    wording Vinted hides listings for. So a term is written only when every
+    word is justified by a fact; the rest go back to the seller as candidates.
+    """
+    confirmed, unconfirmed = [], []
+    for term in terms:
+        words = normalise_words(term)
+        (confirmed if words and all(w in justified for w in words) else unconfirmed).append(term)
+    return confirmed, unconfirmed
+
+
 def fact_words(item: dict, normalise) -> tuple[set[str], set[str]]:
     """(justified, literal): the words a garment's facts vouch for, and the
     words its listing text will already contain.
@@ -856,11 +882,22 @@ def suggest(item: dict, use_corpus: bool = True) -> dict:
     """Full listing proposal plus the validation of what it produced."""
     mined, mine_notes = mined_terms(item) if use_corpus else ([], [])
     tag_info = tag_terms(item) if use_corpus else {"confirmed": [], "candidates": [], "notes": []}
-    # Tag phrases the item's own facts confirm go ahead of the title-mined cell
-    # terms: both come from the market, but only these are vouched for by this
-    # garment rather than by its neighbours.
-    keywords, notes = build_keywords(item, mined=tag_info["confirmed"] + mined)
+    # Both market sources pass the same gate: a term reaches the listing only
+    # when this garment's facts vouch for every word of it. Tag phrases go first
+    # because the tag gate also demands they add a word the listing lacks.
+    justified, _ = fact_words(item, normalise_words)
+    title_confirmed, title_unconfirmed = split_by_facts(mined, justified)
+    keywords, notes = build_keywords(item, mined=tag_info["confirmed"] + title_confirmed)
     notes = mine_notes + tag_info["notes"] + notes
+    if title_unconfirmed:
+        notes.append("aus Titeln der Zelle, aber nicht durch die Fakten belegt (nur Kandidat): "
+                     + ", ".join(title_unconfirmed))
+    candidates = [dict(c, source="hashtags") for c in tag_info["candidates"]]
+    candidates += [{"term": t, "source": "titel"} for t in title_unconfirmed]
+    # A fragment of another candidate is the same suggestion twice.
+    wordsets = [set(normalise_words(c["term"])) for c in candidates]
+    candidates = [c for i, c in enumerate(candidates)
+                  if not any(i != j and wordsets[i] < wordsets[j] for j in range(len(candidates)))]
     tags, tag_candidates = build_hashtags(item, keywords, mined=mined)
     title = build_title(item)
     description = build_description(item, keywords)
@@ -874,7 +911,7 @@ def suggest(item: dict, use_corpus: bool = True) -> dict:
         # Phrases other sellers of this kind of garment tag, that this item's
         # facts do not confirm. Never written into the listing: confirm one by
         # adding it as a fact (e.g. "style": "Baggy") and suggest again.
-        "keyword_candidates": tag_info["candidates"],
+        "keyword_candidates": candidates,
         "structured_fields": {
             "brand": item.get("brand"), "category": item.get("type"),
             "size": item.get("size"), "color": item.get("color"),
@@ -1022,12 +1059,15 @@ def main() -> None:
             print("  Ausblendungsgrund, deshalb wird nichts geraten.")
         if out.get("keyword_candidates"):
             print("\nSUCHBEGRIFFE ANDERER VERKAEUFER (nur wenn zutreffend)")
-            print("  Aus den Hashtags vergleichbarer Anzeigen, ohne Raute. Nichts davon")
+            print("  Aus Hashtags und Titeln vergleichbarer Anzeigen. Nichts davon")
             print("  steht in der Beschreibung; trifft einer zu, als Fakt eintragen")
             print("  (z.B. \"style\": \"Baggy\") und neu erzeugen.")
             for c in out["keyword_candidates"]:
-                print("  %-28s%6d Anzeigen%8.1f%%%7.2fx"
-                      % (c["term"], c["n"], 100 * c["share"], c["lift"]))
+                if c.get("n") is not None:
+                    print("  %-28s%6d Anzeigen%8.1f%%%7.2fx  (Hashtags)"
+                          % (c["term"], c["n"], 100 * c["share"], c["lift"]))
+                else:
+                    print("  %-28s(Titel dieser Zelle)" % c["term"])
         print("\nGELESEN ALS")
         for k, v in sorted(out.get("parsed_as", item).items()):
             print(f"  {k:<16}{v}")
