@@ -166,6 +166,7 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
+| `lovable-unmatched-reasons-prompt.md` (items 83 + 75) | `copies_set_aside`, `wb.reason.breakdown`, `wb.reason.receipt.card_statement_not_loaded`, `wb.reason.charge.receipt_held_by_another_charge` (not `reason_code` alone: other payloads carry one) | Backend PR #932 live on Fly |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
