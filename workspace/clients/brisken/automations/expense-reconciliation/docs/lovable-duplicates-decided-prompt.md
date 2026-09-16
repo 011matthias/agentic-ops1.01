@@ -6,10 +6,10 @@ every receipt group and never asks; resolved items leave the to-do area
 (Criss, note #46: "Ações resolvidas deveriam ser retiradas da área que constam
 para ser removidas").
 
-**Paste AFTER `lovable-month-views-prompt.md` (item 79).** It is written
-against item 79's page structure and replaces the "Duplicates panel"
-paragraph of that prompt's section 5; everything else in item 79 stands.
-Backend shipped first (item 74 PR, Fly deploy); every field below is live.
+**Written against item 79's page structure as published** (month views live
+2026-09-16, SPA `main` at `9df1a1e`): the Matching view's `DuplicatesPanel`
+and view 1's fold of copies. Everything item 79 built stands. Backend shipped
+first (item 74 PR, Fly deploy); every field below is live.
 
 Paste everything between the two rules into the `brisken-expense-review`
 Lovable project.
@@ -65,61 +65,72 @@ Every `duplicate_groups[]` element:
 - `summary.n_duplicate_groups_open` (integer, both payloads): groups nobody has
   decided. Expected 0.
 
-## 2. The panel (`DuplicatesPanel` in the Matching view)
+## 2. The panel (`DuplicatesPanel` in `RunWorkbench.tsx`, Matching view)
 
-Replace item 79's "Duplicates panel" paragraph with this.
+Today the panel shows the title "Possible duplicates" and the sentence
+"Advisory only. Resolving a group records your call; it never moves a row
+between buckets or changes the reconciliation total." (false since a ruling
+re-matches the month), treats every receipt group as decided
+(`isDecided = !!g.resolution || g.kind === "receipt"`), folds those behind
+"{n} decided", and gives every card both "Real duplicate" and "Not a
+duplicate". Change it as follows.
 
-- **Partition at render time only.** Do NOT filter or reorder
-  `duplicate_groups` or `duplicate_receipts`: the panel pairs them BY INDEX
-  within a kind, and a filtered array puts one group's receipts under another.
-  Keep the existing index pairing (and its fallback to member ids) exactly as
-  it is, then split the paired entries into three lists:
-  - OPEN: `state !== "decided"` (a group without `state` counts as open).
+- **Keep the index pairing exactly as it is** (`chargeIdx` / `receiptIdx` and
+  the fallback to member ids). Do NOT filter or reorder `duplicate_groups` or
+  `duplicate_receipts`: the pairing is by index within a kind, and a filtered
+  array puts one group's receipts under another. Partition the paired entries
+  (`detailed`) at render time into three lists:
+  - OPEN: `state === "open"`. When `state` is absent (an older payload), keep
+    today's rule: open unless `resolution` is set or `kind === "receipt"`.
   - COPIES: `state === "decided"` and `verdict === "copy"`.
   - KEPT APART: `state === "decided"` and `verdict === "distinct"`.
 - **Nothing to show:** when all three lists are empty, render nothing (as
   today when there are no groups).
-- **OPEN** groups render above the record exactly as today (member table,
-  both buttons "Real duplicate" / "Not a duplicate", same handlers). None are
-  expected; this keeps the page honest if one ever appears.
-- **The record.** One collapsed fold line, using item 79's fold style (muted
-  text, count, "Show"/"Hide"): `wb.dups.setAside.title` with `{n}` = COPIES
-  count, and when KEPT APART is not empty, append ` · ` and
-  `wb.dups.keptApart.count` with its count. Collapsed by default; item 79's
-  "Show decided rows" switch opens it too. It opens by default only when
-  `summary.n_duplicate_groups_open > 0`.
-- **Inside the record**, one compact card per group, muted, member table as
-  today (date, vendor, reference, total), and one line under the table:
-  - the reason: when `decided_by === "reviewer"`, `wb.dups.byReviewer.copy`
-    (verdict copy) or `wb.dups.byReviewer.distinct` (verdict distinct);
-    otherwise `wb.dups.basis.{basis}` (fall back to `wb.dups.basis.unknown`
-    for any value not in section 4, never print the raw key);
-  - ONE button, secondary, small:
-    - COPIES: `wb.dups.notCopy` -> `POST /api/runs/{id}/duplicates/resolve`
-      `{group_id, action: "ignore"}`;
-    - KEPT APART: `wb.dups.sameDocument` -> the same route with
-      `{group_id, action: "confirmed"}`.
-  Same mutation, busy state, cache update and invalidations the panel uses
-  today. Never send a null or empty resolution; the backend accepts only
+- **OPEN** groups render exactly as today: the title `wb.dups.title`, the
+  member table, both buttons "Real duplicate" / "Not a duplicate", same
+  handlers. None are expected; this keeps the page honest if one ever appears.
+  Delete the `wb.dups.body` sentence everywhere.
+- **No OPEN group:** no title and no intro sentence. The panel is only the
+  record below.
+- **The record.** Replace the "{n} decided" fold line (`wb.decided.fold.one` /
+  `wb.decided.fold.many`) with `wb.dups.setAside.title`, `{n}` = COPIES count,
+  and when KEPT APART is not empty append ` · ` and `wb.dups.keptApart.count`
+  with its count. Keep the panel's own Show/Hide toggle, its styling and its
+  collapsed default. When COPIES is empty but KEPT APART is not, the line
+  reads just the `wb.dups.keptApart.count` part.
+- **Inside the record**, COPIES first, then KEPT APART, each in array order.
+  One card per group, muted as decided cards are today, member table as today
+  (date, vendor, reference, total). In the card header, replace the kind label
+  and the resolution pill with the reason, one line of muted text:
+  - `decided_by === "reviewer"`: `wb.dups.byReviewer.copy` (verdict copy) or
+    `wb.dups.byReviewer.distinct` (verdict distinct);
+  - otherwise `wb.dups.basis.{basis}`, falling back to `wb.dups.basis.unknown`
+    for any value not in section 4. Never print the raw key.
+- **ONE button per decided card**, small, `variant="outline"`, right-aligned
+  where the two buttons sit today, same `onResolve` and `busy`:
+  - COPIES: `wb.dups.notCopy`, calls `onResolve(group_id, "ignore")`;
+  - KEPT APART: `wb.dups.sameDocument`, calls `onResolve(group_id, "confirmed")`.
+  Never send a null or empty resolution; the backend accepts only
   `"confirmed"` and `"ignore"`.
-- COPIES first, then KEPT APART, each in array order.
-- Remove the charge branch's visible strings from this panel: no
-  "Duplicate charges" heading can render (the backend sends no charge group).
-  Keep the `kind === "charge"` code path defensive; do not delete the type.
-- Drop the panel's intro sentence (`wb.dups.body`) and the old title
-  `wb.dups.title`; the fold line is the title now.
+- Keep the `kind === "charge"` code path and the `DuplicateCharge` type
+  defensively; the backend sends no charge group and `duplicate_charges` is
+  `[]`, so "Duplicate charges" never renders.
 
-**View 1 fold (item 79 section 5 table, row 1).** Unchanged rule
-(`duplicate?.is_extra === true`); only its undo label changes to
-`wb.dups.notCopy`, same call. A group the tool calls two purchases carries no
-row marker at all, so its receipts are ordinary open receipts in view 1.
+**View 1, receipts without a charge.** The fold of copies
+(`receiptCopiesAll`, `wb.decided.foldCopies.*`) stays exactly as it is. Only
+the button on a copy row (`r.duplicate?.group_id`, today `wb.dups.notDup`)
+changes its label to `wb.dups.notCopy`; same call with `resolution: "ignore"`.
+A group the tool calls two purchases carries no row marker, so its receipts
+are ordinary open receipts there.
 
 ## 3. The Expenses view (`ExpensesReviewGrid.tsx`)
 
-The duplicate-copies bar (`n_duplicate_copies`) and the row markers stay as
-they are. Only copies carry markers now, so the bar counts copies the tool or
-a reviewer set aside. Change its two strings to the set-aside wording in
-section 4 (`expx.dup.count_one`, `expx.dup.count`). No other change here.
+The duplicate-copies bar (`n_duplicate_copies`), the row badges and "Delete
+the extra" stay as they are. Only copies carry markers now, so the bar counts
+copies the tool or a reviewer set aside. Change only string VALUES in section
+4: the bar (`expx.dup.count_one`, `expx.dup.count`), the row link
+(`expx.dup.notDuplicate`) and its toast (`expx.dup.toast.ignored`). No code
+change here.
 
 ## 4. i18n (EN and PT in the same edit, `src/lib/i18n.tsx`)
 
@@ -143,19 +154,25 @@ section 4 (`expx.dup.count_one`, `expx.dup.count`). No other change here.
 | `wb.dups.basis.unknown` | Decided by the tool | Decidido pela ferramenta |
 | `expx.dup.count_one` | 1 copy set aside | 1 cópia separada |
 | `expx.dup.count` | {n} copies set aside | {n} cópias separadas |
+| `expx.dup.notDuplicate` | Not a copy | Não é cópia |
+| `expx.dup.toast.ignored` | Kept as a separate purchase | Mantida como compra separada |
+
+`wb.dups.body` is no longer rendered; leave the key or delete it, either is
+fine.
 
 ## 5. Do not change
 
 The resolve route, its payload keys and its reply handling; the index pairing
 of `duplicate_groups` with `duplicate_receipts`; row markers (`duplicate`) and
 `n_duplicate_copies`; item 79's cards, views, folds and switch; `RowView`,
-`RowStatusBadge` and the Status cell; the Expenses view beyond the two strings
-in section 3. No em-dashes in any new string.
+`RowStatusBadge` and the Status cell; the Expenses view beyond the four string
+values in section 3. No em-dashes in any new string.
 
 ## 6. Render defensively
 
 `state`, `decided_by`, `verdict`, `basis` may be absent on an older payload:
-absent `state` means open, and an open group renders as today. An unknown
+an absent `state` falls back to today's rule (section 2, OPEN), and such a
+group renders as today. An unknown
 `basis` renders `wb.dups.basis.unknown`. `n_duplicate_groups_open` absent
 means 0.
 
@@ -177,7 +194,8 @@ in `chunk-runs._runId-*`. Decisive signatures: `n_duplicate_groups_open`,
 never click Not a copy or Same document on Criss's months), EN then PT:
 
 1. July `/runs/50622baec444`, Matching view, bottom: no "Possible duplicates"
-   heading, no "Duplicate charges", no "Real duplicate" button. One fold line
+   heading, no "Advisory only" sentence, no "Duplicate charges", no "Real
+   duplicate" button, no "decided" fold line. One fold line
    "Copies set aside (5)" (reads "Copies set aside (4) · 1 kept apart" once the
    Google ruling is reset). Opened: Aposto Karlsruhe 80.00 EUR and Google LLC
    71.64 USD read "Set aside by a reviewer"; Lovable Labs 200.00 USD, the two
