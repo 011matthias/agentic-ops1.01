@@ -71,6 +71,12 @@ Evidence per prompt in the Applied rows. Not driven: item 80's "Warnings only
 27 -> 23" count (the month is split into views now, so the prompt's
 whole-month count has no single screen).
 
+**Re-audited 2026-09-16 night after the owner published the turn prompt (item
+76): applied, the Not-applied table is empty again.** 48 chunks, 1,035 KB, all
+five controls hit, all five decisive names present. Driven cold from the login
+gate in a fresh named session (`recon-turn`), every view of both months, EN and
+PT on August, 0 POST/PUT/PATCH/DELETE after login. Evidence in the Applied row.
+
 Two display strings misread on the 2026-09-01 pass, both resolved by reading
 the surrounding key: `"Not a duplicate"` is `wb.dups.notDup` from the workbench
 duplicates panel, which predates `lovable-duplicates-prompt.md` and is not
@@ -149,6 +155,7 @@ missing.
 | `lovable-row-type-prompt.md` (item 73) | Same crawl: `row_type` in `chunk-runs._runId`; `wb.rowType.payment`, `wb.entity.fromUpload`, `wb.credits.tip` in `chunk-i18n`. **Driven:** July "Credits on the statement" view, posted fold opened: "Payment Thank You-Mobile" -9,664.81 carries "Card payment", and its "Corporate Services" chip's tooltip reads "Company of the card on this row: Credit Card - 2838". August: "ANNUAL MEMBERSHIP FEE" 150.00 in Charges without a receipt carries "Card fee"; "Payment Thank You-Mobile" -7,823.16 carries "Card payment". No purchase row text carried a type chip. The same July payoff row still reads "Awaiting decision" with Reject and a disabled Confirm (item 76) |
 | `lovable-month-move-prompt.md` (item 77) | Same crawl: `month_move` + `n_month_moves` in `chunk-expenses._batchId`; `expx.review.monthMove` in `chunk-i18n`. The renderer itself has no live case (see Cannot verify); July's Expenses view renders with no "Move to" line and no fallback string |
 | `lovable-duplicates-decided-prompt.md` (item 74) | Same crawl: `decided_by` in `chunk-runs._runId`; `wb.dups.setAside.title`, `wb.dups.basis.printed_reference`, `wb.dups.notCopy` in `chunk-i18n`. **`n_duplicate_groups_open` 0 hits**: harmless, the panel partitions each group by its own `state` and the prompt never asked it to print the count. **Driven**, read-only (folds opened, no undo clicked): July reads "Copies set aside (2) · 3 kept apart" with no "Possible duplicates", "Advisory only", "Duplicate charges" or "Real duplicate"; opened, Aposto 80.00 "Set aside by a reviewer", Lovable 200.00 "Same document number", each with one "Not a copy"; Google 71.64 x2, Hostinger 172.61 x2 and Redis 13,200.00 x2 "Kept apart by a reviewer", each with one "Same document". August: "Copies set aside (11)", 7 "Same document number", 2 "One prints the other's number" (Lovable HMVWDWIL0029/0030), 2 "Same vendor, date and amount" (OpenAI, Obsidian), 11 "Not a copy" buttons. PT on August: "Cópias separadas (11)", "Um traz o número do outro" x2, "Não é cópia" x11. The prompt's July prediction (5 copies) predates two reviewer rulings made 2026-09-16 16:17 UTC that turned the Hostinger and Redis groups into kept-apart |
+| `lovable-turn-prompt.md` (item 76) | Bundle 2026-09-16 night: `n_self_confirmed` + `wb.selfConfirmed.count` in `chunk-runs._runId`; `row.status.confirmedByTool`, `row.status.posted`, `row.status.none` in `chunk-i18n`. **Driven, payloads re-read first (July decide 1 / self-confirmed 2, August 7 / 3):** July Matched caption "2 confirmed automatically"; ELEVENLABS.IO 5.00 and ANTHROPIC 50.54 read "Confirmed automatically" with the undo icon and no Reject / Confirm; AMAZON* Z11US7DF5 315.56 reads "Confirmed" with its undo; every row in its posted fold reads "Already booked" with no Reject / Confirm; WEB*NETWORKSOLUTIONS 7.98 reads "Awaiting decision" with Reject + Confirm match; Credits view "Payment Thank You-Mobile" -9,664.81 reads "Already booked", no buttons; the 24 open charges without a receipt read "Nothing to decide" with Attach receipt only. August, all five views: 100 charges without a receipt "Nothing to decide" + Attach receipt; Needs review 2 + Matched 5 rows "Awaiting decision" with both buttons (= `n_undecided` 7); payoff -7,823.16 "Already booked"; LOVABLE 15.00, LOVABLE 25.00, ANTHROPIC 51.38 "Confirmed automatically" with undo; caption "3 confirmed automatically". PT on August: "3 confirmadas automaticamente", "Confirmada automaticamente", "Já lançada", "Nada a decidir", "Aguardando decisão" + Rejeitar / Confirmar par. **Not observed:** the badge tooltips (a hover on "Already booked" rendered no tooltip in the drive; the keys are in the bundle) |
 
 These four were drafted 2026-08-28/29, pasted from chat, and lived only in a
 gitignored scratch directory until 2026-09-01. They are in `docs/` now
@@ -159,7 +166,6 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
-| `lovable-turn-prompt.md` (2026-09-16, item 76: the status badge and the Reject / Confirm buttons follow `rows[].turn`; a booked row reads "Already booked" and never asks; a tool confirmation reads "Confirmed automatically" with its undo) | `n_self_confirmed`, `row.status.confirmedByTool`, `row.status.posted`, `row.status.none`, `wb.selfConfirmed.count` (not `decided_by` alone: the duplicates panel already reads one) | Backend live first (Fly, `turn` on July's rows). Browser-drive the seven checks at the end of the prompt; the self-confirmed rows appear only after each month's next re-match |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
