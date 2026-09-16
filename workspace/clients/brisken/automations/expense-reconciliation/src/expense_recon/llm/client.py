@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Protocol
@@ -142,6 +143,16 @@ class ExtractedReceipt:
     # generation path excludes it loudly. Defaults to "receipt" so text-only
     # mocks and older callers keep their behavior.
     document_type: str = "receipt"
+    # Item 77 amendment (note #45, 2026-09-16): three printed identifiers,
+    # asked for in the response schema only (see `_EXTRACT_SCHEMA`), so the
+    # instructions every other field is read under do not change. `time` is
+    # HH:MM or None;
+    # the two numbers are verbatim or None. The duplicate ladder (item 74) may
+    # use them and never requires them; charge matching cannot, because the
+    # Chase export carries no time of day.
+    time: str | None = None
+    invoice_number: str | None = None
+    receipt_number: str | None = None
 
 
 @dataclass(frozen=True)
@@ -484,12 +495,33 @@ _EXTRACT_SCHEMA = {
         },
         "confidence": {"type": "number"},
         "notes": {"type": "string"},
+        # Item 77 amendment (note #45). In the SCHEMA only, last, with the
+        # question carried by `description`: the instruction text stays
+        # byte-identical. Measured 2026-09-16 over the 129 stored receipts,
+        # two runs per arm: listing these in the instructions moved 39 stable
+        # readings (a Microsoft invoice re-read as a statement, an Amazon
+        # order re-read as its product's maker); this shape moved 31, none of
+        # them a date, total, currency, document type or resolvable card,
+        # against a 12-reading floor for a one-word wording change.
+        "time": {
+            "type": ["string", "null"],
+            "description": "Time of day of the purchase as printed, HH:MM on a 24-hour clock, or null when no time is printed.",
+        },
+        "invoice_number": {
+            "type": ["string", "null"],
+            "description": "The number the document labels as its invoice number, exactly as printed, or null.",
+        },
+        "receipt_number": {
+            "type": ["string", "null"],
+            "description": "The number the document labels as its receipt number, exactly as printed, or null.",
+        },
     },
     "required": [
         "document_type",
         "date", "total", "currency", "vendor", "vendor_clean", "reference",
         "tax", "tax_label", "payment_hint", "card_last4",
         "line_items", "confidence", "notes",
+        "time", "invoice_number", "receipt_number",
     ],
     "additionalProperties": False,
 }
@@ -901,7 +933,28 @@ def _extraction_from_payload(payload: dict) -> ExtractedReceipt:
         card_last4=_card_last4(payload.get("card_last4")),
         vendor_clean=_opt_str(payload.get("vendor_clean")),
         document_type=_document_type(payload.get("document_type")),
+        time=_time_hhmm(payload.get("time")),
+        invoice_number=_opt_str(payload.get("invoice_number")),
+        receipt_number=_opt_str(payload.get("receipt_number")),
     )
+
+
+_TIME_RE = re.compile(r"^\s*(\d{1,2})[:h.](\d{2})(?::\d{2})?\s*$")
+
+
+def _time_hhmm(value: object) -> str | None:
+    """"HH:MM" on a 24-hour clock, or None.
+
+    The prompt asks for HH:MM already; this keeps a reading that is not a
+    clock time (a date, "unknown", 24:30) from being stored as one. A
+    single-digit hour is padded; seconds are dropped."""
+    m = _TIME_RE.match(str(value or ""))
+    if not m:
+        return None
+    hour, minute = int(m.group(1)), int(m.group(2))
+    if hour > 23 or minute > 59:
+        return None
+    return f"{hour:02d}:{minute:02d}"
 
 
 def _card_last4(value: object) -> str | None:

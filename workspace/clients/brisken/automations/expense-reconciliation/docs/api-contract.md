@@ -2255,3 +2255,61 @@ The owner's note gave a criterion ("the criteria for a refund is the fact
 that it was payed with by a non company card"). That is item 41's
 `suggested_private` rule on RECEIPTS, which never emits "refund"; it is a
 different mechanism and this item does not build it.
+
+## A corrected date moves the receipt: `month_move` + `POST .../move` (item 77, 2026-09-16)
+
+A misread date files a receipt in the wrong month (a Mercado Pago slip
+printing `04/07/26` was read as a January date, so the drop created "January
+2026" for it), and correcting the date did not move it: a typed date is
+believed, and nothing looked at where the row lives.
+
+**The offer**, expense-batch payload, `expenses[]`, parallel, object:
+
+```json
+"month_move": {"month": "2026-07", "label": "July 2026", "batch_id": "50622baec444"}
+```
+
+Present only when the row's date was TYPED by the reviewer (or the whole
+expense was entered by hand) AND falls outside the batch's window (its month
+plus one either side, the item-25 window) AND the batch is a company month.
+ABSENT otherwise, never null. `batch_id` names the month the move would join,
+and is absent when that month does not exist yet (the move creates it).
+`label` is the English label a created month gets; localize from `month`.
+A machine reading outside the window never offers a move: it stays the
+`date_outside_period` review state. A receipt attached to a charge by hand
+(`manual:` id that is not a typed-in add) is never offered.
+`summary.n_month_moves` (int, every expense payload) counts the offers.
+
+**The move**, `POST /api/runs/{run_id}/expenses/{document_id}/move`, body
+`{"month": "YYYY-MM"}` optional (default: the row's offer). Reply:
+
+```json
+{"ok": true, "document_id": "0051__20260704_Receipt_Food_ParadaObrigatoria.pdf",
+ "batch_id": "50622baec444", "label": "July 2026", "month": "2026-07",
+ "created_batch": false, "already_in_batch": false,
+ "source": {"batch_id": "4ceaeb461386", "n_expenses": 0},
+ "summary": {"...": "the SOURCE month's summary"},
+ "rematch": {"...": "the target month, present when it has a statement"},
+ "source_rematch": {"...": "the source month, present when it has a statement"}}
+```
+
+The receipt keeps its reading (no model call), its file (copied into the
+target; the source keeps its bytes), its header edits (the date included),
+its category edits and its intake provenance, under a new `document_id` in
+the target. Identical bytes already in the target are not added twice
+(`already_in_batch: true`; the target's own row stands). The source row
+becomes a soft delete whose stored payload names the target. A month the move
+creates carries `created_by: "move"` and claims its pooled mail afterwards.
+Both months re-match when they hold a statement. Refusals: 400 for a trip, a
+malformed month, the batch's own month, an expense already removed, or no
+offer and no named month; 404 for an unknown expense. The source month is
+never deleted, even when the move empties it.
+
+**Printed identifiers** (item 77 amendment, note #45), `expenses[]`, parallel,
+strings, ABSENT when the receipt did not print them and on every receipt read
+before 2026-09-16: `time` (`HH:MM`, 24-hour), `invoice_number` and
+`receipt_number` (verbatim). Read in the same extraction call, asked for in
+the response schema only, so the instructions every other field is read under
+stay unchanged (measured: listing them in the instructions re-read a real
+invoice as a statement). Never a matcher input: the Chase export carries no time of day. Item 74's duplicate
+ladder may use them.
