@@ -77,7 +77,12 @@ def test_full_lifecycle(client):
     assert client.get(f"/api/runs/{run_id}").status_code == 200
     resp = client.post(f"/api/runs/{run_id}/publish")
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True, "run_id": run_id, "published": True}
+    body = resp.json()
+    assert {k: body[k] for k in ("ok", "run_id", "published")} == {
+        "ok": True, "run_id": run_id, "published": True,
+    }
+    # Item 88: publishing is the sign-off and saves the month to memory.
+    assert body["memory"]["saved"] is True
 
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         intake = store.get_intake(intake_id)

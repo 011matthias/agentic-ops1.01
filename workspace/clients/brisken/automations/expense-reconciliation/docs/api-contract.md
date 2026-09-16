@@ -2589,3 +2589,46 @@ and the two old counts keep their questions.
 Pinned by `tests/test_view_contract.py`
 (`test_every_box_count_equals_the_rows_carrying_its_box`), route-level in
 `tests/test_expense_boxes.py`.
+
+## Publishing saves the month's corrections to memory: `memory` on the publish reply (item 88, 2026-09-16)
+
+Owner ruling 2026-09-16: save a month's corrections to memory automatically at
+month sign-off, with the Memory page as the undo. The app's sign-off is Publish
+(`POST /api/runs/{id}/publish`), so publishing now does what the "Save
+corrections to memory" button (`POST /api/runs/{id}/commit-memory`) did: header
+edits teach field corrections, entity overrides teach merchant -> entity,
+category reclassifications teach merchant -> category, confirmed statement
+pairs teach aliases and FX, and the same edits grow the merchant registry.
+
+The publish reply gains one parallel key; `ok`, `run_id` and `published` are
+unchanged, and the month is published whatever the save does.
+
+```json
+{ "ok": true, "run_id": "50622baec444", "published": true,
+  "memory": { "saved": true, "learned": { "field_corrections": 2, "...": 0 } } }
+```
+
+| `memory` | When |
+|---|---|
+| `{"saved": true, "learned": {...}}` | the month's corrections were saved; `learned` is the button's `learned` object |
+| `{"saved": false, "reason": "unchanged"}` | nothing changed since the last save (by Publish or by the button), so nothing is counted twice |
+| `{"saved": false, "error": "..."}` | the save failed; logged server-side, the month is still published |
+
+"Unchanged" compares a digest of the month's verdicts, category overrides,
+header edits and whole-expense adds and deletes, timestamps left out, against
+the one stored at the last save (`memory_commits`, one row per run, removed
+with the run). The button always saves and records the digest. Unpublish saves
+and unlearns nothing.
+
+The undo is where it was: the Memory page's per-merchant Forget
+(`POST /api/memory/forget`) drops learned entities, field corrections and
+categories; category rows are editable in place; registry aliases are edited
+in the Merchants editor. Accepted trade-off (same ruling): a one-off exception
+becomes a rule until someone deletes it there.
+
+Live 2026-09-16: no month has been published yet (`/api/operator/state`
+`published_runs` is empty) and the learning store holds 0 learned entities and
+0 field corrections, so the first save happens when a month is first
+published.
+
+Route-level in `tests/test_memory_at_signoff.py`.
