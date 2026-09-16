@@ -312,3 +312,74 @@ def test_a_plainly_written_foreign_brand_is_still_caught(ke):
 
 def test_the_items_own_brand_is_never_reported(ke):
     assert ke.foreign_brands("Diesel Jeans, dieselbe Passform", "Diesel") == []
+
+
+# ----------------------------------------------- tag vocabulary of other sellers
+
+RESEARCH_PATH = ENGINE_PATH.parent / "keyword_research.py"
+
+
+def _tag_market():
+    """An in-memory market whose stored descriptions tag jeans the way sellers do."""
+    import sqlite3
+    spec = importlib.util.spec_from_file_location("keyword_research_for_engine", RESEARCH_PATH)
+    kr = importlib.util.module_from_spec(spec)
+    sys.modules["keyword_research_for_engine"] = kr
+    spec.loader.exec_module(kr)
+    con = sqlite3.connect(":memory:")
+    con.execute("""CREATE TABLE listings (id INTEGER PRIMARY KEY, title TEXT, size TEXT,
+                   brand_norm TEXT, garment_class TEXT, is_kid INTEGER DEFAULT 0,
+                   sold_flag INTEGER DEFAULT 0)""")
+    con.execute("""CREATE TABLE descriptions (listing_id INTEGER PRIMARY KEY,
+                   description TEXT NOT NULL, source TEXT NOT NULL, fetched_at TEXT NOT NULL)""")
+    n = 0
+    for _ in range(30):
+        n += 1
+        con.execute("INSERT INTO listings VALUES (?,?,?,?,?,0,0)",
+                    (n, "Baggy Jeans vintage denim y2k", "W32", "levis", "pants"))
+    for i in range(60):
+        n += 1
+        con.execute("INSERT INTO listings VALUES (?,?,?,?,?,0,0)",
+                    (n, "Jeans blau", "W30", "noname", "pants"))
+        con.execute("INSERT INTO descriptions VALUES (?,?,?,?)",
+                    (n, "Jeans #y2kjeans #baggyjeans", "meta", "2026-09-16T00:00:00Z"))
+    for i in range(60):
+        n += 1
+        con.execute("INSERT INTO listings VALUES (?,?,?,?,?,0,0)",
+                    (n, "Pullover", "M", "nike", "sweater"))
+        con.execute("INSERT INTO descriptions VALUES (?,?,?,?)",
+                    (n, "Pullover #streetwear", "meta", "2026-09-16T00:00:00Z"))
+    con.commit()
+    return kr, con
+
+
+NO_NAME_Y2K_JEANS = {
+    "brand": "No Name", "type": "Jeans", "garment_class": "pants", "size": "W30",
+    "color": "Blau", "material": "Denim", "condition": "Gut", "era": "00s",
+    "measurements": {"Bundweite": "38cm"},
+}
+
+
+def test_a_confirmed_tag_phrase_reaches_the_description_through_suggest(ke, monkeypatch):
+    """Caller-level: suggest() -> tag_terms -> research -> keywords -> text.
+
+    era 00s justifies y2k, so "y2k jeans" is written, without a hash. Baggy is
+    not a fact about this pair, so it is only offered, never written."""
+    monkeypatch.setattr(ke, "_research_connection", _tag_market)
+    monkeypatch.setattr(ke, "mined_terms", lambda item: ([], []))
+    out = ke.suggest(dict(NO_NAME_Y2K_JEANS))
+    assert "y2k jeans" in out["keywords"]
+    line = [ln for ln in out["description"].splitlines() if ln.startswith("Wird auch gesucht als")]
+    assert line and "y2k jeans" in line[0]
+    assert "#" not in out["description"]
+    assert "baggy" not in out["description"].lower()
+    assert "baggy jeans" in {c["term"] for c in out["keyword_candidates"]}
+
+
+def test_without_a_database_the_listing_is_unchanged(ke, monkeypatch):
+    monkeypatch.setattr(ke, "_research_connection", lambda: (None, None))
+    monkeypatch.setattr(ke, "mined_terms", lambda item: ([], []))
+    with_tags = ke.suggest(dict(NO_NAME_Y2K_JEANS))
+    plain = ke.suggest(dict(NO_NAME_Y2K_JEANS), use_corpus=False)
+    assert with_tags["description"] == plain["description"]
+    assert with_tags["keyword_candidates"] == []

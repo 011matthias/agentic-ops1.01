@@ -186,3 +186,128 @@ def test_cells_lists_only_what_is_worth_mining(kr, corpus):
     assert ("carhartt", "pants") in keys
     assert ("nike", "pants") in keys
     assert all(n >= 60 for _, _, n in found)
+
+
+# ------------------------------------------------------------ description tags
+# Vinted's search reads descriptions and ignores the hash (measured 2026-09-16),
+# so the tag vocabulary other sellers use is a keyword source. These pin the
+# three ways a raw tag wall would otherwise poison it: run-together words, one
+# wall outvoting honest listings, and another brand's name riding along.
+
+
+def build_tag_market(kr, described_pants=60, sold_every=0):
+    """Titles that teach the vocabulary, plus stored descriptions with tags."""
+    con = sqlite3.connect(":memory:")
+    con.execute("""CREATE TABLE listings (id INTEGER PRIMARY KEY, title TEXT, size TEXT,
+                   brand_norm TEXT, garment_class TEXT, is_kid INTEGER DEFAULT 0,
+                   sold_flag INTEGER DEFAULT 0, total_price REAL)""")
+    con.execute("""CREATE TABLE descriptions (listing_id INTEGER PRIMARY KEY,
+                   description TEXT NOT NULL, source TEXT NOT NULL, fetched_at TEXT NOT NULL)""")
+    rows, descs, n = [], [], 0
+    # Vocabulary: every word a tag may split into appears in 20+ titles.
+    for i in range(30):
+        n += 1
+        rows.append((n, "Levis 501 Baggy Jeans vintage denim y2k streetwear", "W32",
+                     "levis", "pants", 0, 0, 20.0))
+    # Described pants across many small brands, which is the owner's closet shape.
+    for i in range(described_pants):
+        n += 1
+        brand = ["hollister", "diesel", "gap", "noname"][i % 4]
+        rows.append((n, "Jeans blau", "W30", brand, "pants", 0,
+                     1 if sold_every and i % sold_every == 0 else 0, 15.0))
+        tags = "#vintagedenim #y2kjeans"
+        if i % 2 == 0:
+            tags += " #baggyjeans"
+        if i % 3 == 0:
+            tags += " #levis501"
+        descs.append((n, "Schoene Jeans, kaum getragen. " + tags, "ld_json", "2026-09-16T00:00:00Z"))
+    # Background descriptions in another class, so lift is measurable.
+    for i in range(60):
+        n += 1
+        rows.append((n, "Pullover grau", "M", "nike", "sweater", 0, 0, 12.0))
+        descs.append((n, "Warmer Pullover #streetwear", "ld_json", "2026-09-16T00:00:00Z"))
+    con.executemany("INSERT INTO listings VALUES (?,?,?,?,?,?,?,?)", rows)
+    con.executemany("INSERT INTO descriptions VALUES (?,?,?,?)", descs)
+    con.commit()
+    return con
+
+
+def test_a_run_together_tag_splits_into_the_words_buyers_type(kr):
+    vocab = {"vintage", "denim", "baggy", "jeans", "y2k", "streetwear", "street", "wear"}
+    assert kr.split_tag("vintagedenim", vocab) == ["vintage", "denim"]
+    assert kr.split_tag("streetwear", vocab) == ["streetwear"], "fewest pieces wins"
+    assert kr.split_tag("coupeevasee", vocab) is None, "unknown fragments are not guessed"
+
+
+def test_a_tag_wall_counts_once_per_listing(kr):
+    vocab = {"baggy", "jeans"}
+    wall = " ".join(["#baggyjeans"] * 40)
+    assert kr.tag_phrases(wall, vocab) == {"baggy jeans"}
+
+
+def test_small_brands_fall_back_to_the_whole_class(kr):
+    con = build_tag_market(kr)
+    try:
+        mined = kr.mine_tags(con, "hollister", "pants")
+        assert mined["scope"] == "class", "15 Hollister descriptions are too few on their own"
+        terms = {t.text: t for t in mined["terms"]}
+        assert "vintage denim" in terms and "baggy jeans" in terms
+        assert terms["baggy jeans"].n == 30, "one listing, one vote"
+    finally:
+        con.close()
+
+
+def test_another_brands_name_never_reaches_a_class_wide_keyword(kr):
+    """#levis501 on a No Name pair is the catalogue-rule breach that hides it."""
+    con = build_tag_market(kr)
+    try:
+        vocab = kr.tag_vocabulary(con)
+        assert kr.tag_phrases("#levis501", vocab) == {"levis 501"}, \
+            "the phrase must actually form, or this test proves nothing"
+        mined = kr.mine_tags(con, None, "pants", vocab=vocab)
+        assert "levis 501" not in {t.text for t in mined["terms"]}
+        assert "levis 501" in {t.text for t in mined["rejected"]}
+    finally:
+        con.close()
+
+
+def test_too_few_descriptions_say_so_instead_of_ranking_noise(kr):
+    con = build_tag_market(kr, described_pants=10)
+    try:
+        mined = kr.mine_tags(con, None, "pants")
+        assert mined["scope"] == "none" and mined["terms"] == []
+        assert mined["needed"] == kr.MIN_DESCRIBED - 10
+    finally:
+        con.close()
+
+
+def test_a_database_without_descriptions_is_not_an_error(kr, corpus):
+    assert kr.mine_tags(corpus, "carhartt", "pants")["scope"] == "none"
+
+
+def test_only_true_phrases_that_add_a_word_are_confirmed(kr):
+    """y2k is justified (the engine maps era 00s to it) and new; denim + jeans
+    is justified but says nothing the listing does not already say; baggy is
+    not a fact about this pair, so it may only be offered."""
+    con = build_tag_market(kr)
+    try:
+        out = kr.tag_keywords_for(con, None, "pants",
+                                  facts_words={"jeans", "denim", "00s", "y2k", "vintage"},
+                                  literal_words={"jeans", "denim", "00s"})
+        assert "y2k jeans" in out["confirmed"]
+        assert "vintage denim" in out["confirmed"]
+        assert "baggy jeans" not in out["confirmed"]
+        assert "baggy jeans" in {c["term"] for c in out["candidates"]}
+    finally:
+        con.close()
+
+
+def test_tag_demand_waits_for_enough_sales(kr):
+    con = build_tag_market(kr, sold_every=10)
+    try:
+        dem = kr.tag_demand(con, None, "pants")
+        assert dem["sold_n"] == 6 and dem["basis"] == "zu-wenig-verkauft"
+        assert dem["terms"] == []
+        assert dem["tagged_share_all"] == 1.0
+    finally:
+        con.close()
