@@ -1113,6 +1113,37 @@ class RunStore:
         )
         self.conn.commit()
 
+    # -- when a run was last edited (2026-09-16) ---------------------------
+
+    # Every per-run edit table carrying `run_id` + `updated_at`. `receipt_claims`
+    # is keyed on two run columns and stamps `claimed_at`; a claim always rides
+    # a decision write, whose stamp is already in `decisions`.
+    _EDIT_TABLES = (
+        "decisions",
+        "category_overrides",
+        "expense_field_overrides",
+        "expense_edits",
+        "duplicate_resolutions",
+    )
+
+    def latest_edit_at(self, run_id: str) -> str | None:
+        """The latest `updated_at` over this run's rows in every edit table,
+        or None when it has none. Feeds the review payloads' `updated_at`: a
+        field edit on a month without a statement changes no snapshot, so the
+        edit tables are the only place it is recorded.
+
+        MAX over the stored strings, which every writer produces with the one
+        `_now_iso` format; the service parses and normalizes the result."""
+        union = " UNION ALL ".join(
+            f"SELECT MAX(updated_at) AS at FROM {table} WHERE run_id = ?"
+            for table in self._EDIT_TABLES
+        )
+        row = self.conn.execute(
+            f"SELECT MAX(at) AS at FROM ({union})",
+            (run_id,) * len(self._EDIT_TABLES),
+        ).fetchone()
+        return row["at"] if row and row["at"] else None
+
     # -- settings (§16 export policy; one row, id=1) -----------------------
 
     def get_settings(self) -> dict:

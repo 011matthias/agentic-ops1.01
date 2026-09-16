@@ -694,6 +694,26 @@ def test_receipt_in_report_is_absent_or_a_bool_never_null(payloads):
             assert 0 <= summary["n_receipts_in_report"] <= summary["n_receipts"]
 
 
+def test_updated_at_is_an_iso_string_on_every_payload(payloads):
+    """2026-09-16. `updated_at` is a scalar, so the list pins above say
+    nothing about it; the SPA renders `updated_at ?? created_at` as "Last
+    updated", which a null would silently turn back into the creation day and
+    a non-string would crash. Present on every payload, a string, a readable
+    UTC instant, and never before `created_at`."""
+    from datetime import datetime, timezone
+
+    for view_name, views in payloads.items():
+        for view in views:
+            value = view.get("updated_at")
+            assert isinstance(value, str), (view_name, view.get("run_id"), value)
+            at = datetime.fromisoformat(value)
+            assert at.utcoffset() == timezone.utc.utcoffset(None), (view_name, value)
+            created = datetime.fromisoformat(view["created_at"])
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            assert at >= created, (view_name, value, view["created_at"])
+
+
 def test_posting_category_proposed_is_absent_or_true_never_false(
     tmp_path, monkeypatch
 ):

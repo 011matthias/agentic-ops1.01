@@ -2577,6 +2577,7 @@ def build_view(
     overrides: dict,
     resolutions: dict[str, str] | None = None,
     settled_elsewhere: dict[str, dict] | None = None,
+    edited_at: str | None = None,
 ) -> dict:
     """Compose the render model: per-transaction rows with candidates and
     the reviewer's effective verdict, plus the unmatched-receipt list and
@@ -2592,7 +2593,12 @@ def build_view(
     charge has claimed. Attached as `settled_by` on the matching
     unmatched / assignable receipt entries -- parallel field, ABSENT (not
     null) everywhere else, so a month with no cross-batch settlements
-    renders byte-identically to before the field existed."""
+    renders byte-identically to before the field existed.
+
+    `edited_at` (2026-09-16): the latest stamp in this run's edit tables,
+    read by the GET route, folded into the payload's `updated_at`. None from
+    every other caller, whose `updated_at` then reads the snapshot and the
+    decisions alone (see `month_updated_at`)."""
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
     rec_by_id = {r.document_id: r for r in receipts}
     # What `receipt_image_available` is resolved against (item 52). Read
@@ -2713,6 +2719,16 @@ def build_view(
     for tx_id_, st in states.items():
         if st["held_doc"]:
             holder_by_doc[st["held_doc"]] = tx_id_
+    # 2026-09-16: a PENDING review row holds its receipts too. Its `held_doc`
+    # is the reviewer's pick, None until one exists, yet `apply_decisions`
+    # pass 2 has already consumed every receipt it keeps, so a later charge
+    # the matcher paired with the same receipt falls to `unmatched` with no
+    # holder named (August 2026: ANTHROPIC 52.46 lost 0023 to a judgment row
+    # and read `n_charges_receipt_taken` 0). `assignable_receipts` below
+    # already counts these. setdefault, so a reconciled match or a
+    # reviewer's pick keeps precedence.
+    for pending in (*effective.judgment_required, *effective.ambiguous):
+        holder_by_doc.setdefault(pending.document_id, pending.transaction_id)
     tx_by_id_all = {t.transaction_id: t for t in transactions}
 
     def _from_batch(document_id: str) -> dict:
@@ -3356,6 +3372,9 @@ def build_view(
         "run_id": run.run_id,
         "label": run.label,
         "created_at": run.created_at,
+        # When the month last changed (2026-09-16); the SPA's "Last updated"
+        # reads `updated_at ?? created_at`, so it printed the creation day.
+        "updated_at": month_updated_at(run, decisions=decisions, edited_at=edited_at),
         "llm_enabled": run.llm_enabled,
         "has_coa": run.has_coa,
         "summary": summary,
@@ -5407,6 +5426,7 @@ def build_expense_view(
     decisions: dict | None = None,
     trip: dict | None = None,
     settled_elsewhere: dict[str, dict] | None = None,
+    edited_at: str | None = None,
 ) -> dict:
     """Compose the receipt-spine render model for an expense batch: one row
     per expense with the reviewer's edits applied, review-by-exception
@@ -5420,7 +5440,11 @@ def build_expense_view(
     a card row that ignored that would report a month as further along than
     the workbench says it is. Omitting it is honest for a month with no
     charges (there is nothing to have decided) and wrong for a reconciling
-    one, which is why the route passes it."""
+    one, which is why the route passes it.
+
+    `edited_at` (2026-09-16): as on `build_view`, the route's read of the
+    edit tables, folded into `updated_at`. A field edit on a month without a
+    statement is recorded nowhere else."""
     parse_errors = [tuple(e) for e in (run.snapshot or {}).get("parse_errors", [])]
     # Compose from the EXTRACTION BASELINE, not the stored receipt block: on
     # a month whose statement has been attached the latter is the baked pool
@@ -5968,6 +5992,11 @@ def build_expense_view(
         "run_id": run.run_id,
         "label": run.label,
         "created_at": run.created_at,
+        # When the month last changed (2026-09-16), same helper and same
+        # sources as the run payload, plus the edit list this view receives.
+        "updated_at": month_updated_at(
+            run, decisions=decisions, edits=edits, edited_at=edited_at
+        ),
         "mode": MODE_EXPENSE_GENERATION,
         # Item 38: the declared kind, "company-month" on every batch that
         # predates the split (absent marker reads as company). Scalar,
@@ -7225,6 +7254,76 @@ def month_statements(run: RunRow) -> list[dict]:
     all.
     """
     return list((run.snapshot or {}).get(STATEMENTS_KEY) or [])
+
+
+def _parse_utc(value) -> datetime | None:
+    """One stored timestamp as an aware UTC datetime, or None when it is not
+    a readable ISO string. A naive value is read as UTC, which is what every
+    writer in this app records (`_now_iso` is UTC)."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip())
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        return None
+
+
+def month_updated_at(
+    run: RunRow,
+    *,
+    decisions: dict | None = None,
+    edits: list[dict] | None = None,
+    edited_at: str | None = None,
+) -> str:
+    """When this month last changed, as `YYYY-MM-DDTHH:MM:SS+00:00`.
+
+    Both review payloads carry it top-level (2026-09-16). The SPA rendered
+    `updated_at ?? created_at` as "Last updated" and neither payload had one,
+    so every month printed its creation day: September read Sep 07 while its
+    last receipt arrived on the 16th.
+
+    The latest of: the month's creation, the last receipt add
+    (`expense_ingest.at`), every statement upload, every re-match commit,
+    every settled-outside disposition, every set-aside and restore, every
+    decision the builder was handed, every edit row carrying a stamp, and
+    `edited_at` -- the route's read of the edit tables
+    (`RunStore.latest_edit_at`), because a field edit on a month without a
+    statement leaves no trace in the snapshot at all.
+
+    Never raises: an unreadable or empty stamp is skipped. When nothing
+    parses, `run.created_at` comes back exactly as stored.
+    """
+    snapshot = run.snapshot if isinstance(run.snapshot, dict) else {}
+    candidates: list = [run.created_at]
+    ingest = snapshot.get("expense_ingest")
+    if isinstance(ingest, dict):
+        candidates.append(ingest.get("at"))
+    for entry in month_statements(run):
+        if isinstance(entry, dict):
+            candidates.append(entry.get("uploaded_at"))
+    rematches = snapshot.get(REMATCH_LOG_KEY)
+    if isinstance(rematches, list):
+        candidates.extend(e.get("at") for e in rematches if isinstance(e, dict))
+    candidates.extend(e.get("at") for e in settled_outside_map(snapshot).values())
+    set_aside = snapshot.get("set_aside")
+    if isinstance(set_aside, list):
+        for e in set_aside:
+            if isinstance(e, dict):
+                candidates.extend((e.get("at"), e.get("restored_at")))
+    for decision in (decisions or {}).values():
+        candidates.append(getattr(decision, "updated_at", None))
+    for edit in edits or []:
+        if isinstance(edit, dict):
+            candidates.append(edit.get("updated_at"))
+    candidates.append(edited_at)
+
+    parsed = [p for p in map(_parse_utc, candidates) if p is not None]
+    if not parsed:
+        return run.created_at
+    return max(parsed).replace(microsecond=0).isoformat()
 
 
 def _statement_period(transactions: list) -> tuple[str | None, str | None]:
