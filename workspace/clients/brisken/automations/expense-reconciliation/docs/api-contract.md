@@ -2055,3 +2055,62 @@ false on the chosen candidate. Measured on the two live months, July moved
 5 receipts and August 1 (that one through the masked-BIN fix in
 `_card_keys`, where a digit run immediately followed by a mask character is
 the issuer's BIN and names no card at all). No SPA change is needed.
+
+## `held_by` also names a review row (2026-09-16)
+
+**No new field, and no field retyped.** `rows[].candidates[].held_by` keeps
+its shape (`{transaction_id, vendor, amount, currency, date}`) and stays
+ABSENT unless another charge holds the receipt. What changed is who counts as
+a holder: a charge sitting in review (`judgment_required` / `ambiguous`) with
+no reviewer pick yet.
+
+Item 60 filled the holder map from the reconciled matches and from each
+charge's `held_doc`. A review row's `held_doc` is the reviewer's pick, None
+until someone picks, but `apply_decisions` pass 2 has already consumed every
+receipt that row keeps. A later charge the matcher paired with the same
+receipt fell to `unmatched` with a candidate that named nobody, while
+`assignable_receipts` on the same payload named the review row. Live on August
+2026 (run `074a7b8905d7`, read 2026-09-16): ANTHROPIC 52.46
+(`6d474e9e8e964bd4`) holds candidate `0023__Invoice-DZ9BH3VA-0034.pdf` with no
+`held_by`, the picker says review row `c632cb75a5098253` holds it, and
+`summary.n_charges_receipt_taken` reads 0.
+
+A reconciled match or a reviewer's pick still wins: the review rows are added
+last and only where nothing else already holds the receipt. The review row's
+own candidates carry no `held_by`, as before. After deploy, August's
+`n_charges_receipt_taken` is expected to move from 0 to 1 (predicted from the
+live payload: ANTHROPIC is the month's only unmatched charge with a
+candidate). The SPA already renders `held_by`; no SPA change is needed.
+
+## `updated_at`: when the month last changed (2026-09-16)
+
+A new top-level scalar on BOTH payloads, `GET /api/runs/{id}` and
+`GET /api/expense-batches/{id}`:
+
+```json
+"updated_at": "2026-09-16T08:12:40+00:00"
+```
+
+Always present, always a string, UTC with seconds and an explicit `+00:00`,
+the format `created_at` already uses. The SPA prints `updated_at ??
+created_at` as "Last updated", and until now neither payload carried a
+month-level `updated_at` (`trip.updated_at` is the trip's own), so every month
+printed its creation day. September read Sep 07 while its last receipt arrived
+on 2026-09-16.
+
+It is the latest of: `created_at`, the last receipt add
+(`expense_ingest.at`), every `statements[].uploaded_at`, every re-match commit
+in the snapshot's `rematch_log`, every settled-outside disposition, every
+set-aside entry and restore, and the newest stamp in this run's edit tables
+(`decisions`, `category_overrides`, `expense_field_overrides`,
+`expense_edits`, `duplicate_resolutions`). The edit tables matter on their
+own: a field edit on a month without a statement writes
+`expense_field_overrides` and changes nothing in the snapshot. One helper,
+`service.month_updated_at`, answers for both payloads, and a stamp it cannot
+read is skipped rather than raised on.
+
+Two limits, stated. Clearing a field edit deletes its row, so the month can
+read as last updated before that clear. The summary replies of the POST/PUT
+routes carry no `updated_at`; re-read the view. Scalar, so
+`tests/test_view_contract.py` pins it with its own test rather than a list
+path. No SPA change is needed: the SPA already prefers `updated_at`.

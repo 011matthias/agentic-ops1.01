@@ -1860,6 +1860,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # receipts (a trip receipt matched by a statement). Empty on
             # every batch with no cross-batch settlements.
             settled_elsewhere=_settled_elsewhere(store, run.run_id),
+            # 2026-09-16: the payload's `updated_at` has to see edits the
+            # snapshot never records (a field edit on a month with no
+            # statement), and the edit tables are where they live.
+            edited_at=store.latest_edit_at(run.run_id),
         )
 
     def _settled_elsewhere(store: RunStore, run_id: str) -> dict[str, dict]:
@@ -1906,9 +1910,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             overrides = store.get_category_overrides(run_id)
             resolutions = store.get_duplicate_resolutions(run_id)
             settled_elsewhere = _settled_elsewhere(store, run_id)
+            # 2026-09-16: `updated_at` over the edit tables too; a category
+            # override or a duplicate ruling moves the month without
+            # touching its snapshot or its decisions.
+            edited_at = store.latest_edit_at(run_id)
         view = build_view(
             run, decisions, overrides, resolutions,
             settled_elsewhere=settled_elsewhere,
+            edited_at=edited_at,
         )
         # build_view already carries run_id, label, summary, rows,
         # unmatched_*, duplicate_groups, category_options: return it as the
