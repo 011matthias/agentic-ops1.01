@@ -3766,6 +3766,16 @@ adds to this item:
   under the ruling, so do not widen it on this note. Show the owner which
   non-exact clean pairs keep asking when this ships, with their count.
 
+**Owner ruling 2026-09-16 late evening (do not re-ask): the vendor floor is 75.**
+Measured on the live payloads minutes before the question, the literal rule
+(chosen `match_type: exact`, `requires_review: false`, one candidate,
+`review.state: ready`) still selects the same six rows, and `labels.csv` /
+`notes.csv` confirm all six as correct pairs. At 75, five confirm themselves:
+July ELEVENLABS.IO 5.00 (75) and ANTHROPIC 50.54 (100), August LOVABLE 15.00,
+LOVABLE 25.00 and ANTHROPIC 51.38 (100). July WEB*NETWORKSOLUTIONS 7.98 (46)
+keeps asking although its label says it is right: a floor that low would also
+pass the BASE44 / Lovable shape (vendor 40), which was wrong.
+
 ### 77. Dates read in the source locale, and a corrected date moves the receipt (note #34) (SHIPPED PR #910 - see Shipped row 49)
 
 **Criss, 2026-09-10, batch `4ceaeb461386`, anchored on `2026-01-04`:** "A leitura
@@ -4201,6 +4211,17 @@ Build:
 Browser-drive July after publish: click each tile, and the list length equals
 the tile.
 
+**Owner ruling 2026-09-16 late evening (do not re-ask): MISSING ENTITY and NEEDS
+PERSON become one box.** Why they coincide, read off both batch payloads: every
+expense with a resolved `card` carries both a company and a person (July 19,
+August 18, none missing a person), and every expense without one carries
+neither (July 33, August 13; 24 and 8 of them `suggested_private`). The fix is
+one action either way: pick the card, or mark the receipt private. The merged
+box opens those rows, and the suggested-private caption sits inside it. The
+backend still needs one row membership that equals the box's count (build
+step 1 unchanged); `n_needs_entity` and `n_needs_person` keep their names and
+questions per the counts table, and the box gets its own.
+
 ### 85. Controls that read as text are buttons (notes #47, #50, #51)
 
 **Matthias, July, 2026-09-16:**
@@ -4283,6 +4304,12 @@ point (month sign-off, or each edit), and keep the Memory page as the undo. Trad
 off to put to the owner: a one-off exception would also become a rule until
 someone deletes it there. Decide before building item 87, which depends on
 fixes being remembered.
+
+**Owner ruling 2026-09-16 late evening (do not re-ask): save a month's
+corrections to memory automatically at month sign-off, with the Memory page as
+the undo.** Accepted trade-off: a one-off exception becomes a rule until someone
+deletes it there. Item 87 is unblocked by this ruling and still starts with a
+read of July's card strip, not a build.
 
 ## Related but tracked elsewhere (do not duplicate here)
 
