@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-16
+updated: 2026-09-17
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -4305,7 +4305,7 @@ center and not-in-report. Predicted live: July 49 / 3 / ready 14 / 33 / 24 /
 0, August 27 / 4 / 10 / 13 / 8 / 0. Suite 1958 -> 1968 passed / 2 skipped;
 five regress proofs bite. SPA half: `docs/lovable-expense-boxes-prompt.md`.
 
-### 85. Controls that read as text are buttons (notes #47, #50, #51) (PROMPT WRITTEN PR #938, pending the owner's paste)
+### 85. Controls that read as text are buttons (notes #47, #50, #51) (APPLIED 2026-09-17, prompt PR #938)
 
 **Matthias, July, 2026-09-16:**
 - #47, Expenses view, on "Confirm private expense": "this should be real button".
@@ -4337,7 +4337,16 @@ not in it: `wb.credits.tip` is a card's `title` attribute, not a text control,
 and the NEEDS PERSON Settings link belongs to the item-84 boxes prompt, which
 replaces that tile.
 
-### 86. "Already posted in your workbook" says what the workbook is (note #48) (PROMPT WRITTEN PR #938 with item 85, pending the owner's paste)
+**Applied 2026-09-17** (owner published; bundle-audited and browser-driven cold,
+EN + PT, 0 writes; evidence in `PROMPT-STATUS.md`). On July the booked fold's
+toggle is an outline button "Show 48 booked rows" / "Hide 48 booked rows", the
+duplicates panel's is "Show 5 groups", 24 "Confirm private expense" controls are
+outline buttons that open the same dialog, and no button or link on the Charges
+or Matched views carries an underline class. Matched's fold reads "31 decided",
+not the booked shape, because 3 of its 31 rows are grey subscription rows: the
+prompt's own rule, and note #51's "16 already posted" predates two re-matches.
+
+### 86. "Already posted in your workbook" says what the workbook is (note #48) (APPLIED 2026-09-17, prompt PR #938 with item 85)
 
 **Matthias, July Matching view, on "30 already posted in your workbook" under
 "Charges without a receipt 72":** "what is the workbook? where does this come
@@ -4362,6 +4371,11 @@ the app no longer mentions Zoho, so "already booked" is the neutral word.
 to "the statement workbook" when no file is recorded. Its tooltip gives the
 yellow and grey rule and says the colours are read when the statement is
 loaded. The PT wording in the prompt ("já lançadas") is a draft for Criss.
+
+**Applied 2026-09-17.** July's fold reads "48 rows marked yellow in
+July2026.xlsx, already booked"; hovering it opens the yellow / grey tooltip; PT
+reads "48 linhas marcadas em amarelo em July2026.xlsx, já lançadas". The PT
+wording is still the draft; Criss has not commented on it.
 
 ### 87. A card that cannot be read or is not known gets a fix that sticks (note #33)
 
