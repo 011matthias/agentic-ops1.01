@@ -383,3 +383,33 @@ def test_without_a_database_the_listing_is_unchanged(ke, monkeypatch):
     plain = ke.suggest(dict(NO_NAME_Y2K_JEANS), use_corpus=False)
     assert with_tags["description"] == plain["description"]
     assert with_tags["keyword_candidates"] == []
+
+
+# ------------------------------------------- title-mined terms pass the same gate
+
+DIESEL_33 = {"brand": "Diesel", "type": "Jeans", "garment_class": "pants",
+             "size": "W33", "material": "Denim", "condition": "Gut"}
+
+
+def test_an_untrue_cell_term_never_reaches_the_description(ke, monkeypatch):
+    """Batch-2 item 33, 2026-09-16: the title-mined terms of a small cell wrote
+    "baggy fit" and "washed blau" onto a pair nobody called either. Through
+    suggest(): those become candidates, a term the facts vouch for is kept."""
+    monkeypatch.setattr(ke, "_research_connection", lambda: (None, None))
+    monkeypatch.setattr(ke, "mined_terms", lambda item: (
+        ["jeans baggy fit", "fit washed blau", "fit washed", "diesel denim"], []))
+    out = ke.suggest(dict(DIESEL_33))
+    text = out["description"].lower()
+    assert "baggy" not in text and "washed" not in text and "blau" not in text
+    assert "diesel denim" in out["keywords"]
+    cands = {c["term"]: c for c in out["keyword_candidates"]}
+    assert "jeans baggy fit" in cands and cands["jeans baggy fit"]["source"] == "titel"
+    assert "fit washed" not in cands, "a fragment of another candidate is dropped"
+
+
+def test_facts_that_say_it_keep_the_cell_term(ke, monkeypatch):
+    monkeypatch.setattr(ke, "_research_connection", lambda: (None, None))
+    monkeypatch.setattr(ke, "mined_terms", lambda item: (["baggy jeans"], []))
+    out = ke.suggest(dict(DIESEL_33, style="Baggy"))
+    assert "baggy jeans" in out["keywords"]
+    assert out["keyword_candidates"] == []
