@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from ..ingest._common import ROW_TYPE_PAYMENT, row_type_of
 from ..matching.deterministic import _card_keys, _tx_card_keys
 from ..matching.types import MatchOutcome, Receipt, Transaction
 
@@ -93,6 +94,11 @@ def exact_pairs(
     window = timedelta(days=window_days)
     out: list[dict] = []
     for tx in transactions:
+        # Item 73: a card payment is the cardholder paying the card down.
+        # No receipt ever settles it, so a receipt of the same amount beside
+        # it is a coincidence, not a purchase the sign hid from the matcher.
+        if row_type_of(tx) == ROW_TYPE_PAYMENT:
+            continue
         amount = abs(tx.amount)
         tx_date = tx.transaction_date
         if not isinstance(tx_date, date):

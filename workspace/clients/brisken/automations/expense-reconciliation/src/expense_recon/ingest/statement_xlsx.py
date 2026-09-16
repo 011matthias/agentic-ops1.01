@@ -79,6 +79,7 @@ from ._common import (
     is_known_type,
     parse_amount,
     parse_date,
+    row_type_for_label,
     unknown_type_issues,
     validate_required_map,
 )
@@ -386,6 +387,8 @@ def parse_statement_xlsx_tolerant(
                 # and since item 64 so does a row whose label this parser
                 # does not recognise.
                 is_credit = False
+                # Item 73 (mirrors statement_csv): the label's row type.
+                row_type: str | None = None
                 if "type" in column_map:
                     raw_type = _coerce_str(mapped.get("type"))
                     if not raw_type:
@@ -393,6 +396,7 @@ def parse_statement_xlsx_tolerant(
                     elif is_known_type(raw_type):
                         is_credit = is_credit_type(raw_type)
                         amount = -abs(amount) if is_credit else abs(amount)
+                        row_type = row_type_for_label(raw_type)
                     else:
                         is_credit = amount < 0
                         unknown_types[raw_type] = (
@@ -435,6 +439,7 @@ def parse_statement_xlsx_tolerant(
                     entry_status=_row_entry_status(row_cells, mapped_indices),
                     is_credit=is_credit,
                     card_last4=card_last4,
+                    row_type=row_type,
                 )
             )
     finally:

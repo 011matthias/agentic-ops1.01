@@ -654,8 +654,10 @@ def _write_unmatched(
             row=blank_row, column=1,
             value="Refunds / credits (own bucket, never receipt-matched)",
         ).font = HEADER_FONT
+        from ..ingest._common import row_type_of
+
         _write_header_row(
-            ws, ("Card", "Date", "Vendor", "Amount", "Currency"),
+            ws, ("Card", "Date", "Vendor", "Amount", "Currency", "Type"),
             start_row=blank_row + 1,
         )
         for tx_id in outcome.refunds:
@@ -668,6 +670,8 @@ def _write_unmatched(
                 tx.vendor_from_statement,
                 float(tx.amount),
                 tx.transaction_currency,
+                # Item 73: payment / refund / reversal, off the statement.
+                row_type_of(tx),
             ])
             _fill_last_row(ws, FILL_REVIEW)
 
@@ -743,12 +747,21 @@ def _write_explain(
     for tx_id in outcome.refunds:
         disposition.setdefault(tx_id, ("REFUND", None))
 
+    from ..ingest._common import row_type_of
+
     for tx in transactions:
         label, match = disposition.get(tx.transaction_id, ("UNKNOWN", None))
         if match:
             reason = match.reason
         elif label == "REFUND":
-            reason = "Credit / refund; own bucket, never receipt-matched (LD-5 A5)."
+            # Item 73: the credit bucket holds card payments and reversals
+            # too, so the outcome names the statement's row type.
+            row_type = row_type_of(tx)
+            label = row_type.upper()
+            reason = (
+                f"Credit ({row_type}); own bucket, never receipt-matched "
+                f"(LD-5 A5)."
+            )
         else:
             reason = "No candidate receipt."
         ws.append([
@@ -763,7 +776,7 @@ def _write_explain(
         ])
         if label == "MATCHED":
             fill = FILL_LINE
-        elif label in ("FX_JUDGMENT", "AMBIGUOUS", "REFUND"):
+        elif label in ("FX_JUDGMENT", "AMBIGUOUS", "REFUND", "PAYMENT", "REVERSAL"):
             fill = FILL_REVIEW
         else:
             fill = FILL_UNMATCHED

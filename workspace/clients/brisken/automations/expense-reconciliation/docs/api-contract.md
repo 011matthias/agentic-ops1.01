@@ -2203,3 +2203,55 @@ Live on 2026-09-16 at EUR:USD 1.162275 / BRL:USD 0.192448: every one of the
 Pinned by `tests/test_view_contract.py`
 (`test_fx_reference_scalar_is_absent_or_typed_never_null`, one per key);
 renders in `docs/lovable-fx-reference-prompt.md`.
+
+## What a statement line is, and where its company came from: `row_type` + `entity_source` (item 73)
+
+`GET /api/runs/{id}` -> two parallel strings on **every** element of
+`rows[]`, never null, never absent on a payload built after this shipped:
+
+```json
+{ "vendor": "Payment Thank You-Mobile", "amount": "-9,664.81",
+  "effective_bucket": "refund", "legal_entity_id": "Corporate Services",
+  "...": "every other key unchanged",
+  "row_type": "payment",
+  "entity_source": "card" }
+```
+
+| Key | Values | Question it answers |
+|---|---|---|
+| `row_type` | `purchase` · `payment` · `refund` · `reversal` · `fee` · `interest` | what kind of line the statement says this is. Read from the statement's Type label when the upload mapped one and the label is recognised (`Sale` / `Purchase` / `Charge` / `Debit` / `Adjustment` -> purchase, `Payment` -> payment, `Return` / `Refund` / `Credit` -> refund, `Reversal` -> reversal, `Fee` -> fee, `Interest` -> interest). Otherwise the sign's reading, which is what the tool said before: a credit is `refund`, anything else `purchase`. A PDF statement always takes the sign path |
+| `entity_source` | `card` · `batch` · `none` | the basis of `legal_entity_id`: `card` when the row printed a card and the registry named its company (item 59), `batch` when the row carries the upload's company (no card column, or no registry), `none` when there is no company. The expense grid's `entity_source` uses the same words for the receipt side |
+
+**The bucket does not move.** `effective_bucket: "refund"` keeps meaning
+"money back to the card, partitioned before matching, never receipt-matched",
+and a card payment is exactly that. What changed is that the bucket stopped
+being the only thing a consumer can print: July's -9,664.81 and August's
+-7,823.16 "Payment Thank You-Mobile" rows printed Type `Payment` and read
+`row_type: "payment"`. A credit's `row_type` is always one of `payment` /
+`refund` / `reversal`, and a non-credit's never is (pinned). `is_credit`,
+matching, `n_refunds` and the four-bucket invariant are untouched; no count
+was added.
+
+**Snapshots stored before this shipped** (both live months, read on
+2026-09-10) hold no row type. Both tabular parsers keep each source row in
+`raw_text` as `str(dict)`, so the stored Type cell is read back (with `ast`,
+never evaluated, header `Type` or `Transaction Type`) and written down at the
+month's next save. No re-read is needed.
+
+**Server-rendered documents follow it.** The reconciliation PDF's Status
+column prints `card payment` / `refund` / `reversal` for a credit row; the
+report workbook's credits section gains a `Type` column and the CLI's
+`--explain` sheet labels the outcome `PAYMENT` / `REFUND` / `REVERSAL`.
+`summary.month_health` no longer reads a card payment beside a same-amount
+receipt as a sign the workbook never canonicalized.
+
+**On rule 5.** Both are new fields, not new values on an existing one, and
+both are closed sets. A consumer that meets a value it has no copy for should
+print the raw word (it is lowercase English) rather than fall back to another
+value's label. Pinned by `tests/test_view_contract.py`; behaviour in
+`tests/test_row_type.py`; renders in `docs/lovable-row-type-prompt.md`.
+
+The owner's note gave a criterion ("the criteria for a refund is the fact
+that it was payed with by a non company card"). That is item 41's
+`suggested_private` rule on RECEIPTS, which never emits "refund"; it is a
+different mechanism and this item does not build it.

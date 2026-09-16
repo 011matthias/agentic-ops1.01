@@ -24,8 +24,10 @@ Two parse modes per ANNEALING B1:
 """
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -99,6 +101,110 @@ def is_known_type(type_value: str) -> bool:
     direction, so the printed sign stands."""
     value = type_value.strip().lower()
     return value in CREDIT_TYPE_VALUES or value in DEBIT_TYPE_VALUES
+
+
+# Item 73 (note #42, 2026-09-15): what KIND of statement line a row is.
+# `is_credit` answers one question, "does money come back to the card", and
+# the matcher partitions on it; it cannot say WHY. Chase prints the
+# cardholder paying the card down ("Payment Thank You-Mobile", Type
+# `Payment`) and a merchant refund (Type `Return`) with the same sign, so
+# both landed in the refund bucket and the payoff printed as "Refund". The
+# row type is the display half: it keeps what the statement's own label
+# said. `is_credit` and matching are untouched; a row type in
+# CREDIT_ROW_TYPES is always a credit, and every other one never is.
+ROW_TYPE_PURCHASE = "purchase"
+ROW_TYPE_PAYMENT = "payment"
+ROW_TYPE_REFUND = "refund"
+ROW_TYPE_REVERSAL = "reversal"
+ROW_TYPE_FEE = "fee"
+ROW_TYPE_INTEREST = "interest"
+ROW_TYPES: tuple[str, ...] = (
+    ROW_TYPE_PURCHASE, ROW_TYPE_PAYMENT, ROW_TYPE_REFUND,
+    ROW_TYPE_REVERSAL, ROW_TYPE_FEE, ROW_TYPE_INTEREST,
+)
+CREDIT_ROW_TYPES: frozenset[str] = frozenset(
+    {ROW_TYPE_PAYMENT, ROW_TYPE_REFUND, ROW_TYPE_REVERSAL}
+)
+
+# Every label the parsers recognise names exactly one row type, and the row
+# type's credit-ness is the label's (pinned in tests, so a label added to
+# either set above without a row type here fails the suite). "credit" is a
+# refund because that is how it has always been bucketed; "adjustment" is a
+# purchase for the reason DEBIT_TYPE_VALUES gives.
+ROW_TYPE_BY_LABEL: dict[str, str] = {
+    "payment": ROW_TYPE_PAYMENT,
+    "return": ROW_TYPE_REFUND,
+    "refund": ROW_TYPE_REFUND,
+    "credit": ROW_TYPE_REFUND,
+    "reversal": ROW_TYPE_REVERSAL,
+    "sale": ROW_TYPE_PURCHASE,
+    "purchase": ROW_TYPE_PURCHASE,
+    "charge": ROW_TYPE_PURCHASE,
+    "debit": ROW_TYPE_PURCHASE,
+    "adjustment": ROW_TYPE_PURCHASE,
+    "fee": ROW_TYPE_FEE,
+    "interest": ROW_TYPE_INTEREST,
+}
+
+
+def row_type_for_label(type_value: object) -> str | None:
+    """The row type a statement Type label names, or None for an empty or
+    unrecognised label (the row then reads by its sign, see `row_type_of`)."""
+    if not isinstance(type_value, str):
+        return None
+    return ROW_TYPE_BY_LABEL.get(type_value.strip().lower())
+
+
+def row_type_of(tx) -> str:
+    """The row type every consumer displays for a charge.
+
+    The label the statement printed, when one was read and it agrees with the
+    credit partition; otherwise the sign's reading, which is exactly what the
+    tool said before row types existed: a credit is a `refund`, anything else
+    a `purchase`. A PDF statement, a workbook with no Type column, and an
+    unrecognised label all take the sign path.
+    """
+    stamped = getattr(tx, "row_type", None)
+    if stamped in ROW_TYPES and (stamped in CREDIT_ROW_TYPES) == bool(tx.is_credit):
+        return stamped
+    return ROW_TYPE_REFUND if tx.is_credit else ROW_TYPE_PURCHASE
+
+
+# The headers the column guess maps to `type` (`inspect.guess_column_map`),
+# mirrored so a stored row is read back under the same rule it was read by.
+_TYPE_HEADER = re.compile(r"^(?:type|transaction\s*type)$", re.I)
+
+
+def type_label_from_raw_text(raw_text: object) -> str | None:
+    """The Type cell of a tabular statement row, read back out of
+    `Transaction.raw_text`.
+
+    For snapshots written before `row_type` was stored. Both tabular parsers
+    keep the whole source row as `str(dict)` (header -> cell), so the label
+    the bank printed is already on the volume; reading it back gives the two
+    live months their row types without re-reading a statement. Parsed with
+    `ast` and never evaluated: only a dict literal whose Type key holds a
+    plain string yields anything, so a PDF line, a cell holding a datetime,
+    or any text that is not a dict returns None.
+    """
+    if not isinstance(raw_text, str) or not raw_text.lstrip().startswith("{"):
+        return None
+    try:
+        node = ast.parse(raw_text, mode="eval").body
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
+        return None
+    if not isinstance(node, ast.Dict):
+        return None
+    for key, value in zip(node.keys, node.values):
+        if (
+            isinstance(key, ast.Constant)
+            and isinstance(key.value, str)
+            and _TYPE_HEADER.match(key.value.strip())
+            and isinstance(value, ast.Constant)
+            and isinstance(value.value, str)
+        ):
+            return value.value.strip() or None
+    return None
 
 
 def infer_sign_flip(amounts: "list[Decimal]") -> bool:
