@@ -674,6 +674,96 @@ def mined_terms(item: dict) -> tuple[list[str], list[str]]:
         return [], [f"Korpus-Recherche uebersprungen: {type(e).__name__}"]
 
 
+# Fact values a buyer spells another way. A tag phrase is written into a
+# listing only when the item's own facts justify every word of it, and these
+# groups are the words a fact justifies beyond its literal spelling. Each group
+# is a true equivalence, never a neighbour: "wide leg" is not "baggy", so it is
+# not here, and a pair has to be SAID to be baggy before "baggy jeans" is.
+TAG_ALIAS_GROUPS = [
+    {"y2k", "00s", "2000s", "2000er", "00er"},
+    {"90s", "90er", "1990s"},
+    {"80s", "80er", "1980s"},
+    {"70s", "70er", "1970s"},
+    {"denim", "jeans"},
+]
+
+
+def fact_words(item: dict, normalise) -> tuple[set[str], set[str]]:
+    """(justified, literal): the words a garment's facts vouch for, and the
+    words its listing text will already contain.
+
+    A multi-word fact also justifies its run-together spelling, because that is
+    how the tag corpus splits: "Low Rise" vouches for "lowrise" when sellers
+    write #lowrisejeans.
+    """
+    justified, literal = set(), set()
+    for key, value in item.items():
+        if key == "measurements" or not isinstance(value, str):
+            continue
+        words = normalise(value)
+        literal.update(words)
+        justified.update(words)
+        if len(words) > 1:
+            justified.add("".join(words))
+    for group in TAG_ALIAS_GROUPS:
+        if justified & group:
+            justified |= group
+    return justified, literal
+
+
+def _research_connection():
+    """(keyword_research module, read-only connection), or (None, None) when the
+    research layer or its database is not there. One seam, so a test can hand
+    the engine an in-memory market and still run everything after it."""
+    import importlib.util
+    import sqlite3
+    research_path = SCRIPT_DIR / "keyword_research.py"
+    if not research_path.exists():
+        return None, None
+    spec = importlib.util.spec_from_file_location("keyword_research_tags", research_path)
+    kr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kr)
+    if not kr.DB_PATH.exists():
+        return None, None
+    return kr, sqlite3.connect("file:" + str(kr.DB_PATH) + "?mode=ro", uri=True)
+
+
+def tag_terms(item: dict) -> dict:
+    """What other sellers tag for this kind of garment, split into what this
+    item's facts confirm and what the seller would have to confirm.
+
+    Optional like mined_terms: no database, no descriptions yet, or any error
+    leaves the listing exactly as it was, with a note saying why.
+    """
+    empty = {"confirmed": [], "candidates": [], "notes": []}
+    cls = item.get("garment_class")
+    if not cls:
+        return empty
+    try:
+        kr, con = _research_connection()
+        if kr is None:
+            return empty
+        try:
+            justified, literal = fact_words(item, kr.normalise)
+            info = kr.tag_keywords_for(con, brand_key(item.get("brand") or ""), cls,
+                                       justified, literal, limit=MAX_KEYWORDS)
+        finally:
+            con.close()
+    except Exception as e:                       # research must never break a listing
+        return {**empty, "notes": [f"Hashtag-Recherche uebersprungen: {type(e).__name__}"]}
+
+    if info["scope"] == "none":
+        note = (f"Hashtag-Begriffe: noch zu wenig gespeicherte Beschreibungen "
+                f"({info['described']}, es fehlen {info['needed']}); der Watcher "
+                f"sammelt sie bei jedem Recheck")
+    else:
+        level = "Marke und Klasse" if info["scope"] == "cell" else "ganze Klasse"
+        note = f"Hashtag-Begriffe aus {info['described']} Beschreibungen ({level})"
+        if info["confirmed"]:
+            note += "; durch die Fakten belegt: " + ", ".join(info["confirmed"])
+    return {"confirmed": info["confirmed"], "candidates": info["candidates"], "notes": [note]}
+
+
 def slug_tag(text: str) -> str | None:
     """A term as a Vinted-linkifiable tag, or None if nothing usable is left.
 
@@ -765,8 +855,12 @@ def build_hashtags(item: dict, keywords: list[str],
 def suggest(item: dict, use_corpus: bool = True) -> dict:
     """Full listing proposal plus the validation of what it produced."""
     mined, mine_notes = mined_terms(item) if use_corpus else ([], [])
-    keywords, notes = build_keywords(item, mined=mined)
-    notes = mine_notes + notes
+    tag_info = tag_terms(item) if use_corpus else {"confirmed": [], "candidates": [], "notes": []}
+    # Tag phrases the item's own facts confirm go ahead of the title-mined cell
+    # terms: both come from the market, but only these are vouched for by this
+    # garment rather than by its neighbours.
+    keywords, notes = build_keywords(item, mined=tag_info["confirmed"] + mined)
+    notes = mine_notes + tag_info["notes"] + notes
     tags, tag_candidates = build_hashtags(item, keywords, mined=mined)
     title = build_title(item)
     description = build_description(item, keywords)
@@ -777,6 +871,10 @@ def suggest(item: dict, use_corpus: bool = True) -> dict:
         "keywords": keywords,
         "hashtags": tags,
         "hashtag_candidates": tag_candidates,
+        # Phrases other sellers of this kind of garment tag, that this item's
+        # facts do not confirm. Never written into the listing: confirm one by
+        # adding it as a fact (e.g. "style": "Baggy") and suggest again.
+        "keyword_candidates": tag_info["candidates"],
         "structured_fields": {
             "brand": item.get("brand"), "category": item.get("type"),
             "size": item.get("size"), "color": item.get("color"),
@@ -922,6 +1020,14 @@ def main() -> None:
             print("  Die Raute bringt keine Reichweite (Vinted hat keine Tag-Seiten),")
             print("  nur Selbstsortierung. Zu viele oder unpassende sind ein")
             print("  Ausblendungsgrund, deshalb wird nichts geraten.")
+        if out.get("keyword_candidates"):
+            print("\nSUCHBEGRIFFE ANDERER VERKAEUFER (nur wenn zutreffend)")
+            print("  Aus den Hashtags vergleichbarer Anzeigen, ohne Raute. Nichts davon")
+            print("  steht in der Beschreibung; trifft einer zu, als Fakt eintragen")
+            print("  (z.B. \"style\": \"Baggy\") und neu erzeugen.")
+            for c in out["keyword_candidates"]:
+                print("  %-28s%6d Anzeigen%8.1f%%%7.2fx"
+                      % (c["term"], c["n"], 100 * c["share"], c["lift"]))
         print("\nGELESEN ALS")
         for k, v in sorted(out.get("parsed_as", item).items()):
             print(f"  {k:<16}{v}")

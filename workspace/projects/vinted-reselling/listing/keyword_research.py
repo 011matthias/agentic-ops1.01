@@ -27,6 +27,7 @@ produced it.
 Modes:
   --research BRAND/CLASS   ranked keyword candidates for one cell, with evidence
   --cells                  which brand/class cells have enough data to mine
+  --tags BRAND/CLASS       hashtag phrases from stored descriptions (* = whole class)
   --fake-vocab             terms that look like counterfeit slang, per brand
 """
 
@@ -764,6 +765,272 @@ def cells(con: sqlite3.Connection, min_rows: int = 60) -> list[tuple[str, str, i
            ORDER BY COUNT(*) DESC""", (min_rows,)).fetchall()]
 
 
+# ------------------------------------------------------------ description tags
+#
+# Everything above reads TITLES, because titles were all the watcher stored.
+# The words sellers put in hashtags live in the DESCRIPTION, and Vinted's search
+# reads the description: on 2026-09-16 `y2kdenim` returned listings whose
+# titles lacked the word, and `#y2kdenim` returned the identical ids in the
+# identical order, so the hash is inert and the word is what matches. The
+# watcher now stores the description of every item page its recheck fetches
+# (`descriptions`), so the tag vocabulary can be measured instead of copied.
+#
+# Tags are mined rather than description prose because a tag is the seller's
+# own statement of "this is a search word". Prose is dominated by condition and
+# shipping boilerplate that lift would mostly, not entirely, cancel.
+#
+# Two things make a raw tag unusable as a keyword and both are handled here:
+#   - run-together tags ("vintagedenim") are split into the words buyers type,
+#     against the vocabulary the title corpus actually uses;
+#   - a 40-tag wall would otherwise outvote forty honest listings, so every
+#     phrase counts once per listing.
+
+HASHTAG = re.compile(r"#([0-9A-Za-zÀ-ÖØ-öø-ÿ]{2,40})")
+TAG_VOCAB_MIN = 20           # a word must appear in this many titles to split a tag on it
+MIN_DESCRIBED = 40           # descriptions a scope needs before its ranking means anything
+TAG_FLOOR_SHARE = 0.02       # and a phrase must appear in this share of them
+MIN_TAG_LISTINGS = 3
+
+
+def tag_vocabulary(con: sqlite3.Connection) -> set[str]:
+    """Words the title corpus uses often enough to trust as a split point.
+
+    The threshold is what keeps "coupeevasee" from being split into three
+    accidental fragments: a split is accepted only when every piece is a word
+    this market already writes.
+    """
+    counts = Counter()
+    for (title,) in con.execute("SELECT title FROM listings"):
+        counts.update(set(normalise(title)))
+    return {w for w, k in counts.items() if k >= TAG_VOCAB_MIN}
+
+
+def split_tag(tag: str, vocab: set[str]) -> list[str] | None:
+    """A run-together tag as the words it was built from, or None.
+
+    Fewest pieces wins, so "streetwear" stays one word when the vocabulary has
+    it rather than becoming "street wear". A tag that cannot be fully covered
+    by known words returns None: it matches only a buyer who types it exactly
+    that way, which is not a keyword worth a slot.
+    """
+    t = tag.lower()
+    n = len(t)
+    best: list[list[str] | None] = [None] * (n + 1)
+    best[0] = []
+    for end in range(1, n + 1):
+        for start in range(max(0, end - 20), end):
+            piece = t[start:end]
+            if best[start] is None or piece not in vocab:
+                continue
+            cand = best[start] + [piece]
+            if best[end] is None or len(cand) < len(best[end]):
+                best[end] = cand
+    return best[n]
+
+
+def tag_phrases(description: str | None, vocab: set[str]) -> set[str]:
+    """The distinct plain-word phrases one description's tags stand for."""
+    out = set()
+    for raw in HASHTAG.findall(description or ""):
+        words = split_tag(raw, vocab)
+        if not words:
+            continue
+        words = [w for w in words if w not in STOPWORDS]
+        if words:
+            out.add(" ".join(words))
+    return out
+
+
+def described_rows(con: sqlite3.Connection, brand_norm: str | None,
+                   garment_class: str | None) -> list[tuple[str, str, int]]:
+    """(title, description, sold_flag) for described adult listings in a scope."""
+    have = {r[0] for r in con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='descriptions'")}
+    if not have:
+        return []
+    sql = ("SELECT l.title, d.description, COALESCE(l.sold_flag,0) FROM descriptions d"
+           " JOIN listings l ON l.id=d.listing_id WHERE COALESCE(l.is_kid,0)=0")
+    params: list = []
+    if garment_class:
+        sql += " AND l.garment_class=?"
+        params.append(garment_class)
+    if brand_norm:
+        sql += " AND l.brand_norm=?"
+        params.append(brand_norm)
+    return con.execute(sql, params).fetchall()
+
+
+def mine_tags(con: sqlite3.Connection, brand_norm: str | None, garment_class: str,
+              vocab: set[str] | None = None) -> dict:
+    """Tag phrases that distinguish a scope, with the scope that was actually used.
+
+    Brand cell first, then the whole garment class. The fallback is what makes
+    this reach the owner's own closet: most of it is No Name, Hollister, Gallery
+    Dept. and Diesel, none of which the watcher tracks, while a pair of jeans is
+    a pair of jeans. Class-wide terms describe style (baggy, y2k, straight
+    leg), never another brand's model names, because brand padding is classified
+    out below.
+    """
+    vocab = vocab if vocab is not None else tag_vocabulary(con)
+    rows, scope = [], "none"
+    if brand_norm:
+        rows = described_rows(con, brand_norm, garment_class)
+        scope = "cell" if len(rows) >= MIN_DESCRIBED else "none"
+    if scope == "none":
+        rows = described_rows(con, None, garment_class)
+        scope = "class" if len(rows) >= MIN_DESCRIBED else "none"
+    everything = described_rows(con, None, None)
+    out = {"scope": scope, "described": len(rows), "described_all": len(everything),
+           "needed": max(0, MIN_DESCRIBED - len(rows)) if scope == "none" else 0,
+           "terms": [], "rejected": []}
+    if scope == "none":
+        return out
+
+    def doc_counts(rs):
+        counts, langs = Counter(), {}
+        for title, desc, _ in rs:
+            phrases = tag_phrases(desc, vocab)
+            counts.update(phrases)
+            lang = title_language(title)
+            if lang:
+                for ph in phrases:
+                    langs.setdefault(ph, Counter())[lang] += 1
+        return counts, langs
+
+    cell, term_langs = doc_counts(rows)
+    background, _ = doc_counts(everything)
+    n_cell, n_all = len(rows), len(everything)
+    size_nums = size_numbers_of(con)
+    floor = max(MIN_TAG_LISTINGS, int(n_cell * TAG_FLOOR_SHARE))
+    ceiling = n_all / n_cell if n_cell else 0.0
+    brand_for_classify = brand_norm or ""
+    terms = []
+    for text, k in cell.items():
+        if k < floor:
+            continue
+        share = k / n_cell
+        p_all = background[text] / n_all if n_all else 0
+        lift = share / p_all if p_all else 0.0
+        kind, notes = classify(text, brand_for_classify, lift, size_nums)
+        if kind == "term" and not brand_norm and brand_word_in(text, con):
+            kind, notes = "brand", ["Markenname; im Klassen-Rueckfall nie uebernehmen"]
+        term = Term(text=text, n=k, share=share, lift=lift, kind=kind, notes=notes,
+                    ceiling=ceiling, langs=term_langs.get(text, Counter()))
+        if term.kind in ("term", "foreign"):
+            verdict, why = language_verdict(term)
+            if verdict == "foreign":
+                term.kind, term.notes = "foreign", [why]
+            elif verdict == "german" and term.kind == "foreign":
+                term.kind, term.notes = "term", []
+        terms.append(term)
+    terms.sort(key=lambda t: (round(t.score(), 6), len(t.text.split()), t.n), reverse=True)
+    out["terms"] = [t for t in terms if t.kind == "term"]
+    out["rejected"] = [t for t in terms if t.kind != "term"]
+    return out
+
+
+_BRAND_WORDS: set[str] | None = None
+
+
+def brand_word_in(text: str, con: sqlite3.Connection) -> bool:
+    """Does a phrase contain any brand family's name?
+
+    Only needed for the class-wide fallback, where classify() has no brand to
+    compare against and would let "levis 501" through as a style term for a
+    No Name pair. Putting another brand's name in a description is the exact
+    catalogue-rule breach that gets a listing hidden.
+    """
+    global _BRAND_WORDS
+    if _BRAND_WORDS is None:
+        words = set()
+        for (b,) in con.execute("SELECT DISTINCT brand_norm FROM listings WHERE brand_norm IS NOT NULL"):
+            for w in re.split(r"[^a-z0-9]+", b):
+                if len(w) >= 3:
+                    words.add(w)
+                    if len(w) > 4 and w.endswith("s"):
+                        words.add(w[:-1])
+        words |= {"wip", "lauren", "polo", "jordan", "levi", "tnf", "carhartt"}
+        _BRAND_WORDS = words
+    return any(p in _BRAND_WORDS for p in text.split())
+
+
+def tag_keywords_for(con: sqlite3.Connection, brand_norm: str | None, garment_class: str,
+                     facts_words: set[str], literal_words: set[str],
+                     limit: int = 8) -> dict:
+    """Tag phrases for ONE garment, split by what its own facts can vouch for.
+
+    `facts_words` is every word the item's supplied facts justify, including
+    the spellings a buyer uses for the same fact (the engine owns that alias
+    table: era 00s also justifies y2k). `literal_words` is only what the listing
+    text will already contain.
+
+    `confirmed` phrases have every word justified AND at least one word the
+    listing does not already carry. The second condition is not tidiness:
+    Vinted matches words, not order, so "bootcut jeans" on a listing that
+    already says Bootcut and Jeans adds nothing a buyer can find, and writing it
+    anyway is the padding the catalogue rules name as a hide reason.
+
+    `candidates` are phrases this scope's sellers tag that the facts do not
+    confirm. They are offered, never written, because a class-wide phrase
+    describes the neighbours. The 2026-09-16 review of the batch-1 keyword lines
+    is why: cell terms that were not true of the piece in hand.
+    """
+    mined = mine_tags(con, brand_norm, garment_class)
+    confirmed, candidates = [], []
+    for t in mined["terms"]:
+        words = t.text.split()
+        if all(w in facts_words for w in words):
+            if any(w not in literal_words for w in words) and len(confirmed) < limit:
+                confirmed.append(t.text)
+        elif len(candidates) < limit:
+            candidates.append({"term": t.text, "n": t.n, "share": round(t.share, 4),
+                               "lift": round(t.lift, 2)})
+    return {"scope": mined["scope"], "described": mined["described"],
+            "needed": mined["needed"], "confirmed": confirmed, "candidates": candidates}
+
+
+def tag_demand(con: sqlite3.Connection, brand_norm: str | None, garment_class: str,
+               limit: int = 12) -> dict:
+    """Do tag phrases show up more in listings that SOLD? Gated like demand().
+
+    This is the question the owner actually asked ("these hashtags play a large
+    role, don't they"), and the only honest way to answer it is the outcome the
+    recheck already records for the same pages. Until a scope has enough sold,
+    described listings, it says so instead of ranking noise.
+    """
+    vocab = tag_vocabulary(con)
+    rows = described_rows(con, brand_norm, garment_class)
+    sold = [r for r in rows if r[2]]
+    out = {"scope": f"{brand_norm or '*'}/{garment_class}", "described": len(rows),
+           "sold_n": len(sold), "needed_for_provisional": max(0, MIN_SOLD_PROVISIONAL - len(sold)),
+           "tagged_share_sold": None, "tagged_share_all": None, "terms": []}
+    if rows:
+        out["tagged_share_all"] = round(
+            sum(1 for r in rows if HASHTAG.search(r[1] or "")) / len(rows), 4)
+    if sold:
+        out["tagged_share_sold"] = round(
+            sum(1 for r in sold if HASHTAG.search(r[1] or "")) / len(sold), 4)
+    if len(sold) < MIN_SOLD_PROVISIONAL:
+        out["basis"] = "zu-wenig-verkauft"
+        return out
+    out["basis"] = "belastbar" if len(sold) >= MIN_SOLD_RELIABLE else "vorlaeufig"
+    sold_counts, all_counts = Counter(), Counter()
+    for r in rows:
+        ph = tag_phrases(r[1], vocab)
+        all_counts.update(ph)
+        if r[2]:
+            sold_counts.update(ph)
+    for text, k in sold_counts.items():
+        if k < MIN_SOLD_TERM or not all_counts[text]:
+            continue
+        p_sold, p_all = k / len(sold), all_counts[text] / len(rows)
+        out["terms"].append({"term": text, "sold_n": k, "sold_share": round(p_sold, 4),
+                             "all_share": round(p_all, 4), "lift": round(p_sold / p_all, 2)})
+    out["terms"].sort(key=lambda t: -t["lift"])
+    out["terms"] = out["terms"][:limit]
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -776,6 +1043,9 @@ def main() -> None:
                     help="terms over-represented in listings that actually sold")
     ap.add_argument("--window", type=int, default=7,
                     help="trend window length in days (default 7)")
+    ap.add_argument("--tags", metavar="BRAND/CLASS",
+                    help="tag phrases sellers use, from stored descriptions; BRAND may be * "
+                         "for the whole class")
     ap.add_argument("--fake-vocab", action="store_true",
                     help="counterfeit slang present in the corpus, per brand")
     ap.add_argument("--brand", help="restrict --fake-vocab to one brand family")
@@ -859,6 +1129,46 @@ def main() -> None:
                           % (t["term"], t["fast_n"], 100 * t["fast_share"], t["lift"]))
             elif out.get("speed_note"):
                 print("\n  " + out["speed_note"])
+            return
+
+        if args.tags:
+            if "/" not in args.tags:
+                print("erwarte MARKE/KLASSE oder */KLASSE, z.B. */pants")
+                sys.exit(2)
+            brand, cls = (x.strip() for x in args.tags.split("/", 1))
+            brand = None if brand in ("*", "") else brand
+            mined = mine_tags(con, brand, cls)
+            dem = tag_demand(con, brand, cls)
+            if args.json:
+                print(json.dumps({
+                    "scope": mined["scope"], "described": mined["described"],
+                    "needed": mined["needed"],
+                    "terms": [{"term": t.text, "n": t.n, "share": round(t.share, 4),
+                               "lift": round(t.lift, 2)} for t in mined["terms"][:20]],
+                    "rejected": [{"term": t.text, "kind": t.kind, "notes": t.notes}
+                                 for t in mined["rejected"][:20]],
+                    "demand": dem}, indent=2, ensure_ascii=False))
+                return
+            print("Hashtag-Begriffe %s/%s   Beschreibungen: %d   Ebene: %s"
+                  % (brand or "*", cls, mined["described"], mined["scope"]))
+            if mined["scope"] == "none":
+                print("\nNoch zu wenig gespeicherte Beschreibungen (%d fehlen). Der Watcher"
+                      % mined["needed"])
+                print("sammelt sie bei jedem Recheck-Lauf, rund 25 Seiten pro Stunde.")
+            else:
+                print("\n  %-30s%8s%9s%8s" % ("Begriff", "Anz.", "Anteil", "Lift"))
+                for t in mined["terms"][:20]:
+                    print("  %-30s%8d%8.1f%%%7.2fx" % (t.text, t.n, 100 * t.share, t.lift))
+            print("\nVerkauft vs. alle (%d verkauft von %d beschrieben): Grundlage %s"
+                  % (dem["sold_n"], dem["described"], dem.get("basis")))
+            if dem["tagged_share_all"] is not None:
+                print("  Anteil mit Hashtags: alle %.0f%%, verkauft %s"
+                      % (100 * dem["tagged_share_all"],
+                         "%.0f%%" % (100 * dem["tagged_share_sold"])
+                         if dem["tagged_share_sold"] is not None else "-"))
+            for t in dem["terms"]:
+                print("  %-30s%8d%8.1f%%%7.2fx" % (t["term"], t["sold_n"],
+                                                  100 * t["sold_share"], t["lift"]))
             return
 
         if args.fake_vocab:
