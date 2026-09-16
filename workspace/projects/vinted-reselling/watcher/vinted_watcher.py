@@ -50,6 +50,27 @@ ENV_PATH = PROJECT_DIR / "context" / ".env"
 CONFIG_PATH = SCRIPT_DIR / "searches.yaml"
 
 BASE = "https://www.vinted.de"
+# Catalogue search moved off the www host entirely on or before 2026-09-15.
+# www paths now answer with the marketing site's HTML 404 page, so a stale
+# path looks like "no results" rather than "wrong URL".
+API_BASE = "https://api.vinted.de"
+CATALOG_PATH = "/svc-catalogue/items"
+CATALOG_URL = API_BASE + CATALOG_PATH
+# The new host wants these. Only Accept and Referer are strictly required
+# today; locale is not optional for us, because without it the condition
+# labels come back in the seller's own language and cond_tier_of speaks
+# English.
+CATALOG_HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "Referer": BASE + "/",
+    # de-DE, not en-DE: the rows already in `listings` hold German
+    # condition strings ("Sehr gut", "Neu, mit Etikett") and COND_TIERS
+    # is keyed on them. English labels parse fine and then map to
+    # "unknown", which fragments the column instead of failing.
+    "locale": "de-DE",
+    "platform": "web",
+    "x-next-app": "marketplace-web",
+}
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
@@ -1093,7 +1114,9 @@ def api_get(client: httpx.Client, con: sqlite3.Connection, url: str, params: dic
     said no.
     """
     for attempt in (1, 2):
-        r = client.get(url, params=params, headers={"Accept": "application/json"})
+        headers = dict(CATALOG_HEADERS) if url.startswith(API_BASE) \
+            else {"Accept": "application/json"}
+        r = client.get(url, params=params, headers=headers)
         if r.status_code in (403, 429):
             wait = WALL_BACKOFF_MIN
             retry_after = r.headers.get("retry-after")
@@ -1189,10 +1212,49 @@ def posted_at_of(photo_url: str | None) -> str | None:
     return ts.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def item_box_fields(item: dict) -> tuple[str, str | None, str]:
+    """brand, size and condition out of `item_box`.
+
+    The catalogue payload no longer carries brand_title, size_title or status.
+    item_box has them, in two forms: first_line is the brand, second_line is
+    "<size> · <condition>", and accessibility_label spells both out under
+    labels whose language follows the `locale` header. Prefer the labelled
+    form, fall back to the bullet split, because an item with no size renders
+    second_line as the condition alone.
+    """
+    box = item.get("item_box") or {}
+    brand = (box.get("first_line") or "").strip()
+    size = cond = None
+
+    label = box.get("accessibility_label") or ""
+    # Both label sets, so a locale change cannot silently empty these.
+    m = re.search(r"\b(?:Zustand|Condition):\s*([^,]+)", label)
+    if m:
+        cond = m.group(1).strip()
+    m = re.search(r"\b(?:Größe|Grösse|Size):\s*([^,]+)", label)
+    if m:
+        size = m.group(1).strip()
+
+    if size is None or cond is None:
+        parts = [p.strip() for p in (box.get("second_line") or "").split("\u00b7")]
+        parts = [p for p in parts if p]
+        if len(parts) >= 2:
+            size = size if size is not None else parts[0]
+            cond = cond if cond is not None else parts[-1]
+        elif parts:
+            cond = cond if cond is not None else parts[0]
+    return brand, size, (cond or "")
+
+
 def parse_item(item: dict, tag: str, seed: int) -> dict:
     price = float((item.get("price") or {}).get("amount") or 0)
     total = float((item.get("total_item_price") or {}).get("amount") or price)
-    cond = (item.get("status") or "").strip()
+    box_brand, box_size, box_cond = item_box_fields(item)
+    # Top-level first so an older payload still parses unchanged; item_box is
+    # the only source on the new host.
+    cond = (item.get("status") or box_cond or "").strip()
+    brand_title = (item.get("brand_title") or box_brand or "").strip()
+    size_title = item.get("size_title") or box_size
     photo = item.get("photo") or {}
     photos = item.get("photos") or []
     photo_url = photo.get("url") or (photos[0].get("url") if photos else None)
@@ -1201,14 +1263,14 @@ def parse_item(item: dict, tag: str, seed: int) -> dict:
         "id": item["id"],
         "search_tag": tag,
         "title": item.get("title"),
-        "brand": (item.get("brand_title") or "").strip(),
-        "size": item.get("size_title"),
+        "brand": brand_title,
+        "size": size_title,
         "condition": cond,
         "cond_tier": cond_tier_of(cond),
         "garment_class": garment_class(item.get("title")),
-        "is_kid": is_kid_item(item.get("title"), item.get("size_title")),
-        "size_class": size_class_of(item.get("size_title")),
-        "brand_norm": brand_norm_of(item.get("brand_title")),
+        "is_kid": is_kid_item(item.get("title"), size_title),
+        "size_class": size_class_of(size_title),
+        "brand_norm": brand_norm_of(brand_title),
         "country": item_country(item),
         "price": price,
         "total_price": total,
@@ -2191,7 +2253,7 @@ def poll_search(client: httpx.Client, con: sqlite3.Connection, search: dict, set
     """Poll one search. Returns True when the API actually answered."""
     tag = search["tag"]
     seeded = meta_get(con, f"seeded:{tag}")
-    url = BASE + "/api/v2/catalog/items"
+    url = CATALOG_URL
 
     if not seeded:
         for page in range(1, settings["seed_pages"] + 1):
@@ -2731,7 +2793,7 @@ def brand_report(settings: dict | None = None) -> int:
                 print(f"  KEEP  {b}" + (f"  (n_bewertet={rated})" if rated else "  (noch keine Bewertungen)"))
             else:
                 print(f"  PRUEF {b}: " + "; ".join(flags))
-                print(f"        Vorschlag: deal_ratio-Override oder alerts_disabled: true fuer den Tag")
+                print("        Vorschlag: deal_ratio-Override oder alerts_disabled: true fuer den Tag")
         print("\nEntscheidung liegt beim Owner. Drop heisst alerts_disabled, nicht Search entfernen:")
         print("die Preisdaten laufen weiter, sie sind das eigentliche Asset.")
 
@@ -2757,7 +2819,7 @@ def probe_fields() -> int:
             return 1
         search = cfg["searches"][0]
         try:
-            data = api_get(client, con, f"{BASE}/api/v2/catalog/items",
+            data = api_get(client, con, CATALOG_URL,
                            {"search_text": search["query"], "per_page": 1, "page": 1})
         except (SessionWall, httpx.HTTPError) as e:
             print(f"Probe nicht moeglich: {type(e).__name__}: {e}")
@@ -2804,7 +2866,7 @@ def probe_search(query: str) -> int:
             print("no session")
             return 1
         try:
-            data = api_get(client, con, f"{BASE}/api/v2/catalog/items",
+            data = api_get(client, con, CATALOG_URL,
                            {"search_text": query, "per_page": PROBE_PER_PAGE, "page": 1})
         except (SessionWall, httpx.HTTPError) as e:
             print(f"Probe {query!r} nicht moeglich: {type(e).__name__}: {e}")
