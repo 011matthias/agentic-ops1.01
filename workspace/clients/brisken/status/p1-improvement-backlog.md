@@ -335,6 +335,18 @@ category** only for the source document's own category.
 retiring them silently drops any card mapping still living only in the legacy
 map. Read the settings row on the volume first.
 
+**Amendment 2026-09-16 (note #43, item 81): four FX field names the inventory
+missed.** The candidate `fx` block (`_fx_breakdown`, `web/service.py`) carries
+`zoho_rate`, `zoho_converted`, `converted_gap` and `converted_gap_pct`, and the
+SPA labels the first "Zoho's rate" (`wb.fx.zohoRate`). None is in the ordered
+plan above. They are a RENAME, not a deletion: an expense-report PDF receipt
+still fills them from `base_amount` / `exchange_rate`, and that file format is
+kept deliberately. Round 7 adds `report_rate`, `report_converted`, `report_gap`,
+`report_gap_pct` beside them (the expense report's own booked conversion), round
+8 flips the SPA, round 9 removes the old keys; `wb.fx.zohoRate` joins round 6b.
+Item 81's new `reference_*` fields are a different quantity (the tool's own rate)
+and do not replace these.
+
 ### 24. The output is a document now (owner directive 2026-08-23)
 
 **Owner:** there is no target application at all. "The output should be first
@@ -3368,6 +3380,16 @@ themselves but only AFTER the precision work; delete charge-side duplicate
 detection; honest labels are the first round. Items 73-75 are that first round,
 76 and 77 follow. Ranking rule holds: wrong money beats wrong text.
 
+**2026-09-16: notes #43-46 planned into this wave.** Four more notes on July,
+read 2026-09-16 (the store now holds 46). #44 (date mismatch on a one-day gap)
+is item 80; #43 (show the conversion at our rate) is item 81, with the per-month
+rate as item 82; #45 (the tool decides duplicates) and #46 (resolved items leave
+the to-do area) amend item 74 as (b) and (d). Amendments also appended to items
+23, 76, 77 and 79. Build order: 76 (in flight, nothing added to its scope), then
+80 and 81 as two parallel sessions, then 73, 74, 75, 77, then 82. The ruled order
+of 73-77 is unchanged. Owner rulings 2026-09-16 are recorded in items 80, 77 and
+82; do not re-ask them.
+
 ### 73. A statement row has a type; a card payment is not a refund (note #42)
 
 **Criss/owner, July, anchored on `Payment Thank You-Mobile / Corporate
@@ -3471,6 +3493,82 @@ distinct Google invoice numbers, two true charges. Reset it with `POST
 /api/runs/50622baec444/duplicates/resolve` `{"resolution": "ignore"}`. **Live
 write on Criss's data: per-action yes required** (PARALLEL-ROUND-PROTOCOL §3).
 The code fix alone does not undo it.
+
+**Amendment 2026-09-16, note #45 (Matthias, July, on Possible duplicates):**
+"duplicates should be decided entirely by you. bank statement duplicates means 2
+transaction to the same vendor, receipt duplicates need to be compared on date
+time amount vendor etc... usually you can tell by comparing receipts".
+
+**(b) as written above would split two true copies.** The line "where a
+reference or a hash is present and DISAGREES, it must not collapse" fails on
+August: `0008__Invoice-HMVWDWIL-0029.pdf` / `0009__Receipt-2247-1655-6392.pdf`
+read `HMVWDWIL0029` vs `2247 1655 6392`, and `0012` / `0013` read
+`HMVWDWIL0030` vs `2506 5524`, because a Stripe receipt's own number was read
+instead of the invoice's. The labels call both pairs one purchase. Replace that
+line with a ladder the tool always finishes, first rung that applies wins, each
+recorded as the group's `basis`:
+
+1. `hash`: identical bytes (the digest (b) adds) -> copy.
+2. `reference`: equal `reference_key` + total + currency -> copy (exists).
+3. `printed_reference`: one document's PDF text layer prints the other's
+   normalized reference -> copy. Read live 2026-09-16 through the image
+   endpoint: `0009` prints `HMVWDWIL0029`, `0013` prints `HMVWDWIL0030`; the
+   two Google invoices do not print each other's numbers; the
+   `rendered-body.pdf` files have no text layer, so they fall through.
+4. `distinct_reference`: both receipts carry a usable `reference_key` (a till
+   counter under the floor counts as absent), the keys differ, rung 3 negative
+   -> two purchases.
+5. `receipt_card`: the receipts name different cards -> two purchases.
+6. `vendor_date`: vendor + date + total + currency with nothing disagreeing ->
+   copy.
+7. After matching: a receipt set aside as a copy while an exact same-currency
+   charge for it sits unmatched on a loaded card is restored and the month
+   re-matched once (`basis: statement`). This is the check that catches July's
+   Google pair from the other side.
+
+Measured on the 15 receipt groups the two live months carry, against
+`labels.csv` + `notes.csv`: the ladder reaches the labelled verdict on 15 of 15.
+Today's grouping calls all 15 duplicates, 14 correctly (Google is the miss).
+Rung 5 fires on none of the 15 ahead of an earlier rung: every copy pair names
+one card or none (`payment_mode` read 2026-09-16). Time of day decides none of the 15;
+it would only separate two photographed POS slips with no usable number, and the
+one live instance (Aposto `0029`/`0030`, till counter `4563` below the floor) is
+a true copy that rung 6 already gets right. Time of day joins item 77's prompt
+change (owner ruling 2026-09-16, recorded there); this ladder never requires it.
+The reviewer is no longer asked; "Not a copy" remains as an undo that writes a
+reviewer verdict.
+
+**(d) new, note #46 (shared operator code, Portuguese, July, anchored on
+`Duplicate charges (4) / Real duplicate / Not a duplicate`):** "Acoes resolvidas
+deveriam ser retiradas da area que constam para ser removidas." Live 2026-09-16:
+July's panel lists three resolved groups (`4bc95012abf2bfb5` ignore,
+`3b0029eea1b11643` and `03ba84fadeebe2a5` confirmed) beside five open ones, and
+the SPA only dims them (`opacity-75`) with both buttons still live
+(`RunWorkbench.tsx` duplicates panel). The anchor itself is the unresolved
+4-member COMPUTER group, whose rows are all `entry_status: subscription`, so
+"resolved" may mean clicked or already booked; the design below covers both.
+The note came from the same IPv6 /64 as the owner's notes #41-45, so the author
+is not certain.
+
+- Backend: `duplicate_groups[]` gains parallel `state` (`open` | `decided`),
+  `decided_by` (`tool` | `reviewer`), `verdict` (`copy` | `distinct`), and
+  `summary.n_duplicate_groups_open`. `resolution` keeps its meaning
+  (`confirmed` -> copy, `ignore` -> distinct, `decided_by: reviewer`).
+- Every group stays in the payload. The SPA pairs `duplicate_groups` with
+  `duplicate_charges` / `duplicate_receipts` BY INDEX within a kind, and round A
+  regress-pinned that alignment; filtering decided groups out of one list would
+  mislabel rows.
+- SPA half, folded into 74's one Lovable prompt (no interim prompt): the panel
+  becomes "Copies set aside (N)", collapsed; open groups (none expected after
+  (b)) render as today; decided groups render as a record with the basis and a
+  "Not a copy" undo.
+- Proof: route-level in `tests/test_web_duplicates.py`; regress by forcing
+  `state` to `open` at its wiring point. `test_view_contract.py` gains
+  absent-or-enum-never-null tests for the three scalars (pattern:
+  `test_duplicate_group_basis_is_absent_or_reference_never_null`).
+- Live check after deploy: both months read `n_duplicate_groups_open` 0. The
+  Google group stays wrong until (c)'s reset, which keeps its own per-action
+  yes.
 
 ### 75. The Unmatched list says why (note #40)
 
@@ -3606,6 +3704,16 @@ written above no longer matches the data, so read this first:
 - Sequencing: item 79 (the month page restructure) is an IA change that sits
   under 73-77; settle its order before building this.
 
+**Note 2026-09-16 (note #44, matcher half): EXACT's date window stays at one
+day.** Nothing is added to this item's scope; the label half of #44 is item 80.
+Across 141 confirmed label pairs on eight statement months (the six bundles plus
+July and August), the charge's Transaction Date equals the receipt date on 124
+and is within one day on 136; only five fall outside, and `PROBABLE` already
+reaches five days. Widening `date_exact_window_days` while `EXACT` ignores the
+vendor would add wrong automatic matches of the BASE44/Lovable shape. Reopen
+only if a labelled month shows more than 5% of confirmed pairs outside one day
+after this item's vendor floor is live, measured with the S1 scorer.
+
 ### 77. Dates read in the source locale, and a corrected date moves the receipt (note #34)
 
 **Criss, 2026-09-10, batch `4ceaeb461386`, anchored on `2026-01-04`:** "A leitura
@@ -3641,6 +3749,19 @@ Item 27 noted that better year reading makes this class harder to see, not
 easier: an error that used to land in 2023 and trip the guard now lands in the
 right month. That trade is now real rather than predicted.
 
+**Amendment 2026-09-16 (note #45), owner ruling: bundle three extraction fields
+into this item's prompt change.** `_EXTRACT_SCHEMA` (`llm/client.py`) gains
+`time` (HH:MM as printed, or null), `invoice_number` and `receipt_number` beside
+`reference`, in the same prompt edit, so the reading cache takes ONE fingerprint
+bump and the stored receipts ONE measurement run, not two. The locale
+measurement already has to re-read what is on the volume. Item 74's duplicate
+ladder may use the fields once present (a different printed time on two
+same-vendor, same-day, same-amount slips -> two purchases; a receipt whose
+`invoice_number` equals the other document's number -> copy) and never requires
+them. Time of day cannot help charge-to-receipt matching: Chase exports carry no
+time (recorded by the 2026-07-23 accuracy program, PRs #404-#406). Report in the
+measurement how many stored readings changed outside the three new fields.
+
 ### 78. A category cannot be cleared once set (found 2026-09-16, driving item 70)
 
 The category dropdown on Review expenses offers the eight categories and no
@@ -3672,6 +3793,171 @@ plain language, technical appendix second, owner decisions as questions). It
 is an information-architecture change underneath items 73-77, so the first
 decision is whether it ships before that wave or after it. Nothing built, no
 Lovable prompt in `docs/`.
+
+**Design constraint 2026-09-16 (note #46):** every action list on the
+restructured pages (transactionless receipts, receiptless transactions, needs
+review, refund, duplicates) shows open items as the work and moves decided ones
+(confirmed, posted, settled outside, copy set aside) to a collapsed record with
+an undo. Item 74(d)'s `state` / `decided_by` shape is the model. Items 80 and 81
+change single cells and do not depend on this item's order; if this item ships
+before 74, 74(d)'s SPA half goes into this item's duplicates page instead.
+
+### 80. A one-day gap is not a date mismatch (note #44)
+
+**Matthias, July, on the `date mismatch` chip of ANTHROPIC 47.23:** "happens
+often because transactions sometimes take a while to get processed in the bank.
+do research to find the green zone on how much time differing is typical."
+
+The chip is SPA-derived: `getRowWarnings` (`RunWorkbench.tsx`) pushes "date
+mismatch" when the chosen candidate's `date_pct` is below 99, which is any gap
+of one day or more, and the chip also counts toward the Warnings filter. The
+named pair is `exact` (receipt 07-13, charge 07-14, `date_pct` 80). Six July
+rows carry the chip, all reconciled and all correct by the labels (AMAZON,
+MP *24HBEBIDAS, GOOGLE Workspace, three ANTHROPIC top-ups); every one of July's
+38 candidates sits 0 or 1 day from its charge.
+
+**Evidence, internal.** The Chase parser matches on `Transaction Date` and keeps
+`Post Date` as `posting_date` (`inspect.py` `guess_column_map`). Over 141
+confirmed label pairs on eight statement months, charge Transaction Date minus
+receipt date: 0 days 124, +1 9, -1 3, -3 2 (one is MSFT 4.26 USD against a Hotel
+Ibis 4.00 EUR receipt, very likely a wrong label), +5 and +6 one each (MEGA
+CENTE CONSTR, Zoho-era dates), +14 one (Namecheap, May). Post Date minus
+Transaction Date: 0 days 7, 1 day 94, 2 days 26, every 2-day case starting on a
+Friday. The processing lag the note describes is real and lives in Post Date,
+which the tool does not match on. The one-day Transaction-Date cases are
+midnight and time-zone boundaries (Anthropic receipts, a late bar tab in Brazil,
+Google's 06-30 invoice charged 07-01) and Amazon charging at shipment.
+
+**Evidence, external (fetched 2026-09-16).** Visa Core Rules (Apr 2026):
+"Transaction Date: The date on which a Transaction between a Cardholder and a
+Merchant or an Acquirer occurs", e-commerce "on or after the date on which the
+goods are shipped"
+(https://usa.visa.com/dam/VCOM/download/about-visa/visa-rules-public.pdf).
+Mastercard Transaction Processing Rules (Moneris-hosted copy; mastercard.com
+returned 403): the DE 12 date is the exchange of goods, shipment, hotel checkout
+or ticket issue; presentment within 7 calendar days
+(https://www.moneris.com/-/media/Files/Terms-and-Conditions/Card-Brands/Mastercard/Mastercard-Transaction-Processing-Rules.pdf).
+Chase: "The transaction date is when you make a purchase ... the posting date is
+when your credit card issuer processes this transaction", a Saturday purchase
+may post Monday or Tuesday
+(https://www.chase.com/personal/credit-cards/education/basics/how-to-track-credit-card-spending).
+Amazon charges at shipment, multi-item orders "after all items have shipped or
+five days after the order date, whichever occurs first"
+(https://www.amazon.com/gp/help/customer/display.html?nodeId=GCSEVDU4VHLPD4VX).
+Stripe attempts invoice payment one hour after `invoice.created`
+(https://docs.stripe.com/invoicing/integration/workflow-transitions). Weekends
+and Fed holidays move Post Date, not Transaction Date
+(https://federalreserve.gov/aboutthefed/k8.htm). No primary source gives a
+typical lag per merchant class; per-class figures are inference from these
+rules.
+
+**Owner ruling 2026-09-16 (do not re-ask):** gap = charge Transaction Date minus
+receipt date, calendar days. -1..+1: no signal. +2..+7: a neutral note, "charged
+N days after the receipt". -3..-2: a neutral note, "receipt dated N days after
+the charge". Beyond either: "date mismatch". The matcher does not change (item
+76's note).
+
+Build, the label only:
+
+- Backend: every `rows[].candidates[]` entry gains parallel `date_gap_days`
+  (int, signed) and `date_gap_zone` (`none` | `lag` | `mismatch`), both absent
+  when either date is missing. The zone bounds are one module constant in
+  `web/service.py` with the evidence in its docstring, not a matcher tunable.
+  `date_pct` and every score are untouched.
+- SPA prompt: `getRowWarnings` reads `date_gap_zone`. `mismatch` -> "date
+  mismatch" (a warning); `lag` -> neutral chip, EN + PT for both directions (not
+  a warning); `none` -> nothing; field absent -> today's `date_pct` rule. Ride
+  with item 76's labelling prompt if that one is still unpasted.
+- Contract: `docs/api-contract.md` candidate section; `test_view_contract.py`
+  `test_date_gap_zone_is_absent_or_enum_never_null`.
+- Proof: `tests/test_date_gap_zone.py`, route-level through
+  `GET /api/runs/{id}`, receipts at 0, +1, -1, +3, -3, +9 days. Regress: the
+  zone wiring replaced by the constant `"mismatch"`; the +1 and +3 assertions go
+  red.
+- Live check: July `86fdc73d70668ccb` reads `date_gap_days` 1, zone `none`;
+  every July candidate reads `none`; August's -2 ANTHROPIC 50.52 reads `lag`.
+- Regressions to watch: the Warnings filter count drops (July, 6 rows); PT
+  wording for a negative gap; a candidate with no receipt date stays absent, not
+  `none`.
+
+### 81. The FX block shows the conversion at our rate (note #43)
+
+**Matthias, July, on the FX block of AMAZON 315.56 USD vs the Amazon.de receipt
+276.08 EUR ("This match needs 1.143002 USD per EUR"):** "maybe in cross currency
+cases show the calculation of what the receipt's amount is in $ using our FX
+rate."
+
+Live 2026-09-16: the chosen candidate's `fx` carries `implied_rate` 1.143002
+and empty `zoho_rate` / `zoho_converted` / `converted_gap`, because
+`_fx_breakdown` (`web/service.py`) fills those from `receipt.base_amount`, and
+none of the 83 receipts on the two live months carries one. The tool's rate
+(Settings `fx_reference_rates`, EUR:USD 1.162275) appears only inside the reason
+string. The SPA already renders a "Receipt is worth" row and a gap line, gated
+on `zoho_converted`.
+
+Build:
+
+- Backend: `_fx_breakdown` gains parallel `reference_rate` (string, charge
+  currency per receipt currency, same direction as `implied_rate`),
+  `reference_rate_source` (`settings` | `statement` | `receipts`, gaining
+  `ecb_month` with item 82), `reference_converted`, `reference_gap` (signed, 2
+  dp), `reference_gap_pct` (signed number, 2 dp, relative to the converted
+  amount, the basis the matcher's deviation uses) and `reference_gap_band`
+  (`match` within `fx_reference_match_pct`, `review` within
+  `fx_reference_review_pct`, else `outside`). All absent when the pair has no
+  rate. The rate comes from the run's frozen config through the matcher's own
+  `_reference_rate_for` + `derive_fx_reference_rates`
+  (`matching/deterministic.py`), so the fields appear on deploy without a
+  re-match. `zoho_*` untouched (item 23 amendment).
+- SPA prompt: `FxSummary` reads `276.08 EUR x 1.162275 = 320.88 USD · difference
+  -5.32 USD (-1.66%)`, amber when the band is not `match`; `FxPanel` adds
+  Reference rate (with its source), Receipt in {currency}, Difference, with
+  "This match needs" last. EN + PT. Keep the `zoho_*` conditionals: an
+  expense-report PDF receipt still fills them.
+- Contract: api-contract `fx` section; `test_view_contract.py` absent-or-typed
+  tests for the six scalars.
+- Proof: `tests/test_fx_breakdown.py`, route-level: EUR 276.08 receipt, USD
+  315.56 charge, Settings rate -> `320.88`, `-5.32`, `-1.66`, `settings`,
+  `match`; plus every `fx_reference` candidate's `reference_rate` appears in its
+  `reason`, so the screen and the decision cannot drift. Regress: the rate
+  lookup at the `_fx_breakdown` call site returns None; the fields vanish, red.
+- Live check: July AMAZON 320.88 / -5.32 / -1.66; August ANTHROPIC 247.32 vs
+  214.20 EUR -> 248.96 / -1.64 / -0.66; PETIT TRAIN 37.48 vs 32.00 EUR -> 37.19 /
+  +0.29 / +0.77.
+
+### 82. A reference rate per month, from the ECB (note #43, owner ruling 2026-09-16)
+
+**One rate per pair, not per month.** `apply_master_data` (`web/service.py`)
+copies Settings `fx_reference_rates` into a run's config with `setdefault` at
+creation and at statement attach; `rematch_after_change` reads that frozen
+config. The reason string's "monthly reference rate" is wording only. July and
+August both cite EUR:USD 1.162275, which equals the ECB daily rate of
+2026-09-04..10: a September rate applied to both months. The 2026-07-23
+self-derived monthly rates (`derive_fx_reference_rates`) cannot fire today: a
+configured rate always wins, the Chase export has no FX columns, and no live
+receipt carries a Zoho rate.
+
+Measured on July's 17 chosen FX pairs: deviation at the Settings rate 0.70% to
+2.93% (the AMAZON pair -1.66%); at the ECB July monthly average 0.05% to 1.41%
+(the AMAZON pair +0.11%); mean absolute deviation 1.79% against 0.50%. ECB Data API,
+`EXR/M.USD.EUR.SP00.A` and `EXR/M.BRL.EUR.SP00.A`, BRL:USD as a cross rate,
+queried live 2026-09-16. Card networks lock the rate at authorization (Visa
+since April 2021,
+https://corporate.visa.com/en/sites/visa-perspectives/company-news/pay-the-same-exchange-rate-every-time.html;
+Mastercard,
+https://www.mastercard.com/us/en/personal/get-support/currency-exchange-rate-converter.html),
+so the purchase month's rate is the right granularity; a daily rate adds little
+at a 3% match threshold.
+
+**Owner ruling 2026-09-16 (do not re-ask):** per month, from the ECB, and a rate
+the operator types still wins.
+
+Build: rates keyed by month in the run config, fetched when a month is created or
+its statement attached, `reference_rate_source` `ecb_month`, Settings copy no
+longer telling the operator to update rates by hand. This moves matcher inputs,
+so it ships after 77 and only after a simulation on the six bundles and both
+live months with the S1 scorer and guard green; report which July and August
+pairs change bucket. Independent of item 79.
 
 ## Related but tracked elsewhere (do not duplicate here)
 
