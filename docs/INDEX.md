@@ -295,6 +295,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-16 | Vinted Catalogue Endpoint Move, Batch 2 Published, Three Gate Fixes | system-infra | [→](docs/2026-09-16%20-%20Vinted%20Catalogue%20Endpoint%20Move%2C%20Batch%202%20Published%2C%20Three%20Gate%20Fixes/Checkpoint.md) |
 | 2026-09-09 | KIT Studienstart Anmeldungen | misc | [→](docs/2026-09-09%20-%20KIT%20Studienstart%20Anmeldungen/Checkpoint.md) |
 | 2026-09-09 | Personal AI Content Channel (TikTok) | misc | [→](docs/2026-09-09%20-%20Personal%20AI%20Content%20Channel%20%28TikTok%29/Checkpoint.md) |
 | 2026-09-08 | System Development | system-infra | [Mini-Checkpoint-2](docs/2026-09-08%20-%20System%20Development/Mini-Checkpoint-2.md) |
