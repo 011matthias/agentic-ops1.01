@@ -2115,6 +2115,36 @@ routes carry no `updated_at`; re-read the view. Scalar, so
 `tests/test_view_contract.py` pins it with its own test rather than a list
 path. No SPA change is needed: the SPA already prefers `updated_at`.
 
+## How far apart the two dates are: `date_gap_days` + `date_gap_zone` (item 80)
+
+`GET /api/runs/{id}` -> every `rows[].candidates[]` entry, both emission
+sites (the matcher's candidates and a reviewer's hand match):
+
+```json
+"date_gap_days": 1,
+"date_gap_zone": "none"
+```
+
+`date_gap_days` is an integer, signed: the charge's `transaction_date` minus
+the receipt's `detected_date` in calendar days, so a receipt dated before its
+charge is positive. `date_gap_zone` is `"none"` (-1..+1), `"lag"` (+2..+7 or
+-3..-2) or `"mismatch"` (anything else), read off the one constant
+`service.DATE_GAP_ZONES`, whose docstring carries the evidence. Both are
+**absent** (never null) when either date is missing, and always travel
+together.
+
+Label only, by owner ruling 2026-09-16 (note #44): the matcher, its windows,
+`score` and `date_pct` are unchanged, and `date_pct` stays what the date
+`ScoreBar` renders. What changes is the SPA's warning: it pushed
+"date mismatch" whenever the chosen candidate's `date_pct` was below 99,
+which put a warning on six correct July rows one day from their receipts.
+The zone replaces that rule (`mismatch` warns, `lag` is a neutral note,
+`none` says nothing, absent keeps the `date_pct` rule). A hand match carries
+`date_pct: null` and never warned; it now carries the zone like any other
+candidate. Pinned by `tests/test_view_contract.py`
+(`test_date_gap_zone_is_absent_or_enum_never_null`) and
+`tests/test_date_gap_zone.py`. Renders in `docs/lovable-date-gap-prompt.md`.
+
 ## The FX block at the tool's own rate: `fx.reference_*` (item 81, 2026-09-16)
 
 `GET /api/runs/{id}` -> `rows[].candidates[].fx`, six parallel keys beside
