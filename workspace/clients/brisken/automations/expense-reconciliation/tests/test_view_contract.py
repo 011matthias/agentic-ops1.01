@@ -886,3 +886,23 @@ def test_date_gap_zone_is_absent_or_enum_never_null(
     assert cands["t1"]["date_gap_zone"] == "lag"
     assert "date_gap_days" not in cands["t2"], cands["t2"]
     assert "date_gap_zone" not in cands["t2"], cands["t2"]
+
+
+def test_every_run_row_carries_a_row_type_and_an_entity_source(payloads):
+    """Item 73. `rows[].row_type` says what kind of statement line a charge
+    is (purchase / payment / refund / reversal / fee / interest) and
+    `rows[].entity_source` where its `legal_entity_id` came from (card /
+    batch / none). Both are on EVERY row, as plain strings, never null: a
+    charge always has a kind (the sign's reading when the statement printed
+    no label) and its entity always has a basis, "none" included. The
+    values are closed sets, so a new one is a rule-5 change (api-contract).
+    Route-level behaviour: `tests/test_row_type.py`."""
+    from expense_recon.ingest._common import ROW_TYPES
+
+    rows = [row for view in payloads["run"] for row in view["rows"]]
+    assert rows
+    for row in rows:
+        assert row["row_type"] in ROW_TYPES, row
+        assert row["entity_source"] in ("card", "batch", "none"), row
+        if row["effective_bucket"] == "refund":
+            assert row["row_type"] in ("payment", "refund", "reversal"), row

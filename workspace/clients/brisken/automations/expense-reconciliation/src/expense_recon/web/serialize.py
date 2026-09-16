@@ -18,6 +18,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+from ..ingest._common import row_type_for_label, type_label_from_raw_text
 from ..matching.types import (
     Categorization,
     ClassificationSource,
@@ -122,6 +123,8 @@ def transaction_to_dict(t: Transaction) -> dict:
         # of the positional transaction_id; content-derived ids carry no
         # row, so it has to survive the snapshot round trip.
         "source_row": t.source_row,
+        # Item 73: the statement label's row type (None = the sign decides).
+        "row_type": t.row_type,
     }
 
 
@@ -151,6 +154,15 @@ def transaction_from_dict(d: dict) -> Transaction:
         # those still carry positional ids, and `_anchor_row`'s legacy
         # fallback recovers their sheet row from the id as before.
         source_row=d.get("source_row"),
+        # A key that is present is the parser's answer, None included (no
+        # label was read). A snapshot from before item 73 has no key; its
+        # row still holds the printed Type cell in `raw_text`, so the label
+        # is read back from there rather than lost until a re-read, and the
+        # next save writes it down.
+        row_type=(
+            d["row_type"] if "row_type" in d
+            else row_type_for_label(type_label_from_raw_text(d.get("raw_text")))
+        ),
     )
 
 

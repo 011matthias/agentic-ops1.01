@@ -3250,6 +3250,22 @@ def build_view(
             if src is not None:
                 row["settled_by"] = src
 
+    # Item 73 (note #42): what kind of statement line each charge is, and
+    # where its company came from. The bucket answers "was this matched"
+    # and keeps doing so; `refund` there means "money back to the card,
+    # never receipt-matched", which a card payoff also is. `row_type` says
+    # which: July's -9,664.81 "Payment Thank You-Mobile" printed Type
+    # `Payment` and is a `payment`, not a refund. `entity_source` names the
+    # basis of `legal_entity_id` (card / batch / none), so an entity the
+    # upload lent a row reads as lent rather than as a fact about the row.
+    from ..ingest._common import row_type_of
+
+    view_cards = _batch_cards(run.config)
+    for row in rows:
+        row_tx = tx_by_id[row["transaction_id"]]
+        row["row_type"] = row_type_of(row_tx)
+        row["entity_source"] = charge_entity_source(row_tx, view_cards)
+
     n_tx = len(transactions)
     # Item 62: the pool a card statement can actually settle.
     n_matchable_receipts = len(receipts) - len(settled_outside_ids)
@@ -7746,6 +7762,28 @@ def stamp_charge_entities(transactions: list, cards: dict) -> list:
             if entity != (tx.legal_entity_id or "") else tx
         )
     return out
+
+
+def charge_entity_source(tx, cards: dict) -> str:
+    """Item 73: where a charge's `legal_entity_id` came from, in the grid's
+    `entity_source` vocabulary.
+
+    * ``card``  - the row printed a card and the registry named its entity
+      (`stamp_charge_entities` above, same condition).
+    * ``batch`` - the upload's entity, which a row with no card column, or a
+      batch with no registry, keeps. Lent, not established by the row.
+    * ``none``  - no entity at all.
+
+    Reads the batch's CURRENT registry snapshot, the one every re-match
+    stamps with, so it describes the stamp the month's last re-match made.
+    """
+    from ..matching.deterministic import _card_keys
+
+    if not (tx.legal_entity_id or "").strip():
+        return "none"
+    if cards and _card_keys(tx.card_last4):
+        return "card"
+    return "batch"
 
 
 def _statement_card_identities(

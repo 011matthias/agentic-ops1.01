@@ -76,7 +76,19 @@ def _status_label(row: dict) -> str:
         return "matched"
     if bucket in ("unmatched", ""):
         return "no receipt"
+    if bucket == "refund":
+        # Item 73: the credit bucket holds card payments too; say which.
+        return _CREDIT_STATUS.get(str(row.get("row_type") or ""), "refund")
     return bucket.replace("_", " ")
+
+
+# Item 73: a credit line's status by its row type. A row built before row
+# types existed has none and keeps the word it always printed.
+_CREDIT_STATUS = {
+    "payment": "card payment",
+    "refund": "refund",
+    "reversal": "reversal",
+}
 
 
 def build_reconciliation_report_pdf(

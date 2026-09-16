@@ -218,6 +218,15 @@ class Transaction:
     # has always been: the row in the file this charge was first read from.
     source_row: int | None = None
 
+    # What the statement's own Type label says this line is (item 73):
+    # purchase / payment / refund / reversal / fee / interest. None when the
+    # source printed no label the parser recognises, which is every PDF row
+    # and every workbook without a Type column. Display only: `is_credit`
+    # still decides the partition, and nothing in matching reads this.
+    # Consumers call `ingest._common.row_type_of`, which falls back to the
+    # sign, rather than reading the field directly.
+    row_type: str | None = None
+
 
 @dataclass(frozen=True)
 class Receipt:
