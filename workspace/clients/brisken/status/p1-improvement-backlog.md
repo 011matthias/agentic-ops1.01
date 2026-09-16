@@ -3526,11 +3526,20 @@ recorded as the group's `basis`:
    re-matched once (`basis: statement`). This is the check that catches July's
    Google pair from the other side.
 
-Measured on the 15 receipt groups the two live months carry, against
-`labels.csv` + `notes.csv`: the ladder reaches the labelled verdict on 15 of 15.
-Today's grouping calls all 15 duplicates, 14 correctly (Google is the miss).
-Rung 5 fires on none of the 15 ahead of an earlier rung: every copy pair names
-one card or none (`payment_mode` read 2026-09-16). Time of day decides none of the 15;
+Measured on the 16 receipt groups the two live months carry (July 5, August
+11), against `labels.csv` + `notes.csv`: 15 are copies and 1 is two purchases
+(Google). The ladder reaches the labelled verdict on 16 of 16; today's grouping
+calls all 16 duplicates, 15 correctly. Expected rung per group, the answer key
+for the build: rung 2 on 10 (July `223358239c9911df`, `7dd5f822b6c9d13d`,
+`5409c62362824053`; August `fd07bcd04d462511`, `5274a5300cd27a6a`,
+`06dd72881174d4c7`, `620aa2aeda415518`, `be1642db8b72aa99`,
+`24c61c428c3e81f0`, `8c9170f68b503742`), rung 3 on 2 (August
+`da109dc56459efa7`, `2f898a54812eb117`), rung 4 on 1 (July `03ba84fadeebe2a5`,
+distinct), rung 6 on 3 (July `3b0029eea1b11643`; August `2e3ef5581a738121`,
+`5c7c063743f32f29`); rung 1 may pre-empt any of them with the same verdict.
+(Corrected 2026-09-16 from "15 groups", a miscount.) Rung 5 fires on none of
+the 16 ahead of an earlier rung: every copy pair names one card or none
+(`payment_mode` read 2026-09-16). Time of day decides none of the 16;
 it would only separate two photographed POS slips with no usable number, and the
 one live instance (Aposto `0029`/`0030`, till counter `4563` below the floor) is
 a true copy that rung 6 already gets right. Time of day joins item 77's prompt
