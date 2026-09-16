@@ -131,7 +131,10 @@ and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
-None as of the 2026-09-16 re-audit.
+| Prompt | Decisive field names | Gate |
+|---|---|---|
+| `lovable-month-views-prompt.md` (2026-09-16, item 79: a month is two views, Expenses and Matching; five cards replace the bucket toggles and the tile bar; decided rows fold into a record with an undo; the `/runs` crash on a statementless month) | `month.tab.matching` (in a SHARED chunk, not a route chunk: both month routes import `MonthHeader`), `wb.decided.switch` (`chunk-runs._runId`), `expx.recon.credits.one` (`chunk-expenses._batchId`) present; `wb.backToDashboard`, `wb.bucket.posted`, `sum.matchRate` absent from `chunk-runs._runId`; `months.locked.body` absent from `chunk-expenses._batchId` | No backend gate. Browser-drive to verify with the eight checks at the end of the prompt; re-read the payloads first, counts move with every re-match |
+| `lovable-journal-callers-prompt.md` (2026-09-16, item 23 round 4, consumer half: the journal CSV button, the `/classic` journal download, the `export_approved_only` Settings card) | ABSENCE: `zoho.csv` 0 hits in every chunk (2 on 2026-09-16: `chunk-classic`, `chunk-runs._runId`); `export_approved_only` 0 in the settings chunk (1 today) | No backend gate. The round-4 backend PR (route deletion) waits for this audit to read 0 |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
