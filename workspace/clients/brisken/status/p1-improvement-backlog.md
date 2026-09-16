@@ -3602,7 +3602,7 @@ is not certain.
   Google group stays wrong until (c)'s reset, which keeps its own per-action
   yes.
 
-### 75. The Unmatched list says why (note #40)
+### 75. The Unmatched list says why (note #40) (SHIPPED PR #932 with item 83 - see Shipped row 52)
 
 **Owner, July, anchored on `Unmatched73`:** "receipts from this month inserted
 by general receipt injection function in the tool or per email should be matched
@@ -3640,6 +3640,11 @@ table; this puts the same classification on the screen.
 Residue, not built: a re-match happens silently. Item 58's notification is
 dev-facing (`/api/operator/state` plus an email). The reviewer has no way to
 tell "the tool tried and found nothing" from "the tool did not try".
+
+**Shipped 2026-09-16 with item 83 (PR #932); the full record is under item
+83.** The five receipt codes shipped as named. Charges got their own four,
+because the receipt vocabulary is false about a charge: `not_a_purchase`,
+`receipt_held_by_another_charge`, `already_booked`, `no_receipt_found`.
 
 ### 76. Reconciled means reconciled, and clean rows confirm themselves (notes #38, #39) (SHIPPED PR #925 - see Shipped row 51)
 
@@ -4125,7 +4130,7 @@ so it ships after 77 and only after a simulation on the six bundles and both
 live months with the S1 scorer and guard green; report which July and August
 pairs change bucket. Independent of item 79.
 
-### 83. A decided duplicate leaves the month's work (note #46, Criss)
+### 83. A decided duplicate leaves the month's work (note #46, Criss) (SHIPPED PR #932 with item 75 - see Shipped row 52)
 
 **Criss, July, anchored on `Duplicate charges (4) / Real duplicate / Not a
 duplicate`:** "Acoes resolvidas deveriam ser retiradas da area que constam para
@@ -4170,6 +4175,42 @@ Build order:
    duplicate_copy` is the same set of rows seen from the other side; build
    whichever lands first so the other reuses it.
 3. SPA half as one Lovable prompt, gated on the backend field being live.
+
+**Shipped 2026-09-16 with item 75 (PR #932).** Step 1 was a read of the
+published SPA source rather than a drive: the Matching view's first card
+already folds `is_extra` rows into a "copies set aside" record, but its whole
+count is `n_unmatched_rec` (copies included), the hand-match picker lists them,
+and a copy could be offered as another charge's near miss. The backend now
+splits at VIEW time, the stored outcome untouched: a copy of a group whose
+verdict is `copy` (tool or reviewer) that the effective outcome leaves
+unmatched moves from `unmatched_receipts` and `assignable_receipts` into
+`copies_set_aside[]`, out of `n_unmatched_rec` and out of the near-miss pool,
+with `summary.n_copies_set_aside`. A copy a reviewer hand-matched renders as
+that match. `duplicate_groups` / `duplicate_receipts` are untouched, so the
+by-index pairing holds. The accounting is a route-tested partition: every
+receipt is held, unmatched, settled outside or set aside, and
+`receipt_match_rate` reads over receipts a card could settle.
+
+Every unmatched receipt and charge carries a parallel `reason_code`
+(`unmatched_reasons.py`). The receipt rules are item 69's attribution rules
+with the date edge read BEFORE the card, bounded to a month either side, and
+tender words counting only when no card digits are printed. Measured on the 14
+live receipts whose label names a coverage kind: 11 name the labelled kind
+(card-first: 9); Redis 13,200 and 360Crossmedia 900 (bank transfers, no
+payment method printed) read `no_charge_on_any_loaded_statement`, true of
+them; Konsultancy 15,972 EUR dated 07-30 reads `charge_in_neighbouring_period`
+and is a bank transfer, the one wrong claim.
+
+Predicted live after deploy, from the payloads (the view computes it, no
+re-match needed): July unmatched receipts 13 -> 11 (7 no charge found, 2
+neighbouring period, 2 not a card charge) + 2 set aside; August 21 -> 10 (4
+card not loaded, 4 neighbouring period, 1 not a card charge, 1 no charge) +
+11 set aside. Charges: July 47 already booked, 1 held (GOOGLE Workspace
+71.64), 24 no receipt; August 1 not a purchase (ANNUAL MEMBERSHIP FEE), 1
+held, 98 no receipt. Receipt match rate July 75.0% -> 78.0%, August 32.3% ->
+50.0%. Suite 1929 -> 1958 passed / 2 skipped; four regress proofs bite. SPA
+half: `docs/lovable-unmatched-reasons-prompt.md`. The July Hostinger and Redis
+groups a reviewer ruled "Not a copy" stay unmatched, as ruled.
 
 ### 84. The Expenses view's tiles open the expenses they count (owner, 2026-09-16)
 
@@ -4353,6 +4394,7 @@ read of July's card strip, not a build.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 52 | The unmatched lists say what they hold: a decided duplicate copy leaves `unmatched_receipts`, `assignable_receipts`, `n_unmatched_rec` and the near-miss pool for `copies_set_aside[]` + `summary.n_copies_set_aside` (view-time split, stored outcome and duplicate lists untouched), and every unmatched receipt and charge carries `reason_code` (receipts: duplicate_copy / card_statement_not_loaded / not_a_card_charge / charge_in_neighbouring_period / no_charge_on_any_loaded_statement; charges: not_a_purchase / receipt_held_by_another_charge / already_booked / no_receipt_found). SPA half: `docs/lovable-unmatched-reasons-prompt.md` | Items 83 + 75, notes #40 and #46. August's "Receipts without a charge" was 21 rows of which 11 were copies of documents that had settled their charge, and no unmatched row on either list said why it was there. Receipt rules are item 69's attribution rules with the date edge read before the card: 11 of 14 labelled live receipts name the labelled kind (card-first 9), one wrong claim (a bank transfer dated 07-30). Suite 1929 -> 1958 / 2 skipped, four regress proofs | PR #932 |
 | 51 | A row says whose turn it is and clean exact pairs confirm themselves: `rows[].turn` (decide / confirmed / rejected / posted / none, `decide` == the `n_undecided` set), `rows[].decided_by` (tool / reviewer) + `decided_rule`, `summary.n_self_confirmed`; `apply_self_confirmations` after every `rematch_month` commit (exact, one candidate, category ready, vendor >= 75, not borrowed / held / rejected), withdrawn when it stops qualifying, never over a person's verdict (`RunStore.set_tool_decision` conditional upsert; `decisions.decided_by` / `decided_rule` migrated in place). SPA half: `docs/lovable-turn-prompt.md` | Item 76, notes #38/#39/#49. `status` was `pending` on all 223 live rows, so a booked row asked Reject / Confirm as loudly as the 13 real decisions, and a same-amount same-day same-vendor pair needed a click. Owner rulings 2026-09-16: exact pairs only, vendor floor 75. Predicted live: 5 of the 6 literal exact pairs confirm themselves at the next re-match; 2 clean `fx_reference` pairs (August) keep asking | PR #925, 2026-09-16; suite 1907 -> 1929 passed / 2 skipped; three regress proofs RED first (pass wiring in `rematch_month`, `turn` wiring, the store's reviewer guard) |
 | 50 | Duplicates are receipts only, and the tool decides every group: `find_duplicate_charges` deleted (`duplicate_charges` always `[]`, no charge group, no charge row marker, none in the reconciliation PDF); each receipt group is decided by a ladder recorded as `duplicate_groups[].basis` (hash / reference / printed_reference / distinct_reference / receipt_card / vendor_date, then the statement check once per re-match), with parallel `state` (open / decided), `decided_by` (tool / reviewer), `verdict` (copy / distinct) and `summary.n_duplicate_groups_open`. The byte digest is persisted in expense-batch snapshots (`receipt_digests`); rung 3 reads a PDF's own text layer locally, no model call. A reviewer's `confirmed` / `ignore` outranks the tool and never moves `basis`. The PDF lists decided copies under "Copies set aside" instead of asking. SPA half: `docs/lovable-duplicates-decided-prompt.md` | Item 74, notes #37/#41/#45/#46. The panel asked Criss "Real duplicate / Not a duplicate" about pairs nothing needed deciding on, and listed two real charges to one vendor as duplicate charges. Replayed on both live months with the real receipt files: all 16 groups land on the rung the answer key named (July 3 `reference`, 1 `distinct_reference`, 1 `vendor_date`; August 7 `reference`, 2 `printed_reference`, 2 `vendor_date`), and the statement check restores nothing. Matching measured identical before and after: July resolved_clean 31, August 8, wrong 0; bundles determ_ok 70/95, determ_wrong 0; scorer 76.0; guard 4/4. July's Google group `03ba84fadeebe2a5` reads `decided_by: reviewer, verdict: copy` because of a July "Real duplicate" click on two different invoices (5608449734, 5614551183); the tool reads it `distinct_reference`. Rung 7 fires only when the kept copy settled a charge, so identical documents against identical charges stay a pick | PR #914, 2026-09-16; suite 1900 -> 1907 passed / 2 skipped; four regress proofs RED first on the rebased tree (ladder wiring, rung 3 text-layer wiring, rung 7 re-match wiring, `state` field). Deployed Fly v138: live on both months, 16 groups on the answer-key rungs, `n_duplicate_groups_open` 0, no charge group; July's and August's Matching panels driven. Google reset owner-approved and sent (`resolution: ignore`, 200, July re-matched): the group reads `decided_by: reviewer, verdict: distinct`; n_reconciled 32 -> 31, n_review 7 -> 8, `n_charges_receipt_taken` 0 -> 1, copies 5 -> 4; charge `b7abd111d69921a3` holds both invoices as exact candidates and waits on Criss's pick |
 | 49 | A reviewer-typed date that belongs in another month offers the move and one POST makes it: `expenses[].month_move {month, label, batch_id?}` (absent otherwise) + `summary.n_month_moves`, and `POST /api/runs/{id}/expenses/{doc}/move` files the receipt into its month (created when absent, `created_by: "move"`), carrying its reading, file, header and category edits and provenance, leaving a soft delete that names the target, and re-matching both months. Amendment (note #45): `time`, `invoice_number`, `receipt_number` read in the same extraction call and carried to `expenses[]` (absent-or-string) | Item 77. A Mercado Pago slip printing 04/07/26 was read as a January date, the drop created "January 2026" for it, and Criss's correction to July left it there, while July's statement holds its charge (`MP *PARADAOBRIGAT` USD 6.20, unmatched). **The locale half was measured and not built:** 129 stored receipts re-read, two runs per arm, and the reported misread is a glyph (gpt-5-mini transcribes the line as `04/01/26`); a locale rule moved 0 dates, and none of the 4 dates off their ground-truth proxy is a swapped order. **The amendment fields cost more than expected:** listed in the instructions they moved 39-41 stable readings, among them a Microsoft invoice re-read as a statement (it would be set aside) and an Amazon.de order re-read as Yubico; asked for in the response schema only, with the instruction text byte-identical, they moved 31, none of them a date, total, currency, document type or resolvable card, against a 12-reading floor that a one-word wording change produces on its own. A machine reading outside the window never offers a move (moving on a reading the guard distrusts would misfile twice) | PR #910, 2026-09-16; suite 1887 -> 1900 passed / 2 skipped; four regress proofs RED first (offer wiring, edits carried, target re-match, stored time). SPA half `docs/lovable-month-move-prompt.md` (owner applies). Deployed Fly v137 (API read: January the only month with an offer, naming July `50622baec444`; five months carry none). Live fix on owner yes: the receipt moved into July and settled `MP *PARADAOBRIGAT` USD 6.20 as `fx_reference` +0.68%; exactly one July row changed, 0 new model calls; January 2026 is empty and kept |

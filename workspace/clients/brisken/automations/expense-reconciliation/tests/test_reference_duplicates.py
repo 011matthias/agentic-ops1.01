@@ -218,11 +218,13 @@ def test_a_copy_that_borrows_its_card_does_not_take_a_strangers_charge(
     assert base44["candidates"] == [], "a Consulting receipt is no candidate here"
     assert base44["effective_bucket"] == "unmatched"
     # Both copies are still the month's receipts: the receipt copy collapsed
-    # as the duplicate it is, the invoice copy unmatched with its card.
+    # as the duplicate it is (items 83 + 75: set aside, not unmatched), the
+    # invoice copy unmatched with its card.
     assert view["summary"]["n_receipts"] == 2
     assert view["summary"]["n_duplicate_copies"] == 1
     unmatched = {r["document_id"]: r for r in view["unmatched_receipts"]}
-    assert len(unmatched) == 2
+    assert len(unmatched) == 1
+    assert len(view["copies_set_aside"]) == 1
 
     # The grid says the same thing the matcher acted on: the invoice copy
     # carries card 1176 and the Consulting entity, from its copy.
@@ -272,7 +274,7 @@ def test_an_invoice_and_its_receipt_spelled_differently_make_one_exact_match(
     assert group["basis"] == "reference"
     assert len(group["members"]) == 2
     assert view["summary"]["n_duplicate_copies"] == 1
-    extra = view["unmatched_receipts"][0]
+    extra = view["copies_set_aside"][0]
     assert extra["duplicate"]["is_extra"] is True
     assert extra["duplicate"]["group_id"] == group["group_id"]
 

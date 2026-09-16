@@ -165,6 +165,11 @@ RUN_CONTRACT = {
     "unmatched_receipts[]": "object",
     "unmatched_receipts[].line_items[]": "object",
     "unmatched_transactions[]": "object",
+    # Items 83 + 75: decided duplicate copies, moved out of
+    # `unmatched_receipts` and `assignable_receipts`; the same receipt-view
+    # objects `unmatched_receipts[]` carries.
+    "copies_set_aside[]": "object",
+    "copies_set_aside[].line_items[]": "object",
 }
 
 # Paths the fixtures MUST actually populate. Everything the SPA renders as
@@ -216,6 +221,7 @@ RUN_MUST_COVER = {
     "coverage[]",
     "coverage[].digits[]",
     "coverage[].statements[]",
+    "copies_set_aside[]",
 }
 
 
@@ -1124,3 +1130,38 @@ def test_every_run_row_carries_a_turn_and_a_verdict_names_its_author(payloads):
             assert isinstance(row["decided_rule"], str) and row["decided_rule"], row
         else:
             assert "decided_rule" not in row, row
+
+
+def test_unmatched_reason_code_is_on_every_unmatched_item_and_nowhere_else(payloads):
+    """Items 83 + 75. `reason_code` is a string from a closed set on EVERY
+    element of `unmatched_receipts[]`, `copies_set_aside[]` (always
+    `duplicate_copy`), `unmatched_transactions[]` and every run row whose
+    `effective_bucket` is `unmatched`; ABSENT (never null) on every other row
+    and on `assignable_receipts[]`. `summary.n_copies_set_aside` is an int
+    equal to the list's length. A new code is a rule-5 change (api-contract).
+    Route-level behaviour: `tests/test_unmatched_reasons.py`."""
+    from expense_recon.unmatched_reasons import (
+        CHARGE_REASON_CODES,
+        RECEIPT_REASON_CODES,
+    )
+
+    views = payloads["run"]
+    assert any(v["copies_set_aside"] for v in views), "no fixture sets a copy aside"
+    assert any(v["unmatched_receipts"] for v in views)
+    assert any(v["unmatched_transactions"] for v in views)
+    for view in views:
+        assert view["summary"]["n_copies_set_aside"] == len(view["copies_set_aside"])
+        for rec in view["unmatched_receipts"]:
+            assert rec["reason_code"] in RECEIPT_REASON_CODES, rec
+            assert rec["reason_code"] != "duplicate_copy", rec
+        for rec in view["copies_set_aside"]:
+            assert rec["reason_code"] == "duplicate_copy", rec
+        for rec in view["assignable_receipts"]:
+            assert "reason_code" not in rec, rec
+        for tx in view["unmatched_transactions"]:
+            assert tx["reason_code"] in CHARGE_REASON_CODES, tx
+        for row in view["rows"]:
+            if row["effective_bucket"] == "unmatched":
+                assert row["reason_code"] in CHARGE_REASON_CODES, row
+            else:
+                assert "reason_code" not in row, row

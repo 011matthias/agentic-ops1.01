@@ -335,15 +335,24 @@ def test_the_duplicate_receipt_is_marked_in_the_hand_match_picker(
     is the one place both copies of an invoice could be assigned to two
     different charges, and it is what makes `n_duplicate_copies` backed by
     rows on screen: a matched duplicate is in neither `rows` nor
-    `unmatched_receipts`."""
+    `unmatched_receipts`. Items 83 + 75: the decided extra copy leaves the
+    picker for `copies_set_aside`, so the pair is backed across the two
+    lists and the picker can no longer hand the copy to a second charge."""
     _wire(monkeypatch)
     batch_id = _batch(client)
     _upload(client, batch_id, _csv(("2026-04-15", "135.00", "PRESSMASTER FZCO")))
 
     view = client.get(f"/api/runs/{batch_id}").json()
-    marked = [r for r in view["assignable_receipts"] if r["duplicate"]]
+    marked = [
+        r for r in (*view["assignable_receipts"], *view["copies_set_aside"])
+        if r["duplicate"]
+    ]
     assert len(marked) == 2, view["assignable_receipts"]
     assert sorted(m["duplicate"]["is_extra"] for m in marked) == [False, True]
+    assert [m["duplicate"]["is_extra"] for m in view["copies_set_aside"]] == [True]
+    assert not any(
+        r["duplicate"] and r["duplicate"]["is_extra"] for r in view["assignable_receipts"]
+    )
     assert view["summary"]["n_duplicate_copies"] == 1
 
     # One of the two IS matched, so the count would have no row behind it

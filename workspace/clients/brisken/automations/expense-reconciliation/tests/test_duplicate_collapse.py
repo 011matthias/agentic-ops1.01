@@ -172,18 +172,27 @@ def test_an_invoice_and_its_receipt_make_one_exact_match(client, monkeypatch):
     assert row["candidates"][0]["match_type"] == "exact"
 
     # Nothing was dropped: both copies are still expenses of this month,
-    # the extra one unmatched and still flagged as the copy it is.
+    # the extra one set aside (items 83 + 75: not unmatched, not offered to
+    # the hand-match picker) and still flagged as the copy it is.
     assert summary["n_receipts"] == 2
     assert summary["n_duplicate_groups"] == 1
     assert summary["n_duplicate_copies"] == 1
-    assert summary["n_unmatched_rec"] == 1
-    extra = view["unmatched_receipts"][0]
+    assert summary["n_unmatched_rec"] == 0
+    assert summary["n_copies_set_aside"] == 1
+    assert view["unmatched_receipts"] == []
+    extra = view["copies_set_aside"][0]
     assert extra["duplicate"]["is_extra"] is True
     assert extra["duplicate"]["n_copies"] == 2
+    assert extra["reason_code"] == "duplicate_copy"
+    assert extra["document_id"] not in {
+        a["document_id"] for a in view["assignable_receipts"]
+    }
     # Reconciliation guarantee on the receipt side: every receipt in the
-    # pool is either paired or listed as unmatched, none silently absent.
+    # pool is either paired, unmatched or set aside, none silently absent.
     paired = {c["receipt"]["document_id"] for r in view["rows"] for c in r["candidates"]}
     assert len(paired | {extra["document_id"]}) == 2
+    assert summary["n_receipts_matched"] == 1
+    assert summary["receipt_match_rate"] == 100.0
 
 
 def test_not_a_duplicate_puts_the_second_copy_back_in_the_pool(client, monkeypatch):
