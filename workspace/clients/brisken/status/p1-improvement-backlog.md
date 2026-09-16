@@ -4305,7 +4305,7 @@ center and not-in-report. Predicted live: July 49 / 3 / ready 14 / 33 / 24 /
 0, August 27 / 4 / 10 / 13 / 8 / 0. Suite 1958 -> 1968 passed / 2 skipped;
 five regress proofs bite. SPA half: `docs/lovable-expense-boxes-prompt.md`.
 
-### 85. Controls that read as text are buttons (notes #47, #50, #51)
+### 85. Controls that read as text are buttons (notes #47, #50, #51) (PROMPT WRITTEN PR #938, pending the owner's paste)
 
 **Matthias, July, 2026-09-16:**
 - #47, Expenses view, on "Confirm private expense": "this should be real button".
@@ -4326,7 +4326,18 @@ list every underlined text control in `chunk-expenses._batchId` and
 `chunk-runs._runId` so all of them go in one prompt, not three. Browser-drive
 July after publish.
 
-### 86. "Already posted in your workbook" says what the workbook is (note #48)
+**Prompt written 2026-09-16 (PR #938), together with item 86:**
+`docs/lovable-controls-as-buttons-prompt.md`. The inventory was read from the
+SPA repo at head `dcd875a7`, not the bundle, and anchored by i18n key, because
+line numbers move with every publish (the brief's list had already drifted by
+3 to 14 lines). The prompt covers 10 controls in `RunWorkbench.tsx` and 10 in
+`ExpensesReviewGrid.tsx`, all as outline small buttons. Fold toggles now name
+what they show ("Show 48 booked rows", "Show 5 groups"). Two listed entries are
+not in it: `wb.credits.tip` is a card's `title` attribute, not a text control,
+and the NEEDS PERSON Settings link belongs to the item-84 boxes prompt, which
+replaces that tile.
+
+### 86. "Already posted in your workbook" says what the workbook is (note #48) (PROMPT WRITTEN PR #938 with item 85, pending the owner's paste)
 
 **Matthias, July Matching view, on "30 already posted in your workbook" under
 "Charges without a receipt 72":** "what is the workbook? where does this come
@@ -4344,6 +4355,13 @@ yellow (already booked) in July2026.xlsx", with a tooltip for the gray rule. The
 statement's filename is already on `statements[].file`. PT wording goes to Criss.
 Worth deciding with item 23: "posted" means "entered in Zoho" in her process, and
 the app no longer mentions Zoho, so "already booked" is the neutral word.
+
+**Prompt written 2026-09-16 (PR #938, with item 85).** The booked fold reads
+"{n} rows marked yellow in {file}, already booked", with `{file}` taken from
+`statements[].file` (live: `July2026.xlsx`, `August2026.xlsx`), falling back
+to "the statement workbook" when no file is recorded. Its tooltip gives the
+yellow and grey rule and says the colours are read when the statement is
+loaded. The PT wording in the prompt ("já lançadas") is a draft for Criss.
 
 ### 87. A card that cannot be read or is not known gets a fix that sticks (note #33)
 

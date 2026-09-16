@@ -166,6 +166,7 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
+| `lovable-controls-as-buttons-prompt.md` (items 85 + 86) | `wb.decided.foldBooked.many`, `wb.decided.showBooked.many`, `wb.dup.showGroups.many`, `wb.fx.showDetails`, `wb.filter.card.showEmpty` | None (SPA-only, no backend field) |
 | `lovable-expense-boxes-prompt.md` (item 84) | `n_needs_company_or_person`, `expx.box.active`, `expx.box.tile.companyOrPerson`, `expx.box.fixCard.link` | Backend PR #935 live on Fly |
 | `lovable-unmatched-reasons-prompt.md` (items 83 + 75) | `copies_set_aside`, `wb.reason.breakdown`, `wb.reason.receipt.card_statement_not_loaded`, `wb.reason.charge.receipt_held_by_another_charge` (not `reason_code` alone: other payloads carry one) | Backend PR #932 live on Fly |
 
