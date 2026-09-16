@@ -888,6 +888,104 @@ def test_date_gap_zone_is_absent_or_enum_never_null(
     assert "date_gap_zone" not in cands["t2"], cands["t2"]
 
 
+# ── item 81: the FX block's reference_* scalars ──────────────────────────
+#
+# `rows[].candidates[].fx.reference_*`: the receipt converted at the rate the
+# matcher used. Parallel keys per rule 1, all six present together or all six
+# ABSENT (a pair with no reference rate), never null and never "". Scalars are
+# outside the list pin above, so each gets its own type check here.
+
+
+def _is_nonempty_string(v) -> bool:
+    return isinstance(v, str) and v != ""
+
+
+FX_REFERENCE_SCALARS = {
+    "reference_rate": _is_nonempty_string,
+    # a growing enum (item 82 adds `ecb_month`): a non-empty string, not a
+    # closed set, so the SPA's raw fallback is what renders a new value
+    "reference_rate_source": _is_nonempty_string,
+    "reference_converted": _is_nonempty_string,
+    "reference_gap": _is_nonempty_string,
+    "reference_gap_pct": lambda v: isinstance(v, (int, float))
+    and not isinstance(v, bool),
+    "reference_gap_band": lambda v: v in ("match", "review", "outside"),
+}
+
+
+@pytest.fixture(scope="module")
+def fx_payload(tmp_path_factory):
+    """One month with a rate for EUR and none for GBP, matched by the real
+    matcher under the run's own config, read back over HTTP: the EUR
+    candidate carries the six keys, the GBP one carries none."""
+    from expense_recon.matching.deterministic import MatchingConfig, match_month
+
+    data_root = tmp_path_factory.mktemp("contract-fx")
+    config = {"matching": {"fx_reference_rates": {"EUR:USD": "1.10"}}}
+
+    def charge(tx_id, day, amount):
+        return Transaction(
+            transaction_id=tx_id, legal_entity_id="le1", account_id="amex-usd",
+            transaction_date=date(2026, 7, day), posting_date=None,
+            amount=Decimal(amount), transaction_currency="USD",
+            account_card_currency="USD", vendor_from_statement="SHOP " + tx_id,
+        )
+
+    def receipt(doc_id, day, total, ccy):
+        return Receipt(
+            document_id=doc_id, legal_entity_id="le1",
+            detected_date=date(2026, 7, day), detected_total=Decimal(total),
+            detected_currency=ccy, detected_vendor="Shop " + doc_id,
+        )
+
+    transactions = [charge("t-eur", 3, "33.00"), charge("t-gbp", 20, "50.80")]
+    receipts = [receipt("r-eur", 3, "30.00", "EUR"), receipt("r-gbp", 20, "40.00", "GBP")]
+    outcome = match_month(
+        transactions, receipts, MatchingConfig.from_dict(config["matching"])
+    )
+    monkey = pytest.MonkeyPatch()
+    monkey.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkey.delenv("OPENAI_API_KEY", raising=False)
+    try:
+        app = create_app(data_root)
+        with TestClient(app) as client:
+            store = RunStore(data_root / "recon-web.sqlite")
+            store.create_run(
+                run_id="contract-fx", created_at="2026-09-16T00:00:00",
+                label="fx", operator=None, summary={},
+                snapshot=snapshot_to_dict(transactions, receipts, outcome, []),
+                config=config, work_dir=str(data_root), llm_enabled=False,
+                has_coa=False,
+            )
+            store.close()
+            yield client.get("/api/runs/contract-fx").json()
+    finally:
+        monkey.undo()
+
+
+def _fx_blocks(*views):
+    for view in views:
+        for row in view.get("rows") or []:
+            for cand in row.get("candidates") or []:
+                if cand.get("fx"):
+                    yield cand["fx"]
+
+
+@pytest.mark.parametrize("key", sorted(FX_REFERENCE_SCALARS))
+def test_fx_reference_scalar_is_absent_or_typed_never_null(key, fx_payload, payloads):
+    blocks = list(_fx_blocks(fx_payload, *payloads["run"]))
+    carrying = [fx for fx in blocks if key in fx]
+    # non-vacuity: the fixture shows the key both present and absent
+    assert carrying, blocks
+    assert len(carrying) < len(blocks), blocks
+    for fx in carrying:
+        assert FX_REFERENCE_SCALARS[key](fx[key]), (key, fx[key], fx)
+    # all six travel together: a block never carries some of them
+    for fx in blocks:
+        present = set(FX_REFERENCE_SCALARS) & set(fx)
+        assert present in (set(), set(FX_REFERENCE_SCALARS)), fx
+
+
 def test_every_run_row_carries_a_row_type_and_an_entity_source(payloads):
     """Item 73. `rows[].row_type` says what kind of statement line a charge
     is (purchase / payment / refund / reversal / fee / interest) and

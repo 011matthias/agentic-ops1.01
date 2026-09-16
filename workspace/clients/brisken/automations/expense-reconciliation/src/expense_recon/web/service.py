@@ -2118,7 +2118,11 @@ def _fmt_rate(value: Decimal | None) -> str:
     return s
 
 
-def _fx_breakdown(tx: "Transaction", receipt: "Receipt | None") -> dict | None:
+def _fx_breakdown(
+    tx: "Transaction",
+    receipt: "Receipt | None",
+    reference: "FxReference | None" = None,
+) -> dict | None:
     """Side-by-side FX comparison for a cross-currency candidate pair, so a
     reviewer sees WHY an uncertain pair is uncertain without decoding the
     prose reason (owner directive 2026-07-25).
@@ -2143,6 +2147,10 @@ def _fx_breakdown(tx: "Transaction", receipt: "Receipt | None") -> dict | None:
     All money/rate values are preformatted strings; direction is always
     "charge currency per one unit of receipt currency", so zoho_rate and
     implied_rate sit in the same column and compare at a glance.
+
+    * reference_* (item 81) — the receipt converted at the rate the MATCHER
+      used for this pair, handed in as `reference` (see
+      `fx_reference_lookup`). All six keys absent when the pair has no rate.
     """
     if receipt is None:
         return None
@@ -2178,6 +2186,126 @@ def _fx_breakdown(tx: "Transaction", receipt: "Receipt | None") -> dict | None:
         "zoho_converted": _fmt_amount(zoho_converted),
         "converted_gap": _fmt_amount(gap) if gap is not None else "",
         "converted_gap_pct": gap_pct,
+        # Item 81: the conversion at the tool's own rate. Parallel keys,
+        # ABSENT (not empty) when the pair has no reference rate.
+        **_fx_reference_fields(charge_amt, rec_amt, reference),
+    }
+
+
+# Item 81. The matcher's name for where a rate came from, as the payload
+# says it. `configured` is Settings to anyone reading the screen; every other
+# source passes through unchanged, so a source the matcher gains later (item
+# 82's `ecb_month`) reaches the payload without a change here.
+_FX_REFERENCE_SOURCE_NAMES = {"configured": "settings"}
+
+
+@dataclass(frozen=True)
+class FxReference:
+    """The reference rate the matcher uses for one (receipt, charge) pair,
+    with the two thresholds that decide its band. `source` is the matcher's
+    own name (`configured` / `statement` / `receipts`)."""
+
+    rate: Decimal
+    source: str
+    match_pct: Decimal
+    review_pct: Decimal
+
+
+def fx_reference_lookup(run: "RunRow", transactions: list, receipts: list):
+    """Build, once per view, the function that answers "which reference rate
+    does the matcher use for this pair".
+
+    It reads the run's FROZEN config through `cli.build_match_cfg` (the
+    assembly `rematch_month` uses) and asks the matcher's own
+    `derive_fx_reference_rates` and `_reference_rate_for`, looked up on the
+    module at call time. There is deliberately no second derivation here: a
+    rate the screen shows that the matcher did not use would be the drift
+    item 81 exists to prevent. Because it reads the stored config and
+    snapshot, it answers for a month matched before this code shipped.
+
+    Charges go in with credits removed, the matcher's own first filter.
+    Receipts are the month's current pool, so a rate DERIVED from receipt
+    lines is re-derived from what the month holds now; a configured rate and
+    a statement-derived rate reproduce the matcher's exactly.
+
+    A config the matcher could not read either (a `tuning_path` file that is
+    not on this machine, an unknown key, an unparseable rate) yields no
+    rates: the fields stay absent and the page renders as before.
+    """
+    from ..cli import build_match_cfg
+    from ..matching import deterministic
+
+    try:
+        cfg = (
+            build_match_cfg(run.config or {}, Path(run.work_dir))
+            or deterministic.MatchingConfig()
+        )
+    except (OSError, ValueError, ArithmeticError):
+        return lambda tx, receipt: None
+    derived = deterministic.derive_fx_reference_rates(
+        [t for t in transactions if not t.is_credit], list(receipts), cfg
+    )
+
+    def lookup(tx: "Transaction", receipt: "Receipt | None") -> FxReference | None:
+        if receipt is None or not receipt.detected_currency:
+            return None
+        hit = deterministic._reference_rate_for(
+            cfg, receipt.detected_currency, tx.transaction_currency, derived
+        )
+        if hit is None:
+            return None
+        rate, source, _n = hit
+        return FxReference(
+            rate=rate,
+            source=source,
+            match_pct=cfg.fx_reference_match_pct,
+            review_pct=cfg.fx_reference_review_pct,
+        )
+
+    return lookup
+
+
+def _fx_reference_fields(
+    charge_amt: Decimal, rec_amt: Decimal, reference: FxReference | None
+) -> dict:
+    """The six `reference_*` keys of an FX block, or `{}` so they are absent.
+
+    Arithmetic follows the matcher (`match_one`): converted = receipt total x
+    rate, deviation = (charge - converted) / converted, band decided on the
+    UNROUNDED deviation against `fx_reference_match_pct` /
+    `fx_reference_review_pct`. The printed difference is the charge minus the
+    converted amount AS PRINTED, so the two figures on screen add up to the
+    charge to the cent; the percentage keeps the matcher's basis.
+    """
+    from decimal import ROUND_HALF_UP
+
+    if reference is None or rec_amt is None or rec_amt <= 0:
+        return {}
+    converted = rec_amt * reference.rate
+    if converted <= 0:
+        return {}
+    cent = Decimal("0.01")
+    shown = converted.quantize(cent, ROUND_HALF_UP)
+    deviation = (charge_amt - converted) / converted
+    if abs(deviation) <= reference.match_pct:
+        band = "match"
+    elif abs(deviation) <= reference.review_pct:
+        band = "review"
+    else:
+        band = "outside"
+    gap = (charge_amt - shown).quantize(cent, ROUND_HALF_UP)
+    gap_text = "0.00" if gap == 0 else f"{gap:+,.2f}"
+    pct = float((deviation * 100).quantize(cent, ROUND_HALF_UP))
+    return {
+        "reference_rate": _fmt_rate(reference.rate),
+        "reference_rate_source": _FX_REFERENCE_SOURCE_NAMES.get(
+            reference.source, reference.source
+        ),
+        "reference_converted": _fmt_amount(shown),
+        "reference_gap": gap_text,
+        # `or 0.0`: a zero deviation must not serialize as -0.0.
+        "reference_gap_pct": pct or 0.0,
+        "reference_gap_band": band,
     }
 
 
@@ -2730,6 +2858,9 @@ def build_view(
     for pending in (*effective.judgment_required, *effective.ambiguous):
         holder_by_doc.setdefault(pending.document_id, pending.transaction_id)
     tx_by_id_all = {t.transaction_id: t for t in transactions}
+    # Item 81: the reference rate each FX candidate's block shows, from the
+    # matcher's own lookup over the run's frozen config, built once here.
+    fx_reference = fx_reference_lookup(run, transactions, list(rec_by_id.values()))
 
     def _from_batch(document_id: str) -> dict:
         """`{"from_batch": {...}}` when this candidate's receipt is borrowed
@@ -2837,7 +2968,7 @@ def build_view(
                     ),
                     # Cross-currency comparison (charge vs receipt vs Zoho's
                     # own conversion); None for same-currency pairs.
-                    "fx": _fx_breakdown(tx, r),
+                    "fx": _fx_breakdown(tx, r, fx_reference(tx, r)),
                     # Item 60: the charge that currently holds this receipt,
                     # when it is not this one. Parallel field, ABSENT (not
                     # null) on a candidate nobody else holds, so a month with
@@ -2877,7 +3008,10 @@ def build_view(
                         work_dir=rv_work_dir,
                         expense_mode=rv_expense_mode,
                     ),
-                    "fx": _fx_breakdown(tx, rec_by_id[held_doc]),
+                    "fx": _fx_breakdown(
+                        tx, rec_by_id[held_doc],
+                        fx_reference(tx, rec_by_id[held_doc]),
+                    ),
                     **_from_batch(held_doc),
                     **_candidate_date_gap(tx, rec_by_id[held_doc]),
                 }

@@ -2145,6 +2145,65 @@ candidate. Pinned by `tests/test_view_contract.py`
 (`test_date_gap_zone_is_absent_or_enum_never_null`) and
 `tests/test_date_gap_zone.py`. Renders in `docs/lovable-date-gap-prompt.md`.
 
+## The FX block at the tool's own rate: `fx.reference_*` (item 81, 2026-09-16)
+
+`GET /api/runs/{id}` -> `rows[].candidates[].fx`, six parallel keys beside
+the existing ones, all present together or all **absent** (never null, never
+`""`) when the matcher has no reference rate for that currency pair:
+
+```json
+"fx": {
+  "charge_amount": "315.56", "charge_currency": "USD",
+  "receipt_amount": "276.08", "receipt_currency": "EUR",
+  "rate_label": "USD per EUR", "implied_rate": "1.143002",
+  "zoho_rate": "", "zoho_converted": "", "converted_gap": "",
+  "converted_gap_pct": null,
+  "reference_rate": "1.162275",
+  "reference_rate_source": "settings",
+  "reference_converted": "320.88",
+  "reference_gap": "-5.32",
+  "reference_gap_pct": -1.66,
+  "reference_gap_band": "match"
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `reference_rate` | charge currency per ONE receipt-currency unit, the same direction and six-decimal trimmed formatting as `implied_rate`, so the two compare in one column |
+| `reference_rate_source` | where the matcher got the rate: `settings` (the matcher's `configured`, Settings `fx_reference_rates` as frozen into the run), `statement` (median of the statement's printed FX lines), `receipts` (median of the receipts' own booked rates). A growing enum: item 82 adds `ecb_month`, and the view passes any source it does not rename through unchanged, so a consumer shows an unknown value raw |
+| `reference_converted` | receipt total x rate, 2 dp, the same formatting as `charge_amount` (thousands separator included) |
+| `reference_gap` | charge minus `reference_converted` as printed, signed (`"-5.32"`, `"+0.24"`, `"0.00"`), so converted + gap equals the charge to the cent |
+| `reference_gap_pct` | number, signed, 2 dp: (charge - converted) / converted x 100 on the UNROUNDED conversion, the basis of the matcher's deviation |
+| `reference_gap_band` | `match` when the unrounded absolute deviation is within `fx_reference_match_pct` (3%), `review` within `fx_reference_review_pct` (13%), else `outside`. A description of the rate, not the verdict: a pair demoted by the uniqueness gate can read `match` while its row sits in review |
+
+**One rate, from the matcher.** `build_view` builds `fx_reference_lookup`
+once: the run's frozen config through `cli.build_match_cfg`, then the
+matcher's own `derive_fx_reference_rates` and `_reference_rate_for`. Nothing
+re-reads Settings, so the fields reflect what the month was matched against
+and appear on a month matched before the deploy, with no re-match. For every
+`fx_reference` candidate the printed `reference_rate` appears verbatim in its
+`reason` (`tests/test_fx_breakdown.py`). One residual, stated: a `receipts`
+rate is re-derived from the pool the month holds NOW, which can differ from
+the pool at match time (a collapsed duplicate copy, a receipt another month
+has since settled); `settings` and `statement` rates reproduce exactly.
+
+**Present on every cross-currency candidate with a rate,** whatever its
+`match_type`: `fx_reference`, `fx_judgment`, and the synthesized `manual`
+candidate of a hand match. A same-currency pair and a receipt with no
+printed total have no `fx` block at all (null, as before).
+
+**`zoho_*` are not these.** `zoho_rate` / `zoho_converted` / `converted_gap`
+/ `converted_gap_pct` are the expense report's own booked conversion, still
+filled from an expense-report PDF receipt's `base_amount`; item 23 renames
+them in round 7. On 2026-09-16 no receipt on either live month carries one,
+which is why the block showed nothing but the implied rate.
+
+Live on 2026-09-16 at EUR:USD 1.162275 / BRL:USD 0.192448: every one of the
+27 FX candidates on July and August has a rate (26 `match`, 1 `review`).
+Pinned by `tests/test_view_contract.py`
+(`test_fx_reference_scalar_is_absent_or_typed_never_null`, one per key);
+renders in `docs/lovable-fx-reference-prompt.md`.
+
 ## What a statement line is, and where its company came from: `row_type` + `entity_source` (item 73)
 
 `GET /api/runs/{id}` -> two parallel strings on **every** element of
