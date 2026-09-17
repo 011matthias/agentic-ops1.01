@@ -43,6 +43,7 @@ here, that doc and the relevant Lovable prompt change with it.
 """
 from __future__ import annotations
 
+import json
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -445,14 +446,43 @@ def _synthetic_run(client, data_root: Path) -> dict:
     return view
 
 
+def _provision_contract_chart(data_root: Path) -> str:
+    """A synthetic one-leaf chart for Corporate Services, as a /data
+    provisioning file, so `account_options[]` is observed FILLED. It used to
+    be filled from the entity's `account_picks` shortlist, which the owner
+    removed on 2026-09-17 (note #61): account options now come only from the
+    company's chart. Returns the provisioning file path."""
+    chart = data_root / "contract-coa.json"
+    chart.write_text(json.dumps({"822741658": {
+        "org": {"name": "Corporate Services"},
+        "accounts": [
+            {"account_id": "1", "account_name": "Office Supplies",
+             "account_code": "E500", "account_type": "expense",
+             "parent_account_name": "MS | OpeEx", "is_active": True},
+            {"account_id": "2", "account_name": "MS | OpeEx",
+             "account_code": "E5", "account_type": "expense",
+             "parent_account_name": None, "is_active": True},
+        ],
+    }}), encoding="utf-8")
+    prov = data_root / "contract-provision.json"
+    prov.write_text(json.dumps({
+        "chart_path": str(chart),
+        "entities": {"Corporate Services": {
+            "org_id": "822741658", "scope_groups": ["MS | OpeEx"],
+        }},
+    }), encoding="utf-8")
+    return str(prov)
+
+
 def _expense_batch(client, monkeypatch_setattr) -> dict:
     """One batch carrying every list surface the grid renders: a quarantined
     statement page (parse issue + set-aside), an unsupported upload (upload
     issue), a generic and an exact payment hint (card review, both halves),
-    a duplicate pair, a field edit, and one vendor booked to two categories."""
+    a duplicate pair, a field edit, and one vendor booked to two categories.
+    The caller provisions a chart for it (`_provision_contract_chart`)."""
     client.put("/api/settings", json={
         "entities": {
-            "Corporate Services": {"account_picks": ["E500 Office Supplies"]},
+            "Corporate Services": {},
             "Cloud Services": {},
         },
         "cards": {
@@ -673,7 +703,13 @@ def payloads(tmp_path_factory):
         with TestClient(app) as client:
             run_a = _statement_run(client)
             run_b = _synthetic_run(client, data_root)
+            # The chart is read at batch creation and snapshotted into the
+            # batch's config, so it is provisioned for this batch only.
+            monkey.setenv(
+                "EXPENSE_RECON_COA_PROVISION", _provision_contract_chart(data_root)
+            )
             batch = _expense_batch(client, monkey.setattr)
+            monkey.delenv("EXPENSE_RECON_COA_PROVISION")
             month_grid, month_run = _reconciling_month(client, monkey.setattr)
             trip_grid = _trip_batch(client, monkey.setattr)
         yield {
