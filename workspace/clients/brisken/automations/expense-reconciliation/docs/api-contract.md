@@ -3974,9 +3974,10 @@ chase would reach, so the PUT refuses anything else with a 400 rather than
 coercing it. Default `{"enabled": false, "holders": {}}`.
 
 Live 2026-09-17 (read-only, before the deploy): August 2026 would list 61
-charges across three holders, Nicolas Neumann 36 on card 3876 (USD 1,011.15),
-Dirk Neumann 24 on card-2838 (USD 6,361.53), and 1 on card-1176 (USD 36.00)
-whose registry `person` is the company "Brisken Consulting"; July 2026 would
+charges across the three names the card registry's `person` field holds:
+"Nicolas Neumann" 36 on card 3876 (USD 1,011.15), "Dirk Neumann - Corp
+Services" 24 on card-2838 (USD 6,361.53), and "Brisken Consulting" 1 on
+card-1176 (USD 36.00), a company rather than a person. July 2026 would
 list nothing, because every charge left without a receipt there is gray-filled
 and already closed. No holder address and no portal hint is configured yet, so
 every live mail would carry `blocked: "no_address"` today. Route-level in
