@@ -1472,6 +1472,19 @@ per person). The report reads the registry LIVE from settings, as the grid
 does, so the two partition on the same names. Pinned by
 `tests/test_cost_center_report.py`.
 
+**Cards inside cost centers (item 138, owner ruling 2026-09-17).** When the
+month's listed receipts also reach two card sections or more (the rule the
+per-card listing uses when no cost center applies), each cost-center section
+orders its rows by the card that paid, on `card_sections`' key and order
+("No card" last). A section spanning two card groups or more gets a
+sub-heading per card with that card's table and `Card: N expenses · sums`
+line, then the section's own sums; a section on one card gets no card
+heading. The card's statement line is not printed inside a cost center. A
+held receipt whose own card differs is named under its card. Receipt pages
+stay after the listing, in listing order. The reconciliation report does not
+section by cost center and is unchanged. Pinned by
+`tests/test_expense_report_by_card_item_138.py`.
+
 ### Cross-month totals: `GET /api/cost-centers/totals` (step 5, added 2026-09-15)
 
 The only surface that aggregates ACROSS batches. "What has Lidar cost since

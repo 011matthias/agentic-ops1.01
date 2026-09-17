@@ -24,6 +24,9 @@ statement settled, its table and sums, and then that card's receipt pages,
 before the next card starts. Anything that belongs to no card section (the
 reimbursements owed, a copy whose original is gone) keeps its pages at the
 end. Trip and cost-center sections keep every receipt at the end, as before.
+A month with cost centers and two cards or more keeps its cost-center
+sections and groups each one's expenses by card inside it (owner ruling
+2026-09-17), a sub-heading and sums per card where a cost center spans two.
 
 The listing is built from `build_expense_rows` — the SAME rows the CSV
 export writes — so the document and the export cannot disagree about money.
@@ -69,6 +72,28 @@ _LISTING = (
     ("Ccy", 34),
     ("Receipt", 54),
 )
+
+
+def _subsections(
+    subsections: Sequence[dict] | None,
+    numbered: list[tuple[int, Sequence[str]]],
+) -> list[tuple[dict, list[tuple[int, Sequence[str]]]]]:
+    """A section's `subsections` with the rows each one covers, or `[]`
+    when they do not cover the section's rows exactly, in order, each
+    non-empty. `[]` renders the section as one table, as before."""
+    if not subsections:
+        return []
+    out: list[tuple[dict, list[tuple[int, Sequence[str]]]]] = []
+    pos = 0
+    for sub in subsections:
+        start = int(sub.get("start") or 0)
+        count = int(sub.get("count") or 0)
+        chunk = numbered[pos:pos + count]
+        if count <= 0 or len(chunk) != count or chunk[0][0] != start:
+            return []
+        out.append((sub, chunk))
+        pos += count
+    return out if pos == len(numbered) else []
 
 
 def build_expense_report_pdf(
@@ -142,6 +167,23 @@ def build_expense_report_pdf(
     caption (what the card's statement settled, `card_statement_line`), and
     `notes`, lines under the sums (a receipt held on this card's charge
     whose own card is another). A section without them renders as before.
+
+    A section may also carry `subsections` (item 138, owner ruling
+    2026-09-17: cards inside cost centers), contiguous slices of the
+    section's own rows in the same shape:
+
+        {"caption": "Lidar (project)", "label": "Lidar", "start": 1,
+         "count": 3, "subsections": [
+             {"caption": "Card 2838", "label": "Card 2838", "start": 1,
+              "count": 2, "notes": [...]},
+             {"caption": "No card", "label": "No card", "start": 3,
+              "count": 1}]}
+
+    Each renders as a sub-heading, its table and its own sums line (and
+    its `notes`), then the section's sums line over all of them. Slices
+    that do not cover the section exactly are ignored and the section
+    renders as one table: a misfiled heading is worse than none, and no
+    row is ever dropped.
 
     `receipts_by_section` puts each section's receipt pages right behind
     that section's sums instead of after the whole document. An evidence
@@ -263,6 +305,19 @@ def build_expense_report_pdf(
         t.setStyle(table_style())
         return t
 
+    def _sums_line(label: str, numbered: list[tuple[int, Sequence[str]]]) -> str:
+        # Same Decimal sum as the header total, over this slice only, so a
+        # per-section (or per-card) line and the month's cannot disagree.
+        slice_totals, _unreadable = sum_amounts(
+            (n, cell(row, "Currency Code"), cell(row, "Expense Amount"))
+            for n, row in numbered
+        )
+        return (
+            f"{label}: {len(numbered)} "
+            f"expense{'s' if len(numbered) != 1 else ''}"
+            f"  ·  {format_totals(slice_totals, 'no amounts read')}"
+        )
+
     # Item 138: which page each evidence caption landed on, one list per
     # entry in `prepared` order, filled by `caption_mark` during the build.
     # Only read when captions sit inside the document.
@@ -336,7 +391,8 @@ def build_expense_report_pdf(
         # (item 38: `person` / `on_roster`); a company month sections per
         # cost center (item 47: `caption` / `label`) or, when no cost
         # center applies, per card (item 138: `caption` / `label` /
-        # `detail` / `notes`, receipts behind each section).
+        # `detail` / `notes`, receipts behind each section). A cost center
+        # on two cards or more carries `subsections`, one per card.
         if sections_heading:
             story.append(Spacer(1, 12))
             story.append(Paragraph(_esc(sections_heading), styles["caption"]))
@@ -360,20 +416,26 @@ def build_expense_report_pdf(
             _flow(Spacer(1, 10), Paragraph(_esc(caption), styles["caption"]))
             if sec.get("detail"):
                 story.append(Paragraph(_esc(str(sec["detail"])), styles["capsub"]))
-            story.append(_listing_table(numbered))
-            # Same Decimal sum as the header total, over this slice only,
-            # so a per-person line and the month's line cannot disagree.
-            sec_totals, _sec_unreadable = sum_amounts(
-                (n, cell(row, "Currency Code"), cell(row, "Expense Amount"))
-                for n, row in numbered
-            )
-            sec_line = format_totals(sec_totals, "no amounts read")
-            story.append(Paragraph(
-                _esc(f"{label}: {len(numbered)} "
-                     f"expense{'s' if len(numbered) != 1 else ''}"
-                     f"  ·  {sec_line}"),
-                styles["sub"],
-            ))
+            subs = _subsections(sec.get("subsections"), numbered)
+            if subs:
+                # Item 138: one table per card inside this section, each
+                # with its own sums, then the section's sums over all.
+                for sub, sub_numbered in subs:
+                    sub_label = str(sub.get("label") or sub.get("caption") or "")
+                    story.append(Paragraph(
+                        _esc(str(sub.get("caption") or sub_label)),
+                        styles["subcaption"],
+                    ))
+                    story.append(_listing_table(sub_numbered))
+                    story.append(Paragraph(
+                        _esc(_sums_line(sub_label, sub_numbered)), styles["capsub"]
+                    ))
+                    for line in sub.get("notes") or []:
+                        story.append(Paragraph(_esc(str(line)), styles["capsub"]))
+                story.append(Spacer(1, 6))
+            else:
+                story.append(_listing_table(numbered))
+            story.append(Paragraph(_esc(_sums_line(label, numbered)), styles["sub"]))
             for line in sec.get("notes") or []:
                 story.append(Paragraph(_esc(str(line)), styles["capsub"]))
             if receipts_by_section:
