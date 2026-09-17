@@ -321,7 +321,7 @@ def _apply_vision_receipts(
 
 def _apply_judgment(
     outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None,
-    *, suggest_floor: float = 0.0,
+    *, suggest_floor: float = 0.0, cfg: MatchingConfig | None = None,
 ) -> None:
     """Replace each judgment_required entry with the judgment verdict.
 
@@ -329,15 +329,49 @@ def _apply_judgment(
     (D1b); without one, `judge_fx_match` returns the stub Match and the
     entry stays in `judgment_required` with `requires_review=True`.
 
-    A real verdict BELOW `suggest_floor` is unbound instead of kept
-    (owner call 2026-07-24): showing a pair the model itself rejected
-    at p=0.10 as "the suggested receipt" wastes the reviewer and reads
-    as a tool error. The charge and the receipt fall to the plain
+    A real verdict BELOW `suggest_floor` is unbound instead of kept, with
+    no exception (owner call 2026-07-24): showing a pair the model itself
+    rejected at p=0.10 as "the suggested receipt" wastes the reviewer and
+    reads as a tool error. The charge and the receipt fall to the plain
     unmatched buckets when nothing else claims them, so every id still
     lands in a bucket and the reconciliation guarantee holds.
+
+    A verdict EXACTLY AT the floor is a rejection too (item 131,
+    2026-09-17: the model answers exactly 0.20, and "below" let those
+    rejections through with "likely NOT the same purchase" as the reason a
+    reviewer read), with one exception: a pair whose OWN rate arithmetic
+    sits in the clean band (item 81's `reference_gap_band` == "match", read
+    through `pair_reference_gap_band` at `cfg`'s rate) stays in review, the
+    tool's arithmetic first and the model's disagreement after it (live
+    July 2026: NATHALIA 5.61 against a 28.73 BRL receipt, 1.5% off the
+    month rate, labelled right, model p=0.20). The exception stops at the
+    floor on purpose: applied below it, it brought back July's Erste Fracht
+    receipt against HOTEL AM TIERGARTEN (-1.59%, model 0.10, another
+    merchant). Without `cfg` no band can be read and an at-floor rejection
+    is unbound. The rate is derived from the charges and receipts handed in
+    here; a configured or ECB rate reproduces the matcher's exactly, a
+    receipts-derived one can differ when the matcher's pool left a copy out
+    (item 81's residual).
     """
     if not outcome.judgment_required:
         return
+    from .matching.deterministic import (
+        derive_fx_reference_rates,
+        pair_reference_gap_band,
+    )
+
+    derived: list = []
+
+    def _rate_band(tx, rec) -> str | None:
+        if cfg is None:
+            return None
+        if not derived:
+            derived.append(derive_fx_reference_rates(
+                [t for t in tx_by_id.values() if not t.is_credit],
+                list(rec_by_id.values()), cfg,
+            ))
+        return pair_reference_gap_band(tx, rec, cfg, derived[0])
+
     judged: list = []
     suppressed: list = []
     for m in outcome.judgment_required:
@@ -364,7 +398,18 @@ def _apply_judgment(
         )
         # Only a REAL model verdict can be suppressed; the no-client stub
         # (confidence 0.5) always stays, so no-LLM runs are unaffected.
-        if client is not None and full.confidence < suggest_floor:
+        at_floor = suggest_floor > 0.0 and abs(full.confidence - suggest_floor) <= 1e-9
+        rejected = at_floor or full.confidence < suggest_floor
+        if client is not None and rejected:
+            # Item 131: only an at-floor rejection can be kept, and only on
+            # a clean rate; below the floor the owner's cut is final.
+            if at_floor and _rate_band(tx, rec) == "match":
+                judged.append(replace(full, reason=(
+                    m.reason.rstrip(".")
+                    + ". Kept for review although the model disagrees: "
+                    + full.reason
+                )))
+                continue
             suppressed.append(full)
             continue
         judged.append(full)
@@ -790,6 +835,7 @@ def reconcile(
     _apply_judgment(
         outcome, tx_by_id, rec_by_id, llm_client,
         suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
+        cfg=match_cfg or MatchingConfig(),
     )
     _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
     # WS3: opt-in second chance for the leftovers, after the deterministic
@@ -866,6 +912,10 @@ def split_non_receipt_documents(
     excluded: list[Receipt] = []
     issues: list[ParseIssue] = []
     for r in receipts:
+        invoice = keep_invoice_read_as_statement(r)  # item 105
+        if invoice is not None:
+            kept.append(invoice)
+            continue
         label = NON_RECEIPT_LABELS.get(r.document_type)
         if label is None:
             kept.append(r)
@@ -879,6 +929,48 @@ def split_non_receipt_documents(
             severity="warning",
         ))
     return kept, excluded, issues
+
+
+# Item 105 (2026-09-17). The reader called three real July invoices
+# statement pages (AWS USD 3,352.59, Microsoft USD 718.20, Tricarico
+# BRL 27,203.34), so they left the month. Each one still carried a vendor,
+# a total, its invoice number and its own line items; eight real statements
+# read through the same reader (seven Chase card statements and an SAP
+# accounts-receivable statement) carried no reference and no line items,
+# and the billing-notice emails no line items. A "statement" verdict with
+# all four is therefore kept as an expense with a note to check it, and the
+# reader's prompt is untouched (a prompt edit moves unrelated readings).
+INVOICE_READ_AS_STATEMENT_NOTE = (
+    "read as a statement page, but it prints its own invoice number and "
+    "line items, so it was kept as an expense: check it"
+)
+
+
+def keep_invoice_read_as_statement(r: Receipt) -> Receipt | None:
+    """The receipt to keep when a "statement" verdict is really one invoice
+    (see above), else None. Only "statement" is second-guessed."""
+    if r.document_type != "statement":
+        return None
+    # Ingest stores an unreadable line amount as 0, so "has an amount" is
+    # "has a non-zero amount".
+    if not any(li.line_total for li in r.line_items):
+        return None
+    for value in (r.detected_vendor, r.detected_total, r.detected_reference):
+        if value is None or not str(value).strip():
+            return None
+    try:
+        if Decimal(str(r.detected_total)) == 0:
+            return None  # a statement's zero balance is not an invoice
+    except (ArithmeticError, ValueError):
+        return None
+    note = INVOICE_READ_AS_STATEMENT_NOTE
+    return replace(
+        r,
+        document_type="receipt",
+        data_quality_note=(
+            f"{r.data_quality_note}; {note}" if r.data_quality_note else note
+        ),
+    )
 
 
 def generate_expenses(
