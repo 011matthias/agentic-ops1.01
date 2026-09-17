@@ -215,30 +215,44 @@ def test_fresh_run_is_not_ready_to_post(client):
 # ── PR A — review speed (confirm-all-matched) ──────────────────────────
 
 
-def test_confirm_all_matched_reconciles_and_opens_post_gate(client):
+def test_confirm_all_matched_confirms_only_the_pairs_the_rule_lets_through(client):
+    """Item 101: the example month matches four charges exactly, but UBER *
+    TRIP ("Uber") and AMAZON.COM ("Amazon") agree on the vendor at 62 and 61,
+    under the owner's floor of 75, so the button leaves both for a person and
+    the post gate stays closed. It used to confirm all four."""
     run_id = _create_run(client)
     db = RunStore(client._data_root / "recon-web.sqlite")
     run = db.get_run(run_id)
     n_matched = run.summary["n_matched"]
     db.close()
-    assert n_matched > 0  # the example month has matched rows to confirm
+    assert n_matched == 4
+    before = client.get(f"/api/runs/{run_id}").json()["summary"]
+    assert before["n_confirm_matched"] == 2
 
     resp = client.post(f"/api/runs/{run_id}/decisions/confirm-matched")
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
-    assert data["confirmed"] == n_matched
-    # Every matched row is now reviewer-confirmed -> nothing undecided ->
-    # the post gate opens.
-    assert data["summary"]["n_undecided"] == 0
-    assert data["summary"]["ready_to_post"] is True
-    assert data["summary"]["n_reconciled"] >= n_matched
+    assert (data["confirmed"], data["remaining"], data["skipped_rule"]) == (2, 0, 2)
+    assert data["summary"]["n_undecided"] == 2
+    assert data["summary"]["n_confirm_matched"] == 0
+    assert data["summary"]["ready_to_post"] is False
+
+    view = client.get(f"/api/runs/{run_id}").json()
+    by_vendor = {r["vendor"]: r for r in view["rows"]}
+    for vendor in ("COFFEE SHOP NYC", "DELANCEY TAVERN"):
+        assert by_vendor[vendor]["status"] == "confirmed"
+        assert by_vendor[vendor]["decided_by"] == "reviewer"
+    for vendor in ("UBER * TRIP", "AMAZON.COM"):
+        assert (by_vendor[vendor]["status"], by_vendor[vendor]["turn"]) == (
+            "pending", "decide",
+        )
 
     # The decisions persisted as confirmed.
     db = RunStore(client._data_root / "recon-web.sqlite")
     decisions = db.get_decisions(run_id)
     db.close()
-    assert sum(1 for d in decisions.values() if d.status == "confirmed") == n_matched
+    assert sum(1 for d in decisions.values() if d.status == "confirmed") == 2
 
     # Re-running confirms nothing new (idempotent; pending-only).
     again = client.post(f"/api/runs/{run_id}/decisions/confirm-matched").json()
