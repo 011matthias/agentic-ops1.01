@@ -141,6 +141,23 @@ write the row.
 
 **Re-audited 2026-09-17 late, after the owner published invoice-read-as-statement (105), untrusted-flag (93), charge-category (109), receipt-chasing (107) and error-codes (130): all five applied, and the Not-applied table is empty again.** 45 chunks, 1,217 KB, controls hit, every decisive key present. Two surfaces driven cold in Chrome (August workbench): the chase panel with its three holder groups summing to the month's own 61, and the charge-category picker with its GUESS chip. Nothing was clicked that writes. The `err.*` render is the one half not observed live: every refusal on a live month needs a write.
 
+**Re-audited 2026-09-18, after the owner said the pending prompts were already
+live on the tool. He was right: all five were published.** The bundle had moved
+again, to 46 chunks / 1,287 KB, every chunk rehashed and the i18n chunk renamed
+from `chunk-i18n-*` to `chunk-x-DkEroC52.js`. The Not-applied table below had
+been written the previous night and was trusted without re-crawling, so five
+prompts that were live were handed to the owner to paste. The lesson was already
+written into this file that same night and did not hold: **re-crawl before any
+action that is predicated on a prompt NOT being applied**, handing one over most
+of all. Nothing else in this file is evidence about the present moment either.
+
+Two signature lessons from the same audit. `errorText` is in the error-codes
+prompt's own checking list and reads ABSENT in every chunk, because it is a local
+function name and the build minifies those away; only the i18n keys and the API
+field names are usable signatures. And `data-pt` (the crash page) is absent from
+the client bundle because that page is server-rendered, so a client-side crawl
+cannot see it either way; the only test is to trigger a crash.
+
 ## Applied
 
 | Prompt | Verified by |
@@ -238,6 +255,12 @@ write the row.
 | `lovable-duplicates-side-by-side-prompt.md` (item 140, note #67) | Same bundle: `dup.compare.open`, `dup.compare.differs`, `dup.compare.status.setAside` and `dup.compare.field.payment` in `chunk-i18n` with "Comparar cópias" beside them, and in `chunk-SettledByBadge` (the call sites). Same cold drive, dialogs closed with Escape and nothing else clicked: July Expenses, Aposto Karlsruhe 2026-07-13 80.00 EUR opens "Compare copies · Aposto Karlsruhe", "2 copies side by side. Highlighted rows differ between the copies.", "Set aside by a reviewer", columns "Copy 1 of 2" and "Copy 2 of 2" with "The row you opened" on the second; Total 80.00, Currency EUR, Reference 4563, Payment "VISA CREDIT" and Category "Meals & Entertainment" equal in both and unmarked; "Matched to a charge" / "Set aside as a copy, not in the total"; matched charge "2026-07-13 · UZR*Aposto Karlsruhe · 91.70 USD" / "-"; both files named; footer "Delete the extra", "Not a copy", "Close". Both receipt images render: two `img` elements, naturalWidth 482 and 960. Lovable Labs 200.00 USD marks Payment ("-" / "Link") and Reference ("H0LHY2WQ-0029" / "H0LHY2WQ0029") as differing and renders both receipts as PDFs (two `iframe`). Delta from the prompt: the dialog also marks Card, Legal entity and Person as differing, because the set-aside copy carries none of the three. Not driven: the August pairs, the July Matching panel fold, and PT |
 | `lovable-remove-account-picks-prompt.md` (note #61, item 23) | Bundle only. Across two audits 40 minutes apart in the same session, `account_picks` and `set.entities.col.accountPicks` went from PRESENT to ABSENT, `set.entities.help.accountPicks` is absent, and the controls `set.entities.listHelp` and `set.entities.col.scopeGroups` are still present, which is the prompt's own check 3 exactly. Checks 1 and 2 (the entity editor's fields, EN and PT) were NOT driven: `/settings` renders as a jump-nav over lazily-mounted sections, and the Legal entities section never mounted into the page text under the drive script's click, so no field list could be read back |
 
+| `lovable-receipt-chasing-prompt.md` (item 107) | **Applied and driven.** Bundle 2026-09-18 (46 chunks, 1,287 KB, five controls hit): `receipt_chase`, `no_receipt_expected` and `chase.title` in `chunk-runs._runId`, "Recibos a cobrar" and `row.chip.noReceipt` in the i18n chunk. Cold drive from the login gate in PT (headless Chrome, 1440x900), only non-GET `POST /api/login`: August `/runs/074a7b8905d7` renders "Recibos a cobrar (61)" with three holder sections (36, 24 and 1 cobranças), "Sem e-mail cadastrado" on all three, "Ver a mensagem" present and "Enviar solicitação" rendered with `disabled: true`, which is the prompt's own requirement. July `/runs/50622baec444` shows no panel at all, the prompt's check 2. Not driven: Preview's dialog contents, and the two row marks (both are writes on Criss's month). |
+| `lovable-charge-category-prompt.md` (item 109) | **Applied by bundle; the control was NOT seen on screen.** `wb.chargeCat.none`, `wb.chargeCat.guess.tip` and "Sem categoria ainda" are all in the bundle. On the same PT drive, August's "Lançamentos sem recibo" view (101 rows, every one of which should carry the picker) returned `document.querySelectorAll('select').length === 0` and zero occurrences of "Palpite". **That probe is probably blind rather than right:** this app's pickers are Radix comboboxes (`button[role=combobox]`), not native `select` elements, which is how every other card and entity picker in the grid is built, and the prompt's wording ("the same category `select` the candidate card already renders") is what led the probe astray. Re-probe by `[role=combobox]` and by the chip text before concluding anything. Same class as the backtick-blind crawler: a structurally blind probe returns a confident negative. |
+| `lovable-error-codes-prompt.md` (item 130) | **Applied in part.** Live in the bundle: `err.company_card`, `err.batch_deleted`, `err.run_not_found`, `adv.no_chart_of_accounts`, `adv.fx_rate_drift`, `warn.amountMismatch`, and the PT sentences "Este mês foi excluído enquanto você trabalhava nele" and "valor diferente"; `warn.amountMismatch` also hits in `chunk-runs._runId`, so the call site took the keys. **But the prompt's check 4 does not pass:** `/runs/does-not-exist-abc123` in PT renders "Esta execução não existe mais; ela pode ter sido excluída. Escolha uma execução atual no painel.", which is a different, pre-existing Portuguese string, not the prompt's `err.run_not_found` ("Este mês não existe mais."). That route localizes by some other path, so the `errorText` helper is not proven to be wired at the site that matters most. Unverified: the row chips (the drive's pill selector hit "Confirmar todas conciliadas" instead of the Matched view, so the check never ran, and 0 English leaks on the view it did reach is weak evidence), and the crash page, which is server-rendered and invisible to a client crawl. |
+| `lovable-untrusted-flag-prompt.md` (item 93) | **Applied by bundle; no live case exists to render.** `expx.review.reason.untrusted_instructions` and the PT sentence "Este recibo contém um texto dirigido à ferramenta" are in the i18n chunk, and `untrusted_instructions` is in `chunk-expenses._batchId`, which is the grid reading the field. No live row carries a flag, so the render is verified on the next flagged receipt. |
+| `lovable-invoice-read-as-statement-prompt.md` (item 105) | **Applied by bundle; no live case exists to render.** `expx.review.reason.invoice_read_as_statement` and "Parecia uma página de extrato bancário" are in the i18n chunk. No live row carries the reason code, so the render is verified on the next invoice the reader calls a statement page. |
+
 These four were drafted 2026-08-28/29, pasted from chat, and lived only in a
 gitignored scratch directory until 2026-09-01. They are in `docs/` now
 because the pasted text is the record of what production was asked to do,
@@ -245,9 +268,10 @@ and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
-Still out after both publishes: invoice-read-as-statement (item 105),
-untrusted-flag (item 93), charge-category (item 109), receipt-chasing (item 107)
-and error-codes (item 130), whose backend went live on Fly v177 this evening.
+The Not-applied table is empty. Every prompt written for this app has been
+published. Three rows above carry an explicit unverified half; those are drives
+to run, not prompts to paste.
+
 
 
 | Prompt | Decisive field names | Gate |
