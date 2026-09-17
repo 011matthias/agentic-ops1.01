@@ -14,6 +14,9 @@ this change adds), not a mock. check-ignore does not require the file to
 exist on disk, so nonexistent target paths classify correctly.
 """
 import json
+import time
+
+import pytest
 
 from hooklib import REPO, load_wire_hooks, permission_decision, run_hook
 
@@ -340,3 +343,114 @@ def test_gate_is_in_canonical_contract():
     assert "file-placement-gate.py" in mod.EXPECTED_HOOK_SCRIPTS
     wired = json.dumps(mod.CANONICAL_HOOKS)
     assert "file-placement-gate.py" in wired
+
+
+# --- W1 new-file purpose check (rule_no_file_bloat §3) ---------------------
+# Driven through the wired gate against a fixture tree: FILE_PLACEMENT_GATE_REPO
+# points REPO at tmp_path, so the near-duplicate walk sees only the fixture.
+
+@pytest.fixture
+def w1_tree(tmp_path):
+    files = [
+        "workspace/clients/acme/context/piece1-status.md",
+        "workspace/clients/acme/context/rollout-plan.md",
+        "workspace/clients/acme/context/state-2026-05-20.json",
+        "workspace/clients/acme/deliverables/README.md",
+        "workspace/clients/acme/context/corpus-cache/rollout-plan.md",
+        "workspace/clients/acme/automations/sync/rollout-plan.md",
+        "workspace/projects/lab/notes/rollout-plan.md",
+    ]
+    for f in files:
+        p = tmp_path / f
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("x", encoding="utf-8")
+    return tmp_path
+
+
+def _w1(root, rel, tool="Write"):
+    return run_hook(
+        "file-placement-gate.py",
+        {"tool_name": tool, "tool_input": {"file_path": str(root / rel)}},
+        cwd=root,
+        env={"FILE_PLACEMENT_GATE_REPO": str(root), "FILE_PLACEMENT_GATE_NO_GIT": "1"},
+    )
+
+
+def _reason(proc):
+    return json.loads(proc.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_w1_asks_on_revision_of_existing_file(w1_tree):
+    p = _w1(w1_tree, "workspace/clients/acme/deliverables/rollout-plan-v2.md")
+    assert permission_decision(p.stdout) == "ask"
+    reason = _reason(p)
+    assert "workspace/clients/acme/context/rollout-plan.md" in reason
+    assert "does an existing file already fit" in reason
+    # cache dirs and automations/ are not candidates; other projects are not either
+    assert "corpus-cache" not in reason and "automations" not in reason
+    assert "projects/lab" not in reason
+
+
+@pytest.mark.parametrize("name", ["rollout-plan-2026-09-17.md", "rollout-plan-final.md",
+                                  "rollout plan copy.md", "Rollout_Plan_v3.md"])
+def test_w1_asks_on_dated_final_and_copy_variants(w1_tree, name):
+    p = _w1(w1_tree, f"workspace/clients/acme/context/{name}")
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_w1_asks_on_snapshot_shape_without_duplicate(w1_tree):
+    p = _w1(w1_tree, "workspace/projects/lab/notes/lead-analysis.md")
+    assert permission_decision(p.stdout) == "ask"
+    assert "snapshot-shaped" in _reason(p)
+
+
+def test_w1_silent_on_a_genuinely_new_file(w1_tree):
+    assert _classify(_w1(w1_tree, "workspace/clients/acme/context/vendor-contacts.md")) == "pass"
+
+
+def test_w1_different_piece_is_not_a_duplicate(w1_tree):
+    assert _classify(_w1(w1_tree, "workspace/clients/acme/context/piece2-status.md")) == "pass"
+
+
+def test_w1_other_kind_is_not_a_duplicate(w1_tree):
+    assert _classify(_w1(w1_tree, "workspace/clients/acme/context/rollout-plan.py")) == "pass"
+
+
+def test_w1_generic_stem_is_exempt(w1_tree):
+    assert _classify(_w1(w1_tree, "workspace/clients/acme/context/README.md")) == "pass"
+
+
+def test_w1_skips_automations_and_scratch(w1_tree):
+    assert _classify(_w1(w1_tree, "workspace/clients/acme/automations/sync/rollout-plan-v2.md")) == "pass"
+    assert _classify(_w1(w1_tree, "workspace/clients/acme/context/.scratch/rollout-plan-v2.md")) == "pass"
+
+
+def test_w1_overwrite_of_existing_file_is_silent(w1_tree):
+    assert _classify(_w1(w1_tree, "workspace/clients/acme/context/rollout-plan.md")) == "pass"
+
+
+def test_w1_edit_is_never_gated(w1_tree):
+    assert _classify(_w1(w1_tree, "workspace/clients/acme/context/rollout-plan-v2.md", tool="Edit")) == "pass"
+
+
+def test_w1_outside_client_and_project_trees_is_silent(w1_tree):
+    assert _classify(_w1(w1_tree, "docs/rollout-plan-v2.md")) == "pass"
+
+
+def test_w1_placement_deny_still_wins(w1_tree):
+    # A scratch-shaped name in a non-gitignored path is a W2 deny, not a W1 ask.
+    p = _w1(w1_tree, "workspace/clients/acme/deliverables/rollout-plan-dump.json")
+    assert permission_decision(p.stdout) == "deny"
+
+
+def test_w1_budget_on_a_large_tree(tmp_path):
+    ctx = tmp_path / "workspace" / "clients" / "big" / "context"
+    for i in range(3000):
+        d = ctx / f"dir{i % 30}"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"note-{i}-{i * 7919 % 1000}.md").write_text("x", encoding="utf-8")
+    start = time.perf_counter()
+    p = _w1(tmp_path, "workspace/clients/big/context/fresh-topic.md")
+    elapsed = time.perf_counter() - start
+    assert _classify(p) == "pass"
+    assert elapsed < 2.0, f"{elapsed:.3f}s"  # loose: includes interpreter startup on CI
