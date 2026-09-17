@@ -4640,7 +4640,7 @@ gets. api-contract "What a settings save wrote";
 
 SPA half: `docs/lovable-settings-tabs-prompt.md`, published by the owner and verified 2026-09-17 (bundle + cold drive, PROMPT-STATUS Applied row).
 
-### 92. The entity list is in nobody's order (Criss via owner, 2026-09-17) (BACKEND SHIPPED PR #TBD, prompt written, pending the owner's paste)
+### 92. The entity list is in nobody's order (Criss via owner, 2026-09-17) (APPLIED 2026-09-17: backend PR #971 deployed v146, prompt published and verified, see PROMPT-STATUS)
 
 **Criss, relayed by the owner 2026-09-17:** she wants to select entities that
 have been saved and reorder them.
@@ -4654,10 +4654,9 @@ Two defects sit underneath the ordering ask, both visible in the Settings
 editor:
 
 - It lists `entities` (the registry someone typed) while the pickers offer
-  the union of the provisioning file, the card map and that registry. On the
-  live tenant the registry is empty, so the editor can look empty while the
-  dropdown is full. Ordering only the registry rows would have moved nothing
-  Criss actually sees.
+  the union of the provisioning file, the card map and that registry. Live
+  (read 2026-09-17): the registry holds 5 entries, the pickers 8. Ordering
+  only the registry rows would have left 3 of the 8 immovable.
 - Every field of every entity is on screen at once, so the list is a wide
   table to read rather than a list to pick from.
 
@@ -4676,7 +4675,21 @@ Unset: alphabetical, exactly as before. api-contract "The writable keys";
 
 SPA half: `docs/lovable-entity-order-prompt.md`. The list renders
 `entity_options` (never sorted locally), a row opens its fields, drag or the
-move buttons save `{"entity_order": [...]}` on their own. Not pasted.
+move buttons save `{"entity_order": [...]}` on their own. Published and
+verified 2026-09-17.
+
+**Open, owner-side data (found verifying this item, not fixed: Criss's
+settings):** the three extra entities are the cards' names for the same
+companies. All 9 cards point at `Corporate Services` / `Cloud Services` /
+`Consulting`, while the entity settings are filed under `Brisken Corp
+Services, LLC` / `Brisken Cloud Services, LLC` / `Brisken Consulting, LLC`.
+`entity_from_settings` matches names exactly (case-insensitive only), so an
+LLC row's org id, default paid through and account picks do not reach a
+charge whose card names the short form; that charge falls back to the
+`/data` provisioning file or gets nothing. The fix is one choice in the
+Cards tab: point each card at its LLC name, after which the three short rows
+disappear from the list on their own. Needs the owner's or Criss's call on
+which name is canonical; nothing to build.
 
 ## Related but tracked elsewhere (do not duplicate here)
 
