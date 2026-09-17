@@ -219,6 +219,7 @@ and a rollback would otherwise have nothing to re-apply.
 | `lovable-private-card-in-picker-prompt.md` (item 139, notes #65 + #66) | `__private_card__` in `chunk-expenses._batchId`; `expx.privateCard.mark` still present | Written 2026-09-17, not pasted. SPA only, no backend gate |
 | `lovable-one-download-each-prompt.md` (item 141, note #68) | `sum.dl.pdf`, `sum.dl.statementFile` in `chunk-runs._runId`; `sum.pdf` absent from every chunk | Written 2026-09-17, not pasted. SPA only, no backend gate |
 | `lovable-booked-hint-names-workbook-prompt.md` (item 142, note #69) | `row.status.posted.tipFile`, `wb.reason.charge.already_booked.file` in `chunk-runs._runId`; "your statement workbook" absent from `chunk-i18n` | Written 2026-09-17, not pasted. SPA copy only, no backend gate |
+| `lovable-remove-account-picks-prompt.md` (note #61, item 23) | `account_picks` absent from `chunk-settings`; `set.entities.col.accountPicks` and `set.entities.help.accountPicks` absent from `chunk-i18n`; `set.entities.listHelp` still present | Written 2026-09-17, not pasted. No gate: the backend already accepts and drops the key, so it can be pasted before or after that deploy |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.

@@ -195,6 +195,7 @@ from .store import (
     VALID_DUP_RESOLUTIONS,
     VALID_STATUSES,
     RunStore,
+    without_retired_entity_keys,
 )
 from . import auth, machine, ratelimit
 
@@ -2390,7 +2391,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             settings = store.get_settings()
             return JSONResponse({
-                **settings,
+                **without_retired_entity_keys(settings),
                 "categories": list(EXPENSE_CATEGORIES),
                 "entity_options": available_entities(settings),
                 "cards_effective": [
@@ -2501,11 +2502,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 cleaned[name] = value
             patch[key] = cleaned
         # Legal-entity registry (Phase 5): {label: {org_id, chart_path,
-        # default_paid_through, scope_groups, account_picks}}. String
-        # fields trim; list fields must be lists of strings. The whole map
-        # replaces the stored one (same contract as the other map keys), so
-        # deleting an entity is omitting it. `categories` is read-only and
-        # never persisted.
+        # default_paid_through, scope_groups}}. String fields trim; list
+        # fields must be lists of strings. The whole map replaces the stored
+        # one (same contract as the other map keys), so deleting an entity is
+        # omitting it. `categories` is read-only and never persisted.
+        # A retired field (`RETIRED_ENTITY_KEYS`) is dropped whatever its
+        # shape, never a 400: the published SPA sends `account_picks` on
+        # every entities save until its removal prompt is applied.
         if "entities" in body:
             raw = body["entities"]
             if not isinstance(raw, dict):
@@ -2526,7 +2529,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 for skey in ("org_id", "chart_path", "default_paid_through"):
                     if str(ent.get(skey) or "").strip():
                         entry[skey] = str(ent[skey]).strip()
-                for lkey in ("scope_groups", "account_picks"):
+                for lkey in ("scope_groups",):
                     if ent.get(lkey) is None:
                         continue
                     if not isinstance(ent[lkey], list):
@@ -2611,7 +2614,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             settings = store.set_settings(patch, _now_iso())
         return JSONResponse({
-            **settings, "categories": list(EXPENSE_CATEGORIES),
+            **without_retired_entity_keys(settings),
+            "categories": list(EXPENSE_CATEGORIES),
             # What this request wrote, and what it carried that the server
             # derives. A caller shows "saved" on its own key appearing in
             # `applied`, never on the 200 alone.

@@ -6011,17 +6011,16 @@ def _expense_review(
     return review
 
 
-def _expense_account_options(run: RunRow, settings: dict | None) -> list[str]:
-    """The curated account picker for an expense batch (Phase 5): the
-    entity registry's explicit `account_picks` shortlist when one is
-    defined, else the same scoped postable-account labels the categorizer
-    was constrained to (rebuilt from the run's `coa_validation` block via
-    `_resolve_categorizer_chart`'s fallback). Empty when no chart — the
-    picker offers nothing rather than the full unscoped chart."""
-    entity = ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
-    ent = entity_from_settings(settings, entity)
-    if ent and ent.get("account_picks"):
-        return [str(a) for a in ent["account_picks"]]
+def _expense_account_options(run: RunRow) -> list[str]:
+    """The account picker for an expense batch (Phase 5): the scoped
+    postable-account labels the categorizer was constrained to (rebuilt from
+    the run's `coa_validation` block via `_resolve_categorizer_chart`'s
+    fallback). Empty when no chart — the picker offers nothing rather than
+    the full unscoped chart.
+
+    Always the company's chart: the per-entity `account_picks` shortlist
+    was removed on the owner's ruling 2026-09-17 (note #61), and a value
+    stored before then is ignored here."""
     try:
         from ..cli import _resolve_categorizer_chart
 
@@ -6822,7 +6821,7 @@ def build_expense_view(
         "set_aside": set_aside,
         "duplicate_groups": duplicate_groups,
         "category_options": list(EXPENSE_CATEGORIES),
-        "account_options": _expense_account_options(run, settings),
+        "account_options": _expense_account_options(run),
         "entity_options": entity_options,
         # Item 47: the row picker's list, active entries only, name-sorted,
         # each with its display-only kind. Empty while the owner has defined
