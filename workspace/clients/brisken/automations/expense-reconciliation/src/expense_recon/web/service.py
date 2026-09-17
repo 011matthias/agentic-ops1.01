@@ -3543,12 +3543,15 @@ def build_view(
     # Items 99 + 100: what still stands between this month and complete,
     # read off the rows and the unmatched list the page renders. The publish
     # gate reads the same summary.
-    # `field_overrides` (the expense header edits) carries the confirmed
-    # private expenses; a caller that passes none counts every unmatched
-    # receipt as needing a charge.
+    # Every receipt no charge holds, copies included, so the decided-copy
+    # exclusion reads `decided_copies` (item 94) rather than trusting the
+    # list split above. `field_overrides` (the expense header edits) carries
+    # the confirmed private expenses; a caller that passes none counts every
+    # private receipt as needing a charge.
     completeness = completeness_counts(
-        rows, unmatched_receipts,
+        rows, [*unmatched_receipts, *copies_set_aside],
         private_docs=frozenset(_private_reimbursements(field_overrides or {})),
+        copy_docs=frozenset(set_aside_copy_ids),
     )
     ready_to_post = n_undecided == 0 and health["state"] == HEALTH_OK
 

@@ -242,6 +242,51 @@ def test_a_confirmed_private_expense_needs_no_charge(client, monkeypatch):
     assert resp.json()["published_override"] is False
 
 
+def test_a_decided_copy_needs_no_charge_until_ruled_not_a_copy(client, monkeypatch):
+    """Item 94's shape: a Lovable invoice and its receipt are one purchase.
+    The copy the run payload sets aside (`decided_copies`) needs no charge;
+    "Not a copy" makes it a receipt waiting for one again."""
+    _wire(
+        monkeypatch,
+        _extraction("Lovable Labs Incorporated", "15.00", "2026-08-31"),
+        _extraction("Lovable Labs Incorporated", "15.00", "2026-08-31"),
+    )
+    resp = client.post(
+        "/api/expense-batches",
+        data={"legal_entity": "Corporate Services", "label": "August 2026"},
+    )
+    _done(client, resp)
+    batch = resp.json()["batch_id"]
+    _done(client, client.post(
+        f"/api/expense-batches/{batch}/receipts",
+        files=[
+            ("files", (name, JPG + str(i).encode(), "application/octet-stream"))
+            for i, name in enumerate(["Invoice-HMVWDWIL.jpg", "Receipt-2167-5718.jpg"])
+        ],
+    ))
+    _attach(client, batch, [LOVABLE, PAYMENT])
+    for r in _view(client, batch)["rows"]:
+        if r["turn"] == "decide":
+            _decide(client, batch, r["transaction_id"], "confirmed")
+
+    view = _view(client, batch)
+    (copy,) = view["copies_set_aside"]
+    assert view["summary"]["n_receipts_need_charge"] == 0
+    assert view["summary"]["month_complete"] is True
+
+    (group,) = view["duplicate_groups"]
+    resp = client.post(
+        f"/api/runs/{batch}/duplicates/resolve",
+        json={"group_id": group["group_id"], "resolution": "ignore"},
+    )
+    assert resp.status_code == 200, resp.text
+    view = _view(client, batch)
+    assert view["copies_set_aside"] == []
+    assert copy["document_id"] in {r["document_id"] for r in view["unmatched_receipts"]}
+    assert view["summary"]["n_receipts_need_charge"] == 1
+    assert view["summary"]["month_complete"] is False
+
+
 def test_a_fee_needs_no_receipt_but_its_guessed_category_is_undecided(client, monkeypatch):
     batch = _month(
         client, monkeypatch, [LOVABLE, FEE, PAYMENT],

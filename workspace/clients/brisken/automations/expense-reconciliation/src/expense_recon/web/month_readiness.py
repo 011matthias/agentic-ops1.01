@@ -64,28 +64,41 @@ def charge_category_guessed(row: dict) -> bool:
     )
 
 
-def receipt_needs_charge(receipt: dict, private_docs=frozenset()) -> bool:
-    """An element of `unmatched_receipts` that no charge holds anywhere.
+def receipt_needs_charge(
+    receipt: dict, *, private_docs=frozenset(), copy_docs=frozenset()
+) -> bool:
+    """A receipt no charge holds (an `unmatched_receipts` or
+    `copies_set_aside` element) that still needs one.
 
-    The list already leaves out settled-outside receipts and decided copies;
-    a receipt another month's charge settled carries `settled_by`. A
-    CONFIRMED private expense (`private_docs`: the flag AND who is
-    reimbursed, `service._private_reimbursements`) was paid on someone's own
-    card, so no company card charge will ever exist for it."""
+    Not a decided copy (`copy_docs`: `service.decided_copies`, the one
+    predicate every listing and total on the month reads, item 94). Not a
+    receipt another month's charge settled (`settled_by`). Not a CONFIRMED
+    private expense (`private_docs`: the flag AND who is reimbursed,
+    `service._private_reimbursements`): it was paid on someone's own card, so
+    no company card charge will ever exist for it. Settled-outside receipts
+    never reach the lists."""
+    doc = receipt.get("document_id")
     return (
         "settled_by" not in receipt
-        and receipt.get("document_id") not in private_docs
+        and doc not in private_docs
+        and doc not in copy_docs
     )
 
 
 def completeness_counts(
-    rows: list[dict], unmatched_receipts: list[dict], private_docs=frozenset()
+    rows: list[dict],
+    receipts_without_charge: list[dict],
+    *,
+    private_docs=frozenset(),
+    copy_docs=frozenset(),
 ) -> dict:
     return {
         "n_charges_need_receipt": sum(1 for r in rows if charge_needs_receipt(r)),
         "n_receipts_need_charge": sum(
-            1 for r in unmatched_receipts
-            if receipt_needs_charge(r, private_docs)
+            1 for r in receipts_without_charge
+            if receipt_needs_charge(
+                r, private_docs=private_docs, copy_docs=copy_docs
+            )
         ),
         "n_charges_category_guessed": sum(
             1 for r in rows if charge_category_guessed(r)
