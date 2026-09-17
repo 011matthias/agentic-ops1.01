@@ -119,7 +119,7 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 # config, so an existing run keeps the master data it ran under.
 #   entities  (Phase 5, receipt-first) — the legal-entity REGISTRY:
 #     {"Corporate Services": {org_id, chart_path?, scope_groups?,
-#     default_paid_through?, account_picks?}}. Definable in the UI; wins
+#     default_paid_through?}}. Definable in the UI; wins
 #     over the /data provisioning file's entity mapping when present
 #     (coa_provision.coa_validation_from_settings). Distinct from
 #     `card_entities`, which stays the card -> entity MAP.
@@ -194,6 +194,34 @@ SETTINGS_DERIVED_KEYS = (
     "applied",
     "ignored",
 )
+
+# Fields an `entities` entry no longer carries. `account_picks` was a
+# per-company shortlist of the accounts an expense row offered; the owner
+# removed it on 2026-09-17 (note #61), so every row offers the company's
+# full chart. The PUT drops it silently (the published SPA sends it until
+# its prompt lands) and the settings payload never serves a value stored
+# before the removal.
+RETIRED_ENTITY_KEYS = frozenset({"account_picks"})
+
+
+def without_retired_entity_keys(settings: dict) -> dict:
+    """`settings` with every `RETIRED_ENTITY_KEYS` field taken off each
+    `entities` entry. A shallow copy: the stored row is never touched."""
+    entities = settings.get("entities")
+    if not isinstance(entities, dict):
+        return settings
+    return {
+        **settings,
+        "entities": {
+            label: (
+                {k: v for k, v in ent.items() if k not in RETIRED_ENTITY_KEYS}
+                if isinstance(ent, dict)
+                else ent
+            )
+            for label, ent in entities.items()
+        },
+    }
+
 
 # Background-job states (durable: a Fly machine can scale to zero mid-run;
 # a job row that is still `running` at boot was interrupted).

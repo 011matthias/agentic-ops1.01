@@ -6124,17 +6124,16 @@ def _expense_review(
     return review
 
 
-def _expense_account_options(run: RunRow, settings: dict | None) -> list[str]:
-    """The curated account picker for an expense batch (Phase 5): the
-    entity registry's explicit `account_picks` shortlist when one is
-    defined, else the same scoped postable-account labels the categorizer
-    was constrained to (rebuilt from the run's `coa_validation` block via
-    `_resolve_categorizer_chart`'s fallback). Empty when no chart — the
-    picker offers nothing rather than the full unscoped chart."""
-    entity = ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
-    ent = entity_from_settings(settings, entity)
-    if ent and ent.get("account_picks"):
-        return [str(a) for a in ent["account_picks"]]
+def _expense_account_options(run: RunRow) -> list[str]:
+    """The account picker for an expense batch (Phase 5): the scoped
+    postable-account labels the categorizer was constrained to (rebuilt from
+    the run's `coa_validation` block via `_resolve_categorizer_chart`'s
+    fallback). Empty when no chart — the picker offers nothing rather than
+    the full unscoped chart.
+
+    Always the company's chart: the per-entity `account_picks` shortlist
+    was removed on the owner's ruling 2026-09-17 (note #61), and a value
+    stored before then is ignored here."""
     try:
         from ..cli import _resolve_categorizer_chart
 
@@ -6943,7 +6942,7 @@ def build_expense_view(
         "set_aside": set_aside,
         "duplicate_groups": duplicate_groups,
         "category_options": list(EXPENSE_CATEGORIES),
-        "account_options": _expense_account_options(run, settings),
+        "account_options": _expense_account_options(run),
         "entity_options": entity_options,
         # Item 47: the row picker's list, active entries only, name-sorted,
         # each with its display-only kind. Empty while the owner has defined
@@ -7945,6 +7944,166 @@ def report_receipt_cards(
             (card.key, card.display_label) if card is not None else ("", "")
         )
     return out
+
+
+def month_card_tabs(
+    view: dict,
+    receipt_cards: dict[str, tuple[str, str]],
+    cfg: dict | None,
+) -> tuple[list[dict], dict[str, str], dict[str, str]]:
+    """Item 138, the month page's half (owner ruling 2026-09-17: "a tab per
+    card showing whether its statement is loaded, how many charges matched
+    and what's still open, plus 'All' and 'No card'").
+
+    `(sections, section key per transaction_id, section key per document_id)`.
+    The grouping IS `_pdf_common.card_sections` over a `build_view` payload
+    and the card chain `report_receipt_cards` resolves, the two inputs the
+    PDFs section on, and each section's figures are `card_statement_figures`,
+    the numbers its PDF heading line prints. A tab and its PDF section can
+    therefore not disagree: a receipt a charge holds follows that charge's
+    card, an unheld receipt goes to its resolved card (item 137), everything
+    else to the no-card section, which is never dropped.
+
+    Each section: `key` (the `coverage[].key`; "" is the no-card section,
+    and since the registry drops a blank card key "" can never name a card),
+    `label`, `digits` (the coverage entry's, else the registry card's, for a
+    card only receipts name), the statement figures, `n_receipts` (every
+    receipt filed there, copies and settled-outside ones included) and
+    `n_receipts_without_charge` (those in the view's `unmatched_receipts`,
+    the page's "Receipts without a charge").
+
+    A month with fewer than two cards gets no sections, the PDFs' own rule
+    (a heading restating the only card organizes nothing); the two maps are
+    filled either way."""
+    from ..output._pdf_common import card_sections, card_statement_figures
+
+    grouped = card_sections(view, receipt_cards)
+    by_tx = {
+        str(row.get("transaction_id") or ""): sec["key"]
+        for sec in grouped for row in sec["rows"]
+    }
+    by_doc = {doc: sec["key"] for sec in grouped for doc in sec["receipt_docs"]}
+    unmatched = {
+        str(rec.get("document_id") or "")
+        for rec in view.get("unmatched_receipts") or []
+    }
+    cards = _batch_cards(cfg)
+    sections: list[dict] = []
+    for sec in grouped:
+        digits = [
+            str(d) for d in ((sec.get("coverage") or {}).get("digits") or [])
+            if str(d).strip()
+        ]
+        if sec["key"] and not digits and sec["key"] in cards:
+            digits = [str(d) for d in cards[sec["key"]].digits]
+        sections.append({
+            "key": sec["key"],
+            "label": sec["label"],
+            "digits": digits if sec["key"] else [],
+            **card_statement_figures(sec),
+            "n_receipts": len(sec["receipt_docs"]),
+            "n_receipts_without_charge": sum(
+                1 for doc in sec["receipt_docs"] if doc in unmatched
+            ),
+        })
+    if sum(1 for s in sections if s["key"]) < 2:
+        sections = []
+    return sections, by_tx, by_doc
+
+
+def attach_run_card_tabs(
+    view: dict, run: RunRow, field_overrides: dict[str, dict[str, str]] | None
+) -> dict:
+    """Item 138 on `GET /api/runs/{id}` (the Matching page): `card_sections`,
+    and `card_section` on every element of `rows[]`, `unmatched_receipts[]`,
+    `copies_set_aside[]` and `assignable_receipts[]`. Mutates and returns
+    `view`, the route's own `build_view` payload.
+
+    The cards are resolved over the pool that view was built on (the
+    snapshot's receipts), the chain `build_view`'s `cards_differ` already
+    reads; the reconciliation report files every receipt the same way on a
+    month whose edits are baked, which is every month with a statement."""
+    _, receipts, _, _ = snapshot_from_dict(run.snapshot)
+    sections, by_tx, by_doc = month_card_tabs(
+        view, report_receipt_cards(receipts, run.config, field_overrides), run.config
+    )
+    for row in view.get("rows") or []:
+        row["card_section"] = by_tx.get(str(row.get("transaction_id") or ""), "")
+    for listing in ("unmatched_receipts", "copies_set_aside", "assignable_receipts"):
+        for rec in view.get(listing) or []:
+            rec["card_section"] = by_doc.get(str(rec.get("document_id") or ""), "")
+    view["card_sections"] = sections
+    return view
+
+
+def attach_expense_card_tabs(
+    view: dict,
+    run: RunRow,
+    *,
+    overrides: dict,
+    field_overrides: dict[str, dict[str, str]],
+    edits: list[dict],
+    resolutions: dict[str, str] | None,
+    decisions: dict | None,
+) -> dict:
+    """Item 138 on `GET /api/expense-batches/{id}` (the Expenses page):
+    `card_sections` and `expenses[].card_section`. Mutates and returns
+    `view`, the route's own `build_expense_view` payload.
+
+    The sections are the month report's: `report_view` and
+    `report_receipt_cards` over `_expense_export_inputs`' pool, exactly as
+    `build_expense_report` builds them, so a copy that borrowed its card
+    (item 69) files where the grid shows it. On top of the reconciliation
+    figures each section carries what the Expenses page counts, from the
+    rows it renders: `n_expenses` (rows that count, decided copies left out,
+    item 94) and `totals_by_ccy` (their totals, summed in Decimal as
+    `summary.totals_by_ccy` is).
+
+    A trip gets no sections: its documents section per traveler, not per
+    card. Only the page GETs carry the tabs, so the edit routes that reply
+    with this payload's summary pay nothing for them."""
+    receipts, _kwargs = _expense_export_inputs(
+        run, overrides, field_overrides, edits, resolutions
+    )
+    _, snapshot_receipts, _, _ = snapshot_from_dict(run.snapshot)
+    card_view = report_view(
+        run, receipts, snapshot_receipts, decisions or {}, overrides,
+        resolutions, field_overrides=field_overrides,
+    )
+    sections, _by_tx, by_doc = month_card_tabs(
+        card_view, report_receipt_cards(receipts, run.config, field_overrides),
+        run.config,
+    )
+    if is_trip_batch(run):
+        sections = []
+    total_of = {
+        r.document_id: (r.detected_currency or "?", r.detected_total)
+        for r in receipts
+    }
+    counted: dict[str, int] = {}
+    sums: dict[str, dict[str, Decimal]] = {}
+    for expense in view.get("expenses") or []:
+        doc = str(expense.get("document_id") or "")
+        key = by_doc.get(doc, "")
+        expense["card_section"] = key
+        if expense.get("counts_in_total") is False:
+            continue
+        counted[key] = counted.get(key, 0) + 1
+        ccy, amount = total_of.get(doc, ("?", None))
+        if amount is not None:
+            per = sums.setdefault(key, {})
+            per[ccy] = per.get(ccy, Decimal("0")) + amount
+    # Every row is placed: the grid's rows and the export pool are one set of
+    # documents (both are `apply_expense_edits` over the baseline, then the
+    # copy card inheritance), and `card_sections` files every one of them.
+    for sec in sections:
+        sec["n_expenses"] = counted.get(sec["key"], 0)
+        sec["totals_by_ccy"] = {
+            ccy: f"{amt:,.2f}"
+            for ccy, amt in sorted((sums.get(sec["key"]) or {}).items())
+        }
+    view["card_sections"] = sections
+    return view
 
 
 def reconciliation_captions(
