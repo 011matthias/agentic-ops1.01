@@ -4,8 +4,9 @@ Found 2026-09-17 while building item 138 and confirmed on a raster of the
 August pages: the month report's listing was 732 pt wide and the
 reconciliation report's charge table 672 pt (its coverage table 572 pt),
 against 503.9 pt of frame. reportlab centers a table that is too wide, so
-both edges ran off the page: `#` and Date cut on the left, Ccy and Receipt
-on the right, on every month report since item 24. The text layer still
+the two widest ran off both sides of the paper: the listing's `#` and Date
+cut on the left, Ccy and Receipt on the right, on every month report since
+item 24. The text layer still
 holds the clipped cells, so every text-extraction test stayed green.
 
 These tests measure the layout instead. `drawn` records each Table the

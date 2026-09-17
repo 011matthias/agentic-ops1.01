@@ -53,11 +53,11 @@ from ._pdf_common import (
 )
 
 # Column widths in points. Every table fits `TABLE_WIDTH_MAX` (503.9 pt, the
-# A4 portrait frame): until item 143 the coverage table was 572 pt and the
-# charge table 672 pt, so both ran past the page edges and the charge
-# table's `#`, Date and Account were cut off. Counts, dates and amounts fit
-# their values on one line in DejaVu Sans, the widest font `register_fonts`
-# picks; the text columns wrap between words. The charge column keeps room
+# A4 portrait frame): until item 143 the charge table was 672 pt, so it ran
+# off both sides of the paper and its `#`, Date and Account were cut off,
+# and the coverage table (572 pt) sat in both margins. Counts, dates and
+# amounts fit their values on one line in DejaVu Sans, the widest font
+# `register_fonts` picks; the text columns wrap between words. The charge column keeps room
 # for a statement descriptor with no space in it (WEB*NETWORKSOLUTIONS).
 _COVERAGE = (
     ("Card", 90),
