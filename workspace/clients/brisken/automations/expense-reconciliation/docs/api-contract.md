@@ -2866,6 +2866,7 @@ card or not.
 | `hint` | the printed payment method, or a batch hint assignment, named the card |
 | `override` | a per-row fix this month (`card_key`) |
 | `learned` | remembered from an earlier month's fix for this vendor |
+| `settled_charge` | item 111: the card of this month's charge the receipt settles (see "A receipt settling a charge takes its company and person") |
 | `none` | no card; `card` is null |
 
 **Strip learning that did not stick, fixed.** An assignment with learning on
@@ -3592,3 +3593,39 @@ under the month-creation lock every arrival waits on; and a borrowed receipt
 is still not offered in a charge's hand-pick list (`assignable_receipts`
 lists the month's own pool only). Route-level in
 `tests/test_neighbour_rematch_item_112.py`.
+
+## A receipt settling a charge takes its company and person: `card_source: "settled_charge"` (item 111, 2026-09-17)
+
+July 2026 asked for a company and a person on 33 receipts while 19 of them
+already settled a charge whose card names both.
+
+On `GET /api/expense-batches/{id}` (the Expenses page, its `boxes` and
+counts) a receipt of this month that a charge of this month settles takes
+that charge's card when the receipt has no card of its own. "Settles" is the
+workbench's effective verdict: the charge's `effective_bucket` is
+`reconciled` and its `chosen_document_id` is the receipt (a pending or
+confirmed pair; a rejected pair, or one still in review, lends nothing). The
+card is the charge's registry card in the month's card snapshot (its
+`coverage_key` when that names a registry card); a card the registry cannot
+name lends nothing, and neither does a receipt borrowed from a neighbouring
+month or a trip.
+
+The card resolves through the same chain as a per-row pick: the row's
+`card`, `legal_entity_id` (`entity_source: "card"`), `person`
+(`person_source: "card"`) and `posting_paid_through` follow it, and the row
+counts as answered for `needs_entity`, `needs_person` and
+`needs_company_or_person`. `card_source` is the NEW value
+`settled_charge`. Anything explicit on the receipt wins: a `card_key` pick
+(`override`), a card from the printed method or an assigned hint (`hint`),
+any card number the receipt prints (known or not), a `legal_entity` override
+(for the company), and a confirmed private expense. A card remembered from
+an earlier month (`learned`) gives way. The row is a company-card row:
+`can_mark_private: false`, `suggested_private: false`, and the private-card
+routes refuse it with `code: "company_card"`.
+
+Scope: this payload only. The run payload (`cards_differ`), the matcher's
+card scope, the Zoho CSV and both PDFs do not inherit, so the CSV still
+prints `(entity - assign)` for these rows. SPA half:
+`docs/lovable-entity-from-charge-prompt.md` (the source line and the card
+Select on a `settled_charge` row; a stale SPA shows the card chip and no
+Select). Route-level in `tests/test_entity_from_settled_charge_item_111.py`.

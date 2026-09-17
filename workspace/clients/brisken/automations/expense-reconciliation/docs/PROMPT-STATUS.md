@@ -215,6 +215,7 @@ and a rollback would otherwise have nothing to re-apply.
 | Prompt | Decisive field names | Gate |
 |---|---|---|
 | `lovable-bulk-confirm-dialog-prompt.md` (item 101) | `n_confirm_matched`, `skipped_rule` in `chunk-runs._runId`; `sum.confirmMatched.dialog.body`, `wb.bulkReject.dialog.body` in `chunk-i18n` | Written 2026-09-17, not pasted. Backend deploy first (`summary.n_confirm_matched` on `GET /api/runs/{id}`, the narrowed confirm-matched route) |
+| `lovable-entity-from-charge-prompt.md` (item 111) | `settled_charge`, `expx.cardFix.source.settled_charge` in the expenses chunk; `expx.cardFix.settledHint` in `chunk-i18n` | Written 2026-09-17, not pasted. Backend deploy first (`expenses[].card_source: "settled_charge"` on `GET /api/expense-batches/{id}`). Until then a stale SPA shows the inherited card chip with no source line and no "Change card" |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.

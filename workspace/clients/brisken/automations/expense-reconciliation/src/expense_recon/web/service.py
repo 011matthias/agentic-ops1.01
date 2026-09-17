@@ -5403,6 +5403,8 @@ def resolve_batch_row_cards(
     receipts: "list[Receipt]",
     cfg: dict | None,
     field_overrides: dict[str, dict[str, str]],
+    *,
+    settled_cards: dict[str, str] | None = None,
 ) -> dict[str, dict]:
     """Per-document card + entity resolution for an expense batch:
     ``{document_id: {hint, card: Card|None, entity, entity_source}}``.
@@ -5453,6 +5455,14 @@ def resolve_batch_row_cards(
     undone. A company card from the printed number, a strip assignment or
     this row's own card pick means the company paid: nothing to reimburse.
     A confirmed private row never picks up a remembered card.
+
+    `settled_cards` (item 111, `settled_charge_cards`): `{document_id: card
+    key}` of the charge in this month that settles the receipt. Only the
+    Expenses payload passes it, never the matcher's bake (the pairing would
+    feed its own card scope). It applies where memory would, and before it:
+    no per-row pick, no card from the printed method or a hint, no card
+    number printed, not confirmed private. Source `settled_charge`; the
+    company paid, so `can_mark_private` is false.
     """
     from ..cards import masked_short_ending, resolve_hinted_card_ex
     from ..matching.deterministic import _card_keys
@@ -5500,8 +5510,15 @@ def resolve_batch_row_cards(
             card, card_source = fixed, "override"
             card_ending = ""
         elif card is None and not _card_keys(hint) and not private:
+            # Item 111: the statement names the card a settled pair was paid
+            # with, which outranks a card remembered from another month.
+            settled = _batch_row_card(
+                cards, (settled_cards or {}).get(r.document_id)
+            )
             remembered = _batch_row_card(cards, r.card_key)
-            if remembered is not None:
+            if settled is not None:
+                card, card_source = settled, "settled_charge"
+            elif remembered is not None:
                 card, card_source = remembered, "learned"
         override = fields.get("legal_entity", "")
         if override.strip():
@@ -6158,10 +6175,18 @@ def build_expense_view(
     exp_cfg = (run.config or {}).get("expense") or {}
     default_pt = exp_cfg.get("default_paid_through")
     card_accts = exp_cfg.get("card_accounts")
+    # Per-card coverage (PR 3) reads the charges and their effective states;
+    # one read of the snapshot feeds it and item 111 below.
+    charges, charge_state_map = month_charge_states(run, decisions or {})
     # Cards R3: one resolution pass feeds the rows' card/entity, the
     # review states, the paid-through card step, and the card_review
     # strip — the same pass the export runs, so they cannot disagree.
-    card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
+    # Item 111: on this payload only, a receipt a charge of this month
+    # settles takes that charge's card when it names none of its own.
+    card_res = resolve_batch_row_cards(
+        receipts, run.config, field_overrides,
+        settled_cards=settled_charge_cards(run, charges, charge_state_map),
+    )
     # Item 47: the cost-center chain, over the same pass's cards. Silent
     # for every row while the owner has defined no cost centers.
     cost_res = resolve_batch_row_cost_centers(
@@ -6374,7 +6399,8 @@ def build_expense_view(
             # Item 87: where `card` came from: hint (the printed payment
             # method or a batch hint assignment), override (a per-row fix
             # this month), learned (remembered from an earlier month's
-            # fix), or none.
+            # fix), settled_charge (item 111: the card of this month's
+            # charge the receipt settles), or none.
             "card_source": res.get("card_source", "none"),
             # Note #60: "38" when the card was named by a masked two-digit
             # ending alone; "" otherwise. Parallel to `card_source`, which
@@ -6702,9 +6728,8 @@ def build_expense_view(
     # registry, plus this batch's own default), and the curated account list.
     entity_options = available_entities(settings, default_entity)
 
-    # Per-card coverage (PR 3). One read of the snapshot feeds both halves,
-    # so every charge rolled up has a state that was computed for it.
-    charges, charge_state_map = month_charge_states(run, decisions or {})
+    # Per-card coverage (PR 3). The charges and states read above, so every
+    # charge rolled up has a state that was computed for it.
     coverage, _keys = month_coverage(run, charges, charge_state_map)
     # Item 59: same count the workbench carries, from the same charge set
     # the coverage panel rolls up. 0 before a statement is loaded.
@@ -8896,6 +8921,42 @@ def month_charge_states(
     transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     return transactions, charge_states(transactions, effective, decisions)
+
+
+def settled_charge_cards(
+    run: RunRow, charges: list, states: dict[str, dict]
+) -> dict[str, str]:
+    """Item 111: `{document_id: card key}` for every receipt of this month a
+    charge of this month settles, keyed to that charge's card in the batch's
+    registry snapshot.
+
+    July 2026 asked Criss for a company and a person on 33 receipts while 19
+    of them already settled a charge whose card names both. "Settles" is the
+    reviewer's effective verdict (`charge_states`, the one map the workbench
+    reads): a pending or confirmed pair in the reconciled bucket, so a
+    rejected pair lends nothing and a pair still in review lends nothing
+    either. The card is the charge's coverage identity (`_charge_card_identity`,
+    the same string the matcher's scoping reads), and a card the registry
+    cannot name lends nothing. A borrowed receipt (`receipt_sources`) is
+    another month's expense, and its id can equal one of this month's own,
+    so any held id in that map lends nothing here."""
+    cards = _batch_cards(run.config)
+    if not cards or not states:
+        return {}
+    borrowed = set((run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {})
+    tx_by_id = {t.transaction_id: t for t in charges}
+    out: dict[str, str] = {}
+    for tx_id, state in states.items():
+        doc = state.get("held_doc")
+        tx = tx_by_id.get(tx_id)
+        if state.get("bucket") != "reconciled" or not doc or tx is None:
+            continue
+        if doc in borrowed:
+            continue
+        key = _charge_card_identity(tx, cards).card_key
+        if key:
+            out[doc] = key
+    return out
 
 
 def _identity_from_observed(observed: str | None, cards: dict) -> _CardIdentity:
