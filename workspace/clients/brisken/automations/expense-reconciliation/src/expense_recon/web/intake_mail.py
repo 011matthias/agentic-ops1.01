@@ -106,7 +106,29 @@ MAX_KNOWN_SENDERS = 25
 # `rendered_by` on mail the arrival path rendered without a human.
 AUTO_RENDER_OPERATOR = "auto"
 MAX_INFLIGHT_ROUTES = 8
-MIN_FREE_DISK_BYTES = 500 * 1024 * 1024
+# Free-disk floor (backlog item 122). It used to be a flat 500 MiB, which
+# on the 1 GB volume meant the mailbox turned EVERY receipt away once the
+# disk was half full — Dirk's mail bouncing mid-close would have been the
+# first sign. The floor is now read from the actual volume: a share of it,
+# never below 200 MB, and never more than half of a small disk (so a tiny
+# test volume does not refuse from empty). On 1 GB that is 200 MB, on 5 GB
+# 256 MB, and the same code is correct on both without a redeploy.
+MIN_FREE_DISK_FLOOR_BYTES = 200 * 1024 * 1024
+MIN_FREE_DISK_FRACTION = 0.05
+# A stranger's message is capped far below the listener's 25 MB ceiling,
+# and all unrecognised senders together get a daily byte budget. Anyone
+# may submit (owner directive 2026-08-23) and From is forgeable, so the
+# budget is deliberately GLOBAL rather than per-sender: a rotating From
+# walks straight past a per-sender one, which is the same reasoning the
+# file caps above already carry. Our own people (inside @brisken.com or
+# listed in intake.known_senders) are subject to neither.
+DEFAULT_UNKNOWN_MAX_MESSAGE_BYTES = 5 * 1024 * 1024
+DEFAULT_UNKNOWN_DAILY_BYTES = 50 * 1024 * 1024
+# Purge for archives the operator judged junk (item 122). Days since the
+# DISMISSAL, not since arrival. 0 = never, which is the default: deleting
+# Brisken's mail is the owner's call, so the sweep ships inert and one
+# settings write (intake.dismissed_purge_days) turns it on.
+DEFAULT_DISMISSED_PURGE_DAYS = 0
 
 # Archive statuses. "received" = custody taken, routing pending;
 # a stale "received" (crashed router) is replayable like held_no_batch.
@@ -236,6 +258,10 @@ class IntakeConfig:
     aliases: dict = field(default_factory=dict)  # local-part -> person name
     sender_daily_cap: int = DEFAULT_SENDER_DAILY_CAP
     global_daily_cap: int = DEFAULT_GLOBAL_DAILY_CAP
+    # Item 122: what an unrecognised sender may spend in disk.
+    unknown_max_message_bytes: int = DEFAULT_UNKNOWN_MAX_MESSAGE_BYTES
+    unknown_daily_bytes: int = DEFAULT_UNKNOWN_DAILY_BYTES
+    dismissed_purge_days: int = DEFAULT_DISMISSED_PURGE_DAYS
     auto_ack: bool = True
     alert_recipients: tuple[str, ...] = DEFAULT_ALERT_RECIPIENTS
     retention_years: int = DEFAULT_RETENTION_YEARS
@@ -271,6 +297,14 @@ class IntakeConfig:
             except (TypeError, ValueError):
                 return default
 
+        def _count(key: str, default: int) -> int:
+            """Like _cap but 0 is a legal value meaning "off"."""
+            try:
+                v = int(raw.get(key, default))
+                return v if v >= 0 else default
+            except (TypeError, ValueError):
+                return default
+
         # Alert recipients keep only internal-looking addresses; the Graph
         # layer re-asserts @brisken.com per send regardless.
         alerts = tuple(
@@ -302,6 +336,15 @@ class IntakeConfig:
             aliases=aliases,
             sender_daily_cap=_cap("sender_daily_cap", DEFAULT_SENDER_DAILY_CAP),
             global_daily_cap=_cap("global_daily_cap", DEFAULT_GLOBAL_DAILY_CAP),
+            unknown_max_message_bytes=_cap(
+                "unknown_max_message_bytes", DEFAULT_UNKNOWN_MAX_MESSAGE_BYTES
+            ),
+            unknown_daily_bytes=_cap(
+                "unknown_daily_bytes", DEFAULT_UNKNOWN_DAILY_BYTES
+            ),
+            dismissed_purge_days=_count(
+                "dismissed_purge_days", DEFAULT_DISMISSED_PURGE_DAYS
+            ),
             auto_ack=bool(raw.get("auto_ack", True)),
             alert_recipients=alerts,
             retention_years=_cap("retention_years", DEFAULT_RETENTION_YEARS),
@@ -338,7 +381,8 @@ def normalize_intake_setting(raw) -> dict:
         cleaned["aliases"] = {
             k.strip().lower(): v.strip() for k, v in aliases.items()
         }
-    for cap in ("sender_daily_cap", "global_daily_cap", "retention_years"):
+    for cap in ("sender_daily_cap", "global_daily_cap", "retention_years",
+                "unknown_max_message_bytes", "unknown_daily_bytes"):
         if cap in raw:
             try:
                 v = int(raw[cap])
@@ -347,6 +391,23 @@ def normalize_intake_setting(raw) -> dict:
             if v <= 0:
                 raise ValueError(f"intake.{cap} must be a positive integer")
             cleaned[cap] = v
+    # Item 122: days an archive stays after the operator dismissed it as
+    # junk. 0 is legal and means "never delete", which is why it is not in
+    # the positive-integer loop above.
+    if "dismissed_purge_days" in raw:
+        try:
+            days = int(raw["dismissed_purge_days"])
+        except (TypeError, ValueError):
+            raise ValueError(
+                "intake.dismissed_purge_days must be 0 (never) or a "
+                "positive number of days"
+            )
+        if days < 0:
+            raise ValueError(
+                "intake.dismissed_purge_days must be 0 (never) or a "
+                "positive number of days"
+            )
+        cleaned["dismissed_purge_days"] = days
     if "auto_ack" in raw:
         if not isinstance(raw["auto_ack"], bool):
             raise ValueError("intake.auto_ack must be true or false")
@@ -593,6 +654,7 @@ class DayBudget:
         self._day = ""
         self._per_sender: dict[str, int] = {}
         self._global = 0
+        self._unknown_bytes = 0
         self._seeded_from: Path | None = None
 
     def _roll(self, data_root: Path) -> None:
@@ -601,6 +663,7 @@ class DayBudget:
             self._day = today
             self._per_sender = {}
             self._global = 0
+            self._unknown_bytes = 0
             self._seeded_from = None
         if self._seeded_from != data_root:
             self._seeded_from = data_root
@@ -611,18 +674,46 @@ class DayBudget:
                 sender = str(row.get("from", ""))
                 self._per_sender[sender] = self._per_sender.get(sender, 0) + units
                 self._global += units
+                # Rows written before item 122 carry neither field. A
+                # missing `known_sender` reads as known (charges nothing):
+                # over-charging the byte budget from archaeology would
+                # refuse today's real receipts after a restart, which is
+                # the failure this item exists to remove.
+                if row.get("known_sender") is False:
+                    self._unknown_bytes += max(0, int(row.get("n_bytes") or 0))
 
     def reserve(self, data_root: Path, sender: str, units: int,
-                cfg: IntakeConfig) -> bool:
+                cfg: IntakeConfig, *, known: bool = False,
+                n_bytes: int = 0) -> bool:
+        """Reserve one message's spend. All-or-nothing under one lock, so
+        a refused message consumes no budget at all.
+
+        ``known`` is item 122: our own people (inside @brisken.com, or an
+        address an operator listed) are not held to the per-sender file
+        cap — a month-end backfill legitimately exceeds 40 files, and the
+        cap was never a security boundary anyway since From is forgeable.
+        The GLOBAL file cap still binds everyone; it is the real ceiling
+        on a day's vision spend. A stranger additionally spends against a
+        shared daily byte budget, which is what stops one afternoon of
+        junk from filling the volume."""
         units = max(1, units)
+        n_bytes = max(0, n_bytes)
         with self._lock:
             self._roll(data_root)
-            if self._per_sender.get(sender, 0) + units > cfg.sender_daily_cap:
+            if not known and (
+                self._per_sender.get(sender, 0) + units > cfg.sender_daily_cap
+            ):
                 return False
             if self._global + units > cfg.global_daily_cap:
                 return False
+            if not known and (
+                self._unknown_bytes + n_bytes > cfg.unknown_daily_bytes
+            ):
+                return False
             self._per_sender[sender] = self._per_sender.get(sender, 0) + units
             self._global += units
+            if not known:
+                self._unknown_bytes += n_bytes
             return True
 
 
@@ -647,11 +738,49 @@ def end_route() -> None:
         _INFLIGHT = max(0, _INFLIGHT - 1)
 
 
-def disk_low(data_root: Path) -> bool:
+def free_disk_floor(total_bytes: int) -> int:
+    """How much free space the mailbox insists on, for a volume of this
+    size (item 122).
+
+    A share of the disk, floored at 200 MB so a bigger volume never
+    lowers the guard, and capped at half the disk so a small one cannot
+    refuse mail from empty. The old flat 500 MiB was 51% of the 1 GB
+    volume, which is why refusals were due to start in early 2027 with no
+    warning; the same code now leaves 800 MB usable on 1 GB and 4.75 GB
+    on 5 GB, and neither number is written down anywhere."""
+    total = max(0, int(total_bytes))
+    share = int(total * MIN_FREE_DISK_FRACTION)
+    return min(max(share, MIN_FREE_DISK_FLOOR_BYTES), total // 2)
+
+
+def disk_snapshot(data_root: Path) -> dict:
+    """Free space on the volume the archive lives on, as /healthz reports
+    it (item 122). ``available`` is False when the volume cannot be read,
+    so a monitor can tell "cannot say" from "nothing free"."""
     try:
-        return shutil.disk_usage(str(data_root)).free < MIN_FREE_DISK_BYTES
+        usage = shutil.disk_usage(str(data_root))
     except OSError:
-        return False
+        return {"available": False}
+    floor = free_disk_floor(usage.total)
+    pct = round(usage.free * 100.0 / usage.total, 1) if usage.total else 0.0
+    return {
+        "available": True,
+        "total_bytes": usage.total,
+        "free_bytes": usage.free,
+        "used_bytes": usage.used,
+        "free_pct": pct,
+        "floor_bytes": floor,
+        # The question a monitor actually asks: is the mailbox about to
+        # start turning receipts away?
+        "intake_refusing": usage.free < floor,
+    }
+
+
+def disk_low(data_root: Path) -> bool:
+    snap = disk_snapshot(data_root)
+    # Unreadable volume: never refuse mail on a failed measurement (the
+    # pre-item-122 posture, kept deliberately).
+    return bool(snap.get("intake_refusing"))
 
 
 # ---------------------------------------------------------------- archive --
@@ -1253,10 +1382,15 @@ def pool_deleted_batch(data_root: Path, batch_id: str) -> tuple[int, int]:
 
 def archive_incoming(
     data_root: Path, raw: bytes, parsed: InboundMessage, peer: str = "",
+    known_sender: bool = True,
 ) -> Path:
     """Custody step: archive + acceptance log row, called INLINE in the
     SMTP DATA handler before the 250 goes out. Raises on failure (the
-    caller answers 451 so the sender's MTA retries)."""
+    caller answers 451 so the sender's MTA retries).
+
+    The row records the message's SIZE and whether we recognised the
+    sender (item 122), which is what lets the day budget re-seed the
+    unknown-sender byte spend after a restart instead of forgiving it."""
     arch = archive_message(
         data_root, raw, parsed, STATUS_RECEIVED, extra={"peer": peer}
     )
@@ -1265,6 +1399,8 @@ def archive_incoming(
         "from": parsed.from_addr,
         "subject": parsed.subject,
         "n_files": len(parsed.attachments),
+        "n_bytes": len(raw or b""),
+        "known_sender": bool(known_sender),
         "status": STATUS_RECEIVED,
         "archive": arch.name,
     })
@@ -3641,6 +3777,55 @@ def sweep_retention(db_path: Path, data_root: Path) -> int:
             removed += 1
     if removed:
         log.info("retention sweep removed %d expired inbound archives", removed)
+    return removed
+
+
+def sweep_dismissed(db_path: Path, data_root: Path) -> int:
+    """Delete archives the operator dismissed as junk, once they have sat
+    dismissed for ``intake.dismissed_purge_days`` (item 122).
+
+    Dismissal is a human saying "this is not a receipt", so the bytes are
+    not an accounting record and nothing in AO paragraph 147 asks us to
+    keep them; today they are kept forever and count against the same
+    volume real receipts need. The grace period exists because a
+    dismissal can be a mis-click, and it is measured from the DISMISSAL,
+    not from arrival.
+
+    Ships inert: the default is 0 = never. Deleting Brisken's mail is the
+    owner's call, and turning it on is one settings write. Runs at boot
+    beside the retention sweep, fail-open, and only ever touches archives
+    whose status is `dismissed`."""
+    root = inbound_root(data_root)
+    if not root.exists():
+        return 0
+    with RunStore(db_path) as store:
+        cfg = IntakeConfig.from_settings(store.get_settings())
+    if cfg.dismissed_purge_days <= 0:
+        return 0
+    cutoff = datetime.now(timezone.utc).timestamp() - (
+        cfg.dismissed_purge_days * 86400
+    )
+    removed = 0
+    for arch in list(root.iterdir()):
+        if not arch.is_dir() or not _ARCHIVE_NAME_RE.fullmatch(arch.name):
+            continue
+        meta = _read_meta(arch)
+        if str(meta.get("status", "")) != STATUS_DISMISSED:
+            continue
+        stamp = str(meta.get("dismissed_at") or "")
+        try:
+            when = datetime.fromisoformat(stamp)
+        except ValueError:
+            # No readable dismissal time: leave it. An archive we cannot
+            # date is not one to delete.
+            continue
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        if when.timestamp() < cutoff:
+            shutil.rmtree(arch, ignore_errors=True)
+            removed += 1
+    if removed:
+        log.info("purged %d dismissed inbound archives", removed)
     return removed
 
 
