@@ -56,6 +56,8 @@ receives after `jsonable_encoder`.
 | `summary.upload_issue_details[]` | object `{code, file, suffix, limit}` |
 | `account_options[]` · `category_options[]` · `entity_options[]` | string (`entity_options` follows the operator's `entity_order`; see PUT /api/settings) |
 | `cost_center_options[]` | object `{name, kind, note}` (item 47: OBJECTS, unlike its three sibling option lists) |
+| `card_sections[]` | object (item 138, the Expenses page's card tabs) |
+| `card_sections[].digits[]` · `card_sections[].statements[]` | string |
 
 ### Run
 
@@ -80,6 +82,8 @@ receives after `jsonable_encoder`.
 | `category_options[]` | string |
 | `copies_set_aside[]` | object (the `unmatched_receipts[]` element shape; items 83 + 75) |
 | `copies_set_aside[].line_items[]` | object |
+| `card_sections[]` | object (item 138, the Matching page's card tabs) |
+| `card_sections[].digits[]` · `card_sections[].statements[]` | string |
 
 ## `parse_issues` specifically
 
@@ -3047,6 +3051,34 @@ Tests: `tests/test_settings_put_contract.py`, where
 key added to the tuple without a handler branch fails instead of doing
 nothing. Renders in `docs/lovable-settings-tabs-prompt.md`.
 
+## `account_picks` is gone from `entities` (note #61, 2026-09-17)
+
+An `entities` entry used to carry `account_picks`, a shortlist of the accounts
+that company's expense rows offered in place of its chart. The owner asked for
+it as a dropdown (note #61), was told what it did, and ruled on 2026-09-17 to
+remove it: every row offers the company's full chart. On the day of the
+ruling none of the five live entities carried the key, so no row changed.
+
+- **`account_options[]`** on the expense-batch payload is always the scoped
+  postable accounts of the batch's company chart (the labels the categorizer
+  was constrained to), and `[]` when no chart is provisioned. A shortlist
+  stored before the removal is ignored.
+- **`PUT /api/settings`** accepts an `entities` entry that still carries
+  `account_picks`, in any shape (list, string, empty), answers 200 with
+  `entities` in `applied`, and stores nothing for it. The published SPA sends
+  the key on every Legal entities save until
+  `docs/lovable-remove-account-picks-prompt.md` is applied, so this stays
+  tolerant rather than refusing. An entry's writable fields are `org_id`,
+  `chart_path`, `default_paid_through`, `scope_groups`.
+- **`GET /api/settings`** and the `PUT` response never carry `account_picks`
+  on an entity, including a value stored before the removal
+  (`store.RETIRED_ENTITY_KEYS`). The stored row itself is not rewritten; the
+  next Legal entities save replaces the map without the key.
+
+Tests: `tests/test_web_expense_settings.py`
+(`test_put_accepts_account_picks_and_stores_nothing_for_it`,
+`test_stored_account_picks_is_never_served_or_offered`).
+
 ## Two printed card digits name a card: `card_ending` (note #60, 2026-09-17)
 
 Owner, note #60: "some receipts only show the last 2 digits of the cards
@@ -3795,3 +3827,90 @@ the matcher from its pool (copies and foreign-claimed receipts left out), so
 with three or more receipts carrying a booked exchange rate a pair the
 matcher read at the ECB rate (2%) can read as receipts-derived (3%) on screen
 and in item 131's floor rule. No hosted month holds such receipts.
+
+## The month page split by card: `card_sections` + `card_section` (item 138, 2026-09-17)
+
+Owner ruling 2026-09-17: build the month page split by card, "a tab per card
+showing whether its statement is loaded, how many charges matched and what's
+still open, plus 'All' and 'No card'". Both month pages read their tabs off
+their own GET; no route or request changes.
+
+**The grouping is the PDFs'.** `card_sections[]` is `_pdf_common.card_sections`
+over a `build_view` payload and `report_receipt_cards`, the two inputs both
+PDFs section on, and every figure is `card_statement_figures`, the numbers the
+PDF prints under each card heading. A charge files on its `coverage_key`; a
+receipt a charge holds follows that charge's card (even when its own resolved
+card differs: the row's `cards_differ` says so); an unheld receipt goes to the
+card item 137 resolved for it; everything else goes to the no-card section.
+Order: `coverage[]` order, then cards only receipts name (pool order), No card
+last. A card with neither charges nor receipts this month is not a section
+(it is still a `coverage[]` entry).
+
+**`card_sections[]`** (list of objects), on `GET /api/runs/{id}` and
+`GET /api/expense-batches/{id}`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `key` | string | the `coverage[].key`; `""` is No card (a blank card key is never a card, so `""` cannot collide) |
+| `label` | string | the card's name as the PDF heading prints it; `"No card"` for `""` (English: localize on the key) |
+| `digits[]` | string | the card's digits (coverage entry, else the registry card); empty for No card |
+| `statement` | string or null | `loaded` (an upload covered the card), `not_recorded` (charges but no recorded upload: they arrived under another statement, live August 1176), `not_loaded` (no statement for the card), `null` on No card. Closed set (rule 5) |
+| `statements[]` | string | the upload file names when `loaded`, else empty |
+| `period_start` · `period_end` | string or null | first and last charge date; null when the section has no charges |
+| `n_charges` · `n_matched` | int | the coverage entry's `n_transactions` and `n_reconciled`; 0 without charges |
+| `unreconciled_by_ccy` | object ccy -> pre-formatted string | still open on the card (the coverage entry's), `{}` when nothing is open |
+| `n_booked_without_receipt` · `booked_without_receipt_by_ccy` | int · object ccy -> string | item 102 on this card: yellow rows no receipt holds |
+| `n_receipts` | int | every receipt filed on the card, set-aside copies and settled-outside ones included |
+| `n_receipts_without_charge` | int | the card's receipts in `unmatched_receipts[]`, the Matching page's "Receipts without a charge" |
+| `n_expenses` · `totals_by_ccy` | int · object ccy -> string | **Expenses payload only**: rows that count (`counts_in_total` not false) and their totals, summed like `summary.totals_by_ccy`. Their sum over sections equals the summary's |
+
+**Empty list** (`[]`) when the month has fewer than two cards, the PDFs' own
+rule (no tab bar), and on a trip batch (a trip sections per traveler). An
+absent field is an older backend; render both as today's page.
+
+**`card_section`** (string, the section key, `""` for No card), always
+present, also when `card_sections` is empty:
+
+- run payload: every element of `rows[]`, `unmatched_receipts[]`,
+  `copies_set_aside[]` and `assignable_receipts[]`;
+- expense payload: every element of `expenses[]`.
+
+The receipts the Matching page shows as settled outside come from the expense
+payload, so they read `expenses[].card_section`.
+
+Which pool each page files by: the Matching page by the receipts its view was
+built on (the snapshot's, the chain `cards_differ` reads), the Expenses page by
+the month report's pool (`_expense_export_inputs`, where a copy may borrow its
+card, item 69). On a month with a statement the two are the same set by
+construction (the attach bakes the pool); measured on a 2026-09-17 DB copy,
+July and August file every charge and receipt identically on both pages and in
+both PDFs. Only the page GETs carry the tabs; the edit routes that reply with
+the expense payload's summary do not build them.
+
+Live August 2026 (`074a7b8905d7`, computed over the live payloads,
+2026-09-17): 3645 loaded, 40 charges, 5 matched, USD 2,393.15 open, 8
+receipts, 0 without a charge; 3876 loaded, 37, 0, USD 1,031.15, 0 receipts;
+card-2838 loaded, 34, 4, USD 7,438.36, 11 receipts, 5 without a charge;
+card-1176 not_recorded, 3, 0, USD 36.00, 2 receipts, 1 without a charge;
+card-9693 not_loaded, 2 receipts, 2 without a charge; No card, 2 receipts, 2
+without a charge. Route-level in `tests/test_card_tabs_item_138.py`; pins in
+`tests/test_view_contract.py`. SPA half: `docs/lovable-card-tabs-prompt.md`.
+
+## A same-amount pair from another merchant yields to the right merchant (item 133 rule (b), 2026-09-17)
+
+No field is added or renamed. A same-currency candidate on the exact amount
+(`match_type` `exact` or `probable`) whose merchant disagrees (vendor score
+below `uniqueness_vendor_dominance_min`, 0.5) now reads `requires_review: true`,
+`confidence` 0.55 and a reason ending "Review: the merchants differ (N%) while
+another charge's merchant matches this receipt (M%)." when another charge's
+deterministic candidate for the SAME receipt has an agreeing merchant (>= 0.5
+and ahead by `uniqueness_vendor_dominance_margin`, 0.25) AND that receipt is
+the rival charge's own top-ranked candidate and the rival is not awaiting a
+human pick (a rival with a better receipt of its own is spoken for; demoting
+against it would flag, or strand, the receipt for nothing). The rule runs
+after the ambiguity pass, so it never breaks a tie a person should settle.
+The demoted pair then ranks below
+that rival, so the right merchant takes the receipt even a few days further
+away, and the other charge reads unmatched. With no such rival nothing
+changes. Replay old vs new over July, August and the six labelled bundles:
+0 receipts moved.
