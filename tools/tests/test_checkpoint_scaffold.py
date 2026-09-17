@@ -480,3 +480,45 @@ class TestContextRootWorktree:
         ) == 0
         assert (forced / "docs" / "sessions" / "2026-07-23-context.yaml").exists()
         assert not (primary / "docs" / "sessions" / "2026-07-23-context.yaml").exists()
+
+
+class TestSharedContextFailClosed:
+    """The same-day context YAML holds every sibling session's client entries
+    and is gitignored: finalize must never rewrite it fresh (2026-09-17)."""
+
+    @pytest.fixture()
+    def root(self, tmp_path: Path) -> Path:
+        (tmp_path / "docs" / "sessions").mkdir(parents=True)
+        return tmp_path
+
+    def _ctx(self, root: Path) -> Path:
+        return root / "docs" / "sessions" / "2026-07-23-context.yaml"
+
+    def test_unparseable_context_refuses_and_writes_nothing(self, root: Path, capsys):
+        ctx = self._ctx(root)
+        ctx.write_text("clients: [unclosed\n", encoding="utf-8")
+        before = ctx.read_bytes()
+        assert run_finalize(root, base_payload()) == 2
+        assert ctx.read_bytes() == before
+        assert not (root / "docs" / "sessions" / "2026-07-23.md").exists()
+        assert not (root / "docs" / "INDEX.md").exists()
+        assert not (root / "docs" / "2026-07-23 - Test Topic").exists()
+        assert "refusing to overwrite" in capsys.readouterr().out
+
+    def test_yaml_context_without_pyyaml_refuses_and_names_uv(self, root: Path, capsys, monkeypatch):
+        ctx = self._ctx(root)
+        ctx.write_text("clients:\n  brisken:\n    next_steps:\n    - keep me\n", encoding="utf-8")
+        before = ctx.read_bytes()
+        monkeypatch.setattr(cs, "_yaml", lambda: None)
+        assert run_finalize(root, base_payload()) == 2
+        assert ctx.read_bytes() == before
+        assert "uv run tools/checkpoint_scaffold.py" in capsys.readouterr().out
+
+    def test_sibling_client_entries_survive_a_merge(self, root: Path):
+        self._ctx(root).write_text(
+            "clients:\n  brisken:\n    next_steps:\n    - keep me\n", encoding="utf-8")
+        payload = base_payload(yaml_clients={"sys": {"next_steps": ["mine"]}})
+        assert run_finalize(root, payload) == 0
+        data = cs.load_context_text(self._ctx(root).read_text(encoding="utf-8"))
+        assert data["clients"]["brisken"]["next_steps"] == ["keep me"]
+        assert data["clients"]["sys"]["next_steps"] == ["mine"]
