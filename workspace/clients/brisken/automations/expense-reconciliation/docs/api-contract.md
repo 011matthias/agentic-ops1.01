@@ -4568,3 +4568,88 @@ company-or-person question. Everything else in that section stands, and the
 open question it names is what this ruling answered.
 
 Pinned route-level in `tests/test_bank_transfer_exit_item_144.py`.
+## One currency for the month's receipts (item 98, 2026-09-18)
+
+A month's documents gave three per-currency totals and nothing saying what
+the month cost in one currency, while `Exchange Rate` sat empty on every row
+because a scanned receipt prints no rate. US filing applies (owner,
+2026-09-08), so the deductible figure is the USD one.
+
+`GET /runs/{id}/expenses.csv` now fills the **existing** `Exchange Rate`
+column. `EXPENSE_COLUMNS` is unchanged: the system this CSV imports into is
+still an open question (item 23), and a column that already exists cannot
+break a mapping that a new one might. A row already in USD keeps the cell
+empty; a column of `1.0`s is noise in a column read for what converted.
+Under the rows, after a blank row, the same first-column shape item 94 uses:
+`Total in USD: 58,187.69`.
+
+`GET /runs/{id}/expense-report.pdf` prints each converted row's figure as a
+small second line under its own amount, the device item 65 uses for an
+unreadable one (`= USD 315.56 at 1.143002, the charge`). No tenth column:
+the listing is already at the page width item 143 had to fix. The month's
+figure joins the header line beside the per-currency totals, and each card
+or cost-center sums line gains its own `USD <amount>`, summed from the same
+per-row conversions, so a section line and the header cannot disagree.
+
+**The rate, in precedence order** (`output/single_currency.py`):
+
+| Rung | When | Rate printed | `source` |
+|---|---|---|---|
+| same currency | the row is already USD | none | `same` |
+| the statement | a reconciled charge of this month settled the receipt AND posted in USD | charge / receipt total | `charge` |
+| a reference rate | anything else, including a charge that implies no positive rate | `_reference_rate_for`: Settings' typed rate, then the run's derived rates, then the ECB monthly average | `configured` / `statement` / `receipts` / `ecb_month` |
+| none | no rate for the currency | none; the row is named in the footer | (absent) |
+
+Rung 2 is the point: it is the money that actually left the account, fees
+and the card's own spread included. On live July, 19 of 56 rows price this
+way, and the month reads USD 14.76 lower than it would at the typed rate
+alone.
+
+Rung 3 hands `_reference_rate_for` a `date`, not the listing cell's ISO
+string: `ecb_monthly_rate` accepts a `date` or `"YYYY-MM"` and rejects
+anything else, so passing `"2026-09-05"` made the ECB rung return None on
+every row and quietly reduced rung 3 to Settings-typed-rates-only. That is
+the shape to watch when reusing the matcher's lookup from a document: the
+matcher passes `tx.transaction_date`, and anything that does not match the
+screen stops quoting the same rate as the screen. Pinned by
+`test_the_ecb_rung_actually_fires_on_a_listing_date`.
+
+**Both documents stay silent unless the figure says something new.** Three
+gates, each because the alternative is a document people stop reading:
+`needs_conversion` is false when every row is already USD (the per-currency
+line already answers the question); `summary_lines` is empty when nothing
+priced (a note with no figure to qualify is a standing complaint) and when
+nothing was actually CONVERTED (the "total" would be the USD subtotal
+printed one line above). A month that priced only some of its rows does not
+get a line headed "Total": it reads `Partial total in USD: 108.00 (3 of 4
+expenses; the notes below say which are out and why)`, because a heading is
+what a reader carries away and a parenthetical cannot undo one. Two reasons
+a row is out, reported separately because they are different problems: no
+rate for its currency, and an amount nobody could read (item 97) -- the
+second never gets a rate stamped on it, since a rate is a claim about a
+number and there was no number.
+
+**The two documents do NOT always print the same total, and that is
+correct.** The CSV exports every expense; the report's listing is company
+expenses only, with private ones partitioned into their own reimbursements
+section (item 41). So a month with a private expense totals differently in
+the two, each figure covering exactly the rows of the document it sits in.
+What IS shared is the per-row conversion, so one purchase can never be
+converted at two rates. For the same reason the CSV's note names each row
+by vendor and date rather than by a listing number: the CSV prints no
+numbers, and its row order is not the report's, so a bare number would
+point at a different purchase in the other document.
+
+Copies (item 94), withheld dispositions and private rows never reach the
+conversion: they are filtered out of the receipts before the rows are built,
+so the figure counts exactly what the listing counts. A receipt that splits
+across two accounts converts ONCE as one purchase, its rows allocated with
+the remainder on a row that has an amount, so a settled receipt's rows sum
+to its charge to the cent. Rows whose amount could not be read (item 97) are
+skipped rather than counted as zero.
+
+`settled_charge_amounts` mirrors `settled_charge_cards` rule for rule (same
+reconciled-bucket test, same refusal to read a borrowed receipt): two
+derivations of "which charge settled this receipt" would let the company a
+row prints and the rate it converts at describe different charges.
+
