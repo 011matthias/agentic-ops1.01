@@ -3763,3 +3763,22 @@ the matcher from its pool (copies and foreign-claimed receipts left out), so
 with three or more receipts carrying a booked exchange rate a pair the
 matcher read at the ECB rate (2%) can read as receipts-derived (3%) on screen
 and in item 131's floor rule. No hosted month holds such receipts.
+
+## A same-amount pair from another merchant yields to the right merchant (item 133 rule (b), 2026-09-17)
+
+No field is added or renamed. A same-currency candidate on the exact amount
+(`match_type` `exact` or `probable`) whose merchant disagrees (vendor score
+below `uniqueness_vendor_dominance_min`, 0.5) now reads `requires_review: true`,
+`confidence` 0.55 and a reason ending "Review: the merchants differ (N%) while
+another charge's merchant matches this receipt (M%)." when another charge's
+deterministic candidate for the SAME receipt has an agreeing merchant (>= 0.5
+and ahead by `uniqueness_vendor_dominance_margin`, 0.25) AND that receipt is
+the rival charge's own top-ranked candidate and the rival is not awaiting a
+human pick (a rival with a better receipt of its own is spoken for; demoting
+against it would flag, or strand, the receipt for nothing). The rule runs
+after the ambiguity pass, so it never breaks a tie a person should settle.
+The demoted pair then ranks below
+that rival, so the right merchant takes the receipt even a few days further
+away, and the other charge reads unmatched. With no such rival nothing
+changes. Replay old vs new over July, August and the six labelled bundles:
+0 receipts moved.
