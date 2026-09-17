@@ -317,6 +317,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | ECC Port Batch 1 | system-infra | [Mini-Checkpoint-2](docs/2026-09-17%20-%20ECC%20Port%20Batch%201/Mini-Checkpoint-2.md) |
 | 2026-09-17 | ECC Port Batch 2 (items 1, 4, 5, 8) | system-infra | [→](docs/2026-09-17%20-%20ECC%20Port%20Batch%202%20%28items%201%2C%204%2C%205%2C%208%29/Checkpoint.md) |
 | 2026-09-17 | ECC Port Batch 1 | system-infra | [→](docs/2026-09-17%20-%20ECC%20Port%20Batch%201/Checkpoint.md) |
 | 2026-09-17 | ECC Audit and Port Prompts | system-infra | [→](docs/2026-09-17%20-%20ECC%20Audit%20and%20Port%20Prompts/Checkpoint.md) |
