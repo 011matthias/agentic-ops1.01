@@ -190,6 +190,8 @@ def main() -> int:
         event = json.loads(raw) if raw.strip() else {}
     except Exception:
         return 0
+    if session_state is not None:
+        session_state.bind_session(event)
 
     # Continuation of a prior hook-block: never re-fire (avoids loop + tax).
     if event.get("stop_hook_active"):
