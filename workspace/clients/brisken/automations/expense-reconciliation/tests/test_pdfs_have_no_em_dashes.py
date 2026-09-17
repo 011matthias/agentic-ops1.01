@@ -4,9 +4,9 @@ The house deliverable standard (`.claude/rules/rule_deliverables.md`) bans
 every dash form from a client-facing document: the em-dash character, the
 `&mdash;` entity, and ` -- ` used as a substitute for one. Both documents
 broke it in the one string a reader sees first. Live on 2026-09-17 (Fly
-v171), page 1 of August's reconciliation read "Reconciliation - August 2026"
-with an em-dash, and the month and trip reports titled themselves the same
-way.
+v171), page 1 of August's reconciliation joined "Reconciliation" to its
+month with an em-dash, and the month and trip reports titled themselves the
+same way.
 
 The three titles are built in `service.py`, not in the builders, which is why
 no builder test saw them: every existing PDF test passes its own `title=`.

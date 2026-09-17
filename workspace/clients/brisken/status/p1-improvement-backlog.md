@@ -5602,7 +5602,7 @@ Answer: from the fill colour of that charge's row in the Chase workbook Criss up
 
 ### 144. Both PDFs title themselves with an em-dash, which the house deliverable standard bans outright (2026-09-17; licence: defect) (SHIPPED 2026-09-17, PR #1058, Shipped row 76)
 
-**Defect.** `.claude/rules/rule_deliverables.md` bans every dash form from a client-facing document: the em-dash character, `&mdash;`, and ` -- ` standing in for one. Both documents broke it in the first string a reader sees. Live on Fly v171, page 1 of August's reconciliation read "Reconciliation - August 2026" with an em-dash, and the month and trip reports titled themselves the same way.
+**Defect.** `.claude/rules/rule_deliverables.md` bans every dash form from a client-facing document: the em-dash character, `&mdash;`, and ` -- ` standing in for one. Both documents broke it in the first string a reader sees. Live on Fly v171, page 1 of August's reconciliation joined "Reconciliation" to its month with an em-dash, and the month and trip reports titled themselves the same way. The three before-and-after strings are in the table below.
 
 | Where | Before | After |
 |---|---|---|
