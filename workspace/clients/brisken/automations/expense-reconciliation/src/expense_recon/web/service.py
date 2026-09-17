@@ -7448,6 +7448,7 @@ def report_view(
     decisions: dict,
     overrides: dict,
     resolutions: dict[str, str] | None,
+    field_overrides: dict[str, dict[str, str]] | None = None,
 ) -> dict:
     """`build_view` over the reviewer's live pool, for a document.
 
@@ -7455,7 +7456,12 @@ def report_view(
     the unmatched list, the duplicate groups, the candidates and the counts
     are all derived there, and re-deriving any of them in a report would be
     a second implementation of the same rules, the exact shape that let the
-    two documents disagree in the first place."""
+    two documents disagree in the first place.
+
+    `field_overrides` reach `build_view` too, as they do on the GET route:
+    the card a reviewer picked is what `rows[].cards_differ` (item 137)
+    compares against, and without it the document never named a held pair
+    whose cards disagree (found building item 138)."""
     if {r.document_id for r in receipts} != {
         r.document_id for r in snapshot_receipts
     }:
@@ -7463,7 +7469,9 @@ def report_view(
             **(run.snapshot or {}),
             "receipts": [receipt_to_dict(r) for r in receipts],
         })
-    return build_view(run, decisions, overrides, resolutions)
+    return build_view(
+        run, decisions, overrides, resolutions, field_overrides=field_overrides
+    )
 
 
 def report_receipt_cards(
@@ -7531,7 +7539,8 @@ def build_reconciliation_report(
             ),
         )
     view = report_view(
-        run, receipts, snapshot_receipts, decisions, overrides, resolutions
+        run, receipts, snapshot_receipts, decisions, overrides, resolutions,
+        field_overrides=field_overrides,
     )
     charge_by_doc: dict[str, dict] = {}
     for row in view.get("rows") or []:
@@ -7575,6 +7584,11 @@ def build_reconciliation_report(
     label = run.label or run.run_id
     return build_reconciliation_report_pdf(
         view, title=f"Reconciliation — {label}", evidence=evidence,
+        # Item 138: the card each receipt nobody holds files under, from the
+        # same chain the matcher scopes by (item 137).
+        receipt_cards=report_receipt_cards(
+            receipts, run.config, field_overrides
+        ),
     )
 
 

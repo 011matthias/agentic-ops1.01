@@ -9,18 +9,24 @@ carry the first part and none of the others, and nothing reads it.
 
 So the document is:
 
-1. the header — the month, the statement account, how many charges matched,
-   and what is still unreconciled per currency,
+1. the header — the month, how many charges matched, what is still
+   unreconciled per currency, and what is booked without a receipt,
 2. **Per-card coverage**, when the month holds more than one card: which
    statements were loaded for each, over what span, and how far each one
-   has got. A month is reconciled card by card, and a single unreconciled
-   figure over three cards tells the reader nothing about which pile of
-   receipts to go and find,
-3. **Exceptions first**, because they are the only part anyone must act on:
-   unmatched charges, unmatched receipts, duplicate groups,
-4. the full charge listing, each line with its matched receipt and status,
-   sectioned per card when there is more than one,
-5. the receipts themselves, behind captions naming the charge they settle.
+   has got,
+3. then **one section per card** (item 138, owner 2026-09-17: "the output
+   (PDF) is also not organized in the different cards that were
+   reconciled"), because a month is reconciled card by card: one statement,
+   one pile of receipts. Each section states that card's statement and its
+   figures, then what needs attention on that card (exceptions first,
+   because they are the only part anyone must act on), then its charges
+   with their receipts, then that card's receipt pages. A last section,
+   never dropped, takes the charges no card claims and the receipts with no
+   card.
+
+A month with a single card and nothing outside it renders the one flat
+document it always did: a heading restating the only card is structure the
+content does not earn.
 
 The XLSX stays the working sidecar (Criss works in Excel, and her fill-colour
 is real data); the CSV stays available and demoted.
@@ -29,10 +35,15 @@ from __future__ import annotations
 
 import io
 from collections.abc import Sequence
+from decimal import Decimal
 
 from ._pdf_common import (
+    caption_mark,
+    card_name,
+    card_sections,
     esc,
     make_styles,
+    parse_amount,
     prepare_evidence,
     register_fonts,
     stitch,
@@ -96,6 +107,7 @@ def build_reconciliation_report_pdf(
     *,
     title: str,
     evidence: Sequence[dict] | None = None,
+    receipt_cards: dict[str, tuple[str, str]] | None = None,
 ) -> bytes:
     """Render the reconciliation document from the workbench's OWN view.
 
@@ -103,15 +115,13 @@ def build_reconciliation_report_pdf(
     review screen states — a reader and a reviewer cannot be looking at
     different reconciliations. `evidence` is one entry per receipt document
     (see `month_report_pdf`), captioned with the charge it settles.
+
+    `receipt_cards` (item 138) is `{document_id: (card key, card label)}`
+    for every receipt in the pool, the card the tool resolved for it
+    (`service.report_receipt_cards`); it decides the section of a receipt no
+    charge holds. Omitted, such a receipt files under the no-card section.
     """
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.units import mm
-    from reportlab.platypus import (
-        PageBreak,
-        Paragraph,
-        SimpleDocTemplate,
-        Spacer,
-    )
+    from reportlab.platypus import Paragraph
 
     body_font, bold_font = register_fonts()
     styles = make_styles(body_font, bold_font)
@@ -139,9 +149,12 @@ def build_reconciliation_report_pdf(
     if rate is not None:
         headline += f" ({rate}%)"
     if unreconciled:
-        headline += "  ·  unreconciled " + ", ".join(
-            f"{ccy} {amt}" for ccy, amt in sorted(unreconciled.items())
-        )
+        headline += "  ·  unreconciled " + _money(unreconciled)
+    # Item 102: booked is not evidenced. The figure sits beside the
+    # unreconciled one so neither changes meaning.
+    booked = summary.get("booked_no_receipt_by_ccy") or {}
+    if booked:
+        headline += "  ·  booked without a receipt " + _money(booked)
     story.append(Paragraph(esc(headline), styles["sub"]))
 
     # ── per-card coverage ───────────────────────────────────────────
@@ -155,33 +168,150 @@ def build_reconciliation_report_pdf(
         story.append(_table([
             [name for name, _w in _COVERAGE],
             *[[
-                _coverage_name(c),
+                card_name(c),
                 ", ".join(c.get("statements") or []) or "not recorded",
                 _period(c),
                 str(c.get("n_transactions") or 0),
                 str(c.get("n_reconciled") or 0),
                 str(c.get("n_unmatched_tx") or 0),
-                ", ".join(
-                    f"{ccy} {amt}"
-                    for ccy, amt in sorted(
-                        (c.get("unreconciled_by_ccy") or {}).items()
-                    )
-                ) or "nothing",
+                _money(c.get("unreconciled_by_ccy") or {}) or "nothing",
             ] for c in coverage],
         ], [w for _n, w in _COVERAGE], styles))
 
-    # ── exceptions first: the only part anyone must act on ──────────
-    story.append(Paragraph("What needs attention", styles["h2"]))
-    unmatched_tx = list(view.get("unmatched_transactions") or [])
-    unmatched_rec = list(view.get("unmatched_receipts") or [])
+    items = list(evidence or [])
+    cards = dict(receipt_cards or {})
+    for item in items:
+        cards.setdefault(str(item.get("document_id") or ""), ("", ""))
+    cards.pop("", None)
+    sections = card_sections(view, cards)
+
+    if len(sections) <= 1:
+        # One card, or nothing but the no-card pile (every run older than
+        # the card axis): the flat document, exactly as before.
+        _attention(story, view, rows, None, styles)
+        story.append(Paragraph("All charges", styles["h2"]))
+        story.append(_charge_table(rows, styles))
+        prepared = prepare_evidence(items)
+        _evidence(story, prepared, styles, None)
+        return _build(story, title, prepared, None)
+
+    by_doc = {str(i.get("document_id") or ""): i for i in items}
+    section_of = {d: s["key"] for s in sections for d in s["receipt_docs"]}
+    ordered: list[dict] = []
+    marks: list[int] = []
+    story_parts: list[tuple[dict, list[dict]]] = []
+    for sec in sections:
+        sec_items = [by_doc[d] for d in sec["receipt_docs"] if d in by_doc]
+        ordered.extend(sec_items)
+        story_parts.append((sec, sec_items))
+    placed = {id(i) for i in ordered}
+    # An evidence item with no document id cannot be placed by card; it
+    # still prints, in the last section, rather than disappearing.
+    stray = [i for i in items if id(i) not in placed]
+    if stray:
+        ordered.extend(stray)
+        story_parts[-1][1].extend(stray)
+    prepared = prepare_evidence(ordered)
+    prepared_by_item = {id(pair[0]): pair for pair in prepared}
+
+    for sec, sec_items in story_parts:
+        _card_section(story, view, sec, section_of, styles)
+        _evidence(
+            story, [prepared_by_item[id(i)] for i in sec_items], styles, marks,
+            differ=_differ_by_doc(sec["rows"]),
+        )
+    return _build(story, title, prepared, marks)
+
+
+def _card_section(
+    story: list, view: dict, sec: dict, section_of: dict[str, str], styles: dict
+) -> None:
+    """One card: its statement and figures, what needs attention on it, its
+    charges. Its receipt pages follow (see `_evidence`)."""
+    from reportlab.platypus import PageBreak, Paragraph, Spacer
+
+    story.append(PageBreak())
+    story.append(Paragraph(esc(sec["label"]), styles["h2"]))
+    cov = sec.get("coverage")
+    if sec["key"]:
+        statements = ", ".join((cov or {}).get("statements") or [])
+        story.append(Paragraph(esc(
+            f"Statement: {statements}  ·  {_period(cov)}" if statements
+            else "No statement loaded for this card"
+        ), styles["capsub"]))
+    figures = []
+    if sec["rows"]:
+        n_rec = sum(1 for r in sec["rows"] if r.get("effective_bucket") == "reconciled")
+        figures.append(f"{len(sec['rows'])} charges  ·  "
+                       f"{int((cov or {}).get('n_reconciled', n_rec) or 0)} matched")
+        figures.append(
+            "unreconciled " + (_money((cov or {}).get("unreconciled_by_ccy") or {})
+                               or "nothing")
+        )
+        booked = _booked_no_receipt(sec["rows"])
+        if booked:
+            figures.append("booked without a receipt " + _money(booked))
+    n_docs = len(sec["receipt_docs"])
+    figures.append(f"{n_docs} receipt{'' if n_docs == 1 else 's'}")
+    story.append(Paragraph(esc("  ·  ".join(figures)), styles["sub"]))
+    story.append(Spacer(1, 4))
+
+    _attention(story, view, sec["rows"], (sec["key"], section_of), styles)
+    if sec["rows"]:
+        story.append(Spacer(1, 8))
+        story.append(Paragraph("Charges", styles["capsub"]))
+        story.append(Spacer(1, 3))
+        story.append(_charge_table(sec["rows"], styles))
+        # Item 137: a receipt held here whose own card is another. It stays
+        # with the charge (the statement decides the card a charge is on) and
+        # is named, so the reader knows which of the two is wrong.
+        for row in sec["rows"]:
+            differ = row.get("cards_differ") or {}
+            if not differ:
+                continue
+            story.append(Spacer(1, 4))
+            story.append(Paragraph(esc(
+                f"{row.get('vendor') or 'A charge'} {row.get('amount') or ''} "
+                f"{row.get('currency') or ''} of {row.get('date') or ''}: the "
+                f"receipt held on it is on "
+                f"{differ.get('receipt_card_label') or 'another card'}, "
+                f"not this card."
+            ), styles["capsub"]))
+
+
+def _attention(
+    story: list,
+    view: dict,
+    rows: list[dict],
+    scope: tuple[str, dict[str, str]] | None,
+    styles: dict,
+) -> None:
+    """What needs attention, then the copies set aside. `scope` is
+    `(section key, {document_id: section key})` for one card, or None for
+    the whole month."""
+    from reportlab.platypus import Paragraph, Spacer
+
+    heading = "What needs attention"
+    story.append(Paragraph(heading, styles["h2"] if scope is None else styles["capsub"]))
+    tx_ids = {str(r.get("transaction_id") or "") for r in rows}
+    unmatched_tx = [
+        t for t in (view.get("unmatched_transactions") or [])
+        if scope is None or str(t.get("transaction_id") or "") in tx_ids
+    ]
+    unmatched_rec = [
+        r for r in (view.get("unmatched_receipts") or [])
+        if scope is None or _in_scope(str(r.get("document_id") or ""), scope)
+    ]
     # Item 74: only a group nobody has decided is something to act on. The
     # tool decides every group it can and a reviewer's ruling decides the
     # rest; a decided copy leaves this section for the record below it
     # (owner ruling 2026-09-16: resolved items leave the to-do area). A view
     # built before `state` existed reads as today: open unless dismissed.
+    # Per card, a group sits with its first member that has a card section.
     all_groups = [
         g for g in (view.get("duplicate_groups") or [])
         if g.get("kind", "receipt") == "receipt"
+        and (scope is None or _group_in_scope(g, scope))
     ]
     dup_groups = [
         g for g in all_groups
@@ -194,7 +324,8 @@ def build_reconciliation_report_pdf(
     if not (unmatched_tx or unmatched_rec or dup_groups):
         story.append(Paragraph(
             "Nothing. Every charge has a receipt, every receipt has a charge, "
-            "and no duplicate is left undecided.", styles["capsub"],
+            "and no duplicate is left undecided." if scope is None else
+            "Nothing on this card.", styles["capsub"],
         ))
     else:
         if unmatched_tx:
@@ -254,48 +385,54 @@ def build_reconciliation_report_pdf(
             ],
         ], [170, 55, 65, 35, 40, 105], styles))
 
-    # ── the full charge listing ─────────────────────────────────────
-    #
-    # Sectioned per card when the month holds more than one, because that is
-    # how the reconciling is done: one card, one statement, one pile of
-    # receipts. The grouping key comes off the row (`coverage_key`) rather
-    # than being re-derived from `account_id` here, so a section and the
-    # coverage table above can never disagree about which card a charge is
-    # on. One card, or a payload with no coverage at all (every run older
-    # than this), renders exactly the one flat table it always did.
-    story.append(Paragraph("All charges", styles["h2"]))
-    if len(coverage) > 1:
-        by_key: dict[str, list[dict]] = {}
-        for row in rows:
-            by_key.setdefault(str(row.get("coverage_key") or ""), []).append(row)
-        for entry in coverage:
-            group = by_key.pop(entry.get("key") or "", [])
-            if not group:
-                continue
-            story.append(Paragraph(esc(_coverage_name(entry)), styles["capsub"]))
-            story.append(Spacer(1, 3))
-            story.append(_charge_table(group, styles))
-            story.append(Spacer(1, 8))
-        # Anything the coverage list did not claim still has to be printed:
-        # a listing that silently drops charges is worse than an ugly one.
-        leftover = [r for group in by_key.values() for r in group]
-        if leftover:
-            story.append(Paragraph("Other charges", styles["capsub"]))
-            story.append(Spacer(1, 3))
-            story.append(_charge_table(leftover, styles))
-    else:
-        story.append(_charge_table(rows, styles))
 
-    # ── evidence ────────────────────────────────────────────────────
-    items = list(evidence or [])
-    prepared = prepare_evidence(items)
+def _in_scope(doc: str, scope: tuple[str, dict[str, str]]) -> bool:
+    key, section_of = scope
+    return section_of.get(doc, "") == key
+
+
+def _group_in_scope(group: dict, scope: tuple[str, dict[str, str]]) -> bool:
+    key, section_of = scope
+    members = [str(m) for m in (group.get("members") or [])]
+    home = next((section_of[m] for m in members if m in section_of), "")
+    return home == key
+
+
+def _differ_by_doc(rows: list[dict]) -> dict[str, dict]:
+    return {
+        str((r.get("cards_differ") or {}).get("document_id") or ""):
+            r["cards_differ"]
+        for r in rows if r.get("cards_differ")
+    }
+
+
+def _evidence(
+    story: list,
+    prepared: list[tuple[dict, bytes | None]],
+    styles: dict,
+    marks: list[int] | None,
+    differ: dict[str, dict] | None = None,
+) -> None:
+    """One caption page per receipt. With `marks`, each caption records its
+    page so `stitch` puts the receipt's own pages right behind it."""
+    from reportlab.platypus import PageBreak, Paragraph, Spacer
+
     for item, pdf_bytes in prepared:
         story.append(PageBreak())
+        if marks is not None:
+            story.append(caption_mark(marks))
         story.append(Paragraph(
             esc(str(item.get("label") or "Receipt")), styles["caption"]
         ))
-        if item.get("detail"):
-            story.append(Paragraph(esc(str(item["detail"])), styles["capsub"]))
+        detail = str(item.get("detail") or "")
+        own = (differ or {}).get(str(item.get("document_id") or ""))
+        if own:
+            detail = "  ·  ".join(x for x in (
+                detail,
+                f"the receipt's own card: {own.get('receipt_card_label') or '?'}",
+            ) if x)
+        if detail:
+            story.append(Paragraph(esc(detail), styles["capsub"]))
         story.append(Spacer(1, 6))
         name = str(item.get("name") or "")
         note = str(item.get("render_note") or "")
@@ -312,6 +449,17 @@ def build_reconciliation_report_pdf(
         else:
             story.append(Paragraph("No receipt document.", styles["capsub"]))
 
+
+def _build(
+    story: list,
+    title: str,
+    prepared: list[tuple[dict, bytes | None]],
+    marks: list[int] | None,
+) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate
+
     buf = io.BytesIO()
     SimpleDocTemplate(
         buf, pagesize=A4,
@@ -319,16 +467,27 @@ def build_reconciliation_report_pdf(
         topMargin=14 * mm, bottomMargin=14 * mm,
         title=title,
     ).build(story)
-    return stitch(buf.getvalue(), prepared)
+    return stitch(buf.getvalue(), prepared, marks)
 
 
-def _coverage_name(entry: dict) -> str:
-    """A card's name for the document: its label, with the digits beside it
-    when they add something the label does not already say."""
-    label = str(entry.get("label") or "").strip()
-    digits = [str(d) for d in (entry.get("digits") or []) if str(d).strip()]
-    extra = [d for d in digits if d not in label]
-    return f"{label} ({'/'.join(extra)})" if label and extra else (label or "-")
+def _money(by_ccy: dict) -> str:
+    return ", ".join(f"{ccy} {amt}" for ccy, amt in sorted(by_ccy.items()))
+
+
+def _booked_no_receipt(rows: list[dict]) -> dict[str, str]:
+    """Item 102 per card: the charges the workbook marks as booked (the
+    `posted` section) that no receipt settles, summed per currency in
+    Decimal, the summary's own rule over this card's rows."""
+    totals: dict[str, Decimal] = {}
+    for row in rows:
+        if row.get("section") != "posted" or row.get("effective_bucket") != "unmatched":
+            continue
+        amount = parse_amount(row.get("amount"))
+        if amount is None:
+            continue
+        ccy = str(row.get("currency") or "?")
+        totals[ccy] = totals.get(ccy, Decimal("0")) + abs(amount)
+    return {ccy: f"{amt:,.2f}" for ccy, amt in sorted(totals.items())}
 
 
 def _duplicate_rows(groups: list[dict], view: dict) -> list[list[str]]:
@@ -387,8 +546,8 @@ def _basis_label(group: dict) -> str:
     return _BASIS_LABELS.get(str(group.get("basis") or ""), "copy")
 
 
-def _period(entry: dict) -> str:
-    start, end = entry.get("period_start"), entry.get("period_end")
+def _period(entry: dict | None) -> str:
+    start, end = (entry or {}).get("period_start"), (entry or {}).get("period_end")
     if not (start or end):
         return "no dated charge"
     return f"{start or '?'} to {end or '?'}"
@@ -414,13 +573,16 @@ def _charge_table(rows: list[dict], styles: dict):
                     (cand.get("receipt") or {}).get("vendor") or ""
                 )
                 break
+        status = _status_label(row)
+        if row.get("cards_differ"):
+            status += ", cards differ"
         table_rows.append([
             Paragraph(str(n), styles["cell"]),
             Paragraph(esc(row.get("date") or ""), styles["cell"]),
             Paragraph(esc(row.get("vendor") or ""), styles["cell"]),
             Paragraph(esc(row.get("amount") or ""), styles["cellr"]),
             Paragraph(esc(row.get("currency") or ""), styles["cell"]),
-            Paragraph(esc(_status_label(row)), styles["cell"]),
+            Paragraph(esc(status), styles["cell"]),
             Paragraph(esc(matched_vendor or "none"), styles["cell"]),
             Paragraph(
                 esc(posting.get("zoho_account") or posting.get("category") or ""),
