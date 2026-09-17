@@ -215,6 +215,7 @@ and a rollback would otherwise have nothing to re-apply.
 | Prompt | Decisive field names | Gate |
 |---|---|---|
 | `lovable-bulk-confirm-dialog-prompt.md` (item 101) | `n_confirm_matched`, `skipped_rule` in `chunk-runs._runId`; `sum.confirmMatched.dialog.body`, `wb.bulkReject.dialog.body` in `chunk-i18n` | Written 2026-09-17, not pasted. Backend deploy first (`summary.n_confirm_matched` on `GET /api/runs/{id}`, the narrowed confirm-matched route) |
+| `lovable-invoice-read-as-statement-prompt.md` (item 105) | `expx.review.reason.invoice_read_as_statement` (EN + PT) in `chunk-i18n` | Written 2026-09-17, not pasted. Optional: without it the row shows the backend's English reason. No live row carries the code yet |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.

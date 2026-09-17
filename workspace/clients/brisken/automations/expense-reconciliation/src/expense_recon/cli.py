@@ -903,11 +903,20 @@ INVOICE_READ_AS_STATEMENT_NOTE = (
 def keep_invoice_read_as_statement(r: Receipt) -> Receipt | None:
     """The receipt to keep when a "statement" verdict is really one invoice
     (see above), else None. Only "statement" is second-guessed."""
-    if r.document_type != "statement" or not r.line_items:
+    if r.document_type != "statement":
+        return None
+    # Ingest stores an unreadable line amount as 0, so "has an amount" is
+    # "has a non-zero amount".
+    if not any(li.line_total for li in r.line_items):
         return None
     for value in (r.detected_vendor, r.detected_total, r.detected_reference):
         if value is None or not str(value).strip():
             return None
+    try:
+        if Decimal(str(r.detected_total)) == 0:
+            return None  # a statement's zero balance is not an invoice
+    except (ArithmeticError, ValueError):
+        return None
     note = INVOICE_READ_AS_STATEMENT_NOTE
     return replace(
         r,

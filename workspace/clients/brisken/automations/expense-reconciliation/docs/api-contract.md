@@ -3495,7 +3495,12 @@ reference (invoice number) and at least one line item. It joins the month
 like any receipt, with `document_type: "receipt"` and
 `expenses[].data_quality_note` containing "read as a statement page, but it
 prints its own invoice number and line items, so it was kept as an expense:
-check it" (appended after any existing note). Every other statement reading,
+check it" (appended after any existing note). "A total" means a non-zero
+total and "a line item" one with a non-zero amount (ingest stores an
+unreadable line amount as 0). Such a row reads `review.state: "check"`,
+`reason_code: "invoice_read_as_statement"`, and `category_confirmable: true`
+until every line's category is the reviewer's own (the note #62 confirm, or a
+category edit); a missing category (`pick`) still ranks first. Every other statement reading,
 and every `report_summary` / `other` verdict, is set aside as before. Applies
 on both entrances (a create that carries files, and an add to an open month);
 months already stored are not re-sorted, so a set-aside invoice there still
