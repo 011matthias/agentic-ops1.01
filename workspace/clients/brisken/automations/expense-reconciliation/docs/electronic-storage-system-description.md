@@ -5,7 +5,7 @@ kind: compliance-description
 backlog_item: 48
 state: draft-pending-owner-and-cpa-review
 created: 2026-09-08
-updated: 2026-09-08
+updated: 2026-09-17
 revision: 2
 ---
 
@@ -842,15 +842,19 @@ the transmission of every receipt to OpenAI under default retention terms
 are the taxpayer's own compliance positions now, not questions deferred to a
 vendor.
 
-**11.3 Outbound notification mail** is sent through Microsoft Graph in two
+**11.3 Outbound notification mail** is sent through Microsoft Graph in three
 forms. An acknowledgement to a submitter carries a file count, the
 submitter's own subject line echoed back, and the month or trip label; it
 adds no amounts, vendors or images of its own, though a submitter's subject
 line may itself contain a vendor or an amount, and acknowledgements go to
 addresses outside the tenant where an operator has listed the sender. An
 alert to the operator when mail is held carries the submitting address, that
-subject line, the archive identifier and the recorded error text. Neither
-carries a receipt image or an extracted amount. The system reads no mailbox
+subject line, the archive identifier and the recorded error text. A notice
+to the submitter of that held mail carries the submitter's own subject line
+and fixed wording saying the mail was not filed and what resolves it, with no
+archive identifier and no error text; it goes only to an address an
+acknowledgement may reach, and is withheld on the same conditions. None of
+the three carries a receipt image or an extracted amount. The system reads no mailbox
 through Graph; the only Graph call it makes is a send.
 
 ---
