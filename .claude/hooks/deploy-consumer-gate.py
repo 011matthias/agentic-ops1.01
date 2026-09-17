@@ -74,6 +74,20 @@ session-pressure-meter uses. A payload without one falls back to the shared
 path rather than dropping the marker: occasionally shared beats silently
 untracked.
 
+RUNNING, NOT MENTIONING; FINISHED, NOT MOVED ASIDE (fixed 2026-09-17)
+--------------------------------------------------------------------
+After the tightening above the register still logged false closes, now from
+the other side of the same idea. A foreground drive the harness moved to the
+background at its 120 s timeout carries no `run_in_background`, only a
+`backgroundTaskId` / `timedOutAfterMs` in its result (items 73, 77, 80, 81,
+83). A failed `agent-browser get url` reports its failure as a `✗ ... (os
+error 10060)` line, not an exit code. And text that merely NAMES a browser
+command closed the marker: `ls .../ms-playwright`, a `--text "agent-browser
+... snapshot"` argument. The reverse also bit: `B="agent-browser ..."; $B
+eval` observed the page and the per-segment pattern never saw it. So the
+browser patterns now match `executed_view()`: variables resolved, text-only
+programs dropped, quoted arguments ignored unless run as inline code.
+
 TWO DEPLOY CLASSES
 ------------------
 An app deploy (fly / railway / wrangler) puts a client-side renderer between
@@ -219,9 +233,17 @@ BROWSER_OBSERVE_CMD_PATTERNS = [
     r"\bagent-browser\b[^|;&]*?\b(snapshot|screenshot|find|eval)\b",
     r"\bagent-browser\b[^|;&]*?\bget\s+(text|html|attr|value|title|url|count)\b",
     r"\bagent-browser\b[^|;&]*?\bwait\b[^|;&]*?--(text|fn)\b",
-    r"\bplaywright\b",
+    # Playwright as something that RUNS: the test runner, a script's import,
+    # or a uv script launched with it. The bare word `\bplaywright\b` closed
+    # the marker on `ls $LOCALAPPDATA/ms-playwright` (2026-09-17).
+    r"\bplaywright\s+test\b",
+    r"\b(?:sync|async)_playwright\b",
+    r"\bconnect_over_cdp\b",
+    r"--with[= ]playwright\b",
     r"\bpytest\b.{0,80}\b(e2e|browser|playwright)\b",
 ]
+# Installing the browser binaries matches `--with playwright` and renders nothing.
+NOT_OBSERVE_CMD_PATTERNS = [r"\bplaywright\s+install\b"]
 # Any browser command at all, observing or not. Used only to stay QUIET: a
 # navigation is not a reason to re-advise, it is a drive in progress.
 BROWSER_CMD_PATTERNS = [
@@ -353,6 +375,90 @@ def strip_authored_prose(cmd: str) -> str:
 
 def matches_any(text: str, patterns) -> bool:
     return any(re.search(p, text, re.IGNORECASE) for p in patterns)
+
+
+# Programs that only read or print text. A browser command NAMED in their
+# arguments is a mention, not a run.
+MENTION_PROGRAMS = frozenset({
+    "ls", "dir", "cat", "type", "head", "tail", "less", "grep", "egrep", "rg",
+    "find", "echo", "printf", "wc", "which", "where", "sed", "awk",
+    "get-childitem", "gci", "get-content", "gc", "select-string", "sls",
+    "test-path", "write-output", "write-host",
+})
+# A segment that runs its quoted argument as code keeps that argument.
+INLINE_CODE_FLAG = re.compile(r"(?:^|\s)(?:-c|-e|--command|-command|--eval|/c)(?:\s|$)", re.IGNORECASE)
+_ASSIGN_SH = re.compile(r"^(?:export\s+)?([A-Za-z_]\w*)=(.*)$", re.DOTALL)
+_ASSIGN_PS = re.compile(r"^\$([A-Za-z_]\w*)\s*=\s*(.*)$", re.DOTALL)
+_ONE_WORD = re.compile(r'"[^"]*"|\'[^\']*\'|[^\s"\']*')
+_QUOTED = re.compile(r'"(?:[^"\\\n]|\\.)*"|\'[^\'\n]*\'')
+
+
+def split_segments(cmd: str) -> list[str]:
+    """Split on unquoted `;`, `&&`, `||`, `|` and newlines. Quote state resets
+    at a newline, so an apostrophe in a heredoc body cannot swallow the rest."""
+    segs: list[str] = []
+    cur: list[str] = []
+    quote = None
+    i = 0
+    while i < len(cmd):
+        ch = cmd[i]
+        if ch == "\n":
+            segs.append("".join(cur))
+            cur, quote = [], None
+        elif quote:
+            cur.append(ch)
+            if ch == "\\" and quote == '"' and i + 1 < len(cmd) and cmd[i + 1] != "\n":
+                cur.append(cmd[i + 1])
+                i += 1
+            elif ch == quote:
+                quote = None
+        elif ch in "\"'":
+            quote = ch
+            cur.append(ch)
+        elif ch in ";|" or (ch == "&" and cmd[i + 1:i + 2] == "&"):
+            segs.append("".join(cur))
+            cur = []
+            if ch in "&|" and cmd[i + 1:i + 2] == ch:
+                i += 1
+        else:
+            cur.append(ch)
+        i += 1
+    segs.append("".join(cur))
+    return [s.strip() for s in segs if s.strip()]
+
+
+def executed_view(view: str) -> str:
+    """The browser work a command RUNS, as opposed to text it mentions.
+
+    Three shapes the raw command string got wrong (register 2026-09-16/17):
+    `ls $LOCALAPPDATA/ms-playwright` and `pattern_rules.py test --text
+    "agent-browser ... snapshot"` closed the marker on a mention, while
+    `B="agent-browser --session x"; $B eval` was a real observation the
+    per-segment pattern never saw. So: simple variable assignments are
+    resolved into later segments, segments whose program only prints or
+    searches text are dropped, and quoted arguments are ignored unless the
+    segment runs inline code (`bash -c`, `python -c`)."""
+    names: dict[str, str] = {}
+    kept: list[str] = []
+    for seg in split_segments(view):
+        m = _ASSIGN_SH.match(seg) or _ASSIGN_PS.match(seg)
+        if m and _ONE_WORD.fullmatch(m.group(2).strip()):
+            names[m.group(1)] = m.group(2).strip().strip("\"'")
+            continue
+        kept.append(seg)
+    out: list[str] = []
+    for seg in kept:
+        for name, value in names.items():
+            seg = re.sub(r"\$\{" + name + r"\}|\$" + name + r"\b", lambda _m, v=value: v, seg)
+        body = re.sub(r"^(?:[A-Za-z_]\w*=\S*\s+)+", "", seg)
+        words = body.split()
+        prog = re.split(r"[\\/]", words[0].strip("\"'"))[-1].lower() if words else ""
+        if prog in MENTION_PROGRAMS:
+            continue
+        if not INLINE_CODE_FLAG.search(body):
+            body = _QUOTED.sub(" ", body)
+        out.append(body)
+    return " ; ".join(out)
 
 
 def emit_post(text: str) -> None:
@@ -491,19 +597,46 @@ def _server_check(pending: tuple[str, str], reason: str) -> int:
     return 0
 
 
+BACKGROUND_TEXT = re.compile(r"running in background with ID", re.IGNORECASE)
+# agent-browser prints its failures on stdout with a cross glyph and the OS
+# error, and the Bash tool response carries no exit code to read instead.
+FAILURE_TEXT = re.compile(r"^\s*✗|\(os error \d+\)", re.MULTILINE)
+
+
+def _response_text(resp) -> str:
+    if isinstance(resp, str):
+        return resp
+    if isinstance(resp, dict):
+        return "\n".join(str(resp.get(k) or "") for k in ("stdout", "stderr", "output", "error"))
+    return ""
+
+
 def backgrounded(event: dict) -> bool:
     """A backgrounded command has not produced output yet, so whatever it
     would have observed is not observed. This is the 2026-09-15 case
     exactly: the drive that closed the gate was still running, and later
-    timed out."""
-    return bool((event.get("tool_input") or {}).get("run_in_background"))
+    timed out.
+
+    Asking for the background is only one way in. A FOREGROUND command the
+    harness moves to the background at its 120 s timeout arrives with no
+    `run_in_background` in its input; its result carries `backgroundTaskId`
+    and `timedOutAfterMs` instead (transcript toolUseResult, 2026-09-16/17),
+    and the gate closed on it for items 73, 77, 80, 81 and 83."""
+    if (event.get("tool_input") or {}).get("run_in_background"):
+        return True
+    resp = event.get("tool_response")
+    if isinstance(resp, dict) and (resp.get("backgroundTaskId") or resp.get("timedOutAfterMs")):
+        return True
+    return bool(BACKGROUND_TEXT.search(_response_text(resp)))
 
 
 def failed(event: dict) -> bool:
     """A drive that errored observed nothing either. Read conservatively:
     an unreadable or absent response is treated as success, because this
     gate must never refuse to close on a drive that actually happened --
-    that direction turns it into noise and gets it approved reflexively."""
+    that direction turns it into noise and gets it approved reflexively.
+    The one text signal read is agent-browser's own failure line
+    (`✗ Failed to read ... (os error 10060)` closed the marker 2026-09-17)."""
     resp = event.get("tool_response")
     if isinstance(resp, dict):
         if resp.get("is_error") or resp.get("isError"):
@@ -513,7 +646,7 @@ def failed(event: dict) -> bool:
         code = resp.get("returncode", resp.get("exit_code"))
         if isinstance(code, int) and code != 0:
             return True
-    return False
+    return bool(FAILURE_TEXT.search(_response_text(resp)))
 
 
 def _observation(event: dict, pending, reason: str) -> int:
@@ -552,12 +685,14 @@ def handle_post(event: dict) -> int:
     if not cmd:
         return 0
     view = normalize_command(strip_authored_prose(cmd))
+    run = executed_view(view)
 
-    if matches_any(view, BROWSER_OBSERVE_CMD_PATTERNS):
+    if (matches_any(run, BROWSER_OBSERVE_CMD_PATTERNS)
+            and not matches_any(run, NOT_OBSERVE_CMD_PATTERNS)):
         if not pending:
             return 0
         return _observation(event, pending, f"cmd={cmd[:60]}")
-    if matches_any(view, BROWSER_CMD_PATTERNS):
+    if matches_any(run, BROWSER_CMD_PATTERNS):
         # A browser command that observes nothing (open / click / fill).
         log(f"NAVIGATE-ONLY cmd={cmd[:60]} pending={pending}")
         return 0

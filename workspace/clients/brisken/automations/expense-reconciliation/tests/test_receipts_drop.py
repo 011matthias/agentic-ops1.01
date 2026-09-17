@@ -313,7 +313,10 @@ def test_drop_takes_more_than_80_files(client, monkeypatch):
     assert entry["created_batch"] is True
     assert entry["n_added"] == n
     view = client.get(f"/api/expense-batches/{entry['batch_id']}").json()
-    assert view["summary"]["n_expenses"] == n
+    # Every FILE landed: n_receipts counts documents. The fixture reads all
+    # of them as one identical Staples receipt, so since item 94 the tool
+    # sets n - 1 aside as copies and n_expenses counts one.
+    assert view["summary"]["n_receipts"] == n
 
 
 def test_drop_overflow_past_cap_is_ledgered_not_silent(client, monkeypatch):
@@ -339,7 +342,9 @@ def test_drop_overflow_past_cap_is_ledgered_not_silent(client, monkeypatch):
     assert entry["n_added"] == 3
     assert "issues" not in entry  # the ingest cap itself never fired
     view = client.get(f"/api/expense-batches/{entry['batch_id']}").json()
-    assert view["summary"]["n_expenses"] == 3
+    # Documents, not counted expenses: the three identical reads are copies
+    # of one receipt to the item-94 count.
+    assert view["summary"]["n_receipts"] == 3
 
 
 # --- 3. the job ledger ----------------------------------------------------

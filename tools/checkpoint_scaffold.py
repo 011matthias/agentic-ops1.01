@@ -125,11 +125,29 @@ def folder_for(root: Path, date: str, topic: str) -> Path:
     return root / "docs" / f"{date} - {topic}"
 
 
+MINI_NAME = re.compile(r"^Mini-Checkpoint-(\d+)\.md$")
+
+
 def checkpoint_filename(folder: Path, mini: bool) -> str:
+    """The one naming rule `pre` and `finalize` share, so they cannot disagree.
+
+    The skill has the prose written at `pre`'s target BEFORE `finalize` runs, so
+    the highest-numbered mini file that INDEX does not link yet is this
+    checkpoint's own and is reused. Counting files + 1 (the old rule) renamed it
+    to N+1 and linked INDEX to a file that never existed, in seven register rows
+    across 2026-09-15..17. A linked top file means a finished checkpoint, so the
+    next one takes top + 1 (max, not count, so a gap cannot cause a collision)."""
     if not mini:
         return "Checkpoint.md"
-    n = len(list(folder.glob("Mini-Checkpoint-*.md"))) + 1 if folder.exists() else 1
-    return f"Mini-Checkpoint-{n}.md"
+    found = [int(m.group(1)) for p in (folder.glob("Mini-Checkpoint-*.md") if folder.exists() else [])
+             if (m := MINI_NAME.match(p.name))]
+    if not found:
+        return "Mini-Checkpoint-1.md"
+    top = max(found)
+    index = folder.parent / "INDEX.md"
+    link = f"]({encode_link(f'docs/{folder.name}/Mini-Checkpoint-{top}.md')})"
+    linked = index.is_file() and link in index.read_text(encoding="utf-8")
+    return f"Mini-Checkpoint-{top + 1 if linked else top}.md"
 
 
 def encode_link(path: str) -> str:
@@ -462,7 +480,9 @@ def cmd_pre(root: Path, args: argparse.Namespace) -> int:
         folder = folder_for(root, date, args.topic)
         fname = checkpoint_filename(folder, args.mini)
         print("== target ==")
-        print(f"write checkpoint prose to: {folder / fname}")
+        print(f"write checkpoint prose to: {folder / fname}"
+              + ("  (exists, not yet in INDEX: finalize will link this file)"
+                 if (folder / fname).exists() else ""))
 
     print("\n== friction candidates (classify: promote or discard; then --clear-candidates) ==")
     print(_run(["uv", "run", "tools/session_state.py", "--list-candidates"], root))
@@ -687,6 +707,13 @@ def main(argv: list[str] | None = None) -> int:
     p_nw = sub.add_parser("not-worked", help="print WHAT NOT TO RETRY from the latest checkpoint")
     p_nw.add_argument("--client", help="scope to this client's latest checkpoint entry")
     p_nw.add_argument("--context-root", help="where the context YAMLs live (default: primary clone)")
+
+    # `--root` is also accepted after the subcommand: `finalize --root X` was
+    # refused as an unrecognized argument and `pre` silently used the cwd
+    # (register rows 2026-09-16). SUPPRESS keeps an absent subcommand-level
+    # value from overwriting the top-level one.
+    for p in (p_pre, p_fin, p_arc, p_nw):
+        p.add_argument("--root", default=argparse.SUPPRESS, help="repo root (either position)")
 
     args = ap.parse_args(argv)
     root = Path(args.root).resolve()

@@ -242,14 +242,18 @@ def build_expense_rows(
     Tax lands on the FIRST row of an expense only, so a split never
     double-counts tax.
 
-    `coa_gate` diverts any non-postable account to review before a row is
-    built (the same guarantee as the journal export). `dispositions`
+    `coa_gate` keeps any non-postable account out of a row before it is
+    built (the same guarantee as the journal export). It judges the
+    ACCOUNT, so a categorized line keeps its category (item 95): the row
+    books as a category with no account, the same thing the grid's
+    `books_as` and a category edit without an account show, and a receipt's
+    categorized part stays its own row. `dispositions`
     (document_id -> §17 disposition) withholds personal / do-not-export
     expenses and redirects a reimbursable expense's Paid Through. Every
     map is keyed by `document_id`.
     """
     if coa_gate is not None:
-        gated, _report = coa_gate.run(list(receipts))
+        gated, _report = coa_gate.run(list(receipts), keep_category=True)
         receipts = gated
 
     rows: list[list[str]] = []
@@ -387,9 +391,14 @@ def write_zoho_expense_export(
     card_accounts: "Mapping[str, str] | None" = None,
     card_hint_accounts: "Mapping[str, str] | None" = None,
     card_map_blocked_docs: "set[str] | None" = None,
+    footer: str = "",
 ) -> Path:
     """Write the Zoho Books Expenses import CSV (one row per expense).
-    Returns the path."""
+    Returns the path.
+
+    `footer` (item 94) is one line of prose written under the rows after a
+    blank row, in the first column only, so no amount column carries it.
+    Empty (the default) writes nothing, byte for byte as before."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     rows = build_expense_rows(
@@ -411,4 +420,7 @@ def write_zoho_expense_export(
         writer = csv.writer(fh)
         writer.writerow(EXPENSE_COLUMNS)
         writer.writerows(rows)
+        if footer:
+            writer.writerow([])
+            writer.writerow([footer])
     return out_path
