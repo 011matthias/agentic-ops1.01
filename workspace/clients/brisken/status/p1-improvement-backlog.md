@@ -4834,7 +4834,7 @@ method and the two run outputs: session 2026-09-17 (memory
 
 **Reviewer corrections:** (evidence) (1) Evidence line refs: the fallback numbering is service.py:6753-6755, not 6768-6771 (that range is the reimbursements block). (2) "print the file name on the caption" in the proposed change is already shipped: live caption pages print the file name ("rendered-body.pdf") under the detail line (month_report_pdf.py caption block, `name`). (3) Mechanism is sharper than "row count checked against widths": the width pass and the row builder run the SAME receipts but only the row builder gets the chart and the COA gate, which is what collapses Microsoft's two parts into one uncategorized row. (4) The no-total case IS reachable through the app (OCR reading no total; the payload test constructs it  (ledger) 1) "print the file name on the caption" is already shipped: output/month_report_pdf.py:339-349 prints the file name (from _evidence_item's _display_name) under every caption since item 67 (PR #839); drop that from the proposal. 2) Item 65's caption is not strictly unreachable: it fires when a listing row's Amount cell fails to parse, which the ledger itself calls unreachable through the app; the accurate statement (and the ledger already makes it at api-contract line 172) is that the real case, detected_total None, yields no row because expense_posting_parts (zoho_expense_export.py:341, 369-371) coerces it to 0 and drops zero-amount groups. The payload half summary.n_amounts_unreadable does 
 
-### 98. The month report gives no single-currency total and no conversion for foreign receipts (2026-09-17 audit draft #96, unranked; new function, quote separately)
+### 98. The month report gives no single-currency total and no conversion for foreign receipts (2026-09-17 audit draft #96, unranked; new function, quote separately) (SHIPPED 2026-09-18, PR #1076, Fly v178 - see Shipped row 85; owner reversed the quote-separately ruling)
 
 **Audit rank 5 of 40; severity medium as merged; verification: one reviewer.** July's report closes with three totals (USD 28,430.03, EUR 18,087.84, BRL 2,361.90) and nothing that says what the month cost in one currency. The Exchange Rate column is empty on all 55 rows because scanned receipts carry no rate. A BRL supermarket slip on a USD card shows the BRL figure only; the USD amount actually charged sits in the other document, for matched rows only. The owner confirmed on 2026-09-08 that US filing applies, so the deductible figure is the USD one. The ECB monthly rate the tool now fetches reaches the screen's FX block but neither document.
 
@@ -4847,6 +4847,54 @@ method and the two run outputs: session 2026-09-17 (memory
 **Value:** One figure per month for the books and the filing, traceable to the rate used, instead of three totals the accountant converts by hand. (effort medium)
 
 **Reviewer corrections:** (combined) (1) "nothing that says what the month cost in one currency" is overstated for the run as a whole: `report.xlsx` (`output/report_xlsx.py:457-461, 580-582`) prints Spend per card and a card total summed from the statement charges in the card currency, i.e. a USD figure for the charge side, and `reconciled.csv` carries the USD charge beside each matched receipt. What is missing is a USD equivalent on the RECEIPT side (the expense report PDF and expenses.csv) and any figure for the 11 unmatched July receipts. (2) "55 rows" are expense LINES; July has 52 expenses (two-line receipts split rows). (3) The ECB rate "reaches the screen's FX block" is true only for cross-currency candidates and is iner
+
+**SHIPPED 2026-09-18 (PR #1076, Fly v178).** Built under the owner's
+2026-09-17 reversal ("we build it all and then agree on the 600 EUR license"),
+which put the quote-separately items back in scope. New pure module
+`output/single_currency.py`; three rungs in order of how much they know about
+what happened: a USD row is itself, a receipt a reconciled USD charge settled
+converts at THAT CHARGE (the money that actually left the account, spread and
+fees included), anything else at the matcher's own `_reference_rate_for`.
+
+Narrowed against the item's text in one place, deliberately: no new CSV
+column. `EXPENSE_COLUMNS` is a live import contract whose target system the
+owner has explicitly left open (item 23), and `Exchange Rate` already means
+exactly this and was empty on all 57 live rows. Filling it carries the same
+information without touching the header. If the owner wants a literal USD
+column it is a one-line follow-up.
+
+Live after deploy, read-only: **July `Total in USD: 58,187.69`** with 34 of 56
+rows carrying a rate (19 at their real statement rate, 15 at the typed rate),
+**August `2,808.91`**; both match the pre-build prediction to the cent. Amazon.de
+reads 1.143002 off its own charge against the typed 1.162275, and the month
+lands USD 14.76 below what the typed rate alone would give. The CSV was driven
+live; the month report PDF was NOT, because that route writes render outcomes
+into the run (item 67) and that would be a live write on Criss's month; its
+rendering is pinned by route-level tests through the real app.
+
+**An adversarial review of the diff found a dead rung and three smaller
+defects**, all fixed and each proven red by hand: (1) the ECB rung never fired,
+because `ecb_monthly_rate` takes a `date` or "YYYY-MM" and was handed the
+listing's ISO date cell, so rung 3 had silently become typed-rates-only and a
+hosted month (ECB table, nothing typed) would have read "no rate" on every
+foreign receipt; (2) the CSV named rows by a listing number it does not print
+and which is not the report's either, so one receipt was "expense 4" in one
+document and "expense 3" in the other; (3) a blank amount parsed as zero and
+took a rate; (4) rung 2 was an `elif` and blocked the fallback when a charge
+implied no positive rate; (5) a rate the receipt itself printed was
+overwritten.
+
+**Correction to the item's own premise, from the review:** the two documents do
+NOT always print the same total, and should not. The CSV exports every expense
+while the report lists company expenses only (private ones go to their own
+reimbursements section), so a month with a private expense totals differently
+in each, correctly. What is shared is the per-row conversion, so one purchase
+can never be converted at two rates.
+
+Both documents stay silent unless the figure says something new: a month
+entirely in USD, a month that priced nothing, and a month where nothing was
+actually converted all render byte-identically to before. A month that priced
+only some rows reads "Partial total", not "Total".
 
 ### 99. July reads 'Ready to post' with Publish enabled while 24 charges have no receipt and carry the tool's own 'confirm first' note (2026-09-17 audit draft #97, unranked; licence: defect, covered) (SHIPPED PR #997, Fly v152; owner ruling: ready means complete; SPA prompt `lovable-ready-publish-gate-prompt.md` pending)
 
@@ -5878,6 +5926,7 @@ the real month contains.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 85 | One currency for a month's receipts: `output/single_currency.py` converts each listing row and both documents state the month's figure. Three rungs, in order of what they know: a base-currency row is itself; a receipt settled by a reconciled USD charge converts at THAT CHARGE (implied rate = charge / receipt total, allocated with the remainder on a row that has an amount so a split receipt ties to its charge to the cent); anything else at the matcher's own `_reference_rate_for`, handed a `date` so the ECB rung actually fires. `expenses.csv` fills the EXISTING `Exchange Rate` column (header untouched: the importer is still an open question, item 23) and states the total under the rows, naming any unpriced row by vendor and date because the CSV prints no row numbers; the month report prints each figure and rate as a small second line under the amount (item 65's device, so no tenth column reopens item 143's page width) plus a per-card/cost-center figure on each sums line | Item 98, the audit's rank 5 of 40 and the highest-ranked unshipped item, built under the owner's 2026-09-17 reversal of quote-separately. July closed with three totals and nothing saying what the month cost in one currency while `Exchange Rate` was empty on all 57 rows. Narrowed in one place on purpose: no new CSV column, because the header is a live import contract and the column that exists already means this | 2026-09-18, PR #1076, Fly v178; live July `Total in USD: 58,187.69` (34 of 56 rows priced, 19 at their statement rate) and August `2,808.91`, both matching the pre-build prediction to the cent; 19 tests in `tests/test_single_currency_item_98.py`, route-level through both documents; nine wiring points proven red by hand; suite 2440 passed / 2 skipped; an adversarial diff review found a dead ECB rung plus four smaller defects, all fixed with a test each proven red |
 | 84 | A company invoice paid by wire has an exit that is not a lie: a row the reviewer settled OFF the card system leaves `needs_person` on BOTH counts that ask it (`summary.n_needs_person` and `card_review.n_needs_person`, so the payload cannot contradict itself), is not offered the private-card button, and reads its own review reason `needs_entity_settled_outside` asking for the entity instead of for a paying card. One fact, `settled_off_card`, stamped on the row's resolution by the card pass and read by every surface; the printed tender alone still changes nothing but the suggestion | Item 144's open question, ruled by the owner 2026-09-17. July's Tricarico invoice (BRL 27,203.34, Wire Transfer, settled outside by bank transfer) sat in all three boxes with two exits that both stated something untrue, and person resolution is card-only, so no sanctioned action could move it. `needs_entity` deliberately STAYS and nothing is auto-filled: the row carries no bill-to field and the company name exists only in the file name | 2026-09-17, pending PR; `tests/test_bank_transfer_exit_item_144.py` (11, four route-level, one pinning the two counts EQUAL) plus `test_private_suggestion_not_a_card_r3.py` rewritten to the ruling; regress_check red on all four wires (the predicate 5 of 13, the box wiring 3 of 13, the stamp 4 of 14, the counter's own condition 1 of 19); suite 2421 passed / 2 skipped; not deployed |
 | 81 | Every refusal carries a stable `code` beside its unchanged English sentence, and the values the sentence names ride as their own fields: 155 codes over 285 sites, the setup advisories and the two statement advisories carry a code and their numbers, and a source scan fails any NEW refusal that has none | Item 130. A refused save, decision or upload showed Criss the backend's English verbatim on a screen she reads in Portuguese; the code is what the front end translates, with the English sentence as the fallback for a code it does not know. Not built: the SPA half (prompt written, not pasted), the English PDFs and CSV (the auditor's, by ruling), and Criss's own read of the Portuguese wording | 2026-09-17, pending PR; `tests/test_error_codes_item_130.py` (20: 9 source-scan, 11 route-level), regress_check red on all four wires (the 401 code, an advisory code, the service-dict `error_code` plumbing, a `RunInputError` code); suite 2286 passed / 2 skipped; SPA half `docs/lovable-error-codes-prompt.md` |
 | 80 | A correction comes back next month: a receipt with line items consults memory, and a rule a person taught (sign-off, the button, a Memory-page edit, a validated row) applies over the model's line read with `decision: "learned_over_line"` and the existing `check` / `vendor_guess` glance when they disagree; a rule saved with NO company (what every live sign-off writes) reaches a row whose card names one, and a row with no company takes the vendor's other rules only when they agree; a month with a statement teaches its CONFIRMED pairs' vendor spellings and FX at sign-off, generic descriptions refused (item 117's guard). A Zoho-seeded row nobody validated still stays below a line read, left for the owner | Item 115. The sign-off promise was that a fixed category arrives pre-filled, and none of it fired: 55 of July's 84 categorized lines came from a line read that never consulted memory, the lookup needed a company that 33 of 52 July and 13 of 31 August receipts do not carry, and only the classic statement page taught aliases and FX, so two reconciled months left the store at 0 aliases / 0 FX. Replay of both live months: 0 lines change today (every rule is seeded), 10 of August's 42 change once July is signed off, and July's sign-off teaches 4 bank spellings instead of 0 | pending PR, 2026-09-17; suite 2266 -> 2279 passed / 2 skipped |
