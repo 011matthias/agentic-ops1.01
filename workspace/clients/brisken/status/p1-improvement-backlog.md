@@ -4577,7 +4577,7 @@ open."). PT "Comparado com o extrato" is a draft for Criss. Worth asking her
 separately: on the Matching view the PT card for matched rows reads
 "Conciliadas" while EN reads "Matched".
 
-### 90. A tighter clean band for the ECB rate, then the Settings rates go (owner ruling 2026-09-17, follows item 82) (band SHIPPED with item 132, PR #1048, Fly v167; step 4, removing the two Settings rates, waits on a per-action owner yes)
+### 90. A tighter clean band for the ECB rate, then the Settings rates go (owner ruling 2026-09-17, follows item 82) (band SHIPPED with item 132, PR #1048, Fly v167; step 4 OFFERED and DECLINED 2026-09-17 evening, see the decision below; do not re-ask)
 
 **Owner ruling 2026-09-17 (do not re-ask):** tighten the clean band first, then
 remove both Settings FX rates (EUR:USD 1.162275, BRL:USD 0.192448) so new
@@ -4611,6 +4611,40 @@ Build:
    Settings rates via `PUT /api/settings`. July and August keep their frozen
    rates either way; the change reaches months created or statement-attached
    afterwards.
+
+**Step 4 offered 2026-09-17 evening; owner answer: leave both rates. Do not
+re-ask.** The step stays open and unactioned until the owner raises it himself.
+Nothing was written to Settings; the two rates are live and unchanged.
+
+**The reads taken before offering, and the correction they force on step 4's
+own wording.** Settings holds exactly the two rates (`GET /api/settings`:
+`EUR:USD 1.162275`, `BRL:USD 0.192448`). Off a read-only DB copy of the same
+evening, `runs.config` `matching.fx_reference_rates` is present on July
+(`50622baec444`) and August (`074a7b8905d7`) and **null on September, May, June
+and January**. So "July and August keep their frozen rates either way" holds,
+but "the change reaches months created or statement-attached afterwards"
+understates who is exposed: four EXISTING months carry no rate of their own.
+`apply_master_data` folds Settings in with `setdefault`, and only at month
+creation and statement attach (`service.py` 406 and 11243; `rematch_month`
+never calls it), so each of those four copies today's typed rates in and
+freezes them the next time a statement lands. That is item 132 in its live
+shape, not a future risk, and it is what step 4 would prevent.
+
+**The drift, measured against the ECB table stored in the August month:**
+
+| pair | typed | ECB 2026-07 | gap | ECB 2026-08 | gap |
+|---|---|---|---|---|---|
+| EUR:USD | 1.162275 | 1.141748 | +1.80% | 1.159310 | +0.26% |
+| BRL:USD | 0.192448 | 0.195341 | -1.48% | 0.194241 | -0.92% |
+
+July's euro gap is wider than the 1% the two bands leave between them
+(`fx_reference_match_pct` 0.03 minus `fx_ecb_match_pct` 0.02, both defaults in
+`deterministic.py`), so item 132's advisory should fire on July at its next
+re-match. It reads zero on both months today and that is expected, not a fault:
+each month's stored summary predates the code. July's last re-match was
+16:59:25Z and August's 11:35:23Z, while v167 shipped at 17:28:24Z. The
+advisory is carried on the stored summary, so it appears on the next re-match
+of either month with no action needed.
 
 ### 91. Settings is one scroll of seven editors (owner, 2026-09-17) (SHIPPED PR #969, SPA APPLIED 2026-09-17)
 
@@ -5606,6 +5640,8 @@ The function exists: the live row carries `can_mark_private: true` and the butto
 
 **Prompt written 2026-09-17:** `docs/lovable-private-card-in-picker-prompt.md`, not applied. Live on July the card column stacks the entity picker, the card picker (nine cards, "Credit Card Chase Visa - 3645" to "Credit Card - 2838") and the button under them; the 32 eligible rows are all `card_source: none`, the Hostinger row of 2026-07-28 (`0002`) has the picker but `can_mark_private: false`, and every hint row is ineligible, so the option never hides behind "Change card".
 
+**Check eligibility before believing a negative on this item.** A second, independent check of the same evening opened the picker on whatever row came first, read nine cards with no tenth entry, and looked exactly like "not applied". The row was ineligible, where nine is the correct rendering after the change as well as before, so the probe could not tell the two states apart and its negative meant nothing. Opening it on a row the API reports as `can_mark_private: true` (July `0003` Konsultancy Finance, `0004` Redis Inc.) shows ten options ending "Paid with a private card". Grepping the shipped bundle does not settle it either: `expx.privateCard.mark` is in the build whether or not the control moved, and the i18n keys resolve at runtime, so no grep locates the control. Only an eligible row answers it. Same class as the instrument-validity clause in `rule_behaviors.md`.
+
 ### 140. A possible duplicate shows a label, not the copies side by side (note #67, owner, 2026-09-17; SPA only; owner ruled build) (PROMPT WRITTEN 2026-09-17, not applied) (SPA APPLIED + VERIFIED 2026-09-17 night: owner published, cold-driven EN and PT, 0 writes; see PROMPT-STATUS)
 
 **Matthias, July Expenses view, row `0030__...Aposto_Karlsruhe__ZE_8100599.jpg`, 15:15 UTC:** "if this is a potential duplicate, the tool needs to show all the available data to each of the duplicates next to each other for manual comparison. Just labeling it is not going to cut it because then user has to search for the other duplicate and this slows comparison process."
@@ -5627,6 +5663,8 @@ Live row: `duplicate {group_id 3b0029eea1b11643, kind receipt, n_copies 2, copy 
 Answer: from the fill colour of that charge's row in the Chase workbook Criss uploads for the month (`July2026.xlsx`): she colours a row yellow once it is booked, and `ingest/statement_xlsx.py` reads the fill when the statement loads (yellow -> `entry_status: posted`). Item 86 fixed the same question on the fold caption ("48 rows marked yellow in July2026.xlsx, already booked", with the yellow / grey tooltip); the per-row hint still says "your statement workbook". **Proposed change, SPA copy:** the row hint names the file from `statements[].file` (fallback "the statement workbook") and says the colour is read when the statement is loaded, same wording as item 86's tooltip; PT wording for Criss.
 
 **Prompt written 2026-09-17:** `docs/lovable-booked-hint-names-workbook-prompt.md`, not applied. Live the phrase sits in two places, the "Already booked" badge tooltip on all 84 booked July rows and the line under the vendor on the 47 in "Charges without a receipt" ("Marked yellow in your statement workbook, so already booked."), and item 86's fold on August names a PDF that carries no colours ("August2026.xlsx, 20260804-statements-1176-.pdf"), so the prompt names only workbooks (`writeback` true), matched on the row's `account_id`.
+
+**Where the hint lives, for whoever checks it next.** It renders inside a tooltip on a collapsed section, so three drives of the live Matching page never put it on screen; the copy is readable in the shipped bundle instead, as `row.status.posted.tipFile` and `wb.reason.charge.already_booked.file` beside their no-file fallbacks.
 
 ### 143. Both PDFs cut table columns off the page (found building item 138, 2026-09-17; licence: defect) (SHIPPED 2026-09-17, PR #1052, Shipped row 74)
 
