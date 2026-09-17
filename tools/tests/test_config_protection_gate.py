@@ -8,12 +8,13 @@ the hook as a subprocess with a real payload.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 
 import pytest
 
-from hooklib import HOOKS, REPO, load_wire_hooks, permission_decision, run_hook
+from hooklib import HOOKS, REPO, load_hook, load_wire_hooks, permission_decision, run_hook
 
 HOOK = "config-protection-gate.py"
 
@@ -55,9 +56,21 @@ def test_real_repo_configs_ask(env):
             assert decide(env, path)[0] == "ask", rel
 
 
-def test_case_variant_and_backslash_path_ask(env, tmp_path):
+def test_case_variant_asks(env, tmp_path):
     touch(tmp_path / "RUFF.TOML")
     assert decide(env, str(tmp_path / "RUFF.TOML"))[0] == "ask"
+
+
+def test_backslash_spelling_matches_the_protected_set():
+    # Pattern half, portable: a Windows spelling is recognised on any OS.
+    gate = load_hook(HOOK)
+    assert gate.protected("C:\\Repo\\x\\tools\\preflight-hooks.py")
+    assert gate.protected("C:\\Repo\\x\\.pre-commit-config.yaml")
+    assert gate.protected("C:\\Repo\\x\\tools\\other.py") is None
+
+
+@pytest.mark.skipif(os.name != "nt", reason="a backslash path only names a real file on Windows")
+def test_backslash_path_asks_on_windows(env, tmp_path):
     touch(tmp_path / "tools" / "preflight-hooks.py")
     assert decide(env, str(tmp_path / "tools" / "preflight-hooks.py").replace("/", "\\"))[0] == "ask"
 
