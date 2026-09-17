@@ -36,7 +36,9 @@ from __future__ import annotations
 import io
 from collections.abc import Sequence
 
+from ..unmatched_reasons import RECEIPT_REASON_SHORT
 from ._pdf_common import (
+    booked_without_receipt,
     caption_mark,
     card_name,
     card_sections,
@@ -84,6 +86,11 @@ def _status_label(row: dict) -> str:
         return "already posted"
     if row.get("chosen_document_id"):
         return "matched"
+    if booked_without_receipt(row):
+        # Item 96: Criss's yellow row is in her books, and the screen folds it
+        # away as already booked. Only the reviewer's verdict reached this
+        # word before, so 48 July rows printed "no receipt" as if still open.
+        return "already posted"
     if bucket in ("unmatched", ""):
         return "no receipt"
     if bucket == "refund":
@@ -271,7 +278,8 @@ def _attention(
     scope: tuple[str, dict[str, str]] | None,
     styles: dict,
 ) -> None:
-    """What needs attention, then the copies set aside. `scope` is
+    """What needs attention, then the charges already booked (one line),
+    then the copies set aside. `scope` is
     `(section key, {document_id: section key})` for one card, or None for
     the whole month."""
     from reportlab.platypus import Paragraph, Spacer
@@ -279,10 +287,21 @@ def _attention(
     heading = "What needs attention"
     story.append(Paragraph(heading, styles["h2"] if scope is None else styles["capsub"]))
     tx_ids = {str(r.get("transaction_id") or "") for r in rows}
-    unmatched_tx = [
+    row_of = {
+        str(r.get("transaction_id") or ""): r for r in (view.get("rows") or [])
+    }
+    unmatched_all = [
         t for t in (view.get("unmatched_transactions") or [])
         if scope is None or str(t.get("transaction_id") or "") in tx_ids
     ]
+    # Item 96: a charge already booked in the workbook is not a to-do. The
+    # screen folds it away; here it leaves the table for one line below and
+    # keeps its place in the listing, labelled already posted.
+    booked_tx = [
+        t for t in unmatched_all
+        if booked_without_receipt(row_of.get(str(t.get("transaction_id") or "")) or t)
+    ]
+    unmatched_tx = [t for t in unmatched_all if t not in booked_tx]
     unmatched_rec = [
         r for r in (view.get("unmatched_receipts") or [])
         if scope is None or _in_scope(str(r.get("document_id") or ""), scope)
@@ -307,8 +326,12 @@ def _attention(
         if g.get("state") == "decided" and g.get("verdict") == "copy"
     ]
     if not (unmatched_tx or unmatched_rec or dup_groups):
+        every_charge = (
+            "Every charge has a receipt or is already booked"
+            if booked_tx else "Every charge has a receipt"
+        )
         story.append(Paragraph(
-            "Nothing. Every charge has a receipt, every receipt has a charge, "
+            f"Nothing. {every_charge}, every receipt has a charge, "
             "and no duplicate is left undecided." if scope is None else
             "Nothing on this card.", styles["capsub"],
         ))
@@ -331,13 +354,15 @@ def _attention(
                 esc(f"{len(unmatched_rec)} receipts with no charge"), styles["capsub"]
             ))
             story.append(Spacer(1, 3))
+            # Item 96: the reason the screen prints beside each one.
             story.append(_table([
-                ["Date", "Vendor", "Amount", "Ccy"],
+                ["Date", "Vendor", "Amount", "Ccy", "Why"],
                 *[[
                     str(r.get("date") or ""), str(r.get("vendor") or ""),
                     str(r.get("total") or ""), str(r.get("currency") or ""),
+                    RECEIPT_REASON_SHORT.get(str(r.get("reason_code") or ""), ""),
                 ] for r in unmatched_rec],
-            ], [60, 250, 80, 40], styles))
+            ], [60, 170, 70, 35, 120], styles))
             story.append(Spacer(1, 8))
         if dup_groups:
             story.append(Paragraph(
@@ -350,6 +375,15 @@ def _attention(
                 ["What", "Date", "Amount", "Ccy", "Copies"],
                 *_duplicate_rows(dup_groups, view),
             ], [230, 60, 80, 40, 50], styles))
+
+    if booked_tx:
+        n_booked = len(booked_tx)
+        story.append(Spacer(1, 8))
+        story.append(Paragraph(esc(
+            f"Already booked in your workbook: {n_booked} "
+            f"charge{'' if n_booked == 1 else 's'} with no receipt, marked "
+            f"already posted in the listing below."
+        ), styles["capsub"]))
 
     # ── copies set aside: decided, recorded, nothing to do ──────────
     #

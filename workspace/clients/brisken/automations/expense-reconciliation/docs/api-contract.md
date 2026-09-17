@@ -1606,8 +1606,12 @@ An unreadable amount now has two visible places, never a silent drop:
 Both are silent when every amount read, which is the case on every month the
 app has produced: `_amount` formats a Decimal to two places and
 `validate_expense_field` refuses a non-finite total at the edge, so no input
-the app accepts reaches the builder unreadable. The guard is defence in depth
-on a builder whose row contract is "export rows", not two decimals.
+the app accepts reaches the builder as a cell that will not parse. The guard
+is defence in depth on a builder whose row contract is "export rows", not two
+decimals. The real case is a receipt whose total OCR never read
+(`detected_total is None`): since item 97 it writes one row with a blank
+amount, and the caller hands its listing number to the builder
+(`amounts_unreadable`), so it reaches both places too.
 
 `summary.n_amounts_unreadable` is the payload half, on the expense batch
 view. PARALLEL (rule 1): a scalar count beside the existing ones, nothing
@@ -3391,6 +3395,71 @@ receipt_card_label, receipt_card_source}`. `summary.n_cards_differ` counts
 those rows. Live August 2026 on deploy: 1 (LOVABLE 25.00 on 3645, receipt
 picked as 2838). Route-level in `tests/test_card_scope_item_137.py`. SPA half:
 `docs/lovable-cards-differ-prompt.md`.
+
+## The PDFs say what the screen says (items 96 + 97, 2026-09-17)
+
+No route, request or payload field changes. Both documents read words and
+numbers the run and batch payloads already carry.
+
+### `GET /runs/{id}/reconciliation-report.pdf`
+
+- **Booked is not a to-do.** A charge booked without a receipt (`rows[].section`
+  `posted`, i.e. yellow in the workbook or the reviewer's already-posted
+  verdict, with `effective_bucket` `unmatched`) leaves the "N charges with no
+  receipt" table. Under the to-do tables, flat and per card:
+  `Already booked in your workbook: 48 charges with no receipt, marked already
+  posted in the listing below.` In the charge listing its Status reads
+  `already posted`, not `no receipt`. A month with nothing else open reads
+  `Nothing. Every charge has a receipt or is already booked, ...`. The
+  coverage table's "No receipt" column is the coverage panel's
+  `n_unmatched_tx` and still counts them.
+- **Why.** The receipts-with-no-charge table gains a Why column: the screen's
+  short label for `unmatched_receipts[].reason_code` (`no charge found`,
+  `card not loaded`, `next or previous month`, `not a card payment`).
+- **Captions** (`service.reconciliation_captions`), one per place the payload
+  puts a receipt; `Unmatched receipt` is no longer printed:
+
+| Where the payload puts it | Caption | Detail line ends with |
+|---|---|---|
+| held by a charge (`chosen_document_id`, or `assignable_receipts[].held_by` naming a non-review charge) | `Charge <date> · <vendor>` | `receipt: <vendor>` (unchanged) |
+| `copies_set_aside[]` | `Copy set aside · <vendor>` | `copy of <original vendor> (<original file>), set aside`, original = `duplicate.of` |
+| candidate of a pending review row (`assignable_receipts[].held_by` is a row with `effective_bucket` `review` that holds no pick) | `Waiting for review · <vendor>` | `proposed for the charge <vendor> <amount> <ccy> of <date>, not confirmed yet` |
+| settled outside the card | `Paid by bank transfer · <vendor>` (the month report's tender words) | date and amount only |
+| `unmatched_receipts[]` | `Receipt with no charge · <vendor>` | the screen's long line for its `reason_code` |
+
+The English strings are `unmatched_reasons.RECEIPT_REASON_TEXT` /
+`RECEIPT_REASON_SHORT`, verbatim from the SPA's EN i18n
+(`docs/lovable-unmatched-reasons-prompt.md` section 5). Live July 2026 rendered
+locally: to-do 24 charges (was 72), booked line 30 + 18 = 48 across cards 3876
+and 2838, captions 31 charge / 11 no charge / 8 waiting for review / 2 copies
+(was 31 charge / 21 "Unmatched receipt"). August: 9 / 10 / 1 / 5, no booked rows.
+
+### `GET /runs/{id}/expense-report.pdf` (and `expenses.csv`)
+
+- **One pass numbers the listing and the captions.**
+  `zoho_expense_export.build_expense_row_groups` returns the rows per receipt;
+  `build_expense_rows` is its flattening, so the CSV is unchanged byte for byte
+  on a month whose totals all read. A caption's expense numbers are the rows
+  written for that document. The old width pass ran without the chart and the
+  COA gate and fell back to 1..N whenever it counted differently.
+- **An unreadable total writes one row** in the listing and the CSV: Amount
+  blank, account the lines' account(s) or `(uncategorized - assign)`, vendor,
+  date. The listing row carries `amount unreadable, not in total`, the footer
+  names it, and the header count includes it.
+- A receipt that still writes no row (a total of exactly 0.00) is captioned
+  `Receipt · <vendor>` with `not in the listing` on its detail line, never a
+  borrowed number. Should rows and receipts ever fail to line up, the listing
+  stays flat and the closing note says the captions name the receipt instead.
+
+Live July and August 2026 rendered locally before and after: every caption
+already named its own rows on both, so the live documents did not move. July's
+audit-time mismatch (width pass 56, rows 55) is gone from today's data: 50
+listed receipts (2 copies out since item 94), width pass 54, rows 54, and the
+Microsoft receipt writes its two rows (22, 23), which fits the COA gate keeping
+a categorized part as its own row since item 95. The fix is pinned on synthetic
+months. Route-level in `tests/test_pdfs_match_the_screen_items_96_97.py`, plus
+the status words in `tests/test_coverage_surface.py`
+`test_the_document_headline_agrees_with_the_screen`.
 
 ## A mail that added nothing (item 106, 2026-09-17)
 

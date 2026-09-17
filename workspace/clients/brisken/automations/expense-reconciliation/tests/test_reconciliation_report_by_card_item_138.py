@@ -146,7 +146,7 @@ def test_each_card_is_a_section_in_coverage_order_and_no_card_comes_last(august)
 
 
 def test_each_cards_receipt_pages_follow_its_own_section(august):
-    """A caption names the charge or says unmatched; the page right after it
+    """A caption names the charge or why no charge holds the receipt; the page right after it
     is the receipt image (no text layer), and every caption sits between its
     own card's heading and the next card's."""
     pages = august
@@ -155,9 +155,9 @@ def test_each_cards_receipt_pages_follow_its_own_section(august):
     at_none = _first(pages, "No card", at_3645 + 1)
     captions = {
         "Charge 2026-08-23 · PRESSMASTER": (at_2838, at_3645),
-        "Unmatched receipt · Zoom": (at_2838, at_3645),
+        "Receipt with no charge · Zoom": (at_2838, at_3645),
         "Charge 2026-08-05 · LOVABLE": (at_3645, at_none),
-        "Unmatched receipt · Taxi": (at_none, len(pages)),
+        "Receipt with no charge · Taxi": (at_none, len(pages)),
     }
     for caption, (lo, hi) in captions.items():
         at = _first(pages, caption, 1)
