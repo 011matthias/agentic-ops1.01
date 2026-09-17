@@ -138,7 +138,7 @@ def is_generic_tender(text: str | None) -> bool:
     is ASCII-alnum and would split accented letters."""
     if not text or not text.strip():
         return False
-    if _card_keys(text):
+    if _card_keys(text) or masked_short_ending(text):
         return False
     folded = unicodedata.normalize("NFKD", text)
     folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
@@ -151,6 +151,42 @@ def is_generic_tender(text: str | None) -> bool:
             for w in words
         )
     )
+
+
+# Note #60 (owner, 2026-09-17): some receipts print only the last TWO
+# digits of the card ("42463153XXXXXX38" on the June Fenix and August SARL
+# TRAIN'S receipts). Two digits sit below the matcher's 3-digit floor, so
+# the hint carried no card at all and every such row needed a hand fix.
+# Two digits are still evidence when a MASK or an ending word introduces
+# them: they are the card's own tail, not a quantity. A bare two-digit
+# number ("Cartao Credito 30 Dias", "$15.00") is not, so it never counts.
+# A single "x" is not a mask here ("3x" is an instalment count); "xx" is.
+_SHORT_ENDING = re.compile(
+    r"(?:[Xx]{2,}|[*#\u2022\u25cf]+|\.{2,}|\u2026|\bending(?:\s+(?:in|with))?|\bfinal)"
+    r"\s*[:.\u2026]*\s*(?<!\d)(\d{2})(?!\d)",
+    re.IGNORECASE,
+)
+
+
+def masked_short_ending(text: str | None) -> str | None:
+    """The two-digit card ending a hint prints behind a mask or an ending
+    word ("XXXXXX38", "**38", "••38", "ending in 38", "final 38"), or None.
+
+    Only consulted for a hint that carries NO card number the matcher can
+    use (`_card_keys` empty): a printed last-4 always outranks two digits.
+    Two different endings in one hint ("xx38; xx49") name nothing."""
+    if not text or _card_keys(text):
+        return None
+    endings = {m.group(1) for m in _SHORT_ENDING.finditer(text)}
+    return endings.pop() if len(endings) == 1 else None
+
+
+def cards_ending_in(ending: str, cards: "dict[str, Card]") -> "list[Card]":
+    """Active cards with a printed number ending in `ending`, registry order."""
+    return [
+        c for c in cards.values()
+        if c.active and any(str(d).endswith(ending) for d in c.digits)
+    ]
 
 
 def hint_digit_run(text: str | None) -> str | None:
@@ -170,8 +206,17 @@ def hint_digit_run(text: str | None) -> str | None:
     """
     if not text:
         return None
-    runs = re.findall(r"\d{3,8}", text)
-    return runs[-1] if runs else None
+    # A run followed by a mask is the issuer's BIN, which `_card_keys`
+    # already ignores (item 69 round B); grouping the strip on it would
+    # show "42463153" as if it were the card.
+    runs = [
+        m.group()
+        for m in re.finditer(r"\d{3,8}", text)
+        if not (m.end() < len(text) and text[m.end()] in _MASK_CHARS)
+    ]
+    if runs:
+        return runs[-1]
+    return masked_short_ending(text)
 
 
 @dataclass(frozen=True)
@@ -664,7 +709,13 @@ def resolve_card(
             return digit_hits[0]
         if digit_hits:
             return digit_hits[0] if on_ambiguity == "first" else None
-    exact_only = strict_alias_with_digits and bool(obs_keys)
+    # Note #60: a masked two-digit ending ("XXXXXX38") names the card when
+    # exactly ONE active card ends in it. Two cards sharing the ending is a
+    # contest, never a guess. The ending is printed digits, so, like a
+    # contradicting last-4, it keeps a word alias from overriding it.
+    ending = None if obs_keys else masked_short_ending(observed)
+    ending_hits = cards_ending_in(ending, live) if ending else []
+    exact_only = strict_alias_with_digits and (bool(obs_keys) or bool(ending))
     obs_norm = _normalize(observed)
     obs_tokens = set(obs_norm.split())
     alias_hits: list[Card] = []
@@ -687,6 +738,15 @@ def resolve_card(
             alias_hits.append(card)
         if exact:
             exact_hits.append(card)
+    if ending:
+        # An operator who taught this exact printed string decided it; the
+        # ending is only inference, so it comes second.
+        if len(exact_hits) == 1:
+            return exact_hits[0]
+        if len(ending_hits) == 1:
+            return ending_hits[0]
+        if ending_hits:
+            return ending_hits[0] if on_ambiguity == "first" else None
     if len(alias_hits) == 1:
         return alias_hits[0]
     # Item 87: a whole-string alias is what an operator's assignment
