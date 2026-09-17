@@ -4910,7 +4910,7 @@ method and the two run outputs: session 2026-09-17 (memory
 
 **2026-09-17, note #52 backend half shipped (PR #988, Fly v150).** `set_aside[].receipt_image_available` on the expense batch payload, resolved by the image endpoint's own rule; live, all five July entries read `true` (the two invoices above included) and serve 200. The View button is `docs/lovable-feedback-0917b-prompt.md` section 4, not pasted yet. The false-quarantine class itself (the proposed change above) is untouched, and the two invoices still need Criss's restore click.
 
-### 106. A mailed forward that created no expense still reads 'Added' and gets a 'landed in July' reply (2026-09-17 audit draft #104, unranked; licence: defect, covered) (SHIPPED PR #1017, Fly v157; SPA prompt written)
+### 106. A mailed forward that created no expense still reads 'Added' and gets a 'landed in July' reply (2026-09-17 audit draft #104, unranked; licence: defect, covered) (SHIPPED PR #1017, Fly v157; SPA APPLIED 2026-09-17)
 
 **Audit rank 13 of 40; severity high as merged; verification: checked by hand against the live inbound log (4 mails); no reviewer pass.** When the reader excludes a mailed file (statement page, bill notification, blank photo), the month already holds identical bytes, or the only attachment is an unsupported type (an iPhone HEIC photo is skipped; only PDF, PNG, JPEG, WebP are kept), the mail is stamped ingested with an empty list of expenses. The intake page shows 'Added', and the sender's confirmation says the files 'landed in the July 2026 expense month'. Four real forwards (two AWS 'billing statement available' from Dirk, an AT&T bill notice and an August card summary from Criss) delivered no receipt and nobody was told to fetch the PDF.
 
@@ -5336,7 +5336,7 @@ Criss on August, 11:29 UTC, row `0019__Invoice-B2EA98DF-0020.pdf` (Pressmaster F
 
 **Applied 2026-09-17 12:42 UTC**, cold-driven: the Pressmaster row shows the one open line with its picker (EN + PT), no other row does. The pick itself is Criss's; the row leaves `partial_uncategorized` when she makes it.
 
-### 137. Receipts are matched against every card's charges unless the receipt prints the card (owner, 2026-09-17; licence: defect) (SHIPPED 2026-09-17, Shipped row 59; SPA prompt NOT applied)
+### 137. Receipts are matched against every card's charges unless the receipt prints the card (owner, 2026-09-17; licence: defect) (SHIPPED 2026-09-17, Shipped row 59; SPA APPLIED 2026-09-17)
 
 **Shipped.** Design calls made on live evidence, recorded so they can be revisited:
 

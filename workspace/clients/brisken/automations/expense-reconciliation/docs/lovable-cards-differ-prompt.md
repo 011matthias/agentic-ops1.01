@@ -1,6 +1,6 @@
 # Lovable prompt: say when a receipt sits on another card's charge (item 137)
 
-> **NOT YET APPLIED.** Backend: `rows[].cards_differ` and
+> **APPLIED 2026-09-17** (see PROMPT-STATUS.md). Backend: `rows[].cards_differ` and
 > `summary.n_cards_differ` on `GET /api/runs/{id}` (item 137).
 
 ````markdown
