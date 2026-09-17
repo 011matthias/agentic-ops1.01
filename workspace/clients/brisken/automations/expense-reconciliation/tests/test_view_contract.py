@@ -142,6 +142,8 @@ EXPENSE_BATCH_CONTRACT = {
     "trip.travelers[]": "string",
     # Item 84: the boxes a row belongs to, each a count name without `n_`.
     "expenses[].boxes[]": "string",
+    # Item 106: per file, why it created no expense ({file, why, reason?}).
+    "expense_ingest.not_added[]": "object",
 }
 
 RUN_CONTRACT = {
@@ -212,6 +214,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "trip.travelers[]",
     "cost_center_options[]",
     "expenses[].boxes[]",
+    "expense_ingest.not_added[]",
 }
 
 RUN_MUST_COVER = {
