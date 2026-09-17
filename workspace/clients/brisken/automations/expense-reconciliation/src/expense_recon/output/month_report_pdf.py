@@ -86,6 +86,7 @@ def build_expense_report_pdf(
     copies_set_aside: Sequence[dict] | None = None,
     copies_set_aside_totals: dict[str, str] | None = None,
     receipts_by_section: bool = False,
+    amounts_unreadable: Sequence[int] = (),
 ) -> bytes:
     """Render the month's report: listing first, then the receipts.
 
@@ -158,6 +159,12 @@ def build_expense_report_pdf(
     preformatted), one line each naming the expense it repeats. Their
     evidence entries carry `"copy": True` and the original's `rows`, and
     are captioned as the copy. Omitted => nothing printed, as before.
+
+    `amounts_unreadable` (item 97) is the listing numbers of the rows written
+    for a receipt whose total was never read. Their Amount cell is blank,
+    which a total reads as zero, so the caller names them: each gets the
+    "amount unreadable, not in total" caption and a place in the footer,
+    the same as a cell that would not parse.
     """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -188,6 +195,9 @@ def build_expense_report_pdf(
         (n, cell(row, "Currency Code"), cell(row, "Expense Amount"))
         for n, row in enumerate(rows, start=1)
     )
+    unreadable = sorted(set(unreadable) | {
+        int(n) for n in amounts_unreadable if 1 <= int(n) <= len(rows)
+    })
     unreadable_rows = set(unreadable)
     totals_text = format_totals(totals, "no expenses")
 
@@ -278,7 +288,9 @@ def build_expense_report_pdf(
         elif numbers:
             which = f"Expense {numbers[0]}"
         else:
-            which = "Expense"
+            # Item 97: a receipt with no listing row is not given a number
+            # it does not have; its detail line says why.
+            which = "Receipt"
         if item.get("copy"):
             # Item 94: the pages of a copy set aside, behind its original.
             which += " (copy set aside)"
