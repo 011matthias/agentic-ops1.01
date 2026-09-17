@@ -99,6 +99,8 @@ def main() -> int:
         return 0
     if not isinstance(payload, dict):
         return 0
+    if session_state is not None:
+        session_state.bind_session(payload)
     ti = payload.get("tool_input") or {}
     path = ti.get("file_path") if isinstance(ti, dict) else None
     if not path:

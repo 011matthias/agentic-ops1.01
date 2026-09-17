@@ -13,11 +13,12 @@ threshold no longer depends on the agent's mental count.
 tokens; matches Claude Code's own pre-compact figure to within ~1k). When the
 context drops below the advised band (a compaction), the advisory re-arms.
 **Fallback, only when the transcript is unreadable:** tool calls and distinct
-files. The counters live in one temp file shared by every session on the
-machine, so a sibling session resets them; the transcript reading and the
-per-session advised-band marker are immune to that. Query the live reading
-with `uv run tools/session_state.py --status` (it names the session the
-reading belongs to). Mental count is the last resort when the meter is
+files. Each session keeps its own state file
+(`agentic-ops-session-state-{session_id}.json` in the temp dir, since
+2026-09-17; a sibling session used to reset the shared one). Query the live
+reading with `uv run tools/session_state.py --status`: it resolves this
+session from `CLAUDE_CODE_SESSION_ID` and reads context straight from this
+session's transcript. Mental count is the last resort when the meter is
 unavailable (e.g. a fresh clone before the SessionStart wiring runs):
 
 | Signal | Moderate | High | Critical |
