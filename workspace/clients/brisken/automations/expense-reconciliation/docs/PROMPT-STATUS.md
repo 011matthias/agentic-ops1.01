@@ -219,6 +219,7 @@ and a rollback would otherwise have nothing to re-apply.
 | `lovable-private-card-in-picker-prompt.md` (item 139, notes #65 + #66) | `__private_card__` in `chunk-expenses._batchId`; `expx.privateCard.mark` still present | Written 2026-09-17, not pasted. SPA only, no backend gate |
 | `lovable-one-download-each-prompt.md` (item 141, note #68) | `sum.dl.pdf`, `sum.dl.statementFile` in `chunk-runs._runId`; `sum.pdf` absent from every chunk | Written 2026-09-17, not pasted. SPA only, no backend gate |
 | `lovable-booked-hint-names-workbook-prompt.md` (item 142, note #69) | `row.status.posted.tipFile`, `wb.reason.charge.already_booked.file` in `chunk-runs._runId`; "your statement workbook" absent from `chunk-i18n` | Written 2026-09-17, not pasted. SPA copy only, no backend gate |
+| `lovable-duplicates-side-by-side-prompt.md` (item 140, note #67) | `dup.compare.open`, `dup.compare.differs`, `dup.compare.status.setAside`, `dup.compare.field.payment` in `chunk-i18n`; `dup.compare.open` and `dup.compare.status.setAside` also in a non-i18n chunk (the call sites). All absent from the 44-file bundle of 2026-09-17 | Written 2026-09-17, not pasted. SPA only, no backend gate: every member of every group is an `expenses[]` row on both live months, and the matched charge comes from the run query both pages already load |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
