@@ -4019,6 +4019,126 @@ that rival, so the right merchant takes the receipt even a few days further
 away, and the other charge reads unmatched. With no such rival nothing
 changes. Replay old vs new over July, August and the six labelled bundles:
 0 receipts moved.
+## The month knows which receipts to chase and from whom (item 107, 2026-09-17)
+
+Chasing receipts is the biggest thing Criss does by hand each month: she reads
+the month for charges with nothing behind them, works out whose card each one
+is, and mails Dirk and Nicolas herself. Three pieces answer that, and only the
+first two are live behaviour; the mail is composed and never sent.
+
+### 1. The list: `receipt_chase[]` on `GET /api/runs/{id}`
+
+One entry per CARD HOLDER, biggest chase first:
+
+```
+{
+  holder: "Dirk Neumann",          // the card registry's `person`; "" when none
+  holder_label: "Dirk Neumann",    // "No card holder on file" when holder is ""
+  holder_address: "dirk.neumann@brisken.com" | null,
+  cards: [{key, card_key, label}],
+  n_charges: 24,
+  n_requested: 3,                  // of those, already asked for
+  amounts_by_ccy: {"USD": "6,361.53"},
+  charges: [{
+    transaction_id, date, vendor, amount, currency,
+    card_key, card_label, coverage_key,
+    portal_hint?,                  // ABSENT unless the merchant registry has one
+    receipt_requested_at?, requested_to?,   // ABSENT unless asked
+  }],
+}
+```
+
+Membership is item 99's `charge_needs_receipt`, read off the payload's own
+`rows[]`, so the groups' charges SUM to `summary.n_charges_need_receipt` and
+the list and the count cannot disagree. A charge is grouped under the holder of
+the card its `coverage_key` names, which is the identity the per-card coverage
+panel totals it under, so a card is never split in two. Empty on a month with
+nothing to chase, which is what live July reads.
+
+`holder_address` comes from `settings.receipt_requests.holders` and is `null`
+when nobody put one there: an invented recipient is the one mistake a chase
+mail cannot take back. `portal_hint` comes from a merchant entry's new optional
+`receipt_portal` ("platform.openai.com"), stored only when set; no merchant
+carries one today, so the key is absent everywhere until somebody fills it in.
+
+### 2. The two states, and what each does to the month
+
+Both are per-charge and reviewer-set, both live on the charge's own `decisions`
+row beside the pairing verdict (so a re-match carries them, and a statement
+re-read's id rekey moves them with the row), and both are ABSENT from `rows[]`
+unless set.
+
+| Route | Body | Row field | Effect on `n_charges_need_receipt` |
+|---|---|---|---|
+| `POST /api/runs/{id}/receipt-requested` | `{transaction_id, to?}` or `{transaction_id, clear: true}` | `receipt_requested_at` + `requested_to` | none: the charge still needs a receipt |
+| `POST /api/runs/{id}/no-receipt-expected` | `{transaction_id, reason}` or `{transaction_id, clear: true}` | `no_receipt_expected` (the reason) | closes it: the charge leaves the count |
+
+Asking is not getting, so "requested" closes nothing and the month stays
+incomplete; `summary.n_charges_receipt_requested` is a SUBSET of
+`n_charges_need_receipt` saying how much of the chase is already out. "No
+receipt expected" is a verdict, so it closes the charge exactly as an
+already-booked one does, `summary.n_charges_no_receipt_expected` keeps the
+closure visible, and `month_complete` follows once nothing else blocks. The
+reason is refused blank: a verdict nobody can read next month is worse than no
+verdict.
+
+The verdict also moves money. A charge nobody will ever evidence leaves
+`summary.unreconciled_by_ccy` into `summary.no_receipt_expected_by_ccy`, beside
+it and never inside it, exactly as item 102's booked-no-receipt total sits. The
+annual card fee stops reading as money nobody has evidenced without
+disappearing from the month.
+
+Both routes reply `{ok, summary}`, the same shape `POST .../decisions` and
+`POST .../disposition` answer with, and both writes are status-preserving: they
+touch their own columns only, so marking a charge never clears its pairing
+verdict or its disposition, and a verdict never clears the chase state.
+
+### 3. The mail: composed, and nothing sends
+
+`GET /api/runs/{id}/receipt-requests` is the dry run. It returns `{enabled,
+can_send, send_blocked_reason, intake_address, n_charges_need_receipt, groups,
+mails}`. One mail per holder, plain text, both languages together (`subject` /
+`body` and `subject_pt` / `body_pt`), `from_address` and `reply_to` both the
+intake address (`receipts@{intake domain}`) so a reply with the PDFs attached
+lands back in the tool as ordinary intake mail. A holder with no address on
+file still gets a composed mail, with `to: null` and `blocked: "no_address"`,
+so the page names who is unreachable instead of the send quietly skipping them.
+Composing is not asking: the preview writes no state and marks no charge
+requested.
+
+**Nothing in this build can send.** `POST /api/runs/{id}/receipt-requests/send`
+answers 403 both ways: `receipt_requests_disabled` while
+`settings.receipt_requests.enabled` is false (the default, and the live value),
+and `receipt_send_not_wired` once it is true, because `receipt_chase.py`
+imports no mail transport and calls none. `can_send` is false in every case.
+The owner approves the first real send separately, under the Brisken
+send-by-id standard; wiring a guarded sender is a deliberate edit to that
+module, not a flag flip. `tests/test_receipt_chasing_item_107.py` pins the
+absence by parsing the module's imports and calls.
+
+Graph sends as `matthias.silva@brisken.com` today, so a future sender has to
+set Reply-To to the intake address explicitly rather than inherit it, or the
+replies carrying the PDFs never reach the tool.
+
+### The settings key
+
+`settings["receipt_requests"]` = `{"enabled": false, "holders": {person:
+address}}`, whole-object replace like `intake`. `enabled` must be a real
+boolean and each address a single plain one; the key decides who an outbound
+chase would reach, so the PUT refuses anything else with a 400 rather than
+coercing it. Default `{"enabled": false, "holders": {}}`.
+
+Live 2026-09-17 (read-only, before the deploy): August 2026 would list 61
+charges across the three names the card registry's `person` field holds:
+"Nicolas Neumann" 36 on card 3876 (USD 1,011.15), "Dirk Neumann - Corp
+Services" 24 on card-2838 (USD 6,361.53), and "Brisken Consulting" 1 on
+card-1176 (USD 36.00), a company rather than a person. July 2026 would
+list nothing, because every charge left without a receipt there is gray-filled
+and already closed. No holder address and no portal hint is configured yet, so
+every live mail would carry `blocked: "no_address"` today. Route-level in
+`tests/test_receipt_chasing_item_107.py`; pins in `tests/test_view_contract.py`
+and `tests/test_settings_put_contract.py`. SPA half:
+`docs/lovable-receipt-chasing-prompt.md`.
 ## A corrected category comes back next month: what memory decides now (item 115, 2026-09-17)
 
 The sign-off promise is that a category Criss fixes arrives pre-filled the

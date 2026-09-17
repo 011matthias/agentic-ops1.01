@@ -465,5 +465,13 @@ def normalize_merchants_setting(raw: object, *, stored: object = None) -> dict:
         cost_center = str(entry.get("cost_center") or "").strip()
         if cost_center:
             cleaned["cost_center"] = cost_center
+        # Item 107: where this brand's invoice can be downloaded again
+        # ("platform.openai.com", "Chase statements portal"). Stored only
+        # when set, for the same reason, and free text on purpose: it is a
+        # hint printed next to the charge in the chase list and the request
+        # mail, not something the tool follows.
+        portal = str(entry.get("receipt_portal") or "").strip()
+        if portal:
+            cleaned["receipt_portal"] = portal[:200]
         out[canonical] = cleaned
     return out
