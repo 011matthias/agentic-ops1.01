@@ -352,8 +352,14 @@ class MatchingConfig:
     fx_base_amount_review_pct: Decimal = Decimal("0.13")
 
     # ── FX-judgment suggestion floor (2026-07-24) ──────────────────
-    # A judged pair whose model same-purchase confidence lands BELOW
-    # this floor is not shown as a suggestion. On the April 2026 hosted
+    # A judged pair whose model same-purchase confidence lands AT OR BELOW
+    # this floor is not shown as a suggestion (item 131, 2026-09-17: the
+    # model answers exactly 0.20, and "below" let those rejections through
+    # with "likely NOT the same purchase" as their reason). The one
+    # exception, AT the floor only: a pair whose own rate arithmetic sits
+    # in the clean band (`pair_reference_gap_band` == "match") stays in
+    # review, the tool's reason first (`cli._apply_judgment`); below the
+    # floor a rejection stays final. On the April 2026 hosted
     # run the workbench proposed a USD OpenAI subscription against a
     # BRL construction-materials receipt at p=0.10, with the model's own
     # reason saying "likely NOT the same purchase" (owner call
@@ -916,6 +922,62 @@ def _reference_rate_for(
     if ecb is not None:
         return ecb[0], "ecb_month", 0
     return None
+
+
+def reference_gap(
+    charge_amount: Decimal,
+    receipt_total: Decimal,
+    rate: Decimal,
+    match_pct: Decimal,
+    review_pct: Decimal,
+) -> tuple[Decimal, Decimal, str] | None:
+    """A receipt converted at a reference rate, set against its charge:
+    ``(converted, deviation, band)``, or None when nothing converts.
+
+    converted = receipt total x rate; deviation = (charge - converted) /
+    converted, signed and unrounded, the basis of ``match_one``'s ``ref_dev``;
+    band is ``match`` within ``match_pct``, ``review`` within ``review_pct``,
+    else ``outside``. This IS item 81's ``fx.reference_gap_band``: the view's
+    ``_fx_reference_fields`` and the judgment layer's rejected-pair rule
+    (item 131, ``cli._apply_judgment``) both read it here, so the band a
+    reviewer sees and the band that keeps a pair in review cannot differ."""
+    if receipt_total is None or receipt_total <= 0 or charge_amount is None:
+        return None
+    converted = receipt_total * rate
+    if converted <= 0:
+        return None
+    deviation = (charge_amount - converted) / converted
+    if abs(deviation) <= match_pct:
+        band = "match"
+    elif abs(deviation) <= review_pct:
+        band = "review"
+    else:
+        band = "outside"
+    return converted, deviation, band
+
+
+def pair_reference_gap_band(
+    tx: Transaction,
+    receipt: Receipt,
+    cfg: MatchingConfig,
+    derived_rates: "Mapping[tuple[str, str], tuple[Decimal, str, int]] | None" = None,
+) -> str | None:
+    """Item 81's band for one cross-currency pair, at the rate the matcher
+    uses for it (``_reference_rate_for``, on the charge date). None for a
+    same-currency pair, a receipt with no total, or a pair with no rate."""
+    rec_ccy = receipt.detected_currency
+    if not rec_ccy or not tx.transaction_currency or rec_ccy == tx.transaction_currency:
+        return None
+    ref = _reference_rate_for(
+        cfg, rec_ccy, tx.transaction_currency, derived_rates, on=tx.transaction_date,
+    )
+    if ref is None:
+        return None
+    gap = reference_gap(
+        tx.amount, receipt.detected_total, ref[0],
+        cfg.fx_reference_match_pct, cfg.fx_reference_review_pct,
+    )
+    return gap[2] if gap is not None else None
 
 
 def match_one(
