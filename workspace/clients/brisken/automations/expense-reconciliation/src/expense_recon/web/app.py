@@ -71,19 +71,21 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     FileResponse,
-    HTMLResponse,
     JSONResponse,
     PlainTextResponse,
     Response,
 )
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..batch_period import month_from_label
 from ..cards import card_to_dict, effective_cards, normalize_cards_setting
 from ..cards_provision import card_by_key, load_cards
+from ..error_codes import code_of, fields_of
 from ..ingest.expense_report_images import render_receipt_page
 from .serialize import receipt_from_dict
 from .service import (
@@ -205,8 +207,38 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _not_found(message: str) -> JSONResponse:
-    return JSONResponse({"error": message.lower()}, status_code=404)
+def _not_found(message: str, code: str) -> JSONResponse:
+    return JSONResponse({"error": message.lower(), "code": code}, status_code=404)
+
+
+def _refused(message, status: int = 400, **extra) -> JSONResponse:
+    """A refusal whose English sentence carries its own code and named
+    values (a `Refusal` from the service layer), answered with both
+    (item 130). A plain string still answers, under a generic code."""
+    return JSONResponse(
+        {"error": str(message), "code": code_of(message, "request_refused"),
+         **fields_of(message), **extra},
+        status_code=status,
+    )
+
+
+def _input_refused(exc: RunInputError) -> JSONResponse:
+    """A user-fixable input problem on the wire (item 130): the English
+    sentence, its stable code, and the named values the sentence used."""
+    return JSONResponse(
+        {"error": exc.message, "code": exc.code, **exc.fields}, status_code=400
+    )
+
+
+def _refusal_response(result: dict, default_status: int = 400) -> JSONResponse:
+    """A service-layer refusal dict on the wire (item 130). The service keeps
+    the HTTP status under an int `code`, which never leaves the server; its
+    `error_code` becomes the body's `code`, beside the unchanged English
+    `error` and whatever named values the refusal carries."""
+    body = dict(result)
+    status = body.pop("code", default_status)
+    body["code"] = body.pop("error_code", None) or "request_refused"
+    return JSONResponse(body, status_code=status)
 
 
 def _operator() -> str | None:
@@ -776,6 +808,33 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # state: runs come and go, learned facts persist across months.
     app.state.learning_db_path = data_root_path / "learning.sqlite"
 
+    # Item 130: the framework's own refusals carry a code like every other
+    # refusal. A request the route signature cannot bind (422) and a path or
+    # method no route serves (404 / 405) keep FastAPI's `detail` for any
+    # reader of it, and gain the `error` sentence and the `code` the SPA
+    # translates.
+    @app.exception_handler(RequestValidationError)
+    async def _validation_refused(request: Request, exc: RequestValidationError):
+        return JSONResponse(
+            {"error": "the request is missing a field, or one has the wrong "
+                      "type",
+             "code": "validation_failed",
+             "detail": jsonable_encoder(exc.errors())},
+            status_code=422,
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _http_refused(request: Request, exc: StarletteHTTPException):
+        code = {404: "not_found", 405: "method_not_allowed"}.get(
+            exc.status_code, "http_error"
+        )
+        return JSONResponse(
+            {"error": str(exc.detail).lower(), "code": code,
+             "detail": exc.detail},
+            status_code=exc.status_code,
+            headers=getattr(exc, "headers", None),
+        )
+
     # Startup sweep: a job still `running` in the durable table was killed
     # by a restart (Fly scale-to-zero). Mark it interrupted and put its
     # intake back in the queue so the operator sees the truth, not a
@@ -894,7 +953,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 role = auth.token_role(token)
             if role is None:
                 return JSONResponse(
-                    {"error": "authentication required"}, status_code=401
+                    {"error": "authentication required",
+                     "code": "unauthenticated"},
+                    status_code=401,
                 )
             label = auth.token_label(token) or auth.DEFAULT_LABEL
         request.state.role = auth.ROLE_OPERATOR
@@ -962,7 +1023,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             else:
                 ratelimit.register_success(store, caller)
         if label is None:
-            return JSONResponse({"error": "invalid code"}, status_code=401)
+            return JSONResponse(
+                {"error": "invalid code", "code": "invalid_login_code"},
+                status_code=401,
+            )
         return JSONResponse({
             "token": auth.issue_token(auth.ROLE_OPERATOR, label),
             "role": auth.ROLE_OPERATOR,
@@ -1146,7 +1210,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     uploaded_by=request.state.role,
                 )
         except RunInputError as exc:
-            return JSONResponse({"error": exc.message}, status_code=400)
+            return _input_refused(exc)
         return JSONResponse(
             {"ok": True, "intake_id": intake_row.intake_id,
              "label": intake_row.label, "status": intake_row.status}
@@ -1164,7 +1228,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             intake = store.get_intake(intake_id)
         if intake is None:
-            return _not_found("Upload not found")
+            return _not_found("Upload not found", "upload_not_found")
 
         statement_bytes = await statement.read() if statement is not None else None
         receipts_bytes = await receipts.read() if receipts is not None else None
@@ -1184,7 +1248,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     now_iso=_now_iso(),
                 )
         except RunInputError as exc:
-            return JSONResponse({"error": exc.message}, status_code=400)
+            return _input_refused(exc)
         return JSONResponse({"ok": True, "intake_id": intake_id})
 
     def _parse_run_form(
@@ -1227,7 +1291,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 else dict(DEFAULT_EXPENSE_COLUMN_MAP)
             )
         except json.JSONDecodeError as exc:
-            raise RunInputError(f"Receipt column map is not valid JSON: {exc}")
+            raise RunInputError(
+                f"Receipt column map is not valid JSON: {exc}",
+                code="receipt_column_map_invalid",
+            )
 
         # Account -> legal entity map (Dirk 2026-06-16): the legal entity is
         # derived from the paying account, not typed each run. Blank => no
@@ -1243,7 +1310,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             entity_map = {str(k): str(v) for k, v in entity_map_raw.items()}
         except (json.JSONDecodeError, ValueError) as exc:
             raise RunInputError(
-                f"Account to legal-entity map is not valid JSON: {exc}"
+                f"Account to legal-entity map is not valid JSON: {exc}",
+                code="entity_map_invalid",
             )
 
         card = card_by_key(card_key, load_cards())
@@ -1324,17 +1392,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 card_key=card_key,
             )
         except RunInputError as exc:
-            return JSONResponse({"error": exc.message}, status_code=400)
+            return _input_refused(exc)
 
         statement_bytes = await statement.read()
         receipts_bytes = await receipts.read()
         if not statement_bytes:
             return JSONResponse(
-                {"error": "No statement file uploaded."}, status_code=400
+                {"error": "No statement file uploaded.", "code": "no_statement_file"},
+                status_code=400
             )
         if not receipts_bytes:
             return JSONResponse(
-                {"error": "No receipts file uploaded."}, status_code=400
+                {"error": "No receipts file uploaded.", "code": "no_receipts_file"},
+                status_code=400
             )
 
         with open_store() as store:
@@ -1353,7 +1423,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 settings=settings,
             )
         except RunInputError as exc:
-            return JSONResponse({"error": exc.message}, status_code=400)
+            return _input_refused(exc)
 
         job_id = uuid.uuid4().hex[:12]
         with open_store() as store:
@@ -1389,11 +1459,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             intake = store.get_intake(intake_id)
             settings = store.get_settings()
         if intake is None:
-            return _not_found("Upload not found")
+            return _not_found("Upload not found", "upload_not_found")
 
-        def _error_page(message: str, headers=None, status_code: int = 400):
+        def _error_page(exc: RunInputError, status_code: int = 400):
             return JSONResponse(
-                {"error": message, "headers": headers},
+                {"error": exc.message, "code": exc.code, **exc.fields,
+                 "headers": exc.headers},
                 status_code=status_code,
             )
 
@@ -1425,7 +1496,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 settings=settings,
             )
         except RunInputError as exc:
-            return _error_page(exc.message, headers=exc.headers)
+            return _error_page(exc)
 
         with open_store() as store:
             store.set_intake_status(
@@ -1443,7 +1514,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     store.set_intake_status(
                         intake_id, INTAKE_RECEIVED, updated_at=_now_iso()
                     )
-                return _error_page(exc.message, headers=exc.headers)
+                return _error_page(exc)
             return JSONResponse({"ok": True, "run_id": run_id})
 
         return _start_background_run(background, prepared, intake.label)
@@ -1461,7 +1532,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return _not_found("Run not found")
+                return _not_found("Run not found", "run_not_found")
             if run_mode(run) != MODE_EXPENSE_GENERATION:
                 # A statement-first run from the classic page (the live ones
                 # are test uploads). It is not a month and teaches nothing;
@@ -1524,7 +1595,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return _not_found("Run not found")
+                return _not_found("Run not found", "run_not_found")
             store.set_run_published(run_id, False, None)
             if run.intake_id is not None:
                 store.set_intake_status(
@@ -1552,13 +1623,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         try:
             data = await request.json()
         except Exception:  # noqa: BLE001 - malformed body is a client error
-            return JSONResponse({"error": "invalid json"}, status_code=400)
+            return JSONResponse({"error": "invalid json", "code": "invalid_json"}, status_code=400)
         label = str((data or {}).get("label", "")).strip()[:200] if isinstance(data, dict) else ""
         if not label:
-            return JSONResponse({"error": "label is required"}, status_code=400)
+            return JSONResponse({"error": "label is required", "code": "label_required"}, status_code=400)
         with open_store() as store:
             if not store.set_run_label(run_id, label):
-                return _not_found("Run not found")
+                return _not_found("Run not found", "run_not_found")
         # Renaming a batch INTO a month is how a mis-labelled month claims
         # the mail that has been waiting for it — the fix path for the
         # default full-date label, which names no month and never claims.
@@ -1589,7 +1660,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
         with open_store() as store:
             if store.get_run(run_id) is None:
-                return _not_found("Run not found")
+                return _not_found("Run not found", "run_not_found")
         # Destructive-action gate: the caller repeats the month's label
         # (or the run id) in the body. A bare POST deletes nothing.
         confirm = (
@@ -1599,7 +1670,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not confirm:
             return JSONResponse(
                 {"error": "confirm is required: repeat the month label "
-                          "(or run id) to delete"},
+                          "(or run id) to delete",
+                 "code": "delete_confirm_required"},
                 status_code=400,
             )
         # Serialize with the batch writers: rows must not vanish under an
@@ -1609,10 +1681,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             with open_store() as store:
                 run = store.get_run(run_id)
                 if run is None:
-                    return _not_found("Run not found")
+                    return _not_found("Run not found", "run_not_found")
                 if confirm not in {(run.label or "").strip(), run.run_id}:
                     return JSONResponse(
-                        {"error": "confirm label mismatch"}, status_code=409
+                        {"error": "confirm label mismatch",
+                         "code": "delete_confirm_mismatch"},
+                        status_code=409
                     )
                 store.delete_run(run_id)
                 # A deleted run must not leave its intake pointing at a gone
@@ -1757,13 +1831,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         try:
             data = await request.json()
         except Exception:  # noqa: BLE001 - malformed body is a client error
-            return JSONResponse({"ok": False, "error": "invalid json"}, status_code=400)
+            return JSONResponse({"ok": False, "error": "invalid json", "code": "invalid_json"}, status_code=400)
         if not isinstance(data, dict):
-            return JSONResponse({"ok": False, "error": "invalid payload"}, status_code=400)
+            return JSONResponse({"ok": False, "error": "invalid payload", "code": "invalid_body"}, status_code=400)
         comment = str(data.get("comment", "")).strip()
         if not comment:
             return JSONResponse(
-                {"ok": False, "error": "comment is required"}, status_code=400
+                {"ok": False, "error": "comment is required", "code": "comment_required"}, status_code=400
             )
         # Position sanitized to the known numeric fields, so a note can be
         # located exactly later (coordinates, scroll, % down the page).
@@ -1997,6 +2071,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 "error": "auto-materialization is off "
                          "(EXPENSE_RECON_AUTO_MATERIALIZE); the pool keeps "
                          "waiting. Flip the flag before backfilling.",
+                "code": "auto_materialize_off",
             }, status_code=409)
         result = replay_held(
             app.state.db_path, app.state.learning_db_path,
@@ -2044,7 +2119,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
         view = read_body_view(app.state.data_root, archive)
         if view is None:
-            return _not_found("Archive not found")
+            return _not_found("Archive not found", "mail_not_found")
         return JSONResponse(view)
 
     @app.post("/api/inbound/{archive}/render-ingest")
@@ -2056,8 +2131,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             app.state.data_root, archive, operator=_operator(),
         )
         if "error" in result:
-            code = result.pop("code", 400)
-            return JSONResponse(result, status_code=code)
+            return _refusal_response(result)
         return JSONResponse({"ok": True, **result})
 
     @app.post("/api/inbound/{archive}/re-ingest")
@@ -2072,8 +2146,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             app.state.data_root, archive, operator=_operator(),
         )
         if "error" in result:
-            code = result.pop("code", 400)
-            return JSONResponse(result, status_code=code)
+            return _refusal_response(result)
         return JSONResponse({"ok": True, **result})
 
     @app.post("/api/inbound/{archive}/join-trip")
@@ -2087,12 +2160,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001 - malformed body is a client error
-            return JSONResponse({"error": "invalid json"}, status_code=400)
+            return JSONResponse({"error": "invalid json", "code": "invalid_json"}, status_code=400)
         trip_id = str((body or {}).get("trip_id") or "").strip() \
             if isinstance(body, dict) else ""
         if not trip_id:
             return JSONResponse(
-                {"error": "trip_id is required"}, status_code=400
+                {"error": "trip_id is required", "code": "trip_id_required"},
+                status_code=400
             )
         result = await run_in_threadpool(
             join_trip,
@@ -2100,8 +2174,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             app.state.data_root, archive, trip_id, _operator(),
         )
         if "error" in result:
-            code = result.pop("code", 400)
-            return JSONResponse(result, status_code=code)
+            return _refusal_response(result)
         return JSONResponse({"ok": True, **result})
 
     @app.post("/api/inbound/{archive}/not-a-duplicate")
@@ -2118,8 +2191,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             app.state.data_root, archive,
         )
         if "error" in result:
-            code = result.pop("code", 400)
-            return JSONResponse(result, status_code=code)
+            return _refusal_response(result)
         return JSONResponse({"ok": True, **result})
 
     @app.post("/api/inbound/{archive}/dismiss")
@@ -2130,8 +2202,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             app.state.data_root, archive, operator=_operator(),
         )
         if "error" in result:
-            code = result.pop("code", 400)
-            return JSONResponse(result, status_code=code)
+            return _refusal_response(result)
         return JSONResponse({"ok": True, **result})
 
     @app.get("/feedback.jsonl")
@@ -2147,7 +2218,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             job = store.get_job(job_id)
         if job is None:
-            return JSONResponse({"error": "unknown job"}, status_code=404)
+            return JSONResponse({"error": "unknown job", "code": "job_not_found"}, status_code=404)
         return JSONResponse(job)
 
     def _expense_view(store: RunStore, run) -> dict:
@@ -2258,7 +2329,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             # A batch WITH a statement attached graduates to the workbench:
             # build_view over the baked snapshot, every statement-mode
             # surface (decisions / confirm-ready / exports) unchanged. The
@@ -2278,11 +2349,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         status = body.get("status")
         chosen = body.get("chosen_document_id")
         if not tx_id or status not in VALID_STATUSES:
-            return JSONResponse({"error": "bad request"}, status_code=400)
+            return JSONResponse({"error": "bad request", "code": "invalid_body"}, status_code=400)
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             # R4 (item 38): the claim sync runs FIRST -- a verdict that
             # would let this receipt settle a second charge in another
             # batch is refused whole, decision unwritten.
@@ -2290,7 +2361,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 store, run, tx_id, status, chosen, _now_iso()
             )
             if conflict is not None:
-                return JSONResponse({"error": conflict}, status_code=409)
+                return _refused(conflict, status=409)
             store.set_decision(run_id, tx_id, status, chosen, _now_iso())
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
@@ -2305,11 +2376,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         tx_id = body.get("transaction_id")
         disposition = body.get("disposition")
         if not tx_id or disposition not in VALID_DISPOSITIONS:
-            return JSONResponse({"error": "bad request"}, status_code=400)
+            return JSONResponse({"error": "bad request", "code": "invalid_body"}, status_code=400)
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             store.set_disposition(run_id, tx_id, disposition, _now_iso())
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
@@ -2326,11 +2397,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         group_id = body.get("group_id") or body.get("group_key")
         resolution = body.get("resolution") or body.get("action")
         if not group_id or resolution not in VALID_DUP_RESOLUTIONS:
-            return JSONResponse({"error": "bad request"}, status_code=400)
+            return JSONResponse({"error": "bad request", "code": "invalid_body"}, status_code=400)
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             store.set_duplicate_resolution(run_id, group_id, resolution, _now_iso())
             reconciling = has_statement(run)
         # Item 56: the resolution decides what the matcher's pool holds (an
@@ -2347,7 +2418,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             # Dispatch on the run's mode, exactly as GET /api/runs/{id}
             # does. Duplicate groups are flagged in BOTH payloads, so an
             # expense batch can be resolved from the grid; replying with
@@ -2448,7 +2519,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # is legal, and `applied` says what actually landed.
         if not isinstance(body, dict):
             return JSONResponse(
-                {"error": "settings body must be an object"}, status_code=400
+                {"error": "settings body must be an object", "code": "invalid_body"}, status_code=400
             )
         unknown = sorted(
             k
@@ -2457,7 +2528,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
         if unknown:
             return JSONResponse(
-                {"error": f"unknown settings key(s): {', '.join(unknown)}"},
+                {"error": f"unknown settings key(s): {', '.join(unknown)}",
+                 "code": "unknown_settings_keys", "keys": unknown},
                 status_code=400,
             )
         patch: dict = {}
@@ -2475,7 +2547,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             raw = body[key]
             if not isinstance(raw, dict):
                 return JSONResponse(
-                    {"error": f"{key} must be an object"}, status_code=400
+                    {"error": f"{key} must be an object",
+                     "code": "invalid_body", "setting": key},
+                    status_code=400
                 )
             cleaned: dict[str, str] = {}
             for k, v in raw.items():
@@ -2487,7 +2561,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     from_ccy, _, to_ccy = name.partition(":")
                     if not from_ccy.strip() or not to_ccy.strip():
                         return JSONResponse(
-                            {"error": f"rate key {name!r} must be 'FROM:TO'"},
+                            {"error": f"rate key {name!r} must be 'FROM:TO'",
+                             "code": "fx_rate_key_invalid",
+                             "setting": "fx_reference_rates",
+                             "rate_key": name},
                             status_code=400,
                         )
                     try:
@@ -2495,7 +2572,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                             raise ValueError(value)
                     except (ArithmeticError, ValueError):
                         return JSONResponse(
-                            {"error": f"rate {name} must be a positive number"},
+                            {"error": f"rate {name} must be a positive number",
+                             "code": "fx_rate_not_positive",
+                             "setting": "fx_reference_rates",
+                             "rate_key": name},
                             status_code=400,
                         )
                 cleaned[name] = value
@@ -2510,7 +2590,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             raw = body["entities"]
             if not isinstance(raw, dict):
                 return JSONResponse(
-                    {"error": "entities must be an object"}, status_code=400
+                    {"error": "entities must be an object",
+                     "code": "invalid_body", "setting": "entities"},
+                    status_code=400
                 )
             cleaned_entities: dict[str, dict] = {}
             for label, ent in raw.items():
@@ -2519,7 +2601,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     continue
                 if not isinstance(ent, dict):
                     return JSONResponse(
-                        {"error": f"entities[{name!r}] must be an object"},
+                        {"error": f"entities[{name!r}] must be an object",
+                         "code": "invalid_body", "setting": "entities"},
                         status_code=400,
                     )
                 entry: dict = {}
@@ -2531,7 +2614,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         continue
                     if not isinstance(ent[lkey], list):
                         return JSONResponse(
-                            {"error": f"entities[{name!r}].{lkey} must be a list"},
+                            {"error": f"entities[{name!r}].{lkey} must be a list",
+                             "code": "invalid_body", "setting": "entities"},
                             status_code=400,
                         )
                     values = [str(v).strip() for v in ent[lkey] if str(v).strip()]
@@ -2551,7 +2635,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             raw_order = body["entity_order"]
             if not isinstance(raw_order, list):
                 return JSONResponse(
-                    {"error": "entity_order must be a list"}, status_code=400
+                    {"error": "entity_order must be a list",
+                     "code": "invalid_body", "setting": "entity_order"},
+                    status_code=400
                 )
             order: list[str] = []
             for item in raw_order:
@@ -2576,7 +2662,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     body["merchants"], stored=stored_merchants
                 )
             except ValueError as exc:
-                return JSONResponse({"error": str(exc)}, status_code=400)
+                return JSONResponse({
+                    "error": str(exc), "code": code_of(exc, "invalid_body"),
+                    "setting": "merchants", **fields_of(exc),
+                }, status_code=400)
         # Card registry (2026-08-21): {slug: {label, digits, aliases,
         # entity, zoho_account?, currency, active}}. Whole-map replace,
         # validated + cleaned by the cards module (blank slug dropped,
@@ -2587,7 +2676,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             try:
                 patch["cards"] = normalize_cards_setting(body["cards"])
             except ValueError as exc:
-                return JSONResponse({"error": str(exc)}, status_code=400)
+                return JSONResponse({
+                    "error": str(exc), "code": code_of(exc, "invalid_body"),
+                    "setting": "cards", **fields_of(exc),
+                }, status_code=400)
         # Cost centers (item 47): {name: {kind, note, active}}. Whole-map
         # replace, same contract family as merchants / cards / entities.
         # Owner-authored ONLY — nothing else in the tool ever writes this
@@ -2598,7 +2690,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     body["cost_centers"]
                 )
             except ValueError as exc:
-                return JSONResponse({"error": str(exc)}, status_code=400)
+                return JSONResponse({
+                    "error": str(exc), "code": code_of(exc, "invalid_body"),
+                    "setting": "cost_centers", **fields_of(exc),
+                }, status_code=400)
         # Mail-intake config (aliases -> person names, sender allowlist,
         # daily caps). Validated at the edge like merchants.
         if "intake" in body:
@@ -2607,7 +2702,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             try:
                 patch["intake"] = normalize_intake_setting(body["intake"])
             except ValueError as exc:
-                return JSONResponse({"error": str(exc)}, status_code=400)
+                return JSONResponse({
+                    "error": str(exc), "code": code_of(exc, "invalid_body"),
+                    "setting": "intake", **fields_of(exc),
+                }, status_code=400)
         with open_store() as store:
             settings = store.set_settings(patch, _now_iso())
         return JSONResponse({
@@ -2680,9 +2778,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001 - malformed body is a client error
-            return JSONResponse({"error": "invalid json"}, status_code=400)
+            return JSONResponse({"error": "invalid json", "code": "invalid_json"}, status_code=400)
         if not isinstance(body, dict):
-            return JSONResponse({"error": "body must be an object"},
+            return JSONResponse({"error": "body must be an object", "code": "invalid_body"},
                                 status_code=400)
         legal_entity_id, vendor_norm = _memory_row_key(body)
         category = str(body.get("category") or "").strip()
@@ -2694,11 +2792,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not legal_entity_id or not vendor_norm:
             return JSONResponse(
                 {"error": "legal_entity_id and a non-empty vendor are "
-                          "required"}, status_code=400)
+                          "required", "code": "memory_row_key_required"},
+                status_code=400)
         if category not in EXPENSE_CATEGORIES:
             return JSONResponse(
                 {"error": f"category must be one of the tool's "
                           f"{len(EXPENSE_CATEGORIES)} categories",
+                 "code": "category_not_allowed",
                  "categories": sorted(EXPENSE_CATEGORIES)},
                 status_code=400)
         with LearningStore(app.state.learning_db_path) as s:
@@ -2722,20 +2822,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001
-            return JSONResponse({"error": "invalid json"}, status_code=400)
+            return JSONResponse({"error": "invalid json", "code": "invalid_json"}, status_code=400)
         if not isinstance(body, dict):
-            return JSONResponse({"error": "body must be an object"},
+            return JSONResponse({"error": "body must be an object", "code": "invalid_body"},
                                 status_code=400)
         legal_entity_id, vendor_norm = _memory_row_key(body)
         if not legal_entity_id or not vendor_norm:
             return JSONResponse(
                 {"error": "legal_entity_id and a non-empty vendor are "
-                          "required"}, status_code=400)
+                          "required", "code": "memory_row_key_required"},
+                status_code=400)
         with LearningStore(app.state.learning_db_path) as s:
             existed = s.delete_merchant_category(legal_entity_id, vendor_norm)
         if not existed:
             return JSONResponse(
-                {"error": "no learned category for that entity + vendor"},
+                {"error": "no learned category for that entity + vendor",
+                 "code": "memory_category_not_found"},
                 status_code=404)
         return JSONResponse({
             "ok": True, "entity": legal_entity_id, "vendor": vendor_norm,
@@ -2751,15 +2853,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001
-            return JSONResponse({"error": "invalid json"}, status_code=400)
+            return JSONResponse({"error": "invalid json", "code": "invalid_json"}, status_code=400)
         if not isinstance(body, dict):
-            return JSONResponse({"error": "body must be an object"},
+            return JSONResponse({"error": "body must be an object", "code": "invalid_body"},
                                 status_code=400)
         rows = body.get("rows")
         if not isinstance(rows, list) or not rows:
             return JSONResponse(
                 {"error": "rows must be a non-empty list of "
-                          "{legal_entity_id, vendor}"}, status_code=400)
+                          "{legal_entity_id, vendor}",
+                 "code": "memory_rows_required"}, status_code=400)
         pairs: list[tuple[str, str]] = []
         for r in rows:
             if not isinstance(r, dict):
@@ -2770,7 +2873,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 pairs.append((entity, vendor))
         if not pairs:
             return JSONResponse(
-                {"error": "no valid rows in the list"}, status_code=400)
+                {"error": "no valid rows in the list",
+                 "code": "memory_rows_invalid"}, status_code=400)
         with LearningStore(app.state.learning_db_path) as s:
             n = s.validate_merchant_categories(
                 pairs, _now_iso(), _operator()
@@ -2788,7 +2892,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         legal_entity_id = (body.get("legal_entity_id") or "").strip()
         vendor = (body.get("vendor") or "").strip()
         if not legal_entity_id or not vendor:
-            return JSONResponse({"error": "bad request"}, status_code=400)
+            return JSONResponse({"error": "bad request", "code": "invalid_body"}, status_code=400)
         forgotten = forget_memory_vendor(
             app.state.learning_db_path, legal_entity_id, vendor
         )
@@ -2808,7 +2912,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             decisions = store.get_decisions(run_id)
             view = _workbench_view(store, run)
             autopick = dict(matched_autopick_decisions(run, decisions))
@@ -2856,7 +2960,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
             pairs = ready_confirm_pairs(run, decisions, overrides)
@@ -2903,24 +3007,28 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         status = body.get("status")
         if not isinstance(tx_ids, list) or not tx_ids:
             return JSONResponse(
-                {"error": "transaction_ids must be a non-empty list"},
+                {"error": "transaction_ids must be a non-empty list",
+                 "code": "transaction_ids_required"},
                 status_code=400,
             )
         if status not in VALID_STATUSES:
             return JSONResponse(
-                {"error": f"status must be one of {sorted(VALID_STATUSES)}"},
+                {"error": f"status must be one of {sorted(VALID_STATUSES)}",
+                 "code": "invalid_decision_status",
+                 "allowed": sorted(VALID_STATUSES)},
                 status_code=400,
             )
         tx_ids = [str(t) for t in tx_ids]
         if len(tx_ids) > _BULK_DECISION_LIMIT:
             return JSONResponse(
-                {"error": f"at most {_BULK_DECISION_LIMIT} rows per call"},
+                {"error": f"at most {_BULK_DECISION_LIMIT} rows per call",
+                 "code": "too_many_rows", "limit": _BULK_DECISION_LIMIT},
                 status_code=400,
             )
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             decisions = store.get_decisions(run_id)
             writes = bulk_decisions(run, decisions, tx_ids, status)
             updated = 0
@@ -2962,16 +3070,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             or isinstance(line_index, bool)
             or (line_index is not None and not isinstance(line_index, int))
         ):
-            return JSONResponse({"error": "bad request"}, status_code=400)
+            return JSONResponse({"error": "bad request", "code": "invalid_body"}, status_code=400)
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             rec = category_edit_receipt(store, run, document_id)
             if line_index is None:
                 if rec is None:
                     return JSONResponse(
-                        {"error": "unknown expense"}, status_code=404
+                        {"error": "unknown expense", "code": "expense_not_found"}, status_code=404
                     )
                 indices = list(range(len(rec.line_items))) or [0]  # every line
             else:
@@ -3004,14 +3112,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         tx_id = body.get("transaction_id")
         document_id = body.get("document_id")
         if not tx_id or not document_id:
-            return JSONResponse({"error": "bad request"}, status_code=400)
+            return JSONResponse({"error": "bad request", "code": "invalid_body"}, status_code=400)
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             err = validate_manual_match(run, tx_id, document_id)
             if err:
-                return JSONResponse({"error": err}, status_code=400)
+                return _refused(err)
             # R4: an in-run steal is fine (apply_decisions frees the other
             # charge); a CROSS-run steal is refused -- the receipt already
             # settles a charge in another batch.
@@ -3019,7 +3127,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 store, run, tx_id, STATUS_CONFIRMED, document_id, _now_iso()
             )
             if conflict is not None:
-                return JSONResponse({"error": conflict}, status_code=409)
+                return _refused(conflict, status=409)
             store.set_decision(
                 run_id, tx_id, STATUS_CONFIRMED, document_id, _now_iso()
             )
@@ -3040,7 +3148,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         form = await request.form()
         upload = form.get("file")
         if upload is None or not getattr(upload, "filename", None):
-            return JSONResponse({"error": "file required"}, status_code=400)
+            return JSONResponse({"error": "file required", "code": "file_required"}, status_code=400)
         data = await upload.read()
         filename = upload.filename
 
@@ -3057,13 +3165,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 run = store.get_run(run_id)
                 if run is None:
                     return JSONResponse(
-                        {"error": "run not found"}, status_code=404
+                        {"error": "run not found", "code": "run_not_found"}, status_code=404
                     )
                 err, document_id = attach_emailed_receipt(
                     store, run, transaction_id, filename, data, _now_iso()
                 )
                 if err:
-                    return JSONResponse({"error": err}, status_code=400)
+                    return _refused(err)
                 run = store.get_run(run_id)  # snapshot changed above
                 decisions = store.get_decisions(run_id)
                 overrides = store.get_category_overrides(run_id)
@@ -3089,7 +3197,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
         if run is None:
-            return JSONResponse({"error": "run not found"}, status_code=404)
+            return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
 
         form = await request.form()
         uploads = [
@@ -3099,7 +3207,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if one is not None and getattr(one, "filename", None):
             uploads.append(one)
         if not uploads:
-            return JSONResponse({"error": "no files uploaded"}, status_code=400)
+            return JSONResponse({"error": "no files uploaded", "code": "no_files_uploaded"}, status_code=400)
 
         job_id = uuid.uuid4().hex[:12]
         staging = Path(run.work_dir) / f"folder-staging-{job_id}"
@@ -3115,7 +3223,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if saved == 0:
             shutil.rmtree(staging, ignore_errors=True)
             return JSONResponse(
-                {"error": "all uploaded files were empty"}, status_code=400
+                {"error": "all uploaded files were empty", "code": "all_files_empty"}, status_code=400
             )
 
         with open_store() as store:
@@ -3136,7 +3244,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
         if run is None:
-            return JSONResponse({"error": "run not found"}, status_code=404)
+            return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
         work_dir = Path(run.work_dir)
 
         if document_id.startswith("manual:"):
@@ -3146,7 +3254,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             hits = sorted(folder.glob(f"{fs_tx}__*")) if folder.is_dir() else []
             if not hits:
                 return JSONResponse(
-                    {"error": "no receipt image"}, status_code=404
+                    {"error": "no receipt image", "code": "receipt_image_not_found"}, status_code=404
                 )
             media = (
                 mimetypes.guess_type(hits[0].name)[0]
@@ -3164,7 +3272,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             hits = sorted(folder.glob(f"{fs_digest}__*")) if folder.is_dir() else []
             if not hits:
                 return JSONResponse(
-                    {"error": "no receipt image"}, status_code=404
+                    {"error": "no receipt image", "code": "receipt_image_not_found"}, status_code=404
                 )
             media = (
                 mimetypes.guess_type(hits[0].name)[0]
@@ -3187,7 +3295,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     return FileResponse(target, media_type=media)
             except (OSError, ValueError):
                 pass
-            return JSONResponse({"error": "no receipt image"}, status_code=404)
+            return JSONResponse({"error": "no receipt image", "code": "receipt_image_not_found"}, status_code=404)
 
         receipts = [
             receipt_from_dict(x) for x in run.snapshot.get("receipts", [])
@@ -3196,16 +3304,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             (r for r in receipts if r.document_id == document_id), None
         )
         if rec is None or rec.receipt_image_page is None:
-            return JSONResponse({"error": "no receipt image"}, status_code=404)
+            return JSONResponse({"error": "no receipt image", "code": "receipt_image_not_found"}, status_code=404)
         rcpt_rel = ((run.config or {}).get("receipts") or {}).get("path") or ""
         pdf_path = work_dir / rcpt_rel
         if not rcpt_rel or not pdf_path.is_file():
             return JSONResponse(
-                {"error": "report file missing"}, status_code=404
+                {"error": "report file missing", "code": "report_file_missing"}, status_code=404
             )
         png = render_receipt_page(pdf_path, rec.receipt_image_page)
         if png is None:
-            return JSONResponse({"error": "no receipt image"}, status_code=404)
+            return JSONResponse({"error": "no receipt image", "code": "receipt_image_not_found"}, status_code=404)
         # Immutable per run: the snapshot never re-maps pages after creation.
         return Response(
             png,
@@ -3220,16 +3328,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # changes nothing until the flag flips.
 
     def _flag_off() -> JSONResponse:
-        return JSONResponse({"error": "not found"}, status_code=404)
+        return JSONResponse({"error": "not found", "code": "not_found"}, status_code=404)
 
     def _expense_run_or_error(store: RunStore, run_id: str):
         """(run, None) for an expense batch; (None, response) otherwise."""
         run = store.get_run(run_id)
         if run is None:
-            return None, JSONResponse({"error": "run not found"}, status_code=404)
+            return None, JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
         if run_mode(run) != MODE_EXPENSE_GENERATION:
             return None, JSONResponse(
-                {"error": "not an expense batch"}, status_code=400
+                {"error": "not an expense batch", "code": "not_an_expense_batch"}, status_code=400
             )
         return run, None
 
@@ -3295,7 +3403,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             view = _expense_view(store, run)
         out = {"ok": True, **(extra or {}), "summary": view["summary"]}
         if rematch is not None:
@@ -3334,7 +3442,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         trip_id = str(form.get("trip_id") or "").strip()
         if declared and declared not in (BATCH_TYPE_COMPANY, BATCH_TYPE_TRIP):
             return JSONResponse(
-                {"error": "batch_type must be 'company-month' or 'trip'"},
+                {"error": "batch_type must be 'company-month' or 'trip'",
+                 "code": "invalid_batch_type"},
                 status_code=400,
             )
         if declared != BATCH_TYPE_TRIP and files:
@@ -3351,13 +3460,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     "Receipts no longer attach at month creation. Create "
                     "the month empty, then add receipts on the Receipts "
                     "page — each files into its month automatically."
-                )},
+                ), "code": "receipts_not_at_month_creation"},
                 status_code=400,
             )
         if declared == BATCH_TYPE_TRIP:
             if not trip_id:
                 return JSONResponse(
-                    {"error": "trip_id is required for a trip batch"},
+                    {"error": "trip_id is required for a trip batch",
+                     "code": "trip_id_required"},
                     status_code=400,
                 )
             # Single-winner batch creation: the run row only commits when
@@ -3370,13 +3480,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     store.get_trip(trip_id) if refused is None else None
                 )
             if refused is not None:
-                code = refused.pop("code", 409)
-                return JSONResponse(refused, status_code=code)
+                return _refusal_response(refused, 409)
             if not label.strip() and trip_row is not None:
                 label = trip_row.name
         elif trip_id:
             return JSONResponse(
-                {"error": "trip_id only applies to batch_type 'trip'"},
+                {"error": "trip_id only applies to batch_type 'trip'",
+                 "code": "trip_id_not_allowed"},
                 status_code=400,
             )
         with open_store() as store:
@@ -3402,7 +3512,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         except RunInputError as exc:
             if declared == BATCH_TYPE_TRIP:
                 release_trip_batch_slot(trip_id)
-            return JSONResponse({"error": exc.message}, status_code=400)
+            return _input_refused(exc)
 
         job_id = uuid.uuid4().hex[:12]
         with open_store() as store:
@@ -3500,13 +3610,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             except ValueError:
                 return JSONResponse(
                     {"error": f"{key} must be a date like 2026-01-31, "
-                              f"got {text!r}"},
+                              f"got {text!r}",
+                     "code": "invalid_date", "param": key, "value": text},
                     status_code=400,
                 )
         if bounds["from"] and bounds["to"] and bounds["from"] > bounds["to"]:
             return JSONResponse(
                 {"error": f"from ({bounds['from']}) is after to "
-                          f"({bounds['to']})"},
+                          f"({bounds['to']})",
+                 "code": "date_range_reversed",
+                 "from": bounds["from"].isoformat(),
+                 "to": bounds["to"].isoformat()},
                 status_code=400,
             )
         with open_store() as store:
@@ -3542,10 +3656,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         try:
             payload = await request.json()
         except Exception:  # noqa: BLE001 - malformed body is a client error
-            return JSONResponse({"error": "invalid json"}, status_code=400)
+            return JSONResponse({"error": "invalid json", "code": "invalid_json"}, status_code=400)
         cleaned, err = validate_trip_fields(payload)
         if err is not None:
-            return JSONResponse({"error": err}, status_code=400)
+            return _refused(err)
         trip_id = uuid.uuid4().hex[:12]
         with open_store() as store:
             store.create_trip(
@@ -3564,11 +3678,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         try:
             payload = await request.json()
         except Exception:  # noqa: BLE001 - malformed body is a client error
-            return JSONResponse({"error": "invalid json"}, status_code=400)
+            return JSONResponse({"error": "invalid json", "code": "invalid_json"}, status_code=400)
         with open_store() as store:
             current = store.get_trip(trip_id)
             if current is None:
-                return _not_found("Trip not found")
+                return _not_found("Trip not found", "trip_not_found")
             merged = {
                 "name": payload.get("name", current.name),
                 "start": payload.get("start", current.start_date),
@@ -3582,7 +3696,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             } if isinstance(payload, dict) else None
             cleaned, err = validate_trip_fields(merged)
             if err is not None:
-                return JSONResponse({"error": err}, status_code=400)
+                return _refused(err)
             store.update_trip(trip_id, updated_at=_now_iso(), **cleaned)
             trip = store.get_trip(trip_id)
             view = trip_view(store, trip, find_trip_batch(store, trip_id))
@@ -3599,8 +3713,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             refused = delete_trip_entity(store, trip_id)
         if refused is not None:
-            code = refused.pop("code", 409)
-            return JSONResponse(refused, status_code=code)
+            return _refusal_response(refused, 409)
         return JSONResponse({"ok": True, "trip_id": trip_id, "deleted": True})
 
     @app.get("/api/expense-batches/{run_id}")
@@ -3636,7 +3749,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if one is not None and getattr(one, "filename", None):
             uploads.append(one)
         if not uploads:
-            return JSONResponse({"error": "no files uploaded"}, status_code=400)
+            return JSONResponse({"error": "no files uploaded", "code": "no_files_uploaded"}, status_code=400)
 
         job_id = uuid.uuid4().hex[:12]
         staging = Path(run.work_dir) / f"add-staging-{job_id}"
@@ -3652,7 +3765,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if saved == 0:
             shutil.rmtree(staging, ignore_errors=True)
             return JSONResponse(
-                {"error": "all uploaded files were empty"}, status_code=400
+                {"error": "all uploaded files were empty", "code": "all_files_empty"}, status_code=400
             )
 
         with open_store() as store:
@@ -3687,11 +3800,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if one is not None and getattr(one, "filename", None):
             uploads.append(one)
         if not uploads:
-            return JSONResponse({"error": "no files uploaded"}, status_code=400)
+            return JSONResponse({"error": "no files uploaded", "code": "no_files_uploaded"}, status_code=400)
         month_override = str(form.get("month") or "").strip()
         if month_override and not valid_month_key(month_override):
             return JSONResponse(
-                {"error": 'month must be "YYYY-MM"'}, status_code=400
+                {"error": 'month must be "YYYY-MM"', "code": "invalid_month"},
+                status_code=400
             )
 
         job_id = uuid.uuid4().hex[:12]
@@ -3708,7 +3822,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if saved == 0:
             shutil.rmtree(staging, ignore_errors=True)
             return JSONResponse(
-                {"error": "all uploaded files were empty"}, status_code=400
+                {"error": "all uploaded files were empty", "code": "all_files_empty"}, status_code=400
             )
 
         # Item 114: what a restart would otherwise lose (the month pick).
@@ -3741,7 +3855,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             body = None
         file = str(((body or {}).get("file")) or "").strip()
         if not file:
-            return JSONResponse({"error": "file is required"}, status_code=400)
+            return JSONResponse({"error": "file is required", "code": "file_name_required"}, status_code=400)
 
         # Off the event loop: restore_set_aside_file takes the batch writer
         # lock, which an OCR ingest can hold for MINUTES. Blocking on it here
@@ -3761,7 +3875,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         learning_db_path=app.state.learning_db_path,
                     )
                 except RunInputError as exc:
-                    return JSONResponse({"error": exc.message}, status_code=400)
+                    return _input_refused(exc)
                 run = store.get_run(run_id)
                 view = _expense_view(store, run)
             return JSONResponse(jsonable_encoder({**result, "batch": view}))
@@ -3785,16 +3899,20 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         except Exception:  # noqa: BLE001 - malformed body is a plain 400
             body = None
         if not isinstance(body, dict):
-            return JSONResponse({"error": "body must be an object"}, status_code=400)
+            return JSONResponse({"error": "body must be an object", "code": "invalid_body"}, status_code=400)
         assignments = body.get("assignments") or []
         if not isinstance(assignments, list):
             return JSONResponse(
-                {"error": "assignments must be a list"}, status_code=400
+                {"error": "assignments must be a list",
+                 "code": "invalid_body", "field": "assignments"},
+                status_code=400
             )
         new_cards = body.get("new_cards")
         if new_cards is not None and not isinstance(new_cards, dict):
             return JSONResponse(
-                {"error": "new_cards must be an object"}, status_code=400
+                {"error": "new_cards must be an object",
+                 "code": "invalid_body", "field": "new_cards"},
+                status_code=400
             )
         # Off the event loop, same reason as set-aside/restore above:
         # assign_batch_cards takes the batch writer lock.
@@ -3812,7 +3930,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         now_iso=_now_iso(),
                     )
                 except RunInputError as exc:
-                    return JSONResponse({"error": exc.message}, status_code=400)
+                    return _input_refused(exc)
                 run = store.get_run(run_id)
                 view = _expense_view(store, run)
             return JSONResponse(jsonable_encoder({**result, "batch": view}))
@@ -3836,7 +3954,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     store, run, now_iso=_now_iso(), operator=_operator()
                 )
             except RunInputError as exc:
-                return JSONResponse({"error": exc.message}, status_code=400)
+                return _input_refused(exc)
             run = store.get_run(run_id)
             view = _expense_view(store, run)
         return JSONResponse(jsonable_encoder({**result, "batch": view}))
@@ -3896,7 +4014,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return JSONResponse(
                 {"error": "statements attach to company months; a trip's "
                           "receipts reconcile against the month statement "
-                          "covering the charge"},
+                          "covering the charge",
+                 "code": "statement_on_trip"},
                 status_code=400,
             )
 
@@ -3921,7 +4040,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 card_key=card_key,
             )
         except RunInputError as exc:
-            return JSONResponse({"error": exc.message}, status_code=400)
+            return _input_refused(exc)
 
         statement_bytes = await statement.read()
         try:
@@ -3933,7 +4052,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             )
         except RunInputError as exc:
             return JSONResponse(
-                {"error": exc.message, "headers": exc.headers},
+                {"error": exc.message, "code": exc.code, **exc.fields,
+                 "headers": exc.headers},
                 status_code=400,
             )
 
@@ -3965,7 +4085,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run, err = _expense_run_or_error(store, run_id)
             if err is None and not has_statement(run):
                 err = JSONResponse(
-                    {"error": "this month has no statement to re-read"},
+                    {"error": "this month has no statement to re-read",
+                     "code": "no_statement_to_reread"},
                     status_code=400,
                 )
         if err is not None:
@@ -3990,7 +4111,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         entity = str((body or {}).get("legal_entity") or "").strip()
         if not entity:
             return JSONResponse(
-                {"error": "legal_entity is required"}, status_code=400
+                {"error": "legal_entity is required", "code": "legal_entity_required"},
+                status_code=400
             )
         with open_store() as store:
             run, err = _expense_run_or_error(store, run_id)
@@ -4021,13 +4143,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return _flag_off()
         body = await request.json()
         if not isinstance(body, dict):
-            return JSONResponse({"error": "invalid payload"}, status_code=400)
+            return JSONResponse({"error": "invalid payload", "code": "invalid_body"}, status_code=400)
         private = bool(body.get("private"))
         reimburse_to = str(body.get("reimburse_to") or "").strip()
         if private and not reimburse_to:
             return JSONResponse(
                 {"error": "reimburse_to is required to confirm a private "
-                          "expense: name who gets reimbursed"},
+                          "expense: name who gets reimbursed",
+                 "code": "reimburse_to_required"},
                 status_code=400,
             )
         with open_store() as store:
@@ -4067,9 +4190,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return err
             msg = confirm_expense_category(store, run, document_id, _now_iso())
             if msg == "unknown expense":
-                return JSONResponse({"error": msg}, status_code=404)
+                return _refused(msg, status=404)
             if msg:
-                return JSONResponse({"error": msg}, status_code=400)
+                return _refused(msg)
         # No re-match (item 70): a category never reaches the matcher.
         return await _expense_edit_reply(run_id, False)
 
@@ -4088,17 +4211,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         value = "" if raw_value is None else str(raw_value).strip()
         if field not in EXPENSE_HEADER_FIELDS | EXPENSE_CATEGORY_FIELDS:
             return JSONResponse(
-                {"error": f"unknown field {field!r}"}, status_code=400
+                {"error": f"unknown field {field!r}",
+                 "code": "unknown_field", "field": field},
+                status_code=400
             )
         if value:
             if field == "category" and value not in EXPENSE_CATEGORIES:
                 return JSONResponse(
-                    {"error": f"category must be one of {sorted(EXPENSE_CATEGORIES)}"},
+                    {"error": f"category must be one of "
+                              f"{sorted(EXPENSE_CATEGORIES)}",
+                     "code": "category_not_allowed",
+                     "categories": sorted(EXPENSE_CATEGORIES)},
                     status_code=400,
                 )
             err_msg = validate_expense_field(field, value)
             if err_msg:
-                return JSONResponse({"error": err_msg}, status_code=400)
+                return _refused(err_msg)
 
         if field == "card_key" and value:
             # Item 87: a per-row card fix names an active registry card, which
@@ -4116,7 +4244,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         return conflict
                     msg = prepare_row_card_fix(store, run_id, value)
                     return (
-                        JSONResponse({"error": msg}, status_code=400)
+                        _refused(msg)
                         if msg else None
                     )
 
@@ -4150,7 +4278,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 if canon is None:
                     return JSONResponse(
                         {"error": f"cost_center {value!r} is not a defined "
-                                  "cost center; define it in Settings first"},
+                                  "cost center; define it in Settings first",
+                         "code": "cost_center_not_defined",
+                         "cost_center": value},
                         status_code=400,
                     )
                 # Store the registry's own spelling, so a picked name and
@@ -4165,7 +4295,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         {"error": "confirming a private expense needs "
                                   "reimburse_to; set it first, or use "
                                   "POST .../expenses/{id}/private which "
-                                  "takes both together"},
+                                  "takes both together",
+                         "code": "reimburse_to_required"},
                         status_code=400,
                     )
                 conflict = _paid_by_conflict(
@@ -4194,7 +4325,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 )
                 if rec is None:
                     return JSONResponse(
-                        {"error": "unknown expense"}, status_code=404
+                        {"error": "unknown expense", "code": "expense_not_found"}, status_code=404
                     )
                 indices = list(range(len(rec.line_items))) or [0]
                 for i in indices:
@@ -4244,7 +4375,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return _flag_off()
         body = await request.json()
         if not isinstance(body, dict):
-            return JSONResponse({"error": "invalid payload"}, status_code=400)
+            return JSONResponse({"error": "invalid payload", "code": "invalid_body"}, status_code=400)
         payload = {
             k: str(body.get(k) or "").strip()
             for k in (
@@ -4256,18 +4387,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         }
         if not payload.get("vendor") or not payload.get("total"):
             return JSONResponse(
-                {"error": "vendor and total are required"}, status_code=400
+                {"error": "vendor and total are required",
+                 "code": "vendor_and_total_required"},
+                status_code=400
             )
         if payload.get("category") and payload["category"] not in EXPENSE_CATEGORIES:
             return JSONResponse(
-                {"error": f"category must be one of {sorted(EXPENSE_CATEGORIES)}"},
+                {"error": f"category must be one of "
+                          f"{sorted(EXPENSE_CATEGORIES)}",
+                 "code": "category_not_allowed",
+                 "categories": sorted(EXPENSE_CATEGORIES)},
                 status_code=400,
             )
         for f in ("date", "total", "currency", "tax"):
             if payload.get(f):
                 err_msg = validate_expense_field(f, payload[f])
                 if err_msg:
-                    return JSONResponse({"error": err_msg}, status_code=400)
+                    return _refused(err_msg)
 
         document_id = f"manual:{uuid.uuid4().hex[:12]}"
         with open_store() as store:
@@ -4301,7 +4437,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 e["document_id"] for e in prior_edits
             }
             if document_id not in known:
-                return JSONResponse({"error": "unknown expense"}, status_code=404)
+                return JSONResponse({"error": "unknown expense", "code": "expense_not_found"}, status_code=404)
             already = any(
                 e["document_id"] == document_id and e["op"] == "delete"
                 for e in prior_edits
@@ -4341,13 +4477,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 )
                 if row is None:
                     return JSONResponse(
-                        {"error": "unknown expense"}, status_code=404
+                        {"error": "unknown expense", "code": "expense_not_found"}, status_code=404
                     )
                 month = (row.get("month_move") or {}).get("month") or ""
                 if not month:
                     return JSONResponse(
                         {"error": "this expense's date is inside this month; "
-                                  "name a month to move it anyway"},
+                                  "name a month to move it anyway",
+                         "code": "month_move_not_needed"},
                         status_code=400,
                     )
             try:
@@ -4358,7 +4495,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 )
             except RunInputError as exc:
                 status = 404 if str(exc) == "unknown expense" else 400
-                return JSONResponse({"error": str(exc)}, status_code=status)
+                return JSONResponse(
+                    {"error": str(exc), "code": exc.code, **exc.fields},
+                    status_code=status,
+                )
             source = store.get_run(run_id)
             if source is not None:
                 out["summary"] = _expense_view(store, source)["summary"]
@@ -4405,7 +4545,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return _not_found("Run not found")
+                return _not_found("Run not found", "run_not_found")
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
             resolutions = store.get_duplicate_resolutions(run_id)
@@ -4499,7 +4639,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         legal_entity_id = (body.get("legal_entity_id") or "").strip()
         vendor = (body.get("vendor") or "").strip()
         if not legal_entity_id or not vendor:
-            return JSONResponse({"error": "bad request"}, status_code=400)
+            return JSONResponse({"error": "bad request", "code": "invalid_body"}, status_code=400)
         forgotten = forget_memory_vendor(
             app.state.learning_db_path, legal_entity_id, vendor
         )
@@ -4514,7 +4654,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             # Passing the open store lets the expense branch upsert the same
             # vendor / category edits into settings["merchants"] (2026-07-29,
             # self-improving registry) in the same transaction context. Item
@@ -4531,7 +4671,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return HTMLResponse("Run not found", status_code=404)
+                return _not_found("Run not found", "run_not_found")
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
         path = regenerate_report(run, decisions, overrides)
@@ -4551,7 +4691,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return HTMLResponse("Run not found", status_code=404)
+                return _not_found("Run not found", "run_not_found")
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
         path = regenerate_zoho(run, decisions, overrides)
@@ -4569,7 +4709,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return HTMLResponse("Run not found", status_code=404)
+                return _not_found("Run not found", "run_not_found")
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
         path = regenerate_reconciled(run, decisions, overrides)
@@ -4593,13 +4733,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return HTMLResponse("Run not found", status_code=404)
+                return _not_found("Run not found", "run_not_found")
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
         path = regenerate_writeback(run, decisions, overrides, file)
         if path is None:
-            return HTMLResponse(
-                "This run's statement is not an Excel workbook", status_code=404
+            return JSONResponse(
+                {"error": "This run's statement is not an Excel workbook",
+                 "code": "statement_not_workbook"},
+                status_code=404,
             )
         return FileResponse(
             path,
@@ -4664,14 +4806,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
         try:
             result = await run_in_threadpool(
                 _settled_outside_write,
                 run_id, document_id, body.get("how"), body.get("note"),
             )
         except RunInputError as exc:
-            return JSONResponse({"error": str(exc)}, status_code=400)
+            return _input_refused(exc)
         return JSONResponse(result)
 
     @app.delete(
@@ -4683,14 +4825,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
         try:
             result = await run_in_threadpool(
                 _settled_outside_write, run_id, document_id, None, None,
                 True,
             )
         except RunInputError as exc:
-            return JSONResponse({"error": str(exc)}, status_code=400)
+            return _input_refused(exc)
         return JSONResponse(result)
 
     def _settled_outside_write(
@@ -4708,7 +4850,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                raise RunInputError("This batch no longer exists.")
+                raise RunInputError("This batch no longer exists.", code="batch_deleted")
             if clear:
                 out = clear_receipt_settled_outside(store, run, document_id)
             else:
@@ -4717,7 +4859,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 )
             run = store.get_run(run_id)
             if run is None:
-                raise RunInputError("This batch no longer exists.")
+                raise RunInputError("This batch no longer exists.", code="batch_deleted")
             if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
                 view = _expense_view(store, run)
             else:

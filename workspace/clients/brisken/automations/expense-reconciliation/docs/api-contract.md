@@ -3763,3 +3763,262 @@ the matcher from its pool (copies and foreign-claimed receipts left out), so
 with three or more receipts carrying a booked exchange rate a pair the
 matcher read at the ECB rate (2%) can read as receipts-derived (3%) on screen
 and in item 131's floor rule. No hosted month holds such receipts.
+
+## Error codes (item 130, 2026-09-17)
+
+Every refusal the API sends is
+
+```json
+{ "error": "This expense was paid with the company card Credit Card - 1672, ...",
+  "code": "company_card",
+  "card": { "key": "corp-1672", "label": "Credit Card - 1672" } }
+```
+
+`error` is one English sentence and is **unchanged forever**: it is what an
+English reader, a log and every client that already reads it sees. `code`
+names the CONDITION, never the wording, so the sentence can be reworded
+without breaking a consumer. Anything the sentence NAMES (a file, a month, a
+card, a count, a limit) also rides as its own field, so a Portuguese sentence
+is composed from data instead of translated out of English with numbers baked
+in.
+
+**How a consumer reads it.** Look up `code`. Known: render your own sentence
+from the code and the named fields. Unknown (an older SPA, a code added since):
+render `error`. That fallback is why the English sentence never leaves.
+
+Two rules that are easy to get wrong:
+
+* The service layer's own refusal dicts carry `code` as an **int HTTP
+  status** and `error_code` as the string. Neither reaches the wire in that
+  shape: `app._refusal_response` turns the pair into `status` + `code`. A
+  refusal dict that forgets `error_code` answers the generic
+  `request_refused`, which is a bug and is caught by
+  `tests/test_error_codes_item_130.py`, not a sanctioned value.
+* `422` keeps FastAPI's `detail` list and `404` / `405` keep its `detail`
+  string, beside the new `error` + `code`.
+
+The PDFs and the CSV exports stay English on purpose: the auditor reads
+English (backlog item 130). Background JOB failures (`GET /jobs/{id}` with
+`status: "error"`) carry prose only; a job's error is a report on work that
+already started, not a refusal of a request, and nothing keyed off it.
+
+### Generic
+
+| Code | HTTP | When | English `error` | Extra fields |
+|---|---|---|---|---|
+| `unauthenticated` | 401 | no session token, gate on | authentication required | |
+| `invalid_login_code` | 401 | wrong operator code | invalid code | |
+| `too_many_login_attempts` | 429 | login throttled | too many login attempts | `retry_after`, `scope` |
+| `not_found` | 404 | no route serves this path, or the route is behind an unset flag | not found | `detail` |
+| `method_not_allowed` | 405 | wrong method on a real path | method not allowed | `detail` |
+| `validation_failed` | 422 | the body/query the route signature needs is missing or mistyped | the request is missing a field, or one has the wrong type | `detail` (FastAPI's list) |
+| `invalid_json` | 400 | the body is not JSON | invalid json | |
+| `invalid_body` | 400 | the body (or one field) is the wrong shape: the SPA's own contract, not the reviewer's doing | 23 shape sentences (`bad request`, `body must be an object`, `assignments must be a list`, `cards[...] must be an object`, ...) | `field` / `setting` / `merchant` / `cost_center` where known |
+| `request_refused` | any | a refusal that reached the wire with no code: a bug, never intended | (whatever the refusal said) | |
+
+### Runs, months and publishing
+
+| Code | HTTP | When | English `error` | Extra fields |
+|---|---|---|---|---|
+| `run_not_found` | 404 | no run / batch with this id | run not found | |
+| `upload_not_found` | 404 | no queued intake with this id | upload not found | |
+| `job_not_found` | 404 | no job with this id | unknown job | |
+| `not_an_expense_batch` | 400 | the run is a classic statement run | not an expense batch | |
+| `batch_deleted` | 400 | the month was deleted while this write was in flight | This batch no longer exists (it was deleted). | |
+| `label_required` | 400 | rename with an empty label | label is required | |
+| `delete_confirm_required` | 400 | delete without the typed confirmation | confirm is required: repeat the month label (or run id) to delete | |
+| `delete_confirm_mismatch` | 409 | the typed confirmation is not the label | confirm label mismatch | |
+| `not_a_month` | 400 | publish on a classic run | Only a month can be published. ... | |
+| `no_statement` | 400 | publish a month with no statement, no override | This month has no statement yet, ... | |
+| `month_not_complete` | 400 | publish an incomplete month, no override | `not_complete_detail(summary)` | `readiness` |
+| `invalid_month` | 400 | a month that is not `YYYY-MM` | month must be "YYYY-MM" | |
+| `auto_materialize_off` | 409 | backfill asked with the flag unset | auto-materialization is off ... | |
+
+### Statements
+
+| Code | HTTP | When | English `error` | Extra fields |
+|---|---|---|---|---|
+| `no_statement_file` | 400 | no statement uploaded | No statement file uploaded. | |
+| `no_receipts_file` | 400 | no receipts file on a classic run | No receipts file uploaded. | |
+| `unsupported_statement_file` | 400 | not a .csv / .xlsx / .pdf | The statement file should be a .csv, .xlsx or .pdf export from the bank. | `suffix` |
+| `unsupported_receipts_file` | 400 | the receipts export is neither .csv nor .pdf | The receipts file should be a .csv export or a Zoho Expense report .pdf. | |
+| `receipts_source_needs_pdf` | 400 | "Zoho Expense report PDF" picked for a non-PDF | Receipts source 'Zoho Expense report PDF' needs a .pdf upload; ... | `suffix` |
+| `statement_columns_missing` | 400 | required columns could not be auto-detected | Could not auto-detect these required statement columns: ... | `missing`, `headers`, `partial_map` |
+| `statement_unreadable` | 400 | the parser could not read the file at all | (the parser's own message) | |
+| `statement_read_nothing` | 400 | the file mapped cleanly and held no charge (item 51) | ... mapped cleanly but held no charge the parser could read ... | `file`, `sheet` |
+| `statement_on_trip` | 400 | a statement aimed at a trip batch | statements attach to company months; ... | |
+| `no_statement_to_reread` | 400 | re-read on a month with no statement | this month has no statement to re-read | |
+| `statement_file_missing` | 400 | a recorded statement file is gone from the month's folder | statement file ... is missing from this month's folder; nothing was changed | `file` |
+| `statement_reads_nothing_now` | 400 | a re-read of a file that once held charges now reads none | statement file ... held N charges when it was uploaded and now reads none ... | `file`, `n_rows` |
+| `reread_strands_decisions` | 400 | a re-read would retire charges that carry reviewer verdicts | N reviewer decision(s) sit on charges this re-read would retire ... | `n_decisions` |
+| `concurrent_statement_upload` | 400 | another upload landed on the month mid-write; nothing was written | another statement upload ... nothing was written, so no charge was lost. ... | `n_charges` (where known) |
+| `statement_not_workbook` | 404 | the write-back download on a non-Excel statement | This run's statement is not an Excel workbook | |
+| `pipeline_config_invalid` | 400 | the run config the pipeline got cannot run (no model key, ...) | (the pipeline's own message) | |
+
+### Receipts and expenses
+
+| Code | HTTP | When | English `error` | Extra fields |
+|---|---|---|---|---|
+| `no_files_uploaded` | 400 | a multipart upload with no file | no files uploaded | |
+| `all_files_empty` | 400 | every uploaded file was empty | all uploaded files were empty | |
+| `no_receipt_files` | 400 | a trip batch created with no receipt | No receipt files uploaded. | |
+| `no_readable_receipt_files` | 400 | every uploaded receipt was rejected by validation | No readable receipt files uploaded. (...) | |
+| `file_required` | 400 | the per-charge attach with no file part | file required | |
+| `file_name_required` | 400 | a body that must name a stored file and does not | file is required | |
+| `unsupported_attachment_type` | 400 | a per-charge attach that is not pdf / png / jpg / webp / gif | Unsupported receipt file type ... | `suffix` |
+| `empty_file` | 400 | a per-charge attach of zero bytes | Empty file. | |
+| `file_too_large` | 400 | a per-charge attach over the cap | File too large (15 MB max). | `limit_mb` |
+| `receipts_not_at_month_creation` | 400 | files sent to the month-create route (decoupled 2026-09-08) | Receipts no longer attach at month creation. ... | |
+| `receipt_image_not_found` | 404 | no image is attributable to this document | no receipt image | |
+| `report_file_missing` | 404 | the ER PDF a page was mapped from is gone | report file missing | |
+| `expense_not_found` | 404 | no expense with this document id | unknown expense | |
+| `expense_already_removed` | 400 | the expense was already deleted | This expense was already removed from this month. | |
+| `expense_already_in_month` | 400 | a move to the month the expense is already in | This expense is already in July 2026. | `month` |
+| `month_move_not_needed` | 400 | a move with no target, on a row whose date is inside the month | this expense's date is inside this month; name a month to move it anyway | |
+| `month_could_not_open` | 400 | the target month could not be created | July 2026 could not be opened. | `month` |
+| `trip_not_by_month` | 400 | a month move on a trip batch | A trip spans months; its receipts are not filed by month. | |
+| `file_missing_on_disk` | 400 | the stored file behind a restore / move is gone | ... is no longer on disk. | `file` |
+| `set_aside_file_not_found` | 400 | restore names a file the set-aside list does not hold | ... is not in this batch's set-aside list. | `file` |
+| `set_aside_already_restored` | 400 | restore of a file already restored | ... was already restored. | `file` |
+| `set_aside_already_expense` | 400 | restore of a file that is already an expense | ... is already an expense in this batch. | `file` |
+| `vendor_and_total_required` | 400 | a manual expense with no vendor or no total | vendor and total are required | |
+| `unknown_field` | 400 | a field edit the grid does not store | unknown field 'x' | `field` |
+| `invalid_date` | 400 | a date that is not ISO (a field edit, or a `from`/`to` bound) | date must be YYYY-MM-DD | `field`, or `param` + `value` |
+| `invalid_number` | 400 | a total / tax that is not a number | total must be a number | `field` |
+| `invalid_currency` | 400 | a currency that is not 3 letters | currency must be a 3-letter code | |
+| `invalid_private_value` | 400 | the private flag set to anything but "1" | private must be "1" (or empty to clear) | |
+| `legal_entity_required` | 400 | an entity edit with no entity | legal_entity is required | |
+| `date_range_reversed` | 400 | the cost-center roll-up asked `from` after `to` | from (...) is after to (...) | `from`, `to` |
+| `settled_outside_how_required` | 400 | settled-outside with no (or an unknown) method | Say how it was settled: bank_transfer, cash, ... | `allowed` |
+| `receipt_not_in_month` | 400 | settled-outside on a receipt this month does not hold | That receipt is not in this month. | |
+| `receipt_settled_by_charge` | 400 | settled-outside on a receipt a charge already settles | That receipt is settled against a charge on the statement. ... | |
+
+### Decisions and pairings
+
+| Code | HTTP | When | English `error` | Extra fields |
+|---|---|---|---|---|
+| `invalid_decision_status` | 400 | a verdict that is not one of the known statuses | status must be one of [...] | `allowed` |
+| `transaction_ids_required` | 400 | a bulk decision with no ids | transaction_ids must be a non-empty list | |
+| `too_many_rows` | 400 | a bulk decision over the per-call cap | at most N rows per call | `limit` |
+| `transaction_not_found` | 400 | the charge is not in this run | Unknown transaction for this run. | |
+| `receipt_not_found` | 400 | the receipt is not in this run | Unknown receipt for this run. | |
+| `entity_differs` | 400 | a hand pairing across two named legal entities | Receipt and charge belong to different legal entities. | |
+| `receipt_settled_elsewhere` | 409 | the receipt already settles a charge in another month | this receipt already settles a charge in 'August 2026'; ... | `batch` |
+| `receipt_just_settled` | 409 | another batch claimed the receipt during this write | this receipt was just settled by another batch; ... | |
+| `company_card` | 400 | marking private a row a defined company card paid | This expense was paid with the company card ..., so there is nothing to reimburse. ... | `card` `{key,label}` |
+| `private_card` | 400 | picking a company card on a confirmed private row | This expense is marked as paid with a private card (reimburse ...). ... | |
+| `reimburse_to_required` | 400 | confirming private with nobody to reimburse | reimburse_to is required to confirm a private expense: name who gets reimbursed | |
+| `category_not_allowed` | 400 | a category outside the tool's eight | category must be one of [...] | `categories` |
+| `category_not_a_guess` | 400 | "keep this category" on a row whose category is not a guess | this expense's category is not a guess to confirm: ... | |
+| `cost_center_not_defined` | 400 | a cost center the owner has not defined | cost_center 'X' is not a defined cost center; define it in Settings first | `cost_center` |
+
+### Cards, trips and settings
+
+| Code | HTTP | When | English `error` | Extra fields |
+|---|---|---|---|---|
+| `card_required` | 400 | an intake with no card named | Please pick which card this statement is from. | |
+| `card_not_defined` | 400 | a card key the registry does not know | card_key 'X' is not a defined card; define it in Settings, Cards first | `card` |
+| `card_inactive` | 400 | a card that exists but is deactivated | card 'X' is inactive; reactivate it before assigning receipts to it | `card` |
+| `card_already_exists` | 400 | creating a card whose slug is taken | card 'X' already exists; edit it in Settings > Cards instead ... | `card` |
+| `card_digits_invalid` | 400 | a digit token that is not 3-8 digits | cards['x'].digits entries must be 3-8 digit strings, got '12' | `card`, `value`, `min_digits`, `max_digits` |
+| `card_alias_generic` | 400 | an alias that names a tender type, not one card | cards['x'].aliases: 'Visa' is a generic tender word ... | `card`, `alias` |
+| `card_definition_invalid` | 400 | a card block the registry refuses (shape, from the batch-cards route) | (the registry's own message) | (the registry's own fields) |
+| `assignment_incomplete` | 400 | a card assignment missing its hint or its card | each assignment needs a hint and a card key | |
+| `hint_assigned_twice` | 400 | one hint assigned to two cards in one call | hint 'X' is assigned more than once | `hint` |
+| `hint_not_in_batch` | 400 | a hint no receipt in this batch prints | hint 'X' does not appear in this batch's receipts | `hint` |
+| `nothing_to_apply` | 400 | a card call with neither assignments nor new cards | Nothing to apply: no assignments and no new cards. | |
+| `unknown_settings_keys` | 400 | a settings key the server neither writes nor derives | unknown settings key(s): ... | `keys` |
+| `fx_rate_key_invalid` | 400 | a rate key that is not `FROM:TO` | rate key 'X' must be 'FROM:TO' | `setting`, `rate_key` |
+| `fx_rate_not_positive` | 400 | a rate that is not a positive number | rate X must be a positive number | `setting`, `rate_key` |
+| `merchant_alias_generic` | 400 | a merchant alias that is a generic word | merchant 'X' alias 'Sports' is a generic word ... | `merchant`, `alias` |
+| `merchant_category_invalid` | 400 | a merchant category outside the eight | merchant 'X' category 'Y' is not one of the expense categories | `merchant`, `category` |
+| `cost_center_case_duplicate` | 400 | two cost centers differing only in case | cost_centers has two entries differing only in case: ... | `cost_center`, `other` |
+| `cost_center_kind_invalid` | 400 | a cost-center kind outside the list | cost_centers['X'].kind 'y' is not one of project, function, trip | `cost_center`, `kind`, `allowed` |
+| `trip_not_found` | 404 | no trip with this id | trip not found | |
+| `trip_name_required` | 400 | a trip with no name | name is required | |
+| `trip_dates_invalid` | 400 | trip dates that are not ISO | start and end must be YYYY-MM-DD dates | |
+| `trip_dates_reversed` | 400 | a trip that ends before it starts | end must not be before start | |
+| `travelers_invalid` | 400 | a roster that is not a list of names | travelers must be a list of names | |
+| `too_many_travelers` | 400 | a roster over the cap | travelers holds at most N names | `limit` |
+| `trip_id_required` | 400 | a trip action with no trip id | trip_id is required | |
+| `trip_id_not_allowed` | 400 | a trip id on a company month | trip_id only applies to batch_type 'trip' | |
+| `invalid_batch_type` | 400 | a batch type outside company-month / trip | batch_type must be 'company-month' or 'trip' | `allowed` (service site) |
+| `trip_batch_being_created` | 409 | a trip whose batch another upload is creating right now | this trip's expense batch is being created right now; ... | |
+| `trip_batch_exists` | 409 | a second batch for one trip | this trip already has an expense batch; add receipts to it instead | `batch_id` |
+| `trip_has_batch` | 409 | deleting a trip that still holds a batch | this trip still has an expense batch; delete the batch first | `batch_id` |
+| `receipt_column_map_invalid` | 400 | the receipt column map is not JSON | Receipt column map is not valid JSON: ... | |
+| `entity_map_invalid` | 400 | the account -> entity map is not JSON | Account to legal-entity map is not valid JSON: ... | |
+| `intake_domain_invalid` / `intake_aliases_invalid` / `intake_number_invalid` / `intake_alert_recipients_invalid` / `intake_known_senders_invalid` / `intake_known_senders_too_many` / `intake_travel_alias_invalid` / `intake_travel_alias_reserved` / `intake_travel_alias_collision` | 400 | the mail-intake settings block, one code per rule | (each rule's own sentence) | `field` / `limit` / `alias` |
+
+### Memory
+
+| Code | HTTP | When | English `error` | Extra fields |
+|---|---|---|---|---|
+| `memory_row_key_required` | 400 | a memory row with no entity or no vendor | legal_entity_id and a non-empty vendor are required | |
+| `memory_category_not_found` | 404 | deleting a learned category that is not there | no learned category for that entity + vendor | |
+| `memory_rows_required` | 400 | a bulk validate with no rows | rows must be a non-empty list of {legal_entity_id, vendor} | |
+| `memory_rows_invalid` | 400 | a bulk validate whose rows all failed normalization | no valid rows in the list | |
+| `comment_required` | 400 | a feedback note with no comment | comment is required | |
+
+### Mail intake
+
+| Code | HTTP | When | English `error` | Extra fields |
+|---|---|---|---|---|
+| `mail_not_found` | 404 | no archive with this name | not found | |
+| `mail_not_travel` | 409 | joining a trip with mail that is not travel mail | only travel mail joins a trip; month mail joins its month automatically | |
+| `mail_travel_not_month` | 409 | re-ingesting travel mail into a month | travel mail joins a trip, not a month; use the trip join on the pooled row | |
+| `mail_no_file_yet` | 409 | joining a trip with mail that delivered no file | this mail has no ingestable file yet; render its body first | |
+| `mail_no_attachment` | 409 | re-ingesting mail that delivered no attachment | this mail delivered no attachment to re-ingest; ... | |
+| `mail_no_readable_body` | 409 | rendering a body with no readable text | no readable body in this mail | |
+| `mail_not_renderable` | 409 | rendering mail that is not body-only held | only body-only held mail can be rendered (status: ...) | `status` |
+| `mail_not_duplicate` | 409 | un-duplicating mail that is not parked as one | this mail is not parked as a duplicate | `status` |
+| `mail_not_dismissable` | 409 | dismissing mail that is neither held nor pooled | only held or pooled mail can be dismissed (status: ...) | `status` |
+| `mail_month_still_live` | 409 | re-ingesting mail whose month still exists | this mail still belongs to a live month; ... | |
+| `mail_state_conflict` | 409 | the archive moved state under the click (a second click, a replay) | cannot join / re-ingest mail in state '...' | `status` |
+| `mail_custody_unreadable` | 409 | the stored `.eml` cannot be read | custody message unreadable | |
+| `no_open_month` | 409 | re-ingest with no month open | no open month to ingest into | |
+| `mail_ingest_failed` | 500 | the ingest job this click started failed | (the job's error) | |
+| `mail_render_failed` | 500 | the body render raised | render failed: ... | |
+| `trip_join_failed` | 500 | the trip join raised before its job existed | join failed: ... | |
+| `mail_routing_failed` | 400 | arrival routing raised; the mail is held and replayable | (the exception, 400 chars) | `archive`, `person`, `status` |
+
+### Advisory codes
+
+The amber boxes at the top of a month are prose too, so each advisory
+carries a code and the values its sentence used, beside the unchanged
+`message`. `summary.setup_advisories[]`:
+
+| `code` | `setting` | Extra fields | Says |
+|---|---|---|---|
+| `fx_rate_missing` | `fx_reference_rates` | `currency`, `card_currency`, `n_receipts` | N receipts are in BRL and no BRL:USD rate is available anywhere |
+| `no_chart_of_accounts` | `cards` | | no chart of accounts resolved, so the journal export placeholders |
+| `card_posting_account_missing` | `cards` | `card` | this card has no posting account (optional; the export placeholders) |
+| `fx_rate_drift` | `fx_reference_rates` | `pair`, `settings_rate`, `ecb_rate`, `ecb_month`, `gap_pct`, `limit_pct`, `n_receipts` | the typed rate has drifted from the ECB average (items 90 + 132) |
+
+The statement advisories ride as a PARALLEL field beside the prose they
+describe, never as a retyping of it (the 2026-08-22 lesson above):
+`summary.statement_advisory_detail` beside `summary.statement_advisory`, and
+`statements[].advisory_detail` beside `statements[].advisory`. Both are
+`{code, ...values}` or absent / null:
+
+| `code` | Extra fields | Says |
+|---|---|---|
+| `statement_not_pdf` | `n_foreign`, `n_receipts`, `suffix` | a foreign-heavy month met a tabular statement; the PDF carries the original amounts |
+| `statement_account_differs` | `other_file`, `other_account`, `account` | one card's two uploads name two account ids, so the month holds both readings |
+| `statement_period_overlap` | `n_rows`, `other_file`, `period_start`, `period_end` | every charge is new over a period another file already covers |
+
+`summary.month_health` is the one prose block that was already coded before
+item 130: it carries `reason` (`zero_match_with_exact_pairs`), `suspects[]`
+and `n_exact_pairs`, and the SPA composes its own sentence from those. It is
+left exactly as it is; `detail` remains the English fallback.
+
+### Enforcement
+
+`tests/test_error_codes_item_130.py` scans the web layer's SOURCE: a
+`JSONResponse` error body with no `code`, a `RunInputError` raised without
+one, a service refusal dict with no `error_code`, a refusal helper that
+returns a bare English sentence, a settings normalizer raising a plain
+`ValueError`, an advisory with no code, or a code that is not snake_case
+each fail at the site, with its line number. Route tests cover one refusal of
+each family end to end. So a NEW refusal added next month cannot reach
+Criss's screen in English by omission.

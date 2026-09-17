@@ -62,6 +62,7 @@ from email.utils import getaddresses, parseaddr
 from pathlib import Path
 
 from ..batch_period import month_from_label
+from ..error_codes import CodedValueError
 from .. import untrusted
 from . import graph_notify
 from .service import (
@@ -314,12 +315,17 @@ def normalize_intake_setting(raw) -> dict:
     """Validate the settings["intake"] payload at the PUT edge. Returns the
     cleaned dict; raises ValueError on a malformed shape."""
     if not isinstance(raw, dict):
-        raise ValueError("intake must be an object")
+        raise CodedValueError(
+            "intake must be an object", code="invalid_body"
+        )
     cleaned: dict = {}
     domain = raw.get("domain")
     if domain is not None:
         if not isinstance(domain, str) or "@" in domain or not domain.strip():
-            raise ValueError("intake.domain must be a bare domain name")
+            raise CodedValueError(
+                "intake.domain must be a bare domain name",
+                code="intake_domain_invalid",
+            )
         cleaned["domain"] = domain.strip().lower()
     # ``senders`` (the retired allowlist) is dropped rather than rejected: a
     # stored settings blob or an older client may still carry it, and a 400
@@ -332,8 +338,9 @@ def normalize_intake_setting(raw) -> dict:
             and isinstance(v, str) and v.strip()
             for k, v in aliases.items()
         ):
-            raise ValueError(
-                "intake.aliases must map address local-parts to person names"
+            raise CodedValueError(
+                "intake.aliases must map address local-parts to person names",
+                code="intake_aliases_invalid",
             )
         cleaned["aliases"] = {
             k.strip().lower(): v.strip() for k, v in aliases.items()
@@ -343,13 +350,22 @@ def normalize_intake_setting(raw) -> dict:
             try:
                 v = int(raw[cap])
             except (TypeError, ValueError):
-                raise ValueError(f"intake.{cap} must be a positive integer")
+                raise CodedValueError(
+                    f"intake.{cap} must be a positive integer",
+                    code="intake_number_invalid", field=cap,
+                )
             if v <= 0:
-                raise ValueError(f"intake.{cap} must be a positive integer")
+                raise CodedValueError(
+                    f"intake.{cap} must be a positive integer",
+                    code="intake_number_invalid", field=cap,
+                )
             cleaned[cap] = v
     if "auto_ack" in raw:
         if not isinstance(raw["auto_ack"], bool):
-            raise ValueError("intake.auto_ack must be true or false")
+            raise CodedValueError(
+                "intake.auto_ack must be true or false",
+                code="invalid_body", field="auto_ack",
+            )
         cleaned["auto_ack"] = raw["auto_ack"]
     alerts = raw.get("alert_recipients")
     if alerts is not None:
@@ -358,8 +374,9 @@ def normalize_intake_setting(raw) -> dict:
             and a.strip().count("@") == 1
             for a in alerts
         ):
-            raise ValueError(
-                "intake.alert_recipients must be @brisken.com addresses"
+            raise CodedValueError(
+                "intake.alert_recipients must be @brisken.com addresses",
+                code="intake_alert_recipients_invalid",
             )
         cleaned["alert_recipients"] = [a.strip().lower() for a in alerts]
     known = raw.get("known_senders")
@@ -367,15 +384,18 @@ def normalize_intake_setting(raw) -> dict:
         if not isinstance(known, list) or not all(
             _is_plain_address(a) for a in known
         ):
-            raise ValueError(
+            raise CodedValueError(
                 "intake.known_senders must be a list of plain e-mail "
-                "addresses"
+                "addresses",
+                code="intake_known_senders_invalid",
             )
         deduped = list(dict.fromkeys(a.strip().lower() for a in known))
         if len(deduped) > MAX_KNOWN_SENDERS:
-            raise ValueError(
+            raise CodedValueError(
                 f"intake.known_senders holds at most {MAX_KNOWN_SENDERS} "
-                "addresses"
+                "addresses",
+                code="intake_known_senders_too_many",
+                limit=MAX_KNOWN_SENDERS,
             )
         cleaned["known_senders"] = deduped
     # Item 38: the travel-pool local-part. "" stores as unset (the owner
@@ -387,22 +407,29 @@ def normalize_intake_setting(raw) -> dict:
     if "travel_alias" in raw:
         travel = raw["travel_alias"]
         if not isinstance(travel, str):
-            raise ValueError("intake.travel_alias must be a string")
+            raise CodedValueError(
+                "intake.travel_alias must be a string",
+                code="invalid_body", field="travel_alias",
+            )
         travel = travel.strip().lower()
         if travel and not _TRAVEL_ALIAS_RE.fullmatch(travel):
-            raise ValueError(
+            raise CodedValueError(
                 "intake.travel_alias must be a bare address local-part "
-                "(letters, digits, . _ -)"
+                "(letters, digits, . _ -)",
+                code="intake_travel_alias_invalid",
             )
         if travel == "receipts":
-            raise ValueError(
+            raise CodedValueError(
                 "intake.travel_alias cannot be 'receipts' - that is the "
-                "company intake address"
+                "company intake address",
+                code="intake_travel_alias_reserved",
             )
         if travel and travel in cleaned.get("aliases", {}):
-            raise ValueError(
+            raise CodedValueError(
                 f"intake.travel_alias {travel!r} collides with a person "
-                "alias"
+                "alias",
+                code="intake_travel_alias_collision",
+                alias=travel,
             )
         cleaned["travel_alias"] = travel
     return cleaned
@@ -2829,6 +2856,7 @@ def route_archived(
         return {
             "status": HELD_FAILED if held else str(current.get("status", "")),
             "archive": arch.name, "person": person, "error": err,
+            "error_code": "mail_routing_failed",
         }
 
 
@@ -3173,24 +3201,27 @@ def join_trip(
     travel pool for the next click."""
     arch = _archive_dir(data_root, archive)
     if arch is None:
-        return {"error": "not found", "code": 404}
+        return {"error": "not found", "code": 404, "error_code": "mail_not_found"}
     meta = _read_meta(arch)
     if str(meta.get("pool_kind") or "") != "travel":
         return {
             "error": "only travel mail joins a trip; month mail joins "
                      "its month automatically",
             "code": 409,
+            "error_code": "mail_not_travel",
         }
     with RunStore(db_path) as store:
         trip = store.get_trip(str(trip_id))
     if trip is None:
-        return {"error": "trip not found", "code": 404}
+        return {"error": "trip not found", "code": 404,
+                "error_code": "trip_not_found"}
     attachments = _archive_attachments(arch)
     if not attachments:
         return {
             "error": "this mail has no ingestable file yet; render its "
                      "body first",
             "code": 409,
+            "error_code": "mail_no_file_yet",
         }
 
     with _TRIP_JOIN_LOCK:
@@ -3210,6 +3241,8 @@ def join_trip(
                 "error": "cannot join mail in state "
                          f"{str(meta.get('status', ''))!r}",
                 "code": 409,
+                "error_code": "mail_state_conflict",
+                "status": str(meta.get("status", "")),
             }
         person = _archive_person(meta)
         received_at = str(meta.get("at") or _now_iso())
@@ -3233,7 +3266,8 @@ def join_trip(
                     {"status": STATUS_POOLED, "batch_id": "",
                      "batch_deleted": False, "error": str(exc)[:400]},
                 )
-                return {"error": f"join failed: {exc}"[:400], "code": 500}
+                return {"error": f"join failed: {exc}"[:400], "code": 500,
+                        "error_code": "trip_join_failed"}
             if job.get("status") != JOB_DONE:
                 # _ingest_job stamped held_failed + the error; the
                 # RESTING place for travel mail is the travel pool.
@@ -3246,6 +3280,7 @@ def join_trip(
                 return {
                     "error": str(job.get("error") or "ingest failed"),
                     "code": 500,
+                    "error_code": "mail_ingest_failed",
                 }
             _update_meta(arch, {"job_id": job_id, "batch_id": run.run_id,
                                 "batch_deleted": False})
@@ -3317,7 +3352,8 @@ def join_trip(
                  "batch_deleted": False, "error": str(exc)[:400]},
             )
             log.warning("trip join failed for %s: %s", arch.name, exc)
-            return {"error": f"join failed: {exc}"[:400], "code": 500}
+            return {"error": f"join failed: {exc}"[:400], "code": 500,
+                        "error_code": "trip_join_failed"}
         finally:
             release_trip_batch_slot(trip.trip_id)
         documents = [
@@ -3691,10 +3727,11 @@ def render_ingest(
 
     arch = _archive_dir(data_root, archive)
     if arch is None or not (arch / "message.eml").exists():
-        return {"error": "not found", "code": 404}
+        return {"error": "not found", "code": 404, "error_code": "mail_not_found"}
     text = extract_body_text((arch / "message.eml").read_bytes())
     if not text.strip():
-        return {"error": "no readable body in this mail", "code": 409}
+        return {"error": "no readable body in this mail", "code": 409,
+                "error_code": "mail_no_readable_body"}
 
     def _renderable(meta: dict) -> bool:
         status = meta.get("status")
@@ -3719,7 +3756,9 @@ def render_ingest(
     })
     if not applied:
         return {"error": "only body-only held mail can be rendered "
-                         f"(status: {meta.get('status', '')})", "code": 409}
+                         f"(status: {meta.get('status', '')})", "code": 409,
+                "error_code": "mail_not_renderable",
+                "status": str(meta.get("status", ""))}
 
     header = [
         f"From: {meta.get('from', '')}",
@@ -3754,7 +3793,8 @@ def render_ingest(
             {"status": HELD_FAILED, "error": str(exc)[:400]},
         )
         log.warning("render failed for %s: %s", arch.name, exc)
-        return {"error": f"render failed: {exc}", "code": 500}
+        return {"error": f"render failed: {exc}", "code": 500,
+                "error_code": "mail_render_failed"}
 
     month = str(stamps["receipt_month"])
     if str(_read_meta(arch).get("pool_kind") or "") == "travel":
@@ -3838,7 +3878,7 @@ def re_ingest(
     """
     arch = _archive_dir(data_root, archive)
     if arch is None:
-        return {"error": "not found", "code": 404}
+        return {"error": "not found", "code": 404, "error_code": "mail_not_found"}
     parts_dir = arch / "parts"
     attachments = [
         (re.sub(r"^\d{3}__", "", f.name), f.read_bytes())
@@ -3850,6 +3890,7 @@ def re_ingest(
             "error": "this mail delivered no attachment to re-ingest; a "
                      "body-only mail is recovered with render-ingest",
             "code": 409,
+            "error_code": "mail_no_attachment",
         }
     if str(_read_meta(arch).get("pool_kind") or "") == "travel":
         # Belt: travel mail joins a TRIP by an operator's click, never
@@ -3861,11 +3902,13 @@ def re_ingest(
             "error": "travel mail joins a trip, not a month; use the "
                      "trip join on the pooled row",
             "code": 409,
+            "error_code": "mail_travel_not_month",
         }
     with RunStore(db_path) as store:
         run = open_batch(store)
     if run is None:
-        return {"error": "no open month to ingest into", "code": 409}
+        return {"error": "no open month to ingest into", "code": 409,
+                "error_code": "no_open_month"}
 
     def _stranded(meta: dict) -> bool:
         if not meta.get("batch_deleted"):
@@ -3890,10 +3933,13 @@ def re_ingest(
                 "error": "this mail still belongs to a live month; re-ingest "
                          "exists for mail stranded by a deleted month",
                 "code": 409,
+                "error_code": "mail_month_still_live",
             }
         return {
             "error": f"cannot re-ingest mail in state {status!r}",
             "code": 409,
+            "error_code": "mail_state_conflict",
+            "status": status,
         }
 
     person = meta.get("person") or {
@@ -3935,7 +3981,7 @@ def unmark_duplicate(
     """
     arch = _archive_dir(data_root, archive)
     if arch is None:
-        return {"error": "not found", "code": 404}
+        return {"error": "not found", "code": 404, "error_code": "mail_not_found"}
     applied, meta = _transition_meta(
         arch,
         lambda m: str(m.get("status", "")) == STATUS_DUPLICATE,
@@ -3951,19 +3997,22 @@ def unmark_duplicate(
                 "this mail is not parked as a duplicate"
             ),
             "code": 409,
+            "error_code": "mail_not_duplicate",
             "status": str(meta.get("status", "")),
         }
     eml = arch / "message.eml"
     if not eml.is_file():
         _update_meta(arch, {"status": HELD_FAILED})
-        return {"error": "custody message unreadable", "code": 409}
+        return {"error": "custody message unreadable", "code": 409,
+                "error_code": "mail_custody_unreadable"}
     with RunStore(db_path) as store:
         cfg = IntakeConfig.from_settings(store.get_settings())
     try:
         parsed = parse_inbound(eml.read_bytes(), cfg.domain)
     except Exception:  # noqa: BLE001 - unreadable custody file
         _update_meta(arch, {"status": HELD_FAILED})
-        return {"error": "custody message unreadable", "code": 409}
+        return {"error": "custody message unreadable", "code": 409,
+                "error_code": "mail_custody_unreadable"}
     # Route it exactly as an arrival would, minus the detector: the
     # override rides on the meta and `route_archived` honours it.
     return route_archived(
@@ -3985,7 +4034,7 @@ def dismiss_archive(
     otherwise, and clearing it is the normal way to finish with one."""
     arch = _archive_dir(data_root, archive)
     if arch is None:
-        return {"error": "not found", "code": 404}
+        return {"error": "not found", "code": 404, "error_code": "mail_not_found"}
     applied, meta = _transition_meta(
         arch,
         lambda m: (
@@ -4000,7 +4049,9 @@ def dismiss_archive(
     )
     if not applied:
         return {"error": "only held or pooled mail can be dismissed "
-                         f"(status: {meta.get('status', '')})", "code": 409}
+                         f"(status: {meta.get('status', '')})", "code": 409,
+                "error_code": "mail_not_dismissable",
+                "status": str(meta.get("status", ""))}
     return {"status": STATUS_DISMISSED, "archive": arch.name}
 # ------------------------------------------------------------ receipts drop --
 
@@ -4239,7 +4290,8 @@ def route_dropped_receipts(
                 fresh = store.get_run(target_run.run_id)
                 if fresh is None:
                     raise RunInputError(
-                        "This batch no longer exists (it was deleted)."
+                        "This batch no longer exists (it was deleted).",
+                        code="batch_deleted",
                     )
                 result = add_receipts_to_expense_batch(
                     store, fresh, add_staging, _now_iso(),

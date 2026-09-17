@@ -51,6 +51,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .error_codes import CodedValueError
+
 # Display-only grouping for the roll-up. Never consulted during resolution.
 COST_CENTER_KINDS = ("project", "function", "trip", "")
 
@@ -220,7 +222,10 @@ def normalize_cost_centers_setting(raw: object) -> dict:
     if raw is None:
         return {}
     if not isinstance(raw, dict):
-        raise ValueError("cost_centers must be an object of {name: entry}")
+        raise CodedValueError(
+            "cost_centers must be an object of {name: entry}",
+            code="invalid_body",
+        )
     out: dict[str, dict] = {}
     seen: dict[str, str] = {}
     for name, entry in raw.items():
@@ -229,18 +234,26 @@ def normalize_cost_centers_setting(raw: object) -> dict:
             continue
         folded = clean_name.casefold()
         if folded in seen:
-            raise ValueError(
+            raise CodedValueError(
                 f"cost_centers has two entries differing only in case: "
-                f"{seen[folded]!r} and {clean_name!r}"
+                f"{seen[folded]!r} and {clean_name!r}",
+                code="cost_center_case_duplicate",
+                cost_center=clean_name, other=seen[folded],
             )
         seen[folded] = clean_name
         if not isinstance(entry, dict):
-            raise ValueError(f"cost_centers[{clean_name!r}] must be an object")
+            raise CodedValueError(
+                f"cost_centers[{clean_name!r}] must be an object",
+                code="invalid_body", cost_center=clean_name,
+            )
         kind = str(entry.get("kind") or "").strip().lower()
         if kind not in COST_CENTER_KINDS:
-            raise ValueError(
+            raise CodedValueError(
                 f"cost_centers[{clean_name!r}].kind {kind!r} is not one of "
-                f"{', '.join(k or '(blank)' for k in COST_CENTER_KINDS)}"
+                f"{', '.join(k or '(blank)' for k in COST_CENTER_KINDS)}",
+                code="cost_center_kind_invalid",
+                cost_center=clean_name, kind=kind,
+                allowed=[k for k in COST_CENTER_KINDS if k],
             )
         cleaned: dict = {}
         if kind:
