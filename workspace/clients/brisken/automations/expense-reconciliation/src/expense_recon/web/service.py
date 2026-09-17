@@ -7002,7 +7002,27 @@ def build_expense_report(
     `CostCenterRegistry.resolve` (the empty-registry contract's only
     home) rather than re-checked here. `settings` is the live settings
     map both registries read from.
+
+    A COMPANY month no cost center partitions sections the listing PER
+    CARD (item 138, owner 2026-09-17: the PDFs were "not organized by the
+    cards that were reconciled"). The sections are `card_sections` over
+    `report_view` and `report_receipt_cards`, the grouping the
+    reconciliation report uses, so both documents file a receipt under the
+    same card. Each card section carries a line on what its statement
+    settled (`card_statement_line`) and names any receipt its charge holds
+    whose own card is another (item 137); its receipt pages follow its
+    sums rather than the whole document. Reimbursements and copies keep
+    their current places. Where cost centers belong in this is undecided,
+    so a month they partition keeps exactly that partition. A month whose
+    listed receipts fall in a single section (one card, or none) keeps the
+    flat listing.
+    `charge_decisions` feeds the view that sections are read from.
     """
+    from ..output._pdf_common import (
+        NO_CARD_SECTION_LABEL,
+        card_sections,
+        card_statement_line,
+    )
     from ..output.month_report_pdf import build_expense_report_pdf
 
     receipts, kwargs = _expense_export_inputs(
@@ -7024,6 +7044,10 @@ def build_expense_report(
     sections: list[dict] | None = None
     sections_heading = ""
     sections_note = ""
+    # Item 138: set when the listing sections per card, which is also when
+    # each section's receipt pages follow that section.
+    by_card_receipts = False
+    card_section_by_key: dict[str, dict] = {}
     # A partition of the company listing into contiguous slices: the
     # ordered keys, the receipts under each, and a function giving the
     # caption fields a section carries. A trip keys on person (item 38);
@@ -7102,6 +7126,65 @@ def build_expense_report(
             section_fields = _cost_center_fields
             sections_heading = "Listing by cost center"
             sections_note = COST_CENTER_SCOPE_NOTE
+        else:
+            # Item 138: no cost center applies, so the month is organized
+            # the way it is reconciled, card by card. The sections are
+            # `card_sections` over the same view and card chain the
+            # reconciliation report sections on, so the two documents file
+            # every receipt under the same card: a receipt a charge holds
+            # follows that charge's card, an unheld one its own resolved
+            # card, the rest "No card", last. Only the listed company
+            # receipts are placed; a card whose receipts are all private or
+            # copies gets no empty table. The listing sections only when its
+            # receipts span two sections or more, one of them a card: a
+            # single section (one card, or only "No card") would put a
+            # heading over the flat listing and push the copies line and
+            # the reimbursements off its first page, organizing nothing.
+            _, snapshot_receipts, _, _ = snapshot_from_dict(run.snapshot)
+            card_view = report_view(
+                run, receipts, snapshot_receipts, charge_decisions or {},
+                overrides, dup_resolutions, field_overrides=field_overrides,
+            )
+            listed = {r.document_id: r for r in company}
+            by_card: dict[str, list] = {}
+            for sec in card_sections(
+                card_view,
+                report_receipt_cards(receipts, run.config, field_overrides),
+            ):
+                for doc in sec["receipt_docs"]:
+                    if doc in listed:
+                        by_card.setdefault(sec["key"], []).append(listed.pop(doc))
+                if sec["key"] in by_card:
+                    card_section_by_key[sec["key"]] = sec
+            if listed:
+                # Never drop a row: a listed receipt the sections did not
+                # place goes with the ones that have no card.
+                by_card.setdefault("", []).extend(
+                    r for r in company if r.document_id in listed
+                )
+            # Two cards or more, the reconciliation report's own rule: a
+            # one-card month (with or without no-card receipts) keeps the
+            # flat listing, whose header already is that card's.
+            if sum(1 for k in by_card if k) >= 2:
+                groups = by_card
+                ordered_keys = [k for k in card_section_by_key if k]
+                if "" in by_card:
+                    ordered_keys.append("")
+
+                def _card_fields(key: str) -> dict:
+                    sec = card_section_by_key.get(key) or {
+                        "key": "", "label": NO_CARD_SECTION_LABEL,
+                        "coverage": None, "rows": [],
+                    }
+                    return {
+                        "caption": sec["label"],
+                        "label": sec["label"],
+                        "detail": card_statement_line(sec),
+                    }
+
+                section_fields = _card_fields
+                sections_heading = "Listing by card"
+                by_card_receipts = True
     if groups is not None:
         company = [r for k in ordered_keys for r in groups[k]]
 
@@ -7113,14 +7196,46 @@ def build_expense_report(
     if groups is not None and section_fields is not None and aligned:
         sections = []
         pos = 1
+        vendor_col = EXPENSE_COLUMNS.index("Vendor")
         for key in ordered_keys:
             count = sum(
                 max(1, len(expense_posting_parts(r)))
                 for r in groups[key]
             )
-            sections.append({
-                **section_fields(key), "start": pos, "count": count,
-            })
+            section = {**section_fields(key), "start": pos, "count": count}
+            if by_card_receipts and key in card_section_by_key:
+                # Item 137 on paper: a listed receipt this card's charge
+                # holds while the tool resolved it to another card. It
+                # stays here, beside the charge it settles, and says so.
+                numbers_by_doc: dict[str, list[int]] = {}
+                n_ = pos
+                for r in groups[key]:
+                    width = max(1, len(expense_posting_parts(r)))
+                    numbers_by_doc[r.document_id] = list(range(n_, n_ + width))
+                    n_ += width
+                notes = []
+                for charge in card_section_by_key[key]["rows"]:
+                    differ = charge.get("cards_differ") or {}
+                    numbers = numbers_by_doc.get(str(differ.get("document_id") or ""))
+                    if not numbers:
+                        continue
+                    vendor = str(rows[numbers[0] - 1][vendor_col] or "").strip()
+                    which = (
+                        f"Expense {numbers[0]}" if len(numbers) == 1
+                        else "Expenses " + ", ".join(str(x) for x in numbers)
+                    )
+                    single = len(numbers) == 1
+                    verb = "is" if single else "are"
+                    whose = "its" if single else "the receipt's"
+                    named = f" ({vendor})" if vendor else ""
+                    other = differ.get("receipt_card_label") or "another card"
+                    notes.append(
+                        f"{which}{named} {verb} held on a charge on this "
+                        f"card, but {whose} own card is {other}."
+                    )
+                if notes:
+                    section["notes"] = notes
+            sections.append(section)
             pos += count
     receipts_dir = Path(run.work_dir) / "receipts"
     # Backlog item 25: the document says which of its own dates it distrusts.
@@ -7259,17 +7374,27 @@ def build_expense_report(
     }
 
     label = run.label or run.run_id
+    # Item 138: sectioned per card, the receipts sit behind each card's
+    # listing, so this note (after the last section) cannot say "below".
+    in_sections = by_card_receipts and sections is not None
     note = (
         "Every amount above is the amount the CSV export writes. Each "
         "receipt follows behind the expense number it proves."
     )
+    if in_sections:
+        note = (
+            "Every amount above is the amount the CSV export writes. Each "
+            "card's receipts follow its listing, each behind the expense "
+            "number it proves."
+        )
     if suspect:
-        listed = ", ".join(str(i) for i in sorted(suspect))
+        suspect_numbers = ", ".join(str(i) for i in sorted(suspect))
         note += (
             f" The date read on {'expense' if len(suspect) == 1 else 'expenses'} "
-            f"{listed} falls outside this month, so check "
+            f"{suspect_numbers} falls outside this month, so check "
             f"{'it' if len(suspect) == 1 else 'them'} against the receipt "
-            f"{'page' if len(suspect) == 1 else 'pages'} below."
+            f"{'page' if len(suspect) == 1 else 'pages'}"
+            f"{'' if in_sections else ' below'}."
         )
     title = f"Expense report — {label}"
     subtitle = ""
@@ -7293,6 +7418,7 @@ def build_expense_report(
         sections_note=sections_note,
         copies_set_aside=copy_lines,
         copies_set_aside_totals=copies_totals,
+        receipts_by_section=in_sections,
     )
     # Item 67: `prepare_evidence` wrote each file's render outcome back onto
     # its evidence dict during the build. The builder returns one `bytes`, so
@@ -7451,6 +7577,60 @@ def build_cost_center_totals(
     }
 
 
+def report_view(
+    run: RunRow,
+    receipts: "list[Receipt]",
+    snapshot_receipts: "list[Receipt]",
+    decisions: dict,
+    overrides: dict,
+    resolutions: dict[str, str] | None,
+    field_overrides: dict[str, dict[str, str]] | None = None,
+) -> dict:
+    """`build_view` over the reviewer's live pool, for a document.
+
+    Hand `build_view` the live pool rather than post-filtering its output:
+    the unmatched list, the duplicate groups, the candidates and the counts
+    are all derived there, and re-deriving any of them in a report would be
+    a second implementation of the same rules, the exact shape that let the
+    two documents disagree in the first place.
+
+    `field_overrides` reach `build_view` too, as they do on the GET route:
+    the card a reviewer picked is what `rows[].cards_differ` (item 137)
+    compares against, and without it the document never named a held pair
+    whose cards disagree (found building item 138)."""
+    if {r.document_id for r in receipts} != {
+        r.document_id for r in snapshot_receipts
+    }:
+        run = replace(run, snapshot={
+            **(run.snapshot or {}),
+            "receipts": [receipt_to_dict(r) for r in receipts],
+        })
+    return build_view(
+        run, decisions, overrides, resolutions, field_overrides=field_overrides
+    )
+
+
+def report_receipt_cards(
+    receipts: "list[Receipt]",
+    cfg: dict | None,
+    field_overrides: dict[str, dict[str, str]] | None,
+) -> dict[str, tuple[str, str]]:
+    """Item 138: `{document_id: (card key, card label)}` for every receipt,
+    in pool order, `("", "")` for one with no card. The card is the one
+    `resolve_batch_row_cards` resolves (a pick on the row, the printed
+    method or an assigned hint, a remembered card), the same chain
+    `bake_card_scope` hands the matcher (item 137), so a document files a
+    receipt under the card it was matched on."""
+    res = resolve_batch_row_cards(receipts, cfg, field_overrides or {})
+    out: dict[str, tuple[str, str]] = {}
+    for r in receipts:
+        card = (res.get(r.document_id) or {}).get("card")
+        out[r.document_id] = (
+            (card.key, card.display_label) if card is not None else ("", "")
+        )
+    return out
+
+
 def build_reconciliation_report(
     run: RunRow,
     decisions: dict,
@@ -7494,19 +7674,10 @@ def build_reconciliation_report(
                 ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
             ),
         )
-    if {r.document_id for r in receipts} != {
-        r.document_id for r in snapshot_receipts
-    }:
-        # Hand `build_view` the live pool rather than post-filtering its
-        # output: the unmatched list, the duplicate groups, the candidates
-        # and the counts are all derived there, and re-deriving any of them
-        # here would be a second implementation of the same rules — the
-        # exact shape that let the two documents disagree in the first place.
-        run = replace(run, snapshot={
-            **(run.snapshot or {}),
-            "receipts": [receipt_to_dict(r) for r in receipts],
-        })
-    view = build_view(run, decisions, overrides, resolutions)
+    view = report_view(
+        run, receipts, snapshot_receipts, decisions, overrides, resolutions,
+        field_overrides=field_overrides,
+    )
     charge_by_doc: dict[str, dict] = {}
     for row in view.get("rows") or []:
         doc = row.get("chosen_document_id")
@@ -7549,6 +7720,11 @@ def build_reconciliation_report(
     label = run.label or run.run_id
     return build_reconciliation_report_pdf(
         view, title=f"Reconciliation — {label}", evidence=evidence,
+        # Item 138: the card each receipt nobody holds files under, from the
+        # same chain the matcher scopes by (item 137).
+        receipt_cards=report_receipt_cards(
+            receipts, run.config, field_overrides
+        ),
     )
 
 

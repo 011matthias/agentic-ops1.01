@@ -592,8 +592,11 @@ def test_the_document_headline_agrees_with_the_screen(client, monkeypatch):
     text = " ".join(
         " ".join(p.extract_text() or "" for p in PdfReader(str(path)).pages).split()
     )
-    assert f"{summary['n_reconciled']} matched" in text, text[:200]
-    assert "0 matched" not in text, text[:200]
+    # The headline, before the coverage table: a card section further down
+    # may truthfully say "0 matched" for a card with nothing matched (item 138).
+    headline = text[:text.index("Coverage by card")]
+    assert f"{summary['n_reconciled']} matched" in headline, text[:200]
+    assert "0 matched" not in headline, text[:200]
 
 
 def test_a_one_card_month_keeps_the_one_flat_table(client, monkeypatch):
