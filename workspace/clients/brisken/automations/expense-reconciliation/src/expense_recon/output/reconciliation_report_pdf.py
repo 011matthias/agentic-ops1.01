@@ -235,8 +235,11 @@ def _card_section(
     cov = sec.get("coverage")
     if sec["key"]:
         statements = ", ".join((cov or {}).get("statements") or [])
+        # Charges with no recorded upload arrived under another statement
+        # (live August 2026: 1176, item 108); "none loaded" would be false.
         story.append(Paragraph(esc(
             f"Statement: {statements}  ·  {_period(cov)}" if statements
+            else f"Statement: not recorded  ·  {_period(cov)}" if sec["rows"]
             else "No statement loaded for this card"
         ), styles["capsub"]))
     figures = []
