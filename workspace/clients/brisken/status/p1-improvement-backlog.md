@@ -3361,6 +3361,14 @@ The persistence split itself stays open here: the commit should persist
 the effective outcome, or the list / log / claims should read the effective
 layer; decide which when round B lands and the instance is gone.
 
+**Item 103 owns both halves (SHIPPED 2026-09-17, pending PR).** The tie rule
+and the counts ship there: a tie holds its receipts, a receipt spoken for by a
+clean exact candidate elsewhere no longer sustains one, and the months list,
+the stored summary and the `rematch_log` event count the effective verdict the
+page shows. `0023`'s own instance had already gone by then, for an unrelated
+reason: item 137 gives it a resolved card, so it no longer ties with `0021` on
+50.52.
+
 ### The 2026-09-15 feedback wave (7 notes, read off `/feedback.jsonl`)
 
 The in-app widget has collected 42 notes since 2026-07-15. Seven were left on
@@ -4870,7 +4878,7 @@ method and the two run outputs: session 2026-09-17 (memory
 
 **Shipped 2026-09-17:** `summary.n_booked_no_receipt` + `summary.booked_no_receipt_by_ccy` on the review payload count yellow rows no receipt settles (`effective_bucket: unmatched`), beside `unreconciled_by_ccy`, never inside it. Live July before the change: 48 such rows (47 `already_booked` + 1 whose receipt another charge holds); 8 more booked rows wait in review with a candidate and are not counted. Not built: the missing-receipts list (item 107, new function). SPA half `docs/lovable-booked-no-receipt-prompt.md`.
 
-### 103. One receipt can be bound to two charges, so the months list, the change log and the month page disagree (item 72, live today) (2026-09-17 audit draft #101, unranked; licence: defect, covered)
+### 103. One receipt can be bound to two charges, so the months list, the change log and the month page disagree (item 72, live today) (2026-09-17 audit draft #101, unranked; licence: defect, covered) (SHIPPED 2026-09-17, pending PR)
 
 **Audit rank 10 of 40; severity high as merged; verification: three reviewers agreed, severity lowered to medium.** When two receipts tie for a charge, the tool sets that charge aside for a human pick but leaves its receipts free, so the same receipt is also handed to another charge in the same pass. The stored numbers (months list, re-match notifications, cross-month claim table) count the second pairing; the screen, PDFs and CSV drop it, and which charge keeps the receipt depends on statement row order, not score. Live: August's Anthropic 52.59 invoice is stored as matched to the 52.46 charge (score 93) while the screen shows it held by the undecided 50.52 pick (score 83) and reports 52.46 as 'no receipt'; the list says 9 matched, the page 8; July list 9 review / 71 unmatched / 13 receipts vs page 8 / 72 / 11. Item 72 said round B would dissolve this instance; it did not.
 
@@ -4883,6 +4891,118 @@ method and the two run outputs: session 2026-09-17 (memory
 **Value:** The count on the months list and in the notification mail becomes the count Criss sees, and one real August expense stops being reported as undocumented. (effort medium)
 
 **Reviewer corrections:** (evidence) (1) The August figures are stale: live is list 8 matched / 101 unmatched vs page 7 / 102 (not 9 vs 8); the one-row delta is what persists. (2) The receipts delta (July 13 vs 11, August 21 vs 11) is the duplicate copies set aside (page n_copies_set_aside 2 / 10), a separate raw-vs-effective split, not the tie. (3) The workbench no longer reports 52.46 as "no receipt": a 2026-09-16 fix (service.py ~2882-2891, which names this exact instance) labels the row receipt_held_by_another_charge with the holder named and counts it in n_charges_receipt_taken (=1); only the PDF/CSV builders, which have no held_by state, render it as plain unmatched. (4) No mail carries these counts: intake_mail.py has no (ledger) (1) "The matcher-level cause is not named" is overstated: the ledger names it precisely, three times, just without an item number or owner. Backlog item 69 round-B review (lines 3094-3101): "0023 is stopped by pass-1 AMBIGUITY detection (`_ties` over deterministic candidates), a different mechanism the gate never reaches. Extending 'spoken for' into tie detection is a real and probably correct change; it is not in round B's scope and was not made." Same in memory project_brisken_recon_matching_program.md ("is its own round") and the loop brief p1-recon-loop-prompt.md:255-259. Unowned, yes; unnamed, no. (2) The ledger's fix pointer differs from the finding's: the ledger would DISSOLVE the tie (value) (1) The SPA does not report 52.46 as "no receipt": the live row has section "attention", reason_code receipt_held_by_another_charge and its candidate carries held_by -> 50.52; the reconciliation PDF headline reads n_reconciled (effective), not the stored n_matched. (2) "The matcher-level cause is not named" is wrong: the matching-program memory and p1-recon-loop-prompt.md lines 255-259 name it (pass-1 ambiguous tie, uniqueness gate never reaches it, extend spoken-for into tie detection); only backlog item 72's last paragraph is stale on round B. (3) The "notification mail" with raw counts is the dev-side tools/brisken-recon-notify.py polling rematches[] and mailing Matthias; Criss and Dirk n
+
+**Shipped (2026-09-17, pending PR).** The rule as built, both halves in pass 1
+of `matching/deterministic.py`. (1) **Held:** every receipt a tie lists is held
+by it, so the greedy pass skips it, the way `apply_decisions` already holds it
+for the pending pick (the item's fix A). (2) **Spoken for:** before the tie is
+taken, a tied receipt that holds a CLEAN exact candidate on another charge,
+while its own candidate here is not one, no longer sustains it
+(`uniqueness_spoken_for`, round B's rule carried into tie detection, the
+ledger's fix B); under two tied receipts left, the charge is not ambiguous and
+goes to the assignment like any other. B only ever dissolves a tie, never
+creates one, and clean matters: the card pass leaves a cards-differ exact at
+confidence 0.55, below every clean deterministic candidate, so it is not the
+stronger claim elsewhere the rule reasons from.
+
+The labels decided which of the two leads. August's `0023` is `excluded`, and
+the note says why: "no charge of 52.59; eight ANTHROPIC charges between 50.52
+and 54.12 within two days; ambiguous". Neither `6d474e9e8e964bd4` (52.46) nor
+`c632cb75a5098253` (50.52) carries a labelled receipt. So no evidence makes
+either pairing right, and the outcome the labels support is the one where a
+human picks: A is what keeps the pick a pick. B is in for the receipt that IS
+spoken for, `0021` (exact to ANTHROPIC 51.38, the label's verdict carried by
+its copy `0022`): without it, A would hold `0021` in a tie it cannot win and
+the month would lose a real, bank-printed pairing. Two exact twins over two
+identical charges are each other's equal, so neither is spoken for there and
+both charges keep waiting for a human (live July, below).
+
+**The live instance has moved since the audit, and the ledger's `0023` case is
+gone for an unrelated reason.** On a DB copy pulled 2026-09-17 19:46 (after Fly
+v167), August holds no tie at all: `0023` now carries a resolved card (hint,
+Visa ...3645, item 137), so its card signal is 0.75 against `0021`'s 0.5, the
+two no longer tie on 50.52, and `0023` is a plain probable match to 52.46 (93)
+that the label cannot verify. August's list and page already agree: 9 matched /
+1 in review / 101 unmatched / 3 refunds on both. What remains live is JULY's
+shape, which is the same defect one bucket over: the two GOOGLE *Workspace
+71.64 charges of 07-01 (`b7abd111d69921a3` and `b7abd111d69921a3-1`) each tie
+over BOTH `0036` and `0037`, so each receipt is listed on two charges; the
+effective layer gives both to whichever charge comes first in statement order
+and the second reads unmatched with its candidates held. Stored and list: 8 in
+review / 72 unmatched. Page: 7 / 73. Same month, same day, two screens.
+
+**Persistence half, built.** `service.effective_charge_counts` (apply_decisions
+then `charge_states`) is the one derivation, and `bucket_counts` names its
+buckets in the stored summary's vocabulary. `batch_list_summary` re-derives the
+four charge counters and `match_rate` on READ, so a confirm or reject taken
+after the re-match moves the list too; the re-match commit writes the same
+counts into the stored summary, the `rematch_log` event the notifier mails and
+the reply the drop page shows, and `execute_run` does the same at creation.
+`n_unmatched_rec` and `n_receipts_matched` stay as the match stored them: the
+receipts delta is the copies-set-aside split (reviewer correction 2), a
+different question with a different fix. Contract updated in
+`docs/api-contract.md` ("The four charge counters count the effective verdict",
+plus a line on `rematches[]`).
+
+**Measured before (origin/main `8fc84dec`) and after, one DB copy, one tool
+(`tools/recon-match-attribution.py`, `RECON_MODULE_SRC` naming each tree).**
+Both live months and the six scorer bundles: class tables byte-identical, and
+per row, 0 of 79 live receipt rows and 0 of 218 bundle rows changed class or
+bucket. The parity block is identical too, so the pairings the next live
+re-match will write do not move. Pinned scorer and guard, identical on both
+trees: train 56.8, holdout 19.2, all 76.0, determ_ok 70/95, determ_wrong 0,
+nc_matched 0, invariant OK, guard 4/4 PASS. The matcher half changes no month
+anyone holds today; it closes the mechanism that produced the August case and
+would produce the next one.
+
+List against page, measured by calling `batch_list_summary` and `build_view` on
+the same DB copy: July before, list 31 / 8 / 72 / 1 against page 31 / 7 / 73 /
+1; after, list 31 / 7 / 73 / 1, the page's own numbers. August 9 / 1 / 101 / 3
+on both screens, before and after. Across all six runs in the store those two
+July numbers are the only ones that move, and the months with no statement keep
+their empty counts.
+
+**Tests:** `tests/test_tied_receipt_item_103.py`, six. Three pin the matcher's
+shapes (the tie dissolves for a spoken-for receipt and both charges land; a
+surviving tie holds its receipts and the rival charge goes unmatched with no
+receipt named twice; two exact twins stay a human pick). Three run through the
+routes: upload, statement attach, then `GET /api/expense-batches` against `GET
+/api/runs/{id}` on the twin shape (one in review, one unmatched, counts equal
+on both screens, and the re-match event carrying the same numbers), and a
+reject that moves both screens. regress_check red on four wires: the tie
+dissolve (2 of 6), the greedy skip (1 of 6), the list derivation (1 of 6), the
+commit's effective `n_review` (1 of 6). Suite 2268 -> 2274 (2272 passed, 2
+skipped); ruff clean on the diff.
+
+**Predicted live change at the next deploy:** the months screen's July row
+reads 7 in review and 73 unmatched instead of 8 and 72, which is what the
+workbench has been saying; no re-match is needed for that and no pairing moves
+anywhere. The next re-match of either month then stores and mails the effective
+counts rather than the raw ones.
+
+**One contract moved with it.** `tests/test_same_amount_other_merchant_item_133.py::test_the_rule_never_breaks_a_tie_a_person_should_settle`
+(item 133's bulk-confirm half, PR #1036) pinned the raw outcome where a charge
+outside the tie still took a tied receipt. The page never rendered that pairing
+(`held_by` gave the receipt to the pick and labelled the charge "receipt held by
+another charge"), which is precisely the raw-vs-effective split this item
+closes, so the test now asserts the held outcome. The cost is named: while a
+pick is open the other charge waits, and the freed receipt reaches it at the
+next re-match, because a decision does not re-match a month. No live row is in
+that shape on either month or the six bundles.
+
+**Not built.** Round-B vendor dominance as a second spoken-for basis: no tie in
+either live month or the six bundles would use it, and a dominance-kept
+rate-derived pair is not provably stronger than a same-currency tied candidate,
+so it would widen the rule on a hypothesis. Twin-charge auto-pairing: two
+identical charges with two equally fitting receipts stay a human pick rather
+than being paired by row order, which is the matcher's standing rule against an
+arbitrary assignment. The receipt-side counts (`n_unmatched_rec`,
+`n_receipts_matched`) still differ between list and page by the copies set
+aside. `cli.py` and `runlog` keep the raw counts; they are not the web
+surfaces this item is about. And `execute_run`'s own wire has no test that
+bites it: the shape where its raw and effective counts differ (a tie holding
+another charge's only receipt) does not arise on the classic intake path the
+suite exercises.
 
 ### 104. Every decision overwrites the previous one, nobody's name is on it, and one shared password is still live with sessions that never expire (2026-09-17 audit draft #102, unranked; new function, quote separately)
 
@@ -4964,7 +5084,7 @@ method and the two run outputs: session 2026-09-17 (memory
 
 **Reviewer corrections:** none recorded
 
-### 109. Charges without a receipt get an AI category nobody can correct, and the tool never learns it (2026-09-17 audit draft #107, unranked; new function, quote separately) (owner 2026-09-17: quote separately, not built)
+### 109. Charges without a receipt get an AI category nobody can correct, and the tool never learns it (2026-09-17 audit draft #107, unranked; new function, quote separately) (SHIPPED 2026-09-17, pending PR; owner reversed the quote-separately ruling)
 
 **Audit rank 16 of 40; severity high as merged; verification: checked by hand in code (category route needs a receipt); no reviewer pass.** Criss's real job is to give every charge a category. 71 of July's 112 charges and 98 of August's 111 have no receipt, each with a category the AI guessed from the bank description ('AI?' badge). There is no control on those rows to change it: the dropdown exists only inside a candidate receipt card, the category route needs a receipt, and learning reads receipts only. The guesses go into the reconciled CSV as they are and the same charge is guessed again next month. The recall half (learned rows for charges) already exists.
 
@@ -4977,6 +5097,27 @@ method and the two run outputs: session 2026-09-17 (memory
 **Value:** The largest part of every month's work becomes something Criss does once per vendor instead of every month, and the deliverable stops carrying uncorrectable guesses. (effort medium)
 
 **Reviewer corrections:** none recorded
+
+**Shipped 2026-09-17 (pending PR).** `PUT /api/runs/{id}/charges/{tx}/category`
+stores a category against the CHARGE, in the same `category_overrides` table
+the receipt edits use, under the pseudo-receipt id `charge:{tx}` the charge
+categorizer already mints. Nothing but deleting the month clears that table, so
+the pick outlives a re-match that rewrites the whole snapshot. It reads
+`source: "EDITED"` with `is_edited: true` on `rows[].charge_category` and
+`rows[].posting_category`, the row's review state drops to `none` (an answer is
+not a question, so it leaves `n_charges_category_guessed`, which keeps its
+meaning), and it reaches the reconciled CSV, `report.xlsx`, the statement
+writeback, the reconciliation PDF's posts-to column, and, behind the existing
+`zoho.export_receiptless_learned` flag, the journal rows a LEARNED charge
+posts. A guess still never posts. At Publish, the month's sign-off since item
+88, the pick is learned under the bank's normalized description through the
+shared `_learn_categories` pass, conflict-skip included, so next month's same
+subscription arrives LEARNED; a category that came from the model writes no
+override and teaches nothing. The guessed row's own copy now says the tool
+guessed it from the bank's description and that the row can be picked on.
+Live scale on the 2026-09-17 payloads: 174 receiptless charges across July
+(73) and August (101), 146 of them carrying a guess, 0 editable before this.
+SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 
 ### 110. A receipt arriving into an existing month resolves its card against that month's stale copy of the registry; September has 40 expenses with no person (2026-09-17 audit draft #108, unranked; licence: defect, covered; SHIPPED PR #979: every arrival refreshes the month's card list first)
 
@@ -5414,7 +5555,7 @@ Criss on August, 11:29 UTC, row `0019__Invoice-B2EA98DF-0020.pdf` (Pressmaster F
 
 **Owner ruling 2026-09-17: cards inside cost centers.** "When a month has both cost centers and cards, the PDFs are organized cards inside cost centers: one section per cost center (spending per project), with each section's expenses grouped by the card that paid." **Shipped (Shipped row 70), month report:** a month whose cost centers resolve keeps "Listing by cost center", one section per cost center in the same order, and when its listed receipts reach two card sections or more (the card listing's own rule) each center's expenses run in `card_sections` order and key, "No card" last. A center spanning two card groups or more gets a sub-heading per card, that card's table and its sums per currency, then the center's sums; a center on one card gets no card heading. `card_statement_line` stays out of the sub-groups (its figures are the whole statement's, not the center's share); a held pair whose cards differ is still named under its card ("on this card" under a heading, the card's name otherwise). Design calls: receipt pages stay at the end in listing order, as a cost-center month had them (moving them behind each center is the existing `receipts_by_section` switch); a one-card month with cost centers stays exactly as before. **Reconciliation report: unchanged.** It never sectioned by cost center (a charge has no cost center of its own; the center is resolved on the receipt), so it keeps its card sections whatever the settings say. No live document changes today: `cost_centers: {}`. Real data, rendered locally from a read-only DB copy with a synthetic assignment in memory (every third receipt Lidar / Marketing / none, no receipt files): July 56 expenses as Lidar 20 (3876 6, 2838 7, 3645 1, No card 6), Marketing 18, Unassigned 18; August 21 as 9 / 7 / 5; per-card sums add to each center's, center counts to the header, captions 1..N once; reconciliation report sections per card as before (63 and 36 pages without receipt files).
 
-**Found on the way, not built:** both PDFs lay tables out wider than the A4 frame (516 pt between the 14 mm margins). The month report's listing is 732 pt, so the `#` and Date columns are cut off on the left and Ccy and Receipt on the right, on every month report since item 24; the reconciliation report's charge table is 672 pt, cutting `#`, part of Date and part of Account. Text extraction still reads the clipped cells, so no test sees it; a raster of the August pages shows it.
+**Found on the way:** both PDFs cut table columns off the page. Built as item 143.
 
 **Owner:** "the output (PDF) is also not organized in the different cards that were reconciled."
 
@@ -5469,6 +5610,97 @@ Answer: from the fill colour of that charge's row in the Chase workbook Criss up
 
 **Prompt written 2026-09-17:** `docs/lovable-booked-hint-names-workbook-prompt.md`, not applied. Live the phrase sits in two places, the "Already booked" badge tooltip on all 84 booked July rows and the line under the vendor on the 47 in "Charges without a receipt" ("Marked yellow in your statement workbook, so already booked."), and item 86's fold on August names a PDF that carries no colours ("August2026.xlsx, 20260804-statements-1176-.pdf"), so the prompt names only workbooks (`writeback` true), matched on the row's `account_id`.
 
+### 143. Both PDFs cut table columns off the page (found building item 138, 2026-09-17; licence: defect) (SHIPPED 2026-09-17, PR #1052, Shipped row 74)
+
+**Defect.** Both documents lay out on A4 portrait with 14 mm margins, and reportlab's frame keeps 6 pt of padding inside them, so a table has 503.9 pt, not the 516 pt between the margins. reportlab centers a table that is too wide, so it spills past both sides of the frame by half the excess; past 45.7 pt a side (margin plus padding) it runs off the paper. The text layer still held the clipped cells, which is why no text-extraction test saw it; a raster of the August pages did.
+
+| Table | Before | After |
+|---|---|---|
+| Month report listing (flat, per card, per cost center, per card inside a cost center, per trip person) | 732 pt: `#` and Date cut on the left, Ccy and Receipt on the right, on every month report since item 24 (2026-08-23) | 503 pt |
+| Reconciliation charge table (flat and per card) | 672 pt: `#`, part of Date and part of Account cut | 503 pt |
+| Reconciliation coverage by card | 572 pt: 34 pt into each margin, still on the paper | 502 pt |
+| Reimbursements owed 466, charges with no receipt 430, receipts with no charge 455, open duplicates 460, copies set aside 470 | fit | unchanged |
+
+**Shipped.** Portrait kept, widths rebalanced, no column dropped, no font change. Every column reads at 8 pt once the text columns wrap, and landscape listing pages would have made a mixed-orientation document, since item 138 puts each card's receipt pages (portrait) right behind its section. Counts, dates, amounts up to 123,456.78 and currency codes fit on one line in DejaVu Sans, the container's font and the widest `register_fonts` picks; vendor, account, entity, paid through, status and receipt wrap between words, so most listing rows run two lines. `_pdf_common.PAGE_MARGIN_MM` and `TABLE_WIDTH_MAX` carry the page, and both builders read their margins from it. A single token wider than its column still breaks at the column edge (nothing lost, nothing past the edge): on July and August that is three charge-table cells, once each, `AMZ*Amazon.D*X37L83BI5` (Charge), `POPULAR-MARAIAL` (Receipt) and `Subscriptions-Others` (Account).
+
+**Test.** `tests/test_pdf_tables_fit_the_page.py` (8) records every Table the document template places while the real builder runs, and asserts each is within its frame, no cell's text is wider than its column, and no count, date, amount or currency breaks a word. Fixtures: a 105-row flat listing with an unreadable amount, a per-card month with receipts, reimbursements and copies, cost centers with cards inside, a trip, the reconciliation report with three cards and with one, and both downloads of a two-card month through the routes. `regress_check` with the old widths: month report 5 red, reconciliation report 3 red; a listing Date column narrowed to 40 pt goes red on the word-break check alone.
+
+**Real data**, read-only DB copy of 2026-09-17 rendered locally in DejaVu Sans with the receipt files, July and August, both documents plus a synthetic cost-center assignment: every table 502 or 503 pt. Rasters of the August listing, the July listing and cost-center listing, and both months' coverage and charge pages show every column inside both edges.
+### 144. Residuals: grid Books-as, decision-reply summary, bank-transfer private suggestion (licence: defect, covered) (SHIPPED 2026-09-17, pending PR)
+
+Three leftovers of items 95, 99 and 111: in each the software states something
+it knows to be otherwise. Found by reading the code against the shipped items,
+checked live read-only against July (`50622baec444`) and August
+(`074a7b8905d7`).
+
+**R1. The Expenses grid's `books_as` skipped the chart-of-accounts gate.** Item
+95 made the export gate judge the ACCOUNT and keep the line's category; the
+grid's own depiction (`build_expense_view`, `service.py`) still called
+`expense_posting_parts` on ungated receipts with no chart, while the export
+called it on gated ones with the run's chart. A line whose account the
+company's chart rejects therefore read as that account on screen and as its
+category (many-entity gate, no chart) or `(account unmapped - assign)`
+(a batch naming one company) in the CSV, for the same purchase. **Built:** one
+function, `zoho_expense_export.gated_for_posting`, called by
+`build_expense_row_groups` and by the grid, plus the same chart on the grid's
+fan-out. **Measured live before the change:** no row differs today. Every
+account cell of both months' `expenses.csv` equals the grid's `books_as`
+(July 56 parts / 56 rows, August 20 / 20), because live accounts are the
+tool's own category labels, which both paths render alike. The defect was
+reachable, not live.
+
+**R2. A write's reply carried a summary the next refetch contradicted.** The
+SPA renders the `summary` a route replies with until it refetches the run.
+Eight routes built theirs as `build_view(run, decisions, overrides)`: no
+duplicate resolutions, no cross-month settlements, and no expense FIELD
+overrides, which is where the month's header edits live. So a receipt
+confirmed private read as still needing a charge (`n_receipts_need_charge`,
+and `month_complete` with it) in every reply. **Built:** `app._run_view`, the
+dispatch `GET /api/runs/{id}` uses, and every one of those routes
+(`decisions`, `decisions/bulk`, `decisions/confirm-ready`, `disposition`,
+`duplicates/resolve`, `manual-match`, the per-charge receipt upload, the
+settled-outside write) now replies with it. The expense-edit routes and the
+month move keep the Expenses payload's summary, which is what their own page's
+GET serves. **Measured:** route-level, a decision reply's summary now equals
+the `GET /api/runs/{id}` summary taken immediately after, count for count.
+
+**R3. A wire is not a card.** The private suggestion fires on any payment
+method that resolves to no registered card, so July's restored Tricarico
+invoice (BRL 27,203.34, prints "Payment Method: Wire Transfer", recorded
+settled outside by bank transfer on 2026-09-17) asked Criss to name a private
+card for a bank payment, while the tool's own ruling of 2026-09-15 calls a
+settled-outside receipt real company spend. **Built:** a bank-transfer tender
+(`service.bank_transfer_tender`, the settled-outside chip's own rule minus the
+word TEF, which is a card payment on a Brazilian cupom fiscal: July's Fenix
+receipt prints TEF and settles a card charge) and a receipt with a
+settled-outside record raise no suggestion. `can_mark_private` is untouched.
+**Measured live (read-only prediction):** exactly one row moves, July's
+Tricarico invoice; `summary.n_suggested_private` 8 to 7 (row flags 10 to 9,
+two of them copies that sit in no box), August unchanged at 1.
+
+**Open question for the owner (R3, NOT decided here).** That invoice still
+sits in "No company or person": `needs_entity` + `needs_person`, and the
+review line now reads `needs_entity`. The file names BRISKEN Consulting LLC
+and it was paid by bank, so a COMPANY is meaningful; a card HOLDER is not, and
+today the box's two sanctioned exits are both wrong for it (pick a company
+card, or confirm it private). A company override answers half; nothing answers
+`needs_person`, because person resolution is card-only by the item-40 ruling
+and neither the code nor `api-contract.md` says what a bank-paid company
+invoice should be asked. Box membership was left exactly as it was.
+
+Tests: `tests/test_books_as_chart_gate_r1.py` (3),
+`tests/test_decision_reply_summary_r2.py` (2),
+`tests/test_private_suggestion_not_a_card_r3.py` (3), all route-level.
+Every wire watched go red with the fix disabled: the grid's gate call (1 of
+3), the grid's chart (1 of 3), the decision route's `_run_view` (1 of 2, on
+`n_receipts_need_charge` 1 vs 0), the settled-outside route's (1 of 2), the
+tender rule (2 of 3), the grid's settled-outside wire (1 of 3). The two app.py
+wires were hand-regressed (the helper's mutated write left `regress_check`
+with no pytest summary line). Suite 2274 passed / 2 skipped. Docs:
+`docs/api-contract.md` (books_as gate, the reply-summary paragraph, "A wire is
+not a card"). Nothing deployed; no SPA half needed (the payload fields keep
+their names and meanings).
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.
@@ -5519,7 +5751,11 @@ Answer: from the fill colour of that charge's row in the Chase workbook Criss up
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-| 75 | The three infrastructure items in one round. **124:** the image copies `uv.lock` and installs from it (`uv export --frozen`, then the project with `--no-deps`), so a deploy ships the versions the suite ran against. **122:** the mail intake's free-disk floor is read from the volume (5%, never below 200 MB, never above half), `/healthz` carries a `disk` block (free bytes, percent, the floor, whether mail is being refused), an unrecognised sender is capped at 5 MB a message and all strangers share 50 MB a day, our own people skip the 40-file per-sender cap, and a dismissed-archive purge ships inert behind `intake.dismissed_purge_days`. **119:** `expense-recon backup` zips the data folder (live databases through SQLite's backup API) to a SharePoint library Brisken controls via the app-only Graph credential, as a CLI (dry run by default, `--check` read-only, `--go`) and an in-app schedule that is off until `EXPENSE_RECON_BACKUP=1`; restore runbook in `docs/backup-and-restore.md` | The drift in 124 was live, not latent: production ran openai 3.14.1 against a lock pinning 2.38.0, a whole major version the suite has never seen. 122 was arithmetic waiting to happen: a 500 MiB floor on a 1 GB volume meant refusals from about half full, at 95 MB used and rising, with bounced receipts mid-close as the first sign, while anyone could mail 25 MB two hundred times a day. 119 is the one with no second chance: every month, every mailed receipt and the learned memory sat on one disk with five days of snapshots and no copy Brisken holds | 2026-09-17, pending PR; `tests/test_intake_disk_limits_item_122.py` (29) and `tests/test_backup_item_119.py` (20), driven through `handle_DATA`, `GET /healthz`, `PUT /api/settings`, the boot path and the `expense-recon backup` CLI; regress_check red on all thirteen wires (122: floor 6 of 29, healthz 3, stranger size limit 1, byte charging 1, known-sender flag 2, boot purge 1, logged size 1; 119: CLI dispatch 3 of 20, app scheduler 1, credential guard 2, size ceiling 1, SQLite snapshot 1, folder create 2, off-by-default 2); image built locally with `docker build` and its versions read back against the lock; Graph target validated read-only against the live tenant, nothing uploaded. Owner actions open: `flyctl volumes extend` to 5 GB, the first deploy moving production back to the locked versions, turning the backup schedule on, and a restore rehearsal |
+| 76 | Three residuals of items 95 / 99 / 111: the Expenses grid's "Books as" line runs the chart-of-accounts gate the CSV runs (one function, `gated_for_posting`, and the run's chart), every write route answers with the summary `GET /api/runs/{id}` serves (`_run_view`, so a receipt marked private stops reading as still needing a charge until the next refetch), and a bank-transfer tender or a receipt settled outside the card suggests no private card | Each is the software stating something it knows to be otherwise: the screen naming one account and the document another, counts that correct themselves a request later, and July's Tricarico wire (BRL 27,203.34) asking Criss to name a private card for a bank payment. Live: `n_suggested_private` 8 to 7 on July, no other row moves; grid and CSV already agreed account for account on both months (the Books-as defect was reachable, not live) | Item 143, pending PR, 2026-09-17 |
+| 75 | One receipt is never bound to two charges, and the months list counts what the page counts: a pass-1 tie HOLDS its receipts against the greedy pass, a tied receipt holding a clean exact candidate on another charge no longer sustains the tie (round B's "spoken for", carried into tie detection), and `service.effective_charge_counts` is the one derivation behind `n_matched` / `n_review` / `n_unmatched_tx` / `n_refunds` on the months list, the stored summary, the `rematch_log` event and the re-match reply | Items 103 and 72. August at round B stored `0023` against ANTHROPIC 52.46 while the page showed it held by the undecided 50.52 pick; the labels call `0023` ambiguous and give neither charge a receipt, so the pick is the right outcome and the holding rule is what keeps it, with the spoken-for rule protecting `0021`'s bank-printed 51.38. Live today the remaining instance is July's two GOOGLE Workspace 71.64 charges, each tied over both invoices: list 8 in review / 72 unmatched against the page's 7 / 73. Not built: vendor dominance as a second spoken-for basis, twin-charge auto-pairing, the receipt-side counts | 2026-09-17, pending PR; route-level `tests/test_tied_receipt_item_103.py` (6), regress_check red on all four wires (tie dissolve 2 of 6, greedy skip 1 of 6, list derivation 1 of 6, the commit's effective `n_review` 1 of 6); suite 2274 (2272 passed / 2 skipped); measured on a 2026-09-17 DB copy: both live months and the six bundles byte-identical, 0 of 79 and 0 of 218 receipt rows moved, scorer 56.8 / 19.2 / 76.0 and guard 4/4 unchanged; predicted live change is July's list row reading 7 / 73 |
+| 74 | Every PDF table fits the A4 frame (503.9 pt): month report listing 732 to 503 pt, reconciliation charge table 672 to 503 pt, coverage table 572 to 502 pt. Portrait kept, widths rebalanced so counts, dates, amounts and currencies fit one line in DejaVu Sans and text columns wrap; no column dropped; `_pdf_common.TABLE_WIDTH_MAX` | Item 143, found building item 138. reportlab centered the too-wide tables past both page edges, so every month report since item 24 printed without `#`, Date, Ccy and Receipt, and the reconciliation report without `#` and part of Date and Account; text extraction still read the clipped cells | PR #1052, 2026-09-17; `tests/test_pdf_tables_fit_the_page.py` (8), regress_check red on both builders; not deployed |
+| 75 | A category can be set on a charge that has no receipt, and sign-off learns it: `PUT /api/runs/{id}/charges/{tx}/category` writes into the one `category_overrides` table under the charge's pseudo-receipt id, so the pick survives a re-match; it reads `EDITED` on `charge_category` + `posting_category`, drops the row's review state to `none` (leaving `n_charges_category_guessed` its meaning), and carries into the reconciled CSV, `report.xlsx`, the writeback, the reconciliation PDF and the journal's receiptless rows. Publish teaches it under the bank's normalized description, conflict-skip included; a model guess teaches nothing | Item 109. Criss's real month-end job is categorizing every charge, and most charges have no receipt: 174 across July and August on 2026-09-17, 146 carrying a category the model guessed from the bank's description with no control to change it. The guess went into the deliverable as it was and the same subscription was guessed again the next month. Owner reversed the quote-separately ruling on 2026-09-17 evening | 2026-09-17, pending PR; suite 2276 -> 2287; six regressions of the real source proven RED first; SPA half `docs/lovable-charge-category-prompt.md` (owner applies) |
+| 79 | The three infrastructure items in one round. **124:** the image copies `uv.lock` and installs from it (`uv export --frozen`, then the project with `--no-deps`), so a deploy ships the versions the suite ran against. **122:** the mail intake's free-disk floor is read from the volume (5%, never below 200 MB, never above half), `/healthz` carries a `disk` block (free bytes, percent, the floor, whether mail is being refused), an unrecognised sender is capped at 5 MB a message and all strangers share 50 MB a day, our own people skip the 40-file per-sender cap, and a dismissed-archive purge ships inert behind `intake.dismissed_purge_days`. **119:** `expense-recon backup` zips the data folder (live databases through SQLite's backup API) to a SharePoint library Brisken controls via the app-only Graph credential, as a CLI (dry run by default, `--check` read-only, `--go`) and an in-app schedule that is off until `EXPENSE_RECON_BACKUP=1`; restore runbook in `docs/backup-and-restore.md` | The drift in 124 was live, not latent: production ran openai 3.14.1 against a lock pinning 2.38.0, a whole major version the suite has never seen. 122 was arithmetic waiting to happen: a 500 MiB floor on a 1 GB volume meant refusals from about half full, at 95 MB used and rising, with bounced receipts mid-close as the first sign, while anyone could mail 25 MB two hundred times a day. 119 is the one with no second chance: every month, every mailed receipt and the learned memory sat on one disk with five days of snapshots and no copy Brisken holds | 2026-09-17, pending PR; `tests/test_intake_disk_limits_item_122.py` (29) and `tests/test_backup_item_119.py` (20), driven through `handle_DATA`, `GET /healthz`, `PUT /api/settings`, the boot path and the `expense-recon backup` CLI; regress_check red on all thirteen wires (122: floor 6 of 29, healthz 3, stranger size limit 1, byte charging 1, known-sender flag 2, boot purge 1, logged size 1; 119: CLI dispatch 3 of 20, app scheduler 1, credential guard 2, size ceiling 1, SQLite snapshot 1, folder create 2, off-by-default 2); image built locally with `docker build` and its versions read back against the lock; Graph target validated read-only against the live tenant, nothing uploaded. Owner actions open: `flyctl volumes extend` to 5 GB, the first deploy moving production back to the locked versions, turning the backup schedule on, and a restore rehearsal |
 | 73 | Account picks removed from Legal entities: `account_options` always comes from the company's chart, `PUT /api/settings` accepts `entities[].account_picks` in any shape and stores nothing, and neither settings response serves a value stored before; SPA half in `docs/lovable-remove-account-picks-prompt.md` | Note #61 (item 23). The owner asked for the box as a dropdown, learned it only shortened the account list a company's rows offer, and ruled to remove it: every row offers the full chart. No live entity carried a value | PR #1044, not yet deployed |
 | 72 | The month page split by card, backend: `card_sections[]` on both month GETs (statement loaded / not recorded / not loaded, period, charges, matched, still open, booked without a receipt, receipts, receipts without a charge; expenses and totals on the Expenses payload) and `card_section` on every row, receipt and expense the pages list; `[]` below two cards and on a trip. `card_statement_figures` feeds both the PDF heading line and the tabs. SPA half: `docs/lovable-card-tabs-prompt.md` | Item 138, owner ruling 2026-09-17 ("build now"). The PDFs were organized by card while both month pages mixed every card, so Criss could not check one card's statement against its receipts on screen. The tabs reuse the PDFs' grouping and figures, so a tab and its PDF section cannot disagree; on a 2026-09-17 DB copy July and August file every charge and receipt identically on both pages and in both PDFs | 2026-09-17; route-level `tests/test_card_tabs_item_138.py` (8) plus contract pins in `tests/test_view_contract.py`, regress_check red on all nine wires (run GET 6 of 8, expense GET 4 of 8, charge keys 2, expense keys 4, figures 4, without-a-charge count 3, two-card rule 1, trip rule 1, shared booked figure 1); suite 2274 passed / 2 skipped on the tree merged with main (cost-center half included) |
 | 71 | The ECB rate gets its own 2% clean band, and a drifted Settings rate says so: `fx_ecb_match_pct` 0.02 for `ecb_month` pairs only (Settings and self-derived keep 3%), measured at 3 / 2.5 / 2 / 1.75 / 1.5% on July with Settings rates removed (29 / 31 / 32 / 33 / 33 right) and on the six bundles (68 / 70 / 70 / 70 / 69); `setup_advisories[]` `code: "fx_rate_drift"` beyond 1 point from the month's ECB average (items 90 + 132) | Owner ruling: tighten the band before the typed September rates go, so new months stop matching at a stale rate without auto-matching coincidences; nothing moves live until the Settings rates are removed | PR #1048, Fly v167, 2026-09-17 |

@@ -1716,6 +1716,80 @@ def scored_pairs(
     return out
 
 
+def _merchant_precedence(
+    cands_by_tx: "dict[str, list[_Candidate]]",
+    rec_by_id: "Mapping[str, Receipt]",
+    transactions: "list[Transaction]",
+    cfg: MatchingConfig,
+    ambiguous_tx_ids: "set[str]" = frozenset(),
+) -> None:
+    """Item 133 rule (b), in place: demote an exact-amount same-currency pair
+    whose merchant disagrees when another charge's pair for the same receipt
+    has a merchant that agrees (see the call site in `match_month`). A rival
+    counts only when this receipt is that charge's top-ranked candidate and
+    the charge is not ambiguous: a rival charge that will take a better
+    receipt of its own is spoken for (round B's `uniqueness_spoken_for`
+    idea), and demoting against it would only flag, or strand, the receipt.
+    Every verdict is taken on the candidates as they stood before any
+    demotion, so the order of charges cannot change the result."""
+    tx_ccy = {tx.transaction_id: tx.transaction_currency for tx in transactions}
+    floor = cfg.uniqueness_vendor_dominance_min
+    margin = cfg.uniqueness_vendor_dominance_margin
+    by_doc: dict[str, list[tuple[str, _Candidate]]] = {}
+    top_key: dict[str, tuple] = {}
+    for tx_id, cands in cands_by_tx.items():
+        if cands:
+            top_key[tx_id] = max(c.sort_key for c in cands)
+        for c in cands:
+            by_doc.setdefault(c.match.document_id, []).append((tx_id, c))
+
+    def exact_same_currency(tx_id: str, c: _Candidate) -> bool:
+        receipt = rec_by_id.get(c.match.document_id)
+        return (
+            c.match.match_type in (MatchType.EXACT, MatchType.PROBABLE)
+            and c.match.amount_score == 1.0
+            and receipt is not None
+            and receipt.detected_currency == tx_ccy.get(tx_id)
+        )
+
+    demote: dict[tuple[str, str], str] = {}
+    for doc, pairs in by_doc.items():
+        for tx_id, c in pairs:
+            if not exact_same_currency(tx_id, c) or c.vendor_signal >= floor:
+                continue
+            rivals = [
+                (r_tx, r) for r_tx, r in pairs
+                if r_tx != tx_id
+                and r_tx not in ambiguous_tx_ids
+                and r.sort_key == top_key.get(r_tx)
+                and r.is_determ
+                and r.match.confidence > CARDS_DIFFER_CONFIDENCE
+                and r.vendor_signal >= floor
+                and r.vendor_signal >= c.vendor_signal + margin
+            ]
+            if rivals:
+                best = max(rivals, key=lambda p: p[1].vendor_signal)[1]
+                demote[(tx_id, doc)] = (
+                    f"the merchants differ ({round(c.vendor_signal * 100)}%) while "
+                    f"another charge's merchant matches this receipt "
+                    f"({round(best.vendor_signal * 100)}%)"
+                )
+    for tx_id, cands in cands_by_tx.items():
+        for i, c in enumerate(cands):
+            note = demote.get((tx_id, c.match.document_id))
+            if note is None:
+                continue
+            cands[i] = replace(
+                c,
+                match=replace(
+                    c.match,
+                    confidence=min(c.match.confidence, CARDS_DIFFER_CONFIDENCE),
+                    requires_review=True,
+                    reason=c.match.reason.rstrip(".") + f". Review: {note}.",
+                ),
+            )
+
+
 def match_month(
     transactions: list[Transaction],
     receipts: list[Receipt],
@@ -1905,22 +1979,78 @@ def match_month(
 
     # Pass 1: detect genuinely ambiguous transactions (top deterministic
     # candidates tie even after the 3.9 signal). These are excluded from
-    # assignment so an arbitrary pick is never made; the receipts they
-    # tie over are left free for other transactions.
+    # assignment so an arbitrary pick is never made.
+    #
+    # Item 103 (2026-09-17): the receipts a tie lists are HELD by it, the way
+    # `apply_decisions` holds them for the pending pick. Until then they were
+    # left free, so pass 2 could also hand one to another charge: one receipt
+    # stored against two charges, the stored counts reporting the second
+    # pairing while the page dropped whichever pairing came later in
+    # statement order (live August 2026 at round B: `0023` Anthropic 52.59
+    # matched to ANTHROPIC 52.46 AND tied on ANTHROPIC 50.52). Two rules:
+    #
+    # 1. Spoken for (`uniqueness_spoken_for`, round B's rule carried into
+    #    tie detection): a tied receipt that holds a CLEAN EXACT candidate on
+    #    another charge, while its candidate here is not one, is claimed by
+    #    bank-printed evidence and does not sustain the tie. When fewer than
+    #    two tied receipts remain the charge is not ambiguous and goes to the
+    #    assignment like any other. This only ever dissolves a tie; a charge
+    #    whose top candidate stood alone before still stands alone. Clean,
+    #    because the card pass above leaves a cards-differ EXACT at
+    #    confidence 0.55, below every clean deterministic candidate: it is
+    #    not the stronger claim elsewhere this rule reasons from. Two EXACT
+    #    twins tying over two identical charges are each other's equal, so
+    #    neither is spoken for and the pick stays with the human (live July
+    #    2026: two GOOGLE Workspace 71.64 charges on 07-01).
+    # 2. Held: every receipt a surviving tie lists is skipped by pass 2.
+    exact_txs_by_doc: dict[str, set[str]] = {}
+    if cfg.uniqueness_spoken_for:
+        for tx_id, cands in cands_by_tx.items():
+            for c in cands:
+                if c.match.match_type is MatchType.EXACT and not c.match.requires_review:
+                    exact_txs_by_doc.setdefault(c.match.document_id, set()).add(tx_id)
     ambiguous_tx_ids: set[str] = set()
+    held_by_tie: set[str] = set()
     for tx_id, cands in cands_by_tx.items():
         determ = [c for c in cands if c.is_determ]
         if not determ:
             continue
         determ.sort(key=lambda c: c.sort_key, reverse=True)
         tied = [c for c in determ if _ties(c, determ[0])]
+        if len(tied) > 1 and exact_txs_by_doc:
+            tied = [
+                c for c in tied
+                if (
+                    c.match.match_type is MatchType.EXACT
+                    and not c.match.requires_review
+                )
+                or not (exact_txs_by_doc.get(c.match.document_id, set()) - {tx_id})
+            ]
         if len(tied) > 1:
             ambiguous_tx_ids.add(tx_id)
             outcome.ambiguous.extend(c.match for c in tied)
+            held_by_tie.update(c.match.document_id for c in tied)
+
+    # Item 133 rule (b), 2026-09-17: a same-currency pair on the exact amount
+    # does not consult the merchant, so a same-day charge from another
+    # merchant (EXACT, 0.99) outranked the receipt's own merchant a few days
+    # later (PROBABLE, 0.85), held the receipt, and left the right charge with
+    # no candidate. Such a pair yields only to a rival for the SAME receipt
+    # whose merchant agrees, by round B's dominance test (rival >= the
+    # dominance minimum and ahead by the margin), and only when that receipt
+    # is the rival charge's own first choice and the rival is not awaiting a
+    # human pick: it keeps its evidence, asks for review, says why, and ranks
+    # at the cards-differ confidence. Applied after pass 1, so it never breaks
+    # a tie a person should settle. With no such rival nothing changes, which
+    # is every exact-amount pair on the eight measured datasets (Network
+    # Solutions, the Google twins, August `0025`).
+    if cfg.uniqueness_vendor_dominance_min > 0.0:
+        _merchant_precedence(cands_by_tx, rec_by_id, transactions, cfg, ambiguous_tx_ids)
 
     # Pass 2: greedy bipartite assignment over all candidates from
     # non-ambiguous transactions, highest sort_key first. A transaction
-    # and a receipt are each consumed at most once.
+    # and a receipt are each consumed at most once, and a receipt a tie
+    # holds (pass 1) is not consumed here at all.
     assignable: list[_Candidate] = [
         c
         for tx_id, cands in cands_by_tx.items()
@@ -1935,6 +2065,8 @@ def match_month(
         if c.match.transaction_id in assigned_tx:
             continue
         if c.match.document_id in assigned_rec:
+            continue
+        if c.match.document_id in held_by_tie:
             continue
         if c.is_determ:
             outcome.matches.append(c.match)

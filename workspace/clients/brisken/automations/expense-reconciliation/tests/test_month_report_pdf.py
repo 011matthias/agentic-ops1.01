@@ -72,7 +72,10 @@ def test_the_listing_quotes_the_export_rows():
     pdf = build_expense_report_pdf(
         ROWS, EXPENSE_COLUMNS, title="April 2026 expenses",
     )
-    page1 = _text(pdf, 0)
+    # Whitespace collapsed: a cell wraps between words (item 143 fits the
+    # columns to the page), and where a value breaks a line is a rendering
+    # detail, not the content this test is about.
+    page1 = " ".join(_text(pdf, 0).split())
     assert "April 2026 expenses" in page1
     for fragment in ("Trenitalia", "42.50", "Cafe Lisboa", "18.00",
                      "Corporate Services", "Cloud Services"):
