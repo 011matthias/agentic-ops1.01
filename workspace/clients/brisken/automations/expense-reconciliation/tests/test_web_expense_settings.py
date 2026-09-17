@@ -3,11 +3,13 @@
 Categories stay the fixed 8 and surface read-only in settings. Legal
 entities become a settings REGISTRY (`settings["entities"]`) the UI can
 edit: org_id/chart_path/scope_groups drive the COA gate (winning over the
-/data provisioning file, which stays the fallback), `default_paid_through`
-rides into each new batch's config, and `account_picks` curates the
-account picker. The account picker otherwise reuses the scoped
-postable-account labels the categorizer was constrained to — never the
-full unscoped chart.
+/data provisioning file, which stays the fallback), and
+`default_paid_through` rides into each new batch's config. The account
+picker reuses the scoped postable-account labels the categorizer was
+constrained to — never the full unscoped chart. The per-entity
+`account_picks` shortlist is gone (owner ruling 2026-09-17, note #61): a PUT
+that still carries it is accepted and the field dropped, and a value stored
+before the removal is neither served nor offered.
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ from expense_recon.coa_provision import coa_validation_from_settings  # noqa: E4
 from expense_recon.llm.client import ExtractedReceipt, MockLLMClient  # noqa: E402
 from expense_recon.output.zoho_expense_export import EXPENSE_COLUMNS  # noqa: E402
 from expense_recon.web.app import create_app  # noqa: E402
+from expense_recon.web.store import RunStore  # noqa: E402
 
 JPG = b"\xff\xd8\xff\xe0fake-jpeg-bytes"
 COL_PAID_THROUGH = EXPENSE_COLUMNS.index("Paid Through")
@@ -162,13 +165,13 @@ def test_settings_entities_roundtrip_and_readonly_categories(client):
             "org_id": "822741658",
             "default_paid_through": "1010 Chase Corporate",
             "scope_groups": ["MS | OpeEx"],
-            "account_picks": ["E500 Office Supplies"],
         },
         "Cloud Services": {},
     }})
     assert resp.status_code == 200, resp.text
     got = client.get("/api/settings").json()
     assert got["entities"]["Corporate Services"]["org_id"] == "822741658"
+    assert got["entities"]["Corporate Services"]["scope_groups"] == ["MS | OpeEx"]
     assert got["entities"]["Cloud Services"] == {}
     # `categories` in a PUT body is ignored, never persisted.
     resp = client.put("/api/settings", json={"categories": ["Hacked"]})
@@ -213,16 +216,104 @@ def test_no_default_paid_through_exports_placeholder(client, monkeypatch):
 # ── pickers: account_options + entity_options ───────────────────────
 
 
-def test_account_picks_shortlist_drives_account_options(client, monkeypatch):
+def test_registry_entities_fill_entity_options(client, monkeypatch):
     client.put("/api/settings", json={"entities": {
-        "Corporate Services": {"account_picks": ["E500 Office Supplies"]},
-        "Cloud Services": {},
+        "Corporate Services": {}, "Cloud Services": {},
     }})
     _patch_ocr(monkeypatch, _extraction())
     batch_id = _create_batch(client)
     grid = client.get(f"/api/expense-batches/{batch_id}").json()
-    assert grid["account_options"] == ["E500 Office Supplies"]
     assert grid["entity_options"] == ["Cloud Services", "Corporate Services"]
+
+
+# ── account_picks is retired (note #61, owner ruling 2026-09-17) ─────
+
+
+def _provision_chart(tmp_path, monkeypatch) -> None:
+    """Corporate Services on the synthetic chart, through the /data
+    provisioning file, so its expense rows have real account options."""
+    chart = tmp_path / "coa.json"
+    chart.write_text(json.dumps(_COA_JSON), encoding="utf-8")
+    prov = tmp_path / "prov.json"
+    prov.write_text(json.dumps({
+        "chart_path": str(chart),
+        "entities": {"Corporate Services": {
+            "org_id": "822741658", "scope_groups": ["MS | OpeEx"],
+        }},
+    }), encoding="utf-8")
+    monkeypatch.setenv("EXPENSE_RECON_COA_PROVISION", str(prov))
+
+
+def _stored_entities(client) -> dict:
+    """The `entities` map exactly as the settings row holds it, before any
+    route shapes the payload."""
+    store = RunStore(client._data_root / "recon-web.sqlite")
+    try:
+        return store.get_settings()["entities"]
+    finally:
+        store.close()
+
+
+def test_put_accepts_account_picks_and_stores_nothing_for_it(client):
+    """The published SPA sends `account_picks` on every Legal entities save
+    until its removal prompt is applied, so the save must keep answering
+    200 whatever shape the field arrives in, and keep nothing of it."""
+    resp = client.put("/api/settings", json={"entities": {
+        "Corporate Services": {
+            "org_id": "822741658",
+            "scope_groups": ["MS | OpeEx"],
+            "account_picks": ["E500 Office Supplies"],
+        },
+        "Cloud Services": {"account_picks": "not-a-list"},
+        "Rome Events": {"account_picks": []},
+    }})
+    assert resp.status_code == 200, resp.text
+    assert "entities" in resp.json()["applied"]
+    expected = {
+        "Corporate Services": {
+            "org_id": "822741658", "scope_groups": ["MS | OpeEx"],
+        },
+        "Cloud Services": {},
+        "Rome Events": {},
+    }
+    assert resp.json()["entities"] == expected
+    assert client.get("/api/settings").json()["entities"] == expected
+    assert _stored_entities(client) == expected
+
+
+def test_stored_account_picks_is_never_served_or_offered(
+    client, monkeypatch, tmp_path
+):
+    """A shortlist saved before the removal, still in the settings row:
+    neither settings response carries it, and the expense rows offer the
+    company's chart, not the stored shortlist."""
+    _provision_chart(tmp_path, monkeypatch)
+    store = RunStore(client._data_root / "recon-web.sqlite")
+    try:
+        store.set_settings(
+            {"entities": {
+                "Corporate Services": {"account_picks": ["X999 Not In Chart"]},
+            }},
+            "2026-09-17T00:00:00",
+        )
+    finally:
+        store.close()
+
+    assert client.get("/api/settings").json()["entities"] == {
+        "Corporate Services": {},
+    }
+    # A save of another group answers with the whole settings object; the
+    # stored shortlist stays out of that echo too.
+    resp = client.put("/api/settings", json={
+        "entity_order": ["Corporate Services"],
+    })
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["entities"] == {"Corporate Services": {}}
+
+    _patch_ocr(monkeypatch, _extraction())
+    batch_id = _create_batch(client)
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    assert grid["account_options"] == ["E500 Office Supplies"]
 
 
 def test_entity_order_round_trips_and_cleans(client):
@@ -288,16 +379,7 @@ def test_saved_order_drives_the_settings_and_grid_pickers(client, monkeypatch):
 
 
 def test_chart_provisioning_drives_account_options(client, monkeypatch, tmp_path):
-    chart = tmp_path / "coa.json"
-    chart.write_text(json.dumps(_COA_JSON), encoding="utf-8")
-    prov = tmp_path / "prov.json"
-    prov.write_text(json.dumps({
-        "chart_path": str(chart),
-        "entities": {"Corporate Services": {
-            "org_id": "822741658", "scope_groups": ["MS | OpeEx"],
-        }},
-    }), encoding="utf-8")
-    monkeypatch.setenv("EXPENSE_RECON_COA_PROVISION", str(prov))
+    _provision_chart(tmp_path, monkeypatch)
     _patch_ocr(monkeypatch, _extraction())
     batch_id = _create_batch(client)
     grid = client.get(f"/api/expense-batches/{batch_id}").json()
@@ -308,7 +390,7 @@ def test_chart_provisioning_drives_account_options(client, monkeypatch, tmp_path
     assert "Corporate Services" in grid["entity_options"]
 
 
-def test_no_chart_and_no_picks_gives_empty_account_options(client, monkeypatch):
+def test_no_chart_gives_empty_account_options(client, monkeypatch):
     _patch_ocr(monkeypatch, _extraction())
     batch_id = _create_batch(client)
     grid = client.get(f"/api/expense-batches/{batch_id}").json()

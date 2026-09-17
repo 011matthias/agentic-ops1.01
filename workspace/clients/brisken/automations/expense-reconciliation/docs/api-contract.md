@@ -3026,6 +3026,34 @@ Tests: `tests/test_settings_put_contract.py`, where
 key added to the tuple without a handler branch fails instead of doing
 nothing. Renders in `docs/lovable-settings-tabs-prompt.md`.
 
+## `account_picks` is gone from `entities` (note #61, 2026-09-17)
+
+An `entities` entry used to carry `account_picks`, a shortlist of the accounts
+that company's expense rows offered in place of its chart. The owner asked for
+it as a dropdown (note #61), was told what it did, and ruled on 2026-09-17 to
+remove it: every row offers the company's full chart. On the day of the
+ruling none of the five live entities carried the key, so no row changed.
+
+- **`account_options[]`** on the expense-batch payload is always the scoped
+  postable accounts of the batch's company chart (the labels the categorizer
+  was constrained to), and `[]` when no chart is provisioned. A shortlist
+  stored before the removal is ignored.
+- **`PUT /api/settings`** accepts an `entities` entry that still carries
+  `account_picks`, in any shape (list, string, empty), answers 200 with
+  `entities` in `applied`, and stores nothing for it. The published SPA sends
+  the key on every Legal entities save until
+  `docs/lovable-remove-account-picks-prompt.md` is applied, so this stays
+  tolerant rather than refusing. An entry's writable fields are `org_id`,
+  `chart_path`, `default_paid_through`, `scope_groups`.
+- **`GET /api/settings`** and the `PUT` response never carry `account_picks`
+  on an entity, including a value stored before the removal
+  (`store.RETIRED_ENTITY_KEYS`). The stored row itself is not rewritten; the
+  next Legal entities save replaces the map without the key.
+
+Tests: `tests/test_web_expense_settings.py`
+(`test_put_accepts_account_picks_and_stores_nothing_for_it`,
+`test_stored_account_picks_is_never_served_or_offered`).
+
 ## Two printed card digits name a card: `card_ending` (note #60, 2026-09-17)
 
 Owner, note #60: "some receipts only show the last 2 digits of the cards
