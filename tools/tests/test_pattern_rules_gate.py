@@ -299,6 +299,12 @@ SEEDS = [
     ("warn-start-process-working-file", "bash",
      {"command": "Start-Process C:/Repo/out/deck.html"},
      {"command": "Start-Process C:/Repo/out/report.pdf"}),
+    ("warn-git-exit-masked-by-pipe", "bash",
+     {"command": "git -C /c/x rebase origin/main 2>&1 | tail -1 && git -C /c/x branch -f b HEAD~1"},
+     {"command": "git log --oneline -3 | head -2 && echo done"}),
+    ("warn-git-exit-masked-by-pipe", "bash",
+     {"command": "git push -q -u origin br 2>&1 | grep -v remote | tail -1 && gh pr create"},
+     {"command": "git -C /c/x rebase origin/main > log 2>&1; echo $?"}),
 ]
 
 
