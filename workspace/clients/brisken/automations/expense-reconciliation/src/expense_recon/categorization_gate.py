@@ -19,13 +19,19 @@ SEGMENTS it:
   when overall holds flat (the exact "coarse metric sails through" failure
   the segmentation exists to prevent).
 
-The fixture is built to guard BOTH consult invariants:
+The fixture is built to guard the consult invariants:
   - thin-line receipts for learned merchants (baseline keyword stub gets
     them wrong; memory should upgrade them) — proves the win.
-  - a good-LINE receipt whose merchant has a CONFLICTING learned mapping
-    (`Contoso Hardware`): the line read is correct and must win; if memory
-    ever preempts the line, this receipt flips wrong and the subset score
-    drops below floor. This guards "memory is a fallback, not an override".
+  - a good-LINE receipt whose merchant has a CONFLICTING ZOHO-SEEDED
+    mapping (`Contoso Hardware`): the seed is how the books posted, not a
+    decision about this merchant, so the line read is correct and must
+    win. If a seeded row ever preempts a line, this receipt flips wrong
+    and the subset score drops below floor.
+  - a good-LINE receipt whose merchant has a CONFLICTING mapping A PERSON
+    TAUGHT (`Fabrikam Supplies`): since item 115 her correction is the
+    right answer and the line read is not, so the label is HER category.
+    If the recall stops reaching a receipt that has line items, this one
+    flips wrong and the same floor trips.
 
 This commit (the gate) lands BEFORE the consult path: with no consult,
 memory has no effect, so the numbers are the empty-store baseline and the
@@ -61,10 +67,15 @@ LABELED: tuple[tuple[Receipt, str], ...] = (
     # Good-line receipts (line keyword wins; merchant NOT in memory).
     (_rcpt("lat", "Cafe Grumpy", (_li("Latte", "10.00"),)), "Meals & Entertainment"),
     (_rcpt("desk", "Office Outlet", (_li("Standing desk", "10.00"),)), "Equipment & Hardware"),
-    # Good-line receipt whose merchant HAS a conflicting learned mapping:
-    # the line ("chair" -> Equipment) must win over the learned Office
-    # Supplies mapping. Guards "fallback, not override".
+    # Good-line receipt whose merchant HAS a conflicting ZOHO-SEEDED
+    # mapping: the line ("chair" -> Equipment) must win over the seeded
+    # Office Supplies row. Guards "a seeded row is a fallback, not an
+    # override" (item 115 left that half for the owner's ruling).
     (_rcpt("guard", "Contoso Hardware", (_li("Office chair", "10.00"),)), "Equipment & Hardware"),
+    # Good-line receipt whose merchant has a conflicting mapping A PERSON
+    # TAUGHT: since item 115 her correction wins and the label is hers.
+    (_rcpt("taught", "Fabrikam Supplies", (_li("Office chair", "10.00"),)),
+     "Office Supplies & Consumables"),
     # Thin-line receipts for learned merchants (baseline stub -> REVIEW;
     # memory should upgrade them to the correct category).
     (_rcpt("blue", "Bluebottle Consulting"), "Professional Services"),
@@ -76,24 +87,28 @@ LABELED: tuple[tuple[Receipt, str], ...] = (
 )
 
 # Learned merchant->category mappings seeded for the with-memory
-# measurement (consult commit). The Contoso entry is deliberately WRONG for
-# the guard receipt, to prove the line read wins.
-MEMORY_FIXTURE: tuple[tuple[str, str, str], ...] = (
-    (LE, "Contoso Hardware", "Office Supplies & Consumables"),
-    (LE, "Bluebottle Consulting", "Professional Services"),
-    (LE, "Vertex Audit Group", "Professional Services"),
-    (LE, "Northwind Premises", "Utilities & Premises"),
+# measurement (consult commit), each with what taught it. The Contoso entry
+# is deliberately WRONG for the guard receipt, to prove a Zoho-seeded row
+# does not preempt a line read; the Fabrikam entry is the same shape taught
+# by a person, which since item 115 does.
+MEMORY_FIXTURE: tuple[tuple[str, str, str, str], ...] = (
+    (LE, "Contoso Hardware", "Office Supplies & Consumables", "zoho-seed:822741658"),
+    (LE, "Fabrikam Supplies", "Office Supplies & Consumables", "fixture"),
+    (LE, "Bluebottle Consulting", "Professional Services", "fixture"),
+    (LE, "Vertex Audit Group", "Professional Services", "fixture"),
+    (LE, "Northwind Premises", "Utilities & Premises", "fixture"),
 )
 
-_MEMORY_VENDORS = {normalize_vendor(v) for (_le, v, _c) in MEMORY_FIXTURE}
+_MEMORY_VENDORS = {normalize_vendor(v) for (_le, v, _c, _s) in MEMORY_FIXTURE}
 
-# Floors. OVERALL is the coarse net, held at the empty-store baseline (4/7
-# = the three thin learned merchants miss without memory). SUBSET is the
-# protective one: with consult live, memory makes the changed population
-# fully correct (4/4), so the floor is 1.0 — a wrong learned mapping, or
-# memory preempting the guard receipt's line read, drops it below 1.0 and
-# trips the gate on its own even while OVERALL holds.
-OVERALL_FLOOR = 4 / 7
+# Floors. OVERALL is the coarse net, held at the empty-store baseline (4/8
+# = the three thin learned merchants and the taught-category receipt miss
+# without memory). SUBSET is the protective one: with consult live, memory
+# makes the changed population fully correct (5/5), so the floor is 1.0 — a
+# wrong learned mapping, a seeded row preempting the guard receipt's line
+# read, or a person's correction failing to reach the taught receipt each
+# drop it below 1.0 and trip the gate on their own while OVERALL holds.
+OVERALL_FLOOR = 4 / 8
 SUBSET_FLOOR = 1.0
 
 
@@ -108,9 +123,9 @@ def memory_lookup() -> MerchantCategoryLookup:
         MerchantCategory(
             legal_entity_id=le, vendor_norm=normalize_vendor(vendor),
             category=category, zoho_account=None, decision_count=1,
-            last_confirmed_at="2026-05-01T00:00:00", source_run="fixture",
+            last_confirmed_at="2026-05-01T00:00:00", source_run=source,
         )
-        for (le, vendor, category) in MEMORY_FIXTURE
+        for (le, vendor, category, source) in MEMORY_FIXTURE
     ]
     return MerchantCategoryLookup(rows)
 
