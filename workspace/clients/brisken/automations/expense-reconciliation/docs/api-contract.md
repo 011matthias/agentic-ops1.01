@@ -153,7 +153,8 @@ name answers the same one:
 
 | Key | Question |
 |---|---|
-| `n_expenses` · `n_receipts` | how many expenses are in the batch |
+| `n_expenses` | how many expenses the month counts: every row except the decided copies set aside (item 94). The months list and the batch page answer it the same way |
+| `n_receipts` | expense payload and months list: how many receipt documents the batch holds, copies included, so `n_receipts == n_expenses + n_copies_set_aside` (item 94; equal to `n_expenses` before it). Run payload: every receipt in the pool |
 | `n_categorized` · `n_uncategorized` | how many still need a category |
 | `n_ready` | how many need NOTHING from the reviewer (category, entity, core fields, and — since item 40 — a person) |
 | `n_review` | how many are flagged for a look (`check` or `pick`) |
@@ -174,7 +175,7 @@ name answers the same one:
 | `n_duplicate_groups_open` | how many duplicate groups NOBODY has decided (item 74), the only ones that belong in a to-do list. The tool decides every group a rung applies to, so this is 0 unless one escaped the whole ladder. `n_duplicate_groups` keeps counting every group, decided or not |
 | `n_self_confirmed` | run payload only: how many rows carry a verdict the TOOL wrote under the self-confirmation rule (item 76). Falls as a reviewer takes one back; `n_undecided` keeps its question (pending pairings nobody has ratified) |
 | `n_needs_company_or_person` | expense payload: how many rows miss their company or their person (item 84, owner ruling 2026-09-16: the Expenses view shows MISSING ENTITY and NEEDS PERSON as one box, because the fix is one action, pick the card or mark the receipt private). `n_needs_entity` and `n_needs_person` keep their questions |
-| `n_copies_set_aside` | run payload only: how many decided duplicate copies are set aside instead of listed as unmatched (items 83 + 75). `n_unmatched_rec` keeps its question (receipts waiting for a charge), and a set-aside copy was never one; `n_duplicate_copies` keeps counting every redundant copy, matched or not |
+| `n_copies_set_aside` | how many decided duplicate copies are set aside. Run payload: instead of listed as unmatched (items 83 + 75); `n_unmatched_rec` keeps its question (receipts waiting for a charge), and a set-aside copy was never one. Expense payload and months list (item 94): the rows left out of `n_expenses` and `totals_by_ccy`, the same set. `n_duplicate_copies` keeps counting every redundant copy, matched or not |
 | `n_charges_need_receipt` | run payload only: how many purchase charges hold no receipt and no verdict that closes them (item 99). Not `n_unmatched_tx`, which also counts booked charges and fee lines |
 | `n_receipts_need_charge` | run payload only: how many receipts no charge holds anywhere and nothing set aside (item 99): `n_unmatched_rec` minus the receipts another month's charge settled (`settled_by`) and the confirmed private expenses (flag AND `reimburse_to`) |
 | `n_charges_category_guessed` | run payload only: how many charges that need no receipt still carry the tool's guessed category (item 99). A charge that needs a receipt is counted under `n_charges_need_receipt` alone |
@@ -432,7 +433,9 @@ and an `ambiguous` pairing. Owner ruling 2026-09-11.
 Everything else is unchanged and load-bearing: the suppressed copy stays in
 `receipts`, in `n_receipts`, in the exports, and in `unmatched_receipts[]`
 carrying its `duplicate` marker, so the reconciliation guarantee holds and
-the reviewer can still see both documents. A group resolved `ignore` ("not
+the reviewer can still see both documents. (Since then: items 83 + 75 moved
+it to `copies_set_aside[]`, and item 94 took it out of the exports'
+listings and every total, named on a "copies set aside" line instead.) A group resolved `ignore` ("not
 a duplicate": two real purchases, same merchant, same day, same amount) is
 NOT collapsed, and `POST /api/runs/{id}/duplicates/resolve` now re-matches
 a reconciling month so that ruling takes effect immediately; its reply
@@ -993,20 +996,67 @@ every row, drops the group out of `n_duplicate_copies`, and drops it from the
 reconciliation document's exceptions. The group itself stays in
 `duplicate_groups[]` carrying the ruling: "we looked at this and it is fine"
 is worth keeping. `"confirmed"` keeps the marker, because acknowledging a
-duplicate is not removing it — the second row is still on screen and still
-in the total until somebody deletes it with
-`DELETE /api/runs/{id}/expenses/{document_id}`.
+duplicate is not removing it: the second row is still on screen, set aside
+as a copy.
 
-**Totals still count every row.** `totals_by_ccy` sums the duplicates too.
-The detector's whole contract is that it flags and never drops, and a total
-that quietly disagreed with the rows printed above it would be worse than
-one that is honestly too high with the reason marked on the row.
+**A decided copy is on screen and out of the total (rewritten 2026-09-17,
+item 94).** Until today this paragraph read "Totals still count every row":
+the detector only flagged, a reviewer decided and deleted, and a total that
+quietly disagreed with the rows above it seemed worse than one that was
+honestly too high with the reason marked on the row. That premise is gone.
+Since items 56, 74 and 83 the tool decides every group itself and keeps each
+copy out of the matching pool, so a total that still counted the copy
+contradicted the tool's own decision, and the PDF, the CSV and the
+cost-center roll-up carry no marker at all (August 2026 printed about 23
+percent too much). The rule now: a copy the tool or a reviewer has decided
+(`decided_copies`, the set `copies_set_aside` lists) keeps its row, marker
+and undo, and leaves `n_expenses`, `totals_by_ccy`, the CSV rows, the report
+listing and its totals, and the cost-center buckets. Each of those says so on
+a "copies set aside" line instead (see "Decided copies leave the month's
+count and totals" below). "Not a copy" brings the document back everywhere.
 
 `POST /api/runs/{id}/duplicates/resolve` replies with the summary of the
 payload the caller is on (grid for an unattached batch, workbench once a
 statement is attached), the same dispatch `GET /api/runs/{id}` uses. It
 previously always replied with the workbench's, so a grid header rendering
 `n_expenses` went blank on the reply to its own click.
+
+### Decided copies leave the month's count and totals (added 2026-09-17, item 94)
+
+Owner ruling 2026-09-17. ONE predicate, `service.decided_copies`, names the
+copies every surface leaves out: each member after the first of a receipt
+group whose `verdict` is `copy` (`copies_to_collapse`, the set the matcher
+already keeps out of its pool), minus any copy a charge holds in the
+effective outcome (a reviewer hand-matched it, so it is real spend and the
+run payload renders it as that match). It is the set the run payload's
+`copies_set_aside[]` lists, and `build_view` reads the same function. A group
+ruled `ignore` ("Not a copy") yields nothing, so that ruling brings the
+document back on every surface below at once.
+
+| Surface | What changed |
+|---|---|
+| `GET /api/expense-batches/{id}` (and `GET /api/runs/{id}` for a month with no statement) | the copy's row stays, `duplicate` marker included, and carries `counts_in_total: false`; ABSENT on every row that counts, so an older payload reads as "counts". `summary.n_expenses` leaves copies out, `summary.n_receipts` keeps every row, `summary.n_copies_set_aside` (int, always) is the difference, `summary.totals_by_ccy` leaves copies out, and `summary.copies_set_aside_by_ccy` (object `{currency: amount}`, `{}` when none) is what they add up to. `n_amounts_unreadable` no longer counts a copy. The box counts (`n_categorized`, `n_ready`, ...) are unchanged: they count rows |
+| `GET /api/expense-batches` (months list) | `summary.n_expenses` leaves copies out, `summary.n_copies_set_aside` beside it |
+| `GET /runs/{id}/expenses.csv` | no row for a copy. Under the rows, after one blank row, a single first-column line: `Copies set aside, not counted above: N documents that repeat another (USD 263.59; EUR 32.00): <vendor> <date> <currency> <amount>; ...`. Amounts sit inside the sentence, never in `Expense Amount`, so a column sum cannot count a copy again. Absent when there are no copies (the file is byte-identical to before) |
+| `GET /runs/{id}/expense-report.pdf` | the listing, its header count and totals, the cost-center / trip sections and the reimbursements leave copies out. Under the listing: `Copies set aside: N documents repeat an expense listed above, not counted in the listing or the totals (USD 263.59 · EUR 32.00). Their pages follow the original's.`, then one line per copy, `<vendor> · <date> · <currency> <amount> · copy of expense <n>`. The copy's pages follow the original's, captioned `Expense <n> (copy set aside) · <vendor>` |
+| `GET /api/cost-centers/totals` | copies are in no centre, not in `unassigned`, not in `n_rows` / `n_undated`. New `copies_set_aside`: `{n_rows, n_batches, totals}`, same shape as `unassigned`, inside the same date range |
+
+`n_receipts_in_report` (item 68) still counts copies: their pages are in the
+report, behind the original.
+
+Live 2026-09-17 before the change, read-only: August 2026 (`074a7b8905d7`)
+printed 25 expenses, USD 2,297.45, EUR 700.00, with 5 copies (USD 263.59,
+EUR 32.00); July 2026 (`50622baec444`) printed 55 listing rows (52
+expenses), USD 28,430.03, EUR 18,087.84, BRL 2,361.90, with 2 copies (Aposto
+EUR 80.00, Lovable USD 200.00). Predicted after: August 20 expenses, USD
+2,033.86, EUR 668.00; July 53 listing rows (50 expenses), USD 28,230.03, EUR
+18,007.84. The cost-center roll-up moves from 132 rows (USD 34,396.02, EUR
+19,231.51) to 115 rows (USD 32,971.01, EUR 19,119.51) with 17 copies across 4
+batches (USD 1,425.01, EUR 112.00).
+
+Tests: `tests/test_copies_out_of_totals.py` (route-level: grid, months list,
+CSV, PDF and roll-up for a decided copy, the "Not a copy" undo, and a
+reconciling month where a hand-matched copy counts again).
 
 ## Cross-batch settlement: `settled_by` (added 2026-09-06, R4 / item 38)
 
@@ -1406,6 +1456,7 @@ it. Query: `from` and `to`, each an optional inclusive ISO date on the row's
 | `cost_centers[]` | object | one per centre, name-sorted: `{name, kind, active, n_rows, n_batches, totals}` |
 | `cost_centers[].totals` | object | `{currency: amount}`, amounts formatted like every other money string (`1,234.50`) |
 | `unassigned` | object | `{n_rows, n_batches, totals}`; explicit, never hidden |
+| `copies_set_aside` | object | `{n_rows, n_batches, totals}` (item 94): decided copies in range, left out of every bucket, `n_rows` and `n_undated` |
 | `n_batches` | int | expense batches SCANNED (months and trips), not those in range |
 | `n_rows` | int | rows counted into the buckets |
 | `n_undated` | int | rows counted that carry no date; a range cannot exclude them |
@@ -3005,14 +3056,16 @@ annotation, and the tool can derive it from statement history. A `rejected`
 or receiptless `confirmed` charge still needs a receipt.
 
 A receipt needs no charge when it is settled outside the card, a decided
-duplicate copy (`copies_set_aside`), quarantined (never in the pool), a
+duplicate copy (`copies_set_aside`, read from the same `decided_copies`
+predicate item 94 uses for every listing and total, so the two cannot
+disagree), quarantined (never in the pool), a
 confirmed private expense (PR #987: the `private` flag AND `reimburse_to`,
 the `_private_reimbursements` pair rule; the flag alone does not count), or
 already settled by another month's charge (`settled_by` on its
 `unmatched_receipts[]` element). So `n_receipts_need_charge` is
 `n_unmatched_rec` minus the `settled_by` entries and the confirmed private
-expenses; `n_unmatched_rec` keeps its question, and a private receipt stays
-listed in `unmatched_receipts`.
+expenses (a decided copy is in neither); `n_unmatched_rec` keeps its question,
+and a private receipt stays listed in `unmatched_receipts`.
 
 The private half reads the expense header edits, so it holds on the payloads
 built with them: `GET /api/runs/{id}` and the publish gate. The `summary` a

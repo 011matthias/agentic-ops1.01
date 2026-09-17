@@ -3262,9 +3262,11 @@ def build_view(
     # keeps out of the pool (`copies_to_collapse`), and only while the
     # effective outcome leaves them unmatched: a copy a reviewer hand-matched
     # holds a charge and renders as that match.
-    set_aside_copy_ids = copies_to_collapse(receipt_decisions) & set(
-        effective.unmatched_receipts
-    )
+    # Item 94: the one predicate every listing and total on the month reads.
+    set_aside_copy_ids = set(decided_copies(
+        run, receipts, resolutions,
+        receipt_decisions=receipt_decisions, effective=effective,
+    ))
 
     # Unmatched receipts come straight from the resolved outcome, so a
     # receipt freed by a reject (or stolen by a manual match) reappears
@@ -5936,14 +5938,27 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
         n_categorized, n_uncategorized = categorized_counts(
             apply_overrides(receipts, overrides)
         )
+        # Item 94: the list screen's expense count is the batch page's, so
+        # it leaves out the same decided copies (the grid's card inheritance
+        # first, exactly as the batch page decides them).
+        resolutions = store.get_duplicate_resolutions(run.run_id)
+        copies = decided_copies(
+            run,
+            inherit_card_from_copies(
+                receipts, resolutions, _batch_card_hints(run.config)
+            ),
+            resolutions,
+            charge_decisions=store.get_decisions(run.run_id),
+        )
     except (KeyError, TypeError, ValueError):
         # A malformed snapshot hides ONE batch's counts (it keeps the stored
         # pair) rather than breaking the landing screen. Deliberately narrow:
         # a blind `except Exception` here swallowed a closed-store bug in
         # this very function and served stale numbers that looked fine.
         return summary
-    summary["n_expenses"] = len(receipts)
+    summary["n_expenses"] = len(receipts) - len(copies)
     summary["n_receipts"] = len(receipts)
+    summary["n_copies_set_aside"] = len(copies)
     summary["n_categorized"] = n_categorized
     summary["n_uncategorized"] = n_uncategorized
     return summary
@@ -6121,6 +6136,20 @@ def build_expense_view(
                 1 for d in _dated if (d.year, d.month) == _consensus
             ),
         }
+    # §18 duplicate groups, receipt-kind only (no charges in an expense
+    # batch), each decided by the item-74 ladder with the reviewer's rulings
+    # outranking it: the same decisions, evidence and fields the run payload
+    # carries, so the grid and the workbench cannot disagree on a group.
+    # Decided before the rows because item 94 needs the copies for the total.
+    resolutions = resolutions or {}
+    grid_decisions = duplicate_decisions(run, receipts, resolutions)
+    # Item 94 (owner ruling 2026-09-17): a decided copy stays on screen as a
+    # row, marker and "Not a copy" undo included, and leaves the count and
+    # the totals. The one predicate every listing surface reads.
+    grid_copies = decided_copies(
+        run, receipts, resolutions,
+        charge_decisions=decisions, receipt_decisions=grid_decisions,
+    )
     for r in receipts:
         res = card_res.get(r.document_id) or {
             "hint": "", "card": None, "entity": r.legal_entity_id or "",
@@ -6210,7 +6239,7 @@ def build_expense_view(
             )
         ]
         ccy = r.detected_currency or "?"
-        if r.detected_total is not None:
+        if r.detected_total is not None and r.document_id not in grid_copies:
             totals[ccy] = totals.get(ccy, Decimal("0")) + r.detected_total
         expenses.append({
             **rv,
@@ -6313,6 +6342,11 @@ def build_expense_view(
                 res["person"] and roster
                 and str(res["person"]).strip().casefold() not in roster
             )
+        if r.document_id in grid_copies:
+            # Item 94: the row stays, the money does not count. Absent on
+            # every row that counts, which is every row an older backend
+            # served, so absent keeps reading "counts".
+            expenses[-1]["counts_in_total"] = False
         # Item 77: a reviewer-typed date that puts this receipt in another
         # month offers the move (POST .../expenses/{id}/move). A `manual:` id
         # that is not a typed-in add is a receipt attached to a charge by
@@ -6375,12 +6409,6 @@ def build_expense_view(
             "varies": False, "categories": [], "n_vendor_receipts": 1,
         })
 
-    # §18 duplicate groups, receipt-kind only (no charges in an expense
-    # batch), each decided by the item-74 ladder with the reviewer's rulings
-    # outranking it: the same decisions, evidence and fields the run payload
-    # carries, so the grid and the workbench cannot disagree on a group.
-    resolutions = resolutions or {}
-    grid_decisions = duplicate_decisions(run, receipts, resolutions)
     duplicate_groups = [duplicate_group_entry(dec) for dec in grid_decisions]  # grid
 
     # The same groups carried ON the row (2026-08-28). This is the one
@@ -6468,8 +6496,21 @@ def build_expense_view(
     set_aside = set_aside_view(run.snapshot or {}, receipts_dir.parent)
     summary = {
         "mode": MODE_EXPENSE_GENERATION,
-        "n_expenses": len(expenses),
+        # Item 94: the expenses the month counts, decided copies left out.
+        # `n_receipts` keeps counting every document on screen, so
+        # n_receipts == n_expenses + n_copies_set_aside.
+        "n_expenses": len(expenses) - len(grid_copies),
         "n_receipts": len(expenses),
+        # Item 94: the copies the count and `totals_by_ccy` leave out, and
+        # what they add up to per currency. Same name and same set as the
+        # run payload's count (items 83 + 75).
+        "n_copies_set_aside": len(grid_copies),
+        "copies_set_aside_by_ccy": {
+            ccy: f"{amt:,.2f}"
+            for ccy, amt in sorted(
+                copies_set_aside_totals(receipts, grid_copies).items()
+            )
+        },
         "n_set_aside": sum(1 for e in set_aside if not e["restored"]),
         # Item 62, same name and same question as the run payload.
         "n_settled_outside": len(grid_settled_outside),
@@ -6514,11 +6555,9 @@ def build_expense_view(
         "n_missing_receipt_image": n_box("missing_receipt_image"),
         "n_duplicate_groups": len(duplicate_groups),
         # Copies that are redundant (here, one per extra row: an expense
-        # batch's spine IS the receipts). `totals_by_ccy` below still sums
-        # every row, duplicates included: the tool flags, the reviewer
-        # deletes (DELETE /api/runs/{id}/expenses/{doc}), and a total that
-        # quietly disagreed with the rows above it would be worse than one
-        # that is honestly too high with the reason marked on screen.
+        # batch's spine IS the receipts). Since item 94 `totals_by_ccy`
+        # below leaves out every DECIDED copy (`n_copies_set_aside`); this
+        # count keeps its question and also counts a copy nobody decided.
         "n_duplicate_copies": n_extra_copies(dup_flags),
         # Item 74(d): groups nobody has decided; same rule as the run view.
         "n_duplicate_groups_open": sum(
@@ -6577,7 +6616,8 @@ def build_expense_view(
     # cannot print them. The payload half of the report's "excluded from
     # the total" footer; 0 on a month where every amount parsed.
     summary["n_amounts_unreadable"] = sum(
-        1 for r in receipts if r.detected_total is None
+        1 for r in receipts
+        if r.detected_total is None and r.document_id not in grid_copies
     )
     # Item 67: how many of this month's receipts produced no page in the
     # report. Present only once a report has been built, the same rule the
@@ -6768,15 +6808,68 @@ def regenerate_expense_export(
     field_overrides: dict[str, dict[str, str]],
     edits: list[dict],
     dup_resolutions: dict[str, str] | None = None,
+    charge_decisions: dict | None = None,
 ) -> Path:
     """Write the expense CSV for a batch with every reviewer edit applied.
-    Returns the path."""
+    Returns the path.
+
+    Item 94: a decided copy (`decided_copies`) writes no row; one line under
+    the rows names the copies set aside and what they add up to."""
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits, dup_resolutions
     )
+    copies = decided_copies(
+        run, receipts, dup_resolutions, charge_decisions=charge_decisions,
+    )
     out_path = Path(run.work_dir) / "expenses.csv"
-    write_zoho_expense_export(receipts, out_path, **kwargs)
+    write_zoho_expense_export(
+        [r for r in receipts if r.document_id not in copies], out_path,
+        footer=copies_set_aside_line(receipts, copies),
+        **kwargs,
+    )
     return out_path
+
+
+def copies_set_aside_entries(receipts: list[Receipt], copies: dict[str, str]) -> list[dict]:
+    """One entry per decided copy among `receipts`, in the receipts' order:
+    `{document_id, of, vendor, date, amount, currency}` (item 94). What the
+    "copies set aside" line on each surface is written from."""
+    return [
+        {
+            "document_id": r.document_id,
+            "of": copies[r.document_id],
+            "vendor": r.canonical_vendor or r.detected_vendor or "(no vendor)",
+            "date": str(r.detected_date or ""),
+            "amount": _fmt_amount(r.detected_total) or "",
+            "currency": r.detected_currency or "?",
+        }
+        for r in receipts
+        if r.document_id in copies
+    ]
+
+
+def copies_set_aside_line(receipts: list[Receipt], copies: dict[str, str]) -> str:
+    """The one-line statement of the copies a listing left out (item 94), or
+    "" when there are none, so a month without copies writes exactly what it
+    wrote before. Amounts sit inside the sentence, never in an amount column,
+    so a reader summing that column cannot count a copy again."""
+    entries = copies_set_aside_entries(receipts, copies)
+    if not entries:
+        return ""
+    totals = copies_set_aside_totals(receipts, copies)
+    summed = "; ".join(
+        f"{ccy} {amt:,.2f}" for ccy, amt in sorted(totals.items())
+    ) or "no amounts read"
+    listed = "; ".join(
+        " ".join(x for x in (e["vendor"], e["date"], e["currency"], e["amount"]) if x)
+        for e in entries
+    )
+    n = len(entries)
+    return (
+        f"Copies set aside, not counted above: {n} "
+        f"{'document' if n == 1 else 'documents'} that repeat another "
+        f"({summed}): {listed}"
+    )
 
 
 def build_expense_report(
@@ -6788,10 +6881,17 @@ def build_expense_report(
     settings: dict | None = None,
     render_outcomes: dict | None = None,
     dup_resolutions: dict[str, str] | None = None,
+    charge_decisions: dict | None = None,
 ) -> bytes:
     """The month's report PDF: the listing, then every receipt (owner
     directive 2026-08-23 — nothing imports the output any more, so the
     deliverable is a document).
+
+    A decided copy (`decided_copies`, item 94, owner ruling 2026-09-17) is
+    in neither the listing nor its totals, company or reimbursement side.
+    A "Copies set aside" line under the listing names each one with the
+    expense it repeats, and its pages follow the original's, captioned as
+    the copy. "Not a copy" brings the document back as a listed expense.
 
     The listing is the export's own rows. Evidence is per DOCUMENT: a receipt
     that books to two accounts writes two listing rows and appears once,
@@ -6831,9 +6931,18 @@ def build_expense_report(
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits, dup_resolutions
     )
+    copies = decided_copies(
+        run, receipts, dup_resolutions, charge_decisions=charge_decisions,
+    )
     private_by_doc = _private_reimbursements(field_overrides)
-    company = [r for r in receipts if r.document_id not in private_by_doc]
-    private = [r for r in receipts if r.document_id in private_by_doc]
+    company = [
+        r for r in receipts
+        if r.document_id not in private_by_doc and r.document_id not in copies
+    ]
+    private = [
+        r for r in receipts
+        if r.document_id in private_by_doc and r.document_id not in copies
+    ]
 
     sections: list[dict] | None = None
     sections_heading = ""
@@ -6946,8 +7055,12 @@ def build_expense_report(
     suspect: list[int] = []
     evidence: list[dict] = []
 
-    def _evidence_item(r, numbers: list[int], extra_detail: str = "") -> dict:
-        if outside_period(r.detected_date, period) and not (
+    def _evidence_item(
+        r, numbers: list[int], extra_detail: str = "", *, copy: bool = False,
+    ) -> dict:
+        # A copy's date questions no listed expense: its numbers are the
+        # original's, which carries its own date (item 94).
+        if not copy and outside_period(r.detected_date, period) and not (
             "date" in field_overrides.get(r.document_id, {})
             or r.document_id.startswith("manual:")
         ):
@@ -6974,6 +7087,8 @@ def build_expense_report(
         # outcome can be keyed back to the ROW that is missing its pages
         # (item 67). The builders ignore keys they do not use.
         item["document_id"] = r.document_id
+        if copy:
+            item["copy"] = True
         if path is not None:
             item["name"] = _display_name(path.name)
             item["data"] = path.read_bytes()
@@ -7031,6 +7146,41 @@ def build_expense_report(
         for g in sorted(reimb_groups.values(), key=lambda g: g["person"])
     ]
 
+    # Item 94: each decided copy's pages follow the expense it repeats,
+    # captioned with that expense's numbers, and the listing states the
+    # copies it left out. Walked in reverse and inserted right behind the
+    # original, so several copies of one expense keep the receipts' order.
+    copy_lines: list[dict] = []
+    if copies:
+        by_doc = {r.document_id: r for r in receipts}
+        for entry in copies_set_aside_entries(receipts, copies):
+            original = next(
+                (e for e in evidence if e.get("document_id") == entry["of"]),
+                None,
+            )
+            copy_lines.append({
+                **entry,
+                "rows": list(original["rows"]) if original is not None else [],
+            })
+        for line in reversed(copy_lines):
+            item = _evidence_item(
+                by_doc[line["document_id"]], line["rows"],
+                extra_detail="copy set aside, not counted", copy=True,
+            )
+            at = next(
+                (i for i, e in enumerate(evidence)
+                 if e.get("document_id") == line["of"]),
+                None,
+            )
+            if at is None:
+                evidence.append(item)
+            else:
+                evidence.insert(at + 1, item)
+    copies_totals = {
+        ccy: f"{amt:,.2f}"
+        for ccy, amt in sorted(copies_set_aside_totals(receipts, copies).items())
+    }
+
     label = run.label or run.run_id
     note = (
         "Every amount above is the amount the CSV export writes. Each "
@@ -7064,6 +7214,8 @@ def build_expense_report(
         sections=sections,
         sections_heading=sections_heading,
         sections_note=sections_note,
+        copies_set_aside=copy_lines,
+        copies_set_aside_totals=copies_totals,
     )
     # Item 67: `prepare_evidence` wrote each file's render outcome back onto
     # its evidence dict during the build. The builder returns one `bytes`, so
@@ -7099,7 +7251,9 @@ def build_cost_center_totals(
     through the same chain the grid and the month report run, so the
     three cannot disagree about where a row belongs. Confirmed private
     expenses are left out: they are reimbursements owed, not company
-    spend. The range is inclusive on the row's (edited) expense date; a
+    spend. A decided copy (`decided_copies`, item 94) is in no bucket and
+    not in `n_rows` / `n_undated`; `copies_set_aside` counts and sums the
+    ones inside the range. The range is inclusive on the row's (edited) expense date; a
     row that carries no date cannot be excluded by a range, so it always
     counts and `n_undated` says how many such rows the figures contain.
 
@@ -7120,8 +7274,19 @@ def build_cost_center_totals(
     def _bucket() -> dict:
         return {"n_rows": 0, "batches": set(), "totals": {}}
 
+    def _add(bucket: dict, run_id: str, r) -> None:
+        bucket["n_rows"] += 1
+        bucket["batches"].add(run_id)
+        if r.detected_total is not None:
+            ccy = r.detected_currency or "?"
+            bucket["totals"][ccy] = (
+                bucket["totals"].get(ccy, Decimal("0")) + r.detected_total
+            )
+
     by_center: dict[str, dict] = {}
     unassigned = _bucket()
+    # Item 94: decided copies in range, never in a centre or `unassigned`.
+    copies_bucket = _bucket()
     n_batches = 0
     n_rows = 0
     n_undated = 0
@@ -7139,9 +7304,15 @@ def build_cost_center_totals(
             )
             if trip_row is not None:
                 trip = {"cost_center": trip_row.cost_center}
+        resolutions = store.get_duplicate_resolutions(run.run_id)
         receipts, _kwargs = _expense_export_inputs(
-            run, overrides, field_overrides, edits,
-            store.get_duplicate_resolutions(run.run_id),
+            run, overrides, field_overrides, edits, resolutions,
+        )
+        # Item 94: the month report's own copies, left out of every bucket
+        # and counted on their own line.
+        copies = decided_copies(
+            run, receipts, resolutions,
+            charge_decisions=store.get_decisions(run.run_id),
         )
         private_by_doc = _private_reimbursements(field_overrides)
         company = [r for r in receipts if r.document_id not in private_by_doc]
@@ -7152,22 +7323,19 @@ def build_cost_center_totals(
         )
         for r in company:
             d = r.detected_date
-            if d is None:
-                n_undated += 1
-            else:
+            if d is not None:
                 if date_from is not None and d < date_from:
                     continue
                 if date_to is not None and d > date_to:
                     continue
+            if r.document_id in copies:
+                _add(copies_bucket, run.run_id, r)
+                continue
+            if d is None:
+                n_undated += 1
             name = cost_res[r.document_id].name
             bucket = by_center.setdefault(name, _bucket()) if name else unassigned
-            bucket["n_rows"] += 1
-            bucket["batches"].add(run.run_id)
-            if r.detected_total is not None:
-                ccy = r.detected_currency or "?"
-                bucket["totals"][ccy] = (
-                    bucket["totals"].get(ccy, Decimal("0")) + r.detected_total
-                )
+            _add(bucket, run.run_id, r)
             n_rows += 1
     for name, entry in registry.entries.items():
         if entry.get("active", True) is not False:
@@ -7198,6 +7366,8 @@ def build_cost_center_totals(
         "note": COST_CENTER_SCOPE_NOTE,
         "cost_centers": centers,
         "unassigned": _emit(unassigned),
+        # Item 94: what the buckets above leave out as decided copies.
+        "copies_set_aside": _emit(copies_bucket),
         "n_batches": n_batches,
         "n_rows": n_rows,
         "n_undated": n_undated,
@@ -11586,6 +11756,84 @@ def duplicate_decisions(
         resolutions=resolutions or {},
         statement_distinct=statement,
     )
+
+
+def decided_copies(
+    run: RunRow,
+    receipts: list[Receipt],
+    resolutions: "dict[str, str] | None",
+    *,
+    charge_decisions: "dict | None" = None,
+    receipt_decisions: "list | None" = None,
+    effective=None,
+) -> dict[str, str]:
+    """THE copies a month does not count: document id -> the id of the
+    document it repeats. One predicate for every surface that lists or sums
+    the month (item 94, owner ruling 2026-09-17): the grid's count and
+    `totals_by_ccy`, the months list, the expense CSV, the month report PDF,
+    the cost-center roll-up, and the run payload's `copies_set_aside`.
+
+    A copy is exactly what the matcher already keeps out of its pool
+    (`copies_to_collapse` over the item-74 decisions: every member after the
+    first of a group whose verdict is `copy`, decided by the tool or a
+    reviewer), and only while no charge holds it. A copy a reviewer
+    hand-matched to a charge holds that charge and is real spend again, which
+    is why the run payload renders it as the match (items 83 + 75). A group
+    ruled "Not a copy" (`ignore`) is not a copy, so ruling it brings the
+    document back into every listing and total.
+
+    `receipts` are the caller's own rows (the grid's, the export's, the
+    snapshot pool), decided the same way over each. `receipt_decisions` /
+    `effective` let a caller that already holds them pass them in;
+    otherwise a month with a statement resolves its effective outcome from
+    the snapshot and `charge_decisions` (the reviewer's verdicts).
+
+    The value is the kept document, followed through a chain: a document
+    kept by one group and collapsed by another is itself a copy, so the
+    answer names the first document that is not."""
+    if receipt_decisions is None:
+        receipt_decisions = duplicate_decisions(run, receipts, resolutions)
+    collapsed = copies_to_collapse(receipt_decisions)
+    if not collapsed:
+        return {}
+    if effective is not None:
+        pool_ids = {r.document_id for r in receipts}
+    elif has_statement(run):
+        transactions, pool, outcome, _errors = snapshot_from_dict(run.snapshot)
+        effective = apply_decisions(
+            outcome, transactions, pool, charge_decisions or {}
+        )
+        pool_ids = {r.document_id for r in pool}
+    if effective is not None:
+        free = set(effective.unmatched_receipts)
+        # A row the pool does not hold (typed in since the last re-match)
+        # holds no charge either.
+        collapsed = {d for d in collapsed if d in free or d not in pool_ids}
+    kept_by: dict[str, str] = {}
+    for dec in receipt_decisions:
+        if dec.is_copy:
+            for member in dec.members[1:]:
+                kept_by.setdefault(member, dec.members[0])
+    out: dict[str, str] = {}
+    for doc in collapsed:
+        root, seen = kept_by.get(doc, doc), {doc}
+        while root in kept_by and root not in seen:
+            seen.add(root)
+            root = kept_by[root]
+        out[doc] = root
+    return out
+
+
+def copies_set_aside_totals(receipts: list[Receipt], copies) -> dict[str, Decimal]:
+    """Per-currency sums of the copies among `receipts` (item 94): the
+    amounts every surface prints on its "copies set aside" line. A copy whose
+    amount was never read adds nothing, as it would add nothing to a total."""
+    totals: dict[str, Decimal] = {}
+    for r in receipts:
+        if r.document_id in copies and r.detected_total is not None:
+            ccy = r.detected_currency or "?"
+            totals[ccy] = totals.get(ccy, Decimal("0")) + r.detected_total
+    return totals
 
 
 def duplicate_group_entry(decision) -> dict:
