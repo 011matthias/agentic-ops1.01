@@ -4,7 +4,7 @@ workstream: watcher
 group: ""
 spec: ""
 state: active
-updated: 2026-09-16
+updated: 2026-09-17
 ---
 
 Sourcing watcher + price/demand database. Polls the Vinted catalog API for
@@ -512,6 +512,39 @@ verkauften Beschreibungen verkauft gegen alle. Ab 40 Beschreibungen pro Klasse
 liefert es Begriffe. `keyword_engine --suggest` schreibt nur noch Begriffe, die
 die Fakten des Artikels vollstaendig belegen; der Rest kommt als Kandidat.
 
+## Erste Nachfrage-Auswertung (2026-09-16 abends, 233 Verkaeufe)
+
+Nur lesend gegen die Live-DB (110.436 Zeilen, keine Kinderware). Verkauft =
+Theme SUCCESS gegen nachgepruefte, noch lebende Anzeigen (404 raus).
+Preisposition = Gesamtpreis durch Median der Zelle Marke x Warenklasse x
+Zustand (Zellen ab 30 Zeilen). Frische Herzen = Anzeigen, die im Alter von 5 bis
+60 Minuten erfasst wurden (7.505).
+
+| Preis zum Median | verkauft | frisch mit Herz |
+|---|---|---|
+| unter 50% | 49% | 33% |
+| 50-75% | 28% | 31% |
+| 75-110% | 9% | 24-25% |
+| ueber 110% | 12% | 20-23% |
+
+- **Das Herz-Vorzeichen ist jetzt belegt, aber nur mit Preis.** Unter 50% des
+  Medians verkauften 88% mit fruehem Herz gegen 40% ohne; ueber 75% 1 von 108,
+  Herz oder nicht. Stuetzt den "Jung + gefragt"-Boost, sofern das Deal-Tor
+  davor sitzt.
+- **Promoted:** 1,5-1,7-fach Herzen im selben Alter; verkauft 25% gegen 7% bei
+  Preis am oder ueber Markt (91 promoted), darunter kein Vorteil (n=17).
+- **Titel:** bis 37 Zeichen und ohne Groesse im Titel mehr fruehe Herzen im
+  selben Preisband (unter 50%: 39% gegen 22%), ueber Markt kein Unterschied.
+  Korrelation, vermutlich Reseller gegen Privat; die 70-Zeichen-Formel der
+  Listing-Referenz ist damit nicht gestuetzt, nur ungetestet.
+- **September-Nachfrage:** Strick 64%, Jacken 30%, Hosen 11% (Levi's 59%,
+  Premium-Damenjeans 0 von 328 bei nur ~27 h Median-Beobachtung). Zustand egal
+  (20-26%). Seed-Zeilen 15% gegen 30%. Gesenkte Anzeigen 0 von 32.
+- **Nicht beantwortbar:** Tageszeit (Watcher nachts aus), Zeit bis Verkauf
+  (Median 173 h ist Recheck-Takt), eigene Anzeigen (Marken ausserhalb der
+  Zellen). Der Recheck bevorzugt guenstige Alert-Zeilen, also Gruppen
+  vergleichen, nicht Niveaus.
+
 ## Elemente
 
 | Element | Zustand | Stand | Nächster Schritt | Blocker |
@@ -526,7 +559,7 @@ die Fakten des Artikels vollstaendig belegen; der Rest kommt als Kandidat.
 | Verkäuferprofil | live | `/api/v2/users/{id}` liefert Land + Reputation, gecacht pro Verkäufer, max 6 Abrufe/Zyklus | - | - |
 | Standort DE | live | Land kommt aus dem Verkäuferprofil (Katalog-Antwort hat keins). Ausland braucht 8 EUR unter dem Median, dem Wortlaut des Kriteriums; die dreimal härtere Lesart bleibt als `foreign_advantage_basis: deal_gate` erreichbar. `alerts.country` wird seit 2026-09-10 wirklich geschrieben | Schwelle nachmessen, sobald Outcome-Daten je Land existieren | gone-Events |
 | Post-Alter | live | Echte Post-Zeit aus der Foto-URL, rueckwirkend ueber 35.752 Zeilen, 0 zusaetzliche Vinted-Anfragen. Steht im Alert-Text und in jedem Snapshot | Nach 2 Wochen gegen Outcome-Daten pruefen | - |
-| Jung + gefragt | live | Herzen auf einem Listing unter 60 Min heben die Qualitaet um bis zu 35%, gedeckelt, innerhalb des Klingel-Budgets. Auf aelteren Listings zaehlen sie nicht | Vorzeichen mit Outcome-Daten pruefen | Outcome-Daten |
+| Jung + gefragt | live | Herzen auf einem Listing unter 60 Min heben die Qualitaet um bis zu 35%, gedeckelt, innerhalb des Klingel-Budgets. Auf aelteren Listings zaehlen sie nicht. **Vorzeichen 2026-09-16 belegt:** unter 50% des Medians 88% verkauft mit fruehem Herz gegen 40% ohne; ueber 75% wirkungslos | Gewicht gegen das Preisband pruefen (Boost nur unter dem Deal-Tor) | - |
 | Alert-Snapshots | live | Jede Entscheidung friert Comps, Schwellen und Risiko ein, auch die unterdrückten. **2026-09-08 zwei Stunden ausgefallen** (fehlende Spalte `quality`), behoben und 34 Zeilen rekonstruiert | - | - |
 | Feedback-Kanal | live | 👍 / 👎 / Gekauft; **am Handy des Owners bestätigt** (Knöpfe rendern, Tap erreicht ntfy). Eine Bewertung überlebt jetzt auch ohne Snapshot | Taste-Daten sammeln | - |
 | Prioritäts-Stufen | live | **Relativ, und seit 2026-09-10 gegen den heutigen Tag** statt gegen 24 Wanduhr-Stunden; `notify_failed` zählt nicht mit. Budgets 60 / 6 plus flacher Notaus bei 250 echten Pushes. Nachspiel 09-09: 202 Pushes, 25 laut | Abnahme 24h nach Deploy gegen A1-A8 | - |
