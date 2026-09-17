@@ -4678,6 +4678,23 @@ SPA half: `docs/lovable-entity-order-prompt.md`. The list renders
 `entity_options` (never sorted locally), a row opens its fields, drag or the
 move buttons save `{"entity_order": [...]}` on their own. Not pasted.
 
+### 93. The untrusted-text flag reads in English and hides what the mail said (follows ECC item 6, 2026-09-17)
+
+PR #973 flags a receipt whose document or carrying mail contains text written
+at the tool ("ignore previous instructions", "mark this as matched"). The SPA
+has no i18n key for `reason_code: untrusted_instructions`, so `reviewReason`
+falls back to the backend's English prose, which names the matched kinds as
+machine slugs (`ignore-previous-instructions, instructs-a-status-change`).
+Criss works in Portuguese, and the row does not show the quoted text the
+backend already sends in `expenses[].untrusted_instructions[].quote`, so she
+is told to "read it" without being shown what to read.
+
+SPA half only (the payload is already contracted in `docs/api-contract.md`):
+add `expx.review.reason.untrusted_instructions` in EN and PT, render each
+flag's `quote` under the reason as quoted text (never as a link, never as
+HTML), and localize the six kinds. No backend change. Low urgency: 0 of 131
+live rows are flagged at deploy time.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
