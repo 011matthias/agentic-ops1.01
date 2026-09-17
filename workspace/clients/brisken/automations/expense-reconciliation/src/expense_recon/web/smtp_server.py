@@ -44,6 +44,7 @@ from .intake_mail import (
     archive_incoming,
     disk_low,
     end_route,
+    is_known_sender,
     parse_inbound,
     record_refusal,
     route_archived,
@@ -53,6 +54,11 @@ from .store import RunStore
 
 log = logging.getLogger("expense_recon.intake")
 
+# The listener's protocol ceiling, for everyone. An unrecognised sender is
+# held to a much smaller per-message size and a shared daily byte budget
+# (item 122, enforced in handle_DATA): anyone may submit, so a stranger
+# mailing 25 MB two hundred times a day used to be enough to fill the
+# volume in an afternoon and stop Brisken's own receipts.
 DATA_SIZE_LIMIT = 25 * 1024 * 1024  # bytes per message (attachments incl.)
 MAX_RCPTS = 10
 
@@ -125,14 +131,27 @@ class IntakeHandler:
         if disk_low(self.data_root):
             log.warning("intake refusing mail: low disk on data volume")
             return _refuse("452 4.3.1 storage low, try again later")
+        # Who we RECOGNISE decides how much disk this message may spend
+        # (item 122). Our own people keep the full 25 MB and skip the
+        # per-sender file cap a month-end backfill exceeds; a stranger is
+        # capped per message and against a shared daily byte budget.
+        sender = parsed.from_addr or (envelope.mail_from or "").lower()
+        known = is_known_sender(sender, cfg)
+        if not known and len(raw) > cfg.unknown_max_message_bytes:
+            # 552 is permanent on purpose: retrying the same 25 MB message
+            # would fail identically, and the sender's own MTA should say
+            # so rather than queue it for days.
+            return _refuse(
+                "552 5.3.4 message too large from an unrecognised sender"
+            )
         if not try_begin_route():
             return _refuse("452 4.5.3 intake busy, try again later")
         # Reserve spend at acceptance time, BEFORE the 250, so concurrent
         # connections cannot race past the caps (units: files, min 1 so
-        # zero-file spam consumes budget too).
-        sender = parsed.from_addr or (envelope.mail_from or "").lower()
+        # zero-file spam consumes budget too; bytes, for strangers).
         if not DAY_BUDGET.reserve(
-            self.data_root, sender, len(parsed.attachments), cfg
+            self.data_root, sender, len(parsed.attachments), cfg,
+            known=known, n_bytes=len(raw),
         ):
             end_route()
             return _refuse(
@@ -141,7 +160,9 @@ class IntakeHandler:
         # Custody BEFORE the ack: archive inline; only routing/OCR moves to
         # the worker thread. An archive failure answers 451 (sender retries).
         try:
-            arch = archive_incoming(self.data_root, raw, parsed, peer=peer)
+            arch = archive_incoming(
+                self.data_root, raw, parsed, peer=peer, known_sender=known,
+            )
         except Exception:  # noqa: BLE001 - no custody, no ack
             end_route()
             log.exception("intake archive failed")
