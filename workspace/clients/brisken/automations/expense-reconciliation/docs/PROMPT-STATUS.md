@@ -268,9 +268,13 @@ and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
-The Not-applied table is empty. Every prompt written for this app has been
-published. Three rows above carry an explicit unverified half; those are drives
-to run, not prompts to paste.
+One prompt is out: item 144's review-reason copy, written 2026-09-18 after the
+backend shipped the night before. Three Applied rows above carry an explicit
+unverified half; those are drives to run, not prompts to paste.
+
+| Prompt | Decisive field names | Gate |
+|---|---|---|
+| `lovable-settled-outside-reason-prompt.md` (item 144) | `expx.review.reason.needs_entity_settled_outside` (EN + PT) in the i18n chunk, and the PT sentence "paga fora do sistema de cartões" | Written 2026-09-18, not pasted. No backend gate: PR #1074 is live on Fly and the row already carries `review.reason_code: "needs_entity_settled_outside"`. Until this lands, July's Tricarico row shows the backend's English sentence on Criss's Portuguese screen |
 
 
 
