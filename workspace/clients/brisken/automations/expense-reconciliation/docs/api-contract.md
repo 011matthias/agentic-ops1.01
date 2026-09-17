@@ -3378,3 +3378,34 @@ all-already-on-file mail reads "No action needed." A mail that added at
 least one expense keeps the old "Receipt received" wording.
 
 A mail acked earlier (pooled: "will join that month automatically") whose claim then adds nothing gets this acknowledgement once as a correction (`no_expense_ack_at` on the archive). A replay after a crash that struck after the batch stored the mail's receipts counts those receipts as the mail's own (`documents`), because each stored file's intake provenance now carries `archive`; that key also appears on the expense grid's `submitted_by` object. Attachment names echoed into the mail are flattened to letters, digits and `._ ()-`, 80 characters.
+
+## An owed re-match (item 113, 2026-09-17)
+
+Every arrival re-matches its month after the receipt is stored. A re-match
+that raised rode back in a result the mail and drop callers discard; one cut
+off by a restart left no trace; re-running the interrupted job found no new
+files and skipped the re-pairing. The month now carries a mark until a
+re-match that read it commits.
+
+### Snapshot key `rematch_pending` (absent when nothing is owed)
+
+`{id, since, changed_at, trigger, error?, failed_at?, attempts?}`. Written in
+the same snapshot write as an arrival's new receipts on a month with a
+statement, by a month move on both months inside its lock span, and by `rematch_after_change` before it runs. Every write takes a NEW `id` (keeping `since` and any recorded failure), and so does a recorded failure.
+A `rematch_month` commit removes it only when the stored mark's `id` equals
+the `id` in the row that re-match read, so a change landing mid-match keeps
+its own debt. A duplicate arrival during a running re-match triggers one extra re-match (accepted: cost, not correctness). A failed attempt records `error` (400 characters),
+`failed_at` and `attempts`. An arrival re-matches when a mark existed before
+it, even if every file was a duplicate. At startup the app re-pairs every
+statement month still carrying a mark (trigger `resume`) in a background
+thread. `rematch_log` keeps its meaning: one event per COMMIT, so a failed
+attempt writes no event.
+
+### `GET /api/operator/state`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `rematch_pending[]` | object `{run_id, label, id, since, changed_at, trigger, error?, failed_at?, attempts?}` | months owing a re-match, oldest debt first. Empty in steady state; an entry with `error` is a re-match that failed and is retried by the next arrival or restart |
+
+`tools/brisken-recon-notify.py` mails each failure once per
+`(run_id, failed_at)` (state key `seen_rematch_failures`).

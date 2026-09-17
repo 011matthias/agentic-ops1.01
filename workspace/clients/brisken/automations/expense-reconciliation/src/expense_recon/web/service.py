@@ -8226,6 +8226,100 @@ def append_rematch_event(existing, event: dict, cap: int = REMATCH_LOG_CAP) -> l
     return log[-cap:] if cap > 0 else log
 
 
+# Item 113 (2026-09-17 voids audit): a re-match that is OWED and has not yet
+# committed. Every arrival re-matches its month after the receipt is stored,
+# so a re-match that raised (a model outage) or was cut off by a restart
+# (every deploy is one) left the month describing itself as it was before,
+# and nothing recorded that the second step never ran; re-running the
+# interrupted job found no new files and skipped the re-pairing too. The
+# mark is written with the change, cleared by the commit of a re-match that
+# READ it (same `id`: a change landing mid-match writes a new id and keeps
+# its debt), carries the last error, and is re-paired at startup.
+REMATCH_PENDING_KEY = "rematch_pending"
+
+
+def rematch_pending_mark(snapshot: dict | None, trigger: str) -> dict:
+    """A fresh owed-re-match mark (new `id`), keeping how long the month has
+    owed one (`since`) and any recorded failure from an earlier mark."""
+    prior = (snapshot or {}).get(REMATCH_PENDING_KEY)
+    prior = prior if isinstance(prior, dict) else {}
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    mark = {
+        "id": uuid.uuid4().hex[:12],
+        "since": str(prior.get("since") or now),
+        "changed_at": now,
+        "trigger": str(trigger or ""),
+    }
+    for key in ("error", "failed_at", "attempts"):
+        if key in prior:
+            mark[key] = prior[key]
+    return mark
+
+
+def rematch_pending(run) -> dict | None:
+    """The run's owed-re-match mark, or None."""
+    if run is None:
+        return None
+    mark = (run.snapshot or {}).get(REMATCH_PENDING_KEY)
+    return mark if isinstance(mark, dict) and mark.get("id") else None
+
+
+def _record_rematch_failure(store: RunStore, run_id: str, trigger: str, error: str) -> None:
+    """Write a failed re-match onto the month's mark (creating the mark when
+    the change that owed it did not write one). Best-effort: a failure to
+    record never turns a reported error into a raised one."""
+    try:
+        with _BATCH_ADD_LOCK:
+            fresh = store.get_run(run_id)
+            if fresh is None or not has_statement(fresh):
+                return
+            snapshot = dict(fresh.snapshot or {})
+            # A NEW id: a re-match that read the month before this failed
+            # attempt must not clear the failure when it commits (review).
+            mark = rematch_pending_mark(snapshot, trigger)
+            snapshot[REMATCH_PENDING_KEY] = {
+                **mark,
+                "error": str(error)[:400],
+                "failed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "attempts": int(mark.get("attempts") or 0) + 1,
+            }
+            store.update_run_snapshot(run_id, snapshot)
+    except Exception:  # noqa: BLE001 - the error is already in the result
+        pass
+
+
+def _ensure_rematch_pending(store: RunStore, run_id: str, trigger: str) -> None:
+    """Owe a re-match before running it, so a restart mid-match leaves the
+    debt on the month. Always a NEW id (keeping `since` and any recorded
+    failure): a re-match already in flight read the month before this
+    change, so its commit must not clear this change's debt (review)."""
+    with _BATCH_ADD_LOCK:
+        fresh = store.get_run(run_id)
+        if fresh is None:
+            return
+        snapshot = dict(fresh.snapshot or {})
+        snapshot[REMATCH_PENDING_KEY] = rematch_pending_mark(snapshot, trigger)
+        store.update_run_snapshot(run_id, snapshot)
+
+
+def resume_pending_rematches(db_path, learning_db_path=None) -> list[str]:
+    """Startup: re-pair every statement month still owing a re-match. The
+    months it re-matched (or tried to; a failure stays on the mark)."""
+    done: list[str] = []
+    with RunStore(db_path) as store:
+        owed = [
+            r.run_id for r in store.list_runs()
+            if rematch_pending(r) is not None and has_statement(r)
+        ]
+        for run_id in owed:
+            rematch_after_change(
+                store, run_id, learning_db_path=learning_db_path,
+                trigger="resume",
+            )
+            done.append(run_id)
+    return done
+
+
 STATEMENTS_KEY = "statements"
 # {stored file name: {transaction_id: sheet row}} — each upload's own row
 # map, kept out of `statements[]` because it is machinery for the sheet
@@ -9448,12 +9542,17 @@ def add_receipts_to_expense_batch(
         )
         if refresh.get("changes"):
             run = store.get_run(run.run_id) or run
+        # Item 113: a re-match this month still owes from an earlier change
+        # (it raised, or a restart cut it off) is paid by THIS arrival too,
+        # even when every file turns out to be a duplicate.
+        owed_before = rematch_pending(run) is not None
         result = _add_receipts_locked(
             store, run, staging_dir, now_iso,
             learning_db_path=learning_db_path,
             on_stage=on_stage,
             provenance_by_digest=provenance_by_digest,
             _stage=_stage,
+            rematch_owed=bool(refresh.get("changes")),
         )
         if refresh.get("changes"):
             result["master_data_refresh"] = refresh["changes"]
@@ -9464,7 +9563,7 @@ def add_receipts_to_expense_batch(
     # nothing. Skipped when the upload added no receipt -- an all-duplicate
     # add changed nothing to re-match -- unless the arrival's refresh moved
     # the month's card list, which the matcher reads too.
-    if result.get("n_added") or result.get("master_data_refresh"):
+    if result.get("n_added") or result.get("master_data_refresh") or owed_before:
         rematch = rematch_after_change(
             store, run.run_id,
             learning_db_path=learning_db_path, on_stage=on_stage,
@@ -9495,6 +9594,7 @@ def _add_receipts_locked(
     on_stage,
     provenance_by_digest: dict[str, dict] | None,
     _stage,
+    rematch_owed: bool = False,
 ) -> dict:
     from ..categorize import categorize_receipts_with_registry
     from ..cli import _resolve_categorizer_chart
@@ -9737,6 +9837,12 @@ def _add_receipts_locked(
         all_provenance.setdefault(k, v)
     if all_provenance:
         new_snapshot["intake_provenance"] = all_provenance
+    # Item 113: the receipts and the debt to re-pair them are ONE write, so
+    # no restart can store the one without the other.
+    if (new_receipts or rematch_owed) and has_statement(run):
+        new_snapshot[REMATCH_PENDING_KEY] = rematch_pending_mark(
+            run.snapshot, "receipts"
+        )
     store.update_run_snapshot(run.run_id, new_snapshot)
     store.update_run_summary(run.run_id, {
         **run.summary,
@@ -10989,6 +11095,12 @@ def rematch_month(
             cfg, transactions, receipts,
             has_coa=bool(cfg.get("coa_validation")),
         )
+        # Item 113: this commit pays the owed re-match it READ. A change that
+        # landed while it ran wrote a new mark id, and that debt stays.
+        owed = rematch_pending(fresh)
+        read = rematch_pending(run)
+        if owed is not None and read is not None and owed.get("id") == read.get("id"):
+            new_snapshot.pop(REMATCH_PENDING_KEY, None)
         # Item 58: one event per commit, appended to the FRESH row's log so
         # a re-match that committed while this one ran keeps its entry.
         new_snapshot[REMATCH_LOG_KEY] = append_rematch_event(
@@ -11092,9 +11204,18 @@ def rematch_after_change(
     try:
         transactions, _, _, _ = snapshot_from_dict(fresh.snapshot)
     except Exception as exc:  # noqa: BLE001 - see the contract below
-        return {"error": f"{type(exc).__name__}: {exc}"}
+        error = f"{type(exc).__name__}: {exc}"
+        _record_rematch_failure(store, run_id, trigger, error)
+        return {"error": error}
     if not transactions:
         return None
+    # Item 113: owe the re-match on the month before running it, and run it
+    # on the row that carries the mark, so its commit can clear exactly it.
+    try:
+        _ensure_rematch_pending(store, run_id, trigger)
+        fresh = store.get_run(run_id) or fresh
+    except Exception:  # noqa: BLE001 - the mark is a safety net, not a gate
+        pass
     cfg = fresh.config or {}
     return _rematch_or_error(
         store,
@@ -11133,7 +11254,17 @@ def _rematch_or_error(*args, **kwargs) -> dict:
     try:
         return rematch_month(*args, **kwargs)
     except Exception as exc:  # noqa: BLE001 - reported, never raised
-        return {"error": f"{type(exc).__name__}: {exc}"}
+        error = f"{type(exc).__name__}: {exc}"
+        # Item 113: the mail and drop callers discard the result, so the
+        # failure also lands on the month's owed-re-match mark, where the
+        # operator state, the notifier and the next arrival see it.
+        store = args[0] if args else kwargs.get("store")
+        run = args[1] if len(args) > 1 else kwargs.get("run")
+        if store is not None and run is not None:
+            _record_rematch_failure(
+                store, run.run_id, str(kwargs.get("trigger") or ""), error
+            )
+        return {"error": error}
 
 
 # ---------------------------------------------------------------------------
@@ -11903,6 +12034,17 @@ def move_expense_to_month(
             now_iso,
         )
         store.delete_claims_for_receipt(source.run_id, document_id)
+        # Item 113: both months owe a re-match from this write on, in the
+        # same lock span, so a restart while the source re-matches (minutes)
+        # cannot leave the moved receipt unpaired in the target unrecorded.
+        for owed_run in (source, target):
+            owed_fresh = store.get_run(owed_run.run_id)
+            if owed_fresh is not None and has_statement(owed_fresh):
+                owed_snap = dict(owed_fresh.snapshot or {})
+                owed_snap[REMATCH_PENDING_KEY] = rematch_pending_mark(
+                    owed_snap, "month_move"
+                )
+                store.update_run_snapshot(owed_run.run_id, owed_snap)
         remaining = len(apply_expense_edits(
             baseline_receipts(source),
             store.get_expense_field_overrides(source.run_id),
