@@ -5790,6 +5790,44 @@ The colon is what the rest of both documents already uses for a label ("Statemen
 
 **Test.** `tests/test_pdfs_have_no_em_dashes.py` (3) drives the ROUTES, where the title is composed: a two-card August with a statement, four receipts and a reviewer's card pick for both documents, and a trip batch for the third title. Each reads every page's extracted text for all three banned forms, and pins the title it expects, because "nothing contains an em-dash" also passes on a document that renders nothing. `regress_check` run once per title, each red on its own test alone (1 failed, 2 passed), so all three wires are covered. The em-dash arm was regressed separately, by hand and byte-for-byte, because `regress_check` cannot carry the character through the Windows command line: putting the real em-dash back into each title turns its own test red and nothing else, which is the live defect reproduced. The character in `BANNED` is built with `chr(0x2014)` rather than typed, so a later strip-gate pass over this client path cannot quietly empty the check.
 
+### 146. The card strip counts decided copies the boxes deliberately do not, so two person counts on one payload differ by the number of copies (found verifying item 144, 2026-09-17; licence: defect, covered)
+
+**Live now** (`GET /api/expense-batches/50622baec444`, read after the item-144
+deploy): `summary.n_needs_person` 13, `card_review.n_needs_person` 15;
+`summary.n_needs_entity` 14, `card_review.n_needs_entity` 16. July holds 54
+expenses, 16 of them with no person. Two of those 16 are decided copies (Aposto
+Karlsruhe and Lovable Labs Incorporated), and item 94's ruling puts a decided
+copy in NO box: `expense_boxes` returns `[]` for it, because a copy writes no
+CSV row, no listing row and no reimbursement, so nothing done to its person
+changes the month. `build_card_review` does not know that. It counts straight
+off `resolution.values()`, which is every receipt, copies included. 16 minus the
+2 copies is the 14 the boxes see; 16 minus the 1 settled-outside row is the 15
+the strip prints.
+
+The gap is the copy count and predates item 144. Before that deploy both counts
+were 2 apart in the same direction (14 and 16); the item-144 exemption reached
+both, each dropped by exactly 1, and the standing difference survived because it
+was never about settled-outside rows.
+
+**Why it is a defect.** It is the disagreement class item 103 closed for the
+months list and the month page: one payload, two surfaces, two answers to the
+same question, and no way for a reader to tell which is right. The strip sits
+beside MISSING ENTITY on the same screen that renders the boxes, so Criss can
+see 15 and 13 at once.
+
+**The fix** is one condition, the same shape item 144 used: `build_card_review`
+skips a row the grid treats as a decided copy, the way `expense_boxes` does. The
+honest question underneath is whether the strip should count copies at all, and
+item 94's ruling already answered it for every other counter.
+
+**What made it visible.** Item 144's route test asserted the two counts equal on
+a constructed fixture with no copies, so it passed and the equality claim reached
+a PR body before the live read contradicted it. The transferable lesson is in the
+checkpoint: a fixture that omits a population the live data has does not test
+equality, it tests equality-in-the-absence-of-the-thing-that-breaks-it. Where a
+claim is about two counters agreeing, the fixture has to contain every row class
+the real month contains.
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.

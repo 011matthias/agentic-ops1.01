@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | Brisken Recon Prompts Applied And The Bank Transfer Exit | client-dev | [Mini-Checkpoint-2](docs/2026-09-17%20-%20Brisken%20Recon%20Prompts%20Applied%20And%20The%20Bank%20Transfer%20Exit/Mini-Checkpoint-2.md) |
 | 2026-09-17 | Brisken Recon Item 90 Declined And The Eligibility Lesson | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Recon%20Item%2090%20Declined%20And%20The%20Eligibility%20Lesson/Checkpoint.md) |
 | 2026-09-17 | Brisken Recon Owner Rulings Executed | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Recon%20Owner%20Rulings%20Executed/Checkpoint.md) |
 | 2026-09-17 | Brisken Recon ECB Band And Merchant Precedence | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Recon%20ECB%20Band%20And%20Merchant%20Precedence/Checkpoint.md) |
