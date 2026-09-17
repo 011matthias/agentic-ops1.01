@@ -2994,11 +2994,12 @@ def set_charge_category(
     _transactions, _receipts, outcome, _ = snapshot_from_dict(run.snapshot)
     known = {t.transaction_id for t in _transactions}
     if transaction_id not in known:
-        return "unknown charge"
+        return Refusal("unknown charge", code="charge_not_found")
     if transaction_id not in set(outcome.unmatched_transactions):
-        return (
+        return Refusal(
             "this charge holds a receipt: set the category on the expense, "
-            "not on the charge"
+            "not on the charge",
+            code="charge_holds_a_receipt",
         )
     document_id, line_index = charge_category_key(transaction_id)
     overrides = store.get_category_overrides(run.run_id)

@@ -3146,20 +3146,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if category and category not in EXPENSE_CATEGORIES:
             return JSONResponse(
                 {"error": f"category must be one of {sorted(EXPENSE_CATEGORIES)}",
+                 "code": "unknown_category",
                  "categories": sorted(EXPENSE_CATEGORIES)},
                 status_code=400,
             )
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return JSONResponse({"error": "run not found"}, status_code=404)
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             err = set_charge_category(
                 store, run, transaction_id, category or None,
                 zoho_account or None, _now_iso(),
             )
             if err is not None:
                 code = 404 if err == "unknown charge" else 400
-                return JSONResponse({"error": err}, status_code=code)
+                return JSONResponse(
+                    {"error": err, "code": code_of(err, "request_refused"),
+                     **fields_of(err)},
+                    status_code=code,
+                )
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
             resolutions = store.get_duplicate_resolutions(run_id)
