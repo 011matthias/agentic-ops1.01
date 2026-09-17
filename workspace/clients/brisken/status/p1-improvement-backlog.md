@@ -5411,6 +5411,8 @@ Criss on August, 11:29 UTC, row `0019__Invoice-B2EA98DF-0020.pdf` (Pressmaster F
 
 The function exists: the live row carries `can_mark_private: true` and the button renders (PR #987, SPA applied #990). The first note read it as missing because it sits outside the picker. **Proposed change, SPA only:** a "Paid with a private card" option at the end of the card picker, offered only when `can_mark_private` is true, doing what the button does today; the button goes. The backend refusals stay as they are (400 `company_card` on a company-card row, 400 `private_card` on a company-card pick for a private row).
 
+**Prompt written 2026-09-17:** `docs/lovable-private-card-in-picker-prompt.md`, not applied. Live on July the card column stacks the entity picker, the card picker (nine cards, "Credit Card Chase Visa - 3645" to "Credit Card - 2838") and the button under them; the 32 eligible rows are all `card_source: none`, the Hostinger row of 2026-07-28 (`0002`) has the picker but `can_mark_private: false`, and every hint row is ineligible, so the option never hides behind "Change card".
+
 ### 140. A possible duplicate shows a label, not the copies side by side (note #67, owner, 2026-09-17; SPA, licence tag for the owner)
 
 **Matthias, July Expenses view, row `0030__...Aposto_Karlsruhe__ZE_8100599.jpg`, 15:15 UTC:** "if this is a potential duplicate, the tool needs to show all the available data to each of the duplicates next to each other for manual comparison. Just labeling it is not going to cut it because then user has to search for the other duplicate and this slows comparison process."
@@ -5421,11 +5423,15 @@ Live row: `duplicate {group_id 3b0029eea1b11643, kind receipt, n_copies 2, copy 
 
 **Matthias, July Matching view (`/runs/50622baec444`), section "Receipts without a charge 11", anchor "Downloads Report Reconciled CSV Statement", 15:19 UTC:** "we do not need more than one button to download the different output files, make sure there is only one button for each output file download." **Proposed change, SPA only:** one download control per output file on the page (report PDF, reconciled CSV, statement), in one place; before writing the prompt, list where each download renders today in `brisken-expense-review` so the prompt removes the repeats and keeps one of each.
 
+**Prompt written 2026-09-17:** `docs/lovable-one-download-each-prompt.md`, not applied. Live July Matching has five buttons for four files in three places: the header's "Download" beside "Statement July2026.xlsx" (`statement-categorized.xlsx?file=`), the primary "Download reconciliation (PDF)" in the action row, and the Downloads row's "Report" (`report.xlsx`, not the PDF), "Reconciled CSV" and "Statement" (the same workbook again); August has no Statement button in the row (`writeback_available: false`) and offers its workbook only inside the collapsed "2 statements" table.
+
 ### 142. A booked charge's hint says "your statement workbook" without naming it or the rule (note #69, owner, 2026-09-17; SPA copy)
 
 **Matthias, July Matching view, section "Charges without a receipt 72", on the row hint "This charge is marked yellow in your statement workbook, so it is already booked. Nothing…", 15:19 UTC:** "where do you get this information from?"
 
 Answer: from the fill colour of that charge's row in the Chase workbook Criss uploads for the month (`July2026.xlsx`): she colours a row yellow once it is booked, and `ingest/statement_xlsx.py` reads the fill when the statement loads (yellow -> `entry_status: posted`). Item 86 fixed the same question on the fold caption ("48 rows marked yellow in July2026.xlsx, already booked", with the yellow / grey tooltip); the per-row hint still says "your statement workbook". **Proposed change, SPA copy:** the row hint names the file from `statements[].file` (fallback "the statement workbook") and says the colour is read when the statement is loaded, same wording as item 86's tooltip; PT wording for Criss.
+
+**Prompt written 2026-09-17:** `docs/lovable-booked-hint-names-workbook-prompt.md`, not applied. Live the phrase sits in two places, the "Already booked" badge tooltip on all 84 booked July rows and the line under the vendor on the 47 in "Charges without a receipt" ("Marked yellow in your statement workbook, so already booked."), and item 86's fold on August names a PDF that carries no colours ("August2026.xlsx, 20260804-statements-1176-.pdf"), so the prompt names only workbooks (`writeback` true), matched on the row's `account_id`.
 
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
