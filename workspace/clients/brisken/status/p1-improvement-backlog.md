@@ -5318,6 +5318,8 @@ Criss on August, 11:29 UTC, row `0019__Invoice-B2EA98DF-0020.pdf` (Pressmaster F
 
 **No backend change needed:** `POST /api/runs/{id}/categories` with `{document_id, line_index, category}` already writes one line, and every row carries `line_items[]` with `index`, `description`, `line_total`, `category`. The fix is a per-line picker for the uncategorized lines on the row (SPA prompt).
 
+**Prompt written 2026-09-17:** `docs/lovable-line-category-prompt.md`. Probed first on the current code with a two-line receipt: `line_index: 1` turns `partial_uncategorized` into the row's next exception, the line reads `EDITED`, and Books as loses its unassigned part.
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.
