@@ -1992,6 +1992,14 @@ def main(argv: list[str] | None = None) -> int:
 
         return label_main(argv[1:])
 
+    # `expense-recon backup --dry-run|--check|--go` — copy the data folder
+    # off the machine to Brisken's SharePoint (item 119). Dry run by
+    # default; --go is the only form that uploads.
+    if argv and argv[0] == "backup":
+        from .web.backup import main as backup_main
+
+        return backup_main(argv[1:])
+
     # `expense-recon memory list|forget|reset` — inspect / correct the
     # cross-run learning store (Phase 2 escape hatch, 2d).
     if argv and argv[0] == "memory":

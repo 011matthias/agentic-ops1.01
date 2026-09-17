@@ -768,6 +768,13 @@ the mail, its month simply is not open yet. It therefore does NOT count toward
 pooled row carries no `batch_id` and no `expenses`, because it belongs to no
 batch yet.
 
+Acceptance rows written since 2026-09-17 (item 122) also carry
+`entries[].n_bytes` (number, the message's size on the volume) and
+`entries[].known_sender` (boolean, whether the submitter was one of our own).
+Both are absent on older rows, and a consumer must read them defensively:
+they exist so the day budget can re-seed what strangers have spent today
+after a restart, not as a new part of the row's meaning.
+
 ### The travel pool (item 38, added 2026-09-06)
 
 Mail addressed to the TRAVEL alias (settings `intake.travel_alias`, unset
@@ -868,7 +875,10 @@ is waiting; the 2026-08-24 live drill read exactly that.
 | `POST /api/inbound/replay-held` | `materialize_failed` | number | only with `materialize: true`: creations refused or errored back to the pool |
 | `GET /api/expense-batches` | `batches[].created_by` | string \| null | item 39 origin marker: `"intake"` when mail created this month itself; `null` on operator-created batches. Also on the batch view as `summary.created_by` |
 | `POST /api/inbound/{archive}/render-ingest` | `pool_month` | string | present on both outcomes; with `status: "pooled"` the render succeeded and is waiting |
-| `PUT /api/settings` | `intake.known_senders` | string[] | outside addresses that count as our own people. They get the acceptance ack, and their body-only mail is rendered on arrival instead of holding. At most 25 plain addresses; malformed entries are a 400 naming the field |
+| `PUT /api/settings` | `intake.known_senders` | string[] | outside addresses that count as our own people. They get the acceptance ack, their body-only mail is rendered on arrival instead of holding, and (item 122) they are exempt from the per-sender file cap and the stranger size limits. At most 25 plain addresses; malformed entries are a 400 naming the field |
+| `PUT /api/settings` | `intake.unknown_max_message_bytes` | number | item 122: biggest message an unrecognised sender may send. Default 5 MB, against the listener's 25 MB ceiling for everyone else; over it the answer is `552 5.3.4` (permanent: the same message would fail again) |
+| `PUT /api/settings` | `intake.unknown_daily_bytes` | number | item 122: bytes per day all unrecognised senders share. Default 50 MB; over it the answer is `452` and the sender's own mail system retries tomorrow. Global rather than per-sender on purpose, because From is forgeable and a rotating one walks past a per-sender budget |
+| `PUT /api/settings` | `intake.dismissed_purge_days` | number | item 122: days an archive stays after the operator dismissed it as junk, counted from the dismissal. `0` (the default) never deletes. Sweeps at boot beside the retention sweep; it only ever touches archives whose status is `dismissed` |
 
 `inbound_marked` on delete keeps its OLD meaning (legacy mail stamped "month
 deleted") and is normally `0` now; `pooled_back` is the number that moves.
@@ -2041,6 +2051,26 @@ moment the report arrived.
 | `server.app` | string | `FLY_APP_NAME`; `""` off Fly |
 | `server.started_at` | string | wall-clock ISO time this process started |
 | `server.uptime_s` | number | seconds since start, on the monotonic clock |
+
+### Free space: `healthz.disk` (added 2026-09-17, item 122)
+
+The mailbox refuses inbound mail when the volume runs low, and until now
+that floor announced itself only as bounced receipts. `/healthz` carries a
+second parallel block, so a monitor sees a filling disk a month before it
+bites. `status` is still the only field a caller needs.
+
+| Path | Element | Meaning |
+|---|---|---|
+| `disk.available` | boolean | false when the volume could not be read; the other keys are then absent, so "cannot say" never reads as "nothing free" |
+| `disk.total_bytes` | number | the volume's size, as the running machine sees it |
+| `disk.free_bytes` | number | free space |
+| `disk.used_bytes` | number | used space |
+| `disk.free_pct` | number | free percentage, one decimal |
+| `disk.floor_bytes` | number | free space the intake insists on: 5% of the volume, never below 200 MB, never above half of it. Derived from the volume, so the same build is correct on a 1 GB and a 5 GB disk |
+| `disk.intake_refusing` | boolean | the question a monitor asks: is mail being turned away right now (`free_bytes < floor_bytes`) |
+
+An unreadable volume never refuses mail, which is the posture this guard has
+always had: a failed measurement must not bounce receipts.
 
 **`POST /api/client-errors`** records one client-side failure. Authenticated
 like every other API route: the failures worth catching happen inside a live

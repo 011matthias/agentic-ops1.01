@@ -854,13 +854,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # sweep above just marked interrupted flips back to a replayable held
     # status, so a Fly stop mid-OCR never leaves mail stranded as pending.
     try:
-        from .intake_mail import reconcile_interrupted, sweep_retention
+        from .intake_mail import (
+            reconcile_interrupted,
+            sweep_dismissed,
+            sweep_retention,
+        )
 
         reconcile_interrupted(db_path, data_root_path)
         # Retention floor (settings intake.retention_years, default 10y per
         # AO paragraph 147): expired inbound archives are deleted at boot,
         # which scale-to-zero makes a near-daily event.
         sweep_retention(db_path, data_root_path)
+        # Item 122: archives the operator dismissed as junk, once they
+        # have sat dismissed for intake.dismissed_purge_days. Inert by
+        # default (0 = never); one settings write turns it on.
+        sweep_dismissed(db_path, data_root_path)
     except Exception:  # noqa: BLE001 - reconcile must never block startup
         pass
     # Pool sweep: a month may have been created while this machine was
@@ -910,6 +918,18 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             ).start()
     except Exception:  # noqa: BLE001 - a resume never blocks startup
         log.warning("drop resume at boot failed", exc_info=True)
+
+    # Item 119: the nightly copy of the data folder to Brisken's own
+    # SharePoint. OFF unless EXPENSE_RECON_BACKUP=1, so this deploy
+    # changes nothing until the owner turns it on; `start_backup_thread`
+    # answers None in that case and the attribute says so.
+    try:
+        from .backup import start_backup_thread
+
+        app.state.backup = start_backup_thread(data_root_path)
+    except Exception:  # noqa: BLE001 - a backup never blocks startup
+        app.state.backup = None
+        log.warning("backup scheduler could not start", exc_info=True)
 
     def open_store() -> RunStore:
         return RunStore(db_path)
@@ -1040,15 +1060,28 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
     @app.get("/healthz")
     def healthz():
-        """Liveness, plus what this process IS (item 50).
+        """Liveness, plus what this process IS (item 50) and how full its
+        disk is (item 122).
 
         `status` is unchanged and still the only field a caller needs.
         The parallel `server` block answers the question the September
         "Failed to fetch" could not: whether the machine answering now is
         the one that was answering a moment ago. A `uptime_s` of a few
         seconds means this process has just replaced another.
+
+        The `disk` block makes a filling volume visible BEFORE the
+        mailbox starts turning receipts away: free space in bytes and
+        percent, the floor the intake refuses below, and whether it is
+        refusing right now. Until this existed the only sign of a full
+        disk was Dirk's receipts bouncing mid-close.
         """
-        return JSONResponse({"status": "ok", "server": machine.snapshot()})
+        from .intake_mail import disk_snapshot
+
+        return JSONResponse({
+            "status": "ok",
+            "server": machine.snapshot(),
+            "disk": disk_snapshot(data_root_path),
+        })
 
     # ── The client-failure probe (backlog item 50) ──────────────────────
     # A fetch that rejects in the browser never reached this app, so no

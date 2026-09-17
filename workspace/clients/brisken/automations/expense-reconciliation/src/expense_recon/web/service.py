@@ -8112,10 +8112,14 @@ def build_expense_report(
             f"{'page' if len(suspect) == 1 else 'pages'}"
             f"{'' if in_sections else ' below'}."
         )
-    title = f"Expense report — {label}"
+    # A colon, never an em-dash: the house deliverable standard bans every
+    # dash form from a client-facing document, and the colon is what the rest
+    # of both documents already uses for a label ("Statement: ...",
+    # "Owed to Dirk: ...").
+    title = f"Expense report: {label}"
     subtitle = ""
     if is_trip_batch(run):
-        title = f"Trip report — {trip.name if trip is not None else label}"
+        title = f"Trip report: {trip.name if trip is not None else label}"
         if trip is not None:
             who = ", ".join(roster) if roster else "no travelers entered"
             subtitle = (
@@ -8695,7 +8699,9 @@ def build_reconciliation_report(
 
     label = run.label or run.run_id
     return build_reconciliation_report_pdf(
-        view, title=f"Reconciliation — {label}", evidence=evidence,
+        # A colon, never an em-dash (the house deliverable standard; the same
+        # call as the month report's title above).
+        view, title=f"Reconciliation: {label}", evidence=evidence,
         # Item 138: the card each receipt nobody holds files under, from the
         # same chain the matcher scopes by (item 137).
         receipt_cards=report_receipt_cards(
