@@ -89,6 +89,15 @@ both, **236 GET and 7 OPTIONS, 0 POST/PUT/PATCH/DELETE after login**. One dialog
 was opened (Confirm private expense) and closed with Escape. Evidence in the
 four Applied rows.
 
+**Re-audited 2026-09-17 later, after the owner published card-fix (item 87),
+matched-with-statement (item 89) and ecb-rates (item 82): all three applied,
+the Not-applied table is empty again.** 48 chunks, 1,050 KB, all five controls
+hit, all 11 decisive names present, and both old `set.fx.desc` strings ("update
+them when you start a new month", "atualize ao começar um novo mês") absent.
+Driven cold in a fresh named session (`rv82b`), EN and PT; one card select
+opened and closed with Escape, nothing picked. July and August `updated_at`
+unchanged before and after. Evidence in the three Applied rows.
+
 Two display strings misread on the 2026-09-01 pass, both resolved by reading
 the surrounding key: `"Not a duplicate"` is `wb.dups.notDup` from the workbench
 duplicates panel, which predates `lovable-duplicates-prompt.md` and is not
@@ -172,6 +181,9 @@ missing.
 | `lovable-expense-boxes-prompt.md` (item 84) | Bundle 2026-09-17: `n_needs_company_or_person`, `expx.box.active`, `expx.box.tile.companyOrPerson`, `expx.box.fixCard.link` in `chunk-expenses._batchId`. **Driven on July Expenses:** clickable tiles EXPENSES 52, CATEGORIZED 49, NEEDS CATEGORY 3, READY 14, NO COMPANY OR PERSON 33 with "24 suggested private" inside it; MISSING ENTITY and NEEDS PERSON absent; MISSING RECEIPT IMAGE 0 is not a button. Each click, rows listed: CATEGORIZED "Showing 49: categorized" 49; clicking it again clears to 52; NEEDS CATEGORY "Showing 3: need a category" 3; READY 14; the merged tile "Showing 33: no company or person yet" 33 with "Add a card and its person once, and every receipt paid with it is fixed: Settings, Cards" linking `/settings`; the caption "Showing 24: suggested private" 24; EXPENSES clears to 52. PT: tile "SEM EMPRESA OU PESSOA 33 · 24 sugeridas como particulares", banner "Mostrando 33: sem empresa ou pessoa", 33 rows. **Residue, item 87's:** the fix-card line promises that defining a card fixes every row in the box, and on July it cannot fix 24 of the 33 (16 print only a tender word, 8 print no card at all) |
 | `lovable-controls-as-buttons-prompt.md` (items 85 + 86) | Bundle 2026-09-17: `wb.decided.foldBooked.many`, `wb.decided.showBooked.many`, `wb.dup.showGroups.many`, `wb.fx.showDetails`, `wb.filter.card.showEmpty` in `chunk-runs._runId`. **Driven on July Matching:** (2) Charges without a receipt fold reads "48 rows marked yellow in July2026.xlsx, already booked"; the hover (label `span.cursor-help`) opens the tooltip "The workbook is the statement spreadsheet uploaded for this month. A row coloured yellow there is already booked; a grey row is a subscription. ..."; the toggle is an outline `h-7 px-2 text-xs` button "Show 48 booked rows" -> "Hide 48 booked rows". (3) **Not the predicted shape, correct by the prompt's own section 4:** Matched's fold reads "31 decided · Hide 31 decided rows", because 3 of its 31 rows are grey subscription rows (28 posted + 3 subscription on the payload), so the every-row-booked branch does not apply; note #51's "16 already posted" predates two re-matches. (4) duplicates panel "Copies set aside (2) · 3 kept apart" with the outline button "Show 5 groups" (August "Show 11 copies" / PT "Mostrar 11 grupos"). Also rendered: "Show 5 cards with nothing this month", 18 "Show FX details". (5) July Expenses: 24 "Confirm private expense" outline buttons, none underlined; a click opened the "Confirm private expense" dialog (Confirm / Close), closed with Escape, nothing saved. (6) No `button` or `a` under `main` carries `underline`, `hover:underline`, `underline-offset-*` or `decoration-dotted` on the Charges and Matched views. (7) PT on July: "48 linhas marcadas em amarelo em July2026.xlsx, já lançadas", "Mostrar 48 linhas lançadas", "Mostrar 5 grupos", 24 "Confirmar despesa particular". Seen, not this prompt's: a fresh session's first click on the Expenses page opens the "Leave feedback anywhere" hint dialog instead of the control |
 | `lovable-memory-at-signoff-prompt.md` (item 88) | Bundle 2026-09-17: `toast.publishedSaved`, `toast.publishedMemoryFailed` in `chunk-runs._runId` (x2 each). Bundle-only by the prompt's own section 6: `/api/operator/state` `published_runs` is still empty, and publishing Criss's month is a memory write. Read the toast the first time a month is published |
+| `lovable-card-fix-prompt.md` (item 87) | Bundle 2026-09-17: `card_source` in `chunk-expenses._batchId`; `expx.cardFix.pick`, `expx.cardFix.source.learned`, `expx.cardFix.boxHint` in `chunk-i18n`. **Driven on July Expenses (PT):** 33 selects read "Escolher o cartão que pagou", matching the 33 rows the API gives `card_source: none`; one opened to the nine registry cards and closed with Escape. Picking a card on Criss's month is a write, so the save path and the `override` / `learned` notes stay route-tested only |
+| `lovable-matched-with-statement-prompt.md` (item 89) | Bundle 2026-09-17: `months.state.matchedStatement`, `months.state.matchedStatement.tip` in `chunk-i18n`. **Driven on `/months`:** July and August read "Matched with statement" (0 "Reconciled"), tooltip "A statement is loaded and its charges were matched against this month's receipts. Open the month to see what is still open."; PT "Comparado com o extrato" on both |
+| `lovable-ecb-rates-prompt.md` (item 82) | Bundle 2026-09-17: `reference_rate_period` in `chunk-runs._runId`; `wb.fx.source.ecbMonth`, "ECB average, {month}", the new `set.fx.desc` EN + PT in `chunk-i18n`; old copy absent. **Driven:** Settings shows the new FX description in EN and PT; July's AMAZON FX panel still reads "1.162275 (USD per EUR) · Settings" / "· Configurações" (no regression). The ECB label itself has no live case, see Cannot verify |
 
 These four were drafted 2026-08-28/29, pasted from chat, and lived only in a
 gitignored scratch directory until 2026-09-01. They are in `docs/` now
@@ -182,9 +194,6 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
-| `lovable-card-fix-prompt.md` (item 87) | `card_source`, `expx.cardFix.pick`, `expx.cardFix.source.learned`, `expx.cardFix.boxHint` (not `card_key` alone: the statement attach form already sends one) | Backend PR #947 live on Fly |
-| `lovable-matched-with-statement-prompt.md` (item 89) | `months.state.matchedStatement`, `months.state.matchedStatement.tip` | None (SPA-only, no backend field) |
-| `lovable-ecb-rates-prompt.md` (item 82) | `reference_rate_period`, `wb.fx.source.ecbMonth`, and `set.fx.desc` no longer containing "update them when you start a new month" | Backend item-82 PR live on Fly. The label has no live case yet: July and August still match on the Settings rates, which win |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
@@ -201,6 +210,7 @@ holds. Verify by field names, not display copy.
 | `lovable-month-pool-prompt.md` §7 §8 §9 | Creating, renaming and deleting a month. §8 refers to "the existing rename dialog": there is none, which is why prompt 1 builds it |
 | `lovable-amounts-unreadable-prompt.md`, the line itself | An expense whose amount was never read. `n_amounts_unreadable` is 0 on both live months, which is the correct state and not something to manufacture in Criss's data; the report's caption and footer are route-tested on constructed fixtures |
 | `lovable-month-move-prompt.md`, the move offer and its banner | A row whose reviewer-typed date falls outside its month's window. `n_month_moves` is 0 on July, August and every other batch since the owner-approved Parada move emptied January 2026; typing a wrong date into Criss's month to raise one is a production mutation |
+| `lovable-ecb-rates-prompt.md`, the "ECB average, {month}" label | An FX candidate with `reference_rate_source: "ecb_month"`. July and August keep their frozen Settings rates, and the two Settings rates win for new months until backlog item 90 removes them; the first month matched on an ECB rate is the live case |
 
 ## Not a Lovable prompt
 
