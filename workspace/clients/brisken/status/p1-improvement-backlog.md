@@ -4377,7 +4377,7 @@ July2026.xlsx, already booked"; hovering it opens the yellow / grey tooltip; PT
 reads "48 linhas marcadas em amarelo em July2026.xlsx, já lançadas". The PT
 wording is still the draft; Criss has not commented on it.
 
-### 87. A card that cannot be read or is not known gets a fix that sticks (note #33)
+### 87. A card that cannot be read or is not known gets a fix that sticks (note #33) (SHIPPED PR #947 - see Shipped row 55)
 
 **Shared operator code, 2026-09-09, July Expenses view, anchored on "Assignments
 here apply to this month only; the tool will not remember them.":** "need to
@@ -4399,6 +4399,55 @@ check whether "the tool will not remember them" is true for digit-bearing hints
 defect. If the paths are right but scattered, this is one "fix card" action per
 row. Item 88's finding is adjacent: corrections made per month are not saved as
 rules unless someone presses Save corrections to memory.
+
+**Read 2026-09-17 (live July and August, `/api/cards`, code).**
+
+- **The notice is true where it shows.** It renders only above the "No card
+  number on the receipt" section, whose hints are generic tender words the
+  backend refuses to learn. So the copy is not the defect.
+- **Two remembered assignments never stuck.** The strip answered
+  `learned: true` for both, and each would have come back unresolved next
+  month (replayed offline against the live registry):
+  - "Paid via Corp Services card" (July) stayed ambiguous, because four
+    cards carry the word alias "Corp".
+  - "42463153XXXXXX38" (August) was taught as the card number "42463153",
+    which `_card_keys` skips as a masked BIN since item 69 round B.
+- **The paths were scattered, and some rows had none.** July's 33 rows in "No
+  company or person" split three ways:
+  - 16 print only a tender word (VISA 7, VISA CREDIT 4, DEBIT, DEBIT
+    MASTERCARD, Cash, TEF, Cartao Credito 30 Dias). The strip's only move
+    assigns every receipt printing that word to one card at once.
+  - 8 print no card at all. They are not in the strip, not suggested private,
+    and "Define card" lists nothing (`seen_undefined` reads statement charges,
+    and every statement card is defined). Their only way out was "Confirm
+    private".
+  - 9 print a specific hint. August: 7 / 5 / 1 of 13.
+
+  The item-84 box line "Add a card and its person once, and every receipt
+  paid with it is fixed" cannot fix 24 of July's 33.
+
+**Shipped 2026-09-17 (PR #947): one card fix per row, remembered at sign-off.**
+
+- **This month.** `PUT /api/runs/{id}/expenses/{doc}` takes `card_key`, an
+  active registry card. A card defined after the month was created is copied
+  into the month's card snapshot. The row's company, person and paid-through
+  account follow the card. No re-match. `expenses[].card_source` reads hint /
+  override / learned / none.
+- **Next month.** Publish saves the fix as a field correction for the vendor.
+  A later receipt from that vendor takes it only when it prints no card
+  number, so a printed number, known or not, always wins. The Memory page's
+  Forget is the undo.
+- **The strip's learning sticks.** A whole-string alias now beats a word alias
+  other cards share, and a masked BIN learns as its string. Every learnable
+  live hint on both months now resolves next month in the offline replay.
+- **Tests.** Suite 1974 -> 1983 passed / 2 skipped. Seven regress proofs bite:
+  per-row override, remembered card, printed number wins, learned at Publish,
+  route refusal (reproduced by hand: 200 instead of 400), exact alias, masked
+  BIN.
+- **SPA half:** `docs/lovable-card-fix-prompt.md` (a card select under each
+  unresolved row, the source line, and a box line that stops overstating).
+- **Nothing moves on Criss's months until someone picks a card:** no stored
+  override exists, and memory holds 0 field corrections.
 
 ### 88. Corrections are learned only when someone presses a button nobody presses (owner question 2026-09-16) (SHIPPED PR #940 - see Shipped row 54)
 
@@ -4443,6 +4492,27 @@ first published. Suite 1968 -> 1974 passed / 2 skipped; four regress proofs.
 SPA half: `docs/lovable-memory-at-signoff-prompt.md` (a publish toast with the
 count).
 
+### 89. "Reconciled" on the months list claims a month is done (owner, 2026-09-17) (PROMPT WRITTEN PR #947, pending the owner's paste)
+
+**Owner, with a screenshot of the two green badges:** "these green marking should
+state 'matched with statement' not reconciled".
+
+The badge is the Statement column of `/months` (`MonthsHome.tsx`), shown when
+`has_statement` is true, reading `months.state.reconciling` ("Reconciled", PT
+"Conciliado"). It appears the moment a statement is attached. July carries it
+with 24 charges without a receipt and 11 receipts without a charge, so it states
+a conclusion the month has not reached. No other visible status badge reads
+"Reconciled". `sum.reconciled` and `wb.bucket.reconciled` are in the
+dictionary but not rendered by the month pages. Left alone, not this note: the
+"Reconciled CSV" download and the guide's bucket list.
+
+SPA only: `docs/lovable-matched-with-statement-prompt.md`. The badge reads
+"Matched with statement" with a tooltip ("A statement is loaded and its charges
+were matched against this month's receipts. Open the month to see what is still
+open."). PT "Comparado com o extrato" is a draft for Criss. Worth asking her
+separately: on the Matching view the PT card for matched rows reads
+"Conciliadas" while EN reads "Matched".
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
@@ -4463,6 +4533,7 @@ count).
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 55 | One card fix per expense row, remembered at sign-off: header field `card_key` (active registry card, copied into the month's snapshot when defined later), `expenses[].card_source` (hint / override / learned / none), saved at Publish as a vendor field correction and applied next month only to a receipt that prints no card number; the strip's learning sticks for whole-string aliases shadowed by a shared word alias and for masked BINs. SPA half: `docs/lovable-card-fix-prompt.md`; item 89's months badge prompt rides the same PR | Item 87, note #33. 24 of July's 33 rows with no company or person had no path but "Confirm private" (16 tender words, 8 no card), and two hints the strip called learned would never have resolved again. Suite 1974 -> 1983 / 2 skipped, seven regress proofs | PR #947 |
 | 54 | Publishing a month saves its corrections to memory: the publish reply carries `memory` (saved + learned / unchanged / error), through `commit_month_memory`, the helper the button now uses too; a digest per run in `memory_commits` keeps a re-publish from counting the same corrections twice; a failed save never fails the publish. SPA half: `docs/lovable-memory-at-signoff-prompt.md` | Item 88, owner ruling 2026-09-16. `commit_to_memory` had one caller, a button nobody pressed, and the live learning store held 0 learned companies and 0 field corrections, so no month's corrections reached the next. No month has been published yet; the first save happens at the first publish. Suite 1968 -> 1974 / 2 skipped, four regress proofs | PR #940 |
 | 53 | The Expenses view's boxes open their rows: `expenses[].boxes[]` (a count name without `n_`) on every row, every box count summed from those rows, `summary.n_needs_company_or_person` for the merged MISSING ENTITY + NEEDS PERSON box, Categorized decided per row by `is_categorized` (every line), and a row whose receipt the app can show is never "missing its image" (both payloads). SPA half: `docs/lovable-expense-boxes-prompt.md` | Item 84. A box that opens its rows must list exactly its number, and two of them could not: Categorized's row rule differed from its count (three two-line receipts), and MISSING RECEIPT IMAGE 2 / 1 named receipts whose files the endpoint served. Suite 1958 -> 1968 / 2 skipped, five regress proofs | PR #935 |
 | 52 | The unmatched lists say what they hold: a decided duplicate copy leaves `unmatched_receipts`, `assignable_receipts`, `n_unmatched_rec` and the near-miss pool for `copies_set_aside[]` + `summary.n_copies_set_aside` (view-time split, stored outcome and duplicate lists untouched), and every unmatched receipt and charge carries `reason_code` (receipts: duplicate_copy / card_statement_not_loaded / not_a_card_charge / charge_in_neighbouring_period / no_charge_on_any_loaded_statement; charges: not_a_purchase / receipt_held_by_another_charge / already_booked / no_receipt_found). SPA half: `docs/lovable-unmatched-reasons-prompt.md` | Items 83 + 75, notes #40 and #46. August's "Receipts without a charge" was 21 rows of which 11 were copies of documents that had settled their charge, and no unmatched row on either list said why it was there. Receipt rules are item 69's attribution rules with the date edge read before the card: 11 of 14 labelled live receipts name the labelled kind (card-first 9), one wrong claim (a bank transfer dated 07-30). Suite 1929 -> 1958 / 2 skipped, four regress proofs | PR #932 |
