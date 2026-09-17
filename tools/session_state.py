@@ -127,6 +127,9 @@ def _default_state(session_id: str = "") -> dict:
         # {session_id: highest band advised}. Carried across the reset in
         # ensure_session so interleaved sibling sessions do not re-advise.
         "bands_by_session": {},
+        # Transient tool failures (lock / 429 / 5xx / MCP transport) that
+        # tool-failure-gate turned into an in-turn retry advisory.
+        "transient_blocks": 0,
     }
 
 
@@ -403,6 +406,16 @@ def bump_b1_block() -> dict:
     return _modify(_fn)
 
 
+def bump_transient_block() -> dict:
+    """Record a transient tool failure (tool-failure-gate). The 2026-05-11
+    EBUSY incident queued 8 edits for the user instead of retrying; the count
+    makes a session that keeps hitting transient blocks visible at checkpoint."""
+    def _fn(state: dict) -> dict:
+        state["transient_blocks"] = int(state.get("transient_blocks", 0)) + 1
+        return state
+    return _modify(_fn)
+
+
 def b1_priming_due(state: dict | None = None) -> int:
     """Blocks recorded but not yet surfaced as a primer (0 = nothing due)."""
     st = state if state is not None else load()
@@ -531,6 +544,7 @@ def _cmd_status(as_json: bool) -> int:
             "candidates": len(st.get("candidates", []) or []),
             "b1_blocks": st.get("b1_blocks", 0),
             "b1_priming_due": b1_priming_due(st),
+            "transient_blocks": st.get("transient_blocks", 0),
         }))
     else:
         ctx_txt = (f"{format_tokens(ctx)}/{format_tokens(window)}" if ctx
@@ -542,7 +556,8 @@ def _cmd_status(as_json: bool) -> int:
               f"calls={st.get('tool_calls', 0)} "
               f"files={len(st.get('distinct_files', []) or [])} "
               f"candidates={len(st.get('candidates', []) or [])} "
-              f"b1_blocks={st.get('b1_blocks', 0)}")
+              f"b1_blocks={st.get('b1_blocks', 0)} "
+              f"transient_blocks={st.get('transient_blocks', 0)}")
     return 0
 
 
