@@ -214,7 +214,7 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
-| none | | Clean slate 2026-09-17 evening, after items 137 and 106 |
+| `lovable-bulk-confirm-dialog-prompt.md` (item 101) | `n_confirm_matched`, `skipped_rule` in `chunk-runs._runId`; `sum.confirmMatched.dialog.body`, `wb.bulkReject.dialog.body` in `chunk-i18n` | Written 2026-09-17, not pasted. Backend deploy first (`summary.n_confirm_matched` on `GET /api/runs/{id}`, the narrowed confirm-matched route) |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.

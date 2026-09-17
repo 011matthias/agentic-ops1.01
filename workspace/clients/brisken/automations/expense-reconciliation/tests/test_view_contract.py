@@ -1163,6 +1163,17 @@ def test_every_run_row_carries_a_turn_and_a_verdict_names_its_author(payloads):
             assert "decided_rule" not in row, row
 
 
+def test_confirm_matched_count_is_an_int_inside_the_undecided_set(payloads):
+    """Item 101. `summary.n_confirm_matched` is an int on every run payload:
+    how many rows 'Confirm all matched' confirms right now. Those rows are
+    the reviewer's turn, so it never exceeds `n_undecided`. Route-level
+    behaviour: `tests/test_confirm_matched_rule.py`."""
+    for view in payloads["run"]:
+        n = view["summary"]["n_confirm_matched"]
+        assert isinstance(n, int) and not isinstance(n, bool), view["summary"]
+        assert 0 <= n <= view["summary"]["n_undecided"], view["summary"]
+
+
 def test_every_box_count_equals_the_rows_carrying_its_box(payloads):
     """Item 84. `expenses[].boxes[]` is on EVERY expense row, a list of
     names from `EXPENSE_BOXES` in that order, never null; and for every box
