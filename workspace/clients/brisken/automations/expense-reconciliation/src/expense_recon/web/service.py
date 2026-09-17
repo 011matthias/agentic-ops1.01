@@ -3261,6 +3261,14 @@ def build_view(
                 # L1: her workbook's fill-color annotation (yellow=posted,
                 # gray=subscription); drives the workbench chips.
                 "entry_status": tx.entry_status,
+                # Owner ruling 2026-09-17: "derived" when the tool inferred
+                # the subscription mark from history, which closes nothing
+                # (a gray fill does). Parallel field, ABSENT on every row
+                # whose mark came from the workbook or a verdict.
+                **(
+                    {"entry_status_source": tx.entry_status_source}
+                    if tx.entry_status_source is not None else {}
+                ),
                 # Slice 10: the tool's suggested category for a receiptless
                 # charge (None on matched rows and pre-Slice-10 snapshots).
                 "charge_category": charge_cat_view,
@@ -3698,7 +3706,9 @@ def build_view(
         # read Ready to post and be published. Nothing left to decide, every
         # charge holds a receipt or a closing verdict, every receipt holds a
         # charge or is set aside, and no receiptless charge's category is
-        # still a guess. The three counts say what blocks it.
+        # still a guess. The three counts say what blocks it;
+        # `n_charges_closed_recurring` says what the gray fill closed
+        # (owner ruling 2026-09-17) and never blocks.
         "month_complete": is_month_complete(
             ready_to_post=ready_to_post, counts=completeness
         ),
