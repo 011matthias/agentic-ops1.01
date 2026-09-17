@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | Brisken Recon ECB Band And Merchant Precedence | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Recon%20ECB%20Band%20And%20Merchant%20Precedence/Checkpoint.md) |
 | 2026-09-17 | Brisken Recon Build It All Round | client-dev | [Mini-Checkpoint-1](docs/2026-09-17%20-%20Brisken%20Recon%20Build%20It%20All%20Round/Mini-Checkpoint-1.md) |
 | 2026-09-17 | Brisken Recon Tie Codes Recall Residuals | client-dev | [Mini-Checkpoint-2](docs/2026-09-17%20-%20Brisken%20Recon%20Tie%20Codes%20Recall%20Residuals/Mini-Checkpoint-2.md) |
 | 2026-09-17 | Brisken Recon Owner Rulings Round | client-dev | [Mini-Checkpoint-2](docs/2026-09-17%20-%20Brisken%20Recon%20Owner%20Rulings%20Round/Mini-Checkpoint-2.md) |
