@@ -555,6 +555,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## vinted-reselling
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | Vinted Batch-2 Photo Pipeline Rebuild | client-dev | [→](docs/2026-09-17%20-%20Vinted%20Batch-2%20Photo%20Pipeline%20Rebuild/Checkpoint.md) |
 | 2026-09-14 | Vinted Volume Fix + Recheck Markup | client-dev | [→](docs/2026-09-14%20-%20Vinted%20Volume%20Fix%20%2B%20Recheck%20Markup/Checkpoint.md) |
 | 2026-09-10 | Vinted Watcher Volume Collapse + Egress Plumbing | client-dev | [→](docs/2026-09-10%20-%20Vinted%20Watcher%20Volume%20Collapse%20%2B%20Egress%20Plumbing/Checkpoint.md) |
 | 2026-09-09 | Vinted Listing Bot Seven Gaps | misc | [→](docs/2026-09-09%20-%20Vinted%20Listing%20Bot%20Seven%20Gaps/Checkpoint.md) |
