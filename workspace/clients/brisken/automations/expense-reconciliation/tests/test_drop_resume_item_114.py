@@ -172,9 +172,14 @@ def test_a_drop_cut_off_again_after_resuming_is_given_up(
         job_id = _post_drop(c, [("a.jpg", JPG)], month=MONTH_M2)
     # First restart resumes it, and that run is killed too.
     with TestClient(create_app(tmp_path)) as c:
+        deadline = time.monotonic() + 10
+        while (_sidecar(tmp_path, job_id)["resumed"] == 0
+               and time.monotonic() < deadline):
+            time.sleep(0.02)
         job = c.get(f"/jobs/{job_id}").json()
         assert job["status"] == "running"
         assert job["stage"] == "resuming after a server restart"
+    assert _sidecar(tmp_path, job_id)["resumed"] == 1
     assert _drop_leftovers(tmp_path) == [job_id, f"{job_id}.json"]
 
     # Second restart: no third attempt.
@@ -210,6 +215,129 @@ def test_boot_deletes_leftovers_that_have_no_interrupted_drop(
     with TestClient(create_app(tmp_path)) as c:
         assert [b["label"] for b in _batches(c)] == [LABEL_M1]
     assert not stale_copy.exists()
+    assert _drop_leftovers(tmp_path) == []
+
+
+def _interrupted_drops(tmp_path, monkeypatch, n: int) -> list[str]:
+    """`n` drops whose job threads a restart killed, each with its own
+    month pick and bytes; returns their job ids in folder order (the order
+    the boot pass resumes them)."""
+    monkeypatch.setattr(app_mod, "_run_receipts_drop_job", _killed_runner)
+    ids = []
+    with TestClient(create_app(tmp_path)) as c:
+        for i in range(n):
+            ids.append(_post_drop(
+                c, [(f"f{i}.jpg", JPG + bytes([i]))], month=MONTH_M2,
+            ))
+    return sorted(ids)
+
+
+def _sidecar(tmp_path, job_id: str) -> dict:
+    import json
+
+    return json.loads(
+        (tmp_path / "drops" / f"{job_id}.json").read_text(encoding="utf-8")
+    )
+
+
+def test_a_second_restart_does_not_give_up_drops_that_never_ran(
+    tmp_path, monkeypatch
+):
+    first, second = _interrupted_drops(tmp_path, monkeypatch, 2)
+    gate = __import__("threading").Event()
+    started: list[str] = []
+
+    def _blocking_runner(_db, job_id, *_a, **_k):
+        started.append(job_id)
+        gate.wait(10)
+
+    # Boot 1 resumes the first drop, which is still running when...
+    monkeypatch.setattr(app_mod, "_run_receipts_drop_job", _blocking_runner)
+    with TestClient(create_app(tmp_path)):
+        deadline = time.monotonic() + 10
+        while not started and time.monotonic() < deadline:
+            time.sleep(0.02)
+    assert started == [first]
+    assert _sidecar(tmp_path, second)["resumed"] == 0
+
+    # ...boot 2 happens: the first was attempted and is given up, the
+    # second never ran and runs now.
+    monkeypatch.setattr(app_mod, "_run_receipts_drop_job", REAL_RUNNER)
+    _patch_ocr(monkeypatch, _extraction(DAY_M1))
+    try:
+        with TestClient(create_app(tmp_path)) as c:
+            gave_up = c.get(f"/jobs/{first}").json()
+            ran = _wait(c, second)
+            assert gave_up["status"] == "error", gave_up
+            assert ran["status"] == "done", ran
+            assert ran["result"]["n_filed"] == 1
+    finally:
+        gate.set()
+
+
+def test_one_resumed_drop_that_raises_does_not_stop_the_next(
+    tmp_path, monkeypatch
+):
+    first, second = _interrupted_drops(tmp_path, monkeypatch, 2)
+
+    def _first_raises(db, job_id, *a, **k):
+        if job_id == first:
+            raise RuntimeError("database is locked")
+        return REAL_RUNNER(db, job_id, *a, **k)
+
+    monkeypatch.setattr(app_mod, "_run_receipts_drop_job", _first_raises)
+    _patch_ocr(monkeypatch, _extraction(DAY_M1))
+    with TestClient(create_app(tmp_path)) as c:
+        ran = _wait(c, second)
+        assert ran["status"] == "done", ran
+        broken = _wait(c, first)
+        assert broken["status"] == "error", broken
+
+
+@pytest.mark.parametrize("bad_index", [0, 1])
+def test_a_bad_sidecar_does_not_strand_the_other_drop(
+    tmp_path, monkeypatch, bad_index
+):
+    # Both positions: the bad sidecar is read before the good one in one
+    # case and after it in the other.
+    ids = _interrupted_drops(tmp_path, monkeypatch, 2)
+    bad, good = ids[bad_index], ids[1 - bad_index]
+    (tmp_path / "drops" / f"{bad}.json").write_text(
+        '{"month": "", "resumed": "not a number"}', encoding="utf-8",
+    )
+    monkeypatch.setattr(app_mod, "_run_receipts_drop_job", REAL_RUNNER)
+    _patch_ocr(monkeypatch, _extraction(DAY_M1))
+    with TestClient(create_app(tmp_path)) as c:
+        ran = _wait(c, good)
+        assert ran["status"] == "done", ran
+        # An untrustworthy sidecar is not a failed resume: the folder goes
+        # and the job keeps the sweep's own instruction.
+        left = c.get(f"/jobs/{bad}").json()
+        assert left["status"] == "error", left
+        assert left["error"].endswith("run it again"), left
+    assert _drop_leftovers(tmp_path) == []
+
+
+def test_a_folder_that_raises_at_boot_does_not_strand_the_next(
+    tmp_path, monkeypatch
+):
+    broken, good = _interrupted_drops(tmp_path, monkeypatch, 2)
+    real_read = app_mod._read_drop_sidecar
+
+    def _read(staging):
+        if staging.name == broken:
+            raise RuntimeError("disk error")
+        return real_read(staging)
+
+    monkeypatch.setattr(app_mod, "_read_drop_sidecar", _read)
+    monkeypatch.setattr(app_mod, "_run_receipts_drop_job", REAL_RUNNER)
+    _patch_ocr(monkeypatch, _extraction(DAY_M1))
+    with TestClient(create_app(tmp_path)) as c:
+        ran = _wait(c, good)
+        assert ran["status"] == "done", ran
+        gave_up = c.get(f"/jobs/{broken}").json()
+        assert gave_up["status"] == "error", gave_up
+        assert "drop the files again" in gave_up["error"]
     assert _drop_leftovers(tmp_path) == []
 
 
