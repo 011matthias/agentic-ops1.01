@@ -21,6 +21,8 @@ reached parity. This app serves JSON plus file downloads only:
                                    manual-match, disposition,
                                    duplicates/resolve, publish, unpublish,
                                    forget, commit-memory
+    PUT  /api/runs/{id}/charges/{tx}/category   a category on a CHARGE row
+                                   (no receipt needed; item 109)
     GET/PUT /api/settings          §16 export policy
     GET  /api/compare              across-runs bucket deltas
     GET  /api/memory               learned facts; POST /api/memory/forget,
@@ -167,6 +169,7 @@ from .service import (  # item 88
     commit_month_memory,
 )
 from .service import confirm_expense_category  # note #62
+from .service import set_charge_category  # item 109
 from .service import attach_expense_card_tabs, attach_run_card_tabs  # item 138
 from .service import TURN_DECIDE, confirm_matched_pairs  # item 101
 from .month_readiness import (  # items 99 + 100
@@ -3015,6 +3018,45 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     run_id, document_id, i, category, account, now
                 )
         return JSONResponse({"ok": True})
+
+    @app.put("/api/runs/{run_id}/charges/{transaction_id}/category")
+    async def put_charge_category(
+        run_id: str, transaction_id: str, request: Request
+    ):
+        """Item 109: the category on a charge that has no receipt.
+
+        {"category": "<one of the eight>", "zoho_account": "<optional>"};
+        category null / "" clears the pick and the tool's guess shows again.
+        The sibling of the per-receipt category routes, writing the same
+        `category_overrides` table under the charge's own pseudo-receipt id,
+        so the CSV, the journal and the report carry it and sign-off teaches
+        it under the bank's description."""
+        body = await request.json()
+        raw = (body or {}).get("category")
+        category = "" if raw is None else str(raw).strip()
+        zoho_account = str((body or {}).get("zoho_account") or "").strip()
+        if category and category not in EXPENSE_CATEGORIES:
+            return JSONResponse(
+                {"error": f"category must be one of {sorted(EXPENSE_CATEGORIES)}",
+                 "categories": sorted(EXPENSE_CATEGORIES)},
+                status_code=400,
+            )
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            err = set_charge_category(
+                store, run, transaction_id, category or None,
+                zoho_account or None, _now_iso(),
+            )
+            if err is not None:
+                code = 404 if err == "unknown charge" else 400
+                return JSONResponse({"error": err}, status_code=code)
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+            resolutions = store.get_duplicate_resolutions(run_id)
+        view = build_view(run, decisions, overrides, resolutions)
+        return JSONResponse({"ok": True, "summary": view["summary"]})
 
     @app.post("/api/runs/{run_id}/manual-match")
     async def post_manual_match(run_id: str, request: Request):

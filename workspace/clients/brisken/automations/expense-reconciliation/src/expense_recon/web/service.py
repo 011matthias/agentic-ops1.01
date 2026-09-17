@@ -2584,7 +2584,75 @@ def _charge_category_view(cat) -> dict | None:
         "source": cat.source.value,
         "provenance": cat.reasoning or "",
         "is_learned": cat.source is ClassificationSource.LEARNED,
+        # Item 109: a reviewer set this one by hand, so the SPA renders EDIT
+        # where it renders EDIT on a receipt line, and the row stops asking
+        # to be confirmed. ABSENT (not false) on every guessed category.
+        **({"is_edited": True} if cat.source is ClassificationSource.EDITED else {}),
     }
+
+
+# ── Item 109: a category set on a CHARGE, not on a receipt ─────────────
+#
+# Stored in the one `category_overrides` table the receipt edits already
+# use, under the charge's pseudo-receipt document id (`charge:{tx_id}`,
+# the id `categorize_charges` itself mints) at line 0. No second storage
+# mechanism, and because the table is keyed on (run_id, document_id,
+# line_index) and nothing but `delete_run` deletes from it, the edit
+# survives a re-match that rewrites the whole snapshot.
+
+CHARGE_CATEGORY_LINE = 0
+
+
+def charge_category_key(transaction_id: str) -> tuple[str, int]:
+    """The `category_overrides` key a charge's own category is stored at."""
+    from ..categorize_charges import CHARGE_DOC_PREFIX
+
+    return (f"{CHARGE_DOC_PREFIX}{transaction_id}", CHARGE_CATEGORY_LINE)
+
+
+def apply_charge_category_overrides(
+    charge_cats: dict, overrides: dict, charge_ids
+) -> dict:
+    """The receiptless-charge categorization map with the reviewer's own
+    picks laid over the tool's guesses (item 109).
+
+    `charge_ids` is the transaction-id set the map may cover — the snapshot
+    outcome's `unmatched_transactions`, the same list that produced
+    `charge_cats`. An override for any other charge is ignored, so a charge
+    that has since been paired can never print a charge-level category beside
+    its receipt's.
+
+    A reviewer's pick reads `source=EDITED` and keeps the account she named,
+    or the guess's own account when she re-picked the guess's category
+    (`override_base_account`, the rule the receipt lines use). Clearing the
+    pick (a stored NULL category) leaves the tool's guess showing."""
+    from ..categorize_charges import CHARGE_DOC_PREFIX
+
+    allowed = set(charge_ids)
+    out = dict(charge_cats)
+    for (document_id, line_index), ov in (overrides or {}).items():
+        if line_index != CHARGE_CATEGORY_LINE:
+            continue
+        if not document_id.startswith(CHARGE_DOC_PREFIX):
+            continue
+        tx_id = document_id[len(CHARGE_DOC_PREFIX):]
+        if tx_id not in allowed:
+            continue
+        category = (ov or {}).get("category")
+        if not category:
+            continue  # cleared: the tool's guess stands again
+        base = charge_cats.get(tx_id)
+        out[tx_id] = Categorization(
+            category=category,
+            zoho_account=(
+                (ov or {}).get("zoho_account")
+                or override_base_account(category, base)
+            ),
+            confidence=1.0,
+            source=ClassificationSource.EDITED,
+            reasoning="set by the reviewer on the charge",
+        )
+    return out
 
 
 def _row_posting_category(
@@ -2819,6 +2887,54 @@ def confirm_expense_category(
     return None
 
 
+def set_charge_category(
+    store: RunStore,
+    run: RunRow,
+    transaction_id: str,
+    category: str | None,
+    zoho_account: str | None,
+    now_iso: str,
+) -> str | None:
+    """Set (or clear) a category on a CHARGE row — item 109.
+
+    Criss's real month-end job is to categorize every charge, and 71 of July's
+    112 carried a model guess with no control to correct it: the category
+    routes all need a receipt. This writes the same `category_overrides` row a
+    receipt edit writes, under the charge's own pseudo-receipt id, so the
+    export path needs no second override mechanism and the edit outlives every
+    re-match.
+
+    Refuses a charge this run does not hold, and one a receipt already
+    settles (its category belongs to the receipt's lines). `category` None /
+    "" clears the pick and the tool's guess shows again. Returns an error
+    string, or None."""
+    _transactions, _receipts, outcome, _ = snapshot_from_dict(run.snapshot)
+    known = {t.transaction_id for t in _transactions}
+    if transaction_id not in known:
+        return "unknown charge"
+    if transaction_id not in set(outcome.unmatched_transactions):
+        return (
+            "this charge holds a receipt: set the category on the expense, "
+            "not on the charge"
+        )
+    document_id, line_index = charge_category_key(transaction_id)
+    overrides = store.get_category_overrides(run.run_id)
+    base = {
+        tx_id: categorization_from_dict(d)
+        for tx_id, d in (run.snapshot.get("charge_categorizations") or {}).items()
+    }.get(transaction_id)
+    # The same account rule the receipt lines use: an explicit account wins,
+    # an unchanged category keeps the account it already had, a changed one
+    # books to none rather than to the account picked for the old category.
+    account = category_edit_account(
+        category, zoho_account, overrides.get((document_id, line_index)), base
+    )
+    store.set_category_override(
+        run.run_id, document_id, line_index, category or None, account, now_iso
+    )
+    return None
+
+
 def resolve_review(
     *, is_posted: bool, effective_bucket: str, status: str,
     matched_rec: "Receipt | None", overrides: dict, charge_category: dict | None,
@@ -2855,7 +2971,13 @@ def resolve_review(
         return _matched_category_review(matched_rec, overrides)
     # unmatched / receiptless
     if charge_category is not None:
-        return _review("check", "No receipt is attached, but the tool suggested a category from the charge. Confirm the category or attach the receipt before it posts.", "receiptless_suggested")
+        # Item 109: a category the REVIEWER set on the charge is an answer,
+        # not a question, so the row stops asking and drops out of
+        # `n_charges_category_guessed` (which counts guesses, and this is
+        # no longer one).
+        if charge_category.get("source") == ClassificationSource.EDITED.value:
+            return _review("none")
+        return _review("check", "No receipt is attached, so the tool guessed this category from the bank's description. Pick the right one on the row, or attach the receipt, before it posts.", "receiptless_suggested")
     return _review("none")
 
 
@@ -3016,10 +3138,15 @@ def build_view(
 
     # Slice 10: receiptless-charge categorizations (extra snapshot key;
     # absent on pre-Slice-10 runs => empty map, rows render as before).
-    charge_cats = {
-        tx_id: categorization_from_dict(d)
-        for tx_id, d in (run.snapshot.get("charge_categorizations") or {}).items()
-    }
+    # Item 109: the reviewer's own picks lie over the tool's guesses.
+    charge_cats = apply_charge_category_overrides(
+        {
+            tx_id: categorization_from_dict(d)
+            for tx_id, d in (run.snapshot.get("charge_categorizations") or {}).items()
+        },
+        overrides,
+        outcome.unmatched_transactions,
+    )
 
     # PR C — line items the cross-run memory auto-filled (Tier-1 LEARNED),
     # excluding any the reviewer has since reclassified. Surfaced as a stat
@@ -3998,17 +4125,26 @@ def build_view(
     }
 
 
-def _charge_cats(run: RunRow) -> dict:
+def _charge_cats(run: RunRow, overrides: dict, charge_ids) -> dict:
     """The receiptless-charge categorization side-map (Slice 10), rebuilt
     from the run snapshot keyed by transaction_id. Threaded into every
     regenerated export so web downloads carry the same receiptless-charge
     categories the workbench shows; `build_view` loads it the same way
     (see the `charge_cats` block there). Empty dict when the snapshot has
-    none, so the writers behave exactly as before on receipt-only runs."""
-    return {
-        tx_id: categorization_from_dict(d)
-        for tx_id, d in (run.snapshot.get("charge_categorizations") or {}).items()
-    }
+    none, so the writers behave exactly as before on receipt-only runs.
+
+    Item 109: `overrides` + `charge_ids` (the snapshot outcome's
+    `unmatched_transactions`) lay the reviewer's own charge categories over
+    the guesses, so the CSV, the journal, the workbook and the report carry
+    what she set, not what the model guessed."""
+    return apply_charge_category_overrides(
+        {
+            tx_id: categorization_from_dict(d)
+            for tx_id, d in (run.snapshot.get("charge_categorizations") or {}).items()
+        },
+        overrides,
+        charge_ids,
+    )
 
 
 def regenerate_report(
@@ -4026,7 +4162,9 @@ def regenerate_report(
         receipts,
         out_path,
         parse_errors=parse_errors,
-        charge_categorizations=_charge_cats(run),
+        charge_categorizations=_charge_cats(
+            run, overrides, outcome.unmatched_transactions
+        ),
         dispositions=_dispositions(transactions, receipts, effective, decisions),
     )
     return out_path
@@ -4113,7 +4251,9 @@ def regenerate_zoho(
         receipts,
         out_path,
         coa_gate=coa_gate,
-        charge_categorizations=_charge_cats(run),
+        charge_categorizations=_charge_cats(
+            run, overrides, outcome.unmatched_transactions
+        ),
         include_receiptless_learned=bool(
             (run.config or {}).get("zoho", {}).get("export_receiptless_learned")
         ),
@@ -4148,7 +4288,9 @@ def regenerate_reconciled(
         transactions,
         receipts,
         out_path,
-        charge_categorizations=_charge_cats(run),
+        charge_categorizations=_charge_cats(
+            run, overrides, outcome.unmatched_transactions
+        ),
         dispositions=_dispositions(transactions, receipts, effective, decisions),
     )
     return out_path
@@ -4234,7 +4376,9 @@ def regenerate_writeback(
         receipts,
         sheet_name=sheet_name,
         chart_of_accounts=chart,
-        charge_categorizations=_charge_cats(run),
+        charge_categorizations=_charge_cats(
+            run, overrides, outcome.unmatched_transactions
+        ),
         anchors=statement_anchors(run, name),
     )
     return out_path
@@ -4493,6 +4637,14 @@ def commit_to_memory(
                 field_overrides=field_overrides or {},
                 category_overrides=overrides,
                 manual_payloads=manual_payloads,
+                # Item 109: the month's charges, so a category she set on a
+                # receiptless charge is taught under the bank's description.
+                # Empty until a statement is attached, which is exactly when
+                # there is no charge to have edited.
+                transactions=[
+                    transaction_from_dict(t)
+                    for t in (run.snapshot or {}).get("transactions") or []
+                ],
                 source_run=run.run_id,
                 now_iso=now_iso,
             )

@@ -4964,7 +4964,7 @@ method and the two run outputs: session 2026-09-17 (memory
 
 **Reviewer corrections:** none recorded
 
-### 109. Charges without a receipt get an AI category nobody can correct, and the tool never learns it (2026-09-17 audit draft #107, unranked; new function, quote separately) (owner 2026-09-17: quote separately, not built)
+### 109. Charges without a receipt get an AI category nobody can correct, and the tool never learns it (2026-09-17 audit draft #107, unranked; new function, quote separately) (SHIPPED 2026-09-17, pending PR; owner reversed the quote-separately ruling)
 
 **Audit rank 16 of 40; severity high as merged; verification: checked by hand in code (category route needs a receipt); no reviewer pass.** Criss's real job is to give every charge a category. 71 of July's 112 charges and 98 of August's 111 have no receipt, each with a category the AI guessed from the bank description ('AI?' badge). There is no control on those rows to change it: the dropdown exists only inside a candidate receipt card, the category route needs a receipt, and learning reads receipts only. The guesses go into the reconciled CSV as they are and the same charge is guessed again next month. The recall half (learned rows for charges) already exists.
 
@@ -4977,6 +4977,27 @@ method and the two run outputs: session 2026-09-17 (memory
 **Value:** The largest part of every month's work becomes something Criss does once per vendor instead of every month, and the deliverable stops carrying uncorrectable guesses. (effort medium)
 
 **Reviewer corrections:** none recorded
+
+**Shipped 2026-09-17 (pending PR).** `PUT /api/runs/{id}/charges/{tx}/category`
+stores a category against the CHARGE, in the same `category_overrides` table
+the receipt edits use, under the pseudo-receipt id `charge:{tx}` the charge
+categorizer already mints. Nothing but deleting the month clears that table, so
+the pick outlives a re-match that rewrites the whole snapshot. It reads
+`source: "EDITED"` with `is_edited: true` on `rows[].charge_category` and
+`rows[].posting_category`, the row's review state drops to `none` (an answer is
+not a question, so it leaves `n_charges_category_guessed`, which keeps its
+meaning), and it reaches the reconciled CSV, `report.xlsx`, the statement
+writeback, the reconciliation PDF's posts-to column, and, behind the existing
+`zoho.export_receiptless_learned` flag, the journal rows a LEARNED charge
+posts. A guess still never posts. At Publish, the month's sign-off since item
+88, the pick is learned under the bank's normalized description through the
+shared `_learn_categories` pass, conflict-skip included, so next month's same
+subscription arrives LEARNED; a category that came from the model writes no
+override and teaches nothing. The guessed row's own copy now says the tool
+guessed it from the bank's description and that the row can be picked on.
+Live scale on the 2026-09-17 payloads: 174 receiptless charges across July
+(73) and August (101), 146 of them carrying a guess, 0 editable before this.
+SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 
 ### 110. A receipt arriving into an existing month resolves its card against that month's stale copy of the registry; September has 40 expenses with no person (2026-09-17 audit draft #108, unranked; licence: defect, covered; SHIPPED PR #979: every arrival refreshes the month's card list first)
 
@@ -5513,6 +5534,7 @@ Answer: from the fill colour of that charge's row in the Chase workbook Criss up
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 75 | A category can be set on a charge that has no receipt, and sign-off learns it: `PUT /api/runs/{id}/charges/{tx}/category` writes into the one `category_overrides` table under the charge's pseudo-receipt id, so the pick survives a re-match; it reads `EDITED` on `charge_category` + `posting_category`, drops the row's review state to `none` (leaving `n_charges_category_guessed` its meaning), and carries into the reconciled CSV, `report.xlsx`, the writeback, the reconciliation PDF and the journal's receiptless rows. Publish teaches it under the bank's normalized description, conflict-skip included; a model guess teaches nothing | Item 109. Criss's real month-end job is categorizing every charge, and most charges have no receipt: 174 across July and August on 2026-09-17, 146 carrying a category the model guessed from the bank's description with no control to change it. The guess went into the deliverable as it was and the same subscription was guessed again the next month. Owner reversed the quote-separately ruling on 2026-09-17 evening | 2026-09-17, pending PR; suite 2276 -> 2287; six regressions of the real source proven RED first; SPA half `docs/lovable-charge-category-prompt.md` (owner applies) |
 | 73 | Account picks removed from Legal entities: `account_options` always comes from the company's chart, `PUT /api/settings` accepts `entities[].account_picks` in any shape and stores nothing, and neither settings response serves a value stored before; SPA half in `docs/lovable-remove-account-picks-prompt.md` | Note #61 (item 23). The owner asked for the box as a dropdown, learned it only shortened the account list a company's rows offer, and ruled to remove it: every row offers the full chart. No live entity carried a value | PR #1044, not yet deployed |
 | 72 | The month page split by card, backend: `card_sections[]` on both month GETs (statement loaded / not recorded / not loaded, period, charges, matched, still open, booked without a receipt, receipts, receipts without a charge; expenses and totals on the Expenses payload) and `card_section` on every row, receipt and expense the pages list; `[]` below two cards and on a trip. `card_statement_figures` feeds both the PDF heading line and the tabs. SPA half: `docs/lovable-card-tabs-prompt.md` | Item 138, owner ruling 2026-09-17 ("build now"). The PDFs were organized by card while both month pages mixed every card, so Criss could not check one card's statement against its receipts on screen. The tabs reuse the PDFs' grouping and figures, so a tab and its PDF section cannot disagree; on a 2026-09-17 DB copy July and August file every charge and receipt identically on both pages and in both PDFs | 2026-09-17; route-level `tests/test_card_tabs_item_138.py` (8) plus contract pins in `tests/test_view_contract.py`, regress_check red on all nine wires (run GET 6 of 8, expense GET 4 of 8, charge keys 2, expense keys 4, figures 4, without-a-charge count 3, two-card rule 1, trip rule 1, shared booked figure 1); suite 2274 passed / 2 skipped on the tree merged with main (cost-center half included) |
 | 71 | The ECB rate gets its own 2% clean band, and a drifted Settings rate says so: `fx_ecb_match_pct` 0.02 for `ecb_month` pairs only (Settings and self-derived keep 3%), measured at 3 / 2.5 / 2 / 1.75 / 1.5% on July with Settings rates removed (29 / 31 / 32 / 33 / 33 right) and on the six bundles (68 / 70 / 70 / 70 / 69); `setup_advisories[]` `code: "fx_rate_drift"` beyond 1 point from the month's ECB average (items 90 + 132) | Owner ruling: tighten the band before the typed September rates go, so new months stop matching at a stale rate without auto-matching coincidences; nothing moves live until the Settings rates are removed | PR #1048, Fly v167, 2026-09-17 |
