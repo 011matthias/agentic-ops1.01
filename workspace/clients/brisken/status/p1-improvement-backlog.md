@@ -4602,7 +4602,7 @@ Build:
    rates either way; the change reaches months created or statement-attached
    afterwards.
 
-### 91. Settings is one scroll of seven editors (owner, 2026-09-17) (BACKEND SHIPPED PR #969, prompt written, pending the owner's paste)
+### 91. Settings is one scroll of seven editors (owner, 2026-09-17) (SHIPPED PR #969, SPA APPLIED 2026-09-17)
 
 **Owner 2026-09-17:** "group the different settings in the settings page into
 tabs of each setting."
@@ -4638,7 +4638,7 @@ page's contract; under tabs that request is the only feedback the group
 gets. api-contract "What a settings save wrote";
 `tests/test_settings_put_contract.py`.
 
-SPA half: `docs/lovable-settings-tabs-prompt.md`. Not pasted.
+SPA half: `docs/lovable-settings-tabs-prompt.md`, published by the owner and verified 2026-09-17 (bundle + cold drive, PROMPT-STATUS Applied row).
 
 ## Related but tracked elsewhere (do not duplicate here)
 
