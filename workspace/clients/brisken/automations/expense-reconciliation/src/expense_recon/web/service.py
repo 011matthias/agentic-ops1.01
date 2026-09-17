@@ -690,6 +690,102 @@ def _setup_advisories(
                 "one is set in Settings > Cards."
             ),
         })
+    out.extend(_fx_rate_drift_advisories(cfg, transactions, receipts, card_ccy))
+    return out
+
+
+def _fx_rate_drift_advisories(
+    cfg: dict, transactions: list, receipts: list, card_ccy: str
+) -> list[dict]:
+    """Item 132: a rate typed in Settings that has drifted from the ECB.
+
+    A Settings rate wins over the month's ECB average (item 82's ruling), so
+    once it drifts, every month keeps matching at it and nothing says so.
+    One advisory per typed pair this month's receipts use, when the month's
+    ECB table holds that pair and the gap is wider than the two bands leave
+    room for: a receipt the ECB rate pairs within `fx_ecb_match_pct` stays
+    inside the Settings rate's `fx_reference_match_pct` band only while the
+    two rates are no further apart than the difference of the bands (3% -
+    2% = 1%). `code` and the numbers ride beside the English `message`, so
+    the screen can say it in the reviewer's language (item 130)."""
+    from collections import Counter
+    from decimal import ROUND_HALF_UP
+
+    from ..matching.deterministic import MatchingConfig
+
+    matching = cfg.get("matching") or {}
+    typed = matching.get("fx_reference_rates") or {}
+    ecb_table = matching.get("fx_ecb_monthly_rates") or {}
+    if not typed or not ecb_table:
+        return []
+    try:
+        # The matcher's own parse and lookup, so the advisory speaks only
+        # for a pair the matcher really reads from Settings (its keys are
+        # case-sensitive: a stored "eur:usd" is not a EUR:USD rate).
+        mc = MatchingConfig.from_dict({
+            k: matching[k]
+            for k in (
+                "fx_reference_rates", "fx_ecb_monthly_rates",
+                "fx_reference_match_pct", "fx_ecb_match_pct",
+            )
+            if k in matching
+        })
+    except (ValueError, ArithmeticError, AttributeError, TypeError):
+        return []
+    limit = mc.fx_reference_match_pct - mc.fx_ecb_match_pct
+    if limit <= 0:
+        return []
+    dated = [t.transaction_date for t in transactions if getattr(t, "transaction_date", None)]
+    if not dated:
+        dated = [r.detected_date for r in receipts if getattr(r, "detected_date", None)]
+    if not dated:
+        return []
+    month = Counter(d.strftime("%Y-%m") for d in dated).most_common(1)[0][0]
+    counts = Counter(
+        (r.detected_currency or "").upper() for r in receipts
+        if (r.detected_currency or "").upper() not in ("", card_ccy)
+    )
+    out: list[dict] = []
+    dst = card_ccy
+    for src in sorted(counts):
+        settings_rate = mc.fx_reference_rate(src, dst)
+        if settings_rate is None or settings_rate <= 0:
+            continue
+        ecb = mc.ecb_monthly_rate(src, dst, month)
+        if ecb is None:
+            continue
+        ecb_rate, ecb_month = ecb
+        try:
+            gap = (settings_rate - ecb_rate) / ecb_rate
+            if abs(gap) <= limit:
+                continue
+            gap_pct = float((gap * 100).quantize(Decimal("0.1"), ROUND_HALF_UP))
+        except ArithmeticError:
+            # A rate Settings accepted but no month can use ("1e30"): the
+            # advisory never fails the month it describes.
+            continue
+        side = "above" if gap > 0 else "below"
+        n = counts[src]
+        out.append({
+            "setting": "fx_reference_rates",
+            "code": "fx_rate_drift",
+            "pair": f"{src}:{dst}",
+            "settings_rate": _fmt_rate(settings_rate),
+            "ecb_rate": _fmt_rate(ecb_rate),
+            "ecb_month": ecb_month,
+            "gap_pct": gap_pct,
+            "limit_pct": float(limit * 100),
+            "n_receipts": n,
+            "message": (
+                f"The {src}:{dst} rate set in Settings ({_fmt_rate(settings_rate)}) "
+                f"is {abs(gap_pct):.1f}% {side} the ECB's {ecb_month} average "
+                f"({_fmt_rate(ecb_rate)}). A Settings rate wins over the ECB for "
+                f"this month's {n} {src} receipt(s); more than "
+                f"{float(limit * 100):g}% away, a receipt the ECB rate pairs "
+                f"cleanly can fall outside the clean band. Removing the rate in "
+                f"Settings lets the ECB average apply."
+            ),
+        })
     return out
 
 
@@ -2328,7 +2424,7 @@ def fx_reference_lookup(run: "RunRow", transactions: list, receipts: list):
         return FxReference(
             rate=rate,
             source=source,
-            match_pct=cfg.fx_reference_match_pct,
+            match_pct=cfg.reference_match_pct(source),
             review_pct=cfg.fx_reference_review_pct,
             period=period,
         )
@@ -7115,10 +7211,17 @@ def build_expense_report(
     settled (`card_statement_line`) and names any receipt its charge holds
     whose own card is another (item 137); its receipt pages follow its
     sums rather than the whole document. Reimbursements and copies keep
-    their current places. Where cost centers belong in this is undecided,
-    so a month they partition keeps exactly that partition. A month whose
-    listed receipts fall in a single section (one card, or none) keeps the
-    flat listing.
+    their current places. A month whose listed receipts fall in a single
+    section (one card, or none) keeps the flat listing.
+
+    A month with cost centers AND two cards or more nests the cards inside
+    the cost centers (owner ruling 2026-09-17): one section per cost center,
+    its expenses ordered by the card that paid (same grouping, same order,
+    "No card" last), and a cost center spanning two card groups or more
+    gets a sub-heading and sums per card. The card's statement line stays
+    out (its figures are the whole statement's); a held pair whose cards
+    differ is still named, under its card. Receipt pages stay at the end,
+    in listing order.
     `charge_decisions` feeds the view that sections are read from.
     """
     from ..output._pdf_common import (
@@ -7155,6 +7258,11 @@ def build_expense_report(
     # each section's receipt pages follow that section.
     by_card_receipts = False
     card_section_by_key: dict[str, dict] = {}
+    # Item 138 (owner ruling 2026-09-17): set when a cost-center listing
+    # groups each section's expenses by card; `card_of` is each listed
+    # receipt's card key.
+    cards_in_sections = False
+    card_of: dict[str, str] = {}
     # A partition of the company listing into contiguous slices: the
     # ordered keys, the receipts under each, and a function giving the
     # caption fields a section carries. A trip keys on person (item 38);
@@ -7196,6 +7304,44 @@ def build_expense_report(
 
         section_fields = _person_fields
     else:
+        def _card_grouping() -> tuple[dict[str, list], dict[str, dict], list[str]]:
+            # Item 138: the listed company receipts per card, from
+            # `card_sections` over the same view and card chain the
+            # reconciliation report sections on, so the two documents file
+            # every receipt under the same card: a receipt a charge holds
+            # follows that charge's card, an unheld one its own resolved
+            # card, the rest "No card", last. Only the listed company
+            # receipts are placed, so a card whose receipts are all private
+            # or copies gets no empty table. Returns the receipts per card
+            # key, the card section per key, and the keys in document order.
+            _, snapshot_receipts, _, _ = snapshot_from_dict(run.snapshot)
+            card_view = report_view(
+                run, receipts, snapshot_receipts, charge_decisions or {},
+                overrides, dup_resolutions, field_overrides=field_overrides,
+            )
+            listed = {r.document_id: r for r in company}
+            by_card: dict[str, list] = {}
+            sec_by_key: dict[str, dict] = {}
+            for sec in card_sections(
+                card_view,
+                report_receipt_cards(receipts, run.config, field_overrides),
+            ):
+                for doc in sec["receipt_docs"]:
+                    if doc in listed:
+                        by_card.setdefault(sec["key"], []).append(listed.pop(doc))
+                if sec["key"] in by_card:
+                    sec_by_key[sec["key"]] = sec
+            if listed:
+                # Never drop a row: a listed receipt the sections did not
+                # place goes with the ones that have no card.
+                by_card.setdefault("", []).extend(
+                    r for r in company if r.document_id in listed
+                )
+            keys = [k for k in sec_by_key if k]
+            if "" in by_card:
+                keys.append("")
+            return by_card, sec_by_key, keys
+
         # Item 47: the chain over the same card pass, exactly as the grid
         # runs it. It partitions only once it resolves or flags a row: an
         # empty registry is silent for every row, so a month with no cost
@@ -7233,50 +7379,39 @@ def build_expense_report(
             section_fields = _cost_center_fields
             sections_heading = "Listing by cost center"
             sections_note = COST_CENTER_SCOPE_NOTE
+            # Item 138, owner ruling 2026-09-17: cards inside cost centers.
+            # A month on two cards or more (the card listing's own rule)
+            # keeps one section per cost center and orders each one's
+            # expenses by the card that paid, in card-section order, "No
+            # card" last; a cost center on two card groups or more gets a
+            # sub-heading and sums per group. Receipt pages stay at the end,
+            # in this listing order.
+            by_card, sec_by_key, card_keys = _card_grouping()
+            if sum(1 for k in by_card if k) >= 2:
+                card_section_by_key = sec_by_key
+                card_of = {
+                    r.document_id: k for k in card_keys for r in by_card[k]
+                }
+                groups = {k: [] for k in groups}
+                for k in card_keys:
+                    for r in by_card[k]:
+                        groups[cost_res[r.document_id].name or ""].append(r)
+                cards_in_sections = True
         else:
             # Item 138: no cost center applies, so the month is organized
-            # the way it is reconciled, card by card. The sections are
-            # `card_sections` over the same view and card chain the
-            # reconciliation report sections on, so the two documents file
-            # every receipt under the same card: a receipt a charge holds
-            # follows that charge's card, an unheld one its own resolved
-            # card, the rest "No card", last. Only the listed company
-            # receipts are placed; a card whose receipts are all private or
-            # copies gets no empty table. The listing sections only when its
-            # receipts span two sections or more, one of them a card: a
-            # single section (one card, or only "No card") would put a
-            # heading over the flat listing and push the copies line and
-            # the reimbursements off its first page, organizing nothing.
-            _, snapshot_receipts, _, _ = snapshot_from_dict(run.snapshot)
-            card_view = report_view(
-                run, receipts, snapshot_receipts, charge_decisions or {},
-                overrides, dup_resolutions, field_overrides=field_overrides,
-            )
-            listed = {r.document_id: r for r in company}
-            by_card: dict[str, list] = {}
-            for sec in card_sections(
-                card_view,
-                report_receipt_cards(receipts, run.config, field_overrides),
-            ):
-                for doc in sec["receipt_docs"]:
-                    if doc in listed:
-                        by_card.setdefault(sec["key"], []).append(listed.pop(doc))
-                if sec["key"] in by_card:
-                    card_section_by_key[sec["key"]] = sec
-            if listed:
-                # Never drop a row: a listed receipt the sections did not
-                # place goes with the ones that have no card.
-                by_card.setdefault("", []).extend(
-                    r for r in company if r.document_id in listed
-                )
+            # the way it is reconciled, card by card (`_card_grouping`).
+            # The listing sections only when its receipts span two sections
+            # or more, one of them a card: a single section (one card, or
+            # only "No card") would put a heading over the flat listing and
+            # push the copies line and the reimbursements off its first
+            # page, organizing nothing.
+            by_card, card_section_by_key, card_keys = _card_grouping()
             # Two cards or more, the reconciliation report's own rule: a
             # one-card month (with or without no-card receipts) keeps the
             # flat listing, whose header already is that card's.
             if sum(1 for k in by_card if k) >= 2:
                 groups = by_card
-                ordered_keys = [k for k in card_section_by_key if k]
-                if "" in by_card:
-                    ordered_keys.append("")
+                ordered_keys = card_keys
 
                 def _card_fields(key: str) -> dict:
                     sec = card_section_by_key.get(key) or {
@@ -7314,35 +7449,92 @@ def build_expense_report(
         sections = []
         pos = 1
         vendor_col = EXPENSE_COLUMNS.index("Vendor")
+
+        def _differ_notes(card_key: str, docs: set[str] | None, on: str) -> list[str]:
+            # Item 137 on paper: a listed receipt this card's charge holds
+            # while the tool resolved it to another card. It stays beside
+            # the charge it settles, and says so. `docs` narrows it to the
+            # receipts of one cost center's card group; `on` names where
+            # the charge is ("this card" under a card heading).
+            notes = []
+            for charge in (card_section_by_key.get(card_key) or {}).get("rows") or []:
+                differ = charge.get("cards_differ") or {}
+                doc = str(differ.get("document_id") or "")
+                numbers = numbers_by_doc.get(doc)
+                if not numbers or (docs is not None and doc not in docs):
+                    continue
+                vendor = str(rows[numbers[0] - 1][vendor_col] or "").strip()
+                which = (
+                    f"Expense {numbers[0]}" if len(numbers) == 1
+                    else "Expenses " + ", ".join(str(x) for x in numbers)
+                )
+                single = len(numbers) == 1
+                verb = "is" if single else "are"
+                whose = "its" if single else "the receipt's"
+                named = f" ({vendor})" if vendor else ""
+                other = differ.get("receipt_card_label") or "another card"
+                notes.append(
+                    f"{which}{named} {verb} held on a charge {on}, but "
+                    f"{whose} own card is {other}."
+                )
+            return notes
+
         for key in ordered_keys:
             count = sum(len(numbers_by_doc[r.document_id]) for r in groups[key])
             section = {**section_fields(key), "start": pos, "count": count}
             if by_card_receipts and key in card_section_by_key:
-                # Item 137 on paper: a listed receipt this card's charge
-                # holds while the tool resolved it to another card. It
-                # stays here, beside the charge it settles, and says so.
-                notes = []
-                for charge in card_section_by_key[key]["rows"]:
-                    differ = charge.get("cards_differ") or {}
-                    numbers = numbers_by_doc.get(str(differ.get("document_id") or ""))
-                    if not numbers:
-                        continue
-                    vendor = str(rows[numbers[0] - 1][vendor_col] or "").strip()
-                    which = (
-                        f"Expense {numbers[0]}" if len(numbers) == 1
-                        else "Expenses " + ", ".join(str(x) for x in numbers)
-                    )
-                    single = len(numbers) == 1
-                    verb = "is" if single else "are"
-                    whose = "its" if single else "the receipt's"
-                    named = f" ({vendor})" if vendor else ""
-                    other = differ.get("receipt_card_label") or "another card"
-                    notes.append(
-                        f"{which}{named} {verb} held on a charge on this "
-                        f"card, but {whose} own card is {other}."
-                    )
+                notes = _differ_notes(key, None, "on this card")
                 if notes:
                     section["notes"] = notes
+            if cards_in_sections:
+                # Item 138, owner ruling 2026-09-17: this cost center's
+                # expenses by the card that paid, contiguous (the listing
+                # was ordered by card above). A group whose receipts wrote
+                # no row has nothing to head. The card's statement line is
+                # left out: its figures are the whole statement's, not this
+                # cost center's share of it.
+                runs: list[tuple[str, list, int]] = []
+                sub_pos = pos
+                for r in groups[key]:
+                    k = card_of.get(r.document_id, "")
+                    width = len(numbers_by_doc[r.document_id])
+                    if runs and runs[-1][0] == k:
+                        runs[-1][1].append(r)
+                        runs[-1] = (k, runs[-1][1], runs[-1][2] + width)
+                    else:
+                        runs.append((k, [r], width))
+                subsections = []
+                for k, run_receipts, width in runs:
+                    if width:
+                        docs = {r.document_id for r in run_receipts}
+                        name = (card_section_by_key.get(k) or {}).get("label") or (
+                            NO_CARD_SECTION_LABEL
+                        )
+                        sub = {
+                            "caption": name, "label": name,
+                            "start": sub_pos, "count": width,
+                            "card_key": k, "docs": docs,
+                        }
+                        subsections.append(sub)
+                    sub_pos += width
+                if len(subsections) >= 2:
+                    for sub in subsections:
+                        notes = _differ_notes(
+                            sub["card_key"], sub["docs"], "on this card"
+                        )
+                        if notes:
+                            sub["notes"] = notes
+                    section["subsections"] = subsections
+                elif subsections:
+                    # One card, no sub-heading: the note names the card.
+                    (sub,) = subsections
+                    on = (
+                        f"on {sub['label']}" if sub["card_key"]
+                        else "with no card"
+                    )
+                    notes = _differ_notes(sub["card_key"], sub["docs"], on)
+                    if notes:
+                        section["notes"] = notes
             sections.append(section)
             pos += count
     receipts_dir = Path(run.work_dir) / "receipts"

@@ -12,9 +12,17 @@ in the order and grouping the reconciliation report uses (`card_sections`):
   under "No card", last;
 * each card's receipt pages follow that card's sums, before the next card.
 
-A cost-center month and a trip month are untouched, and so is a month whose
-receipts reach one section only (tests/test_private_expense.py and
-tests/test_copies_out_of_totals.py read that layout off page 1).
+A trip month is untouched, and so is a month whose receipts reach one section
+only (tests/test_private_expense.py and tests/test_copies_out_of_totals.py
+read that layout off page 1).
+
+A month with cost centers AND two cards or more nests the cards inside the
+cost centers (owner ruling 2026-09-17): one section per cost center, its
+expenses ordered by the card that paid, and a cost center spanning two card
+groups gets a sub-heading and sums per card ("No card" last, never dropped).
+The card's statement line stays out of those sub-groups (its figures are the
+whole statement's), receipt pages stay at the end in listing order, and the
+reconciliation report keeps its card sections.
 
 Route-level: every assertion reads `GET /runs/{id}/expense-report.pdf` after
 the real upload, statement attach and card-pick routes.
@@ -279,33 +287,158 @@ def test_a_statement_less_month_still_sections_and_says_no_statement(client, mon
     )
 
 
-def test_a_cost_center_month_keeps_its_partition_and_receipts_at_the_end(client, monkeypatch):
-    batch = _reconciled_month(client, monkeypatch)
-    client.put("/api/settings", json={
-        "cards": CARDS, "cost_centers": {"Lidar": {"kind": "project"}},
-    })
-    obsidian = _expense(client, batch, "Obsidian")["document_id"]
+CENTERS = {"Lidar": {"kind": "project"}, "Marketing": {"kind": "function"}}
+
+
+def _cost_center(client, batch: str, vendor: str, name: str) -> None:
+    doc = _expense(client, batch, vendor)["document_id"]
     resp = client.put(
-        f"/api/runs/{batch}/expenses/{obsidian}",
-        json={"field": "cost_center", "value": "Lidar"},
+        f"/api/runs/{batch}/expenses/{doc}",
+        json={"field": "cost_center", "value": name},
     )
     assert resp.status_code == 200, resp.text
 
+
+def _placed_once(pages: list[str], expenses: list[tuple[int, str, str, str]]) -> None:
+    """Every expense is listed once under its number and captioned once, with
+    its own receipt page right behind the caption."""
+    text = " ".join(pages)
+    for n, day, vendor, tag in expenses:
+        assert text.count(f"{n} {day} {vendor}") == 1, (n, vendor, text)
+        caption = _page_of(pages, f"Expense {n} · {vendor}")
+        assert _page_of(pages, f"RECEIPT-{tag}") == caption + 1, (tag, pages)
+
+
+def test_a_cost_center_month_groups_each_centers_expenses_by_card(client, monkeypatch):
+    batch = _reconciled_month(client, monkeypatch)
+    client.put("/api/settings", json={"cards": CARDS, "cost_centers": CENTERS})
+    _cost_center(client, batch, "Obsidian", "Lidar")
+    _cost_center(client, batch, "Lovable", "Marketing")
+
     pages = _pages(client, batch)
     text = " ".join(pages)
+    assert "4 expenses · USD 168.50" in text
     assert "Listing by cost center" in text
     assert "Listing by card" not in text
-    assert "is held on a charge on this card" not in text
+    # Per-statement figures describe a whole card, not a cost center's share.
     assert "Statement: August2026.xlsx" not in text
-    last_sums = _page_of(pages, "Unassigned: 3 expenses")
-    captions = [
-        _page_of(pages, f"Expense {n} · ")
-        for n in (1, 2, 3, 4)
-    ]
-    # Today's layout: the listing, then every caption with its pages behind.
-    assert last_sums < min(captions)
-    assert captions == sorted(captions)
+    assert "booked without a receipt" not in text
+
+    lidar = text.index("Lidar: 1 expense · USD 96.00")
+    marketing = text.index("Marketing: 1 expense · USD 25.00")
+    card_3645 = text.index(f"{LABEL_3645}: 1 expense · USD 42.50")
+    no_card = text.index("No card: 1 expense · USD 5.00")
+    unassigned = text.index("Unassigned: 2 expenses · USD 47.50")
+    assert lidar < marketing < card_3645 < no_card < unassigned
+
+    # A cost center on one card gets no card heading or card sums.
+    assert f"{LABEL_2838}: " not in text
+    assert text.count(f"{LABEL_3645}: ") == 1
+    # Its held-across-cards receipt is still named, and names the card.
+    note = (
+        f"Expense 2 (Lovable) is held on a charge on {LABEL_3645}, but its "
+        f"own card is {LABEL_2838}."
+    )
+    assert text.count(note) == 1
+    assert lidar < text.index(note) < card_3645
+
+    # The Unassigned center's rows sit under their card headings, in order.
+    at = text.index("Unassigned (no cost center)")
+    assert marketing < at < text.index(LABEL_3645, at) < (
+        text.index("3 2026-08-10 Staples")
+    ) < card_3645 < text.index("4 2026-08-12 Coffee Bar") < no_card
+
+    # Receipt pages stay at the end, in listing order, each placed once.
+    last_sums = _page_of(pages, "Unassigned: 2 expenses")
+    captions = [_page_of(pages, f"Expense {n} · ") for n in (1, 2, 3, 4)]
+    assert last_sums < min(captions) and captions == sorted(captions)
     assert "Each receipt follows behind the expense number it proves." in text
+    _placed_once(pages, [
+        (1, "2026-08-30", "Obsidian", "OBSIDIAN"),
+        (2, "2026-08-05", "Lovable", "LOVABLE"),
+        (3, "2026-08-10", "Staples", "STAPLES"),
+        (4, "2026-08-12", "Coffee Bar", "COFFEE"),
+    ])
+
+    # The reconciliation report keeps its card sections.
+    resp = client.get(f"/runs/{batch}/reconciliation-report.pdf")
+    assert resp.status_code == 200, resp.text
+    recon = [
+        " ".join((p.extract_text() or "").split())
+        for p in PdfReader(io.BytesIO(resp.content)).pages
+    ]
+    assert any(p.startswith(LABEL_2838) for p in recon)
+    assert any(p.startswith(LABEL_3645) for p in recon)
+    assert "cost center" not in " ".join(recon).lower()
+
+
+def test_inside_one_cost_center_the_listing_follows_card_order_not_upload_order(
+    client, monkeypatch,
+):
+    """Uploaded no card first, 2838 last: the listing still runs 2838, 3645,
+    No card, each with its heading and sums, then the center's sums."""
+    client.put("/api/settings", json={"cards": CARDS})
+    _wire(
+        monkeypatch,
+        _extraction("Coffee Bar", "5.00", "2026-08-12"),
+        _extraction("Staples", "42.50", "2026-08-10", "Visa ...3645"),
+        _extraction("Obsidian", "96.00", "2026-08-30", "Visa ...2838"),
+        _extraction("Lovable", "25.00", "2026-08-05"),
+    )
+    batch = _month(client, ["COFFEE", "STAPLES", "OBSIDIAN", "LOVABLE"])
+    _attach(client, batch, STATEMENT, yellow={"ADOBE"})
+    lovable = _expense(client, batch, "Lovable")["document_id"]
+    assert _pick_card(client, batch, lovable, "corp-2838").status_code == 200
+    client.put("/api/settings", json={"cards": CARDS, "cost_centers": CENTERS})
+    for vendor in ("Coffee Bar", "Staples", "Obsidian", "Lovable"):
+        _cost_center(client, batch, vendor, "Lidar")
+
+    pages = _pages(client, batch)
+    text = " ".join(pages)
+    heads = [
+        text.index("Lidar (project)"),
+        text.index("1 2026-08-30 Obsidian"),
+        text.index(f"{LABEL_2838}: 1 expense · USD 96.00"),
+        text.index("2 2026-08-05 Lovable"),
+        text.index("3 2026-08-10 Staples"),
+        text.index(f"{LABEL_3645}: 2 expenses · USD 67.50"),
+        text.index("4 2026-08-12 Coffee Bar"),
+        text.index("No card: 1 expense · USD 5.00"),
+        text.index("Lidar: 4 expenses · USD 168.50"),
+    ]
+    assert heads == sorted(heads), heads
+    # Under a card heading, the held-across-cards note says "this card".
+    note = (
+        "Expense 2 (Lovable) is held on a charge on this card, but its own "
+        f"card is {LABEL_2838}."
+    )
+    assert heads[5] < text.index(note) < heads[6]
+    assert "Unassigned" not in text
+    _placed_once(pages, [
+        (1, "2026-08-30", "Obsidian", "OBSIDIAN"),
+        (2, "2026-08-05", "Lovable", "LOVABLE"),
+        (3, "2026-08-10", "Staples", "STAPLES"),
+        (4, "2026-08-12", "Coffee Bar", "COFFEE"),
+    ])
+
+
+def test_a_one_card_cost_center_month_gets_no_card_structure(client, monkeypatch):
+    """One card plus receipts with none: the card listing's own rule keeps
+    it flat, so the cost-center listing stays exactly as it was."""
+    client.put("/api/settings", json={"cards": CARDS, "cost_centers": CENTERS})
+    _wire(
+        monkeypatch,
+        _extraction("Obsidian", "96.00", "2026-08-30", "Visa ...2838"),
+        _extraction("Coffee Bar", "5.00", "2026-08-12"),
+    )
+    batch = _month(client, ["OBSIDIAN", "COFFEE"])
+    _cost_center(client, batch, "Obsidian", "Lidar")
+    _cost_center(client, batch, "Coffee Bar", "Lidar")
+
+    text = " ".join(_pages(client, batch))
+    assert "Lidar: 2 expenses · USD 101.00" in text
+    assert f"{LABEL_2838}: " not in text
+    assert "No card: " not in text
 
 
 def test_a_trip_keeps_its_per_person_sections(client, monkeypatch):
