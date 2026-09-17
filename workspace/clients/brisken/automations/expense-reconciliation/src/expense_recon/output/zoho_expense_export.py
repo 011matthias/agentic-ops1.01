@@ -278,6 +278,26 @@ def build_expense_rows(
     ]
 
 
+def gated_for_posting(
+    receipts: "Sequence[Receipt]", coa_gate: "CoaGate | None"
+) -> "list[Receipt]":
+    """The receipts a posting fan-out reads: the chart gate applied with
+    `keep_category` (item 95), or the receipts as they are when no gate is
+    wired.
+
+    ONE function, because the grid's `books_as` depiction calls
+    `expense_posting_parts` on its own receipts and the export calls it on
+    gated ones: a line whose account the company's chart rejects would then
+    read as its raw account on the screen and as its category (or
+    `(account unmapped - assign)`) in the CSV for the same purchase. Both
+    sides gate first, so the screen and the document cannot disagree.
+    """
+    if coa_gate is None:
+        return list(receipts)
+    gated, _report = coa_gate.run(list(receipts), keep_category=True)
+    return gated
+
+
 def build_expense_row_groups(
     receipts: "Sequence[Receipt]",
     *,
@@ -302,9 +322,7 @@ def build_expense_row_groups(
     for that document. It used to count a second fan-out that ran without
     the chart and the COA gate, and from the first receipt the two counted
     differently every later caption named another purchase."""
-    if coa_gate is not None:
-        gated, _report = coa_gate.run(list(receipts), keep_category=True)
-        receipts = gated
+    receipts = gated_for_posting(receipts, coa_gate)
 
     groups: list[tuple[str, list[list[str]]]] = []
     for r in receipts:
