@@ -347,7 +347,7 @@ def test_the_view_asks_the_matchers_own_lookup_for_the_rate(
     adds `ecb_month`) passes through as the matcher named it."""
     batch_id = _july(client, monkeypatch)
 
-    def _stub(cfg, from_ccy, to_ccy, derived):
+    def _stub(cfg, from_ccy, to_ccy, derived, on=None):
         return Decimal("1.2"), "ecb_month", 0
 
     monkeypatch.setattr(deterministic, "_reference_rate_for", _stub)

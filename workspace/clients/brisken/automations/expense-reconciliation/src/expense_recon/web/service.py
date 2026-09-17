@@ -603,6 +603,15 @@ def _setup_advisories(
     card_ccy = (
         transactions[0].account_card_currency if transactions else "USD"
     ).upper()
+    # Item 82: a currency the month's ECB table can cross into the card
+    # currency needs nothing typed. Rates come from the ECB now, so the
+    # advisory speaks only when neither source has one.
+    ecb_table = (cfg.get("matching") or {}).get("fx_ecb_monthly_rates") or {}
+    ecb_ccys = {"EUR"} | {
+        str(c).upper() for per_eur in ecb_table.values() for c in (per_eur or {})
+    }
+    if ecb_table and card_ccy in ecb_ccys:
+        configured |= ecb_ccys
     missing: dict[str, int] = {}
     for r in receipts:
         ccy = (r.detected_currency or "").upper()
@@ -613,8 +622,9 @@ def _setup_advisories(
             "setting": "fx_reference_rates",
             "message": (
                 f"{count} receipt(s) are in {ccy} but no {ccy}:{card_ccy} "
-                f"reference rate is set, so they cannot match "
-                f"deterministically. Add this month's rate in Settings."
+                f"reference rate is available (the ECB publishes none for "
+                f"this month and none is set in Settings), so they cannot "
+                f"match deterministically."
             ),
         })
 
@@ -2216,6 +2226,10 @@ class FxReference:
     source: str
     match_pct: Decimal
     review_pct: Decimal
+    # Item 82: the month whose ECB average the rate is ('2026-07'), only
+    # for `ecb_month`; it can differ from the charge's month when that
+    # month's average was not in the table.
+    period: str | None = None
 
 
 def fx_reference_lookup(run: "RunRow", transactions: list, receipts: list):
@@ -2257,16 +2271,25 @@ def fx_reference_lookup(run: "RunRow", transactions: list, receipts: list):
         if receipt is None or not receipt.detected_currency:
             return None
         hit = deterministic._reference_rate_for(
-            cfg, receipt.detected_currency, tx.transaction_currency, derived
+            cfg, receipt.detected_currency, tx.transaction_currency, derived,
+            on=tx.transaction_date,
         )
         if hit is None:
             return None
         rate, source, _n = hit
+        period = None
+        if source == "ecb_month":
+            ecb = cfg.ecb_monthly_rate(
+                receipt.detected_currency, tx.transaction_currency,
+                tx.transaction_date,
+            )
+            period = ecb[1] if ecb is not None else None
         return FxReference(
             rate=rate,
             source=source,
             match_pct=cfg.fx_reference_match_pct,
             review_pct=cfg.fx_reference_review_pct,
+            period=period,
         )
 
     return lookup
@@ -2313,6 +2336,8 @@ def _fx_reference_fields(
         # `or 0.0`: a zero deviation must not serialize as -0.0.
         "reference_gap_pct": pct or 0.0,
         "reference_gap_band": band,
+        # Item 82: which month's ECB average, absent for every other source.
+        **({"reference_rate_period": reference.period} if reference.period else {}),
     }
 
 
@@ -4768,6 +4793,11 @@ def create_expense_batch(
     # chart when the entity is provisioned (settings registry first, /data
     # file fallback); absent => unguarded, unchanged.
     cfg = apply_coa_provisioning(cfg, legal_entity.strip(), settings=settings)
+    # Item 82: a company month carries the ECB monthly averages around its
+    # own month from creation. A trip is matched inside the company months
+    # that borrow it, against their rates, so it fetches nothing.
+    if batch_type != BATCH_TYPE_TRIP:
+        cfg = apply_ecb_rates(cfg, ecb_months_for(label))
     _write_local_run_config(work_dir, cfg)
 
     learned = expense_memory = None
@@ -9180,6 +9210,10 @@ def read_statement_upload(
         transactions, stmt_issues = _load_statement(new_cfg, work_dir)
     except ConfigError as exc:
         raise RunInputError(str(exc)) from exc
+    # Item 82: refresh the ECB monthly averages for every month this
+    # statement's charges fall in (and the month's own neighbours), so a
+    # month created before its average was published reads it from here.
+    new_cfg = apply_ecb_rates(new_cfg, ecb_months_for(run.label, transactions))
     return transactions, stmt_issues, new_cfg, entity
 
 
@@ -11643,3 +11677,53 @@ def commit_month_memory(
     )
     store.set_memory_commit(run.run_id, digest, now_iso, trigger)
     return {"saved": True, "learned": learned}
+
+
+# ---------------------------------------------------------------------------
+# Item 82: ECB monthly reference rates in the run config
+# ---------------------------------------------------------------------------
+
+
+def ecb_months_for(label: str | None, transactions=()) -> list[str]:
+    """The months whose ECB averages a month's matching can reach: the
+    labelled month with one neighbour either side, plus the month of every
+    charge (a statement opening on the 30th, a charge posted late)."""
+    from . import ecb_rates
+
+    months: set[str] = set()
+    ym = month_from_label(label)
+    if ym is not None:
+        months.update(ecb_rates.months_around(f"{ym[0]:04d}-{ym[1]:02d}"))
+    for tx in transactions or ():
+        d = getattr(tx, "transaction_date", None)
+        if d is not None:
+            months.add(d.strftime("%Y-%m"))
+    return sorted(months)
+
+
+def apply_ecb_rates(cfg: dict, months) -> dict:
+    """Return `cfg` with the ECB monthly averages for `months` merged into
+    `matching.fx_ecb_monthly_rates` (item 82, owner ruling 2026-09-16).
+
+    A fetched month replaces the stored one (a published average is final,
+    so this only ever adds what the ECB has published since); months the
+    fetch did not return stay as they were. Settings' `fx_reference_rates`
+    are not touched: a rate the operator typed still wins in the matcher.
+    Fail-open: when the ECB returns nothing, `cfg` comes back unchanged, key
+    for key, so a month created offline is the month created before this
+    item shipped."""
+    from . import ecb_rates
+
+    fetched = ecb_rates.rates_for_months(months)
+    if not fetched:
+        return cfg
+    out = dict(cfg)
+    matching = dict(out.get("matching") or {})
+    table = {
+        str(month): dict(per_eur or {})
+        for month, per_eur in (matching.get("fx_ecb_monthly_rates") or {}).items()
+    }
+    table.update({month: dict(per_eur) for month, per_eur in fetched.items()})
+    matching["fx_ecb_monthly_rates"] = dict(sorted(table.items()))
+    out["matching"] = matching
+    return out

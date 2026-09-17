@@ -12,4 +12,17 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 os.environ.setdefault("EXPENSE_RECON_WEB_SYNC", "1")
+
+
+@pytest.fixture(autouse=True)
+def _no_ecb_network(monkeypatch):
+    """Item 82: creating a month and attaching a statement ask the ECB for
+    its monthly rates. The suite never reaches the network: every test sees
+    a quiet ECB (no rates, so every config stays exactly as before), and a
+    test that means to exercise the rates replaces `fetch_monthly` itself."""
+    from expense_recon.web import ecb_rates
+
+    monkeypatch.setattr(ecb_rates, "fetch_monthly", lambda start, end, **kw: {})
