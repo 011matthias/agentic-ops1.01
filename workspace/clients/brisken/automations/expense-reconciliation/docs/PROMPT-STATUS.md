@@ -219,6 +219,7 @@ and a rollback would otherwise have nothing to re-apply.
 | `lovable-private-card-in-picker-prompt.md` (item 139, notes #65 + #66) | `__private_card__` in `chunk-expenses._batchId`; `expx.privateCard.mark` still present | Written 2026-09-17, not pasted. SPA only, no backend gate |
 | `lovable-one-download-each-prompt.md` (item 141, note #68) | `sum.dl.pdf`, `sum.dl.statementFile` in `chunk-runs._runId`; `sum.pdf` absent from every chunk | Written 2026-09-17, not pasted. SPA only, no backend gate |
 | `lovable-booked-hint-names-workbook-prompt.md` (item 142, note #69) | `row.status.posted.tipFile`, `wb.reason.charge.already_booked.file` in `chunk-runs._runId`; "your statement workbook" absent from `chunk-i18n` | Written 2026-09-17, not pasted. SPA copy only, no backend gate |
+| `lovable-untrusted-flag-prompt.md` (item 93) | `expx.review.reason.untrusted_instructions`, `expx.untrusted.kind.instructs-a-status-change` (EN + PT) in `chunk-i18n`; `untrusted_instructions` in the grid chunk | Written 2026-09-17, not pasted. SPA only, no backend gate (the payload shipped with PR #973). No live row carries a flag (0 of 135) |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
