@@ -155,7 +155,7 @@ name answers the same one:
 |---|---|
 | `n_expenses` | how many expenses the month counts: every row except the decided copies set aside (item 94). The months list and the batch page answer it the same way |
 | `n_receipts` | expense payload and months list: how many receipt documents the batch holds, copies included, so `n_receipts == n_expenses + n_copies_set_aside` (item 94; equal to `n_expenses` before it). Run payload: every receipt in the pool |
-| `n_categorized` · `n_uncategorized` | how many still need a category |
+| `n_categorized` · `n_uncategorized` | how many still need a category. Expense payload and months list: over the expenses `n_expenses` counts, so the pair sums to it (item 94: a decided copy is in neither) |
 | `n_ready` | how many need NOTHING from the reviewer (category, entity, core fields, and — since item 40 — a person) |
 | `n_review` | how many are flagged for a look (`check` or `pick`) |
 | `n_needs_entity` | how many still need a legal entity (a confirmed private row needs none by design, so it does not count — item 41 sharpened the question the name always asked) |
@@ -1036,14 +1036,41 @@ document back on every surface below at once.
 
 | Surface | What changed |
 |---|---|
-| `GET /api/expense-batches/{id}` (and `GET /api/runs/{id}` for a month with no statement) | the copy's row stays, `duplicate` marker included, and carries `counts_in_total: false`; ABSENT on every row that counts, so an older payload reads as "counts". `summary.n_expenses` leaves copies out, `summary.n_receipts` keeps every row, `summary.n_copies_set_aside` (int, always) is the difference, `summary.totals_by_ccy` leaves copies out, and `summary.copies_set_aside_by_ccy` (object `{currency: amount}`, `{}` when none) is what they add up to. `n_amounts_unreadable` no longer counts a copy. The box counts (`n_categorized`, `n_ready`, ...) are unchanged: they count rows |
-| `GET /api/expense-batches` (months list) | `summary.n_expenses` leaves copies out, `summary.n_copies_set_aside` beside it |
+| `GET /api/expense-batches/{id}` (and `GET /api/runs/{id}` for a month with no statement) | the copy's row stays, `duplicate` marker included, and carries `counts_in_total: false`; ABSENT on every row that counts, so an older payload reads as "counts". `summary.n_expenses` leaves copies out, `summary.n_receipts` keeps every row, `summary.n_copies_set_aside` (int, always) is the difference, `summary.totals_by_ccy` leaves copies out, and `summary.copies_set_aside_by_ccy` (object `{currency: amount}`, `{}` when none) is what they add up to. `n_amounts_unreadable` no longer counts a copy. The copy's `boxes` is `[]` (amended the same day): it is in no Expenses box, so every box count (`n_categorized`, `n_uncategorized`, `n_ready`, `n_needs_company_or_person`, `n_suggested_private`, ...) leaves it out and `n_categorized + n_uncategorized == n_expenses`. See "The Expenses view's boxes open their rows" for why the to-do boxes go too |
+| `GET /api/expense-batches` (months list) | `summary.n_expenses` leaves copies out, `summary.n_copies_set_aside` beside it; `n_categorized` / `n_uncategorized` count the same expenses, so they agree with the batch page and sum to `n_expenses` |
 | `GET /runs/{id}/expenses.csv` | no row for a copy. Under the rows, after one blank row, a single first-column line: `Copies set aside, not counted above: N documents that repeat another (USD 263.59; EUR 32.00): <vendor> <date> <currency> <amount>; ...`. Amounts sit inside the sentence, never in `Expense Amount`, so a column sum cannot count a copy again. Absent when there are no copies (the file is byte-identical to before) |
 | `GET /runs/{id}/expense-report.pdf` | the listing, its header count and totals, the cost-center / trip sections and the reimbursements leave copies out. Under the listing: `Copies set aside: N documents repeat an expense listed above, not counted in the listing or the totals (USD 263.59 · EUR 32.00). Their pages follow the original's.`, then one line per copy, `<vendor> · <date> · <currency> <amount> · copy of expense <n>`. The copy's pages follow the original's, captioned `Expense <n> (copy set aside) · <vendor>` |
 | `GET /api/cost-centers/totals` | copies are in no centre, not in `unassigned`, not in `n_rows` / `n_undated`. New `copies_set_aside`: `{n_rows, n_batches, totals}`, same shape as `unassigned`, inside the same date range |
 
 `n_receipts_in_report` (item 68) still counts copies: their pages are in the
-report, behind the original.
+report, behind the original. It is read against `n_receipts` (documents), not
+against a box.
+
+**The box counts, amended 2026-09-17.** The first round left the Expenses
+boxes counting rows, so live August read EXPENSES 20 beside CATEGORIZED 23 +
+NEEDS CATEGORY 2 = 25, and item 84's rule held only by counting documents the
+month no longer counts. A copy row now carries `boxes: []`, decided by the
+same `grid_copies` set that writes `counts_in_total: false`
+(`service.expense_boxes(copy=...)`, never a second predicate), and the months
+list's categorized pair leaves the same `decided_copies` out. Live before,
+read-only on 2026-09-17, and predicted after. August's 5 copies each sat in
+`categorized` + `ready`; July's 2 (Aposto, Lovable) each in `categorized`,
+`needs_entity`, `needs_person`, `needs_company_or_person` and
+`suggested_private`.
+
+| Count | August 2026 (`074a7b8905d7`) | July 2026 (`50622baec444`) |
+|---|---|---|
+| `n_expenses` | 20 | 50 |
+| `n_categorized` | 23 → 18 | 49 → 47 |
+| `n_uncategorized` | 2 | 3 |
+| `n_ready` | 16 → 11 | 14 |
+| `n_needs_entity` · `n_needs_person` · `n_needs_company_or_person` | 3 · 4 · 4 | 33 · 33 · 33 → 31 · 31 · 31 |
+| `n_suggested_private` | 1 | 24 → 22 |
+| `n_private` · `n_needs_cost_center` · `n_missing_receipt_image` · `n_receipts_unrenderable` | 0 | 0 |
+| months list `n_categorized` / `n_uncategorized` | 23 / 2 → 18 / 2 | 49 / 3 → 47 / 3 |
+
+`n_review` (not a box; July's two copies read `check`) and the card-review
+strip keep counting rows as before.
 
 Live 2026-09-17 before the change, read-only: August 2026 (`074a7b8905d7`)
 printed 25 expenses, USD 2,297.45, EUR 700.00, with 5 copies (USD 263.59,
@@ -1055,9 +1082,9 @@ EUR 80.00, Lovable USD 200.00). Predicted after: August 20 expenses, USD
 19,231.51) to 115 rows (USD 32,971.01, EUR 19,119.51) with 17 copies across 4
 batches (USD 1,425.01, EUR 112.00).
 
-Tests: `tests/test_copies_out_of_totals.py` (route-level: grid, months list,
-CSV, PDF and roll-up for a decided copy, the "Not a copy" undo, and a
-reconciling month where a hand-matched copy counts again).
+Tests: `tests/test_copies_out_of_totals.py` (route-level: grid, its boxes,
+months list, CSV, PDF and roll-up for a decided copy, the "Not a copy" undo,
+and a reconciling month where a hand-matched copy counts again).
 
 ## Cross-batch settlement: `settled_by` (added 2026-09-06, R4 / item 38)
 
@@ -2654,8 +2681,24 @@ one call per row). A box's name is its count's name without `n_`.
 | `receipts_unrenderable` | `receipt_render` is `failed` | `n_receipts_unrenderable` (present once a report was built) |
 
 `expenses[].boxes` is on every row, in the table's order, never null;
-`categorized` and `uncategorized` partition the rows. A new box is a rule-5
-change.
+`categorized` and `uncategorized` partition the rows the month counts. A new
+box is a rule-5 change.
+
+**A decided copy is in no box (item 94, 2026-09-17).** A row carrying
+`counts_in_total: false` has `boxes: []`, from the same `decided_copies` set,
+so every count above leaves it out the way `n_expenses` does and
+`n_categorized + n_uncategorized == n_expenses`. The to-do boxes
+(`needs_company_or_person` and its halves, `needs_cost_center`,
+`suggested_private`, `missing_receipt_image`, `receipts_unrenderable`) go
+too, deliberately: every box is a list of expenses with work left, and
+nothing done to a copy's company, person, cost center, private flag or file
+changes the month, because a copy writes no CSV row, no listing row, no
+reimbursement and no cost-center bucket (its pages print behind the
+original's, which carry the evidence). The row stays on screen and rulable:
+the one question it still asks, whether it really is a copy, has its own
+control, the duplicate badge and "Not a copy", and that ruling brings the row
+back into every box it qualifies for. `n_receipts_in_report` is not a box and
+keeps counting documents against `n_receipts`.
 
 Two numbers the boxes corrected, read off the live months on 2026-09-16:
 
@@ -2677,7 +2720,7 @@ and the two old counts keep their questions.
 
 Pinned by `tests/test_view_contract.py`
 (`test_every_box_count_equals_the_rows_carrying_its_box`), route-level in
-`tests/test_expense_boxes.py`.
+`tests/test_expense_boxes.py` and, for copies, `tests/test_copies_out_of_totals.py`.
 
 ## Publishing saves the month's corrections to memory: `memory` on the publish reply (item 88, 2026-09-16)
 

@@ -1165,9 +1165,11 @@ def test_every_box_count_equals_the_rows_carrying_its_box(payloads):
     names from `EXPENSE_BOXES` in that order, never null; and for every box
     whose count `n_{box}` is on the summary, the count equals the number of
     rows carrying the box, so a box that opens its rows lists exactly the
-    number it shows. `categorized` / `uncategorized` partition the rows. A
-    new box is a rule-5 change (api-contract). Route-level behaviour:
-    `tests/test_expense_boxes.py`."""
+    number it shows. `categorized` / `uncategorized` partition the rows the
+    month counts; a decided copy (`counts_in_total: false`, item 94) is in
+    no box at all, so the pair sums to `n_expenses`. A new box is a rule-5
+    change (api-contract). Route-level behaviour:
+    `tests/test_expense_boxes.py`, `tests/test_copies_out_of_totals.py`."""
     from expense_recon.web.service import EXPENSE_BOXES
 
     views = payloads["expense_batch"]
@@ -1178,8 +1180,16 @@ def test_every_box_count_equals_the_rows_carrying_its_box(payloads):
             boxes = e["boxes"]
             assert isinstance(boxes, list), e
             assert boxes == [b for b in EXPENSE_BOXES if b in boxes], boxes
+            if e.get("counts_in_total") is False:
+                assert boxes == [], e
+                continue
             assert ("categorized" in boxes) != ("uncategorized" in boxes), boxes
             seen.update(boxes)
+        summary = view["summary"]
+        assert (
+            summary["n_categorized"] + summary["n_uncategorized"]
+            == summary["n_expenses"]
+        ), summary
         for box in EXPENSE_BOXES:
             key = f"n_{box}"
             if key in view["summary"]:

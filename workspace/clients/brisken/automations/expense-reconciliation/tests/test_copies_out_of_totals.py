@@ -10,7 +10,11 @@ decides which documents do not count, and every surface reads it:
 
 * the grid keeps the copy's row (marker and "Not a copy" undo included) but
   leaves it out of `n_expenses` and `totals_by_ccy`;
-* the months list counts the same expenses;
+* the copy is in no Expenses box (item 84's `expenses[].boxes`), to-do boxes
+  included, so every box count leaves it out and `n_categorized` +
+  `n_uncategorized` == `n_expenses` (live August 2026 read EXPENSES 20 beside
+  CATEGORIZED 23 + NEEDS CATEGORY 2);
+* the months list counts the same expenses, and categorizes the same ones;
 * the CSV writes no row for it and states it on one line under the rows;
 * the month report PDF leaves it out of the listing and the header total,
   names it under the listing, and keeps its pages behind the original's;
@@ -47,6 +51,7 @@ from expense_recon.llm.client import (  # noqa: E402
     MockLLMClient,
 )
 from expense_recon.web.app import create_app  # noqa: E402
+from expense_recon.web.service import EXPENSE_BOXES  # noqa: E402
 
 JPG = b"\xff\xd8\xff\xe0fake-jpeg-bytes"
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -176,6 +181,7 @@ def _surfaces(client, batch_id) -> dict:
         "grid": grid,
         "rows": {e["document_id"]: e for e in grid["expenses"]},
         "months_n_expenses": listed["summary"]["n_expenses"],
+        "months_summary": listed["summary"],
         "csv_rows": data_rows,
         "csv_footer": footer,
         "listing": listing,
@@ -192,8 +198,36 @@ def _copy_id(grid) -> str:
     return copy
 
 
+def _assert_boxes_reconcile(s: dict, n_expenses: int) -> None:
+    """Item 84's rule, which item 94 must keep: every box count on the grid
+    is the rows carrying that box, and Categorized + Needs category are
+    exactly the expenses the month counts. The months list categorizes the
+    same expenses the batch page does."""
+    summary, rows = s["grid"]["summary"], s["grid"]["expenses"]
+    for box in EXPENSE_BOXES:
+        if f"n_{box}" in summary:
+            assert summary[f"n_{box}"] == sum(
+                1 for e in rows if box in e["boxes"]
+            ), box
+    assert summary["n_expenses"] == n_expenses
+    assert summary["n_categorized"] + summary["n_uncategorized"] == n_expenses
+    months = s["months_summary"]
+    assert months["n_categorized"] + months["n_uncategorized"] == n_expenses
+    assert (months["n_categorized"], months["n_uncategorized"]) == (
+        summary["n_categorized"], summary["n_uncategorized"],
+    )
+
+
 def _assert_copy_set_aside(s: dict, copy_id: str) -> None:
     grid, summary = s["grid"], s["grid"]["summary"]
+    # Boxes: the copy is in none, to-dos included, and every counted row is
+    # in Categorized or Needs category, so each box count leaves it out.
+    assert s["rows"][copy_id]["boxes"] == []
+    assert all(
+        ("categorized" in e["boxes"]) != ("uncategorized" in e["boxes"])
+        for d, e in s["rows"].items() if d != copy_id
+    )
+    _assert_boxes_reconcile(s, 2)
     # Grid: the row stays, marker and all, and leaves the count and totals.
     assert copy_id in s["rows"]
     assert s["rows"][copy_id]["duplicate"]["is_extra"] is True
@@ -242,6 +276,12 @@ def _assert_copy_set_aside(s: dict, copy_id: str) -> None:
 def _assert_copy_counts(s: dict) -> None:
     summary = s["grid"]["summary"]
     assert all("counts_in_total" not in e for e in s["rows"].values())
+    # Boxes: the document is back in every box it qualifies for.
+    assert all(
+        ("categorized" in e["boxes"]) != ("uncategorized" in e["boxes"])
+        for e in s["rows"].values()
+    )
+    _assert_boxes_reconcile(s, 3)
     assert summary["n_expenses"] == 3
     assert summary["n_receipts"] == 3
     assert summary["n_copies_set_aside"] == 0
@@ -270,12 +310,20 @@ def test_a_decided_copy_leaves_every_listing_and_total(client, monkeypatch):
     (group,) = s["grid"]["duplicate_groups"]
     assert group["verdict"] == "copy" and group["decided_by"] == "tool"
     _assert_copy_set_aside(s, _copy_id(s["grid"]))
+    # A to-do box leaves with the copy too. No row has a person yet, and
+    # only the two expenses that count ask for one.
+    summary = s["grid"]["summary"]
+    assert summary["n_uncategorized"] == 2
+    assert summary["n_needs_person"] == 2
+    assert summary["n_needs_company_or_person"] == 2
 
 
 def test_not_a_copy_brings_the_document_back_everywhere(client, monkeypatch):
     _wire(monkeypatch)
     batch_id = _batch(client)
     grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    copy_id = _copy_id(grid)
+    assert grid["summary"]["n_needs_company_or_person"] == 2
     (group,) = grid["duplicate_groups"]
 
     resp = client.post(
@@ -286,7 +334,13 @@ def test_not_a_copy_brings_the_document_back_everywhere(client, monkeypatch):
     # The reply is the grid's own summary, and it already counts the copy.
     assert resp.json()["summary"]["n_expenses"] == 3
 
-    _assert_copy_counts(_surfaces(client, batch_id))
+    s = _surfaces(client, batch_id)
+    _assert_copy_counts(s)
+    # Back in the boxes it qualifies for, the to-do ones included.
+    assert s["rows"][copy_id]["boxes"] == [
+        "uncategorized", "needs_person", "needs_company_or_person",
+    ]
+    assert s["grid"]["summary"]["n_needs_company_or_person"] == 3
 
 
 # ── a reconciling month: the same set the run payload sets aside ────────

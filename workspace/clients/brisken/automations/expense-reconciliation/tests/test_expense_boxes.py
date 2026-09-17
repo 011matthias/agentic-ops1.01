@@ -53,22 +53,25 @@ def _line(category: str | None) -> LineItem:
     )
 
 
-def _rc(doc: str, *, lines=(), entity: str = "", **kw) -> Receipt:
+def _rc(doc: str, total: str, *, lines=(), entity: str = "", **kw) -> Receipt:
     return Receipt(
         document_id=doc, legal_entity_id=entity, detected_date=date(2026, 7, 10),
-        detected_total=Decimal("20"), detected_currency="USD",
+        detected_total=Decimal(total), detected_currency="USD",
         detected_vendor="Staples", line_items=tuple(lines), **kw,
     )
 
 
+# Five separate purchases, so each amount differs: five identical Staples
+# receipts are one purchase and four decided copies, and since item 94 a
+# copy is in no box (`tests/test_copies_out_of_totals.py`).
 RECEIPTS = [
-    _rc("two_lines", lines=(_line(OFFICE), _line(None))),
-    _rc("all_lines", lines=(_line(OFFICE), _line(OFFICE)), receipt_name="all.jpg"),
-    _rc("no_lines"),
+    _rc("two_lines", "20", lines=(_line(OFFICE), _line(None))),
+    _rc("all_lines", "21", lines=(_line(OFFICE), _line(OFFICE)), receipt_name="all.jpg"),
+    _rc("no_lines", "22"),
     # a file on disk, but extraction recorded no image reference
-    _rc("on_disk.pdf", lines=(_line(OFFICE),)),
+    _rc("on_disk.pdf", "23", lines=(_line(OFFICE),)),
     # neither a file nor a reference: the one row really missing its image
-    _rc("nothing", lines=(_line(OFFICE),), entity="Corporate Services"),
+    _rc("nothing", "24", lines=(_line(OFFICE),), entity="Corporate Services"),
 ]
 
 
