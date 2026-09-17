@@ -1,6 +1,6 @@
 # Lovable prompt: a category for each line that has none (note #64, item 136)
 
-> **NOT YET APPLIED.** No backend change: `POST /api/runs/{id}/categories`
+> **APPLIED 2026-09-17** (published 12:42 UTC, verified in `PROMPT-STATUS.md`). No backend change: `POST /api/runs/{id}/categories`
 > with `line_index` already writes one line (probed 2026-09-17 on the current
 > code: the pick clears `partial_uncategorized`). Note answered: #64 (Criss).
 
