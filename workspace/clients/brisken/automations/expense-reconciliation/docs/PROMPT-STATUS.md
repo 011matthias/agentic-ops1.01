@@ -201,6 +201,7 @@ and a rollback would otherwise have nothing to re-apply.
 | Prompt | Decisive field names | Gate |
 |---|---|---|
 | `lovable-entity-order-r2-prompt.md` (item 92 round 2: press, hold, drag; arrows removed) | `set.entities.dragHandle`, `set.entities.dnd.instructions`, `set.entities.dnd.picked` in `chunk-settings`; dnd-kit present (`useSortable` or its minified sensor code beside those keys); `set.entities.moveUp` gone from `chunk-settings` (kept in `chunk-i18n`) | None: no backend change |
+| `lovable-feedback-0917-prompt.md` (notes #54-#60, item 78) | `card_ending`, `expx.reimburse.mark`, `expx.category.undo`, `wb.statement.loaded`, `set.merchants.howTo`, `set.entities.help.defaultPaidThrough`; ABSENCE of `set.export.approvedOnly` and `export_approved_only` in `chunk-settings` | Written 2026-09-17, not pasted. Section 6 reads `card_ending`, live with the notes-#54/#60 backend deploy |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
