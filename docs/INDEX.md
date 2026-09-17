@@ -11,6 +11,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | Brisken Recon Note 64 And Card Separation Items | client-dev | [Mini-Checkpoint-2](docs/2026-09-17%20-%20Brisken%20Recon%20Note%2064%20And%20Card%20Separation%20Items/Mini-Checkpoint-2.md) |
+| 2026-09-17 | Brisken Recon Items 117 And 121 | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Recon%20Items%20117%20And%20121/Checkpoint.md) |
 | 2026-09-17 | Brisken Recon Note 64 And Card Separation Items | client-dev | [Mini-Checkpoint-1](docs/2026-09-17%20-%20Brisken%20Recon%20Note%2064%20And%20Card%20Separation%20Items/Mini-Checkpoint-1.md) |
 | 2026-09-17 | Brisken Expense Recon Voids Audit | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Expense%20Recon%20Voids%20Audit/Checkpoint.md) |
 | 2026-09-17 | Brisken Recon Entity Order | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Recon%20Entity%20Order/Checkpoint.md) |
