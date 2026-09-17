@@ -266,6 +266,167 @@ def test_an_entityless_batch_is_provisioned_against_every_entity_chart(tmp_path)
     assert failed.document_id == "wrong.jpg"
 
 
+# ── item 95: the chart gate never un-categorizes a row ──────────────
+#
+# Live 2026-09-17: the grid showed July 49 of 52 expenses categorized, the
+# document printed the extra ones as `(uncategorized - assign)`, and they
+# were exactly the rows with a company. The chart gate judged the row's
+# account (the tool's own category label, or none after a category edit)
+# not postable in that company's chart and forced the whole line to REVIEW,
+# which the export renders as "needs category". A receipt with one
+# categorized and one unread line collapsed into ONE uncategorized row.
+# Route-level: the CSV is compared with the grid's own `books_as`.
+
+COL_AMOUNT = EXPENSE_COLUMNS.index("Expense Amount")
+ACCOUNT_PLACEHOLDER = "(uncategorized - assign)"
+
+
+def _provision_charts(tmp_path, monkeypatch) -> None:
+    """A provisioned Corporate Services chart that holds a real account but
+    none of the tool's category labels, the live shape."""
+    import json
+
+    chart = tmp_path / "coa.json"
+    chart.write_text(json.dumps({
+        "822741658": {"org": {"name": "Corporate Services"}, "accounts": [
+            {"account_id": "1", "account_name": "Office Supplies",
+             "account_code": "E500", "account_type": "expense",
+             "parent_account_name": None, "is_active": True}]},
+    }), encoding="utf-8")
+    prov = tmp_path / "coa-provision.json"
+    prov.write_text(json.dumps({
+        "chart_path": str(chart),
+        "entities": {"Corporate Services": {"org_id": "822741658"}},
+    }), encoding="utf-8")
+    monkeypatch.setenv("EXPENSE_RECON_COA_PROVISION", str(prov))
+
+
+def _books_as_by_vendor(client, batch_id) -> dict[str, list[tuple[str, str]]]:
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    return {
+        e["vendor"]["display"]: [
+            (b["account"] if not b["unassigned"] else ACCOUNT_PLACEHOLDER, b["amount"])
+            for b in e["books_as"]
+        ]
+        for e in grid["expenses"]
+    }
+
+
+def _csv_by_vendor(client, batch_id) -> dict[str, list[tuple[str, str]]]:
+    out: dict[str, list[tuple[str, str]]] = {}
+    for row in _export_rows(client, batch_id):
+        out.setdefault(row[COL_VENDOR], []).append((row[COL_ACCOUNT], row[COL_AMOUNT]))
+    return out
+
+
+def test_a_categorized_row_with_a_company_exports_its_category(client, monkeypatch):
+    from expense_recon.llm.client import ClassificationResult, ExtractedLineItem
+
+    _provision_charts(client._data_root, monkeypatch)
+    mock = MockLLMClient(
+        extraction_responses=[
+            _extraction(vendor="Uber", total="42.50"),
+            _extraction(vendor="Microsoft", total="718.20", line_items=(
+                ExtractedLineItem("Microsoft 365 Business Standard", "693.00"),
+                ExtractedLineItem("Item 1", "25.20"),
+            )),
+            _extraction(vendor="Parada Obrigatoria", total="32.00"),
+        ],
+        responses=[
+            # AI-categorized, account = the tool's own category label.
+            ClassificationResult("Travel & Transport", "Travel & Transport", 0.9, "mock"),
+            [
+                ClassificationResult(
+                    "Software & Subscriptions", "Software & Subscriptions", 0.9, "mock"
+                ),
+                ClassificationResult(None, None, 0.2, "mock: vague"),
+            ],
+            ClassificationResult(None, None, 0.2, "mock: unsure"),
+        ],
+    )
+    monkeypatch.setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
+    resp = client.post("/api/expense-batches", data={"legal_entity": ""})
+    assert resp.status_code == 200, resp.text
+    batch_id = resp.json()["batch_id"]
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", (name, JPG + name.encode(), "application/octet-stream"))
+               for name in ("uber.jpg", "microsoft.jpg", "parada.jpg")],
+    )
+    assert resp.status_code == 200, resp.text
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+
+    docs = {
+        e["vendor"]["display"]: e["document_id"]
+        for e in client.get(f"/api/expense-batches/{batch_id}").json()["expenses"]
+    }
+    # Criss categorizes the one the AI left open (the edit stores no account).
+    resp = client.put(
+        f"/api/runs/{batch_id}/expenses/{docs['Parada Obrigatoria']}",
+        json={"field": "category", "value": "Meals & Entertainment"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    # Before any company is assigned, the document already agrees.
+    assert _csv_by_vendor(client, batch_id) == _books_as_by_vendor(client, batch_id)
+
+    for doc in docs.values():
+        resp = client.put(
+            f"/api/runs/{batch_id}/expenses/{doc}/entity",
+            json={"legal_entity": "Corporate Services"},
+        )
+        assert resp.status_code == 200, resp.text
+
+    screen = _books_as_by_vendor(client, batch_id)
+    assert screen == {
+        "Uber": [("Travel & Transport", "42.50")],
+        "Microsoft": [
+            ("Software & Subscriptions", "693.00"),
+            (ACCOUNT_PLACEHOLDER, "25.20"),
+        ],
+        "Parada Obrigatoria": [("Meals & Entertainment", "32.00")],
+    }
+    rows = _export_rows(client, batch_id)
+    assert {r[COL_ENTITY] for r in rows} == {"Corporate Services"}, "precondition: gated"
+    assert _csv_by_vendor(client, batch_id) == screen
+
+
+def test_a_gated_line_keeps_its_category_and_loses_only_its_account():
+    """The gate still keeps a non-postable account out of the export: the
+    line books as a category with no account, which the item-70 account
+    rule renders as the category label with no chart wired and as
+    `(account unmapped - assign)` with one. Never as uncategorized."""
+    from decimal import Decimal
+
+    from expense_recon.matching.types import Categorization, ClassificationSource, LineItem, Receipt
+    from expense_recon.output.zoho_expense_export import build_expense_rows
+
+    item = LineItem(
+        description="flight", line_total=Decimal("100.00"), quantity=None, unit_price=None,
+        categorization=Categorization(
+            category="Travel & Transport", zoho_account="E900 Phantom",
+            confidence=0.9, source=ClassificationSource.LINE, reasoning="llm"),
+    )
+    receipt = Receipt(
+        document_id="r1", legal_entity_id="Corporate Services",
+        detected_date=None, detected_total=Decimal("100.00"), detected_currency="USD",
+        detected_vendor="Airline", line_items=(item,),
+    )
+    chart = _chart("Office Supplies", "E500")
+    single = CoaGate(chart=chart, entity="Corporate Services")
+
+    (row,) = build_expense_rows([receipt], chart_of_accounts=chart, coa_gate=single)
+    assert row[COL_ACCOUNT] == "(account unmapped - assign)"
+
+    from expense_recon.coa_gate import gate_for_entities
+
+    multi = gate_for_entities({"Corporate Services": single})
+    (row,) = build_expense_rows([receipt], coa_gate=multi)
+    assert row[COL_ACCOUNT] == "Travel & Transport"
+    assert "Phantom" not in row[COL_ACCOUNT], "the gate let a non-postable account through"
+
+
 def _receipt_for(doc: str, entity: str, account: str):
     from expense_recon.matching.types import Categorization, LineItem, Receipt
 
