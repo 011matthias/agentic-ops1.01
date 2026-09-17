@@ -84,6 +84,7 @@ import unicodedata
 from dataclasses import dataclass, replace
 
 from .cards_provision import CardPreset
+from .error_codes import CodedValueError
 from .matching.deterministic import _MASK_CHARS, _card_keys, _normalize
 
 # Digit tokens accepted in a card entry: 3-8 digits, matching the token
@@ -278,14 +279,17 @@ def normalize_cards_setting(raw: object) -> dict:
     when False) so the settings blob stays small and diffs stay honest.
     """
     if not isinstance(raw, dict):
-        raise ValueError("cards must be an object")
+        raise CodedValueError("cards must be an object", code="invalid_body")
     cleaned: dict[str, dict] = {}
     for key, entry in raw.items():
         slug = str(key).strip()
         if not slug:
             continue
         if not isinstance(entry, dict):
-            raise ValueError(f"cards[{slug!r}] must be an object")
+            raise CodedValueError(
+                f"cards[{slug!r}] must be an object",
+                code="invalid_body", field=f"cards[{slug}]",
+            )
         out: dict = {}
         for skey in (
             "label", "label_pt", "entity", "person", "default_cost_center",
@@ -299,16 +303,22 @@ def normalize_cards_setting(raw: object) -> dict:
             out["currency"] = currency
         digits_raw = entry.get("digits")
         if digits_raw is not None and not isinstance(digits_raw, list):
-            raise ValueError(f"cards[{slug!r}].digits must be a list")
+            raise CodedValueError(
+                f"cards[{slug!r}].digits must be a list",
+                code="invalid_body", field=f"cards[{slug}].digits",
+            )
         digits: list[str] = []
         for d in digits_raw or []:
             token = str(d).strip()
             if not token:
                 continue
             if not token.isdigit() or not (_DIGIT_MIN <= len(token) <= _DIGIT_MAX):
-                raise ValueError(
+                raise CodedValueError(
                     f"cards[{slug!r}].digits entries must be"
-                    f" {_DIGIT_MIN}-{_DIGIT_MAX} digit strings, got {token!r}"
+                    f" {_DIGIT_MIN}-{_DIGIT_MAX} digit strings, got {token!r}",
+                    code="card_digits_invalid",
+                    card=slug, value=token,
+                    min_digits=_DIGIT_MIN, max_digits=_DIGIT_MAX,
                 )
             if token not in digits:
                 digits.append(token)
@@ -316,7 +326,10 @@ def normalize_cards_setting(raw: object) -> dict:
             out["digits"] = digits
         aliases_raw = entry.get("aliases")
         if aliases_raw is not None and not isinstance(aliases_raw, list):
-            raise ValueError(f"cards[{slug!r}].aliases must be a list")
+            raise CodedValueError(
+                f"cards[{slug!r}].aliases must be a list",
+                code="invalid_body", field=f"cards[{slug}].aliases",
+            )
         aliases: list[str] = []
         seen_alias: set[str] = set()
         for a in aliases_raw or []:
@@ -325,10 +338,12 @@ def normalize_cards_setting(raw: object) -> dict:
             if not alias or not norm or norm in seen_alias:
                 continue
             if is_generic_tender(alias):
-                raise ValueError(
+                raise CodedValueError(
                     f"cards[{slug!r}].aliases: {alias!r} is a generic tender "
                     "word and cannot identify one card (it would auto-resolve "
-                    "every receipt paying by that tender)"
+                    "every receipt paying by that tender)",
+                    code="card_alias_generic",
+                    card=slug, alias=alias,
                 )
             seen_alias.add(norm)
             aliases.append(alias)

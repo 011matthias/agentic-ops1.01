@@ -45,6 +45,7 @@ from ..cli import (  # item 105
 )
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
+from ..error_codes import Refusal, code_of, detail_of, fields_of
 from ..duplicates import (
     STATE_OPEN,
     copies_to_collapse,
@@ -72,6 +73,7 @@ from ..learning import (
     LearningStore,
     MatchMemory,
     MerchantCategoryLookup,
+    learn_confirmed_pairs,
     learn_from_expense_run,
     learn_from_run,
     normalize_vendor,
@@ -181,17 +183,27 @@ class RunInputError(Exception):
     `headers` and `partial_map` are populated when the statement column
     map could not be fully auto-detected, so the form can re-prompt with
     the file's real headers and whatever was guessed.
+
+    `code` names the CONDITION (item 130), stable across rewordings, and
+    the keyword arguments are the named values the sentence used, so the
+    front end builds its own sentence from data instead of translating
+    English with numbers baked in. `message` is unchanged and stays the
+    body's `error`.
     """
 
     def __init__(
         self,
         message: str,
         *,
+        code: str = "invalid_input",
         headers: list[str] | None = None,
         partial_map: dict[str, str] | None = None,
+        **fields: object,
     ):
         super().__init__(message)
         self.message = message
+        self.code = code
+        self.fields = dict(fields)
         self.headers = headers
         self.partial_map = partial_map
 
@@ -351,7 +363,9 @@ def prepare_run(
         raise RunInputError(
             "Receipts source 'Zoho Expense report PDF' needs a .pdf upload; "
             f"this receipts file is {rcpt_path.suffix or 'without an extension'}. "
-            "Upload the report PDF, or pick a CSV source."
+            "Upload the report PDF, or pick a CSV source.",
+            code="receipts_source_needs_pdf",
+            suffix=rcpt_path.suffix or "",
         )
 
     # 2026-07-21: the LLM path is the default for a hosted run (the OpenAI key
@@ -643,6 +657,10 @@ def _setup_advisories(
     for ccy, count in sorted(missing.items(), key=lambda kv: -kv[1]):
         out.append({
             "setting": "fx_reference_rates",
+            "code": "fx_rate_missing",
+            "currency": ccy,
+            "card_currency": card_ccy,
+            "n_receipts": count,
             "message": (
                 f"{count} receipt(s) are in {ccy} but no {ccy}:{card_ccy} "
                 f"reference rate is available (the ECB publishes none for "
@@ -654,6 +672,7 @@ def _setup_advisories(
     if not has_coa:
         out.append({
             "setting": "cards",
+            "code": "no_chart_of_accounts",
             "message": (
                 "No chart of accounts was resolved for this run, so posting "
                 "accounts are not validated and the journal exports "
@@ -684,6 +703,8 @@ def _setup_advisories(
     if acct and not resolvable:
         out.append({
             "setting": "cards",
+            "code": "card_posting_account_missing",
+            "card": acct,
             "message": (
                 f"Card '{acct}' has no posting account set "
                 "(optional: only the data export uses it). Export "
@@ -816,12 +837,16 @@ def _statement_source_advisory(
     )
     if foreign < 3 or foreign / len(receipts) < 0.3:
         return None
-    return (
+    return Refusal(
         f"{foreign} of {len(receipts)} receipts are foreign-currency but the "
         f"statement is {Path(stmt_name).suffix or 'tabular'} — the Chase "
         f"statement PDF carries each charge's original foreign amount, which "
         f"lets these match deterministically. Prefer uploading the statement "
-        f"PDF for this month."
+        f"PDF for this month.",
+        code="statement_not_pdf",
+        n_foreign=foreign,
+        n_receipts=len(receipts),
+        suffix=Path(stmt_name).suffix or "",
     )
 
 
@@ -841,7 +866,9 @@ def execute_run(
             on_stage=on_stage,
         )
     except ConfigError as exc:
-        raise RunInputError(str(exc)) from exc
+        raise RunInputError(
+            str(exc), code="pipeline_config_invalid"
+        ) from exc
 
     outcome = result.outcome
     # Item 103: the same effective derivation the re-match commit and the
@@ -895,6 +922,9 @@ def execute_run(
     )
     if advisory:
         summary["statement_advisory"] = advisory
+        # Item 130: the same advisory as a code plus its numbers, so the
+        # screen can say it in the reviewer's language. Parallel field.
+        summary["statement_advisory_detail"] = detail_of(advisory)
     # 2026-07-22: master data that is MISSING now says so. Absent settings
     # used to fail silently — the April run came back 0-matched and
     # has_coa:false with nothing on screen explaining that no FX reference
@@ -1012,12 +1042,16 @@ def create_intake(
     a wall in front of the uploader). Raises `RunInputError` only for the
     user-fixable minimum."""
     if not statement_bytes:
-        raise RunInputError("No statement file uploaded.")
+        raise RunInputError(
+            "No statement file uploaded.", code="no_statement_file"
+        )
     stmt_name = _safe_name(statement_filename or "", "statement.csv")
     if Path(stmt_name).suffix.lower() not in _STATEMENT_SUFFIXES:
         raise RunInputError(
             "The statement file should be a .csv, .xlsx or .pdf export from "
-            "the bank."
+            "the bank.",
+            code="unsupported_statement_file",
+            suffix=Path(stmt_name).suffix or "",
         )
     rcpt_name: str | None = None
     if receipts_bytes:
@@ -1025,10 +1059,14 @@ def create_intake(
         if Path(rcpt_name).suffix.lower() not in _RECEIPTS_SUFFIXES:
             raise RunInputError(
                 "The receipts file should be a .csv export or a Zoho Expense "
-                "report .pdf."
+                "report .pdf.",
+                code="unsupported_receipts_file",
             )
     if not label.strip():
-        raise RunInputError("Please pick which card this statement is from.")
+        raise RunInputError(
+            "Please pick which card this statement is from.",
+            code="card_required",
+        )
 
     intake_id = uuid.uuid4().hex[:12]
     work_dir = data_root / "intakes" / intake_id
@@ -1074,10 +1112,13 @@ def replace_intake_files(
     if intake.status != INTAKE_RECEIVED:
         raise RunInputError(
             "These documents are already being processed; they can no "
-            "longer be swapped. Send a new upload instead."
+            "longer be swapped. Send a new upload instead.",
+            code="intake_already_processing",
         )
     if not statement_bytes and not receipts_bytes:
-        raise RunInputError("Pick at least one file to replace.")
+        raise RunInputError(
+            "Pick at least one file to replace.", code="no_replacement_file"
+        )
 
     work_dir = Path(intake.work_dir)
     new_stmt_name: str | None = None
@@ -1089,14 +1130,17 @@ def replace_intake_files(
         if Path(new_stmt_name).suffix.lower() not in _STATEMENT_SUFFIXES:
             raise RunInputError(
                 "The statement file should be a .csv, .xlsx or .pdf export "
-                "from the bank."
+                "from the bank.",
+                code="unsupported_statement_file",
+                suffix=Path(new_stmt_name).suffix or "",
             )
     if receipts_bytes:
         new_rcpt_name = _safe_name(receipts_filename or "", "receipts.csv")
         if Path(new_rcpt_name).suffix.lower() not in _RECEIPTS_SUFFIXES:
             raise RunInputError(
                 "The receipts file should be a .csv export or a Zoho Expense "
-                "report .pdf."
+                "report .pdf.",
+                code="unsupported_receipts_file",
             )
 
     # Validation passed for everything requested; now touch the disk.
@@ -1169,7 +1213,8 @@ def prepare_intake_run(
     statement_bytes = (intake_dir / intake.statement_name).read_bytes()
     if intake.receipts_name is None:
         raise RunInputError(
-            "This upload has no receipts file yet; ask for it before running."
+            "This upload has no receipts file yet; ask for it before running.",
+            code="intake_missing_receipts",
         )
     receipts_bytes = (intake_dir / intake.receipts_name).read_bytes()
     return prepare_run(
@@ -1196,7 +1241,9 @@ def _resolve_statement_map(stmt_path: Path, form: RunForm) -> dict[str, str]:
             stmt_path, sheet_name=form.sheet_name or None
         )
     except ValueError as exc:
-        raise RunInputError(str(exc)) from exc
+        raise RunInputError(
+            str(exc), code="statement_unreadable"
+        ) from exc
 
     column_map = dict(guessed)
     for field, header in form.column_map_overrides.items():
@@ -1209,8 +1256,10 @@ def _resolve_statement_map(stmt_path: Path, form: RunForm) -> dict[str, str]:
             "Could not auto-detect these required statement columns: "
             + ", ".join(missing)
             + ". Fill them in from the file's headers and re-run.",
+            code="statement_columns_missing",
             headers=headers,
             partial_map=column_map,
+            missing=list(missing),
         )
     return column_map
 
@@ -1631,10 +1680,14 @@ def validate_manual_match(
     transactions, receipts, _, _ = snapshot_from_dict(run.snapshot)
     tx = next((t for t in transactions if t.transaction_id == transaction_id), None)
     if tx is None:
-        return "Unknown transaction for this run."
+        return Refusal(
+            "Unknown transaction for this run.", code="transaction_not_found"
+        )
     rec = next((r for r in receipts if r.document_id == document_id), None)
     if rec is None:
-        return "Unknown receipt for this run."
+        return Refusal(
+            "Unknown receipt for this run.", code="receipt_not_found"
+        )
     # The matcher's own rule since 2026-09-11: an EMPTY entity on either
     # side is unscoped (a mailed receipt before its card is known, a charge
     # on a card the registry cannot name, item 59); only two NAMED entities
@@ -1644,7 +1697,10 @@ def validate_manual_match(
         and tx.legal_entity_id
         and rec.legal_entity_id != tx.legal_entity_id
     ):
-        return "Receipt and charge belong to different legal entities."
+        return Refusal(
+            "Receipt and charge belong to different legal entities.",
+            code="entity_differs",
+        )
     return None
 
 
@@ -1771,15 +1827,26 @@ def attach_emailed_receipt(
         (t for t in transactions if t.transaction_id == transaction_id), None
     )
     if tx is None:
-        return "Unknown transaction for this run.", None
+        return Refusal(
+            "Unknown transaction for this run.",
+            code="transaction_not_found",
+        ), None
     safe_name = Path(file_name or "").name
     suffix = Path(safe_name or "receipt").suffix.lower()
     if suffix not in MANUAL_RECEIPT_SUFFIXES:
-        return f"Unsupported receipt file type {suffix or '(none)'}.", None
+        return Refusal(
+            f"Unsupported receipt file type {suffix or '(none)'}.",
+            code="unsupported_attachment_type",
+            suffix=suffix or "",
+        ), None
     if not file_bytes:
-        return "Empty file.", None
+        return Refusal("Empty file.", code="empty_file"), None
     if len(file_bytes) > MANUAL_RECEIPT_MAX_BYTES:
-        return "File too large (15 MB max).", None
+        return Refusal(
+            "File too large (15 MB max).",
+            code="file_too_large",
+            limit_mb=MANUAL_RECEIPT_MAX_BYTES // (1024 * 1024),
+        ), None
 
     dest_dir = Path(run.work_dir) / "manual-receipts"
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -1837,14 +1904,20 @@ def attach_emailed_receipt(
         if fresh is None:
             # Deleted while the receipt was being read. Refuse honestly rather
             # than write a snapshot UPDATE that matches zero rows.
-            return "This batch no longer exists (it was deleted).", None
+            return Refusal(
+                "This batch no longer exists (it was deleted).",
+                code="batch_deleted",
+            ), None
         run = fresh
         fresh_tx, receipts, outcome, _ = snapshot_from_dict(fresh.snapshot)
         if not any(t.transaction_id == transaction_id for t in fresh_tx):
             # A statement re-read retires transaction ids by design. Confirming
             # a decision against a charge the month no longer holds would
             # strand it, so refuse with the sentence the up-front check uses.
-            return "Unknown transaction for this run.", None
+            return Refusal(
+                "Unknown transaction for this run.",
+                code="transaction_not_found",
+            ), None
         receipts = [r for r in receipts if r.document_id != document_id]
         receipts.append(receipt)
         if document_id not in outcome.unmatched_receipts:
@@ -2223,7 +2296,10 @@ def ingest_receipts_folder_into_run(
     with _BATCH_ADD_LOCK:  # item 66: bulk receipt-folder ingest
         fresh = store.get_run(run.run_id)
         if fresh is None:
-            raise RunInputError("This batch no longer exists (it was deleted).")
+            raise RunInputError(
+                "This batch no longer exists (it was deleted).",
+                code="batch_deleted",
+            )
         fresh_tx, fresh_receipts, _, _ = snapshot_from_dict(fresh.snapshot)
         # Never drop a charge the month already holds. `merged` buckets the
         # charges this ingest read minutes ago, so a statement upload that
@@ -2239,7 +2315,9 @@ def ingest_receipts_folder_into_run(
             raise RunInputError(
                 f"another statement upload added {len(dropped)} charge(s) to "
                 "this month while the folder was read; nothing was written, so "
-                "no charge was lost. Upload the folder again."
+                "no charge was lost. Upload the folder again.",
+                code="concurrent_statement_upload",
+                n_charges=len(dropped),
             )
         # Receipts that arrived mid-ingest (mail, a hand attach) join the pool
         # as unmatched rather than vanishing -- the same treatment the
@@ -2725,6 +2803,15 @@ def _row_posting_category(
 # avoid importing categorize into the view layer; the values are the ones
 # serialize.py round-trips onto the snapshot.
 _ADJ_DISAGREE = frozenset({"ai_override_heavy", "review_unresolved"})
+# Every WS2 adjudication verdict, so the run payload's
+# `adjudication_available` answers "did this run adjudicate" and is not
+# turned on by a decision from another feature (item 115).
+_ADJ_VERDICTS = _ADJ_DISAGREE | {"kept_er"}
+# Item 115: a remembered category was applied to a receipt whose line items
+# read something else, and nobody has validated the rule. The row asks for
+# the same glance a vendor-name guess does -- the category came from the
+# merchant's name, not from this receipt's items.
+_LEARNED_OVER_LINE = "learned_over_line"
 # Source tiers that are trusted enough to post without a glance. REGISTRY
 # (2026-07-29) is a curated merchant default — a deterministic top tier like
 # LEARNED — so it reads `ready`, not `check`.
@@ -2821,6 +2908,12 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
         return _review("pick", "One or more receipt lines still need a category before this can post.", "partial_uncategorized")
     if any(d in _ADJ_DISAGREE for d in decs):
         return _review("check", "The receipt's category and the account it would post to don't agree. A quick look to confirm the account is right.", "category_account_mismatch")
+    if any(d == _LEARNED_OVER_LINE for d in decs):
+        # Item 115. Same code (and so the same SPA sentence and the same
+        # Keep button) as a vendor-name guess, because it is the same
+        # question: the category came from the merchant's name rather than
+        # from this receipt's items. Keeping it makes it the reviewer's own.
+        return _review("check", "A remembered category for this merchant was used instead of what the receipt's items read. If it fits, keep it.", "vendor_guess")
     if any(s == "VENDOR" for s in srcs):
         return _review("check", "The category was guessed from the merchant name, not the receipt's line items. A quick look to confirm it fits.", "vendor_guess")
     if any(s not in _TRUSTED_SOURCE for s in srcs):
@@ -2873,12 +2966,13 @@ def confirm_expense_category(
     at sign-off like any other correction. Returns an error, or None."""
     rec = category_edit_receipt(store, run, document_id)
     if rec is None:
-        return "unknown expense"
+        return Refusal("unknown expense", code="expense_not_found")
     overrides = store.get_category_overrides(run.run_id)
     if not category_confirmable(rec, overrides):
-        return (
+        return Refusal(
             "this expense's category is not a guess to confirm: pick a "
-            "category instead, or check the account"
+            "category instead, or check the account",
+            code="category_not_a_guess",
         )
     for i, li in enumerate(rec.line_items):
         ov = overrides.get((document_id, i)) or {}
@@ -2917,11 +3011,12 @@ def set_charge_category(
     _transactions, _receipts, outcome, _ = snapshot_from_dict(run.snapshot)
     known = {t.transaction_id for t in _transactions}
     if transaction_id not in known:
-        return "unknown charge"
+        return Refusal("unknown charge", code="charge_not_found")
     if transaction_id not in set(outcome.unmatched_transactions):
-        return (
+        return Refusal(
             "this charge holds a receipt: set the category on the expense, "
-            "not on the charge"
+            "not on the charge",
+            code="charge_holds_a_receipt",
         )
     document_id, line_index = charge_category_key(transaction_id)
     overrides = store.get_category_overrides(run.run_id)
@@ -3989,6 +4084,9 @@ def build_view(
         # creation but never rebuilt here, so it had never actually reached
         # the review screen.
         "statement_advisory": run.summary.get("statement_advisory"),
+        "statement_advisory_detail": run.summary.get(
+            "statement_advisory_detail"
+        ),
         "setup_advisories": run.summary.get("setup_advisories", []),
         "llm_cost_usd": run.summary.get("llm_cost_usd", "0"),
         "ai_unavailable": run.summary.get("ai_unavailable", False),
@@ -4176,7 +4274,7 @@ def build_view(
         # finding, 2026-07-27).
         "adjudication_available": any(
             li.categorization is not None
-            and getattr(li.categorization, "decision", None) is not None
+            and getattr(li.categorization, "decision", None) in _ADJ_VERDICTS
             for r in rec_by_id.values()
             for li in r.line_items
         ),
@@ -4706,7 +4804,35 @@ def commit_to_memory(
                 source_run=run.run_id,
                 now_iso=now_iso,
             )
+            # Item 115: a receipt-first month with a statement also RECONCILES,
+            # and its confirmed pairs are the only proof of which truncated
+            # bank description belongs to which receipt, and of what a
+            # merchant's card actually converted at. Only the statement-mode
+            # branch below taught those, and no live month goes through it, so
+            # the store held 0 aliases and 0 FX rates while the contract
+            # promised both. Same inputs the matcher itself read: the
+            # snapshot's charges and baked receipt pool, the decisions applied,
+            # and only pairs a verdict confirmed.
+            pairs = alias = fx = 0
+            if has_statement(run):
+                txs, pool, pool_outcome, _ = snapshot_from_dict(run.snapshot)
+                pool = pool + borrowed_receipts(run)
+                pairs, alias, fx = learn_confirmed_pairs(
+                    store,
+                    transactions=txs,
+                    receipts=pool,
+                    outcome=apply_decisions(pool_outcome, txs, pool, decisions),
+                    confirmed_tx_ids={
+                        tx_id for tx_id, d in (decisions or {}).items()
+                        if d.status == STATUS_CONFIRMED
+                    },
+                    source_run=run.run_id,
+                    now_iso=now_iso,
+                )
         result = summary.as_dict()
+        result["confirmed_pairs"] = pairs
+        result["vendor_aliases"] = alias
+        result["merchant_fx"] = fx
         # Self-improving registry (2026-07-29): the same explicit vendor /
         # category edits also upsert the canonical merchant registry, so the
         # human-editable, seeded registry grows from corrections. Persist only
@@ -4920,31 +5046,42 @@ def validate_trip_fields(payload: dict) -> tuple[dict | None, str | None]:
     cost centers are edited independently, so the edit ORDER must not
     matter. Blank is a normal state and clears it."""
     if not isinstance(payload, dict):
-        return None, "body must be an object"
+        return None, Refusal("body must be an object", code="invalid_body")
     name = str(payload.get("name") or "").strip()[:200]
     if not name:
-        return None, "name is required"
+        return None, Refusal("name is required", code="trip_name_required")
     start_raw = str(payload.get("start") or "").strip()
     end_raw = str(payload.get("end") or "").strip()
     try:
         start = date.fromisoformat(start_raw)
         end = date.fromisoformat(end_raw)
     except ValueError:
-        return None, "start and end must be YYYY-MM-DD dates"
+        return None, Refusal(
+            "start and end must be YYYY-MM-DD dates",
+            code="trip_dates_invalid",
+        )
     if end < start:
-        return None, "end must not be before start"
+        return None, Refusal(
+            "end must not be before start", code="trip_dates_reversed"
+        )
     travelers_raw = payload.get("travelers", [])
     if travelers_raw is None:
         travelers_raw = []
     if not isinstance(travelers_raw, list) or not all(
         isinstance(t, str) for t in travelers_raw
     ):
-        return None, "travelers must be a list of names"
+        return None, Refusal(
+            "travelers must be a list of names", code="travelers_invalid"
+        )
     travelers = list(dict.fromkeys(
         t.strip() for t in travelers_raw if t.strip()
     ))
     if len(travelers) > MAX_TRIP_TRAVELERS:
-        return None, f"travelers holds at most {MAX_TRIP_TRAVELERS} names"
+        return None, Refusal(
+            f"travelers holds at most {MAX_TRIP_TRAVELERS} names",
+            code="too_many_travelers",
+            limit=MAX_TRIP_TRAVELERS,
+        )
     return {
         "name": name,
         "start_date": start.isoformat(),
@@ -4993,18 +5130,19 @@ def claim_trip_batch_slot(store: RunStore, trip_id: str) -> dict | None:
     tid = str(trip_id)
     with _TRIP_BATCH_LOCK:
         if store.get_trip(tid) is None:
-            return {"code": 404, "error": "trip not found"}
+            return {"code": 404, "error": "trip not found",
+                    "error_code": "trip_not_found"}
         if tid in _TRIP_BATCH_PENDING:
             return {"code": 409, "error": (
                 "this trip's expense batch is being created right now; "
                 "retry when that upload finishes"
-            )}
+            ), "error_code": "trip_batch_being_created"}
         existing = find_trip_batch(store, tid)
         if existing is not None:
             return {"code": 409, "error": (
                 "this trip already has an expense batch; add receipts "
                 "to it instead"
-            ), "batch_id": existing.run_id}
+            ), "error_code": "trip_batch_exists", "batch_id": existing.run_id}
         _TRIP_BATCH_PENDING.add(tid)
     return None
 
@@ -5022,18 +5160,19 @@ def delete_trip_entity(store: RunStore, trip_id: str) -> dict | None:
     tid = str(trip_id)
     with _TRIP_BATCH_LOCK:
         if store.get_trip(tid) is None:
-            return {"code": 404, "error": "Trip not found"}
+            return {"code": 404, "error": "Trip not found",
+                    "error_code": "trip_not_found"}
         if tid in _TRIP_BATCH_PENDING:
             return {"code": 409, "error": (
                 "this trip's expense batch is being created right now; "
                 "retry when that upload finishes"
-            )}
+            ), "error_code": "trip_batch_being_created"}
         batch = find_trip_batch(store, tid)
         if batch is not None:
             return {"code": 409, "error": (
                 "this trip still has an expense batch; delete the "
                 "batch first"
-            ), "batch_id": batch.run_id}
+            ), "error_code": "trip_has_batch", "batch_id": batch.run_id}
         store.delete_trip(tid)
     return None
 
@@ -5122,22 +5261,33 @@ def validate_expense_field(field: str, value: str) -> str | None:
         try:
             date.fromisoformat(value)
         except ValueError:
-            return "date must be YYYY-MM-DD"
+            return Refusal(
+                "date must be YYYY-MM-DD", code="invalid_date", field="date"
+            )
     elif field in ("total", "tax"):
         try:
             if not Decimal(value).is_finite():
                 raise ValueError(value)
         except (ArithmeticError, ValueError):
-            return f"{field} must be a number"
+            return Refusal(
+                f"{field} must be a number", code="invalid_number", field=field
+            )
     elif field == "currency":
         if not (len(value) == 3 and value.isalpha()):
-            return "currency must be a 3-letter code"
+            return Refusal(
+                "currency must be a 3-letter code", code="invalid_currency"
+            )
     elif field == "legal_entity":
         if not value.strip():
-            return "legal_entity cannot be blank"
+            return Refusal(
+                "legal_entity cannot be blank", code="legal_entity_required"
+            )
     elif field == "private":
         if value != "1":
-            return 'private must be "1" (or empty to clear)'
+            return Refusal(
+                'private must be "1" (or empty to clear)',
+                code="invalid_private_value",
+            )
     return None
 
 
@@ -5217,13 +5367,19 @@ def create_expense_batch(
     carries mail provenance for a batch created FROM a mailed receipt.
     """
     if not files and not allow_empty:
-        raise RunInputError("No receipt files uploaded.")
+        raise RunInputError(
+            "No receipt files uploaded.", code="no_receipt_files"
+        )
     if batch_type and batch_type not in VALID_BATCH_TYPES:
         raise RunInputError(
-            f"batch_type must be one of {', '.join(VALID_BATCH_TYPES)}."
+            f"batch_type must be one of {', '.join(VALID_BATCH_TYPES)}.",
+            code="invalid_batch_type",
+            allowed=sorted(VALID_BATCH_TYPES),
         )
     if batch_type == BATCH_TYPE_TRIP and not str(trip_id).strip():
-        raise RunInputError("A trip batch needs a trip_id.")
+        raise RunInputError(
+            "A trip batch needs a trip_id.", code="trip_id_required"
+        )
 
     run_id = uuid.uuid4().hex[:12]
     work_dir = data_root / "runs" / run_id
@@ -5292,7 +5448,10 @@ def create_expense_batch(
         # created from files that could not be read.
         _shutil.rmtree(work_dir, ignore_errors=True)
         detail = f" ({issues[0]})" if issues else ""
-        raise RunInputError(f"No readable receipt files uploaded.{detail}")
+        raise RunInputError(
+            f"No readable receipt files uploaded.{detail}",
+            code="no_readable_receipt_files",
+        )
 
     # LLM: folder OCR has no keyword fallback, so without a key the batch
     # will fail honestly at execute time (ConfigError -> job error). The
@@ -5410,7 +5569,9 @@ def execute_expense_batch(
             registry=prepared.registry,
         )
     except ConfigError as exc:
-        raise RunInputError(str(exc)) from exc
+        raise RunInputError(
+            str(exc), code="pipeline_config_invalid"
+        ) from exc
 
     receipts = result.receipts
     n_categorized, n_uncategorized = categorized_counts(receipts)
@@ -5980,13 +6141,26 @@ def prepare_row_card_fix(store: RunStore, run_id: str, key: str) -> str | None:
 
     live = effective_cards(store.get_settings(), load_cards()).get(key)
     if live is None:
-        return f"card_key {key!r} is not a defined card; define it in Settings, Cards first"
+        return Refusal(
+            f"card_key {key!r} is not a defined card; define it in "
+            "Settings, Cards first",
+            code="card_not_defined",
+            card=key,
+        )
     if not live.active:
-        return f"card {key!r} is inactive; reactivate it before assigning receipts to it"
+        return Refusal(
+            f"card {key!r} is inactive; reactivate it before assigning "
+            "receipts to it",
+            code="card_inactive",
+            card=key,
+        )
     with _BATCH_ADD_LOCK:
         run = store.get_run(run_id)
         if run is None:
-            return "This batch no longer exists (it was deleted)."
+            return Refusal(
+                "This batch no longer exists (it was deleted).",
+                code="batch_deleted",
+            )
         cfg = dict(run.config or {})
         exp = dict(cfg.get("expense") or {})
         batch_cards = dict(exp.get("cards") or {})
@@ -7982,10 +8156,14 @@ def build_expense_report(
             f"{'page' if len(suspect) == 1 else 'pages'}"
             f"{'' if in_sections else ' below'}."
         )
-    title = f"Expense report — {label}"
+    # A colon, never an em-dash: the house deliverable standard bans every
+    # dash form from a client-facing document, and the colon is what the rest
+    # of both documents already uses for a label ("Statement: ...",
+    # "Owed to Dirk: ...").
+    title = f"Expense report: {label}"
     subtitle = ""
     if is_trip_batch(run):
-        title = f"Trip report — {trip.name if trip is not None else label}"
+        title = f"Trip report: {trip.name if trip is not None else label}"
         if trip is not None:
             who = ", ".join(roster) if roster else "no travelers entered"
             subtitle = (
@@ -8565,7 +8743,9 @@ def build_reconciliation_report(
 
     label = run.label or run.run_id
     return build_reconciliation_report_pdf(
-        view, title=f"Reconciliation — {label}", evidence=evidence,
+        # A colon, never an em-dash (the house deliverable standard; the same
+        # call as the month report's title above).
+        view, title=f"Reconciliation: {label}", evidence=evidence,
         # Item 138: the card each receipt nobody holds files under, from the
         # same chain the matcher scopes by (item 137).
         receipt_cards=report_receipt_cards(
@@ -8601,11 +8781,18 @@ def assign_batch_cards(
     from ..cards import normalize_cards_setting
 
     if not assignments and not new_cards:
-        raise RunInputError("Nothing to apply: no assignments and no new cards.")
+        raise RunInputError(
+            "Nothing to apply: no assignments and no new cards.",
+            code="nothing_to_apply",
+        )
     try:
         new_cards_clean = normalize_cards_setting(new_cards or {})
     except ValueError as exc:
-        raise RunInputError(str(exc)) from exc
+        raise RunInputError(
+            str(exc),
+            code=code_of(exc, "card_definition_invalid"),
+            **fields_of(exc),
+        ) from exc
 
     # Same serialization as add_receipts_to_expense_batch: the config /
     # snapshot read-modify-write below must not interleave with a
@@ -8615,7 +8802,10 @@ def assign_batch_cards(
     with _BATCH_ADD_LOCK:
         fresh = store.get_run(run.run_id)
         if fresh is None:
-            raise RunInputError("This batch no longer exists (it was deleted).")
+            raise RunInputError(
+                "This batch no longer exists (it was deleted).",
+                code="batch_deleted",
+            )
         run = fresh
         # No statement refusal since 2b-2. A card assignment is exactly what
         # an operator needs mid-month: matching is entity-scoped, so a card
@@ -8681,7 +8871,9 @@ def _assign_batch_cards_locked(
         ):
             raise RunInputError(
                 f"card {slug!r} already exists; edit it in Settings > Cards "
-                "instead of re-creating it here"
+                "instead of re-creating it here",
+                code="card_already_exists",
+                card=slug,
             )
     for slug, entry in new_cards_clean.items():
         cards_map[slug] = dict(entry)
@@ -8690,32 +8882,49 @@ def _assign_batch_cards_locked(
     seen_hints: set[str] = set()
     for a in assignments:
         if not isinstance(a, dict):
-            raise RunInputError("each assignment must be an object")
+            raise RunInputError(
+                "each assignment must be an object", code="invalid_body"
+            )
         hint = str(a.get("hint") or "").strip()
         card_key = str(a.get("card") or "").strip()
         if not hint or not card_key:
-            raise RunInputError("each assignment needs a hint and a card key")
+            raise RunInputError(
+                "each assignment needs a hint and a card key",
+                code="assignment_incomplete",
+            )
         if hint in seen_hints:
             # Two assignments for one hint would teach BOTH cards the
             # hint's tokens and leave it permanently ambiguous — refuse
             # the contradiction instead of last-wins.
-            raise RunInputError(f"hint {hint!r} is assigned more than once")
+            raise RunInputError(
+                f"hint {hint!r} is assigned more than once",
+                code="hint_assigned_twice",
+                hint=hint,
+            )
         seen_hints.add(hint)
         if hint not in batch_hints:
             raise RunInputError(
-                f"hint {hint!r} does not appear in this batch's receipts"
+                f"hint {hint!r} does not appear in this batch's receipts",
+                code="hint_not_in_batch",
+                hint=hint,
             )
         if card_key not in cards_map:
             # Materialize the batch-config entry from the live registry the
             # assignment UI offered (GET /api/cards). Unknown = typo, 400.
             live = composed_live.get(card_key)
             if live is None:
-                raise RunInputError(f"unknown card {card_key!r}")
+                raise RunInputError(
+                    f"unknown card {card_key!r}",
+                    code="card_not_defined",
+                    card=card_key,
+                )
             cards_map[card_key] = cards_to_setting({card_key: live})[card_key]
         if cards_map[card_key].get("active") is False:
             raise RunInputError(
                 f"card {card_key!r} is inactive; reactivate it before "
-                "assigning receipts to it"
+                "assigning receipts to it",
+                code="card_inactive",
+                card=card_key,
             )
         parsed.append((hint, card_key))
 
@@ -8785,7 +8994,11 @@ def _assign_batch_cards_locked(
         try:
             normalized = normalize_cards_setting(touched)
         except ValueError as exc:  # defense in depth; tokens are pre-filtered
-            raise RunInputError(str(exc)) from exc
+            raise RunInputError(
+                str(exc),
+                code=code_of(exc, "card_definition_invalid"),
+                **fields_of(exc),
+            ) from exc
         merged = dict(settings.get("cards") or {})
         merged.update(normalized)
         store.set_settings({"cards": merged}, now_iso)
@@ -8826,7 +9039,10 @@ def refresh_batch_master_data(
     with _BATCH_ADD_LOCK:
         fresh = store.get_run(run.run_id)
         if fresh is None:
-            raise RunInputError("This batch no longer exists (it was deleted).")
+            raise RunInputError(
+                "This batch no longer exists (it was deleted).",
+                code="batch_deleted",
+            )
         run = fresh
         # No statement refusal since 2b-2: the same reasoning as the card
         # assignment above, of which this is the bulk form.
@@ -9440,13 +9656,17 @@ def statement_advisory(prior: list[dict], entry: dict) -> str | None:
             and (other.get("card_key") or "").strip() == card
             and (other.get("account_id") or "").strip() != account
         ):
-            return (
+            return Refusal(
                 f"This card's earlier statement ({other['file']}) was read as "
                 f"account {other.get('account_id') or '(none)'}, this one as "
                 f"{account or '(none)'}. A charge cannot be recognized as the "
                 "same charge under two account ids, so anything that appears "
                 "in both files is now in the month twice. Check the account "
-                "id before working from these numbers."
+                "id before working from these numbers.",
+                code="statement_account_differs",
+                other_file=str(other["file"]),
+                other_account=str(other.get("account_id") or ""),
+                account=account,
             )
     n_rows, n_new = entry.get("n_rows") or 0, entry.get("n_new") or 0
     if n_rows and n_new == n_rows:
@@ -9455,13 +9675,18 @@ def statement_advisory(prior: list[dict], entry: dict) -> str | None:
                 (other.get("account_id") or "").strip() == account
                 and _periods_overlap(other, entry)
             ):
-                return (
+                return Refusal(
                     f"All {n_rows} charges in this upload are new, but "
                     f"{other['file']} already covers "
                     f"{other['period_start']} to {other['period_end']} on the "
                     "same account. If this is that statement re-exported, the "
                     "two files disagree about the rows (a flipped sign is the "
-                    "usual cause) and the month now holds both readings."
+                    "usual cause) and the month now holds both readings.",
+                    code="statement_period_overlap",
+                    n_rows=n_rows,
+                    other_file=str(other["file"]),
+                    period_start=str(other["period_start"]),
+                    period_end=str(other["period_end"]),
                 )
     return None
 
@@ -10253,7 +10478,10 @@ def restore_set_aside_file(
     with _BATCH_ADD_LOCK:
         fresh = store.get_run(run.run_id)
         if fresh is None:
-            raise RunInputError("This batch no longer exists (it was deleted).")
+            raise RunInputError(
+                "This batch no longer exists (it was deleted).",
+                code="batch_deleted",
+            )
         run = fresh
         # No statement refusal since 2b-2: a restored page is a receipt
         # joining the pool, the same class as an arrival.
@@ -10285,13 +10513,25 @@ def _restore_set_aside_locked(
     entries = set_aside_entries(snapshot)
     entry = next((e for e in entries if e["file"] == file), None)
     if entry is None:
-        raise RunInputError(f"{file} is not in this batch's set-aside list.")
+        raise RunInputError(
+            f"{file} is not in this batch's set-aside list.",
+            code="set_aside_file_not_found",
+            file=file,
+        )
     if entry.get("restored"):
-        raise RunInputError(f"{file} was already restored.")
+        raise RunInputError(
+            f"{file} was already restored.",
+            code="set_aside_already_restored",
+            file=file,
+        )
 
     _, receipts, outcome, _parse_errors = snapshot_from_dict(snapshot)
     if any(r.document_id == file for r in receipts):
-        raise RunInputError(f"{file} is already an expense in this batch.")
+        raise RunInputError(
+            f"{file} is already an expense in this batch.",
+            code="set_aside_already_expense",
+            file=file,
+        )
 
     cfg = run.config or {}
     if entry.get("receipt"):
@@ -10303,7 +10543,9 @@ def _restore_set_aside_locked(
         source = Path(run.work_dir) / "receipts" / file
         if not source.is_file():
             raise RunInputError(
-                f"{file} is no longer on disk; re-upload it instead."
+                f"{file} is no longer on disk; re-upload it instead.",
+                code="file_missing_on_disk",
+                file=file,
             )
         llm_client, _tracker, _src = _batch_llm_client(cfg)
         restored = None
@@ -10460,7 +10702,10 @@ def add_receipts_to_expense_batch(
             # the mail stays replayable) instead of writing a snapshot
             # UPDATE that matches zero rows and reporting the receipts
             # as ingested into a batch that no longer exists.
-            raise RunInputError("This batch no longer exists (it was deleted).")
+            raise RunInputError(
+                "This batch no longer exists (it was deleted).",
+                code="batch_deleted",
+            )
         run = fresh
         # Note #54 (owner, 2026-09-16) / audit item 108: a receipt arriving
         # into a month that already exists goes through what the month's
@@ -10840,12 +11085,16 @@ def prepare_statement_attach(
     else's — the same wrong-cell write `Transaction.source_file` exists to
     prevent, arriving by a different road."""
     if not statement_bytes:
-        raise RunInputError("No statement file uploaded.")
+        raise RunInputError(
+            "No statement file uploaded.", code="no_statement_file"
+        )
     stmt_name = _safe_name(statement_filename or "", "statement.csv")
     if Path(stmt_name).suffix.lower() not in _STATEMENT_SUFFIXES:
         raise RunInputError(
             "The statement file should be a .csv, .xlsx or .pdf export from "
-            "the bank."
+            "the bank.",
+            code="unsupported_statement_file",
+            suffix=Path(stmt_name).suffix or "",
         )
     work_dir = Path(run.work_dir)
     stmt_name = _unique_upload_name(work_dir, stmt_name)
@@ -10915,7 +11164,10 @@ def execute_statement_attach(
             statement_read_nothing(
                 upload_name or stmt_name,
                 (new_cfg.get("statement") or {}).get("sheet_name"),
-            )
+            ),
+            code="statement_read_nothing",
+            file=upload_name or stmt_name,
+            sheet=(new_cfg.get("statement") or {}).get("sheet_name") or "",
         )
     merged = merge_transactions(month_transactions(run), transactions)
 
@@ -10998,7 +11250,9 @@ def read_statement_upload(
     try:
         transactions, stmt_issues = _load_statement(new_cfg, work_dir)
     except ConfigError as exc:
-        raise RunInputError(str(exc)) from exc
+        raise RunInputError(
+            str(exc), code="statement_unreadable"
+        ) from exc
     # Item 82: refresh the ECB monthly averages for every month this
     # statement's charges fall in (and the month's own neighbours), so a
     # month created before its average was published reads it from here.
@@ -11049,7 +11303,8 @@ def reread_statements(
     entries = month_statements(run)
     if not entries:
         raise RunInputError(
-            "this month has no recorded statement upload to re-read"
+            "this month has no recorded statement upload to re-read",
+            code="no_statement_to_reread",
         )
     work_dir = Path(run.work_dir)
     cfg = run.config or {}
@@ -11073,7 +11328,9 @@ def reread_statements(
         if not stored or not stmt_path.is_file():
             raise RunInputError(
                 f"statement file {stored or '?'} is missing from this "
-                "month's folder; nothing was changed"
+                "month's folder; nothing was changed",
+                code="statement_file_missing",
+                file=stored or "",
             )
         account_id = str(
             entry.get("account_id") or stmt_cfg.get("account_id") or ""
@@ -11130,7 +11387,10 @@ def reread_statements(
             raise RunInputError(
                 f"statement file {stored} held {entry['n_rows']} charges "
                 "when it was uploaded and now reads none; nothing was "
-                "changed"
+                "changed",
+                code="statement_reads_nothing_now",
+                file=stored,
+                n_rows=entry["n_rows"],
             )
         merged = merge_transactions(transactions, txs)
         transactions = merged.transactions
@@ -11181,7 +11441,9 @@ def reread_statements(
         raise RunInputError(
             f"{len(stranded)} reviewer decision(s) sit on charges this "
             "re-read would retire and no sheet row carries them over; "
-            "nothing was changed"
+            "nothing was changed",
+            code="reread_strands_decisions",
+            n_decisions=len(stranded),
         )
 
     result = rematch_month(
@@ -11230,6 +11492,22 @@ def reread_statements(
 # zero-trips snapshot byte-identical to pre-R4.
 BORROWED_RECEIPTS_KEY = "borrowed_receipts"
 RECEIPT_SOURCES_KEY = "receipt_sources"
+
+
+def borrowed_receipts(run: RunRow) -> list[Receipt]:
+    """The copies of the receipts this month's outcome borrowed from a trip
+    or a neighbouring month (item 38 ruling 3, item 61). They are not part
+    of the month's own pool, so anything that reads a PAIRING has to fold
+    them in or the receipt side of it is missing (item 115: a confirmed
+    pair on a borrowed receipt taught nothing at sign-off). Empty on every
+    month that borrows nothing, which is most of them."""
+    out: list[Receipt] = []
+    for bd in (run.snapshot or {}).get(BORROWED_RECEIPTS_KEY) or []:
+        try:
+            out.append(receipt_from_dict(bd))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
 
 
 def receipt_source_run(run: RunRow, document_id: str) -> str:
@@ -11427,10 +11705,12 @@ def sync_claim_for_decision(
             other = store.get_run(prior["claimed_by_run_id"])
             holder = (other.label or other.run_id) if other else prior[
                 "claimed_by_run_id"]
-            return (
+            return Refusal(
                 f"this receipt already settles a charge in {holder!r}; a "
                 "receipt can only settle one charge. Reject it there "
-                "first, or pick another receipt."
+                "first, or pick another receipt.",
+                code="receipt_settled_elsewhere",
+                batch=holder,
             )
         # A pending reset (or a bare ratify) onto a foreign-settled receipt
         # claims nothing and refuses nothing: the row simply goes back to
@@ -11444,9 +11724,10 @@ def sync_claim_for_decision(
         source, doc, run.run_id, transaction_id, now_iso
     )
     if not ok and explicit_pick:
-        return (
+        return Refusal(
             "this receipt was just settled by another batch; a receipt "
-            "can only settle one charge."
+            "can only settle one charge.",
+            code="receipt_just_settled",
         )
     return None
 
@@ -11792,7 +12073,10 @@ def rematch_month(
     with _BATCH_ADD_LOCK:
         fresh = store.get_run(run.run_id)
         if fresh is None:
-            raise RunInputError("this batch was deleted while it reconciled")
+            raise RunInputError(
+                "this batch was deleted while it reconciled",
+                code="batch_deleted",
+            )
         committing = {t.transaction_id for t in transactions}
         if replace_statements is not None:
             # The re-read replaces ids on purpose, so the never-drop check
@@ -11810,7 +12094,8 @@ def rematch_month(
                 raise RunInputError(
                     "another statement upload landed on this month while its "
                     "files were re-read; nothing was written, so no charge "
-                    "was lost. Run the re-read again."
+                    "was lost. Run the re-read again.",
+                    code="concurrent_statement_upload",
                 )
             if rekey_decisions:
                 store.rekey_decisions(run.run_id, rekey_decisions)
@@ -11824,7 +12109,9 @@ def rematch_month(
                 raise RunInputError(
                     f"another statement upload added {len(dropped)} charge(s) "
                     "to this month while it reconciled; nothing was written, "
-                    "so no charge was lost. Upload again."
+                    "so no charge was lost. Upload again.",
+                    code="concurrent_statement_upload",
+                    n_charges=len(dropped),
                 )
         fresh_cfg = fresh.config or {}
         if fresh_cfg.get("expense") is not None:
@@ -11996,6 +12283,7 @@ def rematch_month(
                 entry = dict(raw)
                 anchors = entry.pop("_anchors", {})
                 entry["advisory"] = statement_advisory(rebuilt_entries, entry)
+                entry["advisory_detail"] = detail_of(entry["advisory"])
                 rebuilt_entries.append(entry)
                 rebuilt_anchors[entry["file"]] = anchors
             new_snapshot[STATEMENTS_KEY] = rebuilt_entries
@@ -12006,6 +12294,7 @@ def rematch_month(
             anchors = entry.pop("_anchors", {})
             statement_advice = statement_advisory(prior, entry)
             entry["advisory"] = statement_advice
+            entry["advisory_detail"] = detail_of(statement_advice)
             new_snapshot[STATEMENTS_KEY] = [*prior, entry]
             new_snapshot[STATEMENT_ANCHORS_KEY] = {
                 **((fresh.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}),
@@ -12675,23 +12964,32 @@ def set_receipt_settled_outside(
     how = (how or "").strip().lower()
     if how not in SETTLED_OUTSIDE_HOWS:
         raise RunInputError(
-            "Say how it was settled: " + ", ".join(SETTLED_OUTSIDE_HOWS) + "."
+            "Say how it was settled: " + ", ".join(SETTLED_OUTSIDE_HOWS) + ".",
+            code="settled_outside_how_required",
+            allowed=sorted(SETTLED_OUTSIDE_HOWS),
         )
     note = (note or "").strip()[:SETTLED_OUTSIDE_NOTE_MAX]
     with _BATCH_ADD_LOCK:
         fresh = store.get_run(run.run_id)
         if fresh is None:
-            raise RunInputError("This batch no longer exists (it was deleted).")
+            raise RunInputError(
+                "This batch no longer exists (it was deleted).",
+                code="batch_deleted",
+            )
         run = fresh
         snapshot = dict(run.snapshot or {})
         _tx, receipts, _outcome, _pe = snapshot_from_dict(snapshot)
         if not any(r.document_id == document_id for r in receipts):
-            raise RunInputError("That receipt is not in this month.")
+            raise RunInputError(
+                "That receipt is not in this month.",
+                code="receipt_not_in_month",
+            )
         if document_id not in _settled_outside_unmatched_ids(store, run):
             raise RunInputError(
                 "That receipt is settled against a charge on the statement. "
                 "Reject that match first, then mark it settled outside the "
-                "card."
+                "card.",
+                code="receipt_settled_by_charge",
             )
         entries = settled_outside_map(snapshot)
         entries[document_id] = {"how": how, "note": note, "at": now_iso}
@@ -12715,7 +13013,10 @@ def clear_receipt_settled_outside(
     with _BATCH_ADD_LOCK:
         fresh = store.get_run(run.run_id)
         if fresh is None:
-            raise RunInputError("This batch no longer exists (it was deleted).")
+            raise RunInputError(
+                "This batch no longer exists (it was deleted).",
+                code="batch_deleted",
+            )
         run = fresh
         snapshot = dict(run.snapshot or {})
         entries = settled_outside_map(snapshot)
@@ -12959,7 +13260,10 @@ def _month_move_source(store: RunStore, run: RunRow, document_id: str):
     if any(
         e["document_id"] == document_id and e["op"] == "delete" for e in edits
     ):
-        raise RunInputError("This expense was already removed from this month.")
+        raise RunInputError(
+            "This expense was already removed from this month.",
+            code="expense_already_removed",
+        )
     if document_id.startswith("manual:"):
         add = next(
             (e for e in edits
@@ -12967,14 +13271,14 @@ def _month_move_source(store: RunStore, run: RunRow, document_id: str):
             None,
         )
         if add is None:
-            raise RunInputError("unknown expense")
+            raise RunInputError("unknown expense", code="expense_not_found")
         return None, dict(add.get("payload") or {})
     rec = next(
         (r for r in baseline_receipts(run) if r.document_id == document_id),
         None,
     )
     if rec is None:
-        raise RunInputError("unknown expense")
+        raise RunInputError("unknown expense", code="expense_not_found")
     return rec, None
 
 
@@ -13007,15 +13311,20 @@ def move_expense_to_month(
 
     ym = _ym(month)
     if ym is None:
-        raise RunInputError('month must be "YYYY-MM"')
+        raise RunInputError('month must be "YYYY-MM"', code="invalid_month")
     if run_mode(run) != MODE_EXPENSE_GENERATION:
-        raise RunInputError("not an expense batch")
+        raise RunInputError("not an expense batch", code="not_an_expense_batch")
     if is_trip_batch(run):
         raise RunInputError(
-            "A trip spans months; its receipts are not filed by month."
+            "A trip spans months; its receipts are not filed by month.",
+            code="trip_not_by_month",
         )
     if month_from_label(run.label) == ym:
-        raise RunInputError(f"This expense is already in {_month_human(month)}.")
+        raise RunInputError(
+            f"This expense is already in {_month_human(month)}.",
+            code="expense_already_in_month",
+            month=month,
+        )
     _month_move_source(store, run, document_id)  # fail before creating a month
 
     created = False
@@ -13037,15 +13346,26 @@ def move_expense_to_month(
             target = store.get_run(execute_expense_batch(store, prepared))
             created = True
     if target is None:
-        raise RunInputError(f"{_month_human(month)} could not be opened.")
+        raise RunInputError(
+            f"{_month_human(month)} could not be opened.",
+            code="month_could_not_open",
+            month=month,
+        )
     if target.run_id == run.run_id:
-        raise RunInputError(f"This expense is already in {_month_human(month)}.")
+        raise RunInputError(
+            f"This expense is already in {_month_human(month)}.",
+            code="expense_already_in_month",
+            month=month,
+        )
 
     with _BATCH_ADD_LOCK:
         source = store.get_run(run.run_id)
         target = store.get_run(target.run_id)
         if source is None or target is None:
-            raise RunInputError("This batch no longer exists (it was deleted).")
+            raise RunInputError(
+                "This batch no longer exists (it was deleted).",
+                code="batch_deleted",
+            )
         rec, manual = _month_move_source(store, source, document_id)
         field_ov = dict(
             store.get_expense_field_overrides(source.run_id).get(document_id)
@@ -13066,7 +13386,9 @@ def move_expense_to_month(
             src_file = Path(source.work_dir) / "receipts" / document_id
             if not src_file.is_file():
                 raise RunInputError(
-                    f"{_display_name(document_id)} is no longer on disk."
+                    f"{_display_name(document_id)} is no longer on disk.",
+                    code="file_missing_on_disk",
+                    file=_display_name(document_id),
                 )
             data = src_file.read_bytes()
             digest = hashlib.sha1(data).hexdigest()[:16]
