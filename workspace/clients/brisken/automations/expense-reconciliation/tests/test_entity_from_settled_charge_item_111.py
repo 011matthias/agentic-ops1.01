@@ -15,9 +15,14 @@ Pinned through the Expenses payload (`GET /api/expense-batches/{id}`):
 4. A receipt with no pairing is unchanged.
 5. The row is a company-card row: `can_mark_private` is false and the
    private-card route refuses it.
+6. The documents say the same: the Zoho CSV and the month report's listing
+   print the inherited company and paid-through account, and a rejected
+   pair still prints `(entity - assign)` in both. Neither document has a
+   person column for a company month.
 """
 from __future__ import annotations
 
+import csv
 import io
 from datetime import datetime
 from decimal import Decimal
@@ -26,9 +31,11 @@ import pytest
 
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
+pytest.importorskip("pypdf")
 
 from fastapi.testclient import TestClient  # noqa: E402
 from openpyxl import Workbook  # noqa: E402
+from pypdf import PdfReader  # noqa: E402
 
 from expense_recon.llm.client import (  # noqa: E402
     ExtractedReceipt,
@@ -350,3 +357,61 @@ def test_an_inherited_company_card_row_cannot_be_marked_private(client, monkeypa
     assert resp.status_code == 400, resp.text
     assert resp.json()["code"] == "company_card"
     assert resp.json()["card"]["key"] == "corp-2838"
+
+
+# ── the documents say what the screen says ───────────────────────────
+
+PLACEHOLDER = "(entity - assign)"
+
+
+def _csv_by_vendor(client, batch_id) -> dict[str, dict]:
+    resp = client.get(f"/runs/{batch_id}/expenses.csv")
+    assert resp.status_code == 200, resp.text
+    return {
+        r["Vendor"]: r for r in csv.DictReader(io.StringIO(resp.text))
+        if r.get("Vendor")
+    }
+
+
+def _report_text(client, batch_id) -> str:
+    # The local app's route runs the app's own builder (never a live call).
+    resp = client.get(f"/runs/{batch_id}/expense-report.pdf")
+    assert resp.status_code == 200, resp.text
+    pages = PdfReader(io.BytesIO(resp.content)).pages
+    return " ".join(" ".join(p.extract_text() or "" for p in pages).split())
+
+
+def test_the_csv_and_the_month_report_print_the_inherited_company(
+    client, monkeypatch
+):
+    batch = _august(client, monkeypatch)
+
+    rows = _csv_by_vendor(client, batch)
+    assert rows["Lovable Labs"]["Legal Entity"] == "Corporate Services"
+    assert rows["Lovable Labs"]["Paid Through"] == "Chase 2838"
+    assert rows["Obsidian"]["Legal Entity"] == "Cloud Services"
+    assert rows["Obsidian"]["Paid Through"] == "Chase 3645"
+    # No pairing, or a printed card of its own: still asks.
+    assert rows["Notion"]["Legal Entity"] == PLACEHOLDER
+    assert rows["Pressmaster"]["Legal Entity"] == PLACEHOLDER
+    # The screen and the file agree row by row.
+    grid = _rows(client, batch)
+    for name, vendor in (("lovable.jpg", "Lovable Labs"), ("obsidian.jpg", "Obsidian")):
+        assert grid[name]["legal_entity_id"] == rows[vendor]["Legal Entity"]
+
+    text = _report_text(client, batch)
+    assert "Cloud Services" in text and "Chase 3645" in text
+    assert text.count(PLACEHOLDER) == 2, text
+
+
+def test_a_rejected_pair_still_prints_the_placeholder_in_both_documents(
+    client, monkeypatch
+):
+    batch = _august(client, monkeypatch)
+    lovable = _charge(client, batch, "LOVABLE")
+    _decide(client, batch, lovable["transaction_id"], "rejected")
+
+    rows = _csv_by_vendor(client, batch)
+    assert rows["Lovable Labs"]["Legal Entity"] == PLACEHOLDER
+    assert rows["Obsidian"]["Legal Entity"] == "Cloud Services"
+    assert _report_text(client, batch).count(PLACEHOLDER) == 3

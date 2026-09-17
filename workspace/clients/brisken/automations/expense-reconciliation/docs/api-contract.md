@@ -3686,9 +3686,16 @@ an earlier month (`learned`) gives way. The row is a company-card row:
 `can_mark_private: false`, `suggested_private: false`, and the private-card
 routes refuse it with `code: "company_card"`.
 
-Scope: this payload only. The run payload (`cards_differ`), the matcher's
-card scope, the Zoho CSV and both PDFs do not inherit, so the CSV still
-prints `(entity - assign)` for these rows. SPA half:
+The month's documents resolve these rows the same way: `GET
+/runs/{id}/expenses.csv` (`Legal Entity`, `Paid Through`) and `GET
+/runs/{id}/expense-report.pdf` (the listing quotes the CSV's rows, and its
+card pass uses the same cards) read the same verdicts
+(`service.export_settled_cards`), so a row the Expenses page resolved from
+its charge never prints `(entity - assign)` there, and a rejected pair
+does. Neither document has a person column for a company month. Not
+inherited: the run payload (`cards_differ`), the matcher's card scope, the
+reconciliation PDF (it prints no company or person; a held receipt is filed
+under its charge's card already) and the cost-center totals roll-up. SPA half:
 `docs/lovable-entity-from-charge-prompt.md` (the source line and the card
 Select on a `settled_charge` row; a stale SPA shows the card chip and no
 Select). Route-level in `tests/test_entity_from_settled_charge_item_111.py`.

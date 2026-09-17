@@ -6893,6 +6893,7 @@ def _expense_export_inputs(
     field_overrides: dict[str, dict[str, str]],
     edits: list[dict],
     dup_resolutions: dict[str, str] | None = None,
+    settled_cards: dict[str, str] | None = None,
 ) -> tuple[list, dict]:
     """`(receipts, kwargs)` for the expense export — the overlay order the
     view uses (`apply_expense_edits` then `apply_overrides`) plus the card /
@@ -6904,7 +6905,13 @@ def _expense_export_inputs(
 
     `dup_resolutions` (item 69 round A) is the run's duplicate resolutions,
     so a group the reviewer ruled "not a duplicate" lends no card here
-    either; a caller without a store in hand passes None (no group ruled)."""
+    either; a caller without a store in hand passes None (no group ruled).
+
+    `settled_cards` (item 111, `export_settled_cards`): the CSV and the month
+    report pass the Expenses payload's card of the charge each receipt
+    settles, so a row the screen resolved from its charge never prints
+    `(entity - assign)` there. The match-time readers of this function (the
+    adjacent and trip pools) pass nothing and stay as they were."""
     # The extraction baseline, for the same reason the grid uses it: the
     # export applies the overlay, and on an attached month the stored receipt
     # block already has it baked in. Grid and export move together.
@@ -6931,7 +6938,7 @@ def _expense_export_inputs(
     # Cards R3: the export runs the SAME card/entity resolution pass the
     # grid renders (assign a card after an export, re-export, and the new
     # file carries it — exports are regenerable, never stale by design).
-    card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
+    card_res = resolve_batch_row_cards(receipts, run.config, field_overrides, settled_cards=settled_cards)
     # Item 41: a confirmed private expense was paid out of somebody's
     # pocket. In the one-file export it stays a row (mixed-entity ruling:
     # one file, entity as a column) with both columns saying so — the
@@ -6980,9 +6987,14 @@ def regenerate_expense_export(
     Returns the path.
 
     Item 94: a decided copy (`decided_copies`) writes no row; one line under
-    the rows names the copies set aside and what they add up to."""
+    the rows names the copies set aside and what they add up to.
+
+    Item 111: a receipt this month's charge settles resolves its company and
+    paid-through from that charge's card, as the Expenses page shows it."""
+    csv_settled = export_settled_cards(run, charge_decisions)
     receipts, kwargs = _expense_export_inputs(
-        run, overrides, field_overrides, edits, dup_resolutions
+        run, overrides, field_overrides, edits, dup_resolutions,
+        settled_cards=csv_settled,
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
@@ -7116,8 +7128,12 @@ def build_expense_report(
     )
     from ..output.month_report_pdf import build_expense_report_pdf
 
+    # Item 111: the Expenses page's card of the charge a receipt settles, for
+    # the listing's rows (company, paid-through) and the card pass below.
+    report_settled = export_settled_cards(run, charge_decisions)
     receipts, kwargs = _expense_export_inputs(
-        run, overrides, field_overrides, edits, dup_resolutions
+        run, overrides, field_overrides, edits, dup_resolutions,
+        settled_cards=report_settled,
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
@@ -7152,7 +7168,7 @@ def build_expense_report(
     # The same card pass the grid runs: it names the person a trip
     # sections on and the card whose default a cost center falls back to.
     card_res_report = resolve_batch_row_cards(
-        company, run.config, field_overrides
+        company, run.config, field_overrides, settled_cards=report_settled
     )
     if is_trip_batch(run):
         def _person_of(r) -> str:
@@ -8998,6 +9014,15 @@ def settled_charge_cards(
         if key:
             out[doc] = key
     return out
+
+
+def export_settled_cards(run: RunRow, charge_decisions: dict | None) -> dict[str, str]:
+    """`settled_charge_cards` for the CSV and the month report, from the same
+    snapshot read and verdicts the Expenses payload uses (`decisions or {}`),
+    so a document resolves a row exactly as the screen does. Empty for a
+    month with no statement."""
+    charges, states = month_charge_states(run, charge_decisions or {})
+    return settled_charge_cards(run, charges, states)
 
 
 def _identity_from_observed(observed: str | None, cards: dict) -> _CardIdentity:
