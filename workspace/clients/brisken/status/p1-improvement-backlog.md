@@ -4640,7 +4640,7 @@ gets. api-contract "What a settings save wrote";
 
 SPA half: `docs/lovable-settings-tabs-prompt.md`, published by the owner and verified 2026-09-17 (bundle + cold drive, PROMPT-STATUS Applied row).
 
-### 92. The entity list is in nobody's order (Criss via owner, 2026-09-17) (APPLIED 2026-09-17: backend PR #971 deployed v146, prompt published and verified, see PROMPT-STATUS)
+### 92. The entity list is in nobody's order (Criss via owner, 2026-09-17) (APPLIED 2026-09-17: backend PR #971 deployed v146; round 1 arrows and round 2 press-hold-drag prompts published and verified; order in live use; see PROMPT-STATUS)
 
 **Criss, relayed by the owner 2026-09-17:** she wants to select entities that
 have been saved and reorder them.
