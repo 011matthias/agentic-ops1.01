@@ -88,6 +88,12 @@ EXPENSE_BATCH_CONTRACT = {
     # stale SPA renders one truthful row while an updated one shows the
     # group and submits every spelling on Assign.
     "card_review.unresolved_hints[].spellings[]": "string",
+    # Item 138: the month page's card tabs. Objects in the PDFs' section
+    # order, No card last; `digits[]` and `statements[]` are strings. Empty
+    # on a month with fewer than two cards and on a trip.
+    "card_sections[]": "object",
+    "card_sections[].digits[]": "string",
+    "card_sections[].statements[]": "string",
     "category_options[]": "string",
     # PR 3: per-card coverage. `digits[]` and `statements[]` are the two
     # lists inside an entry; both are plain strings, and both are empty on
@@ -148,6 +154,11 @@ EXPENSE_BATCH_CONTRACT = {
 
 RUN_CONTRACT = {
     "assignable_receipts[]": "object",
+    # Item 138: same list as on the expense batch view, without the two
+    # Expenses-page figures.
+    "card_sections[]": "object",
+    "card_sections[].digits[]": "string",
+    "card_sections[].statements[]": "string",
     "category_options[]": "string",
     "coverage[]": "object",
     "coverage[].digits[]": "string",
@@ -215,6 +226,9 @@ EXPENSE_BATCH_MUST_COVER = {
     "cost_center_options[]",
     "expenses[].boxes[]",
     "expense_ingest.not_added[]",
+    "card_sections[]",
+    "card_sections[].digits[]",
+    "card_sections[].statements[]",
 }
 
 RUN_MUST_COVER = {
@@ -234,6 +248,9 @@ RUN_MUST_COVER = {
     "coverage[].digits[]",
     "coverage[].statements[]",
     "copies_set_aside[]",
+    "card_sections[]",
+    "card_sections[].digits[]",
+    "card_sections[].statements[]",
 }
 
 
@@ -536,16 +553,29 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
     only has to make the new pin non-vacuous, which is the reason MUST_COVER
     exists at all.
     """
-    mock = MockLLMClient(extraction_responses=[_extraction()])
+    mock = MockLLMClient(extraction_responses=[
+        _extraction(),
+        # Item 138: a receipt paid on a second card, so the month has two
+        # cards and `card_sections[]` (with its `digits[]` and, on the
+        # statement's card, `statements[]`) is observed filled.
+        _extraction(vendor="Second Card Co", total="11.00", date="2026-07-02",
+                    payment_hint="Visa ending 5555"),
+    ])
     monkeypatch_setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
     # A registry card whose digits match the statement's account, so the
     # month's coverage entry carries a `digits[]` the pin can observe. A
     # batch snapshots the composed registry at CREATION, so this settings
     # write has to happen first.
-    client.put("/api/settings", json={"cards": {"amex-9001": {
-        "label": "Amex (contract fixture)", "digits": ["9001"],
-        "entity": "Corporate Services",
-    }}})
+    client.put("/api/settings", json={"cards": {
+        "amex-9001": {
+            "label": "Amex (contract fixture)", "digits": ["9001"],
+            "entity": "Corporate Services",
+        },
+        "visa-5555": {
+            "label": "Visa (contract fixture)", "digits": ["5555"],
+            "entity": "Corporate Services",
+        },
+    }})
     resp = client.post(
         "/api/expense-batches",
         data={"legal_entity": "Corporate Services", "label": "Contract month"},
@@ -555,6 +585,7 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
     resp = client.post(f"/api/expense-batches/{batch_id}/receipts", files=[
         ("files", ("m.jpg", JPG + b"m", "application/octet-stream")),
+        ("files", ("n.jpg", JPG + b"n", "application/octet-stream")),
     ])
     assert resp.status_code == 200, resp.text
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
@@ -580,6 +611,9 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
     assert grid["coverage"] == run["coverage"], "one month, one coverage"
     assert any(c["digits"] and c["statements"] for c in grid["coverage"]), (
         grid["coverage"]
+    )
+    assert [s["key"] for s in run["card_sections"]][:2] == ["amex-9001", "visa-5555"], (
+        run["card_sections"]
     )
     return grid, run
 

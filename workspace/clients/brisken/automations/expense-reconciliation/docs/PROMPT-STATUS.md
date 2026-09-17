@@ -219,6 +219,7 @@ and a rollback would otherwise have nothing to re-apply.
 | `lovable-private-card-in-picker-prompt.md` (item 139, notes #65 + #66) | `__private_card__` in `chunk-expenses._batchId`; `expx.privateCard.mark` still present | Written 2026-09-17, not pasted. SPA only, no backend gate |
 | `lovable-one-download-each-prompt.md` (item 141, note #68) | `sum.dl.pdf`, `sum.dl.statementFile` in `chunk-runs._runId`; `sum.pdf` absent from every chunk | Written 2026-09-17, not pasted. SPA only, no backend gate |
 | `lovable-booked-hint-names-workbook-prompt.md` (item 142, note #69) | `row.status.posted.tipFile`, `wb.reason.charge.already_booked.file` in `chunk-runs._runId`; "your statement workbook" absent from `chunk-i18n` | Written 2026-09-17, not pasted. SPA copy only, no backend gate |
+| `lovable-card-tabs-prompt.md` (item 138, the month page split by card) | `card_sections`, `card_section` in the runs and expenses route chunks; `cardTabs.noCard`, `cardTabs.statement.notRecorded` in `chunk-i18n`; controls `ready_to_post`, `coverage` still hit | Written 2026-09-17, not pasted. Backend deploy first (`card_sections[]` on `GET /api/runs/{id}` and `GET /api/expense-batches/{id}`); then a cold drive of August `/runs/074a7b8905d7` (tabs 3645/3876/2838/1176/9693/No card) |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.

@@ -356,65 +356,108 @@ def booked_without_receipt(row: dict) -> bool:
     )
 
 
+def card_statement_figures(section: dict) -> dict:
+    """What a card's statement settled, as data: the figures
+    `card_statement_line` prints, computed once so the documents and the
+    month page's card tabs (item 138, `service.month_card_tabs`) cannot
+    describe a card differently.
+
+    `section` is one of `card_sections`' entries. The figures are the
+    coverage entry's, the numbers the month page's coverage panel shows. The
+    one figure computed here is booked without a receipt (item 102): the
+    card's charges keyed into the books (`section == "posted"`) that no
+    receipt settles, summed in Decimal off the rows' own amount strings.
+
+    `statement` is "loaded" (an upload covered the card), "not_recorded"
+    (charges but no recorded upload: they arrived under another statement,
+    live August 2026: 1176, item 108, so "none loaded" would be false),
+    "not_loaded" (neither), or None for the no-card section, which names no
+    statement. The period and the charge figures describe charges, so a
+    section without any carries no period and zeros."""
+    coverage = section.get("coverage") or {}
+    rows = list(section.get("rows") or [])
+    statements = [
+        str(s) for s in (coverage.get("statements") or []) if str(s).strip()
+    ] if section.get("key") else []
+    if not section.get("key"):
+        statement = None
+    elif statements:
+        statement = "loaded"
+    elif rows:
+        statement = "not_recorded"
+    else:
+        statement = "not_loaded"
+    n_booked = 0
+    booked: dict[str, Decimal] = {}
+    for row in rows:
+        if not booked_without_receipt(row):
+            continue
+        n_booked += 1
+        value = parse_amount(row.get("amount"))
+        if value is not None:
+            ccy = str(row.get("currency") or "") or "?"
+            booked[ccy] = booked.get(ccy, Decimal("0")) + abs(value)
+    return {
+        "statement": statement,
+        "statements": statements,
+        "period_start": coverage.get("period_start") if rows else None,
+        "period_end": coverage.get("period_end") if rows else None,
+        "n_charges": int(coverage.get("n_transactions") or len(rows)) if rows else 0,
+        "n_matched": int(coverage.get("n_reconciled") or 0) if rows else 0,
+        "unreconciled_by_ccy": (
+            dict(sorted((coverage.get("unreconciled_by_ccy") or {}).items()))
+            if rows else {}
+        ),
+        "n_booked_without_receipt": n_booked,
+        "booked_without_receipt_by_ccy": {
+            ccy: f"{amt:,.2f}" for ccy, amt in sorted(booked.items())
+        },
+    }
+
+
 def card_statement_line(section: dict) -> str:
     """What a card's statement settled, in one line under its heading.
 
     `section` is one of `card_sections`' entries. Both documents print this
-    same line (item 138), so they cannot describe a card differently. The
-    figures are the coverage entry's, the numbers the month page's coverage
-    panel shows. The one figure computed here is booked without a receipt
-    (item 102): the card's charges keyed into the books (`section ==
-    "posted"`) that no receipt settles, summed in Decimal off the rows' own
-    amount strings.
-
-    A card with charges but no recorded upload says "not recorded": its
-    charges arrived under another statement (live August 2026: 1176, item
-    108), so "none loaded" would be false. A card with neither says no
-    statement was loaded. The no-card section names no statement."""
-    coverage = section.get("coverage") or {}
+    same line (item 138), so they cannot describe a card differently, and it
+    is `card_statement_figures` in words, so the month page's card tabs say
+    the same. A card with charges but no recorded upload says "not recorded";
+    a card with neither says no statement was loaded. The no-card section
+    names no statement."""
+    figures = card_statement_figures(section)
     rows = list(section.get("rows") or [])
     parts: list[str] = []
-    if section.get("key"):
-        statements = [
-            str(s) for s in (coverage.get("statements") or []) if str(s).strip()
-        ]
-        if statements:
-            parts.append(
-                ("Statement: " if len(statements) == 1 else "Statements: ")
-                + ", ".join(statements)
-            )
-        elif rows:
-            parts.append("Statement: not recorded")
-        else:
-            parts.append("No statement loaded for this card")
-        start, end = coverage.get("period_start"), coverage.get("period_end")
-        if rows and (start or end):
-            parts.append(f"{start or '?'} to {end or '?'}")
+    statements = figures["statements"]
+    if figures["statement"] == "loaded":
+        parts.append(
+            ("Statement: " if len(statements) == 1 else "Statements: ")
+            + ", ".join(statements)
+        )
+    elif figures["statement"] == "not_recorded":
+        parts.append("Statement: not recorded")
+    elif figures["statement"] == "not_loaded":
+        parts.append("No statement loaded for this card")
+    start, end = figures["period_start"], figures["period_end"]
+    if section.get("key") and rows and (start or end):
+        parts.append(f"{start or '?'} to {end or '?'}")
     if rows:
-        n_tx = int(coverage.get("n_transactions") or len(rows))
+        n_tx = figures["n_charges"]
         parts.append(f"{n_tx} charge{'s' if n_tx != 1 else ''}")
-        parts.append(f"{int(coverage.get('n_reconciled') or 0)} matched")
-        open_by_ccy = coverage.get("unreconciled_by_ccy") or {}
+        parts.append(f"{figures['n_matched']} matched")
         parts.append("unreconciled " + (
-            ", ".join(f"{ccy} {amt}" for ccy, amt in sorted(open_by_ccy.items()))
+            ", ".join(
+                f"{ccy} {amt}" for ccy, amt in figures["unreconciled_by_ccy"].items()
+            )
             or "nothing"
         ))
-        n_booked = 0
-        booked: dict[str, Decimal] = {}
-        for row in rows:
-            if not booked_without_receipt(row):
-                continue
-            n_booked += 1
-            value = parse_amount(row.get("amount"))
-            if value is not None:
-                ccy = str(row.get("currency") or "") or "?"
-                booked[ccy] = booked.get(ccy, Decimal("0")) + abs(value)
+        n_booked = figures["n_booked_without_receipt"]
+        booked = figures["booked_without_receipt_by_ccy"]
         if n_booked:
             parts.append(
                 f"booked without a receipt: {n_booked} "
                 f"charge{'s' if n_booked != 1 else ''}"
                 + (", " + ", ".join(
-                    f"{ccy} {amt:,.2f}" for ccy, amt in sorted(booked.items())
+                    f"{ccy} {amt}" for ccy, amt in booked.items()
                 ) if booked else "")
             )
     return "  ·  ".join(parts)
