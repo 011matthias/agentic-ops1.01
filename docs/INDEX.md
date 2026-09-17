@@ -325,6 +325,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | Friction Fix Program Close-Out | system-infra | [→](docs/2026-09-17%20-%20Friction%20Fix%20Program%20Close-Out/Checkpoint.md) |
 | 2026-09-17 | Friction Check And Gate Fixes | system-infra | [→](docs/2026-09-17%20-%20Friction%20Check%20And%20Gate%20Fixes/Checkpoint.md) |
 | 2026-09-17 | ECC Batch 2 Live Activation | system-infra | [→](docs/2026-09-17%20-%20ECC%20Batch%202%20Live%20Activation/Checkpoint.md) |
 | 2026-09-17 | ECC Port Batch 2 (items 1, 4, 5, 8) | system-infra | [→](docs/2026-09-17%20-%20ECC%20Port%20Batch%202%20%28items%201%2C%204%2C%205%2C%208%29/Checkpoint.md) |
