@@ -39,6 +39,10 @@ from ..batch_period import (
     outside_period,
 )
 from ..cli import NON_RECEIPT_LABELS, ConfigError, generate_expenses, reconcile
+from ..cli import (  # item 105
+    INVOICE_READ_AS_STATEMENT_NOTE,
+    keep_invoice_read_as_statement,
+)
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
 from ..duplicates import (
@@ -2666,8 +2670,26 @@ def category_confirmable(rec: "Receipt | None", overrides: dict) -> bool:
     is (note #62): the category verdict is `vendor_guess` or
     `unknown_provenance`. Before this, the only way to clear either was to
     pick a DIFFERENT category, so a right guess stayed "needs a look"."""
-    code = _matched_category_review(rec, overrides).get("reason_code")
-    return code in _CONFIRMABLE_CATEGORY_CODES
+    review = _matched_category_review(rec, overrides)
+    if _kept_invoice_unconfirmed(rec, overrides) and review["state"] != "pick":
+        return True  # item 105: keeping its categories is the check
+    return review.get("reason_code") in _CONFIRMABLE_CATEGORY_CODES
+
+
+def _kept_invoice_unconfirmed(rec: "Receipt | None", overrides: dict) -> bool:
+    """Item 105: a document the reader called a statement page, kept as an
+    expense on the invoice rule, until the reviewer has made every line's
+    category their own (a category edit, or the Confirm that note #62
+    added). Until then it must not read ready: a wrong keep would otherwise
+    file itself with the rows nobody needs to open, and self-confirm."""
+    if rec is None or not rec.line_items:
+        return False
+    if INVOICE_READ_AS_STATEMENT_NOTE not in (rec.data_quality_note or ""):
+        return False
+    return not all(
+        (overrides.get((rec.document_id, i)) or {}).get("category")
+        for i in range(len(rec.line_items))
+    )
 
 
 def confirm_expense_category(
@@ -5954,6 +5976,17 @@ def _expense_review(
             "untrusted_instructions": [dict(f) for f in flags],
         }
     review = _matched_category_review(r, overrides)
+    if review["state"] != "pick" and _kept_invoice_unconfirmed(r, overrides):
+        # Item 105. A missing category (pick) is the more actionable ask and
+        # still wins; picking one also clears this check.
+        return _review(
+            "check",
+            "The reader took this document for a bank or card statement page, "
+            "but it prints its own invoice number and line items, so it was "
+            "kept as an expense. Check it is one purchase, then confirm its "
+            "category.",
+            "invoice_read_as_statement",
+        )
     if review["state"] == "ready" and person is not None and not person:
         # Item 40: every expense belongs to a person, through the card.
         # A row whose card carries no person is not done — but the fix
@@ -9892,6 +9925,7 @@ def _add_receipts_locked(
         # (which survives later adds and carries the restore path); the
         # stored file stays on disk (its hash also keeps a re-upload from
         # costing another OCR call).
+        receipt = keep_invoice_read_as_statement(receipt) or receipt  # item 105
         label = NON_RECEIPT_LABELS.get(receipt.document_type)
         if label is not None:
             issues.append(

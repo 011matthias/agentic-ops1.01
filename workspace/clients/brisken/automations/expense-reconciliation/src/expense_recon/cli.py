@@ -912,6 +912,10 @@ def split_non_receipt_documents(
     excluded: list[Receipt] = []
     issues: list[ParseIssue] = []
     for r in receipts:
+        invoice = keep_invoice_read_as_statement(r)  # item 105
+        if invoice is not None:
+            kept.append(invoice)
+            continue
         label = NON_RECEIPT_LABELS.get(r.document_type)
         if label is None:
             kept.append(r)
@@ -925,6 +929,48 @@ def split_non_receipt_documents(
             severity="warning",
         ))
     return kept, excluded, issues
+
+
+# Item 105 (2026-09-17). The reader called three real July invoices
+# statement pages (AWS USD 3,352.59, Microsoft USD 718.20, Tricarico
+# BRL 27,203.34), so they left the month. Each one still carried a vendor,
+# a total, its invoice number and its own line items; eight real statements
+# read through the same reader (seven Chase card statements and an SAP
+# accounts-receivable statement) carried no reference and no line items,
+# and the billing-notice emails no line items. A "statement" verdict with
+# all four is therefore kept as an expense with a note to check it, and the
+# reader's prompt is untouched (a prompt edit moves unrelated readings).
+INVOICE_READ_AS_STATEMENT_NOTE = (
+    "read as a statement page, but it prints its own invoice number and "
+    "line items, so it was kept as an expense: check it"
+)
+
+
+def keep_invoice_read_as_statement(r: Receipt) -> Receipt | None:
+    """The receipt to keep when a "statement" verdict is really one invoice
+    (see above), else None. Only "statement" is second-guessed."""
+    if r.document_type != "statement":
+        return None
+    # Ingest stores an unreadable line amount as 0, so "has an amount" is
+    # "has a non-zero amount".
+    if not any(li.line_total for li in r.line_items):
+        return None
+    for value in (r.detected_vendor, r.detected_total, r.detected_reference):
+        if value is None or not str(value).strip():
+            return None
+    try:
+        if Decimal(str(r.detected_total)) == 0:
+            return None  # a statement's zero balance is not an invoice
+    except (ArithmeticError, ValueError):
+        return None
+    note = INVOICE_READ_AS_STATEMENT_NOTE
+    return replace(
+        r,
+        document_type="receipt",
+        data_quality_note=(
+            f"{r.data_quality_note}; {note}" if r.data_quality_note else note
+        ),
+    )
 
 
 def generate_expenses(
