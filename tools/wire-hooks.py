@@ -254,6 +254,24 @@ CANONICAL_HOOKS = {
             ],
         },
     ],
+    "PostToolUseFailure": [
+        {
+            # Classifies a failed tool call: file lock / 429 / 5xx + network
+            # timeout / MCP transport -> "[TRANSIENT] {class}: retry with
+            # backoff in this turn" + transient_blocks++. Everything else is
+            # silent. 2026-05-11: 8 EBUSY edits were queued for the user
+            # instead of retried; the memory fix depended on recall at the
+            # exact moment of the error.
+            "matcher": ".*",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/tool-failure-gate.py"),
+                    "timeout": 10000,
+                }
+            ],
+        }
+    ],
     "Stop": [
         {
             "matcher": "",
@@ -356,6 +374,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "post-action-gate.py",
     "gate-skip-detector.py",
     "session-pressure-meter.py",
+    "tool-failure-gate.py",
     "stop-b1-gate.py",
     "sibling-session-gate.py",
     "scorer-lock-gate.py",
