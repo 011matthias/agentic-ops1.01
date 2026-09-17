@@ -129,6 +129,8 @@ with `upload_name`, `period_start`, `period_end`, `n_rows`, `uploaded_at`.
    reimbursement; the dialog opens prefilled. Close it with Escape.
 5. A row with a reviewer-picked category offers Undo my category first; a row
    the tool categorized does not.
-6. June's Supermercado Fenix row shows card 2838 with "matched on the last two
-   digits (38)".
+6. No live row carries a `card_ending` yet (the one receipt printing two
+   digits was fixed by hand, which outranks the rule). Check the note on the
+   next receipt that prints only two card digits, and check the strip shows a
+   two-character group as `••76`.
 7. August's Matching page shows one "Statement loaded" line per statement.

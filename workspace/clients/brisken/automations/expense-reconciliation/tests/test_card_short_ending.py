@@ -3,10 +3,9 @@ digits of the card.
 
 "when creating expenses, some receipts only show the last 2 digits of the
 cards number, we need to strategize what we can do, so the card attribution
-stays accurate". Live, "42463153XXXXXX38" reached June (Supermercado Fenix,
-no card, no company, no person) and August (SARL TRAIN'S, fixed by hand to
-card 2838). Two digits sat below the matcher's 3-digit floor, so the hint
-named no card.
+stays accurate". Live, "42463153XXXXXX38" is on August's SARL TRAIN'S,
+which a human fixed by hand to card 2838. Two digits sat below the matcher's
+3-digit floor, so the hint named no card.
 
 The rule pinned here: two digits behind a mask or an ending word name the
 card when exactly ONE active card ends in them, and the row says it was
@@ -169,8 +168,8 @@ def client(tmp_path, monkeypatch):
 
 
 def _extraction(**overrides) -> ExtractedReceipt:
-    base = dict(date="2026-06-25", total="1087.06", currency="BRL",
-                vendor="Supermercado Fenix", reference="", line_items=(),
+    base = dict(date="2026-08-14", total="32.00", currency="EUR",
+                vendor="SARL TRAIN'S", reference="", line_items=(),
                 confidence=0.9, notes="")
     base.update(overrides)
     return ExtractedReceipt(**base)
@@ -202,7 +201,7 @@ def _live_setting() -> dict:
     }
 
 
-def test_the_fenix_receipt_gets_its_card_company_and_person(client, monkeypatch):
+def test_a_two_digit_receipt_gets_its_card_company_and_person(client, monkeypatch):
     client.put("/api/settings", json={"cards": _live_setting()})
     _view, rows = _batch(
         client, monkeypatch,
@@ -210,13 +209,13 @@ def test_the_fenix_receipt_gets_its_card_company_and_person(client, monkeypatch)
         _extraction(vendor="Padaria", total="12.00", payment_hint="Visa **76"),
         _extraction(vendor="Uber", total="30.00", payment_hint="Visa ...3645"),
     )
-    fenix = rows["42463153XXXXXX38"]
-    assert fenix["card"]["key"] == "card-2838"
-    assert fenix["card_source"] == "hint"
-    assert fenix["card_ending"] == "38"
-    assert fenix["legal_entity_id"] == "Corporate Services"
-    assert fenix["person"] == "owner of 2838"
-    assert fenix["suggested_private"] is False
+    ending = rows["42463153XXXXXX38"]
+    assert ending["card"]["key"] == "card-2838"
+    assert ending["card_source"] == "hint"
+    assert ending["card_ending"] == "38"
+    assert ending["legal_entity_id"] == "Corporate Services"
+    assert ending["person"] == "owner of 2838"
+    assert ending["suggested_private"] is False
 
     shared = rows["Visa **76"]
     assert shared["card"] is None and shared["card_ending"] == ""
