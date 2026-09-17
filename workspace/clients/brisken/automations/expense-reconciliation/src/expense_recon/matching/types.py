@@ -292,6 +292,12 @@ class Receipt:
     # * `expense_location` — the report "Expense Location".
     payment_mode: str | None = None
     paid_through: str | None = None
+
+    # Agent-directed text found in this receipt's own document text, its
+    # file name, or the mail that carried it (untrusted.scan). Data for a
+    # human: it raises a review flag and decides nothing. Entries are
+    # {"kind", "quote"} (rule_untrusted_inbound, ECC audit item 6).
+    untrusted_instructions: tuple[dict, ...] = ()
     zoho_category: str | None = None
     exchange_rate: Decimal | None = None
     base_amount: Decimal | None = None

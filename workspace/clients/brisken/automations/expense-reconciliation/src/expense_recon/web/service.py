@@ -5529,10 +5529,24 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
     }
 
 
+def _row_untrusted(r: Receipt, intake_provenance: dict) -> list[dict]:
+    """Every untrusted-text flag that applies to one expense row: the ones
+    found in the receipt's own document/file name at parse time, plus the
+    ones the carrying mail was stamped with at route time. Deduped by kind."""
+    prov = intake_provenance.get(r.document_id) or {}
+    out: dict[str, dict] = {}
+    for f in (*(r.untrusted_instructions or ()),
+              *(prov.get("untrusted_instructions") or ())):
+        if isinstance(f, dict) and f.get("kind"):
+            out.setdefault(str(f["kind"]), dict(f))
+    return [out[k] for k in sorted(out)]
+
+
 def _expense_review(
     r: Receipt,
     overrides: dict,
     *,
+    untrusted_flags: tuple | list = (),
     entity: str | None = None,
     period: tuple[date, date] | None = None,
     date_is_human: bool = False,
@@ -5546,8 +5560,10 @@ def _expense_review(
     currency), then a date that cannot belong to this month (backlog item
     25), then a missing legal entity (Cards R3 — resolves from the
     paying card; unresolved = review, and the export still runs with a
-    visible placeholder), then the shared category judgment — the same
-    ready / check / pick vocabulary the statement workbench uses.
+    visible placeholder), then text in the document or its mail that is
+    addressed to the tool (`untrusted_flags`, rule_untrusted_inbound), then
+    the shared category judgment — the same ready / check / pick vocabulary
+    the statement workbench uses.
 
     `person` (backlog item 40) is checked LAST, only on a row that would
     otherwise be ready: the fix (a person on the card, in Settings) is
@@ -5633,6 +5649,30 @@ def _expense_review(
             "export shows a placeholder until then.",
             "needs_entity",
         )
+    # Text addressed to an assistant, found in this receipt's document, its
+    # file name or the mail that carried it (rule_untrusted_inbound). It is
+    # reported, never obeyed. Ranked HERE, not first: the four checks above
+    # are per-row work the reviewer can actually finish, and this flag never
+    # clears (nothing un-writes what the document said), so first would let a
+    # sticky warning hide a missing amount forever. It still outranks the
+    # category judgment and the registry-work flags below, because a document
+    # steering the tool matters more than which account it posts to. The flag
+    # itself is not hidden either way: `expenses[].untrusted_instructions`
+    # rides on the row independently of which exception names it.
+    flags = tuple(untrusted_flags or ()) or tuple(r.untrusted_instructions or ())
+    if flags:
+        kinds = ", ".join(sorted({str(f.get("kind")) for f in flags if f.get("kind")}))
+        return {
+            **_review(
+                "check",
+                "This receipt (or the mail that carried it) contains text "
+                "written at the tool rather than a purchase: " + kinds + ". "
+                "It was extracted as data and changed nothing. Read it before "
+                "you approve the row.",
+                "untrusted_instructions",
+            ),
+            "untrusted_instructions": [dict(f) for f in flags],
+        }
     review = _matched_category_review(r, overrides)
     if review["state"] == "ready" and person is not None and not person:
         # Item 40: every expense belongs to a person, through the card.
@@ -5915,6 +5955,7 @@ def build_expense_view(
         box_inputs[r.document_id] = (r, res, cost)
         review = _expense_review(
             r, overrides, entity=res["entity"], period=period,
+            untrusted_flags=_row_untrusted(r, intake_provenance),
             person=res["person"],
             private=res["private"],
             suggested_private=res["suggested_private"],
@@ -6067,6 +6108,9 @@ def build_expense_view(
             # only for receipts that arrived via the intake mailbox —
             # {person, source: alias|sender, address, received_at}.
             "submitted_by": intake_provenance.get(r.document_id),
+            # Agent-directed text found in this receipt or its mail
+            # (rule_untrusted_inbound): shown for a human, acted on by nothing.
+            "untrusted_instructions": _row_untrusted(r, intake_provenance),
         })
         if roster is not None:
             # Trip batches only (the key is absent on company months).
