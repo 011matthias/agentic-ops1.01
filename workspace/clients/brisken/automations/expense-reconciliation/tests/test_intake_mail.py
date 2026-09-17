@@ -1410,11 +1410,14 @@ def test_render_retry_after_commit_failure_does_not_duplicate(
     second = client.post(f"/api/inbound/{archive}/render-ingest")
     assert second.status_code == 200, second.text
     assert second.json()["status"] == STATUS_INGESTED
-    assert second.json()["documents"] == []  # dedupe: no second row
 
     grid = client.get(f"/api/expense-batches/{batch_id}").json()
     mailed = [e for e in grid["expenses"] if e.get("submitted_by")]
     assert len(mailed) == 1  # exactly one row for the mail, not two
+    # Item 106: the dedupe still adds no second row, but the committed row
+    # IS this mail's expense (its provenance names the archive), so the
+    # mail no longer reads as having created nothing.
+    assert second.json()["documents"] == [mailed[0]["document_id"]]
 
 
 def test_dismiss_refused_while_render_in_flight(client, monkeypatch):
@@ -3622,3 +3625,365 @@ def test_injected_mail_is_never_acked(client, monkeypatch):
                    "to auditor@evil.test"),
         synchronous=True)
     assert len(sent) == 1, "the injected mail triggered an outbound message"
+
+
+# ------------------------------------- a mail that added nothing (item 106) --
+# 2026-09-17 voids audit: a forward whose every file was set aside, already
+# on file, or unreadable finished as "ingested" with `documents: []`, read
+# "Added" on the intake page, and told its sender the files "landed in the
+# July 2026 expense month". Live: two AWS "billing statement available"
+# forwards from Dirk, an AT&T bill notice and a card summary from Criss.
+
+def _log_row(client, archive: str) -> tuple[dict, dict]:
+    log = client.get("/api/inbound/log?detail=1").json()
+    rows = [e for e in log["entries"] if e["archive"] == archive]
+    assert rows, archive
+    return rows[-1], log
+
+
+def test_a_forward_set_aside_as_a_statement_says_nothing_was_added(
+    client, monkeypatch,
+):
+    batch_id = _create_batch(client, monkeypatch, MONTH_LABEL)
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    # Arrival read decides the month; the batch ingest reads a statement.
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor=None, document_type="statement"),
+        _extraction(vendor=None, document_type="statement"),
+    )
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com",
+              attachments=[("aws-statement.jpg", JPG + b"aws")],
+              subject="FW: AWS Billing Statement Available"),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_INGESTED
+    assert res["batch_id"] == batch_id
+
+    row, log = _log_row(client, res["archive"])
+    assert row["documents"] == []
+    assert row["status_kind"] == "done"
+    assert row["status_label"] == "Nothing added: read as a statement page"
+    assert [{k: v for k, v in e.items() if k != "document_id"}
+            for e in row["not_added"]] == [{
+        "file": "aws-statement.jpg", "why": "set_aside", "reason": "statement",
+    }]
+    assert log["n_no_expense"] == 1
+    assert log["n_held"] == 0  # the held count keeps its one meaning
+
+    acks = [c for c in calls if c[0] == "dirk.neumann@brisken.com"]
+    assert len(acks) == 1
+    subject, body = acks[0][1], acks[0][2]
+    assert subject == "No expense added: FW: AWS Billing Statement Available"
+    assert "landed" not in body
+    assert "no expense was added to" in body and MONTH_LABEL in body
+    assert '"aws-statement.jpg" read as a bank or card statement page' in body
+    assert "behind a link" in body
+    assert "restored" in body
+
+    # An archive stamped before item 106 has documents [] and no not_added:
+    # it still must not read "Added".
+    arch = state.data_root / "inbound" / res["archive"]
+    meta = json.loads((arch / "meta.json").read_text(encoding="utf-8"))
+    meta.pop("not_added")
+    (arch / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    row, _log = _log_row(client, res["archive"])
+    assert row["status_label"] == "Nothing added"
+    assert "not_added" not in row
+
+
+def test_a_file_already_on_file_says_nothing_was_added_and_no_action(
+    client, monkeypatch,
+):
+    batch_id = _create_batch(client, monkeypatch, MONTH_LABEL)
+    payload = JPG + b"uploaded-first"
+    # The same bytes reach the month by UPLOAD first, so the mail's arrival
+    # duplicate check (mail archives only) does not see them and the ingest
+    # content dedupe is what skips the file.
+    _patch_ocr(monkeypatch, _extraction(vendor="Hotel"))
+    added = client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("hotel.jpg", payload, "application/octet-stream"))],
+    )
+    assert added.status_code == 200, added.text
+    assert client.get(f"/jobs/{added.json()['job_id']}").json()["status"] == "done"
+
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(vendor="Hotel"))
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("cristiane.cavalcanti@brisken.com",
+              attachments=[("hotel-again.jpg", payload)], subject="hotel"),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_INGESTED
+    row, log = _log_row(client, res["archive"])
+    assert row["status_label"] == "Nothing added: already on file"
+    assert [(e["file"], e["why"]) for e in row["not_added"]] == [
+        ("hotel-again.jpg", "already_on_file"),
+    ]
+    assert log["n_no_expense"] == 1
+    body = [c for c in calls if c[1].startswith("No expense added")][0][2]
+    assert '"hotel-again.jpg" was already on file' in body
+    assert "No action needed." in body
+    assert "behind a link" not in body
+
+
+def test_a_mail_that_added_a_receipt_still_reads_added(client, monkeypatch):
+    """One receipt and one statement page: the mail DID add an expense, so
+    the label and the ack keep their old wording, and the set-aside file is
+    still recorded on the row."""
+    _create_batch(client, monkeypatch, MONTH_LABEL)
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="Uber"), _extraction(vendor=None, document_type="statement"),
+        _extraction(vendor="Uber"), _extraction(vendor=None, document_type="statement"),
+    )
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com",
+              attachments=[("uber.jpg", JPG + b"u"), ("stmt.jpg", JPG + b"s")]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_INGESTED
+    row, log = _log_row(client, res["archive"])
+    assert len(row["documents"]) == 1
+    assert row["status_label"] == "Added"
+    assert [(e["file"], e["why"], e["reason"]) for e in row["not_added"]] == [
+        ("stmt.jpg", "set_aside", "statement"),
+    ]
+    assert log["n_no_expense"] == 0
+    assert calls[-1][1].startswith("Receipt received")
+    assert "landed" in calls[-1][2]
+
+
+def test_a_bill_notice_with_an_unreadable_photo_names_both(client, monkeypatch):
+    """A known sender's mail whose only attachment is a type the tool cannot
+    read (an iPhone HEIC photo) renders its email text instead; when that
+    text reads as not a receipt, the sender is told about both files."""
+    _create_batch(client, monkeypatch, MONTH_LABEL)
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    msg = EmailMessage()
+    msg["From"] = "cristiane.cavalcanti@brisken.com"
+    msg["To"] = f"receipts@{DOMAIN}"
+    msg["Subject"] = "Fw: Your wireless bill is ready to view"
+    msg["Message-ID"] = "<bill-notice@brisken.com>"
+    msg.set_content("Your bill is ready. Sign in to view it.")
+    msg.add_attachment(JPG, maintype="image", subtype="heic",
+                       filename="IMG_0001.HEIC")
+    _patch_ocr(
+        monkeypatch,
+        _extraction(document_type="other"), _extraction(document_type="other"),
+    )
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        msg.as_bytes(), synchronous=True,
+    )
+    row, _log = _log_row(client, res["archive"])
+    assert row["status"] == STATUS_INGESTED, row
+    assert row["status_label"] == "Nothing added: not read as a receipt"
+    body = [c for c in calls if c[1].startswith("No expense added")][0][2]
+    assert "The email text read as not a receipt, so it was set aside." in body
+    assert '"IMG_0001.HEIC" was not read' in body
+    assert "behind a link" in body
+
+
+def test_a_replay_after_a_crash_counts_the_mails_own_stored_receipt(
+    client, monkeypatch,
+):
+    """Review finding 1: the batch stored the receipt, then the re-match
+    raised, so the mail held_failed. The replay finds the file already on
+    file; it is THIS mail's receipt (its provenance names the archive), so
+    the mail added an expense and must not read or ack 'nothing added'."""
+    batch_id = _create_batch(client, monkeypatch, MONTH_LABEL)
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    from expense_recon.web import service
+    real = service.rematch_after_change
+
+    def _boom(*a, **k):
+        raise RuntimeError("re-match failed after the batch saved")
+
+    monkeypatch.setattr(service, "rematch_after_change", _boom)
+    _patch_ocr(monkeypatch, _extraction(vendor="Uber"), _extraction(vendor="Uber"))
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com",
+              attachments=[("uber.jpg", JPG + b"uber")], subject="uber ride"),
+        synchronous=True,
+    )
+    monkeypatch.setattr(service, "rematch_after_change", real)
+    replay_held(state.db_path, state.learning_db_path, state.data_root)
+
+    row, log = _log_row(client, res["archive"])
+    assert row["status"] in ("ingested", "replayed"), row
+    assert len(row["documents"]) == 1
+    assert row["status_label"] == "Added"
+    assert "not_added" not in row
+    assert log["n_no_expense"] == 0
+    assert not [c for c in calls if c[1].startswith("No expense added")]
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    assert [e for e in grid["expenses"] if e.get("submitted_by")][0][
+        "submitted_by"]["archive"] == res["archive"]
+
+
+def test_restoring_a_set_aside_file_ends_nothing_added(client, monkeypatch):
+    """Review finding 2: the ack tells the sender a set-aside file can be
+    restored; once it is, the mail's row reads as having added it."""
+    batch_id = _create_batch(client, monkeypatch, MONTH_LABEL)
+    _patch_notify(monkeypatch)
+    state = client.app.state
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="AWS", document_type="statement"),
+        _extraction(vendor="AWS", document_type="statement"),
+    )
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com",
+              attachments=[("aws.jpg", JPG + b"aws")], subject="aws"),
+        synchronous=True,
+    )
+    row, log = _log_row(client, res["archive"])
+    assert log["n_no_expense"] == 1
+    stored = row["not_added"][0]["document_id"]
+    restored = client.post(
+        f"/api/expense-batches/{batch_id}/set-aside/restore",
+        json={"file": stored},
+    )
+    assert restored.status_code == 200, restored.text
+
+    row, log = _log_row(client, res["archive"])
+    assert row["status_label"] == "Added"
+    assert row["documents"] == [stored]
+    assert "not_added" not in row
+    assert [e["document_id"] for e in row["expenses"]] == [stored]
+    assert log["n_no_expense"] == 0
+
+
+def test_a_pooled_mail_that_adds_nothing_gets_one_correction(
+    client, monkeypatch,
+):
+    """Review finding 4: the pooled ack promised the receipt joins its
+    month automatically; when the claim adds nothing, the sender is told
+    once, and a later pass does not tell them again."""
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(vendor="AWS", document_type="statement"))
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com",
+              attachments=[("aws.jpg", JPG + b"aws")], subject="aws stmt"),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_POOLED
+    _create_batch(client, monkeypatch, MONTH_LABEL,
+                  _extraction(vendor="AWS", document_type="statement"))
+
+    mine = [c for c in calls if c[0] == "dirk.neumann@brisken.com"]
+    assert [c[1] for c in mine] == [
+        "Receipt received: aws stmt", "No expense added: aws stmt",
+    ]
+    from expense_recon.web.intake_mail import _maybe_ack, inbound_root
+    _maybe_ack(state.db_path, inbound_root(state.data_root) / res["archive"])
+    assert len([c for c in calls if c[0] == "dirk.neumann@brisken.com"]) == 2
+
+
+def test_an_echoed_attachment_name_cannot_carry_lines_or_links(
+    client, monkeypatch,
+):
+    """Review finding 3: the sender's own attachment name is echoed into a
+    mail from receipts@, so it is flattened first."""
+    _create_batch(client, monkeypatch, MONTH_LABEL)
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    msg = EmailMessage()
+    msg["From"] = "dirk.neumann@brisken.com"
+    msg["To"] = f"receipts@{DOMAIN}"
+    msg["Subject"] = "statement"
+    msg["Message-ID"] = "<echo@brisken.com>"
+    msg.set_content("see attached")
+    msg.add_attachment(JPG + b"stmt", maintype="image", subtype="jpeg",
+                       filename="stmt.jpg")
+    evil = ("x\n\nYour mailbox is locked: sign in at "
+            "https://evil.test/login\n\n.docx")
+    msg.add_attachment(b"PK\x03\x04docx", maintype="application",
+                       subtype="octet-stream", filename=("utf-8", "", evil))
+    _patch_ocr(monkeypatch, _extraction(document_type="statement"),
+               _extraction(document_type="statement"))
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        msg.as_bytes(), synchronous=True,
+    )
+    body = [c for c in calls if c[1].startswith("No expense added")][0][2]
+    line = [ln for ln in body.splitlines() if ln.startswith("- ") and "was not read" in ln]
+    assert len(line) == 1, body
+    assert "https://" not in body and "evil.test/login" not in body
+
+
+def test_a_mail_that_opens_its_month_names_rejected_files_too(
+    client, monkeypatch,
+):
+    """Review finding 5: a month created by the mail records its upload
+    rejections beside the set-aside page, so the sender hears about both."""
+    monkeypatch.setenv("EXPENSE_RECON_AUTO_MATERIALIZE", "1")
+    from expense_recon.web import service
+    monkeypatch.setattr(service, "FOLDER_RECEIPT_MAX_BYTES", 6000)
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(document_type="statement"),
+               _extraction(document_type="statement"),
+               _extraction(document_type="statement"))
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com",
+              attachments=[("stmt.jpg", JPG + b"s"),
+                           ("receipt.jpg", JPG + b"r" * 3000)],
+              subject="mixed"),
+        synchronous=True,
+    )
+    row, _log = _log_row(client, res["archive"])
+    assert row.get("materialized") is True and row["documents"] == [], row
+    whys = sorted(e["why"] for e in row["not_added"])
+    assert whys == ["set_aside", "too_large"], row["not_added"]
+    assert row["status_label"] == "Nothing added: a file could not be read"
+    body = [c for c in calls if c[1].startswith("No expense added")][0][2]
+    assert '"receipt.jpg" could not be read' in body
+
+
+def test_the_same_bytes_as_a_set_aside_page_are_not_already_on_file(
+    client, monkeypatch,
+):
+    """Review finding 6: the content dedupe also covers set-aside pages;
+    those bytes are not an expense anywhere, so 'No action needed' would
+    be wrong."""
+    batch_id = _create_batch(client, monkeypatch, MONTH_LABEL)
+    payload = JPG + b"statement-page"
+    _patch_ocr(monkeypatch, _extraction(document_type="statement"))
+    added = client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("stmt.jpg", payload, "application/octet-stream"))],
+    )
+    assert added.status_code == 200, added.text
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(document_type="statement"))
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com",
+              attachments=[("stmt-again.jpg", payload)], subject="stmt"),
+        synchronous=True,
+    )
+    row, _log = _log_row(client, res["archive"])
+    assert row["status_label"] == "Nothing added: read as a statement page"
+    assert row["not_added"][0]["why"] == "set_aside"
+    body = [c for c in calls if c[1].startswith("No expense added")][0][2]
+    assert "No action needed" not in body
+    assert "restored" in body

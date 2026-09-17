@@ -20,7 +20,9 @@ operator code so the publisher is a real session label:
 from __future__ import annotations
 
 import io
-from datetime import datetime
+from dataclasses import replace
+from datetime import date, datetime
+from decimal import Decimal
 
 import pytest
 
@@ -29,9 +31,20 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 from openpyxl import Workbook  # noqa: E402
+from openpyxl.styles import PatternFill  # noqa: E402
 
+from expense_recon.categorize_charges import derive_subscription_status  # noqa: E402
 from expense_recon.llm.client import ExtractedReceipt, MockLLMClient  # noqa: E402
+from expense_recon.matching.types import (  # noqa: E402
+    Match,
+    MatchOutcome,
+    MatchType,
+    Receipt,
+    Transaction,
+)
+from expense_recon.store import StatementStore  # noqa: E402
 from expense_recon.web.app import create_app  # noqa: E402
+from expense_recon.web.serialize import snapshot_to_dict  # noqa: E402
 from expense_recon.web.store import RunStore  # noqa: E402
 
 JPG = b"\xff\xd8\xff\xe0fake-jpeg-bytes"
@@ -95,12 +108,20 @@ def _create_batch(client, n_receipts, label="August 2026", seed=0, entity=""):
     return batch_id
 
 
-def _attach(client, batch_id, rows):
+def _attach(client, batch_id, rows, fills=None):
+    """`fills` maps a row's Description to a solid fill, the way Criss colours
+    her workbook (yellow = booked, gray = booked through recurring)."""
     wb = Workbook()
     ws = wb.active
     ws.append(list(HEADERS))
     for row in rows:
         ws.append(list(row))
+        colour = (fills or {}).get(row[1])
+        if colour:
+            for cell in ws[ws.max_row]:
+                cell.fill = PatternFill(
+                    start_color=colour, end_color=colour, fill_type="solid",
+                )
     buf = io.BytesIO()
     wb.save(buf)
     _done(client, client.post(
@@ -151,10 +172,10 @@ def _decide(client, batch_id, tx_id, status):
     assert resp.status_code == 200, resp.text
 
 
-def _month(client, monkeypatch, rows, *extractions):
+def _month(client, monkeypatch, rows, *extractions, fills=None):
     _wire(monkeypatch, *extractions)
     batch_id = _create_batch(client, len(extractions))
-    _attach(client, batch_id, rows)
+    _attach(client, batch_id, rows, fills)
     view = _view(client, batch_id)
     # Every clean pairing decided, so `ready_to_post` is true and only the
     # completeness rule can hold the month back.
@@ -337,6 +358,135 @@ def test_a_receipt_another_month_settled_does_not_block_its_own_month(
     assert len(listed) == 1 and listed[0]["settled_by"]["run_id"] == august, listed
     assert view["summary"]["n_unmatched_rec"] == 1
     assert view["summary"]["n_receipts_need_charge"] == 0
+
+
+# ── owner ruling 2026-09-17: gray is booked through recurring ─────────
+
+GRAY = "FFD9D9D9"
+YELLOW = "FFFFEB9C"
+NOTION = (datetime(2026, 8, 12), "NOTION LABS", "Sale", -10.00)
+
+
+def test_a_gray_filled_charge_is_booked_through_recurring_and_closes(
+    client, monkeypatch
+):
+    """July 2026's shape: every charge left without a receipt is gray, which
+    Criss's walkthrough calls "já estão no recurring". Gray closes the receipt
+    requirement and the guessed category, the way yellow does, and the month
+    publishes without an override."""
+    batch = _month(
+        client, monkeypatch, [LOVABLE, OBSIDIAN, FEE, NOTION, PAYMENT],
+        _extraction("Lovable Labs", "15.00", "2026-08-31"),
+        fills={OBSIDIAN[1]: GRAY, FEE[1]: GRAY, NOTION[1]: YELLOW},
+    )
+    view = _view(client, batch)
+    obsidian = _row(view, "OBSIDIAN")
+    assert obsidian["entry_status"] == "subscription"
+    assert obsidian["effective_bucket"] == "unmatched"
+    assert "entry_status_source" not in obsidian, "parallel field, absent on a fill"
+    fee = _row(view, "UBER ONE ANNUAL FEE")
+    assert fee["entry_status"] == "subscription"
+    assert fee["review"]["reason_code"] == "receiptless_suggested", fee["review"]
+    assert _row(view, "NOTION LABS")["section"] == "posted"
+
+    summary = view["summary"]
+    assert summary["n_charges_need_receipt"] == 0
+    assert summary["n_charges_category_guessed"] == 0, "its category lives in recurring"
+    assert summary["n_charges_closed_recurring"] == 2   # OBSIDIAN + the fee
+    assert summary["n_booked_no_receipt"] == 1, "yellow still closes as before (item 102)"
+    assert summary["month_complete"] is True
+
+    resp = client.post(f"/api/runs/{batch}/publish")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["published_override"] is False
+
+
+def _snapshot_tx(tid, day, vendor, amount, **kw) -> Transaction:
+    return Transaction(
+        transaction_id=tid, legal_entity_id="le1", account_id="chase",
+        transaction_date=date(2026, 4, day), posting_date=None,
+        amount=Decimal(amount), transaction_currency="USD",
+        account_card_currency="USD", vendor_from_statement=vendor,
+        card_last4="2838", **kw,
+    )
+
+
+def _snapshot(charges, matched_tx):
+    receipt = Receipt(
+        document_id="m1", legal_entity_id="le1", detected_date=date(2026, 4, 15),
+        detected_total=Decimal("20.00"), detected_currency="USD",
+        detected_vendor="Cafe",
+    )
+    outcome = MatchOutcome(
+        matches=[Match(
+            transaction_id=matched_tx, document_id="m1", match_type=MatchType.EXACT,
+            confidence=0.99, reason="exact", score=95,
+            amount_score=1.0, date_score=1.0, vendor_score=1.0,
+        )],
+        unmatched_transactions=[
+            c.transaction_id for c in charges if c.transaction_id != matched_tx
+        ],
+        unmatched_receipts=[],
+    )
+    return snapshot_to_dict(charges, [receipt], outcome, [])
+
+
+def _store_run(client, run_id, snapshot):
+    with RunStore(client._data_root / "recon-web.sqlite") as db:
+        db.create_run(
+            run_id=run_id, created_at="2026-05-02T00:00:00", label="April 2026",
+            operator=None, summary={}, snapshot=snapshot, config={},
+            work_dir=str(client._data_root), llm_enabled=False, has_coa=False,
+        )
+    return _view(client, run_id)
+
+
+def test_a_subscription_mark_derived_from_history_closes_nothing(client, tmp_path):
+    """`derive_subscription_status` writes the same `entry_status` from vendor
+    history. That is the tool's guess that a charge recurs, not Criss's record
+    that it was booked, so the charge still needs a receipt. A snapshot saved
+    before the provenance existed carries no key and reads as the fill."""
+    history = tmp_path / "vendor-history.sqlite"
+    with StatementStore(history) as store:
+        # ANTHROPIC in February and March: two distinct months before April.
+        store.ingest_transactions(
+            [
+                replace(_snapshot_tx(f"h{m}", 5, "ANTHROPIC", "20.00"),
+                        transaction_date=date(2026, m, 5))
+                for m in (2, 3)
+            ],
+            statement_id="hist",
+        )
+    charges = [
+        _snapshot_tx("t_fill", 5, "OBSIDIAN", "96.00", entry_status="subscription"),
+        _snapshot_tx("t_derived", 6, "ANTHROPIC", "20.00"),
+        _snapshot_tx("t_yellow", 10, "NOTION", "10.00", entry_status="posted"),
+        _snapshot_tx("t_matched", 15, "CAFE", "20.00"),
+    ]
+    with StatementStore(history) as store:
+        charges = derive_subscription_status(charges, store)
+    by_id = {c.transaction_id: c for c in charges}
+    assert by_id["t_derived"].entry_status == "subscription"
+    assert by_id["t_derived"].entry_status_source == "derived"
+    assert by_id["t_fill"].entry_status_source is None, "a fill is never overwritten"
+
+    view = _store_run(client, "derived", _snapshot(charges, "t_matched"))
+    rows = {r["transaction_id"]: r for r in view["rows"]}
+    assert rows["t_derived"]["entry_status_source"] == "derived"
+    assert "entry_status_source" not in rows["t_fill"]
+    summary = view["summary"]
+    assert summary["n_charges_need_receipt"] == 1          # t_derived only
+    assert summary["n_charges_closed_recurring"] == 1      # t_fill
+    assert summary["n_booked_no_receipt"] == 1             # t_yellow
+    assert summary["month_complete"] is False
+
+    # A snapshot from before the ruling: no `entry_status_source` key at all.
+    old = _snapshot(charges, "t_matched")
+    for tx in old["transactions"]:
+        tx.pop("entry_status_source", None)
+    summary = _store_run(client, "old", old)["summary"]
+    assert summary["n_charges_need_receipt"] == 0
+    assert summary["n_charges_closed_recurring"] == 2
 
 
 # ── item 100: the route is the gate ───────────────────────────────────

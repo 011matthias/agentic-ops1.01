@@ -171,6 +171,15 @@ class Transaction:
     # "posted" rows so a re-import can never double-post.
     entry_status: str | None = None            # "posted" | "subscription" | None
 
+    # Who wrote `entry_status` (owner ruling 2026-09-17). "derived" ONLY when
+    # `categorize_charges.derive_subscription_status` inferred the
+    # subscription mark from statement history; None when it came from the
+    # workbook fill or an operator verdict. The difference is load-bearing:
+    # a gray FILL is booked through Zoho recurring expenses and closes the
+    # charge for month completeness, a derived mark is a guess and closes
+    # nothing (`web.month_readiness`).
+    entry_status_source: str | None = None
+
     # Refund / credit flag (3.10 / LD-5 A5), set at INGEST from the source's
     # own convention (a Type column, sign inference, or the PDF's negative
     # print) — never inferred again downstream. Under the canonical sign

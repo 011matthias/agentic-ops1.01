@@ -178,9 +178,10 @@ name answers the same one:
 | `n_self_confirmed` | run payload only: how many rows carry a verdict the TOOL wrote under the self-confirmation rule (item 76). Falls as a reviewer takes one back; `n_undecided` keeps its question (pending pairings nobody has ratified) |
 | `n_needs_company_or_person` | expense payload: how many rows miss their company or their person (item 84, owner ruling 2026-09-16: the Expenses view shows MISSING ENTITY and NEEDS PERSON as one box, because the fix is one action, pick the card or mark the receipt private). `n_needs_entity` and `n_needs_person` keep their questions |
 | `n_copies_set_aside` | how many decided duplicate copies are set aside. Run payload: instead of listed as unmatched (items 83 + 75); `n_unmatched_rec` keeps its question (receipts waiting for a charge), and a set-aside copy was never one. Expense payload and months list (item 94): the rows left out of `n_expenses` and `totals_by_ccy`, the same set. `n_duplicate_copies` keeps counting every redundant copy, matched or not |
-| `n_charges_need_receipt` | run payload only: how many purchase charges hold no receipt and no verdict that closes them (item 99). Not `n_unmatched_tx`, which also counts booked charges and fee lines |
+| `n_charges_need_receipt` | run payload only: how many purchase charges hold no receipt and no verdict that closes them (item 99). Not `n_unmatched_tx`, which also counts booked charges and fee lines. A gray-filled charge is booked through recurring and does not count (owner ruling 2026-09-17) |
+| `n_charges_closed_recurring` | run payload only: how many charges holding no receipt the gray fill closed (owner ruling 2026-09-17): purchases it took out of `n_charges_need_receipt` and fee lines whose guessed category it took out of `n_charges_category_guessed`. Never blocks the month; it keeps the closure visible. A subscription mark the tool derived from history closes nothing and is not counted |
 | `n_receipts_need_charge` | run payload only: how many receipts no charge holds anywhere and nothing set aside (item 99): `n_unmatched_rec` minus the receipts another month's charge settled (`settled_by`) and the confirmed private expenses (flag AND `reimburse_to`) |
-| `n_charges_category_guessed` | run payload only: how many charges that need no receipt still carry the tool's guessed category (item 99). A charge that needs a receipt is counted under `n_charges_need_receipt` alone |
+| `n_charges_category_guessed` | run payload only: how many charges that need no receipt still carry the tool's guessed category (item 99). A charge that needs a receipt is counted under `n_charges_need_receipt` alone; a gray-filled charge is not counted, its category lives in the Zoho recurring entry |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -3134,10 +3135,11 @@ payload (absent on the expense payload, where no charge exists):
 
 | Key | Type | Question |
 |---|---|---|
-| `summary.month_complete` | bool | can this month read Ready to post and be published: `ready_to_post` AND the three counts below are 0 |
+| `summary.month_complete` | bool | can this month read Ready to post and be published: `ready_to_post` AND the three counts after it are 0 (`n_charges_closed_recurring` never blocks) |
 | `summary.n_charges_need_receipt` | int | purchase charges that hold no receipt and no verdict that closes them |
 | `summary.n_receipts_need_charge` | int | receipts no charge holds anywhere and nothing set aside |
 | `summary.n_charges_category_guessed` | int | charges needing no receipt whose category is still the tool's guess |
+| `summary.n_charges_closed_recurring` | int | charges holding no receipt that Criss's gray fill closed; never blocks (see "Gray is booked through recurring" below) |
 
 Owner rulings 2026-09-17 (`web/month_readiness.py`). The verdicts that close
 a charge are the ones that already existed; none was added:
@@ -3147,12 +3149,13 @@ a charge are the ones that already existed; none was added:
 - **a credit** (bucket `refund`: refund, payment, reversal);
 - **already booked**: Criss's yellow fill (`entry_status: "posted"`) or the
   reviewer's `already_posted` verdict (`section: "posted"`);
+- **booked through recurring**: Criss's gray fill (`entry_status:
+  "subscription"` with no `entry_status_source`), owner ruling 2026-09-17;
 - **a fee or interest line** the statement printed as one (`row_type` `fee` /
   `interest`): it needs no receipt.
 
-A gray fill (`entry_status: "subscription"`) closes nothing: it is an
-annotation, and the tool can derive it from statement history. A `rejected`
-or receiptless `confirmed` charge still needs a receipt.
+A `rejected` or receiptless `confirmed` charge still needs a receipt, unless
+one of the verdicts above closes it.
 
 A receipt needs no charge when it is settled outside the card, a decided
 duplicate copy (`copies_set_aside`, read from the same `decided_copies`
@@ -3189,8 +3192,51 @@ Live 2026-09-17, predicted from the deployed payloads with this rule
 
 All 24 July charges are gray subscription rows (Anthropic, Network Solutions,
 Lovable and others), which Criss's walkthrough calls "já estão no recurring".
-Under the ruling they still need a receipt or `already_posted`. August's
-guess is ANNUAL MEMBERSHIP FEE 150.00.
+August's guess is ANNUAL MEMBERSHIP FEE 150.00. The gray ruling below
+supersedes this table for both months.
+
+### Gray is booked through recurring: `n_charges_closed_recurring` + `rows[].entry_status_source` (owner ruling 2026-09-17, final)
+
+The section above first shipped with "a gray fill closes nothing". The owner
+ruled the other way the same day: gray in Criss's workbook means the charge is
+already booked through Zoho's recurring expenses, so it is closed for month
+completeness the way a yellow row is. It no longer counts in
+`n_charges_need_receipt`, and its guessed category no longer counts in
+`n_charges_category_guessed` (the category lives in the recurring entry, as a
+yellow row's lives in its Zoho entry). `web/month_readiness.py`
+`charge_booked_recurring` is the one predicate the pill counts, the gate and
+the publish refusal read.
+
+The ruling covers the FILL only. The CLI can also write `entry_status:
+"subscription"` from statement history (`derive_subscription_status`, when a
+statements store is configured; the web layer never configures one). That is
+the tool's guess that a charge recurs, not a record that it was booked, so it
+closes nothing. The run payload says which one a row carries:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `rows[].entry_status_source` | string | `"derived"`: the subscription mark was inferred from history and closes nothing. Parallel field per rule 1, **absent** (never null) on every row whose `entry_status` came from the workbook fill or an operator verdict, and on every row of a snapshot saved before the ruling (read as the fill) |
+| `summary.n_charges_closed_recurring` | int | charges holding no receipt (`effective_bucket: "unmatched"`, not `section: "posted"`) that the gray fill closed: the purchases out of `n_charges_need_receipt` and any fee line out of `n_charges_category_guessed`. Always present on the run payload; never blocks |
+
+Nothing else moves: buckets, sections, `rows[].review` (a gray row still reads
+`receiptless_suggested`), `unreconciled_by_ccy`, `n_booked_no_receipt` (yellow
+only, item 102), matching, the exports and the Zoho journal are unchanged.
+Only completeness does.
+
+Live 2026-09-17, predicted from the deployed payloads with the ruling
+(read-only; no live row carries `entry_status_source`):
+
+| Month | `ready_to_post` | `n_undecided` | `n_charges_need_receipt` | `n_receipts_need_charge` | `n_charges_category_guessed` | `n_charges_closed_recurring` | `month_complete` |
+|---|---|---|---|---|---|---|---|
+| July 2026 (`50622baec444`) | true | 0 | 24 -> 0 | 11 | 0 | 24 | false |
+| August 2026 (`074a7b8905d7`) | false | 8 | 100 -> 61 | 10 | 1 -> 0 | 40 | false |
+
+July's 24 are all gray purchases; its 11 receipts with no charge still block.
+August closes 39 gray purchases plus the gray ANNUAL MEMBERSHIP FEE, whose
+guess was the month's one guessed category; 61 unfilled purchases still need a
+receipt. Route-level in `tests/test_month_complete_publish_gate.py`
+(`test_a_gray_filled_charge_is_booked_through_recurring_and_closes`,
+`test_a_subscription_mark_derived_from_history_closes_nothing`).
 
 ### The publish route is the gate
 
@@ -3210,8 +3256,9 @@ what to localize. `readiness` on `month_not_complete`:
 
 ```json
 { "month_complete": false, "ready_to_post": true, "n_undecided": 0,
-  "n_charges_need_receipt": 24, "n_receipts_need_charge": 11,
-  "n_charges_category_guessed": 0, "month_health_state": "ok" }
+  "n_charges_need_receipt": 0, "n_receipts_need_charge": 11,
+  "n_charges_category_guessed": 0, "n_charges_closed_recurring": 24,
+  "month_health_state": "ok" }
 ```
 
 Only `true` (the JSON boolean) is an override. The gate reads the same
@@ -3293,3 +3340,41 @@ receipt_card_label, receipt_card_source}`. `summary.n_cards_differ` counts
 those rows. Live August 2026 on deploy: 1 (LOVABLE 25.00 on 3645, receipt
 picked as 2838). Route-level in `tests/test_card_scope_item_137.py`. SPA half:
 `docs/lovable-cards-differ-prompt.md`.
+
+## A mail that added nothing (item 106, 2026-09-17)
+
+A forward whose every file was set aside (a statement page, a bill notice
+rendered from the email text), was already on file, or could not be read
+used to finish as `ingested` with `documents: []`, read "Added", and tell
+its sender the files "landed in the July 2026 expense month". Live on
+2026-09-17: two AWS "billing statement available" forwards from Dirk, an
+AT&T bill notice and a card summary from Criss.
+
+Nothing is retyped. `status` stays `ingested` / `replayed` and `status_kind`
+stays `done` (`n_held` keys on status, and a sixth kind value is the enum
+growth rule 5 exists to avoid); the label and the new fields carry it.
+
+### `GET /api/inbound/log`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `entries[].not_added` | object list `{file, why, reason?}` (absent when empty or stamped before this item) | per file, why it created no expense. `why`: `set_aside` (with `reason`: `statement`, `report_summary`, `other`), `already_on_file` (identical bytes already in the month), or an upload-issue code (`unsupported_type`, `empty_or_unreadable`, `too_large`, `upload_cap`). Present on a mail that DID add an expense too, naming its other files. `file` is the display name; the rendered email text is `rendered-body.pdf`. `document_id` (absent on upload issues) names the stored file: the set-aside entry, or the stored copy a duplicate matched (bytes matching a set-aside page read `set_aside`, not `already_on_file`). A set-aside file an operator has since restored leaves `not_added` and joins `documents` at read time, so the row reads "Added" |
+| `entries[].status_label` | string | a finished mail with `documents: []` reads `Nothing added`, `Nothing added: read as a statement page`, `Nothing added: read as a summary page`, `Nothing added: not read as a receipt`, `Nothing added: already on file`, `Nothing added: set aside or already on file`, or `Nothing added: a file could not be read`. A mail whose month was deleted keeps "The month it was added to was deleted" |
+| `n_no_expense` | number | distinct MAILS that finished with no expense, counted like `n_held`, excluding mail whose month was deleted |
+
+`add_receipts_to_expense_batch` returns the same list as `not_added` on its
+summary, stored as `expense_ingest.not_added` and served on `GET /api/expense-batches/{id}` (element type pinned in `tests/test_view_contract.py`).
+
+### The acknowledgement
+
+To the same recipients as before, under the same guards (auto_ack, not
+auto-generated, no untrusted flags, @brisken.com or `intake.known_senders`).
+Subject `No expense added: {subject}`; one line per file (set aside and how it
+read, already on file, could not be read) plus any attachment of a type the
+tool cannot read (a tiny signature image of a readable type is not named).
+It asks for the PDF or a photo when a file was set aside or unreadable, and
+says a set-aside file can be restored from the month's set-aside list; an
+all-already-on-file mail reads "No action needed." A mail that added at
+least one expense keeps the old "Receipt received" wording.
+
+A mail acked earlier (pooled: "will join that month automatically") whose claim then adds nothing gets this acknowledgement once as a correction (`no_expense_ack_at` on the archive). A replay after a crash that struck after the batch stored the mail's receipts counts those receipts as the mail's own (`documents`), because each stored file's intake provenance now carries `archive`; that key also appears on the expense grid's `submitted_by` object. Attachment names echoed into the mail are flattened to letters, digits and `._ ()-`, 80 characters.

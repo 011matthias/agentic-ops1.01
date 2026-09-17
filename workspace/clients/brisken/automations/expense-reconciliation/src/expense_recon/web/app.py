@@ -1642,6 +1642,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     labels[bid] = None
                     continue
                 labels[bid] = run.label or bid
+                # Item 106: a set-aside file restored since is this mail's
+                # expense; then the row needs the expenses join too.
+                from .intake_mail import apply_restored_set_aside
+
+                apply_restored_set_aside(rows, run)
+                if detail and any(
+                    str(x.get("batch_id") or "") == bid and x.get("documents")
+                    for x in rows
+                ):
+                    need_view.add(bid)
                 if bid in need_view:
                     try:
                         views[bid] = {
@@ -1698,6 +1708,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # LAST: the label needs the pool state and the resolved batch
         # labels that the loops above just stamped.
         annotate_status_view(rows)
+        # Item 106: finished mails that created no expense, as MAILS (after
+        # the batch_deleted stamps above; a deleted month keeps its story).
+        from .intake_mail import mail_added_nothing
+
+        n_no_expense = count_archives(rows, mail_added_nothing)
         return JSONResponse({
             "entries": rows,
             "n_held": n_held,
@@ -1717,6 +1732,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             "n_refused_ours": refused_counts["ours"],
             "n_probes": refused_counts["probes"],
             "refusals": refusals,
+            # Item 106: finished mails that created no expense.
+            "n_no_expense": n_no_expense,
         })
 
     @app.post("/api/inbound/replay-held")

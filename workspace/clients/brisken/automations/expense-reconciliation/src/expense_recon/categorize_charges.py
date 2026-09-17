@@ -40,7 +40,10 @@ charge `entry_status="subscription"` when its vendor recurs in >= 2
 distinct PRIOR months of the built `StatementStore` — the source-
 agnostic twin of the gray-fill channel Criss's xlsx already carries.
 Annotation only; fill/operator precedence (an already-set entry_status
-is never overwritten).
+is never overwritten). A derived mark carries `entry_status_source=
+"derived"`: under the 2026-09-17 owner ruling a gray FILL closes the
+charge for month completeness (booked through Zoho recurring) and a
+derived mark, being a guess, closes nothing.
 """
 from __future__ import annotations
 
@@ -170,7 +173,9 @@ def derive_subscription_status(
         own_month = tx.transaction_date.strftime("%Y-%m")
         prior = {m for m in months if m < own_month}
         if len(prior) >= min_prior_months:
-            out.append(replace(tx, entry_status="subscription"))
+            out.append(replace(
+                tx, entry_status="subscription", entry_status_source="derived",
+            ))
         else:
             out.append(tx)
     return out

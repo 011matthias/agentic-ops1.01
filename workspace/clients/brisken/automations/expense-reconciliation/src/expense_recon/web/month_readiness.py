@@ -12,7 +12,8 @@ AND
 
 * every charge holds a receipt or carries an existing verdict that closes it:
   a credit (refund / payment / reversal), a charge already booked (Criss's
-  yellow fill or the reviewer's already-posted verdict), or a fee / interest
+  yellow fill or the reviewer's already-posted verdict), a charge booked
+  through Zoho recurring expenses (Criss's gray fill), or a fee / interest
   line the statement itself printed as one;
 * every receipt holds a charge unless it is set aside: settled outside the
   card, a decided duplicate copy, quarantined (a quarantined file never
@@ -22,12 +23,25 @@ AND
 * no receiptless charge still carries a category that is only the tool's
   guess (the row's own "confirm first" state, `receiptless_suggested`).
 
-No new verdict is invented here. A gray "subscription" fill is an annotation
-(and the tool can derive it from history), not a verdict, so it closes
-nothing. A charge that needs a receipt is counted once, under
-`n_charges_need_receipt`, even when it also carries a guess: attaching the
-receipt replaces the guess. `n_charges_category_guessed` counts the guesses
-on charges whose receipt requirement is otherwise closed (a fee line).
+Owner ruling 2026-09-17 (final), the gray fill: a charge Criss filled gray is
+closed the way a yellow one is. Gray means "já estão no recurring": the
+charge is already booked through Zoho's recurring expenses, so it needs no
+receipt, and its category lives in that recurring entry, so the tool's guess
+on it blocks nothing either. It first shipped the other way ("an annotation,
+not a verdict, so it closes nothing"), and July 2026 then read 24 blocking
+charges that were all gray and all already booked. The ruling covers the
+FILL only. The tool also writes `entry_status: "subscription"` when a vendor
+recurs in its statement history (`derive_subscription_status`, which marks
+the row `entry_status_source: "derived"`); that is the tool's guess that a
+charge is recurring, not Criss's record that it was booked, so it closes
+nothing. `n_charges_closed_recurring` counts the charges the gray fill closed
+while they hold no receipt, so the closure stays visible.
+
+No verdict beyond those is invented here. A charge that needs a receipt is
+counted once, under `n_charges_need_receipt`, even when it also carries a
+guess: attaching the receipt replaces the guess. `n_charges_category_guessed`
+counts the guesses on charges whose receipt requirement is otherwise closed
+(a fee line), except on a gray-filled charge.
 
 Pure functions over the run payload's own rows, so the pill, the counts and
 the publish gate read one rule.
@@ -39,10 +53,23 @@ PUBLISH_NO_STATEMENT = "no_statement"
 PUBLISH_MONTH_NOT_COMPLETE = "month_not_complete"
 
 _RECEIPTLESS_GUESS = "receiptless_suggested"
+_SUBSCRIPTION = "subscription"
+_DERIVED = "derived"
 
 
-def charge_needs_receipt(row: dict) -> bool:
-    """A purchase charge that holds no receipt and no verdict closes.
+def charge_booked_recurring(row: dict) -> bool:
+    """Criss's gray fill: the charge is booked through Zoho recurring expenses
+    (owner ruling 2026-09-17). A subscription mark the tool derived from
+    statement history (`entry_status_source: "derived"`) is a guess and books
+    nothing; an absent source is the workbook fill."""
+    return (
+        row.get("entry_status") == _SUBSCRIPTION
+        and row.get("entry_status_source") != _DERIVED
+    )
+
+
+def _charge_without_receipt(row: dict) -> bool:
+    """A charge no receipt and no already-booked verdict settles.
 
     `section == "posted"` is the already-booked flag (yellow fill or the
     already-posted verdict), whatever the verdict column says. A pending
@@ -50,13 +77,31 @@ def charge_needs_receipt(row: dict) -> bool:
     return (
         row.get("effective_bucket") == "unmatched"
         and row.get("section") != "posted"
-        and (row.get("row_type") or "purchase") == "purchase"
     )
+
+
+def charge_needs_receipt(row: dict) -> bool:
+    """A purchase charge that holds no receipt and no verdict closes."""
+    return (
+        _charge_without_receipt(row)
+        and (row.get("row_type") or "purchase") == "purchase"
+        and not charge_booked_recurring(row)
+    )
+
+
+def charge_closed_recurring(row: dict) -> bool:
+    """A charge holding no receipt that only the gray fill closes: what
+    `n_charges_closed_recurring` counts, so the closure stays visible."""
+    return _charge_without_receipt(row) and charge_booked_recurring(row)
 
 
 def charge_category_guessed(row: dict) -> bool:
     """A receiptless charge whose category is still the tool's guess, counted
-    only where no receipt is due (a charge that needs one is counted there)."""
+    only where no receipt is due (a charge that needs one is counted there)
+    and never on a gray-filled charge, whose category lives in the recurring
+    entry it was booked through."""
+    if charge_booked_recurring(row):
+        return False
     review = row.get("review") or {}
     return (
         review.get("reason_code") == _RECEIPTLESS_GUESS
@@ -102,6 +147,10 @@ def completeness_counts(
         ),
         "n_charges_category_guessed": sum(
             1 for r in rows if charge_category_guessed(r)
+        ),
+        # Never blocks: the gray-filled charges the ruling closed.
+        "n_charges_closed_recurring": sum(
+            1 for r in rows if charge_closed_recurring(r)
         ),
     }
 
@@ -158,6 +207,7 @@ READINESS_KEYS = (
     "n_charges_need_receipt",
     "n_receipts_need_charge",
     "n_charges_category_guessed",
+    "n_charges_closed_recurring",
 )
 
 

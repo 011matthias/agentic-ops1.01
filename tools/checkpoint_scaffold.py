@@ -304,16 +304,39 @@ def main_worktree(root: Path) -> Path:
         return root
 
 
+def context_path(root: Path, payload: dict, context_root: Path | None = None) -> Path:
+    return (context_root or root) / "docs" / "sessions" / f"{payload['date']}-context.yaml"
+
+
+def context_read_error(path: Path) -> str | None:
+    """Why the existing context file cannot be merged into, or None.
+
+    The file is shared by every same-day session, so an unreadable one must
+    stop finalize: rewriting it fresh deletes the sibling sessions' client
+    entries, and it is gitignored, so nothing can bring them back (2026-09-17:
+    a `python tools/checkpoint_scaffold.py` run skipped the inline pyyaml
+    dependency, failed to read the YAML as JSON, and wiped four clients)."""
+    if not path.exists():
+        return None
+    try:
+        load_context_text(path.read_text(encoding="utf-8"))
+        return None
+    except Exception as e:
+        hint = (
+            "pyyaml is not importable, so the file was read as JSON: run "
+            "`uv run tools/checkpoint_scaffold.py ...` so the inline dependency loads"
+            if _yaml() is None
+            else "repair or move the file aside"
+        )
+        return (f"existing context file {path} is unparseable ({e}); refusing to "
+                f"overwrite it, nothing was written. {hint}.")
+
+
 def merge_context_yaml(root: Path, payload: dict, checkpoint_rel: str, context_root: Path | None = None) -> Path:
-    base = context_root or root
-    path = base / "docs" / "sessions" / f"{payload['date']}-context.yaml"
-    data: dict = {}
-    if path.exists():
-        try:
-            data = load_context_text(path.read_text(encoding="utf-8"))
-        except Exception as e:
-            print(f"WARN: existing context YAML unparseable ({e}); rewriting fresh")
-            data = {}
+    path = context_path(root, payload, context_root)
+    # cmd_finalize checks context_read_error first; a parse failure here raises
+    # rather than rewriting the shared file fresh.
+    data: dict = load_context_text(path.read_text(encoding="utf-8")) if path.exists() else {}
     data.update(
         checkpoint_date=payload["date"],
         checkpoint_topic=payload["topic"],
@@ -652,12 +675,17 @@ def cmd_finalize(root: Path, args: argparse.Namespace) -> int:
         print(line)
     payload.setdefault("date", today())
 
+    ctx_root = Path(args.context_root).resolve() if args.context_root else main_worktree(root)
+    # Before any write: an unreadable shared context file stops everything.
+    err = context_read_error(context_path(root, payload, ctx_root))
+    if err:
+        print(err)
+        return 2
+
     folder = folder_for(root, payload["date"], payload["topic"])
     folder.mkdir(parents=True, exist_ok=True)
     fname = checkpoint_filename(folder, payload.get("mini", False))
     rel = f"docs/{payload['date']} - {payload['topic']}/{fname}"
-
-    ctx_root = Path(args.context_root).resolve() if args.context_root else main_worktree(root)
 
     n, log_path = update_session_log(root, payload)
     link_text = fname.removesuffix(".md") if payload.get("mini") else "→"
