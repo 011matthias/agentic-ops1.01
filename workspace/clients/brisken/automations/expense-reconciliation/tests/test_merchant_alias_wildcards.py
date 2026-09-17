@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import pytest
 
+from expense_recon.matching.types import Receipt
 from expense_recon.merchant_registry import (
     MerchantRegistry,
     is_generic_alias,
     normalize_merchants_setting,
 )
+from expense_recon.seed_registry import build_merchants
 
 # The shape of the live registry's Brazilian entries (GET /api/settings,
 # 2026-09-17), trimmed to what the cases below need.
@@ -41,6 +43,11 @@ LIVE_SHAPE = {
     "CALDINHO DO MARACA": {
         "aliases": ["Caldinho"], "category": "Meals & Entertainment",
     },
+    "Espetinho do Ramos": {
+        "aliases": ["Espetinho"], "category": "Meals & Entertainment",
+    },
+    "99": {"aliases": [], "category": "Travel & Transport"},
+    "Americanas": {"aliases": [], "category": "Office Supplies & Consumables"},
     "RAC": {"aliases": ["Gasolina", "Alcool", "Diesel"],
             "category": "Travel & Transport"},
     "Supermercado Fenix": {
@@ -69,7 +76,18 @@ def _resolve(vendor: str, clean: str | None = None):
     "Gasolina Comum",                       # a real ER line (ER-00214)
     "Mercado",                              # generic word alone, exact tier
     "Supermercado",
-    "Caldinho Recife",                      # named trade-off: distinctive alias
+    # review of the first draft: place names and shop words are not a brand
+    "Posto Sao Jose Ltda",
+    "Atacado Sao Jose",
+    "Auto Posto 10",
+    "Espetinho e Bebidas",
+    "Farmacia Pimentel",                    # why NOBRE E VAREJO stays a loss
+    "Cafe Americano",                       # a real ER line, not Americanas
+    # named trade-offs: a generic one-word alias no longer matches alone,
+    # and a shop word beside part of a longer merchant is not a guess
+    "Caldinho",
+    "Caldinho Bar",
+    "NOBRE ATACADO E VAREJO",
 ])
 def test_a_vendor_no_longer_inherits_a_merchant_through_a_shared_word(vendor):
     assert _resolve(vendor) is None
@@ -85,13 +103,19 @@ def test_a_vendor_no_longer_inherits_a_merchant_through_a_shared_word(vendor):
      ("MEGA CENTER", "exact")),
     # A generic word added to a known name is not distinctive.
     ("O Castelinho Bar", None, ("O CASTELINHO", "fuzzy")),
-    ("Caldinho Bar", None, ("CALDINHO DO MARACA", "fuzzy")),
+    # the same distinctive words, whatever shop words surround them
+    ("KI-MASSA CAFE", None, ("PADARIA E PASTELARIA KI-MASSA", "fuzzy")),
+    ("PADARIA KI-MASSA PÃES E DOCES", None,
+     ("PADARIA E PASTELARIA KI-MASSA", "fuzzy")),
+    ("OpenAl Inc", None, None),             # not in this registry: no guess
+    # a brand that is a number
+    ("99 Taxi", None, ("99", "fuzzy")),
     # Truncated OCR, spelling variant, accents, reversed containment.
     ("NOBRE ATACADO", None, ("NOBRE ATACADO SAO JOSE DA C", "fuzzy")),
     ("NOBRE ATACADO SÃO JOSÉ DA C", None,
      ("NOBRE ATACADO SAO JOSE DA C", "fuzzy")),
     ("Ki Massa Padaria", None, ("PADARIA E PASTELARIA KI-MASSA", "fuzzy")),
-    ("Caldinho", None, ("CALDINHO DO MARACA", "exact")),
+    ("CALDINHO DO MARACA", None, ("CALDINHO DO MARACA", "exact")),
 ])
 def test_legitimate_hits_still_land(vendor, clean, expected):
     assert _resolve(vendor, clean) == expected
@@ -101,9 +125,30 @@ def test_generic_alias_rule():
     assert is_generic_alias("Mercado")
     assert is_generic_alias("Supermecado")          # the live misspelling
     assert is_generic_alias("Comida e Bebida")
-    assert not is_generic_alias("Caldinho")
+    assert is_generic_alias("Caldinho")
+    assert is_generic_alias("Auto Posto")
+    assert is_generic_alias("Mercados")                # plural
+    assert not is_generic_alias("Caldinho do Maraca")
     assert not is_generic_alias("Material de Construcao")
     assert not is_generic_alias("Mercado Livre")
+
+
+def test_the_seed_never_proposes_a_generic_alias():
+    # `--put` goes through the settings PUT, which would refuse it.
+    recs = [
+        Receipt(
+            document_id=f"d{i}", legal_entity_id="e", detected_date=None,
+            detected_total=None, detected_currency=None,
+            detected_vendor=v, zoho_category=None,
+        )
+        for i, v in enumerate([
+            "SUPERMERCADO FENIX LTDA", "SUPERMERCADO FENIX LTDA",
+            "SUPERMERCADO FENIX LTDA", "SUPERMERCADO",
+        ])
+    ]
+    merchants = build_merchants(recs)
+    aliases = [a for e in merchants.values() for a in e["aliases"]]
+    assert aliases and not any(is_generic_alias(a) for a in aliases)
 
 
 def test_internal_callers_keep_every_alias():
@@ -171,9 +216,12 @@ def _batch_row(client, monkeypatch, vendor):
     # closed by the generic-alias rule alone: a slip that prints only the
     # kind of shop would otherwise hit "Mercado" EXACTLY
     ("MERCADO", "NOBRE ATACADO SAO JOSE DA C"),
-    # closed by the coverage rule alone ("Auto Posto" is not generic, but
-    # "Shell" is a distinctive word it does not cover)
     ("Auto Posto Shell", "AUTO POSTO PIMENTEL SAO JOSE"),
+    # closed by the coverage rule alone: the alias leads with its own word,
+    # but "Leroy Merlin" is distinctive and uncovered
+    ("Leroy Merlin Material de Construcao", "MEGA CENTER"),
+    # closed by the lead-word rule alone: only the place names are shared
+    ("Atacado Sao Jose", "NOBRE ATACADO SAO JOSE DA C"),
 ])
 def test_a_batch_row_keeps_its_own_vendor_despite_a_shared_word(
     client, monkeypatch, vendor, wrong
@@ -216,5 +264,8 @@ def test_settings_put_accepts_generic_aliases_already_stored(client):
     # A distinctive new alias still saves; a new generic one does not.
     got["RAC"]["aliases"].append("Posto RAC Recife")
     assert client.put("/api/settings", json={"merchants": got}).status_code == 200
-    got["RAC"]["aliases"].append("Etanol")
-    assert client.put("/api/settings", json={"merchants": got}).status_code == 400
+    for generic in ("Etanol", "Auto Posto Bar", "Lojas"):
+        trial = {k: dict(v, aliases=list(v["aliases"])) for k, v in got.items()}
+        trial["RAC"]["aliases"].append(generic)
+        resp = client.put("/api/settings", json={"merchants": trial})
+        assert resp.status_code == 400, generic

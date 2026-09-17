@@ -70,46 +70,52 @@ DEFAULT_FUZZY_THRESHOLD = 88.0
 # whenever one side's words are a subset of the other's, so a one-word
 # alias like "Mercado" made every vendor containing that word a certain
 # hit: "Mercado Livre" filed as NOBRE ATACADO / Meals, "Gasolina Comum" as
-# RAC. Two rules close it, mirroring the card registry's generic tender
-# words (cards.GENERIC_TENDER_WORDS):
+# RAC. The rules below close it, mirroring the card registry's generic
+# tender words (cards.GENERIC_TENDER_WORDS):
 #
 #   * An alias built only of generic words (a kind of shop, a product, a
 #     fuel) names no merchant. The resolver ignores it and the settings
 #     PUT refuses to add a new one. A merchant's CANONICAL name is never
 #     ignored: that is the name somebody chose for it.
-#   * A fuzzy hit is discounted by the share of the vendor's DISTINCTIVE
-#     words the alias does not cover, and needs at least one distinctive
-#     word covered. Generic words, stopwords, single letters and bare
-#     numbers are not distinctive, so "O Castelinho Bar" still reads as O
-#     CASTELINHO and "Auto Posto Pimentel" still reads as AUTO POSTO
-#     PIMENTEL SAO JOSE (the vendor's words inside a longer name), while
-#     "Auto Posto Shell" no longer inherits it.
+#   * A fuzzy hit needs the merchant's FIRST distinctive word (where the
+#     brand sits; place names trail) in the vendor, and is discounted by
+#     the share of the vendor's distinctive words the merchant does not
+#     cover. Generic words, joining words, legal forms, single letters and
+#     bare numbers are not distinctive, so "O Castelinho Bar" still reads
+#     as O CASTELINHO and "Auto Posto Pimentel" as AUTO POSTO PIMENTEL SAO
+#     JOSE, while "Auto Posto Shell" and "Posto Sao Jose" no longer do.
+#   * A vendor whose distinctive words are exactly the merchant's also
+#     matches, whatever generic words surround them ("KI-MASSA CAFE" is
+#     PADARIA E PASTELARIA KI-MASSA).
 #
-# Trade-off, named in the item: a distinctive one-word alias (Caldinho,
-# Espetinho, Borracharia) still matches exactly, and fuzzily only when the
-# vendor adds nothing distinctive ("Caldinho Bar" yes, "Caldinho Recife"
-# no).
+# Trade-offs, named: every one-word alias the live registry carried is a
+# generic word, so none of them matches on its own any more (the merchants
+# still resolve by their canonical names); a brand plus a place the merchant
+# does not carry ("Starbucks Paulista") and a vendor naming only part of a
+# longer merchant plus a shop word ("NOBRE ATACADO E VAREJO" for NOBRE
+# ATACADO SAO JOSE DA C) fall through to the model instead of guessing,
+# because the same shape also reads "Farmacia Pimentel" as the petrol station.
 GENERIC_MERCHANT_WORDS = frozenset({
     # PT kinds of shop
-    "supermercado", "supermecado", "supermercados", "hipermercado",
-    "mercado", "mercadinho", "minimercado", "mercearia", "atacado",
-    "atacadao", "varejo", "padaria", "pastelaria", "confeitaria",
-    "lanchonete", "restaurante", "bar", "boteco", "cafe", "cafeteria",
-    "sorveteria", "pizzaria", "churrascaria", "farmacia", "drogaria",
-    "posto", "loja", "comercio", "comercial", "distribuidora",
-    "conveniencia", "acougue", "hortifruti", "feira", "quiosque",
-    "hotel", "pousada", "estacionamento",
+    "supermercado", "supermecado", "hipermercado", "mercado",
+    "mercadinho", "minimercado", "mercearia", "atacado", "atacadao",
+    "varejo", "padaria", "pastelaria", "confeitaria", "lanchonete",
+    "restaurante", "bar", "boteco", "cafe", "cafeteria", "sorveteria",
+    "pizzaria", "churrascaria", "farmacia", "drogaria", "posto", "auto",
+    "loja", "comercio", "comercial", "distribuidora", "conveniencia",
+    "acougue", "hortifruti", "feira", "quiosque", "hotel", "pousada",
+    "estacionamento", "borracharia", "rotisse", "rotisserie",
+    "rotisseria",
     # PT products
-    "comida", "bebida", "bebidas", "drink", "drinks", "doce", "doces",
-    "bolo", "bolos", "pao", "paes", "pastel", "pasteis", "coxinha",
-    "salgado", "salgados", "sushi", "peixe", "peixes", "sorvete",
-    "sorvetes", "feijao", "tapioca", "caipirinha", "cerveja", "lanche",
-    "lanches", "almoco", "jantar", "gasolina", "alcool", "etanol",
-    "diesel", "combustivel", "combustiveis", "esporte", "esportes",
+    "comida", "bebida", "drink", "doce", "bolo", "pao", "paes", "pastel",
+    "pasteis", "coxinha", "salgado", "sushi", "peixe", "sorvete", "feijao",
+    "tapioca", "caipirinha", "cerveja", "lanche", "almoco", "jantar",
+    "gasolina", "alcool", "etanol", "diesel", "combustivel",
+    "combustiveis", "esporte", "caldinho", "espetinho", "churrasco",
     # EN
-    "sport", "sports", "restaurant", "coffee", "pub", "grocery",
-    "market", "supermarket", "store", "shop", "gas", "fuel", "food",
-    "bakery", "pharmacy", "parking", "taxi",
+    "sport", "restaurant", "coffee", "pub", "grocery", "market",
+    "supermarket", "store", "shop", "gas", "fuel", "food", "bakery",
+    "pharmacy", "parking", "taxi",
     # DE / ES / FR
     "supermarkt", "markt", "baeckerei", "backerei", "tankstelle",
     "kiosk", "apotheke", "tienda", "supermarche", "marche", "epicerie",
@@ -132,6 +138,13 @@ def _tokens(text: str | None) -> list[str]:
     return normalize_vendor(folded).split()
 
 
+def _is_generic_word(t: str) -> bool:
+    """A listed generic word, or its plural ("mercados", "lojas")."""
+    return t in GENERIC_MERCHANT_WORDS or (
+        len(t) > 3 and t.endswith("s") and t[:-1] in GENERIC_MERCHANT_WORDS
+    )
+
+
 def _distinctive(tokens: list[str]) -> list[str]:
     """The words that can identify a merchant: not a joining word, a legal
     form ("Inc", "Ltda"), a generic word, a single letter or a bare number."""
@@ -139,7 +152,15 @@ def _distinctive(tokens: list[str]) -> list[str]:
         t for t in tokens
         if len(t) > 1 and not t.isdigit()
         and t not in _STOPWORDS and t not in _LEGAL_SUFFIXES
-        and t not in GENERIC_MERCHANT_WORDS
+        and not _is_generic_word(t)
+    ]
+
+
+def _key_words(tokens: list[str]) -> list[str]:
+    """The distinctive words, else the numbers: a brand that IS a number
+    ("99", "Posto 10") is identified by it."""
+    return _distinctive(tokens) or [
+        t for t in tokens if t.isdigit() and len(t) > 1
     ]
 
 
@@ -148,7 +169,7 @@ def is_generic_alias(text: str | None) -> bool:
     nothing distinctive ("Mercado", "Supermercado", "Comida e Bebida")."""
     tokens = _tokens(text)
     return (
-        any(t in GENERIC_MERCHANT_WORDS for t in tokens)
+        any(_is_generic_word(t) for t in tokens)
         and not _distinctive(tokens)
     )
 
@@ -156,27 +177,47 @@ def is_generic_alias(text: str | None) -> bool:
 # One word covers another when it is the same word or a spelling variant of
 # it. Looser than the whole-name threshold on purpose: a one-letter OCR slip
 # in a six-letter word ("openal" / "openai") is 83, and the whole name must
-# still clear DEFAULT_FUZZY_THRESHOLD before coverage is even consulted.
+# still clear DEFAULT_FUZZY_THRESHOLD (or share every distinctive word).
 _WORD_VARIANT_RATIO = 80.0
 
 
-def _coverage(probe_tokens: list[str], cand_tokens: list[str]) -> float:
-    """Share (by characters) of the probe's distinctive words that the
-    candidate covers, exactly or as a spelling variant. 0.0 when the probe
-    has no distinctive word, so a vendor made only of generic words never
-    fuzzy-matches a merchant that happens to contain them."""
-    distinctive = _distinctive(probe_tokens)
-    if not distinctive:
+def _covers(
+    word: str, words: list[str] | set[str],
+    ratio: float = _WORD_VARIANT_RATIO,
+) -> bool:
+    return word in words or any(fuzz.ratio(word, w) >= ratio for w in words)
+
+
+def _fuzzy_score(
+    probe_norm: str, cand_norm: str,
+    probe_tokens: list[str], cand_tokens: list[str], threshold: float,
+) -> float:
+    """The fuzzy tier's score for one probe x candidate (0-100)."""
+    probe_keys = _key_words(probe_tokens)
+    cand_keys = _key_words(cand_tokens)
+    if not probe_keys or not cand_keys:
         return 0.0
+    if not _covers(cand_keys[0], probe_keys):
+        return 0.0
+    probe_distinct = _distinctive(probe_tokens)
+    cand_distinct = _distinctive(cand_tokens)
+    # Same distinctive words on both sides. No whole-name score backs this
+    # rule, so a word variant must clear the full threshold here: at 80,
+    # "Cafe Americano" (a coffee on an expense report) read as Americanas.
+    if probe_distinct and cand_distinct and all(
+        _covers(t, cand_distinct, threshold) for t in probe_distinct
+    ) and all(_covers(t, probe_distinct, threshold) for t in cand_distinct):
+        return 100.0
+    score = fuzz.token_set_ratio(probe_norm, cand_norm)
+    if score < threshold:
+        return score
     cand = set(cand_tokens)
     covered = total = 0
-    for t in distinctive:
+    for t in probe_keys:
         total += len(t)
-        if t in cand or any(
-            fuzz.ratio(t, c) >= _WORD_VARIANT_RATIO for c in cand
-        ):
+        if _covers(t, cand):
             covered += len(t)
-    return covered / total
+    return score * covered / total
 
 
 @dataclass(frozen=True)
@@ -283,19 +324,19 @@ class MerchantRegistry:
                 canonical, original = hit
                 return self._match(canonical, original, 100.0, "exact")
 
-        # 2) Fuzzy: best token_set_ratio across probe x candidate, discounted
-        # by the share of the probe's distinctive words the candidate does
-        # not cover (item 117). Strict `>` over the sorted-canonical
-        # candidate list keeps ties deterministic.
+        # 2) Fuzzy: best `_fuzzy_score` across probe x candidate (item 117:
+        # token_set_ratio gated on the merchant's lead word and discounted by
+        # the vendor's uncovered distinctive words). Strict `>` over the
+        # sorted-canonical candidate list keeps ties deterministic.
         best_score = -1.0
         best_canonical: str | None = None
         best_original: str | None = None
         for norm, raw in probes:
             probe_tokens = _tokens(raw)
             for cand_norm, cand_orig, canonical, cand_tokens in self._candidates:
-                score = fuzz.token_set_ratio(norm, cand_norm)
-                if score >= self.threshold:
-                    score *= _coverage(probe_tokens, cand_tokens)
+                score = _fuzzy_score(
+                    norm, cand_norm, probe_tokens, cand_tokens, self.threshold
+                )
                 if score > best_score:
                     best_score = score
                     best_canonical = canonical

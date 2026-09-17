@@ -39,7 +39,11 @@ from rapidfuzz import fuzz
 
 from .matching.deterministic import _normalize as normalize_vendor
 from .matching.types import Receipt
-from .merchant_registry import DEFAULT_FUZZY_THRESHOLD, normalize_merchants_setting
+from .merchant_registry import (
+    DEFAULT_FUZZY_THRESHOLD,
+    is_generic_alias,
+    normalize_merchants_setting,
+)
 from .vendor_names import clean_vendor_name
 
 # ER account-label keyword -> one of EXPENSE_CATEGORIES. First match wins;
@@ -228,9 +232,12 @@ def build_merchants(
 ) -> dict:
     """The `settings["merchants"]` map seeded from `receipts`, validated into
     the stored shape."""
+    # Item 117: a raw vendor that is only a generic word ("SUPERMERCADO")
+    # names no merchant, and `--put` goes through the settings PUT, which
+    # refuses a new generic alias. Never propose one.
     merchants = {
         c["canonical"]: {
-            "aliases": c["aliases"],
+            "aliases": [a for a in c["aliases"] if not is_generic_alias(a)],
             "category": c["category"],
             "zoho_account": c["zoho_account"],
         }
