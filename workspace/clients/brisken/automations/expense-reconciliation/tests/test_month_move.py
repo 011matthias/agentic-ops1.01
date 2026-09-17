@@ -351,3 +351,21 @@ def test_a_time_that_is_not_a_clock_time_is_not_stored():
     assert read("24:30") is None
     assert read("2026-07-04") is None
     assert read(None) is None
+
+
+def test_a_moved_receipt_leaves_its_target_owing_a_rematch(client, monkeypatch):
+    """Item 113 review finding 3: the move stores the receipt in the target,
+    then re-matches the SOURCE first (minutes). A restart there must leave the
+    target month's debt recorded, written in the move's own lock span."""
+    january = _misfiled_january(client, monkeypatch)
+    april = _month(client, APRIL)
+    _attach_statement(client, april)
+    _put(client, january, "date", "2026-04-15")
+    from expense_recon.web import service
+
+    monkeypatch.setattr(service, "rematch_after_change", lambda *a, **k: None)
+    out = _move(client, january).json()
+    assert out["batch_id"] == april
+    state = client.get("/api/operator/state").json()
+    owed = [m for m in state["rematch_pending"] if m["run_id"] == april]
+    assert len(owed) == 1 and owed[0]["trigger"] == "month_move", owed

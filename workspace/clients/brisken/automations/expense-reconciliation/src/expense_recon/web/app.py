@@ -125,6 +125,7 @@ from .service import (
     find_trip_batch,
     has_statement,
     REMATCH_LOG_KEY,
+    rematch_pending,
     is_trip_batch,
     release_trip_batch_slot,
     prepare_statement_attach,
@@ -316,6 +317,21 @@ def _claim_pooled_quietly(
             )
     except Exception:  # noqa: BLE001 - a claim never breaks its trigger
         log.warning("pool claim failed", exc_info=True)
+
+
+def _resume_rematches_quietly(
+    db_path: Path, learning_db_path: Path | None,
+) -> None:
+    """Item 113: re-pair every month still owing a re-match, never raising.
+    A failure stays recorded on the month's mark for the next attempt."""
+    try:
+        from .service import resume_pending_rematches
+
+        done = resume_pending_rematches(db_path, learning_db_path)
+        if done:
+            log.info("boot re-pair: %d month(s) re-matched", len(done))
+    except Exception:  # noqa: BLE001 - boot re-pair is best-effort
+        log.warning("boot re-pair failed", exc_info=True)
 
 
 def _run_expense_job(
@@ -624,6 +640,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 daemon=True,
             ).start()
     except Exception:  # noqa: BLE001 - a claim never blocks startup
+        pass
+    # Item 113: a month whose re-match raised or was cut off by the last
+    # restart still carries its owed-re-match mark; re-pair it now, off the
+    # boot path (a re-match can call the model). Nothing owed starts nothing.
+    try:
+        with RunStore(db_path) as _store:
+            _owed = any(
+                rematch_pending(r) is not None for r in _store.list_runs()
+            )
+        if _owed:
+            log.info("a month owes a re-match; re-pairing at boot")
+            threading.Thread(
+                target=_resume_rematches_quietly,
+                args=(db_path, app.state.learning_db_path),
+                daemon=True,
+            ).start()
+    except Exception:  # noqa: BLE001 - a re-pair never blocks startup
         pass
 
     def open_store() -> RunStore:
@@ -1510,6 +1543,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         if isinstance(ev, dict) and ev.get("event_id")
                     ),
                     key=lambda ev: str(ev.get("at") or ""),
+                ),
+                # Item 113: months owing a re-match that has not committed
+                # (raised, or cut off by a restart), with the last error.
+                "rematch_pending": sorted(
+                    (
+                        {"run_id": r.run_id, "label": r.label, **mark}
+                        for r in all_runs
+                        for mark in [rematch_pending(r)]
+                        if mark is not None
+                    ),
+                    key=lambda m: str(m.get("since") or ""),
                 ),
             }
         )

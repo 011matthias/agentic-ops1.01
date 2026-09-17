@@ -227,3 +227,203 @@ def test_the_log_is_capped_and_tolerates_junk():
     assert append_rematch_event([1, "junk", {"event_id": "a"}], {"event_id": "b"}) == [
         {"event_id": "a"}, {"event_id": "b"},
     ]
+
+
+# ---------------------------------------------- an owed re-match (item 113) --
+# 2026-09-17 voids audit: every arrival re-matches its month after the receipt
+# is stored. A re-match that raised rode back in a result the mail and drop
+# callers discard; one cut off by a restart left no trace at all; re-running
+# the interrupted job found no new files and skipped the re-pairing. The month
+# now carries `rematch_pending` until a re-match that read it commits.
+
+
+def _owed(client, batch_id):
+    resp = client.get("/api/operator/state")
+    assert resp.status_code == 200, resp.text
+    return [m for m in resp.json()["rematch_pending"] if m["run_id"] == batch_id]
+
+
+def test_a_failed_rematch_is_owed_recorded_and_paid_by_the_next_arrival(
+    client, monkeypatch,
+):
+    _wire(
+        monkeypatch,
+        _extraction("Lovable Labs", "15.00", "2026-08-31"),
+        _extraction("Obsidian", "96.00", "2026-08-30"),
+    )
+    batch_id = _create_batch(client)
+    _attach_xlsx(client, batch_id)
+    assert _owed(client, batch_id) == []
+
+    from expense_recon.web import service
+    real = service.rematch_month
+
+    def _down(*a, **k):
+        raise RuntimeError("model outage")
+
+    monkeypatch.setattr(service, "rematch_month", _down)
+    _add_receipt(client, batch_id)  # the job still reads done: the receipt landed
+    owed = _owed(client, batch_id)
+    assert len(owed) == 1, owed
+    assert "model outage" in owed[0]["error"]
+    assert owed[0]["attempts"] == 1
+    assert owed[0]["failed_at"] and owed[0]["since"]
+    assert [e["trigger"] for e in _rematches(client, batch_id)] == ["statement"]
+
+    # The same file again: nothing new, but the owed re-match is paid.
+    monkeypatch.setattr(service, "rematch_month", real)
+    _add_receipt(client, batch_id)
+    assert _owed(client, batch_id) == []
+    events = _rematches(client, batch_id)
+    assert [e["trigger"] for e in events] == ["statement", "receipts"]
+    assert events[-1]["n_receipts"] == 2
+
+
+def test_a_rematch_cut_off_by_a_restart_is_repaired_at_boot(
+    client, monkeypatch, tmp_path,
+):
+    _wire(
+        monkeypatch,
+        _extraction("Lovable Labs", "15.00", "2026-08-31"),
+        _extraction("Obsidian", "96.00", "2026-08-30"),
+    )
+    batch_id = _create_batch(client)
+    _attach_xlsx(client, batch_id)
+
+    import time
+
+    from expense_recon.web import service
+    real = service.rematch_after_change
+
+    # The machine stops after the receipt is stored, before the re-pairing.
+    monkeypatch.setattr(service, "rematch_after_change", lambda *a, **k: None)
+    _add_receipt(client, batch_id)
+    owed = _owed(client, batch_id)
+    assert len(owed) == 1 and "error" not in owed[0], owed
+    monkeypatch.setattr(service, "rematch_after_change", real)
+
+    # The next boot re-pairs it.
+    with TestClient(create_app(tmp_path)) as rebooted:
+        deadline = time.monotonic() + 20
+        while _owed(rebooted, batch_id) and time.monotonic() < deadline:
+            time.sleep(0.2)
+        assert _owed(rebooted, batch_id) == []
+        events = _rematches(rebooted, batch_id)
+        assert [e["trigger"] for e in events] == ["statement", "resume"]
+        assert events[-1]["n_receipts"] == 2
+
+
+def test_a_change_landing_mid_rematch_keeps_its_own_debt(client, monkeypatch):
+    _wire(
+        monkeypatch,
+        _extraction("Lovable Labs", "15.00", "2026-08-31"),
+        _extraction("Obsidian", "96.00", "2026-08-30"),
+    )
+    batch_id = _create_batch(client)
+    _attach_xlsx(client, batch_id)
+
+    from expense_recon.web import service
+    real = service.rematch_month
+    landed: dict = {}
+
+    def _arrival_during(store, run, *a, **k):
+        # Another change commits while this re-match runs: a new mark id.
+        with service._BATCH_ADD_LOCK:
+            fresh = store.get_run(run.run_id)
+            snap = dict(fresh.snapshot)
+            snap[service.REMATCH_PENDING_KEY] = service.rematch_pending_mark(
+                snap, "receipts"
+            )
+            landed["id"] = snap[service.REMATCH_PENDING_KEY]["id"]
+            store.update_run_snapshot(run.run_id, snap)
+        return real(store, run, *a, **k)
+
+    monkeypatch.setattr(service, "rematch_month", _arrival_during)
+    _add_receipt(client, batch_id)
+    owed = _owed(client, batch_id)
+    assert [m["id"] for m in owed] == [landed["id"]]
+    assert [e["trigger"] for e in _rematches(client, batch_id)] == [
+        "statement", "receipts",
+    ]
+
+
+def test_an_older_rematch_does_not_clear_a_newer_changes_debt(client, monkeypatch):
+    """Review finding 1: an arrival's re-match A is running; another change
+    (an edit, a card) owes its own re-match B, which the machine never gets
+    to run. A read the month before B's change, so A's commit keeps B's debt."""
+    _wire(
+        monkeypatch,
+        _extraction("Lovable Labs", "15.00", "2026-08-31"),
+        _extraction("Obsidian", "96.00", "2026-08-30"),
+    )
+    batch_id = _create_batch(client)
+    _attach_xlsx(client, batch_id)
+    from expense_recon.web import service
+    real = service.rematch_month
+    seen: dict = {}
+
+    def _during(store, run, *a, **k):
+        if not seen:
+            seen["a_read"] = service.rematch_pending(run)["id"]
+            service._ensure_rematch_pending(store, run.run_id, "expense_edit")
+            seen["b"] = service.rematch_pending(store.get_run(run.run_id))["id"]
+        return real(store, run, *a, **k)
+
+    monkeypatch.setattr(service, "rematch_month", _during)
+    _add_receipt(client, batch_id)
+    assert seen["b"] != seen["a_read"]
+    assert [m["id"] for m in _owed(client, batch_id)] == [seen["b"]]
+
+
+def test_an_older_rematch_does_not_erase_a_newer_failure(client, monkeypatch):
+    """Review finding 2: B's re-match raises while A runs; A's later commit
+    must leave B's recorded failure for the operator state and the retry."""
+    _wire(
+        monkeypatch,
+        _extraction("Lovable Labs", "15.00", "2026-08-31"),
+        _extraction("Obsidian", "96.00", "2026-08-30"),
+    )
+    batch_id = _create_batch(client)
+    _attach_xlsx(client, batch_id)
+    from expense_recon.web import service
+    real = service.rematch_month
+    calls = {"n": 0}
+
+    def _during(store, run, *a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            service.rematch_after_change(store, run.run_id, trigger="expense_edit")
+            return real(store, run, *a, **k)
+        raise RuntimeError("model outage during B")
+
+    monkeypatch.setattr(service, "rematch_month", _during)
+    _add_receipt(client, batch_id)
+    owed = _owed(client, batch_id)
+    assert len(owed) == 1, owed
+    assert "model outage during B" in owed[0]["error"]
+
+
+def test_a_failure_recorded_without_its_own_mark_survives_an_older_commit(
+    client, monkeypatch,
+):
+    """The attach, re-read and unparseable-snapshot paths record a failure
+    with no owed-mark written first; the record takes its own id, so the
+    in-flight arrival re-match that read the month earlier keeps it."""
+    _wire(
+        monkeypatch,
+        _extraction("Lovable Labs", "15.00", "2026-08-31"),
+        _extraction("Obsidian", "96.00", "2026-08-30"),
+    )
+    batch_id = _create_batch(client)
+    _attach_xlsx(client, batch_id)
+    from expense_recon.web import service
+    real = service.rematch_month
+
+    def _during(store, run, *a, **k):
+        service._record_rematch_failure(store, run.run_id, "reread", "boom")
+        return real(store, run, *a, **k)
+
+    monkeypatch.setattr(service, "rematch_month", _during)
+    _add_receipt(client, batch_id)
+    owed = _owed(client, batch_id)
+    assert len(owed) == 1 and owed[0]["error"] == "boom", owed
