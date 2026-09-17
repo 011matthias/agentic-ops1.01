@@ -153,6 +153,46 @@ class TestFinalizeFresh:
         log = (root / "docs" / "sessions" / "2026-07-23.md").read_text(encoding="utf-8")
         assert "Test Topic (mini)" in log
 
+    def _pre_target(self, root: Path, capsys, *where: str) -> Path:
+        # `where` places --root before or after the subcommand.
+        argv = [*where, "pre", "--topic", "Test Topic", "--date", "2026-07-23", "--mini"]
+        if not where:
+            argv = ["pre", "--root", str(root), *argv[1:]]
+        assert cs.main(argv) == 0
+        line = next(ln for ln in capsys.readouterr().out.splitlines()
+                    if ln.startswith("write checkpoint prose to: "))
+        return Path(line.removeprefix("write checkpoint prose to: ").split("  (")[0])
+
+    def test_prose_written_at_pre_target_is_the_one_finalize_links(self, root: Path, capsys):
+        # The skill's order: pre names the file, the prose is written there,
+        # then finalize runs. Before the fix finalize counted the prose file
+        # and linked INDEX to Mini-Checkpoint-2, a file that did not exist.
+        for n in (1, 2):
+            target = self._pre_target(root, capsys, "--root", str(root))
+            assert target.name == f"Mini-Checkpoint-{n}.md"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("prose", encoding="utf-8")
+            run_finalize(root, base_payload(mini=True))
+            out = capsys.readouterr().out
+            assert f"Mini-checkpoint saved → [Mini-Checkpoint-{n}.md]" in out
+            assert "NOT WRITTEN YET" not in out
+        index = (root / "docs" / "INDEX.md").read_text(encoding="utf-8")
+        assert "[Mini-Checkpoint-1]" in index and "[Mini-Checkpoint-2]" in index
+        assert "[Mini-Checkpoint-3]" not in index
+
+    def test_root_is_accepted_after_the_subcommand(self, root: Path, capsys, monkeypatch, tmp_path_factory):
+        # Run from an unrelated cwd: a --root that was ignored would resolve '.'.
+        monkeypatch.chdir(tmp_path_factory.mktemp("elsewhere"))
+        target = self._pre_target(root, capsys)
+        assert target.parent == root / "docs" / "2026-07-23 - Test Topic"
+        target.parent.mkdir(parents=True)
+        target.write_text("prose", encoding="utf-8")
+        p = root / "payload.json"
+        p.write_text(json.dumps(base_payload(mini=True)), encoding="utf-8")
+        assert cs.main(["finalize", "--root", str(root), "--payload", str(p),
+                        "--context-root", str(root)]) == 0
+        assert "[Mini-Checkpoint-1]" in (root / "docs" / "INDEX.md").read_text(encoding="utf-8")
+
     def test_missing_required_field(self, root: Path):
         assert run_finalize(root, {"topic": "X"}) == 2
 

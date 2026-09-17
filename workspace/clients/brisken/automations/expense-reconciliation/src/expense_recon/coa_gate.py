@@ -278,6 +278,8 @@ def _review_note(verdict: LineVerdict, entity: str) -> str:
 def apply_gate(
     receipts: Sequence[Receipt],
     report: CoaGateReport,
+    *,
+    keep_category: bool = False,
 ) -> list[Receipt]:
     """Return NEW receipts with every non-OK line diverted to review.
 
@@ -292,6 +294,18 @@ def apply_gate(
     posting account that failed validation, so `build_journal_rows`
     leaves every such line flagged `(uncategorized - assign)` rather than
     resolving a bad account.
+
+    ``keep_category`` (item 95, the expense export): the verdict is about
+    the ACCOUNT, so a failing line that carries a category keeps it and
+    its source, and loses only the account (still cleared, note still
+    appended). The line then books as a category with no account, which
+    is exactly what a reviewer's category edit without an account books
+    as (item 70): the category label with no chart wired, `(account
+    unmapped - assign)` with one. Forcing REVIEW there printed rows the
+    screen shows categorized as `(uncategorized - assign)` and merged a
+    receipt's categorized part into its unread one. A failing line with no
+    category is diverted to REVIEW either way. The journal export keeps the
+    default: its learned-line pass reads the REVIEW flip as "withhold".
     """
     # Group the failing line indices by receipt for an O(1) lookup.
     fails_by_doc: dict[str, dict[int, LineVerdict]] = {}
@@ -314,13 +328,20 @@ def apply_gate(
                 continue
             note = _review_note(verdict, report.entity)
             reasoning = f"{cat.reasoning} | {note}" if cat.reasoning else note
+            categorized = (
+                bool(cat.category) and cat.source is not ClassificationSource.REVIEW
+            )
+            source = (
+                cat.source if keep_category and categorized
+                else ClassificationSource.REVIEW
+            )
             new_items.append(
                 replace(
                     item,
                     categorization=replace(
                         cat,
                         zoho_account=None,
-                        source=ClassificationSource.REVIEW,
+                        source=source,
                         reasoning=reasoning,
                     ),
                 )
@@ -355,11 +376,14 @@ class CoaGate:
             entity=self.entity,
         )
 
-    def run(self, receipts: Sequence[Receipt]) -> tuple[list[Receipt], CoaGateReport]:
+    def run(
+        self, receipts: Sequence[Receipt], *, keep_category: bool = False,
+    ) -> tuple[list[Receipt], CoaGateReport]:
         """Validate + divert in one call. Returns the gated receipts and
-        the report (counts for logging / surfacing)."""
+        the report (counts for logging / surfacing). ``keep_category``: see
+        `apply_gate`."""
         report = self.validate(receipts)
-        return apply_gate(receipts, report), report
+        return apply_gate(receipts, report, keep_category=keep_category), report
 
 
 # ── many entities in one batch (Cards R4) ───────────────────────────
@@ -413,18 +437,21 @@ class MultiEntityCoaGate:
             entity=", ".join(sorted(by_entity)), verdicts=tuple(merged), counts=counts
         )
 
-    def run(self, receipts: Sequence[Receipt]) -> tuple[list[Receipt], CoaGateReport]:
+    def run(
+        self, receipts: Sequence[Receipt], *, keep_category: bool = False,
+    ) -> tuple[list[Receipt], CoaGateReport]:
         """Validate + divert per entity, then restore the caller's order.
 
         Diversion runs per entity so each review note names the entity the row
         actually failed under; a merged report could only name one of them.
+        ``keep_category``: see `apply_gate`.
         """
         by_entity, ungated = self._partition(receipts)
         gated_by_doc: dict[str, Receipt] = {r.document_id: r for r in ungated}
         merged: list[LineVerdict] = []
         counts: dict[str, int] = {}
         for entity, group in by_entity.items():
-            gated, report = self.gates[entity].run(group)
+            gated, report = self.gates[entity].run(group, keep_category=keep_category)
             for r in gated:
                 gated_by_doc[r.document_id] = r
             merged.extend(report.verdicts)

@@ -5312,11 +5312,15 @@ Criss on August, row `0004__rendered-body.pdf` (Obsidian 96.00, printed "CorpSer
 
 **Shipped:** `card_key` is a match field (a changed pick re-matches a statement month); in the matcher's pool only, a pick that contradicts a printed card replaces it (`hand_picked_card_mode`); receipts that printed no number, and re-picks of the printed card, match exactly as before. SPA: "Change card" on `hint` rows, `docs/lovable-feedback-0917b-prompt.md` section 3. Row 0004 keeps her `paid_through` override: a card pick changes the card, company and person, and a typed paid-through account still outranks the card's.
 
-### 136. A receipt with one uncategorized line keeps asking for a category, and the row gives no way to set it (note #64, Criss, 2026-09-17)
+### 136. A receipt with one uncategorized line keeps asking for a category, and the row gives no way to set it (note #64, Criss, 2026-09-17) (SPA APPLIED 2026-09-17)
 
 Criss on August, 11:29 UTC, row `0019__Invoice-B2EA98DF-0020.pdf` (Pressmaster FZCO 135.00): "Fiz as devidas alterações, dei refresh e ainda pede para informar a categoria." Live, read-only: the receipt has two lines, "Workspace / Team Member Aug 23-Sep 23, 2026" 39.00 (`LINE`, Software & Subscriptions) and "CUSTOM Aug 23-Sep 23, 2026" 96.00 (no category, `REVIEW`), so `review.reason_code` is `partial_uncategorized` and Books as reads "Software & Subscriptions 39.00 · (uncategorized - assign) 96.00". The one category override on the row is line 0 from 2026-09-16 08:17; at 11:28 today she set company, card and paid-through, never a category. The row's category dropdown displays "Software & Subscriptions" (the categorized line), so re-picking it fires nothing, and nothing on the Expenses row addresses a single line.
 
 **No backend change needed:** `POST /api/runs/{id}/categories` with `{document_id, line_index, category}` already writes one line, and every row carries `line_items[]` with `index`, `description`, `line_total`, `category`. The fix is a per-line picker for the uncategorized lines on the row (SPA prompt).
+
+**Prompt written 2026-09-17:** `docs/lovable-line-category-prompt.md`. Probed first on the current code with a two-line receipt: `line_index: 1` turns `partial_uncategorized` into the row's next exception, the line reads `EDITED`, and Books as loses its unassigned part.
+
+**Applied 2026-09-17 12:42 UTC**, cold-driven: the Pressmaster row shows the one open line with its picker (EN + PT), no other row does. The pick itself is Criss's; the row leaves `partial_uncategorized` when she makes it.
 
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
