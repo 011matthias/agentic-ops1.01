@@ -6,6 +6,8 @@
 #     "pypdf==6.13.2",
 #     "pypdfium2==5.9.0",
 #     "pillow==12.2.0",
+#     "rapidfuzz>=3.0",
+#     "reportlab>=4.0",
 # ]
 # ///
 """Failure attribution for the expense-recon matcher: which gate lost each receipt.
@@ -213,6 +215,11 @@ def load_live(
         )
         for r in receipts
     ]
+    # Note #63 / item 137: the resolved card reaches the pool, by the module's
+    # own function. An older tree carries neither step.
+    bake = getattr(service, "bake_card_scope", None)
+    if bake is not None:
+        receipts = bake(receipts, card_res)
     transactions = service.stamp_charge_entities(transactions, service._batch_cards(cfg))
     foreign = {
         doc: c for doc, c in store.get_claims_on_receipts(run_id).items()
@@ -360,8 +367,9 @@ def trace_candidates(transactions, receipts, cfg) -> dict:
     """Every candidate pair the matcher generated, with the status it had
     going into the assignment: clean | judgment | demoted_uniqueness |
     demoted_card. Mirrors `match_month` up to the assignment pass."""
+    from expense_recon.matching import deterministic as det
     from expense_recon.matching.deterministic import (
-        _card_keys, _signal, _tx_card_keys, derive_fx_reference_rates, match_one,
+        _signal, _tx_card_keys, derive_fx_reference_rates, match_one,
     )
     from expense_recon.matching.types import MatchType
 
@@ -370,34 +378,47 @@ def trace_candidates(transactions, receipts, cfg) -> dict:
     present: set[str] = set()
     for keys in tx_card_keys.values():
         present |= keys
+    # The scope and the pair enumeration are the matcher's own (item 137):
+    # `receipt_card_scope` and `scored_pairs`. The inline copy below is kept
+    # only so a "before" run against an older module tree still measures
+    # that tree.
     scope: dict[str, set[str]] = {}
-    if cfg.card_scoping:
-        for r in receipts:
-            pm = _card_keys(r.payment_mode)
-            if pm and (pm & present):
-                scope[r.document_id] = pm
+    for r in receipts:
+        sc = det.receipt_card_scope(r, present, cfg)
+        if sc is not None:
+            scope[r.document_id] = sc
     derived = derive_fx_reference_rates(purchases, receipts, cfg)
 
+    if hasattr(det, "scored_pairs"):
+        pairs = det.scored_pairs(purchases, receipts, cfg, derived)
+    else:
+        pairs = []
+        for tx in purchases:
+            for r in receipts:
+                if not det.pair_in_scope(
+                    tx, r, tx_card_keys[tx.transaction_id], scope.get(r.document_id)
+                ):
+                    continue
+                m = match_one(tx, r, cfg, derived)
+                if m is not None:
+                    pairs.append((tx, r, m))
+    differ = getattr(det, "cards_differ", None)
+
     cands: dict[tuple[str, str], dict] = {}
-    for tx in purchases:
-        for r in receipts:
-            if r.legal_entity_id and tx.legal_entity_id and r.legal_entity_id != tx.legal_entity_id:
-                continue
-            sc = scope.get(r.document_id)
-            if sc is not None and not (sc & tx_card_keys[tx.transaction_id]):
-                continue
-            m = match_one(tx, r, cfg, derived)
-            if m is None:
-                continue
-            ref_sig, card_sig, vendor_sig = _signal(tx, r, cfg)
-            cands[(tx.transaction_id, r.document_id)] = {
-                "match": m,
-                "type": m.match_type.value,
-                "is_determ": m.match_type != MatchType.FX_JUDGMENT,
-                "card_signal": card_sig,
-                "vendor_signal": vendor_sig,
-                "status": "clean" if m.match_type != MatchType.FX_JUDGMENT else "judgment",
-            }
+    for tx, r, m in pairs:
+        ref_sig, card_sig, vendor_sig = _signal(tx, r, cfg)
+        cands[(tx.transaction_id, r.document_id)] = {
+            "match": m,
+            "type": m.match_type.value,
+            "is_determ": m.match_type != MatchType.FX_JUDGMENT,
+            "card_signal": card_sig,
+            "vendor_signal": vendor_sig,
+            "status": "clean" if m.match_type != MatchType.FX_JUDGMENT else "judgment",
+            "cards_differ": bool(
+                differ and cfg.card_scoping
+                and differ(tx_card_keys[tx.transaction_id], r)
+            ),
+        }
     # The gate itself is the matcher's, imported, not re-implemented here
     # (2026-09-15, round B): this tool is the judge of what the matcher
     # does, so a second copy of the rules is a measurement that can quietly
