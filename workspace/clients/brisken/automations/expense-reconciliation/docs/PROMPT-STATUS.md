@@ -98,6 +98,8 @@ Driven cold in a fresh named session (`rv82b`), EN and PT; one card select
 opened and closed with Escape, nothing picked. July and August `updated_at`
 unchanged before and after. Evidence in the three Applied rows.
 
+**Re-audited 2026-09-17 evening after the owner published settings-tabs (item 91): applied, the Not-applied table is empty again.** 43 chunks, 878 KB, controls hit, all five new keys present, `applied` read by the save. Driven cold in Chrome, EN, no Save pressed. Evidence in the Applied row.
+
 Two display strings misread on the 2026-09-01 pass, both resolved by reading
 the surrounding key: `"Not a duplicate"` is `wb.dups.notDup` from the workbench
 duplicates panel, which predates `lovable-duplicates-prompt.md` and is not
@@ -184,6 +186,7 @@ missing.
 | `lovable-card-fix-prompt.md` (item 87) | Bundle 2026-09-17: `card_source` in `chunk-expenses._batchId`; `expx.cardFix.pick`, `expx.cardFix.source.learned`, `expx.cardFix.boxHint` in `chunk-i18n`. **Driven on July Expenses (PT):** 33 selects read "Escolher o cartão que pagou", matching the 33 rows the API gives `card_source: none`; one opened to the nine registry cards and closed with Escape. Picking a card on Criss's month is a write, so the save path and the `override` / `learned` notes stay route-tested only |
 | `lovable-matched-with-statement-prompt.md` (item 89) | Bundle 2026-09-17: `months.state.matchedStatement`, `months.state.matchedStatement.tip` in `chunk-i18n`. **Driven on `/months`:** July and August read "Matched with statement" (0 "Reconciled"), tooltip "A statement is loaded and its charges were matched against this month's receipts. Open the month to see what is still open."; PT "Comparado com o extrato" on both |
 | `lovable-ecb-rates-prompt.md` (item 82) | Bundle 2026-09-17: `reference_rate_period` in `chunk-runs._runId`; `wb.fx.source.ecbMonth`, "ECB average, {month}", the new `set.fx.desc` EN + PT in `chunk-i18n`; old copy absent. **Driven:** Settings shows the new FX description in EN and PT; July's AMAZON FX panel still reads "1.162275 (USD per EUR) · Settings" / "· Configurações" (no regression). The ECB label itself has no live case, see Cannot verify |
+| `lovable-settings-tabs-prompt.md` (item 91) | Bundle 2026-09-17 (43 chunks, 878 KB; controls `seen_undefined`, `merchants_inert`, `cc.title` hit): `set.tabs.advanced`, `set.tabs.unsaved`, `set.save.nothing`, `set.export.approvedOnly`, `set.export.scope` in `chunk-i18n` and `chunk-settings`; `export_approved_only` in `chunk-settings`. Save construction read: the mutation checks `applied` covers every patched key before the success toast (else `set.save.nothing`), writes the PUT response into the settings cache instead of re-fetching, panels `forceMount` + `hidden`, unknown `tab` falls back to `cards`; the intake save still spreads the loaded object (minus `senders`). Driven cold from the login gate in Chrome (`agent-browser --session tabs918`): `?tab=intake` lands on Email intake; seven triggers Cards 9 / Merchants 28 / Cost centers 0 / Legal entities 5 / Email intake 3 / FX reference rates 2 / Advanced, matching `GET /api/settings`; new subtitle rendered; Advanced shows Export policy (switch off, help + scope sentences) above Clear memory (button disabled); `?tab=nonsense` opens Cards. No Save pressed. Tab 6 reads "FX reference rates", the reused `set.fx.title` text, where the prompt's label column said "Currency"; the URL value is `currency` |
 
 These four were drafted 2026-08-28/29, pasted from chat, and lived only in a
 gitignored scratch directory until 2026-09-01. They are in `docs/` now
@@ -194,7 +197,6 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
-| `lovable-settings-tabs-prompt.md` (item 91) | `set.tabs.advanced`, `set.export.approvedOnly`, `set.save.nothing`, and `applied` read off the settings PUT response | Written 2026-09-17, not pasted. Needs the item-91 backend live first (`applied` / `ignored`); section 4's save check reads `applied`, so a paste before the deploy reports "nothing was saved" on every save |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
