@@ -71,6 +71,30 @@ CHARGE_REASON_CODES = (
     NO_RECEIPT_FOUND,
 )
 
+# ── the screen's words (item 96) ────────────────────────────────────────
+#
+# The reconciliation PDF prints these, so a receipt reads the same on paper
+# as on the month page. Verbatim the SPA's EN strings
+# (`docs/lovable-unmatched-reasons-prompt.md` section 5): a change there is a
+# change here. `duplicate_copy` has no line: a copy is named by the list it
+# sits in.
+RECEIPT_REASON_TEXT = {
+    NO_CHARGE_ON_ANY_LOADED_STATEMENT:
+        "No charge on the loaded statement matches this receipt.",
+    CARD_STATEMENT_NOT_LOADED: "Paid with a card whose statement is not loaded.",
+    CHARGE_IN_NEIGHBOURING_PERIOD: (
+        "Dated at the edge of this statement; the charge is likely in the "
+        "previous or next month."
+    ),
+    NOT_A_CARD_CHARGE: "Paid by debit card, cash or transfer, not on this card.",
+}
+RECEIPT_REASON_SHORT = {
+    NO_CHARGE_ON_ANY_LOADED_STATEMENT: "no charge found",
+    CARD_STATEMENT_NOT_LOADED: "card not loaded",
+    CHARGE_IN_NEIGHBOURING_PERIOD: "next or previous month",
+    NOT_A_CARD_CHARGE: "not a card payment",
+}
+
 # Verbatim from `tools/recon-match-attribution.py` (NON_CARD_TENDER, BOUNDARY_DAYS).
 NON_CARD_TENDER = re.compile(
     r"\b(debit|ec[- ]?karte|girocard|maestro|cash|dinheiro|pix|bank transfer|"

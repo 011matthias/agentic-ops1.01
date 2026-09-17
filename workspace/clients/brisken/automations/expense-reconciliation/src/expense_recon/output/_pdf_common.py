@@ -333,6 +333,29 @@ def card_name(entry: dict) -> str:
     return f"{label} ({'/'.join(extra)})" if label and extra else (label or "-")
 
 
+def is_booked(row: dict) -> bool:
+    """A charge keyed into the books: Criss's yellow fill or the reviewer's
+    already-posted verdict. `section == "posted"` is the view's own
+    derivation of both; the two raw facts are read too, for a payload built
+    before `section` existed."""
+    return (
+        row.get("section") == "posted"
+        or row.get("entry_status") == "posted"
+        or row.get("status") == "already_posted"
+    )
+
+
+def booked_without_receipt(row: dict) -> bool:
+    """Booked, and no receipt holds it (item 102's count). Not something to
+    act on: the screen folds these rows away as already booked (item 96), so
+    the documents keep them out of "What needs attention" too."""
+    return (
+        is_booked(row)
+        and row.get("effective_bucket") in ("unmatched", "", None)
+        and not row.get("chosen_document_id")
+    )
+
+
 def card_statement_line(section: dict) -> str:
     """What a card's statement settled, in one line under its heading.
 
@@ -379,7 +402,7 @@ def card_statement_line(section: dict) -> str:
         n_booked = 0
         booked: dict[str, Decimal] = {}
         for row in rows:
-            if row.get("section") != "posted" or row.get("effective_bucket") != "unmatched":
+            if not booked_without_receipt(row):
                 continue
             n_booked += 1
             value = parse_amount(row.get("amount"))

@@ -582,7 +582,8 @@ def test_the_document_headline_agrees_with_the_screen(client, monkeypatch):
         ("2026-04-05", "12.00", "AWS", "3645"),
     ), map_card="Card")
 
-    summary = client.get(f"/api/runs/{batch_id}").json()["summary"]
+    view = client.get(f"/api/runs/{batch_id}").json()
+    summary = view["summary"]
     assert summary["n_reconciled"] == 1, summary
 
     resp = client.get(f"/runs/{batch_id}/reconciliation-report.pdf")
@@ -597,6 +598,15 @@ def test_the_document_headline_agrees_with_the_screen(client, monkeypatch):
     headline = text[:text.index("Coverage by card")]
     assert f"{summary['n_reconciled']} matched" in headline, text[:200]
     assert "0 matched" not in headline, text[:200]
+
+    # Item 96: the status word on each charge is the screen's. A matched row
+    # names its receipt, an open one reads no receipt, and nothing reads
+    # "Unmatched receipt" (the full words are pinned in
+    # tests/test_pdfs_match_the_screen_items_96_97.py).
+    for row in view["rows"]:
+        word = "matched" if row["chosen_document_id"] else "no receipt"
+        assert f"{row['vendor']} {row['amount']} {row['currency']} {word}" in text
+    assert "Unmatched receipt" not in text
 
 
 def test_a_one_card_month_keeps_the_one_flat_table(client, monkeypatch):
