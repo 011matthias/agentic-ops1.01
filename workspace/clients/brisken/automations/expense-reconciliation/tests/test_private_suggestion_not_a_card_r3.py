@@ -10,15 +10,24 @@ for a bank payment. The tool's own ruling of 2026-09-15 calls a settled-outside
 receipt real company spend; the same words already offer "paid by bank
 transfer" on the unmatched-receipt chip.
 
+Item 144 (owner ruling 2026-09-17) then settled what this round left open,
+and the two halves are told apart by WHO said no card paid it. A printed
+tender is the document's claim about itself and moves nothing but the
+suggestion. The reviewer's own settled-outside disposition moves the exits
+too: the option to confirm a private card goes (a wire is not her card
+either), and the `needs_person` box goes (person resolution is card-only,
+so on a row no card paid it is an ask nobody can answer).
+
 Pinned here:
 * a bank-transfer / wire tender, and a receipt the reviewer settled outside
   the card, suggest no private card;
-* `can_mark_private` does NOT move: the tool stops suggesting it, the
-  reviewer can still say she paid it herself;
-* neither does the row's company-or-person question (`needs_entity`,
-  `needs_person`, `needs_company_or_person`): whether a bank-paid company
-  invoice should still ask for a card holder is an open question for the
-  owner, and this is what it does today;
+* on a TENDER alone, nothing else moves: `can_mark_private` stays true and
+  the row keeps all three of `needs_entity`, `needs_person`,
+  `needs_company_or_person`;
+* on a settled-outside DISPOSITION, `can_mark_private` is false and
+  `needs_person` is gone, while `needs_entity` (and so
+  `needs_company_or_person`) stands: the company is genuinely unknown, and
+  a card was never going to be what named it;
 * a card tender no company card matches still suggests private (VISA, Cash,
   and the Brazilian POS word TEF, which is a card payment on a cupom fiscal).
 
@@ -105,8 +114,9 @@ def test_a_bank_transfer_tender_suggests_no_private_card(client, monkeypatch):
     )
     assert "suggested_private" not in row["boxes"]
     assert [b for b in row["boxes"] if b in NEEDS] == list(NEEDS), (
-        "the company / person question is unchanged: an open question for "
-        "the owner, not something this fix decides"
+        "a printed tender alone is the document's claim about itself: the "
+        "company / person question is unchanged (item 144 moves this only "
+        "once the REVIEWER settles the row off the card)"
     )
     assert row["can_mark_private"] is True, (
         "the option stays: the tool stops SUGGESTING a private card, it does "
@@ -163,10 +173,17 @@ def test_a_receipt_settled_outside_the_card_suggests_no_private_card(
     assert row["settled_outside"]["how"] == "bank_transfer"
     assert row["suggested_private"] is False
     assert "suggested_private" not in row["boxes"]
-    assert [b for b in row["boxes"] if b in NEEDS] == list(NEEDS)
-    assert row["can_mark_private"] is True
+    # Item 144: the reviewer's own disposition, unlike a printed tender,
+    # takes both card-shaped exits away. Pinned in full by
+    # test_bank_transfer_exit_item_144.
+    assert [b for b in row["boxes"] if b in NEEDS] == [
+        "needs_entity", "needs_company_or_person",
+    ]
+    assert row["can_mark_private"] is False
 
     resp = client.delete(f"/api/runs/{batch}/receipts/{doc}/settled-outside")
     assert resp.status_code == 200, resp.text
     (row,) = _grid(client, batch)["expenses"]
     assert row["suggested_private"] is True, "undone, the question comes back"
+    assert row["can_mark_private"] is True, "and so does the private option"
+    assert [b for b in row["boxes"] if b in NEEDS] == list(NEEDS)
