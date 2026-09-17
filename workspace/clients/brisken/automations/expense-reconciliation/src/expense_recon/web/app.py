@@ -177,7 +177,9 @@ from .store import (
     INTAKE_RECEIVED,
     JOB_DONE,
     JOB_ERROR,
+    SETTINGS_DERIVED_KEYS,
     SETTINGS_MAP_KEYS,
+    SETTINGS_WRITABLE_KEYS,
     STATUS_CONFIRMED,
     VALID_DISPOSITIONS,
     VALID_DUP_RESOLUTIONS,
@@ -2121,6 +2123,28 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     @app.put("/api/settings")
     async def api_put_settings(request: Request):
         body = await request.json()
+        # One settings GROUP per request is the settings screen's contract
+        # (the tabbed page saves the tab you are in, `{"cards": {...}}`),
+        # so this request is the only feedback that group gets. A key the
+        # handler does not write is refused by name rather than dropped in
+        # silence under a 200 that means "saved" everywhere else. The
+        # derived keys `GET` composes stay accepted-and-ignored: reading
+        # the payload, editing one group and sending the whole object back
+        # is legal, and `applied` says what actually landed.
+        if not isinstance(body, dict):
+            return JSONResponse(
+                {"error": "settings body must be an object"}, status_code=400
+            )
+        unknown = sorted(
+            k
+            for k in body
+            if k not in SETTINGS_WRITABLE_KEYS and k not in SETTINGS_DERIVED_KEYS
+        )
+        if unknown:
+            return JSONResponse(
+                {"error": f"unknown settings key(s): {', '.join(unknown)}"},
+                status_code=400,
+            )
         patch: dict = {}
         if "export_approved_only" in body:
             patch["export_approved_only"] = bool(body["export_approved_only"])
@@ -2245,6 +2269,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             settings = store.set_settings(patch, _now_iso())
         return JSONResponse({
             **settings, "categories": list(EXPENSE_CATEGORIES),
+            # What this request wrote, and what it carried that the server
+            # derives. A caller shows "saved" on its own key appearing in
+            # `applied`, never on the 200 alone.
+            "applied": sorted(patch),
+            "ignored": sorted(k for k in body if k in SETTINGS_DERIVED_KEYS),
         })
 
     @app.get("/api/compare")

@@ -4602,6 +4602,44 @@ Build:
    rates either way; the change reaches months created or statement-attached
    afterwards.
 
+### 91. Settings is one scroll of seven editors (owner, 2026-09-17) (BACKEND SHIPPED PR #969, prompt written, pending the owner's paste)
+
+**Owner 2026-09-17:** "group the different settings in the settings page into
+tabs of each setting."
+
+`/settings` renders every editor in one column: FX reference rates, Cards
+(with the seen-but-undefined block), Cost centers, Expense categories,
+Merchants, Email intake, Legal entities, then the Clear memory danger zone.
+Reaching the last one means scrolling past six, and nothing on the way says
+which one needs attention. Each editor already saves only its own key
+(`PUT /api/settings` with `{"cards": ...}` alone), so the grouping is a
+layout change, not a contract change.
+
+Seven tabs, the first six reusing the titles the page already carries as
+their labels: Cards, Merchants (the read-only category list folds in under
+the table, where the merchant category picker uses it), Cost centers, Legal
+entities, Email intake, Currency, and Advanced. Advanced holds the Clear
+memory block plus `export_approved_only`, a live setting enforced in the
+Zoho export that no screen has ever offered; the page subtitle is that
+setting's scope sentence, orphaned above seven unrelated groups, and it
+moves down with the switch.
+
+What tabs break, and the mitigation: a scrolling page showed the
+seen-but-undefined cards and the inert merchants on the way past, and tabs
+hide both. So the triggers carry counts, and the two states the backend
+actually reports (`seen_undefined`, `merchants_inert`) carry an amber
+marker. Nothing else gets one.
+
+**Backend half, shipped:** `PUT /api/settings` now refuses an unknown
+top-level key (400, naming it, writing nothing) instead of dropping it under
+a 200, and answers `applied[]` / `ignored[]` so a tab shows "saved" on its
+own key landing rather than on the status code. One group per request is the
+page's contract; under tabs that request is the only feedback the group
+gets. api-contract "What a settings save wrote";
+`tests/test_settings_put_contract.py`.
+
+SPA half: `docs/lovable-settings-tabs-prompt.md`. Not pasted.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate

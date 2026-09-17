@@ -194,6 +194,7 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
+| `lovable-settings-tabs-prompt.md` (item 91) | `set.tabs.advanced`, `set.export.approvedOnly`, `set.save.nothing`, and `applied` read off the settings PUT response | Written 2026-09-17, not pasted. Needs the item-91 backend live first (`applied` / `ignored`); section 4's save check reads `applied`, so a paste before the deploy reports "nothing was saved" on every save |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.

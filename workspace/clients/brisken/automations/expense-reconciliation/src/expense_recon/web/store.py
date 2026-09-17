@@ -155,6 +155,36 @@ SETTINGS_DEFAULTS: dict = {
 # Decimal FX rate keeps full precision as text, a json float does not.
 SETTINGS_MAP_KEYS = ("fx_reference_rates", "card_entities", "card_accounts")
 
+# Every top-level key `PUT /api/settings` actually writes. The settings
+# screen saves ONE group per request (the tabbed page sends {"cards": ...}
+# and nothing else), so a key the handler does not recognise used to be
+# dropped in silence and answered 200: the tab said "saved" and nothing had
+# changed. The PUT refuses an unknown key instead, and names it.
+SETTINGS_WRITABLE_KEYS = (
+    "export_approved_only",
+    *SETTINGS_MAP_KEYS,
+    "entities",
+    "merchants",
+    "cards",
+    "cost_centers",
+    "intake",
+)
+
+# Keys `GET /api/settings` DERIVES and the PUT never stores. A client that
+# reads the settings payload, edits one group and sends the whole object
+# back carries these along; they are accepted and ignored rather than
+# refused, which is what keeps that round-trip legal. `applied` / `ignored`
+# are the PUT response's own fields, listed here for the same reason.
+SETTINGS_DERIVED_KEYS = (
+    "categories",
+    "entity_options",
+    "cards_effective",
+    "merchants_inert",
+    "cost_center_options",
+    "applied",
+    "ignored",
+)
+
 # Background-job states (durable: a Fly machine can scale to zero mid-run;
 # a job row that is still `running` at boot was interrupted).
 JOB_RUNNING = "running"

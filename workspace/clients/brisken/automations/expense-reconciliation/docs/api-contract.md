@@ -2741,3 +2741,48 @@ Route-level in `tests/test_ecb_month_rates.py`; the shape in
 `tests/test_view_contract.py`
 (`test_fx_reference_rate_period_rides_only_on_the_ecb_source`). Renders in
 `docs/lovable-ecb-rates-prompt.md`.
+
+## What a settings save wrote: `applied` + `ignored` (item 91, 2026-09-17)
+
+The settings screen saves ONE group per request and always has: the page
+sends `{"cards": {...}}`, `{"merchants": {...}}`, `{"intake": {...}}`, never
+the whole object. Under the tabbed page that request is the only feedback
+the group gets, so the response now says what it did.
+
+**`PUT /api/settings` refuses an unknown top-level key.** A key that is
+neither writable nor derived answers `400 {"error": "unknown settings
+key(s): cost_centres"}` and writes NOTHING, the good keys in the same body
+included. Before this, an unrecognised key was dropped in silence under a
+200, so a tab could say "saved" over a write that never happened.
+
+The writable keys are `export_approved_only`, `fx_reference_rates`,
+`card_entities`, `card_accounts`, `entities`, `merchants`, `cards`,
+`cost_centers`, `intake` (`store.SETTINGS_WRITABLE_KEYS`).
+
+The derived keys `GET` composes are accepted and ignored, never refused:
+`categories`, `entity_options`, `cards_effective`, `merchants_inert`,
+`cost_center_options`, plus the two response fields below
+(`store.SETTINGS_DERIVED_KEYS`). Reading the settings payload, editing one
+group and sending the whole object back stays legal.
+
+**The response gains two lists**, beside the settings it already returned:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `applied` | string[] | the keys this request WROTE, sorted. A caller shows "saved" on its own key appearing here, never on the 200 alone |
+| `ignored` | string[] | derived keys the request carried, sorted. Informational: they were served by `GET`, they are not stored |
+
+A body that is not an object is a 400. An empty object is a 200 with
+`applied: []`, which is the honest answer: nothing was sent, nothing was
+written.
+
+**Unchanged:** the per-key semantics. Each key still REPLACES its whole map
+(`cards`, `merchants`, `entities`, `cost_centers`, `intake` and the string
+maps), so a partial group still erases what it omits; `applied` reports that
+the key landed, never that it was complete. Read the group, change a row,
+send the group back.
+
+Tests: `tests/test_settings_put_contract.py`, where
+`test_every_writable_key_actually_lands` walks `SETTINGS_WRITABLE_KEYS` so a
+key added to the tuple without a handler branch fails instead of doing
+nothing. Renders in `docs/lovable-settings-tabs-prompt.md`.
