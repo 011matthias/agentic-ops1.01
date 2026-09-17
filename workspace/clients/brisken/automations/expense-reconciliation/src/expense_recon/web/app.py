@@ -167,6 +167,7 @@ from .service import (  # item 88
     commit_month_memory,
 )
 from .service import confirm_expense_category  # note #62
+from .service import attach_expense_card_tabs, attach_run_card_tabs  # item 138
 from .service import TURN_DECIDE, confirm_matched_pairs  # item 101
 from .month_readiness import (  # items 99 + 100
     PUBLISH_MONTH_NOT_COMPLETE,
@@ -2200,6 +2201,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             month_batch=lambda month: _month_batch_id(store, month),
         )
 
+    def _expense_page_view(store: RunStore, run) -> dict:
+        """The Expenses page's payload: `_expense_view` plus its card tabs
+        (item 138). Only the page GETs build the tabs; the edit routes that
+        reply with `_expense_view`'s summary skip the extra view build."""
+        return attach_expense_card_tabs(
+            _expense_view(store, run), run,
+            overrides=store.get_category_overrides(run.run_id),
+            field_overrides=store.get_expense_field_overrides(run.run_id),
+            edits=store.get_expense_edits(run.run_id),
+            resolutions=store.get_duplicate_resolutions(run.run_id),
+            decisions=store.get_decisions(run.run_id),
+        )
+
     def _month_batch_id(store: RunStore, month: str) -> str | None:
         """The batch month routing picks for "YYYY-MM", or None."""
         from .intake_mail import _open_batch_for_month, _ym
@@ -2265,8 +2279,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # surface (decisions / confirm-ready / exports) unchanged. The
             # expense grid stays reachable via GET /api/expense-batches/{id}.
             if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
-                return JSONResponse(jsonable_encoder(_expense_view(store, run)))
-            view = _workbench_view(store, run)
+                return JSONResponse(jsonable_encoder(_expense_page_view(store, run)))
+            # Item 138: the Matching page's card tabs ride this GET only.
+            view = attach_run_card_tabs(
+                _workbench_view(store, run), run,
+                store.get_expense_field_overrides(run_id),
+            )
         # build_view already carries run_id, label, summary, rows,
         # unmatched_*, duplicate_groups, category_options: return it as the
         # SPA render model.
@@ -3615,7 +3633,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run, err = _expense_run_or_error(store, run_id)
             if err is not None:
                 return err
-            return JSONResponse(jsonable_encoder(_expense_view(store, run)))
+            return JSONResponse(jsonable_encoder(_expense_page_view(store, run)))
 
     @app.post("/api/expense-batches/{run_id}/receipts")
     async def post_batch_receipts(
