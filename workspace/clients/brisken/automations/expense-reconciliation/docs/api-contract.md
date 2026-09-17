@@ -2939,3 +2939,44 @@ No `rematch` with `has_statement: true` means every file was a duplicate
 already in the month, so nothing changed to match.
 
 Tests: `tests/test_feedback_notes_52_53_62_63.py` (route-level, all four).
+
+## A generic word is not a merchant alias (item 117, 2026-09-17)
+
+The merchant registry matched every alias with `token_set_ratio >= 88`,
+which scores 100 whenever the alias's words are a subset of the vendor's.
+So a one-word alias acted as a wildcard: with `Mercado` on NOBRE ATACADO,
+"Mercado Livre" read as NOBRE ATACADO with its Meals category, the model was
+skipped and the row read ready. Two resolver rules and one save rule close
+it; no field changes shape.
+
+- **An alias made only of generic words names no merchant** and the
+  resolver ignores it: kinds of shop, products and fuels
+  (`merchant_registry.GENERIC_MERCHANT_WORDS`, e.g. `Mercado`,
+  `Supermercado`, `Comida e Bebida`). A merchant's canonical name is never
+  ignored.
+- **A fuzzy hit is discounted by the vendor's distinctive words the alias
+  does not cover**, and needs at least one covered. Generic words, joining
+  words, legal forms (`Ltda`, `Inc`), single letters and bare numbers are
+  not distinctive. "Auto Posto Shell" no longer inherits AUTO POSTO
+  PIMENTEL SAO JOSE through `Auto Posto`; "Auto Posto Pimentel",
+  "O Castelinho Bar" and "OpenAl Inc" still resolve.
+- **`PUT /api/settings` with `merchants` refuses a NEW generic alias**:
+  `400 {"error": "merchant 'X' alias 'Sports' is a generic word ..."}`,
+  nothing written. An alias already stored anywhere in the map is accepted,
+  so sending the saved map back, renaming a merchant or moving an alias
+  never fails on data the request did not add. Memory at sign-off and the
+  seed are unchanged (they pass no stored map).
+
+Trade-off, owner-visible: a distinctive one-word alias (`Caldinho`,
+`Espetinho`, `Borracharia`) still matches exactly, and fuzzily only when the
+vendor adds nothing distinctive ("Caldinho Bar" yes, "Caldinho Recife" no).
+
+Live on 2026-09-17: 42 single-word aliases stored, 38 of them generic; they
+stay in settings (owner ruling: leave them) and are inert. Replayed before
+shipping against all six live months (133 stored receipts) plus the local
+expense-report exports: no stored receipt changed resolution; the two
+changes in the exports were wildcards ("Gasolina Comum" as RAC, "Pastel De
+Nata" as Ki-Massa), now unresolved.
+
+Tests: `tests/test_merchant_alias_wildcards.py` (resolver cases, both
+route-level batch rows, the settings PUT).

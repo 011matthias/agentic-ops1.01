@@ -2251,8 +2251,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # aliases de-duped on their normalized key, category constrained to
         # the fixed 8). A malformed payload is rejected at the edge.
         if "merchants" in body:
+            # Item 117: the stored map lets the registry refuse a NEW
+            # generic-word alias while accepting what is already saved.
+            with open_store() as store:
+                stored_merchants = (
+                    (store.get_settings() or {}).get("merchants") or {}
+                )
             try:
-                patch["merchants"] = normalize_merchants_setting(body["merchants"])
+                patch["merchants"] = normalize_merchants_setting(
+                    body["merchants"], stored=stored_merchants
+                )
             except ValueError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=400)
         # Card registry (2026-08-21): {slug: {label, digits, aliases,
