@@ -2892,6 +2892,45 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             )
         return run, None
 
+    def _paid_by_conflict(
+        store: RunStore, run, document_id: str, *, marking_private: bool,
+    ) -> JSONResponse | None:
+        """Owner 2026-09-17: an expense is paid by a company card OR a
+        private card, never both, so nobody is reimbursed for money a company
+        card already paid. Marking private is refused on a row a defined
+        company card paid; a company-card pick is refused on a confirmed
+        private row. Reads the row from the grid's own view, so the refusal
+        and `expenses[].can_mark_private` cannot disagree. A document the
+        view does not list keeps the old behavior (no check)."""
+        view = _expense_view(store, run)
+        row = next(
+            (e for e in view["expenses"] if e.get("document_id") == document_id),
+            None,
+        )
+        if row is None:
+            return None
+        if marking_private and not row.get("can_mark_private", True):
+            card = row.get("card") or {}
+            label = card.get("label") or card.get("key") or "a company card"
+            return JSONResponse(
+                {"error": f"This expense was paid with the company card "
+                          f"{label}, so there is nothing to reimburse. If "
+                          "someone paid with their own card, correct the "
+                          "card first.",
+                 "code": "company_card",
+                 "card": {"key": card.get("key"), "label": card.get("label")}},
+                status_code=400,
+            )
+        if not marking_private and row.get("private"):
+            return JSONResponse(
+                {"error": "This expense is marked as paid with a private card "
+                          f"(reimburse {row.get('reimburse_to') or 'someone'}). "
+                          "Undo that first if a company card paid.",
+                 "code": "private_card"},
+                status_code=400,
+            )
+        return None
+
     async def _expense_edit_reply(
         run_id: str, rematch_needed: bool, extra: dict | None = None
     ) -> JSONResponse:
@@ -3649,6 +3688,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run, err = _expense_run_or_error(store, run_id)
             if err is not None:
                 return err
+            if private:
+                conflict = _paid_by_conflict(
+                    store, run, document_id, marking_private=True
+                )
+                if conflict is not None:
+                    return conflict
             now = _now_iso()
             store.set_expense_field_override(
                 run_id, document_id, "private", "1" if private else None, now
@@ -3697,6 +3742,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     _run, err = _expense_run_or_error(store, run_id)
                     if err is not None:
                         return err
+                    conflict = _paid_by_conflict(
+                        store, _run, document_id, marking_private=False
+                    )
+                    if conflict is not None:
+                        return conflict
                     msg = prepare_row_card_fix(store, run_id, value)
                     return (
                         JSONResponse({"error": msg}, status_code=400)
@@ -3751,6 +3801,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                                   "takes both together"},
                         status_code=400,
                     )
+                conflict = _paid_by_conflict(
+                    store, run, document_id, marking_private=True
+                )
+                if conflict is not None:
+                    return conflict
             if field in EXPENSE_CATEGORY_FIELDS:
                 # Whole-expense category/account edit -> a category_override
                 # per line. Find the expense in the EFFECTIVE receipt set so
