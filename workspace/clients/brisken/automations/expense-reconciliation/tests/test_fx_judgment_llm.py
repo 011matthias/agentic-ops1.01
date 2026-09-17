@@ -264,8 +264,11 @@ def test_apply_judgment_suggest_floor_unbinds_rejected_pair():
 
 
 def test_apply_judgment_suggest_floor_keeps_stub_and_confident_pairs():
-    """The floor never touches the no-client stub (0.5), and a verdict at
-    or above the floor stays in review."""
+    """The floor never touches the no-client stub (0.5), and a verdict
+    above the floor stays in review. A verdict AT the floor is a rejection
+    (item 131): with no match config to read a rate band from, it unbinds.
+    The band exception is pinned route-level in
+    tests/test_rejected_fx_pair_item_131.py."""
     tx = _tx()
     rec = _receipt()
 
@@ -291,11 +294,11 @@ def test_apply_judgment_suggest_floor_keeps_stub_and_confident_pairs():
     )
     assert len(stub.judgment_required) == 1
 
-    # Real verdict at the floor — stays as a suggestion.
+    # Real verdict just above the floor — stays as a suggestion.
     kept = _outcome()
     mock = MockLLMClient(fx_responses=[
         FxJudgmentResult(
-            is_match=False, same_purchase_confidence=0.20,
+            is_match=False, same_purchase_confidence=0.21,
             implied_rate=None, converted_amount=None,
             reasoning="borderline",
         )
@@ -306,6 +309,23 @@ def test_apply_judgment_suggest_floor_keeps_stub_and_confident_pairs():
     )
     assert len(kept.judgment_required) == 1
     assert kept.unmatched_transactions == []
+
+    # Real verdict exactly at the floor — rejected, unbound.
+    at_floor = _outcome()
+    mock = MockLLMClient(fx_responses=[
+        FxJudgmentResult(
+            is_match=False, same_purchase_confidence=0.20,
+            implied_rate=None, converted_amount=None,
+            reasoning="likely a different purchase",
+        )
+    ])
+    _apply_judgment(
+        at_floor, {tx.transaction_id: tx}, {rec.document_id: rec}, mock,
+        suggest_floor=0.2,
+    )
+    assert at_floor.judgment_required == []
+    assert at_floor.unmatched_transactions == [tx.transaction_id]
+    assert at_floor.unmatched_receipts == [rec.document_id]
 
 
 # ── judge_ambiguous (tie-break) ─────────────────────────────────────

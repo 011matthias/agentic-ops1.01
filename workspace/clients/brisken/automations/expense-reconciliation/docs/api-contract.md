@@ -3409,3 +3409,39 @@ attempt writes no event.
 
 `tools/brisken-recon-notify.py` mails each failure once per
 `(run_id, failed_at)` (state key `seen_rematch_failures`).
+
+## A pair the model rejects (item 131, 2026-09-17)
+
+**No new field, and no field retyped.** For a foreign-currency pair the tool
+cannot settle, the model gives a same-purchase probability, and the owner
+ruled on 2026-07-24 that a pair it rejects is not shown. The cut-off read
+"below `fx_judgment_suggest_floor` (0.20)" and the model answers exactly
+0.20, so two live July rows were shown with "likely NOT the same purchase
+(p=0.20)" as their reason. What a consumer sees now:
+
+- A verdict **at or below** the floor is a rejection. The pair leaves
+  `rows[].candidates[]`: the charge reads `effective_bucket: "unmatched"` and
+  the receipt joins `unmatched_receipts`, as a verdict below the floor did
+  before.
+- **The exception:** a rejected pair whose own rate arithmetic sits in the
+  clean band, `fx.reference_gap_band: "match"` (item 81; the view and the
+  judgment layer read one function,
+  `matching.deterministic.reference_gap`), stays in review. Its
+  `match_type` stays `fx_judgment`, `confidence` is the model's number,
+  `requires_review` true, and `reason` puts the tool's arithmetic first and
+  the model after it:
+
+```
+"Charge 5.61 USD vs receipt 28.73 BRL at monthly reference rate 0.192448: deviation 1.5%. Demoted to judgment: this rate-derived pairing is not conclusive (another charge or receipt agrees just as cleanly). Kept for review although the model disagrees: FX judgment: likely NOT the same purchase (p=0.20). ..."
+```
+
+A pair above the floor keeps the model's reason first, exactly as before, so
+a consumer that reads "the model's verdict" off `reason` should look for
+`FX judgment:` anywhere in the string, not at its start. Measured on the live
+months (DB copy 2026-09-17): July moves two rows at its next re-match, August
+none. NOBRE ATACAREJO 65.23 (receipt `0059`, 4.01% off, model 0.20) leaves
+review; HOTEL AM TIERGARTEN 24.02 (receipt `0034`, Erste Fracht 21.00 EUR,
+-1.59%, model 0.10, labelled `excluded`, "another merchant") returns to it
+under the exception; NATHALIA KEILA FIRMIN 5.61 (`0062`) stays, with the
+reason reordered. No SPA change is needed: `reason` renders verbatim. Pinned
+route-level in `tests/test_rejected_fx_pair_item_131.py`.

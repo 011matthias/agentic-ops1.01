@@ -2023,6 +2023,7 @@ def ingest_receipts_folder_into_run(
     _apply_judgment(
         sub, tx_by_id, rec_by_id, llm_client,
         suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
+        cfg=match_cfg or MatchingConfig(),
     )
     _apply_ambiguous_judgment(sub, tx_by_id, rec_by_id, llm_client)
     _apply_unmatched_judgment(
@@ -2327,20 +2328,21 @@ def _fx_reference_fields(
     """
     from decimal import ROUND_HALF_UP
 
+    from ..matching.deterministic import reference_gap
+
     if reference is None or rec_amt is None or rec_amt <= 0:
         return {}
-    converted = rec_amt * reference.rate
-    if converted <= 0:
+    # Item 131: the conversion, deviation and band live in the matcher's
+    # module, where the judgment layer reads the same band to decide whether
+    # a pair the model rejected stays in review.
+    arithmetic = reference_gap(
+        charge_amt, rec_amt, reference.rate, reference.match_pct, reference.review_pct,
+    )
+    if arithmetic is None:
         return {}
+    converted, deviation, band = arithmetic
     cent = Decimal("0.01")
     shown = converted.quantize(cent, ROUND_HALF_UP)
-    deviation = (charge_amt - converted) / converted
-    if abs(deviation) <= reference.match_pct:
-        band = "match"
-    elif abs(deviation) <= reference.review_pct:
-        band = "review"
-    else:
-        band = "outside"
     gap = (charge_amt - shown).quantize(cent, ROUND_HALF_UP)
     gap_text = "0.00" if gap == 0 else f"{gap:+,.2f}"
     pct = float((deviation * 100).quantize(cent, ROUND_HALF_UP))
@@ -10773,6 +10775,7 @@ def rematch_month(
     _apply_judgment(
         outcome, tx_by_id, rec_by_id, llm_client,
         suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
+        cfg=match_cfg or MatchingConfig(),  # item 131: the band a rejection keeps
     )
     _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
     _apply_unmatched_judgment(
