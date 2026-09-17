@@ -112,6 +112,10 @@ def transaction_to_dict(t: Transaction) -> dict:
         "original_currency": t.original_currency,
         "fx_rate": _dec(t.fx_rate),
         "entry_status": t.entry_status,
+        # Owner ruling 2026-09-17: a derived subscription mark closes
+        # nothing, a gray fill closes the charge, so the provenance has to
+        # survive the snapshot.
+        "entry_status_source": t.entry_status_source,
         "is_credit": t.is_credit,
         # Per-row card identity (WS3). Load-bearing when a snapshot is
         # re-matched later (the bulk receipts-folder attach): without it the
@@ -145,6 +149,10 @@ def transaction_from_dict(d: dict) -> Transaction:
         fx_rate=_as_dec(d.get("fx_rate")),
         # .get keeps pre-L1 snapshots loadable (no entry_status key).
         entry_status=d.get("entry_status"),
+        # .get keeps snapshots from before the 2026-09-17 ruling loadable:
+        # no key means the mark came from the workbook fill (the web layer
+        # never derived one).
+        entry_status_source=d.get("entry_status_source"),
         # .get keeps pre-3.15 snapshots loadable (no is_credit key).
         is_credit=d.get("is_credit", False),
         # .get keeps pre-WS3 snapshots loadable (no card_last4 key); those

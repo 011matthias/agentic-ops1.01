@@ -3261,6 +3261,14 @@ def build_view(
                 # L1: her workbook's fill-color annotation (yellow=posted,
                 # gray=subscription); drives the workbench chips.
                 "entry_status": tx.entry_status,
+                # Owner ruling 2026-09-17: "derived" when the tool inferred
+                # the subscription mark from history, which closes nothing
+                # (a gray fill does). Parallel field, ABSENT on every row
+                # whose mark came from the workbook or a verdict.
+                **(
+                    {"entry_status_source": tx.entry_status_source}
+                    if tx.entry_status_source is not None else {}
+                ),
                 # Slice 10: the tool's suggested category for a receiptless
                 # charge (None on matched rows and pre-Slice-10 snapshots).
                 "charge_category": charge_cat_view,
@@ -3698,7 +3706,9 @@ def build_view(
         # read Ready to post and be published. Nothing left to decide, every
         # charge holds a receipt or a closing verdict, every receipt holds a
         # charge or is set aside, and no receiptless charge's category is
-        # still a guess. The three counts say what blocks it.
+        # still a guess. The three counts say what blocks it;
+        # `n_charges_closed_recurring` says what the gray fill closed
+        # (owner ruling 2026-09-17) and never blocks.
         "month_complete": is_month_complete(
             ready_to_post=ready_to_post, counts=completeness
         ),
@@ -9523,15 +9533,29 @@ def _add_receipts_locked(
     for p in existing_files:
         add_digests[p.name] = hashlib.sha1(p.read_bytes()).hexdigest()[:16]
         existing_hashes.add(add_digests[p.name])
+    # Item 106: which stored file a skipped duplicate matched, and whether
+    # that file is itself a set-aside page (then the bytes are not an
+    # expense anywhere, and "already on file, no action" would mislead).
+    stored_by_digest = {d: n for n, d in add_digests.items()}
+    set_aside_by_file = {
+        str(e.get("file", "")): e
+        for e in set_aside_entries(run.snapshot) if not e.get("restored")
+    }
 
     _stage("ingesting")
     issues: list[str] = []
     issue_details: list[dict] = []
+    # Item 106: every file that did NOT become an expense, with why, in
+    # upload order. Mail intake stamps it on the archive so the log row and
+    # the sender's acknowledgement can say "nothing was added, because ..."
+    # instead of "Added" about a forward that created no expense.
+    not_added: list[dict] = []
 
     def _issue(code: str, file: str, **kw) -> None:
         prose, detail = upload_issue(code, file, **kw)
         issues.append(prose)
         issue_details.append(detail)
+        not_added.append({"file": file, "why": code})
 
     new_receipts: list[Receipt] = []
     new_set_aside: list[dict] = []
@@ -9563,13 +9587,28 @@ def _add_receipts_locked(
             continue
         digest = hashlib.sha1(data).hexdigest()[:16]
         if digest in existing_hashes:
-            continue  # already in the pool (or earlier in this upload)
+            # already in the pool (or earlier in this upload)
+            stored = stored_by_digest.get(digest, "")
+            prior = set_aside_by_file.get(stored)
+            if prior is not None:
+                not_added.append({
+                    "file": display, "why": "set_aside",
+                    "reason": str(prior.get("reason") or ""),
+                    "document_id": stored,
+                })
+            else:
+                not_added.append({
+                    "file": display, "why": "already_on_file",
+                    "document_id": stored,
+                })
+            continue
         existing_hashes.add(digest)
         fs_name = re.sub(r"[^A-Za-z0-9._-]", "_", display) or f"receipt{suffix}"
         dest = receipts_dir / f"{n_index:04d}__{fs_name}"
         n_index += 1
         dest.write_bytes(data)
         add_digests[dest.name] = digest
+        stored_by_digest.setdefault(digest, dest.name)
         if provenance_by_digest and digest in provenance_by_digest:
             new_provenance[dest.name] = provenance_by_digest[digest]
         receipt = None
@@ -9608,6 +9647,12 @@ def _add_receipts_locked(
                 "excluded (no expense created)"
             )
             new_set_aside.append(_set_aside_entry(receipt, now_iso))
+            set_aside_by_file[dest.name] = new_set_aside[-1]
+            not_added.append({
+                "file": display, "why": "set_aside",
+                "reason": receipt.document_type,
+                "document_id": dest.name,
+            })
             continue
         new_receipts.append(receipt)
 
@@ -9662,6 +9707,9 @@ def _add_receipts_locked(
         "issues": issues,
         # Same rejections, machine-readable (item 20); prose unchanged.
         "issue_details": issue_details,
+        # Item 106: per file, why it created no expense (set_aside with its
+        # reason, already_on_file, or an upload-issue code).
+        "not_added": not_added,
     }
     new_snapshot = dict(run.snapshot)
     new_snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
