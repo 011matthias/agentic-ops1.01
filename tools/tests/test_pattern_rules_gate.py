@@ -375,3 +375,25 @@ def test_cli_lint_exit_codes(tmp_path):
                         env={**__import__("os").environ, "PATTERN_RULES_DIR": str(bad)})
     assert ok.returncode == 0, ok.stdout
     assert ko.returncode == 1 and "verb-first" in ko.stdout
+
+
+def test_digest_extracts_user_turns_for_the_miner(tmp_path):
+    import subprocess
+    t = tmp_path / "s.jsonl"
+    entries = [
+        {"type": "user", "message": {"role": "user", "content": "Build the thing <system-reminder>secret ctx</system-reminder>"}},
+        {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "I ran git add -A and pushed."}]}},
+        {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "content": "ok"}]}},
+        {"type": "user", "message": {"role": "user", "content": "No, don't use git add -A here, stage paths."}},
+    ]
+    t.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
+    cli = str(TOOLS / "pattern_rules.py")
+    out = subprocess.run([sys.executable, cli, "digest", "--transcript", str(t)],
+                         capture_output=True, text=True, timeout=30).stdout
+    assert out.count("user:") == 2
+    assert "secret ctx" not in out and "tool_result" not in out
+    assert "* user: No, don't use git add -A" in out
+    assert "agent: ...I ran git add -A and pushed." in out
+    missing = subprocess.run([sys.executable, cli, "digest", "--session", "no-such-session"],
+                             capture_output=True, text=True, timeout=30)
+    assert missing.returncode == 0 and missing.stdout.strip() == "transcript unavailable"

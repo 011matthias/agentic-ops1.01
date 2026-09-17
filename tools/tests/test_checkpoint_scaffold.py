@@ -17,6 +17,40 @@ sys.modules["checkpoint_scaffold"] = cs
 spec.loader.exec_module(cs)
 
 
+class TestPatternRuleFix:
+    # Fix `pattern-rule:<name>` (ECC port item 1), driven through finalize.
+
+    @pytest.fixture()
+    def root(self, tmp_path: Path) -> Path:
+        (tmp_path / "docs" / "sessions").mkdir(parents=True)
+        (tmp_path / ".claude" / "patterns").mkdir(parents=True)
+        (tmp_path / ".claude" / "patterns" / "warn-git-add-all.md").write_text("x", encoding="utf-8")
+        return tmp_path
+
+    def _row(self, fix: str) -> dict:
+        return {"client": "system", "type": "slow-path", "desc": "d", "fix": fix}
+
+    def test_existing_rule_is_written_normalized(self, root: Path, capsys):
+        payload = base_payload(friction_rows=[self._row("pattern-rule: warn-git-add-all")])
+        assert run_finalize(root, payload) == 0
+        reg = (root / "docs" / "friction-register.md").read_text(encoding="utf-8")
+        assert "| No | pattern-rule:warn-git-add-all | No |" in reg
+        assert "advisory" not in capsys.readouterr().out
+
+    def test_missing_rule_file_is_advisory_only(self, root: Path, capsys):
+        payload = base_payload(friction_rows=[self._row("pattern-rule:block-not-merged-yet")])
+        assert run_finalize(root, payload) == 0
+        assert "not in" in capsys.readouterr().out
+        reg = (root / "docs" / "friction-register.md").read_text(encoding="utf-8")
+        assert "pattern-rule:block-not-merged-yet" in reg
+
+    def test_malformed_name_refuses_and_writes_nothing(self, root: Path, capsys):
+        payload = base_payload(friction_rows=[self._row("pattern-rule:Git Add All")])
+        assert run_finalize(root, payload) == 2
+        assert "verb-first" in capsys.readouterr().out
+        assert not (root / "docs" / "friction-register.md").exists()
+
+
 def run_finalize(root: Path, payload: dict) -> int:
     # Pin --context-root to root so the YAML target is deterministic regardless
     # of whether the pytest tmp dir happens to sit inside a git repo.
