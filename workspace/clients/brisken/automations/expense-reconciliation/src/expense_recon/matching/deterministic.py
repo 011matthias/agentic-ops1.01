@@ -356,9 +356,10 @@ class MatchingConfig:
     # this floor is not shown as a suggestion (item 131, 2026-09-17: the
     # model answers exactly 0.20, and "below" let those rejections through
     # with "likely NOT the same purchase" as their reason). The one
-    # exception: a rejected pair whose own rate arithmetic sits in the
-    # clean band (`pair_reference_gap_band` == "match") stays in review,
-    # the tool's reason first (`cli._apply_judgment`). On the April 2026 hosted
+    # exception, AT the floor only: a pair whose own rate arithmetic sits
+    # in the clean band (`pair_reference_gap_band` == "match") stays in
+    # review, the tool's reason first (`cli._apply_judgment`); below the
+    # floor a rejection stays final. On the April 2026 hosted
     # run the workbench proposed a USD OpenAI subscription against a
     # BRL construction-materials receipt at p=0.10, with the model's own
     # reason saying "likely NOT the same purchase" (owner call

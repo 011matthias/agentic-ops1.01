@@ -8,12 +8,13 @@ NOBRE ATACAREJO 65.23 against a Fenix 325.88 BRL receipt (4.01% off the month
 rate, a different store) and NATHALIA KEILA FIRMIN 5.61 against a 28.73 BRL
 receipt (1.5% off, labelled the right pair). Now:
 
-* a verdict AT or below the floor is a rejection;
-* a rejected pair whose own rate arithmetic sits in the clean band (item 81's
-  `fx.reference_gap_band` == "match") stays in review, the tool's arithmetic
-  first and the model's disagreement after it;
-* a rejected pair outside the clean band is not shown: the charge and the
-  receipt go to the unmatched lists.
+* a verdict below the floor stays final, exactly as ruled: not shown, the
+  charge and the receipt go to the unmatched lists, whatever the rate says;
+* a verdict exactly AT the floor is a rejection too, except when the pair's
+  own rate arithmetic sits in the clean band (item 81's
+  `fx.reference_gap_band` == "match"): then it stays in review, the tool's
+  arithmetic first and the model's disagreement after it;
+* an at-floor rejection outside the clean band is not shown.
 
 Route-level: every assertion reads `GET /api/runs/{id}` after the real
 upload and statement-attach routes, which run `rematch_month` and the judgment
@@ -146,10 +147,26 @@ def _nathalia(client, monkeypatch, p: float) -> dict:
     return client.get(f"/api/runs/{batch}").json()
 
 
-@pytest.mark.parametrize("p", [0.20, 0.10])
-def test_a_rejected_pair_inside_the_clean_band_stays_in_review_with_the_tools_reason_first(
-    client, monkeypatch, p
+def test_a_verdict_below_the_floor_stays_final_even_inside_the_clean_band(
+    client, monkeypatch
 ):
+    """The owner's 2026-07-24 cut, unchanged: at p=0.10 the clean-band pair
+    is not shown (live July: Erste Fracht 21.00 EUR against HOTEL AM
+    TIERGARTEN 24.02, -1.59%, another merchant). Both charges fall to
+    unmatched and the receipt joins the unmatched list."""
+    view = _nathalia(client, monkeypatch, 0.10)
+    row = _row(view, "NATHALIA")
+    assert row["effective_bucket"] == "unmatched", row
+    assert not [c for c in row["candidates"] if c["match_type"] == "fx_judgment"], row["candidates"]
+    assert _row(view, "COL INTERMUNICIPAL")["effective_bucket"] == "unmatched"
+    assert [r["vendor"] for r in view["unmatched_receipts"]] == ["Bezerra Ltda"]
+    assert view["summary"]["n_review"] == 0
+
+
+def test_a_rejection_at_the_floor_inside_the_clean_band_stays_in_review_with_the_tools_reason_first(
+    client, monkeypatch
+):
+    p = 0.20
     view = _nathalia(client, monkeypatch, p)
     row = _row(view, "NATHALIA")
     assert row["effective_bucket"] == "review", row

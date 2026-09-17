@@ -2618,6 +2618,14 @@ Route result:
   review-bucket rows included) and that the rule left for a person.
 - `summary`: the run summary after the writes.
 
+`POST .../decisions/confirm-ready` ("Confirm all Ready") follows the same
+pairing rule since item 133 (2026-09-17): a row must be `review.state:
+"ready"` AND pass `confirmable_pair`. `ready` is a category verdict, so before
+this a categorized receipt paired with ANOTHER merchant's same-amount charge
+(BASE44 100.00 holding an "Anthropic, PBC" receipt, `vendor_pct` 22) was
+ready, and the click booked it. The route's response shape is unchanged;
+route-level in `tests/test_same_amount_other_merchant_item_133.py`.
+
 The other two bulk confirms and a booked row: `POST .../decisions/confirm-ready`
 already never confirmed one (a booked row's `review.state` is `none`, so it is
 never `ready`); `POST .../decisions/bulk` with `"status": "confirmed"` did, and
@@ -3496,17 +3504,17 @@ ruled on 2026-07-24 that a pair it rejects is not shown. The cut-off read
 0.20, so two live July rows were shown with "likely NOT the same purchase
 (p=0.20)" as their reason. What a consumer sees now:
 
-- A verdict **at or below** the floor is a rejection. The pair leaves
-  `rows[].candidates[]`: the charge reads `effective_bucket: "unmatched"` and
-  the receipt joins `unmatched_receipts`, as a verdict below the floor did
-  before.
-- **The exception:** a rejected pair whose own rate arithmetic sits in the
+- A verdict **below** the floor is final, exactly as ruled and as before:
+  the pair leaves `rows[].candidates[]`, the charge reads
+  `effective_bucket: "unmatched"` and the receipt joins `unmatched_receipts`,
+  whatever its rate says.
+- A verdict **exactly at** the floor is now a rejection too, and leaves the
+  same way, with one exception: a pair whose own rate arithmetic sits in the
   clean band, `fx.reference_gap_band: "match"` (item 81; the view and the
-  judgment layer read one function,
-  `matching.deterministic.reference_gap`), stays in review. Its
-  `match_type` stays `fx_judgment`, `confidence` is the model's number,
-  `requires_review` true, and `reason` puts the tool's arithmetic first and
-  the model after it:
+  judgment layer read one function, `matching.deterministic.reference_gap`),
+  stays in review. Its `match_type` stays `fx_judgment`, `confidence` is the
+  model's number (0.2), `requires_review` true, and `reason` puts the tool's
+  arithmetic first and the model after it:
 
 ```
 "Charge 5.61 USD vs receipt 28.73 BRL at monthly reference rate 0.192448: deviation 1.5%. Demoted to judgment: this rate-derived pairing is not conclusive (another charge or receipt agrees just as cleanly). Kept for review although the model disagrees: FX judgment: likely NOT the same purchase (p=0.20). ..."
@@ -3515,10 +3523,10 @@ ruled on 2026-07-24 that a pair it rejects is not shown. The cut-off read
 A pair above the floor keeps the model's reason first, exactly as before, so
 a consumer that reads "the model's verdict" off `reason` should look for
 `FX judgment:` anywhere in the string, not at its start. Measured on the live
-months (DB copy 2026-09-17): July moves two rows at its next re-match, August
-none. NOBRE ATACAREJO 65.23 (receipt `0059`, 4.01% off, model 0.20) leaves
-review; HOTEL AM TIERGARTEN 24.02 (receipt `0034`, Erste Fracht 21.00 EUR,
--1.59%, model 0.10, labelled `excluded`, "another merchant") returns to it
-under the exception; NATHALIA KEILA FIRMIN 5.61 (`0062`) stays, with the
-reason reordered. No SPA change is needed: `reason` renders verbatim. Pinned
-route-level in `tests/test_rejected_fx_pair_item_131.py`.
+months (DB copy 2026-09-17 evening): July moves one row at its next re-match,
+August none. NOBRE ATACAREJO 65.23 (receipt `0059`, 4.01% off, model 0.20)
+leaves review; NATHALIA KEILA FIRMIN 5.61 (`0062`, 1.46%, model 0.20) stays,
+with the reason reordered; HOTEL AM TIERGARTEN 24.02 (`0034`, Erste Fracht
+21.00 EUR, -1.59%, model 0.10) stays out, because the exception stops at the
+floor. No SPA change is needed: `reason` renders verbatim. Pinned route-level
+in `tests/test_rejected_fx_pair_item_131.py`.

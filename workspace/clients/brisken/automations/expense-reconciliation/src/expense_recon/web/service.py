@@ -2751,11 +2751,17 @@ def ready_confirm_pairs(run, decisions: dict, overrides: dict) -> list:
     need no further work (adversarial-verify: never wire Confirm-all to the
     broader bulk path). Callers apply `_BULK_DECISION_LIMIT` and report any
     remainder rather than silently truncating.
+
+    Item 133 (2026-09-17): `ready` is a CATEGORY verdict, so the row must
+    also pass the owner's pairing rule (`confirmable_pair`, the one "Confirm
+    all matched" uses since item 101). Before, a same-amount receipt from
+    another merchant (BASE44 100.00 holding an Anthropic receipt, vendor 22)
+    was `ready` and one click booked it.
     """
     view = build_view(run, decisions, overrides)
     ready = {
         r["transaction_id"] for r in view["rows"]
-        if r.get("review", {}).get("state") == "ready"
+        if r.get("review", {}).get("state") == "ready" and confirmable_pair(r)
     }
     return [
         (tx_id, doc_id)
