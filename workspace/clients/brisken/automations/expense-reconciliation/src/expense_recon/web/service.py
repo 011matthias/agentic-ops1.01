@@ -2929,6 +2929,19 @@ def build_view(
     # but are counted here, because booked and evidenced are two questions.
     booked_no_receipt: dict[str, Decimal] = {}
     n_booked_no_receipt = 0
+    # Item 137: a receipt held on a charge of ANOTHER card than the one the
+    # tool resolved for it (a pick, the printed method, a remembered card).
+    # Same chain the grid shows, same test the matcher demotes by, so a pair
+    # confirmed before item 137 (live August 2026: LOVABLE 25.00 on 3645
+    # with a receipt picked as 2838) is named on the page, not only the next
+    # proposal.
+    from ..matching.deterministic import _tx_card_keys, cards_differ
+
+    card_res_view = resolve_batch_row_cards(receipts, run.config, field_overrides or {})
+    card_scope_view = {
+        r.document_id: r for r in bake_card_scope(receipts, card_res_view)
+    }
+    n_cards_differ = 0
     # The reviewer's effective verdict per charge, derived ONCE (PR 3): the
     # rows below, the summary's four counters, and the per-card coverage
     # roll-up all read this map rather than each deciding a bucket for
@@ -3203,6 +3216,23 @@ def build_view(
             overrides=overrides,
             charge_category=charge_cat_view,
         )
+        cards_flag: dict = {}
+        scoped_rec = card_scope_view.get(held_doc) if held_doc else None
+        if scoped_rec is not None and effective_bucket in ("reconciled", "review"):
+            tx_keys = _tx_card_keys(tx)
+            if cards_differ(tx_keys, scoped_rec):
+                picked = card_res_view[held_doc]["card"]
+                cards_flag = {
+                    "cards_differ": {
+                        "document_id": held_doc,
+                        "charge_card": "/".join(sorted(tx_keys)),
+                        "receipt_card": "/".join(scoped_rec.card_scope_keys),
+                        "receipt_card_key": picked.key,
+                        "receipt_card_label": picked.display_label,
+                        "receipt_card_source": scoped_rec.card_scope_source,
+                    }
+                }
+                n_cards_differ += 1
 
         rows.append(
             {
@@ -3223,6 +3253,9 @@ def build_view(
                 "effective_bucket": effective_bucket,
                 "status": status,
                 "chosen_document_id": held_doc,
+                # Item 137: ABSENT unless the held receipt's card and the
+                # charge's card disagree.
+                **cards_flag,
                 "candidates": cands,
                 "has_learned": has_learned,
                 # L1: her workbook's fill-color annotation (yellow=posted,
@@ -3682,6 +3715,8 @@ def build_view(
         # Item 102: booked in the workbook, no receipt holding it. Sits next
         # to `unreconciled_by_ccy`, never inside it.
         "n_booked_no_receipt": n_booked_no_receipt,
+        # Item 137: rows carrying `cards_differ`.
+        "n_cards_differ": n_cards_differ,
         "booked_no_receipt_by_ccy": {
             ccy: f"{amt:,.2f}" for ccy, amt in sorted(booked_no_receipt.items())
         },
@@ -5477,27 +5512,32 @@ def resolve_batch_row_cards(
     return out
 
 
-def hand_picked_card_mode(r: Receipt, res: dict | None) -> str | None:
-    """The payment mode the matcher should read for a receipt whose card was
-    picked by hand against the card it printed, else None (note #63).
+def bake_card_scope(
+    receipts: "list[Receipt]", card_res: dict[str, dict]
+) -> "list[Receipt]":
+    """Stamp the card the tool resolved for each receipt onto the match pool
+    (item 137, `Receipt.card_scope_keys` / `card_scope_source`).
 
-    Card scoping reads `payment_mode`, so a receipt printing "••3645" stays
-    scoped to 3645 whatever card the reviewer picks, and its 2838 charge can
-    never pair. Only the contradiction is rewritten: a pick on a receipt that
-    printed no card number, or the same card it printed, changes nothing, so
-    months without such a pick match exactly as before. The value names the
-    picked card's own digits and nothing else. Pool only: the expense grid
-    resolves cards from the extraction baseline, never from this string."""
-    from ..matching.deterministic import _card_keys
+    Before item 137 only a card the receipt PRINTED scoped its matching, and
+    note #63 bolted a picked card on by rewriting the printed payment mode,
+    and only where the pick contradicted a printed card. The card resolved
+    by the same chain the grid shows (`resolve_batch_row_cards`: a pick on
+    the row, the printed method or a hint word assigned to a card, a card
+    remembered from an earlier month) now reaches the matcher for every
+    receipt, and `match_month` decides what each source may do. Pool only:
+    the fields are never serialized and are re-derived on every re-match,
+    and `rematch_month` and the attribution tool both call this."""
+    from ..matching.deterministic import CARD_SCOPE_SOURCES
 
-    if not res or res.get("card_source") != "override" or res.get("card") is None:
-        return None
-    printed = _card_keys(r.payment_mode)
-    picked = res["card"].digit_keys()
-    if not printed or not picked or printed & picked:
-        return None
-    digits = " / ".join(d for d in res["card"].digits if _card_keys(d))
-    return f"{digits} (card picked by hand)"
+    out = []
+    for r in receipts:
+        res = card_res.get(r.document_id) or {}
+        card, source = res.get("card"), res.get("card_source")
+        keys = tuple(sorted(card.digit_keys())) if card is not None else ()
+        if keys and source in CARD_SCOPE_SOURCES:
+            r = replace(r, card_scope_keys=keys, card_scope_source=source)
+        out.append(r)
+    return out
 
 
 def _batch_row_card(cards: dict, key: object):
@@ -10299,15 +10339,10 @@ def rematch_month(
         )
         for r in receipts
     ]
-    # Note #63: a card picked by hand on a row whose receipt printed ANOTHER
-    # card replaces the printed one in the pool too, or the matcher keeps the
-    # receipt scoped to the card the reviewer just said did not pay.
-    receipts = [
-        replace(r, payment_mode=mode)
-        if (mode := hand_picked_card_mode(r, card_res_bake.get(r.document_id)))
-        else r
-        for r in receipts
-    ]
+    # Note #63 / item 137: the card the chain resolved (a pick on the row, the
+    # printed method or an assigned hint, a remembered card) reaches the
+    # matcher, which scopes and demotes by it (`match_month`).
+    receipts = bake_card_scope(receipts, card_res_bake)
 
     # Item 59: the charge side of the same rule. Each charge that printed a
     # card carries THAT card's entity from the batch's registry snapshot
@@ -11256,7 +11291,7 @@ def clear_receipt_settled_outside(
 EXPENSE_MATCH_FIELDS = frozenset({
     "vendor", "date", "total", "currency", "legal_entity", "reference",
     # Note #63: the per-row card fix (item 87) decides the row's entity and,
-    # through `hand_picked_card_mode`, the card the matcher scopes it to.
+    # through `bake_card_scope`, the card the matcher scopes it to.
     "card_key",
 })
 

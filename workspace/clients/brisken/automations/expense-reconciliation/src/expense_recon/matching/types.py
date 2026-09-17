@@ -365,6 +365,15 @@ class Receipt:
     # only when the printed payment method names no card number, so a
     # printed number always wins over what was remembered.
     card_key: str | None = None
+    # Item 137 (2026-09-17): the card the TOOL resolved for this receipt,
+    # as digit keys (`Card.digit_keys`) and where it came from ("override" =
+    # picked by hand on the row, "hint" = the printed payment method or a
+    # hint word assigned to a card, "learned" = remembered from an earlier
+    # month). Stamped on the match pool only (`service.bake_card_scope`),
+    # never serialized, never read off the document. Empty = no resolved
+    # card, and matching reads the printed payment mode alone as before.
+    card_scope_keys: tuple[str, ...] = ()
+    card_scope_source: str = ""
 
     @property
     def has_receipt_image(self) -> bool:

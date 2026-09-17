@@ -1464,6 +1464,20 @@ def uniqueness_verdicts(
     return out
 
 
+# Item 137: where a receipt's resolved card came from (`Receipt.card_scope_source`).
+CARD_SCOPE_PICKED = "override"
+CARD_SCOPE_SOURCES = frozenset({CARD_SCOPE_PICKED, "hint", "learned"})
+# A pair whose cards differ keeps its evidence but ranks below every clean
+# deterministic candidate (POSSIBLE is the lowest, 0.60), so a charge on the
+# receipt's own card always wins the receipt first.
+CARDS_DIFFER_CONFIDENCE = 0.55
+# Tie-break signal for a pair on the card the tool resolved: above an unknown
+# card (0.5), below a card the receipt itself printed (1.0), so between two
+# receipts for one charge the printed card still wins (live August 2026:
+# ZOHO Corporation printing ...2838 over a Zoho Books copy picked as 2838).
+RESOLVED_CARD_SIGNAL = 0.75
+
+
 def receipt_card_scope(
     receipt: Receipt, present_keys: set[str], cfg: MatchingConfig
 ) -> set[str] | None:
@@ -1471,9 +1485,18 @@ def receipt_card_scope(
     scoping is off, its payment mode names no card, or the card it names is
     not PRESENT among the statement's charges (``present_keys``). The one
     rule ``match_month`` scopes by, public so the duplicate statement check
-    (item 74) reads the same scope instead of a copy of it."""
+    (item 74) reads the same scope instead of a copy of it.
+
+    Item 137: a card picked by hand on the row (``card_scope_source``
+    "override") scopes the receipt to THAT card, over whatever the document
+    printed and whether or not the card has charges here. ``match_month``
+    falls back to the other cards' charges only when the picked card offers
+    no candidate at all (``cards_differ``), so a wrong pick never silently
+    removes the one real match."""
     if not cfg.card_scoping:
         return None
+    if receipt.card_scope_source == CARD_SCOPE_PICKED and receipt.card_scope_keys:
+        return set(receipt.card_scope_keys)
     pm_keys = _card_keys(receipt.payment_mode)
     if not pm_keys or not (pm_keys & present_keys):
         return None
@@ -1500,6 +1523,102 @@ def pair_in_scope(
     if scope is not None and not (scope & tx_keys):
         return False
     return True
+
+
+def cards_differ(tx_keys: set[str], receipt: Receipt) -> bool | None:
+    """Whether the card the tool resolved for a receipt (item 137) and the
+    charge's card (``_tx_card_keys``) disagree: True when both name a card
+    and they do not overlap, False when they overlap, None when either side
+    names none (unknown is never evidence either way). Public so the month
+    view flags a held pair by the same test the matcher demotes by."""
+    if not receipt.card_scope_keys or not tx_keys:
+        return None
+    return not (set(receipt.card_scope_keys) & tx_keys)
+
+
+def _cards_differ_note(tx_keys: set[str], receipt: Receipt) -> str:
+    how = {
+        CARD_SCOPE_PICKED: "picked by hand",
+        "hint": "from its payment method",
+        "learned": "remembered from an earlier month",
+    }.get(receipt.card_scope_source, "resolved")
+    return (
+        f"the cards differ: the receipt's card is "
+        f"{'/'.join(sorted(receipt.card_scope_keys))} ({how}), the charge is "
+        f"on {'/'.join(sorted(tx_keys))}"
+    )
+
+
+def scored_pairs(
+    transactions: list[Transaction],
+    receipts: list[Receipt],
+    cfg: MatchingConfig,
+    derived_rates=None,
+) -> list[tuple[Transaction, Receipt, Match]]:
+    """Every (charge, receipt) pair ``match_month`` scores, in its order: the
+    entity and card scope (``pair_in_scope`` over ``receipt_card_scope``),
+    then ``match_one``. Credits must already be partitioned out.
+
+    Item 137: a receipt scoped by a card picked by hand that finds NO
+    candidate on that card is offered the other cards' charges after all,
+    appended last; ``match_month`` demotes each one (``cards_differ``). A
+    pick is the reviewer's word in any contest between cards, but it never
+    silently removes the only real match: live August 2026, LOVABLE 25.00
+    on card 3645 is the bank's line for a receipt picked as 2838.
+
+    Public so ``tools/recon-match-attribution.py`` traces the matcher's
+    own scope instead of a copy of it."""
+    tx_card_keys = {tx.transaction_id: _tx_card_keys(tx) for tx in transactions}
+    present_keys: set[str] = set()
+    for keys in tx_card_keys.values():
+        present_keys |= keys
+    receipt_scope = {
+        r.document_id: scope
+        for r in receipts
+        if (scope := receipt_card_scope(r, present_keys, cfg)) is not None
+    }
+    out: list[tuple[Transaction, Receipt, Match]] = []
+    in_scope: set[str] = set()
+    off_card: dict[str, list[Transaction]] = {}
+    for tx in transactions:
+        for receipt in receipts:
+            doc = receipt.document_id
+            # Entity scope per v2 spec §4.2: a receipt that NAMES another
+            # entity never pairs with this charge. An UNKNOWN entity (the
+            # empty string) is unscoped rather than a mismatch: receipts
+            # mailed or dropped into a month carry no entity until a card
+            # hint or the reviewer assigns one, and the classic path
+            # (`reconcile()`) stamps the config entity on every receipt, so
+            # nothing there changes. Before 2026-09-11 the bare inequality
+            # dropped every entity-less receipt from every pairing, and a
+            # month whose receipts came in by mail reconciled 0 no matter
+            # what the statement said. The card half: a receipt whose
+            # payment mode names a different card never pairs either.
+            if not pair_in_scope(
+                tx, receipt, tx_card_keys[tx.transaction_id],
+                receipt_scope.get(doc),
+            ):
+                if (
+                    receipt.card_scope_source == CARD_SCOPE_PICKED
+                    and doc in receipt_scope
+                    and pair_in_scope(tx, receipt, tx_card_keys[tx.transaction_id], None)
+                ):
+                    off_card.setdefault(doc, []).append(tx)
+                continue
+            scored = match_one(tx, receipt, cfg, derived_rates)
+            if scored is None:
+                continue
+            in_scope.add(doc)
+            out.append((tx, receipt, scored))
+    by_doc = {r.document_id: r for r in receipts}
+    for doc, txs in off_card.items():
+        if doc in in_scope:
+            continue
+        for tx in txs:
+            scored = match_one(tx, by_doc[doc], cfg, derived_rates)
+            if scored is not None:
+                out.append((tx, by_doc[doc], scored))
+    return out
 
 
 def match_month(
@@ -1552,15 +1671,7 @@ def match_month(
     # are the same string; on a multi-card tabular export it is the
     # difference between scoping working and being a no-op.
     tx_card_keys = {tx.transaction_id: _tx_card_keys(tx) for tx in transactions}
-    present_keys: set[str] = set()
-    for keys in tx_card_keys.values():
-        present_keys |= keys
-
-    receipt_scope: dict[str, set[str]] = {}
-    for r in receipts:
-        scope = receipt_card_scope(r, present_keys, cfg)
-        if scope is not None:
-            receipt_scope[r.document_id] = scope
+    rec_by_id = {r.document_id: r for r in receipts}
 
     # Self-derived per-run reference rates (2026-07-23): computed once for
     # the month from the run's own inputs, consulted by match_one wherever
@@ -1569,37 +1680,17 @@ def match_month(
     derived_rates = derive_fx_reference_rates(transactions, receipts, cfg)
 
     cands_by_tx: dict[str, list[_Candidate]] = {}
-    for tx in transactions:
-        for receipt in receipts:
-            # Entity scope per v2 spec §4.2: a receipt that NAMES another
-            # entity never pairs with this charge. An UNKNOWN entity (the
-            # empty string) is unscoped rather than a mismatch: receipts
-            # mailed or dropped into a month carry no entity until a card
-            # hint or the reviewer assigns one, and the classic path
-            # (`reconcile()`) stamps the config entity on every receipt, so
-            # nothing there changes. Before 2026-09-11 the bare inequality
-            # dropped every entity-less receipt from every pairing, and a
-            # month whose receipts came in by mail reconciled 0 no matter
-            # what the statement said. The card half: a receipt whose
-            # payment mode names a different card never pairs either.
-            if not pair_in_scope(
-                tx, receipt, tx_card_keys[tx.transaction_id],
-                receipt_scope.get(receipt.document_id),
-            ):
-                continue
-            scored = match_one(tx, receipt, cfg, derived_rates)
-            if scored is None:
-                continue
-            ref_sig, card_sig, vendor_sig = _signal(tx, receipt, cfg)
-            cands_by_tx.setdefault(tx.transaction_id, []).append(
-                _Candidate(
-                    match=scored,
-                    is_determ=scored.match_type != MatchType.FX_JUDGMENT,
-                    ref_signal=ref_sig,
-                    card_signal=card_sig,
-                    vendor_signal=vendor_sig,
-                )
+    for tx, receipt, scored in scored_pairs(transactions, receipts, cfg, derived_rates):
+        ref_sig, card_sig, vendor_sig = _signal(tx, receipt, cfg)
+        cands_by_tx.setdefault(tx.transaction_id, []).append(
+            _Candidate(
+                match=scored,
+                is_determ=scored.match_type != MatchType.FX_JUDGMENT,
+                ref_signal=ref_sig,
+                card_signal=card_sig,
+                vendor_signal=vendor_sig,
             )
+        )
 
     # Bilateral-uniqueness gate on rate-derived FX evidence (2026-07-23).
     # A clean FX_BASE_AMOUNT / FX_REFERENCE candidate resolves
@@ -1676,6 +1767,46 @@ def match_month(
                 card_signal=c.card_signal,
                 vendor_signal=c.vendor_signal,
             )
+
+    # Item 137: the card the tool resolved for a receipt (a pick, a hint, a
+    # remembered card; `Receipt.card_scope_keys`) takes part in matching the
+    # way a printed card always has. A pair on the same card wins a tie over
+    # an unknown card (`RESOLVED_CARD_SIGNAL`), though not over a card the
+    # receipt printed. A pair on another card is kept, never dropped: it
+    # asks for review, says why, cannot confirm itself (item 76 skips
+    # `requires_review`), and ranks below every clean deterministic
+    # candidate, so a charge on the receipt's own card takes the receipt
+    # first. Applied after the uniqueness gate, which keeps reading the
+    # printed evidence it was calibrated on.
+    if cfg.card_scoping:
+        for tx_id, cands in cands_by_tx.items():
+            tx_keys = tx_card_keys[tx_id]
+            for i, c in enumerate(cands):
+                receipt = rec_by_id[c.match.document_id]
+                differ = cards_differ(tx_keys, receipt)
+                if differ is None:
+                    continue
+                if not differ:
+                    cands[i] = replace(
+                        c,
+                        card_signal=max(c.card_signal, RESOLVED_CARD_SIGNAL),
+                        match=replace(c.match, card_score=1.0),
+                    )
+                    continue
+                cands[i] = replace(
+                    c,
+                    card_signal=0.0,
+                    match=replace(
+                        c.match,
+                        confidence=min(c.match.confidence, CARDS_DIFFER_CONFIDENCE),
+                        requires_review=True,
+                        card_score=0.0,
+                        reason=(
+                            c.match.reason.rstrip(".")
+                            + f". Review: {_cards_differ_note(tx_keys, receipt)}."
+                        ),
+                    ),
+                )
 
     # Pass 1: detect genuinely ambiguous transactions (top deterministic
     # candidates tie even after the 3.9 signal). These are excluded from
