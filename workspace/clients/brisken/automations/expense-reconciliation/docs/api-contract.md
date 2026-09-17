@@ -176,6 +176,7 @@ name answers the same one:
 | `n_receipts_in_report` | how many expenses have a receipt PAGE in the built report (item 68). Not "how many have a file": a file that cannot be rendered is a file, and the caption page says so while the Receipt column used to say "attached". ABSENT until every row's verdict is known, so the count is never quietly short |
 | `n_duplicate_groups_open` | how many duplicate groups NOBODY has decided (item 74), the only ones that belong in a to-do list. The tool decides every group a rung applies to, so this is 0 unless one escaped the whole ladder. `n_duplicate_groups` keeps counting every group, decided or not |
 | `n_self_confirmed` | run payload only: how many rows carry a verdict the TOOL wrote under the self-confirmation rule (item 76). Falls as a reviewer takes one back; `n_undecided` keeps its question (pending pairings nobody has ratified) |
+| `n_confirm_matched` | run payload only: how many rows "Confirm all matched" (`POST .../decisions/confirm-matched`) would confirm right now, under the owner's pairing rule (item 101). A subset of `n_undecided`; 0 disables the button |
 | `n_needs_company_or_person` | expense payload: how many rows miss their company or their person (item 84, owner ruling 2026-09-16: the Expenses view shows MISSING ENTITY and NEEDS PERSON as one box, because the fix is one action, pick the card or mark the receipt private). `n_needs_entity` and `n_needs_person` keep their questions |
 | `n_copies_set_aside` | how many decided duplicate copies are set aside. Run payload: instead of listed as unmatched (items 83 + 75); `n_unmatched_rec` keeps its question (receipts waiting for a charge), and a set-aside copy was never one. Expense payload and months list (item 94): the rows left out of `n_expenses` and `totals_by_ccy`, the same set. `n_duplicate_copies` keeps counting every redundant copy, matched or not |
 | `n_charges_need_receipt` | run payload only: how many purchase charges hold no receipt and no verdict that closes them (item 99). Not `n_unmatched_tx`, which also counts booked charges and fee lines. A gray-filled charge is booked through recurring and does not count (owner ruling 2026-09-17) |
@@ -2578,6 +2579,56 @@ Pinned by `tests/test_view_contract.py`
 (`test_every_run_row_carries_a_turn_and_a_verdict_names_its_author`),
 route-level in `tests/test_self_confirm.py`. SPA half:
 `docs/lovable-turn-prompt.md`.
+
+## "Confirm all matched" follows the same pairing rule: `confirm-matched` + `summary.n_confirm_matched` (item 101, 2026-09-17)
+
+`POST /api/runs/{id}/decisions/confirm-matched` used to confirm every pending
+row in the matcher's RAW matched list, with no rule. Read live on 2026-09-17
+(read-only), July would have confirmed 27 rows, all booked in the workbook
+(`turn: "posted"`), and August all 7 open pairs, including BASE44 50.00 at
+`vendor_pct` 40, two `fx_reference` pairs and one `probable` pair.
+
+It now confirms only the rows passing the PAIRING half of the self-confirm
+rule above (`service.confirmable_pair`): pending, `turn: "decide"` (so never
+booked), `effective_bucket: "reconciled"`, exactly ONE candidate, chosen,
+`match_type: "exact"`, `requires_review: false`, `vendor_pct` 75 or more, not
+`from_batch` / `held_by` / `rejected`. The category is NOT part of it: a
+person pressed the button, confirming a pairing is not a category verdict,
+and a `check` or `pick` category keeps asking its own question. Each pair is
+also intersected with the matcher's pending auto-pick, so every write is a
+real `outcome.matches` pairing on the receipt the row shows. The writes are
+ordinary reviewer confirms (`decided_by: "reviewer"`, no `decided_rule`),
+reversible one row at a time with the ordinary reset.
+
+| Field | Shape | When |
+|---|---|---|
+| `summary.n_confirm_matched` | int | run payload: the rows the button confirms right now, from the same function the route writes with (read off the payload `GET /api/runs/{id}` serves) |
+
+Route result:
+
+```json
+{"ok": true, "confirmed": 2, "remaining": 0, "skipped_rule": 3, "summary": {...}}
+```
+
+- `confirmed`: rows written. A pair whose receipt another month settled
+  meanwhile (R4) is skipped and is in no count.
+- `remaining`: eligible rows past the per-call cap of 1,000, like
+  `confirm-ready`.
+- `skipped_rule`: rows that were the reviewer's turn (`turn: "decide"`,
+  review-bucket rows included) and that the rule left for a person.
+- `summary`: the run summary after the writes.
+
+The other two bulk confirms and a booked row: `POST .../decisions/confirm-ready`
+already never confirmed one (a booked row's `review.state` is `none`, so it is
+never `ready`); `POST .../decisions/bulk` with `"status": "confirmed"` did, and
+now skips a charge with `entry_status: "posted"` like a charge with no
+candidate (it lands in `skipped`). Rejecting through `bulk` ("Reject N shown")
+is unchanged.
+
+Pinned by `tests/test_view_contract.py`
+(`test_confirm_matched_count_is_an_int_inside_the_undecided_set`), route-level
+in `tests/test_confirm_matched_rule.py`. SPA half:
+`docs/lovable-bulk-confirm-dialog-prompt.md`.
 
 ## The unmatched lists say what they hold: `copies_set_aside` + `reason_code` (items 83 + 75, 2026-09-16)
 

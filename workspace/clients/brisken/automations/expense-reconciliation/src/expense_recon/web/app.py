@@ -167,6 +167,7 @@ from .service import (  # item 88
     commit_month_memory,
 )
 from .service import confirm_expense_category  # note #62
+from .service import TURN_DECIDE, confirm_matched_pairs  # item 101
 from .month_readiness import (  # items 99 + 100
     PUBLISH_MONTH_NOT_COMPLETE,
     PUBLISH_NO_STATEMENT,
@@ -2608,16 +2609,30 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
     @app.post("/api/runs/{run_id}/decisions/confirm-matched")
     def post_confirm_matched(run_id: str):
-        # PR A — one click confirms every matched-bucket transaction with
-        # its auto-picked receipt, so only review + unmatched need hand
-        # work. Reuses the per-row decision write; never stomps an
-        # explicit confirm/reject.
+        # PR A — one click confirms matched pairs with their auto-picked
+        # receipt. Item 101 (2026-09-17): only the pairs the owner's rule
+        # lets through without a closer look (`confirmable_pair`: exact,
+        # one candidate, vendor 75+, not borrowed / held / rejected, the
+        # reviewer's turn), never a booked row, whatever the category says.
+        # The raw matched list confirmed 27 booked July rows and August's
+        # vendor-40 BASE44 pair. Read off the payload GET serves, so
+        # `summary.n_confirm_matched` is exactly what this writes. Ordinary
+        # reviewer confirms; never stomps an explicit verdict.
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             decisions = store.get_decisions(run_id)
-            pairs = matched_autopick_decisions(run, decisions)
+            view = _workbench_view(store, run)
+            autopick = dict(matched_autopick_decisions(run, decisions))
+            pairs = confirm_matched_pairs(view["rows"], autopick)
+            # The reviewer's-turn rows the rule left for a person.
+            n_decide = sum(1 for r in view["rows"] if r.get("turn") == TURN_DECIDE)
+            skipped_rule = max(n_decide - len(pairs), 0)
+            remaining = 0
+            if len(pairs) > _BULK_DECISION_LIMIT:
+                remaining = len(pairs) - _BULK_DECISION_LIMIT
+                pairs = pairs[:_BULK_DECISION_LIMIT]
             confirmed = 0
             for tx_id, doc_id in pairs:
                 # R4: a pair whose receipt another run settled meanwhile is
@@ -2631,12 +2646,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     run_id, tx_id, STATUS_CONFIRMED, doc_id, _now_iso()
                 )
                 confirmed += 1
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-        view = build_view(run, decisions, overrides)
-        return JSONResponse(
-            {"ok": True, "confirmed": confirmed, "summary": view["summary"]}
-        )
+            view = _workbench_view(store, run)
+        return JSONResponse(jsonable_encoder({
+            "ok": True,
+            "confirmed": confirmed,
+            "remaining": remaining,
+            "skipped_rule": skipped_rule,
+            "summary": view["summary"],
+        }))
 
     @app.post("/api/runs/{run_id}/decisions/confirm-ready")
     def post_confirm_ready(run_id: str):
@@ -2690,7 +2707,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         be cleared one row at a time. The client sends the ids it is acting
         on, so the scope is explicit and auditable rather than the server
         guessing "everything that looks like this". Confirming uses each
-        charge's own top candidate and skips any charge without one.
+        charge's own top candidate and skips any charge without one, and
+        (item 101) any charge booked in the workbook, which never offers
+        Confirm. Rejecting is unchanged.
         """
         body = await request.json()
         tx_ids = body.get("transaction_ids")

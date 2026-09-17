@@ -1439,8 +1439,19 @@ def matched_autopick_decisions(
     (status still pending). An explicit prior confirm/reject is never
     stomped. The picked document is the matcher's own assignment, so the
     batch reproduces what confirming each matched row by hand would do.
+
+    Item 101: this is the raw set, and no longer what the button confirms.
+    `confirm_matched_pairs` narrows it to the owner's pairing rule.
     """
     _, _, outcome, _ = snapshot_from_dict(run.snapshot)
+    return autopick_pairs(outcome, decisions)
+
+
+def autopick_pairs(
+    outcome: MatchOutcome, decisions: dict[str, Decision]
+) -> list[tuple[str, str]]:
+    """`matched_autopick_decisions` over an outcome the caller already read
+    (`build_view` has one), so the count and the route read one rule."""
     matched_doc_by_tx = {m.transaction_id: m.document_id for m in outcome.matches}
     out: list[tuple[str, str]] = []
     for tx_id, doc_id in matched_doc_by_tx.items():
@@ -1468,8 +1479,13 @@ def bulk_decisions(
 
     Added 2026-07-22: the review bucket was 34 rows on the real April run
     with no way to clear them except one at a time.
+
+    Item 101: a charge booked in the workbook (yellow, `turn: posted`) is
+    never confirmed either; a booked row never offers Confirm, so a bulk
+    click must not confirm it. Rejecting is unchanged.
     """
-    _, _, outcome, _ = snapshot_from_dict(run.snapshot)
+    transactions, _, outcome, _ = snapshot_from_dict(run.snapshot)
+    booked = {t.transaction_id for t in transactions if t.entry_status == "posted"}
     top_doc: dict[str, str] = {}
     for bucket in (outcome.matches, outcome.judgment_required, outcome.ambiguous):
         for m in bucket:
@@ -1483,6 +1499,8 @@ def bulk_decisions(
         if decision is not None and decision.status != STATUS_PENDING:
             continue
         if status == STATUS_CONFIRMED:
+            if tx_id in booked:
+                continue  # already booked: nothing to confirm (item 101)
             doc_id = top_doc.get(tx_id)
             if not doc_id:
                 continue  # nothing to confirm against; never fabricate a pair
@@ -3774,6 +3792,11 @@ def build_view(
         "n_self_confirmed": sum(
             1 for r in rows if r.get("decided_by") == DECIDED_BY_TOOL
         ),
+        # Item 101: how many rows "Confirm all matched" confirms right now,
+        # from the function the route writes with.
+        "n_confirm_matched": len(confirm_matched_pairs(
+            rows, dict(autopick_pairs(outcome, decisions))
+        )),
     }
 
     return {
@@ -12391,36 +12414,77 @@ def decided_by_view(decision: "Decision | None") -> dict:
     return {"decided_by": DECIDED_BY_REVIEWER}
 
 
+def confirmable_pair(row: dict) -> bool:
+    """The owner's PAIRING rule on one `build_view` row (item 76 rulings
+    2026-09-16), shared by the tool's self-confirmation and "Confirm all
+    matched" (item 101).
+
+    A pending row that is the reviewer's turn (`decide`, so never booked) in
+    the `reconciled` bucket, with ONE candidate, that candidate chosen,
+    `exact`, not flagged for review, and the vendor agreeing at
+    `SELF_CONFIRM_VENDOR_FLOOR`. A candidate borrowed from another batch,
+    held by another charge, or turned down never qualifies: each is a
+    question the rule was not ruled on.
+
+    Says nothing about the category: confirming a pairing is not a category
+    verdict, so the category condition lives in `self_confirm_pairs`."""
+    if row.get("status") != STATUS_PENDING:
+        return False
+    if row.get("turn") != TURN_DECIDE or row.get("effective_bucket") != "reconciled":
+        return False
+    cands = row.get("candidates") or []
+    if len(cands) != 1:
+        return False
+    c = cands[0]
+    if not c.get("is_chosen") or c.get("match_type") != MatchType.EXACT.value:
+        return False
+    if c.get("requires_review"):
+        return False
+    if (c.get("vendor_pct") or 0) < SELF_CONFIRM_VENDOR_FLOOR:
+        return False
+    if c.get("from_batch") or c.get("held_by") or c.get("rejected"):
+        return False
+    return True
+
+
 def self_confirm_pairs(view: dict) -> dict[str, str]:
     """`{transaction_id: document_id}` for the rows that confirm themselves.
 
     Read off a `build_view` payload so the test is the one the page shows:
-    a pending, unbooked, reconciled row whose category is `ready`, with ONE
-    candidate, that candidate chosen, `exact`, not flagged for review, and
-    the vendor agreeing at `SELF_CONFIRM_VENDOR_FLOOR`. A candidate borrowed
-    from another batch, held by another charge, or turned down never
-    qualifies: each is a question the rule was not ruled on."""
+    the pairing rule (`confirmable_pair`) AND a category the tool may post
+    (`review.state == "ready"`). The tool confirms without anyone looking,
+    so it also needs the category settled."""
     out: dict[str, str] = {}
     for r in view.get("rows", []):
-        if r.get("status") != STATUS_PENDING:
-            continue
-        if r.get("turn") != TURN_DECIDE or r.get("effective_bucket") != "reconciled":
+        if not confirmable_pair(r):
             continue
         if (r.get("review") or {}).get("state") != "ready":
             continue
-        cands = r.get("candidates") or []
-        if len(cands) != 1:
+        out[r["transaction_id"]] = r["candidates"][0]["document_id"]
+    return out
+
+
+def confirm_matched_pairs(
+    rows: list[dict], autopick: dict[str, str]
+) -> list[tuple[str, str]]:
+    """The (transaction_id, document_id) writes "Confirm all matched" makes
+    (item 101), in row order.
+
+    Rows passing the pairing rule (`confirmable_pair`), whatever their
+    category state: a person pressed the button, and the category keeps its
+    own question. Intersected with the matcher's pending auto-pick
+    (`autopick_pairs`) so every write is a real `outcome.matches` pairing on
+    the receipt the row shows. `build_view` counts the same list as
+    `summary.n_confirm_matched`, so the button's number is what it does."""
+    out: list[tuple[str, str]] = []
+    for r in rows:
+        if not confirmable_pair(r):
             continue
-        c = cands[0]
-        if not c.get("is_chosen") or c.get("match_type") != MatchType.EXACT.value:
+        tx_id = r["transaction_id"]
+        doc_id = r["candidates"][0]["document_id"]
+        if autopick.get(tx_id) != doc_id:
             continue
-        if c.get("requires_review"):
-            continue
-        if (c.get("vendor_pct") or 0) < SELF_CONFIRM_VENDOR_FLOOR:
-            continue
-        if c.get("from_batch") or c.get("held_by") or c.get("rejected"):
-            continue
-        out[r["transaction_id"]] = c["document_id"]
+        out.append((tx_id, doc_id))
     return out
 
 
