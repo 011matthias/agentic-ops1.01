@@ -5938,9 +5938,6 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
                 ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
             ),
         )
-        n_categorized, n_uncategorized = categorized_counts(
-            apply_overrides(receipts, overrides)
-        )
         # Item 94: the list screen's expense count is the batch page's, so
         # it leaves out the same decided copies (the grid's card inheritance
         # first, exactly as the batch page decides them).
@@ -5952,6 +5949,12 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
             ),
             resolutions,
             charge_decisions=store.get_decisions(run.run_id),
+        )
+        # A copy is in no box on the batch page (`expense_boxes`), so the
+        # categorized pair counts the same expenses `n_expenses` does.
+        counted = [r for r in receipts if r.document_id not in copies]
+        n_categorized, n_uncategorized = categorized_counts(
+            apply_overrides(counted, overrides)
         )
     except (KeyError, TypeError, ValueError):
         # A malformed snapshot hides ONE batch's counts (it keeps the stored
@@ -6489,6 +6492,9 @@ def build_expense_view(
                 referenced=receipt.has_receipt_image,
             ),
             render_failed=e.get("receipt_render") == "failed",
+            # Item 94: a decided copy is in no box, so every box count
+            # below leaves it out the way `n_expenses` does.
+            copy=e["document_id"] in grid_copies,
         )
 
     def n_box(box: str) -> int:
@@ -6501,7 +6507,8 @@ def build_expense_view(
         "mode": MODE_EXPENSE_GENERATION,
         # Item 94: the expenses the month counts, decided copies left out.
         # `n_receipts` keeps counting every document on screen, so
-        # n_receipts == n_expenses + n_copies_set_aside.
+        # n_receipts == n_expenses + n_copies_set_aside. A copy is in no box
+        # either, so n_categorized + n_uncategorized == n_expenses.
         "n_expenses": len(expenses) - len(grid_copies),
         "n_receipts": len(expenses),
         # Item 94: the copies the count and `totals_by_ccy` leave out, and
@@ -12111,13 +12118,27 @@ def expense_boxes(
     needs_cost_center: bool,
     image_missing: bool,
     render_failed: bool,
+    copy: bool = False,
 ) -> list[str]:
     """The boxes one expense row belongs to, in `EXPENSE_BOXES` order.
 
     `res` is the row's card resolution (`resolve_batch_row_cards`). The
     entity rule is `n_needs_entity`'s (a confirmed private row needs none),
     the person rule `n_needs_person`'s; `needs_company_or_person` is either
-    (owner ruling 2026-09-16: one box, because the fix is one action)."""
+    (owner ruling 2026-09-16: one box, because the fix is one action).
+
+    `copy` (item 94, owner ruling 2026-09-17): a decided copy
+    (`decided_copies`, the row's `counts_in_total: false`) is in NO box. The
+    boxes count the expenses the month counts, so a copy that leaves
+    `n_expenses` leaves every box with it and `categorized` + `uncategorized`
+    still partition exactly `n_expenses`. The to-do boxes go too: nothing
+    done to a copy's company, person, cost center, private flag or file
+    changes the month, because a copy writes no CSV row, no listing row, no
+    reimbursement and no cost-center bucket. The one question a copy still
+    asks, whether it really is one, has its own control ("Not a copy"), and
+    that ruling brings the row back into every box it qualifies for."""
+    if copy:
+        return []
     needs_entity = not res.get("entity") and not res.get("private")
     needs_person = not res.get("person")
     member = {
