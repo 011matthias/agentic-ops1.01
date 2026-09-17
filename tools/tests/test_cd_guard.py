@@ -7,6 +7,10 @@ block/allow boundary so a regex tweak can't silently reopen the hole.
 A BLOCK is exit code 2 with a JSON {"decision": "block"} on stdout.
 """
 import json
+import shutil
+import subprocess
+
+import pytest
 
 from hooklib import run_hook
 
@@ -191,3 +195,157 @@ def test_ps_block_reason_recommends_push_location():
     p = _run_ps("Set-Location platform")
     reason = json.loads(p.stdout.strip().splitlines()[-1])["reason"]
     assert "Push-Location" in reason
+
+
+# --- 2026-09-17: auto-mode rewrite -------------------------------------------
+# Under permission_mode "auto" a Bash cd chain is rewritten into a subshell via
+# updatedInput. Never with a permissionDecision: a hook "allow" skips the
+# approval the command would need (live-probed 2026-09-17, memory
+# reference_pretooluse_updatedinput_semantics). Other modes keep the block; in
+# "default" a `( ... )` loses prefix-rule matching and would prompt instead.
+
+NON_AUTO_MODES = ["default", "acceptEdits", "plan", "dontAsk", "bypassPermissions", None]
+
+
+def _run_mode(cmd, mode, tool="Bash", **extra):
+    payload = {"tool_name": tool, "tool_input": {"command": cmd, **extra}}
+    if mode is not None:
+        payload["permission_mode"] = mode
+    return run_hook("cd-guard.py", payload)
+
+
+def _output(p):
+    lines = p.stdout.strip().splitlines()
+    return json.loads(lines[-1]) if lines else {}
+
+
+def _updated_input(p):
+    return (_output(p).get("hookSpecificOutput") or {}).get("updatedInput")
+
+
+def test_auto_rewrites_cd_chain_into_subshell():
+    p = _run_mode("cd platform && npm run build", "auto")
+    assert p.returncode == 0
+    assert _updated_input(p)["command"] == "( cd platform && npm run build )"
+
+
+def test_auto_rewrite_carries_full_tool_input():
+    p = _run_mode("cd platform && npm test", "auto",
+                  description="run tests", timeout=60000, run_in_background=True)
+    assert _updated_input(p) == {
+        "command": "( cd platform && npm test )",
+        "description": "run tests",
+        "timeout": 60000,
+        "run_in_background": True,
+    }
+
+
+def test_auto_rewrite_tells_agent_the_cd_did_not_persist():
+    p = _run_mode('cd "$WT" && git status', "auto")
+    note = _output(p)["hookSpecificOutput"]["additionalContext"]
+    assert "does NOT persist" in note and 'cd "$WT"' in note
+
+
+def test_auto_rewrite_emits_no_permission_decision():
+    out = _output(_run_mode("cd platform; gh pr create", "auto"))
+    assert set(out) == {"hookSpecificOutput"}
+    assert "permissionDecision" not in out["hookSpecificOutput"]
+    assert "updatedInput" in out["hookSpecificOutput"]
+
+
+_CORPUS_BASH = [
+    "cd platform && npm run build",
+    "cd platform; gh pr create",
+    'cd "$WT"\ngit commit -m x\ngit push',
+    "cd platform && npm test # smoke",
+    "cd platform && cat > x.txt <<'EOF'\nbody\nEOF",
+    "cd platform | cat",
+    "cd platform",
+    "cd platform 2>/dev/null",
+    "( cd platform && ls )",
+    "git -C platform status",
+    "cd ~/Repo; ls",
+]
+_CORPUS_PS = [
+    "Set-Location platform; npm run build",
+    "cd platform; npm run build",
+    "Push-Location platform; npm run build; Pop-Location",
+]
+
+
+@pytest.mark.parametrize("mode", NON_AUTO_MODES + ["auto"])
+@pytest.mark.parametrize("tool,cmd", [("Bash", c) for c in _CORPUS_BASH]
+                         + [("PowerShell", c) for c in _CORPUS_PS])
+def test_never_permission_decision_alongside_updated_input(tool, cmd, mode):
+    p = _run_mode(cmd, mode, tool=tool)
+    out = _output(p)
+    spec = out.get("hookSpecificOutput") or {}
+    assert "permissionDecision" not in spec
+    if "updatedInput" in spec:
+        assert tool == "Bash" and mode == "auto"
+        assert p.returncode == 0 and "decision" not in out
+
+
+@pytest.mark.parametrize("mode", NON_AUTO_MODES)
+def test_non_auto_modes_keep_the_block(mode):
+    assert _is_block(_run_mode("cd platform && npm run build", mode))
+
+
+@pytest.mark.parametrize("cmd", [
+    "cd platform",
+    "cd platform 2>/dev/null",
+    "cd platform;",
+    "cd platform &",
+    "ls\ncd platform",
+])
+def test_auto_blocks_a_cd_nothing_in_the_call_uses(cmd):
+    # Wrapped, these would be silent no-ops and the next call would run in a
+    # directory the agent did not expect.
+    assert _is_block(_run_mode(cmd, "auto"))
+
+
+def test_auto_block_names_the_stranded_cd():
+    p = _run_mode("cd a && make\ncd b", "auto")
+    assert _is_block(p)
+    assert "`cd b && ...`" in _output(p)["reason"]
+
+
+def test_auto_keeps_powershell_block():
+    # PS parentheses do not scope Set-Location, so there is nothing to wrap.
+    assert _is_block(_run_mode("Set-Location platform; npm run build", "auto", tool="PowerShell"))
+
+
+def test_auto_existing_subshell_passes_silently():
+    p = _run_mode("( cd platform && ls )", "auto")
+    assert p.returncode == 0 and not p.stdout.strip()
+
+
+def test_auto_comment_puts_parens_on_own_lines():
+    p = _run_mode("cd platform && npm test # smoke", "auto")
+    assert _updated_input(p)["command"] == "(\ncd platform && npm test # smoke\n)"
+
+
+def _real_bash():
+    bash = shutil.which("bash")
+    # System32\bash.exe is the WSL launcher, not a shell for this cwd.
+    if not bash or "system32" in bash.lower():
+        pytest.skip("no POSIX bash on PATH")
+    return bash
+
+
+@pytest.mark.parametrize("cmd,content", [
+    ("cd sub && printf hi > inner.txt", "hi"),
+    ("cd sub && printf hi > inner.txt # note", "hi"),
+    ("cd sub && cat > inner.txt <<'EOF'\nhello\nEOF", "hello\n"),
+])
+def test_rewritten_command_runs_in_bash_and_the_cd_does_not_leak(tmp_path, cmd, content):
+    bash = _real_bash()
+    (tmp_path / "sub").mkdir()
+    rewritten = _updated_input(_run_mode(cmd, "auto"))["command"]
+    baseline = subprocess.run([bash, "-c", "pwd"], cwd=tmp_path,
+                              capture_output=True, text=True).stdout.strip()
+    r = subprocess.run([bash, "-c", rewritten + "\npwd"], cwd=tmp_path,
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip().splitlines()[-1] == baseline
+    assert (tmp_path / "sub" / "inner.txt").read_text() == content
