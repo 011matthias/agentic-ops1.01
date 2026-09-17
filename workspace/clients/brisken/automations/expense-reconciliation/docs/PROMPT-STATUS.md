@@ -209,6 +209,8 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
+| `lovable-ready-publish-gate-prompt.md` (items 99, 100; PR #997, Fly v152) | `month_complete`, `n_charges_need_receipt`, `n_receipts_need_charge`, `n_charges_category_guessed`, `published_override` in `chunk-runs._runId`; `sum.needReceipt.many`, `pub.override.confirm`, `pub.refused.month_not_complete` in `chunk-i18n`; `/classic` redirects to `/months` | Written 2026-09-17, not pasted. Backend live on v152: July reads ready_to_post true / month_complete false (24 need a receipt, 11 need a charge); August 8 undecided / 100 / 10 / 1 guessed |
+| `lovable-copies-out-of-totals-prompt.md` (item 94; PR #998, Fly v152) | `n_copies_set_aside`, `copies_set_aside_by_ccy`, `counts_in_total` in `chunk-expenses._batchId`; `copies_set_aside` in the cost-centers chunk; `expx.copies.totalsLine.many` in `chunk-i18n` | Written 2026-09-17, not pasted. Backend live on v152 and driven: August tiles read EXPENSES 20, TOTALS EUR 668.00 / USD 2,033.86 (was 2,297.45) with no explanation until pasted; CATEGORIZED 23 + NEEDS CATEGORY 2 still count the 5 copies |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
