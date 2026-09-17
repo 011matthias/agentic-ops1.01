@@ -2145,6 +2145,62 @@ zoho_account?}`:
   and a receipt with one categorized and one unread line printed as one
   uncategorized row. Pinned route-level in `tests/test_mixed_entity_export.py`.
 
+## A category on a CHARGE, with no receipt: `PUT .../charges/{tx}/category` (item 109)
+
+`PUT /api/runs/{id}/charges/{transaction_id}/category`
+`{category, zoho_account?}`. The sibling of the receipt category routes, for
+the rows that have no receipt to edit: 71 of July's 112 charges and 98 of
+August's 111 carried a category the model guessed from the bank's description,
+and every category route needed a receipt, so the guess could not be corrected
+and went into the reconciled CSV as it was.
+
+- `category` is one of the eight (`400` otherwise, with the list); `""` or
+  `null` clears the pick and the tool's guess shows again.
+- `404` "unknown charge" when the run holds no such transaction; `400` when a
+  receipt already settles it ("set the category on the expense, not on the
+  charge"), whose category lives on the receipt's own lines.
+- Account rule: the receipt rule unchanged (an explicit `zoho_account` is
+  stored as sent; without one the account survives only while the category
+  does not change).
+- Stored in the same `category_overrides` table the receipt edits use, under
+  the charge's pseudo-receipt id (`charge:{transaction_id}`, line 0), so it
+  outlives a re-match, which rewrites the whole snapshot and never touches
+  that table.
+- Reply: `{ok: true, summary}`.
+
+What carries it afterwards:
+
+- `GET /api/runs/{id}` -> `rows[].charge_category` reads
+  `{category, zoho_account, source: "EDITED", provenance, is_learned: false,
+  is_edited: true}`, and `rows[].posting_category` the same, the way a
+  receipt's edited line reads `EDITED`. `is_edited` is `true` or **absent**,
+  never `false`.
+- `rows[].review` on that row becomes `{state: "none"}`: an answer is not a
+  question, so it leaves `summary.n_charges_category_guessed`, which keeps its
+  meaning (a receiptless charge whose category is still the tool's GUESS).
+  A guessed row keeps `reason_code: "receiptless_suggested"`, whose English
+  reason now says the tool guessed the category from the bank's description
+  and that the row can be picked on.
+- `GET /runs/{id}/reconciled.csv` -> `Charge Category`,
+  `Charge posting account`, `Charge Category Source: EDITED`;
+  `GET /runs/{id}/report.xlsx`, the statement writeback, and the
+  reconciliation PDF's posts-to column the same. A charge a receipt settles
+  keeps its blank charge columns: an override for it is ignored.
+- `GET /runs/{id}/zoho.csv`: behind the existing opt-in
+  `zoho.export_receiptless_learned`, a reviewer's category posts where a
+  LEARNED one does. A guess still never posts.
+- At sign-off (`POST /api/runs/{id}/publish`, and the Save-corrections
+  button) the pick is learned under the bank's NORMALIZED description, the
+  same normalization the charge categorizer consults, so the next month's
+  same subscription arrives `source: "LEARNED"`. Only her picks teach: a
+  charge whose category came from the model writes no override and teaches
+  nothing, and two charges of one description given two categories are
+  skipped and counted in `skipped_mixed_category`, the conflict rule
+  categories already follow.
+
+Pinned route-level in `tests/test_charge_category_item_109.py`; renders in
+`docs/lovable-charge-category-prompt.md`.
+
 ## A needs-review row's proposed category: `posting_category_proposed` (item 70)
 
 `GET /api/runs/{id}` -> `rows[].posting_category_proposed`, `true` or
