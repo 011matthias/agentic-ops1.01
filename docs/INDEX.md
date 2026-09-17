@@ -317,6 +317,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | ECC Port Batch 1 | system-infra | [→](docs/2026-09-17%20-%20ECC%20Port%20Batch%201/Checkpoint.md) |
 | 2026-09-17 | ECC Audit and Port Prompts | system-infra | [→](docs/2026-09-17%20-%20ECC%20Audit%20and%20Port%20Prompts/Checkpoint.md) |
 | 2026-09-16 | Vinted Catalogue Endpoint Move, Batch 2 Published, Three Gate Fixes | system-infra | [→](docs/2026-09-16%20-%20Vinted%20Catalogue%20Endpoint%20Move%2C%20Batch%202%20Published%2C%20Three%20Gate%20Fixes/Checkpoint.md) |
 | 2026-09-09 | KIT Studienstart Anmeldungen | misc | [→](docs/2026-09-09%20-%20KIT%20Studienstart%20Anmeldungen/Checkpoint.md) |
