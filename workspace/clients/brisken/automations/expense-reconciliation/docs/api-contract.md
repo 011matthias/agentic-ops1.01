@@ -1322,7 +1322,7 @@ PARALLEL (rule 1).
 | Field | Type | Meaning |
 |---|---|---|
 | `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17); a bank-transfer tender and a receipt settled outside the card never raise it (residual R3, see "A wire is not a card") |
-| `expenses[].can_mark_private` | boolean | whether the private-card option applies to the row (2026-09-17): true when no defined company card paid it (no card and not a two-card contest, or a card only remembered from an earlier month) and on every confirmed private row. False = a company card paid; the write routes refuse to mark it private. Absent on older builds: treat as `card == null \|\| private` |
+| `expenses[].can_mark_private` | boolean | whether the private-card option applies to the row (2026-09-17): true when no defined company card paid it (no card and not a two-card contest, or a card only remembered from an earlier month) and on every confirmed private row. False when a company card paid, and (item 144) when the reviewer settled the row outside the card system, where a private card is as untrue as a company one; the write routes refuse to mark either private. Absent on older builds: treat as `card == null \|\| private` |
 | `expenses[].private` | boolean | the operator confirmed it: a reimbursement row |
 | `expenses[].reimburse_to` | string | who gets reimbursed; `""` unless confirmed |
 | `expenses[].reimburse_to_prefill` | string | the `submitted_by` person, offered ONLY on suggested/confirmed private rows as a pre-fill for the confirm dialog. The ONE sanctioned use of the sender claim — it never fills `person` and must never generalize into sender-based attribution |
@@ -1344,14 +1344,27 @@ answered: a payment method that reads as a bank transfer and names no card
 (`service.bank_transfer_tender`, the settled-outside chip's own
 `bank_transfer` rule minus the Brazilian POS word TEF, which IS a card
 payment on a cupom fiscal), and a receipt the reviewer marked settled outside
-the card. `can_mark_private` does not move (the reviewer can still confirm
-she paid it herself), and neither does the row's `needs_entity` /
-`needs_person` / `needs_company_or_person` question: it still reads `check` /
-`needs_entity`. Live, one row moved: July's restored Tricarico invoice (BRL
+the card. Live, one row moved: July's restored Tricarico invoice (BRL
 27,203.34, "Payment Method: Wire Transfer", settled outside by bank
-transfer), `summary.n_suggested_private` 8 to 7. Whether a bank-paid company
-invoice should still ask for a card HOLDER is an open question for the owner.
-Pinned route-level in `tests/test_private_suggestion_not_a_card_r3.py`.
+transfer), `summary.n_suggested_private` 8 to 7.
+
+**Superseded in part by item 144 (same day; see "A row settled outside the
+card system" at the end of this document).** This section originally said
+that `can_mark_private` does not move and that the row's `needs_entity` /
+`needs_person` / `needs_company_or_person` question does not either, and
+closed on the open question of what a bank-paid company invoice should be
+asked. The owner answered it the same day, so those sentences are now true
+of the printed TENDER only:
+
+* a bank-transfer tender with no disposition still moves nothing but
+  `suggested_private`, exactly as described above;
+* a receipt the REVIEWER marked settled outside the card also loses
+  `can_mark_private` and the `needs_person` box, and reads its own review
+  reason `needs_entity_settled_outside`. `needs_entity` stays.
+
+Pinned route-level in `tests/test_private_suggestion_not_a_card_r3.py`
+(the tender half) and `tests/test_bank_transfer_exit_item_144.py` (the
+disposition half).
 
 **Company card OR private card, never both (added 2026-09-17).** Owner:
 expenses on cards that are not defined in Settings need "the option of
@@ -4492,6 +4505,69 @@ each fail at the site, with its line number. Route tests cover one refusal of
 each family end to end. So a NEW refusal added next month cannot reach
 Criss's screen in English by omission.
 
+## A row settled outside the card system (item 144, 2026-09-17)
+
+Owner ruling 2026-09-17: a company invoice paid by wire needs an exit that
+is not a lie. July's Tricarico invoice (BRL 27,203.34, "Payment Method: Wire
+Transfer", settled outside by bank transfer) sat in `needs_entity`,
+`needs_person` and `needs_company_or_person`, and both exits the screen
+offered stated something untrue. Picking a company card says a card paid it.
+Confirming "paid with a private card" says the reviewer paid it out of her
+own pocket. A wire is neither, and person resolution is card-only by the
+item-40 ruling, so the row could not leave `needs_person` by any sanctioned
+action.
+
+The trigger is the reviewer's OWN disposition, never the printed tender: a
+row is settled off the card system when `expenses[].settled_outside` is
+present and carries a `how` (`service.settled_off_card`, the one predicate
+the card pass, the review sentence and the boxes all read). A printed
+"Wire Transfer" with no disposition is the document's claim about itself and
+still changes nothing but `suggested_private`.
+
+On such a row these move, and nothing else does:
+
+| Field | On a settled-outside row | Otherwise |
+|---|---|---|
+| `expenses[].boxes[]` | no `needs_person`; `needs_company_or_person` follows from `needs_entity` alone | unchanged |
+| `expenses[].can_mark_private` | `false`, so the private-card option is not offered | unchanged |
+| `expenses[].review.reason_code` | `needs_entity_settled_outside` while the row has no entity | `needs_entity` |
+| `summary.n_needs_person` · `card_review.n_needs_person` | both one lower; they read one fact, so they cannot disagree about a row | unchanged |
+
+`summary.n_needs_person` and `summary.n_needs_company_or_person` are counts
+over the boxes, so they follow. `card_review.n_needs_person` counts the same
+question off the card resolution, and it takes the same exemption, so the
+two counts that sit beside each other on one payload agree about every row.
+The fact behind all of them is decided once, in `resolve_batch_row_cards`,
+which stamps `settled_off_card` on the row's resolution; every surface reads
+that stamp rather than deciding again. `card_review.n_needs_entity` does NOT
+take the exemption, because the company question stands on such a row.
+`POST .../private` and the field PUT already
+refuse whatever `can_mark_private` is false on (`code: "company_card"`), so
+the button and the routes still agree.
+
+The new reason's English sentence is "This expense was settled outside the
+card system, so no card will name the company it belongs to. Set the legal
+entity on the row; the export shows a placeholder until then." The generic
+`needs_entity` sentence opens by telling the reviewer to assign the paying
+card, which is the one instruction this row cannot follow. A front end that
+does not know the new code falls back to the English sentence, exactly as
+item 130 specifies. The `needs_person` sentence goes quiet on the same rows
+the box drops, so the screen and the box cannot disagree about whether the
+row still owes an answer.
+
+**`needs_entity` STAYS, and the entity is not auto-filled.** The row carries
+no bill-to field: `customer`, `legal_entity_id` and `entity_source` are all
+empty on the live payload, and the company name exists only inside the file
+name. The tool does not know which company this is; it only stops naming a
+card as the way to tell it. The reviewer sets the entity on the row.
+
+Supersedes two sentences of "A wire is not a card (residual R3, 2026-09-17)"
+above, which are now true of the TENDER half only: on a settled-outside row
+`can_mark_private` does move, and so does the `needs_person` half of the
+company-or-person question. Everything else in that section stands, and the
+open question it names is what this ruling answered.
+
+Pinned route-level in `tests/test_bank_transfer_exit_item_144.py`.
 ## One currency for the month's receipts (item 98, 2026-09-18)
 
 A month's documents gave three per-currency totals and nothing saying what
