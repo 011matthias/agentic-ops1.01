@@ -74,6 +74,8 @@ def build_expense_report_pdf(
     sections: Sequence[dict] | None = None,
     sections_heading: str = "",
     sections_note: str = "",
+    copies_set_aside: Sequence[dict] | None = None,
+    copies_set_aside_totals: dict[str, str] | None = None,
 ) -> bytes:
     """Render the month's report: listing first, then the receipts.
 
@@ -123,6 +125,17 @@ def build_expense_report_pdf(
     section: a heading for the partition and the standing note that
     qualifies its sums (for cost centers, the stated limit that this is
     card-and-receipt spend, not total project cost).
+
+    `copies_set_aside` (item 94) is the documents the tool decided repeat a
+    listed expense, already left out of `rows`:
+
+        {"vendor": "Obsidian", "date": "2026-08-30", "amount": "96.00",
+         "currency": "USD", "rows": [5]}
+
+    — stated under the listing with `copies_set_aside_totals` (per currency,
+    preformatted), one line each naming the expense it repeats. Their
+    evidence entries carry `"copy": True` and the original's `rows`, and
+    are captioned as the copy. Omitted => nothing printed, as before.
     """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -183,7 +196,8 @@ def build_expense_report_pdf(
     # table is built), so it states the one thing it now knows for certain.
     documented: set[int] = set()
     for item, pdf_bytes in prepared:
-        if pdf_bytes is None:
+        if pdf_bytes is None or item.get("copy"):
+            # A copy's pages prove nothing about its original's (item 94).
             continue
         documented.update(int(n) for n in item.get("rows") or [])
 
@@ -268,6 +282,44 @@ def build_expense_report_pdf(
     if excluded:
         story.append(Paragraph(_esc(excluded), styles["sub"]))
 
+    # ── copies set aside (item 94): named, summed, never in the total ──
+    if copies_set_aside:
+        n_copies = len(copies_set_aside)
+        owed = "  ·  ".join(
+            f"{ccy} {amount}"
+            for ccy, amount in sorted((copies_set_aside_totals or {}).items())
+        ) or "no amounts read"
+        story.append(Spacer(1, 8))
+        story.append(Paragraph(
+            _esc(
+                f"Copies set aside: {n_copies} "
+                f"{'document repeats' if n_copies == 1 else 'documents repeat'}"
+                f" an expense listed above, not counted in the listing or "
+                f"the totals ({owed}). "
+                f"{'Its pages follow' if n_copies == 1 else 'Their pages follow'}"
+                f" the original's."
+            ),
+            styles["sub"],
+        ))
+        for entry in copies_set_aside:
+            numbers = [int(n) for n in entry.get("rows") or []]
+            of = (
+                "copy of expense " + ", ".join(str(n) for n in numbers)
+                if numbers else "copy"
+            )
+            story.append(Paragraph(
+                _esc("  ·  ".join(x for x in (
+                    str(entry.get("vendor") or "(no vendor)"),
+                    str(entry.get("date") or ""),
+                    " ".join(x for x in (
+                        str(entry.get("currency") or ""),
+                        str(entry.get("amount") or ""),
+                    ) if x),
+                    of,
+                ) if x)),
+                styles["capsub"],
+            ))
+
     # ── reimbursements owed (item 41): per person, with sums ────────
     if reimbursements:
         story.append(Spacer(1, 12))
@@ -331,6 +383,9 @@ def build_expense_report_pdf(
             which = f"Expense {numbers[0]}"
         else:
             which = "Expense"
+        if item.get("copy"):
+            # Item 94: the pages of a copy set aside, behind its original.
+            which += " (copy set aside)"
         label = str(item.get("label") or "(no vendor)")
         story.append(Paragraph(_esc(f"{which} · {label}"), styles["caption"]))
         if item.get("detail"):

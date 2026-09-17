@@ -242,7 +242,12 @@ def test_a_copy_that_borrows_its_card_does_not_take_a_strangers_charge(
     # not with the batch's Corporate Services or the entity placeholder.
     by_ref = _csv_rows_by_reference(client, batch_id)
     assert by_ref["H0LHY2WQ-0032"]["Legal Entity"] == "Consulting"
-    assert by_ref["H0LHY2WQ0032"]["Legal Entity"] == "Consulting"
+    # Item 94: the receipt copy is a decided copy, so it writes no row; the
+    # grid still shows it, on its own card.
+    assert "H0LHY2WQ0032" not in by_ref
+    receipt = next(e for e in grid["expenses"] if "Receipt-" in e["document_id"])
+    assert receipt["legal_entity_id"] == "Consulting"
+    assert receipt["counts_in_total"] is False
 
 
 def test_an_invoice_and_its_receipt_spelled_differently_make_one_exact_match(
@@ -803,7 +808,13 @@ def test_an_operator_assignment_on_the_tender_word_beats_the_twins_card(
         assert invoice["entity_source"] == "card"
     by_ref = _csv_rows_by_reference(client, batch_id)
     assert by_ref["H0LHY2WQ-0032"]["Legal Entity"] == "Corporate Services"
-    assert by_ref["H0LHY2WQ0032"]["Legal Entity"] == "Consulting"
+    # Item 94: the receipt copy writes no row; the grid keeps its own card.
+    assert "H0LHY2WQ0032" not in by_ref
+    receipt = next(
+        e for e in _grid(client, batch_id)["expenses"]
+        if "Receipt-" in e["document_id"]
+    )
+    assert receipt["legal_entity_id"] == "Consulting"
 
 
 # ── route: a collecting batch's grid and export apply it (review F5) ────
@@ -845,7 +856,10 @@ def test_a_collecting_batch_grid_and_export_apply_the_inheritance(
 
     by_ref = _csv_rows_by_reference(client, batch_id)
     assert by_ref["890D70BF-0032"]["Legal Entity"] == "Cloud Services"
-    assert by_ref["890D70BF0032"]["Legal Entity"] == "Cloud Services"
+    # Item 94: the receipt copy writes no row; the grid row carries the card.
+    assert "890D70BF0032" not in by_ref
+    receipt = next(e for d, e in rows.items() if "Receipt-" in d)
+    assert receipt["legal_entity_id"] == "Cloud Services"
 
 
 # ── item 74: the ladder, one rung per test, through the app ─────────────

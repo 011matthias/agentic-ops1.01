@@ -391,9 +391,14 @@ def write_zoho_expense_export(
     card_accounts: "Mapping[str, str] | None" = None,
     card_hint_accounts: "Mapping[str, str] | None" = None,
     card_map_blocked_docs: "set[str] | None" = None,
+    footer: str = "",
 ) -> Path:
     """Write the Zoho Books Expenses import CSV (one row per expense).
-    Returns the path."""
+    Returns the path.
+
+    `footer` (item 94) is one line of prose written under the rows after a
+    blank row, in the first column only, so no amount column carries it.
+    Empty (the default) writes nothing, byte for byte as before."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     rows = build_expense_rows(
@@ -415,4 +420,7 @@ def write_zoho_expense_export(
         writer = csv.writer(fh)
         writer.writerow(EXPENSE_COLUMNS)
         writer.writerows(rows)
+        if footer:
+            writer.writerow([])
+            writer.writerow([footer])
     return out_path
