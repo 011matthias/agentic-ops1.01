@@ -257,6 +257,74 @@ def test_an_unreadable_response_still_closes_the_marker(tmp_path):
     )
 
 
+# ---- 2026-09-16/17: holes the register kept logging after #885 -----------
+
+
+def test_a_drive_the_harness_backgrounded_at_its_timeout_does_not_close(tmp_path):
+    """A FOREGROUND command moved to the background at 120 s has no
+    run_in_background in its input; the result says so instead (the shape
+    items 73, 77, 80, 81 and 83 hit)."""
+    post(tmp_path, "Bash", "fly deploy")
+    text = post(
+        tmp_path, "Bash",
+        "agent-browser --session recon open https://x && agent-browser --session recon wait --load networkidle && agent-browser --session recon snapshot -i",
+        response={"stdout": "", "stderr": "", "interrupted": False, "isImage": False,
+                  "noOutputExpected": False, "backgroundTaskId": "bw73s5jh3",
+                  "timedOutAfterMs": 120000},
+    )
+    assert "DRIVE NOT COMPLETE" in text
+    assert stop(tmp_path, CLAIM) is not None
+
+
+def test_a_background_notice_as_text_does_not_close(tmp_path):
+    post(tmp_path, "Bash", "fly deploy")
+    assert "DRIVE NOT COMPLETE" in post(
+        tmp_path, "Bash", "agent-browser snapshot -i",
+        response={"stdout": "Command running in background with ID: bx1. Output is being written to: C:\\t\\bx1.output"},
+    )
+
+
+def test_an_agent_browser_failure_line_does_not_close(tmp_path):
+    post(tmp_path, "Bash", "fly deploy")
+    text = post(
+        tmp_path, "Bash", "agent-browser --cdp 9222 get url",
+        response={"stdout": "✗ Failed to read: connection timed out (os error 10060)", "stderr": ""},
+    )
+    assert "DRIVE NOT COMPLETE" in text
+    assert stop(tmp_path, CLAIM) is not None
+
+
+@pytest.mark.parametrize("cmd", [
+    "ls $LOCALAPPDATA/ms-playwright",
+    'Get-ChildItem "$env:LOCALAPPDATA\\ms-playwright"',
+    'uv run tools/pattern_rules.py test --text "agent-browser --session x snapshot -i" --event bash',
+    'grep -rn "agent-browser snapshot" .claude/hooks',
+    "echo agent-browser get url",
+    "uv run --with playwright python -m playwright install chromium",
+])
+def test_a_mention_of_a_browser_command_does_not_close(tmp_path, cmd):
+    post(tmp_path, "Bash", "fly deploy")
+    assert post(tmp_path, "Bash", cmd, response={"stdout": "ok"}) == "", cmd
+    assert stop(tmp_path, CLAIM) is not None
+
+
+@pytest.mark.parametrize("cmd", [
+    'B="agent-browser --session recon-item77"; $B eval "document.title"',
+    "AB='agent-browser --session s'\n$AB snapshot -i",
+    '$ab = "agent-browser"; & $ab get text @e1',
+    'agent-browser --session s open https://x && agent-browser --session s wait --text "Arriving"',
+    "npx playwright test e2e/smoke.spec.ts",
+    "uv run --with playwright python drive.py",
+    'uv run python -c "from playwright.sync_api import sync_playwright; print(1)"',
+    "python - <<'EOF'\nfrom playwright.sync_api import sync_playwright\n"
+    "with sync_playwright() as p:\n    b = p.chromium.connect_over_cdp('http://localhost:9333')\nEOF",
+])
+def test_a_real_observation_still_closes(tmp_path, cmd):
+    post(tmp_path, "Bash", "fly deploy")
+    assert "CONSUMER DRIVEN" in post(tmp_path, "Bash", cmd, response={"stdout": "ok"}), cmd
+    assert stop(tmp_path, CLAIM) is None
+
+
 def test_a_backgrounded_navigation_says_nothing_extra(tmp_path):
     """Navigation is silent whether or not it is backgrounded: it was never
     going to close the marker, so there is nothing to explain."""
