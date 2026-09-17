@@ -97,6 +97,8 @@ ROOT_ALLOWLIST = {
 # Top-level dirs with an established home (W2 §2). A write under any other
 # top-level dir is ambiguous -> advisory. Committed homes: workspace,
 # platform, docs, tools, scripts, api-docs, .claude, .github, .agents.
+# `.claude` covers its sanctioned sub-homes (rules, skills, agents, hooks,
+# patterns); the gate keys on the top segment only.
 # The rest are gitignored tooling dirs (branch 4 already suppresses their
 # advisory via `and not _ignored()`); kept here for clarity.
 KNOWN_TOP_DIRS = {
