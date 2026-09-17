@@ -176,7 +176,7 @@ name answers the same one:
 | `n_needs_company_or_person` | expense payload: how many rows miss their company or their person (item 84, owner ruling 2026-09-16: the Expenses view shows MISSING ENTITY and NEEDS PERSON as one box, because the fix is one action, pick the card or mark the receipt private). `n_needs_entity` and `n_needs_person` keep their questions |
 | `n_copies_set_aside` | run payload only: how many decided duplicate copies are set aside instead of listed as unmatched (items 83 + 75). `n_unmatched_rec` keeps its question (receipts waiting for a charge), and a set-aside copy was never one; `n_duplicate_copies` keeps counting every redundant copy, matched or not |
 | `n_charges_need_receipt` | run payload only: how many purchase charges hold no receipt and no verdict that closes them (item 99). Not `n_unmatched_tx`, which also counts booked charges and fee lines |
-| `n_receipts_need_charge` | run payload only: how many receipts no charge holds anywhere and nothing set aside (item 99): `n_unmatched_rec` minus the receipts another month's charge settled (`settled_by`) |
+| `n_receipts_need_charge` | run payload only: how many receipts no charge holds anywhere and nothing set aside (item 99): `n_unmatched_rec` minus the receipts another month's charge settled (`settled_by`) and the confirmed private expenses (flag AND `reimburse_to`) |
 | `n_charges_category_guessed` | run payload only: how many charges that need no receipt still carry the tool's guessed category (item 99). A charge that needs a receipt is counted under `n_charges_need_receipt` alone |
 
 `service.categorized_counts` is the single implementation of the categorized
@@ -3005,11 +3005,20 @@ annotation, and the tool can derive it from statement history. A `rejected`
 or receiptless `confirmed` charge still needs a receipt.
 
 A receipt needs no charge when it is settled outside the card, a decided
-duplicate copy (`copies_set_aside`), quarantined (never in the pool), or
+duplicate copy (`copies_set_aside`), quarantined (never in the pool), a
+confirmed private expense (PR #987: the `private` flag AND `reimburse_to`,
+the `_private_reimbursements` pair rule; the flag alone does not count), or
 already settled by another month's charge (`settled_by` on its
 `unmatched_receipts[]` element). So `n_receipts_need_charge` is
-`n_unmatched_rec` minus the `settled_by` entries; `n_unmatched_rec` keeps its
-question.
+`n_unmatched_rec` minus the `settled_by` entries and the confirmed private
+expenses; `n_unmatched_rec` keeps its question, and a private receipt stays
+listed in `unmatched_receipts`.
+
+The private half reads the expense header edits, so it holds on the payloads
+built with them: `GET /api/runs/{id}` and the publish gate. The `summary` a
+decision route returns (`POST .../decisions` and its siblings) is built
+without them and counts a confirmed private receipt as needing a charge; the
+SPA refetches the run after those calls.
 
 A guessed category is the row's own confirm-first state (`review.reason_code:
 "receiptless_suggested"`, any source). A charge that needs a receipt is

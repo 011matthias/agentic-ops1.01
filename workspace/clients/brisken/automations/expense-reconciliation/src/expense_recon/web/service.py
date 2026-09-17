@@ -2802,6 +2802,7 @@ def build_view(
     resolutions: dict[str, str] | None = None,
     settled_elsewhere: dict[str, dict] | None = None,
     edited_at: str | None = None,
+    field_overrides: dict[str, dict[str, str]] | None = None,
 ) -> dict:
     """Compose the render model: per-transaction rows with candidates and
     the reviewer's effective verdict, plus the unmatched-receipt list and
@@ -2822,7 +2823,11 @@ def build_view(
     `edited_at` (2026-09-16): the latest stamp in this run's edit tables,
     read by the GET route, folded into the payload's `updated_at`. None from
     every other caller, whose `updated_at` then reads the snapshot and the
-    decisions alone (see `month_updated_at`)."""
+    decisions alone (see `month_updated_at`).
+
+    `field_overrides` (items 99 + 100): the run's expense header edits, read
+    by the GET route and the publish gate, so a confirmed private expense
+    (flag AND reimburse_to) does not count as a receipt needing a charge."""
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
     rec_by_id = {r.document_id: r for r in receipts}
     # What `receipt_image_available` is resolved against (item 52). Read
@@ -3536,7 +3541,13 @@ def build_view(
     # Items 99 + 100: what still stands between this month and complete,
     # read off the rows and the unmatched list the page renders. The publish
     # gate reads the same summary.
-    completeness = completeness_counts(rows, unmatched_receipts)
+    # `field_overrides` (the expense header edits) carries the confirmed
+    # private expenses; a caller that passes none counts every unmatched
+    # receipt as needing a charge.
+    completeness = completeness_counts(
+        rows, unmatched_receipts,
+        private_docs=frozenset(_private_reimbursements(field_overrides or {})),
+    )
     ready_to_post = n_undecided == 0 and health["state"] == HEALTH_OK
 
     n_tx = len(transactions)

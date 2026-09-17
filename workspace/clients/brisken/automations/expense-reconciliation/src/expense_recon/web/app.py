@@ -1996,6 +1996,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run, decisions, overrides, resolutions,
             settled_elsewhere=settled_elsewhere,
             edited_at=edited_at,
+            field_overrides=store.get_expense_field_overrides(run_id),
         )
 
     @app.get("/api/runs/{run_id}")

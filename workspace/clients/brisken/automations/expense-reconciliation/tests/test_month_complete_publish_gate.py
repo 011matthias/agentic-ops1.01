@@ -32,6 +32,7 @@ from openpyxl import Workbook  # noqa: E402
 
 from expense_recon.llm.client import ExtractedReceipt, MockLLMClient  # noqa: E402
 from expense_recon.web.app import create_app  # noqa: E402
+from expense_recon.web.store import RunStore  # noqa: E402
 
 JPG = b"\xff\xd8\xff\xe0fake-jpeg-bytes"
 CRISS_CODE = "criss-code-1"
@@ -52,6 +53,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("EXPENSE_RECON_OPERATOR_CODES", f"{CRISS_CODE}:criss")
     app = create_app(tmp_path)
     with TestClient(app) as c:
+        c._data_root = tmp_path
         login = c.post("/api/login", json={"code": CRISS_CODE})
         assert login.status_code == 200, login.text
         c.headers.update({"Authorization": f"Bearer {login.json()['token']}"})
@@ -203,6 +205,41 @@ def test_a_receipt_with_no_charge_keeps_the_month_incomplete(client, monkeypatch
     summary = _view(client, batch)["summary"]
     assert summary["n_receipts_need_charge"] == 0
     assert summary["month_complete"] is True
+
+
+def test_a_confirmed_private_expense_needs_no_charge(client, monkeypatch):
+    """PR #987: a receipt paid on someone's own card will never meet a company
+    card charge. Confirmation is the pair (the flag AND who is reimbursed),
+    the same rule `_private_reimbursements` applies everywhere else."""
+    batch = _month(
+        client, monkeypatch, [LOVABLE, PAYMENT],
+        _extraction("Lovable Labs", "15.00", "2026-08-31"),
+        _extraction("Brauhaus Kuehler Krug", "140.00", "2026-08-12"),
+    )
+    view = _view(client, batch)
+    assert view["summary"]["n_receipts_need_charge"] == 1
+    assert view["summary"]["month_complete"] is False
+    doc = view["unmatched_receipts"][0]["document_id"]
+
+    # The flag alone is not a confirmation. The routes refuse to write one, so
+    # plant it the way an older one-field-at-a-time write left it.
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        store.set_expense_field_override(batch, doc, "private", "1", "2026-09-17T09:00:00")
+    assert _view(client, batch)["summary"]["n_receipts_need_charge"] == 1
+
+    resp = client.post(
+        f"/api/runs/{batch}/expenses/{doc}/private",
+        json={"private": True, "reimburse_to": "Dirk"},
+    )
+    assert resp.status_code == 200, resp.text
+    view = _view(client, batch)
+    assert view["summary"]["n_unmatched_rec"] == 1, "the list keeps its question"
+    assert view["summary"]["n_receipts_need_charge"] == 0
+    assert view["summary"]["month_complete"] is True
+    # The gate reads the same rule: a complete month publishes without override.
+    resp = client.post(f"/api/runs/{batch}/publish")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["published_override"] is False
 
 
 def test_a_fee_needs_no_receipt_but_its_guessed_category_is_undecided(client, monkeypatch):

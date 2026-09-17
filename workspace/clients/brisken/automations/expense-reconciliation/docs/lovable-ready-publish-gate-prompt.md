@@ -19,7 +19,7 @@ On `summary` (all optional for an older backend):
 
 - `month_complete` (boolean): the month may read Ready to post and be published.
 - `n_charges_need_receipt` (integer): charges with no receipt and nothing that closes them.
-- `n_receipts_need_charge` (integer): receipts with no charge that are not set aside.
+- `n_receipts_need_charge` (integer): receipts with no charge that are not set aside, settled outside or confirmed private.
 - `n_charges_category_guessed` (integer): charges needing no receipt whose category is still the tool's guess.
 - `ready_to_post` and `n_undecided` keep their meaning: nothing left to decide.
 

@@ -15,8 +15,9 @@ AND
   yellow fill or the reviewer's already-posted verdict), or a fee / interest
   line the statement itself printed as one;
 * every receipt holds a charge unless it is set aside: settled outside the
-  card, a decided duplicate copy, or quarantined (a quarantined file never
-  enters the pool). A receipt another month's charge already settled has a
+  card, a decided duplicate copy, quarantined (a quarantined file never
+  enters the pool), or a confirmed private expense (paid on someone's own
+  card, PR #987). A receipt another month's charge already settled has a
   charge, so it does not count either;
 * no receiptless charge still carries a category that is only the tool's
   guess (the row's own "confirm first" state, `receiptless_suggested`).
@@ -63,19 +64,28 @@ def charge_category_guessed(row: dict) -> bool:
     )
 
 
-def receipt_needs_charge(receipt: dict) -> bool:
+def receipt_needs_charge(receipt: dict, private_docs=frozenset()) -> bool:
     """An element of `unmatched_receipts` that no charge holds anywhere.
 
     The list already leaves out settled-outside receipts and decided copies;
-    a receipt another month's charge settled carries `settled_by`."""
-    return "settled_by" not in receipt
+    a receipt another month's charge settled carries `settled_by`. A
+    CONFIRMED private expense (`private_docs`: the flag AND who is
+    reimbursed, `service._private_reimbursements`) was paid on someone's own
+    card, so no company card charge will ever exist for it."""
+    return (
+        "settled_by" not in receipt
+        and receipt.get("document_id") not in private_docs
+    )
 
 
-def completeness_counts(rows: list[dict], unmatched_receipts: list[dict]) -> dict:
+def completeness_counts(
+    rows: list[dict], unmatched_receipts: list[dict], private_docs=frozenset()
+) -> dict:
     return {
         "n_charges_need_receipt": sum(1 for r in rows if charge_needs_receipt(r)),
         "n_receipts_need_charge": sum(
-            1 for r in unmatched_receipts if receipt_needs_charge(r)
+            1 for r in unmatched_receipts
+            if receipt_needs_charge(r, private_docs)
         ),
         "n_charges_category_guessed": sum(
             1 for r in rows if charge_category_guessed(r)
