@@ -116,7 +116,7 @@ def test_full_lifecycle(client):
 def test_publish_unknown_run_404(client):
     resp = client.post("/api/runs/nope/publish")
     assert resp.status_code == 404
-    assert resp.json() == {"error": "run not found"}
+    assert resp.json() == {"error": "run not found", "code": "run_not_found"}
 
 
 def test_intake_without_receipts_cannot_run(client):
