@@ -2674,3 +2674,69 @@ learns as its string instead of as a card number the matcher ignores.
 
 Route-level in `tests/test_card_fix_per_row.py`; the shape in
 `tests/test_view_contract.py`.
+
+## A reference rate per month, from the ECB: `ecb_month` + `reference_rate_period` (item 82, 2026-09-17)
+
+Owner ruling 2026-09-16: the reference rate is per month, from the ECB, and a
+rate the operator types still wins.
+
+**Where the rates live.** The run config's `matching.fx_ecb_monthly_rates`
+holds the ECB's monthly averages exactly as published (series
+`EXR/M.{CCY}.EUR.SP00.A`, units of each currency per one EUR, the ECB's own
+digits as strings), keyed by month:
+
+```json
+"matching": {
+  "fx_reference_rates": {"EUR:USD": "1.162275"},
+  "fx_ecb_monthly_rates": {
+    "2026-06": {"USD": "1.1518", "BRL": "5.898918181818181", "...": "..."},
+    "2026-07": {"USD": "1.1417478260869562", "BRL": "5.844895652173915"}
+  }
+}
+```
+
+One request fetches every currency the ECB publishes (29) for a span of
+months. It runs when a company month is created (its labelled month and one
+neighbour either side) and when a statement is attached or re-read (those
+months plus every charge's month). A fetched month replaces the stored one; a
+month the ECB has not published stays absent. The fetch is fail-open, 4 s:
+an outage creates the month with no key at all, and the next attach tries
+again. A trip fetches nothing (it is matched inside the months that borrow
+it). `EXPENSE_RECON_ECB_RATES=0` switches the fetch off. `run.local.json`
+carries the table, so a pulled-down month replays offline.
+
+**How the matcher reads them.** A pair's rate is the cross through EUR, for
+the month of the CHARGE's `transaction_date` (card networks lock the rate at
+authorization), to six decimals. A month missing from the table reads the
+nearest month that has both currencies (earlier on a tie). The rungs, in
+order: `configured` (Settings `fx_reference_rates`, frozen into the run),
+`statement`, `receipts`, then `ecb_month`. The self-derived rates sit above
+the ECB because a statement's FX lines are the rate the card charged and, on
+the six labelled bundles, the receipts' booked rates resolved 70 of 95 pairs
+against 68 at the ECB average. A hosted month has neither, so there the ECB
+answers whenever Settings holds no rate. The reason reads `ECB monthly
+average rate 1.141748 (2026-07)`.
+
+**`fx.reference_rate_source`** gains `ecb_month`.
+
+**`fx.reference_rate_period`**, new, string `YYYY-MM`: present ONLY when the
+source is `ecb_month`, the month whose average the rate is (it differs from the
+charge's month when that month was missing from the table); **absent** on
+every other source, never null.
+
+**What it did not change live.** Rates are frozen into a month at creation or
+first attach (`apply_master_data` uses `setdefault`) and `refresh-master-data`
+refreshes cards only. July `50622baec444` and August `074a7b8905d7` carry the
+Settings rates (EUR:USD 1.162275, BRL:USD 0.192448), which still win, so their
+matching and every FX block are unchanged by this deploy. A new month uses the
+ECB for any pair Settings does not hold.
+
+**Setup advisory.** `summary.setup_advisories[]` no longer tells the operator
+to add this month's rate: a currency the month's ECB table covers raises
+nothing, and the one that still fires says no rate is available from either
+source.
+
+Route-level in `tests/test_ecb_month_rates.py`; the shape in
+`tests/test_view_contract.py`
+(`test_fx_reference_rate_period_rides_only_on_the_ecb_source`). Renders in
+`docs/lovable-ecb-rates-prompt.md`.

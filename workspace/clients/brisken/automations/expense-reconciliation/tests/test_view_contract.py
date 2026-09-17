@@ -954,6 +954,15 @@ FX_REFERENCE_SCALARS = {
     "reference_gap_band": lambda v: v in ("match", "review", "outside"),
 }
 
+# Item 82: the ECB month a `ecb_month` rate is the average of. Present ONLY
+# on that source, absent on every other one (the fixture above has no ECB
+# table, so it pins the absence; `tests/test_ecb_month_rates.py` pins the
+# 'YYYY-MM' value through the route).
+FX_REFERENCE_OPTIONAL_SCALARS = {
+    "reference_rate_period": lambda v: isinstance(v, str)
+    and len(v) == 7 and v[4] == "-" and v[:4].isdigit() and v[5:].isdigit(),
+}
+
 
 @pytest.fixture(scope="module")
 def fx_payload(tmp_path_factory):
@@ -1214,3 +1223,59 @@ def test_expense_card_source_is_on_every_row_from_a_closed_set(payloads):
             assert (e["card_source"] == "none") == (e["card"] is None), e
             seen.add(e["card_source"])
     assert "none" in seen, seen
+
+
+def test_fx_reference_rate_period_rides_only_on_the_ecb_source(fx_payload, tmp_path, monkeypatch):
+    """Item 82. `fx.reference_rate_period` ('YYYY-MM') is present exactly
+    when `reference_rate_source` is `ecb_month`, absent otherwise, never null.
+    One month with an ECB table for EUR and none for GBP, matched by the real
+    matcher under the run's own config, read back over HTTP; the Settings
+    month above (`fx_payload`) carries no period anywhere."""
+    from expense_recon.matching.deterministic import MatchingConfig, match_month
+
+    config = {"matching": {"fx_ecb_monthly_rates": {
+        "2026-07": {"USD": "1.1417478260869562"},
+    }}}
+    transactions = [Transaction(
+        transaction_id="t-eur", legal_entity_id="le1", account_id="amex-usd",
+        transaction_date=date(2026, 7, 3), posting_date=None,
+        amount=Decimal("34.25"), transaction_currency="USD",
+        account_card_currency="USD", vendor_from_statement="SHOP EUR",
+    ), Transaction(
+        transaction_id="t-gbp", legal_entity_id="le1", account_id="amex-usd",
+        transaction_date=date(2026, 7, 20), posting_date=None,
+        amount=Decimal("50.80"), transaction_currency="USD",
+        account_card_currency="USD", vendor_from_statement="SHOP GBP",
+    )]
+    receipts = [Receipt(
+        document_id="r-eur", legal_entity_id="le1", detected_date=date(2026, 7, 3),
+        detected_total=Decimal("30.00"), detected_currency="EUR", detected_vendor="Shop",
+    ), Receipt(
+        document_id="r-gbp", legal_entity_id="le1", detected_date=date(2026, 7, 20),
+        detected_total=Decimal("40.00"), detected_currency="GBP", detected_vendor="Shop",
+    )]
+    outcome = match_month(transactions, receipts, MatchingConfig.from_dict(config["matching"]))
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with TestClient(create_app(tmp_path)) as client:
+        store = RunStore(tmp_path / "recon-web.sqlite")
+        store.create_run(
+            run_id="contract-ecb", created_at="2026-09-17T00:00:00",
+            label="July 2026", operator=None, summary={},
+            snapshot=snapshot_to_dict(transactions, receipts, outcome, []),
+            config=config, work_dir=str(tmp_path), llm_enabled=False,
+            has_coa=False,
+        )
+        store.close()
+        ecb_view = client.get("/api/runs/contract-ecb").json()
+
+    key = "reference_rate_period"
+    blocks = list(_fx_blocks(ecb_view, fx_payload))
+    carrying = [fx for fx in blocks if key in fx]
+    assert carrying, blocks
+    assert len(carrying) < len(blocks), blocks
+    for fx in blocks:
+        assert (key in fx) == (fx.get("reference_rate_source") == "ecb_month"), fx
+    for fx in carrying:
+        assert FX_REFERENCE_OPTIONAL_SCALARS[key](fx[key]), fx
+        assert fx[key] == "2026-07", fx

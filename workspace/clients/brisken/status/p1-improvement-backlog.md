@@ -4096,7 +4096,7 @@ Build:
   214.20 EUR -> 248.96 / -1.64 / -0.66; PETIT TRAIN 37.48 vs 32.00 EUR -> 37.19 /
   +0.29 / +0.77.
 
-### 82. A reference rate per month, from the ECB (note #43, owner ruling 2026-09-16)
+### 82. A reference rate per month, from the ECB (note #43, owner ruling 2026-09-16) (SHIPPED PR #PRNUM - see Shipped row 56)
 
 **One rate per pair, not per month.** `apply_master_data` (`web/service.py`)
 copies Settings `fx_reference_rates` into a run's config with `setdefault` at
@@ -4129,6 +4129,60 @@ longer telling the operator to update rates by hand. This moves matcher inputs,
 so it ships after 77 and only after a simulation on the six bundles and both
 live months with the S1 scorer and guard green; report which July and August
 pairs change bucket. Independent of item 79.
+
+**Simulation 2026-09-17, before building** (DB copy off the Fly volume at v143,
+`tools/recon-match-attribution.py` imported, no model call; ECB Data API
+queried the same morning: July EUR:USD 1.141748 / BRL:USD 0.195341, August
+1.159310 / 0.194241, June BRL:USD 0.195256). The instrument first reproduced
+both hosted outcomes at the Settings rates (parity 0, judgment cache 13 + 2
+hits, 0 misses). Keying by the label month and by each charge's own month gave
+identical results everywhere.
+
+- **The rate is more accurate.** July's 22 labelled FX pairs: mean absolute
+  deviation 1.78% at Settings, 0.44% at ECB (max 2.93% -> 1.41%). August's 3:
+  0.68% -> 0.60%.
+- **It buys no correct pair on the live months.** Every true pair was already
+  inside the 3% clean band. August: nothing changes. July, three receipts
+  move, and none for the better:
+  - `0067` MARINHO 41.85 BRL, labelled to SUPERMEC SAO JOSE 8.29: clean ->
+    review. At 0.195341 the rival charge 'JoseliMariaDos' 8.40 (+2.75%) enters
+    the band and the uniqueness gate demotes the true pair to FX judgment.
+  - `0034` Erste Fracht 21.00 EUR, labelled excluded ("HOTEL AM TIERGARTEN
+    24.02 is another merchant"): unmatched -> auto-matched to that charge,
+    +0.2%. At Settings its rival MP *24HBEBIDAS 24.88 sat in the band, the gate
+    demoted it and the model said no.
+  - `0066` Mega Center 14.90 BRL, labelled excluded: unmatched -> auto-matched
+    to '48.247.796 BEATRYZ RI' 2.97 two days later, +2.0%.
+- **Six bundles** (deterministic-correct of 95 / wrong / composite): shipped
+  asset (self-derived receipt rates) 70 / 0 / 76.0; one Settings rate for all
+  six 64 / 3 / 65.2 (Nov 2024 is 9% off it: three wrong matches); ECB monthly
+  68 / 0 / 74.3. The ECB beats a static rate across time and trails the
+  receipts' own booked rates by two Oct 2024 pairs.
+- **The band, not the rate, is the lever** (measured, not built): ECB with a
+  2% clean band gives July 32 right (POSTO ARCA and NATHALIA promoted, `0067`
+  kept, `0066` to review, `0034` still auto-matched), August unchanged,
+  bundles 70 / 0 / 75.7. `fx_reference_match_pct` 0.015 was refuted in the S1
+  run under self-derived rates; a 2% band under ECB rates is a new lever and
+  its own item, owner call.
+
+**Shipped 2026-09-17 (PR #PRNUM), built as ruled and inert on the live months.**
+The run config gains `matching.fx_ecb_monthly_rates` (the ECB's monthly
+averages as published, units per EUR, all 29 currencies, one request),
+fetched at company-month creation (labelled month +/- 1) and at statement
+attach / re-read (those months plus every charge's month), fail-open at 4 s.
+The matcher reads the cross through EUR for the CHARGE's month (nearest
+month when absent). Rung order: typed Settings rate, statement-derived,
+receipts-derived, `ecb_month`; the self-derived rates stay above the ECB on
+the bundle evidence. The FX block carries `reference_rate_source: "ecb_month"`
+and a parallel `reference_rate_period`; the setup advisory stops telling the
+operator to add a rate by hand. July and August keep their frozen Settings
+rates (EUR:USD 1.162275, BRL:USD 0.192448), which win, so the deploy moves
+neither month: replayed on the shipped code, parity 0 on both. The same code
+with Settings rates absent reproduces the simulation's charge-month result
+exactly (empty diff). The two Settings rates also win for every new month
+until someone removes them in Settings, so today the ECB fires only for a
+currency Settings does not hold. SPA half: `docs/lovable-ecb-rates-prompt.md`
+(Settings copy, the ECB source label).
 
 ### 83. A decided duplicate leaves the month's work (note #46, Criss) (SHIPPED PR #932 with item 75 - see Shipped row 52)
 
@@ -4533,6 +4587,7 @@ separately: on the Matching view the PT card for matched rows reads
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 56 | A reference rate per month, from the ECB: the run config's `matching.fx_ecb_monthly_rates` (the ECB's monthly averages as published, all currencies, units per EUR) is fetched at company-month creation and at statement attach / re-read, fail-open; the matcher crosses through EUR for each CHARGE's month, below the typed Settings rate and the self-derived rates; the FX block carries `reference_rate_source: "ecb_month"` + `reference_rate_period`; the setup advisory stops asking for a hand-typed rate. SPA half: `docs/lovable-ecb-rates-prompt.md` | Item 82, note #43, owner ruling 2026-09-16. Simulated before building on a DB copy at v143 and the six bundles: the ECB rate is more accurate (July's 22 labelled FX pairs 1.78% -> 0.44% mean deviation) but on the live months it buys no correct pair (July `0067` clean -> review, `0034` and `0066` newly auto-matched to charges the labels call other merchants; August unchanged), while across the bundles it beats one static rate (68 vs 64 right, 0 vs 3 wrong). Built inert on July and August: their frozen Settings rates still win, replay parity 0 on both. The Settings rates also win for new months until removed there | PR #PRNUM, 2026-09-17; suite 1983 -> 1998 / 2 skipped; four regress proofs RED first (matcher call site, view lookup, statement attach, month creation); scorer unchanged 70/95, SCORE 76.0, guard 4/4 PASS |
 | 55 | One card fix per expense row, remembered at sign-off: header field `card_key` (active registry card, copied into the month's snapshot when defined later), `expenses[].card_source` (hint / override / learned / none), saved at Publish as a vendor field correction and applied next month only to a receipt that prints no card number; the strip's learning sticks for whole-string aliases shadowed by a shared word alias and for masked BINs. SPA half: `docs/lovable-card-fix-prompt.md`; item 89's months badge prompt rides the same PR | Item 87, note #33. 24 of July's 33 rows with no company or person had no path but "Confirm private" (16 tender words, 8 no card), and two hints the strip called learned would never have resolved again. Suite 1974 -> 1983 / 2 skipped, seven regress proofs | PR #947 |
 | 54 | Publishing a month saves its corrections to memory: the publish reply carries `memory` (saved + learned / unchanged / error), through `commit_month_memory`, the helper the button now uses too; a digest per run in `memory_commits` keeps a re-publish from counting the same corrections twice; a failed save never fails the publish. SPA half: `docs/lovable-memory-at-signoff-prompt.md` | Item 88, owner ruling 2026-09-16. `commit_to_memory` had one caller, a button nobody pressed, and the live learning store held 0 learned companies and 0 field corrections, so no month's corrections reached the next. No month has been published yet; the first save happens at the first publish. Suite 1968 -> 1974 / 2 skipped, four regress proofs | PR #940 |
 | 53 | The Expenses view's boxes open their rows: `expenses[].boxes[]` (a count name without `n_`) on every row, every box count summed from those rows, `summary.n_needs_company_or_person` for the merged MISSING ENTITY + NEEDS PERSON box, Categorized decided per row by `is_categorized` (every line), and a row whose receipt the app can show is never "missing its image" (both payloads). SPA half: `docs/lovable-expense-boxes-prompt.md` | Item 84. A box that opens its rows must list exactly its number, and two of them could not: Categorized's row rule differed from its count (three two-line receipts), and MISSING RECEIPT IMAGE 2 / 1 named receipts whose files the endpoint served. Suite 1958 -> 1968 / 2 skipped, five regress proofs | PR #935 |

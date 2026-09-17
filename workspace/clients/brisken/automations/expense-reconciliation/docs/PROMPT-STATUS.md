@@ -184,6 +184,7 @@ and a rollback would otherwise have nothing to re-apply.
 |---|---|---|
 | `lovable-card-fix-prompt.md` (item 87) | `card_source`, `expx.cardFix.pick`, `expx.cardFix.source.learned`, `expx.cardFix.boxHint` (not `card_key` alone: the statement attach form already sends one) | Backend PR #947 live on Fly |
 | `lovable-matched-with-statement-prompt.md` (item 89) | `months.state.matchedStatement`, `months.state.matchedStatement.tip` | None (SPA-only, no backend field) |
+| `lovable-ecb-rates-prompt.md` (item 82) | `reference_rate_period`, `wb.fx.source.ecbMonth`, and `set.fx.desc` no longer containing "update them when you start a new month" | Backend item-82 PR live on Fly. The label has no live case yet: July and August still match on the Settings rates, which win |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.

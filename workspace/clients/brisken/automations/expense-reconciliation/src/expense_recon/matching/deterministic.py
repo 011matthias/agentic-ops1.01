@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # annotations only; the body imports Path itself
+    from datetime import date
     from pathlib import Path
 
 import difflib
@@ -30,6 +31,9 @@ from collections.abc import Mapping
 from decimal import Decimal
 
 from .types import Match, MatchOutcome, MatchType, Receipt, Transaction
+
+# A month key in `fx_ecb_monthly_rates` (item 82): the ECB's TIME_PERIOD.
+_MONTH_KEY = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
 
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
@@ -311,6 +315,18 @@ class MatchingConfig:
     fx_reference_rates: Mapping[tuple[str, str], Decimal] = field(
         default_factory=dict
     )
+    # Item 82 (owner ruling 2026-09-16): the ECB's monthly average reference
+    # rates, as the ECB publishes them, keyed by month:
+    # {"2026-07": {"USD": Decimal("1.1417478"), "BRL": Decimal("5.8448957")}},
+    # units of each currency per ONE EUR (series EXR/M.{CCY}.EUR.SP00.A). A
+    # pair's rate is the cross through EUR, read for the CHARGE's own month:
+    # card networks lock the rate at authorization, so the purchase month is
+    # the right grain. The hosted surface fetches the table when a month is
+    # created and when a statement is attached; empty keeps every pair on
+    # the rungs above it, byte for byte. See `ecb_monthly_rate`.
+    fx_ecb_monthly_rates: Mapping[str, Mapping[str, Decimal]] = field(
+        default_factory=dict
+    )
     fx_reference_match_pct: Decimal = Decimal("0.03")
     fx_reference_review_pct: Decimal = Decimal("0.13")
 
@@ -500,10 +516,22 @@ class MatchingConfig:
                         )
                     rates[(from_ccy, to_ccy)] = Decimal(str(rate))
                 kwargs[key] = rates
+            elif key == "fx_ecb_monthly_rates":
+                table: dict[str, dict[str, Decimal]] = {}
+                for month, per_eur in value.items():
+                    if not _MONTH_KEY.fullmatch(str(month)):
+                        raise ValueError(
+                            f"fx_ecb_monthly_rates key {month!r} must be 'YYYY-MM'"
+                        )
+                    table[str(month)] = {
+                        str(ccy).upper(): Decimal(str(units))
+                        for ccy, units in (per_eur or {}).items()
+                    }
+                kwargs[key] = table
             else:
                 raise ValueError(
                     f"unknown matching-tuning key {key!r} "
-                    f"(tunables: {sorted(_TUNABLE_DECIMAL | _TUNABLE_INT | _TUNABLE_FLOAT | _TUNABLE_BOOL | {'fx_rate_bands', 'fx_reference_rates'})})"
+                    f"(tunables: {sorted(_TUNABLE_DECIMAL | _TUNABLE_INT | _TUNABLE_FLOAT | _TUNABLE_BOOL | {'fx_rate_bands', 'fx_reference_rates', 'fx_ecb_monthly_rates'})})"
                 )
         return cls(**kwargs)
 
@@ -529,6 +557,51 @@ class MatchingConfig:
         None when the pair has no configured rate (then the band/LLM path
         applies unchanged)."""
         return self.fx_reference_rates.get((from_ccy, to_ccy))
+
+    def ecb_monthly_rate(
+        self, from_ccy: str, to_ccy: str, on: "date | str | None"
+    ) -> tuple[Decimal, str] | None:
+        """Item 82: the ECB monthly average rate for receipt->charge currency
+        in the month of `on` (a date or 'YYYY-MM'), as (rate, month used).
+
+        The month itself when the table holds it with both currencies, else
+        the nearest month that does (earlier wins a tie): a charge dated the
+        30th on next month's statement, or a month whose average the ECB has
+        not published yet, reads its neighbour, and the returned month says
+        which. Cross rate through EUR (EUR is 1 unit per EUR), to six
+        decimals, the precision a rate typed in Settings carries. None when
+        `on` is missing, the table is empty or no month carries the pair."""
+        if not self.fx_ecb_monthly_rates or on is None:
+            return None
+        src, dst = (from_ccy or "").upper(), (to_ccy or "").upper()
+        if not src or not dst or src == dst:
+            return None
+        want = on if isinstance(on, str) else on.strftime("%Y-%m")
+        if not _MONTH_KEY.fullmatch(want):
+            return None
+
+        def _index(month: str) -> int:
+            return int(month[:4]) * 12 + int(month[5:7])
+
+        def _units(table: Mapping[str, Decimal], ccy: str) -> Decimal | None:
+            if ccy == "EUR":
+                return Decimal(1)
+            units = table.get(ccy)
+            return units if units is not None and units > 0 else None
+
+        usable = [
+            month for month, table in self.fx_ecb_monthly_rates.items()
+            if _units(table, src) is not None and _units(table, dst) is not None
+        ]
+        if not usable:
+            return None
+        target = _index(want)
+        month = min(usable, key=lambda m: (abs(_index(m) - target), _index(m)))
+        table = self.fx_ecb_monthly_rates[month]
+        rate = (_units(table, dst) / _units(table, src)).quantize(
+            Decimal("0.000001")
+        )
+        return (rate, month) if rate > 0 else None
 
     def is_alias(
         self, legal_entity_id: str, stmt_vendor: str | None, receipt_vendor: str | None
@@ -817,10 +890,21 @@ def _reference_rate_for(
     from_ccy: str,
     to_ccy: str,
     derived: "Mapping[tuple[str, str], tuple[Decimal, str, int]] | None",
+    on: "date | str | None" = None,
 ) -> tuple[Decimal, str, int] | None:
     """The best reference rate for a pair: configured (operator intent)
-    wins, else this run's self-derived rate. Returns (rate, source, n)
-    with source in {"configured", "statement", "receipts"}, or None."""
+    wins, else this run's self-derived rate, else the ECB monthly average
+    for the month of `on` (the charge date, item 82). Returns (rate, source,
+    n) with source in {"configured", "statement", "receipts", "ecb_month"},
+    or None.
+
+    The ECB rung sits BELOW the self-derived rates on the evidence: a
+    statement's printed FX lines are the rate the card actually charged,
+    and on the six labelled bundles the receipts' own booked rates resolved
+    70 of 95 pairs against 68 at the ECB monthly average (2026-09-17). A
+    hosted month has neither (the Chase export prints no FX columns and no
+    mailed receipt carries a booked rate), so there the ECB rate is what
+    fires whenever Settings holds none."""
     configured = cfg.fx_reference_rate(from_ccy, to_ccy)
     if configured is not None and configured > 0:
         return configured, "configured", 0
@@ -828,6 +912,9 @@ def _reference_rate_for(
         hit = derived.get(((from_ccy or "").upper(), (to_ccy or "").upper()))
         if hit is not None:
             return hit
+    ecb = cfg.ecb_monthly_rate(from_ccy, to_ccy, on)
+    if ecb is not None:
+        return ecb[0], "ecb_month", 0
     return None
 
 
@@ -959,7 +1046,7 @@ def match_one(
         # median (statement FX lines, else receipt Zoho rates).
         ref = _reference_rate_for(
             cfg, receipt.detected_currency, tx.transaction_currency,
-            derived_rates,
+            derived_rates, on=tx.transaction_date,
         )
         ref_dev: Decimal | None = None
         if (
@@ -975,6 +1062,12 @@ def match_one(
             rate, source, n = ref
             if source == "configured":
                 return f"monthly reference rate {rate}"
+            if source == "ecb_month":
+                _rate, month = cfg.ecb_monthly_rate(
+                    receipt.detected_currency, tx.transaction_currency,
+                    tx.transaction_date,
+                )
+                return f"ECB monthly average rate {rate} ({month})"
             unit = (
                 "statement FX lines" if source == "statement"
                 else "receipt rates"
@@ -1108,7 +1201,7 @@ def match_one(
                 tx.legal_entity_id, receipt.detected_vendor,
                 receipt.detected_currency, tx.transaction_currency,
             )
-            if ref is not None and ref[1] == "configured":
+            if ref is not None and ref[1] in ("configured", "ecb_month"):
                 score_rate = ref[0]
                 score_src = _rate_phrase()
             elif learned_mean is not None and lo <= learned_mean <= hi:
