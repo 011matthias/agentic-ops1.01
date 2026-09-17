@@ -27,6 +27,17 @@ _FONT_CANDIDATES = (
 _FONT_NAME = "ReportBody"
 _FONT_BOLD = "ReportBold"
 
+# Both documents lay out on A4 portrait with 14 mm margins, and reportlab's
+# frame keeps 6 pt of padding inside the margins on each side, so a table
+# has 210 mm - 28 mm - 12 pt = 503.9 pt. A wider table is centered past both
+# sides of the frame, and once it spills past the margin its outer columns
+# are cut off the paper while the text layer still reads the clipped cells,
+# which is how the 732 pt listing shipped from item 24 (2026-08-23) to item
+# 143. `tests/test_pdf_tables_fit_the_page.py`
+# measures every table the builders draw against the real frame.
+PAGE_MARGIN_MM = 14
+TABLE_WIDTH_MAX = (210 - 2 * PAGE_MARGIN_MM) * 72 / 25.4 - 2 * 6
+
 
 def register_fonts() -> tuple[str, str]:
     """Register a full-Latin TTF pair with reportlab, or fall back to the

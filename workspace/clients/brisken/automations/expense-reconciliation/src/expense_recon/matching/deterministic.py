@@ -1716,6 +1716,80 @@ def scored_pairs(
     return out
 
 
+def _merchant_precedence(
+    cands_by_tx: "dict[str, list[_Candidate]]",
+    rec_by_id: "Mapping[str, Receipt]",
+    transactions: "list[Transaction]",
+    cfg: MatchingConfig,
+    ambiguous_tx_ids: "set[str]" = frozenset(),
+) -> None:
+    """Item 133 rule (b), in place: demote an exact-amount same-currency pair
+    whose merchant disagrees when another charge's pair for the same receipt
+    has a merchant that agrees (see the call site in `match_month`). A rival
+    counts only when this receipt is that charge's top-ranked candidate and
+    the charge is not ambiguous: a rival charge that will take a better
+    receipt of its own is spoken for (round B's `uniqueness_spoken_for`
+    idea), and demoting against it would only flag, or strand, the receipt.
+    Every verdict is taken on the candidates as they stood before any
+    demotion, so the order of charges cannot change the result."""
+    tx_ccy = {tx.transaction_id: tx.transaction_currency for tx in transactions}
+    floor = cfg.uniqueness_vendor_dominance_min
+    margin = cfg.uniqueness_vendor_dominance_margin
+    by_doc: dict[str, list[tuple[str, _Candidate]]] = {}
+    top_key: dict[str, tuple] = {}
+    for tx_id, cands in cands_by_tx.items():
+        if cands:
+            top_key[tx_id] = max(c.sort_key for c in cands)
+        for c in cands:
+            by_doc.setdefault(c.match.document_id, []).append((tx_id, c))
+
+    def exact_same_currency(tx_id: str, c: _Candidate) -> bool:
+        receipt = rec_by_id.get(c.match.document_id)
+        return (
+            c.match.match_type in (MatchType.EXACT, MatchType.PROBABLE)
+            and c.match.amount_score == 1.0
+            and receipt is not None
+            and receipt.detected_currency == tx_ccy.get(tx_id)
+        )
+
+    demote: dict[tuple[str, str], str] = {}
+    for doc, pairs in by_doc.items():
+        for tx_id, c in pairs:
+            if not exact_same_currency(tx_id, c) or c.vendor_signal >= floor:
+                continue
+            rivals = [
+                (r_tx, r) for r_tx, r in pairs
+                if r_tx != tx_id
+                and r_tx not in ambiguous_tx_ids
+                and r.sort_key == top_key.get(r_tx)
+                and r.is_determ
+                and r.match.confidence > CARDS_DIFFER_CONFIDENCE
+                and r.vendor_signal >= floor
+                and r.vendor_signal >= c.vendor_signal + margin
+            ]
+            if rivals:
+                best = max(rivals, key=lambda p: p[1].vendor_signal)[1]
+                demote[(tx_id, doc)] = (
+                    f"the merchants differ ({round(c.vendor_signal * 100)}%) while "
+                    f"another charge's merchant matches this receipt "
+                    f"({round(best.vendor_signal * 100)}%)"
+                )
+    for tx_id, cands in cands_by_tx.items():
+        for i, c in enumerate(cands):
+            note = demote.get((tx_id, c.match.document_id))
+            if note is None:
+                continue
+            cands[i] = replace(
+                c,
+                match=replace(
+                    c.match,
+                    confidence=min(c.match.confidence, CARDS_DIFFER_CONFIDENCE),
+                    requires_review=True,
+                    reason=c.match.reason.rstrip(".") + f". Review: {note}.",
+                ),
+            )
+
+
 def match_month(
     transactions: list[Transaction],
     receipts: list[Receipt],
@@ -1917,6 +1991,22 @@ def match_month(
         if len(tied) > 1:
             ambiguous_tx_ids.add(tx_id)
             outcome.ambiguous.extend(c.match for c in tied)
+
+    # Item 133 rule (b), 2026-09-17: a same-currency pair on the exact amount
+    # does not consult the merchant, so a same-day charge from another
+    # merchant (EXACT, 0.99) outranked the receipt's own merchant a few days
+    # later (PROBABLE, 0.85), held the receipt, and left the right charge with
+    # no candidate. Such a pair yields only to a rival for the SAME receipt
+    # whose merchant agrees, by round B's dominance test (rival >= the
+    # dominance minimum and ahead by the margin), and only when that receipt
+    # is the rival charge's own first choice and the rival is not awaiting a
+    # human pick: it keeps its evidence, asks for review, says why, and ranks
+    # at the cards-differ confidence. Applied after pass 1, so it never breaks
+    # a tie a person should settle. With no such rival nothing changes, which
+    # is every exact-amount pair on the eight measured datasets (Network
+    # Solutions, the Google twins, August `0025`).
+    if cfg.uniqueness_vendor_dominance_min > 0.0:
+        _merchant_precedence(cands_by_tx, rec_by_id, transactions, cfg, ambiguous_tx_ids)
 
     # Pass 2: greedy bipartite assignment over all candidates from
     # non-ambiguous transactions, highest sort_key first. A transaction
