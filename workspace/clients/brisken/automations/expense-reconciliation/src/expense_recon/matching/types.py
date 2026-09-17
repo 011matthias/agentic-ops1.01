@@ -51,6 +51,7 @@ class ClassificationSource(str, Enum):
     REVIEW = "REVIEW"      # Tier 3: confidence too low or no signal at all
     LEARNED = "LEARNED"    # Tier 1: confirmed merchant->category recalled from memory (Phase 2)
     REGISTRY = "REGISTRY"  # Tier 1: canonical merchant-registry default (2026-07-29); preempts the LLM
+    EDITED = "EDITED"      # Tier 1: a reviewer set this category by hand (item 109)
     UNCLASSIFIED = "UNCLASSIFIED"  # pre-categorization default
 
 

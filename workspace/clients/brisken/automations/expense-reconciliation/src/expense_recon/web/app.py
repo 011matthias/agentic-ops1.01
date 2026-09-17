@@ -21,6 +21,8 @@ reached parity. This app serves JSON plus file downloads only:
                                    manual-match, disposition,
                                    duplicates/resolve, publish, unpublish,
                                    forget, commit-memory
+    PUT  /api/runs/{id}/charges/{tx}/category   a category on a CHARGE row
+                                   (no receipt needed; item 109)
     GET/PUT /api/settings          §16 export policy
     GET  /api/compare              across-runs bucket deltas
     GET  /api/memory               learned facts; POST /api/memory/forget,
@@ -169,6 +171,8 @@ from .service import (  # item 88
     commit_month_memory,
 )
 from .service import confirm_expense_category  # note #62
+from .service import set_charge_category  # item 109
+from .service import attach_expense_card_tabs, attach_run_card_tabs  # item 138
 from .service import TURN_DECIDE, confirm_matched_pairs  # item 101
 from .month_readiness import (  # items 99 + 100
     PUBLISH_MONTH_NOT_COMPLETE,
@@ -197,6 +201,7 @@ from .store import (
     VALID_DUP_RESOLUTIONS,
     VALID_STATUSES,
     RunStore,
+    without_retired_entity_keys,
 )
 from . import auth, machine, ratelimit
 
@@ -2270,6 +2275,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             month_batch=lambda month: _month_batch_id(store, month),
         )
 
+    def _expense_page_view(store: RunStore, run) -> dict:
+        """The Expenses page's payload: `_expense_view` plus its card tabs
+        (item 138). Only the page GETs build the tabs; the edit routes that
+        reply with `_expense_view`'s summary skip the extra view build."""
+        return attach_expense_card_tabs(
+            _expense_view(store, run), run,
+            overrides=store.get_category_overrides(run.run_id),
+            field_overrides=store.get_expense_field_overrides(run.run_id),
+            edits=store.get_expense_edits(run.run_id),
+            resolutions=store.get_duplicate_resolutions(run.run_id),
+            decisions=store.get_decisions(run.run_id),
+        )
+
     def _month_batch_id(store: RunStore, month: str) -> str | None:
         """The batch month routing picks for "YYYY-MM", or None."""
         from .intake_mail import _open_batch_for_month, _ym
@@ -2335,8 +2353,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # surface (decisions / confirm-ready / exports) unchanged. The
             # expense grid stays reachable via GET /api/expense-batches/{id}.
             if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
-                return JSONResponse(jsonable_encoder(_expense_view(store, run)))
-            view = _workbench_view(store, run)
+                return JSONResponse(jsonable_encoder(_expense_page_view(store, run)))
+            # Item 138: the Matching page's card tabs ride this GET only.
+            view = attach_run_card_tabs(
+                _workbench_view(store, run), run,
+                store.get_expense_field_overrides(run_id),
+            )
         # build_view already carries run_id, label, summary, rows,
         # unmatched_*, duplicate_groups, category_options: return it as the
         # SPA render model.
@@ -2461,7 +2483,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             settings = store.get_settings()
             return JSONResponse({
-                **settings,
+                **without_retired_entity_keys(settings),
                 "categories": list(EXPENSE_CATEGORIES),
                 "entity_options": available_entities(settings),
                 "cards_effective": [
@@ -2581,11 +2603,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 cleaned[name] = value
             patch[key] = cleaned
         # Legal-entity registry (Phase 5): {label: {org_id, chart_path,
-        # default_paid_through, scope_groups, account_picks}}. String
-        # fields trim; list fields must be lists of strings. The whole map
-        # replaces the stored one (same contract as the other map keys), so
-        # deleting an entity is omitting it. `categories` is read-only and
-        # never persisted.
+        # default_paid_through, scope_groups}}. String fields trim; list
+        # fields must be lists of strings. The whole map replaces the stored
+        # one (same contract as the other map keys), so deleting an entity is
+        # omitting it. `categories` is read-only and never persisted.
+        # A retired field (`RETIRED_ENTITY_KEYS`) is dropped whatever its
+        # shape, never a 400: the published SPA sends `account_picks` on
+        # every entities save until its removal prompt is applied.
         if "entities" in body:
             raw = body["entities"]
             if not isinstance(raw, dict):
@@ -2609,7 +2633,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 for skey in ("org_id", "chart_path", "default_paid_through"):
                     if str(ent.get(skey) or "").strip():
                         entry[skey] = str(ent[skey]).strip()
-                for lkey in ("scope_groups", "account_picks"):
+                for lkey in ("scope_groups",):
                     if ent.get(lkey) is None:
                         continue
                     if not isinstance(ent[lkey], list):
@@ -2709,7 +2733,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             settings = store.set_settings(patch, _now_iso())
         return JSONResponse({
-            **settings, "categories": list(EXPENSE_CATEGORIES),
+            **without_retired_entity_keys(settings),
+            "categories": list(EXPENSE_CATEGORIES),
             # What this request wrote, and what it carried that the server
             # derives. A caller shows "saved" on its own key appearing in
             # `applied`, never on the 200 alone.
@@ -3101,6 +3126,45 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     run_id, document_id, i, category, account, now
                 )
         return JSONResponse({"ok": True})
+
+    @app.put("/api/runs/{run_id}/charges/{transaction_id}/category")
+    async def put_charge_category(
+        run_id: str, transaction_id: str, request: Request
+    ):
+        """Item 109: the category on a charge that has no receipt.
+
+        {"category": "<one of the eight>", "zoho_account": "<optional>"};
+        category null / "" clears the pick and the tool's guess shows again.
+        The sibling of the per-receipt category routes, writing the same
+        `category_overrides` table under the charge's own pseudo-receipt id,
+        so the CSV, the journal and the report carry it and sign-off teaches
+        it under the bank's description."""
+        body = await request.json()
+        raw = (body or {}).get("category")
+        category = "" if raw is None else str(raw).strip()
+        zoho_account = str((body or {}).get("zoho_account") or "").strip()
+        if category and category not in EXPENSE_CATEGORIES:
+            return JSONResponse(
+                {"error": f"category must be one of {sorted(EXPENSE_CATEGORIES)}",
+                 "categories": sorted(EXPENSE_CATEGORIES)},
+                status_code=400,
+            )
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            err = set_charge_category(
+                store, run, transaction_id, category or None,
+                zoho_account or None, _now_iso(),
+            )
+            if err is not None:
+                code = 404 if err == "unknown charge" else 400
+                return JSONResponse({"error": err}, status_code=code)
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+            resolutions = store.get_duplicate_resolutions(run_id)
+        view = build_view(run, decisions, overrides, resolutions)
+        return JSONResponse({"ok": True, "summary": view["summary"]})
 
     @app.post("/api/runs/{run_id}/manual-match")
     async def post_manual_match(run_id: str, request: Request):
@@ -3724,7 +3788,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run, err = _expense_run_or_error(store, run_id)
             if err is not None:
                 return err
-            return JSONResponse(jsonable_encoder(_expense_view(store, run)))
+            return JSONResponse(jsonable_encoder(_expense_page_view(store, run)))
 
     @app.post("/api/expense-batches/{run_id}/receipts")
     async def post_batch_receipts(
