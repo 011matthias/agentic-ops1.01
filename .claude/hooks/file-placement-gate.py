@@ -10,6 +10,10 @@ basename pattern and:
   ADVISE   a token-bearing dotfile (.npmrc/.netrc/...) into a tracked path
   ADVISE   a data/PII export into a tracked, non-gitignored path
   ADVISE   write into an unknown top-level directory (no established home)
+  ASK      a NEW file under workspace/{clients,projects}/* (outside
+           automations/ and .scratch/) whose stem matches an existing
+           same-kind file once revision tokens are dropped, or whose name is
+           a snapshot shape (W1 purpose check, rule_no_file_bloat §3)
   PASS     edits to existing files; writes already in a known home;
            committable env templates (.env.example/.sample/.template);
            durable source/test/doc files that merely start with debug-/
@@ -227,6 +231,124 @@ def advise(text: str) -> None:
     }))
 
 
+# --- W1 new-file purpose check (rule_no_file_bloat §3) ----------------------
+# W2 decides WHERE a file goes; W1 decides WHETHER it should exist. The W1
+# pre-creation gate was recall-only, and the 2026-06-01 meji audit found 36
+# drafts, 9 snapshots, 10 one-off scripts and 3 superseded plans in one
+# context/ folder. This arm asks on a NEW file under a client or project
+# subtree when an existing same-kind file looks like the same thing, or when
+# the name is a snapshot shape.
+#
+# "Looks like the same thing" = equal stem skeleton: tokens that only mark a
+# revision (v2, final, a date, a bare number) are dropped before comparing, so
+# `plan-v2` ~ `plan` and `state-2026-09-17` ~ `state-2026-09-10`, while
+# `piece1-status` and `piece2-status` stay different pieces. Calibrated
+# 2026-09-17 by leave-one-out over the 858 text files in workspace/: a difflib
+# ratio >= 0.6 anywhere in the subtree would have asked on 70% of them, shared
+# content tokens on 26%; skeleton equality asks on 7.3% (mostly numbered
+# recording transcripts) and still catches 90% of synthetic -v2 / dated /
+# -final / copy variants of real files.
+W1_ROOT_RE = re.compile(r"^workspace/(clients|projects)/[^/]+/", re.IGNORECASE)
+W1_SKIP_DIRS = {
+    "automations", ".scratch", "node_modules", ".git", "__pycache__", ".venv",
+    "dist", "build", ".astro", ".next", ".vercel", ".pytest_cache", ".ruff_cache",
+}
+W1_FAMILY = {
+    ".md": "doc", ".markdown": "doc", ".txt": "doc", ".json": "json",
+    ".yaml": "yaml", ".yml": "yaml", ".csv": "table", ".tsv": "table",
+    ".py": "py", ".html": "html", ".htm": "html", ".js": "js", ".ts": "js",
+    ".mjs": "js", ".cjs": "js", ".sql": "sql",
+}
+W1_REVISION_TOKEN = re.compile(
+    r"^(v\d+|\d+|r\d+|rev\d*|round\d*|final|new|old|copy|draft|updated|update|"
+    r"latest|backup|bak|tmp|wip|fixed|revised|alt)$"
+)
+# Stems that legitimately repeat across a tree (one per folder by convention).
+W1_GENERIC_STEMS = {
+    "readme", "index", "skill", "main", "app", "init", "package", "config",
+    "settings", "styles", "style", "script", "page", "layout", "test", "tests",
+}
+W1_SNAPSHOT_RE = re.compile(r"(^state-)|(analysis)|(plan-v\d)|(status-\d{4})", re.IGNORECASE)
+W1_MAX_FILES = 20000  # walk cap: a runaway tree must not stall a Write
+
+
+def _w1_skeleton(stem: str) -> str:
+    tokens = [t for t in re.split(r"[^a-z0-9]+", stem.lower()) if t]
+    return "-".join(t for t in tokens if not W1_REVISION_TOKEN.match(t))
+
+
+def w1_near_duplicates(project_root: str, new_path: str) -> list[str]:
+    """Repo-relative paths of existing same-kind files whose stem skeleton
+    equals the new file's. Cache dirs are skipped: tools write those, never
+    the Write tool (brisken's Graph corpus cache alone is 1,847 JSON files)."""
+    stem, ext = os.path.splitext(os.path.basename(new_path))
+    family = W1_FAMILY.get(ext.lower())
+    skeleton = _w1_skeleton(stem)
+    if not family or not skeleton or skeleton in W1_GENERIC_STEMS:
+        return []
+    new_norm = os.path.normcase(os.path.normpath(new_path))
+    hits: list[str] = []
+    seen = 0
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        dirnames[:] = [d for d in dirnames
+                       if d not in W1_SKIP_DIRS and "cache" not in d.lower()]
+        for fn in filenames:
+            seen += 1
+            if seen > W1_MAX_FILES:
+                return hits
+            s, e = os.path.splitext(fn)
+            if W1_FAMILY.get(e.lower()) != family or _w1_skeleton(s) != skeleton:
+                continue
+            full = os.path.join(dirpath, fn)
+            if os.path.normcase(os.path.normpath(full)) == new_norm:
+                continue
+            hits.append(os.path.relpath(full, REPO).replace("\\", "/"))
+    return sorted(hits)
+
+
+def w1_purpose_check(abspath: str, rel: str) -> None:
+    """Ask on a new file that looks like bloat; silent otherwise."""
+    m = W1_ROOT_RE.match(rel)
+    if not m:
+        return
+    parts = rel.split("/")
+    if any(p in ("automations", ".scratch") for p in parts[3:-1]):
+        return
+    if os.path.exists(abspath):
+        return  # overwrite of an existing file: W1 is about creation
+    fname = parts[-1]
+    stem = os.path.splitext(fname)[0]
+    project_root = os.path.join(REPO, *parts[:3])
+    near = w1_near_duplicates(project_root, abspath)
+    snapshot = bool(W1_SNAPSHOT_RE.search(stem))
+    if not near and not snapshot:
+        return
+    why = []
+    if near:
+        shown = near[:5]
+        more = f" (+{len(near) - 5} more)" if len(near) > 5 else ""
+        why.append("existing file(s) that look like the same thing: "
+                   + ", ".join(shown) + more)
+    if snapshot:
+        why.append(f"'{stem}' is a snapshot-shaped name (state-/analysis/plan-vN/status-YYYY)")
+    log_fire(f"ASK w1-purpose {rel} near={len(near)} snapshot={snapshot}")
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "ask",
+            "permissionDecisionReason": (
+                f"NEW-FILE PURPOSE CHECK (W1, rule_no_file_bloat §3): creating "
+                f"'{rel}'. Found " + "; ".join(why) + ". Before creating it: "
+                "(1) does an existing file already fit? Update it instead. "
+                "(2) who else will read this? (3) when will it be re-read? "
+                "(4) what decision or action does it enable? If this supersedes "
+                "an older file, delete the old one in the same change (W1 §4). "
+                "A finding you can print belongs in the reply, not a file."
+            ),
+        }
+    }))
+
+
 def main() -> int:
     try:
         raw = sys.stdin.read()
@@ -373,7 +495,9 @@ def main() -> int:
         )
         return 0
 
-    return 0  # in a known home — pass through silently
+    # 5. In a known home: last, the W1 whether-to-create check (ask or silent).
+    w1_purpose_check(abspath, rel)
+    return 0
 
 
 if __name__ == "__main__":

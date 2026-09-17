@@ -79,6 +79,19 @@ Before creating ANY file under `workspace/clients/*/` or
 If all four pass cleanly, write the file. If any fail, surface
 the finding inline instead.
 
+**Structural backstop (built 2026-09-17).** `file-placement-gate.py`
+asks (permission prompt) on a NEW file under these trees, outside
+`automations/` and `.scratch/`, when an existing same-kind file in the
+same client or project has the same stem once revision tokens are
+dropped (`plan-v2` against `plan`, `state-2026-09-17` against
+`state-2026-09-10`, `-final`, `copy`), or when the name is a snapshot
+shape (`state-`, `analysis`, `plan-vN`, `status-YYYY`). The prompt lists
+the near-duplicates and these four questions. It cannot see a bloat
+file with a fresh name, so the four questions stay agent discipline.
+Calibrated against the 858 text files in `workspace/`: asks on 7.3% of
+them, catches 90% of synthetic revision copies. Tests:
+`tools/tests/test_file_placement_gate.py` (`test_w1_*`).
+
 ## 4. Supersession discipline (all context data)
 
 When new context data replaces old context data, DELETE the old in
