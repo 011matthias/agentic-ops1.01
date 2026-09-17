@@ -362,7 +362,8 @@ one event to the month's snapshot (`rematch_log`, capped at 50):
 ```
 
 `trigger` is one of `statement` (attach), `reread`, `receipts` (mail, drop,
-folder), `cards`, `master_data`, `set_aside`, `trip`. Oldest first. The
+folder), `cards`, `master_data`, `set_aside`, `trip`, and since item 112
+`adjacent_receipts` (a neighbouring month's arrival). Oldest first. The
 notifier diffs on `event_id` and mails one line per event ("August 2026:
 14 of 111, pool 7 (reread, 2026-09-11T14:24:46+00:00)"); an event with no
 id is never announced.
@@ -2877,6 +2878,7 @@ card or not.
 | `hint` | the printed payment method, or a batch hint assignment, named the card |
 | `override` | a per-row fix this month (`card_key`) |
 | `learned` | remembered from an earlier month's fix for this vendor |
+| `settled_charge` | item 111: the card of this month's charge the receipt settles (see "A receipt settling a charge takes its company and person") |
 | `none` | no card; `card` is null |
 
 **Strip learning that did not stick, fixed.** An assignment with learning on
@@ -3622,6 +3624,85 @@ and every `report_summary` / `other` verdict, is set aside as before. Applies
 on both entrances (a create that carries files, and an add to an open month);
 months already stored are not re-sorted, so a set-aside invoice there still
 needs the strip's restore. No new field.
+
+## A receipt arriving re-matches the neighbouring month it belongs to (item 112, 2026-09-17)
+
+A month borrows its neighbours' receipts dated inside its own statement
+period (item 61), but read them only when it re-matched itself. A receipt
+dated 07-31 landing in July after August's last re-match waited for an
+unrelated August event.
+
+Now every receipt ADDED to a company month (mail intake, drop, the batch's
+receipts upload: all go through the same add) and every month move owes a
+re-match to each neighbouring company month (previous or next by label, as
+item 61 decides neighbours) that holds a statement whose period (min..max of
+its charge dates) covers the receipt's date. The neighbour's
+`rematch_pending` mark (item 113) is written inside the arrival's own lock
+span, trigger `adjacent_receipts`; the neighbour re-matches after the
+arrival's own month, outside the lock, and its `rematch_log` event carries
+`trigger: "adjacent_receipts"`. A failure never fails the add or the move:
+it is recorded on the neighbour's mark (`error`, `failed_at`, `attempts`)
+and paid by the neighbour's next trigger or the next boot (`resume`).
+
+- Dates are the rows' effective dates, so a typed date moved with a month
+  move counts.
+- A trip batch owes nothing here: its receipts re-match months through the
+  trip trigger (`trip`) only.
+- A month move owes the TARGET's other neighbour; the source re-matches
+  anyway, and nothing is owed when the target already held the bytes.
+- The add and move replies carry `months_rematched[]` (`{run_id, ...rematch
+  result}`) when a neighbour re-matched, the key trips already use, and
+  `neighbour_rematch_error` when the neighbours could not even be read.
+
+Not built: a month CREATED with its first receipts (mail or drop into a month
+that did not exist) owes its neighbours nothing, because that create runs
+under the month-creation lock every arrival waits on; and a borrowed receipt
+is still not offered in a charge's hand-pick list (`assignable_receipts`
+lists the month's own pool only). Route-level in
+`tests/test_neighbour_rematch_item_112.py`.
+
+## A receipt settling a charge takes its company and person: `card_source: "settled_charge"` (item 111, 2026-09-17)
+
+July 2026 asked for a company and a person on 33 receipts while 19 of them
+already settled a charge whose card names both.
+
+On `GET /api/expense-batches/{id}` (the Expenses page, its `boxes` and
+counts) a receipt of this month that a charge of this month settles takes
+that charge's card when the receipt has no card of its own. "Settles" is the
+workbench's effective verdict: the charge's `effective_bucket` is
+`reconciled` and its `chosen_document_id` is the receipt (a pending or
+confirmed pair; a rejected pair, or one still in review, lends nothing). The
+card is the charge's registry card in the month's card snapshot (its
+`coverage_key` when that names a registry card); a card the registry cannot
+name lends nothing, and neither does a receipt borrowed from a neighbouring
+month or a trip.
+
+The card resolves through the same chain as a per-row pick: the row's
+`card`, `legal_entity_id` (`entity_source: "card"`), `person`
+(`person_source: "card"`) and `posting_paid_through` follow it, and the row
+counts as answered for `needs_entity`, `needs_person` and
+`needs_company_or_person`. `card_source` is the NEW value
+`settled_charge`. Anything explicit on the receipt wins: a `card_key` pick
+(`override`), a card from the printed method or an assigned hint (`hint`),
+any card number the receipt prints (known or not), a `legal_entity` override
+(for the company), and a confirmed private expense. A card remembered from
+an earlier month (`learned`) gives way. The row is a company-card row:
+`can_mark_private: false`, `suggested_private: false`, and the private-card
+routes refuse it with `code: "company_card"`.
+
+The month's documents resolve these rows the same way: `GET
+/runs/{id}/expenses.csv` (`Legal Entity`, `Paid Through`) and `GET
+/runs/{id}/expense-report.pdf` (the listing quotes the CSV's rows, and its
+card pass uses the same cards) read the same verdicts
+(`service.export_settled_cards`), so a row the Expenses page resolved from
+its charge never prints `(entity - assign)` there, and a rejected pair
+does. Neither document has a person column for a company month. Not
+inherited: the run payload (`cards_differ`), the matcher's card scope, the
+reconciliation PDF (it prints no company or person; a held receipt is filed
+under its charge's card already) and the cost-center totals roll-up. SPA half:
+`docs/lovable-entity-from-charge-prompt.md` (the source line and the card
+Select on a `settled_charge` row; a stale SPA shows the card chip and no
+Select). Route-level in `tests/test_entity_from_settled_charge_item_111.py`.
 
 ## The month page split by card: `card_sections` + `card_section` (item 138, 2026-09-17)
 
