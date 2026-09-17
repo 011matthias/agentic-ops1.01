@@ -14,7 +14,7 @@ When beginning a new conversation where a client name is mentioned or evident fr
    - When scope is broad or unknown, grep the store (`--no-ignore`) for the system/tool at hand rather than loading it whole.
    - Platform work: also read `workspace/projects/platform/context/brand.md` for canonical names
 
-7. **Output session header** as the FIRST block of every session (after `/resume` or when scope is evident). Mandatory — skipping = friction event (`missed-session-header`):
+7. **Output session header** as the FIRST block of every session (after `/resume` or when scope is evident; under `/resume` the WHAT NOT TO RETRY block precedes it). Mandatory — skipping = friction event (`missed-session-header`):
    ```
    ---
    **[{SCOPE}] {task-desc}**

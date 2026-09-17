@@ -19,6 +19,9 @@ Subcommands:
                     append friction-register rows. Prints the confirm line.
   archive-register  Move resolved rows older than --days to
                     docs/friction-register-archive.md.
+  not-worked        Print the WHAT NOT TO RETRY block from the latest context
+                    YAML (per --client when given). /comd_resume renders it
+                    before anything else.
 
 Payload shape for finalize (--payload FILE, or '-' for stdin):
 {
@@ -34,6 +37,7 @@ Payload shape for finalize (--payload FILE, or '-' for stdin):
   "friction_rows": [{"client": "x", "type": "slow-path", "desc": "...",
                       "resolved": "No", "fix": "structural",
                       "regression": "No"}],
+  "not_worked": [{"approach": "...", "reason": "..."}],   // required; or "None"
   "yaml_clients": {"brisken": {"orchestrator": "fastapi", ...}}
 }
 """
@@ -65,11 +69,44 @@ SESSION_ENTRY_FIELDS = [
     ("focus", "Focus"),
     ("projects_line", "Projects"),
     ("built", "Built"),
+    ("not_worked_line", "Did NOT work"),
     ("friction", "Friction"),
     ("gates", "Gates"),
     ("autonomy", "Autonomy"),
     ("outcome", "Outcome"),
 ]
+
+
+def normalize_not_worked(value) -> tuple[list[dict] | str | None, str]:
+    """Validate the payload's `not_worked` field. Returns (normalized, error).
+
+    Failed approaches are first-class checkpoint content (ECC port item 7): the
+    next session must not re-run a dead end because it only survived as a line
+    buried in Working Notes. So the field is REQUIRED, "None" must be written
+    explicitly (an omitted field and an empty list are both refused, since
+    either can mean "forgot"), and every entry names the approach AND the exact
+    reason it failed."""
+    if isinstance(value, str) and value.strip().lower() == "none":
+        return "None", ""
+    if not isinstance(value, list) or not value:
+        return None, ('payload missing required field: not_worked (a list of '
+                      '{"approach", "reason"} entries, or "None" when nothing failed)')
+    out = []
+    for i, item in enumerate(value, 1):
+        if not isinstance(item, dict):
+            return None, f"not_worked entry {i} must be an object with approach + reason"
+        approach = " ".join(str(item.get("approach", "")).split())
+        reason = " ".join(str(item.get("reason", "")).split())
+        if not approach or not reason:
+            return None, f"not_worked entry {i} needs both a non-empty approach and reason"
+        out.append({"approach": approach, "reason": reason})
+    return out, ""
+
+
+def not_worked_line(value: list[dict] | str) -> str:
+    if value == "None":
+        return "None"
+    return "; ".join(f"{e['approach']} (why not: {e['reason']})" for e in value)
 
 
 def _utf8_stdout() -> None:
@@ -147,6 +184,8 @@ def update_session_log(root: Path, payload: dict) -> tuple[int, Path]:
     heading_suffix = " (mini)" if payload.get("mini") else ""
     lines = [f"\n### Session {n} — {payload['topic']}{heading_suffix}", f"**Type:** {work_type}"]
     entry = {**entry, "projects_line": ", ".join(projects)} if projects else dict(entry)
+    if payload.get("not_worked"):
+        entry["not_worked_line"] = not_worked_line(payload["not_worked"])
     for key, label in SESSION_ENTRY_FIELDS:
         if entry.get(key):
             lines.append(f"**{label}:** {entry[key]}")
@@ -263,10 +302,17 @@ def merge_context_yaml(root: Path, payload: dict, checkpoint_rel: str, context_r
         checkpoint_file=checkpoint_rel,
         work_type=payload["work_type"],
     )
+    if payload.get("not_worked"):
+        data["not_worked"] = payload["not_worked"]
     clients = data.setdefault("clients", {})
     for cid, fragment in (payload.get("yaml_clients") or {}).items():
         base = clients.get(cid) or {}
         base.update(fragment)
+        # Per client too: a later checkpoint for another client overwrites the
+        # top-level list, and /resume {client} reads the client's own entry.
+        if payload.get("not_worked"):
+            base["not_worked"] = payload["not_worked"]
+            base["not_worked_checkpoint"] = payload["topic"]
         clients[cid] = base
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(dump_context(data), encoding="utf-8")
@@ -483,6 +529,54 @@ def cmd_pre(root: Path, args: argparse.Namespace) -> int:
     return 0
 
 
+# ----------------------------------------------------------------- not-worked
+
+
+def _context_yamls(sessions: Path) -> list[Path]:
+    """Context YAMLs newest date first (the file name carries the date)."""
+    return sorted(sessions.glob("*-context.yaml"), key=lambda p: p.name, reverse=True)
+
+
+def cmd_not_worked(root: Path, args: argparse.Namespace) -> int:
+    """Always prints a block, so its absence at resume is itself visible."""
+    base = Path(args.context_root).resolve() if args.context_root else main_worktree(root)
+    client = (args.client or "").strip()
+    docs = []
+    for path in _context_yamls(base / "docs" / "sessions"):
+        try:
+            data = load_context_text(path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        if isinstance(data, dict):
+            docs.append((str(data.get("checkpoint_date") or path.name[:10]), data))
+    found, source, value = False, "", None
+    for date, data in docs if client else []:
+        entry = (data.get("clients") or {}).get(client)
+        if isinstance(entry, dict):
+            # The top-level topic belongs to the day's LAST checkpoint, which
+            # may be another client's; the client entry names its own.
+            topic = entry.get("not_worked_checkpoint") or ""
+            found, value = True, entry.get("not_worked")
+            source = f"{date} {topic}, {client}" if topic else f"{date}, {client}"
+            break
+    if not found and docs:  # no client scope, or the client has no entry yet
+        date, data = docs[0]
+        found, value = True, data.get("not_worked")
+        source = f"{date} {data.get('checkpoint_topic') or ''}".strip()
+    print("WHAT NOT TO RETRY" + (f" (latest checkpoint: {source})" if found else ""))
+    if not found:
+        print("- no checkpoint context YAML found")
+    elif value is None:
+        print("- not recorded (that checkpoint predates the required field)")
+    elif value == "None" or not isinstance(value, list):
+        print("- None")
+    else:
+        for e in value:
+            if isinstance(e, dict):
+                print(f"- {e.get('approach', '?')} (why not: {e.get('reason', '?')})")
+    return 0
+
+
 # ------------------------------------------------------------------- finalize
 
 
@@ -493,6 +587,11 @@ def cmd_finalize(root: Path, args: argparse.Namespace) -> int:
         if not payload.get(field):
             print(f"payload missing required field: {field}")
             return 2
+    not_worked, err = normalize_not_worked(payload.get("not_worked"))
+    if err:
+        print(err)
+        return 2
+    payload["not_worked"] = not_worked
     payload.setdefault("date", today())
 
     folder = folder_for(root, payload["date"], payload["topic"])
@@ -547,12 +646,18 @@ def main(argv: list[str] | None = None) -> int:
     p_arc.add_argument("--dry-run", action="store_true",
                        help="report what would move; write nothing")
 
+    p_nw = sub.add_parser("not-worked", help="print WHAT NOT TO RETRY from the latest checkpoint")
+    p_nw.add_argument("--client", help="scope to this client's latest checkpoint entry")
+    p_nw.add_argument("--context-root", help="where the context YAMLs live (default: primary clone)")
+
     args = ap.parse_args(argv)
     root = Path(args.root).resolve()
     if args.cmd == "pre":
         return cmd_pre(root, args)
     if args.cmd == "finalize":
         return cmd_finalize(root, args)
+    if args.cmd == "not-worked":
+        return cmd_not_worked(root, args)
     return archive_register(root, args.days, dry_run=args.dry_run)
 
 

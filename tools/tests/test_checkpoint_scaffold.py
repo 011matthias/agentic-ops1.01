@@ -39,6 +39,7 @@ def base_payload(**over) -> dict:
             "friction": "None",
             "outcome": "Shipped",
         },
+        "not_worked": "None",
     }
     payload.update(over)
     return payload
@@ -120,6 +121,101 @@ class TestFinalizeFresh:
 
     def test_missing_required_field(self, root: Path):
         assert run_finalize(root, {"topic": "X"}) == 2
+
+
+class TestNotWorked:
+    """Failed approaches are a required, first-class checkpoint field (ECC
+    port item 7). Every test runs through finalize / the not-worked
+    subcommand, the callers the fix changed."""
+
+    @pytest.fixture()
+    def root(self, tmp_path: Path) -> Path:
+        (tmp_path / "docs" / "sessions").mkdir(parents=True)
+        return tmp_path
+
+    def _ctx(self, root: Path, date: str = "2026-07-23") -> dict:
+        return cs.load_context_text(
+            (root / "docs" / "sessions" / f"{date}-context.yaml").read_text(encoding="utf-8"))
+
+    def _resume_block(self, root: Path, capsys, *extra: str) -> str:
+        capsys.readouterr()
+        assert cs.main(["--root", str(root), "not-worked", "--context-root", str(root),
+                        *extra]) == 0
+        return capsys.readouterr().out
+
+    @pytest.mark.parametrize("value", [None, [], "", "nothing"])
+    def test_omitted_or_empty_is_refused(self, root: Path, value):
+        payload = base_payload()
+        if value is None:
+            del payload["not_worked"]
+        else:
+            payload["not_worked"] = value
+        assert run_finalize(root, payload) == 2
+        assert not (root / "docs" / "sessions" / "2026-07-23.md").exists()
+
+    def test_entry_without_reason_is_refused(self, root: Path):
+        payload = base_payload(not_worked=[{"approach": "retry the upload", "reason": " "}])
+        assert run_finalize(root, payload) == 2
+
+    def test_none_is_written_to_log_and_yaml(self, root: Path):
+        assert run_finalize(root, base_payload(not_worked="none")) == 0
+        log = (root / "docs" / "sessions" / "2026-07-23.md").read_text(encoding="utf-8")
+        assert "**Did NOT work:** None" in log
+        assert self._ctx(root)["not_worked"] == "None"
+
+    def test_entries_carried_into_log_yaml_and_client(self, root: Path):
+        failed = [{"approach": "tail-read 64 KB", "reason": "a single tool result line exceeded it"},
+                  {"approach": "hot-reload via /hooks", "reason": "event not delivered"}]
+        payload = base_payload(work_type="client-dev", projects=["brisken"], section="brisken",
+                               not_worked=failed,
+                               yaml_clients={"brisken": {"orchestrator": "fastapi"}})
+        assert run_finalize(root, payload) == 0
+        log = (root / "docs" / "sessions" / "2026-07-23.md").read_text(encoding="utf-8")
+        assert ("**Did NOT work:** tail-read 64 KB (why not: a single tool result line "
+                "exceeded it); hot-reload via /hooks (why not: event not delivered)") in log
+        ctx = self._ctx(root)
+        assert ctx["not_worked"] == failed
+        assert ctx["clients"]["brisken"]["not_worked"] == failed
+
+    def test_resume_block_prints_latest_entries(self, root: Path, capsys):
+        run_finalize(root, base_payload(topic="Old", date="2026-07-22",
+                                        not_worked=[{"approach": "stale", "reason": "old"}]))
+        run_finalize(root, base_payload(topic="New", not_worked=[
+            {"approach": "fold ledger into feature PR", "reason": "splits the register"}]))
+        out = self._resume_block(root, capsys)
+        assert out.startswith("WHAT NOT TO RETRY (latest checkpoint: 2026-07-23 New)")
+        assert "- fold ledger into feature PR (why not: splits the register)" in out
+        assert "stale" not in out
+
+    def test_resume_block_prints_none_explicitly(self, root: Path, capsys):
+        run_finalize(root, base_payload())
+        out = self._resume_block(root, capsys)
+        assert "WHAT NOT TO RETRY" in out and "- None" in out
+
+    def test_resume_block_is_client_scoped(self, root: Path, capsys):
+        run_finalize(root, base_payload(
+            topic="Brisken Work", date="2026-07-22", work_type="client-dev",
+            projects=["brisken"], yaml_clients={"brisken": {"orchestrator": "fastapi"}},
+            not_worked=[{"approach": "COM draft loader", "reason": "Graph-first rule"}]))
+        run_finalize(root, base_payload(topic="System Work"))  # newer, no brisken entry
+        # Same-day later checkpoint for another client overwrites the top level.
+        run_finalize(root, base_payload(topic="Meji Work", date="2026-07-22",
+                                        yaml_clients={"meji": {"orchestrator": "make"}}))
+        out = self._resume_block(root, capsys, "--client", "brisken")
+        assert "2026-07-22 Brisken Work, brisken" in out
+        assert "Meji Work" not in out
+        assert "- COM draft loader (why not: Graph-first rule)" in out
+        # An unknown scope falls back to the newest checkpoint.
+        assert "System Work" in self._resume_block(root, capsys, "--client", "sys")
+
+    def test_resume_block_without_any_yaml(self, root: Path, capsys):
+        assert "no checkpoint context YAML found" in self._resume_block(root, capsys)
+
+    def test_resume_block_flags_pre_field_checkpoint(self, root: Path, capsys):
+        (root / "docs" / "sessions" / "2026-07-01-context.yaml").write_text(
+            cs.dump_context({"checkpoint_date": "2026-07-01", "checkpoint_topic": "Legacy"}),
+            encoding="utf-8")
+        assert "not recorded" in self._resume_block(root, capsys)
 
 
 class TestArchiveRegister:

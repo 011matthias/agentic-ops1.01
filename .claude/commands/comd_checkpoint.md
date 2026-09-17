@@ -80,6 +80,13 @@ Write to the target path from `pre`, using the template below (Mini template in 
 
 ---
 
+## What Did NOT Work (and why)
+- **[Approach]:** [exact reason it failed: the error, the measured number, the constraint]
+
+[Required. Write `None` when nothing failed; an absent section is not "None".]
+
+---
+
 ## Files Modified
 | File | Action | Purpose |
 |------|--------|---------|
@@ -104,7 +111,7 @@ Write to the target path from `pre`, using the template below (Mini template in 
 - [Question]
 
 ### Working Notes
-Findings and intermediate state expensive to re-derive: failed approaches (and why), partial results, best current hypotheses.
+Findings and intermediate state expensive to re-derive: partial results, best current hypotheses. (Failed approaches go in What Did NOT Work.)
 
 ### Reference Materials
 - [URL or path]
@@ -144,6 +151,9 @@ Findings and intermediate state expensive to re-derive: failed approaches (and w
 
 ## What Was Done
 - [Item]
+
+## What Did NOT Work (and why)
+- **[Approach]:** [exact reason] (or `None`; required)
 
 ## Current Status
 [Where things stand]
@@ -192,6 +202,9 @@ Payload (write to `.scratch/` — gitignored):
   "friction_rows": [
     {"client": "{c}", "type": "{type}", "desc": "{description incl. gate + detected-by}", "resolved": "No", "fix": "{fix}", "regression": "{No | Yes (...)}"}
   ],
+  "not_worked": [
+    {"approach": "{what was tried}", "reason": "{exact reason it failed}"}
+  ],
   "yaml_clients": {
     "{client-id}": {
       "orchestrator": "{n8n|make|trigger-dev|fastapi}",
@@ -204,6 +217,8 @@ Payload (write to `.scratch/` — gitignored):
 ```
 
 The script bumps the session-log frontmatter, appends the derived `### Session {N}` entry, inserts the INDEX row (URL-encoded), merges the context YAML (add/update touched clients, others preserved), and appends the register rows. In mini mode omit `friction_rows`/`gates`/`autonomy`.
+
+`not_worked` is required in both modes and mirrors the checkpoint's What Did NOT Work section: `"None"` when nothing failed, otherwise one `{approach, reason}` entry per dead end. `finalize` exits 2 and writes nothing when it is omitted, an empty list, or an entry lacks a reason. It lands in the session-log entry (`**Did NOT work:**`), the context YAML top level, and each touched client's YAML entry, which is where `/comd_resume` prints WHAT NOT TO RETRY from.
 
 **Worktree note:** when the checkpoint's committed ledger edits go through a `docs/...` worktree (because siblings are live, per rule_branch_isolation §1), run `finalize` with `--root` = the worktree. The gitignored context YAML is auto-written to the **primary clone** (finalize detects the linked worktree via git and merges into `<primary>/docs/sessions/`, preserving any sibling's same-day entry) so it is never orphaned in the throwaway worktree. Do not hand-write it into the main tree; that risks clobbering a sibling's client context. Override the target only with `--context-root` if the auto-detect is wrong.
 
