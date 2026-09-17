@@ -84,6 +84,11 @@ def make_styles(body_font: str, bold_font: str) -> dict:
         "caption": ParagraphStyle(
             "caption", fontName=bold_font, fontSize=12, leading=15, spaceAfter=4,
         ),
+        # A heading inside a section (item 138: a card inside a cost center).
+        "subcaption": ParagraphStyle(
+            "subcaption", fontName=bold_font, fontSize=10, leading=13,
+            spaceBefore=6, spaceAfter=3,
+        ),
         "capsub": ParagraphStyle(
             "capsub", fontName=body_font, fontSize=9, leading=12, textColor=muted,
         ),

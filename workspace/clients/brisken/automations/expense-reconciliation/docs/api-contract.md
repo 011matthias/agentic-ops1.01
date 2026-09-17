@@ -1473,6 +1473,19 @@ per person). The report reads the registry LIVE from settings, as the grid
 does, so the two partition on the same names. Pinned by
 `tests/test_cost_center_report.py`.
 
+**Cards inside cost centers (item 138, owner ruling 2026-09-17).** When the
+month's listed receipts also reach two card sections or more (the rule the
+per-card listing uses when no cost center applies), each cost-center section
+orders its rows by the card that paid, on `card_sections`' key and order
+("No card" last). A section spanning two card groups or more gets a
+sub-heading per card with that card's table and `Card: N expenses · sums`
+line, then the section's own sums; a section on one card gets no card
+heading. The card's statement line is not printed inside a cost center. A
+held receipt whose own card differs is named under its card. Receipt pages
+stay after the listing, in listing order. The reconciliation report does not
+section by cost center and is unchanged. Pinned by
+`tests/test_expense_report_by_card_item_138.py`.
+
 ### Cross-month totals: `GET /api/cost-centers/totals` (step 5, added 2026-09-15)
 
 The only surface that aggregates ACROSS batches. "What has Lidar cost since
@@ -3727,3 +3740,54 @@ under its charge's card already) and the cost-center totals roll-up. SPA half:
 `docs/lovable-entity-from-charge-prompt.md` (the source line and the card
 Select on a `settled_charge` row; a stale SPA shows the card chip and no
 Select). Route-level in `tests/test_entity_from_settled_charge_item_111.py`.
+
+## The ECB rate's own clean band, and a drifted Settings rate (items 90 + 132, 2026-09-17)
+
+**Band.** A cross-currency pair whose reference rate is the ECB monthly
+average (`fx.reference_rate_source: "ecb_month"`) is a clean deterministic
+match within **2%** (`matching.fx_ecb_match_pct`, default 0.02); a rate typed
+in Settings (`"settings"`) and the self-derived rates (`"statement"`,
+`"receipts"`) keep 3% (`fx_reference_match_pct`). Between 2% and 3% an ECB pair
+now reads `match_type: "fx_judgment"`, `requires_review: true`,
+`fx.reference_gap_band: "review"`, and goes to the model and the reviewer;
+item 131's at-floor exception reads the same band, so a model rejection at
+exactly the floor on such a pair is not shown. No field is added or renamed.
+Live effect at deploy: none, because July and August match at their Settings
+rates (which win); the band applies once those rates are removed in Settings
+(an owner action, item 90 step 4) or for a currency Settings does not hold.
+Measured with the Settings rates removed on a copy of the live July month:
+32 right against 29 at 3%, one coincidental auto-match against two.
+
+**Advisory.** `summary.setup_advisories[]` gains one entry per typed Settings
+pair this month's receipts use, when the month's ECB table holds that pair
+and the typed rate sits further from the month's ECB average than
+`fx_reference_match_pct - fx_ecb_match_pct` (1 point):
+
+| Key | Type | Meaning |
+|---|---|---|
+| `setting` | string | `"fx_reference_rates"` (unchanged key the SPA already reads) |
+| `code` | string | `"fx_rate_drift"` (new; the other advisories carry no code yet) |
+| `pair` | string | `"EUR:USD"` |
+| `settings_rate` | string | the typed rate, 6 dp |
+| `ecb_rate` | string | the ECB cross rate for the month, 6 dp |
+| `ecb_month` | string | `"YYYY-MM"`, the plurality month of the charges (nearest published month when absent) |
+| `gap_pct` | number | signed, 1 dp: `+1.8` means the typed rate is 1.8% above the ECB |
+| `limit_pct` | number | the gap it had to exceed (1.0) |
+| `n_receipts` | number | this month's receipts in that currency |
+| `message` | string | English sentence, as for every advisory |
+
+Computed when a month's match commits (creation, statement attach, re-match),
+like the other advisories; a month with no ECB table in its config (July
+today) carries none. The live Settings EUR:USD 1.162275 is +1.8% against
+July's average and +0.3% against August's; BRL:USD 0.192448 is -1.5% and
+-0.9%.
+
+The advisory reads Settings through the matcher's own parse and lookup: a key
+the matcher does not read (a lower-case `eur:usd`) or a rate whose arithmetic
+overflows (`1e30`, which Settings accepts) produces no advisory rather than a
+wrong one or a failed month. Residual, not changed here: the judgment layer
+and the view derive self-derived rates from the month's whole receipt list,
+the matcher from its pool (copies and foreign-claimed receipts left out), so
+with three or more receipts carrying a booked exchange rate a pair the
+matcher read at the ECB rate (2%) can read as receipts-derived (3%) on screen
+and in item 131's floor rule. No hosted month holds such receipts.

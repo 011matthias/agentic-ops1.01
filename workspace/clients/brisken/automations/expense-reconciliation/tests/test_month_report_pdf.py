@@ -243,3 +243,34 @@ def test_a_captioned_section_renders_its_heading_note_and_label():
                    "count": 2}],
     )
     assert "Dirk: 2 expenses" in " ".join(_text(pdf, 0).split())
+
+
+def test_card_subsections_that_do_not_cover_the_section_render_one_table():
+    """Item 138 (cards inside cost centers): per-card slices print a heading
+    and sums each, but only when they cover the section's rows exactly. A
+    slice that misses a row would drop it or misfile a heading, so the
+    section falls back to its one table and loses nothing."""
+    def _pdf(subsections):
+        return " ".join(_text(build_expense_report_pdf(
+            ROWS, EXPENSE_COLUMNS, title="Expense report - August 2026",
+            sections=[{"caption": "Lidar (project)", "label": "Lidar",
+                       "start": 1, "count": 2, "subsections": subsections}],
+        ), 0).split())
+
+    text = _pdf([
+        {"caption": "Card 2838", "label": "Card 2838", "start": 1, "count": 1},
+        {"caption": "No card", "label": "No card", "start": 2, "count": 1},
+    ])
+    assert text.index("Card 2838: 1 expense · EUR 42.50") < text.index(
+        "No card: 1 expense · EUR 18.00"
+    ) < text.index("Lidar: 2 expenses · EUR 60.50")
+
+    for broken in (
+        [{"caption": "Card 2838", "label": "Card 2838", "start": 1, "count": 1}],
+        [{"caption": "Card 2838", "label": "Card 2838", "start": 2, "count": 1},
+         {"caption": "No card", "label": "No card", "start": 1, "count": 1}],
+    ):
+        text = _pdf(broken)
+        assert "Card 2838" not in text and "No card" not in text
+        assert "Trenitalia" in text and "Cafe Lisboa" in text
+        assert "Lidar: 2 expenses · EUR 60.50" in text

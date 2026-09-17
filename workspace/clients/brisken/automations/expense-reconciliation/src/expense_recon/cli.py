@@ -349,9 +349,13 @@ def _apply_judgment(
     receipt against HOTEL AM TIERGARTEN (-1.59%, model 0.10, another
     merchant). Without `cfg` no band can be read and an at-floor rejection
     is unbound. The rate is derived from the charges and receipts handed in
-    here; a configured or ECB rate reproduces the matcher's exactly, a
+    here; a configured rate reproduces the matcher's exactly, a
     receipts-derived one can differ when the matcher's pool left a copy out
-    (item 81's residual).
+    (item 81's residual). Since items 90/132 the band follows the rate's
+    source (ECB 2%, every other 3%), so that residual can also flip an ECB
+    pair to a receipts-derived source with the same rate and a wider band;
+    it needs three receipts carrying a booked exchange rate, which no hosted
+    month holds (mailed and dropped receipts carry none).
     """
     if not outcome.judgment_required:
         return
