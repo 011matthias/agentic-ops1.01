@@ -83,6 +83,7 @@ Read the following to understand recent work and where friction occurred:
 - `.claude/rules/rule_behaviors.md` — refresh the self-annealing framework and behavioral constraints
 - Current CLAUDE.md — understand existing primitives
 - **Skill usage**: run `uv run tools/skill_stocktake.py` for Retire / Merge / Improve candidates across skills, commands and agents, joined with recorded run counts (30/90d). Feed its candidates into Phase 1.5 checks 3 and 4 as evidence; it withholds Retire until 30 days of telemetry exist, and a candidate is never a decision.
+- **Memory store health**: run `uv run tools/memory_audit.py` for Retire / Merge / Verify candidates (index integrity, likely duplicates, stale open work, reads 30/90d). This cycle decides each candidate; the tool never deletes, and a merge means reading both files and keeping the newer truth.
 - **Convergence + drift baseline**: run `uv run tools/anneal-metrics.py --format json` for asset counts, friction recurrence, and documented-vs-actual drift; read the latest row of `docs/anneal-ledger.md` for the prior cycle's numbers.
 
 ### Ask the user:

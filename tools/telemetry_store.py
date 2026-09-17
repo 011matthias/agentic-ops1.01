@@ -12,8 +12,15 @@ ECC's skill-run tracker showed the cheap fix: record each invocation as one
 identifier-only line and let a stocktake join it against the inventory.
 
 `session-pressure-meter.py` (PostToolUse, all tools) is the only writer; it
-calls `record_from_payload` on every tool call, and the audit tools
-(`skill_stocktake.py`, ...) are the readers.
+calls `record_from_payload` on every tool call, and the audit tools are the
+readers. Two streams:
+
+  skill-runs.jsonl    {ts, session_id, kind, name, ok}   -> skill_stocktake.py
+  memory-reads.jsonl  {ts, session_id, store, file}      -> memory_audit.py
+
+A memory read is a Read of, or a cat/sed/head/tail/Get-Content on, a file
+under ~/.claude/projects/<store>/memory/. The memory files themselves are
+never written.
 
 WHERE
 -----
@@ -153,11 +160,65 @@ def skill_run_record(payload: dict) -> dict | None:
     }
 
 
+# --------------------------------------------------------------------------
+# Memory reads
+# --------------------------------------------------------------------------
+MEMORY_READS = "memory-reads.jsonl"
+# A file in a Claude Code auto-memory store: ~/.claude/projects/<slug>/memory/<f>.md
+_MEMORY_PATH = re.compile(
+    r"\.claude/projects/(?P<store>[^/\s\"';|&]+)/memory/(?P<file>[^/\s\"';|&*?]+\.md)\b",
+    re.IGNORECASE,
+)
+# Shell readers whose target is a file the agent is reading, not searching.
+_READERS = re.compile(r"\b(cat|sed|head|tail|less|more|type|Get-Content|gc)\b", re.IGNORECASE)
+_ASSIGN = re.compile(r"(?:^|[;&|\s])(?:\$env:)?([A-Za-z_]\w*)=([\"']?)([^\"'\s;&|]+)\2")
+
+
+def _expand_vars(command: str) -> str:
+    """Resolve `M="dir"; cat "$M/x.md"`-style references inside one command.
+    Only assignments made in the same command are known; anything else stays
+    unresolved and simply does not match."""
+    values = {m.group(1): m.group(3) for m in _ASSIGN.finditer(command)}
+    for name, value in values.items():
+        pattern = r"\$\{" + re.escape(name) + r"\}|\$" + re.escape(name) + r"\b"
+        command = re.sub(pattern, lambda _m, v=value: v, command)
+    return command
+
+
+def memory_paths_read(payload: dict) -> list[tuple[str, str]]:
+    """(store, file) pairs a Read or a shell reader call opened."""
+    tool = payload.get("tool_name")
+    ti = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
+    if tool == "Read":
+        texts = [str(ti.get("file_path") or "")]
+    elif tool in ("Bash", "PowerShell"):
+        command = str(ti.get("command") or "")
+        if not _READERS.search(command):
+            return []
+        texts = [_expand_vars(command)]
+    else:
+        return []
+    found = []
+    for text in texts:
+        for m in _MEMORY_PATH.finditer(text.replace("\\", "/")):
+            pair = (m.group("store"), m.group("file"))
+            if pair not in found:
+                found.append(pair)
+    return found
+
+
 def record_from_payload(payload: dict) -> None:
     """The meter's single entry point. Never raises."""
     try:
         rec = skill_run_record(payload)
         if rec:
             append(SKILL_RUNS, rec)
+    except Exception:
+        pass
+    try:
+        session = _identifier(payload.get("session_id")) or ""
+        for store, fname in memory_paths_read(payload):
+            append(MEMORY_READS, {"ts": _now(), "session_id": session,
+                                  "store": store, "file": fname})
     except Exception:
         pass
