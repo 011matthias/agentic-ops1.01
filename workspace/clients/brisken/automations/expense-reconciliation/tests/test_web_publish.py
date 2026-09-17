@@ -1,6 +1,7 @@
 """Publish lifecycle on the JSON API: upload an intake -> operator runs it
--> publishes -> unpublish. Publish flips the intake status the dashboard
-and the dev-side notifier read. Runs under the sync seam (conftest sets
+-> publish is refused -> unpublish. An intake run is a classic statement-first
+run, not a month, so since item 100 it never publishes and its intake status
+never flips to ready. Runs under the sync seam (conftest sets
 EXPENSE_RECON_WEB_SYNC=1), so /api/intakes/{id}/run answers {run_id}
 directly. Auth is covered in test_web_auth; these clients run ungated.
 """
@@ -18,7 +19,6 @@ from fastapi.testclient import TestClient  # noqa: E402
 from expense_recon.web.app import create_app  # noqa: E402
 from expense_recon.web.store import (  # noqa: E402
     INTAKE_PROCESSING,
-    INTAKE_READY,
     RunStore,
 )
 
@@ -73,25 +73,22 @@ def test_full_lifecycle(client):
     assert run.intake_id == intake_id
     assert run.published is False
 
-    # 3. the run is reviewable and publish flips run + intake state
+    # 3. the run is reviewable, but an intake run is a classic statement-first
+    # run, not a month: item 100 refuses to publish it, override or not, so
+    # test uploads never teach memory. The intake stays where it was.
     assert client.get(f"/api/runs/{run_id}").status_code == 200
-    resp = client.post(f"/api/runs/{run_id}/publish")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert {k: body[k] for k in ("ok", "run_id", "published")} == {
-        "ok": True, "run_id": run_id, "published": True,
-    }
-    # Item 88: publishing is the sign-off and saves the month to memory.
-    assert body["memory"]["saved"] is True
+    for payload in (None, {"override": True}):
+        resp = client.post(f"/api/runs/{run_id}/publish", json=payload)
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "not_a_month"
 
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         intake = store.get_intake(intake_id)
         run = store.get_run(run_id)
-    assert intake.status == INTAKE_READY
-    assert intake.run_id == run_id
-    assert run.published is True
+    assert intake.status == INTAKE_PROCESSING
+    assert run.published is False
 
-    # 4. decisions still work on a published run
+    # 4. decisions still work on the run
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         run = store.get_run(run_id)
     matches = run.snapshot["outcome"]["matches"]
@@ -103,10 +100,14 @@ def test_full_lifecycle(client):
         )
         assert resp.status_code == 200
 
-    # 5. unpublish reverts run + intake state
+    # 5. unpublish leaves run + intake unpublished, and says it unlearned
+    # nothing (item 100); this run never saved anything to memory.
     resp = client.post(f"/api/runs/{run_id}/unpublish")
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True, "run_id": run_id, "published": False}
+    assert resp.json() == {
+        "ok": True, "run_id": run_id, "published": False,
+        "memory": {"unlearned": False, "kept": False},
+    }
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         assert store.get_run(run_id).published is False
         assert store.get_intake(intake_id).status == INTAKE_PROCESSING

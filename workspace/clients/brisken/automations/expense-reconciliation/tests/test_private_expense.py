@@ -456,7 +456,10 @@ def test_a_remembered_card_does_not_block_the_private_card(client, monkeypatch):
     r = client.put(f"/api/runs/{july}/expenses/{doc}",
                    json={"field": "card_key", "value": "corp-1672"})
     assert r.status_code == 200, r.text
-    assert client.post(f"/api/runs/{july}/publish").status_code == 200
+    # No statement on July: since item 100 publish needs the override.
+    assert client.post(
+        f"/api/runs/{july}/publish", json={"override": True}
+    ).status_code == 200
 
     _patch_ocr(monkeypatch, _extraction(date="2026-08-03"))
     august = _create_batch(client, label="August 2026", seed=2)

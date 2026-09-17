@@ -176,6 +176,9 @@ name answers the same one:
 | `n_self_confirmed` | run payload only: how many rows carry a verdict the TOOL wrote under the self-confirmation rule (item 76). Falls as a reviewer takes one back; `n_undecided` keeps its question (pending pairings nobody has ratified) |
 | `n_needs_company_or_person` | expense payload: how many rows miss their company or their person (item 84, owner ruling 2026-09-16: the Expenses view shows MISSING ENTITY and NEEDS PERSON as one box, because the fix is one action, pick the card or mark the receipt private). `n_needs_entity` and `n_needs_person` keep their questions |
 | `n_copies_set_aside` | how many decided duplicate copies are set aside. Run payload: instead of listed as unmatched (items 83 + 75); `n_unmatched_rec` keeps its question (receipts waiting for a charge), and a set-aside copy was never one. Expense payload and months list (item 94): the rows left out of `n_expenses` and `totals_by_ccy`, the same set. `n_duplicate_copies` keeps counting every redundant copy, matched or not |
+| `n_charges_need_receipt` | run payload only: how many purchase charges hold no receipt and no verdict that closes them (item 99). Not `n_unmatched_tx`, which also counts booked charges and fee lines |
+| `n_receipts_need_charge` | run payload only: how many receipts no charge holds anywhere and nothing set aside (item 99): `n_unmatched_rec` minus the receipts another month's charge settled (`settled_by`) and the confirmed private expenses (flag AND `reimburse_to`) |
+| `n_charges_category_guessed` | run payload only: how many charges that need no receipt still carry the tool's guessed category (item 99). A charge that needs a receipt is counted under `n_charges_need_receipt` alone |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -331,6 +334,11 @@ and 31 receipts in the pool: nothing was undecided because nothing had been
 proposed. The SPA's post gate reads `ready_to_post` as before; when it is
 false with `n_undecided == 0`, `month_health.detail` says why. Renders in
 `docs/lovable-month-health-prompt.md`.
+
+Since items 99 + 100 (2026-09-17) `ready_to_post` answers only "nothing is
+left to decide"; the pill and Publish read `summary.month_complete`, and the
+publish route refuses an incomplete month. See "A month is complete, and only
+a complete month publishes" below.
 
 ## Re-match events: `rematches[]` on `GET /api/operator/state` (added 2026-09-11, item 58)
 
@@ -2708,7 +2716,8 @@ unchanged, and the month is published whatever the save does.
 header edits and whole-expense adds and deletes, timestamps left out, against
 the one stored at the last save (`memory_commits`, one row per run, removed
 with the run). The button always saves and records the digest. Unpublish saves
-and unlearns nothing.
+and unlearns nothing, and since item 100 its reply says so (`memory.unlearned`
+/ `memory.kept`, below).
 
 The undo is where it was: the Memory page's per-merchant Forget
 (`POST /api/memory/forget`) drops learned entities, field corrections and
@@ -3008,3 +3017,143 @@ No `rematch` with `has_statement: true` means every file was a duplicate
 already in the month, so nothing changed to match.
 
 Tests: `tests/test_feedback_notes_52_53_62_63.py` (route-level, all four).
+
+## A month is complete, and only a complete month publishes: `month_complete` + `published_*` (items 99 + 100, 2026-09-17)
+
+On 2026-09-17 July 2026 read `ready_to_post: true`, a green pill and an
+enabled Publish, while 24 purchase charges held no receipt and 11 receipts
+held no charge: a charge with no receipt offers nothing to click, so nothing
+was "undecided". `POST /api/runs/{id}/publish` refused nothing, recorded
+nobody, and the classic page could publish any run.
+
+### Run payload: `summary.month_complete` and what blocks it
+
+`ready_to_post` KEEPS its meaning: nothing is left to decide
+(`n_undecided == 0` and `month_health.state == "ok"`). It is no longer the
+signal for the pill or Publish. Parallel keys, always present on the run
+payload (absent on the expense payload, where no charge exists):
+
+| Key | Type | Question |
+|---|---|---|
+| `summary.month_complete` | bool | can this month read Ready to post and be published: `ready_to_post` AND the three counts below are 0 |
+| `summary.n_charges_need_receipt` | int | purchase charges that hold no receipt and no verdict that closes them |
+| `summary.n_receipts_need_charge` | int | receipts no charge holds anywhere and nothing set aside |
+| `summary.n_charges_category_guessed` | int | charges needing no receipt whose category is still the tool's guess |
+
+Owner rulings 2026-09-17 (`web/month_readiness.py`). The verdicts that close
+a charge are the ones that already existed; none was added:
+
+- **a receipt it holds** (effective bucket `reconciled` and decided; a pending
+  pairing is `n_undecided`'s);
+- **a credit** (bucket `refund`: refund, payment, reversal);
+- **already booked**: Criss's yellow fill (`entry_status: "posted"`) or the
+  reviewer's `already_posted` verdict (`section: "posted"`);
+- **a fee or interest line** the statement printed as one (`row_type` `fee` /
+  `interest`): it needs no receipt.
+
+A gray fill (`entry_status: "subscription"`) closes nothing: it is an
+annotation, and the tool can derive it from statement history. A `rejected`
+or receiptless `confirmed` charge still needs a receipt.
+
+A receipt needs no charge when it is settled outside the card, a decided
+duplicate copy (`copies_set_aside`, read from the same `decided_copies`
+predicate item 94 uses for every listing and total, so the two cannot
+disagree), quarantined (never in the pool), a
+confirmed private expense (PR #987: the `private` flag AND `reimburse_to`,
+the `_private_reimbursements` pair rule; the flag alone does not count), or
+already settled by another month's charge (`settled_by` on its
+`unmatched_receipts[]` element). So `n_receipts_need_charge` is
+`n_unmatched_rec` minus the `settled_by` entries and the confirmed private
+expenses (a decided copy is in neither); `n_unmatched_rec` keeps its question,
+and a private receipt stays listed in `unmatched_receipts`.
+
+The private half reads the expense header edits, so it holds on the payloads
+built with them: `GET /api/runs/{id}` and the publish gate. The `summary` a
+decision route returns (`POST .../decisions` and its siblings) is built
+without them and counts a confirmed private receipt as needing a charge; the
+SPA refetches the run after those calls.
+
+A guessed category is the row's own confirm-first state (`review.reason_code:
+"receiptless_suggested"`, any source). A charge that needs a receipt is
+counted once, under `n_charges_need_receipt`, even when it carries a guess:
+attaching the receipt replaces the guess. No route confirms a receiptless
+charge's category, so a guessed fee clears by `already_posted` or by an
+override.
+
+Live 2026-09-17, predicted from the deployed payloads with this rule
+(read-only):
+
+| Month | `ready_to_post` | `n_undecided` | `n_charges_need_receipt` | `n_receipts_need_charge` | `n_charges_category_guessed` | `month_complete` |
+|---|---|---|---|---|---|---|
+| July 2026 (`50622baec444`) | true | 0 | 24 | 11 | 0 | false |
+| August 2026 (`074a7b8905d7`) | false | 8 | 100 | 10 | 1 | false |
+
+All 24 July charges are gray subscription rows (Anthropic, Network Solutions,
+Lovable and others), which Criss's walkthrough calls "já estão no recurring".
+Under the ruling they still need a receipt or `already_posted`. August's
+guess is ANNUAL MEMBERSHIP FEE 150.00.
+
+### The publish route is the gate
+
+```
+POST /api/runs/{run_id}/publish            (no body, or {"override": true})
+```
+
+| Status | `code` | When |
+|---|---|---|
+| 400 | `not_a_month` | the run is a classic statement-first run (not an expense batch). An override does not change it |
+| 400 | `no_statement` | a month with no statement, and no override |
+| 400 | `month_not_complete` | `summary.month_complete` is false, and no override. The body also carries `readiness` |
+| 200 | | published |
+
+Every refusal is `{error, code}`; `error` is one English sentence, `code` is
+what to localize. `readiness` on `month_not_complete`:
+
+```json
+{ "month_complete": false, "ready_to_post": true, "n_undecided": 0,
+  "n_charges_need_receipt": 24, "n_receipts_need_charge": 11,
+  "n_charges_category_guessed": 0, "month_health_state": "ok" }
+```
+
+Only `true` (the JSON boolean) is an override. The gate reads the same
+payload `GET /api/runs/{id}` serves (`_workbench_view`), so the pill and the
+route cannot disagree. The 200 reply keeps `ok`, `run_id`, `published` and
+`memory` (item 88) and adds `published_at`, `published_by` and
+`published_override`.
+
+### Who published: `published*` on the run payload
+
+Top-level on the run payload, always present:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `published` | bool | the month is published |
+| `published_at` | string \| null | ISO time of the current publish; null while unpublished |
+| `published_by` | string \| null | the operator label of the session that published (the label inside the bearer token, `request.state.operator`, the same attribution feedback notes carry; `operator` for the shared code); null while unpublished |
+| `published_override` | bool | the month was published over the completeness gate (incomplete or no statement). Publishing a complete month with `{"override": true}` records false |
+
+Unpublish clears all four. The SPA no longer needs `/api/operator/state` to
+know whether the month it shows is published.
+
+### Unpublish says what it did to memory
+
+```json
+{ "ok": true, "run_id": "...", "published": false,
+  "memory": { "unlearned": false, "kept": true,
+              "saved_at": "2026-09-17T10:02:11+00:00", "trigger": "publish" } }
+```
+
+`unlearned` is always false: unpublishing removes nothing a save taught.
+`kept` says whether this month ever saved anything (by Publish or by the
+button), and when it did, `saved_at` and `trigger` (`publish` / `button`)
+say which save; `{"unlearned": false, "kept": false}` when none. The undo is
+the Memory page's Forget.
+
+### What did not change
+
+Downloads (PDF, CSV, XLSX, writeback) are not gated and are rebuilt from live
+state; a published month is not frozen and nothing is stored at sign-off.
+The months list and `GET /api/expense-batches/{id}` carry none of the new keys.
+
+Route-level in `tests/test_month_complete_publish_gate.py`. SPA half:
+`docs/lovable-ready-publish-gate-prompt.md`.

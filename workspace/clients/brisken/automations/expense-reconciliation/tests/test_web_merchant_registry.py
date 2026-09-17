@@ -261,7 +261,8 @@ def test_publishing_a_month_with_no_edits_leaves_the_registry_whole(client, monk
     _patch_ocr(monkeypatch, _extraction(vendor="Staples"))
     batch = _create_batch(client)
 
-    resp = client.post(f"/api/runs/{batch}/publish")
+    # No statement on this month: since item 100 publish needs the override.
+    resp = client.post(f"/api/runs/{batch}/publish", json={"override": True})
     assert resp.status_code == 200, resp.text
     memory = resp.json()["memory"]
     assert memory["saved"] is True

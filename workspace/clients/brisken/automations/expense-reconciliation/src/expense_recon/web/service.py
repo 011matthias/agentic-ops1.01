@@ -95,6 +95,7 @@ from .month_health import (
     month_health,
     unchecked as unchecked_month_health,
 )
+from .month_readiness import completeness_counts, is_month_complete
 from .serialize import (
     categorization_from_dict,
     categorization_to_dict,
@@ -2801,6 +2802,7 @@ def build_view(
     resolutions: dict[str, str] | None = None,
     settled_elsewhere: dict[str, dict] | None = None,
     edited_at: str | None = None,
+    field_overrides: dict[str, dict[str, str]] | None = None,
 ) -> dict:
     """Compose the render model: per-transaction rows with candidates and
     the reviewer's effective verdict, plus the unmatched-receipt list and
@@ -2821,7 +2823,11 @@ def build_view(
     `edited_at` (2026-09-16): the latest stamp in this run's edit tables,
     read by the GET route, folded into the payload's `updated_at`. None from
     every other caller, whose `updated_at` then reads the snapshot and the
-    decisions alone (see `month_updated_at`)."""
+    decisions alone (see `month_updated_at`).
+
+    `field_overrides` (items 99 + 100): the run's expense header edits, read
+    by the GET route and the publish gate, so a confirmed private expense
+    (flag AND reimburse_to) does not count as a receipt needing a charge."""
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
     rec_by_id = {r.document_id: r for r in receipts}
     # What `receipt_image_available` is resolved against (item 52). Read
@@ -3534,6 +3540,21 @@ def build_view(
     for tx_entry in unmatched_transactions:
         tx_entry["reason_code"] = charge_reasons[tx_entry["transaction_id"]]
 
+    # Items 99 + 100: what still stands between this month and complete,
+    # read off the rows and the unmatched list the page renders. The publish
+    # gate reads the same summary.
+    # Every receipt no charge holds, copies included, so the decided-copy
+    # exclusion reads `decided_copies` (item 94) rather than trusting the
+    # list split above. `field_overrides` (the expense header edits) carries
+    # the confirmed private expenses; a caller that passes none counts every
+    # private receipt as needing a charge.
+    completeness = completeness_counts(
+        rows, [*unmatched_receipts, *copies_set_aside],
+        private_docs=frozenset(_private_reimbursements(field_overrides or {})),
+        copy_docs=frozenset(set_aside_copy_ids),
+    )
+    ready_to_post = n_undecided == 0 and health["state"] == HEALTH_OK
+
     n_tx = len(transactions)
     # Item 62: the pool a card statement can actually settle. Items 83 + 75:
     # a set-aside copy is not a second purchase for a card to settle either.
@@ -3625,8 +3646,19 @@ def build_view(
         # ready, whatever the reviewer has (not) decided; `month_health`
         # says which input is broken.
         "n_undecided": n_undecided,
-        "ready_to_post": n_undecided == 0 and health["state"] == HEALTH_OK,
+        # Its question is unchanged: nothing is left to decide. It is NOT
+        # "the month is complete" (item 99); `month_complete` is.
+        "ready_to_post": ready_to_post,
         "month_health": health,
+        # Item 99 (owner ruling 2026-09-17): the month is complete, so it may
+        # read Ready to post and be published. Nothing left to decide, every
+        # charge holds a receipt or a closing verdict, every receipt holds a
+        # charge or is set aside, and no receiptless charge's category is
+        # still a guess. The three counts say what blocks it.
+        "month_complete": is_month_complete(
+            ready_to_post=ready_to_post, counts=completeness
+        ),
+        **completeness,
         # Item 59: charges whose card the registry cannot name carry no
         # entity; the fix is defining the card once, not a row edit.
         "n_charges_no_entity": sum(
@@ -3689,6 +3721,13 @@ def build_view(
         # When the month last changed (2026-09-16); the SPA's "Last updated"
         # reads `updated_at ?? created_at`, so it printed the creation day.
         "updated_at": month_updated_at(run, decisions=decisions, edited_at=edited_at),
+        # Item 100: the sign-off, on the page that shows the month. Who
+        # published (the session's operator label), when, and whether the
+        # completeness gate was overridden; null / false while unpublished.
+        "published": run.published,
+        "published_at": run.published_at if run.published else None,
+        "published_by": run.published_by if run.published else None,
+        "published_override": bool(run.published and run.published_override),
         "llm_enabled": run.llm_enabled,
         "has_coa": run.has_coa,
         "summary": summary,
