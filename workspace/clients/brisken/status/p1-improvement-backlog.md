@@ -4602,7 +4602,7 @@ Build:
    rates either way; the change reaches months created or statement-attached
    afterwards.
 
-### 91. Settings is one scroll of seven editors (owner, 2026-09-17) (BACKEND SHIPPED PR #PRNUM, prompt written, pending the owner's paste)
+### 91. Settings is one scroll of seven editors (owner, 2026-09-17) (BACKEND SHIPPED PR #969, prompt written, pending the owner's paste)
 
 **Owner 2026-09-17:** "group the different settings in the settings page into
 tabs of each setting."
