@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import csv
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -477,16 +477,31 @@ def write_zoho_expense_export(
     card_hint_accounts: "Mapping[str, str] | None" = None,
     card_map_blocked_docs: "set[str] | None" = None,
     footer: str = "",
+    single_currency: "Callable[[list[tuple[str, list[list[str]]]]], tuple[Mapping[int, str], Sequence[str]]] | None" = None,
 ) -> Path:
     """Write the Zoho Books Expenses import CSV (one row per expense).
     Returns the path.
 
     `footer` (item 94) is one line of prose written under the rows after a
     blank row, in the first column only, so no amount column carries it.
-    Empty (the default) writes nothing, byte for byte as before."""
+    Empty (the default) writes nothing, byte for byte as before.
+
+    `single_currency` (item 98) is handed the row groups and returns the
+    `Exchange Rate` cell for each 1-based row number it can price, plus any
+    footer lines to write under the rows. It is a callback rather than a
+    computation here because the rate depends on the month's charges and its
+    frozen FX config, neither of which this module has any business knowing;
+    what it DOES own is that the rate belongs in the column already named
+    for it. That column has shipped empty on every row since the export
+    existed, because a scanned receipt prints no rate, and filling it is
+    what lets a reader (or an importer) reach the base-currency figure
+    without a second document. The header is untouched on purpose: the
+    system this CSV imports into is still an open question (backlog item
+    23), and a column that already exists cannot break a mapping that a new
+    one might."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    rows = build_expense_rows(
+    groups = build_expense_row_groups(
         receipts,
         chart_of_accounts=chart_of_accounts,
         coa_gate=coa_gate,
@@ -501,11 +516,20 @@ def write_zoho_expense_export(
         card_hint_accounts=card_hint_accounts,
         card_map_blocked_docs=card_map_blocked_docs,
     )
+    rows = [row for _doc, doc_rows in groups for row in doc_rows]
+    lines: list[str] = [footer] if footer else []
+    if single_currency is not None:
+        rates, extra = single_currency(groups)
+        rate_col = EXPENSE_COLUMNS.index("Exchange Rate")
+        for n, text in (rates or {}).items():
+            if 1 <= int(n) <= len(rows) and text:
+                rows[int(n) - 1][rate_col] = text
+        lines.extend(line for line in (extra or ()) if line)
     with out_path.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(EXPENSE_COLUMNS)
         writer.writerows(rows)
-        if footer:
+        for line in lines:
             writer.writerow([])
-            writer.writerow([footer])
+            writer.writerow([line])
     return out_path

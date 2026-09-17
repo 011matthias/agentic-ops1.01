@@ -80,6 +80,12 @@ from ..learning import (
 )
 from ..output.reconciled_csv import write_reconciled_csv
 from ..output.report_xlsx import write_report
+from ..output.single_currency import (
+    BASE_CURRENCY,
+    convert_rows,
+    needs_conversion,
+    summary_lines,
+)
 from ..output.zoho_expense_export import (
     EXPENSE_COLUMNS,
     _UNCATEGORIZED,
@@ -7544,9 +7550,54 @@ def regenerate_expense_export(
     write_zoho_expense_export(
         [r for r in receipts if r.document_id not in copies], out_path,
         footer=copies_set_aside_line(receipts, copies),
+        single_currency=single_currency_for_export(run, charge_decisions),
         **kwargs,
     )
     return out_path
+
+
+def single_currency_for_export(run: RunRow, charge_decisions: dict | None):
+    """Item 98: the callback `write_zoho_expense_export` uses to fill the
+    `Exchange Rate` column and state the month's one total.
+
+    Built here rather than in the writer because pricing a row needs this
+    month's settled charges and its frozen FX config, and the writer owns
+    neither. The figures come from `convert_rows`, the same function the
+    month report calls, so the CSV's footer total and the report's header
+    total are one computation and cannot drift apart.
+
+    A row already in the base currency gets no rate printed: an "Exchange
+    Rate" of 1 on a USD expense is noise in a column a reader scans for the
+    rows that actually converted.
+    """
+    settled = export_settled_amounts(run, charge_decisions)
+    rate_of = usd_reference_rate(run)
+
+    def fill(groups):
+        rows = [row for _doc, doc_rows in groups for row in doc_rows]
+        if not needs_conversion(rows, EXPENSE_COLUMNS):
+            # A month entirely in the filing currency has nothing to say
+            # here, and the CSV goes out exactly as it did before.
+            return {}, ()
+        numbers_by_doc: dict[str, list[int]] = {}
+        pos = 1
+        for doc, doc_rows in groups:
+            numbers_by_doc.setdefault(doc, []).extend(
+                range(pos, pos + len(doc_rows))
+            )
+            pos += len(doc_rows)
+        converted, totals, unconverted = convert_rows(
+            rows, EXPENSE_COLUMNS,
+            numbers_by_doc=numbers_by_doc,
+            settled_amounts=settled,
+            reference_rate=rate_of,
+        )
+        rates = {
+            n: f"{c.rate:f}" for n, c in converted.items() if c.rate is not None
+        }
+        return rates, summary_lines(totals, unconverted, converted)
+
+    return fill
 
 
 def copies_set_aside_entries(receipts: list[Receipt], copies: dict[str, str]) -> list[dict]:
@@ -8169,11 +8220,34 @@ def build_expense_report(
             subtitle = (
                 f"{trip.start_date} to {trip.end_date}  ·  travelers: {who}"
             )
+    # Item 98: one figure for the month, and per row how it was reached.
+    # `numbers_by_doc` is the map this function already built to caption
+    # receipt pages, so a split receipt converts once as one purchase; the
+    # unreadable rows are skipped because they are already out of every
+    # other total on the page. `aligned` false means the fan-out and the
+    # receipts disagree and the listing has fallen back to 1..N, where the
+    # document boundaries this needs are exactly what is not trustworthy.
+    report_conversions: dict = {}
+    report_total = report_unconverted = ""
+    if aligned and needs_conversion(rows, EXPENSE_COLUMNS):
+        report_conversions, base_totals, missing = convert_rows(
+            rows, EXPENSE_COLUMNS,
+            numbers_by_doc=numbers_by_doc,
+            settled_amounts=export_settled_amounts(run, charge_decisions),
+            reference_rate=usd_reference_rate(run),
+            skip=set(unreadable_numbers),
+        )
+        lines = summary_lines(base_totals, missing, report_conversions)
+        report_total = lines[0] if lines else ""
+        report_unconverted = lines[1] if len(lines) > 1 else ""
     pdf = build_expense_report_pdf(
         rows,
         EXPENSE_COLUMNS,
         title=title,
         subtitle=subtitle,
+        conversions=report_conversions,
+        conversion_total=report_total,
+        conversion_note=report_unconverted,
         evidence=evidence,
         prepared_note=note,
         reimbursements=reimbursements,
@@ -9916,6 +9990,99 @@ def export_settled_cards(run: RunRow, charge_decisions: dict | None) -> dict[str
     month with no statement."""
     charges, states = month_charge_states(run, charge_decisions or {})
     return settled_charge_cards(run, charges, states)
+
+
+def settled_charge_amounts(
+    run: RunRow, charges: list, states: dict[str, dict]
+) -> dict[str, tuple[Decimal, str]]:
+    """Item 98: `{document_id: (charge amount, charge currency)}` for every
+    receipt of this month a charge of this month settles.
+
+    The money-side twin of `settled_charge_cards`, sharing its rules to the
+    letter on purpose: the same effective verdict (a reconciled pending or
+    confirmed pair, so a rejected pair lends nothing and one still in review
+    lends nothing either) and the same refusal to read a borrowed receipt,
+    whose id can equal one of this month's own. Two derivations of "which
+    charge settled this receipt" would eventually disagree, and then the
+    company a row prints and the rate it converts at would be describing
+    different charges.
+
+    What it adds over the card twin is only the money: the amount and the
+    currency the charge posted in, so a converter can refuse a charge that
+    did not post in the base currency rather than convert through two rates.
+    """
+    if not states:
+        return {}
+    borrowed = set((run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {})
+    tx_by_id = {t.transaction_id: t for t in charges}
+    out: dict[str, tuple[Decimal, str]] = {}
+    for tx_id, state in states.items():
+        doc = state.get("held_doc")
+        tx = tx_by_id.get(tx_id)
+        if state.get("bucket") != "reconciled" or not doc or tx is None:
+            continue
+        if doc in borrowed or tx.amount is None:
+            continue
+        out[doc] = (tx.amount, (tx.transaction_currency or "").upper())
+    return out
+
+
+def export_settled_amounts(
+    run: RunRow, charge_decisions: dict | None
+) -> dict[str, tuple[Decimal, str]]:
+    """`settled_charge_amounts` read the way `export_settled_cards` reads its
+    own, so one pass over one set of verdicts feeds both what a document
+    attributes a row to and what it converts the row at."""
+    charges, states = month_charge_states(run, charge_decisions or {})
+    return settled_charge_amounts(run, charges, states)
+
+
+def usd_reference_rate(run: RunRow):
+    """Item 98 rung 3: the rate for a receipt NO charge settled, taken from
+    the matcher's own lookup bound to this month's frozen config.
+
+    `_reference_rate_for` is the function the on-screen FX block already
+    calls, so a document and the screen quote one rate for one purchase, and
+    its precedence stands untouched: a rate typed in Settings is operator
+    intent and wins, then this run's self-derived rates (a hosted month has
+    none), then the ECB monthly average for the row's month. `build_match_cfg`
+    assembles the config because it is the one place that knows how a
+    `matching:` block becomes a `MatchingConfig`.
+
+    Returns `(currency, date) -> (rate, source, ecb month)`, or None when the
+    month froze no matching block at all. None is the honest outcome there:
+    every foreign row then reports no figure and says so, rather than
+    converting at a rate borrowed from somewhere this month never used.
+    """
+    from ..cli import build_match_cfg
+    from ..matching.deterministic import _reference_rate_for
+
+    if not ((run.config or {}).get("matching") or {}):
+        return None
+    try:
+        cfg = build_match_cfg(run.config or {}, Path(run.work_dir))
+    except Exception:  # noqa: BLE001 - a document never fails over a rate
+        # A month whose tuning file has gone missing still has to render.
+        # The rows then say they have no figure, which is true and visible,
+        # instead of the download 500ing on a currency question.
+        return None
+    if cfg is None:
+        return None
+
+    def lookup(currency: str, on: str):
+        hit = _reference_rate_for(
+            cfg, currency, BASE_CURRENCY, None, on=on or None
+        )
+        if hit is None:
+            return None
+        rate, source, _n = hit
+        month = ""
+        if source == "ecb_month":
+            ecb = cfg.ecb_monthly_rate(currency, BASE_CURRENCY, on or None)
+            month = ecb[1] if ecb else ""
+        return rate, source, month
+
+    return lookup
 
 
 def _identity_from_observed(observed: str | None, cards: dict) -> _CardIdentity:
