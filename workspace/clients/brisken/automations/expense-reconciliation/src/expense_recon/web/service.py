@@ -690,6 +690,102 @@ def _setup_advisories(
                 "one is set in Settings > Cards."
             ),
         })
+    out.extend(_fx_rate_drift_advisories(cfg, transactions, receipts, card_ccy))
+    return out
+
+
+def _fx_rate_drift_advisories(
+    cfg: dict, transactions: list, receipts: list, card_ccy: str
+) -> list[dict]:
+    """Item 132: a rate typed in Settings that has drifted from the ECB.
+
+    A Settings rate wins over the month's ECB average (item 82's ruling), so
+    once it drifts, every month keeps matching at it and nothing says so.
+    One advisory per typed pair this month's receipts use, when the month's
+    ECB table holds that pair and the gap is wider than the two bands leave
+    room for: a receipt the ECB rate pairs within `fx_ecb_match_pct` stays
+    inside the Settings rate's `fx_reference_match_pct` band only while the
+    two rates are no further apart than the difference of the bands (3% -
+    2% = 1%). `code` and the numbers ride beside the English `message`, so
+    the screen can say it in the reviewer's language (item 130)."""
+    from collections import Counter
+    from decimal import ROUND_HALF_UP
+
+    from ..matching.deterministic import MatchingConfig
+
+    matching = cfg.get("matching") or {}
+    typed = matching.get("fx_reference_rates") or {}
+    ecb_table = matching.get("fx_ecb_monthly_rates") or {}
+    if not typed or not ecb_table:
+        return []
+    try:
+        # The matcher's own parse and lookup, so the advisory speaks only
+        # for a pair the matcher really reads from Settings (its keys are
+        # case-sensitive: a stored "eur:usd" is not a EUR:USD rate).
+        mc = MatchingConfig.from_dict({
+            k: matching[k]
+            for k in (
+                "fx_reference_rates", "fx_ecb_monthly_rates",
+                "fx_reference_match_pct", "fx_ecb_match_pct",
+            )
+            if k in matching
+        })
+    except (ValueError, ArithmeticError, AttributeError, TypeError):
+        return []
+    limit = mc.fx_reference_match_pct - mc.fx_ecb_match_pct
+    if limit <= 0:
+        return []
+    dated = [t.transaction_date for t in transactions if getattr(t, "transaction_date", None)]
+    if not dated:
+        dated = [r.detected_date for r in receipts if getattr(r, "detected_date", None)]
+    if not dated:
+        return []
+    month = Counter(d.strftime("%Y-%m") for d in dated).most_common(1)[0][0]
+    counts = Counter(
+        (r.detected_currency or "").upper() for r in receipts
+        if (r.detected_currency or "").upper() not in ("", card_ccy)
+    )
+    out: list[dict] = []
+    dst = card_ccy
+    for src in sorted(counts):
+        settings_rate = mc.fx_reference_rate(src, dst)
+        if settings_rate is None or settings_rate <= 0:
+            continue
+        ecb = mc.ecb_monthly_rate(src, dst, month)
+        if ecb is None:
+            continue
+        ecb_rate, ecb_month = ecb
+        try:
+            gap = (settings_rate - ecb_rate) / ecb_rate
+            if abs(gap) <= limit:
+                continue
+            gap_pct = float((gap * 100).quantize(Decimal("0.1"), ROUND_HALF_UP))
+        except ArithmeticError:
+            # A rate Settings accepted but no month can use ("1e30"): the
+            # advisory never fails the month it describes.
+            continue
+        side = "above" if gap > 0 else "below"
+        n = counts[src]
+        out.append({
+            "setting": "fx_reference_rates",
+            "code": "fx_rate_drift",
+            "pair": f"{src}:{dst}",
+            "settings_rate": _fmt_rate(settings_rate),
+            "ecb_rate": _fmt_rate(ecb_rate),
+            "ecb_month": ecb_month,
+            "gap_pct": gap_pct,
+            "limit_pct": float(limit * 100),
+            "n_receipts": n,
+            "message": (
+                f"The {src}:{dst} rate set in Settings ({_fmt_rate(settings_rate)}) "
+                f"is {abs(gap_pct):.1f}% {side} the ECB's {ecb_month} average "
+                f"({_fmt_rate(ecb_rate)}). A Settings rate wins over the ECB for "
+                f"this month's {n} {src} receipt(s); more than "
+                f"{float(limit * 100):g}% away, a receipt the ECB rate pairs "
+                f"cleanly can fall outside the clean band. Removing the rate in "
+                f"Settings lets the ECB average apply."
+            ),
+        })
     return out
 
 
@@ -2328,7 +2424,7 @@ def fx_reference_lookup(run: "RunRow", transactions: list, receipts: list):
         return FxReference(
             rate=rate,
             source=source,
-            match_pct=cfg.fx_reference_match_pct,
+            match_pct=cfg.reference_match_pct(source),
             review_pct=cfg.fx_reference_review_pct,
             period=period,
         )

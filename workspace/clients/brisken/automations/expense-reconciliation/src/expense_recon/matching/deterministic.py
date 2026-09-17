@@ -240,7 +240,7 @@ _TUNABLE_DECIMAL = frozenset({
     "amount_exact_tolerance", "amount_probable_tolerance_pct",
     "fx_reference_match_pct", "fx_reference_review_pct",
     "fx_base_amount_match_pct", "fx_base_amount_review_pct",
-    "fx_band_score_span_pct",
+    "fx_band_score_span_pct", "fx_ecb_match_pct",
 })
 _TUNABLE_INT = frozenset({
     "date_exact_window_days", "date_probable_window_days",
@@ -329,6 +329,22 @@ class MatchingConfig:
     )
     fx_reference_match_pct: Decimal = Decimal("0.03")
     fx_reference_review_pct: Decimal = Decimal("0.13")
+    # Item 90 / 132 (owner ruling 2026-09-17: tighten the band first, then
+    # the Settings rates go): the clean band for a pair whose rate is the
+    # ECB monthly average, and for no other source. A typed Settings rate
+    # and the self-derived rates keep `fx_reference_match_pct` (the S1
+    # optimize run refuted 1.5% for the receipt-median path, which needs its
+    # 3% headroom), so the scorer's bundles and every month still matched at
+    # a Settings rate are untouched. `reference_match_pct` is the one home.
+    # 0.02 measured 2026-09-17 with the Settings rates removed (DB copy at
+    # v165, judgment from the snapshot cache): July 29 / 31 / 32 / 33 / 33
+    # right at 3 / 2.5 / 2 / 1.75 / 1.5%, coincidental auto-matches 2 / 2 /
+    # 1 / 1 / 1 (the last is Erste Fracht at +0.2%, which no band reaches),
+    # August unchanged; the six bundles on ECB rates alone 68 / 70 / 70 / 70
+    # / 69 of 95, 0 wrong. 1.5% loses a holdout pair, so a true pair sits
+    # between 1.5 and 1.75%; 2% keeps headroom above it for a volatile month
+    # at the price of one July receipt (E A LOCACOES) staying in review.
+    fx_ecb_match_pct: Decimal = Decimal("0.02")
 
     # ── Zoho base-amount deterministic FX (2026-07-23) ─────────────
     # The ER report prints Zoho's own per-receipt conversion ("1 BRL =
@@ -563,6 +579,16 @@ class MatchingConfig:
         None when the pair has no configured rate (then the band/LLM path
         applies unchanged)."""
         return self.fx_reference_rates.get((from_ccy, to_ccy))
+
+    def reference_match_pct(self, source: str | None) -> Decimal:
+        """The clean band for a reference-rate pair, by where its rate came
+        from (`_reference_rate_for`'s source): `fx_ecb_match_pct` for
+        `ecb_month`, `fx_reference_match_pct` for every other source. The
+        matcher, the band a reviewer sees (item 81) and the judgment layer's
+        rejected-pair rule (item 131) all read it here."""
+        if source == "ecb_month":
+            return self.fx_ecb_match_pct
+        return self.fx_reference_match_pct
 
     def ecb_monthly_rate(
         self, from_ccy: str, to_ccy: str, on: "date | str | None"
@@ -924,6 +950,12 @@ def _reference_rate_for(
     return None
 
 
+def _pct_text(fraction: Decimal) -> str:
+    """A band as a reason string prints it: 0.03 -> '3', 0.025 -> '2.5'.
+    A whole percentage reads exactly as the old `:.0f` did."""
+    return format((Decimal(fraction) * 100).normalize(), "f")
+
+
 def reference_gap(
     charge_amount: Decimal,
     receipt_total: Decimal,
@@ -975,7 +1007,7 @@ def pair_reference_gap_band(
         return None
     gap = reference_gap(
         tx.amount, receipt.detected_total, ref[0],
-        cfg.fx_reference_match_pct, cfg.fx_reference_review_pct,
+        cfg.reference_match_pct(ref[1]), cfg.fx_reference_review_pct,
     )
     return gap[2] if gap is not None else None
 
@@ -1158,7 +1190,8 @@ def match_one(
                     f"{float(base_dev) * 100:.1f}%."
                 ),
             )
-        if ref is not None and ref_dev is not None and ref_dev <= cfg.fx_reference_match_pct:
+        ref_match_pct = cfg.reference_match_pct(ref[1] if ref is not None else None)
+        if ref is not None and ref_dev is not None and ref_dev <= ref_match_pct:
             return _fx_det_match(
                 MatchType.FX_REFERENCE,
                 clean=True,
@@ -1224,7 +1257,7 @@ def match_one(
                     f"Charge {tx.amount} {tx.transaction_currency} vs receipt "
                     f"{receipt.detected_total} {receipt.detected_currency} at "
                     f"{_rate_phrase()}: deviation {float(ref_dev) * 100:.1f}% "
-                    f"(above {float(cfg.fx_reference_match_pct) * 100:.0f}%; "
+                    f"(above {_pct_text(ref_match_pct)}%; "
                     f"DCC markup / tip territory). Requires FX judgment."
                 ),
                 requires_review=True,
