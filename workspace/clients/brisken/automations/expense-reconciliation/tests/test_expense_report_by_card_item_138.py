@@ -199,12 +199,12 @@ def test_each_card_says_what_its_statement_settled(client, monkeypatch):
 
     text = " ".join(_pages(client, batch))
     assert (
-        "Statement: August2026.xlsx · 2 charges · 1 matched · still open: "
-        "nothing · booked without a receipt: 1 charge, USD 60.00"
+        "Statement: August2026.xlsx · 2026-08-20 to 2026-08-30 · 2 charges · 1 matched · "
+        "unreconciled nothing · booked without a receipt: 1 charge, USD 60.00"
     ) in text
     assert (
-        "Statement: August2026.xlsx · 2 charges · 1 matched · still open: "
-        "USD 135.00"
+        "Statement: August2026.xlsx · 2026-08-05 to 2026-08-23 · 2 charges · 1 matched · "
+        "unreconciled USD 135.00"
     ) in text
     # 3645 books nothing yellow, so only 2838 carries the booked part.
     assert text.count("booked without a receipt") == 1
@@ -269,7 +269,7 @@ def test_a_statement_less_month_still_sections_and_says_no_statement(client, mon
     pages = _pages(client, batch)
     text = " ".join(pages)
     assert "Listing by card" in text
-    assert text.count("No statement loaded for this card.") == 2
+    assert text.count("No statement loaded for this card") == 2
     assert "charges" not in text and "booked without a receipt" not in text
     assert (
         _page_of(pages, f"{LABEL_2838}: 1 expense")

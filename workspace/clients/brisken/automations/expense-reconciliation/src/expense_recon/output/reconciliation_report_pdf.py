@@ -35,15 +35,14 @@ from __future__ import annotations
 
 import io
 from collections.abc import Sequence
-from decimal import Decimal
 
 from ._pdf_common import (
     caption_mark,
     card_name,
     card_sections,
+    card_statement_line,
     esc,
     make_styles,
-    parse_amount,
     prepare_evidence,
     register_fonts,
     stitch,
@@ -232,31 +231,12 @@ def _card_section(
 
     story.append(PageBreak())
     story.append(Paragraph(esc(sec["label"]), styles["h2"]))
-    cov = sec.get("coverage")
-    if sec["key"]:
-        statements = ", ".join((cov or {}).get("statements") or [])
-        # Charges with no recorded upload arrived under another statement
-        # (live August 2026: 1176, item 108); "none loaded" would be false.
-        story.append(Paragraph(esc(
-            f"Statement: {statements}  ·  {_period(cov)}" if statements
-            else f"Statement: not recorded  ·  {_period(cov)}" if sec["rows"]
-            else "No statement loaded for this card"
-        ), styles["capsub"]))
-    figures = []
-    if sec["rows"]:
-        n_rec = sum(1 for r in sec["rows"] if r.get("effective_bucket") == "reconciled")
-        figures.append(f"{len(sec['rows'])} charges  ·  "
-                       f"{int((cov or {}).get('n_reconciled', n_rec) or 0)} matched")
-        figures.append(
-            "unreconciled " + (_money((cov or {}).get("unreconciled_by_ccy") or {})
-                               or "nothing")
-        )
-        booked = _booked_no_receipt(sec["rows"])
-        if booked:
-            figures.append("booked without a receipt " + _money(booked))
     n_docs = len(sec["receipt_docs"])
-    figures.append(f"{n_docs} receipt{'' if n_docs == 1 else 's'}")
-    story.append(Paragraph(esc("  ·  ".join(figures)), styles["sub"]))
+    line = "  ·  ".join(x for x in (
+        card_statement_line(sec),
+        f"{n_docs} receipt{'' if n_docs == 1 else 's'}",
+    ) if x)
+    story.append(Paragraph(esc(line), styles["sub"]))
     story.append(Spacer(1, 4))
 
     _attention(story, view, sec["rows"], (sec["key"], section_of), styles)
@@ -475,22 +455,6 @@ def _build(
 
 def _money(by_ccy: dict) -> str:
     return ", ".join(f"{ccy} {amt}" for ccy, amt in sorted(by_ccy.items()))
-
-
-def _booked_no_receipt(rows: list[dict]) -> dict[str, str]:
-    """Item 102 per card: the charges the workbook marks as booked (the
-    `posted` section) that no receipt settles, summed per currency in
-    Decimal, the summary's own rule over this card's rows."""
-    totals: dict[str, Decimal] = {}
-    for row in rows:
-        if row.get("section") != "posted" or row.get("effective_bucket") != "unmatched":
-            continue
-        amount = parse_amount(row.get("amount"))
-        if amount is None:
-            continue
-        ccy = str(row.get("currency") or "?")
-        totals[ccy] = totals.get(ccy, Decimal("0")) + abs(amount)
-    return {ccy: f"{amt:,.2f}" for ccy, amt in sorted(totals.items())}
 
 
 def _duplicate_rows(groups: list[dict], view: dict) -> list[list[str]]:

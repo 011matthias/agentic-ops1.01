@@ -333,6 +333,70 @@ def card_name(entry: dict) -> str:
     return f"{label} ({'/'.join(extra)})" if label and extra else (label or "-")
 
 
+def card_statement_line(section: dict) -> str:
+    """What a card's statement settled, in one line under its heading.
+
+    `section` is one of `card_sections`' entries. Both documents print this
+    same line (item 138), so they cannot describe a card differently. The
+    figures are the coverage entry's, the numbers the month page's coverage
+    panel shows. The one figure computed here is booked without a receipt
+    (item 102): the card's charges keyed into the books (`section ==
+    "posted"`) that no receipt settles, summed in Decimal off the rows' own
+    amount strings.
+
+    A card with charges but no recorded upload says "not recorded": its
+    charges arrived under another statement (live August 2026: 1176, item
+    108), so "none loaded" would be false. A card with neither says no
+    statement was loaded. The no-card section names no statement."""
+    coverage = section.get("coverage") or {}
+    rows = list(section.get("rows") or [])
+    parts: list[str] = []
+    if section.get("key"):
+        statements = [
+            str(s) for s in (coverage.get("statements") or []) if str(s).strip()
+        ]
+        if statements:
+            parts.append(
+                ("Statement: " if len(statements) == 1 else "Statements: ")
+                + ", ".join(statements)
+            )
+        elif rows:
+            parts.append("Statement: not recorded")
+        else:
+            parts.append("No statement loaded for this card")
+        start, end = coverage.get("period_start"), coverage.get("period_end")
+        if rows and (start or end):
+            parts.append(f"{start or '?'} to {end or '?'}")
+    if rows:
+        n_tx = int(coverage.get("n_transactions") or len(rows))
+        parts.append(f"{n_tx} charge{'s' if n_tx != 1 else ''}")
+        parts.append(f"{int(coverage.get('n_reconciled') or 0)} matched")
+        open_by_ccy = coverage.get("unreconciled_by_ccy") or {}
+        parts.append("unreconciled " + (
+            ", ".join(f"{ccy} {amt}" for ccy, amt in sorted(open_by_ccy.items()))
+            or "nothing"
+        ))
+        n_booked = 0
+        booked: dict[str, Decimal] = {}
+        for row in rows:
+            if row.get("section") != "posted" or row.get("effective_bucket") != "unmatched":
+                continue
+            n_booked += 1
+            value = parse_amount(row.get("amount"))
+            if value is not None:
+                ccy = str(row.get("currency") or "") or "?"
+                booked[ccy] = booked.get(ccy, Decimal("0")) + abs(value)
+        if n_booked:
+            parts.append(
+                f"booked without a receipt: {n_booked} "
+                f"charge{'s' if n_booked != 1 else ''}"
+                + (", " + ", ".join(
+                    f"{ccy} {amt:,.2f}" for ccy, amt in sorted(booked.items())
+                ) if booked else "")
+            )
+    return "  ·  ".join(parts)
+
+
 def card_sections(
     view: dict, receipt_cards: dict[str, tuple[str, str]]
 ) -> list[dict]:

@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import io
 from collections.abc import Sequence
-from decimal import Decimal
 
 from ._pdf_common import (
     UNREADABLE_CAPTION,
@@ -49,7 +48,6 @@ from ._pdf_common import (
     excluded_note,
     format_totals,
     make_styles,
-    parse_amount,
     prepare_evidence,
     register_fonts,
     stitch,
@@ -71,64 +69,6 @@ _LISTING = (
     ("Ccy", 34),
     ("Receipt", 54),
 )
-
-
-def card_statement_line(section: dict) -> str:
-    """What a card's statement settled, in one line under its caption.
-
-    `section` is one of `card_sections`' entries (item 138). The figures are
-    its coverage entry's, the same numbers the month page's coverage panel
-    shows, so the document and the screen cannot count a card differently.
-    The one figure computed here is booked-without-a-receipt (item 102): the
-    card's charges keyed into the books (`section == "posted"`) that no
-    receipt settles, summed in Decimal off the rows' own amount strings.
-
-    A card with no coverage entry had no statement this month, and says so.
-    The no-card section says nothing then: "no statement for no card" is not
-    a sentence anyone needs."""
-    coverage = section.get("coverage")
-    has_card = bool(section.get("key"))
-    if not coverage:
-        return "No statement loaded for this card." if has_card else ""
-    parts: list[str] = []
-    statements = [
-        str(s) for s in (coverage.get("statements") or []) if str(s).strip()
-    ]
-    if statements:
-        parts.append(
-            ("Statement: " if len(statements) == 1 else "Statements: ")
-            + ", ".join(statements)
-        )
-    elif has_card:
-        parts.append("No statement loaded for this card")
-    n_tx = int(coverage.get("n_transactions") or 0)
-    parts.append(f"{n_tx} charge{'s' if n_tx != 1 else ''}")
-    parts.append(f"{int(coverage.get('n_reconciled') or 0)} matched")
-    still_open = coverage.get("unreconciled_by_ccy") or {}
-    parts.append("still open: " + (
-        ", ".join(f"{ccy} {amt}" for ccy, amt in sorted(still_open.items()))
-        or "nothing"
-    ))
-    n_booked = 0
-    booked: dict[str, Decimal] = {}
-    for row in section.get("rows") or []:
-        if row.get("section") != "posted" or row.get("effective_bucket") != "unmatched":
-            continue
-        n_booked += 1
-        value = parse_amount(row.get("amount"))
-        if value is not None:
-            ccy = str(row.get("currency") or "") or "?"
-            booked[ccy] = booked.get(ccy, Decimal("0")) + abs(value)
-    if n_booked:
-        parts.append(
-            f"booked without a receipt: {n_booked} "
-            f"charge{'s' if n_booked != 1 else ''}"
-            + (", " + ", ".join(
-                f"{ccy} {amt:,.2f}" for ccy, amt in sorted(booked.items())
-            ) if booked else "")
-        )
-    line = "  ·  ".join(parts)
-    return line[:1].upper() + line[1:]
 
 
 def build_expense_report_pdf(

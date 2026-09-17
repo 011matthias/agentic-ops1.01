@@ -7008,11 +7008,12 @@ def build_expense_report(
     flat listing.
     `charge_decisions` feeds the view that sections are read from.
     """
-    from ..output._pdf_common import NO_CARD_SECTION_LABEL, card_sections
-    from ..output.month_report_pdf import (
-        build_expense_report_pdf,
+    from ..output._pdf_common import (
+        NO_CARD_SECTION_LABEL,
+        card_sections,
         card_statement_line,
     )
+    from ..output.month_report_pdf import build_expense_report_pdf
 
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits, dup_resolutions
