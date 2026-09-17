@@ -4491,3 +4491,59 @@ returns a bare English sentence, a settings normalizer raising a plain
 each fail at the site, with its line number. Route tests cover one refusal of
 each family end to end. So a NEW refusal added next month cannot reach
 Criss's screen in English by omission.
+
+## A row settled outside the card system (item 144, 2026-09-17)
+
+Owner ruling 2026-09-17: a company invoice paid by wire needs an exit that
+is not a lie. July's Tricarico invoice (BRL 27,203.34, "Payment Method: Wire
+Transfer", settled outside by bank transfer) sat in `needs_entity`,
+`needs_person` and `needs_company_or_person`, and both exits the screen
+offered stated something untrue. Picking a company card says a card paid it.
+Confirming "paid with a private card" says the reviewer paid it out of her
+own pocket. A wire is neither, and person resolution is card-only by the
+item-40 ruling, so the row could not leave `needs_person` by any sanctioned
+action.
+
+The trigger is the reviewer's OWN disposition, never the printed tender: a
+row is settled off the card system when `expenses[].settled_outside` is
+present and carries a `how` (`service.settled_off_card`, the one predicate
+the card pass, the review sentence and the boxes all read). A printed
+"Wire Transfer" with no disposition is the document's claim about itself and
+still changes nothing but `suggested_private`.
+
+On such a row, three payload fields move and nothing else does:
+
+| Field | On a settled-outside row | Otherwise |
+|---|---|---|
+| `expenses[].boxes[]` | no `needs_person`; `needs_company_or_person` follows from `needs_entity` alone | unchanged |
+| `expenses[].can_mark_private` | `false`, so the private-card option is not offered | unchanged |
+| `expenses[].review.reason_code` | `needs_entity_settled_outside` while the row has no entity | `needs_entity` |
+
+`summary.n_needs_person` and `summary.n_needs_company_or_person` are counts
+over the boxes, so they follow. `POST .../private` and the field PUT already
+refuse whatever `can_mark_private` is false on (`code: "company_card"`), so
+the button and the routes still agree.
+
+The new reason's English sentence is "This expense was settled outside the
+card system, so no card will name the company it belongs to. Set the legal
+entity on the row; the export shows a placeholder until then." The generic
+`needs_entity` sentence opens by telling the reviewer to assign the paying
+card, which is the one instruction this row cannot follow. A front end that
+does not know the new code falls back to the English sentence, exactly as
+item 130 specifies. The `needs_person` sentence goes quiet on the same rows
+the box drops, so the screen and the box cannot disagree about whether the
+row still owes an answer.
+
+**`needs_entity` STAYS, and the entity is not auto-filled.** The row carries
+no bill-to field: `customer`, `legal_entity_id` and `entity_source` are all
+empty on the live payload, and the company name exists only inside the file
+name. The tool does not know which company this is; it only stops naming a
+card as the way to tell it. The reviewer sets the entity on the row.
+
+Supersedes two sentences of "A wire is not a card (residual R3, 2026-09-17)"
+above, which are now true of the TENDER half only: on a settled-outside row
+`can_mark_private` does move, and so does the `needs_person` half of the
+company-or-person question. Everything else in that section stands, and the
+open question it names is what this ruling answered.
+
+Pinned route-level in `tests/test_bank_transfer_exit_item_144.py`.

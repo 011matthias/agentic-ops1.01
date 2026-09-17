@@ -5913,6 +5913,20 @@ def bank_transfer_tender(hint: str | None) -> bool:
     return hit is not None and hit["how"] == "bank_transfer"
 
 
+def settled_off_card(entry: object) -> bool:
+    """Whether one row's settled-outside disposition takes it out of the
+    card system (item 144).
+
+    The argument is one value of `settled_outside_map` (`{how, note, at}`),
+    or None for a row with no disposition. It is settled off the card when
+    it carries a `how`: the reviewer has stated how the money moved, and
+    that answer is never a company card. The one predicate the three places
+    that act on it read (the card pass, the review reason, the boxes), so
+    they cannot disagree about one row.
+    """
+    return bool(isinstance(entry, dict) and entry.get("how"))
+
+
 def resolve_batch_row_cards(
     receipts: "list[Receipt]",
     cfg: dict | None,
@@ -5987,10 +6001,17 @@ def resolve_batch_row_cards(
     invoice (BRL 27,203.34, "Payment Method: Wire Transfer", settled outside
     by bank transfer) read `suggested_private` while the tool's own ruling
     of 2026-09-15 calls a settled-outside receipt real company spend.
-    `can_mark_private` is unchanged: the reviewer can still say she paid it
-    herself, the tool just stops suggesting it. Nothing else moves — such a
-    row keeps its company / person question (the boxes), which is the
-    unanswered half of this defect.
+
+    Item 144 (owner ruling 2026-09-17) closed the half this left open. A
+    row the reviewer has settled OFF the card system (`settled_off_card`:
+    its disposition carries a `how`) also reads `can_mark_private` false.
+    Both exits the screen offered on July's Tricarico invoice stated
+    something untrue: picking a company card says a card paid it, and
+    confirming a private card says the reviewer paid it out of her own
+    pocket. A wire is neither. The printed tender alone
+    (`bank_transfer_tender`) does NOT take the option away, because that
+    is the document's claim about itself; only the reviewer's own
+    disposition does.
     """
     from ..cards import masked_short_ending, resolve_hinted_card_ex
     from ..matching.deterministic import _card_keys
@@ -6004,7 +6025,8 @@ def resolve_batch_row_cards(
         # Residual R3: a tender no card carries (a wire), or a receipt the
         # reviewer already settled outside the card, answers the private
         # suggestion's question with "no card at all".
-        not_a_card = bank_transfer_tender(hint) or r.document_id in (settled_outside or {})
+        settled_off = settled_off_card((settled_outside or {}).get(r.document_id))
+        not_a_card = bank_transfer_tender(hint) or settled_off
         card, ambiguous = resolve_hinted_card_ex(hint, cards, hints_map)
         card_source = "hint" if card is not None else "none"
         # Note #60: the two digits the card was named by, when a masked
@@ -6082,7 +6104,9 @@ def resolve_batch_row_cards(
                 and not not_a_card
             ),
             "can_mark_private": private or (
-                not ambiguous and (card is None or card_source == "learned")
+                not settled_off
+                and not ambiguous
+                and (card is None or card_source == "learned")
             ),
             "ambiguous": ambiguous,
             # A reviewer's (or remembered) pick settles the ambiguity the
@@ -6389,6 +6413,7 @@ def _expense_review(
     private: bool = False,
     suggested_private: bool = False,
     needs_cost_center: bool = False,
+    settled_outside: bool = False,
 ) -> dict:
     """Review-by-exception for one expense (receipt-spine). Missing core
     fields first (an expense cannot export cleanly without date / amount /
@@ -6418,7 +6443,17 @@ def _expense_review(
     and confirming private or assigning the card is the same decision
     needs_entity was asking for, sharpened. A CONFIRMED private row
     (`private`) skips the entity check entirely — a reimbursement row
-    needs a person (`reimburse_to`), not a company entity."""
+    needs a person (`reimburse_to`), not a company entity.
+
+    `settled_outside` (item 144, owner ruling 2026-09-17) is the row's
+    settled-off-the-card state (`settled_off_card`). It changes WHICH
+    sentence the two card-shaped asks use, never whether they fire. The
+    entity ask stops naming the paying card, because on such a row there
+    is none to assign and the instruction cannot be followed; it asks for
+    the entity directly instead. The person ask goes quiet altogether, for
+    the reason the boxes drop `needs_person` (`expense_boxes`): person
+    resolution is card-only, so on a row no card paid it is an ask nobody
+    can answer."""
     missing = [
         label
         for label, value in (
@@ -6477,6 +6512,20 @@ def _expense_review(
             "suggested_private",
         )
     if entity is not None and not entity and not private:
+        if settled_outside:
+            # Item 144. Same question, an answerable instruction. The
+            # generic sentence below opens with "assign this expense's
+            # paying card", and on a row settled off the card there is no
+            # card to assign and never will be, so the first thing the
+            # screen told Criss to do was the one thing she could not.
+            return _review(
+                "check",
+                "This expense was settled outside the card system, so no "
+                "card will name the company it belongs to. Set the legal "
+                "entity on the row; the export shows a placeholder until "
+                "then.",
+                "needs_entity_settled_outside",
+            )
         return _review(
             "check",
             "No legal entity yet. Assign this expense's paying card (or set "
@@ -6520,11 +6569,22 @@ def _expense_review(
             "category.",
             "invoice_read_as_statement",
         )
-    if review["state"] == "ready" and person is not None and not person:
+    if (
+        review["state"] == "ready"
+        and person is not None
+        and not person
+        and not settled_outside
+    ):
         # Item 40: every expense belongs to a person, through the card.
         # A row whose card carries no person is not done — but the fix
         # lives in Settings > Cards, so this fires only when nothing
         # more actionable is wrong with the row itself.
+        #
+        # Item 144: silent on a row settled off the card, which the same
+        # ruling drops from the `needs_person` box. The fix this sentence
+        # names (a person on its paying card) does not exist for a row no
+        # card paid, so the screen and the box would otherwise disagree
+        # about whether the row still owes an answer.
         return _review(
             "check",
             "No person owns this expense yet. Add a person to its paying "
@@ -6861,7 +6921,13 @@ def build_expense_view(
             "ambiguous": False, "card_map_blocked": False,
         }
         cost = cost_res.get(r.document_id) or UNRESOLVED_COST_CENTER
-        box_inputs[r.document_id] = (r, res, cost)
+        # Item 144: the one row-level fact the review sentence and the boxes
+        # both read, decided here once (`settled_off_card`) and carried to
+        # the box pass below, so the two cannot answer it differently.
+        row_settled_outside = settled_off_card(
+            grid_settled_outside.get(r.document_id)
+        )
+        box_inputs[r.document_id] = (r, res, cost, row_settled_outside)
         review = _expense_review(
             r, overrides, entity=res["entity"], period=period,
             untrusted_flags=_row_untrusted(r, intake_provenance),
@@ -6869,6 +6935,7 @@ def build_expense_view(
             private=res["private"],
             suggested_private=res["suggested_private"],
             needs_cost_center=cost.needs,
+            settled_outside=row_settled_outside,
             # A hand-typed date, or a whole expense entered by hand, is the
             # reviewer's own value; the guard only questions the machine's.
             date_is_human=(
@@ -7178,7 +7245,7 @@ def build_expense_view(
     # box count below is the number of rows carrying that box, so a box that
     # opens its rows can never list a different number than it shows.
     for e in expenses:
-        receipt, res, cost = box_inputs[e["document_id"]]
+        receipt, res, cost, row_settled_outside = box_inputs[e["document_id"]]
         e["boxes"] = expense_boxes(
             categorized=is_categorized(ov_by_doc.get(e["document_id"], receipt)),
             review_state=e["review"]["state"],
@@ -7193,6 +7260,9 @@ def build_expense_view(
             # Item 94: a decided copy is in no box, so every box count
             # below leaves it out the way `n_expenses` does.
             copy=e["document_id"] in grid_copies,
+            # Item 144: a row settled off the card system is in no
+            # `needs_person` box; the same fact the review sentence read.
+            settled_outside=row_settled_outside,
         )
 
     def n_box(box: str) -> int:
@@ -14092,6 +14162,7 @@ def expense_boxes(
     image_missing: bool,
     render_failed: bool,
     copy: bool = False,
+    settled_outside: bool = False,
 ) -> list[str]:
     """The boxes one expense row belongs to, in `EXPENSE_BOXES` order.
 
@@ -14109,11 +14180,22 @@ def expense_boxes(
     changes the month, because a copy writes no CSV row, no listing row, no
     reimbursement and no cost-center bucket. The one question a copy still
     asks, whether it really is one, has its own control ("Not a copy"), and
-    that ruling brings the row back into every box it qualifies for."""
+    that ruling brings the row back into every box it qualifies for.
+
+    `settled_outside` (item 144, owner ruling 2026-09-17): a row the
+    reviewer has settled OFF the card system (`settled_off_card`) is not in
+    `needs_person`. Person resolution is card-only by the item-40 ruling,
+    and a bill paid by wire will never have a card, so the box was holding
+    a row on an ask nobody can answer: July's Tricarico invoice could not
+    leave it by any sanctioned action. `needs_entity` is untouched. The
+    company is genuinely unknown on such a row and a card was never what
+    was going to name it, so the question stands and only the instruction
+    changes (`_expense_review`). `needs_company_or_person` then follows
+    from `needs_entity` alone, by the same either-half rule."""
     if copy:
         return []
     needs_entity = not res.get("entity") and not res.get("private")
-    needs_person = not res.get("person")
+    needs_person = not res.get("person") and not settled_outside
     member = {
         "categorized": categorized,
         "uncategorized": not categorized,
