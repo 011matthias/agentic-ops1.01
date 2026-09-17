@@ -7441,6 +7441,52 @@ def build_cost_center_totals(
     }
 
 
+def report_view(
+    run: RunRow,
+    receipts: "list[Receipt]",
+    snapshot_receipts: "list[Receipt]",
+    decisions: dict,
+    overrides: dict,
+    resolutions: dict[str, str] | None,
+) -> dict:
+    """`build_view` over the reviewer's live pool, for a document.
+
+    Hand `build_view` the live pool rather than post-filtering its output:
+    the unmatched list, the duplicate groups, the candidates and the counts
+    are all derived there, and re-deriving any of them in a report would be
+    a second implementation of the same rules, the exact shape that let the
+    two documents disagree in the first place."""
+    if {r.document_id for r in receipts} != {
+        r.document_id for r in snapshot_receipts
+    }:
+        run = replace(run, snapshot={
+            **(run.snapshot or {}),
+            "receipts": [receipt_to_dict(r) for r in receipts],
+        })
+    return build_view(run, decisions, overrides, resolutions)
+
+
+def report_receipt_cards(
+    receipts: "list[Receipt]",
+    cfg: dict | None,
+    field_overrides: dict[str, dict[str, str]] | None,
+) -> dict[str, tuple[str, str]]:
+    """Item 138: `{document_id: (card key, card label)}` for every receipt,
+    in pool order, `("", "")` for one with no card. The card is the one
+    `resolve_batch_row_cards` resolves (a pick on the row, the printed
+    method or an assigned hint, a remembered card), the same chain
+    `bake_card_scope` hands the matcher (item 137), so a document files a
+    receipt under the card it was matched on."""
+    res = resolve_batch_row_cards(receipts, cfg, field_overrides or {})
+    out: dict[str, tuple[str, str]] = {}
+    for r in receipts:
+        card = (res.get(r.document_id) or {}).get("card")
+        out[r.document_id] = (
+            (card.key, card.display_label) if card is not None else ("", "")
+        )
+    return out
+
+
 def build_reconciliation_report(
     run: RunRow,
     decisions: dict,
@@ -7484,19 +7530,9 @@ def build_reconciliation_report(
                 ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
             ),
         )
-    if {r.document_id for r in receipts} != {
-        r.document_id for r in snapshot_receipts
-    }:
-        # Hand `build_view` the live pool rather than post-filtering its
-        # output: the unmatched list, the duplicate groups, the candidates
-        # and the counts are all derived there, and re-deriving any of them
-        # here would be a second implementation of the same rules — the
-        # exact shape that let the two documents disagree in the first place.
-        run = replace(run, snapshot={
-            **(run.snapshot or {}),
-            "receipts": [receipt_to_dict(r) for r in receipts],
-        })
-    view = build_view(run, decisions, overrides, resolutions)
+    view = report_view(
+        run, receipts, snapshot_receipts, decisions, overrides, resolutions
+    )
     charge_by_doc: dict[str, dict] = {}
     for row in view.get("rows") or []:
         doc = row.get("chosen_document_id")

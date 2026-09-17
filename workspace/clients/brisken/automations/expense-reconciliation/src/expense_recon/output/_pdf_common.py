@@ -221,42 +221,182 @@ def prepare_evidence(items: list[dict]) -> list[tuple[dict, bytes | None]]:
     return prepared
 
 
-def stitch(document_pdf: bytes, prepared: list[tuple[dict, bytes | None]]) -> bytes:
-    """Interleave: the leading pages, then each caption page followed by its
-    document's pages. The caption pages are the LAST `len(prepared)` pages of
-    `document_pdf`, one per evidence item."""
+def caption_mark(pages: list[int]):
+    """A zero-size flowable that records the page it lands on.
+
+    Placed right after the `PageBreak` that opens an evidence caption, it
+    tells `stitch` which page is that caption's, so receipt pages can sit
+    INSIDE the document (item 138: each card's receipts follow that card's
+    listing) instead of only after its last page."""
+    from reportlab.platypus import Flowable
+
+    class _Mark(Flowable):
+        def wrap(self, *_args):
+            return 0, 0
+
+        def draw(self):
+            pages.append(self.canv.getPageNumber())
+
+    return _Mark()
+
+
+def stitch(
+    document_pdf: bytes,
+    prepared: list[tuple[dict, bytes | None]],
+    caption_pages: list[int] | None = None,
+) -> bytes:
+    """Interleave each caption page with its document's pages.
+
+    Without `caption_pages` the caption pages are the LAST `len(prepared)`
+    pages of `document_pdf`, one per evidence item. With it (the 1-based page
+    of each item's caption, in `prepared` order, recorded by `caption_mark`)
+    each document's pages follow its own caption wherever that sits, so a
+    report can put a card's receipts behind that card's section. A caption
+    must own its page (a `PageBreak` before it and before whatever follows
+    its section). A mark count that does not line up with `prepared` would
+    misfile every receipt, so it falls back to appending the documents after
+    the last page: out of place, never dropped."""
     from pypdf import PdfReader, PdfWriter
 
     base = PdfReader(io.BytesIO(document_pdf))
     writer = PdfWriter()
+    if caption_pages is not None and len(caption_pages) == len(prepared):
+        after: dict[int, list[bytes | None]] = {}
+        for page_no, (_item, pdf_bytes) in zip(caption_pages, prepared):
+            after.setdefault(page_no, []).append(pdf_bytes)
+        for i, page in enumerate(base.pages, start=1):
+            writer.add_page(page)
+            for pdf_bytes in after.get(i, []):
+                _add_document_pages(writer, pdf_bytes)
+        return _written(writer)
+    if caption_pages is not None:
+        for page in base.pages:
+            writer.add_page(page)
+        for _item, pdf_bytes in prepared:
+            _add_document_pages(writer, pdf_bytes)
+        return _written(writer)
     lead_end = len(base.pages) - len(prepared)
     for page in base.pages[:lead_end]:
         writer.add_page(page)
     for i, (_item, pdf_bytes) in enumerate(prepared):
         writer.add_page(base.pages[lead_end + i])
-        if pdf_bytes is None:
-            continue
-        # Per file, because the alternative is the whole month. One receipt
-        # that raised here used to abort the assembly, so the request 500ed
-        # and the period produced NO report at all: not a partial one, not a
-        # caption, nothing naming the file. `probe_pdf` has already run these
-        # same operations over these same bytes, so a failure reaching this
-        # point is the residual case rather than the expected one; the caption
-        # is laid out before stitching and cannot be rewritten from here,
-        # which is why the decision belongs in `prepare_evidence` and this is
-        # only the belt that keeps the rest of the document.
-        try:
-            pages = list(PdfReader(io.BytesIO(pdf_bytes)).pages)
-            for page in pages[:MAX_RECEIPT_PAGES]:
-                writer.add_page(page)
-        except Exception:  # noqa: BLE001 - one receipt never costs the month
-            continue
+        _add_document_pages(writer, pdf_bytes)
+    return _written(writer)
+
+
+def _add_document_pages(writer, pdf_bytes: bytes | None) -> None:
+    from pypdf import PdfReader
+
+    if pdf_bytes is None:
+        return
+    # Per file, because the alternative is the whole month. One receipt
+    # that raised here used to abort the assembly, so the request 500ed
+    # and the period produced NO report at all: not a partial one, not a
+    # caption, nothing naming the file. `probe_pdf` has already run these
+    # same operations over these same bytes, so a failure reaching this
+    # point is the residual case rather than the expected one; the caption
+    # is laid out before stitching and cannot be rewritten from here,
+    # which is why the decision belongs in `prepare_evidence` and this is
+    # only the belt that keeps the rest of the document.
+    try:
+        pages = list(PdfReader(io.BytesIO(pdf_bytes)).pages)
+        for page in pages[:MAX_RECEIPT_PAGES]:
+            writer.add_page(page)
+    except Exception:  # noqa: BLE001 - one receipt never costs the month
+        return
+
+
+def _written(writer) -> bytes:
     # Spooled, not `BytesIO().getvalue()`: that held the serialized document
     # twice at once, on the same machine this assembly already fills.
     with tempfile.TemporaryFile() as fh:
         writer.write(fh)
         fh.seek(0)
         return fh.read()
+
+
+# ── per-card sections (backlog item 138) ────────────────────────────
+#
+# Owner, 2026-09-17: "the output (PDF) is also not organized in the
+# different cards that were reconciled." A month is reconciled card by card,
+# so both documents section on the same grouping, derived here once.
+
+NO_CARD_SECTION_LABEL = "No card"
+
+
+def card_name(entry: dict) -> str:
+    """A coverage entry's name for a document: its label, with the digits
+    beside it when they add something the label does not already say."""
+    label = str(entry.get("label") or "").strip()
+    digits = [str(d) for d in (entry.get("digits") or []) if str(d).strip()]
+    extra = [d for d in digits if d not in label]
+    return f"{label} ({'/'.join(extra)})" if label and extra else (label or "-")
+
+
+def card_sections(
+    view: dict, receipt_cards: dict[str, tuple[str, str]]
+) -> list[dict]:
+    """The month's per-card sections, in document order.
+
+    `view` is `build_view`'s payload. `receipt_cards` is every receipt in
+    the pool, in pool order: `{document_id: (card key, card label)}`, the
+    card the tool resolved for it (item 137's chain) or `("", "")`.
+
+    Charges group on `rows[].coverage_key`, which joins `coverage[].key`;
+    the key is never parsed. A receipt a charge holds follows that charge's
+    card, even where its own resolved card differs (the row's
+    `cards_differ` names that inside the section rather than moving it). A
+    receipt nobody holds goes to its resolved card. The last section,
+    `key` "" and never dropped while it has content, takes the charges no
+    coverage entry claims (and the "no card on the charge" entry) and the
+    receipts with no card.
+
+    Each section: `key`, `label`, `coverage` (the entry, or None; the last
+    section carries the "no card on the charge" entry when there is one), `rows`
+    (its charges, in payload order) and `receipt_docs` (held receipts in
+    charge order, then the unheld ones in pool order). Sections with
+    neither charges nor receipts are left out; a card with nothing this
+    month is already a line in the coverage table.
+    """
+    coverage = {
+        str(c.get("key") or ""): c for c in (view.get("coverage") or [])
+    }
+    order: list[str] = [k for k in coverage if k]
+    labels: dict[str, str] = {k: card_name(c) for k, c in coverage.items() if k}
+    rows_by: dict[str, list[dict]] = {}
+    docs_by: dict[str, list[str]] = {}
+    held: set[str] = set()
+    for row in view.get("rows") or []:
+        key = str(row.get("coverage_key") or "")
+        if key not in labels:
+            key = ""
+        rows_by.setdefault(key, []).append(row)
+        doc = str(row.get("chosen_document_id") or "")
+        if doc and doc not in held:
+            held.add(doc)
+            docs_by.setdefault(key, []).append(doc)
+    for doc, (card_key, card_label) in receipt_cards.items():
+        if doc in held:
+            continue
+        key = str(card_key or "")
+        if key and key not in labels:
+            labels[key] = str(card_label or key)
+            order.append(key)
+        docs_by.setdefault(key, []).append(doc)
+    out = []
+    for key in [*order, ""]:
+        if not (rows_by.get(key) or docs_by.get(key)):
+            continue
+        out.append({
+            "key": key,
+            "label": labels.get(key) or NO_CARD_SECTION_LABEL,
+            # The "" entry is the charges with no card; its figures are the
+            # same arithmetic as every card's, so the last section keeps them.
+            "coverage": coverage.get(key),
+            "rows": rows_by.get(key, []),
+            "receipt_docs": docs_by.get(key, []),
+        })
+    return out
 
 
 def esc(text) -> str:
