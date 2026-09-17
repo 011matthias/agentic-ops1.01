@@ -1979,18 +1979,57 @@ def match_month(
 
     # Pass 1: detect genuinely ambiguous transactions (top deterministic
     # candidates tie even after the 3.9 signal). These are excluded from
-    # assignment so an arbitrary pick is never made; the receipts they
-    # tie over are left free for other transactions.
+    # assignment so an arbitrary pick is never made.
+    #
+    # Item 103 (2026-09-17): the receipts a tie lists are HELD by it, the way
+    # `apply_decisions` holds them for the pending pick. Until then they were
+    # left free, so pass 2 could also hand one to another charge: one receipt
+    # stored against two charges, the stored counts reporting the second
+    # pairing while the page dropped whichever pairing came later in
+    # statement order (live August 2026 at round B: `0023` Anthropic 52.59
+    # matched to ANTHROPIC 52.46 AND tied on ANTHROPIC 50.52). Two rules:
+    #
+    # 1. Spoken for (`uniqueness_spoken_for`, round B's rule carried into
+    #    tie detection): a tied receipt that holds a CLEAN EXACT candidate on
+    #    another charge, while its candidate here is not one, is claimed by
+    #    bank-printed evidence and does not sustain the tie. When fewer than
+    #    two tied receipts remain the charge is not ambiguous and goes to the
+    #    assignment like any other. This only ever dissolves a tie; a charge
+    #    whose top candidate stood alone before still stands alone. Clean,
+    #    because the card pass above leaves a cards-differ EXACT at
+    #    confidence 0.55, below every clean deterministic candidate: it is
+    #    not the stronger claim elsewhere this rule reasons from. Two EXACT
+    #    twins tying over two identical charges are each other's equal, so
+    #    neither is spoken for and the pick stays with the human (live July
+    #    2026: two GOOGLE Workspace 71.64 charges on 07-01).
+    # 2. Held: every receipt a surviving tie lists is skipped by pass 2.
+    exact_txs_by_doc: dict[str, set[str]] = {}
+    if cfg.uniqueness_spoken_for:
+        for tx_id, cands in cands_by_tx.items():
+            for c in cands:
+                if c.match.match_type is MatchType.EXACT and not c.match.requires_review:
+                    exact_txs_by_doc.setdefault(c.match.document_id, set()).add(tx_id)
     ambiguous_tx_ids: set[str] = set()
+    held_by_tie: set[str] = set()
     for tx_id, cands in cands_by_tx.items():
         determ = [c for c in cands if c.is_determ]
         if not determ:
             continue
         determ.sort(key=lambda c: c.sort_key, reverse=True)
         tied = [c for c in determ if _ties(c, determ[0])]
+        if len(tied) > 1 and exact_txs_by_doc:
+            tied = [
+                c for c in tied
+                if (
+                    c.match.match_type is MatchType.EXACT
+                    and not c.match.requires_review
+                )
+                or not (exact_txs_by_doc.get(c.match.document_id, set()) - {tx_id})
+            ]
         if len(tied) > 1:
             ambiguous_tx_ids.add(tx_id)
             outcome.ambiguous.extend(c.match for c in tied)
+            held_by_tie.update(c.match.document_id for c in tied)
 
     # Item 133 rule (b), 2026-09-17: a same-currency pair on the exact amount
     # does not consult the merchant, so a same-day charge from another
@@ -2010,7 +2049,8 @@ def match_month(
 
     # Pass 2: greedy bipartite assignment over all candidates from
     # non-ambiguous transactions, highest sort_key first. A transaction
-    # and a receipt are each consumed at most once.
+    # and a receipt are each consumed at most once, and a receipt a tie
+    # holds (pass 1) is not consumed here at all.
     assignable: list[_Candidate] = [
         c
         for tx_id, cands in cands_by_tx.items()
@@ -2025,6 +2065,8 @@ def match_month(
         if c.match.transaction_id in assigned_tx:
             continue
         if c.match.document_id in assigned_rec:
+            continue
+        if c.match.document_id in held_by_tie:
             continue
         if c.is_determ:
             outcome.matches.append(c.match)

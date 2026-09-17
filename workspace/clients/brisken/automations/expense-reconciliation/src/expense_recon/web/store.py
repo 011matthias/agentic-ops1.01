@@ -158,6 +158,12 @@ SETTINGS_DEFAULTS: dict = {
     # flags nothing, so a tenant that has never defined one sees no
     # cost-center review state at all. See cost_centers.py.
     "cost_centers": {},
+    # Receipt chasing (item 107): {"enabled": false, "holders": {person:
+    # address}}. OFF by default and off on the live volume until the owner
+    # approves the chase mail; with it off the month still builds the
+    # missing-receipts list and still composes the mail for preview, and
+    # nothing sends either way (receipt_chase.py sends nothing at all).
+    "receipt_requests": {"enabled": False, "holders": {}},
 }
 
 # Settings keys holding a {str: str} map. Values are kept as STRINGS: a
@@ -178,6 +184,7 @@ SETTINGS_WRITABLE_KEYS = (
     "cards",
     "cost_centers",
     "intake",
+    "receipt_requests",
 )
 
 # Keys `GET /api/settings` DERIVES and the PUT never stores. A client that
@@ -305,6 +312,13 @@ class Decision:
     # person or by a disposition seed that left the status pending.
     decided_by: str | None = None
     rule: str | None = None
+    # Item 107, both reviewer-set and both absent on every row nobody has
+    # chased. `receipt_requested_at` (with `receipt_requested_to`) records
+    # that the holder was ASKED, which closes nothing; `no_receipt_expected`
+    # holds the REASON no receipt will ever exist, which closes the charge.
+    receipt_requested_at: str | None = None
+    receipt_requested_to: str | None = None
+    no_receipt_expected: str | None = None
 
 
 class RunStore:
@@ -346,6 +360,9 @@ class RunStore:
                 chosen_document_id TEXT,
                 updated_at         TEXT,
                 disposition        TEXT,
+                receipt_requested_at TEXT,
+                receipt_requested_to TEXT,
+                no_receipt_expected  TEXT,
                 PRIMARY KEY (run_id, transaction_id)
             );
             CREATE TABLE IF NOT EXISTS category_overrides (
@@ -508,6 +525,17 @@ class RunStore:
             self.conn.execute("ALTER TABLE decisions ADD COLUMN decided_by TEXT")
         if "decided_rule" not in decision_cols:
             self.conn.execute("ALTER TABLE decisions ADD COLUMN decided_rule TEXT")
+        # decisions.receipt_requested_* + no_receipt_expected (item 107,
+        # 2026-09-17): the live volume predates all three. NULL everywhere
+        # reads as "nobody has chased this charge", which is what every
+        # charge on every existing month was.
+        for column in (
+            "receipt_requested_at", "receipt_requested_to", "no_receipt_expected",
+        ):
+            if column not in decision_cols:
+                self.conn.execute(
+                    f"ALTER TABLE decisions ADD COLUMN {column} TEXT"
+                )
         # jobs.result (receipts drop, 2026-09-08): the live volume predates
         # the column; NULL on old rows reads as "this job kind carries no
         # payload", which is true of every job kind before the drop.
@@ -1016,7 +1044,8 @@ class RunStore:
     def get_decisions(self, run_id: str) -> dict[str, Decision]:
         rows = self.conn.execute(
             "SELECT transaction_id, status, chosen_document_id, updated_at, "
-            "disposition, decided_by, decided_rule FROM decisions "
+            "disposition, decided_by, decided_rule, receipt_requested_at, "
+            "receipt_requested_to, no_receipt_expected FROM decisions "
             "WHERE run_id = ?",
             (run_id,),
         ).fetchall()
@@ -1028,6 +1057,9 @@ class RunStore:
                 disposition=r["disposition"],
                 decided_by=r["decided_by"],
                 rule=r["decided_rule"],
+                receipt_requested_at=r["receipt_requested_at"],
+                receipt_requested_to=r["receipt_requested_to"],
+                no_receipt_expected=r["no_receipt_expected"],
             )
             for r in rows
         }
@@ -1152,6 +1184,59 @@ class RunStore:
             "disposition = excluded.disposition, "
             "updated_at = excluded.updated_at",
             (run_id, transaction_id, STATUS_PENDING, updated_at, disposition),
+        )
+        self.conn.commit()
+
+    def set_receipt_requested(
+        self,
+        run_id: str,
+        transaction_id: str,
+        requested_at: str | None,
+        requested_to: str | None,
+        updated_at: str,
+    ) -> None:
+        """Item 107: record that this charge's receipt was asked for, or
+        clear the record (`requested_at=None`).
+
+        Status-preserving in the same way `set_disposition` is: a fresh row
+        seeds `status=pending`, an existing row keeps its status, its chosen
+        document and its disposition untouched. Asking for a receipt is not
+        a verdict on the charge, and it must never look like one."""
+        self.conn.execute(
+            "INSERT INTO decisions (run_id, transaction_id, status, "
+            "chosen_document_id, updated_at, receipt_requested_at, "
+            "receipt_requested_to) VALUES (?, ?, ?, NULL, ?, ?, ?) "
+            "ON CONFLICT(run_id, transaction_id) DO UPDATE SET "
+            "receipt_requested_at = excluded.receipt_requested_at, "
+            "receipt_requested_to = excluded.receipt_requested_to, "
+            "updated_at = excluded.updated_at",
+            (run_id, transaction_id, STATUS_PENDING, updated_at,
+             requested_at, requested_to),
+        )
+        self.conn.commit()
+
+    def set_no_receipt_expected(
+        self,
+        run_id: str,
+        transaction_id: str,
+        reason: str | None,
+        updated_at: str,
+    ) -> None:
+        """Item 107: record that no receipt will ever exist for this charge,
+        and why (`reason=None` clears the mark).
+
+        Status-preserving like the two upserts above. The reason is the whole
+        content of the verdict: a mark with no reason closes a charge for a
+        reason nobody can read next month, so the route refuses a blank one
+        rather than storing an empty string."""
+        self.conn.execute(
+            "INSERT INTO decisions (run_id, transaction_id, status, "
+            "chosen_document_id, updated_at, no_receipt_expected) "
+            "VALUES (?, ?, ?, NULL, ?, ?) "
+            "ON CONFLICT(run_id, transaction_id) DO UPDATE SET "
+            "no_receipt_expected = excluded.no_receipt_expected, "
+            "updated_at = excluded.updated_at",
+            (run_id, transaction_id, STATUS_PENDING, updated_at, reason),
         )
         self.conn.commit()
 

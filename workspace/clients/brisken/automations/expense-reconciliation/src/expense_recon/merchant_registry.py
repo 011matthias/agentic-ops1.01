@@ -58,6 +58,7 @@ from dataclasses import dataclass
 from rapidfuzz import fuzz
 
 from .matching.deterministic import _normalize as normalize_vendor
+from .error_codes import CodedValueError
 from .matching.types import EXPENSE_CATEGORIES
 from .vendor_names import _LEGAL_SUFFIXES, clean_vendor_name
 
@@ -234,6 +235,12 @@ class MerchantMatch:
     # Item 47: the brand's default project / purpose. None when unset, and
     # unaffected by `multi_category` (which decouples CATEGORY only).
     cost_center: str | None = None
+    # Item 115: whether this merchant is marked multi-category. `category`
+    # is None for that merchant AND for a naming-only one, and the two are
+    # not the same instruction: a multi-category merchant says "judge every
+    # receipt on its own items", so a remembered category must not flatten
+    # its lines either.
+    multi_category: bool = False
 
 
 class MerchantRegistry:
@@ -363,6 +370,7 @@ class MerchantRegistry:
                 score=float(score),
                 kind=kind,
                 cost_center=(entry.get("cost_center") or None),
+                multi_category=True,
             )
         category = (entry.get("category") or None)
         return MerchantMatch(
@@ -403,7 +411,10 @@ def normalize_merchants_setting(raw: object, *, stored: object = None) -> dict:
     if raw is None:
         return {}
     if not isinstance(raw, dict):
-        raise ValueError("merchants must be an object of {canonical_name: entry}")
+        raise CodedValueError(
+            "merchants must be an object of {canonical_name: entry}",
+            code="invalid_body",
+        )
     already: set[str] | None = None
     if isinstance(stored, dict):
         already = {
@@ -417,7 +428,10 @@ def normalize_merchants_setting(raw: object, *, stored: object = None) -> dict:
         if not canonical:
             continue
         if not isinstance(entry, dict):
-            raise ValueError(f"merchant {canonical!r} must be an object")
+            raise CodedValueError(
+                f"merchant {canonical!r} must be an object",
+                code="invalid_body", merchant=canonical,
+            )
         aliases: list[str] = []
         seen: set[str] = set()
         for a in entry.get("aliases") or []:
@@ -428,19 +442,23 @@ def normalize_merchants_setting(raw: object, *, stored: object = None) -> dict:
                     already is not None and key not in already
                     and is_generic_alias(s)
                 ):
-                    raise ValueError(
+                    raise CodedValueError(
                         f"merchant {canonical!r} alias {s!r} is a generic "
                         "word (a kind of shop or product, not a merchant "
                         "name), so it would match unrelated vendors; use "
-                        "a word from the merchant's own name"
+                        "a word from the merchant's own name",
+                        code="merchant_alias_generic",
+                        merchant=canonical, alias=s,
                     )
                 seen.add(key)
                 aliases.append(s)
         category = str(entry.get("category") or "").strip() or None
         if category is not None and category not in EXPENSE_CATEGORIES:
-            raise ValueError(
+            raise CodedValueError(
                 f"merchant {canonical!r} category {category!r} is not one of the "
-                "expense categories"
+                "expense categories",
+                code="merchant_category_invalid",
+                merchant=canonical, category=category,
             )
         zoho_account = str(entry.get("zoho_account") or "").strip() or None
         cleaned: dict = {
@@ -458,5 +476,13 @@ def normalize_merchants_setting(raw: object, *, stored: object = None) -> dict:
         cost_center = str(entry.get("cost_center") or "").strip()
         if cost_center:
             cleaned["cost_center"] = cost_center
+        # Item 107: where this brand's invoice can be downloaded again
+        # ("platform.openai.com", "Chase statements portal"). Stored only
+        # when set, for the same reason, and free text on purpose: it is a
+        # hint printed next to the charge in the chase list and the request
+        # mail, not something the tool follows.
+        portal = str(entry.get("receipt_portal") or "").strip()
+        if portal:
+            cleaned["receipt_portal"] = portal[:200]
         out[canonical] = cleaned
     return out

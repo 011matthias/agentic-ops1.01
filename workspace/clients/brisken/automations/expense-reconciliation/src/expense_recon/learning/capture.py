@@ -16,7 +16,10 @@ decision #2: a half-reviewed month must never teach wrong facts):
   category the LLM guessed for that receipt, so an un-reclassified Tier-1/
   Tier-2 category is left unlearned. A vendor whose overridden lines
   disagree on category is skipped (counted), never taught a wrong single
-  mapping.
+  mapping. Item 109: an override on a receiptless CHARGE teaches the same
+  way, keyed on the bank's description, so next month's same subscription
+  arrives pre-filled; the model's own guess on such a charge writes no
+  override and so still teaches nothing.
 
 The function is pure w.r.t. the web layer: it takes matching-domain types
 plus the already-computed `confirmed_tx_ids` set and the raw overrides
@@ -35,6 +38,25 @@ from .store import LearningStore, normalize_vendor
 # "reclassified by reviewer", so reclassifications land here; REVIEW /
 # UNCLASSIFIED never do.
 _CONCRETE_SOURCES = (ClassificationSource.LINE, ClassificationSource.VENDOR)
+
+
+def charge_pseudo_receipts(transactions) -> dict[str, Receipt]:
+    """Item 109: every charge as the receipt-shaped row `_learn_categories`
+    reads, keyed by the pseudo-receipt document id the charge-category edit
+    is stored under (`charge:{tx_id}`).
+
+    The pseudo-receipt carries the bank's own description as its vendor and
+    the charge's legal entity, so a category the reviewer set on a CHARGE is
+    learned under exactly the normalized description the charge categorizer
+    will consult next month, through the one shared pass that already holds
+    the conflict-skip rule. Charges the reviewer never edited contribute no
+    override, so a model guess still teaches nothing."""
+    from ..categorize_charges import CHARGE_DOC_PREFIX, build_charge_pseudo_receipt
+
+    return {
+        f"{CHARGE_DOC_PREFIX}{t.transaction_id}": build_charge_pseudo_receipt(t)
+        for t in (transactions or ())
+    }
 
 
 @dataclass(frozen=True)
@@ -70,9 +92,61 @@ def learn_from_run(
     decision-applied (effective) outcome; `confirmed_tx_ids` are the
     transactions the reviewer explicitly confirmed; `category_overrides`
     is the raw (document_id, line_index) -> {category, zoho_account} map."""
+    rec_by_id = {r.document_id: r for r in receipts}
+    confirmed_pairs, n_alias, n_fx = learn_confirmed_pairs(
+        store,
+        transactions=transactions,
+        receipts=receipts,
+        outcome=outcome,
+        confirmed_tx_ids=confirmed_tx_ids,
+        source_run=source_run,
+        now_iso=now_iso,
+    )
+
+    n_category, n_skipped = _learn_categories(
+        store,
+        {**rec_by_id, **charge_pseudo_receipts(transactions)},
+        category_overrides,
+        source_run,
+        now_iso,
+    )
+
+    return LearnSummary(
+        confirmed_pairs=confirmed_pairs,
+        vendor_aliases=n_alias,
+        merchant_fx=n_fx,
+        merchant_categories=n_category,
+        skipped_mixed_category=n_skipped,
+    )
+
+
+def learn_confirmed_pairs(
+    store: LearningStore,
+    *,
+    transactions: list[Transaction],
+    receipts: list[Receipt],
+    outcome: MatchOutcome,
+    confirmed_tx_ids: set[str],
+    source_run: str,
+    now_iso: str,
+) -> tuple[int, int, int]:
+    """Teach the vendor spellings and exchange rates a month's CONFIRMED
+    charge/receipt pairs prove. Returns (pairs, aliases, FX samples).
+
+    Split out of `learn_from_run` for item 115: every live month is
+    receipt-first WITH a statement, and that sign-off path taught the
+    category half only, so the bank's truncated descriptions came back
+    unmatched every month while the contract promised otherwise.
+
+    An alias whose statement description or receipt vendor names no
+    merchant ("SUPERMERCADO", "Comida e Bebida") is refused, the guard item
+    117 put on merchant aliases: those strings identify a KIND of shop, and
+    what the matcher would learn from one is a name it cannot tell two
+    merchants apart by."""
+    from ..merchant_registry import is_generic_alias
+
     tx_by_id = {t.transaction_id: t for t in transactions}
     rec_by_id = {r.document_id: r for r in receipts}
-
     confirmed_pairs = n_alias = n_fx = 0
 
     for m in outcome.matches:
@@ -89,7 +163,10 @@ def learn_from_run(
         if tx.vendor_from_statement and r.detected_vendor:
             sv = normalize_vendor(tx.vendor_from_statement)
             rv = normalize_vendor(r.detected_vendor)
-            if sv and rv:
+            generic = is_generic_alias(tx.vendor_from_statement) or is_generic_alias(
+                r.detected_vendor
+            )
+            if sv and rv and not generic:
                 store.record_vendor_alias(tx.legal_entity_id, sv, rv, now_iso, source_run)
                 n_alias += 1
 
@@ -116,17 +193,7 @@ def learn_from_run(
                 )
                 n_fx += 1
 
-    n_category, n_skipped = _learn_categories(
-        store, rec_by_id, category_overrides, source_run, now_iso
-    )
-
-    return LearnSummary(
-        confirmed_pairs=confirmed_pairs,
-        vendor_aliases=n_alias,
-        merchant_fx=n_fx,
-        merchant_categories=n_category,
-        skipped_mixed_category=n_skipped,
-    )
+    return confirmed_pairs, n_alias, n_fx
 
 
 @dataclass(frozen=True)
@@ -162,6 +229,7 @@ def learn_from_expense_run(
     field_overrides: dict[str, dict[str, str]],
     category_overrides: dict[tuple[str, int], dict],
     manual_payloads: dict[str, dict] | None = None,
+    transactions: list[Transaction] | None = None,
     source_run: str,
     now_iso: str,
 ) -> ExpenseLearnSummary:
@@ -174,6 +242,9 @@ def learn_from_expense_run(
     * **merchant_category** — explicit line reclassifications, via the
       shared `_learn_categories`, keyed on the EFFECTIVE (post-edit)
       vendor + entity so a corrected spelling learns under its canon.
+      Item 109: `transactions` (the month's charges, absent on a batch with
+      no statement yet) carries the charge categories she set with no
+      receipt, learned under the bank's normalized description.
     * **merchant_entity** — a per-expense entity OVERRIDE, or a manual
       add whose payload names the entity. The batch default is a bulk
       choice, not a per-merchant judgment; it teaches nothing.
@@ -240,8 +311,15 @@ def learn_from_expense_run(
             store.record_merchant_entity(vnorm, entity, now_iso, source_run)
             n_entity += 1
 
+    # Item 109: a month is an expense batch with a statement attached, so THIS
+    # is the sign-off path a real month takes, and the charge categories she
+    # set are learned here beside the receipt ones.
     n_category, n_skipped = _learn_categories(
-        store, eff_by_id, category_overrides, source_run, now_iso
+        store,
+        {**eff_by_id, **charge_pseudo_receipts(transactions)},
+        category_overrides,
+        source_run,
+        now_iso,
     )
 
     return ExpenseLearnSummary(

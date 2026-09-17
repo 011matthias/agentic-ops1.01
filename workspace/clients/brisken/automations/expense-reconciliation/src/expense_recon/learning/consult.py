@@ -21,6 +21,46 @@ from .store import (
 )
 
 
+# Which rule a recall used (item 115). `company`: the receipt's own company
+# and vendor. `no_company`: a rule saved from a row that had no company, used
+# for a receipt whose company is known but has no rule of its own; it never
+# belonged to another company. `vendor_only`: the receipt has no company, so
+# the vendor's rules decide, and only when they agree on the category.
+RECALL_COMPANY = "company"
+RECALL_NO_COMPANY = "no_company"
+RECALL_VENDOR_ONLY = "vendor_only"
+
+# Rows seeded from Zoho Books posting history carry this source_run prefix.
+ZOHO_SEED_PREFIX = "zoho-seed"
+
+
+@dataclass(frozen=True)
+class LearnedRecall:
+    """What memory recalls for one receipt (item 115): the category and
+    account to apply, the rows that decided it, and which rule fired."""
+
+    category: str
+    zoho_account: str | None
+    rows: tuple[MerchantCategory, ...]
+    kind: str
+
+    @property
+    def taught_by_person(self) -> bool:
+        """At least one deciding row is a person's decision: a correction
+        saved at sign-off or by the button, or a Memory-page edit. A row
+        seeded from Zoho Books history is not, until someone validates it."""
+        return any(
+            not (r.source_run or "").startswith(ZOHO_SEED_PREFIX)
+            or r.validated_at
+            for r in self.rows
+        )
+
+    @property
+    def validated(self) -> bool:
+        """A person validated at least one deciding row on the Memory page."""
+        return any(r.validated_at for r in self.rows)
+
+
 class MerchantCategoryLookup:
     """An in-memory (legal_entity_id, vendor_norm) -> MerchantCategory map.
     Empty by construction when there is nothing learned, so an absent or
@@ -30,11 +70,60 @@ class MerchantCategoryLookup:
         self._by_key: dict[tuple[str, str], MerchantCategory] = {
             (r.legal_entity_id, r.vendor_norm): r for r in (rows or [])
         }
+        self._by_vendor: dict[str, list[MerchantCategory]] = {}
+        for r in self._by_key.values():
+            self._by_vendor.setdefault(r.vendor_norm, []).append(r)
 
     def get(self, legal_entity_id: str, vendor: str | None) -> MerchantCategory | None:
         if not vendor:
             return None
         return self._by_key.get((legal_entity_id, normalize_vendor(vendor)))
+
+    def recall(
+        self, legal_entity_id: str | None, vendor: str | None
+    ) -> LearnedRecall | None:
+        """The remembered category for a receipt, or None (item 115).
+
+        A receipt takes the rule saved under its own company and vendor
+        first -- and a receipt with no company has one of those too, the
+        rule saved with no company. A receipt with a company but no rule of
+        its own falls back to a rule saved with no company, which never
+        belonged to another company. Only a receipt with no company and no
+        company-less rule reaches the vendor's other rules, and then only
+        when they agree on the category (or exactly one exists); rules that
+        disagree decide nothing, so one company's rule never files another
+        company's receipt against the other rules. The account is kept on
+        that path only when every rule names the same one, because an
+        account belongs to one company's chart."""
+        if not vendor:
+            return None
+        vnorm = normalize_vendor(vendor)
+        if not vnorm:
+            return None
+        entity = (legal_entity_id or "").strip()
+        hit = self._by_key.get((entity, vnorm))
+        if hit is not None and hit.category:
+            return LearnedRecall(
+                hit.category, hit.zoho_account, (hit,), RECALL_COMPANY
+            )
+        if entity:
+            no_company = self._by_key.get(("", vnorm))
+            if no_company is not None and no_company.category:
+                return LearnedRecall(
+                    no_company.category, no_company.zoho_account,
+                    (no_company,), RECALL_NO_COMPANY,
+                )
+            return None
+        rows = [r for r in self._by_vendor.get(vnorm, []) if r.category]
+        if not rows or len({r.category for r in rows}) != 1:
+            return None
+        accounts = {r.zoho_account for r in rows}
+        return LearnedRecall(
+            rows[0].category,
+            accounts.pop() if len(accounts) == 1 else None,
+            tuple(sorted(rows, key=lambda r: r.legal_entity_id)),
+            RECALL_VENDOR_ONLY,
+        )
 
     def __len__(self) -> int:
         return len(self._by_key)
