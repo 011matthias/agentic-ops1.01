@@ -9697,6 +9697,17 @@ def add_receipts_to_expense_batch(
         )
         if refresh.get("changes"):
             result["master_data_refresh"] = refresh["changes"]
+        # Item 112: a neighbouring month whose statement period covers a new
+        # receipt owes a re-match from this write on, in the same lock span.
+        # A failure to owe never fails an add that is already committed.
+        neighbours: list[str] = []
+        if result.get("n_added"):
+            try:
+                neighbours = _owe_neighbour_rematches_locked(
+                    store, run, list(result.get("documents") or [])
+                )
+            except Exception as exc:  # noqa: BLE001 - reported in the result
+                result["neighbour_rematch_error"] = f"{type(exc).__name__}: {exc}"
 
     # OUTSIDE the lock (`rematch_month` takes the same non-reentrant lock to
     # commit). A month whose statement is already loaded reconciles the
@@ -9722,6 +9733,14 @@ def add_receipts_to_expense_batch(
             )
             if cross:
                 result["months_rematched"] = cross
+    # Item 112: the neighbours this arrival owed, after the month's own
+    # re-match (so a receipt both statements could take goes home first).
+    if neighbours:
+        cross = rematch_neighbour_months(
+            store, neighbours, learning_db_path=learning_db_path
+        )
+        if cross:
+            result["months_rematched"] = cross
     return result
 
 
@@ -11427,11 +11446,25 @@ def _rematch_or_error(*args, **kwargs) -> dict:
 # the thing that actually decides whether a charge could be on this workbook.
 
 ADJACENT_BORROW_KIND = "adjacent"
+# Item 112: the re-match a neighbouring month owes when a receipt dated
+# inside its statement period lands in this month (`rematch_log` trigger).
+ADJACENT_REMATCH_TRIGGER = "adjacent_receipts"
 # Only reached by a month that has no statement yet, where there are no
 # charges to derive a period from and nothing to match either. The calendar
 # month plus this margin is the widest window such a month could plausibly
 # bill, and it keeps the helper answerable instead of undefined.
 ADJACENT_FALLBACK_DAYS = 3
+
+
+def adjacent_months(ym: tuple[int, int]) -> set[tuple[int, int]]:
+    """The calendar months either side of `(year, month)`: the one definition
+    of "neighbour" the borrow (item 61) and the arrival trigger (item 112)
+    share."""
+    year, month = ym
+    return {
+        (year - 1, 12) if month == 1 else (year, month - 1),
+        (year + 1, 1) if month == 12 else (year, month + 1),
+    }
 
 
 def statement_period_for_month(
@@ -11498,11 +11531,7 @@ def adjacent_pool_for_month(
     if period is None:
         return [], {}
     lo, hi = period
-    year, month = ym
-    wanted = {
-        (year - 1, 12) if month == 1 else (year, month - 1),
-        (year + 1, 1) if month == 12 else (year, month + 1),
-    }
+    wanted = adjacent_months(ym)
     neighbours = []
     for other in store.list_runs():
         if other.run_id == run.run_id:
@@ -11552,6 +11581,131 @@ def adjacent_pool_for_month(
                 "kind": ADJACENT_BORROW_KIND,
             }
     return borrowed, origins
+
+
+# Item 112 (2026-09-17 audit draft #110): the borrow above is read only when
+# the BORROWING month re-matches. A receipt dated 07-31 that lands in July
+# after August's last re-match waited in July for an unrelated August event,
+# while a receipt joining a trip already re-matched every month the trip
+# spans (`rematch_months_after_trip_change`). An arrival now owes a re-match
+# to each neighbouring month whose loaded statement period covers the
+# receipt's date: owed inside the arrival's own lock span (item 113's mark,
+# so a restart before the neighbour's turn cannot lose it), paid after the
+# lock through `rematch_after_change`, whose failure lands on that mark.
+
+
+def neighbour_months_covering(
+    store: RunStore,
+    run: RunRow,
+    dates: list,
+    *,
+    exclude: set[str] | tuple = (),
+) -> list[RunRow]:
+    """The company months either side of `run` (by label, as
+    `adjacent_pool_for_month` decides neighbours) holding a statement whose
+    period (`statement_period_for_month`) covers any of `dates`, previous
+    month first. A trip batch has no neighbours: its receipts reach the
+    months through the trip trigger. A neighbour whose snapshot cannot be
+    parsed is included, so its re-match records why it cannot run."""
+    if is_trip_batch(run) or not dates:
+        return []
+    ym = month_from_label(run.label)
+    if ym is None:
+        return []
+    wanted = adjacent_months(ym)
+    skip = {run.run_id, *exclude}
+    found: list[tuple] = []
+    for other in store.list_runs():
+        if other.run_id in skip:
+            continue
+        if (other.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if is_trip_batch(other) or not has_statement(other):
+            continue
+        oym = month_from_label(other.label)
+        if oym not in wanted:
+            continue
+        try:
+            transactions = snapshot_from_dict(other.snapshot)[0]
+        except Exception:  # noqa: BLE001 - owed; its re-match reports the error
+            found.append((oym, str(other.run_id), other))
+            continue
+        if not transactions:
+            continue
+        period = statement_period_for_month(other, transactions)
+        if period is None:
+            continue
+        lo, hi = period
+        if any(lo <= d <= hi for d in dates):
+            found.append((oym, str(other.run_id), other))
+    found.sort(key=lambda n: (n[0], n[1]))
+    return [other for _oym, _rid, other in found]
+
+
+def _owe_neighbour_rematches_locked(
+    store: RunStore,
+    run: RunRow,
+    document_ids: list[str],
+    *,
+    exclude: set[str] | tuple = (),
+) -> list[str]:
+    """Write the owed-re-match mark on every neighbouring month the receipts
+    `document_ids` (just added to `run`) fall inside, and return their ids.
+    Caller holds `_BATCH_ADD_LOCK`. Dates are the rows' effective dates (a
+    typed date wins), read from the row as it stands after the add."""
+    if not document_ids:
+        return []
+    fresh = store.get_run(run.run_id)
+    if fresh is None:
+        return []
+    wanted = set(document_ids)
+    rows = apply_expense_edits(
+        baseline_receipts(fresh),
+        store.get_expense_field_overrides(fresh.run_id),
+        store.get_expense_edits(fresh.run_id),
+    )
+    dates = [
+        r.detected_date for r in rows
+        if r.document_id in wanted and r.detected_date is not None
+    ]
+    owed: list[str] = []
+    for other in neighbour_months_covering(store, fresh, dates, exclude=exclude):
+        # The row as it stands now (the lock is held), never the listing's copy.
+        current = store.get_run(other.run_id)
+        if current is None:
+            continue
+        snapshot = dict(current.snapshot or {})
+        snapshot[REMATCH_PENDING_KEY] = rematch_pending_mark(
+            snapshot, ADJACENT_REMATCH_TRIGGER
+        )
+        store.update_run_snapshot(other.run_id, snapshot)
+        owed.append(other.run_id)
+    return owed
+
+
+def rematch_neighbour_months(
+    store: RunStore,
+    run_ids: list[str],
+    *,
+    learning_db_path: Path | None = None,
+) -> list[dict]:
+    """Pay the neighbours' owed re-matches, outside every lock. Never raises:
+    the arrival that owed them is committed, and a failure stays on the
+    neighbour's mark for the operator state, the notifier and the retry."""
+    results: list[dict] = []
+    for run_id in run_ids:
+        try:
+            rematch = rematch_after_change(
+                store, run_id, learning_db_path=learning_db_path,
+                trigger=ADJACENT_REMATCH_TRIGGER,
+            )
+        except Exception as exc:  # noqa: BLE001 - recorded on the mark
+            error = f"{type(exc).__name__}: {exc}"
+            _record_rematch_failure(store, run_id, ADJACENT_REMATCH_TRIGGER, error)
+            rematch = {"error": error}
+        if rematch is not None:
+            results.append({"run_id": run_id, **rematch})
+    return results
 
 
 def borrowed_source_view(entry: object) -> dict | None:
@@ -12186,6 +12340,19 @@ def move_expense_to_month(
                     owed_snap, "month_move"
                 )
                 store.update_run_snapshot(owed_run.run_id, owed_snap)
+        # Item 112: the target's OTHER neighbour (the source re-matches
+        # anyway) owes a re-match when its statement period covers the
+        # moved receipt's date. Nothing is owed when the target already
+        # held the bytes: nothing arrived there.
+        target_neighbours: list[str] = []
+        neighbour_error = ""
+        if not already_there:
+            try:
+                target_neighbours = _owe_neighbour_rematches_locked(
+                    store, target, [new_doc], exclude={source.run_id}
+                )
+            except Exception as exc:  # noqa: BLE001 - the move is committed
+                neighbour_error = f"{type(exc).__name__}: {exc}"
         remaining = len(apply_expense_edits(
             baseline_receipts(source),
             store.get_expense_field_overrides(source.run_id),
@@ -12210,6 +12377,14 @@ def move_expense_to_month(
         )
         if rematch is not None:
             out[key] = rematch
+    if neighbour_error:
+        out["neighbour_rematch_error"] = neighbour_error
+    if target_neighbours:
+        moved_cross = rematch_neighbour_months(
+            store, target_neighbours, learning_db_path=learning_db_path
+        )
+        if moved_cross:
+            out["months_rematched"] = moved_cross
     return out
 
 

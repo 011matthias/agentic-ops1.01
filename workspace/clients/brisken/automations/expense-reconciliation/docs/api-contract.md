@@ -358,7 +358,8 @@ one event to the month's snapshot (`rematch_log`, capped at 50):
 ```
 
 `trigger` is one of `statement` (attach), `reread`, `receipts` (mail, drop,
-folder), `cards`, `master_data`, `set_aside`, `trip`. Oldest first. The
+folder), `cards`, `master_data`, `set_aside`, `trip`, and since item 112
+`adjacent_receipts` (a neighbouring month's arrival). Oldest first. The
 notifier diffs on `event_id` and mails one line per event ("August 2026:
 14 of 111, pool 7 (reread, 2026-09-11T14:24:46+00:00)"); an event with no
 id is never announced.
@@ -3555,3 +3556,39 @@ still run. A folder with no interrupted job, or with no trustworthy sidecar
 (a drop from before this change, whose month pick is unknown), is deleted
 and its job keeps what it said; so is every `drop-add-*` copy inside a
 month's folder. No new response field.
+
+## A receipt arriving re-matches the neighbouring month it belongs to (item 112, 2026-09-17)
+
+A month borrows its neighbours' receipts dated inside its own statement
+period (item 61), but read them only when it re-matched itself. A receipt
+dated 07-31 landing in July after August's last re-match waited for an
+unrelated August event.
+
+Now every receipt ADDED to a company month (mail intake, drop, the batch's
+receipts upload: all go through the same add) and every month move owes a
+re-match to each neighbouring company month (previous or next by label, as
+item 61 decides neighbours) that holds a statement whose period (min..max of
+its charge dates) covers the receipt's date. The neighbour's
+`rematch_pending` mark (item 113) is written inside the arrival's own lock
+span, trigger `adjacent_receipts`; the neighbour re-matches after the
+arrival's own month, outside the lock, and its `rematch_log` event carries
+`trigger: "adjacent_receipts"`. A failure never fails the add or the move:
+it is recorded on the neighbour's mark (`error`, `failed_at`, `attempts`)
+and paid by the neighbour's next trigger or the next boot (`resume`).
+
+- Dates are the rows' effective dates, so a typed date moved with a month
+  move counts.
+- A trip batch owes nothing here: its receipts re-match months through the
+  trip trigger (`trip`) only.
+- A month move owes the TARGET's other neighbour; the source re-matches
+  anyway, and nothing is owed when the target already held the bytes.
+- The add and move replies carry `months_rematched[]` (`{run_id, ...rematch
+  result}`) when a neighbour re-matched, the key trips already use, and
+  `neighbour_rematch_error` when the neighbours could not even be read.
+
+Not built: a month CREATED with its first receipts (mail or drop into a month
+that did not exist) owes its neighbours nothing, because that create runs
+under the month-creation lock every arrival waits on; and a borrowed receipt
+is still not offered in a charge's hand-pick list (`assignable_receipts`
+lists the month's own pool only). Route-level in
+`tests/test_neighbour_rematch_item_112.py`.
