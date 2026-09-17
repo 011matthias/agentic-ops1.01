@@ -2803,8 +2803,10 @@ nothing. Renders in `docs/lovable-settings-tabs-prompt.md`.
 
 Owner, note #60: "some receipts only show the last 2 digits of the cards
 number, we need to strategize what we can do, so the card attribution stays
-accurate". Live, `42463153XXXXXX38` reached June (Supermercado Fenix, no card,
-no company, no person) and August (SARL TRAIN'S, fixed by hand to 2838).
+accurate". Live on 2026-09-17, one row prints a two-digit ending:
+`42463153XXXXXX38` on August's SARL TRAIN'S, already fixed by hand to 2838
+(a per-row fix outranks this rule), so the deploy moved no live row. The rule
+is for the receipts that arrive next.
 
 **The rule.** Two digits behind a mask (`XX`, `*`, `#`, `•`, `..`) or an
 ending word (`ending`, `ending in`, `final`) name the card when exactly ONE
