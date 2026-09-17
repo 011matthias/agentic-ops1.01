@@ -225,6 +225,68 @@ def test_account_picks_shortlist_drives_account_options(client, monkeypatch):
     assert grid["entity_options"] == ["Cloud Services", "Corporate Services"]
 
 
+def test_entity_order_round_trips_and_cleans(client):
+    """Item 92: the order saves like any other settings group — whole-list
+    replace, trimmed, blanks dropped, first occurrence wins."""
+    resp = client.put("/api/settings", json={
+        "entity_order": ["Corporate Services", "  ", "Cloud Services",
+                         " Corporate Services "],
+    })
+    assert resp.status_code == 200, resp.text
+    assert "entity_order" in resp.json()["applied"]
+    got = client.get("/api/settings").json()
+    assert got["entity_order"] == ["Corporate Services", "Cloud Services"]
+
+
+def test_entity_order_rejects_a_non_list(client):
+    resp = client.put("/api/settings", json={"entity_order": "Corporate"})
+    assert resp.status_code == 400
+    assert "entity_order" in resp.json()["error"]
+
+
+def test_entity_order_keeps_a_name_the_tool_no_longer_knows(client):
+    """Saving must not 400 because the list remembers an entity that has
+    left the card map; the read side ignores it (unit tests cover that)."""
+    resp = client.put("/api/settings", json={"entity_order": ["Gone Ltd"]})
+    assert resp.status_code == 200, resp.text
+    assert client.get("/api/settings").json()["entity_order"] == ["Gone Ltd"]
+    assert client.get("/api/settings").json()["entity_options"] == []
+
+
+def test_saved_order_drives_the_settings_and_grid_pickers(client, monkeypatch):
+    """The one contract the reordering exists for: the order set in Settings
+    is the order the reviewer sees in the per-expense entity dropdown. Both
+    pickers read `entity_options`, so this asserts through the grid route the
+    reviewer actually uses, not only through the settings payload."""
+    client.put("/api/settings", json={"entities": {
+        "Corporate Services": {}, "Cloud Services": {}, "Rome Events": {},
+    }})
+    client.put("/api/settings", json={
+        "entity_order": ["Rome Events", "Corporate Services"],
+    })
+    assert client.get("/api/settings").json()["entity_options"] == [
+        "Rome Events", "Corporate Services", "Cloud Services",
+    ]
+    _patch_ocr(monkeypatch, _extraction())
+    batch_id = _create_batch(client)
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    assert grid["entity_options"] == [
+        "Rome Events", "Corporate Services", "Cloud Services",
+    ]
+    # Reordering is a settings save like any other: it moves both pickers
+    # without touching the entities themselves.
+    client.put("/api/settings", json={
+        "entity_order": ["Cloud Services", "Rome Events"],
+    })
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    assert grid["entity_options"] == [
+        "Cloud Services", "Rome Events", "Corporate Services",
+    ]
+    assert sorted(client.get("/api/settings").json()["entities"]) == [
+        "Cloud Services", "Corporate Services", "Rome Events",
+    ]
+
+
 def test_chart_provisioning_drives_account_options(client, monkeypatch, tmp_path):
     chart = tmp_path / "coa.json"
     chart.write_text(json.dumps(_COA_JSON), encoding="utf-8")

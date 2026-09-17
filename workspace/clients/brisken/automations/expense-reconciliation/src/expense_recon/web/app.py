@@ -2224,6 +2224,26 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         entry[lkey] = values
                 cleaned_entities[name] = entry
             patch["entities"] = cleaned_entities
+        # The operator's own order for the entity list (item 92): a list of
+        # entity names, best first. Whole-list replace, trimmed, blanks
+        # dropped, first occurrence wins on a repeat. Nothing here checks
+        # that a name still exists: an entity can leave the /data
+        # provisioning or the card map at any time, and a save that 400'd
+        # because the list remembered a name the tool no longer knows would
+        # refuse the operator's own ordering for a reason they cannot see.
+        # `available_entities` ignores stale names at read time instead.
+        if "entity_order" in body:
+            raw_order = body["entity_order"]
+            if not isinstance(raw_order, list):
+                return JSONResponse(
+                    {"error": "entity_order must be a list"}, status_code=400
+                )
+            order: list[str] = []
+            for item in raw_order:
+                name = str(item).strip()
+                if name and name not in order:
+                    order.append(name)
+            patch["entity_order"] = order
         # Merchant registry (2026-07-29): {canonical_name: {aliases, category,
         # zoho_account}}. Whole-map replace, same contract as `entities`;
         # validated + cleaned by the registry module (blank canonical dropped,
