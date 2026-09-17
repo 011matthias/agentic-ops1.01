@@ -751,7 +751,12 @@ def test_not_a_duplicate_frees_the_card_less_copy_for_its_own_charge(
     invoice = next(e for e in grid["expenses"] if "Invoice-" in e["document_id"])
     assert invoice["payment_hint"] in (None, "")
     assert invoice["legal_entity_id"] == "Corporate Services"
-    assert invoice["entity_source"] == "batch"
+    # Item 111: the invoice now settles the LOVABLE charge on 2838, so the
+    # grid names that card (never the receipt copy's 1176); the company is
+    # the one the CSV prints.
+    assert invoice["entity_source"] == "card"
+    assert invoice["card_source"] == "settled_charge"
+    assert invoice["card"]["key"] == "corp-2838"
 
     by_ref = _csv_rows_by_reference(client, batch_id)
     assert by_ref["H0LHY2WQ-0032"]["Legal Entity"] == "Corporate Services"
