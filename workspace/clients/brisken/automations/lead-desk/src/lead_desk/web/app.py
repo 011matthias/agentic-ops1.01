@@ -53,7 +53,7 @@ from fastapi.responses import (
 )
 from fastapi.templating import Jinja2Templates
 
-from . import accounts, auth, cadence, review, uploads
+from . import accounts, approval, auth, cadence, review, uploads
 from .service import (
     EDITABLE_FLAGS, EDITABLE_TEXT, StaleWriteError, apply_fields, build_board,
     build_contact_view, build_sheet, build_unmatched_groups, create_contact,
@@ -753,11 +753,26 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 "inbound": store.campaign_inbound_counts(
                     cid, campaign.get("approved_at")),
             }
+            # Per-message approval ledger (web/approval.py): the latest
+            # decision, each attempt's claim, and the last approve outcome
+            # (a stale-epoch refusal must be visible, not silently stored).
+            decision = approval.latest_decision(store, cid)
+            decision = dict(decision) if decision is not None else None
+            claims = approval.claims_for_campaign(store, cid)
+            for a in attempts:
+                a["claim"] = claims.get(a["attempt_key"])
+                a["retry_block"] = approval.retry_block_reason(store, a["attempt_key"])
+            try:
+                approve_result = json.loads(
+                    store.get_state(f"approve-result:{cid}") or "null")
+            except json.JSONDecodeError:
+                approve_result = None
         return templates.TemplateResponse(
             request, "campaign.html",
             {"campaign": campaign, "report": report, "rules": rules,
              "sequences": sequences, "templates_": all_templates,
              "enrollments": enrollments, "attempts": attempts, "pins": pins,
+             "decision": decision, "approve_result": approve_result,
              "wave": wave, "guard_alert": guard_alert, "engine": engine,
              "degrees": DEGREES, "send_modes": SEND_MODES,
              "kill_switch": kill_switch,
@@ -997,13 +1012,34 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                                 status_code=303)
 
     @app.post("/campaigns/{cid}/approve")
-    def campaign_approve(request: Request, cid: str, confirm: str = Form("")):
+    def campaign_approve(request: Request, cid: str, confirm: str = Form(""),
+                         draft_manifest: str = Form(""),
+                         draft_epoch: str = Form("")):
+        """Approve exactly the messages the operator reviewed: the form echoes
+        the manifest hash and epoch the page showed, and approve_campaign
+        refuses as stale if either moved since. A POST without them is refused
+        outright (there is no approval without a reviewed epoch)."""
         with open_store() as store:
             if store.get_campaign(cid) is None:
                 return HTMLResponse("Campaign not found", status_code=404)
-            result = cadence.approve_campaign(store, cid, current_user(request),
-                                              confirm)
-            store.set_state(f"approve-result:{cid}", json.dumps(result), now_iso())
+            try:
+                epoch = int(draft_epoch.strip())
+            except ValueError:
+                epoch = None
+            if not draft_manifest.strip() or epoch is None:
+                result = {"ok": False, "stale": True, "errors": [
+                    "This approval carried no reviewed message epoch. Reload the "
+                    "campaign page and approve from there."]}
+            else:
+                result = cadence.approve_campaign(
+                    store, cid, current_user(request), confirm,
+                    expected_manifest=draft_manifest.strip(), expected_epoch=epoch)
+            store.set_state(f"approve-result:{cid}",
+                            json.dumps({k: v for k, v in result.items()
+                                        if k in ("ok", "stale", "errors", "decision_id",
+                                                 "snapshots", "held", "draft_epoch",
+                                                 "manifest_sha256")}),
+                            now_iso())
         return RedirectResponse(url=f"/campaigns/{cid}", status_code=303)
 
     @app.post("/campaigns/{cid}/start-sending")
@@ -1055,6 +1091,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return HTMLResponse("Attempt not found", status_code=404)
             if attempt["status"] not in ("stalled", "parked", "failed"):
                 return HTMLResponse("Not retryable", status_code=400)
+            blocked = approval.retry_block_reason(store, attempt_key.strip())
+            if blocked:
+                return HTMLResponse(blocked, status_code=400)
             # Reset attempt_count too: try_lease re-leases a 'queued' row only
             # while attempt_count < max_attempts, so an operator retry of a
             # send that exhausted the transient-retry cap was a silent no-op
@@ -1078,6 +1117,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return HTMLResponse("Attempt not found", status_code=404)
             if attempt["status"] not in ("stalled", "parked", "failed"):
                 return HTMLResponse("Not retryable", status_code=400)
+            blocked = approval.retry_block_reason(store, attempt_key.strip())
+            if blocked:
+                return HTMLResponse(blocked, status_code=400)
             store.update_attempt(attempt_key.strip(), {
                 "status": "queued", "failure_reason": None, "attempt_count": 0,
                 "force_fresh": 1,
@@ -1088,13 +1130,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     @app.post("/attempts/mark-sent")
     def attempt_mark_sent(request: Request, attempt_key: str = Form(...),
                           campaign: str = Form("")):
-        """Human resolution of an ambiguous stall: assert the mail DID go out."""
+        """Human resolution of a stall with no dispatch in progress: assert the
+        mail DID go out. An unknown-outcome send is not marked here; it goes
+        through /attempts/reconcile, which records the evidence."""
         with open_store() as store:
             attempt = store.get_attempt(attempt_key.strip())
             if attempt is None:
                 return HTMLResponse("Attempt not found", status_code=404)
+            claim = approval.latest_claim(store, attempt_key.strip())
+            if claim is not None and claim["state"] in ("dispatching", "unknown"):
+                return HTMLResponse(
+                    "The outcome of this send is unknown. Use Reconcile and record "
+                    "the evidence.", status_code=400)
             enr = store.get_enrollment(int(attempt["enrollment_id"]))
             now = now_iso()
+            if claim is not None:
+                approval.cancel(store, claim["token"],
+                                f"marked sent by {current_user(request)}", now)
             store.update_attempt(attempt_key.strip(),
                                  {"status": "sent", "resolved_at": now})
             if enr is not None:
@@ -1109,6 +1161,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     now=now,
                 )
         target = f"/campaigns/{campaign}" if campaign.strip() else "/"
+        return RedirectResponse(url=target, status_code=303)
+
+    @app.post("/attempts/reconcile")
+    def attempt_reconcile(request: Request, attempt_key: str = Form(...),
+                          outcome: str = Form(""), coordinate: str = Form(""),
+                          evidence: str = Form(""), campaign: str = Form("")):
+        """The trusted manual step for an unknown outcome: record whether the
+        mail went (with its internetMessageId or Sent Items note) or did not
+        (with the evidence). Nothing else ever resolves an unknown send."""
+        with open_store() as store:
+            if store.get_attempt(attempt_key.strip()) is None:
+                return HTMLResponse("Attempt not found", status_code=404)
+            result = approval.reconcile(
+                store, attempt_key.strip(), outcome.strip(),
+                coordinate=coordinate, evidence=evidence,
+                user=current_user(request) or "", now=now_iso())
+        if not result.get("ok"):
+            return HTMLResponse(result.get("error", "error"), status_code=400)
+        target = f"/campaigns/{campaign}#attempts" if campaign.strip() else "/"
         return RedirectResponse(url=target, status_code=303)
 
     @app.post("/worker/kill")
@@ -1158,6 +1229,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         worker_id = str(body.get("worker_id") or "worker")
         max_items = min(int(body.get("max_items") or 10), 50)
         peek = bool(body.get("peek"))
+        if not peek:
+            # The HTTP outbox fed the retired local COM worker, which cannot
+            # run begin_dispatch (the revalidation immediately before
+            # transport). A claim it cannot honour is a dispatch permission
+            # nobody checks, so live claims over HTTP are refused; the in-app
+            # cloud worker claims in-process. Peek stays available.
+            return JSONResponse({
+                "paused": True, "claims": [],
+                "reason": "live HTTP claims are disabled: dispatch requires the "
+                          "in-process cloud worker (epoch-keyed approval)"})
         with open_store() as store:
             result = cadence.claim_sends(store, worker_id, max_items, peek=peek)
         return JSONResponse(result)

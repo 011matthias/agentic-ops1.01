@@ -43,7 +43,7 @@ from . import capture as graph_capture
 from .graph_mail import DIRK_SMTP, SEND_FROM, DraftGuardError, GraphMailer, \
     GraphSendError, NotAllowlisted, OWN_DOMAIN
 from .sync import _load_creds, have_creds
-from .web import cadence
+from .web import approval, cadence
 from .web.service import ingest_event, now_iso
 from .web.store import ContactStore
 from .worker.com_mail import match_drafted
@@ -198,30 +198,108 @@ def _resolve_anchor(store: ContactStore, mailer, send: dict) -> dict | None:
         return None
 
 
+def _fail(store: ContactStore, send: dict, *, error_class: str, reason: str) -> None:
+    cadence.resolve_result(store, {
+        "attempt_key": send["attempt_key"], "lease_id": send["lease_id"],
+        "status": "failed", "error_class": error_class,
+        "failure_reason": reason[:300]})
+
+
+def _pre_dispatch_stop(store: ContactStore, journal: Journal, send: dict, *,
+                       now: datetime, error_class: str, reason: str) -> None:
+    """Stop BEFORE transport: release the claim (nothing left, so an operator
+    Retry may claim again under the same decision), then park or requeue."""
+    approval.cancel(store, send.get("claim_token"), reason, cadence._iso(now))
+    journal.write(send["attempt_key"], "nacked", reason=reason[:200])
+    _fail(store, send, error_class=error_class, reason=reason)
+
+
+def _hold_unknown(store: ContactStore, journal: Journal, send: dict, detail: str,
+                  *, now: datetime, alerts: list[str],
+                  journal_state: str = "nacked") -> str:
+    """Anything but a confirmed success AFTER begin_dispatch: the outcome is
+    unknown. Claim and attempt go 'unknown' and stay there until a human
+    reconciles; nothing requeues. ``journal_state='graph_error'`` keeps the
+    entry pending so the next tick searches Sent Items for evidence to SHOW
+    the reconciling human (it never acts on that evidence itself)."""
+    akey = send["attempt_key"]
+    approval.mark_unknown(store, send.get("claim_token"), detail, cadence._iso(now))
+    if journal_state == "graph_error":
+        journal.write(akey, "graph_error", reason=detail[:200], to=send["to"],
+                      subject=send.get("wire_subject") or send["subject"],
+                      lease_id=send["lease_id"],
+                      claim_token=send.get("claim_token"))
+    else:
+        journal.write(akey, "nacked",
+                      reason=f"outcome unknown, held for reconciliation: {detail}"[:200])
+    alerts.append(
+        f"UNKNOWN outcome for {akey} to {send['to']!r}: {detail[:160]}. Held, never "
+        "retried; reconcile it (delivered / not delivered) on the campaign page.")
+    return "unknown"
+
+
+def _begin(store: ContactStore, journal: Journal, send: dict, *, now: datetime,
+           alerts: list[str]) -> dict | None:
+    """THE DISPATCH BOUNDARY (approval.begin_dispatch): revalidate the binding
+    and move the claim to 'dispatching'. Returns the send with the APPROVED
+    bytes swapped in, or None when refused (claim cancelled, attempt parked)."""
+    akey = send["attempt_key"]
+    try:
+        bound = approval.begin_dispatch(store, send.get("claim_token"), send,
+                                        cadence._iso(now))
+    except approval.ClaimRefused as exc:
+        reason = f"approval binding refused at dispatch: {exc}"
+        journal.write(akey, "nacked", reason=reason[:200])
+        _fail(store, send, error_class="config", reason=reason)
+        alerts.append(reason)
+        return None
+    return dict(send, subject=bound["subject"], body=bound["body"], to=bound["to"])
+
+
+def _complete(store: ContactStore, send: dict, coordinate: str, ack: dict, *,
+              now: datetime) -> dict:
+    """Claim -> delivered and the attempt/event ack as ONE transaction."""
+    with store.transaction():
+        approval.complete(store, send.get("claim_token"), coordinate,
+                          cadence._iso(now))
+        return cadence.resolve_result(store, ack)
+
+
 def execute_one(store: ContactStore, mailer, send: dict, journal: Journal,
                 *, draft_to_self: bool = False, now: datetime,
                 alerts: list[str] | None = None) -> str:
     """Execute one claimed send. Returns the outcome string for counters.
     Mirrors worker/sender.execute_one with resolve_result called in-process.
     ``alerts`` (run_tick's list) collects the human-readable lines that land
-    in the cloud_worker_alert state key at tick end."""
+    in the cloud_worker_alert state key at tick end.
+
+    Contract with web/approval.py: everything before ``_begin`` is
+    pre-transport and releases the claim on a stop; ``_begin`` is the last
+    check and swaps in the approved bytes; after it, only a confirmed success
+    completes the claim and every other ending is an unknown outcome."""
     akey = send["attempt_key"]
     alerts = alerts if alerts is not None else []
+
+    if not send.get("claim_token"):
+        # No claim, no dispatch permission (e.g. a payload built outside
+        # claim_sends). Park; there is nothing to release.
+        journal.write(akey, "nacked", reason="no dispatch claim")
+        _fail(store, send, error_class="config",
+              reason="no dispatch claim on this payload; re-approve and let the "
+                     "engine claim it")
+        return "no_claim"
 
     # Copy tamper check (same as worker/sender.body_hash, inlined so the web
     # app's import of this module never pulls the COM worker's httpx client).
     rendered = hashlib.sha256(
         (send["subject"] + "\n" + send["body"]).encode("utf-8")).hexdigest()
     if rendered != send["body_hash"]:
-        journal.write(akey, "nacked", reason="body hash mismatch")
-        cadence.resolve_result(store, {
-            "attempt_key": akey, "lease_id": send["lease_id"],
-            "status": "failed", "error_class": "config",
-            "failure_reason": "body hash mismatch (copy drift)"})
+        _pre_dispatch_stop(store, journal, send, now=now, error_class="config",
+                           reason="body hash mismatch (copy drift)")
         return "hash_mismatch"
 
     journal.write(akey, "claimed", to=send["to"], lease_id=send["lease_id"],
-                  mode=send["send_mode"])
+                  mode=send["send_mode"], claim_token=send.get("claim_token"))
 
     # In-thread reply step: resolve the anchor (the prior step's sent mail)
     # up front. Read-only, so the drill mode below exercises it for real.
@@ -230,9 +308,20 @@ def execute_one(store: ContactStore, mailer, send: dict, journal: Journal,
 
     if draft_to_self:
         # Test mode: full pipeline, but the mail lands as a draft in OUR
-        # mailbox and nothing is acked (repeatable, human-inspectable). A
-        # reply step stages a real threaded reply, recipient rewritten to
-        # self; with no resolvable anchor it degrades to a plain self-draft.
+        # mailbox and nothing is acked (repeatable, human-inspectable). It runs
+        # the dispatch-time binding checks without moving the claim, so the
+        # drill proves an approval covers the message. A reply step stages a
+        # real threaded reply, recipient rewritten to self; with no resolvable
+        # anchor it degrades to a plain self-draft. The claim stays 'claimed'
+        # and is cancelled when the lease expires (then Retry re-claims).
+        try:
+            approval.verify_claim(store, send.get("claim_token"), send)
+        except approval.ClaimRefused as exc:
+            reason = f"approval binding refused (draft-to-self): {exc}"
+            _pre_dispatch_stop(store, journal, send, now=now,
+                               error_class="config", reason=reason)
+            alerts.append(reason)
+            return "approval_refused"
         if reply_to_prior and anchor is not None:
             mailer.create_reply_draft(
                 SEND_FROM, anchor["id"], to=SEND_FROM,
@@ -249,23 +338,17 @@ def execute_one(store: ContactStore, mailer, send: dict, journal: Journal,
     # bad state write cannot weaken it. draft-to-self above targets our own
     # mailbox and returns before this point.
     if cadence._recipient_domain(send["to"]) in set(cadence.DEFAULT_DENY_DOMAINS):
-        journal.write(akey, "nacked", reason=f"recipient domain denied: {send['to']}")
-        cadence.resolve_result(store, {
-            "attempt_key": akey, "lease_id": send["lease_id"],
-            "status": "failed", "error_class": "config",
-            "failure_reason": f"recipient domain hard-denied: {send['to']}"[:300]})
+        _pre_dispatch_stop(store, journal, send, now=now, error_class="config",
+                           reason=f"recipient domain hard-denied: {send['to']}")
         return "recipient_denied"
 
     # Suppression-list backstop, same shape: an entry imported between claim
     # and execution (or a claim-time guard regression) never reaches Graph.
     sup = store.suppression_block(send["to"])
     if sup is not None:
-        journal.write(akey, "nacked", reason=f"recipient suppressed: {send['to']}")
-        cadence.resolve_result(store, {
-            "attempt_key": akey, "lease_id": send["lease_id"],
-            "status": "failed", "error_class": "config",
-            "failure_reason": f"suppression-list ({sup['kind']} {sup['entry']}): "
-                              f"{send['to']}"[:300]})
+        _pre_dispatch_stop(store, journal, send, now=now, error_class="config",
+                           reason=f"suppression-list ({sup['kind']} {sup['entry']}): "
+                                  f"{send['to']}")
         return "recipient_suppressed"
 
     if reply_to_prior and anchor is None:
@@ -274,173 +357,173 @@ def execute_one(store: ContactStore, mailer, send: dict, journal: Journal,
         # a human: Retry re-runs the resolution; Send fresh (force_fresh)
         # re-queues it as a plain fresh send.
         reason = f"reply anchor not found: {akey}"
-        journal.write(akey, "nacked", reason=reason)
-        cadence.resolve_result(store, {
-            "attempt_key": akey, "lease_id": send["lease_id"],
-            "status": "failed", "error_class": "permanent",
-            "failure_reason": reason[:300]})
+        _pre_dispatch_stop(store, journal, send, now=now,
+                           error_class="permanent", reason=reason)
         alerts.append(reason)
         return "reply_anchor_missing"
 
     if send["send_mode"] == "draft-dirk":
+        bound = _begin(store, journal, send, now=now, alerts=alerts)
+        if bound is None:
+            return "approval_refused"
         try:
             if reply_to_prior:
                 # Stage the threaded reply into Dirk's Drafts; his click (or
                 # a wave release) sends it and the existing match_drafted
                 # correlation completes the step.
                 res = mailer.create_reply_draft(
-                    DIRK_SMTP, anchor["id"], to=send["to"],
-                    html_body=_body_as_html(send["body"]),
-                    cc=send.get("cc"), bcc=send.get("bcc"))
+                    DIRK_SMTP, anchor["id"], to=bound["to"],
+                    html_body=_body_as_html(bound["body"]),
+                    cc=bound.get("cc"), bcc=bound.get("bcc"))
             else:
-                res = mailer.create_draft(DIRK_SMTP, send)
-        except Exception as exc:  # noqa: BLE001 - draft creation is safely retryable
-            journal.write(akey, "nacked", reason=str(exc)[:200])
-            cadence.resolve_result(store, {
-                "attempt_key": akey, "lease_id": send["lease_id"],
-                "status": "failed", "error_class": "transient",
-                "failure_reason": f"draft load: {exc}"[:300]})
-            return "draft_failed"
+                res = mailer.create_draft(DIRK_SMTP, bound)
+        except Exception as exc:  # noqa: BLE001 - a half-staged draft in Dirk's box is not retried blind
+            return _hold_unknown(store, journal, bound, f"draft load: {exc}",
+                                 now=now, alerts=alerts)
         journal.write(akey, "drafted", entry_id=res.get("entry_id"))
-        cadence.resolve_result(store, {
+        _complete(store, bound, res.get("entry_id") or f"draft:{akey}", {
             "attempt_key": akey, "lease_id": send["lease_id"],
-            "status": "drafted", "entry_id": res.get("entry_id")})
+            "status": "drafted", "entry_id": res.get("entry_id")}, now=now)
         journal.write(akey, "acked", outcome="drafted")
         return "drafted"
+
+    if (send.get("from") or SEND_FROM).strip().lower() != SEND_FROM:
+        # send_auto refuses any other from-address before its POST; check it
+        # here too, so that refusal lands before the dispatch boundary.
+        _pre_dispatch_stop(store, journal, send, now=now, error_class="config",
+                           reason=f"auto-send is matthias-only; refusing "
+                                  f"from={send.get('from')!r}")
+        return "not_allowlisted"
 
     if reply_to_prior:
         # auto-matthias reply: a two-phase send-by-id
         # (rule_brisken_graph_send_by_id). Staging the threaded reply draft
         # is retryable (nothing has left); the /send POST is the
-        # irreversible moment, so graph_issued lands between the two.
+        # irreversible moment, so the dispatch boundary sits between the two.
         try:
             draft = mailer.create_reply_draft(
                 SEND_FROM, anchor["id"], to=send["to"],
                 html_body=_body_as_html(send["body"]),
                 cc=send.get("cc"), bcc=send.get("bcc"))
         except Exception as exc:  # noqa: BLE001 - nothing sent yet: safe to retry
-            journal.write(akey, "nacked", reason=str(exc)[:200])
-            cadence.resolve_result(store, {
-                "attempt_key": akey, "lease_id": send["lease_id"],
-                "status": "failed", "error_class": "transient",
-                "failure_reason": f"reply draft: {exc}"[:300]})
+            _pre_dispatch_stop(store, journal, send, now=now,
+                               error_class="transient", reason=f"reply draft: {exc}")
             return "draft_failed"
+        bound = _begin(store, journal, send, now=now, alerts=alerts)
+        if bound is None:
+            return "approval_refused"
         # The wire subject is the draft's RE:-prefixed one; the reconcile
         # evidence search must look for THAT in Sent Items.
-        wire_subject = draft.get("subject") or send["subject"]
+        bound["wire_subject"] = draft.get("subject") or bound["subject"]
         try:
-            journal.write(akey, "graph_issued", to=send["to"],
-                          subject=wire_subject, lease_id=send["lease_id"])
+            journal.write(akey, "graph_issued", to=bound["to"],
+                          subject=bound["wire_subject"], lease_id=send["lease_id"],
+                          claim_token=send.get("claim_token"))
             snapshot = mailer.send_draft_by_id(
-                SEND_FROM, draft["entry_id"], expect_to=send["to"],
+                SEND_FROM, draft["entry_id"], expect_to=bound["to"],
                 expect_subject=draft.get("subject"))
         except (NotAllowlisted, DraftGuardError) as exc:
-            # Guard refused BEFORE the POST: the send did not happen.
-            journal.write(akey, "nacked", reason=str(exc)[:200])
-            cadence.resolve_result(store, {
-                "attempt_key": akey, "lease_id": send["lease_id"],
-                "status": "failed", "error_class": "config",
-                "failure_reason": str(exc)[:300]})
-            return "reply_guard_refused"
+            # The guard refused before its POST, but the claim is already
+            # dispatching: record unknown with the reason, a human voids it.
+            return _hold_unknown(store, journal, bound,
+                                 f"send guard refused before POST: {exc}",
+                                 now=now, alerts=alerts)
         except GraphSendError as exc:
-            # Graph answered non-2xx on /send: the send did not happen.
-            journal.write(akey, "nacked", reason=str(exc)[:200])
-            cadence.resolve_result(store, {
-                "attempt_key": akey, "lease_id": send["lease_id"],
-                "status": "failed",
-                "error_class": "transient" if exc.status_code >= 500 else "permanent",
-                "failure_reason": str(exc)[:300]})
-            return "graph_rejected"
-        except Exception as exc:
-            # Network error inside the send window: may or may not have
-            # reached Graph. Same ambiguity contract as send_auto - do NOT
-            # nack; next tick's reconcile searches Sent Items for evidence
-            # (search_sent_for normalizes the RE: prefix).
-            journal.write(akey, "graph_error", reason=str(exc)[:200],
-                          to=send["to"], subject=wire_subject,
-                          lease_id=send["lease_id"])
-            return "graph_error"
+            return _hold_unknown(store, journal, bound, f"Graph /send: {exc}",
+                                 now=now, alerts=alerts)
+        except Exception as exc:  # noqa: BLE001 - network error inside the send window
+            return _hold_unknown(store, journal, bound, f"network: {exc}",
+                                 now=now, alerts=alerts, journal_state="graph_error")
         journal.write(akey, "graph_sent")
         # THREADING VERIFY: the reply must still sit in the anchor's
         # conversation. On a mismatch the mail DID go (ack it), but flag it.
         conv = draft.get("conversation_id") or snapshot.get("conversation_id")
         if conv != anchor.get("conversationId"):
             alerts.append(f"thread_verify_failed: {akey}")
+        imid = snapshot.get("internet_message_id")
         ack = {"attempt_key": akey, "lease_id": send["lease_id"],
-               "status": "sent",
-               "internet_message_id": snapshot.get("internet_message_id")}
-        res = cadence.resolve_result(store, ack)
+               "status": "sent", "internet_message_id": imid}
+        res = _complete(store, bound, imid or f"graph-send:{draft['entry_id']}",
+                        ack, now=now)
         if res.get("ok"):
-            journal.write(akey, "acked", outcome="sent",
-                          imid=snapshot.get("internet_message_id"))
+            journal.write(akey, "acked", outcome="sent", imid=imid)
         else:
-            journal.write(akey, "ack_failed", reason=str(res)[:200], ack=ack)
+            journal.write(akey, "ack_failed", reason=str(res)[:200], ack=ack,
+                          claim_token=send.get("claim_token"))
             return "ack_pending"
         return "sent"
 
     # auto-matthias via Graph sendMail
+    bound = _begin(store, journal, send, now=now, alerts=alerts)
+    if bound is None:
+        return "approval_refused"
     issued_at = now
     try:
         # to/subject/lease_id ride on EVERY crash-window entry: the reconcile
         # pass reads only the LATEST entry per key, so an evidence search (and
         # the lease it must ack with) has to survive into graph_error too.
-        journal.write(akey, "graph_issued", to=send["to"],
-                      subject=send["subject"], lease_id=send["lease_id"])
-        mailer.send_auto(send)
-    except NotAllowlisted as exc:
-        # Never reached Graph (raised before the POST): safe to park.
-        journal.write(akey, "nacked", reason=str(exc)[:200])
-        cadence.resolve_result(store, {
-            "attempt_key": akey, "lease_id": send["lease_id"],
-            "status": "failed", "error_class": "config",
-            "failure_reason": str(exc)[:300]})
-        return "not_allowlisted"
-    except GraphSendError as exc:
-        # Graph answered non-202: the send definitively did not happen.
-        journal.write(akey, "nacked", reason=str(exc)[:200])
-        cadence.resolve_result(store, {
-            "attempt_key": akey, "lease_id": send["lease_id"],
-            "status": "failed",
-            "error_class": "transient" if exc.status_code >= 500 else "permanent",
-            "failure_reason": str(exc)[:300]})
-        return "graph_rejected"
-    except Exception as exc:
-        # Network error AFTER the POST was issued: the request may or may not
-        # have reached Graph. Do NOT nack (a nack re-queues = possible
-        # double-send). The next tick's reconcile searches Sent Items for
-        # evidence and a human resolves genuine ambiguity.
-        journal.write(akey, "graph_error", reason=str(exc)[:200],
-                      to=send["to"], subject=send["subject"],
-                      lease_id=send["lease_id"])
-        return "graph_error"
+        journal.write(akey, "graph_issued", to=bound["to"],
+                      subject=bound["subject"], lease_id=send["lease_id"],
+                      claim_token=send.get("claim_token"))
+        mailer.send_auto(bound)
+    except (NotAllowlisted, GraphSendError) as exc:
+        # A non-202 after the dispatch boundary is not treated as proof of
+        # non-delivery (a 5xx can land after acceptance). Unknown, held.
+        return _hold_unknown(store, journal, bound, f"Graph sendMail: {exc}",
+                             now=now, alerts=alerts)
+    except Exception as exc:  # noqa: BLE001 - network error inside the send window
+        return _hold_unknown(store, journal, bound, f"network: {exc}",
+                             now=now, alerts=alerts, journal_state="graph_error")
 
     journal.write(akey, "graph_sent")
     evidence = mailer.readback_sent(
-        SEND_FROM, send["to"], send["subject"], issued_at - timedelta(minutes=2))
+        SEND_FROM, bound["to"], bound["subject"], issued_at - timedelta(minutes=2))
     ack = {"attempt_key": akey, "lease_id": send["lease_id"], "status": "sent",
            "occurred_at": (evidence or {}).get("ts"),
            "internet_message_id": (evidence or {}).get("imid"),
            "entry_id": (evidence or {}).get("entry_id")}
-    res = cadence.resolve_result(store, ack)
+    coordinate = (evidence or {}).get("imid") or \
+        f"graph-202:{cadence._iso(issued_at)}"
+    res = _complete(store, bound, coordinate, ack, now=now)
     if res.get("ok"):
         journal.write(akey, "acked", outcome="sent",
                       imid=(evidence or {}).get("imid"))
     else:
         # In-process ack can only fail on a store error; journal keeps the
         # outcome and replay delivers it next tick (result is idempotent).
-        journal.write(akey, "ack_failed", reason=str(res)[:200], ack=ack)
+        journal.write(akey, "ack_failed", reason=str(res)[:200], ack=ack,
+                      claim_token=send.get("claim_token"))
         return "ack_pending"
     return "sent"
 
 
 def replay_pending(store: ContactStore, mailer, journal: Journal,
                    alerts: list[str], *, now: datetime) -> dict:
-    """Crash reconcile, run at tick start BEFORE any new claim."""
+    """Crash reconcile, run at tick start BEFORE any new claim.
+
+    The claim table is the authority on whether transport may have begun; the
+    journal says what to look for. Nothing here ever resolves an unknown
+    outcome: Sent Items evidence is attached to the claim as a suggestion and
+    a human reconciles."""
     counters = {"replayed": 0, "requeued": 0, "ambiguous": 0}
+    iso_now = cadence._iso(now)
     for akey, entry in sorted(journal.pending().items()):
         state = entry.get("state")
+        claim = approval.latest_claim(store, akey)
+        token = claim["token"] if claim is not None else None
+        claim_state = claim["state"] if claim is not None else None
         if state == "claimed":
+            if claim_state == "dispatching":
+                # Crashed after begin_dispatch committed: may have gone.
+                approval.mark_unknown(store, token,
+                                      "worker restarted after begin_dispatch", iso_now)
+                journal.write(akey, "nacked", reason="restart after dispatch began: unknown")
+                alerts.append(f"UNKNOWN outcome for {akey}: worker restarted after "
+                              "dispatch began. Held; reconcile on the campaign page.")
+                counters["ambiguous"] += 1
+                continue
             # The send call never fired: safe to hand back.
+            approval.cancel(store, token, "worker restarted before dispatch", iso_now)
             cadence.resolve_result(store, {
                 "attempt_key": akey, "lease_id": entry.get("lease_id") or "",
                 "status": "failed", "error_class": "transient",
@@ -448,6 +531,9 @@ def replay_pending(store: ContactStore, mailer, journal: Journal,
             journal.write(akey, "nacked", reason="restart before send")
             counters["requeued"] += 1
         elif state in ("graph_issued", "graph_error"):
+            if claim_state in ("claimed", "dispatching"):
+                approval.mark_unknown(store, token, "crashed inside the send window",
+                                      iso_now)
             to = entry.get("to") or ""
             subject = entry.get("subject") or ""
             evidence = None
@@ -458,25 +544,45 @@ def replay_pending(store: ContactStore, mailer, journal: Journal,
                         now - timedelta(days=RECONCILE_LOOKBACK_DAYS))
                 except Exception:  # noqa: BLE001 - evidence search is best-effort
                     evidence = None
-            if evidence:
-                cadence.resolve_result(store, {
-                    "attempt_key": akey, "lease_id": entry.get("lease_id") or "",
-                    "status": "sent", "occurred_at": evidence.get("ts"),
-                    "internet_message_id": evidence.get("imid")})
-                journal.write(akey, "acked", outcome="sent-reconciled")
-                counters["replayed"] += 1
-            else:
-                counters["ambiguous"] += 1
+            counters["ambiguous"] += 1
+            if evidence and token:
+                approval.note_evidence(
+                    store, token,
+                    f"Sent Items shows a matching mail: imid {evidence.get('imid')} "
+                    f"at {evidence.get('ts')} (suggestion; confirm to reconcile)",
+                    iso_now)
                 alerts.append(
-                    f"AMBIGUOUS send {akey} to {to!r}: crashed inside the send "
-                    "window, no Sent Items evidence. NOT resending; resolve on "
-                    "the campaign page (Retry or Mark sent).")
-                journal.write(akey, "ambiguous_flagged")
+                    f"UNKNOWN send {akey} to {to!r}: Sent Items shows a matching "
+                    f"mail (imid {evidence.get('imid')}). NOT auto-reconciled; "
+                    "confirm delivered on the campaign page.")
+            else:
+                alerts.append(
+                    f"UNKNOWN send {akey} to {to!r}: crashed inside the send "
+                    "window, no Sent Items evidence. NOT resending; reconcile on "
+                    "the campaign page.")
+            journal.write(akey, "ambiguous_flagged")
         elif state in ("graph_sent", "ack_failed"):
+            # The 2xx was journaled before the crash: a confirmed success whose
+            # receipt write was lost. Completing it is not reconciliation.
             ack = entry.get("ack") or {
                 "attempt_key": akey, "lease_id": entry.get("lease_id") or "",
                 "status": "sent"}
-            res = cadence.resolve_result(store, ack)
+            if claim_state == "unknown":
+                alerts.append(
+                    f"UNKNOWN send {akey}: the journal recorded Graph acceptance "
+                    "but the claim already went unknown. Confirm delivered on the "
+                    "campaign page.")
+                journal.write(akey, "ambiguous_flagged")
+                counters["ambiguous"] += 1
+                continue
+            coordinate = ack.get("internet_message_id") or f"journal-2xx:{akey}"
+            try:
+                with store.transaction():
+                    if claim_state == "dispatching":
+                        approval.complete(store, token, coordinate, iso_now)
+                    res = cadence.resolve_result(store, ack)
+            except approval.ClaimRefused as exc:
+                res = {"ok": False, "error": str(exc)}
             if res.get("ok") or res.get("idempotent"):
                 journal.write(akey, "acked", outcome="sent-replayed")
                 counters["replayed"] += 1
@@ -548,12 +654,10 @@ def run_tick(data_dir: str | Path, *, mailer=None, poll_fn=None,
                 counters["sent"] += 1
             elif outcome == "drafted":
                 counters["drafted"] += 1
+            elif outcome == "unknown":
+                counters["ambiguous"] += 1
             elif outcome != "draft_to_self":
                 counters["failed"] += 1
-            if outcome in ("graph_error",):
-                alerts.append(
-                    f"Graph error inside send window for {send['attempt_key']} "
-                    f"to {send['to']}: reconcile searches Sent Items next tick.")
             if i < len(sends) - 1:
                 sleep(send.get("throttle_seconds", 12)
                       + random.uniform(0, send.get("jitter_seconds", 4)))

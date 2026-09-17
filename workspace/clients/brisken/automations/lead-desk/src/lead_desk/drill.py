@@ -39,6 +39,7 @@ from .freshness import age_minutes, capture_watermark_ages, guard_alerts, \
     state_json
 from .graph_mail import DEFAULT_DENY_DOMAINS, SEND_FROM, GraphMailer
 from .sync import have_creds
+from .web import approval
 from .web.service import now_iso
 from .web.store import ContactStore
 
@@ -78,11 +79,12 @@ def _drill_contact_id(addr: str) -> str:
 
 # -- steps --------------------------------------------------------------------
 
-def step1(data_dir: str | Path) -> int:
+def step1(data_dir: str | Path, *, mailer=None, poll_fn=None) -> int:
     """Dry-run tick (peek): prove the dormant engine is inert. Checks the
     machine-checkable pass criteria (kill switch reported true, zero leases
     taken, watermarks untouched); the due_preview is printed for the human
-    to match against expectation (empty while dormant)."""
+    to match against expectation (empty while dormant). ``mailer`` /
+    ``poll_fn`` inject the fixture transport; prod leaves them None."""
     data_dir = Path(data_dir)
     state_path = cloud_worker._capture_state_path(data_dir)
 
@@ -95,7 +97,8 @@ def step1(data_dir: str | Path) -> int:
     marks_before = watermarks()
     with _open_store(data_dir) as store:
         leased_before = _leased_count(store)
-    report = cloud_worker.run_tick(data_dir, dry_run=True)
+    report = cloud_worker.run_tick(data_dir, dry_run=True, mailer=mailer,
+                                   poll_fn=poll_fn)
     print(json.dumps(report, indent=1, default=str))
     with _open_store(data_dir) as store:
         leased_after = _leased_count(store)
@@ -106,12 +109,14 @@ def step1(data_dir: str | Path) -> int:
     })
 
 
-def step2(data_dir: str | Path) -> int:
+def step2(data_dir: str | Path, *, mailer=None, poll_fn=None) -> int:
     """Draft-to-self tick: the full pipeline (claim -> render -> Graph),
     with every mail landing as a draft in OUR mailbox and nothing acked.
     Needs a claimable send: drill campaign in 'sending' plus the scoped
-    kill lift from ARMING-DRILL.md step 2."""
-    report = cloud_worker.run_tick(Path(data_dir), draft_to_self=True)
+    kill lift from ARMING-DRILL.md step 2. The claim is verified against its
+    approval snapshot but never begins dispatch."""
+    report = cloud_worker.run_tick(Path(data_dir), draft_to_self=True,
+                                   mailer=mailer, poll_fn=poll_fn)
     print(json.dumps(report, indent=1, default=str))
     claimed = report.get("claimed", 0)
     if not claimed:
@@ -245,6 +250,12 @@ def status_report(data_dir: str | Path, at: datetime | None = None) -> dict:
         out["sending_campaigns"] = [
             r["campaign_id"] for r in store.list_campaigns()
             if r["status"] == "sending"]
+        # Per-message approval ledger: an unknown outcome is a hard stop for
+        # arming (step 7) until a human reconciles it.
+        out["claims"] = approval.claim_state_counts(store)
+        out["unknown_claims"] = [r["attempt_key"] for r in store.conn.execute(
+            "SELECT attempt_key FROM dispatch_claims WHERE state = 'unknown' "
+            "ORDER BY claim_id")]
         out["heartbeat_age_minutes"] = age_minutes(
             state_json(store, "worker_heartbeat").get("ts"), at)
     ages = capture_watermark_ages(data_dir, at)

@@ -36,6 +36,24 @@ Residual risk inside a lift window: the in-app loop may tick first and
 fire the drill campaign's due send for real. By construction that mail
 can only go to the test address.
 
+Per-message approval (added 2026-09-17, store v14, `web/approval.py`): an
+approval now snapshots every message it covers (exact text, sha256, recipient,
+from/cc/bcc) and each claim binds to that snapshot. Three consequences for the
+drill:
+
+- A campaign approved before v14 has no snapshots, so every claim refuses with
+  `no_approval_snapshot` (visible in the send-guard alert). Re-approve the
+  drill campaign from its page before step 2; the panel shows the manifest
+  hash prefix and epoch the approval will be keyed to.
+- Any change to a contact field the copy uses, an address, or from/cc/bcc after
+  approval refuses that message at claim (`approval_stale`) until re-approved,
+  even if the change is reverted.
+- A send whose outcome is uncertain (timeout, Graph error, worker death after
+  dispatch began) is held as `unknown`. It never retries; Retry, Send fresh and
+  Mark sent refuse it; only Reconcile (delivered with its internetMessageId, or
+  not delivered with evidence) resolves it, and a not-delivered send needs a
+  fresh approval before it can go again.
+
 ## Prerequisites
 
 - External test address chosen (a mailbox we control, outside
@@ -151,6 +169,8 @@ can only go to the test address.
      mail cannot be unsent.
   2. Explicit greenlight from Dirk.
   3. Readiness audit: evidence log shows steps 1-6 PASS;
+     `lead-desk-drill status` shows `unknown_claims` empty (an unknown
+     outcome is a hard stop until reconciled);
      `lead-desk-drill status` shows `guard_alerts` empty, fresh
      heartbeat, fresh watermarks, and `sending_campaigns` = exactly the
      intended campaign(s).
@@ -172,4 +192,5 @@ can only go to the test address.
 | 2026-08-13 | 2 (draft-to-self, fresh-send leg) | PASS | Drill campaign staged: sole contact admin@unpauseai.com (owner-chosen), degree `cold`, 2 steps (step 2 = `reply` day 0), cap 2, window widened to 24/7 for the fixture, `bcc_address` = Zoho dropbox default. Both gates passed on owner delegation, `approved_by: matthias (arming drill)` 22:59:37Z. Staging findings, fixed before the gates: default `cc_address` = dirk.neumann@ would have CCed Dirk on the step-5 live send (cleared to empty); `cold_untouched` is not a valid degree (rules classify `cold`). Scoped lift 23:01:37Z (~30 s, restored in a `finally`): preflight sending=['drill'] + no guard alerts, tick claimed 1, nothing sent/acked, `PASS step2`. Draft verified by Graph probe: in matthias Drafts, `isDraft` true, to = self (attempt row keeps real `to_addr` admin@unpauseai.com), cc empty, BCC dropbox, merge fields rendered; attempt `cadence:632:1` leased, un-acked. Reply-step RE:-threading leg deferred by design: the anchor conversation only exists after step 5's live step-1 send; rehearse via a second draft-to-self tick between that send and the reply |
 | 2026-08-15 | 2 (draft-to-self, reply-step leg) | PASS | Run between step 5's live send and the reply, per the deferral above. First attempt staged NOTHING while reporting `PASS step2`: `create_reply_draft`'s dupe guard matched the leftover 08-13 fresh-leg self-draft (same normalized subject, to=self) and returned `duplicate:true` - the runbook rollback ("delete the inspected self-drafts") is load-bearing, not optional. After deleting the stale draft + operator requeue of `cadence:632:2`: lift 15:17:19Z, claimed 1, nothing sent/acked, and the staged draft verified by Graph probe: subject `RE: LEAD DESK ARMING DRILL campaign step 1`, **same `conversationId` as the live anchor**, to = self, cc empty, BCC dropbox, follow-up body. Phase-3 createReply path rehearsed end to end without sending |
 | 2026-08-15 | 5 (live send + reply-halt) | PASS | Live send: operator Retry of the stalled step-1 attempt, then self-sequencing watched lift (preflight + in-app-tick imminence guard, kill restored in `finally`): tick 15:13:56Z claimed 1, sent 1; attempt `cadence:632:1` `sent`, imid `<SJ0PR22MB2809E77CA292D1BBECAEB94C8FD92@SJ0PR22MB2809.namprd22.prod.outlook.com>`, resolved 15:14:05Z - the engine's first-ever campaign-path live send, to our own admin@unpauseai.com. Reply-halt: owner replied from the test address; reply event ingested by the ordinary in-app tick 15:42:29Z (`source: graph-auto`), enrollment `cadence_replied=1, stage=replied`. Follow-up deliberately requeued (claimable in principle), watched tick: **claimed 0, sent 0**, follow-up still `queued` - capture-before-claim halted the cadence server-side; the in-thread follow-up never fired. Drill campaign paused per rollback |
+| 2026-09-17 | 1, 2, 5 + approval legs (fixture) | PASS | Not a live drill: `tests/test_send_drill_fixture.py` walks the steps against the fixture transport after the per-message approval port, 12/12 checks (stale page refused; approve = decision #1 with 4 snapshots; step 1 inert; step 2 claims verified, 0 dispatched; lease expiry cancels + Retry; live send transports exactly the snapshot bytes; reply-halt; old-epoch decision releases nothing; unknown outcome held with Retry 400; trusted reconcile clears `unknown_claims`). The live drill campaign must be re-approved before the next watched lift |
 | 2026-08-15 | 6 (Zoho BCC filing) | DEFERRED | Blocked on CRM UI access: Brisken's CRM is DC `.com` (the owner's test Lead landed in a different `.eu` org and was refused as step-6 prep); the read-only Self Client token (scopes contacts.READ + accounts.READ, connection user Dirk Neumann) cannot read Leads/Emails. The step-5 send DID carry the dropbox BCC. Plan: fold the filing check into the step-7 session (Dirk present): create the test Lead in Brisken's CRM, one BCC'd drill send, check the Lead's Emails list ~15 min later; and re-grant the Self Client with `ZohoCRM.modules.leads.READ` + emails scope so filing becomes API-verifiable permanently |
