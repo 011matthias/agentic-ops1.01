@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | Brisken Recon Owner Rulings Round | client-dev | [Mini-Checkpoint-2](docs/2026-09-17%20-%20Brisken%20Recon%20Owner%20Rulings%20Round/Mini-Checkpoint-2.md) |
 | 2026-09-17 | Brisken Recon Bulk Confirm PDFs And Pair Guards | client-dev | [Mini-Checkpoint-1](docs/2026-09-17%20-%20Brisken%20Recon%20Bulk%20Confirm%20PDFs%20And%20Pair%20Guards/Mini-Checkpoint-1.md) |
 | 2026-09-17 | Brisken Recon Items 114 And 105 | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Recon%20Items%20114%20And%20105/Checkpoint.md) |
 | 2026-09-17 | Brisken Recon PDFs By Card | client-dev | [Mini-Checkpoint-1](docs/2026-09-17%20-%20Brisken%20Recon%20PDFs%20By%20Card/Mini-Checkpoint-1.md) |
