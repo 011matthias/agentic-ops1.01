@@ -84,7 +84,7 @@ import unicodedata
 from dataclasses import dataclass, replace
 
 from .cards_provision import CardPreset
-from .matching.deterministic import _card_keys, _normalize
+from .matching.deterministic import _MASK_CHARS, _card_keys, _normalize
 
 # Digit tokens accepted in a card entry: 3-8 digits, matching the token
 # extractor's floor (`_card_keys` only sees runs of 3+). A shorter token
@@ -375,7 +375,15 @@ def learnable_hint_tokens(hint: str) -> tuple[str | None, str | None, str | None
             "generic tender word; identifies a payment network, not one "
             "card, so the assignment applies to this batch only"
         )
-    runs = re.findall(r"\d{3,8}", text)
+    # Item 87: a run followed by a mask character is a card's leading BIN
+    # ("42463153XXXXXX38"), which `_card_keys` skips since item 69 round B.
+    # Taught as a digit it could never resolve the same hint again, so it
+    # is not a card number here either and the hint learns as its string.
+    runs = [
+        m.group()
+        for m in re.finditer(r"\d{3,8}", text)
+        if not (m.end() < len(text) and text[m.end()] in _MASK_CHARS)
+    ]
     if len(runs) == 1:
         return runs[0], None, None
     return None, text, None
@@ -660,22 +668,34 @@ def resolve_card(
     obs_norm = _normalize(observed)
     obs_tokens = set(obs_norm.split())
     alias_hits: list[Card] = []
+    exact_hits: list[Card] = []
     for card in live.values():
+        matched = exact = False
         for alias in card.aliases:
             a = _normalize(alias)
             if not a or is_generic_tender(alias):
                 continue
-            if obs_norm == a or (
-                not exact_only
-                and (
-                    obs_norm.endswith(" " + a)
-                    or (" " not in a and a in obs_tokens)
-                )
-            ):
-                alias_hits.append(card)
+            if obs_norm == a:
+                matched = exact = True
                 break
+            if not exact_only and (
+                obs_norm.endswith(" " + a)
+                or (" " not in a and a in obs_tokens)
+            ):
+                matched = True  # keep looking: a later alias may be exact
+        if matched:
+            alias_hits.append(card)
+        if exact:
+            exact_hits.append(card)
     if len(alias_hits) == 1:
         return alias_hits[0]
+    # Item 87: a whole-string alias is what an operator's assignment
+    # teaches, and it names ONE card. Several cards sharing a word alias
+    # ("Corp") also match "Paid via Corp Services card" by token, which
+    # left the taught card ambiguous forever: the strip said "learned"
+    # and the same hint came back next month.
+    if len(exact_hits) == 1:
+        return exact_hits[0]
     if alias_hits:
         return alias_hits[0] if on_ambiguity == "first" else None
     return None

@@ -1197,3 +1197,20 @@ def test_unmatched_reason_code_is_on_every_unmatched_item_and_nowhere_else(paylo
                 assert row["reason_code"] in CHARGE_REASON_CODES, row
             else:
                 assert "reason_code" not in row, row
+
+
+def test_expense_card_source_is_on_every_row_from_a_closed_set(payloads):
+    """Item 87. `expenses[].card_source` is one of `hint` (the printed payment
+    method or a batch hint assignment), `override` (a per-row card fix this
+    month), `learned` (remembered from an earlier month's fix) or `none`,
+    never null; `none` exactly when `card` is null. The per-row fix is the
+    header field `card_key`. A new value is a rule-5 change (api-contract).
+    Route-level behaviour: `tests/test_card_fix_per_row.py`."""
+    views = payloads["expense_batch"]
+    seen: set[str] = set()
+    for view in views:
+        for e in view["expenses"]:
+            assert e["card_source"] in {"hint", "override", "learned", "none"}, e
+            assert (e["card_source"] == "none") == (e["card"] is None), e
+            seen.add(e["card_source"])
+    assert "none" in seen, seen

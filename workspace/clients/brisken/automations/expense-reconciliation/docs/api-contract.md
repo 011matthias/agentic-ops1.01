@@ -2632,3 +2632,45 @@ Live 2026-09-16: no month has been published yet (`/api/operator/state`
 published.
 
 Route-level in `tests/test_memory_at_signoff.py`.
+
+## A card that cannot be read gets a fix that sticks (item 87)
+
+Note #33 (2026-09-09, July Expenses): "need to create a process to manually
+correct and fix this when card is not readable or not recognized". Read on July
+(2026-09-17): of the 33 rows with no company or person, 16 print only a tender
+word and 8 print no card at all. The card-review strip assigns by printed hint,
+so it reached neither one row at a time.
+
+**Per-row fix.** `PUT /api/runs/{id}/expenses/{document_id}` accepts the header
+field `card_key` (a registry key from `GET /api/cards`; `""` clears it). 400
+when the key names no card or an inactive one. A card defined after the month
+was created is copied into the month's card snapshot, as a strip assignment
+does. No re-match: the matcher does not read it. The row's card, and through it
+the company, the person and the paid-through account, come from the picked
+card; a `legal_entity` override still wins for the company. `edited_fields`
+lists `card_key`.
+
+**Remembered at sign-off.** Publishing the month (item 88) saves the fix as a
+field correction for the vendor (`field_corrections[]` field `card_key`, undone
+by the Memory page's Forget). On a later month a receipt from that vendor takes
+the remembered card only when its printed payment method carries no card
+number: a tender word ("VISA") or nothing. A printed number always wins, known
+card or not.
+
+**One new row field**, `expenses[].card_source`:
+
+| Value | Meaning |
+|---|---|
+| `hint` | the printed payment method, or a batch hint assignment, named the card |
+| `override` | a per-row fix this month (`card_key`) |
+| `learned` | remembered from an earlier month's fix for this vendor |
+| `none` | no card; `card` is null |
+
+**Strip learning that did not stick, fixed.** An assignment with learning on
+now resolves the same hint next month for two shapes that used to come back
+unresolved: a whole-string alias ("Paid via Corp Services card") now beats a
+word alias other cards share ("Corp"), and a masked BIN ("42463153XXXXXX38")
+learns as its string instead of as a card number the matcher ignores.
+
+Route-level in `tests/test_card_fix_per_row.py`; the shape in
+`tests/test_view_contract.py`.

@@ -150,7 +150,8 @@ class ExpenseLearnSummary:
 # Header fields a reviewer edit teaches as a per-merchant correction. The
 # key is the ORIGINAL extracted vendor (what OCR will read again next
 # month); `vendor` teaches the canonical spelling itself.
-_LEARNABLE_FIELDS = ("vendor", "tax_label", "paid_through")
+# `card_key` (item 87): a reviewer's per-row card fix, remembered per vendor.
+_LEARNABLE_FIELDS = ("vendor", "tax_label", "paid_through", "card_key")
 
 
 def learn_from_expense_run(
