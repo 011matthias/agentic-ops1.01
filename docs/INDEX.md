@@ -556,6 +556,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## vinted-reselling
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | Vinted Listing Text and Buyer-Search Keywords | client-dev | [→](docs/2026-09-17%20-%20Vinted%20Listing%20Text%20and%20Buyer-Search%20Keywords/Checkpoint.md) |
 | 2026-09-17 | Vinted Batch-2 Photo Pipeline Rebuild | client-dev | [→](docs/2026-09-17%20-%20Vinted%20Batch-2%20Photo%20Pipeline%20Rebuild/Checkpoint.md) |
 | 2026-09-17 | Vinted Demand Signals Read | misc | [→](docs/2026-09-17%20-%20Vinted%20Demand%20Signals%20Read/Checkpoint.md) |
 | 2026-09-14 | Vinted Volume Fix + Recheck Markup | client-dev | [→](docs/2026-09-14%20-%20Vinted%20Volume%20Fix%20%2B%20Recheck%20Markup/Checkpoint.md) |
