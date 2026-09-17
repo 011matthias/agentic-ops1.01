@@ -263,9 +263,10 @@ def test_a_card_picked_against_the_printed_card_re_matches_the_month(client, mon
     assert _charge(client, batch, "OBSIDIAN")["chosen_document_id"] is None
 
 
-def test_a_pick_on_a_receipt_that_printed_no_card_matches_as_before(client, monkeypatch):
-    """Only a contradiction is rewritten: a receipt that printed no card
-    number stays card-unscoped after a pick, as it was before note #63."""
+def test_a_pick_on_a_receipt_that_printed_no_card_reaches_the_matcher(client, monkeypatch):
+    """Item 137 widened note #63: a pick scopes a receipt that printed no card
+    too. The only LOVABLE charge is on 2838, so the pick of 3645 keeps the
+    pair but asks for review (tests/test_card_scope_item_137.py)."""
     client.put("/api/settings", json={"cards": CARDS})
     _wire(monkeypatch, _extraction("Lovable", "15.00", "2026-08-31"))
     batch = _month(client, 1)
@@ -273,10 +274,13 @@ def test_a_pick_on_a_receipt_that_printed_no_card_matches_as_before(client, monk
                             ("3645", datetime(2026, 8, 23), "PRESSMASTER DMCC", "Sale", -135.00)])
     doc = _expense(client, batch, "Lovable")["document_id"]
     assert _charge(client, batch, "LOVABLE")["chosen_document_id"] == doc
+    assert "cards_differ" not in _charge(client, batch, "LOVABLE")
 
     resp = _pick_card(client, batch, doc, "corp-3645")
     assert resp.status_code == 200 and "rematch" in resp.json(), resp.text
-    assert _charge(client, batch, "LOVABLE")["chosen_document_id"] == doc
+    row = _charge(client, batch, "LOVABLE")
+    assert row["chosen_document_id"] == doc
+    assert row["cards_differ"]["receipt_card"] == "3645"
 
 
 def test_repicking_the_printed_card_does_not_re_match(client, monkeypatch):

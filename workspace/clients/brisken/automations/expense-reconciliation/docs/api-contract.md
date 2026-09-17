@@ -164,6 +164,7 @@ name answers the same one:
 | `n_charges_no_entity` | how many CHARGES carry no legal entity, because the card they printed is not in the registry or has no entity (item 59; the fix is defining that card, not a row edit). Charges, not expenses: `n_needs_entity` answers the receipt-side question |
 | `n_charges_receipt_taken` | how many charges are bucketed `unmatched` while every candidate they hold is held by another charge (item 60; the fix is a pick, not a missing receipt) |
 | `n_booked_no_receipt` · `booked_no_receipt_by_ccy` | review payload only: charges the workbook marks as already booked (`entry_status: posted`, yellow) that no receipt settles (`effective_bucket: unmatched`), and their amount per currency, formatted like `unreconciled_by_ccy` (item 102). Never part of `unreconciled_by_ccy`, which keeps its meaning; `{}` and 0 when every booked charge holds a receipt |
+| `n_cards_differ` | review payload only: rows carrying `rows[].cards_differ` (item 137), confirmed rows included. 0 when every held receipt's card agrees with its charge's card or is unknown |
 | `n_roster_mismatch` | trip batches only (absent on company months): how many rows a person OUTSIDE the trip's roster paid for (item 38 x 40) |
 | `n_suggested_private` | how many rows are suggested as private expenses, unconfirmed (item 41) |
 | `n_private` | how many rows the operator confirmed private (reimbursement rows) |
@@ -3266,6 +3267,32 @@ the change: 85 booked rows, 48 of them `unmatched` (47 `already_booked`, 1
 `receipt_held_by_another_charge`); 8 more wait in review with a candidate
 receipt and are not counted. Route-level in `tests/test_booked_without_receipt.py`.
 SPA half: `docs/lovable-booked-no-receipt-prompt.md`.
+
+## Matching is separated by card (item 137)
+
+The card the tool resolved for a receipt (the Expenses page's `card` /
+`card_source`: `override` picked on the row, `hint` from the printed method or
+an assigned hint word, `learned` remembered from an earlier month) now takes
+part in matching. No new route and no request change.
+
+- **Picked by hand:** the receipt pairs only with charges on the picked card.
+  When the picked card has no candidate at all, the other cards' charges are
+  offered after all, each asking for review.
+- **Hint or remembered:** a charge on another card stays a candidate but asks
+  for review and ranks below every clean candidate, so a charge on the
+  receipt's own card takes it first. A card the receipt printed still beats a
+  resolved one in a tie.
+- A pair on another card: `candidates[].requires_review: true`, `reason` ends
+  "Review: the cards differ: the receipt's card is 2838 (picked by hand), the
+  charge is on 3645.", and it never confirms itself (item 76).
+
+`GET /api/runs/{id}` `rows[].cards_differ` (ABSENT unless true) marks a row
+whose held receipt's card disagrees with the charge's card, confirmed rows
+included: `{document_id, charge_card, receipt_card, receipt_card_key,
+receipt_card_label, receipt_card_source}`. `summary.n_cards_differ` counts
+those rows. Live August 2026 on deploy: 1 (LOVABLE 25.00 on 3645, receipt
+picked as 2838). Route-level in `tests/test_card_scope_item_137.py`. SPA half:
+`docs/lovable-cards-differ-prompt.md`.
 
 ## A mail that added nothing (item 106, 2026-09-17)
 
