@@ -3266,3 +3266,41 @@ the change: 85 booked rows, 48 of them `unmatched` (47 `already_booked`, 1
 `receipt_held_by_another_charge`); 8 more wait in review with a candidate
 receipt and are not counted. Route-level in `tests/test_booked_without_receipt.py`.
 SPA half: `docs/lovable-booked-no-receipt-prompt.md`.
+
+## A mail that added nothing (item 106, 2026-09-17)
+
+A forward whose every file was set aside (a statement page, a bill notice
+rendered from the email text), was already on file, or could not be read
+used to finish as `ingested` with `documents: []`, read "Added", and tell
+its sender the files "landed in the July 2026 expense month". Live on
+2026-09-17: two AWS "billing statement available" forwards from Dirk, an
+AT&T bill notice and a card summary from Criss.
+
+Nothing is retyped. `status` stays `ingested` / `replayed` and `status_kind`
+stays `done` (`n_held` keys on status, and a sixth kind value is the enum
+growth rule 5 exists to avoid); the label and the new fields carry it.
+
+### `GET /api/inbound/log`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `entries[].not_added` | object list `{file, why, reason?}` (absent when empty or stamped before this item) | per file, why it created no expense. `why`: `set_aside` (with `reason`: `statement`, `report_summary`, `other`), `already_on_file` (identical bytes already in the month), or an upload-issue code (`unsupported_type`, `empty_or_unreadable`, `too_large`, `upload_cap`). Present on a mail that DID add an expense too, naming its other files. `file` is the display name; the rendered email text is `rendered-body.pdf`. `document_id` (absent on upload issues) names the stored file: the set-aside entry, or the stored copy a duplicate matched (bytes matching a set-aside page read `set_aside`, not `already_on_file`). A set-aside file an operator has since restored leaves `not_added` and joins `documents` at read time, so the row reads "Added" |
+| `entries[].status_label` | string | a finished mail with `documents: []` reads `Nothing added`, `Nothing added: read as a statement page`, `Nothing added: read as a summary page`, `Nothing added: not read as a receipt`, `Nothing added: already on file`, `Nothing added: set aside or already on file`, or `Nothing added: a file could not be read`. A mail whose month was deleted keeps "The month it was added to was deleted" |
+| `n_no_expense` | number | distinct MAILS that finished with no expense, counted like `n_held`, excluding mail whose month was deleted |
+
+`add_receipts_to_expense_batch` returns the same list as `not_added` on its
+summary, stored as `expense_ingest.not_added` and served on `GET /api/expense-batches/{id}` (element type pinned in `tests/test_view_contract.py`).
+
+### The acknowledgement
+
+To the same recipients as before, under the same guards (auto_ack, not
+auto-generated, no untrusted flags, @brisken.com or `intake.known_senders`).
+Subject `No expense added: {subject}`; one line per file (set aside and how it
+read, already on file, could not be read) plus any attachment of a type the
+tool cannot read (a tiny signature image of a readable type is not named).
+It asks for the PDF or a photo when a file was set aside or unreadable, and
+says a set-aside file can be restored from the month's set-aside list; an
+all-already-on-file mail reads "No action needed." A mail that added at
+least one expense keeps the old "Receipt received" wording.
+
+A mail acked earlier (pooled: "will join that month automatically") whose claim then adds nothing gets this acknowledgement once as a correction (`no_expense_ack_at` on the archive). A replay after a crash that struck after the batch stored the mail's receipts counts those receipts as the mail's own (`documents`), because each stored file's intake provenance now carries `archive`; that key also appears on the expense grid's `submitted_by` object. Attachment names echoed into the mail are flattened to letters, digits and `._ ()-`, 80 characters.

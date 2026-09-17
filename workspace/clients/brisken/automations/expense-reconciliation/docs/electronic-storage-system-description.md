@@ -844,9 +844,12 @@ vendor.
 
 **11.3 Outbound notification mail** is sent through Microsoft Graph in three
 forms. An acknowledgement to a submitter carries a file count, the
-submitter's own subject line echoed back, and the month or trip label; it
-adds no amounts, vendors or images of its own, though a submitter's subject
-line may itself contain a vendor or an amount, and acknowledgements go to
+submitter's own subject line echoed back, and the month or trip label; when
+the mail added no expense it instead names each of the submitter's own file
+names and how that file was treated (set aside and how it read, already on
+file, not readable). It adds no amounts, vendors or images of its own, though
+a submitter's subject line or file name may itself contain a vendor or an
+amount, and acknowledgements go to
 addresses outside the tenant where an operator has listed the sender. An
 alert to the operator when mail is held carries the submitting address, that
 subject line, the archive identifier and the recorded error text. A notice

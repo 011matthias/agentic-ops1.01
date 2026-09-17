@@ -886,6 +886,9 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
                 row["files"] = files
             if meta.get("skipped"):
                 row["skipped"] = meta["skipped"]
+            # Item 106: why this mail's other files created no expense.
+            if meta.get("not_added"):
+                row["not_added"] = meta["not_added"]
             if meta.get("error"):
                 row["error"] = meta["error"]
             # Month-pool stamps (2026-08-24): which month this mail's
@@ -1099,6 +1102,10 @@ def _provenance_entry(person: dict, received_at: str, arch: Path | None) -> dict
     flags, so a receipt created from an injected mail shows the flag on its
     grid row exactly where `submitted_by` already shows."""
     entry = {**person, "received_at": received_at}
+    if arch is not None:
+        # Item 106: which mail stored this file, so a replay of the same
+        # mail recognises its own receipt instead of calling it a copy.
+        entry["archive"] = arch.name
     flags = _untrusted_flags(arch)
     if flags:
         entry["untrusted_instructions"] = flags
@@ -1336,7 +1343,12 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
                     batch_is_trip = is_trip_batch(run)
         if not cfg.auto_ack or not graph_notify.enabled():
             return
-        if meta.get("ack_at") or _inbound_is_auto_generated(arch):
+        # Item 106: a mail acked earlier (pooled: "will join that month
+        # automatically") that then added nothing gets ONE correction.
+        corrective = (
+            mail_added_nothing(meta) and not meta.get("no_expense_ack_at")
+        )
+        if (meta.get("ack_at") and not corrective) or _inbound_is_auto_generated(arch):
             return
         if _untrusted_flags(arch):
             # The mail carried text aimed at an assistant, and the ack echoes
@@ -1425,11 +1437,25 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
             + "\n\nAutomated confirmation from "
             f"{sender_local}@{cfg.domain}."
         )
+        ack_subject = "Receipt received" + (f": {subject}" if subject else "")
+        if mail_added_nothing(meta):
+            # Item 106: a forward that created no expense (every file set
+            # aside, already on file, or unreadable) must not be told it
+            # "landed". Say what happened per file and what would help.
+            ack_subject = "No expense added" + (f": {subject}" if subject else "")
+            body = _no_expense_ack_body(
+                meta, subject=subject, month=month, batch_label=batch_label,
+                batch_is_trip=batch_is_trip,
+                signature=f"{sender_local}@{cfg.domain}",
+            )
         if graph_notify.send_mail(
-            recipient, "Receipt received" + (f": {subject}" if subject else ""),
+            recipient, ack_subject,
             body, allow_external=cfg.known_senders,
         ):
-            _update_meta(arch, {"ack_at": _now_iso()})
+            stamp = {"ack_at": _now_iso()}
+            if mail_added_nothing(meta):
+                stamp["no_expense_ack_at"] = stamp["ack_at"]
+            _update_meta(arch, stamp)
     except Exception as exc:  # noqa: BLE001 - notifications never break ingest
         log.warning("ack skipped for %s: %s", arch.name, exc)
 
@@ -1812,6 +1838,11 @@ def annotate_status_view(rows: list[dict]) -> None:
                 f'Already have this, from "{subject}"' if subject
                 else "Already have this"
             )
+        elif mail_added_nothing(row):
+            # Item 106: finished, but no expense came of it. Same status
+            # and kind (the held count keys on status; a sixth kind value
+            # is the enum growth this view exists to avoid), honest label.
+            label = no_expense_label(row.get("not_added"))
         elif (
             row.get("materialized")
             and status in (STATUS_INGESTED, STATUS_REPLAYED)
@@ -1840,6 +1871,222 @@ def annotate_status_view(rows: list[dict]) -> None:
             kind, label = KIND_HELD, "The month it was added to was deleted"
         row["status_kind"] = kind
         row["status_label"] = label
+
+
+# ------------------------------------------- a mail that added nothing --
+# Item 106 (2026-09-17 voids audit). A forward whose every file was set
+# aside (a statement page, a bill notice rendered from the email text), was
+# already on file, or could not be read used to finish as "ingested" with
+# `documents: []`, read "Added" on the intake page, and tell its sender the
+# files "landed in the July 2026 expense month". Live: Dirk's two AWS
+# "billing statement available" forwards and Criss's AT&T bill notice and
+# card summary, none of which put a receipt anywhere.
+
+_SET_ASIDE_READS = {
+    "statement": "a bank or card statement page",
+    "report_summary": "a summary page",
+    "other": "not a receipt",
+}
+_RENDERED_BODY = "rendered-body.pdf"
+
+
+def mail_added_nothing(record: dict) -> bool:
+    """A finished mail (ingested/replayed) that created no expense.
+
+    `documents` must be PRESENT and empty: an archive written before the
+    ingest stamped its documents is never claimed to be empty, and a mail
+    whose month was deleted keeps the deleted-month story."""
+    docs = record.get("documents")
+    return (
+        str(record.get("status", "")) in (STATUS_INGESTED, STATUS_REPLAYED)
+        and isinstance(docs, list)
+        and not docs
+        and not record.get("batch_deleted")
+    )
+
+
+def no_expense_label(not_added) -> str:
+    """The intake row's label for a mail that added nothing."""
+    entries = [e for e in (not_added or []) if isinstance(e, dict)]
+    whys = {str(e.get("why") or "") for e in entries}
+    if not whys:
+        # Stamped before item 106, or nothing reached the month at all.
+        return "Nothing added"
+    if whys == {"already_on_file"}:
+        return "Nothing added: already on file"
+    if whys == {"set_aside"}:
+        reasons = {str(e.get("reason") or "") for e in entries}
+        if reasons == {"statement"}:
+            return "Nothing added: read as a statement page"
+        if reasons == {"report_summary"}:
+            return "Nothing added: read as a summary page"
+        return "Nothing added: not read as a receipt"
+    if whys <= {"set_aside", "already_on_file"}:
+        return "Nothing added: set aside or already on file"
+    return "Nothing added: a file could not be read"
+
+
+def _created_batch_not_added(run) -> list[dict]:
+    """`not_added` for a batch this mail CREATED (month materialization,
+    trip creation): every set-aside entry and every upload rejection in a
+    fresh batch is this mail's."""
+    if run is None:
+        return []
+    from .service import set_aside_entries
+
+    out = [
+        {"file": str(e.get("display") or e.get("file") or ""),
+         "why": "set_aside", "reason": str(e.get("reason") or ""),
+         "document_id": str(e.get("file") or "")}
+        for e in set_aside_entries(run.snapshot or {})
+    ]
+    for d in (run.summary or {}).get("upload_issue_details") or []:
+        if isinstance(d, dict) and d.get("code"):
+            out.append({"file": str(d.get("file") or ""), "why": str(d["code"])})
+    return out
+
+
+def _own_outcome(run, arch: Path | None, summary: dict | None) -> tuple[list[str], list[dict]]:
+    """(documents, not_added) for one ingest of this mail.
+
+    A replay after a crash that struck AFTER the batch stored this mail's
+    receipts (a re-match that raised, a machine stop before the meta stamp)
+    finds its own files already on file. Those are this mail's expenses,
+    not copies: the stored file's provenance names this archive. Never
+    raises; on any doubt the add's own summary stands."""
+    documents = list((summary or {}).get("documents") or [])
+    not_added = list((summary or {}).get("not_added") or [])
+    if run is None or arch is None:
+        return documents, not_added
+    try:
+        snap = run.snapshot or {}
+        prov = snap.get("intake_provenance") or {}
+        pool = {
+            str(r.get("document_id")) for r in snap.get("receipts") or []
+            if isinstance(r, dict)
+        }
+        kept: list[dict] = []
+        for e in not_added:
+            doc = str(e.get("document_id") or "") if isinstance(e, dict) else ""
+            if (
+                isinstance(e, dict) and e.get("why") == "already_on_file"
+                and doc in pool
+                and (prov.get(doc) or {}).get("archive") == arch.name
+            ):
+                if doc not in documents:
+                    documents.append(doc)
+                continue
+            kept.append(e)
+        return documents, kept
+    except Exception:  # noqa: BLE001 - the plain summary is still true
+        return (
+            list((summary or {}).get("documents") or []),
+            list((summary or {}).get("not_added") or []),
+        )
+
+
+def apply_restored_set_aside(rows: list[dict], run) -> None:
+    """Read-time overlay for one batch: a set-aside file an operator has
+    since RESTORED is an expense of the mail that brought it, so the row
+    stops reading "Nothing added" without rewriting the archive."""
+    restored = {
+        str(e.get("file") or "")
+        for e in (run.snapshot or {}).get("set_aside") or []
+        if isinstance(e, dict) and e.get("restored")
+    }
+    if not restored:
+        return
+    for row in rows:
+        if str(row.get("batch_id") or "") != run.run_id:
+            continue
+        entries = row.get("not_added")
+        if not isinstance(entries, list):
+            continue
+        back = [
+            e for e in entries
+            if isinstance(e, dict) and e.get("why") == "set_aside"
+            and str(e.get("document_id") or "") in restored
+        ]
+        if not back:
+            continue
+        docs = list(row.get("documents") or [])
+        for e in back:
+            if e["document_id"] not in docs:
+                docs.append(e["document_id"])
+        row["documents"] = docs
+        left = [e for e in entries if e not in back]
+        if left:
+            row["not_added"] = left
+        else:
+            row.pop("not_added", None)
+
+
+def _safe_echo(name: str) -> str:
+    """A sender-supplied file name, flattened before it is echoed into a
+    mail from receipts@: no line breaks, no URL punctuation, bounded."""
+    flat = re.sub(r"[^A-Za-z0-9._ ()-]", "_", str(name or ""))
+    return flat[:80] or "file"
+
+
+def _no_expense_ack_body(
+    meta: dict, *, subject: str, month: str, batch_label: str,
+    batch_is_trip: bool, signature: str,
+) -> str:
+    """Acknowledgement for a mail that created no expense: what happened
+    to each file and what would help. File names and the subject are the
+    sender's own words echoed back to the sender; nothing here is decided
+    by the mail's content (rule_untrusted_inbound)."""
+    if batch_label:
+        where = f'the "{batch_label}" ' + ("trip" if batch_is_trip else "expense month")
+    elif month:
+        where = _month_human(month)
+    else:
+        where = "its expense month"
+    lead = f'Your email "{subject}"' if subject else "Your email"
+    lines = [
+        f"{lead} reached the Brisken expense tool, but no expense was "
+        f"added to {where}."
+    ]
+    entries = [e for e in (meta.get("not_added") or []) if isinstance(e, dict)]
+    set_aside = unreadable = False
+    for e in entries:
+        file = str(e.get("file") or "")
+        name = "The email text" if file == _RENDERED_BODY else f'"{_safe_echo(file)}"'
+        why = str(e.get("why") or "")
+        if why == "set_aside":
+            set_aside = True
+            reading = _SET_ASIDE_READS.get(str(e.get("reason") or ""), "not a receipt")
+            lines.append(f"- {name} read as {reading}, so it was set aside.")
+        elif why == "already_on_file":
+            lines.append(
+                f"- {name} was already on file, so it was not added a "
+                "second time."
+            )
+        else:
+            unreadable = True
+            lines.append(f"- {name} could not be read.")
+    for skipped in meta.get("skipped") or []:
+        # Only a file TYPE the tool cannot read; a signature logo (a tiny
+        # image of a readable type) is not worth the sender's attention.
+        if Path(str(skipped)).suffix.lower() not in FOLDER_RECEIPT_SUFFIXES:
+            unreadable = True
+            lines.append(
+                f'- "{_safe_echo(skipped)}" was not read (the tool reads PDF, '
+                "PNG, JPEG and WebP files)."
+            )
+    if set_aside or unreadable or not entries:
+        lines.append(
+            "If the receipt or invoice is behind a link in the email, or in "
+            "a file that was not read, please forward it as a PDF or a photo."
+        )
+    if set_aside:
+        lines.append(
+            "If a set-aside file is a receipt after all, it can be restored "
+            "from the month's set-aside list in the expense tool."
+        )
+    if not (set_aside or unreadable) and entries:
+        lines.append("No action needed.")
+    return "\n".join(lines) + f"\n\nAutomated confirmation from {signature}."
 
 
 def _arrival_llm_client(settings: dict | None):
@@ -2005,6 +2252,10 @@ def _ingest_job(
                     job_id, JOB_ERROR, error="batch deleted",
                     updated_at=_now_iso(),
                 )
+            documents, not_added = _own_outcome(
+                None if batch_gone or arch is None else store.get_run(run_id),
+                arch, summary,
+            )
         # Status truth: "ingested" only after the job ACTUALLY succeeded.
         if arch is not None:
             if batch_gone:
@@ -2016,7 +2267,9 @@ def _ingest_job(
                 # on it.
                 _update_meta(arch, {
                     "status": STATUS_INGESTED,
-                    "documents": list((summary or {}).get("documents") or []),
+                    "documents": documents,
+                    # Item 106: why each other file created no expense.
+                    "not_added": not_added,
                 })
                 _maybe_ack(db_path, arch)
     except Exception as exc:  # noqa: BLE001 - job errors surface via meta+log
@@ -2223,7 +2476,8 @@ def _create_month_from_mail(
         lambda m: str(m.get("status", "")) == owned_status,
         {"status": STATUS_INGESTED, "batch_id": run_id, "job_id": job_id,
          "batch_deleted": False, "materialized": True,
-         "documents": documents},
+         "documents": documents,
+         "not_added": _created_batch_not_added(run)},
     )
     if not stamped:
         # Someone (a stale-transient replay, a dismiss) took the archive
@@ -3074,6 +3328,7 @@ def join_trip(
         _update_meta(arch, {
             "status": STATUS_INGESTED, "batch_id": run_id,
             "batch_deleted": False, "documents": documents,
+            "not_added": _created_batch_not_added(created),
         })
         _maybe_ack(db_path, arch)
         _append_log(data_root, {
