@@ -5,22 +5,36 @@ Track session depth using proxy signals. When pressure is elevated, adapt behavi
 ## Pressure Signals
 
 Instrumented via `.claude/hooks/session-pressure-meter.py` (PostToolUse, all
-tools): it counts tool calls and distinct files this session and emits a
-band-crossing advisory ONCE per band, so crossing a threshold no longer
-depends on the agent's mental count. The meter keys the session boundary off
-the hook payload `session_id` (a new id resets the counters; an unchanged id
-across a compaction preserves them), so no SessionStart reset hook is needed.
-Query the live reading on demand with `uv run tools/session_state.py
---status`. Mental count is the fallback when the meter is unavailable (e.g. a
-fresh clone before the SessionStart wiring runs):
+tools), which emits a band-crossing advisory ONCE per band, so crossing a
+threshold no longer depends on the agent's mental count.
+
+**Primary signal: real context size.** The meter reads the latest assistant
+`usage` record from the transcript (`input + cache_read + cache_creation`
+tokens; matches Claude Code's own pre-compact figure to within ~1k). When the
+context drops below the advised band (a compaction), the advisory re-arms.
+**Fallback, only when the transcript is unreadable:** tool calls and distinct
+files. The counters live in one temp file shared by every session on the
+machine, so a sibling session resets them; the transcript reading and the
+per-session advised-band marker are immune to that. Query the live reading
+with `uv run tools/session_state.py --status` (it names the session the
+reading belongs to). Mental count is the last resort when the meter is
+unavailable (e.g. a fresh clone before the SessionStart wiring runs):
 
 | Signal | Moderate | High | Critical |
 |--------|----------|------|----------|
-| Tool calls made | 80+ | 150+ | 250+ |
-| Distinct files read | 30+ | 50+ | 80+ |
+| **Context tokens (1M window, primary)** | 300k+ | 500k+ | 700k+ |
+| Tool calls made (fallback) | 80+ | 150+ | 250+ |
+| Distinct files read (fallback) | 30+ | 50+ | 80+ |
 | Build-test-fix iterations (total, all cycles) | 4+ | 6+ | 8+ |
 | Major operations completed | 2+ | 3+ | 5+ |
 | Work-type transitions | 1+ | 2+ | — |
+
+Token bands are fractions of the window (30/50/70%; override the window with
+`AGENTIC_OPS_CONTEXT_WINDOW`). Calibrated 2026-09-17 on 120 transcripts:
+median session peak 402k, p95 703k; 23 compactions, all manual, at 468k-920k
+(2 below 500k, 18 at or below 700k). Moderate lands before the typical peak,
+high near the earliest observed compaction, critical where most sessions had
+already compacted.
 
 **Major operations:** A complete skil_build-test-fix cycle, a /system-dev round, a full /comd_deploy cycle, or a cross-client context switch.
 

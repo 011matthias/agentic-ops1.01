@@ -60,16 +60,40 @@ STATE_FILE = os.environ.get("AGENTIC_OPS_SESSION_STATE") or os.path.join(
 )
 LOCK_FILE = STATE_FILE + ".lock"
 
-# Pressure thresholds, mirrored from rule_session-pressure.md. A band is
-# crossed when EITHER the tool-call count OR the distinct-file count reaches
-# the threshold (whichever trips first -- a read-heavy session trips on files,
-# a build-heavy one on calls).
+# FALLBACK pressure thresholds, mirrored from rule_session-pressure.md. Used
+# only when the transcript's context size cannot be read. A band is crossed
+# when EITHER the tool-call count OR the distinct-file count reaches the
+# threshold (whichever trips first -- a read-heavy session trips on files, a
+# build-heavy one on calls).
 BANDS = (
     ("critical", 250, 80),
     ("high", 150, 50),
     ("moderate", 80, 30),
 )
 _BAND_RANK = {None: 0, "moderate": 1, "high": 2, "critical": 3}
+
+# PRIMARY pressure signal (2026-09-17, ECC port item 2): the real context size,
+# read from the latest assistant `usage` record in the session transcript.
+# Tool calls are a weak proxy (a few large reads fill the window in few calls),
+# and the counters above live in ONE file shared by every session on the
+# machine, so a sibling session resets them mid-session. The transcript is
+# per-session by construction. Fractions of the window, calibrated on 120
+# transcripts: median session peak 402k; 23 compactions (all manual) at
+# 468k-920k, 2 of them below 500k, 18 at or below 700k.
+CONTEXT_BANDS = (
+    ("critical", 0.70),
+    ("high", 0.50),
+    ("moderate", 0.30),
+)
+_USAGE_KEYS = ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
+# Transcripts reach 100+ MB, and the meter runs on every tool call, so only the
+# tail is read: start small, grow 4x until a usage record turns up, give up
+# (-> tool-call fallback) past the cap.
+_TAIL_START = 256 * 1024
+_TAIL_MAX = 8 * 1024 * 1024
+# Per-session emitted-band memory survives the reset a sibling session causes;
+# bounded so the shared file cannot grow without limit.
+_BANDS_BY_SESSION_MAX = 20
 
 # Candidate context is truncated to keep the file small and dedup stable.
 _CTX_MAX = 300
@@ -95,6 +119,14 @@ def _default_state(session_id: str = "") -> dict:
         # a block is waiting to prime the NEXT turn. See rule_behaviors.md B1.
         "b1_blocks": 0,
         "b1_primed": 0,
+        # Latest measured context size (transcript usage), or None when the
+        # transcript was unreadable. See read_context_usage().
+        "context_tokens": None,
+        "context_model": "",
+        "context_measured_at": None,
+        # {session_id: highest band advised}. Carried across the reset in
+        # ensure_session so interleaved sibling sessions do not re-advise.
+        "bands_by_session": {},
     }
 
 
@@ -224,23 +256,136 @@ def ensure_session(session_id: str) -> dict:
     an unchanged id is a no-op (compaction keeps the same id => preserve)."""
     def _fn(state: dict) -> dict:
         if session_id and state.get("session_id") != session_id:
-            return _default_state(session_id)
+            fresh = _default_state(session_id)
+            fresh["bands_by_session"] = _bounded_bands(state.get("bands_by_session"))
+            return fresh
         if session_id and not state.get("session_id"):
             state["session_id"] = session_id
         return state
     return _modify(_fn)
 
 
-def bump_tool(tool_name: str, file_path: str | None = None) -> dict:
-    """Increment the tool-call count; track a distinct file when relevant."""
+def bump_tool(tool_name: str, file_path: str | None = None,
+              context: dict | None = None) -> dict:
+    """Increment the tool-call count; track a distinct file when relevant.
+    `context` (a read_context_usage() result) records the measured context
+    size in the same locked write; None leaves the last reading in place."""
     def _fn(state: dict) -> dict:
         state["tool_calls"] = int(state.get("tool_calls", 0)) + 1
         if tool_name in _FILE_TOOLS and file_path:
             files = state.setdefault("distinct_files", [])
             if file_path not in files:
                 files.append(file_path)
+        if context:
+            state["context_tokens"] = int(context.get("tokens", 0))
+            state["context_model"] = context.get("model", "") or ""
+            state["context_measured_at"] = _now_iso()
         return state
     return _modify(_fn)
+
+
+def context_window() -> int:
+    """Context window in tokens (AGENTIC_OPS_CONTEXT_WINDOW, default 1M).
+    A malformed override falls back to the default rather than raising at
+    import, which would silently unload the meter."""
+    try:
+        n = int(os.environ.get("AGENTIC_OPS_CONTEXT_WINDOW") or 1_000_000)
+        return n if n > 0 else 1_000_000
+    except ValueError:
+        return 1_000_000
+
+
+def _usage_line(raw: bytes) -> dict | None:
+    """Parse one transcript line. Returns {"tokens", "model", "message_id"} for
+    a main-thread assistant usage record, {"compact": True} for a compaction
+    boundary, else None."""
+    if b'"usage"' not in raw and b'"compact_boundary"' not in raw:
+        return None  # cheap prefilter; most lines are neither
+    try:
+        entry = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(entry, dict):
+        return None
+    if entry.get("type") == "system" and entry.get("subtype") == "compact_boundary":
+        return {"compact": True}
+    if entry.get("type") != "assistant" or entry.get("isSidechain"):
+        return None
+    msg = entry.get("message")
+    usage = msg.get("usage") if isinstance(msg, dict) else None
+    if not isinstance(usage, dict):
+        return None
+    try:
+        tokens = sum(int(usage.get(k) or 0) for k in _USAGE_KEYS)
+    except (TypeError, ValueError):
+        return None
+    if tokens <= 0:
+        return None  # synthetic / error turns carry an all-zero usage
+    return {"tokens": tokens, "model": msg.get("model", "") or "",
+            "message_id": msg.get("id", "") or ""}
+
+
+def read_context_usage(transcript_path: str) -> dict | None:
+    """Current context size from the session transcript, or None if unknown.
+
+    context = input_tokens + cache_read_input_tokens +
+    cache_creation_input_tokens of the LATEST main-thread assistant record.
+    Only the latest record matters, so no per-message.id dedupe is needed (that
+    applies to summing session totals, which this does not do). A compaction
+    boundary newer than any usage record means the last reading is pre-compact
+    and stale: return None so the caller falls back instead of over-reporting.
+    Claude Code writes the transcript asynchronously, so the reading can lag
+    the in-flight turn by one response. Never raises."""
+    if not transcript_path:
+        return None
+    try:
+        size = os.path.getsize(transcript_path)
+    except OSError:
+        return None
+    window = _TAIL_START
+    try:
+        with open(transcript_path, "rb") as f:
+            while True:
+                start = max(0, size - window)
+                f.seek(start)
+                lines = f.read(size - start).split(b"\n")
+                if start > 0:
+                    lines = lines[1:]  # first line is cut mid-record
+                for raw in reversed(lines):
+                    hit = _usage_line(raw)
+                    if hit is None:
+                        continue
+                    return None if hit.get("compact") else hit
+                if start == 0 or window >= _TAIL_MAX:
+                    return None
+                window *= 4
+    except OSError:
+        return None
+
+
+def context_band(tokens: int | None, window: int | None = None) -> str | None:
+    """Highest context band crossed by `tokens`, or None."""
+    if not tokens:
+        return None
+    w = window or context_window()
+    for name, frac in CONTEXT_BANDS:  # critical-first
+        if tokens >= frac * w:
+            return name
+    return None
+
+
+def format_tokens(n: int) -> str:
+    """312456 -> '312k', 1000000 -> '1M'."""
+    if n >= 1_000_000 and n % 1_000_000 == 0:
+        return f"{n // 1_000_000}M"
+    return f"{round(n / 1000)}k"
+
+
+def _bounded_bands(bands) -> dict:
+    if not isinstance(bands, dict):
+        return {}
+    items = list(bands.items())[-_BANDS_BY_SESSION_MAX:]
+    return dict(items)
 
 
 def bump_b1_block() -> dict:
@@ -308,10 +453,29 @@ def pressure_band(state: dict | None = None) -> str | None:
     return None
 
 
-def mark_band_emitted(band: str | None) -> dict:
-    """Record the highest band already advised on (dedup per band)."""
+def emitted_band(state: dict, session_id: str = "") -> str | None:
+    """Highest band already advised for `session_id` (falls back to the
+    unkeyed field for callers without a session id)."""
+    if session_id:
+        bands = state.get("bands_by_session")
+        if isinstance(bands, dict) and session_id in bands:
+            return bands[session_id]
+    return state.get("pressure_band_emitted")
+
+
+def mark_band_emitted(band: str | None, session_id: str = "") -> dict:
+    """Record the highest band already advised on (dedup per band). With a
+    session id the record is keyed, so it survives a sibling-session reset.
+    Lowering it (band below the previous one) is how a compaction re-arms the
+    advisories."""
     def _fn(state: dict) -> dict:
         state["pressure_band_emitted"] = band
+        if session_id:
+            bands = state.get("bands_by_session")
+            bands = dict(bands) if isinstance(bands, dict) else {}
+            bands.pop(session_id, None)  # re-insert last -> most recent survives pruning
+            bands[session_id] = band
+            state["bands_by_session"] = _bounded_bands(bands)
         return state
     return _modify(_fn)
 
@@ -345,20 +509,36 @@ def reset() -> dict:
 # --------------------------------------------------------------------------
 def _cmd_status(as_json: bool) -> int:
     st = load()
-    band = pressure_band(st)
+    ctx = st.get("context_tokens")
+    window = context_window()
+    if ctx:
+        band, signal = context_band(ctx, window), "context"
+    else:
+        band, signal = pressure_band(st), "tool-calls"
+    sid = st.get("session_id", "") or ""
     if as_json:
         print(json.dumps({
-            "session_id": st.get("session_id", ""),
+            "session_id": sid,
             "tool_calls": st.get("tool_calls", 0),
             "distinct_files": len(st.get("distinct_files", []) or []),
             "pressure_band": band,
-            "pressure_band_emitted": st.get("pressure_band_emitted"),
+            "pressure_signal": signal,
+            "pressure_band_emitted": emitted_band(st, sid),
+            "context_tokens": ctx,
+            "context_window": window,
+            "context_model": st.get("context_model", ""),
+            "context_measured_at": st.get("context_measured_at"),
             "candidates": len(st.get("candidates", []) or []),
             "b1_blocks": st.get("b1_blocks", 0),
             "b1_priming_due": b1_priming_due(st),
         }))
     else:
-        print(f"[session-state] band={band or 'none'} "
+        ctx_txt = (f"{format_tokens(ctx)}/{format_tokens(window)}" if ctx
+                   else "unread")
+        # The state file is shared by every session on this machine: the
+        # session prefix shows whose reading this is.
+        print(f"[session-state] session={sid[:8] or '-'} "
+              f"band={band or 'none'} ({signal}) context={ctx_txt} "
               f"calls={st.get('tool_calls', 0)} "
               f"files={len(st.get('distinct_files', []) or [])} "
               f"candidates={len(st.get('candidates', []) or [])} "

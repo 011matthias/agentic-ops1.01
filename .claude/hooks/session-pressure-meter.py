@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """PostToolUse(all tools): session-pressure meter + background-work liveness.
 
-Counts tool calls + distinct files this session and emits a band-crossing
-advisory ONCE per band (moderate -> high -> critical), so the agent is told
-when rule_session-pressure.md thresholds are reached instead of relying on a
-mental count. Session boundary is keyed off the hook payload's `session_id`
+Emits a band-crossing advisory ONCE per band (moderate -> high -> critical),
+so the agent is told when rule_session-pressure.md thresholds are reached
+instead of relying on a mental count.
+
+Primary signal: the real context size, read from the latest assistant `usage`
+record in the payload's `transcript_path` (session_state.read_context_usage).
+Fallback, only when the transcript is unreadable: tool-call and distinct-file
+counts. When the context shrinks below the band already advised (a
+compaction), the per-session marker drops with it, so the next crossing
+advises again. Session boundary is keyed off the hook payload's `session_id`
 (handled in session_state.ensure_session): a new id resets counts, an
-unchanged id across a compaction preserves them.
+unchanged id across a compaction preserves them; the emitted-band marker is
+keyed by session so an interleaved sibling session cannot re-trigger it.
 
 It carries two more best-effort riders, both independent of the pressure logic:
 the sibling-session heartbeat refresh (tools/session_registry.py) and the
@@ -55,22 +62,32 @@ except Exception:
 
 _ADVISORY = {
     "moderate": (
-        "[PRESSURE: MODERATE] {calls} tool calls, {files} distinct files this "
-        "session. rule_session-pressure: shift to concise responses and "
-        "recommend /comd_checkpoint --mini at the next natural breakpoint."
+        "[PRESSURE: MODERATE] {measure} this session. rule_session-pressure: "
+        "shift to concise responses and recommend /comd_checkpoint --mini at "
+        "the next natural breakpoint."
     ),
     "high": (
-        "[PRESSURE: HIGH] {calls} tool calls, {files} distinct files this "
-        "session. rule_session-pressure: strongly recommend /comd_checkpoint "
-        "(or --mini) before continuing; prioritize finishing the current task "
-        "over starting new work."
+        "[PRESSURE: HIGH] {measure} this session. rule_session-pressure: "
+        "strongly recommend /comd_checkpoint (or --mini) before continuing; "
+        "prioritize finishing the current task over starting new work."
     ),
     "critical": (
-        "[PRESSURE: CRITICAL] {calls} tool calls, {files} distinct files this "
-        "session. rule_session-pressure: STOP starting new work and run "
-        "/comd_checkpoint --mini now; then suggest a fresh /resume session."
+        "[PRESSURE: CRITICAL] {measure} this session. rule_session-pressure: "
+        "STOP starting new work and run /comd_checkpoint --mini now; then "
+        "suggest a fresh /resume session."
     ),
 }
+
+
+def _measure(usage, state) -> str:
+    if usage:
+        window = session_state.context_window()
+        pct = round(100 * usage["tokens"] / window)
+        return (f"context ~{session_state.format_tokens(usage['tokens'])} tokens "
+                f"({pct}% of the {session_state.format_tokens(window)} window)")
+    return (f"{state.get('tool_calls', 0)} tool calls, "
+            f"{len(state.get('distinct_files', []) or [])} distinct files "
+            "(context size unreadable; tool-call proxy)")
 
 
 def main() -> int:
@@ -100,16 +117,20 @@ def main() -> int:
 
     # Pressure half. Isolated so a failure here still lets the liveness half run.
     try:
+        usage = session_state.read_context_usage(payload.get("transcript_path") or "")
         session_state.ensure_session(session_id)
-        state = session_state.bump_tool(tool_name, file_path)
-        band = session_state.pressure_band(state)
-        emitted = state.get("pressure_band_emitted")
+        state = session_state.bump_tool(tool_name, file_path, context=usage)
+        if usage:
+            band = session_state.context_band(usage["tokens"])
+        else:
+            band = session_state.pressure_band(state)
+        emitted = session_state.emitted_band(state, session_id)
         if band and session_state.band_is_new(band, emitted):
-            session_state.mark_band_emitted(band)
-            messages.append(_ADVISORY[band].format(
-                calls=state.get("tool_calls", 0),
-                files=len(state.get("distinct_files", []) or []),
-            ))
+            session_state.mark_band_emitted(band, session_id)
+            messages.append(_ADVISORY[band].format(measure=_measure(usage, state)))
+        elif usage and session_state.band_is_new(emitted, band):
+            # Context shrank below the advised band (compaction): re-arm.
+            session_state.mark_band_emitted(band, session_id)
     except Exception:
         pass
 
