@@ -4,6 +4,8 @@ registry categorization that skips the LLM, reviewer-override precedence),
 plus the self-improving upsert from corrections."""
 from __future__ import annotations
 
+import copy
+
 import pytest
 
 pytest.importorskip("fastapi")
@@ -15,6 +17,7 @@ from expense_recon.llm.client import ExtractedReceipt, MockLLMClient  # noqa: E4
 from expense_recon.matching.types import Receipt  # noqa: E402
 from expense_recon.web.app import create_app  # noqa: E402
 from expense_recon.web.service import registry_upserts_from_expense_run  # noqa: E402
+from expense_recon.web.store import RunStore  # noqa: E402
 
 JPG = b"\xff\xd8\xff\xe0fake-jpeg-bytes"
 
@@ -25,6 +28,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     app = create_app(tmp_path)
     with TestClient(app) as c:
+        c._data_root = tmp_path
         yield c
 
 
@@ -204,9 +208,13 @@ def test_upsert_category_conflict_is_skipped():
 
 
 def test_upsert_no_edits_is_noop():
-    seed = {"X": {"aliases": ["a"], "category": None, "zoho_account": None}}
+    seed = {
+        "X": {"aliases": ["a"], "category": None, "zoho_account": None},
+        "Amazon": {"aliases": [], "category": None, "zoho_account": None,
+                   "multi_category": True, "cost_center": "Rome 26"},
+    }
     new, summary = registry_upserts_from_expense_run(
-        seed,
+        copy.deepcopy(seed),
         receipts=[_rec("d1", "Cafe")],
         effective_receipts=[_rec("d1", "Cafe")],
         field_overrides={},
@@ -214,3 +222,87 @@ def test_upsert_no_edits_is_noop():
     )
     assert summary == {"aliases_added": 0, "categories_set": 0, "skipped_conflict": 0}
     assert new == seed
+
+
+# ── item 116: sign-off carries every merchant entry whole ───────────
+#
+# Publishing a month (and the "Save corrections to memory" button) rewrote
+# the whole registry from a copy holding only aliases / category / account,
+# so `multi_category`, `cost_center` and any other key vanished from every
+# merchant. Route-level: the settings map read back after the save is the
+# assertion, not the helper's return value.
+
+_REGISTRY_116 = {
+    "Acme": {
+        "aliases": ["ACME LTDA"], "category": None, "zoho_account": None,
+        "multi_category": True, "cost_center": "Rome 26",
+    },
+    "Globex": {
+        "aliases": ["GLOBEX CORP"], "category": "Software & Subscriptions",
+        "zoho_account": "E300 - Software", "cost_center": "Operations",
+        # A key the settings editor does not know yet must survive as well.
+        "owner_note": "annual plan, renews in March",
+    },
+}
+
+
+def _seed_registry(client, merchants: dict) -> dict:
+    # Straight into the store (the PUT edge would drop `owner_note`), then
+    # read back through the API so the comparison is what the screen sees.
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        store.set_settings({"merchants": copy.deepcopy(merchants)}, "2026-09-17T00:00:00")
+    got = client.get("/api/settings").json()["merchants"]
+    assert got == merchants, "precondition: the seeded registry reads back whole"
+    return got
+
+
+def test_publishing_a_month_with_no_edits_leaves_the_registry_whole(client, monkeypatch):
+    before = _seed_registry(client, _REGISTRY_116)
+    _patch_ocr(monkeypatch, _extraction(vendor="Staples"))
+    batch = _create_batch(client)
+
+    resp = client.post(f"/api/runs/{batch}/publish")
+    assert resp.status_code == 200, resp.text
+    memory = resp.json()["memory"]
+    assert memory["saved"] is True
+    assert memory["learned"]["registry"] == {
+        "aliases_added": 0, "categories_set": 0, "skipped_conflict": 0,
+    }
+    assert client.get("/api/settings").json()["merchants"] == before
+
+
+def test_saving_corrections_changes_only_what_the_edits_touched(client, monkeypatch):
+    before = _seed_registry(client, _REGISTRY_116)
+    _patch_ocr(monkeypatch, _extraction(vendor="Staples"))
+    batch = _create_batch(client)
+    doc = _row(client, batch)["document_id"]
+    for body in (
+        {"field": "vendor", "value": "Acme"},
+        {"field": "category", "value": "Office Supplies & Consumables"},
+    ):
+        resp = client.put(f"/api/runs/{batch}/expenses/{doc}", json=body)
+        assert resp.status_code == 200, resp.text
+
+    resp = client.post(f"/api/runs/{batch}/commit-memory")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["learned"]["registry"] == {
+        "aliases_added": 1, "categories_set": 1, "skipped_conflict": 0,
+    }
+
+    after = client.get("/api/settings").json()["merchants"]
+    assert list(after) == list(before)
+    assert after["Globex"] == before["Globex"], "an untouched merchant changed"
+    assert after["Acme"] == {
+        **before["Acme"],
+        "aliases": ["ACME LTDA", "Staples"],
+        "category": "Office Supplies & Consumables",
+    }, "the touched merchant lost a key or changed beyond its edits"
+
+    # Saving the same corrections again changes nothing, and the reply says
+    # so: the counts name what was written, not what was re-affirmed.
+    resp = client.post(f"/api/runs/{batch}/commit-memory")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["learned"]["registry"] == {
+        "aliases_added": 0, "categories_set": 0, "skipped_conflict": 0,
+    }
+    assert client.get("/api/settings").json()["merchants"] == after
