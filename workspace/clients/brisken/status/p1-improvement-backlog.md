@@ -5449,6 +5449,81 @@ Answer: from the fill colour of that charge's row in the Chase workbook Criss up
 
 **Prompt written 2026-09-17:** `docs/lovable-booked-hint-names-workbook-prompt.md`, not applied. Live the phrase sits in two places, the "Already booked" badge tooltip on all 84 booked July rows and the line under the vendor on the 47 in "Charges without a receipt" ("Marked yellow in your statement workbook, so already booked."), and item 86's fold on August names a PDF that carries no colours ("August2026.xlsx, 20260804-statements-1176-.pdf"), so the prompt names only workbooks (`writeback` true), matched on the row's `account_id`.
 
+### 143. Residuals: grid Books-as, decision-reply summary, bank-transfer private suggestion (licence: defect, covered) (SHIPPED 2026-09-17, pending PR)
+
+Three leftovers of items 95, 99 and 111: in each the software states something
+it knows to be otherwise. Found by reading the code against the shipped items,
+checked live read-only against July (`50622baec444`) and August
+(`074a7b8905d7`).
+
+**R1. The Expenses grid's `books_as` skipped the chart-of-accounts gate.** Item
+95 made the export gate judge the ACCOUNT and keep the line's category; the
+grid's own depiction (`build_expense_view`, `service.py`) still called
+`expense_posting_parts` on ungated receipts with no chart, while the export
+called it on gated ones with the run's chart. A line whose account the
+company's chart rejects therefore read as that account on screen and as its
+category (many-entity gate, no chart) or `(account unmapped - assign)`
+(a batch naming one company) in the CSV, for the same purchase. **Built:** one
+function, `zoho_expense_export.gated_for_posting`, called by
+`build_expense_row_groups` and by the grid, plus the same chart on the grid's
+fan-out. **Measured live before the change:** no row differs today. Every
+account cell of both months' `expenses.csv` equals the grid's `books_as`
+(July 56 parts / 56 rows, August 20 / 20), because live accounts are the
+tool's own category labels, which both paths render alike. The defect was
+reachable, not live.
+
+**R2. A write's reply carried a summary the next refetch contradicted.** The
+SPA renders the `summary` a route replies with until it refetches the run.
+Eight routes built theirs as `build_view(run, decisions, overrides)`: no
+duplicate resolutions, no cross-month settlements, and no expense FIELD
+overrides, which is where the month's header edits live. So a receipt
+confirmed private read as still needing a charge (`n_receipts_need_charge`,
+and `month_complete` with it) in every reply. **Built:** `app._run_view`, the
+dispatch `GET /api/runs/{id}` uses, and every one of those routes
+(`decisions`, `decisions/bulk`, `decisions/confirm-ready`, `disposition`,
+`duplicates/resolve`, `manual-match`, the per-charge receipt upload, the
+settled-outside write) now replies with it. The expense-edit routes and the
+month move keep the Expenses payload's summary, which is what their own page's
+GET serves. **Measured:** route-level, a decision reply's summary now equals
+the `GET /api/runs/{id}` summary taken immediately after, count for count.
+
+**R3. A wire is not a card.** The private suggestion fires on any payment
+method that resolves to no registered card, so July's restored Tricarico
+invoice (BRL 27,203.34, prints "Payment Method: Wire Transfer", recorded
+settled outside by bank transfer on 2026-09-17) asked Criss to name a private
+card for a bank payment, while the tool's own ruling of 2026-09-15 calls a
+settled-outside receipt real company spend. **Built:** a bank-transfer tender
+(`service.bank_transfer_tender`, the settled-outside chip's own rule minus the
+word TEF, which is a card payment on a Brazilian cupom fiscal: July's Fenix
+receipt prints TEF and settles a card charge) and a receipt with a
+settled-outside record raise no suggestion. `can_mark_private` is untouched.
+**Measured live (read-only prediction):** exactly one row moves, July's
+Tricarico invoice; `summary.n_suggested_private` 8 to 7 (row flags 10 to 9,
+two of them copies that sit in no box), August unchanged at 1.
+
+**Open question for the owner (R3, NOT decided here).** That invoice still
+sits in "No company or person": `needs_entity` + `needs_person`, and the
+review line now reads `needs_entity`. The file names BRISKEN Consulting LLC
+and it was paid by bank, so a COMPANY is meaningful; a card HOLDER is not, and
+today the box's two sanctioned exits are both wrong for it (pick a company
+card, or confirm it private). A company override answers half; nothing answers
+`needs_person`, because person resolution is card-only by the item-40 ruling
+and neither the code nor `api-contract.md` says what a bank-paid company
+invoice should be asked. Box membership was left exactly as it was.
+
+Tests: `tests/test_books_as_chart_gate_r1.py` (3),
+`tests/test_decision_reply_summary_r2.py` (2),
+`tests/test_private_suggestion_not_a_card_r3.py` (3), all route-level.
+Every wire watched go red with the fix disabled: the grid's gate call (1 of
+3), the grid's chart (1 of 3), the decision route's `_run_view` (1 of 2, on
+`n_receipts_need_charge` 1 vs 0), the settled-outside route's (1 of 2), the
+tender rule (2 of 3), the grid's settled-outside wire (1 of 3). The two app.py
+wires were hand-regressed (the helper's mutated write left `regress_check`
+with no pytest summary line). Suite 2274 passed / 2 skipped. Docs:
+`docs/api-contract.md` (books_as gate, the reply-summary paragraph, "A wire is
+not a card"). Nothing deployed; no SPA half needed (the payload fields keep
+their names and meanings).
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.
@@ -5573,3 +5648,4 @@ Answer: from the fill colour of that charge's row in the Chase workbook Criss up
 | 11 | Learned memory validate + adjust: the 103 learned categories are editable (single-row PUT, count-preserving — an operator correction is not another confirmation; category-only edits never wipe the learned Zoho account), deletable one row at a time (aliases/FX stay), and reviewable (validated stamps + a "needs review" filter; ANY value change clears the stamp so machine re-teaches can never wear an old sign-off); reset now previews what it would delete and requires typed-through confirmation | Her note 10 ("this must be validated and adjustable") on the /memory page; the review caught stale sign-off stamps, a migration race on the live store, and a silent account-wipe before they shipped | PR #565, 2026-08-21; Lovable half `docs/lovable-memory-edit-prompt.md` (REQUIRED — old Reset button becomes a safe no-op until applied) |
 | 10 | Body-only mail handling: held mail with no attachment (Uber forwards, credit notices) gets three per-mail actions — view the body (sanitized text off the custody eml, never the raw archive), render it to a PDF and add it to the open month through the NORMAL pipeline (same vision reading and quarantine as any scanned receipt; deterministic bytes so a retry can never double-ingest), and dismiss as junk (terminal, custody untouched, held strip can reach zero). Transient `rendering` status makes render/dismiss/replay mutually exclusive; replay now rescues body-only mail a router crash left as "received"; interrupted renders reconcile to retryable at startup; container gets a full-Latin font so German bodies ("Gebühr", "27,90 €") render legibly for extraction | Her note 12 ("where can user handle this?") + Dirk's first real organic mail sat stuck in held_body_only with no path; adversarial review caught a Pillow timestamp defect that would have let retries create duplicate expense rows | PR #563, 2026-08-21; Lovable half `docs/lovable-body-only-prompt.md` |
 | 9 | Intake quick-wins: the Email-intake log shows WHICH files each mail delivered (recorded at accept time; legacy archives derived from parts/) and an honest Month column (batch_label resolved for every routed row, held rows say held, deleted months say "month deleted" instead of misreporting each expense as operator-removed); and Delete month exists behind a typed confirm phrase — cascade under the batch writer lock, job rows purged, mail archives stamped batch_deleted but NEVER deleted (custody/retention), response reports where inbound mail routes next + that learned memory is kept. 3-lens adversarial review pre-commit: sync handler (async version froze the event loop on the OCR-held lock), deleted-run refusal at every locked batch writer, DONE-stamp re-check, replay clears stale stamps, atomic serialized meta writes | Her notes 2/3/13: "need to see which files were delivered", "month says no date", "there needs to be some kind of delete month option" — plus the review closing a real freeze + three race defects before they shipped | PR #561, 2026-08-21; Lovable half `docs/lovable-intake-quickwins-prompt.md` |
+| 72 | Three residuals of items 95 / 99 / 111: the Expenses grid's "Books as" line runs the chart-of-accounts gate the CSV runs (one function, `gated_for_posting`, and the run's chart), every write route answers with the summary `GET /api/runs/{id}` serves (`_run_view`, so a receipt marked private stops reading as still needing a charge until the next refetch), and a bank-transfer tender or a receipt settled outside the card suggests no private card | Each is the software stating something it knows to be otherwise: the screen naming one account and the document another, counts that correct themselves a request later, and July's Tricarico wire (BRL 27,203.34) asking Criss to name a private card for a bank payment. Live: `n_suggested_private` 8 to 7 on July, no other row moves; grid and CSV already agreed account for account on both months (the Books-as defect was reachable, not live) | Item 143, pending PR, 2026-09-17 |

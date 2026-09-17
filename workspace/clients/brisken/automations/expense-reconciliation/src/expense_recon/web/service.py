@@ -83,6 +83,7 @@ from ..output.zoho_expense_export import (
     _UNCATEGORIZED,
     build_expense_row_groups,
     expense_posting_parts,
+    gated_for_posting,
     resolve_paid_through,
     write_zoho_expense_export,
 )
@@ -5525,12 +5526,30 @@ def _batch_card_hints(cfg: dict | None) -> dict[str, str]:
     }
 
 
+def bank_transfer_tender(hint: str | None) -> bool:
+    """Whether a payment method reads as a bank transfer and names no card.
+
+    The rule is the settled-outside chip's own (`suggested_settled_outside`
+    answering `bank_transfer`), so the tool cannot offer "paid by bank
+    transfer" and "paid with a private card" for the same words. Minus the
+    Brazilian POS word TEF: on a cupom fiscal it is a card payment (July's
+    Fenix groceries receipt prints TEF and settles a card charge), and a card
+    tender is exactly what the private suggestion is for.
+    """
+    text = (hint or "").strip()
+    if not text:
+        return False
+    hit = suggested_settled_outside(re.sub(r"\btef\b", " ", text, flags=re.IGNORECASE))
+    return hit is not None and hit["how"] == "bank_transfer"
+
+
 def resolve_batch_row_cards(
     receipts: "list[Receipt]",
     cfg: dict | None,
     field_overrides: dict[str, dict[str, str]],
     *,
     settled_cards: dict[str, str] | None = None,
+    settled_outside: dict[str, dict] | None = None,
 ) -> dict[str, dict]:
     """Per-document card + entity resolution for an expense batch:
     ``{document_id: {hint, card: Card|None, entity, entity_source}}``.
@@ -5589,6 +5608,19 @@ def resolve_batch_row_cards(
     no per-row pick, no card from the printed method or a hint, no card
     number printed, not confirmed private. Source `settled_charge`; the
     company paid, so `can_mark_private` is false.
+
+    `settled_outside` (residual R3, `settled_outside_map`): the month's
+    settled-outside dispositions. A receipt the reviewer settled outside the
+    card, and a payment method that reads as a bank transfer
+    (`bank_transfer_tender`), suggest NO private card: the suggestion asks
+    which card paid, and a wire is not a card. July's restored Tricarico
+    invoice (BRL 27,203.34, "Payment Method: Wire Transfer", settled outside
+    by bank transfer) read `suggested_private` while the tool's own ruling
+    of 2026-09-15 calls a settled-outside receipt real company spend.
+    `can_mark_private` is unchanged: the reviewer can still say she paid it
+    herself, the tool just stops suggesting it. Nothing else moves — such a
+    row keeps its company / person question (the boxes), which is the
+    unanswered half of this defect.
     """
     from ..cards import masked_short_ending, resolve_hinted_card_ex
     from ..matching.deterministic import _card_keys
@@ -5599,6 +5631,10 @@ def resolve_batch_row_cards(
     out: dict[str, dict] = {}
     for r in receipts:
         hint = (r.payment_mode or "").strip()
+        # Residual R3: a tender no card carries (a wire), or a receipt the
+        # reviewer already settled outside the card, answers the private
+        # suggestion's question with "no card at all".
+        not_a_card = bank_transfer_tender(hint) or r.document_id in (settled_outside or {})
         card, ambiguous = resolve_hinted_card_ex(hint, cards, hints_map)
         card_source = "hint" if card is not None else "none"
         # Note #60: the two digits the card was named by, when a masked
@@ -5673,6 +5709,7 @@ def resolve_batch_row_cards(
             "reimburse_to": reimburse_to if private else "",
             "suggested_private": bool(
                 hint and card is None and not ambiguous and not private
+                and not not_a_card
             ),
             "can_mark_private": private or (
                 not ambiguous and (card is None or card_source == "learned")
@@ -6278,7 +6315,13 @@ def build_expense_view(
     # Override-applied twins for the `books_as` fan-out (backlog item 2):
     # the export applies category overrides before splitting, so the grid's
     # depiction must too, or the two would disagree after a reclassify.
-    ov_by_doc = {x.document_id: x for x in apply_overrides(receipts, overrides)}
+    # Residual R1: and the chart gate the export runs (`gated_for_posting`,
+    # the same call `build_expense_row_groups` makes), with the same chart,
+    # or a line whose account the company's chart rejects reads as that
+    # account here and as its category in the CSV for the same purchase.
+    grid_gate = _coa_gate_from_config(run.config, run.work_dir)
+    grid_chart = getattr(grid_gate, "chart", None) if grid_gate is not None else None
+    ov_by_doc = {x.document_id: x for x in gated_for_posting(apply_overrides(receipts, overrides), grid_gate)}
 
     n_learned_lines = 0
     for r in receipts:
@@ -6320,9 +6363,13 @@ def build_expense_view(
     # strip — the same pass the export runs, so they cannot disagree.
     # Item 111: on this payload only, a receipt a charge of this month
     # settles takes that charge's card when it names none of its own.
+    # Residual R3: and a receipt settled outside the card suggests no
+    # private card (the reviewer already said no card paid it).
+    grid_settled_outside = settled_outside_map(run.snapshot or {})
     card_res = resolve_batch_row_cards(
         receipts, run.config, field_overrides,
         settled_cards=settled_charge_cards(run, charges, charge_state_map),
+        settled_outside=grid_settled_outside,
     )
     # Item 47: the cost-center chain, over the same pass's cards. Silent
     # for every row while the owner has defined no cost centers.
@@ -6493,7 +6540,7 @@ def build_expense_view(
                 "amount": _fmt_amount(amt),
             }
             for account, amt, _descs in expense_posting_parts(
-                ov_by_doc.get(r.document_id, r)
+                ov_by_doc.get(r.document_id, r), chart_of_accounts=grid_chart
             )
         ]
         ccy = r.detected_currency or "?"
@@ -6720,8 +6767,9 @@ def build_expense_view(
     # Item 62: the disposition rides the grid row, absent unless set. This
     # view removes NOTHING -- the receipt is still an expense of this month
     # and still prints in the report; only the reconciliation pool on the
-    # run payload lets it go.
-    grid_settled_outside = settled_outside_map(run.snapshot or {})
+    # run payload lets it go. (Read above the row loop since residual R3:
+    # the card pass needs it to stop suggesting a private card on a receipt
+    # the reviewer already settled outside the card.)
     if grid_settled_outside:
         for e in expenses:
             hit = grid_settled_outside.get(e.get("document_id"))

@@ -1280,7 +1280,7 @@ PARALLEL (rule 1).
 
 | Field | Type | Meaning |
 |---|---|---|
-| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17) |
+| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17); a bank-transfer tender and a receipt settled outside the card never raise it (residual R3, see "A wire is not a card") |
 | `expenses[].can_mark_private` | boolean | whether the private-card option applies to the row (2026-09-17): true when no defined company card paid it (no card and not a two-card contest, or a card only remembered from an earlier month) and on every confirmed private row. False = a company card paid; the write routes refuse to mark it private. Absent on older builds: treat as `card == null \|\| private` |
 | `expenses[].private` | boolean | the operator confirmed it: a reimbursement row |
 | `expenses[].reimburse_to` | string | who gets reimbursed; `""` unless confirmed |
@@ -1296,6 +1296,21 @@ explicit entity override does NOT clear the suggestion (changed
 2026-09-17): the entity says which company books the expense, not how it
 was paid, and the old exemption left an August "EC-Karte" restaurant bill
 on `needs_person`, pointing at a Settings card that does not exist.
+
+**A wire is not a card (residual R3, 2026-09-17).** Two rows never suggest a
+private card, because the question "which card paid this" is already
+answered: a payment method that reads as a bank transfer and names no card
+(`service.bank_transfer_tender`, the settled-outside chip's own
+`bank_transfer` rule minus the Brazilian POS word TEF, which IS a card
+payment on a cupom fiscal), and a receipt the reviewer marked settled outside
+the card. `can_mark_private` does not move (the reviewer can still confirm
+she paid it herself), and neither does the row's `needs_entity` /
+`needs_person` / `needs_company_or_person` question: it still reads `check` /
+`needs_entity`. Live, one row moved: July's restored Tricarico invoice (BRL
+27,203.34, "Payment Method: Wire Transfer", settled outside by bank
+transfer), `summary.n_suggested_private` 8 to 7. Whether a bank-paid company
+invoice should still ask for a card HOLDER is an open question for the owner.
+Pinned route-level in `tests/test_private_suggestion_not_a_card_r3.py`.
 
 **Company card OR private card, never both (added 2026-09-17).** Owner:
 expenses on cards that are not defined in Settings need "the option of
@@ -2113,6 +2128,16 @@ zoho_account?}`:
   categorized row whose receipt carried a company printed the placeholder,
   and a receipt with one categorized and one unread line printed as one
   uncategorized row. Pinned route-level in `tests/test_mixed_entity_export.py`.
+- Residual R1 (2026-09-17): `expenses[].books_as` runs that gate too, with
+  the run's chart, through the one function the export calls
+  (`zoho_expense_export.gated_for_posting`). The screen therefore shows what
+  the CSV prints for a rejected account: the line's category on a month that
+  names no company (the many-entity gate carries no chart) and
+  `(account unmapped - assign)` on a batch that names one. The depiction used
+  to print the rejected account itself. No live row differed on 2026-09-17
+  (July and August agree today, account for account) because live accounts
+  are the tool's own category labels. Pinned route-level in
+  `tests/test_books_as_chart_gate_r1.py`.
 
 ## A needs-review row's proposed category: `posting_category_proposed` (item 70)
 
@@ -3247,11 +3272,18 @@ already settled by another month's charge (`settled_by` on its
 expenses (a decided copy is in neither); `n_unmatched_rec` keeps its question,
 and a private receipt stays listed in `unmatched_receipts`.
 
-The private half reads the expense header edits, so it holds on the payloads
-built with them: `GET /api/runs/{id}` and the publish gate. The `summary` a
-decision route returns (`POST .../decisions` and its siblings) is built
-without them and counts a confirmed private receipt as needing a charge; the
-SPA refetches the run after those calls.
+The private half reads the expense header edits, so it holds on every payload
+built with them. Since 2026-09-17 (residual R2) that is all of them: a route
+that answers with a `summary` answers with the one `GET /api/runs/{id}`
+serves, built by the same function from the same inputs (`_run_view`), so the
+counts the SPA holds after a write are the counts a refetch gives it. Before
+that, `POST .../decisions` and its siblings built the reply as
+`build_view(run, decisions, overrides)` and counted a confirmed private
+receipt as needing a charge until the SPA refetched the run. Pinned
+route-level in `tests/test_decision_reply_summary_r2.py`. The expense-edit
+routes (`_expense_edit_reply`) and the month-move route keep answering with
+the Expenses payload's summary, which is what THEIR page's GET
+(`/api/expense-batches/{id}`) serves; that shape carries no charge counts.
 
 A guessed category is the row's own confirm-first state (`review.reason_code:
 "receiptless_suggested"`, any source). A charge that needs a receipt is

@@ -2248,6 +2248,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             field_overrides=store.get_expense_field_overrides(run_id),
         )
 
+    def _run_view(store: RunStore, run) -> dict:
+        """The payload `GET /api/runs/{id}` serves for this run, dispatched
+        the way that route dispatches it.
+
+        Every mutating route that answers with a `summary` answers with THIS
+        one (residual R2), so the counts the SPA holds after a write are the
+        counts a refetch gives it. `build_view(run, decisions, overrides)`
+        was missing the month's own overlays — the header edits above all,
+        so a receipt marked private still read as needing a charge in the
+        reply (`n_receipts_need_charge`, `month_complete`) and corrected
+        itself only on the next run refetch."""
+        if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
+            return _expense_view(store, run)
+        return _workbench_view(store, run)
+
     @app.get("/api/runs/{run_id}")
     def api_workbench(run_id: str):
         """The review render model for the SPA: `build_view` (transaction
@@ -2263,9 +2278,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # build_view over the baked snapshot, every statement-mode
             # surface (decisions / confirm-ready / exports) unchanged. The
             # expense grid stays reachable via GET /api/expense-batches/{id}.
-            if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
-                return JSONResponse(jsonable_encoder(_expense_view(store, run)))
-            view = _workbench_view(store, run)
+            # The dispatch itself lives in `_run_view`, which is what the
+            # mutating routes reply with (residual R2).
+            view = _run_view(store, run)
         # build_view already carries run_id, label, summary, rows,
         # unmatched_*, duplicate_groups, category_options: return it as the
         # SPA render model.
@@ -2292,10 +2307,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if conflict is not None:
                 return JSONResponse({"error": conflict}, status_code=409)
             store.set_decision(run_id, tx_id, status, chosen, _now_iso())
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-        view = build_view(run, decisions, overrides)
-        return JSONResponse({"ok": True, "summary": view["summary"]})
+            view = _run_view(store, run)
+        return JSONResponse(jsonable_encoder({"ok": True, "summary": view["summary"]}))
 
     # §17 disposition. The upsert is status-preserving in the store (never
     # clobbers the row's triage verdict).
@@ -2311,10 +2324,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             store.set_disposition(run_id, tx_id, disposition, _now_iso())
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-        view = build_view(run, decisions, overrides)
-        return JSONResponse({"ok": True, "summary": view["summary"]})
+            view = _run_view(store, run)
+        return JSONResponse(jsonable_encoder({"ok": True, "summary": view["summary"]}))
 
     # §18 duplicate resolve. Advisory: records the reviewer's verdict on a
     # flagged duplicate group (ignore / confirmed); never touches buckets or
@@ -2354,19 +2365,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # `build_view`'s summary there handed the grid the workbench's
             # counts, and every one of the fields it renders (n_expenses,
             # n_ready, n_duplicate_rows) is absent from that shape.
-            if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
-                view = _expense_view(store, run)
-            else:
-                view = build_view(
-                    run,
-                    store.get_decisions(run_id),
-                    store.get_category_overrides(run_id),
-                    store.get_duplicate_resolutions(run_id),
-                )
+            view = _run_view(store, run)
         out = {"ok": True, "summary": view["summary"]}
         if rematch is not None:
             out["rematch"] = rematch
-        return JSONResponse(out)
+        return JSONResponse(jsonable_encoder(out))
 
     # §16 export policy. The policy is snapshotted into each new run's
     # config at creation, so changing it affects future runs, never
@@ -2876,15 +2879,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     run_id, tx_id, STATUS_CONFIRMED, doc_id, _now_iso()
                 )
                 confirmed += 1
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-        view = build_view(run, decisions, overrides)
-        return JSONResponse({
+            view = _run_view(store, run)
+        return JSONResponse(jsonable_encoder({
             "ok": True,
             "confirmed": confirmed,
             "remaining": remaining,
             "summary": view["summary"],
-        })
+        }))
 
     @app.post("/api/runs/{run_id}/decisions/bulk")
     async def post_bulk_decisions(run_id: str, request: Request):
@@ -2933,19 +2934,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     continue
                 store.set_decision(run_id, tx_id, status, doc_id, _now_iso())
                 updated += 1
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-            resolutions = store.get_duplicate_resolutions(run_id)
-        view = build_view(run, decisions, overrides, resolutions)
+            view = _run_view(store, run)
         # `skipped` is the honest half of the count: rows already decided,
         # (when confirming) rows with no candidate to confirm against, or
         # rows whose receipt another batch settled first.
-        return JSONResponse({
+        return JSONResponse(jsonable_encoder({
             "ok": True,
             "updated": updated,
             "skipped": len(tx_ids) - updated,
             "summary": view["summary"],
-        })
+        }))
 
     @app.post("/api/runs/{run_id}/categories")
     async def post_category(run_id: str, request: Request):
@@ -3023,10 +3021,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             store.set_decision(
                 run_id, tx_id, STATUS_CONFIRMED, document_id, _now_iso()
             )
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-        view = build_view(run, decisions, overrides)
-        return JSONResponse({"ok": True, "summary": view["summary"]})
+            view = _run_view(store, run)
+        return JSONResponse(jsonable_encoder({"ok": True, "summary": view["summary"]}))
 
     @app.post("/api/runs/{run_id}/transactions/{transaction_id}/receipt")
     async def post_manual_receipt(
@@ -3065,13 +3061,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 if err:
                     return JSONResponse({"error": err}, status_code=400)
                 run = store.get_run(run_id)  # snapshot changed above
-                decisions = store.get_decisions(run_id)
-                overrides = store.get_category_overrides(run_id)
-            view = build_view(run, decisions, overrides)
-            return JSONResponse(
+                view = _run_view(store, run)
+            return JSONResponse(jsonable_encoder(
                 {"ok": True, "document_id": document_id,
                  "summary": view["summary"]}
-            )
+            ))
 
         return await run_in_threadpool(_work)
 
@@ -4718,16 +4712,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run = store.get_run(run_id)
             if run is None:
                 raise RunInputError("This batch no longer exists.")
-            if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
-                view = _expense_view(store, run)
-            else:
-                view = build_view(
-                    run,
-                    store.get_decisions(run_id),
-                    store.get_category_overrides(run_id),
-                    store.get_duplicate_resolutions(run_id),
-                    settled_elsewhere=_settled_elsewhere(store, run_id),
-                )
+            view = _run_view(store, run)
         return {**out, "summary": jsonable_encoder(view["summary"])}
 
     return app
