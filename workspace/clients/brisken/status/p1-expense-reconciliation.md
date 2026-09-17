@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-09-17
+updated: 2026-09-18
 ---
 
 # Brisken / Expense Reconciliation (p1)
@@ -410,6 +410,7 @@ this table is the index, not a second record.
 | The ECB rate's own 2% clean band + drifted-Settings-rate advisory (backlog items 90 + 132, audit 2026-09-17) | **shipped 2026-09-17** (PR #1048, Fly v167) | `fx_ecb_match_pct` 0.02 for ECB-sourced pairs only; `setup_advisories[]` `fx_rate_drift` beyond 1 point. Inert live until the owner removes the two Settings rates (item 90 step 4); July/August FX candidates all `settings` / `match` at deploy |
 | One receipt never on two charges + the list counts what the page counts; a wire is not a private card; a correction is recalled; every refusal carries a code (backlog items 103, 144, 115, 130, audit 2026-09-17) | **shipped 2026-09-17** (PRs #1056 / #1057 / #1060 / #1061, Fly v177) | A pass-1 tie holds its receipts and "spoken for" reaches tie detection; one effective derivation behind the four charge counters on the months list, the stored summary, the re-match event and its reply (live July 31/7/73/1 on both screens, was 8/72 on the list). Grid Books-as runs the export's chart gate; eight write routes answer with the run GET's own dispatch; a bank-transfer tender and a settled-outside receipt stop suggesting a private card (live `n_suggested_private` 8 -> 7). Memory is consulted for a receipt with line items, reaches a row with no company, and sign-off teaches confirmed pairs (0 live lines move today; a simulated July sign-off teaches 11 categories, 4 aliases, 1 FX rate). 285 refusal sites carry a stable `code` beside the unchanged English, advisories carry their values, nine source-scan tests fail on a new uncoded refusal; SPA prompt `docs/lovable-error-codes-prompt.md` not pasted |
 | An exact-amount pair from another merchant yields to the right merchant (backlog item 133 rule (b), audit 2026-09-17) | **shipped 2026-09-17** (PR #1053, Fly v170) | Demotion to review at 0.55 only when a rival charge for the same receipt agrees on the merchant and that receipt is its first choice; after the ambiguity pass. Replay over July, August and the six bundles: 0 receipts moved |
+| One currency for a month's receipts (backlog item 98, audit 2026-09-17) | **shipped 2026-09-18** (PR #1076, Fly v179) | `output/single_currency.py`: a settled receipt converts at its own charge, everything else at the matcher's reference rate, a row nobody can price is named rather than counted as zero. `expenses.csv` fills the existing `Exchange Rate` column and states the total; the month report prints each figure and rate under the amount. Live July USD 58,187.69, August USD 2,808.91, both as predicted. Silent on a month already in one currency. The report PDF was not driven live (that route writes render outcomes into the run, item 67) |
 
 ## Open decisions / gates
 
