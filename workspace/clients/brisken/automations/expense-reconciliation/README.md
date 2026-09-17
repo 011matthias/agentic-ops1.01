@@ -242,6 +242,18 @@ fly secrets set EXPENSE_RECON_OPERATOR_CODE=<op> EXPENSE_RECON_ACCESS_CODE=<user
 flyctl deploy   # from this module dir; the DB self-migrates on first open
 ```
 
+**Backup** (item 119): `expense-recon backup --dry-run` says what would be
+copied, `--check` reads the SharePoint target without writing, `--go` takes
+one copy. The in-app schedule is off until `EXPENSE_RECON_BACKUP=1` and a
+site in `EXPENSE_RECON_BACKUP_SITE`; the restore procedure (unrehearsed) is
+`docs/backup-and-restore.md`.
+
+The image installs the versions pinned in `uv.lock`, not the open ranges in
+`pyproject.toml` (backlog item 124), so a deploy ships exactly what the suite
+ran against. An upgrade is therefore a deliberate commit: `uv lock --upgrade`,
+run the suite against the new set, then deploy. A drifted lock fails the build
+rather than resolving something new (`uv export --frozen`).
+
 Notifier env (dev-side, gitignored `../../context/.env`):
 `BRISKEN_TENANT_ID`, `BRISKEN_GRAPH_CLIENT_ID`, `BRISKEN_GRAPH_CLIENT_SECRET`,
 `EXPENSE_RECON_OPERATOR_CODE`, and `EXPENSE_RECON_NOTIFY_USER` (Chris's
