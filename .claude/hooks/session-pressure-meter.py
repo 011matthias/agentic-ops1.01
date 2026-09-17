@@ -135,6 +135,7 @@ def main() -> int:
     # Pressure half. Isolated so a failure here still lets the liveness half run.
     try:
         usage = session_state.read_context_usage(payload.get("transcript_path") or "")
+        session_state.bind_session(session_id)
         session_state.ensure_session(session_id)
         state = session_state.bump_tool(tool_name, file_path, context=usage)
         if usage:

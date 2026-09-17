@@ -26,8 +26,23 @@ not (a gate firing CORRECTLY is the system working, not friction).
 
 DESIGN
 ------
-- One JSON file in the OS temp dir (transient working state; never committed,
-  per rule_no_file_bloat). Path: {tempdir}/agentic-ops-session-state.json.
+- One JSON file PER SESSION in the OS temp dir (transient working state; never
+  committed, per rule_no_file_bloat).
+  Path: {tempdir}/agentic-ops-session-state-{session_id}.json.
+  Until 2026-09-17 every session on the machine shared one file, and a
+  sibling's first write reset this session's counters, B1 primer state and
+  friction candidates (a checkpoint `pre` drained zero candidates from a
+  session that had produced them).
+- Path resolution, first hit wins: AGENTIC_OPS_SESSION_STATE (tests); the id a
+  hook bound from its payload via bind_session(); CLAUDE_CODE_SESSION_ID from
+  the environment (set in the agent's Bash env; hooks may or may not inherit
+  it, so nothing depends on that); the legacy shared file, which is also READ
+  when this session has no file yet but the legacy file records its id (hooks
+  running from a checkout that predates the split still write there).
+- A hook MUST call bind_session(payload) after parsing stdin. An unbound hook
+  writes to a file the CLI and the other hooks never read.
+- Per-session files untouched for _STALE_AFTER_S are swept when a session
+  creates its file.
 - Session boundary is detected by the hook payload's `session_id`. A changed
   id => new session => reset (counts start at zero). An unchanged id across a
   compaction => counts PRESERVED. This is why there is no SessionStart reset
@@ -45,19 +60,48 @@ result. A hook importing this module must NEVER break the tool call it rides.
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import random
+import re
 import sys
 import tempfile
 import time
 from datetime import datetime, timezone
 
-# State-file path is overridable via env so smoke tests run in isolation
-# without clobbering a live session's counters.
-STATE_FILE = os.environ.get("AGENTIC_OPS_SESSION_STATE") or os.path.join(
-    tempfile.gettempdir(), "agentic-ops-session-state.json"
-)
+_STATE_PREFIX = "agentic-ops-session-state"
+LEGACY_STATE_FILE = os.path.join(tempfile.gettempdir(), f"{_STATE_PREFIX}.json")
+# A per-session file older than this is an ended session's residue.
+_STALE_AFTER_S = 7 * 86400
+_SID_UNSAFE = re.compile(r"[^A-Za-z0-9_-]")
+
+
+def _override() -> str:
+    """AGENTIC_OPS_SESSION_STATE pins one exact file (tests, smoke runs)."""
+    return os.environ.get("AGENTIC_OPS_SESSION_STATE") or ""
+
+
+def _safe_sid(session_id) -> str:
+    """Session id reduced to filename-safe characters ("" for a non-string)."""
+    if not isinstance(session_id, str):
+        return ""
+    return _SID_UNSAFE.sub("", session_id)[:64]
+
+
+def state_path(session_id: str = "") -> str:
+    """State file for `session_id`: the env override, else the per-session
+    file, else (no id) the legacy shared file."""
+    if _override():
+        return _override()
+    sid = _safe_sid(session_id)
+    if sid:
+        return os.path.join(tempfile.gettempdir(), f"{_STATE_PREFIX}-{sid}.json")
+    return LEGACY_STATE_FILE
+
+
+BOUND_SESSION = _safe_sid(os.environ.get("CLAUDE_CODE_SESSION_ID", ""))
+STATE_FILE = state_path(BOUND_SESSION)
 LOCK_FILE = STATE_FILE + ".lock"
 
 # FALLBACK pressure thresholds, mirrored from rule_session-pressure.md. Used
@@ -201,19 +245,32 @@ def _release_lock(token: str | None) -> None:
         pass
 
 
-def load() -> dict:
-    """Read state, returning a default dict on any failure."""
+def _read_json(path: str) -> dict | None:
     try:
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        if not isinstance(data, dict):
-            return _default_state()
-        # Heal any missing keys from a prior schema.
-        base = _default_state(data.get("session_id", ""))
-        base.update({k: data[k] for k in base if k in data})
-        return base
-    except (OSError, json.JSONDecodeError, ValueError):
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def load() -> dict:
+    """Read state, returning a default dict on any failure. A session with no
+    file of its own yet reads the legacy shared file when that file records
+    this session's id, so the first write carries it over."""
+    data = _read_json(STATE_FILE)
+    if (data is None and BOUND_SESSION and not _override()
+            and STATE_FILE != LEGACY_STATE_FILE
+            and not os.path.exists(STATE_FILE)):
+        legacy = _read_json(LEGACY_STATE_FILE)
+        if legacy is not None and _safe_sid(legacy.get("session_id")) == BOUND_SESSION:
+            data = legacy
+    if data is None:
         return _default_state()
+    # Heal any missing keys from a prior schema.
+    base = _default_state(data.get("session_id", ""))
+    base.update({k: data[k] for k in base if k in data})
+    return base
 
 
 def save(state: dict) -> None:
@@ -254,6 +311,49 @@ def _modify(fn):
 # --------------------------------------------------------------------------
 # Public API (used by hooks)
 # --------------------------------------------------------------------------
+def bind_session(session) -> str:
+    """Point this process at the state file of `session` (a hook payload dict
+    or a bare session id) and return the path now in use. A blank or missing
+    id keeps the current binding. Creating a session's file sweeps stale ones.
+    Never raises."""
+    global STATE_FILE, LOCK_FILE, BOUND_SESSION
+    try:
+        sid = _safe_sid(session.get("session_id") if isinstance(session, dict)
+                        else session)
+        if not sid:
+            return STATE_FILE
+        BOUND_SESSION = sid
+        path = state_path(sid)
+        STATE_FILE, LOCK_FILE = path, path + ".lock"
+        if not _override() and not os.path.exists(path):
+            sweep_stale()
+    except Exception:
+        pass
+    return STATE_FILE
+
+
+def sweep_stale(max_age_s: float = _STALE_AFTER_S) -> int:
+    """Delete per-session state files (and their lock / temp residue) not
+    modified for `max_age_s`. The legacy shared file is left alone. Returns
+    the number of files removed; never raises."""
+    removed = 0
+    cutoff = time.time() - max_age_s
+    try:
+        pattern = os.path.join(tempfile.gettempdir(), f"{_STATE_PREFIX}-*")
+        for path in glob.glob(pattern):
+            if path == STATE_FILE or path.startswith(STATE_FILE + "."):
+                continue
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    os.unlink(path)
+                    removed += 1
+            except OSError:
+                pass
+    except Exception:
+        pass
+    return removed
+
+
 def ensure_session(session_id: str) -> dict:
     """Reset counters if the session_id changed (new session). A blank id or
     an unchanged id is a no-op (compaction keeps the same id => preserve)."""
@@ -520,26 +620,45 @@ def reset() -> dict:
 # --------------------------------------------------------------------------
 # CLI (used by /comd_checkpoint and ad-hoc inspection)
 # --------------------------------------------------------------------------
+def find_transcript(session_id: str) -> str:
+    """Path of `session_id`'s transcript under the Claude config dir, or ""."""
+    sid = _safe_sid(session_id)
+    if not sid:
+        return ""
+    base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(
+        os.path.expanduser("~"), ".claude")
+    try:
+        hits = glob.glob(os.path.join(base, "projects", "*", f"{sid}.jsonl"))
+    except Exception:
+        return ""
+    return max(hits, key=os.path.getmtime) if hits else ""
+
+
 def _cmd_status(as_json: bool) -> int:
     st = load()
-    ctx = st.get("context_tokens")
+    sid = st.get("session_id", "") or BOUND_SESSION
+    # The transcript is fresher than the meter's last write (and exists even
+    # when the live hooks predate the per-session file).
+    live = read_context_usage(find_transcript(sid)) if sid else None
+    ctx = live["tokens"] if live else st.get("context_tokens")
     window = context_window()
     if ctx:
         band, signal = context_band(ctx, window), "context"
     else:
         band, signal = pressure_band(st), "tool-calls"
-    sid = st.get("session_id", "") or ""
     if as_json:
         print(json.dumps({
             "session_id": sid,
+            "state_file": STATE_FILE,
             "tool_calls": st.get("tool_calls", 0),
             "distinct_files": len(st.get("distinct_files", []) or []),
             "pressure_band": band,
             "pressure_signal": signal,
             "pressure_band_emitted": emitted_band(st, sid),
             "context_tokens": ctx,
+            "context_source": "transcript" if live else ("meter" if ctx else None),
             "context_window": window,
-            "context_model": st.get("context_model", ""),
+            "context_model": live["model"] if live else st.get("context_model", ""),
             "context_measured_at": st.get("context_measured_at"),
             "candidates": len(st.get("candidates", []) or []),
             "b1_blocks": st.get("b1_blocks", 0),
@@ -549,8 +668,7 @@ def _cmd_status(as_json: bool) -> int:
     else:
         ctx_txt = (f"{format_tokens(ctx)}/{format_tokens(window)}" if ctx
                    else "unread")
-        # The state file is shared by every session on this machine: the
-        # session prefix shows whose reading this is.
+        # The session prefix shows whose reading this is.
         print(f"[session-state] session={sid[:8] or '-'} "
               f"band={band or 'none'} ({signal}) context={ctx_txt} "
               f"calls={st.get('tool_calls', 0)} "
@@ -591,7 +709,11 @@ def main(argv: list[str]) -> int:
                    help="drop all candidates (after reconciliation)")
     g.add_argument("--reset", action="store_true", help="full reset (new session)")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
+    ap.add_argument("--session-id", default="",
+                    help="session to read (default: CLAUDE_CODE_SESSION_ID)")
     args = ap.parse_args(argv)
+    if args.session_id:
+        bind_session(args.session_id)
 
     if args.list_candidates:
         return _cmd_list(args.json)

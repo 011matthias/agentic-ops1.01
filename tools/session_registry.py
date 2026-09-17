@@ -277,7 +277,7 @@ def main(argv: list[str]) -> int:
     g.add_argument("--check", action="store_true", help="list live siblings on this working tree")
     g.add_argument("--list", action="store_true", help="dump all heartbeats")
     g.add_argument("--prune", action="store_true", help="delete stale heartbeats now")
-    ap.add_argument("--session-id", default=os.environ.get("CLAUDE_SESSION_ID", ""))
+    ap.add_argument("--session-id", default=os.environ.get("CLAUDE_CODE_SESSION_ID", ""))
     ap.add_argument("--cwd", default=None)
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     args = ap.parse_args(argv)
