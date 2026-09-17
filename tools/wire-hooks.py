@@ -123,6 +123,14 @@ CANONICAL_HOOKS = {
                     "timeout": 10000,
                 },
                 {
+                    # Existing ruff.toml / pytest.ini / .pre-commit-config.yaml
+                    # / tools/preflight-hooks.py -> ask: fix the source, not
+                    # the check. First-time creation passes. (ECC port item 10)
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/config-protection-gate.py"),
+                    "timeout": 10000,
+                },
+                {
                     "type": "command",
                     "command": _cmd(".claude/hooks/scorer-lock-gate.py"),
                     "timeout": 10000,
@@ -367,6 +375,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "git-stash-gate.py",
     "git-restore-gate.py",
     "write-shrink-gate.py",
+    "config-protection-gate.py",
     "deploy-consumer-gate.py",
     "vercel-scope-gate.py",
     "em-dash-strip-gate.py",
