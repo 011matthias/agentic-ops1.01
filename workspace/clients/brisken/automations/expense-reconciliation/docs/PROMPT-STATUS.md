@@ -200,6 +200,7 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
+| `lovable-entity-order-r2-prompt.md` (item 92 round 2: press, hold, drag; arrows removed) | `set.entities.dragHandle`, `set.entities.dnd.instructions`, `set.entities.dnd.picked` in `chunk-settings`; dnd-kit present (`useSortable` or its minified sensor code beside those keys); `set.entities.moveUp` gone from `chunk-settings` (kept in `chunk-i18n`) | None: no backend change |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
