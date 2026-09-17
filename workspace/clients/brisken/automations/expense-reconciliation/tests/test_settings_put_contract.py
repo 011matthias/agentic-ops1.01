@@ -31,6 +31,7 @@ VALID_SAMPLE: dict[str, object] = {
     "card_entities": {"2838": "Corporate Services"},
     "card_accounts": {"2838": "Chase 2838"},
     "entities": {"Corporate Services": {"org_id": "60021234567"}},
+    "entity_order": ["Corporate Services"],
     "merchants": {"Uber": {"aliases": ["UBER *TRIP"]}},
     "cards": {"corp-2838": {"label": "Corporate Services", "digits": ["2838"]}},
     "cost_centers": {"Lidar": {"kind": "project"}},

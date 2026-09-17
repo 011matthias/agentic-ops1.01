@@ -116,6 +116,73 @@ def test_available_entities_empty_when_nothing_configured(monkeypatch):
     assert available_entities({}, extra="  ") == []
 
 
+# ── entity_order: the operator's own order (item 92) ───────────────────
+
+
+def _three(**extra) -> dict:
+    settings = {"card_entities": {"1": "Rome Events", "2": "Cloud Services",
+                                  "3": "Corporate Services"}}
+    settings.update(extra)
+    return settings
+
+
+def test_entity_order_leads_the_list(monkeypatch):
+    """The named entities come first, in the order the operator put them —
+    not A-Z, which is what buried the entity Criss books every day."""
+    monkeypatch.delenv("EXPENSE_RECON_COA_PROVISION", raising=False)
+    settings = _three(entity_order=["Corporate Services", "Rome Events"])
+    assert available_entities(settings) == [
+        "Corporate Services", "Rome Events", "Cloud Services",
+    ]
+
+
+def test_entities_the_order_never_names_still_appear(monkeypatch):
+    """An entity missing from the order is appended alphabetically, never
+    dropped: a charge on it must stay bookable the day it appears."""
+    monkeypatch.delenv("EXPENSE_RECON_COA_PROVISION", raising=False)
+    settings = _three(entity_order=["Rome Events"])
+    assert available_entities(settings) == [
+        "Rome Events", "Cloud Services", "Corporate Services",
+    ]
+
+
+def test_stale_and_repeated_names_in_the_order_are_ignored(monkeypatch):
+    """An order remembering an entity that has since left the card map (or
+    naming one twice) still resolves; it orders what exists and says nothing
+    about what does not."""
+    monkeypatch.delenv("EXPENSE_RECON_COA_PROVISION", raising=False)
+    settings = _three(entity_order=["Gone Ltd", "Rome Events", "Rome Events",
+                                    "  ", "Cloud Services"])
+    assert available_entities(settings) == [
+        "Rome Events", "Cloud Services", "Corporate Services",
+    ]
+
+
+def test_run_default_entity_takes_its_place_in_the_order(monkeypatch):
+    """`extra` (the batch's own entity) is ordered like any other: named in
+    the order it leads, unnamed it joins the alphabetical tail."""
+    monkeypatch.delenv("EXPENSE_RECON_COA_PROVISION", raising=False)
+    ordered = available_entities(
+        {"entity_order": ["Trips 2026"]}, extra="Trips 2026"
+    )
+    assert ordered == ["Trips 2026"]
+    settings = _three(entity_order=["Cloud Services"])
+    assert available_entities(settings, extra="Trips 2026") == [
+        "Cloud Services", "Corporate Services", "Rome Events", "Trips 2026",
+    ]
+
+
+def test_no_order_is_still_alphabetical(monkeypatch):
+    """Nothing changes for a tenant that has never set an order."""
+    monkeypatch.delenv("EXPENSE_RECON_COA_PROVISION", raising=False)
+    assert available_entities(_three()) == [
+        "Cloud Services", "Corporate Services", "Rome Events",
+    ]
+    assert available_entities(_three(entity_order=[])) == [
+        "Cloud Services", "Corporate Services", "Rome Events",
+    ]
+
+
 # ── FX reference rates (the 0-of-94 cause) ─────────────────────────────
 
 

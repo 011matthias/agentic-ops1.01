@@ -54,7 +54,7 @@ receives after `jsonable_encoder`.
 | `card_review.resolved[].hints[]` | string |
 | `summary.upload_issues[]` | string (English prose; unchanged by design) |
 | `summary.upload_issue_details[]` | object `{code, file, suffix, limit}` |
-| `account_options[]` · `category_options[]` · `entity_options[]` | string |
+| `account_options[]` · `category_options[]` · `entity_options[]` | string (`entity_options` follows the operator's `entity_order`; see PUT /api/settings) |
 | `cost_center_options[]` | object `{name, kind, note}` (item 47: OBJECTS, unlike its three sibling option lists) |
 
 ### Run
@@ -2755,8 +2755,20 @@ included. Before this, an unrecognised key was dropped in silence under a
 200, so a tab could say "saved" over a write that never happened.
 
 The writable keys are `export_approved_only`, `fx_reference_rates`,
-`card_entities`, `card_accounts`, `entities`, `merchants`, `cards`,
-`cost_centers`, `intake` (`store.SETTINGS_WRITABLE_KEYS`).
+`card_entities`, `card_accounts`, `entities`, `entity_order`, `merchants`,
+`cards`, `cost_centers`, `intake` (`store.SETTINGS_WRITABLE_KEYS`).
+
+**`entity_order` (item 92) is the operator's own order for the entity list**:
+a list of entity names, best first, whole-list replace, trimmed and deduped
+on save. `entity_options` (this payload, `GET /api/cards`, and every expense
+batch's grid) now returns the names it lists in that order, then everything
+it does not name alphabetically. It is a separate list rather than a field
+on each `entities` entry because most real entities never reach that
+registry: they arrive from `/data` provisioning and the card map, which the
+operator cannot edit. A name the order carries that no longer resolves is
+ignored at read time and kept on save, so an entity leaving the card map
+cannot refuse the operator's ordering or drop an entity a charge still
+needs. Unset or empty: alphabetical, exactly as before.
 
 The derived keys `GET` composes are accepted and ignored, never refused:
 `categories`, `entity_options`, `cards_effective`, `merchants_inert`,

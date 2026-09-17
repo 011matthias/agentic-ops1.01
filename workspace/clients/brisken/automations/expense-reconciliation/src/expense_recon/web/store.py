@@ -123,6 +123,14 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 #     over the /data provisioning file's entity mapping when present
 #     (coa_provision.coa_validation_from_settings). Distinct from
 #     `card_entities`, which stays the card -> entity MAP.
+#   entity_order (item 92, owner ask 2026-09-17) — the operator's own ORDER
+#     for the entity list: ["Corporate Services", "Cloud Services"]. A list,
+#     not a field on each registry entry, because most entities never reach
+#     that registry: they arrive from /data provisioning and the card map,
+#     which the operator cannot edit. Names it does not know are appended
+#     alphabetically, names it knows that no longer exist are ignored, so
+#     the picker can neither hide an entity nor break on a stale name.
+#     Read through `service.available_entities`.
 #   merchants (2026-07-29, receipt-first) — the canonical MERCHANT REGISTRY:
 #     {"Uber": {aliases: [...], category?, zoho_account?}}. Definable in the
 #     UI (like `entities`); the highest-priority deterministic source for a
@@ -142,6 +150,7 @@ SETTINGS_DEFAULTS: dict = {
     "card_entities": {},
     "card_accounts": {},
     "entities": {},
+    "entity_order": [],
     "merchants": {},
     "cards": {},
     # Cost centers (item 47): owner-authored only. The empty default is
@@ -164,6 +173,7 @@ SETTINGS_WRITABLE_KEYS = (
     "export_approved_only",
     *SETTINGS_MAP_KEYS,
     "entities",
+    "entity_order",
     "merchants",
     "cards",
     "cost_centers",

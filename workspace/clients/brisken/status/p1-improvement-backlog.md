@@ -4640,6 +4640,44 @@ gets. api-contract "What a settings save wrote";
 
 SPA half: `docs/lovable-settings-tabs-prompt.md`, published by the owner and verified 2026-09-17 (bundle + cold drive, PROMPT-STATUS Applied row).
 
+### 92. The entity list is in nobody's order (Criss via owner, 2026-09-17) (BACKEND SHIPPED PR #TBD, prompt written, pending the owner's paste)
+
+**Criss, relayed by the owner 2026-09-17:** she wants to select entities that
+have been saved and reorder them.
+
+Every entity list in the tool is alphabetical: the Settings editor and the
+entity dropdown on every expense row both render `entity_options`, which was
+`sorted()`. Nobody chose that order, and the entity Criss books all day sits
+wherever its initial puts it with no way to move it.
+
+Two defects sit underneath the ordering ask, both visible in the Settings
+editor:
+
+- It lists `entities` (the registry someone typed) while the pickers offer
+  the union of the provisioning file, the card map and that registry. On the
+  live tenant the registry is empty, so the editor can look empty while the
+  dropdown is full. Ordering only the registry rows would have moved nothing
+  Criss actually sees.
+- Every field of every entity is on screen at once, so the list is a wide
+  table to read rather than a list to pick from.
+
+**Backend half, shipped:** `settings['entity_order']`, a list of entity
+names. `available_entities` returns the names it lists first, in that order,
+then everything it does not name alphabetically, so `entity_options` carries
+the order to every picker (settings payload, `GET /api/cards`, each batch's
+grid) with no per-caller change. A separate list rather than a field on each
+registry entry, because most entities never reach that registry. A stale
+name is ignored at read time and kept on save: an entity leaving the card
+map must not refuse the operator's ordering, and an entity the order never
+names must still appear (at the back) so a charge on it stays bookable.
+Unset: alphabetical, exactly as before. api-contract "The writable keys";
+`tests/test_master_data_settings.py` (ordering) and
+`tests/test_web_expense_settings.py` (the grid route reads it).
+
+SPA half: `docs/lovable-entity-order-prompt.md`. The list renders
+`entity_options` (never sorted locally), a row opens its fields, drag or the
+move buttons save `{"entity_order": [...]}` on their own. Not pasted.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate

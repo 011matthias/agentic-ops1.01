@@ -421,7 +421,8 @@ def prepare_run(
 
 
 def available_entities(settings: dict | None, extra: str | None = None) -> list[str]:
-    """The legal entities a reviewer can pick, deduped and sorted.
+    """The legal entities a reviewer can pick, deduped and in the operator's
+    own order.
 
     Unions four sources so the picker is never empty: the CoA provisioning
     file (authoritative, `/data`), the card registry's entity TARGETS (the
@@ -430,6 +431,15 @@ def available_entities(settings: dict | None, extra: str | None = None) -> list[
     run default. The provisioning + card sources are what populate the
     dropdown in the real Brisken case, where `settings['entities']` is
     empty but the entities do exist on `/data` and in the card map.
+
+    Order (item 92): the names `settings['entity_order']` lists, in that
+    order, then everything it does not name, alphabetically. A-Z was
+    nobody's order; the entity Criss books every day sat wherever its
+    initial put it, in the Settings list and in every per-expense dropdown,
+    with no way to move it. Two properties make the ordering safe to read
+    anywhere: a name the order no longer matches is ignored, and an entity
+    the order never names still appears (at the back), so this list can
+    neither hide an entity a charge needs nor go stale into a wrong answer.
     """
     from ..cards import effective_cards
     from ..coa_provision import provisioned_entity_labels
@@ -442,7 +452,13 @@ def available_entities(settings: dict | None, extra: str | None = None) -> list[
     }
     if extra and extra.strip():
         opts.add(extra.strip())
-    return sorted(opts)
+    order = s.get("entity_order") or []
+    ranked: list[str] = []
+    for name in order:
+        label = str(name).strip()
+        if label in opts and label not in ranked:
+            ranked.append(label)
+    return ranked + sorted(opts - set(ranked))
 
 
 def resolve_entity(form: RunForm, settings: dict | None) -> str:
