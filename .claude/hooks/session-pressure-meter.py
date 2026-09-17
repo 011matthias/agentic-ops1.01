@@ -15,9 +15,10 @@ advises again. Session boundary is keyed off the hook payload's `session_id`
 unchanged id across a compaction preserves them; the emitted-band marker is
 keyed by session so an interleaved sibling session cannot re-trigger it.
 
-It carries two more best-effort riders, both independent of the pressure logic:
-the sibling-session heartbeat refresh (tools/session_registry.py) and the
-background-work liveness check (tools/bg_watch.py). Both live HERE rather than
+It carries three more best-effort riders, all independent of the pressure logic:
+the sibling-session heartbeat refresh (tools/session_registry.py), the
+background-work liveness check (tools/bg_watch.py), and identifier-only usage
+telemetry for the stocktake tools (tools/telemetry_store.py). They live HERE rather than
 in hooks of their own because this hook already fires on every tool call with
 `matcher: ""`; a second all-tools hook would double the subprocess spawns for
 an entire session to reach the same payload. When a registered background watch
@@ -59,6 +60,15 @@ try:
     import bg_watch  # noqa: E402
 except Exception:
     bg_watch = None
+
+# Optional: usage telemetry. Appends one identifier-only line per Skill/Agent
+# call to ~/.claude/agentic-ops-telemetry/ for tools/skill_stocktake.py. Rides
+# here for the same reason as the two riders above: this hook already fires on
+# every tool call. See tools/telemetry_store.py.
+try:
+    import telemetry_store  # noqa: E402
+except Exception:
+    telemetry_store = None
 
 _ADVISORY = {
     "moderate": (
@@ -110,6 +120,13 @@ def main() -> int:
     if session_registry is not None and session_id:
         try:
             session_registry.heartbeat(session_id, cwd=payload.get("cwd"))
+        except Exception:
+            pass
+
+    # Usage telemetry (independent of pressure; silent, never raises).
+    if telemetry_store is not None:
+        try:
+            telemetry_store.record_from_payload(payload)
         except Exception:
             pass
 
