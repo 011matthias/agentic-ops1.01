@@ -51,8 +51,12 @@ from tests.test_trip_settlement import _extraction as _trip_extraction  # noqa: 
 from tests.test_trip_settlement import _wire as _trip_wire  # noqa: E402
 
 # Every form the deliverable standard bans, by the name a failure prints.
+# The em-dash is BUILT, not typed: this file sits under a client path, where
+# `em-dash-strip-gate.py` rewrites the character on Write and Edit. A literal
+# here would be stripped by a later pass and the check would go quietly
+# vacuous, which is the one failure a guard must not have.
 BANNED = {
-    "em-dash U+2014": "—",
+    "em-dash U+2014": chr(0x2014),
     "&mdash; entity": "&mdash;",
     "double hyphen": " -- ",
 }
