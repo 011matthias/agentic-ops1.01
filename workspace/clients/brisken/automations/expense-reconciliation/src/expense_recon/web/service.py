@@ -3075,6 +3075,7 @@ def build_view(
     settled_elsewhere: dict[str, dict] | None = None,
     edited_at: str | None = None,
     field_overrides: dict[str, dict[str, str]] | None = None,
+    settings: dict | None = None,
 ) -> dict:
     """Compose the render model: per-transaction rows with candidates and
     the reviewer's effective verdict, plus the unmatched-receipt list and
@@ -3099,7 +3100,13 @@ def build_view(
 
     `field_overrides` (items 99 + 100): the run's expense header edits, read
     by the GET route and the publish gate, so a confirmed private expense
-    (flag AND reimburse_to) does not count as a receipt needing a charge."""
+    (flag AND reimburse_to) does not count as a receipt needing a charge.
+
+    `settings` (item 107): the stored settings, passed by the GET route so
+    `receipt_chase[]` can carry each holder's address and the merchant
+    registry's portal hints. None from every other caller, and then the
+    chase list is still built (it is derived from the rows) with no address
+    and no hint on it: the groups and their counts never depend on it."""
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
     rec_by_id = {r.document_id: r for r in receipts}
     # What `receipt_image_available` is resolved against (item 52). Read
@@ -3206,6 +3213,11 @@ def build_view(
     # but are counted here, because booked and evidenced are two questions.
     booked_no_receipt: dict[str, Decimal] = {}
     n_booked_no_receipt = 0
+    # Item 107: the money behind the "no receipt expected" verdict, kept
+    # beside the unreconciled total rather than inside it. The COUNT comes
+    # from `completeness_counts` over the same rows, so there is one rule
+    # and the two cannot drift apart.
+    no_receipt_expected_ccy: dict[str, Decimal] = {}
     # Item 137: a receipt held on a charge of ANOTHER card than the one the
     # tool resolved for it (a pick, the printed method, a remembered card).
     # Same chain the grid shows, same test the matcher demotes by, so a pair
@@ -3443,7 +3455,24 @@ def build_view(
                 booked_no_receipt.get(tx.transaction_currency, Decimal("0"))
                 + abs(tx.amount)
             )
-        if effective_bucket not in ("reconciled", "refund") and not is_posted:
+        # Item 107: a charge the reviewer ruled no receipt will ever exist
+        # for is decided, so it leaves the unreconciled total the way a
+        # booked one does, and its money gets its own name beside it
+        # (item 102's shape). The annual card fee stops reading as money
+        # nobody has evidenced, without disappearing from the month.
+        no_receipt_due = bool(str(
+            (decision.no_receipt_expected if decision else "") or ""
+        ).strip()) and effective_bucket == "unmatched" and not is_posted
+        if no_receipt_due:
+            no_receipt_expected_ccy[tx.transaction_currency] = (
+                no_receipt_expected_ccy.get(tx.transaction_currency, Decimal("0"))
+                + abs(tx.amount)
+            )
+        if (
+            effective_bucket not in ("reconciled", "refund")
+            and not is_posted
+            and not no_receipt_due
+        ):
             unreconciled[tx.transaction_currency] = (
                 unreconciled.get(tx.transaction_currency, Decimal("0"))
                 + abs(tx.amount)
@@ -3577,6 +3606,11 @@ def build_view(
                 # pending row.
                 "turn": row_turn(status, is_posted, effective_bucket),
                 **decided_by_view(decision),
+                # Item 107: the chase states, both ABSENT unless a reviewer
+                # set them. `receipt_requested_at` + `requested_to` leave
+                # the charge open; `no_receipt_expected` (the reason) closes
+                # it. See `receipt_chase_view`.
+                **receipt_chase_view(decision),
             }
         )
 
@@ -4007,6 +4041,14 @@ def build_view(
         "booked_no_receipt_by_ccy": {
             ccy: f"{amt:,.2f}" for ccy, amt in sorted(booked_no_receipt.items())
         },
+        # Item 107: money on charges the reviewer ruled will never have a
+        # receipt (the annual fee, interest). Beside `unreconciled_by_ccy`
+        # and out of it, exactly as `booked_no_receipt_by_ccy` is; the count
+        # is `n_charges_no_receipt_expected` in `completeness` above.
+        "no_receipt_expected_by_ccy": {
+            ccy: f"{amt:,.2f}"
+            for ccy, amt in sorted(no_receipt_expected_ccy.items())
+        },
         # Item 60: charges the tool found receipts for that another charge
         # now holds. Its own name because it is its own question: these rows
         # are not "no receipt found", they are waiting on a contested pick.
@@ -4108,6 +4150,16 @@ def build_view(
         # answers the card question, which is the one the work is organized
         # around. Parallel field, empty on a month with nothing loaded.
         "coverage": coverage,
+        # Item 107: the month's missing-receipt list, grouped by card
+        # holder, so the chase Criss runs by hand every month is a list the
+        # tool hands her. Membership is `charge_needs_receipt`, read off the
+        # rows above, so the groups' charges sum to
+        # `summary.n_charges_need_receipt` and the two cannot disagree.
+        # Empty on a month with nothing to chase.
+        "receipt_chase": receipt_chase_groups(
+            rows, run=run, transactions=transactions, coverage=coverage,
+            settings=settings,
+        ),
         # Bulk receipts-folder attach (2026-07-27): the last upload's summary
         # (n_ingested / n_matched_new / n_review_new / n_possible_duplicates /
         # llm_source / cost_usd / issues), or None when no folder was uploaded.
@@ -13442,6 +13494,78 @@ def row_turn(status: str, is_posted: bool, effective_bucket: str) -> str:
     if effective_bucket in ("reconciled", "review"):
         return TURN_DECIDE
     return TURN_NONE
+
+
+def receipt_chase_groups(
+    rows: list[dict],
+    *,
+    run: RunRow,
+    transactions: list,
+    coverage: list[dict],
+    settings: dict | None = None,
+) -> list[dict]:
+    """Item 107's missing-receipt list for one month, grouped by holder.
+
+    Binds the payload's own rows to the card identities `coverage` already
+    resolved, so a charge is chased from the person whose card the coverage
+    panel totals it under. The amounts come from the transactions rather
+    than the rows' formatted strings, so the per-currency totals are exact.
+    `settings` adds the holders' addresses and the merchant registry's
+    portal hints when the caller has them; without it the groups are
+    identical minus those two display fields."""
+    from ..cards import cards_from_setting
+    from .receipt_chase import chase_groups, holder_addresses, portal_hints
+    from .month_readiness import charge_needs_receipt
+
+    cards = cards_from_setting(
+        ((run.config or {}).get("expense") or {}).get("cards")
+    )
+    card_info = {
+        cov["key"]: {
+            "card_key": cov.get("card_key") or "",
+            "label": cov.get("label") or cov["key"],
+            "person": (
+                cards[cov["card_key"]].person
+                if cov.get("card_key") in cards else ""
+            ),
+        }
+        for cov in coverage
+    }
+    open_rows = [r for r in rows if charge_needs_receipt(r)]
+    if not open_rows:
+        return []
+    return chase_groups(
+        rows,
+        card_info=card_info,
+        amounts={t.transaction_id: t.amount for t in transactions},
+        addresses=holder_addresses(settings),
+        hints=portal_hints(
+            (settings or {}).get("merchants"),
+            {r["transaction_id"]: r.get("vendor") or "" for r in open_rows},
+        ),
+    )
+
+
+def receipt_chase_view(decision: "Decision | None") -> dict:
+    """Item 107's two reviewer-set states as row fields, both ABSENT unless
+    set, so a month nobody has chased renders byte-identically to before.
+
+    `receipt_requested_at` / `requested_to` record the ask (it closes
+    nothing); `no_receipt_expected` holds the reason no receipt will ever
+    exist (it closes the charge). They live on the SAME `decisions` row as
+    the pairing verdict, which is what carries them through a re-match and
+    through a statement re-read's id rekey."""
+    if decision is None:
+        return {}
+    out: dict = {}
+    if decision.receipt_requested_at:
+        out["receipt_requested_at"] = decision.receipt_requested_at
+        if decision.receipt_requested_to:
+            out["requested_to"] = decision.receipt_requested_to
+    reason = str(decision.no_receipt_expected or "").strip()
+    if reason:
+        out["no_receipt_expected"] = reason
+    return out
 
 
 def decided_by_view(decision: "Decision | None") -> dict:

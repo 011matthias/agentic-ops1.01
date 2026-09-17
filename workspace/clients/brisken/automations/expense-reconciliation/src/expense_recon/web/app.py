@@ -2297,6 +2297,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             settled_elsewhere=settled_elsewhere,
             edited_at=edited_at,
             field_overrides=store.get_expense_field_overrides(run_id),
+            # Item 107: the holders' addresses and the merchant registry's
+            # portal hints, for `receipt_chase[]`. The list itself, and
+            # every count, come off the rows and do not depend on this.
+            settings=store.get_settings(),
         )
 
     def _run_view(store: RunStore, run) -> dict:
@@ -2384,6 +2388,142 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             store.set_disposition(run_id, tx_id, disposition, _now_iso())
             view = _run_view(store, run)
         return JSONResponse(jsonable_encoder({"ok": True, "summary": view["summary"]}))
+
+    # Item 107, the chase states. Both are per-charge, both are written by
+    # the same status-preserving upsert family as the disposition above, and
+    # both live on the charge's `decisions` row, which is what carries them
+    # through a re-match. Asking closes nothing; "no receipt expected"
+    # closes the charge and takes its money out of the unreconciled total.
+    @app.post("/api/runs/{run_id}/receipt-requested")
+    async def post_receipt_requested(run_id: str, request: Request):
+        """Record that this charge's receipt was asked for (or clear it).
+
+        Body: `{transaction_id, to?}` marks it asked NOW, optionally naming
+        the address it was asked from; `{transaction_id, clear: true}`
+        removes the record. Writing the mark is all this does: no mail is
+        composed and none is sent (see receipt_chase.py)."""
+        body = await request.json()
+        tx_id = str((body or {}).get("transaction_id") or "").strip()
+        if not tx_id:
+            return JSONResponse({"error": "bad request"}, status_code=400)
+        clear = bool((body or {}).get("clear"))
+        to = str((body or {}).get("to") or "").strip() or None
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            store.set_receipt_requested(
+                run_id, tx_id,
+                None if clear else _now_iso(),
+                None if clear else to,
+                _now_iso(),
+            )
+            view = _workbench_view(store, run)
+        return JSONResponse({"ok": True, "summary": view["summary"]})
+
+    @app.post("/api/runs/{run_id}/no-receipt-expected")
+    async def post_no_receipt_expected(run_id: str, request: Request):
+        """Rule that no receipt will ever exist for this charge, and say why.
+
+        Body: `{transaction_id, reason}` marks it; `{transaction_id, clear:
+        true}` removes the mark. The reason is refused blank: a verdict
+        nobody can read next month is worse than no verdict, and this one
+        both closes the charge for the month gate and takes its money out of
+        `unreconciled_by_ccy`."""
+        body = await request.json()
+        tx_id = str((body or {}).get("transaction_id") or "").strip()
+        clear = bool((body or {}).get("clear"))
+        reason = str((body or {}).get("reason") or "").strip()
+        if not tx_id or (not clear and not reason):
+            return JSONResponse(
+                {"error": "transaction_id and a reason are required"},
+                status_code=400,
+            )
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            store.set_no_receipt_expected(
+                run_id, tx_id, None if clear else reason[:200], _now_iso()
+            )
+            view = _workbench_view(store, run)
+        return JSONResponse({"ok": True, "summary": view["summary"]})
+
+    @app.get("/api/runs/{run_id}/receipt-requests")
+    def get_receipt_requests(run_id: str):
+        """The chase mail this month WOULD send, per card holder: the dry
+        run. Read-only, composes and returns; nothing is sent, and no send
+        path exists for it to reach (item 107).
+
+        `enabled` is the owner's switch (`settings.receipt_requests.
+        enabled`, off by default). `can_send` is false in this build
+        whatever the switch says, and `send_blocked_reason` names which gate
+        is refusing."""
+        from .intake_mail import IntakeConfig
+        from .receipt_chase import (
+            SEND_DISABLED,
+            SEND_NOT_WIRED,
+            compose_requests,
+            requests_enabled,
+        )
+
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            settings = store.get_settings()
+            view = _workbench_view(store, run)
+        cfg = IntakeConfig.from_settings(settings)
+        intake_address = f"receipts@{cfg.domain}"
+        groups = view.get("receipt_chase") or []
+        enabled = requests_enabled(settings)
+        return JSONResponse(jsonable_encoder({
+            "run_id": run_id,
+            "label": run.label,
+            "enabled": enabled,
+            "can_send": False,
+            "send_blocked_reason": SEND_NOT_WIRED if enabled else SEND_DISABLED,
+            "intake_address": intake_address,
+            "n_charges_need_receipt": view["summary"]["n_charges_need_receipt"],
+            "groups": groups,
+            "mails": compose_requests(
+                groups, month_label=run.label, intake_address=intake_address
+            ),
+        }))
+
+    @app.post("/api/runs/{run_id}/receipt-requests/send")
+    def post_receipt_requests_send(run_id: str):
+        """Refuses, always, in this build.
+
+        The owner approves real sends separately (Brisken send-by-id
+        standard). Until then there is no sender to reach: `receipt_chase`
+        imports no mail transport, so this route cannot deliver a message
+        even with the switch on. It answers 403 and names which gate."""
+        from .receipt_chase import (
+            SEND_DISABLED,
+            SEND_NOT_WIRED,
+            requests_enabled,
+        )
+
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            enabled = requests_enabled(store.get_settings())
+        if not enabled:
+            return JSONResponse({
+                "error": "Receipt requests are switched off. Turn on "
+                         "Settings > receipt requests first; the owner "
+                         "approves the first real send separately.",
+                "code": SEND_DISABLED,
+            }, status_code=403)
+        return JSONResponse({
+            "error": "Receipt requests are switched on, but no sender is "
+                     "wired yet: this build composes the mail and never "
+                     "sends it. Use the preview and send it by hand until "
+                     "the owner approves the automated send.",
+            "code": SEND_NOT_WIRED,
+        }, status_code=403)
 
     # §18 duplicate resolve. Advisory: records the reviewer's verdict on a
     # flagged duplicate group (ignore / confirmed); never touches buckets or
@@ -2669,6 +2809,20 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
             try:
                 patch["intake"] = normalize_intake_setting(body["intake"])
+            except ValueError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+        # Receipt chasing (item 107): {enabled, holders: {person: address}}.
+        # Whole-object replace, same contract as `intake`. `enabled` must be
+        # a real boolean and an address must be a single plain one: the key
+        # decides who an outbound chase would reach, so a tolerant parse
+        # here is the wrong kind of kindness.
+        if "receipt_requests" in body:
+            from .receipt_chase import normalize_receipt_requests_setting
+
+            try:
+                patch["receipt_requests"] = normalize_receipt_requests_setting(
+                    body["receipt_requests"]
+                )
             except ValueError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=400)
         with open_store() as store:

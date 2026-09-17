@@ -37,6 +37,15 @@ charge is recurring, not Criss's record that it was booked, so it closes
 nothing. `n_charges_closed_recurring` counts the charges the gray fill closed
 while they hold no receipt, so the closure stays visible.
 
+Item 107 adds the reviewer's two chase states, and only one of them is a
+verdict. "No receipt expected", with its reason, closes the charge the way an
+already-booked one does: an annual card fee has no receipt to find, so
+counting it as an open receipt keeps a month permanently incomplete.
+"Requested on {date}" closes nothing at all: the holder has been asked and
+the receipt is still missing, which is precisely a charge that needs one.
+`n_charges_receipt_requested` says how many of the open charges are already
+chased, and `n_charges_no_receipt_expected` keeps the closure visible.
+
 No verdict beyond those is invented here. A charge that needs a receipt is
 counted once, under `n_charges_need_receipt`, even when it also carries a
 guess: attaching the receipt replaces the guess. `n_charges_category_guessed`
@@ -80,13 +89,32 @@ def _charge_without_receipt(row: dict) -> bool:
     )
 
 
+def charge_no_receipt_expected(row: dict) -> bool:
+    """Item 107: the reviewer's verdict that no receipt will ever exist for
+    this charge, carrying the reason (an annual card fee, interest, a bank
+    charge). A verdict, so it closes the charge exactly as an already-booked
+    one does; the reason is the whole content of it, so a blank string is no
+    mark at all."""
+    return bool(str(row.get("no_receipt_expected") or "").strip())
+
+
 def charge_needs_receipt(row: dict) -> bool:
     """A purchase charge that holds no receipt and no verdict closes."""
     return (
         _charge_without_receipt(row)
         and (row.get("row_type") or "purchase") == "purchase"
         and not charge_booked_recurring(row)
+        and not charge_no_receipt_expected(row)
     )
+
+
+def charge_receipt_requested(row: dict) -> bool:
+    """Item 107: a charge whose holder has been ASKED for the receipt and
+    that still needs one. Asking closes nothing, so this is a subset of
+    `n_charges_need_receipt` and never changes it: it says how much of the
+    chase is already out, which is the difference between "nobody has looked
+    at this" and "Dirk owes us a PDF"."""
+    return bool(row.get("receipt_requested_at")) and charge_needs_receipt(row)
 
 
 def charge_closed_recurring(row: dict) -> bool:
@@ -152,6 +180,17 @@ def completeness_counts(
         "n_charges_closed_recurring": sum(
             1 for r in rows if charge_closed_recurring(r)
         ),
+        # Item 107, neither blocks. The first is a SUBSET of
+        # `n_charges_need_receipt` (asking closes nothing), the second is
+        # what the "no receipt expected" verdict closed, kept visible for
+        # the same reason `n_charges_closed_recurring` is.
+        "n_charges_receipt_requested": sum(
+            1 for r in rows if charge_receipt_requested(r)
+        ),
+        "n_charges_no_receipt_expected": sum(
+            1 for r in rows
+            if _charge_without_receipt(r) and charge_no_receipt_expected(r)
+        ),
     }
 
 
@@ -208,6 +247,8 @@ READINESS_KEYS = (
     "n_receipts_need_charge",
     "n_charges_category_guessed",
     "n_charges_closed_recurring",
+    "n_charges_receipt_requested",
+    "n_charges_no_receipt_expected",
 )
 
 
