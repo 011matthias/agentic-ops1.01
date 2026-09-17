@@ -255,13 +255,15 @@ def _assert_copy_set_aside(s: dict, copy_id: str) -> None:
     # set-aside line naming the expense it repeats, and its pages captioned
     # as the copy.
     assert "2 expenses · EUR 32.00 · USD 15.00" in s["listing"]
-    assert "Copies set aside: 1 document repeats an expense listed above" in s["listing"]
-    assert "(USD 15.00)" in s["listing"]
+    # Item 138: a month sectioned per card states its copies after the last
+    # card's receipt pages, so the line is read off the whole document.
+    assert "Copies set aside: 1 document repeats an expense listed above" in s["pdf_text"]
+    assert "(USD 15.00)" in s["pdf_text"]
     lovable_no = next(
         n for n in (1, 2)
         if f"Expense {n} · Lovable" in s["pdf_text"]
     )
-    assert f"copy of expense {lovable_no}" in s["listing"]
+    assert f"copy of expense {lovable_no}" in s["pdf_text"]
     assert f"Expense {lovable_no} (copy set aside) · Lovable" in s["pdf_text"]
     # Cost centers: out of every bucket, on its own line.
     roll_up = s["roll_up"]
