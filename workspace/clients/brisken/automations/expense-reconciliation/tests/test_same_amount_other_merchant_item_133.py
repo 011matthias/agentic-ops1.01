@@ -283,4 +283,12 @@ def test_the_rule_never_breaks_a_tie_a_person_should_settle():
     )
     assert {a.transaction_id for a in out.ambiguous} == {"t1"}, out.ambiguous
     assert all(m.transaction_id != "t1" for m in out.matches), out.matches
-    assert ("t2", "R1") in _pairs(out)
+    # Item 103 (2026-09-17) changed what happens to R1 while the pick is
+    # open: the tie HOLDS both receipts, so ANTHROPIC does not take R1
+    # behind the pick's back. The raw outcome used to pair them, and the
+    # page never showed that pairing anyway (`held_by` gave R1 to the tie
+    # and called the charge "receipt held by another charge"), which is the
+    # split item 103 closed. Once a person settles the tie, the next
+    # re-match offers the freed receipt to this charge.
+    assert ("t2", "R1") not in _pairs(out)
+    assert "t2" in out.unmatched_transactions, out.unmatched_transactions

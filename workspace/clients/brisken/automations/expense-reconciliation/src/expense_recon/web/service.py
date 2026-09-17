@@ -844,18 +844,23 @@ def execute_run(
         raise RunInputError(str(exc)) from exc
 
     outcome = result.outcome
-    n_review = len(
-        {m.transaction_id for m in outcome.judgment_required}
-        | {m.transaction_id for m in outcome.ambiguous}
+    # Item 103: the same effective derivation the re-match commit and the
+    # months list use, so one name means one thing on every screen. A fresh
+    # run has no verdicts yet, and the difference is still real: a charge
+    # whose only receipt a tie on another charge holds is unmatched on the
+    # page from the first render.
+    committed = effective_charge_counts(
+        result.transactions, outcome, result.receipts, {}
     )
+    n_review = committed["n_review"]
     n_tx = len(result.transactions)
     summary = {
         "n_transactions": n_tx,
         "n_receipts": len(result.receipts),
-        "n_matched": len(outcome.matches),
+        "n_matched": committed["n_matched"],
         "n_review": n_review,
-        "n_unmatched_tx": len(outcome.unmatched_transactions),
-        "n_refunds": len(outcome.refunds),
+        "n_unmatched_tx": committed["n_unmatched_tx"],
+        "n_refunds": committed["n_refunds"],
         "n_unmatched_rec": len(outcome.unmatched_receipts),
         "n_parse_errors": count_parse_issues(result.parse_errors)["errors"],
         "n_parse_notes": count_parse_issues(result.parse_errors)["notes"],
@@ -865,7 +870,7 @@ def execute_run(
         # receipts. `receipt_match_rate` is the honest denominator: receipts
         # placed on a charge over receipts that exist. Both are exposed; the
         # SPA leads with the receipt rate. (2026-07-27)
-        "match_rate": round(len(outcome.matches) / n_tx * 100, 1) if n_tx else 0.0,
+        "match_rate": round(committed["n_matched"] / n_tx * 100, 1) if n_tx else 0.0,
         "n_receipts_matched": max(
             len(result.receipts) - len(outcome.unmatched_receipts), 0
         ),
@@ -6200,6 +6205,21 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
     # the batch page reads them as `receipt_render` per row and one count.
     summary.pop("receipt_render", None)
     snapshot = run.snapshot or {}
+    # Item 103: the four charge counters (and the rate over them) are the
+    # page's, derived here from the reviewer's effective verdict rather than
+    # served as the matcher committed them. A month with no statement has no
+    # charges to count and keeps what it stored; a snapshot that cannot be
+    # read keeps it too, for the same reason the expense counts below do.
+    if has_statement(run):
+        try:
+            charges, states = month_charge_states(run, store.get_decisions(run.run_id))
+        except (KeyError, TypeError, ValueError):
+            charges, states = [], {}
+        if states:
+            summary.update(bucket_counts(states))
+            summary["match_rate"] = (
+                round(summary["n_matched"] / len(charges) * 100, 1) if charges else 0.0
+            )
     # A run whose summary predates expense counts, or whose snapshot has no
     # receipts block yet (created, ingest still running or failed), keeps
     # what it stored: deriving from an empty snapshot would report a real
@@ -9379,6 +9399,51 @@ def month_charge_states(
     return transactions, charge_states(transactions, effective, decisions)
 
 
+def effective_charge_counts(
+    transactions: list,
+    outcome: MatchOutcome,
+    receipts: list,
+    decisions: dict,
+) -> dict[str, int]:
+    """The four charge counters in the STORED summary's vocabulary
+    (`n_matched` / `n_review` / `n_unmatched_tx` / `n_refunds`), derived from
+    the same `charge_states` map the run page counts (`_BUCKET_COUNTER`,
+    where the reconciled bucket is called `n_reconciled`).
+
+    Item 103: the stored summary and the months list counted the RAW outcome
+    -- `len(outcome.matches)` and the transactions named in
+    `judgment_required` / `ambiguous` -- while the page counts the effective
+    one. A receipt a pending pick holds is dropped from the second charge
+    that scored it, so the list reported a month as further along than its
+    own workbench (live July 2026: list 8 in review / 72 unmatched, page 7 /
+    73; both numbers are of the same month on the same day). One derivation,
+    so the two screens cannot disagree, and a reviewer's later confirm or
+    reject moves both.
+    """
+    effective = apply_decisions(outcome, transactions, receipts, decisions)
+    return bucket_counts(charge_states(transactions, effective, decisions))
+
+
+# The stored summary / months list name for each `charge_states` bucket. The
+# page's own names are `_BUCKET_COUNTER`; only the reconciled bucket differs
+# (`n_matched` here, `n_reconciled` there), because the two vocabularies
+# predate item 103 and renaming a served field would break the SPA.
+_STORED_BUCKET_COUNTER = {
+    "reconciled": "n_matched",
+    "review": "n_review",
+    "refund": "n_refunds",
+    "unmatched": "n_unmatched_tx",
+}
+
+
+def bucket_counts(states: dict[str, dict]) -> dict[str, int]:
+    """`charge_states` counted into the stored summary's four names."""
+    counts = dict.fromkeys(_STORED_BUCKET_COUNTER.values(), 0)
+    for state in states.values():
+        counts[_STORED_BUCKET_COUNTER[state["bucket"]]] += 1
+    return counts
+
+
 def settled_charge_cards(
     run: RunRow, charges: list, states: dict[str, dict]
 ) -> dict[str, str]:
@@ -11743,25 +11808,32 @@ def rematch_month(
                 entry["file"]: anchors,
             }
         n_tx = len(transactions)
-        n_review = len(
-            {m.transaction_id for m in outcome.judgment_required}
-            | {m.transaction_id for m in outcome.ambiguous}
+        # Item 103: what this commit stores, logs and returns is the
+        # EFFECTIVE count -- the reviewer's verdicts over the outcome, which
+        # is what the page and the months list show. The raw outcome can
+        # name one receipt on two charges (a pending pick holds it; the
+        # second charge falls to unmatched), and counting that pairing was
+        # how a re-match event reported one more matched charge than the
+        # workbench it had just rebuilt.
+        committed = effective_charge_counts(
+            transactions, outcome, receipts, store.get_decisions(run.run_id)
         )
+        n_review = committed["n_review"]
         counts = count_parse_issues(all_issues)
         summary = {
             **fresh.summary,
             "n_transactions": n_tx,
             "n_receipts": len(receipts),
             "n_expenses": len(receipts),
-            "n_matched": len(outcome.matches),
+            "n_matched": committed["n_matched"],
             "n_review": n_review,
-            "n_unmatched_tx": len(outcome.unmatched_transactions),
-            "n_refunds": len(outcome.refunds),
+            "n_unmatched_tx": committed["n_unmatched_tx"],
+            "n_refunds": committed["n_refunds"],
             "n_unmatched_rec": len(outcome.unmatched_receipts),
             "n_parse_errors": counts["errors"],
             "n_parse_notes": counts["notes"],
             "match_rate": (
-                round(len(outcome.matches) / n_tx * 100, 1) if n_tx else 0.0
+                round(committed["n_matched"] / n_tx * 100, 1) if n_tx else 0.0
             ),
             "n_receipts_matched": max(
                 len(receipts) - len(outcome.unmatched_receipts), 0
@@ -11801,9 +11873,9 @@ def rematch_month(
                 "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "trigger": str(trigger or ""),
                 "n_transactions": n_tx,
-                "n_matched": len(outcome.matches),
+                "n_matched": committed["n_matched"],
                 "n_review": n_review,
-                "n_unmatched_tx": len(outcome.unmatched_transactions),
+                "n_unmatched_tx": committed["n_unmatched_tx"],
                 "n_receipts": len(receipts),
                 "n_unmatched_rec": len(outcome.unmatched_receipts),
                 "match_rate": summary["match_rate"],
@@ -11846,10 +11918,10 @@ def rematch_month(
         self_confirm = {"error": f"{type(exc).__name__}: {exc}"}
     return {
         "n_transactions": n_tx,
-        "n_matched": len(outcome.matches),
+        "n_matched": committed["n_matched"],
         "n_review": n_review,
-        "n_unmatched_tx": len(outcome.unmatched_transactions),
-        "n_refunds": len(outcome.refunds),
+        "n_unmatched_tx": committed["n_unmatched_tx"],
+        "n_refunds": committed["n_refunds"],
         "entity_mismatch": entity_mismatch,
         "judgments_reused": judgments.hits,
         "judgments_new": judgments.misses,
