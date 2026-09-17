@@ -208,6 +208,7 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
+| `lovable-line-category-prompt.md` (note #64, item 136) | `expx.lines.open.one`, `expx.lines.open.many`, `expx.lines.pick` in `chunk-expenses._batchId`, with `line_index` beside them in the same chunk | Written 2026-09-17, not pasted. No backend change (`POST /api/runs/{id}/categories` with `line_index`, probed on current code) |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.

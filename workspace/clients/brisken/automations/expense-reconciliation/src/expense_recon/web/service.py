@@ -18,6 +18,7 @@ which keeps the layer unit-testable without an HTTP client.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -4082,24 +4083,38 @@ def registry_upserts_from_expense_run(
 
     Only explicit edits teach; the batch default and untouched OCR values do
     not. Pure: it never touches the store, so it is unit-testable and the
-    caller decides whether to persist the changed map."""
+    caller decides whether to persist the changed map.
+
+    Item 116 (2026-09-17): every entry is carried WHOLE. Only a merchant an
+    edit actually changed is rewritten, and only its aliases / category /
+    account move; `multi_category`, `cost_center` and any other key stay as
+    stored. A run whose edits change nothing returns a map equal to the one
+    passed in, so the caller writes nothing, and the counts name exactly the
+    changes the returned map carries (a re-affirmed category is not counted)."""
     orig_by_id = {r.document_id: r for r in receipts}
     eff_by_id = {r.document_id: r for r in effective_receipts}
-    # Work on a mutable copy in the stored shape.
-    out: dict[str, dict] = {}
-    for name, entry in (merchants or {}).items():
-        out[str(name)] = {
-            "aliases": list((entry or {}).get("aliases") or []),
-            "category": (entry or {}).get("category"),
-            "zoho_account": (entry or {}).get("zoho_account"),
-        }
+    base: dict = merchants or {}
+    # Merchants an edit reached, each a deep copy of its WHOLE stored entry
+    # (or a fresh entry for a new canonical name). Untouched entries are never
+    # copied into this, so nothing can strip them.
+    work: dict[str, dict] = {}
+    aliases_added: dict[str, int] = {}
+    category_changed: set[str] = set()
 
     def _ensure(canonical: str) -> dict:
-        return out.setdefault(
-            canonical, {"aliases": [], "category": None, "zoho_account": None}
-        )
+        entry = work.get(canonical)
+        if entry is None:
+            prior = base.get(canonical)
+            entry = (
+                copy.deepcopy(prior)
+                if isinstance(prior, dict)
+                else {"aliases": [], "category": None, "zoho_account": None}
+            )
+            entry["aliases"] = list(entry.get("aliases") or [])
+            work[canonical] = entry
+        return entry
 
-    n_alias = n_category = n_skipped = 0
+    n_skipped = 0
 
     # 1) Vendor edits -> canonical + alias.
     for document_id, fields in (field_overrides or {}).items():
@@ -4115,7 +4130,7 @@ def registry_upserts_from_expense_run(
         have = {normalize_vendor(a) for a in entry["aliases"]}
         if normalize_vendor(raw) not in have:
             entry["aliases"].append(raw)
-            n_alias += 1
+            aliases_added[canonical] = aliases_added.get(canonical, 0) + 1
 
     # 2) Category reclassifications -> merchant default (conflict-skipped).
     pending: dict[str, dict] = {}
@@ -4146,17 +4161,34 @@ def registry_upserts_from_expense_run(
             n_skipped += 1
             continue
         entry = _ensure(canonical)
+        before = (entry.get("category"), entry.get("zoho_account"))
         entry["category"] = val["category"]
         if val["zoho_account"]:
             entry["zoho_account"] = val["zoho_account"]
-        n_category += 1
+        if (entry["category"], entry.get("zoho_account")) != before:
+            category_changed.add(canonical)
 
-    # Validate + clean back into the canonical stored shape (dedup aliases,
-    # confirm categories). Fail-open: a malformed result keeps the old map.
-    try:
-        new_merchants = normalize_merchants_setting(out)
-    except ValueError:
-        new_merchants = merchants or {}
+    # Fold only the merchants that actually changed back into a copy of the
+    # stored map, validating each one (dedup aliases, confirm the category)
+    # and laying the cleaned aliases / category / account over the WHOLE
+    # entry. Fail-open per merchant: a malformed entry keeps its stored form
+    # and is not counted.
+    new_merchants = copy.deepcopy(base)
+    n_alias = n_category = 0
+    for canonical, entry in work.items():
+        n_new_aliases = aliases_added.get(canonical, 0)
+        changed_category = canonical in category_changed
+        if not n_new_aliases and not changed_category:
+            continue
+        try:
+            cleaned = normalize_merchants_setting({canonical: entry}).get(canonical)
+        except ValueError:
+            continue
+        if cleaned is None:
+            continue
+        new_merchants[canonical] = {**entry, **cleaned}
+        n_alias += n_new_aliases
+        n_category += int(changed_category)
     summary = {
         "aliases_added": n_alias,
         "categories_set": n_category,

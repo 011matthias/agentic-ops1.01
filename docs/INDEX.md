@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | Brisken Expense Recon Voids Audit | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Expense%20Recon%20Voids%20Audit/Checkpoint.md) |
 | 2026-09-17 | Brisken Recon Entity Order | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Recon%20Entity%20Order/Checkpoint.md) |
 | 2026-09-17 | Expense Recon Settings Tabs and Feedback Round | client-dev | [→](docs/2026-09-17%20-%20Expense%20Recon%20Settings%20Tabs%20and%20Feedback%20Round/Checkpoint.md) |
 | 2026-09-17 | Brisken ECC Items 9 And 6 | client-dev | [Mini-Checkpoint-2](docs/2026-09-17%20-%20Brisken%20ECC%20Items%209%20And%206/Mini-Checkpoint-2.md) |

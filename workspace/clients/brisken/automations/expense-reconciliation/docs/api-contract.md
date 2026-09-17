@@ -2048,6 +2048,14 @@ zoho_account?}`:
   the row then books to what the export derives for a category with no
   account: the category label when no chart is wired, the visible
   `(account unmapped - assign)` placeholder when one is.
+- Item 95 (2026-09-17): a line the chart gate rejects books the same way.
+  The gate judges the account, so it clears a non-postable account and
+  keeps the line's category; `GET /runs/{id}/expenses.csv` and the month's
+  report print `(uncategorized - assign)` only for a line with no category,
+  exactly where `books_as[].unassigned` is true. Before this, every
+  categorized row whose receipt carried a company printed the placeholder,
+  and a receipt with one categorized and one unread line printed as one
+  uncategorized row. Pinned route-level in `tests/test_mixed_entity_export.py`.
 
 ## A needs-review row's proposed category: `posting_category_proposed` (item 70)
 
@@ -2671,6 +2679,16 @@ corrections to memory" button (`POST /api/runs/{id}/commit-memory`) did: header
 edits teach field corrections, entity overrides teach merchant -> entity,
 category reclassifications teach merchant -> category, confirmed statement
 pairs teach aliases and FX, and the same edits grow the merchant registry.
+
+Growing the registry (item 116, 2026-09-17) rewrites only the merchants an
+edit changed, and on those only `aliases`, `category` and `zoho_account`;
+`multi_category`, `cost_center` and every other key stay as stored, and a
+save whose edits change nothing leaves `settings["merchants"]` untouched.
+`learned.registry` (`aliases_added`, `categories_set`, `skipped_conflict`)
+counts what was written: a category already stored on the merchant is not
+counted again. Before this, every save rebuilt the whole map with three
+keys per merchant while the reply could read 0 / 0. Pinned in
+`tests/test_web_merchant_registry.py`.
 
 The publish reply gains one parallel key; `ok`, `run_id` and `published` are
 unchanged, and the month is published whatever the save does.
