@@ -536,6 +536,33 @@ def test_a_real_deploy_beside_a_commit_still_opens(tmp_path):
     assert "CONSUMER NOT DRIVEN" in out
 
 
+@pytest.mark.parametrize("cmd", [
+    # register 2026-09-17 slow-path (session f9a82399): a read-only search
+    'B=/c/x/agentic-ops1-audit; grep -rn "flyctl deploy" $B/docs | head',
+    # the same class, live the next session
+    'MSYS_NO_PATHCONV=1 git -C C:/x show origin/main:f.md'
+    ' | grep -n -E "f9a82399|flyctl deploy" | cut -c1-900',
+    "rg -F -e 'flyctl deploy' docs",
+    "echo fly deploy",
+    "grep -n vercel-force-deploy tools/INDEX.md",
+])
+def test_a_search_naming_a_deploy_opens_nothing(tmp_path, cmd):
+    assert post(tmp_path, "Bash", cmd) == ""
+    assert stop(tmp_path, CLAIM) is None
+
+
+@pytest.mark.parametrize("cmd,label", [
+    ('& "C:\\Users\\x\\.fly\\bin\\flyctl.exe" deploy -a app', "app"),
+    ("( cd workspace/x && flyctl deploy -a app )", "app"),
+    ("FLY_API_TOKEN=abc timeout 900 flyctl deploy -a app", "app"),
+    ("bash -c 'flyctl deploy -a app'", "app"),
+])
+def test_real_deploy_shapes_still_open(tmp_path, cmd, label):
+    out = post(tmp_path, "PowerShell" if cmd.startswith("&") else "Bash", cmd)
+    assert "CONSUMER NOT DRIVEN" in out
+    assert f"{label} deployed" in out
+
+
 def test_a_commit_message_does_not_close_an_open_marker(tmp_path):
     """The mirror of the same confusion: prose mentioning playwright must not
     count as a drive."""
