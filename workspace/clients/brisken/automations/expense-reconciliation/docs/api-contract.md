@@ -163,6 +163,7 @@ name answers the same one:
 | `n_needs_cost_center` | how many rows carry no cost center yet (item 47). Structurally 0 while no cost center is defined |
 | `n_charges_no_entity` | how many CHARGES carry no legal entity, because the card they printed is not in the registry or has no entity (item 59; the fix is defining that card, not a row edit). Charges, not expenses: `n_needs_entity` answers the receipt-side question |
 | `n_charges_receipt_taken` | how many charges are bucketed `unmatched` while every candidate they hold is held by another charge (item 60; the fix is a pick, not a missing receipt) |
+| `n_booked_no_receipt` · `booked_no_receipt_by_ccy` | review payload only: charges the workbook marks as already booked (`entry_status: posted`, yellow) that no receipt settles (`effective_bucket: unmatched`), and their amount per currency, formatted like `unreconciled_by_ccy` (item 102). Never part of `unreconciled_by_ccy`, which keeps its meaning; `{}` and 0 when every booked charge holds a receipt |
 | `n_roster_mismatch` | trip batches only (absent on company months): how many rows a person OUTSIDE the trip's roster paid for (item 38 x 40) |
 | `n_suggested_private` | how many rows are suggested as private expenses, unconfirmed (item 41) |
 | `n_private` | how many rows the operator confirmed private (reimbursement rows) |
@@ -3157,3 +3158,14 @@ The months list and `GET /api/expense-batches/{id}` carry none of the new keys.
 
 Route-level in `tests/test_month_complete_publish_gate.py`. SPA half:
 `docs/lovable-ready-publish-gate-prompt.md`.
+
+## Booked in the workbook, no receipt behind it (item 102)
+
+`GET /api/runs/{id}` `summary.n_booked_no_receipt` and
+`summary.booked_no_receipt_by_ccy` count the yellow statement rows that no
+receipt settles. They sit beside `unreconciled_by_ccy`, never inside it:
+booked is booked, and evidenced is a separate question. Live July 2026 before
+the change: 85 booked rows, 48 of them `unmatched` (47 `already_booked`, 1
+`receipt_held_by_another_charge`); 8 more wait in review with a candidate
+receipt and are not counted. Route-level in `tests/test_booked_without_receipt.py`.
+SPA half: `docs/lovable-booked-no-receipt-prompt.md`.
