@@ -5377,6 +5377,28 @@ Criss on August, 11:29 UTC, row `0019__Invoice-B2EA98DF-0020.pdf` (Pressmaster F
 
 **2026-09-17, Criss (via owner): the months page should show it plainly and be organized separately by the card whose statement each expense was reconciled against.** Same principle as this item and 137 (the card is the unit of reconciliation), on the screen. Recommended shape, not built: tabs per card that has charges or receipts this month plus All and No card, each with a header (statement loaded or not, matched count, still-open amount, receipts on that card without a charge); cards with nothing collapse to one line. Not the stacked coverage panels item 71 removed from the top on 2026-09-15. Order: 137 first (a per-card view over a matcher that does not scope by card would file receipts under the wrong card; one confirmed August pair already crosses cards), then the page and this item's PDFs on the same grouping key. It will make item 108 (9693 and 1176 statements never loaded) visible every month. Open: which surface Criss means (inside a month, the months list with one status line per card, or both), and build now at the hourly rate or quote as a piece under the licence (new presentation, not a defect).
 
+### 139. "Paid with a private card" is a separate button instead of a choice in the card picker (notes #65, #66, owner, 2026-09-17; SPA only)
+
+**Matthias, July Expenses view (`/expenses/50622baec444`), row `0000__rendered-body.pdf` (Hostinger), 15:13 and 15:14 UTC.** On the picker "Leave blank (resolve from card) / Pick the card that paid": "no 'paid with a private card' function". A minute later, on the "Paid with a private card" button of the same row: "I need this 'paid with private card' button as one of the options in the 'pick the card that paid' dropdown. preserves space".
+
+The function exists: the live row carries `can_mark_private: true` and the button renders (PR #987, SPA applied #990). The first note read it as missing because it sits outside the picker. **Proposed change, SPA only:** a "Paid with a private card" option at the end of the card picker, offered only when `can_mark_private` is true, doing what the button does today; the button goes. The backend refusals stay as they are (400 `company_card` on a company-card row, 400 `private_card` on a company-card pick for a private row).
+
+### 140. A possible duplicate shows a label, not the copies side by side (note #67, owner, 2026-09-17; SPA, licence tag for the owner)
+
+**Matthias, July Expenses view, row `0030__...Aposto_Karlsruhe__ZE_8100599.jpg`, 15:15 UTC:** "if this is a potential duplicate, the tool needs to show all the available data to each of the duplicates next to each other for manual comparison. Just labeling it is not going to cut it because then user has to search for the other duplicate and this slows comparison process."
+
+Live row: `duplicate {group_id 3b0029eea1b11643, kind receipt, n_copies 2, copy 2, of 0029__...ZE_7150901.jpg, is_extra true, resolution confirmed}`. The payload already names the other copy (`duplicate.of`), so a side-by-side panel (date, vendor, total, currency, card, reference, receipt image for each copy, then the ruling buttons) needs no backend field. Open: licence class (a comparison view is new presentation; the owner decides whether it counts as the defect "the duplicate cannot be judged from the screen").
+
+### 141. The month page repeats download buttons (note #68, owner, 2026-09-17; SPA only)
+
+**Matthias, July Matching view (`/runs/50622baec444`), section "Receipts without a charge 11", anchor "Downloads Report Reconciled CSV Statement", 15:19 UTC:** "we do not need more than one button to download the different output files, make sure there is only one button for each output file download." **Proposed change, SPA only:** one download control per output file on the page (report PDF, reconciled CSV, statement), in one place; before writing the prompt, list where each download renders today in `brisken-expense-review` so the prompt removes the repeats and keeps one of each.
+
+### 142. A booked charge's hint says "your statement workbook" without naming it or the rule (note #69, owner, 2026-09-17; SPA copy)
+
+**Matthias, July Matching view, section "Charges without a receipt 72", on the row hint "This charge is marked yellow in your statement workbook, so it is already booked. Nothing…", 15:19 UTC:** "where do you get this information from?"
+
+Answer: from the fill colour of that charge's row in the Chase workbook Criss uploads for the month (`July2026.xlsx`): she colours a row yellow once it is booked, and `ingest/statement_xlsx.py` reads the fill when the statement loads (yellow -> `entry_status: posted`). Item 86 fixed the same question on the fold caption ("48 rows marked yellow in July2026.xlsx, already booked", with the yellow / grey tooltip); the per-row hint still says "your statement workbook". **Proposed change, SPA copy:** the row hint names the file from `statements[].file` (fallback "the statement workbook") and says the colour is read when the statement is loaded, same wording as item 86's tooltip; PT wording for Criss.
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.
