@@ -5322,6 +5322,31 @@ Criss on August, 11:29 UTC, row `0019__Invoice-B2EA98DF-0020.pdf` (Pressmaster F
 
 **Applied 2026-09-17 12:42 UTC**, cold-driven: the Pressmaster row shows the one open line with its picker (EN + PT), no other row does. The pick itself is Criss's; the row leaves `partial_uncategorized` when she makes it.
 
+### 137. Receipts are matched against every card's charges unless the receipt prints the card (owner, 2026-09-17; licence: defect)
+
+**Owner:** "the expense to statement matching is not separated by cards."
+
+**What the code does.** `match_month` scopes a receipt to a card only through `receipt_card_scope` (`matching/deterministic.py`): the card digits have to be printed in the receipt's own `payment_mode` AND appear among the statement's charges. Everything else is unscoped and competes for charges on every card. The card the tool itself resolved for the receipt (Settings card hint, a hand pick on the row, a learned card) never reaches the matcher; the one exception is item 135's pick that contradicts a printed card (`hand_picked_card_mode`), and a pick on a receipt that prints no card was left matching as before on purpose. `card_scoping` is on (default `True`, `settings.matching` is empty live), and the LLM judgment layer only sees the pairs `pair_in_scope` lets through, so it inherits the same gap.
+
+**Live, read-only 2026-09-17** (four cards with charges in each month):
+
+- July: 19 of 52 receipts are card-scoped; 33 carry no card and compete across 3876 (48 charges), 2838 (36), 3645 (27) and 0340 (1). 19 of those 33 are matched.
+- August: 10 of 25 are card-scoped; 11 have a card the tool knows but that does not scope (9 picked by hand, 2 from a Settings hint) and 4 have none.
+- One confirmed pair crosses cards: the LOVABLE 25.00 charge of 2026-08-05 on card 3645 is confirmed with `0027__Invoice-HMVWDWIL-0028.pdf`, whose card is hand-picked as Credit Card - 2838. Either the pair or the pick is wrong, and neither the matcher nor the screen says so.
+
+**Proposed change.** The receipt's resolved card (override, hint, learned, printed) scopes its candidates the same way a printed one does, and the charge side keys on `coverage_key`. Open design call before building: a hand pick is Criss's word and can scope hard; a hint or a learned card can be wrong, so a card disagreement from those should demote the pair to review with a "the cards differ" reason rather than drop it (the reconciliation guarantee: a real match is never silently excluded). A confirmed pair whose cards disagree, like the LOVABLE one, needs its own flag on the month page.
+
+### 138. The PDFs are not organized by the cards that were reconciled (owner, 2026-09-17; licence: defect)
+
+**Owner:** "the output (PDF) is also not organized in the different cards that were reconciled."
+
+**What each document does today:**
+
+- **Month report** (`GET /runs/{id}/expense-report.pdf`, the Expenses page download, `build_expense_report`): a company month sections its listing only by cost center (item 47), and only when a cost center resolves; the live registry is empty (`cost_centers: {}`), so the listing is one flat table with the card as a "Paid through" column, one total per currency, and the receipts behind it in listing order. No per-card section, no per-card total.
+- **Reconciliation report** (`GET /runs/{id}/reconciliation-report.pdf`, the month page download): the coverage table and the full charge listing ARE per card (Shipped row 28). The header's matched count and unreconciled total, the exceptions block (unmatched charges, unmatched receipts, duplicates) and the receipt pages are not. August, read 2026-09-17 (69 pages): page 1 "114 charges · 9 matched (7.9%) · unreconciled USD 10,898.66" over four cards, exceptions on pages 2-4 across all cards, per-card listings on pages 5-7, receipts from page 8 in one run.
+
+**Proposed change.** One per-card structure in both documents: per card, its charges with their receipts, its exceptions, its total and its unreconciled figure, then that card's receipt pages; receipts with no card, and charges no coverage entry claims, in a last section that is never dropped. Group on `coverage_key` for charges and on the item 137 resolved card for receipts, so the document and the matcher agree on which card a receipt belongs to. The cost-center partition (item 47) nests inside a card section or stays a separate roll-up; that is an owner call once cost centers exist.
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.

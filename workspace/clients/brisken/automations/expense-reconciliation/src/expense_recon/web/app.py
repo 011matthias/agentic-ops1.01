@@ -166,6 +166,13 @@ from .service import (  # item 88
     commit_month_memory,
 )
 from .service import confirm_expense_category  # note #62
+from .month_readiness import (  # items 99 + 100
+    PUBLISH_MONTH_NOT_COMPLETE,
+    PUBLISH_NO_STATEMENT,
+    PUBLISH_NOT_A_MONTH,
+    not_complete_detail,
+    readiness_of,
+)
 from ..matching.types import EXPENSE_CATEGORIES
 from ..cost_centers import (
     CostCenterRegistry,
@@ -1223,12 +1230,50 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # ── Publish / unpublish a reviewed run (drives the intake status the
     # dashboard and the dev-side notifier read).
     @app.post("/api/runs/{run_id}/publish")
-    def publish_run(run_id: str):
+    def publish_run(
+        run_id: str, request: Request, payload: dict | None = Body(None)
+    ):
+        # Items 99 + 100 (owner rulings 2026-09-17): publishing is the month's
+        # sign-off, so the route itself refuses a month that is not complete
+        # unless the caller overrides, and never publishes a classic run.
+        override = isinstance(payload, dict) and payload.get("override") is True
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
                 return _not_found("Run not found")
-            store.set_run_published(run_id, True, _now_iso())
+            if run_mode(run) != MODE_EXPENSE_GENERATION:
+                # A statement-first run from the classic page (the live ones
+                # are test uploads). It is not a month and teaches nothing;
+                # an override does not change that.
+                return JSONResponse({
+                    "error": "Only a month can be published. This run was made "
+                             "on the classic page, so it is not a month.",
+                    "code": PUBLISH_NOT_A_MONTH,
+                }, status_code=400)
+            if has_statement(run):
+                summary = _workbench_view(store, run)["summary"]
+                complete = bool(summary.get("month_complete"))
+                if not complete and not override:
+                    return JSONResponse({
+                        "error": not_complete_detail(summary),
+                        "code": PUBLISH_MONTH_NOT_COMPLETE,
+                        "readiness": readiness_of(summary),
+                    }, status_code=400)
+            else:
+                complete = False
+                if not override:
+                    return JSONResponse({
+                        "error": "This month has no statement yet, so no charge "
+                                 "is reconciled. Attach the statement, or "
+                                 "publish with override.",
+                        "code": PUBLISH_NO_STATEMENT,
+                    }, status_code=400)
+            published_at = _now_iso()
+            published_by = getattr(request.state, "operator", auth.DEFAULT_LABEL)
+            store.set_run_published(
+                run_id, True, published_at,
+                published_by=published_by, override=not complete,
+            )
             if run.intake_id is not None:
                 store.set_intake_status(
                     run.intake_id, INTAKE_READY,
@@ -1248,6 +1293,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 memory = {"saved": False, "error": str(exc)[:200]}
         return JSONResponse({
             "ok": True, "run_id": run_id, "published": True, "memory": memory,
+            "published_at": published_at,
+            "published_by": published_by,
+            "published_override": not complete,
         })
 
     @app.post("/api/runs/{run_id}/unpublish")
@@ -1261,7 +1309,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 store.set_intake_status(
                     run.intake_id, INTAKE_PROCESSING, updated_at=_now_iso()
                 )
-        return JSONResponse({"ok": True, "run_id": run_id, "published": False})
+            last_save = store.get_memory_commit(run_id)
+        # Item 100: say truthfully what unpublishing does to memory. It
+        # removes nothing: whatever a save (by Publish or by the button)
+        # taught stays until someone forgets it on the Memory page.
+        memory: dict = {"unlearned": False, "kept": last_save is not None}
+        if last_save is not None:
+            memory["saved_at"] = last_save["committed_at"]
+            memory["trigger"] = last_save["trigger"]
+        return JSONResponse({
+            "ok": True, "run_id": run_id, "published": False, "memory": memory,
+        })
 
     # ── Rename / delete a run (F9). The operator accumulates test runs and
     # needs to relabel or clear them; deleting also removes the on-disk
@@ -1922,6 +1980,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             }
         return out
 
+    def _workbench_view(store: RunStore, run) -> dict:
+        """The statement workbench payload exactly as `GET /api/runs/{id}`
+        serves it, so the publish gate reads the counts the page shows."""
+        run_id = run.run_id
+        decisions = store.get_decisions(run_id)
+        overrides = store.get_category_overrides(run_id)
+        resolutions = store.get_duplicate_resolutions(run_id)
+        settled_elsewhere = _settled_elsewhere(store, run_id)
+        # 2026-09-16: `updated_at` over the edit tables too; a category
+        # override or a duplicate ruling moves the month without
+        # touching its snapshot or its decisions.
+        edited_at = store.latest_edit_at(run_id)
+        return build_view(
+            run, decisions, overrides, resolutions,
+            settled_elsewhere=settled_elsewhere,
+            edited_at=edited_at,
+            field_overrides=store.get_expense_field_overrides(run_id),
+        )
+
     @app.get("/api/runs/{run_id}")
     def api_workbench(run_id: str):
         """The review render model for the SPA: `build_view` (transaction
@@ -1939,19 +2016,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # expense grid stays reachable via GET /api/expense-batches/{id}.
             if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
                 return JSONResponse(jsonable_encoder(_expense_view(store, run)))
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-            resolutions = store.get_duplicate_resolutions(run_id)
-            settled_elsewhere = _settled_elsewhere(store, run_id)
-            # 2026-09-16: `updated_at` over the edit tables too; a category
-            # override or a duplicate ruling moves the month without
-            # touching its snapshot or its decisions.
-            edited_at = store.latest_edit_at(run_id)
-        view = build_view(
-            run, decisions, overrides, resolutions,
-            settled_elsewhere=settled_elsewhere,
-            edited_at=edited_at,
-        )
+            view = _workbench_view(store, run)
         # build_view already carries run_id, label, summary, rows,
         # unmatched_*, duplicate_groups, category_options: return it as the
         # SPA render model.

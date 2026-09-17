@@ -115,7 +115,8 @@ def _fix(client, batch_id, doc, key):
 
 
 def _publish(client, batch_id) -> dict:
-    resp = client.post(f"/api/runs/{batch_id}/publish")
+    # No statement on these months: since item 100 publish needs the override.
+    resp = client.post(f"/api/runs/{batch_id}/publish", json={"override": True})
     assert resp.status_code == 200, resp.text
     return resp.json()["memory"]
 

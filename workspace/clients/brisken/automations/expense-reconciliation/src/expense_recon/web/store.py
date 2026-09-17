@@ -217,6 +217,10 @@ class RunRow:
     published: bool = False
     published_at: str | None = None
     intake_id: str | None = None
+    # Item 100: the operator label of the session that published, and whether
+    # it published a month the completeness gate refused. Cleared on unpublish.
+    published_by: str | None = None
+    published_override: bool = False
 
 
 @dataclass
@@ -453,6 +457,9 @@ class RunStore:
             ("published", "INTEGER NOT NULL DEFAULT 0"),
             ("published_at", "TEXT"),
             ("intake_id", "TEXT"),
+            # Item 100 (2026-09-17): who published, and whether over the gate.
+            ("published_by", "TEXT"),
+            ("published_override", "INTEGER NOT NULL DEFAULT 0"),
         )
         for column, ddl in adds:
             if column not in existing:
@@ -540,11 +547,27 @@ class RunStore:
         return [self._row_to_run(r) for r in rows]
 
     def set_run_published(
-        self, run_id: str, published: bool, published_at: str | None
+        self,
+        run_id: str,
+        published: bool,
+        published_at: str | None,
+        *,
+        published_by: str | None = None,
+        override: bool = False,
     ) -> None:
+        """Publish or unpublish. Unpublishing clears who and whether it was
+        an override along with the time, so the row describes the CURRENT
+        sign-off only."""
         self.conn.execute(
-            "UPDATE runs SET published = ?, published_at = ? WHERE run_id = ?",
-            (int(published), published_at, run_id),
+            "UPDATE runs SET published = ?, published_at = ?, published_by = ?, "
+            "published_override = ? WHERE run_id = ?",
+            (
+                int(published),
+                published_at,
+                published_by if published else None,
+                int(bool(published and override)),
+                run_id,
+            ),
         )
         self.conn.commit()
 
@@ -649,6 +672,8 @@ class RunStore:
             published=bool(row["published"]),
             published_at=row["published_at"],
             intake_id=row["intake_id"],
+            published_by=row["published_by"],
+            published_override=bool(row["published_override"]),
         )
 
     # -- trips (item 38) ---------------------------------------------------
