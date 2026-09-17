@@ -92,9 +92,61 @@ def learn_from_run(
     decision-applied (effective) outcome; `confirmed_tx_ids` are the
     transactions the reviewer explicitly confirmed; `category_overrides`
     is the raw (document_id, line_index) -> {category, zoho_account} map."""
+    rec_by_id = {r.document_id: r for r in receipts}
+    confirmed_pairs, n_alias, n_fx = learn_confirmed_pairs(
+        store,
+        transactions=transactions,
+        receipts=receipts,
+        outcome=outcome,
+        confirmed_tx_ids=confirmed_tx_ids,
+        source_run=source_run,
+        now_iso=now_iso,
+    )
+
+    n_category, n_skipped = _learn_categories(
+        store,
+        {**rec_by_id, **charge_pseudo_receipts(transactions)},
+        category_overrides,
+        source_run,
+        now_iso,
+    )
+
+    return LearnSummary(
+        confirmed_pairs=confirmed_pairs,
+        vendor_aliases=n_alias,
+        merchant_fx=n_fx,
+        merchant_categories=n_category,
+        skipped_mixed_category=n_skipped,
+    )
+
+
+def learn_confirmed_pairs(
+    store: LearningStore,
+    *,
+    transactions: list[Transaction],
+    receipts: list[Receipt],
+    outcome: MatchOutcome,
+    confirmed_tx_ids: set[str],
+    source_run: str,
+    now_iso: str,
+) -> tuple[int, int, int]:
+    """Teach the vendor spellings and exchange rates a month's CONFIRMED
+    charge/receipt pairs prove. Returns (pairs, aliases, FX samples).
+
+    Split out of `learn_from_run` for item 115: every live month is
+    receipt-first WITH a statement, and that sign-off path taught the
+    category half only, so the bank's truncated descriptions came back
+    unmatched every month while the contract promised otherwise.
+
+    An alias whose statement description or receipt vendor names no
+    merchant ("SUPERMERCADO", "Comida e Bebida") is refused, the guard item
+    117 put on merchant aliases: those strings identify a KIND of shop, and
+    what the matcher would learn from one is a name it cannot tell two
+    merchants apart by."""
+    from ..merchant_registry import is_generic_alias
+
     tx_by_id = {t.transaction_id: t for t in transactions}
     rec_by_id = {r.document_id: r for r in receipts}
-
     confirmed_pairs = n_alias = n_fx = 0
 
     for m in outcome.matches:
@@ -111,7 +163,10 @@ def learn_from_run(
         if tx.vendor_from_statement and r.detected_vendor:
             sv = normalize_vendor(tx.vendor_from_statement)
             rv = normalize_vendor(r.detected_vendor)
-            if sv and rv:
+            generic = is_generic_alias(tx.vendor_from_statement) or is_generic_alias(
+                r.detected_vendor
+            )
+            if sv and rv and not generic:
                 store.record_vendor_alias(tx.legal_entity_id, sv, rv, now_iso, source_run)
                 n_alias += 1
 
@@ -138,21 +193,7 @@ def learn_from_run(
                 )
                 n_fx += 1
 
-    n_category, n_skipped = _learn_categories(
-        store,
-        {**rec_by_id, **charge_pseudo_receipts(transactions)},
-        category_overrides,
-        source_run,
-        now_iso,
-    )
-
-    return LearnSummary(
-        confirmed_pairs=confirmed_pairs,
-        vendor_aliases=n_alias,
-        merchant_fx=n_fx,
-        merchant_categories=n_category,
-        skipped_mixed_category=n_skipped,
-    )
+    return confirmed_pairs, n_alias, n_fx
 
 
 @dataclass(frozen=True)
