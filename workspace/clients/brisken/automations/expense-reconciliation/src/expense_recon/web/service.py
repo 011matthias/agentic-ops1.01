@@ -5228,13 +5228,27 @@ def resolve_batch_row_cards(
     owner directive 2026-09-06): a payment method that resolves to NO
     registered card is SUGGESTED as a private expense — never stamped.
     The suggestion fires on a non-empty hint the chain refused (not on
-    ambiguity, which is a known-card contest, and not once the operator
-    set the row's entity explicitly — an override is a decision). The
-    operator resolves it by confirming private (the `private` +
-    `reimburse_to` field overrides; the row becomes a reimbursement row
-    and its person IS `reimburse_to`, source "private" — the one bounded
-    exception to item 40's card-only rule, operator-confirmed) or by
-    assigning/registering the real card, which clears it.
+    ambiguity, which is a known-card contest). The operator resolves it
+    by confirming private (the `private` + `reimburse_to` field
+    overrides; the row becomes a reimbursement row and its person IS
+    `reimburse_to`, source "private" — the one bounded exception to item
+    40's card-only rule, operator-confirmed) or by assigning/registering
+    the real card, which clears it. An entity override no longer clears
+    the suggestion (owner 2026-09-17): the entity says which company the
+    expense books to, not how it was paid, and the old exemption left an
+    "EC-Karte" restaurant bill in August on needs_person, pointing at a
+    Settings card that does not exist.
+
+    `can_mark_private` (owner 2026-09-17: "expenses on cards that are not
+    defined in settings ... the option of defining as an expense that went
+    through private card"): whether the private-card option applies to the
+    row at all. True when no defined company card paid it (no card, not a
+    two-card contest) or when the card is only REMEMBERED from an earlier
+    month (memory is not a decision on this row, and the reviewer has no
+    way to take it off), and always on a confirmed private row so it can be
+    undone. A company card from the printed number, a strip assignment or
+    this row's own card pick means the company paid: nothing to reimburse.
+    A confirmed private row never picks up a remembered card.
     """
     from ..cards import masked_short_ending, resolve_hinted_card_ex
     from ..matching.deterministic import _card_keys
@@ -5264,26 +5278,6 @@ def resolve_batch_row_cards(
         # number (a tender word, or nothing), so memory never overrides a
         # number the document shows. A key the batch's cards do not hold,
         # or an inactive card, decides nothing.
-        fixed = _batch_row_card(
-            cards, (field_overrides.get(r.document_id) or {}).get("card_key")
-        )
-        if fixed is not None:
-            card, card_source = fixed, "override"
-            card_ending = ""
-        elif card is None and not _card_keys(hint):
-            remembered = _batch_row_card(cards, r.card_key)
-            if remembered is not None:
-                card, card_source = remembered, "learned"
-        override = (field_overrides.get(r.document_id) or {}).get("legal_entity", "")
-        if override.strip():
-            entity, source = override.strip(), "override"
-        elif card is not None and card.entity:
-            entity, source = card.entity, "card"
-        elif (r.legal_entity_id or "").strip():
-            entity = r.legal_entity_id.strip()
-            source = "batch" if entity == (batch_entity or "").strip() else "learned"
-        else:
-            entity, source = "", "none"
         fields = field_overrides.get(r.document_id) or {}
         reimburse_to = str(fields.get("reimburse_to") or "").strip()
         # A confirmation IS the pair: the flag AND who gets reimbursed.
@@ -5297,6 +5291,24 @@ def resolve_batch_row_cards(
             str(fields.get("private") or "").strip() == "1"
             and bool(reimburse_to)
         )
+        fixed = _batch_row_card(cards, fields.get("card_key"))
+        if fixed is not None:
+            card, card_source = fixed, "override"
+            card_ending = ""
+        elif card is None and not _card_keys(hint) and not private:
+            remembered = _batch_row_card(cards, r.card_key)
+            if remembered is not None:
+                card, card_source = remembered, "learned"
+        override = fields.get("legal_entity", "")
+        if override.strip():
+            entity, source = override.strip(), "override"
+        elif card is not None and card.entity:
+            entity, source = card.entity, "card"
+        elif (r.legal_entity_id or "").strip():
+            entity = r.legal_entity_id.strip()
+            source = "batch" if entity == (batch_entity or "").strip() else "learned"
+        else:
+            entity, source = "", "none"
         if private:
             person, person_source = reimburse_to, "private"
         elif card is not None and card.person:
@@ -5313,11 +5325,10 @@ def resolve_batch_row_cards(
             "private": private,
             "reimburse_to": reimburse_to if private else "",
             "suggested_private": bool(
-                hint
-                and card is None
-                and not ambiguous
-                and not private
-                and source != "override"
+                hint and card is None and not ambiguous and not private
+            ),
+            "can_mark_private": private or (
+                not ambiguous and (card is None or card_source == "learned")
             ),
             "ambiguous": ambiguous,
             # A reviewer's (or remembered) pick settles the ambiguity the
@@ -5978,6 +5989,7 @@ def build_expense_view(
             "hint": "", "card": None, "entity": r.legal_entity_id or "",
             "entity_source": "batch", "person": "", "person_source": "none",
             "private": False, "reimburse_to": "", "suggested_private": False,
+            "can_mark_private": True,
             "ambiguous": False, "card_map_blocked": False,
         }
         cost = cost_res.get(r.document_id) or UNRESOLVED_COST_CENTER
@@ -6088,6 +6100,10 @@ def build_expense_view(
             "private": res["private"],
             "reimburse_to": res["reimburse_to"],
             "suggested_private": res["suggested_private"],
+            # Owner 2026-09-17: the private-card option applies only where
+            # no company card paid (see resolve_batch_row_cards). The two
+            # write routes refuse the same rows, so the SPA gates on this.
+            "can_mark_private": res.get("can_mark_private", True),
             "reimburse_to_prefill": (
                 ((intake_provenance.get(r.document_id) or {}).get("person") or "")
                 if (res["suggested_private"] or res["private"]) else ""

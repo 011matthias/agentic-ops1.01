@@ -9,8 +9,12 @@ Pinned here:
 * SUGGESTED, never stamped: a non-empty hint the chain resolves to no
   registered card reads check/`suggested_private` (rule-5 prose beside
   the code). Ambiguity does not suggest (a known-card contest), an
-  explicit entity override does not (an operator decision), and nothing
+  explicit entity override no longer clears it (2026-09-17: the entity
+  says which company books it, not how it was paid), and nothing
   auto-books.
+* The private-card option (`can_mark_private`, 2026-09-17) applies only
+  where no company card paid; marking a company-card row private and
+  picking a company card on a private row are both refused.
 * Confirming private (POST .../expenses/{doc}/private, reimburse_to
   required) turns the row into a reimbursement row: person =
   reimburse_to, source "private", no entity required, paid-through
@@ -74,9 +78,10 @@ def _extraction(**overrides) -> ExtractedReceipt:
     return ExtractedReceipt(**base)
 
 
-def _create_batch(client, n_files=1, label="August 2026"):
+def _create_batch(client, n_files=1, label="August 2026", seed=0):
     # Empty create + receipts add (the 2026-09-08 decoupling): files are
     # refused at month creation and join through the add route instead.
+    # `seed` keeps a second batch's files byte-distinct from the first's.
     resp = client.post("/api/expense-batches",
                        data={"legal_entity": "", "label": label})
     assert resp.status_code == 200, resp.text
@@ -84,7 +89,8 @@ def _create_batch(client, n_files=1, label="August 2026"):
     assert client.get(f"/jobs/{body['job_id']}").json()["status"] == "done"
     batch_id = body["batch_id"]
     files = [
-        ("files", (f"r{i}.jpg", JPG + bytes([i]), "application/octet-stream"))
+        ("files", (f"r{i}.jpg", JPG + bytes([i, seed]),
+                   "application/octet-stream"))
         for i in range(n_files)
     ]
     resp = client.post(f"/api/expense-batches/{batch_id}/receipts",
@@ -168,18 +174,28 @@ def test_ambiguity_never_suggests_private(client, monkeypatch):
     assert entry["suggested_private"] is False
 
 
-def test_entity_override_is_a_decision_and_clears_the_suggestion(
-    client, monkeypatch
-):
-    _patch_ocr(monkeypatch, _extraction(payment_hint="****0340"))
+def test_an_entity_override_keeps_the_private_suggestion(client, monkeypatch):
+    """Owner 2026-09-17, live in August 2026: an "EC-Karte" restaurant bill
+    whose entity the reviewer set by hand lost the suggestion and sat on
+    needs_person, pointing at a Settings card that does not exist. The
+    entity says which company books the expense, not how it was paid."""
+    _patch_ocr(monkeypatch, _extraction(vendor="Moghul Mahal",
+                                        payment_hint="EC-Karte"))
     batch = _create_batch(client)
     doc = _grid(client, batch)["expenses"][0]["document_id"]
     r = client.put(f"/api/runs/{batch}/expenses/{doc}/entity",
                    json={"legal_entity": "Corporate Services"})
     assert r.status_code == 200, r.text
     row = _grid(client, batch)["expenses"][0]
-    assert row["suggested_private"] is False
-    assert row["review"]["reason_code"] != "suggested_private"
+    assert row["legal_entity_id"] == "Corporate Services"
+    assert row["entity_source"] == "override"
+    assert row["suggested_private"] is True
+    assert row["can_mark_private"] is True
+    assert row["review"]["reason_code"] == "suggested_private"
+
+    _confirm_private(client, batch, doc, person="Dirk")
+    row = _grid(client, batch)["expenses"][0]
+    assert row["private"] is True and row["person"] == "Dirk"
 
 
 def test_assigning_the_card_clears_the_suggestion(client, monkeypatch):
@@ -330,6 +346,130 @@ def test_prefill_rides_only_the_private_flow(client, monkeypatch):
     # card-resolved row: NO prefill, and the card still owns the person
     assert by_vendor["Staples"]["reimburse_to_prefill"] == ""
     assert by_vendor["Staples"]["person"] == "Nicolas"
+
+
+# ── the private-card option: only where no company card paid ─────────
+# Owner 2026-09-17: "expenses on cards that are not defined in settings
+# (non-company cards) [need] the option of defining as an expense that went
+# through private card". A row is paid by a company card OR a private card,
+# never both: nobody is reimbursed for money a company card already paid.
+
+CORP = {"corp-1672": {"digits": ["1672"], "entity": "Corporate Services",
+                      "person": "Nicolas"}}
+
+
+def _by_vendor(client, batch) -> dict:
+    return {e["vendor"]["display"]: e for e in _grid(client, batch)["expenses"]}
+
+
+def test_the_option_applies_only_where_no_company_card_paid(client, monkeypatch):
+    client.put("/api/settings", json={"cards": {
+        **CORP,
+        "a-5555": {"digits": ["5555"], "entity": "Corporate Services"},
+        "b-5555": {"digits": ["5555"], "entity": "Cloud Services"},
+    }})
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="Company Card Co", payment_hint="Visa ...1672"),
+        _extraction(vendor="Undefined Card Co", total="9.00",
+                    payment_hint="Visa ...4242"),
+        _extraction(vendor="Tender Word Co", total="8.00",
+                    payment_hint="EC-Karte"),
+        _extraction(vendor="No Hint Co", total="7.00"),
+        _extraction(vendor="Two Cards Co", total="6.00",
+                    payment_hint="Visa ...5555"),
+    )
+    rows = _by_vendor(client, _create_batch(client, n_files=5))
+    assert rows["Company Card Co"]["can_mark_private"] is False
+    assert rows["Undefined Card Co"]["can_mark_private"] is True
+    assert rows["Tender Word Co"]["can_mark_private"] is True
+    # no payment method printed: no suggestion, but no company card either
+    assert rows["No Hint Co"]["can_mark_private"] is True
+    assert rows["No Hint Co"]["suggested_private"] is False
+    # two company cards claim the number: a company card paid, pick which
+    assert rows["Two Cards Co"]["can_mark_private"] is False
+
+
+def test_a_company_card_expense_cannot_be_marked_private(client, monkeypatch):
+    client.put("/api/settings", json={"cards": CORP})
+    _patch_ocr(monkeypatch, _extraction(payment_hint="Visa ...1672"))
+    batch = _create_batch(client)
+    doc = _grid(client, batch)["expenses"][0]["document_id"]
+
+    r = client.post(f"/api/runs/{batch}/expenses/{doc}/private",
+                    json={"private": True, "reimburse_to": "Dirk"})
+    assert r.status_code == 400
+    assert r.json()["code"] == "company_card"
+    assert r.json()["card"]["key"] == "corp-1672"
+
+    # the one-field route refuses the same row, person stored or not
+    r = client.put(f"/api/runs/{batch}/expenses/{doc}",
+                   json={"field": "reimburse_to", "value": "Dirk"})
+    assert r.status_code == 200, r.text
+    r = client.put(f"/api/runs/{batch}/expenses/{doc}",
+                   json={"field": "private", "value": "1"})
+    assert r.status_code == 400
+    assert r.json()["code"] == "company_card"
+
+    grid = _grid(client, batch)
+    row = grid["expenses"][0]
+    assert row["private"] is False
+    assert row["person"] == "Nicolas" and row["person_source"] == "card"
+    assert grid["summary"]["n_private"] == 0
+    # clearing is never refused
+    r = client.post(f"/api/runs/{batch}/expenses/{doc}/private",
+                    json={"private": False})
+    assert r.status_code == 200, r.text
+
+
+def test_a_private_card_expense_refuses_a_company_card_pick(client, monkeypatch):
+    client.put("/api/settings", json={"cards": CORP})
+    _patch_ocr(monkeypatch, _extraction(payment_hint="EC-Karte"))
+    batch = _create_batch(client)
+    doc = _grid(client, batch)["expenses"][0]["document_id"]
+    _confirm_private(client, batch, doc, person="Dirk")
+    assert _grid(client, batch)["expenses"][0]["can_mark_private"] is True
+
+    pick = {"field": "card_key", "value": "corp-1672"}
+    r = client.put(f"/api/runs/{batch}/expenses/{doc}", json=pick)
+    assert r.status_code == 400
+    assert r.json()["code"] == "private_card"
+    row = _grid(client, batch)["expenses"][0]
+    assert row["private"] is True and row["card"] is None
+
+    # undo the private card, then the company card can be picked
+    r = client.post(f"/api/runs/{batch}/expenses/{doc}/private",
+                    json={"private": False})
+    assert r.status_code == 200, r.text
+    r = client.put(f"/api/runs/{batch}/expenses/{doc}", json=pick)
+    assert r.status_code == 200, r.text
+    row = _grid(client, batch)["expenses"][0]
+    assert row["card"]["key"] == "corp-1672"
+    assert row["can_mark_private"] is False
+
+
+def test_a_remembered_card_does_not_block_the_private_card(client, monkeypatch):
+    client.put("/api/settings", json={"cards": CORP})
+    _patch_ocr(monkeypatch, _extraction(date="2026-07-10"))
+    july = _create_batch(client, label="July 2026", seed=1)
+    doc = _grid(client, july)["expenses"][0]["document_id"]
+    r = client.put(f"/api/runs/{july}/expenses/{doc}",
+                   json={"field": "card_key", "value": "corp-1672"})
+    assert r.status_code == 200, r.text
+    assert client.post(f"/api/runs/{july}/publish").status_code == 200
+
+    _patch_ocr(monkeypatch, _extraction(date="2026-08-03"))
+    august = _create_batch(client, label="August 2026", seed=2)
+    row = _grid(client, august)["expenses"][0]
+    assert row["card"]["key"] == "corp-1672"
+    assert row["card_source"] == "learned"
+    assert row["can_mark_private"] is True
+
+    _confirm_private(client, august, row["document_id"], person="Dirk")
+    row = _grid(client, august)["expenses"][0]
+    assert row["private"] is True
+    assert row["card"] is None, "memory must not re-attach the company card"
+    assert row["person"] == "Dirk" and row["person_source"] == "private"
 
 
 # ── the report and the export ────────────────────────────────────────

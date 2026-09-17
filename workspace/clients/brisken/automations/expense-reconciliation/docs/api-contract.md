@@ -1189,7 +1189,8 @@ PARALLEL (rule 1).
 
 | Field | Type | Meaning |
 |---|---|---|
-| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed, no entity override), so this reads as private money until someone decides |
+| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17) |
+| `expenses[].can_mark_private` | boolean | whether the private-card option applies to the row (2026-09-17): true when no defined company card paid it (no card and not a two-card contest, or a card only remembered from an earlier month) and on every confirmed private row. False = a company card paid; the write routes refuse to mark it private. Absent on older builds: treat as `card == null \|\| private` |
 | `expenses[].private` | boolean | the operator confirmed it: a reimbursement row |
 | `expenses[].reimburse_to` | string | who gets reimbursed; `""` unless confirmed |
 | `expenses[].reimburse_to_prefill` | string | the `submitted_by` person, offered ONLY on suggested/confirmed private rows as a pre-fill for the confirm dialog. The ONE sanctioned use of the sender claim — it never fills `person` and must never generalize into sender-based attribution |
@@ -1200,8 +1201,26 @@ A suggested row reads `check` / `reason_code: "suggested_private"` (rule
 the sharpened needs_entity question for a row whose payment method the
 registry does not know. Ambiguous hints (two cards claim them) keep
 `needs_entity` — that is a known-card contest, not private money. An
-explicit entity override also clears the suggestion: an operator decision
-stands.
+explicit entity override does NOT clear the suggestion (changed
+2026-09-17): the entity says which company books the expense, not how it
+was paid, and the old exemption left an August "EC-Karte" restaurant bill
+on `needs_person`, pointing at a Settings card that does not exist.
+
+**Company card OR private card, never both (added 2026-09-17).** Owner:
+expenses on cards that are not defined in Settings need "the option of
+defining as an expense that went through private card", which makes the
+person eligible for a reimbursement. `can_mark_private` gates the option.
+Both write paths enforce it and answer 400 with a `code`:
+
+- `POST .../private` with `private: true`, or the field PUT with
+  `private: "1"`, on a row a defined company card paid:
+  `{"error": ..., "code": "company_card", "card": {"key", "label"}}`.
+- The field PUT with `card_key` (a per-row company-card pick) on a
+  confirmed private row: `{"error": ..., "code": "private_card"}`. Undo
+  the private card first.
+
+Clearing (`private: false`, `card_key: ""`) is never refused. A confirmed
+private row never picks up a card remembered from an earlier month.
 
 **Confirming**: `POST /api/runs/{id}/expenses/{document_id}/private` with
 `{"private": true, "reimburse_to": "Dirk"}` (`reimburse_to` required;
