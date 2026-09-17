@@ -13,7 +13,10 @@ Owner ruling 2026-09-17. On a row the reviewer has settled OFF the card
 system (its disposition carries a `how`):
 
 * `needs_person` is gone, and `needs_company_or_person` follows from
-  `needs_entity` alone;
+  `needs_entity` alone. `summary.n_needs_person` and
+  `card_review.n_needs_person` both read the `settled_off_card` the card
+  pass stamps on the resolution, so the two counts of one payload agree
+  about every row;
 * `can_mark_private` is false, so the private-card button is not offered;
 * the review reason is its own (`needs_entity_settled_outside`) and asks for
   the entity directly instead of naming a paying card.
@@ -149,6 +152,56 @@ def test_an_ordinary_card_less_row_is_untouched(client, monkeypatch):
     assert row["review"]["reason_code"] == "needs_entity"
     assert "paying card" in row["review"]["reason"]
     assert _grid(client, batch)["summary"]["n_needs_person"] == 1
+
+
+def test_the_two_person_counts_agree_on_every_row(client, monkeypatch):
+    """EQUALITY is the property that broke, so it is what gets pinned.
+
+    `summary.n_needs_person` counts the boxes; `card_review.n_needs_person`
+    counts the card resolution. Both answer "how many rows owe a person",
+    and the first draft of item 144 moved only the first: a settled-outside
+    row read 0 on the summary and 1 on the strip, one payload contradicting
+    itself about one row. Both now read the `settled_off_card` the card pass
+    stamps, so they agree here before and after the disposition, and on the
+    ordinary row beside it that never had one.
+
+    `n_needs_entity` is asserted equal too, in the same call: the company
+    question STAYS on a settled-outside row, so that pair is the control
+    that the exemption did not leak into the entity half.
+    """
+    batch = _batch(
+        client, monkeypatch,
+        _extraction(payment_hint="Wire Transfer"),
+        _extraction(vendor="Aposto Karlsruhe", total="42.50", currency="EUR"),
+    )
+
+    def counts() -> tuple[dict, dict]:
+        grid = _grid(client, batch)
+        return grid["summary"], grid["card_review"]
+
+    summary, strip = counts()
+    assert summary["n_needs_person"] == strip["n_needs_person"] == 2
+    assert summary["n_needs_entity"] == strip["n_needs_entity"] == 2
+
+    doc = _rows(client, batch)["Tricarico Consultoria"]["document_id"]
+    resp = client.post(
+        f"/api/runs/{batch}/receipts/{doc}/settled-outside",
+        json={"how": "bank_transfer", "note": ""},
+    )
+    assert resp.status_code == 200, resp.text
+
+    summary, strip = counts()
+    assert summary["n_needs_person"] == strip["n_needs_person"] == 1, (
+        "the settled row leaves BOTH counts, not just the boxes"
+    )
+    assert summary["n_needs_entity"] == strip["n_needs_entity"] == 2, (
+        "and the company question stays on both"
+    )
+
+    resp = client.delete(f"/api/runs/{batch}/receipts/{doc}/settled-outside")
+    assert resp.status_code == 200, resp.text
+    summary, strip = counts()
+    assert summary["n_needs_person"] == strip["n_needs_person"] == 2
 
 
 def test_the_person_sentence_goes_quiet_only_on_a_settled_outside_row(

@@ -1322,7 +1322,7 @@ PARALLEL (rule 1).
 | Field | Type | Meaning |
 |---|---|---|
 | `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17); a bank-transfer tender and a receipt settled outside the card never raise it (residual R3, see "A wire is not a card") |
-| `expenses[].can_mark_private` | boolean | whether the private-card option applies to the row (2026-09-17): true when no defined company card paid it (no card and not a two-card contest, or a card only remembered from an earlier month) and on every confirmed private row. False = a company card paid; the write routes refuse to mark it private. Absent on older builds: treat as `card == null \|\| private` |
+| `expenses[].can_mark_private` | boolean | whether the private-card option applies to the row (2026-09-17): true when no defined company card paid it (no card and not a two-card contest, or a card only remembered from an earlier month) and on every confirmed private row. False when a company card paid, and (item 144) when the reviewer settled the row outside the card system, where a private card is as untrue as a company one; the write routes refuse to mark either private. Absent on older builds: treat as `card == null \|\| private` |
 | `expenses[].private` | boolean | the operator confirmed it: a reimbursement row |
 | `expenses[].reimburse_to` | string | who gets reimbursed; `""` unless confirmed |
 | `expenses[].reimburse_to_prefill` | string | the `submitted_by` person, offered ONLY on suggested/confirmed private rows as a pre-fill for the confirm dialog. The ONE sanctioned use of the sender claim — it never fills `person` and must never generalize into sender-based attribution |
@@ -1344,14 +1344,27 @@ answered: a payment method that reads as a bank transfer and names no card
 (`service.bank_transfer_tender`, the settled-outside chip's own
 `bank_transfer` rule minus the Brazilian POS word TEF, which IS a card
 payment on a cupom fiscal), and a receipt the reviewer marked settled outside
-the card. `can_mark_private` does not move (the reviewer can still confirm
-she paid it herself), and neither does the row's `needs_entity` /
-`needs_person` / `needs_company_or_person` question: it still reads `check` /
-`needs_entity`. Live, one row moved: July's restored Tricarico invoice (BRL
+the card. Live, one row moved: July's restored Tricarico invoice (BRL
 27,203.34, "Payment Method: Wire Transfer", settled outside by bank
-transfer), `summary.n_suggested_private` 8 to 7. Whether a bank-paid company
-invoice should still ask for a card HOLDER is an open question for the owner.
-Pinned route-level in `tests/test_private_suggestion_not_a_card_r3.py`.
+transfer), `summary.n_suggested_private` 8 to 7.
+
+**Superseded in part by item 144 (same day; see "A row settled outside the
+card system" at the end of this document).** This section originally said
+that `can_mark_private` does not move and that the row's `needs_entity` /
+`needs_person` / `needs_company_or_person` question does not either, and
+closed on the open question of what a bank-paid company invoice should be
+asked. The owner answered it the same day, so those sentences are now true
+of the printed TENDER only:
+
+* a bank-transfer tender with no disposition still moves nothing but
+  `suggested_private`, exactly as described above;
+* a receipt the REVIEWER marked settled outside the card also loses
+  `can_mark_private` and the `needs_person` box, and reads its own review
+  reason `needs_entity_settled_outside`. `needs_entity` stays.
+
+Pinned route-level in `tests/test_private_suggestion_not_a_card_r3.py`
+(the tender half) and `tests/test_bank_transfer_exit_item_144.py` (the
+disposition half).
 
 **Company card OR private card, never both (added 2026-09-17).** Owner:
 expenses on cards that are not defined in Settings need "the option of
@@ -4511,16 +4524,24 @@ the card pass, the review sentence and the boxes all read). A printed
 "Wire Transfer" with no disposition is the document's claim about itself and
 still changes nothing but `suggested_private`.
 
-On such a row, three payload fields move and nothing else does:
+On such a row these move, and nothing else does:
 
 | Field | On a settled-outside row | Otherwise |
 |---|---|---|
 | `expenses[].boxes[]` | no `needs_person`; `needs_company_or_person` follows from `needs_entity` alone | unchanged |
 | `expenses[].can_mark_private` | `false`, so the private-card option is not offered | unchanged |
 | `expenses[].review.reason_code` | `needs_entity_settled_outside` while the row has no entity | `needs_entity` |
+| `summary.n_needs_person` · `card_review.n_needs_person` | both one lower; they read one fact, so they cannot disagree about a row | unchanged |
 
 `summary.n_needs_person` and `summary.n_needs_company_or_person` are counts
-over the boxes, so they follow. `POST .../private` and the field PUT already
+over the boxes, so they follow. `card_review.n_needs_person` counts the same
+question off the card resolution, and it takes the same exemption, so the
+two counts that sit beside each other on one payload agree about every row.
+The fact behind all of them is decided once, in `resolve_batch_row_cards`,
+which stamps `settled_off_card` on the row's resolution; every surface reads
+that stamp rather than deciding again. `card_review.n_needs_entity` does NOT
+take the exemption, because the company question stands on such a row.
+`POST .../private` and the field PUT already
 refuse whatever `can_mark_private` is false on (`code: "company_card"`), so
 the button and the routes still agree.
 

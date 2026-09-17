@@ -5920,9 +5920,13 @@ def settled_off_card(entry: object) -> bool:
     The argument is one value of `settled_outside_map` (`{how, note, at}`),
     or None for a row with no disposition. It is settled off the card when
     it carries a `how`: the reviewer has stated how the money moved, and
-    that answer is never a company card. The one predicate the three places
-    that act on it read (the card pass, the review reason, the boxes), so
-    they cannot disagree about one row.
+    that answer is never a company card.
+
+    Called ONCE per row, by `resolve_batch_row_cards`, which stamps the
+    answer on the resolution as `settled_off_card`. Everything that acts on
+    it downstream (the private option, the boxes, the review sentence, the
+    card strip's `n_needs_person`) reads that stamp rather than deciding
+    again, so no two surfaces of one payload can disagree about one row.
     """
     return bool(isinstance(entry, dict) and entry.get("how"))
 
@@ -6115,6 +6119,14 @@ def resolve_batch_row_cards(
             or (card is not None and not card.zoho_account),
             "card_source": card_source,
             "card_ending": card_ending,
+            # Item 144: the row's settled-off-the-card state, decided ONCE
+            # here and carried on the resolution so every surface that
+            # answers a person-owed question reads the same fact. The
+            # boxes, the review sentence and the card strip's
+            # `n_needs_person` all take it from here; a caller that passes
+            # no `settled_outside` map gets False for every row, which is
+            # correct (only the Expenses payload knows the dispositions).
+            "settled_off_card": settled_off,
         }
     return out
 
@@ -6375,8 +6387,19 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
         # Item 40: rows no person owns yet — the count beside MISSING
         # ENTITY. Resolution is card-only, so the fix is a person on the
         # card (Settings > Cards), not a per-row edit.
+        #
+        # Item 144: which is why a row settled OFF the card system is not
+        # counted here either. There is no card to put a person on, so the
+        # fix this count points at does not exist for it. It reads the same
+        # `settled_off_card` fact `expense_boxes` reads, off the same
+        # resolution, so `card_review.n_needs_person` and
+        # `summary.n_needs_person` cannot disagree about a row: they were
+        # both 1 on July's Tricarico invoice before the ruling and are both
+        # 0 after. `n_needs_entity` above deliberately does NOT take the
+        # exemption: the company question stands on such a row.
         "n_needs_person": sum(
-            1 for res in resolution.values() if not res.get("person")
+            1 for res in resolution.values()
+            if not res.get("person") and not res.get("settled_off_card")
         ),
         # Item 41: the private-expense pair, beside the two above.
         "n_suggested_private": sum(
@@ -6919,14 +6942,19 @@ def build_expense_view(
             "private": False, "reimburse_to": "", "suggested_private": False,
             "can_mark_private": True,
             "ambiguous": False, "card_map_blocked": False,
+            # The card pass sees every receipt, so this branch is defensive
+            # only; it still spells the item-144 fact rather than assuming
+            # False, because a row that fell back here and WAS settled
+            # outside would silently get the pre-ruling answers.
+            "settled_off_card": settled_off_card(
+                grid_settled_outside.get(r.document_id)
+            ),
         }
         cost = cost_res.get(r.document_id) or UNRESOLVED_COST_CENTER
-        # Item 144: the one row-level fact the review sentence and the boxes
-        # both read, decided here once (`settled_off_card`) and carried to
-        # the box pass below, so the two cannot answer it differently.
-        row_settled_outside = settled_off_card(
-            grid_settled_outside.get(r.document_id)
-        )
+        # Item 144: one fact, read off the resolution the card pass stamped
+        # it on, so the boxes, the review sentence and the card strip's
+        # `n_needs_person` cannot answer the same question differently.
+        row_settled_outside = bool(res.get("settled_off_card"))
         box_inputs[r.document_id] = (r, res, cost, row_settled_outside)
         review = _expense_review(
             r, overrides, entity=res["entity"], period=period,
