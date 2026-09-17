@@ -232,6 +232,11 @@ def test_pass_debug_prefixed_doc_already_tracked():
     assert _classify(_run(".claude/skills/next-best-practices/debug-tricks.md")) == "pass"
 
 
+def test_pass_pattern_rule_home():
+    # .claude/patterns/ is a sanctioned W2 home (rule_file_placement §2).
+    assert _classify(_run(".claude/patterns/warn-new-rule.md")) == "pass"
+
+
 # ...but hard scratch (dumps / state / .tmp / .bak) still DENY in tracked dirs.
 def test_deny_api_dump_json():
     assert _classify(_run("docs/api-dump.json")) == "deny"

@@ -580,6 +580,38 @@ def cmd_not_worked(root: Path, args: argparse.Namespace) -> int:
 # ------------------------------------------------------------------- finalize
 
 
+PATTERN_RULE_FIX = re.compile(r"^\s*pattern-rule\s*:\s*(.*?)\s*$", re.IGNORECASE)
+PATTERN_RULE_NAME = re.compile(r"^(warn|block|require)-[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def check_pattern_rule_fixes(root: Path, payload: dict) -> tuple[str | None, list[str]]:
+    """Validate friction rows whose Fix is `pattern-rule:<name>` (a declarative
+    rule in `.claude/patterns/`, counted as structural by anneal-metrics).
+
+    Returns (error, advisories). A malformed value is an error: the cell must
+    read exactly `pattern-rule:<name>` or anneal-metrics cannot classify it.
+    A rule file missing from this checkout is only an advisory, because the
+    ledger lands via its own docs PR and may be written before the rule's PR
+    merges. The cell is normalized in place (`pattern-rule: X` -> `pattern-rule:X`)."""
+    advisories: list[str] = []
+    for i, row in enumerate(payload.get("friction_rows") or [], 1):
+        m = PATTERN_RULE_FIX.match(str(row.get("fix", "")))
+        if not m:
+            continue
+        name = m.group(1)
+        if not PATTERN_RULE_NAME.match(name):
+            return (f"friction_rows[{i}].fix {row.get('fix')!r}: expected pattern-rule:<name> with a "
+                    "verb-first kebab name (warn-*, block-*, require-*)"), advisories
+        row["fix"] = f"pattern-rule:{name}"
+        if not (root / ".claude" / "patterns" / f"{name}.md").is_file():
+            advisories.append(
+                f"advisory: friction_rows[{i}] names pattern rule {name!r}, which is not in "
+                f"{root / '.claude' / 'patterns'} yet; make sure its PR lands "
+                "(uv run tools/pattern_rules.py new ...)."
+            )
+    return None, advisories
+
+
 def cmd_finalize(root: Path, args: argparse.Namespace) -> int:
     raw = sys.stdin.read() if args.payload == "-" else Path(args.payload).read_text(encoding="utf-8")
     payload = json.loads(raw)
@@ -592,6 +624,12 @@ def cmd_finalize(root: Path, args: argparse.Namespace) -> int:
         print(err)
         return 2
     payload["not_worked"] = not_worked
+    err, pattern_advisories = check_pattern_rule_fixes(root, payload)
+    if err:
+        print(err)
+        return 2
+    for line in pattern_advisories:
+        print(line)
     payload.setdefault("date", today())
 
     folder = folder_for(root, payload["date"], payload["topic"])

@@ -84,7 +84,15 @@ CANONICAL_HOOKS = {
                     "type": "command",
                     "command": _cmd(".claude/hooks/input-classifier.py"),
                     "timeout": 10000,
-                }
+                },
+                {
+                    # Prompt arm of the declarative pattern rules
+                    # (.claude/patterns/*.md, event: prompt). Also delivers
+                    # stop-event warnings parked on the previous turn.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/pattern-rules-gate.py"),
+                    "timeout": 10000,
+                },
             ],
         }
     ],
@@ -128,6 +136,14 @@ CANONICAL_HOOKS = {
                     # the check. First-time creation passes. (ECC port item 10)
                     "type": "command",
                     "command": _cmd(".claude/hooks/config-protection-gate.py"),
+                    "timeout": 10000,
+                },
+                {
+                    # File arm of the declarative pattern rules (event: file).
+                    # A regex-shaped lesson becomes a warn/ask/block in one
+                    # markdown file, no new hook (ECC port item 1).
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/pattern-rules-gate.py"),
                     "timeout": 10000,
                 },
                 {
@@ -197,6 +213,13 @@ CANONICAL_HOOKS = {
                 {
                     "type": "command",
                     "command": _cmd(".claude/hooks/vercel-scope-gate.py"),
+                    "timeout": 10000,
+                },
+                {
+                    # Bash arm of the declarative pattern rules (event: bash),
+                    # matched on the _shell.py normalized command view.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/pattern-rules-gate.py"),
                     "timeout": 10000,
                 },
                 {
@@ -299,6 +322,15 @@ CANONICAL_HOOKS = {
                     "command": _cmd(".claude/hooks/deploy-consumer-gate.py"),
                     "timeout": 10000,
                 },
+                {
+                    # Stop arm of the declarative pattern rules (event: stop).
+                    # block honors stop_hook_active; warn is parked and shown
+                    # by the prompt arm on the next turn (Stop has no context
+                    # channel).
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/pattern-rules-gate.py"),
+                    "timeout": 10000,
+                },
             ],
         }
     ],
@@ -388,6 +420,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "sibling-session-gate.py",
     "scorer-lock-gate.py",
     "optimize-run-gate.py",
+    "pattern-rules-gate.py",
 }
 
 # Canonical hook count, derived so the assertion strings can never drift out

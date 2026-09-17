@@ -2,6 +2,7 @@
 
 **Self-annealing (Layer 1 — tactical):** After every fix or build → ask "how do I prevent this error category?" If preventable AND recurrent, choose the highest-leverage operationalization:
 1. **Tool/script** (fires automatically, can't be forgotten) — preferred for: validation checks, file transformations, deploy steps, repetitive file analysis. Create in `tools/` with inline deps (PEP 723) or as a hook in `settings.json`.
+1b. **Pattern rule** (declarative, minutes) — preferred when the failure has a regex-shaped signature in a command, a file write, a prompt, or a closing message. One markdown file in `.claude/patterns/` (`uv run tools/pattern_rules.py new ...`), read by the generic `pattern-rules-gate.py` hook, so no new hook or test module is needed. Actions: warn / ask / block. Record the fix as `pattern-rule:<name>` (anneal-metrics counts it as structural).
 2. **Structural gate** (rule in behaviors.md — fires at decision time) — for: behavioral constraints, decision boundaries, workflow sequencing. Read DECISION-TREE.md first. Dedup check before creating.
 3. **Memory** (feedback file — depends on agent recall) — last resort for: preferences, style guidance, domain knowledge too niche for a rule.
 Check in with user. If too niche → document in checkpoint instead. If choosing memory-only, note: "Fragile fix — consider structural alternative: {suggestion}." If a suggestion appears in 2+ checkpoints without being built, log `infrastructure-deferred` friction.
