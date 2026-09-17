@@ -347,7 +347,7 @@ kept deliberately. Round 7 adds `report_rate`, `report_converted`, `report_gap`,
 Item 81's new `reference_*` fields are a different quantity (the tool's own rate)
 and do not replace these.
 
-**Note #61 (owner, 2026-09-17) waits here.** "Make these dropdown so user does not have to know the exact numbers by heart" on Settings, Legal entities, Account picks. Not built: whether the picks should list GL account codes at all is this item's open question.
+**Note #61 (owner, 2026-09-17): Account picks removed (Shipped row 73).** "Make these dropdown so user does not have to know the exact numbers by heart" on Settings, Legal entities, Account picks. Asked in plain language what the box is for (it shortens the list of accounts a company's expense rows offer; empty means the full chart), the owner ruled the same day: remove the box, every row always offers the full chart. Shipped: `account_options` always comes from the company's chart, `PUT /api/settings` accepts an entity still carrying `account_picks` in any shape and drops it (the published SPA sends it on every save), and neither settings response serves a stored value. None of the five live entities carried the key, so no row moved. SPA half: `docs/lovable-remove-account-picks-prompt.md`, not yet pasted.
 
 ### 24. The output is a document now (owner directive 2026-08-23)
 
@@ -3361,6 +3361,14 @@ The persistence split itself stays open here: the commit should persist
 the effective outcome, or the list / log / claims should read the effective
 layer; decide which when round B lands and the instance is gone.
 
+**Item 103 owns both halves (SHIPPED 2026-09-17, pending PR).** The tie rule
+and the counts ship there: a tie holds its receipts, a receipt spoken for by a
+clean exact candidate elsewhere no longer sustains one, and the months list,
+the stored summary and the `rematch_log` event count the effective verdict the
+page shows. `0023`'s own instance had already gone by then, for an unrelated
+reason: item 137 gives it a resolved card, so it no longer ties with `0021` on
+50.52.
+
 ### The 2026-09-15 feedback wave (7 notes, read off `/feedback.jsonl`)
 
 The in-app widget has collected 42 notes since 2026-07-15. Seven were left on
@@ -4870,7 +4878,7 @@ method and the two run outputs: session 2026-09-17 (memory
 
 **Shipped 2026-09-17:** `summary.n_booked_no_receipt` + `summary.booked_no_receipt_by_ccy` on the review payload count yellow rows no receipt settles (`effective_bucket: unmatched`), beside `unreconciled_by_ccy`, never inside it. Live July before the change: 48 such rows (47 `already_booked` + 1 whose receipt another charge holds); 8 more booked rows wait in review with a candidate and are not counted. Not built: the missing-receipts list (item 107, new function). SPA half `docs/lovable-booked-no-receipt-prompt.md`.
 
-### 103. One receipt can be bound to two charges, so the months list, the change log and the month page disagree (item 72, live today) (2026-09-17 audit draft #101, unranked; licence: defect, covered)
+### 103. One receipt can be bound to two charges, so the months list, the change log and the month page disagree (item 72, live today) (2026-09-17 audit draft #101, unranked; licence: defect, covered) (SHIPPED 2026-09-17, pending PR)
 
 **Audit rank 10 of 40; severity high as merged; verification: three reviewers agreed, severity lowered to medium.** When two receipts tie for a charge, the tool sets that charge aside for a human pick but leaves its receipts free, so the same receipt is also handed to another charge in the same pass. The stored numbers (months list, re-match notifications, cross-month claim table) count the second pairing; the screen, PDFs and CSV drop it, and which charge keeps the receipt depends on statement row order, not score. Live: August's Anthropic 52.59 invoice is stored as matched to the 52.46 charge (score 93) while the screen shows it held by the undecided 50.52 pick (score 83) and reports 52.46 as 'no receipt'; the list says 9 matched, the page 8; July list 9 review / 71 unmatched / 13 receipts vs page 8 / 72 / 11. Item 72 said round B would dissolve this instance; it did not.
 
@@ -4883,6 +4891,118 @@ method and the two run outputs: session 2026-09-17 (memory
 **Value:** The count on the months list and in the notification mail becomes the count Criss sees, and one real August expense stops being reported as undocumented. (effort medium)
 
 **Reviewer corrections:** (evidence) (1) The August figures are stale: live is list 8 matched / 101 unmatched vs page 7 / 102 (not 9 vs 8); the one-row delta is what persists. (2) The receipts delta (July 13 vs 11, August 21 vs 11) is the duplicate copies set aside (page n_copies_set_aside 2 / 10), a separate raw-vs-effective split, not the tie. (3) The workbench no longer reports 52.46 as "no receipt": a 2026-09-16 fix (service.py ~2882-2891, which names this exact instance) labels the row receipt_held_by_another_charge with the holder named and counts it in n_charges_receipt_taken (=1); only the PDF/CSV builders, which have no held_by state, render it as plain unmatched. (4) No mail carries these counts: intake_mail.py has no (ledger) (1) "The matcher-level cause is not named" is overstated: the ledger names it precisely, three times, just without an item number or owner. Backlog item 69 round-B review (lines 3094-3101): "0023 is stopped by pass-1 AMBIGUITY detection (`_ties` over deterministic candidates), a different mechanism the gate never reaches. Extending 'spoken for' into tie detection is a real and probably correct change; it is not in round B's scope and was not made." Same in memory project_brisken_recon_matching_program.md ("is its own round") and the loop brief p1-recon-loop-prompt.md:255-259. Unowned, yes; unnamed, no. (2) The ledger's fix pointer differs from the finding's: the ledger would DISSOLVE the tie (value) (1) The SPA does not report 52.46 as "no receipt": the live row has section "attention", reason_code receipt_held_by_another_charge and its candidate carries held_by -> 50.52; the reconciliation PDF headline reads n_reconciled (effective), not the stored n_matched. (2) "The matcher-level cause is not named" is wrong: the matching-program memory and p1-recon-loop-prompt.md lines 255-259 name it (pass-1 ambiguous tie, uniqueness gate never reaches it, extend spoken-for into tie detection); only backlog item 72's last paragraph is stale on round B. (3) The "notification mail" with raw counts is the dev-side tools/brisken-recon-notify.py polling rematches[] and mailing Matthias; Criss and Dirk n
+
+**Shipped (2026-09-17, pending PR).** The rule as built, both halves in pass 1
+of `matching/deterministic.py`. (1) **Held:** every receipt a tie lists is held
+by it, so the greedy pass skips it, the way `apply_decisions` already holds it
+for the pending pick (the item's fix A). (2) **Spoken for:** before the tie is
+taken, a tied receipt that holds a CLEAN exact candidate on another charge,
+while its own candidate here is not one, no longer sustains it
+(`uniqueness_spoken_for`, round B's rule carried into tie detection, the
+ledger's fix B); under two tied receipts left, the charge is not ambiguous and
+goes to the assignment like any other. B only ever dissolves a tie, never
+creates one, and clean matters: the card pass leaves a cards-differ exact at
+confidence 0.55, below every clean deterministic candidate, so it is not the
+stronger claim elsewhere the rule reasons from.
+
+The labels decided which of the two leads. August's `0023` is `excluded`, and
+the note says why: "no charge of 52.59; eight ANTHROPIC charges between 50.52
+and 54.12 within two days; ambiguous". Neither `6d474e9e8e964bd4` (52.46) nor
+`c632cb75a5098253` (50.52) carries a labelled receipt. So no evidence makes
+either pairing right, and the outcome the labels support is the one where a
+human picks: A is what keeps the pick a pick. B is in for the receipt that IS
+spoken for, `0021` (exact to ANTHROPIC 51.38, the label's verdict carried by
+its copy `0022`): without it, A would hold `0021` in a tie it cannot win and
+the month would lose a real, bank-printed pairing. Two exact twins over two
+identical charges are each other's equal, so neither is spoken for there and
+both charges keep waiting for a human (live July, below).
+
+**The live instance has moved since the audit, and the ledger's `0023` case is
+gone for an unrelated reason.** On a DB copy pulled 2026-09-17 19:46 (after Fly
+v167), August holds no tie at all: `0023` now carries a resolved card (hint,
+Visa ...3645, item 137), so its card signal is 0.75 against `0021`'s 0.5, the
+two no longer tie on 50.52, and `0023` is a plain probable match to 52.46 (93)
+that the label cannot verify. August's list and page already agree: 9 matched /
+1 in review / 101 unmatched / 3 refunds on both. What remains live is JULY's
+shape, which is the same defect one bucket over: the two GOOGLE *Workspace
+71.64 charges of 07-01 (`b7abd111d69921a3` and `b7abd111d69921a3-1`) each tie
+over BOTH `0036` and `0037`, so each receipt is listed on two charges; the
+effective layer gives both to whichever charge comes first in statement order
+and the second reads unmatched with its candidates held. Stored and list: 8 in
+review / 72 unmatched. Page: 7 / 73. Same month, same day, two screens.
+
+**Persistence half, built.** `service.effective_charge_counts` (apply_decisions
+then `charge_states`) is the one derivation, and `bucket_counts` names its
+buckets in the stored summary's vocabulary. `batch_list_summary` re-derives the
+four charge counters and `match_rate` on READ, so a confirm or reject taken
+after the re-match moves the list too; the re-match commit writes the same
+counts into the stored summary, the `rematch_log` event the notifier mails and
+the reply the drop page shows, and `execute_run` does the same at creation.
+`n_unmatched_rec` and `n_receipts_matched` stay as the match stored them: the
+receipts delta is the copies-set-aside split (reviewer correction 2), a
+different question with a different fix. Contract updated in
+`docs/api-contract.md` ("The four charge counters count the effective verdict",
+plus a line on `rematches[]`).
+
+**Measured before (origin/main `8fc84dec`) and after, one DB copy, one tool
+(`tools/recon-match-attribution.py`, `RECON_MODULE_SRC` naming each tree).**
+Both live months and the six scorer bundles: class tables byte-identical, and
+per row, 0 of 79 live receipt rows and 0 of 218 bundle rows changed class or
+bucket. The parity block is identical too, so the pairings the next live
+re-match will write do not move. Pinned scorer and guard, identical on both
+trees: train 56.8, holdout 19.2, all 76.0, determ_ok 70/95, determ_wrong 0,
+nc_matched 0, invariant OK, guard 4/4 PASS. The matcher half changes no month
+anyone holds today; it closes the mechanism that produced the August case and
+would produce the next one.
+
+List against page, measured by calling `batch_list_summary` and `build_view` on
+the same DB copy: July before, list 31 / 8 / 72 / 1 against page 31 / 7 / 73 /
+1; after, list 31 / 7 / 73 / 1, the page's own numbers. August 9 / 1 / 101 / 3
+on both screens, before and after. Across all six runs in the store those two
+July numbers are the only ones that move, and the months with no statement keep
+their empty counts.
+
+**Tests:** `tests/test_tied_receipt_item_103.py`, six. Three pin the matcher's
+shapes (the tie dissolves for a spoken-for receipt and both charges land; a
+surviving tie holds its receipts and the rival charge goes unmatched with no
+receipt named twice; two exact twins stay a human pick). Three run through the
+routes: upload, statement attach, then `GET /api/expense-batches` against `GET
+/api/runs/{id}` on the twin shape (one in review, one unmatched, counts equal
+on both screens, and the re-match event carrying the same numbers), and a
+reject that moves both screens. regress_check red on four wires: the tie
+dissolve (2 of 6), the greedy skip (1 of 6), the list derivation (1 of 6), the
+commit's effective `n_review` (1 of 6). Suite 2268 -> 2274 (2272 passed, 2
+skipped); ruff clean on the diff.
+
+**Predicted live change at the next deploy:** the months screen's July row
+reads 7 in review and 73 unmatched instead of 8 and 72, which is what the
+workbench has been saying; no re-match is needed for that and no pairing moves
+anywhere. The next re-match of either month then stores and mails the effective
+counts rather than the raw ones.
+
+**One contract moved with it.** `tests/test_same_amount_other_merchant_item_133.py::test_the_rule_never_breaks_a_tie_a_person_should_settle`
+(item 133's bulk-confirm half, PR #1036) pinned the raw outcome where a charge
+outside the tie still took a tied receipt. The page never rendered that pairing
+(`held_by` gave the receipt to the pick and labelled the charge "receipt held by
+another charge"), which is precisely the raw-vs-effective split this item
+closes, so the test now asserts the held outcome. The cost is named: while a
+pick is open the other charge waits, and the freed receipt reaches it at the
+next re-match, because a decision does not re-match a month. No live row is in
+that shape on either month or the six bundles.
+
+**Not built.** Round-B vendor dominance as a second spoken-for basis: no tie in
+either live month or the six bundles would use it, and a dominance-kept
+rate-derived pair is not provably stronger than a same-currency tied candidate,
+so it would widen the rule on a hypothesis. Twin-charge auto-pairing: two
+identical charges with two equally fitting receipts stay a human pick rather
+than being paired by row order, which is the matcher's standing rule against an
+arbitrary assignment. The receipt-side counts (`n_unmatched_rec`,
+`n_receipts_matched`) still differ between list and page by the copies set
+aside. `cli.py` and `runlog` keep the raw counts; they are not the web
+surfaces this item is about. And `execute_run`'s own wire has no test that
+bites it: the shape where its raw and effective counts differ (a tie holding
+another charge's only receipt) does not arise on the classic intake path the
+suite exercises.
 
 ### 104. Every decision overwrites the previous one, nobody's name is on it, and one shared password is still live with sessions that never expire (2026-09-17 audit draft #102, unranked; new function, quote separately)
 
@@ -5007,6 +5127,8 @@ method and the two run outputs: session 2026-09-17 (memory
 **Reviewer corrections:** (combined) (1) August is stale: the batch was edited at 09:53Z today and now has 30 expenses, 5 needs_entity (7 needs_company_or_person) and 7 reconciled rows, with 0 overlap; the "3 of 13" no longer holds live. (2) "Item 87 helps only when the receipt prints a card" is wrong: item 87's `card_key` per-row override applies to any row (the 8 no-card rows were its motivation); what is true is that it still asks Criss to pick the card the statement already names. (3) "Every charge carries its card, company and holder": rows carry `legal_entity_id` and `coverage_key` (two shapes: `card-2838` and bare `3876`); the person is resolved from the registry, not stored on the row. (4) "Six in ten clicks disappear e
 
 **Shipped 2026-09-17 (pending PR).** On the Expenses payload (`GET /api/expense-batches/{id}`, its `boxes` and counts), and since the second commit the CSV and the month report, a receipt of the month that a charge of the same month settles (`service.settled_charge_cards`: the workbench's effective bucket `reconciled` with the receipt as `chosen_document_id`, pending or confirmed; a rejected pair or one in review lends nothing; a receipt borrowed from a neighbour or a trip lends nothing) takes that charge's registry card through the item-87 per-row path (`resolve_batch_row_cards(settled_cards=...)`): `card`, company (`entity_source: card`), person (`person_source: card`) and paid-through follow it, and it counts as answered for `needs_entity` / `needs_person`. `card_source` gains the value `settled_charge`. Order: a `card_key` pick, a printed method or assigned hint, any printed card number, and a confirmed private expense all win; a card remembered from an earlier month gives way. The row is a company-card row (`can_mark_private: false`, `suggested_private: false`, the private route refuses `company_card`). Live prediction, read-only against today's payloads and registry: July 19 of its 31 company-or-person rows inherit (12 on card-2838, 7 on 3876; all 19 get both company and person, so the box goes 31 -> 12; 15 of the 19 lose a "suggested private" flag, tender words VISA CREDIT, Link, VISA, TEF), August 2 of 4 (both on 3645, box 4 -> 2). Tests: `tests/test_entity_from_settled_charge_item_111.py` (7, route-level: inherit and box count, no pairing unchanged, rejected pair, row pick wins, printed number wins, settled beats remembered, private refused); `test_view_contract.py` closed set gains the value; `test_reference_duplicates.py`'s ignored-copy invoice now reads `entity_source: card` / `card_source: settled_charge` on corp-2838 (same company as the CSV). `regress_check` red on all six wires (payload wire 4 of 7, pick-first 4 of 6, printed-number guard 3 of 6, reviewer verdicts 1 of 6, source value 2 of 6, settled before memory 1 of 7). Suite 2228 passed / 2 skipped. SPA half: `docs/lovable-entity-from-charge-prompt.md` (source line + "Change card" on the new value; a stale SPA shows the card chip only). Exports follow (same day, second commit): the Zoho CSV and the month report resolve these rows through the same resolver and verdicts (`export_settled_cards` into `_expense_export_inputs` and the report's card pass), so an inherited row never prints `(entity - assign)` and a rejected pair still does; neither document has a person column for a company month. July's CSV rendered locally from a read-only DB copy (deleted after): 56 rows, `(entity - assign)` 35 -> 16; August 21 rows, 3 -> 1 (the payload model gave the same counts). Two export tests; `regress_check` red on all four export wires (resolver 2 of 9, CSV caller 2 of 9, report caller 2 of 9, verdicts 1 of 9). Suite 2253 passed / 2 skipped after merging origin/main. NOT built: the run payload, the matcher, the reconciliation PDF (prints no company or person) and the cost-center totals roll-up do not inherit; the per-receipt pairing field on the Expenses page (item 79 decision 9).
+
+**Box trace 2026-09-17.** Live July after the deploy reads 19 `settled_charge` rows but `n_needs_company_or_person` 14, not the predicted 12. Not a defect: the month changed between the prediction and the deploy. The 19 inheriting rows are the predicted set (12 on card-2838, 7 on 3876, each the chosen receipt of one reconciled pending or confirmed charge, each with company and person from the card and no to-do box), and August reads exactly as predicted (2 inherit on 3645, box 2). The two extra rows are `0015__2026-07-01__BRISKEN_CLOUD_SERVICES__AWS_-_Amazon_Web_Services__Invoice_2704896057.pdf` (USD 3,352.59, prints no payment method) and `0017__2026-07-30__BRISKEN_Consulting_LLC__Rodrigo_Tanure_Tricarico_Con__20260803_July2026_Invoice_20_2318.pdf` (BRL 27,203.34, "Wire Transfer"), which item 105 restored from set-aside at ~17:00 UTC on the owner's order: after the prediction read July (50 expenses, box 31), before PR #1045 merged (17:17 UTC). So the box was 33 at deploy and 33 - 19 = 14. The restore left its trace in the live payload (both restored rows appended after `0070`, the last ingest of 09-12; Tricarico's `settled_outside.at` 17:00:31, the batch's `updated_at`). Neither is chosen or a candidate on any July charge (AWS waits in `unmatched_receipts` for a Cloud Services statement, Tricarico is settled outside by bank transfer), so neither can inherit. `n_suggested_private` closes the same way: predicted 22 - 15 = 7, live 8 (Tricarico's "Wire Transfer" matches no card). The other 12 box rows ask correctly: 9 are named by no charge (`0002` Hostinger "Paid via Corp Services card", an alias four cards share; `0003` Konsultancy, `0004` and `0070` Redis, `0008` 360Crossmedia, no method; `0027`, `0028`, `0034`, `0066` tender words only) and 3 are only candidates on charges in review or unmatched, which lend nothing by design (`0036` and `0037` Google on `b7abd111d69921a3`, card-2838, which also print a card number of their own; `0062` Bezerra on `7b7284d43889d1f4`, 3876). Nothing fixed. Seen on the way, not item 111's and untracked: a receipt recorded settled outside by bank transfer (`0017`) still reads `suggested_private` and sits in the company-or-person box.
 
 ### 112. A receipt filed in the neighbouring month reaches this month's statement only by luck (2026-09-17 audit draft #110, unranked; licence: defect, covered) (SHIPPED 2026-09-17, pending PR)
 
@@ -5407,7 +5529,7 @@ Criss on August, 11:29 UTC, row `0019__Invoice-B2EA98DF-0020.pdf` (Pressmaster F
 
 **Proposed change.** The receipt's resolved card (override, hint, learned, printed) scopes its candidates the same way a printed one does, and the charge side keys on `coverage_key`. Open design call before building: a hand pick is Criss's word and can scope hard; a hint or a learned card can be wrong, so a card disagreement from those should demote the pair to review with a "the cards differ" reason rather than drop it (the reconciliation guarantee: a real match is never silently excluded). A confirmed pair whose cards disagree, like the LOVABLE one, needs its own flag on the month page.
 
-### 138. The PDFs are not organized by the cards that were reconciled (owner, 2026-09-17; licence: defect) (SHIPPED 2026-09-17, PR #1028, Shipped row 62; the months-page half below stays open)
+### 138. The PDFs are not organized by the cards that were reconciled (owner, 2026-09-17; licence: defect) (SHIPPED 2026-09-17, PR #1028, Shipped row 62; cards inside cost centers Shipped row 70; months-page half: backend SHIPPED 2026-09-17, PR #1049, Shipped row 72, SPA prompt written)
 
 **Shipped (both PDFs).** One grouping, `_pdf_common.card_sections`, feeds both documents: charges on `rows[].coverage_key`, a receipt a charge holds follows that charge's card, an unheld receipt goes to the card item 137 resolved for it (`service.report_receipt_cards`), and a last "No card" section is never dropped. Each card section opens with one shared line (`card_statement_line`: statement or "not recorded", period, charges, matched, unreconciled, booked without a receipt), then its exceptions (reconciliation report), its charges or expenses, then that card's receipt pages (`caption_mark` + `stitch(..., caption_pages)`). A held pair whose cards disagree is named inside its charge's section. Design calls, so they can be revisited:
 
@@ -5418,7 +5540,7 @@ Criss on August, 11:29 UTC, row `0019__Invoice-B2EA98DF-0020.pdf` (Pressmaster F
 
 **Owner ruling 2026-09-17: cards inside cost centers.** "When a month has both cost centers and cards, the PDFs are organized cards inside cost centers: one section per cost center (spending per project), with each section's expenses grouped by the card that paid." **Shipped (Shipped row 70), month report:** a month whose cost centers resolve keeps "Listing by cost center", one section per cost center in the same order, and when its listed receipts reach two card sections or more (the card listing's own rule) each center's expenses run in `card_sections` order and key, "No card" last. A center spanning two card groups or more gets a sub-heading per card, that card's table and its sums per currency, then the center's sums; a center on one card gets no card heading. `card_statement_line` stays out of the sub-groups (its figures are the whole statement's, not the center's share); a held pair whose cards differ is still named under its card ("on this card" under a heading, the card's name otherwise). Design calls: receipt pages stay at the end in listing order, as a cost-center month had them (moving them behind each center is the existing `receipts_by_section` switch); a one-card month with cost centers stays exactly as before. **Reconciliation report: unchanged.** It never sectioned by cost center (a charge has no cost center of its own; the center is resolved on the receipt), so it keeps its card sections whatever the settings say. No live document changes today: `cost_centers: {}`. Real data, rendered locally from a read-only DB copy with a synthetic assignment in memory (every third receipt Lidar / Marketing / none, no receipt files): July 56 expenses as Lidar 20 (3876 6, 2838 7, 3645 1, No card 6), Marketing 18, Unassigned 18; August 21 as 9 / 7 / 5; per-card sums add to each center's, center counts to the header, captions 1..N once; reconciliation report sections per card as before (63 and 36 pages without receipt files).
 
-**Found on the way, not built:** both PDFs lay tables out wider than the A4 frame (516 pt between the 14 mm margins). The month report's listing is 732 pt, so the `#` and Date columns are cut off on the left and Ccy and Receipt on the right, on every month report since item 24; the reconciliation report's charge table is 672 pt, cutting `#`, part of Date and part of Account. Text extraction still reads the clipped cells, so no test sees it; a raster of the August pages shows it.
+**Found on the way:** both PDFs cut table columns off the page. Built as item 143.
 
 **Owner:** "the output (PDF) is also not organized in the different cards that were reconciled."
 
@@ -5430,6 +5552,18 @@ Criss on August, 11:29 UTC, row `0019__Invoice-B2EA98DF-0020.pdf` (Pressmaster F
 **Proposed change.** One per-card structure in both documents: per card, its charges with their receipts, its exceptions, its total and its unreconciled figure, then that card's receipt pages; receipts with no card, and charges no coverage entry claims, in a last section that is never dropped. Group on `coverage_key` for charges and on the item 137 resolved card for receipts, so the document and the matcher agree on which card a receipt belongs to. The cost-center partition (item 47) nests inside a card section or stays a separate roll-up; that is an owner call once cost centers exist.
 
 **2026-09-17, Criss (via owner): the months page should show it plainly and be organized separately by the card whose statement each expense was reconciled against.** Same principle as this item and 137 (the card is the unit of reconciliation), on the screen. Recommended shape, not built: tabs per card that has charges or receipts this month plus All and No card, each with a header (statement loaded or not, matched count, still-open amount, receipts on that card without a charge); cards with nothing collapse to one line. Not the stacked coverage panels item 71 removed from the top on 2026-09-15. Order: 137 first (a per-card view over a matcher that does not scope by card would file receipts under the wrong card; one confirmed August pair already crosses cards), then the page and this item's PDFs on the same grouping key. It will make item 108 (9693 and 1176 statements never loaded) visible every month. Open: which surface Criss means (inside a month, the months list with one status line per card, or both), and build now at the hourly rate or quote as a piece under the licence (new presentation, not a defect).
+
+**Owner ruling 2026-09-17: build now.** Told it is new screen layout under the licence hold, he chose to build "a tab per card showing whether its statement is loaded, how many charges matched and what's still open, plus 'All' and 'No card'". The surface was decided for him (he did not want to be involved): tabs inside the month on both pages, Matching `/runs/{id}` and Expenses `/expenses/{id}`, one card key and one tab bar component, All selected by default, the choice remembered per month. The months list keeps its one line per month.
+
+**Shipped (months-page backend, SPA prompt written).** Both month GETs carry `card_sections[]` and a `card_section` key on every row, receipt and expense the page lists (`rows[]`, `unmatched_receipts[]`, `copies_set_aside[]`, `assignable_receipts[]`, `expenses[]`). The grouping is `_pdf_common.card_sections` over the view and card chain the PDFs use, and every figure is `card_statement_figures`, which `card_statement_line` now reads too, so a tab and its PDF section cannot disagree: statement `loaded` / `not_recorded` / `not_loaded`, statements, period, charges, matched, still open per currency, booked without a receipt, receipts, receipts without a charge; the Expenses payload adds expenses and totals per tab. Design calls, so they can be revisited:
+
+- **Fewer than two cards, or a trip, sends `[]`**: the PDFs' flat rule (a tab bar restating the only card organizes nothing), and a trip sections per traveler.
+- **No card is key `""`**, as on `coverage[]`: the registry drops a blank card key, so it can never name a card. The prompt tells the SPA to compare keys with `===`.
+- **A card with nothing this month is no tab**; the tab row ends with item 71's "+ N cards with nothing this month", counted from `coverage[]`.
+- **Only the two page GETs build the tabs**; the edit routes that reply with the expense payload's summary do not pay for the extra view build.
+- **Each page files by its own PDF's pool** (Matching by the snapshot's receipts, Expenses by the month report's). Measured on a 2026-09-17 DB copy: July and August file every charge and receipt identically on both pages and in both PDFs; only September (no statement) differs, by the copy card inheritance the Expenses page already shows.
+
+Live August over the live payloads: 3645 loaded, 40 charges, 5 matched, USD 2,393.15 open, 8 receipts, 5 expenses; 3876 loaded, 37, 0, USD 1,031.15, no receipt; 2838 loaded, 34, 4, USD 7,438.36, 11 receipts (5 without a charge), 10 expenses; 1176 not recorded, 3 charges, USD 36.00, 2 receipts (1); 9693 not loaded, 2 receipts (2); No card, 2 receipts (2). The tab counts add up to the page's whole counts (101 charges without a receipt, 10 receipts without a charge, 20 expenses, EUR 668.00 / USD 2,033.86). SPA half: `docs/lovable-card-tabs-prompt.md` (Not applied): the tab bar, one header line per tab, both pages filtered by `card_section`, All unchanged, EN + PT-BR, and a cold-drive check list for August.
 
 ### 139. "Paid with a private card" is a separate button instead of a choice in the card picker (notes #65, #66, owner, 2026-09-17; SPA only)
 
@@ -5460,6 +5594,23 @@ Live row: `duplicate {group_id 3b0029eea1b11643, kind receipt, n_copies 2, copy 
 Answer: from the fill colour of that charge's row in the Chase workbook Criss uploads for the month (`July2026.xlsx`): she colours a row yellow once it is booked, and `ingest/statement_xlsx.py` reads the fill when the statement loads (yellow -> `entry_status: posted`). Item 86 fixed the same question on the fold caption ("48 rows marked yellow in July2026.xlsx, already booked", with the yellow / grey tooltip); the per-row hint still says "your statement workbook". **Proposed change, SPA copy:** the row hint names the file from `statements[].file` (fallback "the statement workbook") and says the colour is read when the statement is loaded, same wording as item 86's tooltip; PT wording for Criss.
 
 **Prompt written 2026-09-17:** `docs/lovable-booked-hint-names-workbook-prompt.md`, not applied. Live the phrase sits in two places, the "Already booked" badge tooltip on all 84 booked July rows and the line under the vendor on the 47 in "Charges without a receipt" ("Marked yellow in your statement workbook, so already booked."), and item 86's fold on August names a PDF that carries no colours ("August2026.xlsx, 20260804-statements-1176-.pdf"), so the prompt names only workbooks (`writeback` true), matched on the row's `account_id`.
+
+### 143. Both PDFs cut table columns off the page (found building item 138, 2026-09-17; licence: defect) (SHIPPED 2026-09-17, PR #1052, Shipped row 74)
+
+**Defect.** Both documents lay out on A4 portrait with 14 mm margins, and reportlab's frame keeps 6 pt of padding inside them, so a table has 503.9 pt, not the 516 pt between the margins. reportlab centers a table that is too wide, so it spills past both sides of the frame by half the excess; past 45.7 pt a side (margin plus padding) it runs off the paper. The text layer still held the clipped cells, which is why no text-extraction test saw it; a raster of the August pages did.
+
+| Table | Before | After |
+|---|---|---|
+| Month report listing (flat, per card, per cost center, per card inside a cost center, per trip person) | 732 pt: `#` and Date cut on the left, Ccy and Receipt on the right, on every month report since item 24 (2026-08-23) | 503 pt |
+| Reconciliation charge table (flat and per card) | 672 pt: `#`, part of Date and part of Account cut | 503 pt |
+| Reconciliation coverage by card | 572 pt: 34 pt into each margin, still on the paper | 502 pt |
+| Reimbursements owed 466, charges with no receipt 430, receipts with no charge 455, open duplicates 460, copies set aside 470 | fit | unchanged |
+
+**Shipped.** Portrait kept, widths rebalanced, no column dropped, no font change. Every column reads at 8 pt once the text columns wrap, and landscape listing pages would have made a mixed-orientation document, since item 138 puts each card's receipt pages (portrait) right behind its section. Counts, dates, amounts up to 123,456.78 and currency codes fit on one line in DejaVu Sans, the container's font and the widest `register_fonts` picks; vendor, account, entity, paid through, status and receipt wrap between words, so most listing rows run two lines. `_pdf_common.PAGE_MARGIN_MM` and `TABLE_WIDTH_MAX` carry the page, and both builders read their margins from it. A single token wider than its column still breaks at the column edge (nothing lost, nothing past the edge): on July and August that is three charge-table cells, once each, `AMZ*Amazon.D*X37L83BI5` (Charge), `POPULAR-MARAIAL` (Receipt) and `Subscriptions-Others` (Account).
+
+**Test.** `tests/test_pdf_tables_fit_the_page.py` (8) records every Table the document template places while the real builder runs, and asserts each is within its frame, no cell's text is wider than its column, and no count, date, amount or currency breaks a word. Fixtures: a 105-row flat listing with an unreadable amount, a per-card month with receipts, reimbursements and copies, cost centers with cards inside, a trip, the reconciliation report with three cards and with one, and both downloads of a two-card month through the routes. `regress_check` with the old widths: month report 5 red, reconciliation report 3 red; a listing Date column narrowed to 40 pt goes red on the word-break check alone.
+
+**Real data**, read-only DB copy of 2026-09-17 rendered locally in DejaVu Sans with the receipt files, July and August, both documents plus a synthetic cost-center assignment: every table 502 or 503 pt. Rasters of the August listing, the July listing and cost-center listing, and both months' coverage and charge pages show every column inside both edges.
 
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
@@ -5511,7 +5662,11 @@ Answer: from the fill colour of that charge's row in the Chase workbook Criss up
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-| 72 | A correction comes back next month: a receipt with line items consults memory, and a rule a person taught (sign-off, the button, a Memory-page edit, a validated row) applies over the model's line read with `decision: "learned_over_line"` and the existing `check` / `vendor_guess` glance when they disagree; a rule saved with NO company (what every live sign-off writes) reaches a row whose card names one, and a row with no company takes the vendor's other rules only when they agree; a month with a statement teaches its CONFIRMED pairs' vendor spellings and FX at sign-off, generic descriptions refused (item 117's guard). A Zoho-seeded row nobody validated still stays below a line read, left for the owner | Item 115. The sign-off promise was that a fixed category arrives pre-filled, and none of it fired: 55 of July's 84 categorized lines came from a line read that never consulted memory, the lookup needed a company that 33 of 52 July and 13 of 31 August receipts do not carry, and only the classic statement page taught aliases and FX, so two reconciled months left the store at 0 aliases / 0 FX. Replay of both live months: 0 lines change today (every rule is seeded), 10 of August's 42 change once July is signed off, and July's sign-off teaches 4 bank spellings instead of 0 | pending PR, 2026-09-17; suite 2266 -> 2279 passed / 2 skipped |
+| 77 | A correction comes back next month: a receipt with line items consults memory, and a rule a person taught (sign-off, the button, a Memory-page edit, a validated row) applies over the model's line read with `decision: "learned_over_line"` and the existing `check` / `vendor_guess` glance when they disagree; a rule saved with NO company (what every live sign-off writes) reaches a row whose card names one, and a row with no company takes the vendor's other rules only when they agree; a month with a statement teaches its CONFIRMED pairs' vendor spellings and FX at sign-off, generic descriptions refused (item 117's guard). A Zoho-seeded row nobody validated still stays below a line read, left for the owner | Item 115. The sign-off promise was that a fixed category arrives pre-filled, and none of it fired: 55 of July's 84 categorized lines came from a line read that never consulted memory, the lookup needed a company that 33 of 52 July and 13 of 31 August receipts do not carry, and only the classic statement page taught aliases and FX, so two reconciled months left the store at 0 aliases / 0 FX. Replay of both live months: 0 lines change today (every rule is seeded), 10 of August's 42 change once July is signed off, and July's sign-off teaches 4 bank spellings instead of 0 | pending PR, 2026-09-17; suite 2266 -> 2279 passed / 2 skipped |
+| 75 | One receipt is never bound to two charges, and the months list counts what the page counts: a pass-1 tie HOLDS its receipts against the greedy pass, a tied receipt holding a clean exact candidate on another charge no longer sustains the tie (round B's "spoken for", carried into tie detection), and `service.effective_charge_counts` is the one derivation behind `n_matched` / `n_review` / `n_unmatched_tx` / `n_refunds` on the months list, the stored summary, the `rematch_log` event and the re-match reply | Items 103 and 72. August at round B stored `0023` against ANTHROPIC 52.46 while the page showed it held by the undecided 50.52 pick; the labels call `0023` ambiguous and give neither charge a receipt, so the pick is the right outcome and the holding rule is what keeps it, with the spoken-for rule protecting `0021`'s bank-printed 51.38. Live today the remaining instance is July's two GOOGLE Workspace 71.64 charges, each tied over both invoices: list 8 in review / 72 unmatched against the page's 7 / 73. Not built: vendor dominance as a second spoken-for basis, twin-charge auto-pairing, the receipt-side counts | 2026-09-17, pending PR; route-level `tests/test_tied_receipt_item_103.py` (6), regress_check red on all four wires (tie dissolve 2 of 6, greedy skip 1 of 6, list derivation 1 of 6, the commit's effective `n_review` 1 of 6); suite 2274 (2272 passed / 2 skipped); measured on a 2026-09-17 DB copy: both live months and the six bundles byte-identical, 0 of 79 and 0 of 218 receipt rows moved, scorer 56.8 / 19.2 / 76.0 and guard 4/4 unchanged; predicted live change is July's list row reading 7 / 73 |
+| 74 | Every PDF table fits the A4 frame (503.9 pt): month report listing 732 to 503 pt, reconciliation charge table 672 to 503 pt, coverage table 572 to 502 pt. Portrait kept, widths rebalanced so counts, dates, amounts and currencies fit one line in DejaVu Sans and text columns wrap; no column dropped; `_pdf_common.TABLE_WIDTH_MAX` | Item 143, found building item 138. reportlab centered the too-wide tables past both page edges, so every month report since item 24 printed without `#`, Date, Ccy and Receipt, and the reconciliation report without `#` and part of Date and Account; text extraction still read the clipped cells | PR #1052, 2026-09-17; `tests/test_pdf_tables_fit_the_page.py` (8), regress_check red on both builders; not deployed |
+| 73 | Account picks removed from Legal entities: `account_options` always comes from the company's chart, `PUT /api/settings` accepts `entities[].account_picks` in any shape and stores nothing, and neither settings response serves a value stored before; SPA half in `docs/lovable-remove-account-picks-prompt.md` | Note #61 (item 23). The owner asked for the box as a dropdown, learned it only shortened the account list a company's rows offer, and ruled to remove it: every row offers the full chart. No live entity carried a value | PR #1044, not yet deployed |
+| 72 | The month page split by card, backend: `card_sections[]` on both month GETs (statement loaded / not recorded / not loaded, period, charges, matched, still open, booked without a receipt, receipts, receipts without a charge; expenses and totals on the Expenses payload) and `card_section` on every row, receipt and expense the pages list; `[]` below two cards and on a trip. `card_statement_figures` feeds both the PDF heading line and the tabs. SPA half: `docs/lovable-card-tabs-prompt.md` | Item 138, owner ruling 2026-09-17 ("build now"). The PDFs were organized by card while both month pages mixed every card, so Criss could not check one card's statement against its receipts on screen. The tabs reuse the PDFs' grouping and figures, so a tab and its PDF section cannot disagree; on a 2026-09-17 DB copy July and August file every charge and receipt identically on both pages and in both PDFs | 2026-09-17; route-level `tests/test_card_tabs_item_138.py` (8) plus contract pins in `tests/test_view_contract.py`, regress_check red on all nine wires (run GET 6 of 8, expense GET 4 of 8, charge keys 2, expense keys 4, figures 4, without-a-charge count 3, two-card rule 1, trip rule 1, shared booked figure 1); suite 2274 passed / 2 skipped on the tree merged with main (cost-center half included) |
 | 71 | The ECB rate gets its own 2% clean band, and a drifted Settings rate says so: `fx_ecb_match_pct` 0.02 for `ecb_month` pairs only (Settings and self-derived keep 3%), measured at 3 / 2.5 / 2 / 1.75 / 1.5% on July with Settings rates removed (29 / 31 / 32 / 33 / 33 right) and on the six bundles (68 / 70 / 70 / 70 / 69); `setup_advisories[]` `code: "fx_rate_drift"` beyond 1 point from the month's ECB average (items 90 + 132) | Owner ruling: tighten the band before the typed September rates go, so new months stop matching at a stale rate without auto-matching coincidences; nothing moves live until the Settings rates are removed | PR #1048, Fly v167, 2026-09-17 |
 | 70 | Month report with cost centers and two cards or more: cards inside cost centers. Each cost center's expenses run in `card_sections` order and key ("No card" last); a center spanning two card groups gets a sub-heading, table and per-currency sums per card, then the center's sums; no statement line in the sub-groups; a held pair whose cards differ still named. Reconciliation report unchanged (it never sectioned by cost center) | Item 138, owner ruling 2026-09-17. Item 138 left cost-center months on their own partition with no card structure, so a month with both could not be read per card inside a project. Changes no live document today (`cost_centers: {}`) | 2026-09-17; route-level `tests/test_expense_report_by_card_item_138.py` (3 new, the old cost-center test rewritten to the ruling) and the builder fallback in `tests/test_month_report_pdf.py`, regress_check red on all six wires (subsections attached 2 of 9, card order inside a center 1 of 9, builder renders subsections 2 of 9, one-card note 1 of 9, two-card trigger 1 of 9, slices must cover the section 1 of 11); suite 2238 passed / 2 skipped; July and August rendered locally from a read-only DB copy with a synthetic assignment |
 | 69 | A receipt settling a charge takes its company and person: on the Expenses payload a receipt this month's charge settles (reconciled, pending or confirmed, never rejected) with no card of its own takes the charge's registry card through the per-row card path, `card_source: "settled_charge"`, and leaves the company-or-person box; a pick, a printed card, a hint or a confirmed private wins, a remembered card gives way, `can_mark_private` false. SPA half: `docs/lovable-entity-from-charge-prompt.md` | Item 111. July asked Criss for a company and a person on receipts the matching page had already paired with a charge whose card names both. Live prediction: July 19 of 31 rows (box 31 -> 12), August 2 of 4. The Zoho CSV and the month report follow the same card: July's CSV `(entity - assign)` 35 -> 16 of 56 rows. Not built: the run payload and the matcher do not inherit | 2026-09-17, pending PR; route-level `tests/test_entity_from_settled_charge_item_111.py` (9), regress_check red on all ten wires (payload wire 4 of 7, pick-first 4 of 6, printed-number guard 3 of 6, reviewer verdicts 1 of 6, source value 2 of 6, settled before memory 1 of 7, export resolver / CSV caller / report caller 2 of 9 each, export verdicts 1 of 9); suite 2253 passed / 2 skipped |

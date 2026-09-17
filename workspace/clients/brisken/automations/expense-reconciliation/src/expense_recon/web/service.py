@@ -844,18 +844,23 @@ def execute_run(
         raise RunInputError(str(exc)) from exc
 
     outcome = result.outcome
-    n_review = len(
-        {m.transaction_id for m in outcome.judgment_required}
-        | {m.transaction_id for m in outcome.ambiguous}
+    # Item 103: the same effective derivation the re-match commit and the
+    # months list use, so one name means one thing on every screen. A fresh
+    # run has no verdicts yet, and the difference is still real: a charge
+    # whose only receipt a tie on another charge holds is unmatched on the
+    # page from the first render.
+    committed = effective_charge_counts(
+        result.transactions, outcome, result.receipts, {}
     )
+    n_review = committed["n_review"]
     n_tx = len(result.transactions)
     summary = {
         "n_transactions": n_tx,
         "n_receipts": len(result.receipts),
-        "n_matched": len(outcome.matches),
+        "n_matched": committed["n_matched"],
         "n_review": n_review,
-        "n_unmatched_tx": len(outcome.unmatched_transactions),
-        "n_refunds": len(outcome.refunds),
+        "n_unmatched_tx": committed["n_unmatched_tx"],
+        "n_refunds": committed["n_refunds"],
         "n_unmatched_rec": len(outcome.unmatched_receipts),
         "n_parse_errors": count_parse_issues(result.parse_errors)["errors"],
         "n_parse_notes": count_parse_issues(result.parse_errors)["notes"],
@@ -865,7 +870,7 @@ def execute_run(
         # receipts. `receipt_match_rate` is the honest denominator: receipts
         # placed on a charge over receipts that exist. Both are exposed; the
         # SPA leads with the receipt rate. (2026-07-27)
-        "match_rate": round(len(outcome.matches) / n_tx * 100, 1) if n_tx else 0.0,
+        "match_rate": round(committed["n_matched"] / n_tx * 100, 1) if n_tx else 0.0,
         "n_receipts_matched": max(
             len(result.receipts) - len(outcome.unmatched_receipts), 0
         ),
@@ -6168,17 +6173,16 @@ def _expense_review(
     return review
 
 
-def _expense_account_options(run: RunRow, settings: dict | None) -> list[str]:
-    """The curated account picker for an expense batch (Phase 5): the
-    entity registry's explicit `account_picks` shortlist when one is
-    defined, else the same scoped postable-account labels the categorizer
-    was constrained to (rebuilt from the run's `coa_validation` block via
-    `_resolve_categorizer_chart`'s fallback). Empty when no chart — the
-    picker offers nothing rather than the full unscoped chart."""
-    entity = ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
-    ent = entity_from_settings(settings, entity)
-    if ent and ent.get("account_picks"):
-        return [str(a) for a in ent["account_picks"]]
+def _expense_account_options(run: RunRow) -> list[str]:
+    """The account picker for an expense batch (Phase 5): the scoped
+    postable-account labels the categorizer was constrained to (rebuilt from
+    the run's `coa_validation` block via `_resolve_categorizer_chart`'s
+    fallback). Empty when no chart — the picker offers nothing rather than
+    the full unscoped chart.
+
+    Always the company's chart: the per-entity `account_picks` shortlist
+    was removed on the owner's ruling 2026-09-17 (note #61), and a value
+    stored before then is ignored here."""
     try:
         from ..cli import _resolve_categorizer_chart
 
@@ -6208,6 +6212,21 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
     # the batch page reads them as `receipt_render` per row and one count.
     summary.pop("receipt_render", None)
     snapshot = run.snapshot or {}
+    # Item 103: the four charge counters (and the rate over them) are the
+    # page's, derived here from the reviewer's effective verdict rather than
+    # served as the matcher committed them. A month with no statement has no
+    # charges to count and keeps what it stored; a snapshot that cannot be
+    # read keeps it too, for the same reason the expense counts below do.
+    if has_statement(run):
+        try:
+            charges, states = month_charge_states(run, store.get_decisions(run.run_id))
+        except (KeyError, TypeError, ValueError):
+            charges, states = [], {}
+        if states:
+            summary.update(bucket_counts(states))
+            summary["match_rate"] = (
+                round(summary["n_matched"] / len(charges) * 100, 1) if charges else 0.0
+            )
     # A run whose summary predates expense counts, or whose snapshot has no
     # receipts block yet (created, ingest still running or failed), keeps
     # what it stored: deriving from an empty snapshot would report a real
@@ -6987,7 +7006,7 @@ def build_expense_view(
         "set_aside": set_aside,
         "duplicate_groups": duplicate_groups,
         "category_options": list(EXPENSE_CATEGORIES),
-        "account_options": _expense_account_options(run, settings),
+        "account_options": _expense_account_options(run),
         "entity_options": entity_options,
         # Item 47: the row picker's list, active entries only, name-sorted,
         # each with its display-only kind. Empty while the owner has defined
@@ -7989,6 +8008,166 @@ def report_receipt_cards(
             (card.key, card.display_label) if card is not None else ("", "")
         )
     return out
+
+
+def month_card_tabs(
+    view: dict,
+    receipt_cards: dict[str, tuple[str, str]],
+    cfg: dict | None,
+) -> tuple[list[dict], dict[str, str], dict[str, str]]:
+    """Item 138, the month page's half (owner ruling 2026-09-17: "a tab per
+    card showing whether its statement is loaded, how many charges matched
+    and what's still open, plus 'All' and 'No card'").
+
+    `(sections, section key per transaction_id, section key per document_id)`.
+    The grouping IS `_pdf_common.card_sections` over a `build_view` payload
+    and the card chain `report_receipt_cards` resolves, the two inputs the
+    PDFs section on, and each section's figures are `card_statement_figures`,
+    the numbers its PDF heading line prints. A tab and its PDF section can
+    therefore not disagree: a receipt a charge holds follows that charge's
+    card, an unheld receipt goes to its resolved card (item 137), everything
+    else to the no-card section, which is never dropped.
+
+    Each section: `key` (the `coverage[].key`; "" is the no-card section,
+    and since the registry drops a blank card key "" can never name a card),
+    `label`, `digits` (the coverage entry's, else the registry card's, for a
+    card only receipts name), the statement figures, `n_receipts` (every
+    receipt filed there, copies and settled-outside ones included) and
+    `n_receipts_without_charge` (those in the view's `unmatched_receipts`,
+    the page's "Receipts without a charge").
+
+    A month with fewer than two cards gets no sections, the PDFs' own rule
+    (a heading restating the only card organizes nothing); the two maps are
+    filled either way."""
+    from ..output._pdf_common import card_sections, card_statement_figures
+
+    grouped = card_sections(view, receipt_cards)
+    by_tx = {
+        str(row.get("transaction_id") or ""): sec["key"]
+        for sec in grouped for row in sec["rows"]
+    }
+    by_doc = {doc: sec["key"] for sec in grouped for doc in sec["receipt_docs"]}
+    unmatched = {
+        str(rec.get("document_id") or "")
+        for rec in view.get("unmatched_receipts") or []
+    }
+    cards = _batch_cards(cfg)
+    sections: list[dict] = []
+    for sec in grouped:
+        digits = [
+            str(d) for d in ((sec.get("coverage") or {}).get("digits") or [])
+            if str(d).strip()
+        ]
+        if sec["key"] and not digits and sec["key"] in cards:
+            digits = [str(d) for d in cards[sec["key"]].digits]
+        sections.append({
+            "key": sec["key"],
+            "label": sec["label"],
+            "digits": digits if sec["key"] else [],
+            **card_statement_figures(sec),
+            "n_receipts": len(sec["receipt_docs"]),
+            "n_receipts_without_charge": sum(
+                1 for doc in sec["receipt_docs"] if doc in unmatched
+            ),
+        })
+    if sum(1 for s in sections if s["key"]) < 2:
+        sections = []
+    return sections, by_tx, by_doc
+
+
+def attach_run_card_tabs(
+    view: dict, run: RunRow, field_overrides: dict[str, dict[str, str]] | None
+) -> dict:
+    """Item 138 on `GET /api/runs/{id}` (the Matching page): `card_sections`,
+    and `card_section` on every element of `rows[]`, `unmatched_receipts[]`,
+    `copies_set_aside[]` and `assignable_receipts[]`. Mutates and returns
+    `view`, the route's own `build_view` payload.
+
+    The cards are resolved over the pool that view was built on (the
+    snapshot's receipts), the chain `build_view`'s `cards_differ` already
+    reads; the reconciliation report files every receipt the same way on a
+    month whose edits are baked, which is every month with a statement."""
+    _, receipts, _, _ = snapshot_from_dict(run.snapshot)
+    sections, by_tx, by_doc = month_card_tabs(
+        view, report_receipt_cards(receipts, run.config, field_overrides), run.config
+    )
+    for row in view.get("rows") or []:
+        row["card_section"] = by_tx.get(str(row.get("transaction_id") or ""), "")
+    for listing in ("unmatched_receipts", "copies_set_aside", "assignable_receipts"):
+        for rec in view.get(listing) or []:
+            rec["card_section"] = by_doc.get(str(rec.get("document_id") or ""), "")
+    view["card_sections"] = sections
+    return view
+
+
+def attach_expense_card_tabs(
+    view: dict,
+    run: RunRow,
+    *,
+    overrides: dict,
+    field_overrides: dict[str, dict[str, str]],
+    edits: list[dict],
+    resolutions: dict[str, str] | None,
+    decisions: dict | None,
+) -> dict:
+    """Item 138 on `GET /api/expense-batches/{id}` (the Expenses page):
+    `card_sections` and `expenses[].card_section`. Mutates and returns
+    `view`, the route's own `build_expense_view` payload.
+
+    The sections are the month report's: `report_view` and
+    `report_receipt_cards` over `_expense_export_inputs`' pool, exactly as
+    `build_expense_report` builds them, so a copy that borrowed its card
+    (item 69) files where the grid shows it. On top of the reconciliation
+    figures each section carries what the Expenses page counts, from the
+    rows it renders: `n_expenses` (rows that count, decided copies left out,
+    item 94) and `totals_by_ccy` (their totals, summed in Decimal as
+    `summary.totals_by_ccy` is).
+
+    A trip gets no sections: its documents section per traveler, not per
+    card. Only the page GETs carry the tabs, so the edit routes that reply
+    with this payload's summary pay nothing for them."""
+    receipts, _kwargs = _expense_export_inputs(
+        run, overrides, field_overrides, edits, resolutions
+    )
+    _, snapshot_receipts, _, _ = snapshot_from_dict(run.snapshot)
+    card_view = report_view(
+        run, receipts, snapshot_receipts, decisions or {}, overrides,
+        resolutions, field_overrides=field_overrides,
+    )
+    sections, _by_tx, by_doc = month_card_tabs(
+        card_view, report_receipt_cards(receipts, run.config, field_overrides),
+        run.config,
+    )
+    if is_trip_batch(run):
+        sections = []
+    total_of = {
+        r.document_id: (r.detected_currency or "?", r.detected_total)
+        for r in receipts
+    }
+    counted: dict[str, int] = {}
+    sums: dict[str, dict[str, Decimal]] = {}
+    for expense in view.get("expenses") or []:
+        doc = str(expense.get("document_id") or "")
+        key = by_doc.get(doc, "")
+        expense["card_section"] = key
+        if expense.get("counts_in_total") is False:
+            continue
+        counted[key] = counted.get(key, 0) + 1
+        ccy, amount = total_of.get(doc, ("?", None))
+        if amount is not None:
+            per = sums.setdefault(key, {})
+            per[ccy] = per.get(ccy, Decimal("0")) + amount
+    # Every row is placed: the grid's rows and the export pool are one set of
+    # documents (both are `apply_expense_edits` over the baseline, then the
+    # copy card inheritance), and `card_sections` files every one of them.
+    for sec in sections:
+        sec["n_expenses"] = counted.get(sec["key"], 0)
+        sec["totals_by_ccy"] = {
+            ccy: f"{amt:,.2f}"
+            for ccy, amt in sorted((sums.get(sec["key"]) or {}).items())
+        }
+    view["card_sections"] = sections
+    return view
 
 
 def reconciliation_captions(
@@ -9214,6 +9393,51 @@ def month_charge_states(
     transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     return transactions, charge_states(transactions, effective, decisions)
+
+
+def effective_charge_counts(
+    transactions: list,
+    outcome: MatchOutcome,
+    receipts: list,
+    decisions: dict,
+) -> dict[str, int]:
+    """The four charge counters in the STORED summary's vocabulary
+    (`n_matched` / `n_review` / `n_unmatched_tx` / `n_refunds`), derived from
+    the same `charge_states` map the run page counts (`_BUCKET_COUNTER`,
+    where the reconciled bucket is called `n_reconciled`).
+
+    Item 103: the stored summary and the months list counted the RAW outcome
+    -- `len(outcome.matches)` and the transactions named in
+    `judgment_required` / `ambiguous` -- while the page counts the effective
+    one. A receipt a pending pick holds is dropped from the second charge
+    that scored it, so the list reported a month as further along than its
+    own workbench (live July 2026: list 8 in review / 72 unmatched, page 7 /
+    73; both numbers are of the same month on the same day). One derivation,
+    so the two screens cannot disagree, and a reviewer's later confirm or
+    reject moves both.
+    """
+    effective = apply_decisions(outcome, transactions, receipts, decisions)
+    return bucket_counts(charge_states(transactions, effective, decisions))
+
+
+# The stored summary / months list name for each `charge_states` bucket. The
+# page's own names are `_BUCKET_COUNTER`; only the reconciled bucket differs
+# (`n_matched` here, `n_reconciled` there), because the two vocabularies
+# predate item 103 and renaming a served field would break the SPA.
+_STORED_BUCKET_COUNTER = {
+    "reconciled": "n_matched",
+    "review": "n_review",
+    "refund": "n_refunds",
+    "unmatched": "n_unmatched_tx",
+}
+
+
+def bucket_counts(states: dict[str, dict]) -> dict[str, int]:
+    """`charge_states` counted into the stored summary's four names."""
+    counts = dict.fromkeys(_STORED_BUCKET_COUNTER.values(), 0)
+    for state in states.values():
+        counts[_STORED_BUCKET_COUNTER[state["bucket"]]] += 1
+    return counts
 
 
 def settled_charge_cards(
@@ -11596,25 +11820,32 @@ def rematch_month(
                 entry["file"]: anchors,
             }
         n_tx = len(transactions)
-        n_review = len(
-            {m.transaction_id for m in outcome.judgment_required}
-            | {m.transaction_id for m in outcome.ambiguous}
+        # Item 103: what this commit stores, logs and returns is the
+        # EFFECTIVE count -- the reviewer's verdicts over the outcome, which
+        # is what the page and the months list show. The raw outcome can
+        # name one receipt on two charges (a pending pick holds it; the
+        # second charge falls to unmatched), and counting that pairing was
+        # how a re-match event reported one more matched charge than the
+        # workbench it had just rebuilt.
+        committed = effective_charge_counts(
+            transactions, outcome, receipts, store.get_decisions(run.run_id)
         )
+        n_review = committed["n_review"]
         counts = count_parse_issues(all_issues)
         summary = {
             **fresh.summary,
             "n_transactions": n_tx,
             "n_receipts": len(receipts),
             "n_expenses": len(receipts),
-            "n_matched": len(outcome.matches),
+            "n_matched": committed["n_matched"],
             "n_review": n_review,
-            "n_unmatched_tx": len(outcome.unmatched_transactions),
-            "n_refunds": len(outcome.refunds),
+            "n_unmatched_tx": committed["n_unmatched_tx"],
+            "n_refunds": committed["n_refunds"],
             "n_unmatched_rec": len(outcome.unmatched_receipts),
             "n_parse_errors": counts["errors"],
             "n_parse_notes": counts["notes"],
             "match_rate": (
-                round(len(outcome.matches) / n_tx * 100, 1) if n_tx else 0.0
+                round(committed["n_matched"] / n_tx * 100, 1) if n_tx else 0.0
             ),
             "n_receipts_matched": max(
                 len(receipts) - len(outcome.unmatched_receipts), 0
@@ -11654,9 +11885,9 @@ def rematch_month(
                 "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "trigger": str(trigger or ""),
                 "n_transactions": n_tx,
-                "n_matched": len(outcome.matches),
+                "n_matched": committed["n_matched"],
                 "n_review": n_review,
-                "n_unmatched_tx": len(outcome.unmatched_transactions),
+                "n_unmatched_tx": committed["n_unmatched_tx"],
                 "n_receipts": len(receipts),
                 "n_unmatched_rec": len(outcome.unmatched_receipts),
                 "match_rate": summary["match_rate"],
@@ -11699,10 +11930,10 @@ def rematch_month(
         self_confirm = {"error": f"{type(exc).__name__}: {exc}"}
     return {
         "n_transactions": n_tx,
-        "n_matched": len(outcome.matches),
+        "n_matched": committed["n_matched"],
         "n_review": n_review,
-        "n_unmatched_tx": len(outcome.unmatched_transactions),
-        "n_refunds": len(outcome.refunds),
+        "n_unmatched_tx": committed["n_unmatched_tx"],
+        "n_refunds": committed["n_refunds"],
         "entity_mismatch": entity_mismatch,
         "judgments_reused": judgments.hits,
         "judgments_new": judgments.misses,

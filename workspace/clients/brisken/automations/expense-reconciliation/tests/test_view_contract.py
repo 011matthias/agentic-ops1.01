@@ -43,6 +43,7 @@ here, that doc and the relevant Lovable prompt change with it.
 """
 from __future__ import annotations
 
+import json
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -88,6 +89,12 @@ EXPENSE_BATCH_CONTRACT = {
     # stale SPA renders one truthful row while an updated one shows the
     # group and submits every spelling on Assign.
     "card_review.unresolved_hints[].spellings[]": "string",
+    # Item 138: the month page's card tabs. Objects in the PDFs' section
+    # order, No card last; `digits[]` and `statements[]` are strings. Empty
+    # on a month with fewer than two cards and on a trip.
+    "card_sections[]": "object",
+    "card_sections[].digits[]": "string",
+    "card_sections[].statements[]": "string",
     "category_options[]": "string",
     # PR 3: per-card coverage. `digits[]` and `statements[]` are the two
     # lists inside an entry; both are plain strings, and both are empty on
@@ -148,6 +155,11 @@ EXPENSE_BATCH_CONTRACT = {
 
 RUN_CONTRACT = {
     "assignable_receipts[]": "object",
+    # Item 138: same list as on the expense batch view, without the two
+    # Expenses-page figures.
+    "card_sections[]": "object",
+    "card_sections[].digits[]": "string",
+    "card_sections[].statements[]": "string",
     "category_options[]": "string",
     "coverage[]": "object",
     "coverage[].digits[]": "string",
@@ -215,6 +227,9 @@ EXPENSE_BATCH_MUST_COVER = {
     "cost_center_options[]",
     "expenses[].boxes[]",
     "expense_ingest.not_added[]",
+    "card_sections[]",
+    "card_sections[].digits[]",
+    "card_sections[].statements[]",
 }
 
 RUN_MUST_COVER = {
@@ -234,6 +249,9 @@ RUN_MUST_COVER = {
     "coverage[].digits[]",
     "coverage[].statements[]",
     "copies_set_aside[]",
+    "card_sections[]",
+    "card_sections[].digits[]",
+    "card_sections[].statements[]",
 }
 
 
@@ -428,14 +446,43 @@ def _synthetic_run(client, data_root: Path) -> dict:
     return view
 
 
+def _provision_contract_chart(data_root: Path) -> str:
+    """A synthetic one-leaf chart for Corporate Services, as a /data
+    provisioning file, so `account_options[]` is observed FILLED. It used to
+    be filled from the entity's `account_picks` shortlist, which the owner
+    removed on 2026-09-17 (note #61): account options now come only from the
+    company's chart. Returns the provisioning file path."""
+    chart = data_root / "contract-coa.json"
+    chart.write_text(json.dumps({"822741658": {
+        "org": {"name": "Corporate Services"},
+        "accounts": [
+            {"account_id": "1", "account_name": "Office Supplies",
+             "account_code": "E500", "account_type": "expense",
+             "parent_account_name": "MS | OpeEx", "is_active": True},
+            {"account_id": "2", "account_name": "MS | OpeEx",
+             "account_code": "E5", "account_type": "expense",
+             "parent_account_name": None, "is_active": True},
+        ],
+    }}), encoding="utf-8")
+    prov = data_root / "contract-provision.json"
+    prov.write_text(json.dumps({
+        "chart_path": str(chart),
+        "entities": {"Corporate Services": {
+            "org_id": "822741658", "scope_groups": ["MS | OpeEx"],
+        }},
+    }), encoding="utf-8")
+    return str(prov)
+
+
 def _expense_batch(client, monkeypatch_setattr) -> dict:
     """One batch carrying every list surface the grid renders: a quarantined
     statement page (parse issue + set-aside), an unsupported upload (upload
     issue), a generic and an exact payment hint (card review, both halves),
-    a duplicate pair, a field edit, and one vendor booked to two categories."""
+    a duplicate pair, a field edit, and one vendor booked to two categories.
+    The caller provisions a chart for it (`_provision_contract_chart`)."""
     client.put("/api/settings", json={
         "entities": {
-            "Corporate Services": {"account_picks": ["E500 Office Supplies"]},
+            "Corporate Services": {},
             "Cloud Services": {},
         },
         "cards": {
@@ -536,16 +583,29 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
     only has to make the new pin non-vacuous, which is the reason MUST_COVER
     exists at all.
     """
-    mock = MockLLMClient(extraction_responses=[_extraction()])
+    mock = MockLLMClient(extraction_responses=[
+        _extraction(),
+        # Item 138: a receipt paid on a second card, so the month has two
+        # cards and `card_sections[]` (with its `digits[]` and, on the
+        # statement's card, `statements[]`) is observed filled.
+        _extraction(vendor="Second Card Co", total="11.00", date="2026-07-02",
+                    payment_hint="Visa ending 5555"),
+    ])
     monkeypatch_setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
     # A registry card whose digits match the statement's account, so the
     # month's coverage entry carries a `digits[]` the pin can observe. A
     # batch snapshots the composed registry at CREATION, so this settings
     # write has to happen first.
-    client.put("/api/settings", json={"cards": {"amex-9001": {
-        "label": "Amex (contract fixture)", "digits": ["9001"],
-        "entity": "Corporate Services",
-    }}})
+    client.put("/api/settings", json={"cards": {
+        "amex-9001": {
+            "label": "Amex (contract fixture)", "digits": ["9001"],
+            "entity": "Corporate Services",
+        },
+        "visa-5555": {
+            "label": "Visa (contract fixture)", "digits": ["5555"],
+            "entity": "Corporate Services",
+        },
+    }})
     resp = client.post(
         "/api/expense-batches",
         data={"legal_entity": "Corporate Services", "label": "Contract month"},
@@ -555,6 +615,7 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
     resp = client.post(f"/api/expense-batches/{batch_id}/receipts", files=[
         ("files", ("m.jpg", JPG + b"m", "application/octet-stream")),
+        ("files", ("n.jpg", JPG + b"n", "application/octet-stream")),
     ])
     assert resp.status_code == 200, resp.text
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
@@ -580,6 +641,9 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
     assert grid["coverage"] == run["coverage"], "one month, one coverage"
     assert any(c["digits"] and c["statements"] for c in grid["coverage"]), (
         grid["coverage"]
+    )
+    assert [s["key"] for s in run["card_sections"]][:2] == ["amex-9001", "visa-5555"], (
+        run["card_sections"]
     )
     return grid, run
 
@@ -639,7 +703,13 @@ def payloads(tmp_path_factory):
         with TestClient(app) as client:
             run_a = _statement_run(client)
             run_b = _synthetic_run(client, data_root)
+            # The chart is read at batch creation and snapshotted into the
+            # batch's config, so it is provisioned for this batch only.
+            monkey.setenv(
+                "EXPENSE_RECON_COA_PROVISION", _provision_contract_chart(data_root)
+            )
             batch = _expense_batch(client, monkey.setattr)
+            monkey.delenv("EXPENSE_RECON_COA_PROVISION")
             month_grid, month_run = _reconciling_month(client, monkey.setattr)
             trip_grid = _trip_batch(client, monkey.setattr)
         yield {
