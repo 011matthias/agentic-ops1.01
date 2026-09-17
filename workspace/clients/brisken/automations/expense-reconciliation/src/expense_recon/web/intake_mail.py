@@ -1265,10 +1265,11 @@ def archive_incoming(
 
 
 # ---------------------------------------------------------- notifications --
-# Acks + held alerts ride graph_notify (internal-only, hard-guarded).
-# Both are best-effort side effects: a failed notification never changes
-# an archive's status or breaks ingest, and both are idempotent per
-# archive via meta stamps (ack_at / alert_at).
+# Acks, held alerts and held-sender notices ride graph_notify (internal-only
+# plus operator-listed senders, hard-guarded). All are best-effort side
+# effects: a failed notification never changes an archive's status or
+# breaks ingest, and each is idempotent per archive via its own meta stamp
+# (ack_at / alert_at / held_notice_at).
 
 _NO_REPLY_LOCALS = ("no-reply", "noreply", "do-not-reply", "postmaster",
                     "mailer-daemon", "bounce")
@@ -1435,7 +1436,20 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
 
 def _maybe_alert(db_path: Path, arch: Path, status: str) -> None:
     """Operator alert the first time an archive lands in a held status.
-    Without this, held mail is only visible when someone opens the app."""
+    Without this, held mail is only visible when someone opens the app.
+
+    The same moment also tells the SENDER (item 121, owner ruling
+    2026-09-17): until then a held mail left the person who sent it with
+    no signal at all. Two separate facts with separate stamps (``alert_at``
+    and ``held_notice_at``), each best-effort on its own, so a failed
+    operator send never suppresses the sender notice, or the reverse."""
+    _alert_operator(db_path, arch, status)
+    _maybe_notify_held_sender(db_path, arch, status)
+
+
+def _alert_operator(db_path: Path, arch: Path, status: str) -> None:
+    """The operator half of `_maybe_alert`: recipients, subject and body
+    exactly as they were before the sender notice existed."""
     try:
         with RunStore(db_path) as store:
             cfg = IntakeConfig.from_settings(store.get_settings())
@@ -1462,6 +1476,106 @@ def _maybe_alert(db_path: Path, arch: Path, status: str) -> None:
             _update_meta(arch, {"alert_at": _now_iso()})
     except Exception as exc:  # noqa: BLE001 - notifications never break ingest
         log.warning("held alert skipped for %s: %s", arch.name, exc)
+
+
+# What a held mail's sender reads, per held status: (why it is not filed and
+# what happens next, whether "the team has been told" belongs beside it).
+# Every sentence states only what the code does next. Nothing retries a held
+# mail on its own: held_failed waits for an operator's "Retry held emails",
+# and the other holds are resolved by a click or by the sender re-sending.
+_HELD_NOTICE_TEXT: dict[str, tuple[str, bool]] = {
+    HELD_FAILED: (
+        " reached the Brisken expense tool, but something went wrong on our"
+        " side while filing it, so it has not been filed yet. The email is"
+        " saved in full and can be retried from there, so there is no need"
+        " to send it again.",
+        True,
+    ),
+    HELD_NO_VALID_FILES: (
+        " reached the Brisken expense tool, but nothing in it was a file the"
+        " tool can read as a receipt, so nothing was filed. Sending the"
+        " receipt again as a PDF or a photo (JPG, PNG or WEBP) attachment"
+        " lets the tool pick it up.",
+        False,
+    ),
+    HELD_BODY_ONLY: (
+        " reached the Brisken expense tool without a receipt file attached,"
+        " and its text could not be read as a receipt automatically, so it"
+        " has not been filed yet. The email is saved. If you have the"
+        " receipt as a PDF or a photo, sending it again as an attachment is"
+        " the surest way for the tool to pick it up.",
+        True,
+    ),
+}
+_HELD_NOTICE_FALLBACK = (
+    " reached the Brisken expense tool but has not been filed yet. The email"
+    " is saved.",
+    True,
+)
+
+
+def _maybe_notify_held_sender(db_path: Path, arch: Path, status: str) -> None:
+    """Tell the address a held mail came from that it was not filed, once.
+
+    The guards are exactly `_maybe_ack`'s, because the recipient is the same
+    untrusted From header (rule_untrusted_inbound: inbound mail never decides
+    who we send to on its own). Off with ``intake.auto_ack``; never for
+    auto-generated inbound mail; never for mail that carried agent-directed
+    text (stamped, like the ack); and `graph_notify.send_mail` only lets the
+    address through when it is inside @brisken.com or an operator listed it
+    in ``intake.known_senders``. A stranger gets nothing.
+
+    Idempotent per archive via ``held_notice_at``, independent of the
+    operator's ``alert_at``. The text carries no archive name, no error
+    string and nothing the operator alert carries beyond the sender's own
+    subject line."""
+    try:
+        with RunStore(db_path) as store:
+            cfg = IntakeConfig.from_settings(store.get_settings())
+        if not cfg.auto_ack or not graph_notify.enabled():
+            return
+        meta = _read_meta(arch)
+        if meta.get("held_notice_at") or _inbound_is_auto_generated(arch):
+            return
+        if _untrusted_flags(arch):
+            # Same reason the ack holds back: the notice echoes the subject,
+            # and an injected mail never triggers an outbound message.
+            _update_meta(
+                arch, {"held_notice_suppressed": "untrusted_instructions"}
+            )
+            return
+        recipient = str(meta.get("from", "")).strip().lower()
+        subject = str(meta.get("subject") or "").strip()
+        reason, mention_team = _HELD_NOTICE_TEXT.get(
+            status, _HELD_NOTICE_FALLBACK
+        )
+        # "Told" only when the operator alert really went out; the two sends
+        # are independent, so the notice must not claim the other one.
+        told = (
+            " The team running the tool has been told."
+            if mention_team and meta.get("alert_at") else ""
+        )
+        sender_local = (
+            cfg.travel_alias
+            if str(meta.get("pool_kind") or "") == "travel" and cfg.travel_alias
+            else "receipts"
+        )
+        body = (
+            "Your email"
+            + (f' "{subject}"' if subject else "")
+            + reason
+            + told
+            + "\n\nAutomated notice from "
+            f"{sender_local}@{cfg.domain}."
+        )
+        if graph_notify.send_mail(
+            recipient,
+            "Receipt not filed yet" + (f": {subject}" if subject else ""),
+            body, allow_external=cfg.known_senders,
+        ):
+            _update_meta(arch, {"held_notice_at": _now_iso()})
+    except Exception as exc:  # noqa: BLE001 - notifications never break ingest
+        log.warning("held notice skipped for %s: %s", arch.name, exc)
 
 
 # ---------------------------------------------------------------- routing --
