@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | Expense Recon Private Card And Audit Defects | client-dev | [Mini-Checkpoint-1](docs/2026-09-17%20-%20Expense%20Recon%20Private%20Card%20And%20Audit%20Defects/Mini-Checkpoint-1.md) |
 | 2026-09-17 | Brisken Recon Note 64 And Card Separation Items | client-dev | [Mini-Checkpoint-2](docs/2026-09-17%20-%20Brisken%20Recon%20Note%2064%20And%20Card%20Separation%20Items/Mini-Checkpoint-2.md) |
 | 2026-09-17 | Brisken Recon Items 117 And 121 | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Recon%20Items%20117%20And%20121/Checkpoint.md) |
 | 2026-09-17 | Brisken Recon Note 64 And Card Separation Items | client-dev | [Mini-Checkpoint-1](docs/2026-09-17%20-%20Brisken%20Recon%20Note%2064%20And%20Card%20Separation%20Items/Mini-Checkpoint-1.md) |
@@ -325,6 +326,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | Friction Fix Program Close-Out | system-infra | [→](docs/2026-09-17%20-%20Friction%20Fix%20Program%20Close-Out/Checkpoint.md) |
 | 2026-09-17 | Friction Check And Gate Fixes | system-infra | [→](docs/2026-09-17%20-%20Friction%20Check%20And%20Gate%20Fixes/Checkpoint.md) |
 | 2026-09-17 | ECC Batch 2 Live Activation | system-infra | [→](docs/2026-09-17%20-%20ECC%20Batch%202%20Live%20Activation/Checkpoint.md) |
 | 2026-09-17 | ECC Port Batch 2 (items 1, 4, 5, 8) | system-infra | [→](docs/2026-09-17%20-%20ECC%20Port%20Batch%202%20%28items%201%2C%204%2C%205%2C%208%29/Checkpoint.md) |
