@@ -1,8 +1,8 @@
 # Lovable prompt: the 2026-09-17 feedback notes
 
-> **NOT YET APPLIED.** Section 6 reads `card_ending`, which ships with the
-> notes-#54/#60 backend deploy; every other section works against the API as
-> it is. Notes answered: #55, #56, #57 (Criss), #58, #59 (owner), item 78.
+> **APPLIED 2026-09-17** (bundle-audited and driven cold, see PROMPT-STATUS).
+> Section 4 is superseded by `lovable-private-card-prompt.md`. Notes answered:
+> #55, #56, #57 (Criss), #58, #59 (owner), item 78.
 
 The app calls the FastAPI backend at `https://api.expenses.brisken.com`.
 Seven small changes, each independent. Render defensively: a missing new

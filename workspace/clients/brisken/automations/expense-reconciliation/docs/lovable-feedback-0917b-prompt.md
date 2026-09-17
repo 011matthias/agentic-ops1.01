@@ -32,6 +32,7 @@ Criss: "I can't change the card if I need to." `CardFixCell` returns nothing whe
 
 - In `CardFixCell`, when `row.card_source === "hint"`, render a small ghost button `Button size="sm" variant="ghost" className="mt-1 h-6 px-1.5 text-[11px] text-muted-foreground"` labelled `t("expx.cardFix.change")`. Clicking it reveals the same `Select` the other sources use (value `row.card?.key ?? ""`, the active cards from `getCards()`, saving `card_key` through the row's field saver). Local state only; pressing Escape or closing the Select without a pick hides it again.
 - `none`, `override`, `learned` keep rendering exactly as today.
+- A row with `row.private === true` shows no card control at all, "Change card" included (the backend refuses a card pick on a private row). If `CardFixCell` already returns nothing for private rows, keep that check first.
 - After a `card_key` save whose reply carries `rematch` without `error`, show `toast.success(t("expx.cardFix.rematched"))`. `afterExpenseEdit` keeps handling the failure toast.
 
 ## 4. Expenses: look at a set-aside page before restoring it (`SetAsideStrip`)
