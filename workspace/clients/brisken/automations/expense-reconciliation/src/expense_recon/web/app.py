@@ -449,7 +449,7 @@ def _run_receipts_drop_job(
                 job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
             )
     finally:
-        shutil.rmtree(staging, ignore_errors=True)
+        _discard_drop(staging)  # item 114: the folder and its sidecar
 
 
 def _resolve_duplicate_rematch(
@@ -581,6 +581,119 @@ def _run_attach_statement_job(
             )
 
 
+# Item 114: a drop's files are on the volume (/data/drops/<job>) before its
+# job starts, so a restart mid-drop need not cost the operator a second
+# drop. The request writes a sidecar beside the folder carrying what the
+# folder alone cannot say (the operator's month pick) and how often the drop
+# was resumed. The boot pass re-runs an interrupted drop ONCE under its own
+# job id (content dedupe skips files that landed before the kill), and
+# deletes folders whose job is already over, so nothing strands on the disk.
+_DROP_RESUME_LIMIT = 1
+_DROP_INTERRUPTED = "interrupted by a server restart"
+
+
+def _drop_sidecar(staging: Path) -> Path:
+    return staging.with_name(staging.name + ".json")
+
+
+def _write_drop_sidecar(staging: Path, meta: dict) -> None:
+    side = _drop_sidecar(staging)
+    tmp = side.with_name(side.name + ".tmp")
+    tmp.write_text(json.dumps(meta), encoding="utf-8")
+    os.replace(tmp, side)
+
+
+def _discard_drop(staging: Path) -> None:
+    shutil.rmtree(staging, ignore_errors=True)
+    for leftover in (_drop_sidecar(staging),
+                     staging.with_name(staging.name + ".json.tmp")):
+        try:
+            leftover.unlink()
+        except OSError:
+            pass
+
+
+def resume_interrupted_drops(db_path: Path, data_root: Path) -> list[tuple]:
+    """Boot pass for item 114; runs after the stale-job sweep and before the
+    app serves. Returns ``(job_id, staging, month_override)`` for each drop
+    to re-run, already marked running so the page polling it never reads
+    the sweep's "run it again". A drop resumed once and cut off again is
+    given up (a drop that kills the machine must not kill it every boot).
+    A folder with no interrupted job, or no readable sidecar (the month
+    pick is unknown, so re-running could file into the wrong month), is
+    deleted; its job keeps what it already says. A ``drop-add-*`` copy left
+    inside a month by a killed add is deleted too: its source is the drop
+    folder, and nothing is mid-add at boot."""
+    from .store import JOB_RUNNING
+
+    drops = Path(data_root) / "drops"
+    resume: list[tuple] = []
+    now = _now_iso()
+    with RunStore(db_path) as store:
+        for run in store.list_runs():
+            work = Path(run.work_dir) if run.work_dir else None
+            if work is not None and work.is_dir():
+                for stale in work.glob("drop-add-*"):
+                    shutil.rmtree(stale, ignore_errors=True)
+        if not drops.is_dir():
+            return resume
+        for staging in sorted(p for p in drops.iterdir() if p.is_dir()):
+            job = store.get_job(staging.name)
+            interrupted = (
+                job is not None
+                and job.get("status") == JOB_ERROR
+                and not job.get("result")
+                and _DROP_INTERRUPTED in str(job.get("error") or "")
+            )
+            try:
+                meta = json.loads(
+                    _drop_sidecar(staging).read_text(encoding="utf-8")
+                )
+            except (OSError, ValueError):
+                meta = None
+            if not interrupted or not isinstance(meta, dict):
+                _discard_drop(staging)
+                continue
+            resumed = int(meta.get("resumed") or 0)
+            if resumed >= _DROP_RESUME_LIMIT:
+                store.set_job_status(
+                    staging.name, JOB_ERROR,
+                    error=(
+                        "interrupted by a server restart again after it "
+                        "was resumed; drop the files again"
+                    ),
+                    updated_at=now,
+                )
+                _discard_drop(staging)
+                continue
+            meta["resumed"] = resumed + 1
+            _write_drop_sidecar(staging, meta)
+            store.set_job_status(
+                staging.name, JOB_RUNNING,
+                stage="resuming after a server restart", updated_at=now,
+            )
+            resume.append(
+                (staging.name, staging, str(meta.get("month") or ""))
+            )
+        for side in drops.glob("*.json"):
+            if not side.with_name(side.name[: -len(".json")]).is_dir():
+                side.unlink(missing_ok=True)
+    return resume
+
+
+def _resume_drops_quietly(
+    db_path: Path, learning_db_path: Path | None, data_root: Path,
+    resumed: list[tuple],
+) -> None:
+    """Re-run the drops `resume_interrupted_drops` marked, one after the
+    other, through the same job runner a fresh drop uses."""
+    for job_id, staging, month in resumed:
+        log.info("resuming drop %s after a restart", job_id)
+        _run_receipts_drop_job(
+            db_path, job_id, staging, month, learning_db_path, data_root,
+        )
+
+
 # Upper bound on one bulk-decision call. A month is ~100 charges, so this
 # is far above any real batch; it exists so a malformed client cannot
 # open a huge write transaction.
@@ -658,6 +771,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             ).start()
     except Exception:  # noqa: BLE001 - a re-pair never blocks startup
         pass
+    # Item 114: a drop cut off by the last restart runs again from the files
+    # already on the volume; leftovers of finished drops are deleted.
+    try:
+        _resumed_drops = resume_interrupted_drops(db_path, data_root_path)
+        if _resumed_drops:
+            threading.Thread(
+                target=_resume_drops_quietly,
+                args=(db_path, app.state.learning_db_path, data_root_path,
+                      _resumed_drops),
+                daemon=True,
+            ).start()
+    except Exception:  # noqa: BLE001 - a resume never blocks startup
+        log.warning("drop resume at boot failed", exc_info=True)
 
     def open_store() -> RunStore:
         return RunStore(db_path)
@@ -3505,6 +3631,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 {"error": "all uploaded files were empty"}, status_code=400
             )
 
+        # Item 114: what a restart would otherwise lose (the month pick).
+        _write_drop_sidecar(
+            staging, {"month": month_override, "resumed": 0,
+                      "created_at": _now_iso()},
+        )
         with open_store() as store:
             store.create_job(job_id, None, _now_iso())
         background.add_task(
