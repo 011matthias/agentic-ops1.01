@@ -393,13 +393,15 @@ def test_operator_state_surfaces_operator_runs(client):
     # An unpublished run is invisible to published_runs (the old blind spot).
     assert run_id not in {r["run_id"] for r in state["published_runs"]}
 
-    # Publishing keeps it in operator_runs (announced once) and now also
-    # lists it under published_runs (the separate user-facing ping).
-    client.post(f"/api/runs/{run_id}/publish")
+    # A "run now" upload is a classic statement-first run, not a month, so
+    # item 100 refuses to publish it and it never reaches published_runs. A
+    # published month's listing is pinned in test_month_complete_publish_gate.
+    resp = client.post(f"/api/runs/{run_id}/publish")
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "not_a_month"
     state = client.get("/api/operator/state").json()
     assert run_id in {r["run_id"] for r in state["operator_runs"]}
-    published = {r["run_id"]: r for r in state["published_runs"]}
-    assert run_id in published
+    assert run_id not in {r["run_id"] for r in state["published_runs"]}
     assert next(
         r for r in state["operator_runs"] if r["run_id"] == run_id
-    )["published"] is True
+    )["published"] is False
