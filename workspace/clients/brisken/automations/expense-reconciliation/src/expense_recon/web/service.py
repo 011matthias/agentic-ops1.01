@@ -2633,6 +2633,52 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
     return _review("ready")
 
 
+# Category verdicts a reviewer settles by keeping the category as it is. Not
+# `category_account_mismatch`: that one questions the ACCOUNT, and keeping the
+# category would clear it without anyone looking at the account.
+_CONFIRMABLE_CATEGORY_CODES = frozenset({"vendor_guess", "unknown_provenance"})
+
+
+def category_confirmable(rec: "Receipt | None", overrides: dict) -> bool:
+    """Whether this receipt's category is a guess a reviewer can keep as it
+    is (note #62): the category verdict is `vendor_guess` or
+    `unknown_provenance`. Before this, the only way to clear either was to
+    pick a DIFFERENT category, so a right guess stayed "needs a look"."""
+    code = _matched_category_review(rec, overrides).get("reason_code")
+    return code in _CONFIRMABLE_CATEGORY_CODES
+
+
+def confirm_expense_category(
+    store: RunStore, run: RunRow, document_id: str, now_iso: str
+) -> str | None:
+    """Keep a receipt's categories as they are, as the reviewer's own (note
+    #62). Writes one category override per line holding that line's current
+    category and account, so a multi-line receipt keeps each line's own
+    category (the generic category PUT sets every line to one value). The
+    row then reads `EDITED` provenance: ready on the category, and taught
+    at sign-off like any other correction. Returns an error, or None."""
+    rec = category_edit_receipt(store, run, document_id)
+    if rec is None:
+        return "unknown expense"
+    overrides = store.get_category_overrides(run.run_id)
+    if not category_confirmable(rec, overrides):
+        return (
+            "this expense's category is not a guess to confirm: pick a "
+            "category instead, or check the account"
+        )
+    for i, li in enumerate(rec.line_items):
+        ov = overrides.get((document_id, i)) or {}
+        base = li.categorization
+        category = ov.get("category") or (base.category if base else None)
+        # The same account rule as the category PUT re-sending the current
+        # category: a picked account stays, else the line's own is inherited.
+        account = category_edit_account(category, None, ov, base)
+        store.set_category_override(
+            run.run_id, document_id, i, category, account, now_iso
+        )
+    return None
+
+
 def resolve_review(
     *, is_posted: bool, effective_bucket: str, status: str,
     matched_rec: "Receipt | None", overrides: dict, charge_category: dict | None,
@@ -5330,6 +5376,29 @@ def resolve_batch_row_cards(
     return out
 
 
+def hand_picked_card_mode(r: Receipt, res: dict | None) -> str | None:
+    """The payment mode the matcher should read for a receipt whose card was
+    picked by hand against the card it printed, else None (note #63).
+
+    Card scoping reads `payment_mode`, so a receipt printing "••3645" stays
+    scoped to 3645 whatever card the reviewer picks, and its 2838 charge can
+    never pair. Only the contradiction is rewritten: a pick on a receipt that
+    printed no card number, or the same card it printed, changes nothing, so
+    months without such a pick match exactly as before. The value names the
+    picked card's own digits and nothing else. Pool only: the expense grid
+    resolves cards from the extraction baseline, never from this string."""
+    from ..matching.deterministic import _card_keys
+
+    if not res or res.get("card_source") != "override" or res.get("card") is None:
+        return None
+    printed = _card_keys(r.payment_mode)
+    picked = res["card"].digit_keys()
+    if not printed or not picked or printed & picked:
+        return None
+    digits = " / ".join(d for d in res["card"].digits if _card_keys(d))
+    return f"{digits} (card picked by hand)"
+
+
 def _batch_row_card(cards: dict, key: object):
     """The active batch card a per-row fix (or its memory) names, else None."""
     key = str(key or "").strip()
@@ -6130,6 +6199,11 @@ def build_expense_view(
             "posting_category": posting,
             "posting_paid_through": {"account": pt_account, "source": pt_source},
             "review": review,
+            # Note #62: the category is the tool's guess and a reviewer can
+            # keep it as it is (`POST .../confirm-category`). Judged on the
+            # category alone, so it is offered even while another exception
+            # is the row's headline.
+            "category_confirmable": category_confirmable(r, overrides),
             "is_manual": r.document_id.startswith("manual:"),
             "edited_fields": sorted(field_overrides.get(r.document_id, {})),
             # Split depiction (backlog item 2): how THIS receipt will book
@@ -6307,7 +6381,7 @@ def build_expense_view(
 
     n_categorized, n_uncategorized = n_box("categorized"), n_box("uncategorized")
     n_ready = n_box("ready")
-    set_aside = set_aside_view(run.snapshot or {})
+    set_aside = set_aside_view(run.snapshot or {}, receipts_dir.parent)
     summary = {
         "mode": MODE_EXPENSE_GENERATION,
         "n_expenses": len(expenses),
@@ -8590,21 +8664,33 @@ def set_aside_entries(snapshot: dict) -> list[dict]:
     return _derive_legacy_set_aside(snapshot.get("parse_errors", []))
 
 
-def set_aside_view(snapshot: dict) -> list[dict]:
+def set_aside_view(snapshot: dict, work_dir: Path | None = None) -> list[dict]:
     """The SPA-facing shape: internal receipt dict withheld. `reason` is
     the machine code ("statement" | "report_summary" | "other") the SPA
     keys its own wording (EN/PT) on — the English reason_label was dead
-    weight the prompt already forbade showing (language-contract round)."""
-    return [
-        {
+    weight the prompt already forbade showing (language-contract round).
+
+    Note #52: `receipt_image_available` says whether the receipt viewer can
+    open the file (`GET /api/runs/{id}/receipts/{file}/image`, resolved by
+    `receipt_image_file`, the endpoint's own rule), so the reviewer can look
+    at a page before deciding it is a receipt. Present when `work_dir` is
+    given, which the expense batch payload always does."""
+    out = []
+    for e in set_aside_entries(snapshot):
+        row = {
             "file": e["file"],
             "display": e.get("display") or _display_name(e["file"]),
             "reason": e.get("reason") or "other",
             "restored": bool(e.get("restored")),
             "at": e.get("at"),
         }
-        for e in set_aside_entries(snapshot)
-    ]
+        if work_dir is not None:
+            row["receipt_image_available"] = (
+                receipt_image_file(work_dir, e["file"], expense_mode=True)
+                is not None
+            )
+        out.append(row)
+    return out
 
 
 def restore_set_aside_file(
@@ -9932,6 +10018,15 @@ def rematch_month(
         )
         for r in receipts
     ]
+    # Note #63: a card picked by hand on a row whose receipt printed ANOTHER
+    # card replaces the printed one in the pool too, or the matcher keeps the
+    # receipt scoped to the card the reviewer just said did not pay.
+    receipts = [
+        replace(r, payment_mode=mode)
+        if (mode := hand_picked_card_mode(r, card_res_bake.get(r.document_id)))
+        else r
+        for r in receipts
+    ]
 
     # Item 59: the charge side of the same rule. Each charge that printed a
     # card carries THAT card's entity from the batch's registry snapshot
@@ -10879,6 +10974,9 @@ def clear_receipt_settled_outside(
 # private flag, so confirming a private expense moves no pairing.
 EXPENSE_MATCH_FIELDS = frozenset({
     "vendor", "date", "total", "currency", "legal_entity", "reference",
+    # Note #63: the per-row card fix (item 87) decides the row's entity and,
+    # through `hand_picked_card_mode`, the card the matcher scopes it to.
+    "card_key",
 })
 
 

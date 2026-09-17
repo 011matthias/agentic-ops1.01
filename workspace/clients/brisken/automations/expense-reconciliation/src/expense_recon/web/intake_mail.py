@@ -3642,6 +3642,25 @@ def valid_month_key(month: str) -> bool:
     return _ym(month) is not None
 
 
+def drop_rematch_summary(rematch: object) -> dict | None:
+    """What the drop page says about the re-match an arrival ran (note #53):
+    None when none ran (no statement, or every file was a duplicate),
+    `{ok: false, error}` when it failed (the receipts are filed regardless
+    and the month's next change retries), else `{ok: true}` with the month's
+    counts after it."""
+    if not isinstance(rematch, dict):
+        return None
+    if rematch.get("error"):
+        return {"ok": False, "error": str(rematch["error"])}
+    return {
+        "ok": True,
+        **{
+            k: int(rematch.get(k) or 0)
+            for k in ("n_transactions", "n_matched", "n_review", "n_unmatched_tx")
+        },
+    }
+
+
 def route_dropped_receipts(
     db_path: Path,
     learning_db_path: Path | None,
@@ -3805,6 +3824,9 @@ def route_dropped_receipts(
                     entry.update({
                         "batch_id": run_id, "created_batch": True,
                         "n_added": len(files_bytes),
+                        # A month created by this drop holds no statement,
+                        # so nothing was matched (note #53).
+                        "has_statement": False,
                     })
                     if prepared.upload_issues:
                         entry["issues"] = list(prepared.upload_issues)
@@ -3858,7 +3880,13 @@ def route_dropped_receipts(
             entry.update({
                 "batch_id": target_run.run_id,
                 "n_added": int(result.get("n_added") or 0),
+                "has_statement": has_statement(fresh),
             })
+            # Note #53: the arrival already re-matched a month holding a
+            # statement; say so, and with what result, instead of dropping it.
+            rematch = drop_rematch_summary(result.get("rematch"))
+            if rematch is not None:
+                entry["rematch"] = rematch
             if result.get("issues"):
                 entry["issues"] = list(result["issues"])
             for row, _path in group:

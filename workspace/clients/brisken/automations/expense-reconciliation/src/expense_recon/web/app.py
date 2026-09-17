@@ -165,6 +165,7 @@ from .service import (  # item 88
     MEMORY_TRIGGER_PUBLISH,
     commit_month_memory,
 )
+from .service import confirm_expense_category  # note #62
 from ..matching.types import EXPENSE_CATEGORIES
 from ..cost_centers import (
     CostCenterRegistry,
@@ -3659,6 +3660,27 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             )
         # No re-match (item 70): the private flag and who is reimbursed never
         # reach the matcher; the card chain derives a row's entity without it.
+        return await _expense_edit_reply(run_id, False)
+
+    @app.post("/api/runs/{run_id}/expenses/{document_id:path}/confirm-category")
+    async def post_expense_confirm_category(run_id: str, document_id: str):
+        """Note #62: keep the category the tool guessed from the vendor name
+        (or could not explain) as the reviewer's own. Before this a right
+        guess read "needs a look" until a DIFFERENT category was picked. No
+        body. 400 when the category is not a guess to confirm, 404 for an
+        unknown expense. Undone by the category PUT with `""`."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            run, err = _expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            msg = confirm_expense_category(store, run, document_id, _now_iso())
+            if msg == "unknown expense":
+                return JSONResponse({"error": msg}, status_code=404)
+            if msg:
+                return JSONResponse({"error": msg}, status_code=400)
+        # No re-match (item 70): a category never reaches the matcher.
         return await _expense_edit_reply(run_id, False)
 
     @app.put("/api/runs/{run_id}/expenses/{document_id:path}")

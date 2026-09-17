@@ -783,7 +783,8 @@ other job kind) —
 `{files: [{file, status: filed|needs_month|rejected|failed, month?,
 month_source?, batch_id?, reason?, limit?, mixed_months?}], months:
 [{month, label, batch_id?, created_batch, n_files, n_added, issues?,
-error?}], n_filed, n_needs_month, n_rejected}`. `n_added < n_files` on
+error?, has_statement?, rematch?}], n_filed, n_needs_month, n_rejected}`
+(`has_statement` / `rematch` since note #53, section at the end). `n_added < n_files` on
 a month entry means content duplicates were skipped (the dedupe
 working, not a loss). A drop-created month claims its pooled mail like
 any other month creation.
@@ -2646,7 +2647,8 @@ so it reached neither one row at a time.
 field `card_key` (a registry key from `GET /api/cards`; `""` clears it). 400
 when the key names no card or an inactive one. A card defined after the month
 was created is copied into the month's card snapshot, as a strip assignment
-does. No re-match: the matcher does not read it. The row's card, and through it
+does. A changed pick re-matches a month with a statement (note #63, see "Keep a
+guessed category, change a printed card" below). The row's card, and through it
 the company, the person and the paid-through account, come from the picked
 card; a `legal_entity` override still wins for the company. `edited_fields`
 lists `card_key`.
@@ -2860,3 +2862,61 @@ No API change. `PUT /api/runs/{id}/expenses/{doc}` with
 reviewer's pick; now pinned. The row returns to the tool's own value, which
 for an uncategorized row is no category (`posting_category` null). Tests:
 `tests/test_category_clear.py`.
+
+## Keep a guessed category, change a printed card, look at a set-aside page, see the drop's re-match (notes #62, #63, #52, #53, 2026-09-17)
+
+**Note #62 (Criss, August): "already resolved but it still says needs a
+look".** The row (OpenAI 80.04) read `review.reason_code: vendor_guess`: the
+category was guessed from the vendor name. Only a category override clears
+that verdict, and the category PUT only writes one when the category CHANGES
+from the screen's point of view, so a right guess stayed flagged whatever else
+was edited (she had set `paid_through`).
+
+- `POST /api/runs/{id}/expenses/{document_id}/confirm-category`, no body.
+  Keeps every line's current category (and its picked account) as the
+  reviewer's own: one category override per line, so a multi-line receipt
+  keeps each line's category. The row then reads `posting_category.source:
+  "override"` and leaves `vendor_guess`; publishing the month teaches it like
+  any other correction. Undo is the existing `{"field": "category", "value":
+  ""}`. 400 when the category is not a guess to keep, 404 for an unknown
+  expense. No re-match.
+- `expenses[].category_confirmable`, bool: the category verdict alone is
+  `vendor_guess` or `unknown_provenance`. Judged on the category, so it can be
+  true while another exception (a missing company, say) is the row's
+  headline. Never true for `category_account_mismatch`, which questions the
+  account.
+
+**Note #63 (Criss, August): "I can't change the card if I need to."** The
+per-row fix already outranked a printed card on the grid; two gaps made it
+wrong on a month with a statement:
+
+- `card_key` joins the match fields: a changed pick re-matches (the reply
+  carries `rematch`); re-sending the same key does not.
+- In the matcher's pool only, a pick that contradicts the card the receipt
+  PRINTED replaces the printed card (`payment_mode` becomes the picked card's
+  digits plus "(card picked by hand)"), so the receipt is scoped to the card
+  the reviewer named. A pick on a receipt that printed no card number, or the
+  same card it printed, leaves the pool as it was. The grid keeps showing
+  `payment_hint` as printed.
+
+**Note #52 (owner, July): a set-aside page must be viewable before it is
+restored.** `set_aside[].receipt_image_available`, bool, on the expense batch
+payload: whether `GET /api/runs/{id}/receipts/{file}/image` serves the file
+(the endpoint's own resolution, `receipt_image_file`). Live on 2026-09-17 all
+five July entries serve 200.
+
+**Note #53 (owner): "do dropped receipts get sorted into months?"** Yes: each
+file is read and filed into the month printed on it (created when absent); an
+unreadable date is held as `needs_month`. A month that already holds a
+statement re-matches on the arrival. The drop ledger's `months[]` entries now
+say so:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `has_statement` | bool | the month held a statement when the files arrived; `false` on a month this drop created. Absent only on a failed month group |
+| `rematch` | object | present only when a re-match ran: `{ok: true, n_transactions, n_matched, n_review, n_unmatched_tx}` (the month's counts after it) or `{ok: false, error}` (the receipts are filed regardless; the month's next change retries) |
+
+No `rematch` with `has_statement: true` means every file was a duplicate
+already in the month, so nothing changed to match.
+
+Tests: `tests/test_feedback_notes_52_53_62_63.py` (route-level, all four).
