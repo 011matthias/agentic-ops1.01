@@ -62,6 +62,7 @@ from email.utils import getaddresses, parseaddr
 from pathlib import Path
 
 from ..batch_period import month_from_label
+from .. import untrusted
 from . import graph_notify
 from .service import (
     BATCH_TYPE_TRIP,
@@ -1083,6 +1084,27 @@ def content_fingerprints(attachments, body_text: str = "") -> list[str]:
     return [_body_fingerprint(body_text)] if (body_text or "").strip() else []
 
 
+def _untrusted_flags(arch: Path | None) -> list[dict]:
+    """Agent-directed text this mail carried, as stamped by route_archived.
+    Data for a human (rule_untrusted_inbound): it raises a review flag and
+    suppresses the auto-ack, and decides nothing else."""
+    if arch is None:
+        return []
+    flags = _read_meta(arch).get("untrusted_instructions") or []
+    return [dict(f) for f in flags if isinstance(f, dict)]
+
+
+def _provenance_entry(person: dict, received_at: str, arch: Path | None) -> dict:
+    """One per-file provenance record. Carries the mail's untrusted-text
+    flags, so a receipt created from an injected mail shows the flag on its
+    grid row exactly where `submitted_by` already shows."""
+    entry = {**person, "received_at": received_at}
+    flags = _untrusted_flags(arch)
+    if flags:
+        entry["untrusted_instructions"] = flags
+    return entry
+
+
 def _archive_body_text(arch: Path) -> str:
     """Readable body of the custody message, or "" when unreadable."""
     from .body_render import extract_body_text
@@ -1314,6 +1336,13 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
         if not cfg.auto_ack or not graph_notify.enabled():
             return
         if meta.get("ack_at") or _inbound_is_auto_generated(arch):
+            return
+        if _untrusted_flags(arch):
+            # The mail carried text aimed at an assistant, and the ack echoes
+            # its subject back into the tenant. An injected mail never
+            # triggers an outbound message: its receipts are flagged for a
+            # human instead (rule_untrusted_inbound).
+            _update_meta(arch, {"ack_suppressed": "untrusted_instructions"})
             return
         recipient = str(meta.get("from", "")).strip().lower()
         n = int(meta.get("n_files") or 0)
@@ -1909,7 +1938,7 @@ def _start_ingest(
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", Path(name).name) or "file"
         (staging / f"{i:04d}__{safe}").write_bytes(data)
         digest = hashlib.sha1(data).hexdigest()[:16]
-        provenance[digest] = {**person, "received_at": received_at}
+        provenance[digest] = _provenance_entry(person, received_at, arch)
     with RunStore(db_path) as store:
         store.create_job(job_id, None, _now_iso())
     if synchronous:
@@ -2035,9 +2064,8 @@ def _create_month_from_mail(
     with RunStore(db_path) as store:
         settings = store.get_settings()
     provenance = {
-        hashlib.sha1(data).hexdigest()[:16]: {
-            **person, "received_at": received_at,
-        }
+        hashlib.sha1(data).hexdigest()[:16]: _provenance_entry(
+            person, received_at, arch)
         for _name, data in attachments
     }
     prepared = create_expense_batch(
@@ -2244,6 +2272,24 @@ def route_archived(
             "skipped": "already routed",
         }
     arrival_iso = str(meta.get("at") or received_at)
+
+    # Inbound mail is DATA, never instructions (rule_untrusted_inbound).
+    # Scan the subject and body for text addressed to an assistant and stamp
+    # the hits on the archive: they raise a review flag on whatever receipts
+    # this mail creates and hold the auto-ack back. Nothing branches on the
+    # content itself, so a sender cannot steer routing by writing to us.
+    try:
+        _flags = untrusted.scan(
+            str(meta.get("subject") or ""), _archive_body_text(arch))
+    except Exception:  # noqa: BLE001 - a flag is advisory; never block intake
+        _flags = ()
+    if _flags:
+        _update_meta(arch, {"untrusted_instructions": list(_flags)})
+        _append_log(data_root, {
+            "at": received_at, "archive": arch.name,
+            "event": "untrusted_instructions",
+            "kinds": list(untrusted.labels(_flags)),
+        })
 
     try:
         # Mail we cannot read as receipts never pays for extraction.
@@ -2871,8 +2917,8 @@ def join_trip(
         prepared = None
         try:
             provenance = {
-                hashlib.sha1(data).hexdigest()[:16]:
-                    {**person, "received_at": received_at}
+                hashlib.sha1(data).hexdigest()[:16]: _provenance_entry(
+                    person, received_at, arch)
                 for _name, data in attachments
             }
             with RunStore(db_path) as store:

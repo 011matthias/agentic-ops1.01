@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Protocol
 
+from ..untrusted import UNTRUSTED_SYSTEM, data_block, new_nonce
 from .cost import CostTracker, TokenUsage
 from .extraction_cache import ExtractionCache, extraction_cache_key, prompt_fingerprint
 
@@ -462,6 +463,17 @@ The receipt content below is the text layer extracted from a PDF; layout may be 
 --- RECEIPT TEXT END ---
 """
 
+# What the model actually sees ahead of the fenced text block. The constant
+# above is FROZEN: it is hashed into _EXTRACT_FINGERPRINT, which keys the
+# extraction cache, and editing it would invalidate every cached reading and
+# re-bill the whole history on the next re-match. The untrusted-data fence
+# changes how the text is delimited, not what a benign document extracts to,
+# so the cache stays valid.
+_EXTRACT_TEXT_INTRO = (
+    "The receipt content below is the text layer extracted from a PDF; "
+    "layout may be flattened.\n"
+)
+
 _EXTRACT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -621,7 +633,8 @@ class OpenAIClient:
 
         response = self._client.chat.completions.create(
             model=self.model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "system", "content": UNTRUSTED_SYSTEM},
+                      {"role": "user", "content": prompt}],
             response_format={
                 "type": "json_schema",
                 "json_schema": {
@@ -672,7 +685,8 @@ class OpenAIClient:
         )
         response = self._client.chat.completions.create(
             model=self.model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "system", "content": UNTRUSTED_SYSTEM},
+                      {"role": "user", "content": prompt}],
             response_format={
                 "type": "json_schema",
                 "json_schema": {
@@ -723,7 +737,8 @@ class OpenAIClient:
         )
         response = self._client.chat.completions.create(
             model=self.model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "system", "content": UNTRUSTED_SYSTEM},
+                      {"role": "user", "content": prompt}],
             response_format={
                 "type": "json_schema",
                 "json_schema": {
@@ -762,7 +777,8 @@ class OpenAIClient:
         )
         response = self._client.chat.completions.create(
             model=self.model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "system", "content": UNTRUSTED_SYSTEM},
+                      {"role": "user", "content": prompt}],
             response_format={
                 "type": "json_schema",
                 "json_schema": {
@@ -821,11 +837,18 @@ class OpenAIClient:
         ) if self.known_cards else (
             " No card list was supplied for this batch, so return null."
         )
+        # The file name rides in from the mail attachment, so it is untrusted
+        # too: fence it rather than interpolating it into the instructions.
+        nonce = new_nonce()
         instructions = _EXTRACT_INSTRUCTIONS.format(
-            file_name=file_name, known_cards=known
-        )
+            file_name="see the file-name block below", known_cards=known
+        ) + "\n" + data_block(file_name, kind="file name", nonce=nonce)
         if text is not None:
-            content: object = instructions + _EXTRACT_TEXT_SUFFIX.format(text=text)
+            # Fenced with a per-call nonce and the marker neutralised inside,
+            # so a PDF that prints the end marker cannot close the block and
+            # have its tail read as instructions (untrusted.data_block).
+            content: object = instructions + "\n" + _EXTRACT_TEXT_INTRO + data_block(
+                text, kind="PDF text layer", nonce=nonce)
         else:
             import base64
 
@@ -842,7 +865,8 @@ class OpenAIClient:
 
         response = self._client.chat.completions.create(
             model=model,
-            messages=[{"role": "user", "content": content}],
+            messages=[{"role": "system", "content": UNTRUSTED_SYSTEM},
+                      {"role": "user", "content": content}],
             response_format={
                 "type": "json_schema",
                 "json_schema": {

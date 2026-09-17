@@ -54,7 +54,7 @@ receives after `jsonable_encoder`.
 | `card_review.resolved[].hints[]` | string |
 | `summary.upload_issues[]` | string (English prose; unchanged by design) |
 | `summary.upload_issue_details[]` | object `{code, file, suffix, limit}` |
-| `account_options[]` · `category_options[]` · `entity_options[]` | string |
+| `account_options[]` · `category_options[]` · `entity_options[]` | string (`entity_options` follows the operator's `entity_order`; see PUT /api/settings) |
 | `cost_center_options[]` | object `{name, kind, note}` (item 47: OBJECTS, unlike its three sibling option lists) |
 
 ### Run
@@ -1193,6 +1193,7 @@ PARALLEL (rule 1).
 | `expenses[].private` | boolean | the operator confirmed it: a reimbursement row |
 | `expenses[].reimburse_to` | string | who gets reimbursed; `""` unless confirmed |
 | `expenses[].reimburse_to_prefill` | string | the `submitted_by` person, offered ONLY on suggested/confirmed private rows as a pre-fill for the confirm dialog. The ONE sanctioned use of the sender claim — it never fills `person` and must never generalize into sender-based attribution |
+| `expenses[].untrusted_instructions` | object[] | agent-directed text found in this receipt's document, its file name, or the mail that carried it: `[{kind, quote}]`, empty on ordinary rows. Reported, never obeyed (`rule_untrusted_inbound`). The row also reads `check` / `reason_code: "untrusted_instructions"`, which is the surface a reviewer sees; this list is the detail. `quote` is a sanitised one-line excerpt of untrusted text: render it as TEXT, never as markup or a link |
 
 A suggested row reads `check` / `reason_code: "suggested_private"` (rule
 5: prose in `reason`). The suggestion takes the entity check's slot: it IS
@@ -2755,8 +2756,20 @@ included. Before this, an unrecognised key was dropped in silence under a
 200, so a tab could say "saved" over a write that never happened.
 
 The writable keys are `export_approved_only`, `fx_reference_rates`,
-`card_entities`, `card_accounts`, `entities`, `merchants`, `cards`,
-`cost_centers`, `intake` (`store.SETTINGS_WRITABLE_KEYS`).
+`card_entities`, `card_accounts`, `entities`, `entity_order`, `merchants`,
+`cards`, `cost_centers`, `intake` (`store.SETTINGS_WRITABLE_KEYS`).
+
+**`entity_order` (item 92) is the operator's own order for the entity list**:
+a list of entity names, best first, whole-list replace, trimmed and deduped
+on save. `entity_options` (this payload, `GET /api/cards`, and every expense
+batch's grid) now returns the names it lists in that order, then everything
+it does not name alphabetically. It is a separate list rather than a field
+on each `entities` entry because most real entities never reach that
+registry: they arrive from `/data` provisioning and the card map, which the
+operator cannot edit. A name the order carries that no longer resolves is
+ignored at read time and kept on save, so an entity leaving the card map
+cannot refuse the operator's ordering or drop an entity a charge still
+needs. Unset or empty: alphabetical, exactly as before.
 
 The derived keys `GET` composes are accepted and ignored, never refused:
 `categories`, `entity_options`, `cards_effective`, `merchants_inert`,
@@ -2785,3 +2798,65 @@ Tests: `tests/test_settings_put_contract.py`, where
 `test_every_writable_key_actually_lands` walks `SETTINGS_WRITABLE_KEYS` so a
 key added to the tuple without a handler branch fails instead of doing
 nothing. Renders in `docs/lovable-settings-tabs-prompt.md`.
+
+## Two printed card digits name a card: `card_ending` (note #60, 2026-09-17)
+
+Owner, note #60: "some receipts only show the last 2 digits of the cards
+number, we need to strategize what we can do, so the card attribution stays
+accurate". Live on 2026-09-17, one row prints a two-digit ending:
+`42463153XXXXXX38` on August's SARL TRAIN'S, already fixed by hand to 2838
+(a per-row fix outranks this rule), so the deploy moved no live row. The rule
+is for the receipts that arrive next.
+
+**The rule.** Two digits behind a mask (`XX`, `*`, `#`, `•`, `..`) or an
+ending word (`ending`, `ending in`, `final`) name the card when exactly ONE
+active card has a number ending in them. Two cards sharing the ending is a
+contest: the row stays without a card and the strip group is `ambiguous`,
+never guessed. On the live registry 3876 / 1176 share `76` and 0113 / 6013
+share `13`, and each pair spans two companies. A bare two-digit number
+(`Cartao Credito 30 Dias`, `$15.00`), a single `x` (`3x`, an instalment
+count) and two different endings in one hint name nothing. A printed last-4
+and a taught exact string both outrank the ending.
+
+**One new row field**, `expenses[].card_ending`, string: `"38"` when the card
+was named by a masked two-digit ending alone, `""` otherwise (a last-4, an
+assignment, a per-row fix, memory, or no card). `card_source` keeps its four
+values; this rides beside it.
+
+**The strip.** `card_review.unresolved_hints[].digits` for a masked-ending
+group is the two digits (`"76"`), and a masked BIN is no longer shown as the
+card's number: `42463153XXXXXX38` groups as `38`, not `42463153`.
+
+Tests: `tests/test_card_short_ending.py` (unit + the batch route).
+
+## A receipt arriving into an existing month reads today's card list (note #54, audit item 108, 2026-09-17)
+
+Owner, note #54: a receipt that reaches an existing month by the Receipts
+drop or by mail "goes through the entire process all the other receipts
+inside the month have gone through". Categorization, memory and the re-match
+against a loaded statement already ran on arrivals; the card chain read the
+card registry copy the month was created with.
+
+**Now** every arrival first refreshes the month's copy from Settings through
+the same audited pass as `POST /api/expense-batches/{id}/refresh-master-data`
+(per-row fixes and the month's own hint assignments survive it), so the new
+receipt AND the rows already in the month resolve card, company and person
+against the registry as it is today. A refresh that changed something is
+appended to the month's `master_data_refreshes` trail with operator
+`auto: receipt arrival`; one that changed nothing writes no row. The add
+result gains `master_data_refresh` (the changes list) only when something
+moved, and a month with a statement re-matches when the refresh moved its
+card list even if every uploaded file was a duplicate.
+
+Unchanged: a Settings save alone still does not touch an existing month
+until its next arrival or a manual refresh.
+
+Tests: `tests/test_arrival_reads_live_cards.py`.
+
+## Clearing a category (item 78, 2026-09-17)
+
+No API change. `PUT /api/runs/{id}/expenses/{doc}` with
+`{"field": "category", "value": ""}` (or `null`) already cleared the
+reviewer's pick; now pinned. The row returns to the tool's own value, which
+for an uncategorized row is no category (`posting_category` null). Tests:
+`tests/test_category_clear.py`.

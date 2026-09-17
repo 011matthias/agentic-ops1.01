@@ -421,7 +421,8 @@ def prepare_run(
 
 
 def available_entities(settings: dict | None, extra: str | None = None) -> list[str]:
-    """The legal entities a reviewer can pick, deduped and sorted.
+    """The legal entities a reviewer can pick, deduped and in the operator's
+    own order.
 
     Unions four sources so the picker is never empty: the CoA provisioning
     file (authoritative, `/data`), the card registry's entity TARGETS (the
@@ -430,6 +431,15 @@ def available_entities(settings: dict | None, extra: str | None = None) -> list[
     run default. The provisioning + card sources are what populate the
     dropdown in the real Brisken case, where `settings['entities']` is
     empty but the entities do exist on `/data` and in the card map.
+
+    Order (item 92): the names `settings['entity_order']` lists, in that
+    order, then everything it does not name, alphabetically. A-Z was
+    nobody's order; the entity Criss books every day sat wherever its
+    initial put it, in the Settings list and in every per-expense dropdown,
+    with no way to move it. Two properties make the ordering safe to read
+    anywhere: a name the order no longer matches is ignored, and an entity
+    the order never names still appears (at the back), so this list can
+    neither hide an entity a charge needs nor go stale into a wrong answer.
     """
     from ..cards import effective_cards
     from ..coa_provision import provisioned_entity_labels
@@ -442,7 +452,13 @@ def available_entities(settings: dict | None, extra: str | None = None) -> list[
     }
     if extra and extra.strip():
         opts.add(extra.strip())
-    return sorted(opts)
+    order = s.get("entity_order") or []
+    ranked: list[str] = []
+    for name in order:
+        label = str(name).strip()
+        if label in opts and label not in ranked:
+            ranked.append(label)
+    return ranked + sorted(opts - set(ranked))
 
 
 def resolve_entity(form: RunForm, settings: dict | None) -> str:
@@ -5220,7 +5236,7 @@ def resolve_batch_row_cards(
     exception to item 40's card-only rule, operator-confirmed) or by
     assigning/registering the real card, which clears it.
     """
-    from ..cards import resolve_hinted_card_ex
+    from ..cards import masked_short_ending, resolve_hinted_card_ex
     from ..matching.deterministic import _card_keys
 
     cards = _batch_cards(cfg)
@@ -5231,6 +5247,17 @@ def resolve_batch_row_cards(
         hint = (r.payment_mode or "").strip()
         card, ambiguous = resolve_hinted_card_ex(hint, cards, hints_map)
         card_source = "hint" if card is not None else "none"
+        # Note #60: the two digits the card was named by, when a masked
+        # ending was the only card number the receipt printed. Weaker than a
+        # last-4, so the screen says so; empty for every other resolution.
+        ending = masked_short_ending(hint) if card is not None else None
+        card_ending = (
+            ending
+            if ending
+            and not (hints_map or {}).get(hint)
+            and any(str(d).endswith(ending) for d in card.digits)
+            else ""
+        )
         # Item 87: the reviewer's per-row card fix wins over everything the
         # receipt printed; a card REMEMBERED from an earlier month's fix
         # applies only when the printed payment method carries no card
@@ -5242,6 +5269,7 @@ def resolve_batch_row_cards(
         )
         if fixed is not None:
             card, card_source = fixed, "override"
+            card_ending = ""
         elif card is None and not _card_keys(hint):
             remembered = _batch_row_card(cards, r.card_key)
             if remembered is not None:
@@ -5297,6 +5325,7 @@ def resolve_batch_row_cards(
             "card_map_blocked": (ambiguous and card is None)
             or (card is not None and not card.zoho_account),
             "card_source": card_source,
+            "card_ending": card_ending,
         }
     return out
 
@@ -5529,10 +5558,24 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
     }
 
 
+def _row_untrusted(r: Receipt, intake_provenance: dict) -> list[dict]:
+    """Every untrusted-text flag that applies to one expense row: the ones
+    found in the receipt's own document/file name at parse time, plus the
+    ones the carrying mail was stamped with at route time. Deduped by kind."""
+    prov = intake_provenance.get(r.document_id) or {}
+    out: dict[str, dict] = {}
+    for f in (*(r.untrusted_instructions or ()),
+              *(prov.get("untrusted_instructions") or ())):
+        if isinstance(f, dict) and f.get("kind"):
+            out.setdefault(str(f["kind"]), dict(f))
+    return [out[k] for k in sorted(out)]
+
+
 def _expense_review(
     r: Receipt,
     overrides: dict,
     *,
+    untrusted_flags: tuple | list = (),
     entity: str | None = None,
     period: tuple[date, date] | None = None,
     date_is_human: bool = False,
@@ -5546,8 +5589,10 @@ def _expense_review(
     currency), then a date that cannot belong to this month (backlog item
     25), then a missing legal entity (Cards R3 — resolves from the
     paying card; unresolved = review, and the export still runs with a
-    visible placeholder), then the shared category judgment — the same
-    ready / check / pick vocabulary the statement workbench uses.
+    visible placeholder), then text in the document or its mail that is
+    addressed to the tool (`untrusted_flags`, rule_untrusted_inbound), then
+    the shared category judgment — the same ready / check / pick vocabulary
+    the statement workbench uses.
 
     `person` (backlog item 40) is checked LAST, only on a row that would
     otherwise be ready: the fix (a person on the card, in Settings) is
@@ -5633,6 +5678,30 @@ def _expense_review(
             "export shows a placeholder until then.",
             "needs_entity",
         )
+    # Text addressed to an assistant, found in this receipt's document, its
+    # file name or the mail that carried it (rule_untrusted_inbound). It is
+    # reported, never obeyed. Ranked HERE, not first: the four checks above
+    # are per-row work the reviewer can actually finish, and this flag never
+    # clears (nothing un-writes what the document said), so first would let a
+    # sticky warning hide a missing amount forever. It still outranks the
+    # category judgment and the registry-work flags below, because a document
+    # steering the tool matters more than which account it posts to. The flag
+    # itself is not hidden either way: `expenses[].untrusted_instructions`
+    # rides on the row independently of which exception names it.
+    flags = tuple(untrusted_flags or ()) or tuple(r.untrusted_instructions or ())
+    if flags:
+        kinds = ", ".join(sorted({str(f.get("kind")) for f in flags if f.get("kind")}))
+        return {
+            **_review(
+                "check",
+                "This receipt (or the mail that carried it) contains text "
+                "written at the tool rather than a purchase: " + kinds + ". "
+                "It was extracted as data and changed nothing. Read it before "
+                "you approve the row.",
+                "untrusted_instructions",
+            ),
+            "untrusted_instructions": [dict(f) for f in flags],
+        }
     review = _matched_category_review(r, overrides)
     if review["state"] == "ready" and person is not None and not person:
         # Item 40: every expense belongs to a person, through the card.
@@ -5915,6 +5984,7 @@ def build_expense_view(
         box_inputs[r.document_id] = (r, res, cost)
         review = _expense_review(
             r, overrides, entity=res["entity"], period=period,
+            untrusted_flags=_row_untrusted(r, intake_provenance),
             person=res["person"],
             private=res["private"],
             suggested_private=res["suggested_private"],
@@ -6028,6 +6098,10 @@ def build_expense_view(
             # this month), learned (remembered from an earlier month's
             # fix), or none.
             "card_source": res.get("card_source", "none"),
+            # Note #60: "38" when the card was named by a masked two-digit
+            # ending alone; "" otherwise. Parallel to `card_source`, which
+            # keeps its four values.
+            "card_ending": res.get("card_ending", ""),
             "card": (
                 {
                     "key": res["card"].key,
@@ -6067,6 +6141,9 @@ def build_expense_view(
             # only for receipts that arrived via the intake mailbox —
             # {person, source: alias|sender, address, received_at}.
             "submitted_by": intake_provenance.get(r.document_id),
+            # Agent-directed text found in this receipt or its mail
+            # (rule_untrusted_inbound): shown for a human, acted on by nothing.
+            "untrusted_instructions": _row_untrusted(r, intake_provenance),
         })
         if roster is not None:
             # Trip batches only (the key is absent on company months).
@@ -8762,6 +8839,22 @@ def add_receipts_to_expense_batch(
             # as ingested into a batch that no longer exists.
             raise RunInputError("This batch no longer exists (it was deleted).")
         run = fresh
+        # Note #54 (owner, 2026-09-16) / audit item 108: a receipt arriving
+        # into a month that already exists goes through what the month's
+        # other receipts went through, and that includes the CURRENT card
+        # list. The month kept the copy of the registry it was created with,
+        # so September, opened by mail before the cards had people and
+        # companies, resolved every arrival against that copy: 40 rows with
+        # no person while Settings knew all nine cards. The arrival now
+        # refreshes the copy first, through the same audited pass as the
+        # manual button (overrides and the month's own assignments survive
+        # it), so the new receipt and the rows already there both read the
+        # registry as it is today.
+        refresh = _refresh_batch_master_data_locked(
+            store, run, now_iso=now_iso, operator="auto: receipt arrival"
+        )
+        if refresh.get("changes"):
+            run = store.get_run(run.run_id) or run
         result = _add_receipts_locked(
             store, run, staging_dir, now_iso,
             learning_db_path=learning_db_path,
@@ -8769,13 +8862,16 @@ def add_receipts_to_expense_batch(
             provenance_by_digest=provenance_by_digest,
             _stage=_stage,
         )
+        if refresh.get("changes"):
+            result["master_data_refresh"] = refresh["changes"]
 
     # OUTSIDE the lock (`rematch_month` takes the same non-reentrant lock to
     # commit). A month whose statement is already loaded reconciles the
     # arrival now; one without a statement does nothing here and pays
     # nothing. Skipped when the upload added no receipt -- an all-duplicate
-    # add changed nothing to re-match.
-    if result.get("n_added"):
+    # add changed nothing to re-match -- unless the arrival's refresh moved
+    # the month's card list, which the matcher reads too.
+    if result.get("n_added") or result.get("master_data_refresh"):
         rematch = rematch_after_change(
             store, run.run_id,
             learning_db_path=learning_db_path, on_stage=on_stage,

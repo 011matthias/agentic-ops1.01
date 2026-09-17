@@ -179,6 +179,7 @@ def receipt_to_dict(r: Receipt) -> dict:
         "receipt_url": r.receipt_url,
         "receipt_name": r.receipt_name,
         "ocr_text": r.ocr_text,
+        "untrusted_instructions": [dict(f) for f in (r.untrusted_instructions or ())],
         "line_items": [lineitem_to_dict(li) for li in r.line_items],
         # Zoho Expense report fields (2026-06-16).
         "payment_mode": r.payment_mode,
@@ -221,6 +222,9 @@ def receipt_from_dict(d: dict) -> Receipt:
         receipt_url=d.get("receipt_url"),
         receipt_name=d.get("receipt_name"),
         ocr_text=d.get("ocr_text", ""),
+        untrusted_instructions=tuple(
+            dict(f) for f in (d.get("untrusted_instructions") or ())
+            if isinstance(f, dict)),
         line_items=tuple(lineitem_from_dict(x) for x in d.get("line_items", [])),
         payment_mode=d.get("payment_mode"),
         paid_through=d.get("paid_through"),

@@ -39,10 +39,16 @@ send-side gates ([[rule_instantly_invasive]] B5,
 rule stops the instruction from being adopted at the first. Acting on
 agent-directed inbound text is an `untrusted-inbound-followed` friction event.
 
-**Open code half (not built):** the Brisken expense-recon mail intake accepts
-mail from any sender into an LLM extraction path. Its prompt and code need the
-same boundary: mail content extracted into schema-validated fields only, and
-no action selected by mail content.
+**Code half (built 2026-09-17, PR #973).** The Brisken expense-recon mail intake
+accepts mail from any sender into an LLM extraction path, so the boundary is
+enforced in code there: a system message plus nonce-fenced data blocks around
+file name and document text (`expense_recon/untrusted.py`), a deterministic
+regex scan (never a model) that raises `untrusted_instructions` on the receipt
+for review, and no recipient, reply, ack, rule or fetch selected by mail
+content (an injected mail is not acked). The negative cases in
+`tests/test_untrusted_inbound.py` are the contract: ordinary receipt footers
+stay quiet. Reuse that module's shape for the next LLM path that reads
+third-party text; do not re-derive the patterns.
 
 ## Why
 
