@@ -4567,6 +4567,41 @@ open."). PT "Comparado com o extrato" is a draft for Criss. Worth asking her
 separately: on the Matching view the PT card for matched rows reads
 "Conciliadas" while EN reads "Matched".
 
+### 90. A tighter clean band for the ECB rate, then the Settings rates go (owner ruling 2026-09-17, follows item 82)
+
+**Owner ruling 2026-09-17 (do not re-ask):** tighten the clean band first, then
+remove both Settings FX rates (EUR:USD 1.162275, BRL:USD 0.192448) so new
+months use the ECB monthly average. Until this item ships, the two typed rates
+stay and win for every month.
+
+Why the order: item 82's simulation (backlog item 82, 2026-09-17) found the
+ECB rate more accurate (July's 22 labelled FX pairs 1.78% -> 0.44% mean
+deviation) but, at the 3% `fx_reference_match_pct`, it moved July -1 right
+(`0067` MARINHO demoted by the rival JoseliMariaDos 8.40) and +2 coincidental
+auto-matches (`0034` Erste Fracht -> HOTEL AM TIERGARTEN 24.02, `0066` Mega
+Center -> 48.247.796 BEATRYZ RI 2.97). A 2% band under ECB rates, measured
+once and not built: July 30 -> 32 right (POSTO ARCA and NATHALIA promoted,
+`0067` kept, `0066` to review), `0034` still auto-matched at +0.2%, August
+unchanged, six bundles 70 / 0 wrong / 75.7 (shipped 76.0).
+
+Build:
+
+1. Decide the scope of the tighter band: ECB-sourced rates only (a new knob,
+   e.g. `fx_ecb_match_pct`, leaving `fx_reference_match_pct` and the scorer
+   asset untouched) or the shared band. `fx_reference_match_pct` 0.015 was
+   refuted in the S1 run under self-derived rates
+   (`docs/optimize/brisken-recon-tuning-v1/SUMMARY.md`); read it first.
+2. Simulate on a fresh DB copy and the six bundles with
+   `tools/recon-match-attribution.py`, at 3%, 2.5% and 2% under ECB rates
+   with the Settings rates removed (not 1.5%: refuted in the S1 run); report
+   bucket changes against `labels.csv` and bracket the knee. `0034` is not fixable by the band
+   (+0.2%): name it as the residual.
+3. Ship with the scorer guard green; route-level tests; regress proof.
+4. Then, and only on a per-action owner yes at that point: remove the two
+   Settings rates via `PUT /api/settings`. July and August keep their frozen
+   rates either way; the change reaches months created or statement-attached
+   afterwards.
+
 ## Related but tracked elsewhere (do not duplicate here)
 
 - Merchant name book seed cleanup (merge the MEGA CENTER/CENTRE duplicate
