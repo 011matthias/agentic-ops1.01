@@ -38,7 +38,7 @@ Probed the auto-mode classifier and prefix-rule behavior against a rewrite-only 
 
 ### Context YAML incident (PR #1023)
 1. `finalize` ran as `uv run --directory <wt> python tools/checkpoint_scaffold.py`, which skips the inline `pyyaml` dependency. The loader fell back to JSON, failed on the sibling-written YAML, and rewrote `docs/sessions/2026-09-17-context.yaml` fresh, deleting `brisken`, `vinted-reselling`, `system` and `sys` (gitignored, no git copy).
-2. Rebuilt all four. orchestrator/specs came from surviving payloads; next_steps, open_questions and not_worked came from each client's latest checkpoint on main (brisken: Expense Recon Private Card And Audit Defects mini; vinted: Listing Text and Buyer-Search Keywords; system/sys: this checkpoint). Older payloads were not replayed, since they predate those checkpoints. Each entry carries `recovered_from`.
+2. Rebuilt all four. orchestrator/specs came from surviving payloads; next_steps, open_questions and not_worked came from each client's latest checkpoint on main (brisken: Brisken Recon Card-Scoped Matching mini, #1019; vinted: Listing Text and Buyer-Search Keywords; system/sys: this checkpoint). Older payloads were not replayed, since they predate those checkpoints. Each entry carries `recovered_from`. The first rebuild used the Session 22 brisken checkpoint; #1019's finalize had run at 16:34, two minutes before the wipe, so brisken was re-pointed after merging main.
 3. PR #1023: finalize checks the context file before any write and exits 2 with nothing written; `merge_context_yaml` lost its rewrite-fresh branch. 3 tests through `cs.main`, regress_check x2, and a replay of the incident invocation against a copy of the real file: exit 2, sha256 unchanged.
 
 ### Register
