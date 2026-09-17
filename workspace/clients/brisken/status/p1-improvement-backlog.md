@@ -4980,6 +4980,16 @@ workbench has been saying; no re-match is needed for that and no pairing moves
 anywhere. The next re-match of either month then stores and mails the effective
 counts rather than the raw ones.
 
+**One contract moved with it.** `tests/test_same_amount_other_merchant_item_133.py::test_the_rule_never_breaks_a_tie_a_person_should_settle`
+(item 133's bulk-confirm half, PR #1036) pinned the raw outcome where a charge
+outside the tie still took a tied receipt. The page never rendered that pairing
+(`held_by` gave the receipt to the pick and labelled the charge "receipt held by
+another charge"), which is precisely the raw-vs-effective split this item
+closes, so the test now asserts the held outcome. The cost is named: while a
+pick is open the other charge waits, and the freed receipt reaches it at the
+next re-match, because a decision does not re-match a month. No live row is in
+that shape on either month or the six bundles.
+
 **Not built.** Round-B vendor dominance as a second spoken-for basis: no tie in
 either live month or the six bundles would use it, and a dominance-kept
 rate-derived pair is not provably stronger than a same-currency tied candidate,
