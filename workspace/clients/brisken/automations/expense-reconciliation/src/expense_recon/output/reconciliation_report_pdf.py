@@ -38,6 +38,7 @@ from collections.abc import Sequence
 
 from ..unmatched_reasons import RECEIPT_REASON_SHORT
 from ._pdf_common import (
+    PAGE_MARGIN_MM,
     booked_without_receipt,
     caption_mark,
     card_name,
@@ -51,25 +52,32 @@ from ._pdf_common import (
     table_style,
 )
 
+# Column widths in points. Every table fits `TABLE_WIDTH_MAX` (503.9 pt, the
+# A4 portrait frame): until item 143 the coverage table was 572 pt and the
+# charge table 672 pt, so both ran past the page edges and the charge
+# table's `#`, Date and Account were cut off. Counts, dates and amounts fit
+# their values on one line in DejaVu Sans, the widest font `register_fonts`
+# picks; the text columns wrap between words. The charge column keeps room
+# for a statement descriptor with no space in it (WEB*NETWORKSOLUTIONS).
 _COVERAGE = (
-    ("Card", 118),
-    ("Statements", 118),
-    ("Period", 100),
+    ("Card", 90),
+    ("Statements", 110),
+    ("Period", 80),
     ("Charges", 46),
-    ("Matched", 46),
-    ("No receipt", 52),
-    ("Unreconciled", 92),
+    ("Matched", 48),
+    ("No receipt", 56),
+    ("Unreconciled", 72),
 )
 
 _CHARGES = (
     ("#", 24),
-    ("Date", 60),
-    ("Charge", 150),
-    ("Amount", 70),
-    ("Ccy", 32),
-    ("Status", 74),
-    ("Receipt", 140),
-    ("Account", 122),
+    ("Date", 55),
+    ("Charge", 118),
+    ("Amount", 54),
+    ("Ccy", 26),
+    ("Status", 64),
+    ("Receipt", 80),
+    ("Account", 82),
 )
 
 
@@ -480,10 +488,11 @@ def _build(
     from reportlab.platypus import SimpleDocTemplate
 
     buf = io.BytesIO()
+    margin = PAGE_MARGIN_MM * mm
     SimpleDocTemplate(
         buf, pagesize=A4,
-        leftMargin=14 * mm, rightMargin=14 * mm,
-        topMargin=14 * mm, bottomMargin=14 * mm,
+        leftMargin=margin, rightMargin=margin,
+        topMargin=margin, bottomMargin=margin,
         title=title,
     ).build(story)
     return stitch(buf.getvalue(), prepared, marks)
