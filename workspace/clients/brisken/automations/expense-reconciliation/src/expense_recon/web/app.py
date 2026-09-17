@@ -857,6 +857,18 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     except Exception:  # noqa: BLE001 - a resume never blocks startup
         log.warning("drop resume at boot failed", exc_info=True)
 
+    # Item 119: the nightly copy of the data folder to Brisken's own
+    # SharePoint. OFF unless EXPENSE_RECON_BACKUP=1, so this deploy
+    # changes nothing until the owner turns it on; `start_backup_thread`
+    # answers None in that case and the attribute says so.
+    try:
+        from .backup import start_backup_thread
+
+        app.state.backup = start_backup_thread(data_root_path)
+    except Exception:  # noqa: BLE001 - a backup never blocks startup
+        app.state.backup = None
+        log.warning("backup scheduler could not start", exc_info=True)
+
     def open_store() -> RunStore:
         return RunStore(db_path)
 

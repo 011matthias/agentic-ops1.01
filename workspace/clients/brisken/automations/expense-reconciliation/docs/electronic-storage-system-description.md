@@ -377,9 +377,19 @@ mentioned only because an earlier internal assessment credited the deployed
 system with its properties in error.
 
 **5.4 Durability.** One volume, one region, one machine. There is no
-replication, no second region, and no application-level backup or restore
-procedure. The only automated durability is the platform's scheduled
-snapshots, with a 5-day retention window.
+replication and no second region. The only automated durability in
+operation is the platform's scheduled snapshots, with a 5-day retention
+window.
+
+An application-level backup exists since 2026-09-17: the whole data
+folder, zipped with live databases copied through SQLite's backup API, to
+a SharePoint library the client controls, on a schedule inside the
+application or from the command line
+(`docs/backup-and-restore.md`). Two things keep this from closing the
+gap. It is off unless the deployment sets `EXPENSE_RECON_BACKUP`, so at
+the time of writing no copy has been taken in production; and the restore
+procedure is written but has never been rehearsed, so it is documented
+rather than demonstrated.
 
 ---
 
@@ -875,7 +885,7 @@ open.
 | 2 | 4.01(2)(b), 4.02(2) | One permission level; no per-person attribution on any stored record; no audit log; deletion effectively unrecorded | Highest |
 | 3 | 4.01(8) | No retention control over the run store; one request deletes a period. ~~Queued-file replacement and same-name re-attach destroy bytes silently~~ REMEDIATED 2026-09-15 (backlog item 66): both archive the superseded file under a versioned name instead of destroying it | High |
 | 4 | 4.01(2)(c) | No inspection or quality-assurance program | High |
-| 5 | 4.01(1) | Preservation: one volume, one region, no replication, no application-level backup or restore | High |
+| 5 | 4.01(1) | Preservation: one volume, one region, no replication. NARROWED 2026-09-17 (backlog item 119): an application-level backup to a client-controlled SharePoint library and a written restore procedure now exist, but the backup is off by default and the restore has never been rehearsed, so preservation is documented rather than demonstrated | High |
 | 6 | 4.01(2)(b) | Mail arrives over unauthenticated, unencrypted SMTP; no transport security and no means of establishing what the sender transmitted | High |
 | 7 | 4.01(1), 4.01(6) | A single unreadable PDF makes a whole period unreproducible, with no message naming the file; a large period may exhaust memory and produce nothing | High |
 | 8 | 4.01(4) | Receipt-location column empty on every row of both exports; no receipt carries a stored location | Medium |
