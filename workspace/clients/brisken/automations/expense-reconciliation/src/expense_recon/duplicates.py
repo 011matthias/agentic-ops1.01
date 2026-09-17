@@ -14,8 +14,10 @@ distinct document ids. Pure functions; no LLM, no network.
 One consumer does act on a receipt group: ``collapsed_duplicate_copies``
 (item 56, owner ruling 2026-09-11) names the copies a re-match keeps OUT of
 the candidate pool, so an invoice and its receipt stop presenting as two
-indistinguishable candidates for one charge. It still drops nothing: every
-copy stays in the snapshot, the counts and the exports.
+indistinguishable candidates for one charge. It deletes nothing: every copy
+stays in the snapshot and on screen with its marker. Since item 94
+(2026-09-17) the month's count, totals and exports leave a decided copy out
+and name it on a "copies set aside" line (`web.service.decided_copies`).
 
 A second receipt key (item 69 round A, 2026-09-15): one purchase is one
 candidate BY ITS NUMBER. ``find_duplicate_receipts_by_reference`` groups
@@ -426,9 +428,10 @@ def collapsed_duplicate_copies(
     dozen times a month. Removing the extra copies from the candidate pool
     turns each of those into the exact match it always was.
 
-    Only the pool shrinks. Every copy stays in the month's snapshot, its
-    counts, its exports and its duplicate markers; a suppressed copy simply
-    surfaces as unmatched, flagged as the copy it is.
+    Here only the pool shrinks. Every copy stays in the month's snapshot and
+    keeps its duplicate marker; the run payload sets it aside (items 83 +
+    75), and the month's count, totals and exports leave it out through
+    `web.service.decided_copies`, which reads this same set (item 94).
 
     ``ignore`` is the escape hatch and it is load-bearing: two real
     purchases from one merchant on one day for one amount are a real thing

@@ -4039,8 +4039,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             field_overrides = store.get_expense_field_overrides(run_id)
             edits = store.get_expense_edits(run_id)
             dup_resolutions = store.get_duplicate_resolutions(run_id)
+            # Item 94: a copy a reviewer hand-matched holds a charge and
+            # stays listed, so the verdicts are part of the question.
+            charge_decisions = store.get_decisions(run_id)
         path = regenerate_expense_export(
-            run, overrides, field_overrides, edits, dup_resolutions
+            run, overrides, field_overrides, edits, dup_resolutions,
+            charge_decisions=charge_decisions,
         )
         return FileResponse(
             path,
@@ -4107,12 +4111,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # and the screen partition on the same names.
             settings = store.get_settings()
             dup_resolutions = store.get_duplicate_resolutions(run_id)
+            # Item 94: which copies the report sets aside (see the CSV).
+            charge_decisions = store.get_decisions(run_id)
         outcomes: dict = {}
         pdf = build_expense_report(
             run, overrides, field_overrides, edits, trip=trip,
             settings=settings,
             render_outcomes=outcomes,
             dup_resolutions=dup_resolutions,
+            charge_decisions=charge_decisions,
         )
         # Item 67: building the report is the only moment renderability is
         # known, so it is the moment the answer gets recorded. The grid reads
