@@ -3460,3 +3460,29 @@ attempt writes no event.
 
 `tools/brisken-recon-notify.py` mails each failure once per
 `(run_id, failed_at)` (state key `seen_rematch_failures`).
+
+## A drop cut off by a restart (item 114, 2026-09-17)
+
+`POST /api/receipts` stores the dropped files in `drops/<job_id>/` on the
+volume before its job reads them, and now writes `drops/<job_id>.json`
+beside the folder: `{month, resumed, created_at}`, where `month` is the
+operator's override ("" when none). The job removes both when it ends,
+done or error.
+
+At startup, after the stale-job sweep and before the app serves, every drop
+whose job reads "interrupted by a server restart" is queued to run again
+under the same `job_id`, with the stored month, one after the other:
+`GET /jobs/{id}` reads `running` with stage `waiting to resume after a
+server restart`, then `resuming after a server restart` when its turn
+comes, then `done` with the usual `result`. Files that landed before the
+restart are skipped by content (a month's `n_added` is lower than
+`n_files`), so nothing doubles. `resumed` is written when a drop's turn
+starts, not when it is queued: a drop that ran once after a restart and was
+cut off again ends as `error` "interrupted by a server restart again after
+it was resumed; drop the files again", while one still waiting is queued
+again. A drop whose folder or run fails during this ends as `error` "could
+not be resumed after a server restart; drop the files again" and the rest
+still run. A folder with no interrupted job, or with no trustworthy sidecar
+(a drop from before this change, whose month pick is unknown), is deleted
+and its job keeps what it said; so is every `drop-add-*` copy inside a
+month's folder. No new response field.
