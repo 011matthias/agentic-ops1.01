@@ -3486,3 +3486,17 @@ still run. A folder with no interrupted job, or with no trustworthy sidecar
 (a drop from before this change, whose month pick is unknown), is deleted
 and its job keeps what it said; so is every `drop-add-*` copy inside a
 month's folder. No new response field.
+
+## An invoice read as a statement page (item 105, 2026-09-17)
+
+A file the reader classifies `document_type: "statement"` is kept as an
+expense, not set aside, when its reading carries a vendor, a total, a
+reference (invoice number) and at least one line item. It joins the month
+like any receipt, with `document_type: "receipt"` and
+`expenses[].data_quality_note` containing "read as a statement page, but it
+prints its own invoice number and line items, so it was kept as an expense:
+check it" (appended after any existing note). Every other statement reading,
+and every `report_summary` / `other` verdict, is set aside as before. Applies
+on both entrances (a create that carries files, and an add to an open month);
+months already stored are not re-sorted, so a set-aside invoice there still
+needs the strip's restore. No new field.

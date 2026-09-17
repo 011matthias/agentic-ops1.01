@@ -39,6 +39,7 @@ from ..batch_period import (
     outside_period,
 )
 from ..cli import NON_RECEIPT_LABELS, ConfigError, generate_expenses, reconcile
+from ..cli import keep_invoice_read_as_statement  # item 105
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
 from ..duplicates import (
@@ -9766,6 +9767,7 @@ def _add_receipts_locked(
         # (which survives later adds and carries the restore path); the
         # stored file stays on disk (its hash also keeps a re-upload from
         # costing another OCR call).
+        receipt = keep_invoice_read_as_statement(receipt) or receipt  # item 105
         label = NON_RECEIPT_LABELS.get(receipt.document_type)
         if label is not None:
             issues.append(
