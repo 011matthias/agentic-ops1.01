@@ -190,6 +190,30 @@ same live overlay the batch page renders, so a reviewer's edit moves both. A
 new count gets a row here and its own name — never a second meaning on an
 existing one.
 
+### The four charge counters count the effective verdict (item 103, 2026-09-17)
+
+`n_matched` / `n_review` / `n_unmatched_tx` / `n_refunds` on the months list
+(`GET /api/expense-batches`), in the stored run summary, on `rematches[]` and
+in a re-match reply are the run page's four buckets — `summary.n_reconciled` /
+`n_review` / `n_unmatched_tx` / `n_refunds` on `GET /api/runs/{id}` — under the
+reviewer's verdicts, and they sum to `n_transactions` the same way. Only the
+reconciled bucket's NAME differs between the two payloads; the question is the
+same one.
+
+Before item 103 the list and the stored summary counted the RAW matcher
+outcome. A receipt a pending pick holds is dropped from the second charge that
+scored it, and a confirm or reject moves a charge after the re-match, so the
+months screen reported a month as further along than its own workbench (live
+July 2026, same day: list 8 in review / 72 unmatched, page 7 / 73).
+`service.effective_charge_counts` is the one derivation, over
+`apply_decisions` + `charge_states`, and the list re-derives on read so a
+verdict taken after the re-match moves both screens.
+
+`n_unmatched_rec` and `n_receipts_matched` are the receipt side and are NOT
+part of this: the list still serves what the match stored, while the page
+leaves out the copies set aside (`n_copies_set_aside`) and the receipts
+settled outside the card.
+
 ## The statements a month has taken: `statements[]` (added 2026-08-25)
 
 `POST /api/expense-batches/{id}/statement` is repeatable: a statement arrives
@@ -359,7 +383,10 @@ one event to the month's snapshot (`rematch_log`, capped at 50):
 
 `trigger` is one of `statement` (attach), `reread`, `receipts` (mail, drop,
 folder), `cards`, `master_data`, `set_aside`, `trip`, and since item 112
-`adjacent_receipts` (a neighbouring month's arrival). Oldest first. The
+`adjacent_receipts` (a neighbouring month's arrival). Since item 103 the four
+counts are the effective ones the month's page shows at that moment (see "The
+four charge counters count the effective verdict"), not the raw outcome the
+matcher produced. Oldest first. The
 notifier diffs on `event_id` and mails one line per event ("August 2026:
 14 of 111, pool 7 (reread, 2026-09-11T14:24:46+00:00)"); an event with no
 id is never announced.
