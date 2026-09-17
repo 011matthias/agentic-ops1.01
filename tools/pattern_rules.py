@@ -190,7 +190,8 @@ def _user_text(msg: dict) -> str:
         return ""
     # Harness-injected context is not the user speaking.
     text = re.sub(r"<system-reminder>.*?</system-reminder>", " ", text, flags=re.S)
-    text = re.sub(r"<(command-[a-z-]+|local-command-[a-z-]+)>.*?</\1>", " ", text, flags=re.S)
+    text = re.sub(r"<(command-[a-z-]+|local-command-[a-z-]+|task-notification)>.*?</\1>",
+                  " ", text, flags=re.S)
     return text.strip()
 
 

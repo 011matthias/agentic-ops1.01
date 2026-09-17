@@ -390,6 +390,9 @@ def test_digest_extracts_user_turns_for_the_miner(tmp_path):
         {"type": "user", "message": {"role": "user", "content": "Build the thing <system-reminder>secret ctx</system-reminder>"}},
         {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "I ran git add -A and pushed."}]}},
         {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "content": "ok"}]}},
+        # 2026-09-17 first real miner run: a background-task notification was
+        # digested as a user turn.
+        {"type": "user", "message": {"role": "user", "content": "<task-notification><task-id>b1</task-id><status>completed</status></task-notification>"}},
         {"type": "user", "message": {"role": "user", "content": "No, don't use git add -A here, stage paths."}},
     ]
     t.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
@@ -397,7 +400,7 @@ def test_digest_extracts_user_turns_for_the_miner(tmp_path):
     out = subprocess.run([sys.executable, cli, "digest", "--transcript", str(t)],
                          capture_output=True, text=True, timeout=30).stdout
     assert out.count("user:") == 2
-    assert "secret ctx" not in out and "tool_result" not in out
+    assert "secret ctx" not in out and "tool_result" not in out and "task-id" not in out
     assert "* user: No, don't use git add -A" in out
     assert "agent: ...I ran git add -A and pushed." in out
     missing = subprocess.run([sys.executable, cli, "digest", "--session", "no-such-session"],
