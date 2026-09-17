@@ -2924,6 +2924,11 @@ def build_view(
     # would still export as "(uncategorized - assign)".
     n_undecided = n_unmapped = 0
     unreconciled: dict[str, Decimal] = {}
+    # Item 102: charges Criss marked as keyed into her books (yellow) that
+    # no receipt settles. They stay out of `unreconciled` (booked is booked)
+    # but are counted here, because booked and evidenced are two questions.
+    booked_no_receipt: dict[str, Decimal] = {}
+    n_booked_no_receipt = 0
     # The reviewer's effective verdict per charge, derived ONCE (PR 3): the
     # rows below, the summary's four counters, and the per-card coverage
     # roll-up all read this map rather than each deciding a bucket for
@@ -3142,6 +3147,12 @@ def build_view(
             n_undecided += 1
         # Refunds (3.10) are money back, not unreconciled spend — they
         # never count toward the unreconciled-by-currency total.
+        if is_posted and effective_bucket == "unmatched":
+            n_booked_no_receipt += 1
+            booked_no_receipt[tx.transaction_currency] = (
+                booked_no_receipt.get(tx.transaction_currency, Decimal("0"))
+                + abs(tx.amount)
+            )
         if effective_bucket not in ("reconciled", "refund") and not is_posted:
             unreconciled[tx.transaction_currency] = (
                 unreconciled.get(tx.transaction_currency, Decimal("0"))
@@ -3667,6 +3678,12 @@ def build_view(
         "n_unmapped_accounts": n_unmapped,
         "unreconciled_by_ccy": {
             ccy: f"{amt:,.2f}" for ccy, amt in sorted(unreconciled.items())
+        },
+        # Item 102: booked in the workbook, no receipt holding it. Sits next
+        # to `unreconciled_by_ccy`, never inside it.
+        "n_booked_no_receipt": n_booked_no_receipt,
+        "booked_no_receipt_by_ccy": {
+            ccy: f"{amt:,.2f}" for ccy, amt in sorted(booked_no_receipt.items())
         },
         # Item 60: charges the tool found receipts for that another charge
         # now holds. Its own name because it is its own question: these rows
