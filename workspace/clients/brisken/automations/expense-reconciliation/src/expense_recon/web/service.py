@@ -7162,7 +7162,10 @@ def build_expense_report(
                 by_card.setdefault("", []).extend(
                     r for r in company if r.document_id in listed
                 )
-            if any(by_card) and len(by_card) >= 2:
+            # Two cards or more, the reconciliation report's own rule: a
+            # one-card month (with or without no-card receipts) keeps the
+            # flat listing, whose header already is that card's.
+            if sum(1 for k in by_card if k) >= 2:
                 groups = by_card
                 ordered_keys = [k for k in card_section_by_key if k]
                 if "" in by_card:

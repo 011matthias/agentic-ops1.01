@@ -184,9 +184,11 @@ def build_reconciliation_report_pdf(
     cards.pop("", None)
     sections = card_sections(view, cards)
 
-    if len(sections) <= 1:
-        # One card, or nothing but the no-card pile (every run older than
-        # the card axis): the flat document, exactly as before.
+    if sum(1 for s in sections if s["key"]) < 2:
+        # One card at most (every run older than the card axis, a one-card
+        # month, even with receipts that carry no card): the flat document,
+        # exactly as before. Its headline already describes the one card,
+        # and "What needs attention" already lists the receipts nobody placed.
         _attention(story, view, rows, None, styles)
         story.append(Paragraph("All charges", styles["h2"]))
         story.append(_charge_table(rows, styles))
