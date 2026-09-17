@@ -5236,7 +5236,7 @@ def resolve_batch_row_cards(
     exception to item 40's card-only rule, operator-confirmed) or by
     assigning/registering the real card, which clears it.
     """
-    from ..cards import resolve_hinted_card_ex
+    from ..cards import masked_short_ending, resolve_hinted_card_ex
     from ..matching.deterministic import _card_keys
 
     cards = _batch_cards(cfg)
@@ -5247,6 +5247,17 @@ def resolve_batch_row_cards(
         hint = (r.payment_mode or "").strip()
         card, ambiguous = resolve_hinted_card_ex(hint, cards, hints_map)
         card_source = "hint" if card is not None else "none"
+        # Note #60: the two digits the card was named by, when a masked
+        # ending was the only card number the receipt printed. Weaker than a
+        # last-4, so the screen says so; empty for every other resolution.
+        ending = masked_short_ending(hint) if card is not None else None
+        card_ending = (
+            ending
+            if ending
+            and not (hints_map or {}).get(hint)
+            and any(str(d).endswith(ending) for d in card.digits)
+            else ""
+        )
         # Item 87: the reviewer's per-row card fix wins over everything the
         # receipt printed; a card REMEMBERED from an earlier month's fix
         # applies only when the printed payment method carries no card
@@ -5258,6 +5269,7 @@ def resolve_batch_row_cards(
         )
         if fixed is not None:
             card, card_source = fixed, "override"
+            card_ending = ""
         elif card is None and not _card_keys(hint):
             remembered = _batch_row_card(cards, r.card_key)
             if remembered is not None:
@@ -5313,6 +5325,7 @@ def resolve_batch_row_cards(
             "card_map_blocked": (ambiguous and card is None)
             or (card is not None and not card.zoho_account),
             "card_source": card_source,
+            "card_ending": card_ending,
         }
     return out
 
@@ -6044,6 +6057,10 @@ def build_expense_view(
             # this month), learned (remembered from an earlier month's
             # fix), or none.
             "card_source": res.get("card_source", "none"),
+            # Note #60: "38" when the card was named by a masked two-digit
+            # ending alone; "" otherwise. Parallel to `card_source`, which
+            # keeps its four values.
+            "card_ending": res.get("card_ending", ""),
             "card": (
                 {
                     "key": res["card"].key,
