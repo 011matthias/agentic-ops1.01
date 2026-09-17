@@ -339,7 +339,7 @@ def deploy_label(view: str) -> str:
     carries one, else the deploy verb itself."""
     m = re.search(r"-a\s+(\S+)|--app[= ](\S+)", view)
     if m:
-        return m.group(1) or m.group(2)
+        return (m.group(1) or m.group(2)).strip("\"'")
     m = re.search(r"\b(fly(?:ctl)?\s+deploy|vercel[\w-]*|railway\s+up|wrangler\s+deploy)", view)
     return m.group(1) if m else "the deploy"
 
@@ -697,10 +697,12 @@ def handle_post(event: dict) -> int:
         log(f"NAVIGATE-ONLY cmd={cmd[:60]} pending={pending}")
         return 0
 
+    # Deploys match the executed view too (2026-09-17): a grep whose pattern
+    # named the deploy verb opened a marker and blocked four closing messages.
     for kind, patterns in (("browser", BROWSER_DEPLOY_PATTERNS),
                            ("fetch", FETCH_DEPLOY_PATTERNS)):
-        if matches_any(view, patterns):
-            label = deploy_label(view)
+        if matches_any(run, patterns):
+            label = deploy_label(run)
             write_marker(kind, label)
             log(f"OPEN kind={kind} label={label} cmd={cmd[:60]}")
             emit_post(

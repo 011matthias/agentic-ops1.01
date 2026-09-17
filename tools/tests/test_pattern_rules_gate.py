@@ -305,7 +305,23 @@ SEEDS = [
     ("warn-git-exit-masked-by-pipe", "bash",
      {"command": "git push -q -u origin br 2>&1 | grep -v remote | tail -1 && gh pr create"},
      {"command": "git -C /c/x rebase origin/main > log 2>&1; echo $?"}),
+    ("warn-attach-busy-cdp-9222", "bash",
+     {"command": "agent-browser --cdp 9222 snapshot -i"},
+     {"command": "agent-browser --cdp 9333 snapshot -i"}),
+    ("warn-attach-busy-cdp-9222", "bash",
+     {"command": "python -c \"b=pw.chromium.connect_over_cdp('http://127.0.0.1:9222')\""},
+     {"command": "agent-browser --session recon open http://127.0.0.1:8765"}),
 ]
+
+
+def test_cdp_rule_ignores_file_text_that_only_mentions_the_flag():
+    """Register 2026-09-17 gate-precision: the rule fired on a consumer-gate
+    test fixture and a register-flip script, where no browser was attached."""
+    rules, _ = pr.load_rules(str(REPO / ".claude" / "patterns"))
+    rule = [r for r in rules if r.name == "warn-attach-busy-cdp-9222"]
+    fixture = {"file_path": "C:/repo/tools/tests/test_deploy_consumer_gate.py",
+               "new_text": '    "agent-browser --cdp 9222 snapshot",'}
+    assert rule and pr.evaluate(rule, "file", fixture) == []
 
 
 @pytest.mark.parametrize("name,event,hit,miss", SEEDS)
