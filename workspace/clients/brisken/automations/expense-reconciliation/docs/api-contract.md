@@ -1311,7 +1311,7 @@ PARALLEL (rule 1).
 
 | Field | Type | Meaning |
 |---|---|---|
-| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17) |
+| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17); a bank-transfer tender and a receipt settled outside the card never raise it (residual R3, see "A wire is not a card") |
 | `expenses[].can_mark_private` | boolean | whether the private-card option applies to the row (2026-09-17): true when no defined company card paid it (no card and not a two-card contest, or a card only remembered from an earlier month) and on every confirmed private row. False = a company card paid; the write routes refuse to mark it private. Absent on older builds: treat as `card == null \|\| private` |
 | `expenses[].private` | boolean | the operator confirmed it: a reimbursement row |
 | `expenses[].reimburse_to` | string | who gets reimbursed; `""` unless confirmed |
@@ -1327,6 +1327,21 @@ explicit entity override does NOT clear the suggestion (changed
 2026-09-17): the entity says which company books the expense, not how it
 was paid, and the old exemption left an August "EC-Karte" restaurant bill
 on `needs_person`, pointing at a Settings card that does not exist.
+
+**A wire is not a card (residual R3, 2026-09-17).** Two rows never suggest a
+private card, because the question "which card paid this" is already
+answered: a payment method that reads as a bank transfer and names no card
+(`service.bank_transfer_tender`, the settled-outside chip's own
+`bank_transfer` rule minus the Brazilian POS word TEF, which IS a card
+payment on a cupom fiscal), and a receipt the reviewer marked settled outside
+the card. `can_mark_private` does not move (the reviewer can still confirm
+she paid it herself), and neither does the row's `needs_entity` /
+`needs_person` / `needs_company_or_person` question: it still reads `check` /
+`needs_entity`. Live, one row moved: July's restored Tricarico invoice (BRL
+27,203.34, "Payment Method: Wire Transfer", settled outside by bank
+transfer), `summary.n_suggested_private` 8 to 7. Whether a bank-paid company
+invoice should still ask for a card HOLDER is an open question for the owner.
+Pinned route-level in `tests/test_private_suggestion_not_a_card_r3.py`.
 
 **Company card OR private card, never both (added 2026-09-17).** Owner:
 expenses on cards that are not defined in Settings need "the option of
@@ -2144,6 +2159,72 @@ zoho_account?}`:
   categorized row whose receipt carried a company printed the placeholder,
   and a receipt with one categorized and one unread line printed as one
   uncategorized row. Pinned route-level in `tests/test_mixed_entity_export.py`.
+- Residual R1 (2026-09-17): `expenses[].books_as` runs that gate too, with
+  the run's chart, through the one function the export calls
+  (`zoho_expense_export.gated_for_posting`). The screen therefore shows what
+  the CSV prints for a rejected account: the line's category on a month that
+  names no company (the many-entity gate carries no chart) and
+  `(account unmapped - assign)` on a batch that names one. The depiction used
+  to print the rejected account itself. No live row differed on 2026-09-17
+  (July and August agree today, account for account) because live accounts
+  are the tool's own category labels. Pinned route-level in
+  `tests/test_books_as_chart_gate_r1.py`.
+
+## A category on a CHARGE, with no receipt: `PUT .../charges/{tx}/category` (item 109)
+
+`PUT /api/runs/{id}/charges/{transaction_id}/category`
+`{category, zoho_account?}`. The sibling of the receipt category routes, for
+the rows that have no receipt to edit: 71 of July's 112 charges and 98 of
+August's 111 carried a category the model guessed from the bank's description,
+and every category route needed a receipt, so the guess could not be corrected
+and went into the reconciled CSV as it was.
+
+- `category` is one of the eight (`400` otherwise, with the list); `""` or
+  `null` clears the pick and the tool's guess shows again.
+- `404` "unknown charge" when the run holds no such transaction; `400` when a
+  receipt already settles it ("set the category on the expense, not on the
+  charge"), whose category lives on the receipt's own lines.
+- Account rule: the receipt rule unchanged (an explicit `zoho_account` is
+  stored as sent; without one the account survives only while the category
+  does not change).
+- Stored in the same `category_overrides` table the receipt edits use, under
+  the charge's pseudo-receipt id (`charge:{transaction_id}`, line 0), so it
+  outlives a re-match, which rewrites the whole snapshot and never touches
+  that table.
+- Reply: `{ok: true, summary}`.
+
+What carries it afterwards:
+
+- `GET /api/runs/{id}` -> `rows[].charge_category` reads
+  `{category, zoho_account, source: "EDITED", provenance, is_learned: false,
+  is_edited: true}`, and `rows[].posting_category` the same, the way a
+  receipt's edited line reads `EDITED`. `is_edited` is `true` or **absent**,
+  never `false`.
+- `rows[].review` on that row becomes `{state: "none"}`: an answer is not a
+  question, so it leaves `summary.n_charges_category_guessed`, which keeps its
+  meaning (a receiptless charge whose category is still the tool's GUESS).
+  A guessed row keeps `reason_code: "receiptless_suggested"`, whose English
+  reason now says the tool guessed the category from the bank's description
+  and that the row can be picked on.
+- `GET /runs/{id}/reconciled.csv` -> `Charge Category`,
+  `Charge posting account`, `Charge Category Source: EDITED`;
+  `GET /runs/{id}/report.xlsx`, the statement writeback, and the
+  reconciliation PDF's posts-to column the same. A charge a receipt settles
+  keeps its blank charge columns: an override for it is ignored.
+- `GET /runs/{id}/zoho.csv`: behind the existing opt-in
+  `zoho.export_receiptless_learned`, a reviewer's category posts where a
+  LEARNED one does. A guess still never posts.
+- At sign-off (`POST /api/runs/{id}/publish`, and the Save-corrections
+  button) the pick is learned under the bank's NORMALIZED description, the
+  same normalization the charge categorizer consults, so the next month's
+  same subscription arrives `source: "LEARNED"`. Only her picks teach: a
+  charge whose category came from the model writes no override and teaches
+  nothing, and two charges of one description given two categories are
+  skipped and counted in `skipped_mixed_category`, the conflict rule
+  categories already follow.
+
+Pinned route-level in `tests/test_charge_category_item_109.py`; renders in
+`docs/lovable-charge-category-prompt.md`.
 
 ## A needs-review row's proposed category: `posting_category_proposed` (item 70)
 
@@ -3306,11 +3387,18 @@ already settled by another month's charge (`settled_by` on its
 expenses (a decided copy is in neither); `n_unmatched_rec` keeps its question,
 and a private receipt stays listed in `unmatched_receipts`.
 
-The private half reads the expense header edits, so it holds on the payloads
-built with them: `GET /api/runs/{id}` and the publish gate. The `summary` a
-decision route returns (`POST .../decisions` and its siblings) is built
-without them and counts a confirmed private receipt as needing a charge; the
-SPA refetches the run after those calls.
+The private half reads the expense header edits, so it holds on every payload
+built with them. Since 2026-09-17 (residual R2) that is all of them: a route
+that answers with a `summary` answers with the one `GET /api/runs/{id}`
+serves, built by the same function from the same inputs (`_run_view`), so the
+counts the SPA holds after a write are the counts a refetch gives it. Before
+that, `POST .../decisions` and its siblings built the reply as
+`build_view(run, decisions, overrides)` and counted a confirmed private
+receipt as needing a charge until the SPA refetched the run. Pinned
+route-level in `tests/test_decision_reply_summary_r2.py`. The expense-edit
+routes (`_expense_edit_reply`) and the month-move route keep answering with
+the Expenses payload's summary, which is what THEIR page's GET
+(`/api/expense-batches/{id}`) serves; that shape carries no charge counts.
 
 A guessed category is the row's own confirm-first state (`review.reason_code:
 "receiptless_suggested"`, any source). A charge that needs a receipt is
@@ -3909,3 +3997,123 @@ that rival, so the right merchant takes the receipt even a few days further
 away, and the other charge reads unmatched. With no such rival nothing
 changes. Replay old vs new over July, August and the six labelled bundles:
 0 receipts moved.
+## The month knows which receipts to chase and from whom (item 107, 2026-09-17)
+
+Chasing receipts is the biggest thing Criss does by hand each month: she reads
+the month for charges with nothing behind them, works out whose card each one
+is, and mails Dirk and Nicolas herself. Three pieces answer that, and only the
+first two are live behaviour; the mail is composed and never sent.
+
+### 1. The list: `receipt_chase[]` on `GET /api/runs/{id}`
+
+One entry per CARD HOLDER, biggest chase first:
+
+```
+{
+  holder: "Dirk Neumann",          // the card registry's `person`; "" when none
+  holder_label: "Dirk Neumann",    // "No card holder on file" when holder is ""
+  holder_address: "dirk.neumann@brisken.com" | null,
+  cards: [{key, card_key, label}],
+  n_charges: 24,
+  n_requested: 3,                  // of those, already asked for
+  amounts_by_ccy: {"USD": "6,361.53"},
+  charges: [{
+    transaction_id, date, vendor, amount, currency,
+    card_key, card_label, coverage_key,
+    portal_hint?,                  // ABSENT unless the merchant registry has one
+    receipt_requested_at?, requested_to?,   // ABSENT unless asked
+  }],
+}
+```
+
+Membership is item 99's `charge_needs_receipt`, read off the payload's own
+`rows[]`, so the groups' charges SUM to `summary.n_charges_need_receipt` and
+the list and the count cannot disagree. A charge is grouped under the holder of
+the card its `coverage_key` names, which is the identity the per-card coverage
+panel totals it under, so a card is never split in two. Empty on a month with
+nothing to chase, which is what live July reads.
+
+`holder_address` comes from `settings.receipt_requests.holders` and is `null`
+when nobody put one there: an invented recipient is the one mistake a chase
+mail cannot take back. `portal_hint` comes from a merchant entry's new optional
+`receipt_portal` ("platform.openai.com"), stored only when set; no merchant
+carries one today, so the key is absent everywhere until somebody fills it in.
+
+### 2. The two states, and what each does to the month
+
+Both are per-charge and reviewer-set, both live on the charge's own `decisions`
+row beside the pairing verdict (so a re-match carries them, and a statement
+re-read's id rekey moves them with the row), and both are ABSENT from `rows[]`
+unless set.
+
+| Route | Body | Row field | Effect on `n_charges_need_receipt` |
+|---|---|---|---|
+| `POST /api/runs/{id}/receipt-requested` | `{transaction_id, to?}` or `{transaction_id, clear: true}` | `receipt_requested_at` + `requested_to` | none: the charge still needs a receipt |
+| `POST /api/runs/{id}/no-receipt-expected` | `{transaction_id, reason}` or `{transaction_id, clear: true}` | `no_receipt_expected` (the reason) | closes it: the charge leaves the count |
+
+Asking is not getting, so "requested" closes nothing and the month stays
+incomplete; `summary.n_charges_receipt_requested` is a SUBSET of
+`n_charges_need_receipt` saying how much of the chase is already out. "No
+receipt expected" is a verdict, so it closes the charge exactly as an
+already-booked one does, `summary.n_charges_no_receipt_expected` keeps the
+closure visible, and `month_complete` follows once nothing else blocks. The
+reason is refused blank: a verdict nobody can read next month is worse than no
+verdict.
+
+The verdict also moves money. A charge nobody will ever evidence leaves
+`summary.unreconciled_by_ccy` into `summary.no_receipt_expected_by_ccy`, beside
+it and never inside it, exactly as item 102's booked-no-receipt total sits. The
+annual card fee stops reading as money nobody has evidenced without
+disappearing from the month.
+
+Both routes reply `{ok, summary}`, the same shape `POST .../decisions` and
+`POST .../disposition` answer with, and both writes are status-preserving: they
+touch their own columns only, so marking a charge never clears its pairing
+verdict or its disposition, and a verdict never clears the chase state.
+
+### 3. The mail: composed, and nothing sends
+
+`GET /api/runs/{id}/receipt-requests` is the dry run. It returns `{enabled,
+can_send, send_blocked_reason, intake_address, n_charges_need_receipt, groups,
+mails}`. One mail per holder, plain text, both languages together (`subject` /
+`body` and `subject_pt` / `body_pt`), `from_address` and `reply_to` both the
+intake address (`receipts@{intake domain}`) so a reply with the PDFs attached
+lands back in the tool as ordinary intake mail. A holder with no address on
+file still gets a composed mail, with `to: null` and `blocked: "no_address"`,
+so the page names who is unreachable instead of the send quietly skipping them.
+Composing is not asking: the preview writes no state and marks no charge
+requested.
+
+**Nothing in this build can send.** `POST /api/runs/{id}/receipt-requests/send`
+answers 403 both ways: `receipt_requests_disabled` while
+`settings.receipt_requests.enabled` is false (the default, and the live value),
+and `receipt_send_not_wired` once it is true, because `receipt_chase.py`
+imports no mail transport and calls none. `can_send` is false in every case.
+The owner approves the first real send separately, under the Brisken
+send-by-id standard; wiring a guarded sender is a deliberate edit to that
+module, not a flag flip. `tests/test_receipt_chasing_item_107.py` pins the
+absence by parsing the module's imports and calls.
+
+Graph sends as `matthias.silva@brisken.com` today, so a future sender has to
+set Reply-To to the intake address explicitly rather than inherit it, or the
+replies carrying the PDFs never reach the tool.
+
+### The settings key
+
+`settings["receipt_requests"]` = `{"enabled": false, "holders": {person:
+address}}`, whole-object replace like `intake`. `enabled` must be a real
+boolean and each address a single plain one; the key decides who an outbound
+chase would reach, so the PUT refuses anything else with a 400 rather than
+coercing it. Default `{"enabled": false, "holders": {}}`.
+
+Live 2026-09-17 (read-only, before the deploy): August 2026 would list 61
+charges across the three names the card registry's `person` field holds:
+"Nicolas Neumann" 36 on card 3876 (USD 1,011.15), "Dirk Neumann - Corp
+Services" 24 on card-2838 (USD 6,361.53), and "Brisken Consulting" 1 on
+card-1176 (USD 36.00), a company rather than a person. July 2026 would
+list nothing, because every charge left without a receipt there is gray-filled
+and already closed. No holder address and no portal hint is configured yet, so
+every live mail would carry `blocked: "no_address"` today. Route-level in
+`tests/test_receipt_chasing_item_107.py`; pins in `tests/test_view_contract.py`
+and `tests/test_settings_put_contract.py`. SPA half:
+`docs/lovable-receipt-chasing-prompt.md`.

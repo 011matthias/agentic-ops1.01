@@ -1,4 +1,4 @@
-"""Item 144: no page of either client-facing PDF carries a banned dash form.
+"""Item 145: no page of either client-facing PDF carries a banned dash form.
 
 The house deliverable standard (`.claude/rules/rule_deliverables.md`) bans
 every dash form from a client-facing document: the em-dash character, the

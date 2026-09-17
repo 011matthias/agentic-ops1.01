@@ -356,6 +356,14 @@ def build_journal_rows(
     return rows
 
 
+# Charge-level categorizations trusted enough to post with no receipt:
+# memory recalled from a prior confirmed decision, and (item 109) a category
+# the reviewer set on the charge herself. A VENDOR guess never posts.
+_POSTABLE_CHARGE_SOURCES = frozenset(
+    {ClassificationSource.LEARNED, ClassificationSource.EDITED}
+)
+
+
 def _receiptless_charge_rows(
     outcome: MatchOutcome,
     tx_by_id: dict[str, Transaction],
@@ -368,7 +376,8 @@ def _receiptless_charge_rows(
     reimbursable_account: str | None = None,
 ) -> list[list[str]]:
     """Journal rows for the unmatched charges whose categorization is
-    Tier-1 LEARNED. Each becomes one debit row (the learned account) +
+    Tier-1 LEARNED or the reviewer's own (item 109). Each becomes one debit
+    row (the learned account) +
     one balancing credit row (the card account), Reference# = the
     transaction id. The receipt-URL / report-reference columns stay
     blank — there IS no receipt, and B4 says blank over fabricated.
@@ -386,7 +395,7 @@ def _receiptless_charge_rows(
         cat = charge_categorizations.get(tx_id)
         if tx is None or cat is None:
             continue
-        if cat.source is not ClassificationSource.LEARNED or not cat.category:
+        if not cat.category or cat.source not in _POSTABLE_CHARGE_SOURCES:
             continue  # VENDOR / REVIEW charges stay review-only
         # L1 posting policy, same as the matched loop: an already-in-Zoho
         # row never reaches the journal again.
@@ -415,7 +424,7 @@ def _receiptless_charge_rows(
         cat = item.categorization
         if (
             cat is None
-            or cat.source is not ClassificationSource.LEARNED
+            or cat.source not in _POSTABLE_CHARGE_SOURCES
             or not cat.category
         ):
             continue  # gate-diverted -> review, not the journal
