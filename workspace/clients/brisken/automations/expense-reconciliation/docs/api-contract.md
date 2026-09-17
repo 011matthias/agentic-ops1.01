@@ -194,6 +194,30 @@ same live overlay the batch page renders, so a reviewer's edit moves both. A
 new count gets a row here and its own name — never a second meaning on an
 existing one.
 
+### The four charge counters count the effective verdict (item 103, 2026-09-17)
+
+`n_matched` / `n_review` / `n_unmatched_tx` / `n_refunds` on the months list
+(`GET /api/expense-batches`), in the stored run summary, on `rematches[]` and
+in a re-match reply are the run page's four buckets — `summary.n_reconciled` /
+`n_review` / `n_unmatched_tx` / `n_refunds` on `GET /api/runs/{id}` — under the
+reviewer's verdicts, and they sum to `n_transactions` the same way. Only the
+reconciled bucket's NAME differs between the two payloads; the question is the
+same one.
+
+Before item 103 the list and the stored summary counted the RAW matcher
+outcome. A receipt a pending pick holds is dropped from the second charge that
+scored it, and a confirm or reject moves a charge after the re-match, so the
+months screen reported a month as further along than its own workbench (live
+July 2026, same day: list 8 in review / 72 unmatched, page 7 / 73).
+`service.effective_charge_counts` is the one derivation, over
+`apply_decisions` + `charge_states`, and the list re-derives on read so a
+verdict taken after the re-match moves both screens.
+
+`n_unmatched_rec` and `n_receipts_matched` are the receipt side and are NOT
+part of this: the list still serves what the match stored, while the page
+leaves out the copies set aside (`n_copies_set_aside`) and the receipts
+settled outside the card.
+
 ## The statements a month has taken: `statements[]` (added 2026-08-25)
 
 `POST /api/expense-batches/{id}/statement` is repeatable: a statement arrives
@@ -363,7 +387,10 @@ one event to the month's snapshot (`rematch_log`, capped at 50):
 
 `trigger` is one of `statement` (attach), `reread`, `receipts` (mail, drop,
 folder), `cards`, `master_data`, `set_aside`, `trip`, and since item 112
-`adjacent_receipts` (a neighbouring month's arrival). Oldest first. The
+`adjacent_receipts` (a neighbouring month's arrival). Since item 103 the four
+counts are the effective ones the month's page shows at that moment (see "The
+four charge counters count the effective verdict"), not the raw outcome the
+matcher produced. Oldest first. The
 notifier diffs on `event_id` and mails one line per event ("August 2026:
 14 of 111, pool 7 (reread, 2026-09-11T14:24:46+00:00)"); an event with no
 id is never announced.
@@ -1284,7 +1311,7 @@ PARALLEL (rule 1).
 
 | Field | Type | Meaning |
 |---|---|---|
-| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17) |
+| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17); a bank-transfer tender and a receipt settled outside the card never raise it (residual R3, see "A wire is not a card") |
 | `expenses[].can_mark_private` | boolean | whether the private-card option applies to the row (2026-09-17): true when no defined company card paid it (no card and not a two-card contest, or a card only remembered from an earlier month) and on every confirmed private row. False = a company card paid; the write routes refuse to mark it private. Absent on older builds: treat as `card == null \|\| private` |
 | `expenses[].private` | boolean | the operator confirmed it: a reimbursement row |
 | `expenses[].reimburse_to` | string | who gets reimbursed; `""` unless confirmed |
@@ -1300,6 +1327,21 @@ explicit entity override does NOT clear the suggestion (changed
 2026-09-17): the entity says which company books the expense, not how it
 was paid, and the old exemption left an August "EC-Karte" restaurant bill
 on `needs_person`, pointing at a Settings card that does not exist.
+
+**A wire is not a card (residual R3, 2026-09-17).** Two rows never suggest a
+private card, because the question "which card paid this" is already
+answered: a payment method that reads as a bank transfer and names no card
+(`service.bank_transfer_tender`, the settled-outside chip's own
+`bank_transfer` rule minus the Brazilian POS word TEF, which IS a card
+payment on a cupom fiscal), and a receipt the reviewer marked settled outside
+the card. `can_mark_private` does not move (the reviewer can still confirm
+she paid it herself), and neither does the row's `needs_entity` /
+`needs_person` / `needs_company_or_person` question: it still reads `check` /
+`needs_entity`. Live, one row moved: July's restored Tricarico invoice (BRL
+27,203.34, "Payment Method: Wire Transfer", settled outside by bank
+transfer), `summary.n_suggested_private` 8 to 7. Whether a bank-paid company
+invoice should still ask for a card HOLDER is an open question for the owner.
+Pinned route-level in `tests/test_private_suggestion_not_a_card_r3.py`.
 
 **Company card OR private card, never both (added 2026-09-17).** Owner:
 expenses on cards that are not defined in Settings need "the option of
@@ -2117,6 +2159,72 @@ zoho_account?}`:
   categorized row whose receipt carried a company printed the placeholder,
   and a receipt with one categorized and one unread line printed as one
   uncategorized row. Pinned route-level in `tests/test_mixed_entity_export.py`.
+- Residual R1 (2026-09-17): `expenses[].books_as` runs that gate too, with
+  the run's chart, through the one function the export calls
+  (`zoho_expense_export.gated_for_posting`). The screen therefore shows what
+  the CSV prints for a rejected account: the line's category on a month that
+  names no company (the many-entity gate carries no chart) and
+  `(account unmapped - assign)` on a batch that names one. The depiction used
+  to print the rejected account itself. No live row differed on 2026-09-17
+  (July and August agree today, account for account) because live accounts
+  are the tool's own category labels. Pinned route-level in
+  `tests/test_books_as_chart_gate_r1.py`.
+
+## A category on a CHARGE, with no receipt: `PUT .../charges/{tx}/category` (item 109)
+
+`PUT /api/runs/{id}/charges/{transaction_id}/category`
+`{category, zoho_account?}`. The sibling of the receipt category routes, for
+the rows that have no receipt to edit: 71 of July's 112 charges and 98 of
+August's 111 carried a category the model guessed from the bank's description,
+and every category route needed a receipt, so the guess could not be corrected
+and went into the reconciled CSV as it was.
+
+- `category` is one of the eight (`400` otherwise, with the list); `""` or
+  `null` clears the pick and the tool's guess shows again.
+- `404` "unknown charge" when the run holds no such transaction; `400` when a
+  receipt already settles it ("set the category on the expense, not on the
+  charge"), whose category lives on the receipt's own lines.
+- Account rule: the receipt rule unchanged (an explicit `zoho_account` is
+  stored as sent; without one the account survives only while the category
+  does not change).
+- Stored in the same `category_overrides` table the receipt edits use, under
+  the charge's pseudo-receipt id (`charge:{transaction_id}`, line 0), so it
+  outlives a re-match, which rewrites the whole snapshot and never touches
+  that table.
+- Reply: `{ok: true, summary}`.
+
+What carries it afterwards:
+
+- `GET /api/runs/{id}` -> `rows[].charge_category` reads
+  `{category, zoho_account, source: "EDITED", provenance, is_learned: false,
+  is_edited: true}`, and `rows[].posting_category` the same, the way a
+  receipt's edited line reads `EDITED`. `is_edited` is `true` or **absent**,
+  never `false`.
+- `rows[].review` on that row becomes `{state: "none"}`: an answer is not a
+  question, so it leaves `summary.n_charges_category_guessed`, which keeps its
+  meaning (a receiptless charge whose category is still the tool's GUESS).
+  A guessed row keeps `reason_code: "receiptless_suggested"`, whose English
+  reason now says the tool guessed the category from the bank's description
+  and that the row can be picked on.
+- `GET /runs/{id}/reconciled.csv` -> `Charge Category`,
+  `Charge posting account`, `Charge Category Source: EDITED`;
+  `GET /runs/{id}/report.xlsx`, the statement writeback, and the
+  reconciliation PDF's posts-to column the same. A charge a receipt settles
+  keeps its blank charge columns: an override for it is ignored.
+- `GET /runs/{id}/zoho.csv`: behind the existing opt-in
+  `zoho.export_receiptless_learned`, a reviewer's category posts where a
+  LEARNED one does. A guess still never posts.
+- At sign-off (`POST /api/runs/{id}/publish`, and the Save-corrections
+  button) the pick is learned under the bank's NORMALIZED description, the
+  same normalization the charge categorizer consults, so the next month's
+  same subscription arrives `source: "LEARNED"`. Only her picks teach: a
+  charge whose category came from the model writes no override and teaches
+  nothing, and two charges of one description given two categories are
+  skipped and counted in `skipped_mixed_category`, the conflict rule
+  categories already follow.
+
+Pinned route-level in `tests/test_charge_category_item_109.py`; renders in
+`docs/lovable-charge-category-prompt.md`.
 
 ## A needs-review row's proposed category: `posting_category_proposed` (item 70)
 
@@ -3279,11 +3387,18 @@ already settled by another month's charge (`settled_by` on its
 expenses (a decided copy is in neither); `n_unmatched_rec` keeps its question,
 and a private receipt stays listed in `unmatched_receipts`.
 
-The private half reads the expense header edits, so it holds on the payloads
-built with them: `GET /api/runs/{id}` and the publish gate. The `summary` a
-decision route returns (`POST .../decisions` and its siblings) is built
-without them and counts a confirmed private receipt as needing a charge; the
-SPA refetches the run after those calls.
+The private half reads the expense header edits, so it holds on every payload
+built with them. Since 2026-09-17 (residual R2) that is all of them: a route
+that answers with a `summary` answers with the one `GET /api/runs/{id}`
+serves, built by the same function from the same inputs (`_run_view`), so the
+counts the SPA holds after a write are the counts a refetch gives it. Before
+that, `POST .../decisions` and its siblings built the reply as
+`build_view(run, decisions, overrides)` and counted a confirmed private
+receipt as needing a charge until the SPA refetched the run. Pinned
+route-level in `tests/test_decision_reply_summary_r2.py`. The expense-edit
+routes (`_expense_edit_reply`) and the month-move route keep answering with
+the Expenses payload's summary, which is what THEIR page's GET
+(`/api/expense-batches/{id}`) serves; that shape carries no charge counts.
 
 A guessed category is the row's own confirm-first state (`review.reason_code:
 "receiptless_suggested"`, any source). A charge that needs a receipt is
@@ -3864,6 +3979,24 @@ card-9693 not_loaded, 2 receipts, 2 without a charge; No card, 2 receipts, 2
 without a charge. Route-level in `tests/test_card_tabs_item_138.py`; pins in
 `tests/test_view_contract.py`. SPA half: `docs/lovable-card-tabs-prompt.md`.
 
+## A same-amount pair from another merchant yields to the right merchant (item 133 rule (b), 2026-09-17)
+
+No field is added or renamed. A same-currency candidate on the exact amount
+(`match_type` `exact` or `probable`) whose merchant disagrees (vendor score
+below `uniqueness_vendor_dominance_min`, 0.5) now reads `requires_review: true`,
+`confidence` 0.55 and a reason ending "Review: the merchants differ (N%) while
+another charge's merchant matches this receipt (M%)." when another charge's
+deterministic candidate for the SAME receipt has an agreeing merchant (>= 0.5
+and ahead by `uniqueness_vendor_dominance_margin`, 0.25) AND that receipt is
+the rival charge's own top-ranked candidate and the rival is not awaiting a
+human pick (a rival with a better receipt of its own is spoken for; demoting
+against it would flag, or strand, the receipt for nothing). The rule runs
+after the ambiguity pass, so it never breaks a tie a person should settle.
+The demoted pair then ranks below
+that rival, so the right merchant takes the receipt even a few days further
+away, and the other charge reads unmatched. With no such rival nothing
+changes. Replay old vs new over July, August and the six labelled bundles:
+0 receipts moved.
 ## The month knows which receipts to chase and from whom (item 107, 2026-09-17)
 
 Chasing receipts is the biggest thing Criss does by hand each month: she reads

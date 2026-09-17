@@ -45,6 +45,7 @@ import io
 from collections.abc import Sequence
 
 from ._pdf_common import (
+    PAGE_MARGIN_MM,
     UNREADABLE_CAPTION,
     caption_mark,
     esc as _esc,
@@ -61,16 +62,25 @@ from ._pdf_common import (
 # The listing columns, in reading order. Deliberately NOT every export
 # column: a reader wants to see what was bought, by whom, for how much, and
 # which receipt proves it. The full field set stays in the CSV.
+#
+# Widths in points, summing to 503: an A4 portrait page with 14 mm margins
+# leaves 503.9 pt for a table once the frame's own 6 pt padding is taken off
+# each side (`TABLE_WIDTH_MAX`). The listing was 732 pt until item 143, so
+# the table ran past both edges and `#`, Date, Ccy and Receipt were cut off
+# every month report. The fixed-format columns fit their longest value on
+# one line in DejaVu Sans, the widest of the fonts `register_fonts` picks
+# (a date, a six-figure amount, "attached"); the four text columns share the
+# rest and wrap between words.
 _LISTING = (
-    ("#", 26),
-    ("Date", 62),
-    ("Vendor", 132),
-    ("Account", 150),
-    ("Entity", 92),
-    ("Paid through", 108),
-    ("Amount", 74),
-    ("Ccy", 34),
-    ("Receipt", 54),
+    ("#", 24),
+    ("Date", 55),
+    ("Vendor", 90),
+    ("Account", 76),
+    ("Entity", 58),
+    ("Paid through", 76),
+    ("Amount", 54),
+    ("Ccy", 26),
+    ("Receipt", 44),
 )
 
 
@@ -556,10 +566,11 @@ def build_expense_report_pdf(
             _caption(i)
 
     buf = io.BytesIO()
+    margin = PAGE_MARGIN_MM * mm
     SimpleDocTemplate(
         buf, pagesize=A4,
-        leftMargin=14 * mm, rightMargin=14 * mm,
-        topMargin=14 * mm, bottomMargin=14 * mm,
+        leftMargin=margin, rightMargin=margin,
+        topMargin=margin, bottomMargin=margin,
         title=title,
     ).build(story)
 
