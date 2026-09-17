@@ -5529,6 +5529,8 @@ def resolve_batch_row_cards(
     receipts: "list[Receipt]",
     cfg: dict | None,
     field_overrides: dict[str, dict[str, str]],
+    *,
+    settled_cards: dict[str, str] | None = None,
 ) -> dict[str, dict]:
     """Per-document card + entity resolution for an expense batch:
     ``{document_id: {hint, card: Card|None, entity, entity_source}}``.
@@ -5579,6 +5581,14 @@ def resolve_batch_row_cards(
     undone. A company card from the printed number, a strip assignment or
     this row's own card pick means the company paid: nothing to reimburse.
     A confirmed private row never picks up a remembered card.
+
+    `settled_cards` (item 111, `settled_charge_cards`): `{document_id: card
+    key}` of the charge in this month that settles the receipt. Only the
+    Expenses payload passes it, never the matcher's bake (the pairing would
+    feed its own card scope). It applies where memory would, and before it:
+    no per-row pick, no card from the printed method or a hint, no card
+    number printed, not confirmed private. Source `settled_charge`; the
+    company paid, so `can_mark_private` is false.
     """
     from ..cards import masked_short_ending, resolve_hinted_card_ex
     from ..matching.deterministic import _card_keys
@@ -5626,8 +5636,15 @@ def resolve_batch_row_cards(
             card, card_source = fixed, "override"
             card_ending = ""
         elif card is None and not _card_keys(hint) and not private:
+            # Item 111: the statement names the card a settled pair was paid
+            # with, which outranks a card remembered from another month.
+            settled = _batch_row_card(
+                cards, (settled_cards or {}).get(r.document_id)
+            )
             remembered = _batch_row_card(cards, r.card_key)
-            if remembered is not None:
+            if settled is not None:
+                card, card_source = settled, "settled_charge"
+            elif remembered is not None:
                 card, card_source = remembered, "learned"
         override = fields.get("legal_entity", "")
         if override.strip():
@@ -6295,10 +6312,18 @@ def build_expense_view(
     exp_cfg = (run.config or {}).get("expense") or {}
     default_pt = exp_cfg.get("default_paid_through")
     card_accts = exp_cfg.get("card_accounts")
+    # Per-card coverage (PR 3) reads the charges and their effective states;
+    # one read of the snapshot feeds it and item 111 below.
+    charges, charge_state_map = month_charge_states(run, decisions or {})
     # Cards R3: one resolution pass feeds the rows' card/entity, the
     # review states, the paid-through card step, and the card_review
     # strip — the same pass the export runs, so they cannot disagree.
-    card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
+    # Item 111: on this payload only, a receipt a charge of this month
+    # settles takes that charge's card when it names none of its own.
+    card_res = resolve_batch_row_cards(
+        receipts, run.config, field_overrides,
+        settled_cards=settled_charge_cards(run, charges, charge_state_map),
+    )
     # Item 47: the cost-center chain, over the same pass's cards. Silent
     # for every row while the owner has defined no cost centers.
     cost_res = resolve_batch_row_cost_centers(
@@ -6511,7 +6536,8 @@ def build_expense_view(
             # Item 87: where `card` came from: hint (the printed payment
             # method or a batch hint assignment), override (a per-row fix
             # this month), learned (remembered from an earlier month's
-            # fix), or none.
+            # fix), settled_charge (item 111: the card of this month's
+            # charge the receipt settles), or none.
             "card_source": res.get("card_source", "none"),
             # Note #60: "38" when the card was named by a masked two-digit
             # ending alone; "" otherwise. Parallel to `card_source`, which
@@ -6839,9 +6865,8 @@ def build_expense_view(
     # registry, plus this batch's own default), and the curated account list.
     entity_options = available_entities(settings, default_entity)
 
-    # Per-card coverage (PR 3). One read of the snapshot feeds both halves,
-    # so every charge rolled up has a state that was computed for it.
-    charges, charge_state_map = month_charge_states(run, decisions or {})
+    # Per-card coverage (PR 3). The charges and states read above, so every
+    # charge rolled up has a state that was computed for it.
     coverage, _keys = month_coverage(run, charges, charge_state_map)
     # Item 59: same count the workbench carries, from the same charge set
     # the coverage panel rolls up. 0 before a statement is loaded.
@@ -6964,6 +6989,7 @@ def _expense_export_inputs(
     field_overrides: dict[str, dict[str, str]],
     edits: list[dict],
     dup_resolutions: dict[str, str] | None = None,
+    settled_cards: dict[str, str] | None = None,
 ) -> tuple[list, dict]:
     """`(receipts, kwargs)` for the expense export — the overlay order the
     view uses (`apply_expense_edits` then `apply_overrides`) plus the card /
@@ -6975,7 +7001,13 @@ def _expense_export_inputs(
 
     `dup_resolutions` (item 69 round A) is the run's duplicate resolutions,
     so a group the reviewer ruled "not a duplicate" lends no card here
-    either; a caller without a store in hand passes None (no group ruled)."""
+    either; a caller without a store in hand passes None (no group ruled).
+
+    `settled_cards` (item 111, `export_settled_cards`): the CSV and the month
+    report pass the Expenses payload's card of the charge each receipt
+    settles, so a row the screen resolved from its charge never prints
+    `(entity - assign)` there. The match-time readers of this function (the
+    adjacent and trip pools) pass nothing and stay as they were."""
     # The extraction baseline, for the same reason the grid uses it: the
     # export applies the overlay, and on an attached month the stored receipt
     # block already has it baked in. Grid and export move together.
@@ -7002,7 +7034,7 @@ def _expense_export_inputs(
     # Cards R3: the export runs the SAME card/entity resolution pass the
     # grid renders (assign a card after an export, re-export, and the new
     # file carries it — exports are regenerable, never stale by design).
-    card_res = resolve_batch_row_cards(receipts, run.config, field_overrides)
+    card_res = resolve_batch_row_cards(receipts, run.config, field_overrides, settled_cards=settled_cards)
     # Item 41: a confirmed private expense was paid out of somebody's
     # pocket. In the one-file export it stays a row (mixed-entity ruling:
     # one file, entity as a column) with both columns saying so — the
@@ -7051,9 +7083,14 @@ def regenerate_expense_export(
     Returns the path.
 
     Item 94: a decided copy (`decided_copies`) writes no row; one line under
-    the rows names the copies set aside and what they add up to."""
+    the rows names the copies set aside and what they add up to.
+
+    Item 111: a receipt this month's charge settles resolves its company and
+    paid-through from that charge's card, as the Expenses page shows it."""
+    csv_settled = export_settled_cards(run, charge_decisions)
     receipts, kwargs = _expense_export_inputs(
-        run, overrides, field_overrides, edits, dup_resolutions
+        run, overrides, field_overrides, edits, dup_resolutions,
+        settled_cards=csv_settled,
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
@@ -7187,8 +7224,12 @@ def build_expense_report(
     )
     from ..output.month_report_pdf import build_expense_report_pdf
 
+    # Item 111: the Expenses page's card of the charge a receipt settles, for
+    # the listing's rows (company, paid-through) and the card pass below.
+    report_settled = export_settled_cards(run, charge_decisions)
     receipts, kwargs = _expense_export_inputs(
-        run, overrides, field_overrides, edits, dup_resolutions
+        run, overrides, field_overrides, edits, dup_resolutions,
+        settled_cards=report_settled,
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
@@ -7223,7 +7264,7 @@ def build_expense_report(
     # The same card pass the grid runs: it names the person a trip
     # sections on and the card whose default a cost center falls back to.
     card_res_report = resolve_batch_row_cards(
-        company, run.config, field_overrides
+        company, run.config, field_overrides, settled_cards=report_settled
     )
     if is_trip_batch(run):
         def _person_of(r) -> str:
@@ -9035,6 +9076,51 @@ def month_charge_states(
     return transactions, charge_states(transactions, effective, decisions)
 
 
+def settled_charge_cards(
+    run: RunRow, charges: list, states: dict[str, dict]
+) -> dict[str, str]:
+    """Item 111: `{document_id: card key}` for every receipt of this month a
+    charge of this month settles, keyed to that charge's card in the batch's
+    registry snapshot.
+
+    July 2026 asked Criss for a company and a person on 33 receipts while 19
+    of them already settled a charge whose card names both. "Settles" is the
+    reviewer's effective verdict (`charge_states`, the one map the workbench
+    reads): a pending or confirmed pair in the reconciled bucket, so a
+    rejected pair lends nothing and a pair still in review lends nothing
+    either. The card is the charge's coverage identity (`_charge_card_identity`,
+    the same string the matcher's scoping reads), and a card the registry
+    cannot name lends nothing. A borrowed receipt (`receipt_sources`) is
+    another month's expense, and its id can equal one of this month's own,
+    so any held id in that map lends nothing here."""
+    cards = _batch_cards(run.config)
+    if not cards or not states:
+        return {}
+    borrowed = set((run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {})
+    tx_by_id = {t.transaction_id: t for t in charges}
+    out: dict[str, str] = {}
+    for tx_id, state in states.items():
+        doc = state.get("held_doc")
+        tx = tx_by_id.get(tx_id)
+        if state.get("bucket") != "reconciled" or not doc or tx is None:
+            continue
+        if doc in borrowed:
+            continue
+        key = _charge_card_identity(tx, cards).card_key
+        if key:
+            out[doc] = key
+    return out
+
+
+def export_settled_cards(run: RunRow, charge_decisions: dict | None) -> dict[str, str]:
+    """`settled_charge_cards` for the CSV and the month report, from the same
+    snapshot read and verdicts the Expenses payload uses (`decisions or {}`),
+    so a document resolves a row exactly as the screen does. Empty for a
+    month with no statement."""
+    charges, states = month_charge_states(run, charge_decisions or {})
+    return settled_charge_cards(run, charges, states)
+
+
 def _identity_from_observed(observed: str | None, cards: dict) -> _CardIdentity:
     """The coverage identity of one card-bearing string, or `_NO_CARD` when
     it names no card.
@@ -9834,6 +9920,17 @@ def add_receipts_to_expense_batch(
         )
         if refresh.get("changes"):
             result["master_data_refresh"] = refresh["changes"]
+        # Item 112: a neighbouring month whose statement period covers a new
+        # receipt owes a re-match from this write on, in the same lock span.
+        # A failure to owe never fails an add that is already committed.
+        neighbours: list[str] = []
+        if result.get("n_added"):
+            try:
+                neighbours = _owe_neighbour_rematches_locked(
+                    store, run, list(result.get("documents") or [])
+                )
+            except Exception as exc:  # noqa: BLE001 - reported in the result
+                result["neighbour_rematch_error"] = f"{type(exc).__name__}: {exc}"
 
     # OUTSIDE the lock (`rematch_month` takes the same non-reentrant lock to
     # commit). A month whose statement is already loaded reconciles the
@@ -9859,6 +9956,14 @@ def add_receipts_to_expense_batch(
             )
             if cross:
                 result["months_rematched"] = cross
+    # Item 112: the neighbours this arrival owed, after the month's own
+    # re-match (so a receipt both statements could take goes home first).
+    if neighbours:
+        cross = rematch_neighbour_months(
+            store, neighbours, learning_db_path=learning_db_path
+        )
+        if cross:
+            result["months_rematched"] = cross
     return result
 
 
@@ -11566,11 +11671,25 @@ def _rematch_or_error(*args, **kwargs) -> dict:
 # the thing that actually decides whether a charge could be on this workbook.
 
 ADJACENT_BORROW_KIND = "adjacent"
+# Item 112: the re-match a neighbouring month owes when a receipt dated
+# inside its statement period lands in this month (`rematch_log` trigger).
+ADJACENT_REMATCH_TRIGGER = "adjacent_receipts"
 # Only reached by a month that has no statement yet, where there are no
 # charges to derive a period from and nothing to match either. The calendar
 # month plus this margin is the widest window such a month could plausibly
 # bill, and it keeps the helper answerable instead of undefined.
 ADJACENT_FALLBACK_DAYS = 3
+
+
+def adjacent_months(ym: tuple[int, int]) -> set[tuple[int, int]]:
+    """The calendar months either side of `(year, month)`: the one definition
+    of "neighbour" the borrow (item 61) and the arrival trigger (item 112)
+    share."""
+    year, month = ym
+    return {
+        (year - 1, 12) if month == 1 else (year, month - 1),
+        (year + 1, 1) if month == 12 else (year, month + 1),
+    }
 
 
 def statement_period_for_month(
@@ -11637,11 +11756,7 @@ def adjacent_pool_for_month(
     if period is None:
         return [], {}
     lo, hi = period
-    year, month = ym
-    wanted = {
-        (year - 1, 12) if month == 1 else (year, month - 1),
-        (year + 1, 1) if month == 12 else (year, month + 1),
-    }
+    wanted = adjacent_months(ym)
     neighbours = []
     for other in store.list_runs():
         if other.run_id == run.run_id:
@@ -11691,6 +11806,131 @@ def adjacent_pool_for_month(
                 "kind": ADJACENT_BORROW_KIND,
             }
     return borrowed, origins
+
+
+# Item 112 (2026-09-17 audit draft #110): the borrow above is read only when
+# the BORROWING month re-matches. A receipt dated 07-31 that lands in July
+# after August's last re-match waited in July for an unrelated August event,
+# while a receipt joining a trip already re-matched every month the trip
+# spans (`rematch_months_after_trip_change`). An arrival now owes a re-match
+# to each neighbouring month whose loaded statement period covers the
+# receipt's date: owed inside the arrival's own lock span (item 113's mark,
+# so a restart before the neighbour's turn cannot lose it), paid after the
+# lock through `rematch_after_change`, whose failure lands on that mark.
+
+
+def neighbour_months_covering(
+    store: RunStore,
+    run: RunRow,
+    dates: list,
+    *,
+    exclude: set[str] | tuple = (),
+) -> list[RunRow]:
+    """The company months either side of `run` (by label, as
+    `adjacent_pool_for_month` decides neighbours) holding a statement whose
+    period (`statement_period_for_month`) covers any of `dates`, previous
+    month first. A trip batch has no neighbours: its receipts reach the
+    months through the trip trigger. A neighbour whose snapshot cannot be
+    parsed is included, so its re-match records why it cannot run."""
+    if is_trip_batch(run) or not dates:
+        return []
+    ym = month_from_label(run.label)
+    if ym is None:
+        return []
+    wanted = adjacent_months(ym)
+    skip = {run.run_id, *exclude}
+    found: list[tuple] = []
+    for other in store.list_runs():
+        if other.run_id in skip:
+            continue
+        if (other.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if is_trip_batch(other) or not has_statement(other):
+            continue
+        oym = month_from_label(other.label)
+        if oym not in wanted:
+            continue
+        try:
+            transactions = snapshot_from_dict(other.snapshot)[0]
+        except Exception:  # noqa: BLE001 - owed; its re-match reports the error
+            found.append((oym, str(other.run_id), other))
+            continue
+        if not transactions:
+            continue
+        period = statement_period_for_month(other, transactions)
+        if period is None:
+            continue
+        lo, hi = period
+        if any(lo <= d <= hi for d in dates):
+            found.append((oym, str(other.run_id), other))
+    found.sort(key=lambda n: (n[0], n[1]))
+    return [other for _oym, _rid, other in found]
+
+
+def _owe_neighbour_rematches_locked(
+    store: RunStore,
+    run: RunRow,
+    document_ids: list[str],
+    *,
+    exclude: set[str] | tuple = (),
+) -> list[str]:
+    """Write the owed-re-match mark on every neighbouring month the receipts
+    `document_ids` (just added to `run`) fall inside, and return their ids.
+    Caller holds `_BATCH_ADD_LOCK`. Dates are the rows' effective dates (a
+    typed date wins), read from the row as it stands after the add."""
+    if not document_ids:
+        return []
+    fresh = store.get_run(run.run_id)
+    if fresh is None:
+        return []
+    wanted = set(document_ids)
+    rows = apply_expense_edits(
+        baseline_receipts(fresh),
+        store.get_expense_field_overrides(fresh.run_id),
+        store.get_expense_edits(fresh.run_id),
+    )
+    dates = [
+        r.detected_date for r in rows
+        if r.document_id in wanted and r.detected_date is not None
+    ]
+    owed: list[str] = []
+    for other in neighbour_months_covering(store, fresh, dates, exclude=exclude):
+        # The row as it stands now (the lock is held), never the listing's copy.
+        current = store.get_run(other.run_id)
+        if current is None:
+            continue
+        snapshot = dict(current.snapshot or {})
+        snapshot[REMATCH_PENDING_KEY] = rematch_pending_mark(
+            snapshot, ADJACENT_REMATCH_TRIGGER
+        )
+        store.update_run_snapshot(other.run_id, snapshot)
+        owed.append(other.run_id)
+    return owed
+
+
+def rematch_neighbour_months(
+    store: RunStore,
+    run_ids: list[str],
+    *,
+    learning_db_path: Path | None = None,
+) -> list[dict]:
+    """Pay the neighbours' owed re-matches, outside every lock. Never raises:
+    the arrival that owed them is committed, and a failure stays on the
+    neighbour's mark for the operator state, the notifier and the retry."""
+    results: list[dict] = []
+    for run_id in run_ids:
+        try:
+            rematch = rematch_after_change(
+                store, run_id, learning_db_path=learning_db_path,
+                trigger=ADJACENT_REMATCH_TRIGGER,
+            )
+        except Exception as exc:  # noqa: BLE001 - recorded on the mark
+            error = f"{type(exc).__name__}: {exc}"
+            _record_rematch_failure(store, run_id, ADJACENT_REMATCH_TRIGGER, error)
+            rematch = {"error": error}
+        if rematch is not None:
+            results.append({"run_id": run_id, **rematch})
+    return results
 
 
 def borrowed_source_view(entry: object) -> dict | None:
@@ -12325,6 +12565,19 @@ def move_expense_to_month(
                     owed_snap, "month_move"
                 )
                 store.update_run_snapshot(owed_run.run_id, owed_snap)
+        # Item 112: the target's OTHER neighbour (the source re-matches
+        # anyway) owes a re-match when its statement period covers the
+        # moved receipt's date. Nothing is owed when the target already
+        # held the bytes: nothing arrived there.
+        target_neighbours: list[str] = []
+        neighbour_error = ""
+        if not already_there:
+            try:
+                target_neighbours = _owe_neighbour_rematches_locked(
+                    store, target, [new_doc], exclude={source.run_id}
+                )
+            except Exception as exc:  # noqa: BLE001 - the move is committed
+                neighbour_error = f"{type(exc).__name__}: {exc}"
         remaining = len(apply_expense_edits(
             baseline_receipts(source),
             store.get_expense_field_overrides(source.run_id),
@@ -12349,6 +12602,14 @@ def move_expense_to_month(
         )
         if rematch is not None:
             out[key] = rematch
+    if neighbour_error:
+        out["neighbour_rematch_error"] = neighbour_error
+    if target_neighbours:
+        moved_cross = rematch_neighbour_months(
+            store, target_neighbours, learning_db_path=learning_db_path
+        )
+        if moved_cross:
+            out["months_rematched"] = moved_cross
     return out
 
 
