@@ -182,6 +182,8 @@ and a rollback would otherwise have nothing to re-apply.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
+| `lovable-card-fix-prompt.md` (item 87) | `card_source`, `expx.cardFix.pick`, `expx.cardFix.source.learned`, `expx.cardFix.boxHint` (not `card_key` alone: the statement attach form already sends one) | Backend PR #947 live on Fly |
+| `lovable-matched-with-statement-prompt.md` (item 89) | `months.state.matchedStatement`, `months.state.matchedStatement.tip` | None (SPA-only, no backend field) |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.

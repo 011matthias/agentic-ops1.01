@@ -4525,6 +4525,11 @@ EXPENSE_HEADER_FIELDS = frozenset({
     # against the registry in the route, which is where settings are
     # readable (`validate_expense_field` is pure by design).
     "cost_center",
+    # Item 87: the card that paid this one expense, by registry key, for
+    # a receipt whose printed payment method names no card or the wrong
+    # one. Validated against the live registry in the route; publishing
+    # the month remembers it for the vendor (item 88).
+    "card_key",
 })
 EXPENSE_CATEGORY_FIELDS = frozenset({"category", "zoho_account"})
 
@@ -5186,6 +5191,7 @@ def resolve_batch_row_cards(
     assigning/registering the real card, which clears it.
     """
     from ..cards import resolve_hinted_card_ex
+    from ..matching.deterministic import _card_keys
 
     cards = _batch_cards(cfg)
     hints_map = _batch_card_hints(cfg)
@@ -5194,6 +5200,22 @@ def resolve_batch_row_cards(
     for r in receipts:
         hint = (r.payment_mode or "").strip()
         card, ambiguous = resolve_hinted_card_ex(hint, cards, hints_map)
+        card_source = "hint" if card is not None else "none"
+        # Item 87: the reviewer's per-row card fix wins over everything the
+        # receipt printed; a card REMEMBERED from an earlier month's fix
+        # applies only when the printed payment method carries no card
+        # number (a tender word, or nothing), so memory never overrides a
+        # number the document shows. A key the batch's cards do not hold,
+        # or an inactive card, decides nothing.
+        fixed = _batch_row_card(
+            cards, (field_overrides.get(r.document_id) or {}).get("card_key")
+        )
+        if fixed is not None:
+            card, card_source = fixed, "override"
+        elif card is None and not _card_keys(hint):
+            remembered = _batch_row_card(cards, r.card_key)
+            if remembered is not None:
+                card, card_source = remembered, "learned"
         override = (field_overrides.get(r.document_id) or {}).get("legal_entity", "")
         if override.strip():
             entity, source = override.strip(), "override"
@@ -5240,10 +5262,49 @@ def resolve_batch_row_cards(
                 and source != "override"
             ),
             "ambiguous": ambiguous,
-            "card_map_blocked": ambiguous
+            # A reviewer's (or remembered) pick settles the ambiguity the
+            # hint left, so the pick's own account decides, as for a hint.
+            "card_map_blocked": (ambiguous and card is None)
             or (card is not None and not card.zoho_account),
+            "card_source": card_source,
         }
     return out
+
+
+def _batch_row_card(cards: dict, key: object):
+    """The active batch card a per-row fix (or its memory) names, else None."""
+    key = str(key or "").strip()
+    card = cards.get(key) if key else None
+    return card if card is not None and card.active else None
+
+
+def prepare_row_card_fix(store: RunStore, run_id: str, key: str) -> str | None:
+    """Item 87: make a per-row card fix resolvable on this batch. The key must
+    name an active card in the live registry (what `GET /api/cards` offered);
+    a card defined after the batch was created is copied into the batch's card
+    snapshot, exactly as a strip assignment does, so the row resolves without a
+    refresh of every other row's master data. Returns an error, or None."""
+    from ..cards import cards_to_setting, effective_cards
+    from ..cards_provision import load_cards
+
+    live = effective_cards(store.get_settings(), load_cards()).get(key)
+    if live is None:
+        return f"card_key {key!r} is not a defined card; define it in Settings, Cards first"
+    if not live.active:
+        return f"card {key!r} is inactive; reactivate it before assigning receipts to it"
+    with _BATCH_ADD_LOCK:
+        run = store.get_run(run_id)
+        if run is None:
+            return "This batch no longer exists (it was deleted)."
+        cfg = dict(run.config or {})
+        exp = dict(cfg.get("expense") or {})
+        batch_cards = dict(exp.get("cards") or {})
+        if key not in batch_cards:
+            batch_cards[key] = cards_to_setting({key: live})[key]
+            exp["cards"] = batch_cards
+            cfg["expense"] = exp
+            store.update_run_config(run_id, cfg)
+    return None
 
 
 def resolve_batch_row_cost_centers(
@@ -5932,6 +5993,11 @@ def build_expense_view(
                 if (res["suggested_private"] or res["private"]) else ""
             ),
             "payment_hint": res["hint"],
+            # Item 87: where `card` came from: hint (the printed payment
+            # method or a batch hint assignment), override (a per-row fix
+            # this month), learned (remembered from an earlier month's
+            # fix), or none.
+            "card_source": res.get("card_source", "none"),
             "card": (
                 {
                     "key": res["card"].key,

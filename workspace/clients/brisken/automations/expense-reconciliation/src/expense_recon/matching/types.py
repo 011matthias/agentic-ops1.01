@@ -353,6 +353,12 @@ class Receipt:
     # instead of becoming a phantom expense. Statement-mode reconcile()
     # ignores this field entirely.
     document_type: str = "receipt"
+    # Item 87: the registry key of the card that paid, as REMEMBERED from a
+    # reviewer's per-row fix on an earlier month (a field correction keyed
+    # on the vendor). Never read off the document: the card chain uses it
+    # only when the printed payment method names no card number, so a
+    # printed number always wins over what was remembered.
+    card_key: str | None = None
 
     @property
     def has_receipt_image(self) -> bool:

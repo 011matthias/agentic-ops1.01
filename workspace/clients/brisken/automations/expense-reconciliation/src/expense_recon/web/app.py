@@ -96,6 +96,7 @@ from .service import (
     PreparedExpenseBatch,
     PreparedRun,
     cards_seen_but_undefined,
+    prepare_row_card_fix,
     RunForm,
     RunInputError,
     add_receipts_to_expense_batch,
@@ -3637,6 +3638,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             err_msg = validate_expense_field(field, value)
             if err_msg:
                 return JSONResponse({"error": err_msg}, status_code=400)
+
+        if field == "card_key" and value:
+            # Item 87: a per-row card fix names an active registry card, which
+            # may be copied into the batch's card snapshot. That write takes
+            # the batch writer lock, so it runs off the event loop (item 18).
+            def _prep_card():
+                with open_store() as store:
+                    _run, err = _expense_run_or_error(store, run_id)
+                    if err is not None:
+                        return err
+                    msg = prepare_row_card_fix(store, run_id, value)
+                    return (
+                        JSONResponse({"error": msg}, status_code=400)
+                        if msg else None
+                    )
+
+            card_err = await run_in_threadpool(_prep_card)
+            if card_err is not None:
+                return card_err
 
         with open_store() as store:
             run, err = _expense_run_or_error(store, run_id)

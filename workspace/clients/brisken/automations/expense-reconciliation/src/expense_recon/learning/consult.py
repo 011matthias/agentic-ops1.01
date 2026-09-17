@@ -147,7 +147,9 @@ class FieldCorrectionLookup:
 # Header fields a stored correction may auto-fill. `vendor` REPLACES the
 # extracted spelling (that is the point of the correction); the others fill
 # or replace the extracted value the same way the reviewer's edit did.
-_CORRECTABLE_FIELDS = ("vendor", "tax_label", "paid_through")
+# `card_key` (item 87) is only a candidate: the card chain applies it when
+# the receipt's own payment method names no card number.
+_CORRECTABLE_FIELDS = ("vendor", "tax_label", "paid_through", "card_key")
 
 
 @dataclass(frozen=True)
@@ -192,11 +194,16 @@ class ExpenseMemory:
                     "vendor": r.detected_vendor,
                     "tax_label": r.tax_label,
                     "paid_through": r.paid_through,
+                    "card_key": r.card_key,
                 }[f]
                 if value != current:
                     kw[
                         "detected_vendor" if f == "vendor" else f
                     ] = value
+                    if f == "card_key":
+                        # Only a candidate; the row's `card_source`
+                        # "learned" says when it actually decided the card.
+                        continue
                     filled.append(f)
                     if f == "vendor":
                         # Mark where the DISPLAY vendor came from so the grid
@@ -207,11 +214,12 @@ class ExpenseMemory:
             if not kw:
                 out.append(r)
                 continue
-            note = "Auto-filled from a prior correction: " + ", ".join(filled)
-            existing_note = r.data_quality_note
-            kw["data_quality_note"] = (
-                f"{existing_note} | {note}" if existing_note else note
-            )
+            if filled:
+                note = "Auto-filled from a prior correction: " + ", ".join(filled)
+                existing_note = r.data_quality_note
+                kw["data_quality_note"] = (
+                    f"{existing_note} | {note}" if existing_note else note
+                )
             out.append(replace(r, **kw))
         return out
 
