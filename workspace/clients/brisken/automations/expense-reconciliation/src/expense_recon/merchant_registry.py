@@ -235,6 +235,12 @@ class MerchantMatch:
     # Item 47: the brand's default project / purpose. None when unset, and
     # unaffected by `multi_category` (which decouples CATEGORY only).
     cost_center: str | None = None
+    # Item 115: whether this merchant is marked multi-category. `category`
+    # is None for that merchant AND for a naming-only one, and the two are
+    # not the same instruction: a multi-category merchant says "judge every
+    # receipt on its own items", so a remembered category must not flatten
+    # its lines either.
+    multi_category: bool = False
 
 
 class MerchantRegistry:
@@ -364,6 +370,7 @@ class MerchantRegistry:
                 score=float(score),
                 kind=kind,
                 cost_center=(entry.get("cost_center") or None),
+                multi_category=True,
             )
         category = (entry.get("category") or None)
         return MerchantMatch(

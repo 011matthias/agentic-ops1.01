@@ -31,6 +31,11 @@ from dataclasses import replace
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from .learning.consult import (
+    RECALL_NO_COMPANY,
+    RECALL_VENDOR_ONLY,
+    LearnedRecall,
+)
 from .llm.client import (
     ClassificationResult,
     LineItemInput,
@@ -55,6 +60,12 @@ NO_SIGNAL_REASON = "No classification signal — Chris assigns category"
 
 # Confidence below this routes to Tier 3 REVIEW regardless of source.
 REVIEW_THRESHOLD = 0.6
+
+# Recorded on `Categorization.decision` when a remembered category was
+# applied to a receipt whose line items read something else (item 115). The
+# review layer turns it into the glance the row deserves; it is NOT one of
+# the WS2 adjudication verdicts below.
+DECISION_LEARNED_OVER_LINE = "learned_over_line"
 
 # Stub confidence: all keyword hits get the same value so it's visually
 # obvious in the report that no real ranking is happening yet.
@@ -178,6 +189,8 @@ def categorize_receipts(
     chart_of_accounts: list[str] | None = None,
     learned: "MerchantCategoryLookup | None" = None,
     override_er_category: bool = False,
+    registry_backed: "frozenset[str] | None" = None,
+    judge_each_receipt: "frozenset[str] | None" = None,
 ) -> list[Receipt]:
     """Return a new list of receipts with line_items carrying
     Categorization results per LD-2.
@@ -193,9 +206,24 @@ def categorize_receipts(
     without an LLM client.
 
     `learned` (Phase 2) is a cross-run memory of confirmed
-    merchant->category decisions. It is consulted ONLY on the weak
-    vendor-fallback path (a receipt with no usable line items); a
-    confident line read always wins. None / empty => behaviour unchanged.
+    merchant->category decisions. Since item 115 it is consulted on EVERY
+    receipt, not only the weak vendor-fallback path: a rule a person taught
+    (a correction saved at sign-off or the button, a Memory-page edit, or a
+    validated row) applies to a receipt with readable line items too, and
+    the row says so when it disagreed with the line read. A rule seeded
+    from Zoho Books posting history that nobody has validated still stays
+    below a confident line read. None / empty => behaviour unchanged.
+
+    `registry_backed` (item 115, internal) names the documents whose
+    merchant carries a registry default category. The registry already
+    preempts a line read, and a per-company learned row already outranks
+    the registry (2026-08-07), so for those documents the learned row
+    applies over the line read whatever taught it -- the alternative was
+    the old cycle, where a remembered row blocked the merchant default and
+    the line read won both. `judge_each_receipt` (item 115, internal) names
+    the documents whose merchant is marked multi-category: that mark is an
+    instruction to judge every receipt on its own items, so no remembered
+    category flattens its lines.
 
     `override_er_category` (2026-07-21 owner decision) flips who owns the
     posting account. Default False keeps the 2026-06-16 behaviour (the
@@ -211,6 +239,12 @@ def categorize_receipts(
         _categorize_one(
             r, client, chart_of_accounts, learned,
             override_er_category=override_er_category,
+            registry_backed=bool(
+                registry_backed and r.document_id in registry_backed
+            ),
+            judge_each_receipt=bool(
+                judge_each_receipt and r.document_id in judge_each_receipt
+            ),
         )
         for r in receipts
     ]
@@ -272,18 +306,23 @@ def categorize_receipts_with_registry(
     as a deterministic tier above the LLM (2026-07-29) and below per-entity
     memory (2026-08-07).
 
-    Tier order: a confident LINE read > LEARNED (entity, vendor) > REGISTRY >
-    LLM / keyword vendor guess > REVIEW.
+    Tier order since item 115: LEARNED (a rule a person taught, or any rule
+    for a merchant the registry also has a default for) > REGISTRY > a
+    confident LINE read > LEARNED (a Zoho-seeded rule nobody validated) >
+    LLM / keyword vendor guess > REVIEW. A receipt with no readable line
+    items has no LINE tier, so there memory leads outright, as it has since
+    Phase 2.
 
     For each receipt it resolves a canonical merchant (stamping
     `canonical_vendor` + `vendor_source="registry"` on every match — naming is
     independent of categorization, so a merchant whose CATEGORY comes from
     memory still displays the registry's canonical name). A match that carries
-    a default category AND has no per-entity learned row is stamped a REGISTRY
-    categorization and SKIPS the LLM (deterministic-first); the rest run
-    through `categorize_receipts`, and through `adjudicate_receipts` when
-    `cat_chart` is supplied and `override_er_category` is on. An empty / None
-    registry behaves exactly like `categorize_receipts` alone.
+    a default category AND has no learned row for this receipt's company is
+    stamped a REGISTRY categorization and SKIPS the LLM (deterministic-first);
+    the rest run through `categorize_receipts`, and through
+    `adjudicate_receipts` when `cat_chart` is supplied and
+    `override_er_category` is on. An empty / None registry behaves exactly
+    like `categorize_receipts` alone.
 
     Returns `(receipts, registry_matches)` where `registry_matches` maps
     document_id -> MerchantMatch, for the grid's display vendor + provenance.
@@ -317,18 +356,35 @@ def categorize_receipts_with_registry(
     # entity-specific fact wins and the receipt flows through
     # `categorize_receipts`, which applies LEARNED on the vendor-fallback
     # path (still below a confident line read — the Phase-2 invariant).
-    # `_learned_categorization` is the same predicate that will actually
-    # apply the row, so the two can never disagree about who wins.
+    # `_company_recall` is the same predicate that will actually apply the
+    # row, so the two can never disagree about who wins.
+    #
+    # Item 115 closes the cycle this created. A receipt WITH line items used
+    # to fall past both: the learned row sent it here, and here the line read
+    # beat the learned row, so the merchant default it displaced never
+    # applied either. Those documents are named in `registry_backed`, and
+    # `categorize_receipts` applies the learned row over the line read for
+    # them. A rule recalled on the VENDOR alone (this receipt has no company)
+    # does not displace the registry: the registry's default is curated and
+    # company-independent, which is exactly what a company-less receipt needs.
     rec_by_doc = {r.document_id: r for r in receipts}
     cat_docs = {
         doc
         for doc, m in registry_matches.items()
-        if m.category and _learned_categorization(rec_by_doc[doc], learned) is None
+        if m.category and _company_recall(rec_by_doc[doc], learned) is None
     }
+    registry_backed = frozenset(
+        doc for doc, m in registry_matches.items() if m.category
+    ) - cat_docs
     to_llm = [r for r in receipts if r.document_id not in cat_docs]
+    multi_category = frozenset(
+        doc for doc, m in registry_matches.items() if m.multi_category
+    )
     categorized = categorize_receipts(
         to_llm, client=client, chart_of_accounts=chart_of_accounts,
         learned=learned, override_er_category=override_er_category,
+        registry_backed=registry_backed,
+        judge_each_receipt=multi_category,
     )
     if override_er_category and cat_chart is not None:
         categorized = adjudicate_receipts(
@@ -352,21 +408,44 @@ def _categorize_one(
     learned: "MerchantCategoryLookup | None" = None,
     *,
     override_er_category: bool = False,
+    registry_backed: bool = False,
+    judge_each_receipt: bool = False,
 ) -> Receipt:
     """Apply the LD-2 tier rules to a single receipt."""
+    recall = _recall_for(receipt, learned)
+    has_lines = bool(receipt.line_items) and not _all_vague(receipt.line_items)
 
-    if receipt.line_items and not _all_vague(receipt.line_items):
-        # LINE path (Tier 1). A confident line read ALWAYS wins; memory is
-        # never consulted here, so a learned merchant->category can never
-        # preempt a good line read (Phase 2 invariant: fallback, not override).
-        if client is not None:
-            categorized = _classify_lines_via_llm(
-                receipt.line_items, client, chart_of_accounts
+    if has_lines:
+        # LINE path (Tier 1). Item 115: memory IS consulted here now, but it
+        # only leads when a person stands behind the rule (a correction saved
+        # at sign-off or the button, a Memory-page edit, a validated row) or
+        # when the merchant also carries a registry default the line read
+        # would otherwise have displaced. A Zoho-seeded row nobody has
+        # validated still sits below the line read (the Phase-2 invariant,
+        # kept: those rows are how the books posted, not what a person said
+        # about this merchant). A multi-category merchant is never flattened.
+        leads = (
+            recall is not None
+            and not judge_each_receipt
+            and (recall.taught_by_person or registry_backed)
+        )
+        if not leads:
+            if client is not None:
+                categorized = _classify_lines_via_llm(
+                    receipt.line_items, client, chart_of_accounts
+                )
+            else:
+                categorized = tuple(
+                    _classify_line_keyword(li) for li in receipt.line_items
+                )
+            return _carry_zoho_account(
+                replace(receipt, line_items=categorized),
+                override_er_category=override_er_category,
             )
-        else:
-            categorized = tuple(_classify_line_keyword(li) for li in receipt.line_items)
         return _carry_zoho_account(
-            replace(receipt, line_items=categorized),
+            _apply_learned_over_lines(
+                receipt, recall, client, chart_of_accounts,
+            ),
             override_er_category=override_er_category,
         )
 
@@ -374,9 +453,12 @@ def _categorize_one(
     # guess and lands Tier-2. Memory FALLBACK first: a confirmed
     # merchant->category recalled from a prior month upgrades it to Tier-1
     # LEARNED and skips the LLM/keyword vendor call (the deterministic-first
-    # win). Only here, never above the line path.
+    # win).
+    # `judge_each_receipt` is not consulted here: a multi-category merchant's
+    # mark says to judge a receipt on its own items, and this receipt has
+    # none, so memory leads exactly as it has since Phase 2.
     synthesized = _synthesize_total_line(receipt)
-    learned_cat = _learned_categorization(receipt, learned)
+    learned_cat = None if recall is None else _learned_categorization(recall)
     if learned_cat is not None:
         return _carry_zoho_account(
             replace(
@@ -439,33 +521,107 @@ def _carry_zoho_account(
     return replace(receipt, line_items=tuple(new_items))
 
 
-def _learned_categorization(
+def _recall_for(
     receipt: Receipt, learned: "MerchantCategoryLookup | None"
-) -> Categorization | None:
-    """A Tier-1 LEARNED categorization for this receipt's merchant, or None
-    when there is no learned mapping. The provenance reasoning carries the
-    month of the confirming decision so the workbench can show it; rows
-    seeded from Zoho Books posting history (L2, source_run "zoho-seed:*")
-    name that history instead of a reviewer decision."""
+) -> "LearnedRecall | None":
+    """What memory remembers for this receipt's merchant, or None."""
     if learned is None or not receipt.detected_vendor:
         return None
-    hit = learned.get(receipt.legal_entity_id, receipt.detected_vendor)
-    if hit is None or not hit.category:
+    return learned.recall(receipt.legal_entity_id, receipt.detected_vendor)
+
+
+def _company_recall(
+    receipt: Receipt, learned: "MerchantCategoryLookup | None"
+) -> "LearnedRecall | None":
+    """The recall that outranks the merchant registry: one keyed on this
+    receipt's own company (or saved with no company at all). A recall the
+    VENDOR alone produced does not, so the registry's curated default still
+    stamps a company-less receipt."""
+    recall = _recall_for(receipt, learned)
+    if recall is None or recall.kind == RECALL_VENDOR_ONLY:
         return None
-    if hit.source_run and hit.source_run.startswith("zoho-seed"):
+    return recall
+
+
+def _learned_categorization(recall: "LearnedRecall") -> Categorization:
+    """A Tier-1 LEARNED categorization from a recall. The provenance
+    reasoning carries the month of the confirming decision so the workbench
+    can show it; rows seeded from Zoho Books posting history (L2, source_run
+    "zoho-seed:*") name that history instead of a reviewer decision, and a
+    recall that fired on the vendor alone names the rule it used (item
+    115), because that rule was written for another company or for none."""
+    seeded = all(
+        (r.source_run or "").startswith("zoho-seed") for r in recall.rows
+    )
+    if seeded:
         provenance = "from your earlier posting history"
     else:
-        when = hit.last_confirmed_at[:7] if hit.last_confirmed_at else None
+        months = [r.last_confirmed_at[:7] for r in recall.rows if r.last_confirmed_at]
+        when = max(months) if months else None
         provenance = (
             f"learned from your {when} decision" if when
             else "learned from your confirmed decision"
         )
+    if recall.kind == RECALL_VENDOR_ONLY:
+        rule = ", ".join(
+            f"{r.legal_entity_id or 'no company'} / {r.vendor_norm}"
+            for r in recall.rows
+        )
+        provenance += f" ({rule}; this expense has no company yet)"
+    elif recall.kind == RECALL_NO_COMPANY:
+        provenance += " (a rule saved with no company)"
     return Categorization(
-        category=hit.category,
-        zoho_account=hit.zoho_account,
+        category=recall.category,
+        zoho_account=recall.zoho_account,
         confidence=1.0,
         source=ClassificationSource.LEARNED,
         reasoning=provenance,
+    )
+
+
+def _apply_learned_over_lines(
+    receipt: Receipt,
+    recall: "LearnedRecall",
+    client: LLMClient | None,
+    chart_of_accounts: list[str] | None,
+) -> Receipt:
+    """Stamp a remembered category on every line of a receipt that HAS
+    readable line items (item 115).
+
+    A rule nobody has validated is checked against the line read before it
+    wins: the same read the LINE tier would have paid for anyway, and when
+    it disagrees the row says so (`decision = learned_over_line`) and the
+    review state asks for a glance. A validated rule is applied without the
+    call: a person has already certified that answer for this merchant."""
+    cat = _learned_categorization(recall)
+    if not recall.validated:
+        if client is not None:
+            read = _classify_lines_via_llm(
+                receipt.line_items, client, chart_of_accounts
+            )
+        else:
+            read = tuple(_classify_line_keyword(li) for li in receipt.line_items)
+        disagreed = sorted({
+            li.categorization.category
+            for li in read
+            if li.categorization is not None
+            and li.categorization.category
+            and li.categorization.category != recall.category
+        })
+        if disagreed:
+            cat = replace(
+                cat,
+                reasoning=(
+                    f"{cat.reasoning}; the receipt's items read "
+                    f"{', '.join(disagreed)}"
+                ),
+                decision=DECISION_LEARNED_OVER_LINE,
+            )
+    return replace(
+        receipt,
+        line_items=tuple(
+            replace(li, categorization=cat) for li in receipt.line_items
+        ),
     )
 
 

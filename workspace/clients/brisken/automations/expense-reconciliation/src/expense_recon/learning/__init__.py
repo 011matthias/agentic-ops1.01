@@ -11,12 +11,14 @@ from __future__ import annotations
 from .capture import (
     ExpenseLearnSummary,
     LearnSummary,
+    learn_confirmed_pairs,
     learn_from_expense_run,
     learn_from_run,
 )
 from .consult import (
     ExpenseMemory,
     FieldCorrectionLookup,
+    LearnedRecall,
     MatchMemory,
     MerchantCategoryLookup,
     MerchantEntityLookup,
@@ -41,8 +43,10 @@ __all__ = [
     "normalize_vendor",
     "LearnSummary",
     "ExpenseLearnSummary",
+    "learn_confirmed_pairs",
     "learn_from_run",
     "learn_from_expense_run",
+    "LearnedRecall",
     "MerchantCategoryLookup",
     "MerchantEntityLookup",
     "FieldCorrectionLookup",

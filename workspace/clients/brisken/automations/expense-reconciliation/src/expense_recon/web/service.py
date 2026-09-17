@@ -73,6 +73,7 @@ from ..learning import (
     LearningStore,
     MatchMemory,
     MerchantCategoryLookup,
+    learn_confirmed_pairs,
     learn_from_expense_run,
     learn_from_run,
     normalize_vendor,
@@ -2802,6 +2803,15 @@ def _row_posting_category(
 # avoid importing categorize into the view layer; the values are the ones
 # serialize.py round-trips onto the snapshot.
 _ADJ_DISAGREE = frozenset({"ai_override_heavy", "review_unresolved"})
+# Every WS2 adjudication verdict, so the run payload's
+# `adjudication_available` answers "did this run adjudicate" and is not
+# turned on by a decision from another feature (item 115).
+_ADJ_VERDICTS = _ADJ_DISAGREE | {"kept_er"}
+# Item 115: a remembered category was applied to a receipt whose line items
+# read something else, and nobody has validated the rule. The row asks for
+# the same glance a vendor-name guess does -- the category came from the
+# merchant's name, not from this receipt's items.
+_LEARNED_OVER_LINE = "learned_over_line"
 # Source tiers that are trusted enough to post without a glance. REGISTRY
 # (2026-07-29) is a curated merchant default — a deterministic top tier like
 # LEARNED — so it reads `ready`, not `check`.
@@ -2898,6 +2908,12 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
         return _review("pick", "One or more receipt lines still need a category before this can post.", "partial_uncategorized")
     if any(d in _ADJ_DISAGREE for d in decs):
         return _review("check", "The receipt's category and the account it would post to don't agree. A quick look to confirm the account is right.", "category_account_mismatch")
+    if any(d == _LEARNED_OVER_LINE for d in decs):
+        # Item 115. Same code (and so the same SPA sentence and the same
+        # Keep button) as a vendor-name guess, because it is the same
+        # question: the category came from the merchant's name rather than
+        # from this receipt's items. Keeping it makes it the reviewer's own.
+        return _review("check", "A remembered category for this merchant was used instead of what the receipt's items read. If it fits, keep it.", "vendor_guess")
     if any(s == "VENDOR" for s in srcs):
         return _review("check", "The category was guessed from the merchant name, not the receipt's line items. A quick look to confirm it fits.", "vendor_guess")
     if any(s not in _TRUSTED_SOURCE for s in srcs):
@@ -4258,7 +4274,7 @@ def build_view(
         # finding, 2026-07-27).
         "adjudication_available": any(
             li.categorization is not None
-            and getattr(li.categorization, "decision", None) is not None
+            and getattr(li.categorization, "decision", None) in _ADJ_VERDICTS
             for r in rec_by_id.values()
             for li in r.line_items
         ),
@@ -4788,7 +4804,35 @@ def commit_to_memory(
                 source_run=run.run_id,
                 now_iso=now_iso,
             )
+            # Item 115: a receipt-first month with a statement also RECONCILES,
+            # and its confirmed pairs are the only proof of which truncated
+            # bank description belongs to which receipt, and of what a
+            # merchant's card actually converted at. Only the statement-mode
+            # branch below taught those, and no live month goes through it, so
+            # the store held 0 aliases and 0 FX rates while the contract
+            # promised both. Same inputs the matcher itself read: the
+            # snapshot's charges and baked receipt pool, the decisions applied,
+            # and only pairs a verdict confirmed.
+            pairs = alias = fx = 0
+            if has_statement(run):
+                txs, pool, pool_outcome, _ = snapshot_from_dict(run.snapshot)
+                pool = pool + borrowed_receipts(run)
+                pairs, alias, fx = learn_confirmed_pairs(
+                    store,
+                    transactions=txs,
+                    receipts=pool,
+                    outcome=apply_decisions(pool_outcome, txs, pool, decisions),
+                    confirmed_tx_ids={
+                        tx_id for tx_id, d in (decisions or {}).items()
+                        if d.status == STATUS_CONFIRMED
+                    },
+                    source_run=run.run_id,
+                    now_iso=now_iso,
+                )
         result = summary.as_dict()
+        result["confirmed_pairs"] = pairs
+        result["vendor_aliases"] = alias
+        result["merchant_fx"] = fx
         # Self-improving registry (2026-07-29): the same explicit vendor /
         # category edits also upsert the canonical merchant registry, so the
         # human-editable, seeded registry grows from corrections. Persist only
@@ -11448,6 +11492,22 @@ def reread_statements(
 # zero-trips snapshot byte-identical to pre-R4.
 BORROWED_RECEIPTS_KEY = "borrowed_receipts"
 RECEIPT_SOURCES_KEY = "receipt_sources"
+
+
+def borrowed_receipts(run: RunRow) -> list[Receipt]:
+    """The copies of the receipts this month's outcome borrowed from a trip
+    or a neighbouring month (item 38 ruling 3, item 61). They are not part
+    of the month's own pool, so anything that reads a PAIRING has to fold
+    them in or the receipt side of it is missing (item 115: a confirmed
+    pair on a borrowed receipt taught nothing at sign-off). Empty on every
+    month that borrows nothing, which is most of them."""
+    out: list[Receipt] = []
+    for bd in (run.snapshot or {}).get(BORROWED_RECEIPTS_KEY) or []:
+        try:
+            out.append(receipt_from_dict(bd))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
 
 
 def receipt_source_run(run: RunRow, document_id: str) -> str:

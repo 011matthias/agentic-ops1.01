@@ -2950,8 +2950,30 @@ month sign-off, with the Memory page as the undo. The app's sign-off is Publish
 (`POST /api/runs/{id}/publish`), so publishing now does what the "Save
 corrections to memory" button (`POST /api/runs/{id}/commit-memory`) did: header
 edits teach field corrections, entity overrides teach merchant -> entity,
-category reclassifications teach merchant -> category, confirmed statement
-pairs teach aliases and FX, and the same edits grow the merchant registry.
+category reclassifications teach merchant -> category, confirmed pairs teach
+vendor aliases and FX, and the same edits grow the merchant registry.
+
+Until item 115 (2026-09-17) that last clause was only true of the classic
+statement-first page, which no live month uses: a receipt-first month with a
+statement reconciles too, and its sign-off taught the category half only, so
+the store held 0 aliases and 0 FX rates after two reconciled months. A month
+that carries a statement now runs the same pair step at sign-off, over the
+charges and receipt pool the matcher itself read, on pairs a verdict
+CONFIRMED (a person's or the tool's self-confirmation), and the `learned`
+object carries three more counts:
+
+```json
+{ "field_corrections": 2, "merchant_categories": 11,
+  "confirmed_pairs": 4, "vendor_aliases": 4, "merchant_fx": 1 }
+```
+
+`confirmed_pairs` is how many confirmed pairs were inspected; `vendor_aliases`
+how many (statement spelling == receipt spelling) equivalences were written;
+`merchant_fx` how many implied rates were recorded for a pair whose receipt
+currency differs from the charge's. A month with no statement reports 0 / 0 / 0
+and writes nothing. An alias whose statement description or receipt vendor
+names no merchant ("SUPERMERCADO", "Comida e Bebida") is refused, the same
+guard item 117 put on merchant aliases.
 
 Growing the registry (item 116, 2026-09-17) rewrites only the merchants an
 edit changed, and on those only `aliases`, `category` and `zoho_account`;
@@ -4147,6 +4169,70 @@ every live mail would carry `blocked: "no_address"` today. Route-level in
 `tests/test_receipt_chasing_item_107.py`; pins in `tests/test_view_contract.py`
 and `tests/test_settings_put_contract.py`. SPA half:
 `docs/lovable-receipt-chasing-prompt.md`.
+## A corrected category comes back next month: what memory decides now (item 115, 2026-09-17)
+
+The sign-off promise is that a category Criss fixes arrives pre-filled the
+next time that merchant does. It did not: a receipt with readable line items
+never consulted memory at all (55 of July's 84 categorized lines came from a
+line read), and the lookup needed the receipt's company while a month's
+corrections are saved under the company each expense carried, which for 33 of
+52 July and 13 of 31 August receipts is none. Live before the fix:
+`has_learned` false on all 223 rows across both months.
+
+What a receipt's category resolves to, top to bottom:
+
+1. **the reviewer's own pick** (a category override) -- untouched by any of
+   this, and still what `posting_category.source: "override"` reports;
+2. **a rule saved under this receipt's company and vendor**, else, when the
+   receipt's company has no rule of its own, **a rule saved with no company**
+   (every rule a live sign-off writes today is one of those);
+3. **the merchant registry's default**;
+4. **a rule the vendor's other companies agree on**, only for a receipt with
+   no company of its own, and only when their categories agree (or exactly
+   one rule exists). The account is carried only when every rule names the
+   same one, because an account belongs to one company's chart. The
+   provenance names the rule that fired;
+5. **the model's line read**, then its vendor guess, then review.
+
+A rule at 2 or 4 applies to a receipt WITH line items only when a person
+stands behind it: a correction saved at sign-off or by the button, a
+Memory-page edit, or a row someone validated. A row seeded from Zoho Books
+posting history that nobody has validated still fills only a receipt with no
+readable items, unchanged from before (the owner's call, not the builder's:
+the live seed maps `slack`, `supabase`, `perplexity ai` and `hugging face` to
+Marketing & Advertising, and Criss's own August edits filed Perplexity and
+Pressmaster under Software & Subscriptions).
+
+When a remembered category displaces a line read that said something else,
+the line carries `decision: "learned_over_line"` and the row reads
+`review.state: "check"` with `review.reason_code: "vendor_guess"` -- the same
+code, sentence and `Keep "<category>"` button a vendor-name guess gets,
+because it is the same question: the category came from the merchant's name,
+not from this receipt's items. `provenance` on the line names what the items
+read. A rule a person validated on the Memory page applies without the flag
+and without paying for the line read at all. A merchant marked
+`multi_category` is never flattened by a remembered category: that mark is an
+instruction to judge every receipt on its own items.
+
+`adjudication_available` on the run payload now answers "did this run
+adjudicate" (a `decision` of `kept_er` / `ai_override_heavy` /
+`review_unresolved`) rather than "does any line carry a decision", so the new
+verdict does not claim an account check that never ran.
+
+Nothing re-categorizes a stored row: a month's rows are categorized when a
+receipt arrives (creation, mid-month add, a set-aside page restored), and a
+re-match re-pairs without re-reading. So this reaches the screen on the NEXT
+arrival, never by rewriting a month Criss has already reviewed. Replayed over
+both live months with today's memory (103 Zoho-seeded rules, 0 validated), 0
+of 201 lines and 0 of 173 receiptless charges change. Replayed again with the
+memory a July sign-off would write, 10 of August's 42 lines change: 7 from
+the model's line read, 2 from no category at all, 1 from the registry default
+to the same category under her name. No line contradicts a reviewer edit or
+the merchant registry, and July's own 17 edited lines keep their categories.
+
+Route-level in `tests/test_memory_recall_item_115.py`; the precedence itself
+in `tests/test_categorize_memory.py` and the accuracy gate's fixture
+(`categorization_gate.py`, which now guards both halves).
 ## Error codes (item 130, 2026-09-17)
 
 Every refusal the API sends is
