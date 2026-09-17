@@ -2797,3 +2797,63 @@ Tests: `tests/test_settings_put_contract.py`, where
 `test_every_writable_key_actually_lands` walks `SETTINGS_WRITABLE_KEYS` so a
 key added to the tuple without a handler branch fails instead of doing
 nothing. Renders in `docs/lovable-settings-tabs-prompt.md`.
+
+## Two printed card digits name a card: `card_ending` (note #60, 2026-09-17)
+
+Owner, note #60: "some receipts only show the last 2 digits of the cards
+number, we need to strategize what we can do, so the card attribution stays
+accurate". Live, `42463153XXXXXX38` reached June (Supermercado Fenix, no card,
+no company, no person) and August (SARL TRAIN'S, fixed by hand to 2838).
+
+**The rule.** Two digits behind a mask (`XX`, `*`, `#`, `•`, `..`) or an
+ending word (`ending`, `ending in`, `final`) name the card when exactly ONE
+active card has a number ending in them. Two cards sharing the ending is a
+contest: the row stays without a card and the strip group is `ambiguous`,
+never guessed. On the live registry 3876 / 1176 share `76` and 0113 / 6013
+share `13`, and each pair spans two companies. A bare two-digit number
+(`Cartao Credito 30 Dias`, `$15.00`), a single `x` (`3x`, an instalment
+count) and two different endings in one hint name nothing. A printed last-4
+and a taught exact string both outrank the ending.
+
+**One new row field**, `expenses[].card_ending`, string: `"38"` when the card
+was named by a masked two-digit ending alone, `""` otherwise (a last-4, an
+assignment, a per-row fix, memory, or no card). `card_source` keeps its four
+values; this rides beside it.
+
+**The strip.** `card_review.unresolved_hints[].digits` for a masked-ending
+group is the two digits (`"76"`), and a masked BIN is no longer shown as the
+card's number: `42463153XXXXXX38` groups as `38`, not `42463153`.
+
+Tests: `tests/test_card_short_ending.py` (unit + the batch route).
+
+## A receipt arriving into an existing month reads today's card list (note #54, audit item 108, 2026-09-17)
+
+Owner, note #54: a receipt that reaches an existing month by the Receipts
+drop or by mail "goes through the entire process all the other receipts
+inside the month have gone through". Categorization, memory and the re-match
+against a loaded statement already ran on arrivals; the card chain read the
+card registry copy the month was created with.
+
+**Now** every arrival first refreshes the month's copy from Settings through
+the same audited pass as `POST /api/expense-batches/{id}/refresh-master-data`
+(per-row fixes and the month's own hint assignments survive it), so the new
+receipt AND the rows already in the month resolve card, company and person
+against the registry as it is today. A refresh that changed something is
+appended to the month's `master_data_refreshes` trail with operator
+`auto: receipt arrival`; one that changed nothing writes no row. The add
+result gains `master_data_refresh` (the changes list) only when something
+moved, and a month with a statement re-matches when the refresh moved its
+card list even if every uploaded file was a duplicate.
+
+Unchanged: a Settings save alone still does not touch an existing month
+until its next arrival or a manual refresh.
+
+Tests: `tests/test_arrival_reads_live_cards.py`.
+
+## Clearing a category (item 78, 2026-09-17)
+
+No API change. `PUT /api/runs/{id}/expenses/{doc}` with
+`{"field": "category", "value": ""}` (or `null`) already cleared the
+reviewer's pick; now pinned. The row returns to the tool's own value, which
+for an uncategorized row is no category (`posting_category` null). Tests:
+`tests/test_category_clear.py`.
