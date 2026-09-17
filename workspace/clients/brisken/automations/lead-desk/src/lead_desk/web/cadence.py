@@ -33,6 +33,7 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from ..graph_mail import DEFAULT_DENY_DOMAINS
+from . import approval
 from .store import CADENCE_PREFIX, DEGREES, ContactStore, attempt_key_for
 
 LEASE_MINUTES = 30
@@ -482,26 +483,40 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
             # stays step-1 and starts on a later day.
             if ramp_left is not None and step["step_no"] == 1 and ramp_left <= 0:
                 continue
-            version = pins.get(step["template_key"])
-            tpl = store.get_template(step["template_key"], version)
-            if tpl is None:
+            ob = approval.render_obligation(store, campaign, e, step, pins)
+            if ob is None:
                 continue
-            subject = render(tpl["subject"] or "", e)
-            body = render(tpl["body"], e)
+            subject, body = ob["subject"], ob["body"]
             lease_id = secrets.token_hex(16)
             lease_expires = _iso(at + timedelta(minutes=LEASE_MINUTES))
-            if not peek and not store.try_lease(
-                attempt_key=item["attempt_key"], enrollment_id=e["enrollment_id"],
-                step_no=step["step_no"], send_mode=item["sequence"]["send_mode"],
-                lease_id=lease_id, lease_expires=lease_expires, worker_id=worker_id,
-                to_addr=to_addr, rendered_subject=subject, rendered_body=body,
-                template_key=step["template_key"], template_version=int(tpl["version"]),
-                now=now, max_attempts=MAX_SEND_ATTEMPTS,
-            ):
-                continue
+            # EPOCH-KEYED APPROVAL (web/approval.py): the lease is taken only
+            # together with the one dispatch claim, and only when an approval
+            # snapshot of EXACTLY this text, recipient and destination at the
+            # current draft epoch covers the message. A contact edit, a from/cc
+            # change or a re-filed draft since approval refuses here.
+            granted: dict = {}
             if peek:
+                refusal = approval.preview_refusal(store, ob)
+                if refusal is not None:
+                    continue
                 lease_id = None
                 lease_expires = None
+            else:
+                try:
+                    granted = approval.claim(store, ob, worker_id=worker_id, now=now, lease=dict(
+                        attempt_key=item["attempt_key"], enrollment_id=e["enrollment_id"],
+                        step_no=step["step_no"], send_mode=item["sequence"]["send_mode"],
+                        lease_id=lease_id, lease_expires=lease_expires, worker_id=worker_id,
+                        to_addr=to_addr, rendered_subject=subject, rendered_body=body,
+                        template_key=step["template_key"],
+                        template_version=ob["template_version"],
+                        now=now, max_attempts=MAX_SEND_ATTEMPTS,
+                    ))
+                except approval.ClaimRefused as exc:
+                    if exc.kind not in approval.SILENT_REFUSALS:
+                        blocks.append({"contact_id": cid, "kind": exc.kind,
+                                       "detail": exc.detail})
+                    continue
             cap_left -= 1
             if ramp_left is not None and step["step_no"] == 1:
                 ramp_left -= 1
@@ -525,10 +540,12 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
                 "from": campaign["from_address"],
                 "subject": subject,
                 "body": body,
-                "body_hash": hashlib.sha256(
-                    (subject + "\n" + body).encode("utf-8")).hexdigest(),
+                "body_hash": ob["draft_sha256"],
+                "claim_token": granted.get("token"),
+                "decision_id": granted.get("decision_id"),
+                "draft_epoch": granted.get("draft_epoch"),
                 "template_key": step["template_key"],
-                "template_version": int(tpl["version"]),
+                "template_version": ob["template_version"],
                 "thread_ext_key": prior,
                 # In-thread reply step: the worker sends this as a Graph reply
                 # anchored on the prior step's sent mail. An operator
@@ -566,6 +583,25 @@ def resolve_result(store: ContactStore, payload: dict) -> dict:
     enrollment = store.get_enrollment(int(attempt["enrollment_id"]))
     if enrollment is None:
         return {"ok": False, "error": "orphan attempt"}
+
+    # Keep the dispatch claim consistent with any result reported here (the
+    # cloud worker settles its claim itself; this covers every other caller).
+    claim = approval.active_claim(store, akey)
+    if claim is not None:
+        if status == "failed" and claim["state"] == "claimed":
+            approval.cancel(store, claim["token"], "failure reported before dispatch", now)
+        elif status == "failed":
+            # A failure reported AFTER dispatch began is not proof the mail did
+            # not go: hold it as unknown, never requeue.
+            approval.mark_unknown(store, claim["token"],
+                                  f"failure reported after dispatch began: "
+                                  f"{payload.get('failure_reason') or ''}", now)
+            return {"ok": True, "requeued": False, "unknown": True}
+        elif claim["state"] == "dispatching":
+            approval.complete(store, claim["token"],
+                              (payload.get("internet_message_id") or "").strip()
+                              or payload.get("entry_id") or f"result-{status}:{akey}",
+                              now)
 
     if status == "sent":
         occurred = (payload.get("occurred_at") or "").strip() or now
@@ -890,10 +926,12 @@ def approval_report(store: ContactStore, campaign_id: str) -> dict:
                     f"contact(s) of '{degree}': missing {what} "
                     f"(e.g. {', '.join(who[:3])})")
             sample = cohort[0] if cohort else None
+            s_subject = render(tpl["subject"] or "", sample) if sample else tpl["subject"]
+            s_body = render(tpl["body"], sample) if sample else tpl["body"]
             rendered_steps.append({
                 "step": dict(step), "template_version": tpl["version"],
-                "subject": render(tpl["subject"] or "", sample) if sample else tpl["subject"],
-                "body": render(tpl["body"], sample) if sample else tpl["body"],
+                "subject": s_subject, "body": s_body,
+                "draft_sha256": approval.draft_sha256(s_subject, s_body),
             })
         samples[degree] = {
             "sequence": {k: seq[k] for k in ("name", "send_mode")},
@@ -928,7 +966,7 @@ def approval_report(store: ContactStore, campaign_id: str) -> dict:
         "worker's inbox poll; if the worker is off, log replies by hand or "
         "sends will continue."
     )
-    return {
+    report = {
         "ok": not errors, "errors": errors, "warnings": warnings,
         "campaign": campaign, "enrollments": enrollments,
         "degrees": degrees_in_use, "samples": samples,
@@ -936,17 +974,58 @@ def approval_report(store: ContactStore, campaign_id: str) -> dict:
         "scope_text": scope_text,
         "projected_schedule": project_schedule(store, campaign_id),
     }
+    # What an approval right now would freeze, per message: the manifest hash
+    # and the epoch the approve POST must echo back (a pure read; see
+    # approval.approval_manifest). Only meaningful when the report validates.
+    if not errors:
+        report["draft"] = approval.approval_manifest(
+            store, campaign_id, approval_pins(store, report))
+    return report
+
+
+def approval_pins(store: ContactStore, report: dict) -> dict[str, int]:
+    """The template versions an approval would freeze. Fresh approval
+    (draft/paused) pins the latest version of every template. An INCREMENTAL
+    approval (campaign already approved; approving late-added enrollments)
+    PRESERVES existing pins - otherwise a template edited since the original
+    approval would silently upgrade the copy for the whole cohort. New copy
+    only applies through pause -> re-approve."""
+    campaign = report["campaign"]
+    existing = store.get_pins(campaign["campaign_id"]) \
+        if campaign.get("status") in ("approved", "sending") else {}
+    pins: dict[str, int] = {}
+    for degree in report["degrees"]:
+        for rs in report["samples"][degree]["steps"]:
+            key = rs["step"]["template_key"]
+            pins[key] = existing.get(key, int(rs["template_version"]))
+    return pins
 
 
 def approve_campaign(store: ContactStore, campaign_id: str, user: str,
-                     confirm_slug: str, now: str | None = None) -> dict:
+                     confirm_slug: str, now: str | None = None, *,
+                     expected_manifest: str | None = None,
+                     expected_epoch: int | None = None) -> dict:
     """THE gate. Validates, freezes template pins + the list hash, stamps the
-    campaign approved and every pending enrollment. Nothing sends before this.
+    campaign approved and every pending enrollment, and writes the decision
+    with one immutable snapshot per message. Nothing sends before this.
+
+    All of it is ONE transaction. When the caller passes the manifest hash and
+    epoch the operator reviewed (the web route always does), a mismatch with
+    what would be frozen now refuses the approval as stale: the operator
+    approves the text they saw, never text that changed under the page.
 
     ``now`` (ISO) is injectable so tests can pin approved_at; production leaves
     it None and uses the wall clock."""
     if confirm_slug.strip() != campaign_id:
         return {"ok": False, "errors": ["type the campaign id to confirm"]}
+    with store.transaction():
+        return _approve_in_tx(store, campaign_id, user, now,
+                              expected_manifest, expected_epoch)
+
+
+def _approve_in_tx(store: ContactStore, campaign_id: str, user: str,
+                   now: str | None, expected_manifest: str | None,
+                   expected_epoch: int | None) -> dict:
     report = approval_report(store, campaign_id)
     # Lifecycle guard: a 'done' campaign (e.g. the historical Rome roster) must
     # not be re-approvable by data-validation side effects alone; reopening is a
@@ -957,19 +1036,18 @@ def approve_campaign(store: ContactStore, campaign_id: str, user: str,
             "This campaign is marked done. Reopen it before approving."]}
     if not report["ok"]:
         return report
+    draft = report["draft"]
+    if expected_manifest is not None or expected_epoch is not None:
+        if (expected_manifest != draft["manifest_sha256"]
+                or expected_epoch != draft["draft_epoch"]):
+            return {"ok": False, "stale": True, "errors": [
+                "The messages changed since this page was loaded (reviewed "
+                f"epoch {expected_epoch}, sha {str(expected_manifest or '')[:8]}; "
+                f"now epoch {draft['draft_epoch']}, sha "
+                f"{draft['manifest_sha256'][:8]}). Nothing was approved. "
+                "Review the page again and re-approve."]}
     now = now or _iso(now_utc())
-    # Fresh approval (draft/paused) pins the latest version of every template.
-    # An INCREMENTAL approval (campaign already approved; approving late-added
-    # enrollments) PRESERVES existing pins - otherwise a template edited since
-    # the original approval would silently upgrade the copy for the whole
-    # cohort. New copy only applies through pause -> re-approve.
-    existing = store.get_pins(campaign_id) \
-        if (report["campaign"].get("status") in ("approved", "sending")) else {}
-    pins: dict[str, int] = {}
-    for degree in report["degrees"]:
-        for rs in report["samples"][degree]["steps"]:
-            key = rs["step"]["template_key"]
-            pins[key] = existing.get(key, int(rs["template_version"]))
+    pins = approval_pins(store, report)
     store.pin_templates(campaign_id, pins)
     # Freeze each approved contact's EXACT recipient address. The claim path
     # refuses to send to an address that drifted from this snapshot, closing
@@ -982,16 +1060,28 @@ def approve_campaign(store: ContactStore, campaign_id: str, user: str,
     store.pin_recipients(campaign_id, recipient_pins)
     ids = sorted(e["contact_id"] for e in report["enrollments"])
     contacts_hash = hashlib.sha1("|".join(ids).encode("utf-8")).hexdigest()
+    decision = approval.record_decision(
+        store, campaign_id, "approve", user, now, draft["obligations"],
+        draft["manifest_sha256"], draft["draft_epoch"])
     store.update_campaign(campaign_id, {
         "status": "approved", "approved_at": now, "approved_by": user,
         "approved_contacts_hash": contacts_hash,
+        "draft_epoch": draft["draft_epoch"],
+        "draft_manifest_sha256": draft["manifest_sha256"],
     }, now)
     approved_n = store.approve_pending_enrollments(campaign_id, user, now)
     store.set_state(f"approval:{campaign_id}", json.dumps({
         "approved_at": now, "approved_by": user, "pins": pins,
         "contacts_hash": contacts_hash, "enrolled": len(ids),
+        "decision_id": decision["decision_id"],
+        "draft_epoch": draft["draft_epoch"],
+        "manifest_sha256": draft["manifest_sha256"],
     }), now)
-    return {"ok": True, "approved_enrollments": approved_n, "pins": pins}
+    return {"ok": True, "approved_enrollments": approved_n, "pins": pins,
+            "decision_id": decision["decision_id"],
+            "snapshots": decision["snapshots"], "held": decision["held"],
+            "draft_epoch": draft["draft_epoch"],
+            "manifest_sha256": draft["manifest_sha256"]}
 
 
 def start_sending(store: ContactStore, campaign_id: str, user: str,
@@ -1149,6 +1239,14 @@ def apply_sequence_delta(store: ContactStore, campaign_id: str, degree: str,
     fresh step_nos; only changed/new template keys are re-pinned. The campaign
     KEEPS its status, so a 'sending' wave never stops. Send-safety is intact:
     recipient pins + contacts hash are untouched, and every step stays pinned."""
+    with store.transaction():
+        return _apply_delta_in_tx(store, campaign_id, degree, submitted_steps,
+                                  user, now)
+
+
+def _apply_delta_in_tx(store: ContactStore, campaign_id: str, degree: str,
+                       submitted_steps: list[dict], user: str | None,
+                       now: str | None) -> dict:
     report = sequence_delta_report(store, campaign_id, degree, submitted_steps)
     if not report["ok"]:
         return report
@@ -1156,6 +1254,25 @@ def apply_sequence_delta(store: ContactStore, campaign_id: str, degree: str,
     store.upsert_sequence(campaign_id, degree, report["name"],
                           report["send_mode"], report["new_steps"])
     store.pin_templates(campaign_id, report["pins"])
+    # The delta IS an operator decision about the future steps it adds, so it
+    # snapshots exactly those messages, in this same transaction. Already
+    # approved steps keep their own snapshots: the delta never re-approves a
+    # message whose text drifted since its approval. A future step whose
+    # contact address drifted from the approval-frozen pin gets no snapshot
+    # and stays blocked until a full re-approve.
+    future_nos = {int(s["step_no"]) for s in report["added"]}
+    recipient_pins = store.get_recipient_pins(campaign_id)
+    delta_obs = [o for o in approval.campaign_obligations(
+                     store, campaign_id, report["pins"], degree=degree,
+                     step_nos=future_nos)
+                 if recipient_pins.get(o["contact_id"]) == o["recipient"]]
+    whole = approval.approval_manifest(store, campaign_id, report["pins"])
+    decision = approval.record_decision(
+        store, campaign_id, "sequence_delta", user or "unknown", now, delta_obs,
+        whole["manifest_sha256"], whole["draft_epoch"])
+    store.update_campaign(campaign_id, {
+        "draft_epoch": whole["draft_epoch"],
+        "draft_manifest_sha256": whole["manifest_sha256"]}, now)
     # Keep the recorded approval pins in sync so the audit record matches what
     # will render; do NOT touch campaign status (no supersede).
     marker = store.get_state(f"approval:{campaign_id}")
@@ -1173,7 +1290,9 @@ def apply_sequence_delta(store: ContactStore, campaign_id: str, degree: str,
     }), now)
     return {"ok": True, "frozen_count": report["frozen_count"],
             "added": report["added"], "pins": report["pins"],
-            "added_pins": report["added_pins"]}
+            "added_pins": report["added_pins"],
+            "decision_id": decision["decision_id"],
+            "snapshots": decision["snapshots"]}
 
 
 # -- reconcile -----------------------------------------------------------------------

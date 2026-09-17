@@ -39,8 +39,8 @@
     <span title="Inbound events captured from the live mailboxes for enrolled contacts{% if campaign.approved_at %} since approval{% endif %}: mailbox truth, not log assertions.">inbound{% if campaign.approved_at %} since approval{% endif %}: {{ engine.inbound.get('reply', 0) }} reply, {{ engine.inbound.get('bounce', 0) }} bounce</span>
   </div>
   <div class="inline" style="margin-top:10px; flex-wrap:wrap;">
-    {% for st in ('queued', 'leased', 'drafted', 'sent', 'stalled', 'parked', 'failed') %}
-    <span class="badge {% if st == 'sent' %}stage-booked{% elif st in ('stalled', 'parked', 'failed') %}suppressed{% else %}stage-sent{% endif %}" title="send attempts in status '{{ st }}'">{{ st }} {{ engine.attempts.get(st, 0) }}</span>
+    {% for st in ('queued', 'leased', 'drafted', 'sent', 'stalled', 'parked', 'failed', 'unknown') %}
+    <span class="badge {% if st == 'sent' %}stage-booked{% elif st in ('stalled', 'parked', 'failed', 'unknown') %}suppressed{% else %}stage-sent{% endif %}" title="send attempts in status '{{ st }}'">{{ st }} {{ engine.attempts.get(st, 0) }}</span>
     {% endfor %}
     {% if attempts %}<a class="muted" href="#attempts" style="font-size:12px;">attempt detail &darr;</a>{% endif %}
   </div>
@@ -211,18 +211,30 @@
 <div class="card scroll-x" id="attempts">
   <h2>Send attempts</h2>
   <table>
-    <thead><tr><th>Attempt</th><th>Status</th><th>To</th><th>Subject</th><th>Tries</th><th>Failure</th><th></th></tr></thead>
+    <thead><tr><th>Attempt</th><th>Status</th><th>Claim</th><th>To</th><th>Subject</th><th>Tries</th><th>Failure</th><th></th></tr></thead>
     <tbody>
     {% for a in attempts %}
       <tr>
         <td class="mono" style="font-size:11px;">{{ a.attempt_key }}</td>
-        <td><span class="badge {% if a.status == 'sent' %}stage-booked{% elif a.status in ('stalled', 'parked', 'failed') %}suppressed{% else %}stage-sent{% endif %}">{{ a.status }}</span></td>
+        <td><span class="badge {% if a.status == 'sent' %}stage-booked{% elif a.status in ('stalled', 'parked', 'failed', 'unknown') %}suppressed{% else %}stage-sent{% endif %}">{{ a.status }}</span></td>
+        <td class="mono" style="font-size:11px;">{% if a.claim %}{{ a.claim.state }} &middot; #{{ a.claim.decision_id }}{% if a.claim.draft_sha256 %} &middot; {{ a.claim.draft_sha256[:8] }}{% endif %}{% if a.claim.state == 'unknown' and a.claim.outcome_detail %}<div class="muted" style="font-family:inherit; white-space:normal;">{{ a.claim.outcome_detail }}</div>{% endif %}{% endif %}</td>
         <td class="mono" style="font-size:11.5px;">{{ a.to_addr or '' }}</td>
         <td>{{ a.rendered_subject or '' }}</td>
         <td>{{ a.attempt_count }}</td>
         <td class="muted" style="font-size:12px;">{{ a.failure_reason or '' }}</td>
         <td class="inline">
-          {% if a.status in ('stalled', 'parked', 'failed') %}
+          {% if a.claim and a.claim.state == 'unknown' %}
+          <form method="post" action="/attempts/reconcile" style="margin:0;" title="the trusted manual step: record what actually happened">
+            <input type="hidden" name="attempt_key" value="{{ a.attempt_key }}">
+            <input type="hidden" name="campaign" value="{{ campaign.campaign_id }}">
+            <select name="outcome"><option value="delivered">delivered</option><option value="not_delivered">not delivered</option></select>
+            <input type="text" name="coordinate" placeholder="internetMessageId (if delivered)" autocomplete="off">
+            <input type="text" name="evidence" placeholder="evidence (where you checked)" autocomplete="off" required>
+            <button class="btn btn-secondary btn-small" type="submit">Reconcile</button>
+          </form>
+          {% elif a.retry_block %}
+          <span class="muted" style="font-size:12px;">{{ a.retry_block }}</span>
+          {% elif a.status in ('stalled', 'parked', 'failed') %}
           <form method="post" action="/attempts/retry" style="margin:0;">
             <input type="hidden" name="attempt_key" value="{{ a.attempt_key }}">
             <input type="hidden" name="campaign" value="{{ campaign.campaign_id }}">
@@ -301,6 +313,24 @@
     <ul style="margin:0;">{% for w in report.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
   </div>
   {% endif %}
+  {% if approve_result and not approve_result.ok %}
+  <div id="approve-refused" style="padding:10px 14px; border:1px solid var(--red); border-radius:10px; background:var(--red-bg); margin-bottom:10px;">
+    <strong style="color:var(--red);">{% if approve_result.stale %}Approval refused: stale page{% else %}Last approval attempt failed{% endif %}</strong>
+    <ul style="margin:6px 0 0;">{% for e in approve_result.errors or [] %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  {% if report.draft %}
+  <div id="approval-manifest" style="padding:10px 14px; border:1px solid var(--border); border-radius:10px; background:var(--bg); margin-bottom:10px;">
+    <strong>What an approval freezes now:</strong> {{ report.draft.count }} message(s),
+    manifest sha256 <span class="mono" title="{{ report.draft.manifest_sha256 }}">{{ report.draft.manifest_sha256[:8] }}</span>,
+    draft epoch <span class="mono">{{ report.draft.draft_epoch }}</span>.
+    <div class="muted" style="font-size:12px; margin-top:4px;">Each message is snapshotted (exact text, hash, recipient) with the approval. If any copy, address or contact field changes before you press approve, the approval is refused as stale; if one changes afterwards, that message stops at claim time until you re-approve.</div>
+    {% if decision %}
+    <div id="approval-decision" style="font-size:12px; margin-top:6px;">Last decision <span class="mono">#{{ decision.decision_id }}</span> ({{ decision.kind }}) by {{ decision.decided_by }} at {{ (decision.decided_at or '')[:16] }}: epoch <span class="mono">{{ decision.campaign_draft_epoch }}</span>, sha256 <span class="mono" title="{{ decision.manifest_sha256 }}">{{ decision.manifest_sha256[:8] }}</span>, {{ decision.snapshot_count }} snapshot(s).</div>
+    {% endif %}
+  </div>
+  {% endif %}
 
   {% if report.samples %}
   <h2 style="margin-top:14px;">Rendered copy (first real contact per degree)</h2>
@@ -309,7 +339,7 @@
     <summary style="cursor:pointer;"><strong>{{ degree }}</strong> - {{ s.cohort_size }} contact(s), {{ s.steps|length }} step(s), {{ s.sequence.send_mode }}</summary>
     {% for rs in s.steps %}
     <div style="border:1px solid var(--border); border-radius:10px; padding:12px; margin:8px 0;">
-      <div class="muted" style="font-size:12px;">Step {{ rs.step.step_no }} &middot; {{ rs.step.channel }} &middot; {{ rs.step.template_key }} v{{ rs.template_version }} &middot; +{{ rs.step.day_offset }}d</div>
+      <div class="muted" style="font-size:12px;">Step {{ rs.step.step_no }} &middot; {{ rs.step.channel }} &middot; {{ rs.step.template_key }} v{{ rs.template_version }} &middot; +{{ rs.step.day_offset }}d{% if rs.draft_sha256 %} &middot; sha256 <span class="mono">{{ rs.draft_sha256[:8] }}</span>{% endif %}</div>
       {% if rs.subject %}<div style="margin-top:6px;"><strong>{{ rs.subject }}</strong></div>{% endif %}
       <pre style="white-space:pre-wrap; font-family:inherit; margin:6px 0 0;">{{ rs.body }}</pre>
     </div>
@@ -323,6 +353,8 @@
     <p style="margin:0 0 10px;">{{ report.scope_text }}</p>
     <p style="margin:0 0 10px;" class="muted">Approving only FREEZES the copy + list. Sending stays OFF until you press Start sending in the next step.</p>
     <form method="post" action="/campaigns/{{ campaign.campaign_id }}/approve" class="row-actions">
+      <input type="hidden" name="draft_manifest" value="{{ report.draft.manifest_sha256 }}">
+      <input type="hidden" name="draft_epoch" value="{{ report.draft.draft_epoch }}">
       <div style="min-width:220px;"><label>Type the campaign id to confirm</label>
         <input type="text" name="confirm" placeholder="{{ campaign.campaign_id }}" autocomplete="off"></div>
       <button class="btn btn-small" type="submit">Approve: freeze copy + list</button>
@@ -330,12 +362,16 @@
   </div>
   {% elif campaign.status in ('approved', 'sending', 'paused') %}
   {% set pending = enrollments | rejectattr('enrollment_approved_at') | list %}
-  <p class="muted">Copy + list frozen. New uploads stay inert until you approve the additions (button appears below when pending rows exist).</p>
-  {% if pending %}
+  {% set voided = attempts | selectattr('retry_block') | selectattr('claim') | selectattr('claim.state', 'equalto', 'void') | list %}
+  {% set drifted = report.draft and report.draft.draft_epoch != campaign.draft_epoch %}
+  <p class="muted">Copy + list frozen. New uploads stay inert until you approve the additions. A message whose copy, address or contact fields changed since approval, or a send reconciled as not delivered, needs a re-approval before it can go.</p>
+  {% if (pending or voided or drifted) and report.draft %}
   <form method="post" action="/campaigns/{{ campaign.campaign_id }}/approve" class="row-actions" style="margin-bottom:10px;">
-    <div style="min-width:220px;"><label>{{ pending|length }} pending addition(s) - type the id to approve them</label>
+    <input type="hidden" name="draft_manifest" value="{{ report.draft.manifest_sha256 }}">
+    <input type="hidden" name="draft_epoch" value="{{ report.draft.draft_epoch }}">
+    <div style="min-width:220px;"><label>{% if pending %}{{ pending|length }} pending addition(s){% endif %}{% if pending and (voided or drifted) %}, {% endif %}{% if voided %}{{ voided|length }} voided send(s){% endif %}{% if voided and drifted %}, {% endif %}{% if drifted %}messages changed since approval{% endif %} - type the id to approve</label>
       <input type="text" name="confirm" placeholder="{{ campaign.campaign_id }}" autocomplete="off"></div>
-    <button class="btn btn-small" type="submit">Approve additions</button>
+    <button class="btn btn-small" type="submit">{% if pending %}Approve additions{% else %}Re-approve{% endif %}</button>
   </form>
   {% endif %}
   {% endif %}

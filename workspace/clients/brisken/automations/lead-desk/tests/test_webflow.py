@@ -5,6 +5,7 @@ multipart upload, and the Jinja templates actually rendering (board,
 campaigns, campaign admin, contact cadence card) at every lifecycle stage.
 """
 import io
+import re
 from datetime import datetime, timezone
 
 import pytest
@@ -31,6 +32,16 @@ def client(tmp_path, monkeypatch):
     c = TestClient(app)
     c.app_state_db = tmp_path / "lead-desk.sqlite"
     return c
+
+
+def approve_via_panel(client, cid, **kw):
+    """Approve the way an operator does: read the reviewed manifest hash and
+    epoch off the approval panel and echo them with the typed id."""
+    page = client.get(f"/campaigns/{cid}").text
+    manifest = re.search(r'name="draft_manifest" value="([0-9a-f]{64})"', page).group(1)
+    epoch = re.search(r'name="draft_epoch" value="(\d+)"', page).group(1)
+    return client.post(f"/campaigns/{cid}/approve", data={
+        "confirm": cid, "draft_manifest": manifest, "draft_epoch": epoch}, **kw)
 
 
 def test_full_campaign_lifecycle_over_http(client):
@@ -63,8 +74,7 @@ def test_full_campaign_lifecycle_over_http(client):
     # 4. Approval page shows rendered copy for a real contact, then approve.
     r = client.get("/campaigns/mdh-2026")
     assert "Hi Jane at Acme." in r.text or "Hi Kai at Corp." in r.text
-    r = client.post("/campaigns/mdh-2026/approve", data={"confirm": "mdh-2026"},
-                    follow_redirects=True)
+    r = approve_via_panel(client, "mdh-2026", follow_redirects=True)
     assert r.status_code == 200 and "approved" in r.text
 
     # 5. Board renders the cadence columns for the approved campaign.
@@ -122,7 +132,7 @@ def test_manual_linkedin_step_done_over_http(client):
     client.post("/campaigns/li-camp/sequences", data={
         "degree": "cold", "name": "li", "send_mode": "auto-matthias",
         "steps": "linkedin li-1 0"})
-    client.post("/campaigns/li-camp/approve", data={"confirm": "li-camp"})
+    approve_via_panel(client, "li-camp")
 
     with ContactStore(client.app_state_db) as store:
         enr = store.enrollments_for_campaign("li-camp")
@@ -183,7 +193,7 @@ def test_sequence_delta_route_keeps_campaign_sending(client):
     client.post("/campaigns/d-2026/sequences", data={
         "degree": "cold", "name": "c", "send_mode": "auto-matthias",
         "steps": "email d-e1 0"})
-    client.post("/campaigns/d-2026/approve", data={"confirm": "d-2026"})
+    approve_via_panel(client, "d-2026")
     client.post("/campaigns/d-2026/start-sending", data={"confirm": "d-2026"})
     # A second template, then a LIVE delta appending it (nothing sent yet).
     client.post("/templates", data={"template_key": "d-e2", "channel": "email",

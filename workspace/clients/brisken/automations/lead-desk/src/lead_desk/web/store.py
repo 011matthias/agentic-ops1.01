@@ -28,6 +28,16 @@ Campaign-engine tables (iteration 3):
                       a send is real only when its 'sent' event lands.
 * ``campaign_template_pins``  which template version an approval froze.
 
+Per-message approval ledger (v14, web/approval.py):
+
+* ``obligation_drafts``   what each enrollment-step would send now, with its
+                          epoch (advances when the text or destination moves).
+* ``approval_decisions``  one approve / sequence delta by a named operator.
+* ``approval_snapshots``  immutable exact text + hash + recipient per message,
+                          written in the same transaction as its decision.
+* ``dispatch_claims``     one dispatch permission per message:
+                          claimed -> dispatching -> delivered | unknown.
+
 RESERVED ext_key NAMESPACE: cadence events carry
 ``ext_key = 'cadence:{enrollment_id}:{step_no}'``. The event-hash basis
 (contact, type, ext_key) then admits at most ONE 'sent' event per
@@ -45,6 +55,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 CHANNELS = ("email", "linkedin", "meeting", "call")
@@ -525,6 +536,113 @@ def _seed_admin_users(conn) -> None:
         )
 
 
+# v14 approval ledger DDL. The obligation is one enrollment-step, keyed by its
+# attempt_key ('cadence:{enrollment_id}:{step_no}'), so it lines up 1:1 with
+# send_attempts (the lease table) and the event-log ext_key.
+#
+# The database, not the calling code, carries the safety properties:
+#   * ux_claim_active: at most ONE claimed/dispatching/unknown/delivered claim
+#     per obligation. Two workers racing the same obligation get one row; an
+#     unknown outcome holds the slot so nothing can re-claim past it.
+#   * ux_claim_dispatch_once: one DISPATCH per (obligation, decision), ever. A
+#     claim cancelled before dispatch frees the slot; a reconciled-not-delivered
+#     ('void') one does not, so sending again needs a fresh decision.
+#   * snapshots and decisions are immutable; claims are never deleted and only
+#     move along the legal transitions; nothing about a snapshot or a draft can
+#     be rewritten while a claim on that obligation is in flight.
+_APPROVAL_LEDGER_DDL = [
+    "CREATE TABLE IF NOT EXISTS obligation_drafts ("
+    "attempt_key TEXT PRIMARY KEY, "
+    "campaign_id TEXT NOT NULL, "
+    "enrollment_id INTEGER NOT NULL, "
+    "step_no INTEGER NOT NULL, "
+    "draft_epoch INTEGER NOT NULL, "
+    "draft_sha256 TEXT NOT NULL, "
+    "recipient TEXT NOT NULL, "
+    "destination TEXT NOT NULL, "
+    "subject TEXT NOT NULL, "
+    "body TEXT NOT NULL, "
+    "template_key TEXT, "
+    "template_version INTEGER, "
+    "filed_at TEXT NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS ix_drafts_campaign ON obligation_drafts(campaign_id)",
+    "CREATE TABLE IF NOT EXISTS approval_decisions ("
+    "decision_id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "campaign_id TEXT NOT NULL REFERENCES campaigns(campaign_id), "
+    "kind TEXT NOT NULL CHECK (kind IN ('approve', 'sequence_delta')), "
+    "decided_by TEXT NOT NULL, "
+    "decided_at TEXT NOT NULL, "
+    "campaign_draft_epoch INTEGER NOT NULL, "
+    "manifest_sha256 TEXT NOT NULL, "
+    "snapshot_count INTEGER NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS approval_snapshots ("
+    "decision_id INTEGER NOT NULL REFERENCES approval_decisions(decision_id), "
+    "attempt_key TEXT NOT NULL, "
+    "draft_epoch INTEGER NOT NULL, "
+    "draft_sha256 TEXT NOT NULL, "
+    "recipient TEXT NOT NULL, "
+    "destination TEXT NOT NULL, "
+    "subject TEXT NOT NULL, "
+    "body TEXT NOT NULL, "
+    "created_at TEXT NOT NULL, "
+    "PRIMARY KEY (decision_id, attempt_key))",
+    "CREATE INDEX IF NOT EXISTS ix_snapshots_obligation "
+    "ON approval_snapshots(attempt_key, decision_id)",
+    "CREATE TABLE IF NOT EXISTS dispatch_claims ("
+    "claim_id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "attempt_key TEXT NOT NULL, "
+    "decision_id INTEGER NOT NULL REFERENCES approval_decisions(decision_id), "
+    "token TEXT NOT NULL UNIQUE, "
+    "state TEXT NOT NULL CHECK (state IN "
+    "('claimed', 'dispatching', 'delivered', 'unknown', 'cancelled', 'void')), "
+    "worker_id TEXT, "
+    "created_at TEXT NOT NULL, "
+    "updated_at TEXT NOT NULL, "
+    "dispatched_at TEXT, "
+    "coordinate TEXT, "
+    "outcome_detail TEXT, "
+    "reconciled_by TEXT, "
+    "reconciliation_evidence TEXT)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_claim_active ON dispatch_claims(attempt_key) "
+    "WHERE state IN ('claimed', 'dispatching', 'unknown', 'delivered')",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_claim_dispatch_once "
+    "ON dispatch_claims(attempt_key, decision_id) WHERE dispatched_at IS NOT NULL",
+    "CREATE TRIGGER IF NOT EXISTS trg_decisions_no_update BEFORE UPDATE ON approval_decisions "
+    "BEGIN SELECT RAISE(ABORT, 'approval_decisions are immutable'); END",
+    "CREATE TRIGGER IF NOT EXISTS trg_decisions_no_delete BEFORE DELETE ON approval_decisions "
+    "BEGIN SELECT RAISE(ABORT, 'approval_decisions are immutable'); END",
+    "CREATE TRIGGER IF NOT EXISTS trg_snapshots_no_update BEFORE UPDATE ON approval_snapshots "
+    "BEGIN SELECT RAISE(ABORT, 'approval_snapshots are immutable'); END",
+    "CREATE TRIGGER IF NOT EXISTS trg_snapshots_no_delete BEFORE DELETE ON approval_snapshots "
+    "BEGIN SELECT RAISE(ABORT, 'approval_snapshots are immutable'); END",
+    "CREATE TRIGGER IF NOT EXISTS trg_snapshots_frozen_in_flight "
+    "BEFORE INSERT ON approval_snapshots "
+    "WHEN EXISTS (SELECT 1 FROM dispatch_claims WHERE attempt_key = NEW.attempt_key "
+    "AND state IN ('claimed', 'dispatching', 'unknown')) "
+    "BEGIN SELECT RAISE(ABORT, 'obligation has a claim in flight'); END",
+    "CREATE TRIGGER IF NOT EXISTS trg_drafts_frozen_in_flight "
+    "BEFORE UPDATE ON obligation_drafts "
+    "WHEN EXISTS (SELECT 1 FROM dispatch_claims WHERE attempt_key = OLD.attempt_key "
+    "AND state IN ('claimed', 'dispatching', 'unknown')) "
+    "BEGIN SELECT RAISE(ABORT, 'obligation has a claim in flight'); END",
+    "CREATE TRIGGER IF NOT EXISTS trg_claims_no_delete BEFORE DELETE ON dispatch_claims "
+    "BEGIN SELECT RAISE(ABORT, 'dispatch_claims are never deleted'); END",
+    "CREATE TRIGGER IF NOT EXISTS trg_claims_legal_transition "
+    "BEFORE UPDATE ON dispatch_claims "
+    "WHEN NEW.token IS NOT OLD.token OR NEW.attempt_key IS NOT OLD.attempt_key "
+    "OR NEW.decision_id IS NOT OLD.decision_id OR NEW.created_at IS NOT OLD.created_at "
+    "OR (OLD.dispatched_at IS NOT NULL AND NEW.dispatched_at IS NOT OLD.dispatched_at) "
+    "OR (NEW.state = 'dispatching' AND NEW.dispatched_at IS NULL) "
+    "OR (OLD.state IN ('delivered', 'cancelled', 'void') AND NEW.state = OLD.state "
+    "    AND NEW.coordinate IS NOT OLD.coordinate) "
+    "OR (OLD.state <> NEW.state AND NOT ("
+    "    (OLD.state = 'claimed' AND NEW.state IN ('dispatching', 'cancelled')) "
+    " OR (OLD.state = 'dispatching' AND NEW.state IN ('delivered', 'unknown')) "
+    " OR (OLD.state = 'unknown' AND NEW.state IN ('delivered', 'void')))) "
+    "BEGIN SELECT RAISE(ABORT, 'dispatch_claims: illegal transition'); END",
+]
+
+
 # Ordered schema migrations. Each key N holds the steps that move a DB from
 # user_version N-1 to N; a step is either a raw SQL string or a callable(conn).
 # All steps are replay-safe (DROP...IF EXISTS / guarded ADD COLUMN). BUMP
@@ -682,6 +800,17 @@ _MIGRATIONS: dict[int, list] = {
         "CREATE INDEX IF NOT EXISTS ix_review_items_packet "
         "ON review_items(packet_id, position)",
     ],
+    # v14: epoch-keyed approval + single dispatch claim (ported from ECC
+    # operator-approval-loop, 2026-09-17). An approval now writes an immutable
+    # per-message snapshot in the same transaction as the decision; re-filing
+    # a draft advances its epoch so an old decision releases nothing; one
+    # claim per obligation walks claimed -> dispatching -> delivered | unknown.
+    # See web/approval.py for the contract. Kept out of _SCHEMA (v13 pattern).
+    14: [
+        _add_column("campaigns", "draft_epoch", "INTEGER NOT NULL DEFAULT 0"),
+        _add_column("campaigns", "draft_manifest_sha256", "TEXT"),
+        *_APPROVAL_LEDGER_DDL,
+    ],
 }
 
 # Highest applied migration. On a fresh DB the runner applies 1..N in order;
@@ -727,6 +856,7 @@ class ContactStore:
         # matters at cold boot when several threadpool connections open at once
         # and the migration runner briefly holds the write lock.
         self.conn.execute("PRAGMA busy_timeout = 5000")
+        self._tx_depth = 0
         self._init_schema()
 
     def __enter__(self) -> "ContactStore":
@@ -738,9 +868,43 @@ class ContactStore:
     def close(self) -> None:
         self.conn.close()
 
+    def _commit(self) -> None:
+        """Commit, unless an enclosing ``transaction()`` owns the commit. Every
+        store write goes through here, so the existing write methods compose
+        into one atomic unit when a caller needs that (approve + snapshot)."""
+        if not self._tx_depth:
+            self.conn.commit()
+
+    @contextmanager
+    def transaction(self):
+        """One ``BEGIN IMMEDIATE`` unit: all store writes inside commit
+        together or roll back together. A nested call joins the outer unit
+        (only the outermost commits). IMMEDIATE takes the write lock up front,
+        so two connections racing the same check-then-insert serialise instead
+        of both passing the check."""
+        if self._tx_depth:
+            self._tx_depth += 1
+            try:
+                yield self
+            finally:
+                self._tx_depth -= 1
+            return
+        if self.conn.in_transaction:
+            self.conn.commit()
+        self.conn.execute("BEGIN IMMEDIATE")
+        self._tx_depth = 1
+        try:
+            yield self
+        except BaseException:
+            self._tx_depth = 0
+            self.conn.rollback()
+            raise
+        self._tx_depth = 0
+        self.conn.commit()
+
     def _init_schema(self) -> None:
         self.conn.executescript(_SCHEMA)
-        self.conn.commit()
+        self._commit()
         self._run_migrations()
 
     def _run_migrations(self) -> None:
@@ -768,7 +932,7 @@ class ContactStore:
                         self.conn.execute(stmt)
                 # user_version takes no bind parameter; target is a trusted int.
                 self.conn.execute(f"PRAGMA user_version = {target}")
-            self.conn.commit()
+            self._commit()
         except Exception:
             self.conn.rollback()
             raise
@@ -796,7 +960,7 @@ class ContactStore:
             f"ON CONFLICT(natural_key) DO UPDATE SET {set_clause}",
             values,
         )
-        self.conn.commit()
+        self._commit()
 
     def get_contact(self, contact_id: str) -> sqlite3.Row | None:
         return self.conn.execute(
@@ -853,7 +1017,7 @@ class ContactStore:
             "UPDATE contacts SET suppressed = 1, suppress_reason = 'duplicate', "
             "merged_into = ?, updated_at = ? WHERE contact_id = ?",
             (survivor_id, now, loser_id))
-        self.conn.commit()
+        self._commit()
         return {"ok": True, "events_moved": moved,
                 "survivor": survivor_id, "loser": loser_id}
 
@@ -871,7 +1035,7 @@ class ContactStore:
         self.conn.execute(
             f"UPDATE contacts SET {set_clause} WHERE contact_id = ?", values
         )
-        self.conn.commit()
+        self._commit()
 
     def set_suppressed(
         self, contact_id: str, suppressed: bool, reason: str | None,
@@ -883,7 +1047,7 @@ class ContactStore:
             (1 if suppressed else 0, reason, now if suppressed else None,
              by if suppressed else None, now, contact_id),
         )
-        self.conn.commit()
+        self._commit()
 
     def board_rows(self, campaign: str = "rome-2026") -> list[sqlite3.Row]:
         """Every contact joined with its derived stage + last activity."""
@@ -928,7 +1092,7 @@ class ContactStore:
             (contact_id, campaign, ts, channel, direction, type, subject, detail,
              source, created_by, ext_key, now, h),
         )
-        self.conn.commit()
+        self._commit()
         return cur.rowcount > 0
 
     def get_events(self, contact_id: str) -> list[sqlite3.Row]:
@@ -1002,7 +1166,7 @@ class ContactStore:
             "last_seen = excluded.last_seen, seen_count = seen_count + 1",
             (email, payload_json, now, now, event_hash),
         )
-        self.conn.commit()
+        self._commit()
 
     def get_unmatched(self, unmatched_id: int) -> sqlite3.Row | None:
         return self.conn.execute(
@@ -1031,7 +1195,7 @@ class ContactStore:
             "resolved_at = ?, resolved_by = ? WHERE id = ?",
             (status, contact_id, now, resolved_by, unmatched_id),
         )
-        self.conn.commit()
+        self._commit()
 
     # -- suppression ledger (v11 table; import + send-guard lookup) --------
 
@@ -1046,7 +1210,7 @@ class ContactStore:
             "(entry, kind, source, added_at, note) VALUES (?, ?, ?, ?, ?)",
             (entry, kind, source, now, note),
         )
-        self.conn.commit()
+        self._commit()
         return cur.rowcount > 0
 
     def suppression_hit(self, addr: str) -> sqlite3.Row | None:
@@ -1103,7 +1267,7 @@ class ContactStore:
             (mailbox, folder_id, path, total_item_count, now,
              now if hit else None),
         )
-        self.conn.commit()
+        self._commit()
 
     def insert_truth_run(self, *, run_id: str, kind: str, started_at: str,
                          finished_at: str, window_since: str,
@@ -1119,7 +1283,7 @@ class ContactStore:
              corpus_messages, folders_scanned, folders_failed, events_added,
              anomalies, report),
         )
-        self.conn.commit()
+        self._commit()
 
     # -- state (delta tokens etc.) ---------------------------------------
 
@@ -1133,7 +1297,7 @@ class ContactStore:
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
             (key, value, now),
         )
-        self.conn.commit()
+        self._commit()
 
     def state_keys_with_prefix(self, prefix: str) -> list[str]:
         """State keys starting with ``prefix`` ('%'/'_' in prefix are escaped)."""
@@ -1147,7 +1311,7 @@ class ContactStore:
     def delete_state(self, key: str) -> bool:
         """Remove one state row. Returns True if a row was deleted."""
         cur = self.conn.execute("DELETE FROM state WHERE key = ?", (key,))
-        self.conn.commit()
+        self._commit()
         return cur.rowcount > 0
 
     def campaign_ids(self) -> set[str]:
@@ -1181,7 +1345,7 @@ class ContactStore:
             "VALUES (?, ?, 'member', 'pending', ?)",
             (email, name.strip(), now),
         )
-        self.conn.commit()
+        self._commit()
         return cur.rowcount > 0
 
     def upsert_user(self, email: str, name: str, role: str, status: str,
@@ -1202,7 +1366,7 @@ class ContactStore:
             "approved_by = COALESCE(approved_by, excluded.approved_by)",
             (email, name.strip(), role, status, now, approved_at, approved_by),
         )
-        self.conn.commit()
+        self._commit()
 
     def set_user_status(self, email: str, status: str, by: str | None, now: str) -> None:
         email = (email or "").strip().lower()
@@ -1217,21 +1381,21 @@ class ContactStore:
         else:
             self.conn.execute(
                 "UPDATE users SET status = ? WHERE email = ?", (status, email))
-        self.conn.commit()
+        self._commit()
 
     def set_user_role(self, email: str, role: str) -> None:
         email = (email or "").strip().lower()
         if role not in USER_ROLES:
             raise ValueError(f"bad role {role!r}")
         self.conn.execute("UPDATE users SET role = ? WHERE email = ?", (role, email))
-        self.conn.commit()
+        self._commit()
 
     def touch_user_login(self, email: str, now: str) -> None:
         self.conn.execute(
             "UPDATE users SET last_login_at = ? WHERE email = ?",
             (now, (email or "").strip().lower()),
         )
-        self.conn.commit()
+        self._commit()
 
     def count_admins(self) -> int:
         """Approved admins - the guard that stops the last admin disabling
@@ -1247,7 +1411,7 @@ class ContactStore:
             "VALUES (?, ?, ?, ?, ?)",
             (token_hash, (email or "").strip().lower(), now, expires_at, request_ip),
         )
-        self.conn.commit()
+        self._commit()
 
     def consume_login_token(self, token_hash: str, now: str) -> str | None:
         """Single-use redemption: return the token's email iff it exists, is
@@ -1263,7 +1427,7 @@ class ContactStore:
             "UPDATE login_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL",
             (now, token_hash),
         )
-        self.conn.commit()
+        self._commit()
         return row["email"] if cur.rowcount == 1 else None
 
     def purge_expired_tokens(self, now: str) -> int:
@@ -1272,7 +1436,7 @@ class ContactStore:
             "DELETE FROM login_tokens WHERE expires_at < ? OR used_at IS NOT NULL",
             (now,),
         )
-        self.conn.commit()
+        self._commit()
         return cur.rowcount
 
     # -- campaigns ---------------------------------------------------------
@@ -1290,7 +1454,7 @@ class ContactStore:
             f"VALUES ({', '.join('?' for _ in cols)})",
             vals,
         )
-        self.conn.commit()
+        self._commit()
 
     def get_campaign(self, campaign_id: str) -> sqlite3.Row | None:
         return self.conn.execute(
@@ -1308,6 +1472,7 @@ class ContactStore:
             "send_window", "daily_cap", "throttle_seconds", "jitter_seconds",
             "start_not_before", "ramp_per_day",
             "approved_at", "approved_by", "approved_contacts_hash",
+            "draft_epoch", "draft_manifest_sha256",
         )]
         if not cols:
             return
@@ -1316,7 +1481,7 @@ class ContactStore:
             f"UPDATE campaigns SET {set_clause} WHERE campaign_id = ?",
             [fields[c] for c in cols] + [now, campaign_id],
         )
-        self.conn.commit()
+        self._commit()
 
     # -- templates (versioned; editing inserts a new version) --------------
 
@@ -1333,7 +1498,7 @@ class ContactStore:
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (template_key, version, channel, subject, body, now, by),
         )
-        self.conn.commit()
+        self._commit()
         return version
 
     def get_template(self, template_key: str, version: int | None = None) -> sqlite3.Row | None:
@@ -1365,7 +1530,7 @@ class ContactStore:
             "VALUES (?, ?, ?, ?, ?, ?)",
             (packet_id, position, kind, title, body_json, now),
         )
-        self.conn.commit()
+        self._commit()
         return int(cur.lastrowid)
 
     def list_review_items(self, packet_id: str) -> list[sqlite3.Row]:
@@ -1384,14 +1549,14 @@ class ContactStore:
             "UPDATE review_items SET response = ?, updated_at = ? WHERE item_id = ?",
             (response_json, now, item_id),
         )
-        self.conn.commit()
+        self._commit()
 
     def delete_review_packet(self, packet_id: str) -> int:
         """Remove a packet's items (used by seed --replace). Responses go with
         them; a reseed is a fresh review round by design."""
         cur = self.conn.execute(
             "DELETE FROM review_items WHERE packet_id = ?", (packet_id,))
-        self.conn.commit()
+        self._commit()
         return cur.rowcount
 
     # -- sequences + steps --------------------------------------------------
@@ -1427,7 +1592,7 @@ class ContactStore:
                 (seq_id, s["step_no"], s["channel"], s["template_key"],
                  s["day_offset"], int(s.get("reply_to_prior") or 0)),
             )
-        self.conn.commit()
+        self._commit()
         return seq_id
 
     def frozen_step_nos(self, campaign_id: str, degree: str | None) -> set[int]:
@@ -1467,7 +1632,7 @@ class ContactStore:
             return
         self.conn.execute("DELETE FROM sequence_steps WHERE sequence_id = ?", (row["sequence_id"],))
         self.conn.execute("DELETE FROM sequences WHERE sequence_id = ?", (row["sequence_id"],))
-        self.conn.commit()
+        self._commit()
 
     def get_sequence(self, campaign_id: str, degree: str) -> dict | None:
         row = self.conn.execute(
@@ -1506,7 +1671,7 @@ class ContactStore:
                 "VALUES (?, ?, ?, ?, ?)",
                 (campaign_id, r["priority"], r["degree"], r["predicate"], r["label"]),
             )
-        self.conn.commit()
+        self._commit()
 
     def get_rules(self, campaign_id: str) -> list[sqlite3.Row]:
         return self.conn.execute(
@@ -1523,7 +1688,7 @@ class ContactStore:
             "VALUES (?, ?, ?, ?)",
             (contact_id, campaign_id, now, by),
         )
-        self.conn.commit()
+        self._commit()
         return cur.rowcount > 0
 
     def enroll_campaign_contacts(self, campaign_id: str, by: str | None, now: str) -> int:
@@ -1541,7 +1706,7 @@ class ContactStore:
             "                WHERE en.contact_id = c.contact_id AND en.campaign_id = ?)",
             (campaign_id, now, by, campaign_id, campaign_id),
         )
-        self.conn.commit()
+        self._commit()
         return cur.rowcount
 
     def get_enrollment(self, enrollment_id: int) -> sqlite3.Row | None:
@@ -1582,7 +1747,7 @@ class ContactStore:
             "WHERE enrollment_id = ?",
             (degree, source, rule_label, enrollment_id),
         )
-        self.conn.commit()
+        self._commit()
 
     def approve_pending_enrollments(self, campaign_id: str, by: str, now: str) -> int:
         cur = self.conn.execute(
@@ -1590,12 +1755,12 @@ class ContactStore:
             "WHERE campaign_id = ? AND approved_at IS NULL",
             (now, by, campaign_id),
         )
-        self.conn.commit()
+        self._commit()
         return cur.rowcount
 
     def remove_enrollment(self, enrollment_id: int) -> None:
         self.conn.execute("DELETE FROM enrollments WHERE enrollment_id = ?", (enrollment_id,))
-        self.conn.commit()
+        self._commit()
 
     # -- template pins ---------------------------------------------------------
 
@@ -1609,7 +1774,7 @@ class ContactStore:
                 "VALUES (?, ?, ?)",
                 (campaign_id, key, version),
             )
-        self.conn.commit()
+        self._commit()
 
     def get_pins(self, campaign_id: str) -> dict[str, int]:
         rows = self.conn.execute(
@@ -1631,7 +1796,7 @@ class ContactStore:
                 "VALUES (?, ?, ?)",
                 (campaign_id, contact_id, email),
             )
-        self.conn.commit()
+        self._commit()
 
     def get_recipient_pins(self, campaign_id: str) -> dict[str, str]:
         rows = self.conn.execute(
@@ -1671,17 +1836,24 @@ class ContactStore:
         ).fetchall()
         return {r["status"]: int(r["n"]) for r in rows}
 
-    def try_lease(self, *, attempt_key: str, enrollment_id: int, step_no: int,
-                  send_mode: str, lease_id: str, lease_expires: str, worker_id: str,
-                  to_addr: str | None, rendered_subject: str | None, rendered_body: str,
-                  template_key: str, template_version: int, now: str,
-                  max_attempts: int = 3) -> bool:
+    def try_lease(self, **kw) -> bool:
         """Take the per-step lock (committed immediately - the attempt_key
         PRIMARY KEY is the atomicity guarantee across connections).
 
         Insert when no row exists; re-lease only a 'queued' row (transient
         retry) under the attempt cap. Every other status (leased, sent,
-        drafted, parked, stalled, failed) is not claimable here."""
+        drafted, parked, stalled, failed, unknown) is not claimable here."""
+        taken = self.take_lease(**kw)
+        self._commit()
+        return taken
+
+    def take_lease(self, *, attempt_key: str, enrollment_id: int, step_no: int,
+                   send_mode: str, lease_id: str, lease_expires: str, worker_id: str,
+                   to_addr: str | None, rendered_subject: str | None, rendered_body: str,
+                   template_key: str, template_version: int, now: str,
+                   max_attempts: int = 3) -> bool:
+        """``try_lease`` without the commit, for a caller that must take the
+        lease and the dispatch claim in ONE transaction (approval.claim)."""
         cur = self.conn.execute(
             "INSERT OR IGNORE INTO send_attempts "
             "(attempt_key, enrollment_id, step_no, status, send_mode, lease_id, lease_expires, "
@@ -1693,7 +1865,6 @@ class ContactStore:
              template_key, template_version, now),
         )
         if cur.rowcount > 0:
-            self.conn.commit()
             return True
         cur = self.conn.execute(
             "UPDATE send_attempts SET status = 'leased', send_mode = ?, lease_id = ?, "
@@ -1704,7 +1875,6 @@ class ContactStore:
             (send_mode, lease_id, lease_expires, worker_id, to_addr, rendered_subject,
              rendered_body, template_key, template_version, now, attempt_key, max_attempts),
         )
-        self.conn.commit()
         return cur.rowcount > 0
 
     def update_attempt(self, attempt_key: str, fields: dict) -> None:
@@ -1720,7 +1890,7 @@ class ContactStore:
             f"UPDATE send_attempts SET {set_clause} WHERE attempt_key = ?",
             [fields[c] for c in cols] + [attempt_key],
         )
-        self.conn.commit()
+        self._commit()
 
     def find_attempt_by_imid(self, internet_message_id: str) -> sqlite3.Row | None:
         if not internet_message_id:
@@ -1732,14 +1902,42 @@ class ContactStore:
 
     def expire_leases(self, now: str) -> int:
         """Flip expired leases to 'stalled' (surfaced for a human; never auto
-        re-leased: at-most-once beats at-least-once for real email)."""
-        cur = self.conn.execute(
-            "UPDATE send_attempts SET status = 'stalled' "
-            "WHERE status = 'leased' AND lease_expires < ?",
-            (now,),
-        )
-        self.conn.commit()
-        return cur.rowcount
+        re-leased: at-most-once beats at-least-once for real email).
+
+        The dispatch claim rides along. A lease that expired BEFORE dispatch
+        began cancels its claim: nothing was transported, so an operator Retry
+        may claim again under the same decision. A lease that expired AFTER
+        begin_dispatch means the worker died inside the send window: that is an
+        unknown outcome, so claim and attempt both go 'unknown' and only a
+        trusted reconciliation moves them on."""
+        with self.transaction():
+            expired = [r["attempt_key"] for r in self.conn.execute(
+                "SELECT attempt_key FROM send_attempts "
+                "WHERE status = 'leased' AND lease_expires < ?", (now,))]
+            for akey in expired:
+                claim = self.conn.execute(
+                    "SELECT claim_id, state FROM dispatch_claims "
+                    "WHERE attempt_key = ? AND state IN ('claimed', 'dispatching')",
+                    (akey,)).fetchone()
+                if claim is not None and claim["state"] == "dispatching":
+                    self.conn.execute(
+                        "UPDATE dispatch_claims SET state = 'unknown', updated_at = ?, "
+                        "outcome_detail = 'lease expired mid-dispatch (worker died "
+                        "after begin_dispatch)' WHERE claim_id = ?",
+                        (now, claim["claim_id"]))
+                    self.conn.execute(
+                        "UPDATE send_attempts SET status = 'unknown' "
+                        "WHERE attempt_key = ?", (akey,))
+                    continue
+                if claim is not None:
+                    self.conn.execute(
+                        "UPDATE dispatch_claims SET state = 'cancelled', updated_at = ?, "
+                        "outcome_detail = 'lease expired before dispatch' "
+                        "WHERE claim_id = ?", (now, claim["claim_id"]))
+                self.conn.execute(
+                    "UPDATE send_attempts SET status = 'stalled' WHERE attempt_key = ?",
+                    (akey,))
+        return len(expired)
 
     def cadence_sends_today(self, campaign_id: str, day_prefix: str) -> int:
         """Cap accounting: today's landed cadence sends + outstanding leases."""
@@ -1752,7 +1950,7 @@ class ContactStore:
         outstanding = self.conn.execute(
             "SELECT COUNT(*) FROM send_attempts sa "
             "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
-            "WHERE en.campaign_id = ? AND sa.status = 'leased'",
+            "WHERE en.campaign_id = ? AND sa.status IN ('leased', 'unknown')",
             (campaign_id,),
         ).fetchone()[0]
         return int(landed) + int(outstanding)
@@ -1770,7 +1968,7 @@ class ContactStore:
         outstanding = self.conn.execute(
             "SELECT COUNT(*) FROM send_attempts sa "
             "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
-            "WHERE en.campaign_id = ? AND sa.status = 'leased' AND sa.step_no = 1",
+            "WHERE en.campaign_id = ? AND sa.status IN ('leased', 'unknown') AND sa.step_no = 1",
             (campaign_id,),
         ).fetchone()[0]
         return int(landed) + int(outstanding)
@@ -1791,7 +1989,7 @@ class ContactStore:
             "SELECT COUNT(*) FROM send_attempts sa "
             "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
             "JOIN campaigns c ON c.campaign_id = en.campaign_id "
-            "WHERE c.from_address = ? AND sa.status = 'leased'",
+            "WHERE c.from_address = ? AND sa.status IN ('leased', 'unknown')",
             (from_address,),
         ).fetchone()[0]
         return int(landed) + int(outstanding)
