@@ -36,6 +36,10 @@ VALID_SAMPLE: dict[str, object] = {
     "cards": {"corp-2838": {"label": "Corporate Services", "digits": ["2838"]}},
     "cost_centers": {"Lidar": {"kind": "project"}},
     "intake": {"aliases": {"dirk": "Dirk Neumann"}},
+    "receipt_requests": {
+        "enabled": False,
+        "holders": {"Dirk Neumann": "dirk.neumann@brisken.com"},
+    },
 }
 
 

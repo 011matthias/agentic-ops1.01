@@ -176,6 +176,12 @@ RUN_CONTRACT = {
     "parse_errors[]": "array",
     "parse_errors[][]": "number|string",
     "parse_issues[]": "object",
+    # Item 107: the missing-receipt list, one entry per card holder, each
+    # carrying the cards it covers and the charges to chase. Objects, both
+    # inner lists included; empty on a month with nothing to chase.
+    "receipt_chase[]": "object",
+    "receipt_chase[].cards[]": "object",
+    "receipt_chase[].charges[]": "object",
     "rows[]": "object",
     "rows[].candidates[]": "object",
     "rows[].candidates[].receipt.line_items[]": "object",

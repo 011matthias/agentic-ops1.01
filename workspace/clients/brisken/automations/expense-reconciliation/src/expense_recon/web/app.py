@@ -2335,7 +2335,26 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             settled_elsewhere=settled_elsewhere,
             edited_at=edited_at,
             field_overrides=store.get_expense_field_overrides(run_id),
+            # Item 107: the holders' addresses and the merchant registry's
+            # portal hints, for `receipt_chase[]`. The list itself, and
+            # every count, come off the rows and do not depend on this.
+            settings=store.get_settings(),
         )
+
+    def _run_view(store: RunStore, run) -> dict:
+        """The payload `GET /api/runs/{id}` serves for this run, dispatched
+        the way that route dispatches it.
+
+        Every mutating route that answers with a `summary` answers with THIS
+        one (residual R2), so the counts the SPA holds after a write are the
+        counts a refetch gives it. `build_view(run, decisions, overrides)`
+        was missing the month's own overlays — the header edits above all,
+        so a receipt marked private still read as needing a charge in the
+        reply (`n_receipts_need_charge`, `month_complete`) and corrected
+        itself only on the next run refetch."""
+        if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
+            return _expense_view(store, run)
+        return _workbench_view(store, run)
 
     @app.get("/api/runs/{run_id}")
     def api_workbench(run_id: str):
@@ -2354,9 +2373,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # expense grid stays reachable via GET /api/expense-batches/{id}.
             if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
                 return JSONResponse(jsonable_encoder(_expense_page_view(store, run)))
-            # Item 138: the Matching page's card tabs ride this GET only.
+            # Item 138: the Matching page's card tabs ride this GET only,
+            # on top of `_run_view`, which is the dispatch the mutating
+            # routes reply with (residual R2). The tabs are additive and
+            # never touch the summary, which is why the reply can skip them.
             view = attach_run_card_tabs(
-                _workbench_view(store, run), run,
+                _run_view(store, run), run,
                 store.get_expense_field_overrides(run_id),
             )
         # build_view already carries run_id, label, summary, rows,
@@ -2385,10 +2407,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if conflict is not None:
                 return _refused(conflict, status=409)
             store.set_decision(run_id, tx_id, status, chosen, _now_iso())
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-        view = build_view(run, decisions, overrides)
-        return JSONResponse({"ok": True, "summary": view["summary"]})
+            view = _run_view(store, run)
+        return JSONResponse(jsonable_encoder({"ok": True, "summary": view["summary"]}))
 
     # §17 disposition. The upsert is status-preserving in the store (never
     # clobbers the row's triage verdict).
@@ -2404,10 +2424,155 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if run is None:
                 return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
             store.set_disposition(run_id, tx_id, disposition, _now_iso())
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-        view = build_view(run, decisions, overrides)
+            view = _run_view(store, run)
+        return JSONResponse(jsonable_encoder({"ok": True, "summary": view["summary"]}))
+
+    # Item 107, the chase states. Both are per-charge, both are written by
+    # the same status-preserving upsert family as the disposition above, and
+    # both live on the charge's `decisions` row, which is what carries them
+    # through a re-match. Asking closes nothing; "no receipt expected"
+    # closes the charge and takes its money out of the unreconciled total.
+    @app.post("/api/runs/{run_id}/receipt-requested")
+    async def post_receipt_requested(run_id: str, request: Request):
+        """Record that this charge's receipt was asked for (or clear it).
+
+        Body: `{transaction_id, to?}` marks it asked NOW, optionally naming
+        the address it was asked from; `{transaction_id, clear: true}`
+        removes the record. Writing the mark is all this does: no mail is
+        composed and none is sent (see receipt_chase.py)."""
+        body = await request.json()
+        tx_id = str((body or {}).get("transaction_id") or "").strip()
+        if not tx_id:
+            return JSONResponse(
+                {"error": "bad request", "code": "invalid_body",
+                 "missing": "transaction_id"},
+                status_code=400,
+            )
+        clear = bool((body or {}).get("clear"))
+        to = str((body or {}).get("to") or "").strip() or None
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse(
+                    {"error": "run not found", "code": "run_not_found"},
+                    status_code=404,
+                )
+            store.set_receipt_requested(
+                run_id, tx_id,
+                None if clear else _now_iso(),
+                None if clear else to,
+                _now_iso(),
+            )
+            view = _workbench_view(store, run)
         return JSONResponse({"ok": True, "summary": view["summary"]})
+
+    @app.post("/api/runs/{run_id}/no-receipt-expected")
+    async def post_no_receipt_expected(run_id: str, request: Request):
+        """Rule that no receipt will ever exist for this charge, and say why.
+
+        Body: `{transaction_id, reason}` marks it; `{transaction_id, clear:
+        true}` removes the mark. The reason is refused blank: a verdict
+        nobody can read next month is worse than no verdict, and this one
+        both closes the charge for the month gate and takes its money out of
+        `unreconciled_by_ccy`."""
+        body = await request.json()
+        tx_id = str((body or {}).get("transaction_id") or "").strip()
+        clear = bool((body or {}).get("clear"))
+        reason = str((body or {}).get("reason") or "").strip()
+        if not tx_id or (not clear and not reason):
+            return JSONResponse(
+                {"error": "transaction_id and a reason are required",
+                 "code": "reason_required"},
+                status_code=400,
+            )
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse(
+                    {"error": "run not found", "code": "run_not_found"},
+                    status_code=404,
+                )
+            store.set_no_receipt_expected(
+                run_id, tx_id, None if clear else reason[:200], _now_iso()
+            )
+            view = _workbench_view(store, run)
+        return JSONResponse({"ok": True, "summary": view["summary"]})
+
+    @app.get("/api/runs/{run_id}/receipt-requests")
+    def get_receipt_requests(run_id: str):
+        """The chase mail this month WOULD send, per card holder: the dry
+        run. Read-only, composes and returns; nothing is sent, and no send
+        path exists for it to reach (item 107).
+
+        `enabled` is the owner's switch (`settings.receipt_requests.
+        enabled`, off by default). `can_send` is false in this build
+        whatever the switch says, and `send_blocked_reason` names which gate
+        is refusing."""
+        from .intake_mail import IntakeConfig
+        from .receipt_chase import (
+            SEND_DISABLED,
+            SEND_NOT_WIRED,
+            compose_requests,
+            requests_enabled,
+        )
+
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
+            settings = store.get_settings()
+            view = _workbench_view(store, run)
+        cfg = IntakeConfig.from_settings(settings)
+        intake_address = f"receipts@{cfg.domain}"
+        groups = view.get("receipt_chase") or []
+        enabled = requests_enabled(settings)
+        return JSONResponse(jsonable_encoder({
+            "run_id": run_id,
+            "label": run.label,
+            "enabled": enabled,
+            "can_send": False,
+            "send_blocked_reason": SEND_NOT_WIRED if enabled else SEND_DISABLED,
+            "intake_address": intake_address,
+            "n_charges_need_receipt": view["summary"]["n_charges_need_receipt"],
+            "groups": groups,
+            "mails": compose_requests(
+                groups, month_label=run.label, intake_address=intake_address
+            ),
+        }))
+
+    @app.post("/api/runs/{run_id}/receipt-requests/send")
+    def post_receipt_requests_send(run_id: str):
+        """Refuses, always, in this build.
+
+        The owner approves real sends separately (Brisken send-by-id
+        standard). Until then there is no sender to reach: `receipt_chase`
+        imports no mail transport, so this route cannot deliver a message
+        even with the switch on. It answers 403 and names which gate."""
+        from .receipt_chase import (
+            SEND_DISABLED,
+            SEND_NOT_WIRED,
+            requests_enabled,
+        )
+
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
+            enabled = requests_enabled(store.get_settings())
+        if not enabled:
+            return JSONResponse({
+                "error": "Receipt requests are switched off. Turn on "
+                         "Settings > receipt requests first; the owner "
+                         "approves the first real send separately.",
+                "code": SEND_DISABLED,
+            }, status_code=403)
+        return JSONResponse({
+            "error": "Receipt requests are switched on, but no sender is "
+                     "wired yet: this build composes the mail and never "
+                     "sends it. Use the preview and send it by hand until "
+                     "the owner approves the automated send.",
+            "code": SEND_NOT_WIRED,
+        }, status_code=403)
 
     # §18 duplicate resolve. Advisory: records the reviewer's verdict on a
     # flagged duplicate group (ignore / confirmed); never touches buckets or
@@ -2447,19 +2612,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # `build_view`'s summary there handed the grid the workbench's
             # counts, and every one of the fields it renders (n_expenses,
             # n_ready, n_duplicate_rows) is absent from that shape.
-            if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
-                view = _expense_view(store, run)
-            else:
-                view = build_view(
-                    run,
-                    store.get_decisions(run_id),
-                    store.get_category_overrides(run_id),
-                    store.get_duplicate_resolutions(run_id),
-                )
+            view = _run_view(store, run)
         out = {"ok": True, "summary": view["summary"]}
         if rematch is not None:
             out["rematch"] = rematch
-        return JSONResponse(out)
+        return JSONResponse(jsonable_encoder(out))
 
     # §16 export policy. The policy is snapshotted into each new run's
     # config at creation, so changing it affects future runs, never
@@ -2729,6 +2886,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return JSONResponse({
                     "error": str(exc), "code": code_of(exc, "invalid_body"),
                     "setting": "intake", **fields_of(exc),
+                }, status_code=400)
+        # Receipt chasing (item 107): {enabled, holders: {person: address}}.
+        # Whole-object replace, same contract as `intake`. `enabled` must be
+        # a real boolean and an address must be a single plain one: the key
+        # decides who an outbound chase would reach, so a tolerant parse
+        # here is the wrong kind of kindness.
+        if "receipt_requests" in body:
+            from .receipt_chase import normalize_receipt_requests_setting
+
+            try:
+                patch["receipt_requests"] = normalize_receipt_requests_setting(
+                    body["receipt_requests"]
+                )
+            except ValueError as exc:
+                return JSONResponse({
+                    "error": str(exc), "code": code_of(exc, "invalid_body"),
+                    "setting": "receipt_requests", **fields_of(exc),
                 }, status_code=400)
         with open_store() as store:
             settings = store.set_settings(patch, _now_iso())
@@ -3005,15 +3179,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     run_id, tx_id, STATUS_CONFIRMED, doc_id, _now_iso()
                 )
                 confirmed += 1
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-        view = build_view(run, decisions, overrides)
-        return JSONResponse({
+            view = _run_view(store, run)
+        return JSONResponse(jsonable_encoder({
             "ok": True,
             "confirmed": confirmed,
             "remaining": remaining,
             "summary": view["summary"],
-        })
+        }))
 
     @app.post("/api/runs/{run_id}/decisions/bulk")
     async def post_bulk_decisions(run_id: str, request: Request):
@@ -3066,19 +3238,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     continue
                 store.set_decision(run_id, tx_id, status, doc_id, _now_iso())
                 updated += 1
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-            resolutions = store.get_duplicate_resolutions(run_id)
-        view = build_view(run, decisions, overrides, resolutions)
+            view = _run_view(store, run)
         # `skipped` is the honest half of the count: rows already decided,
         # (when confirming) rows with no candidate to confirm against, or
         # rows whose receipt another batch settled first.
-        return JSONResponse({
+        return JSONResponse(jsonable_encoder({
             "ok": True,
             "updated": updated,
             "skipped": len(tx_ids) - updated,
             "summary": view["summary"],
-        })
+        }))
 
     @app.post("/api/runs/{run_id}/categories")
     async def post_category(run_id: str, request: Request):
@@ -3200,10 +3369,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             store.set_decision(
                 run_id, tx_id, STATUS_CONFIRMED, document_id, _now_iso()
             )
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-        view = build_view(run, decisions, overrides)
-        return JSONResponse({"ok": True, "summary": view["summary"]})
+            view = _run_view(store, run)
+        return JSONResponse(jsonable_encoder({"ok": True, "summary": view["summary"]}))
 
     @app.post("/api/runs/{run_id}/transactions/{transaction_id}/receipt")
     async def post_manual_receipt(
@@ -3242,13 +3409,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 if err:
                     return _refused(err)
                 run = store.get_run(run_id)  # snapshot changed above
-                decisions = store.get_decisions(run_id)
-                overrides = store.get_category_overrides(run_id)
-            view = build_view(run, decisions, overrides)
-            return JSONResponse(
+                view = _run_view(store, run)
+            return JSONResponse(jsonable_encoder(
                 {"ok": True, "document_id": document_id,
                  "summary": view["summary"]}
-            )
+            ))
 
         return await run_in_threadpool(_work)
 
@@ -4929,16 +5094,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run = store.get_run(run_id)
             if run is None:
                 raise RunInputError("This batch no longer exists.", code="batch_deleted")
-            if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
-                view = _expense_view(store, run)
-            else:
-                view = build_view(
-                    run,
-                    store.get_decisions(run_id),
-                    store.get_category_overrides(run_id),
-                    store.get_duplicate_resolutions(run_id),
-                    settled_elsewhere=_settled_elsewhere(store, run_id),
-                )
+            view = _run_view(store, run)
         return {**out, "summary": jsonable_encoder(view["summary"])}
 
     return app
