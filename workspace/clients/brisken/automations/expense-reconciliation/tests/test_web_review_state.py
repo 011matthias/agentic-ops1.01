@@ -227,10 +227,12 @@ def test_ready_confirm_pairs_excludes_check_and_pick():
         _rec(_cat(source=ClassificationSource.VENDOR), doc="rB"),         # check
         _rec(None, doc="rC"),                                             # pick
     ]
+    # vendor_score 1.0: each pairing passes the owner's pairing rule (item
+    # 133), so only the CATEGORY state separates the three rows here.
     outcome = MatchOutcome(matches=[
-        Match(transaction_id="A", document_id="rA", match_type=MatchType.EXACT, confidence=1.0, reason="x"),
-        Match(transaction_id="B", document_id="rB", match_type=MatchType.EXACT, confidence=1.0, reason="x"),
-        Match(transaction_id="C", document_id="rC", match_type=MatchType.EXACT, confidence=1.0, reason="x"),
+        Match(transaction_id="A", document_id="rA", match_type=MatchType.EXACT, confidence=1.0, reason="x", vendor_score=1.0),
+        Match(transaction_id="B", document_id="rB", match_type=MatchType.EXACT, confidence=1.0, reason="x", vendor_score=1.0),
+        Match(transaction_id="C", document_id="rC", match_type=MatchType.EXACT, confidence=1.0, reason="x", vendor_score=1.0),
     ])
     snap = snapshot_to_dict(txs, recs, outcome, [])
     pairs = ready_confirm_pairs(_run_row(snap), {}, {})
@@ -290,12 +292,19 @@ def test_confirm_ready_endpoint_shape_and_safety(tmp_path):
             row for row in pre
             if row["review"]["state"] == "ready" and row["status"] == "pending"
         ]
+        # Item 133: a ready category is not a pairing verdict; the row must
+        # also pass the owner's pairing rule, and on the example month one
+        # ready row does not.
+        from expense_recon.web.service import confirmable_pair
+        eligible = [row for row in ready_pending if confirmable_pair(row)]
+        assert 0 < len(eligible) < len(ready_pending)
         r = c.post(f"/api/runs/{run_id}/decisions/confirm-ready")
         assert r.status_code == 200
         body = r.json()
         assert {"ok", "confirmed", "remaining", "summary"} <= set(body)
-        # It confirmed exactly the ready+pending rows, no more.
-        assert body["confirmed"] == len(ready_pending)
+        # It confirmed exactly the ready+pending rows the pairing rule
+        # passes, no more.
+        assert body["confirmed"] == len(eligible)
         # Safety: the bulk action never confirmed a check / pick row.
         post = c.get(f"/api/runs/{run_id}").json()["rows"]
         assert all(

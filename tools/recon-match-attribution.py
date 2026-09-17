@@ -62,7 +62,8 @@ Classes, in the order the matcher applies its gates:
   rival_won_greedy          correct pair was a candidate, the assignment gave
                             the receipt or the charge to another pair
   ambiguous_tie             correct charge tied between candidates
-  llm_suppressed            the model rejected the (correct) pair below the floor
+  llm_suppressed            the model rejected the (correct) pair at or below the
+                            floor, and its rate arithmetic was not clean (item 131)
   coverage_unloaded_card    receipt paid on a card whose statement is not loaded
   coverage_non_card_tender  cash / debit / bank transfer: never posts to a card
   coverage_boundary         receipt dated at the statement's edge; its charge
@@ -76,6 +77,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import inspect
 import json
 import os
 import re
@@ -278,7 +280,13 @@ def load_live(
     rec_by_id = {r.document_id: r for r in receipts}
     for br in borrowed:
         rec_by_id.setdefault(br.document_id, br)
-    _apply_judgment(judged, tx_by_id, rec_by_id, client, suggest_floor=match_cfg.fx_judgment_suggest_floor)
+    # Item 131: the judgment layer reads the pair's rate band to decide whether
+    # a rejected pair stays in review, so it needs the match config, exactly as
+    # `rematch_month` passes it. An older tree takes no `cfg`.
+    judgment_kw = {"suggest_floor": match_cfg.fx_judgment_suggest_floor}
+    if "cfg" in inspect.signature(_apply_judgment).parameters:
+        judgment_kw["cfg"] = match_cfg
+    _apply_judgment(judged, tx_by_id, rec_by_id, client, **judgment_kw)
     _apply_ambiguous_judgment(judged, tx_by_id, rec_by_id, client)
     for o in (raw, judged):
         in_pool = {r.document_id for r in receipts}
@@ -759,7 +767,7 @@ def attribute(month: dict, labels: dict[str, tuple[str, str]]) -> list[dict]:
                 row["cls"], row["detail"] = "rival_won_greedy", f"candidate {c['type']} not assigned"
         if suppressed:
             row["cls"] = "llm_suppressed"
-            row["detail"] = "model rejected the pair below the suggest floor; " + row["detail"]
+            row["detail"] = "model rejected the pair at or below the suggest floor; " + row["detail"]
         elif bucket == "judgment" and not row["teed_up"]:
             row["detail"] += f"; in review with the WRONG charge {held_desc(held[0])}"
         rows.append(row)
