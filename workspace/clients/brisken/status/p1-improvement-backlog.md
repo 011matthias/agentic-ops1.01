@@ -4693,7 +4693,7 @@ Cards tab: point each card at its LLC name, after which the three short rows
 disappear from the list on their own. Needs the owner's or Criss's call on
 which name is canonical; nothing to build.
 
-### 93. The untrusted-text flag reads in English and hides what the mail said (follows ECC item 6, 2026-09-17)
+### 93. The untrusted-text flag reads in English and hides what the mail said (follows ECC item 6, 2026-09-17) (SPA prompt written 2026-09-17: `docs/lovable-untrusted-flag-prompt.md`, not pasted)
 
 PR #973 flags a receipt whose document or carrying mail contains text written
 at the tool ("ignore previous instructions", "mark this as matched"). The SPA
