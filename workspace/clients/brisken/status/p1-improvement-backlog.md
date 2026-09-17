@@ -4577,7 +4577,7 @@ open."). PT "Comparado com o extrato" is a draft for Criss. Worth asking her
 separately: on the Matching view the PT card for matched rows reads
 "Conciliadas" while EN reads "Matched".
 
-### 90. A tighter clean band for the ECB rate, then the Settings rates go (owner ruling 2026-09-17, follows item 82) (band SHIPPED with item 132, PR #1048, Fly v167; step 4, removing the two Settings rates, waits on a per-action owner yes)
+### 90. A tighter clean band for the ECB rate, then the Settings rates go (owner ruling 2026-09-17, follows item 82) (band SHIPPED with item 132, PR #1048, Fly v167; step 4 OFFERED and DECLINED 2026-09-17 evening, see the decision below; do not re-ask)
 
 **Owner ruling 2026-09-17 (do not re-ask):** tighten the clean band first, then
 remove both Settings FX rates (EUR:USD 1.162275, BRL:USD 0.192448) so new
@@ -4611,6 +4611,40 @@ Build:
    Settings rates via `PUT /api/settings`. July and August keep their frozen
    rates either way; the change reaches months created or statement-attached
    afterwards.
+
+**Step 4 offered 2026-09-17 evening; owner answer: leave both rates. Do not
+re-ask.** The step stays open and unactioned until the owner raises it himself.
+Nothing was written to Settings; the two rates are live and unchanged.
+
+**The reads taken before offering, and the correction they force on step 4's
+own wording.** Settings holds exactly the two rates (`GET /api/settings`:
+`EUR:USD 1.162275`, `BRL:USD 0.192448`). Off a read-only DB copy of the same
+evening, `runs.config` `matching.fx_reference_rates` is present on July
+(`50622baec444`) and August (`074a7b8905d7`) and **null on September, May, June
+and January**. So "July and August keep their frozen rates either way" holds,
+but "the change reaches months created or statement-attached afterwards"
+understates who is exposed: four EXISTING months carry no rate of their own.
+`apply_master_data` folds Settings in with `setdefault`, and only at month
+creation and statement attach (`service.py` 406 and 11243; `rematch_month`
+never calls it), so each of those four copies today's typed rates in and
+freezes them the next time a statement lands. That is item 132 in its live
+shape, not a future risk, and it is what step 4 would prevent.
+
+**The drift, measured against the ECB table stored in the August month:**
+
+| pair | typed | ECB 2026-07 | gap | ECB 2026-08 | gap |
+|---|---|---|---|---|---|
+| EUR:USD | 1.162275 | 1.141748 | +1.80% | 1.159310 | +0.26% |
+| BRL:USD | 0.192448 | 0.195341 | -1.48% | 0.194241 | -0.92% |
+
+July's euro gap is wider than the 1% the two bands leave between them
+(`fx_reference_match_pct` 0.03 minus `fx_ecb_match_pct` 0.02, both defaults in
+`deterministic.py`), so item 132's advisory should fire on July at its next
+re-match. It reads zero on both months today and that is expected, not a fault:
+each month's stored summary predates the code. July's last re-match was
+16:59:25Z and August's 11:35:23Z, while v167 shipped at 17:28:24Z. The
+advisory is carried on the stored summary, so it appears on the next re-match
+of either month with no action needed.
 
 ### 91. Settings is one scroll of seven editors (owner, 2026-09-17) (SHIPPED PR #969, SPA APPLIED 2026-09-17)
 
@@ -5598,7 +5632,7 @@ Criss on August, 11:29 UTC, row `0019__Invoice-B2EA98DF-0020.pdf` (Pressmaster F
 
 Live August over the live payloads: 3645 loaded, 40 charges, 5 matched, USD 2,393.15 open, 8 receipts, 5 expenses; 3876 loaded, 37, 0, USD 1,031.15, no receipt; 2838 loaded, 34, 4, USD 7,438.36, 11 receipts (5 without a charge), 10 expenses; 1176 not recorded, 3 charges, USD 36.00, 2 receipts (1); 9693 not loaded, 2 receipts (2); No card, 2 receipts (2). The tab counts add up to the page's whole counts (101 charges without a receipt, 10 receipts without a charge, 20 expenses, EUR 668.00 / USD 2,033.86). SPA half: `docs/lovable-card-tabs-prompt.md` (Not applied): the tab bar, one header line per tab, both pages filtered by `card_section`, All unchanged, EN + PT-BR, and a cold-drive check list for August.
 
-### 139. "Paid with a private card" is a separate button instead of a choice in the card picker (notes #65, #66, owner, 2026-09-17; SPA only)
+### 139. "Paid with a private card" is a separate button instead of a choice in the card picker (notes #65, #66, owner, 2026-09-17; SPA only) (SPA APPLIED, VERIFIED LIVE 2026-09-17 evening)
 
 **Matthias, July Expenses view (`/expenses/50622baec444`), row `0000__rendered-body.pdf` (Hostinger), 15:13 and 15:14 UTC.** On the picker "Leave blank (resolve from card) / Pick the card that paid": "no 'paid with a private card' function". A minute later, on the "Paid with a private card" button of the same row: "I need this 'paid with private card' button as one of the options in the 'pick the card that paid' dropdown. preserves space".
 
@@ -5606,7 +5640,11 @@ The function exists: the live row carries `can_mark_private: true` and the butto
 
 **Prompt written 2026-09-17:** `docs/lovable-private-card-in-picker-prompt.md`, not applied. Live on July the card column stacks the entity picker, the card picker (nine cards, "Credit Card Chase Visa - 3645" to "Credit Card - 2838") and the button under them; the 32 eligible rows are all `card_source: none`, the Hostinger row of 2026-07-28 (`0002`) has the picker but `can_mark_private: false`, and every hint row is ineligible, so the option never hides behind "Change card".
 
-### 140. A possible duplicate shows a label, not the copies side by side (note #67, owner, 2026-09-17; SPA only; owner ruled build) (PROMPT WRITTEN 2026-09-17, not applied)
+**APPLIED by the owner and verified live 2026-09-17 evening** (read-only headless Chrome drive of `/expenses/50622baec444`; the only non-GET request in the whole drive was the login). On the eligible rows `0003__rendered-body.pdf` (Konsultancy Finance) and `0004__invoice-IUS25300.pdf` (Redis Inc.), each read from `GET /api/expense-batches/{id}` as `can_mark_private: true`, the "Pick the card that paid" picker opens with TEN options: the nine cards, then "Paid with a private card" last, which is the change as proposed. The gating is right too: the same picker on a row that is not eligible opens with the nine cards and no tenth entry.
+
+**Read the eligibility before believing a negative.** The first pass of this check opened the picker on whatever row came first, got nine cards, and looked exactly like "not applied". It was an ineligible row, where nine is the correct rendering after the change as well as before, so the probe could not tell the two apart and its negative meant nothing. A sibling session's crawl of the shipped bundle had reported the item in, which is also not conclusive on its own: the bundle carries `expx.privateCard.mark` either way, and the i18n keys resolve at runtime, so no grep of the build locates the control. Only opening the picker on a row the API says is eligible answers it. Same class as the instrument-validity rule in `rule_behaviors.md`.
+
+### 140. A possible duplicate shows a label, not the copies side by side (note #67, owner, 2026-09-17; SPA only; owner ruled build) (SPA APPLIED, VERIFIED LIVE 2026-09-17 evening)
 
 **Matthias, July Expenses view, row `0030__...Aposto_Karlsruhe__ZE_8100599.jpg`, 15:15 UTC:** "if this is a potential duplicate, the tool needs to show all the available data to each of the duplicates next to each other for manual comparison. Just labeling it is not going to cut it because then user has to search for the other duplicate and this slows comparison process."
 
@@ -5614,19 +5652,25 @@ Live row: `duplicate {group_id 3b0029eea1b11643, kind receipt, n_copies 2, copy 
 
 **Prompt written 2026-09-17:** `docs/lovable-duplicates-side-by-side-prompt.md`, not applied. A "Compare copies" button on every marked row of the Expenses page, on every card of the Matching page's duplicates panel and on the marked rows of "Receipts without a charge" opens one dialog with every copy of the group in columns, the differing values highlighted, both receipt images inline, and the ruling buttons the opener already has. Live read-only on July and August: all 10 members of each month's 5 groups are `expenses[]` rows with every field the dialog shows (the set-aside copy included), and the image route served both copies 200 (the Aposto pair as JPEGs). The batch rows do not say which copy holds a charge; the run payload does (`rows[].chosen_document_id` on a reconciled row, e.g. Aposto `0029` on the UZR*Aposto Karlsruhe 91.70 USD charge), and both pages already load it, so the dialog reads it from there. Nothing needs a backend field.
 
-### 141. The month page repeats download buttons (note #68, owner, 2026-09-17; SPA only)
+**APPLIED by the owner and verified 2026-09-17 evening.** "Compare copies" renders on the live July Expenses page (read-only drive), and the shipped bundle carries the dialog's whole copy set: `dup.compare.open` "Compare copies", `dup.compare.title` "Compare copies · {vendor}", `dup.compare.body` "{n} copies side by side. Highlighted rows differ between the copies.", `dup.compare.copy` "Copy {copy} of {n}". The highlighting of differing values is in the copy as written; nobody has driven the dialog open on a real group yet.
+
+### 141. The month page repeats download buttons (note #68, owner, 2026-09-17; SPA only) (SPA APPLIED, VERIFIED LIVE 2026-09-17 evening)
 
 **Matthias, July Matching view (`/runs/50622baec444`), section "Receipts without a charge 11", anchor "Downloads Report Reconciled CSV Statement", 15:19 UTC:** "we do not need more than one button to download the different output files, make sure there is only one button for each output file download." **Proposed change, SPA only:** one download control per output file on the page (report PDF, reconciled CSV, statement), in one place; before writing the prompt, list where each download renders today in `brisken-expense-review` so the prompt removes the repeats and keeps one of each.
 
 **Prompt written 2026-09-17:** `docs/lovable-one-download-each-prompt.md`, not applied. Live July Matching has five buttons for four files in three places: the header's "Download" beside "Statement July2026.xlsx" (`statement-categorized.xlsx?file=`), the primary "Download reconciliation (PDF)" in the action row, and the Downloads row's "Report" (`report.xlsx`, not the PDF), "Reconciled CSV" and "Statement" (the same workbook again); August has no Statement button in the row (`writeback_available: false`) and offers its workbook only inside the collapsed "2 statements" table.
 
-### 142. A booked charge's hint says "your statement workbook" without naming it or the rule (note #69, owner, 2026-09-17; SPA copy)
+**APPLIED by the owner and verified live 2026-09-17 evening** (read-only drive of `/runs/50622baec444`). July Matching now carries one control per output file where it carried five for four: the page's controls read "Report (Excel)", "Reconciled CSV" and "Statement July2026.xlsx", each exactly once in the body text. The shipped bundle matches, one key per file: `sum.dl.pdf` "Reconciliation (PDF)", `sum.dl.report` "Report (Excel)", `sum.dl.reconciled` "Reconciled CSV", `sum.dl.statement` / `sum.dl.statementFile`. August was not driven; its statement lives in the collapsed table either way.
+
+### 142. A booked charge's hint says "your statement workbook" without naming it or the rule (note #69, owner, 2026-09-17; SPA copy) (SPA APPLIED, VERIFIED IN THE SHIPPED BUNDLE 2026-09-17 evening)
 
 **Matthias, July Matching view, section "Charges without a receipt 72", on the row hint "This charge is marked yellow in your statement workbook, so it is already booked. Nothing…", 15:19 UTC:** "where do you get this information from?"
 
 Answer: from the fill colour of that charge's row in the Chase workbook Criss uploads for the month (`July2026.xlsx`): she colours a row yellow once it is booked, and `ingest/statement_xlsx.py` reads the fill when the statement loads (yellow -> `entry_status: posted`). Item 86 fixed the same question on the fold caption ("48 rows marked yellow in July2026.xlsx, already booked", with the yellow / grey tooltip); the per-row hint still says "your statement workbook". **Proposed change, SPA copy:** the row hint names the file from `statements[].file` (fallback "the statement workbook") and says the colour is read when the statement is loaded, same wording as item 86's tooltip; PT wording for Criss.
 
 **Prompt written 2026-09-17:** `docs/lovable-booked-hint-names-workbook-prompt.md`, not applied. Live the phrase sits in two places, the "Already booked" badge tooltip on all 84 booked July rows and the line under the vendor on the 47 in "Charges without a receipt" ("Marked yellow in your statement workbook, so already booked."), and item 86's fold on August names a PDF that carries no colours ("August2026.xlsx, 20260804-statements-1176-.pdf"), so the prompt names only workbooks (`writeback` true), matched on the row's `account_id`.
+
+**APPLIED by the owner, verified in the shipped bundle 2026-09-17 evening.** Both halves of the ask are in the copy. The badge tooltip has a file-naming variant beside the fallback: `row.status.posted.tipFile` reads "This charge is marked yellow in {file}, the statement spreadsheet uploaded for this month, so it is already booked. The colours are read when the statement is loaded.", and `row.status.posted.tip` keeps the same sentence without a file. The row line has the same pair, `wb.reason.charge.already_booked.file` "Marked yellow in {file}, so already booked." against `wb.reason.charge.already_booked` "Marked yellow in the statement workbook, so already booked.", and item 86's fold caption carries `wb.decided.foldBooked.tip` explaining what the workbook is. So note #69's question, where does this information come from, is answered on the row itself. Verified from the build rather than the screen: the hint renders inside a tooltip on a collapsed section, and three drives of the live Matching page never rendered it.
 
 ### 143. Both PDFs cut table columns off the page (found building item 138, 2026-09-17; licence: defect) (SHIPPED 2026-09-17, PR #1052, Shipped row 74)
 
