@@ -47,15 +47,19 @@ from expense_recon.llm.client import (  # noqa: E402
     FxJudgmentResult,
     MockLLMClient,
 )
+from types import SimpleNamespace  # noqa: E402
+
 from expense_recon.output.single_currency import (  # noqa: E402
     BASE_CURRENCY,
     RowConversion,
     allocate,
     convert_rows,
+    summary_lines,
     total_line,
     unconverted_note,
 )
 from expense_recon.web.app import create_app  # noqa: E402
+from expense_recon.web.service import usd_reference_rate  # noqa: E402
 
 JPG = b"\xff\xd8\xff\xe0item98-bytes"
 
@@ -273,7 +277,11 @@ def test_a_currency_with_no_rate_is_named_not_counted_as_zero(
 
     assert "Partial total in USD: 108.00 (3 of 4 expenses" in joined
     assert "Total in USD: 108.00" not in joined
-    assert "no USD figure" in joined
+    # The CSV prints no row numbers and its order is not the
+    # report's, so the note names the row by what is printed on it.
+    assert "no USD figure (no rate for its currency)" in joined
+    assert "Padaria Sao Paulo 2026-09-08 BRL 100.00" in joined
+    assert "expense 4" not in joined
 
 
 def test_csv_without_the_call_is_unchanged(client, monkeypatch, tmp_path):
@@ -399,7 +407,7 @@ def test_a_split_receipt_converts_once_and_ties_to_the_charge():
         ["2026-09-05", "16.67", "EUR"],
         ["2026-09-05", "33.33", "EUR"],
     ]
-    converted, totals, unconverted = convert_rows(
+    converted, totals, unconverted, _blank = convert_rows(
         rows, columns,
         numbers_by_doc={"split.jpg": [1, 2]},
         settled_amounts={"split.jpg": (Decimal("56.00"), "USD")},
@@ -428,7 +436,7 @@ def test_a_charge_in_another_currency_is_not_used_as_a_rate():
     reference rate."""
     columns = ("Expense Date", "Expense Amount", "Currency Code")
     rows = [["2026-09-05", "50.00", "EUR"]]
-    converted, _totals, _unconverted = convert_rows(
+    converted, _totals, _unconverted, _blank = convert_rows(
         rows, columns,
         numbers_by_doc={"a.jpg": [1]},
         settled_amounts={"a.jpg": (Decimal("290.00"), "BRL")},
@@ -444,7 +452,7 @@ def test_an_unreadable_amount_is_skipped_not_counted_as_zero():
     one pretending they were free."""
     columns = ("Expense Date", "Expense Amount", "Currency Code")
     rows = [["2026-09-05", "", "EUR"], ["2026-09-06", "10.00", "EUR"]]
-    converted, totals, _unconverted = convert_rows(
+    converted, totals, _unconverted, _blank = convert_rows(
         rows, columns,
         numbers_by_doc={"a.jpg": [1], "b.jpg": [2]},
         reference_rate=lambda ccy, on: (Decimal("1.10"), "configured", ""),
@@ -459,3 +467,126 @@ def test_notes_and_lines_are_silent_when_there_is_nothing_to_say():
     assert unconverted_note([]) == ""
     assert total_line({}, []) == ""
     assert RowConversion(None, None, "").caption() == ""
+
+# ── what the adversarial review of this change found ────────────────
+
+
+def _run_with(config: dict):
+    """The two attributes `usd_reference_rate` reads off a run."""
+    return SimpleNamespace(config=config, work_dir=".")
+
+
+def test_the_ecb_rung_actually_fires_on_a_listing_date():
+    """The review's first finding, and the one that mattered.
+
+    `ecb_monthly_rate` takes a `date` or a "YYYY-MM" string and rejects
+    anything else. The listing cell is a full ISO date, so handing it over
+    verbatim failed the month-key match and the ECB rung returned None on
+    every row: rung 3 had silently become Settings-typed-rate-only, and a
+    hosted month (which carries an ECB table and nothing typed) reported "no
+    rate for its currency" for every foreign receipt. The matcher passes a
+    `date` object; so must this, or the document and the screen quote
+    different rates for the same purchase, which is the thing reusing
+    `_reference_rate_for` was for.
+    """
+    lookup = usd_reference_rate(_run_with({
+        "matching": {"fx_ecb_monthly_rates": {
+            "2026-09": {"USD": "1.17", "BRL": "6.30"},
+        }},
+    }))
+    assert lookup is not None
+
+    hit = lookup("EUR", "2026-09-05")
+    assert hit is not None, "the ECB rung did not fire on a listing date"
+    rate, source, month = hit
+    assert source == "ecb_month"
+    assert month == "2026-09"
+    assert rate == Decimal("1.170000")
+    # A cross rate through EUR, and a plain month key still works.
+    assert lookup("BRL", "2026-09-05")[0] == (
+        Decimal("1.17") / Decimal("6.30")
+    ).quantize(Decimal("0.000001"))
+    assert lookup("EUR", "2026-09")[1] == "ecb_month"
+    # Junk in the cell is not a crash and not a guess.
+    assert lookup("EUR", "not-a-date") is None
+    assert lookup("EUR", "") is None
+
+
+def test_a_typed_rate_still_outranks_the_ecb_table():
+    """Precedence is the matcher's, unchanged: operator intent first."""
+    lookup = usd_reference_rate(_run_with({
+        "matching": {
+            "fx_reference_rates": {"EUR:USD": "1.10"},
+            "fx_ecb_monthly_rates": {"2026-09": {"USD": "1.17"}},
+        },
+    }))
+    rate, source, _month = lookup("EUR", "2026-09-05")
+    assert (rate, source) == (Decimal("1.10"), "configured")
+
+
+def test_a_row_with_no_readable_amount_gets_no_rate_and_its_own_reason():
+    """The review's third finding. A blank amount cell parsed as zero, so
+    the row joined the total contributing nothing AND got an exchange rate
+    stamped on it: a rate is a claim about a number, and there was no
+    number. It is also not a currency problem, so it must not be reported as
+    one."""
+    columns = ("Expense Date", "Expense Amount", "Currency Code", "Vendor")
+    rows = [
+        ["2026-09-05", "", "EUR", "Mystery Cafe"],
+        ["2026-09-06", "10.00", "EUR", "Hotel"],
+    ]
+    converted, totals, unconverted, no_amount = convert_rows(
+        rows, columns,
+        numbers_by_doc={"a.jpg": [1], "b.jpg": [2]},
+        reference_rate=lambda ccy, on: (Decimal("1.10"), "configured", ""),
+    )
+    assert 1 not in converted, "a blank amount must not be priced"
+    assert unconverted == [] and no_amount == [1]
+    assert totals[BASE_CURRENCY] == Decimal("11.00")
+
+    lines = summary_lines(totals, unconverted, converted, no_amount=no_amount)
+    assert any("amount could not be read" in line for line in lines)
+    assert not any("no rate for" in line for line in lines)
+
+
+def test_a_charge_that_implies_no_usable_rate_falls_back(client, monkeypatch):
+    """The review's fifth finding. Rung 2 used to be an `elif`, so a charge
+    that was present but could not yield a positive rate blocked rung 3 and
+    the row reported "no rate" for a currency the month has a rate for."""
+    columns = ("Expense Date", "Expense Amount", "Currency Code")
+    rows = [["2026-09-05", "50.00", "EUR"]]
+    for charge in ((Decimal("-56.00"), "USD"), (Decimal("0.00"), "USD")):
+        converted, _totals, unconverted, _blank = convert_rows(
+            rows, columns,
+            numbers_by_doc={"a.jpg": [1]},
+            settled_amounts={"a.jpg": charge},
+            reference_rate=lambda ccy, on: (Decimal("1.10"), "configured", ""),
+        )
+        assert unconverted == [], charge
+        assert converted[1].source == "configured", charge
+        assert converted[1].amount == Decimal("55.00"), charge
+
+
+def test_a_rate_the_receipt_printed_is_not_overwritten(tmp_path):
+    """The review's sixth finding. A rate read off the document is what that
+    purchase was actually converted at; ours is a reconstruction, and the
+    document outranks it."""
+    from expense_recon.matching.types import Receipt
+    from expense_recon.output.zoho_expense_export import (
+        EXPENSE_COLUMNS as COLS,
+        write_zoho_expense_export,
+    )
+
+    receipt = Receipt(
+        document_id="a.jpg", legal_entity_id="Corporate Services",
+        detected_date=None, detected_total=Decimal("10.00"),
+        detected_currency="EUR", detected_vendor="Cafe",
+        exchange_rate=Decimal("1.08"),
+    )
+    out = write_zoho_expense_export(
+        [receipt], tmp_path / "priced.csv",
+        single_currency=lambda groups: ({1: "1.100000"}, []),
+    )
+    parsed = list(csv.reader(io.StringIO(out.read_text(encoding="utf-8"))))
+    assert parsed[1][COLS.index("Exchange Rate")] == "1.08"
+

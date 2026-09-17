@@ -4597,13 +4597,22 @@ per-row conversions, so a section line and the header cannot disagree.
 |---|---|---|---|
 | same currency | the row is already USD | none | `same` |
 | the statement | a reconciled charge of this month settled the receipt AND posted in USD | charge / receipt total | `charge` |
-| a reference rate | anything else | `_reference_rate_for`: Settings' typed rate, then the run's derived rates, then the ECB monthly average | `configured` / `statement` / `receipts` / `ecb_month` |
+| a reference rate | anything else, including a charge that implies no positive rate | `_reference_rate_for`: Settings' typed rate, then the run's derived rates, then the ECB monthly average | `configured` / `statement` / `receipts` / `ecb_month` |
 | none | no rate for the currency | none; the row is named in the footer | (absent) |
 
 Rung 2 is the point: it is the money that actually left the account, fees
 and the card's own spread included. On live July, 19 of 56 rows price this
 way, and the month reads USD 14.76 lower than it would at the typed rate
 alone.
+
+Rung 3 hands `_reference_rate_for` a `date`, not the listing cell's ISO
+string: `ecb_monthly_rate` accepts a `date` or `"YYYY-MM"` and rejects
+anything else, so passing `"2026-09-05"` made the ECB rung return None on
+every row and quietly reduced rung 3 to Settings-typed-rates-only. That is
+the shape to watch when reusing the matcher's lookup from a document: the
+matcher passes `tx.transaction_date`, and anything that does not match the
+screen stops quoting the same rate as the screen. Pinned by
+`test_the_ecb_rung_actually_fires_on_a_listing_date`.
 
 **Both documents stay silent unless the figure says something new.** Three
 gates, each because the alternative is a document people stop reading:
@@ -4613,8 +4622,23 @@ priced (a note with no figure to qualify is a standing complaint) and when
 nothing was actually CONVERTED (the "total" would be the USD subtotal
 printed one line above). A month that priced only some of its rows does not
 get a line headed "Total": it reads `Partial total in USD: 108.00 (3 of 4
-expenses; the rest have no rate)`, because a heading is what a reader
-carries away and a parenthetical cannot undo one.
+expenses; the notes below say which are out and why)`, because a heading is
+what a reader carries away and a parenthetical cannot undo one. Two reasons
+a row is out, reported separately because they are different problems: no
+rate for its currency, and an amount nobody could read (item 97) -- the
+second never gets a rate stamped on it, since a rate is a claim about a
+number and there was no number.
+
+**The two documents do NOT always print the same total, and that is
+correct.** The CSV exports every expense; the report's listing is company
+expenses only, with private ones partitioned into their own reimbursements
+section (item 41). So a month with a private expense totals differently in
+the two, each figure covering exactly the rows of the document it sits in.
+What IS shared is the per-row conversion, so one purchase can never be
+converted at two rates. For the same reason the CSV's note names each row
+by vendor and date rather than by a listing number: the CSV prints no
+numbers, and its row order is not the report's, so a bare number would
+point at a different purchase in the other document.
 
 Copies (item 94), withheld dispositions and private rows never reach the
 conversion: they are filtered out of the receipts before the rows are built,

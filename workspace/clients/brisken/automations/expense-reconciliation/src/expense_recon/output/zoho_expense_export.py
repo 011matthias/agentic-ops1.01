@@ -522,7 +522,13 @@ def write_zoho_expense_export(
         rates, extra = single_currency(groups)
         rate_col = EXPENSE_COLUMNS.index("Exchange Rate")
         for n, text in (rates or {}).items():
-            if 1 <= int(n) <= len(rows) and text:
+            # Never overwrite a rate the RECEIPT printed. A booked rate read
+            # off the document is what that purchase was actually converted
+            # at; a rate computed here is our reconstruction, and the
+            # document's own figure outranks it. No live receipt carries one
+            # today (vision extraction sets none), which is exactly why this
+            # would otherwise go unnoticed the first time one does.
+            if 1 <= int(n) <= len(rows) and text and not rows[int(n) - 1][rate_col]:
                 rows[int(n) - 1][rate_col] = text
         lines.extend(line for line in (extra or ()) if line)
     with out_path.open("w", encoding="utf-8", newline="") as fh:

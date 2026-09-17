@@ -7660,9 +7660,14 @@ def single_currency_for_export(run: RunRow, charge_decisions: dict | None):
 
     Built here rather than in the writer because pricing a row needs this
     month's settled charges and its frozen FX config, and the writer owns
-    neither. The figures come from `convert_rows`, the same function the
-    month report calls, so the CSV's footer total and the report's header
-    total are one computation and cannot drift apart.
+    neither. The per-row conversion is `convert_rows`, the same function the
+    month report calls, so one purchase can never be converted at two rates.
+
+    The two documents' TOTALS can legitimately differ, and on a month with a
+    private expense they do: this CSV exports every expense, while the
+    report's listing is company expenses only (private ones go to their own
+    reimbursements section). Each figure covers the rows of the document it
+    sits in, which is the only thing either could honestly mean.
 
     A row already in the base currency gets no rate printed: an "Exchange
     Rate" of 1 on a USD expense is noise in a column a reader scans for the
@@ -7684,7 +7689,7 @@ def single_currency_for_export(run: RunRow, charge_decisions: dict | None):
                 range(pos, pos + len(doc_rows))
             )
             pos += len(doc_rows)
-        converted, totals, unconverted = convert_rows(
+        converted, totals, unconverted, no_amount = convert_rows(
             rows, EXPENSE_COLUMNS,
             numbers_by_doc=numbers_by_doc,
             settled_amounts=settled,
@@ -7693,7 +7698,25 @@ def single_currency_for_export(run: RunRow, charge_decisions: dict | None):
         rates = {
             n: f"{c.rate:f}" for n, c in converted.items() if c.rate is not None
         }
-        return rates, summary_lines(totals, unconverted, converted)
+        # The CSV prints no row numbers, and its row order is not the
+        # report's, so a note here names each row the way the copies line
+        # does: by what is printed on it.
+        cols = {name: i for i, name in enumerate(EXPENSE_COLUMNS)}
+        labels = {
+            n: " ".join(
+                x for x in (
+                    str(rows[n - 1][cols["Vendor"]] or "").strip(),
+                    str(rows[n - 1][cols["Expense Date"]] or "").strip(),
+                    str(rows[n - 1][cols["Currency Code"]] or "").strip(),
+                    str(rows[n - 1][cols["Expense Amount"]] or "").strip(),
+                ) if x
+            ) or f"expense {n}"
+            for n in set(unconverted) | set(no_amount)
+        }
+        return rates, summary_lines(
+            totals, unconverted, converted,
+            no_amount=no_amount, labels=labels,
+        )
 
     return fill
 
@@ -8328,13 +8351,17 @@ def build_expense_report(
     report_conversions: dict = {}
     report_total = report_unconverted = ""
     if aligned and needs_conversion(rows, EXPENSE_COLUMNS):
-        report_conversions, base_totals, missing = convert_rows(
+        report_conversions, base_totals, missing, _blank = convert_rows(
             rows, EXPENSE_COLUMNS,
             numbers_by_doc=numbers_by_doc,
             settled_amounts=export_settled_amounts(run, charge_decisions),
             reference_rate=usd_reference_rate(run),
             skip=set(unreadable_numbers),
         )
+        # `_blank` stays out of the lines here: an unreadable amount already
+        # has its own caption on the row and its own line in the footer
+        # (item 65), and saying it twice in two vocabularies is worse than
+        # saying it once.
         lines = summary_lines(base_totals, missing, report_conversions)
         report_total = lines[0] if lines else ""
         report_unconverted = lines[1] if len(lines) > 1 else ""
@@ -10152,8 +10179,12 @@ def usd_reference_rate(run: RunRow):
     every foreign row then reports no figure and says so, rather than
     converting at a rate borrowed from somewhere this month never used.
     """
+    import re
+
     from ..cli import build_match_cfg
     from ..matching.deterministic import _reference_rate_for
+
+    _MONTH_SHAPE = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
 
     if not ((run.config or {}).get("matching") or {}):
         return None
@@ -10168,15 +10199,26 @@ def usd_reference_rate(run: RunRow):
         return None
 
     def lookup(currency: str, on: str):
-        hit = _reference_rate_for(
-            cfg, currency, BASE_CURRENCY, None, on=on or None
-        )
+        # The listing cell is a full ISO date, and `ecb_monthly_rate` accepts
+        # a `date` or a "YYYY-MM" string, nothing else: handing it
+        # "2026-09-05" fails its month-key match and the ECB rung silently
+        # returns None, which made a document quote a different rate from the
+        # screen for the same purchase. The matcher passes a `date`
+        # (`on=tx.transaction_date`), so this does too.
+        when: "date | str | None" = None
+        text = (on or "").strip()
+        if text:
+            try:
+                when = date.fromisoformat(text)
+            except ValueError:
+                when = text[:7] if _MONTH_SHAPE.fullmatch(text[:7]) else None
+        hit = _reference_rate_for(cfg, currency, BASE_CURRENCY, None, on=when)
         if hit is None:
             return None
         rate, source, _n = hit
         month = ""
         if source == "ecb_month":
-            ecb = cfg.ecb_monthly_rate(currency, BASE_CURRENCY, on or None)
+            ecb = cfg.ecb_monthly_rate(currency, BASE_CURRENCY, when)
             month = ecb[1] if ecb else ""
         return rate, source, month
 

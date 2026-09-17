@@ -9,9 +9,15 @@ converting by hand.
 
 This module is the conversion, and nothing else: no store, no config object,
 no document. It takes amounts and a way to look a rate up, and hands back a
-figure per listing row plus the month's single total. Both documents that
-need it (the month report PDF and `expenses.csv`) call the same function, so
-the report's total and the CSV's footer cannot disagree.
+figure per listing row plus the total over them.
+
+One rule, two documents, and they do NOT always print the same figure: the
+CSV exports every expense while the month report's listing holds company
+expenses only and partitions private ones into their own reimbursements
+section. So a month with a private expense totals differently in the two,
+correctly, because each figure covers exactly the rows of the document it
+sits in. What is shared is the per-row conversion, which is why the same
+purchase can never be converted at two different rates.
 
 Three rungs, in this order, because they are in order of how much they know
 about what actually happened:
@@ -239,6 +245,7 @@ def convert_rows(
     out: dict[int, RowConversion] = {}
     totals: dict[str, Decimal] = {}
     unconverted: list[int] = []
+    no_amount: list[int] = []
 
     for doc, numbers in numbers_by_doc.items():
         wanted = [n for n in numbers if n not in skipped and 1 <= n <= len(rows)]
@@ -247,9 +254,16 @@ def convert_rows(
         amounts: list[Decimal] = []
         live: list[int] = []
         for n in wanted:
-            value = parse_money(cell(rows[n - 1], "Expense Amount"))
-            if value is None:
-                unconverted.append(n)
+            raw = str(cell(rows[n - 1], "Expense Amount")).strip()
+            value = parse_money(raw)
+            if not raw or value is None:
+                # Two different events, one outcome. A row whose total nobody
+                # could read (item 97 writes it with the cell blank) has no
+                # amount to convert, so it takes no figure AND no rate: a
+                # rate stamped on an empty amount is a claim about a number
+                # that was never read. It is not "no rate for its currency"
+                # either, so it is reported separately and never as zero.
+                no_amount.append(n)
                 continue
             amounts.append(value)
             live.append(n)
@@ -270,8 +284,15 @@ def convert_rows(
         if charge is not None and (charge[1] or "").upper() == base_ccy and total > 0:
             # Rung 2. The implied rate is what the card actually did; the
             # allocation below then reproduces the charge to the cent.
-            rate, source = charge[0] / total, SOURCE_CHARGE
-        elif reference_rate is not None and ccy:
+            implied = charge[0] / total
+            if implied > 0:
+                rate, source = implied, SOURCE_CHARGE
+        if rate is None and reference_rate is not None and ccy:
+            # Rung 3, reached whenever rung 2 produced nothing USABLE and not
+            # merely when no charge was present. A charge that cannot yield a
+            # positive rate (a credit, a zero) is not evidence of what the
+            # purchase cost, and refusing the fallback there would report "no
+            # rate" for a currency the month has a perfectly good rate for.
             hit = reference_rate(ccy, on)
             if hit is not None:
                 rate, source, month = hit
@@ -285,7 +306,7 @@ def convert_rows(
             out[n] = RowConversion(amount, shown, source, month)
             totals[base_ccy] = totals.get(base_ccy, Decimal("0")) + amount
 
-    return out, totals, sorted(unconverted)
+    return out, totals, sorted(unconverted), sorted(no_amount)
 
 
 def total_for(
@@ -307,28 +328,41 @@ def total_for(
     return sum(parts, Decimal("0")) if parts else None
 
 
-def unconverted_note(numbers: Sequence[int], base: str = BASE_CURRENCY) -> str:
+def unconverted_note(
+    numbers: Sequence[int],
+    base: str = BASE_CURRENCY,
+    labels: Mapping[int, str] | None = None,
+    reason: str = "no rate for their currency",
+) -> str:
     """The footer line naming the rows with no figure in `base`, or "" when
     every row converted.
 
     Same shape and same reason as `_pdf_common.excluded_note`: a clean month
     says nothing rather than "0 receipts not converted", and a month with a
-    gap names the expense numbers so the reader can go to them instead of
-    hunting a total that is quietly short.
+    gap names the rows so the reader can go to them instead of hunting a
+    total that is quietly short.
+
+    `labels` decides HOW they are named. The month report numbers its
+    listing, so there "expense 4" is a thing the reader can find. The CSV
+    numbers nothing, and its listing numbers are not even the report's (the
+    report renumbers after partitioning private rows out), so a bare number
+    there would point at a different purchase in the other document. Given
+    labels, the line names each row the way the CSV's own copies line does,
+    by vendor and date.
     """
     listed = sorted(set(int(n) for n in numbers))
     if not listed:
         return ""
-    joined = ", ".join(str(n) for n in listed)
-    if len(listed) == 1:
-        return (
-            f"1 expense has no {base} figure (no rate for its currency): "
-            f"expense {joined}."
+    one = len(listed) == 1
+    if labels:
+        named = "; ".join(labels.get(n, f"expense {n}") for n in listed)
+    else:
+        named = ("expense " if one else "expenses ") + ", ".join(
+            str(n) for n in listed
         )
-    return (
-        f"{len(listed)} expenses have no {base} figure (no rate for their "
-        f"currency): expenses {joined}."
-    )
+    count = "1 expense has" if one else f"{len(listed)} expenses have"
+    why = reason.replace("their", "its") if one else reason
+    return f"{count} no {base} figure ({why}): {named}."
 
 
 def summary_lines(
@@ -336,6 +370,8 @@ def summary_lines(
     unconverted: Sequence[int],
     converted: Mapping[int, RowConversion],
     base: str = BASE_CURRENCY,
+    no_amount: Sequence[int] = (),
+    labels: Mapping[int, str] | None = None,
 ) -> list[str]:
     """The lines a document writes under its rows: the figure, then the note
     naming what the figure leaves out. Both absent when the figure would say
@@ -356,11 +392,19 @@ def summary_lines(
     """
     if not any(c.source != SOURCE_SAME for c in converted.values()):
         return []
-    line = total_line(totals, unconverted, len(converted), base)
+    missing = list(unconverted) + list(no_amount)
+    line = total_line(totals, missing, len(converted), base)
     if not line:
         return []
-    note = unconverted_note(unconverted, base)
-    return [line, note] if note else [line]
+    out = [line]
+    for numbers, reason in (
+        (unconverted, "no rate for their currency"),
+        (no_amount, "their amount could not be read"),
+    ):
+        note = unconverted_note(numbers, base, labels, reason)
+        if note:
+            out.append(note)
+    return out
 
 
 def total_line(
@@ -394,5 +438,6 @@ def total_line(
     whole = priced + missing
     return (
         f"Partial total in {base}: {amount:,.2f} "
-        f"({priced} of {whole} expenses; the rest have no rate)"
+        f"({priced} of {whole} expenses; the notes below say which are out "
+        f"and why)"
     )
