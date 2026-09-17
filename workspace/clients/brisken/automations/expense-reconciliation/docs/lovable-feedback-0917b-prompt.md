@@ -1,9 +1,7 @@
 # Lovable prompt: keep a guessed category, change any card, view set-aside pages, drop-page matching line
 
-> **NOT YET APPLIED.** Needs the backend from the notes #52/#53/#62/#63 PR
-> deployed (`category_confirmable`, `POST .../confirm-category`,
-> `set_aside[].receipt_image_available`, drop ledger `has_statement` /
-> `rematch`). Notes answered: #62, #63 (Criss), #52, #53 (owner).
+> **APPLIED 2026-09-17** (bundle-audited and driven cold, see PROMPT-STATUS).
+> Backend: PR #988, Fly v150. Notes answered: #62, #63 (Criss), #52, #53 (owner).
 
 ````markdown
 The app calls the FastAPI backend at `https://api.expenses.brisken.com` as a JSON API. Do NOT add Supabase or any database. Auth stays the existing `Authorization: Bearer <token>`. Five changes, each independent. Render defensively: a missing new field degrades to the screen as it is today, never to an error or a raw key.
