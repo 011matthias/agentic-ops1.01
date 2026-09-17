@@ -81,7 +81,7 @@ from ..output.report_xlsx import write_report
 from ..output.zoho_expense_export import (
     EXPENSE_COLUMNS,
     _UNCATEGORIZED,
-    build_expense_rows,
+    build_expense_row_groups,
     expense_posting_parts,
     resolve_paid_through,
     write_zoho_expense_export,
@@ -2045,6 +2045,7 @@ def ingest_receipts_folder_into_run(
     _apply_judgment(
         sub, tx_by_id, rec_by_id, llm_client,
         suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
+        cfg=match_cfg or MatchingConfig(),
     )
     _apply_ambiguous_judgment(sub, tx_by_id, rec_by_id, llm_client)
     _apply_unmatched_judgment(
@@ -2349,20 +2350,21 @@ def _fx_reference_fields(
     """
     from decimal import ROUND_HALF_UP
 
+    from ..matching.deterministic import reference_gap
+
     if reference is None or rec_amt is None or rec_amt <= 0:
         return {}
-    converted = rec_amt * reference.rate
-    if converted <= 0:
+    # Item 131: the conversion, deviation and band live in the matcher's
+    # module, where the judgment layer reads the same band to decide whether
+    # a pair the model rejected stays in review.
+    arithmetic = reference_gap(
+        charge_amt, rec_amt, reference.rate, reference.match_pct, reference.review_pct,
+    )
+    if arithmetic is None:
         return {}
+    converted, deviation, band = arithmetic
     cent = Decimal("0.01")
     shown = converted.quantize(cent, ROUND_HALF_UP)
-    deviation = (charge_amt - converted) / converted
-    if abs(deviation) <= reference.match_pct:
-        band = "match"
-    elif abs(deviation) <= reference.review_pct:
-        band = "review"
-    else:
-        band = "outside"
     gap = (charge_amt - shown).quantize(cent, ROUND_HALF_UP)
     gap_text = "0.00" if gap == 0 else f"{gap:+,.2f}"
     pct = float((deviation * 100).quantize(cent, ROUND_HALF_UP))
@@ -2771,11 +2773,17 @@ def ready_confirm_pairs(run, decisions: dict, overrides: dict) -> list:
     need no further work (adversarial-verify: never wire Confirm-all to the
     broader bulk path). Callers apply `_BULK_DECISION_LIMIT` and report any
     remainder rather than silently truncating.
+
+    Item 133 (2026-09-17): `ready` is a CATEGORY verdict, so the row must
+    also pass the owner's pairing rule (`confirmable_pair`, the one "Confirm
+    all matched" uses since item 101). Before, a same-amount receipt from
+    another merchant (BASE44 100.00 holding an Anthropic receipt, vendor 22)
+    was `ready` and one click booked it.
     """
     view = build_view(run, decisions, overrides)
     ready = {
         r["transaction_id"] for r in view["rows"]
-        if r.get("review", {}).get("state") == "ready"
+        if r.get("review", {}).get("state") == "ready" and confirmable_pair(r)
     }
     return [
         (tx_id, doc_id)
@@ -7029,9 +7037,11 @@ def build_expense_report(
     The listing is the export's own rows. Evidence is per DOCUMENT: a receipt
     that books to two accounts writes two listing rows and appears once,
     captioned with both expense numbers. The row-to-document map comes from
-    `expense_posting_parts`, the same fan-out the export writes, and is
-    checked against the row count — if the two ever disagree the report falls
-    back to one caption per row rather than mislabelling the evidence.
+    the same pass that writes the rows (`build_expense_row_groups`, item 97),
+    so a caption names exactly the rows written for its document. A receipt
+    whose total was never read writes one row with a blank amount, marked
+    "amount unreadable, not in total" and counted in the footer; a receipt
+    that wrote no row says "not in the listing" on its caption.
 
     Confirmed private expenses (backlog item 41) are PARTITIONED out of the
     company listing into a reimbursements-owed section, grouped per person
@@ -7044,10 +7054,10 @@ def build_expense_report(
     40's field, resolved through the card chain — in roster order, other
     named persons after, unowned rows last, numbering continuous. `trip`
     is the trip entity when the caller has it (title, range, roster);
-    a trip batch whose entity is gone still sections. When the
-    row-to-document fan-out cannot be aligned the report falls back to
-    the flat listing rather than mislabelling a section boundary, the
-    same fallback the evidence captions already take.
+    a trip batch whose entity is gone still sections. Should the rows ever
+    fail to line up with their receipts the report falls back to the flat
+    listing and says so in its closing note rather than mislabelling a
+    section boundary.
 
     A COMPANY month (item 47) sections the listing PER COST CENTER once
     the chain resolves or flags any row: named centres in name order,
@@ -7244,31 +7254,32 @@ def build_expense_report(
     if groups is not None:
         company = [r for k in ordered_keys for r in groups[k]]
 
-    rows = build_expense_rows(company, **kwargs)
-
-    widths = [max(1, len(expense_posting_parts(r))) for r in company]
-    aligned = sum(widths) == len(rows)
+    # Item 97: the listing and the captions come from ONE pass. Each
+    # receipt's listing numbers are the rows the export actually wrote for
+    # it, so a caption can only name its own purchase. The numbers used to
+    # come from a second fan-out run without the chart and the COA gate;
+    # whenever the two counted differently the captions fell back to 1..N
+    # and, from the first split receipt on, named someone else's purchase.
+    row_groups = build_expense_row_groups(company, **kwargs)
+    rows = [row for _doc, doc_rows in row_groups for row in doc_rows]
+    aligned = [doc for doc, _rows in row_groups] == [r.document_id for r in company]
+    numbers_by_doc: dict[str, list[int]] = {}
+    pos = 1
+    for doc, doc_rows in row_groups if aligned else ():
+        numbers_by_doc[doc] = list(range(pos, pos + len(doc_rows)))
+        pos += len(doc_rows)
 
     if groups is not None and section_fields is not None and aligned:
         sections = []
         pos = 1
         vendor_col = EXPENSE_COLUMNS.index("Vendor")
         for key in ordered_keys:
-            count = sum(
-                max(1, len(expense_posting_parts(r)))
-                for r in groups[key]
-            )
+            count = sum(len(numbers_by_doc[r.document_id]) for r in groups[key])
             section = {**section_fields(key), "start": pos, "count": count}
             if by_card_receipts and key in card_section_by_key:
                 # Item 137 on paper: a listed receipt this card's charge
                 # holds while the tool resolved it to another card. It
                 # stays here, beside the charge it settles, and says so.
-                numbers_by_doc: dict[str, list[int]] = {}
-                n_ = pos
-                for r in groups[key]:
-                    width = max(1, len(expense_posting_parts(r)))
-                    numbers_by_doc[r.document_id] = list(range(n_, n_ + width))
-                    n_ += width
                 notes = []
                 for charge in card_section_by_key[key]["rows"]:
                     differ = charge.get("cards_differ") or {}
@@ -7342,19 +7353,27 @@ def build_expense_report(
             item["data"] = path.read_bytes()
         return item
 
-    n = 1
+    n = len(rows) + 1
     # Item 62 (owner ruling 2026-09-15): a receipt settled outside the card
     # STILL prints. It is real company spend whose evidence is the invoice,
     # and dropping it would hide the spend from the accountant; the caption
     # names the tender so the reader knows why no card line matches it.
     report_settled_outside = settled_outside_map(run.snapshot or {})
-    for r, width in zip(company, widths):
-        numbers = list(range(n, n + width)) if aligned else [n]
-        n += width if aligned else 1
+    # Item 97: the listing numbers of the rows written for a receipt whose
+    # total was never read. Their Amount cell is blank, which the total reads
+    # as zero, so the report is told which rows those are.
+    unreadable_numbers: list[int] = []
+    for r in company:
+        numbers = numbers_by_doc.get(r.document_id, [])
+        if r.detected_total is None:
+            unreadable_numbers.extend(numbers)
         so = report_settled_outside.get(r.document_id)
         evidence.append(_evidence_item(
             r, numbers,
-            extra_detail=settled_outside_caption(so["how"]) if so else "",
+            extra_detail="  ·  ".join(x for x in (
+                settled_outside_caption(so["how"]) if so else "",
+                "" if numbers or not aligned else "not in the listing",
+            ) if x),
         ))
 
     # The reimbursements-owed section: one numbered row per private
@@ -7443,6 +7462,13 @@ def build_expense_report(
             "card's receipts follow its listing, each behind the expense "
             "number it proves."
         )
+    if not aligned:
+        # Item 97: never renumber in silence. Defensive: the one pass above
+        # keeps the receipts in order, so this should not print.
+        note += (
+            " The receipt pages could not be tied to the listing's expense "
+            "numbers, so each caption names the receipt instead."
+        )
     if suspect:
         suspect_numbers = ", ".join(str(i) for i in sorted(suspect))
         note += (
@@ -7475,6 +7501,7 @@ def build_expense_report(
         copies_set_aside=copy_lines,
         copies_set_aside_totals=copies_totals,
         receipts_by_section=in_sections,
+        amounts_unreadable=unreadable_numbers,
     )
     # Item 67: `prepare_evidence` wrote each file's render outcome back onto
     # its evidence dict during the build. The builder returns one `bytes`, so
@@ -7687,6 +7714,118 @@ def report_receipt_cards(
     return out
 
 
+def reconciliation_captions(
+    view: dict,
+    receipts: "list[Receipt]",
+    settled_outside: dict[str, dict],
+    names: dict[str, str],
+) -> dict[str, tuple[str, str]]:
+    """`{document_id: (label, detail)}`: the caption over each receipt's
+    pages in the reconciliation report, in the screen's words (item 96).
+
+    Every receipt the view places sits in exactly one of five places, and
+    the caption names which, read off `view` (`build_view`'s payload, the
+    one the month page renders), never re-derived:
+
+    * held by a charge: "Charge <date> · <vendor>", as before;
+    * a decided copy (`copies_set_aside`): "Copy set aside", naming the
+      receipt it repeats by vendor and file (the row's `duplicate.of`, the
+      screen's own marker);
+    * settled outside the card: the month report's tender caption
+      (`settled_outside_caption`, item 62);
+    * proposed for a charge still in review: "Waiting for review", naming
+      the charge. A review row holds no `chosen_document_id` until a pick,
+      so this receipt used to read as if nothing settled it;
+    * none of those (`unmatched_receipts`): "Receipt with no charge" with
+      the screen's reason line for its `reason_code` (items 75 + 83).
+
+    `names` is `{document_id: display file name}` for the receipts with a
+    stored file. "Unmatched receipt" is gone: it was printed over all five.
+    """
+    from ..unmatched_reasons import (
+        NO_CHARGE_ON_ANY_LOADED_STATEMENT,
+        RECEIPT_REASON_TEXT,
+    )
+
+    rows_by_tx = {
+        str(row.get("transaction_id") or ""): row for row in view.get("rows") or []
+    }
+    charge_by_doc: dict[str, dict] = {}
+    for row in view.get("rows") or []:
+        doc = row.get("chosen_document_id")
+        if doc:
+            charge_by_doc[str(doc)] = row
+    # `assignable_receipts[].held_by` names the charge holding a receipt,
+    # a pending review row included; copies are not in that list.
+    for entry in view.get("assignable_receipts") or []:
+        holder = rows_by_tx.get(str(entry.get("held_by") or ""))
+        if holder is not None:
+            charge_by_doc.setdefault(str(entry.get("document_id") or ""), holder)
+    reason_by_doc = {
+        str(rec.get("document_id") or ""): str(rec.get("reason_code") or "")
+        for rec in view.get("unmatched_receipts") or []
+    }
+    copy_of = {
+        str(rec.get("document_id") or ""):
+            str((rec.get("duplicate") or {}).get("of") or "")
+        for rec in view.get("copies_set_aside") or []
+    }
+    vendor_of = {r.document_id: r.detected_vendor or "" for r in receipts}
+
+    def _charge(row: dict) -> str:
+        return " ".join(x for x in (
+            str(row.get("vendor") or ""), str(row.get("amount") or ""),
+            str(row.get("currency") or ""),
+        ) if x) + (f" of {row.get('date')}" if row.get("date") else "")
+
+    out: dict[str, tuple[str, str]] = {}
+    for r in receipts:
+        doc = r.document_id
+        vendor = r.detected_vendor or "(no vendor)"
+        facts = (
+            str(r.detected_date or ""),
+            (f"{r.detected_total} {r.detected_currency or ''}".strip()
+             if r.detected_total is not None else ""),
+        )
+        charge = charge_by_doc.get(doc)
+        if charge is not None and (
+            charge.get("chosen_document_id") == doc
+            or charge.get("effective_bucket") != "review"
+        ):
+            label = (
+                f"Charge {charge.get('date') or ''} · "
+                f"{charge.get('vendor') or ''}".strip(" ·")
+            )
+            detail = "  ·  ".join(x for x in (
+                f"{charge.get('amount') or ''} {charge.get('currency') or ''}".strip(),
+                f"receipt: {r.detected_vendor or ''}".strip(),
+            ) if x.strip())
+            out[doc] = (label, detail)
+            continue
+        if doc in copy_of:
+            # Vendor and file both: live originals are often a mail body
+            # named rendered-body.pdf, which alone finds nothing.
+            of = copy_of[doc]
+            original = " ".join(x for x in (
+                vendor_of.get(of, ""), f"({names[of]})" if names.get(of) else "",
+            ) if x) or "another receipt"
+            label, why = f"Copy set aside · {vendor}", f"copy of {original}, set aside"
+        elif charge is not None:
+            label = f"Waiting for review · {vendor}"
+            why = f"proposed for the charge {_charge(charge)}, not confirmed yet"
+        elif doc in settled_outside and doc not in reason_by_doc:
+            how = settled_outside_caption(settled_outside[doc]["how"])
+            label, why = f"{how[:1].upper()}{how[1:]} · {vendor}", ""
+        else:
+            label = f"Receipt with no charge · {vendor}"
+            why = RECEIPT_REASON_TEXT.get(
+                reason_by_doc.get(doc, ""),
+                RECEIPT_REASON_TEXT[NO_CHARGE_ON_ANY_LOADED_STATEMENT],
+            )
+        out[doc] = (label, "  ·  ".join(x for x in (*facts, why) if x))
+    return out
+
+
 def build_reconciliation_report(
     run: RunRow,
     decisions: dict,
@@ -7702,8 +7841,9 @@ def build_reconciliation_report(
     Built from `build_view` — the workbench's OWN payload — so the document
     and the review screen cannot state different reconciliations. Evidence is
     every receipt the run holds: matched ones captioned with the charge they
-    settle, unmatched ones captioned as unmatched, because a receipt nobody
-    could place is exactly what a reader needs to see.
+    settle, every other one with where the screen puts it and why
+    (`reconciliation_captions`, item 96), because a receipt nobody could
+    place is exactly what a reader needs to see.
 
     `field_overrides` / `edits` are the expense-mode overlay (item 68). They
     are not an extra source: they are THE source, the same one the expense
@@ -7734,40 +7874,26 @@ def build_reconciliation_report(
         run, receipts, snapshot_receipts, decisions, overrides, resolutions,
         field_overrides=field_overrides,
     )
-    charge_by_doc: dict[str, dict] = {}
-    for row in view.get("rows") or []:
-        doc = row.get("chosen_document_id")
-        if doc:
-            charge_by_doc[doc] = row
-
     receipts_dir = Path(run.work_dir) / "receipts"
-    evidence: list[dict] = []
+    path_by_doc: dict[str, Path] = {}
     for r in receipts:
         path = receipts_dir / r.document_id
         if not path.is_file():
-            hit = _attached_receipt_file(receipts_dir.parent, r.document_id)
-            path = hit if hit is not None else None
-        charge = charge_by_doc.get(r.document_id)
-        if charge is not None:
-            label = (
-                f"Charge {charge.get('date') or ''} · "
-                f"{charge.get('vendor') or ''}".strip(" ·")
-            )
-            detail = "  ·  ".join(x for x in (
-                f"{charge.get('amount') or ''} {charge.get('currency') or ''}".strip(),
-                f"receipt: {r.detected_vendor or ''}".strip(),
-            ) if x.strip())
-        else:
-            label = f"Unmatched receipt · {r.detected_vendor or '(no vendor)'}"
-            detail = "  ·  ".join(x for x in (
-                str(r.detected_date or ""),
-                (f"{r.detected_total} {r.detected_currency or ''}".strip()
-                 if r.detected_total is not None else ""),
-                "no charge on the statement settles this receipt",
-            ) if x)
+            path = _attached_receipt_file(receipts_dir.parent, r.document_id)
+        if path is not None:
+            path_by_doc[r.document_id] = path
+    captions = reconciliation_captions(
+        view, receipts, settled_outside_map(run.snapshot or {}),
+        {doc: _display_name(p.name) for doc, p in path_by_doc.items()},
+    )
+
+    evidence: list[dict] = []
+    for r in receipts:
+        label, detail = captions[r.document_id]
         item: dict = {
             "label": label, "detail": detail, "document_id": r.document_id,
         }
+        path = path_by_doc.get(r.document_id)
         if path is not None:
             item["name"] = _display_name(path.name)
             item["data"] = path.read_bytes()
@@ -10830,6 +10956,7 @@ def rematch_month(
     _apply_judgment(
         outcome, tx_by_id, rec_by_id, llm_client,
         suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
+        cfg=match_cfg or MatchingConfig(),  # item 131: the band a rejection keeps
     )
     _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
     _apply_unmatched_judgment(

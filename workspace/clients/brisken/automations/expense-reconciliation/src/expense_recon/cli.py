@@ -321,7 +321,7 @@ def _apply_vision_receipts(
 
 def _apply_judgment(
     outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None,
-    *, suggest_floor: float = 0.0,
+    *, suggest_floor: float = 0.0, cfg: MatchingConfig | None = None,
 ) -> None:
     """Replace each judgment_required entry with the judgment verdict.
 
@@ -329,15 +329,49 @@ def _apply_judgment(
     (D1b); without one, `judge_fx_match` returns the stub Match and the
     entry stays in `judgment_required` with `requires_review=True`.
 
-    A real verdict BELOW `suggest_floor` is unbound instead of kept
-    (owner call 2026-07-24): showing a pair the model itself rejected
-    at p=0.10 as "the suggested receipt" wastes the reviewer and reads
-    as a tool error. The charge and the receipt fall to the plain
+    A real verdict BELOW `suggest_floor` is unbound instead of kept, with
+    no exception (owner call 2026-07-24): showing a pair the model itself
+    rejected at p=0.10 as "the suggested receipt" wastes the reviewer and
+    reads as a tool error. The charge and the receipt fall to the plain
     unmatched buckets when nothing else claims them, so every id still
     lands in a bucket and the reconciliation guarantee holds.
+
+    A verdict EXACTLY AT the floor is a rejection too (item 131,
+    2026-09-17: the model answers exactly 0.20, and "below" let those
+    rejections through with "likely NOT the same purchase" as the reason a
+    reviewer read), with one exception: a pair whose OWN rate arithmetic
+    sits in the clean band (item 81's `reference_gap_band` == "match", read
+    through `pair_reference_gap_band` at `cfg`'s rate) stays in review, the
+    tool's arithmetic first and the model's disagreement after it (live
+    July 2026: NATHALIA 5.61 against a 28.73 BRL receipt, 1.5% off the
+    month rate, labelled right, model p=0.20). The exception stops at the
+    floor on purpose: applied below it, it brought back July's Erste Fracht
+    receipt against HOTEL AM TIERGARTEN (-1.59%, model 0.10, another
+    merchant). Without `cfg` no band can be read and an at-floor rejection
+    is unbound. The rate is derived from the charges and receipts handed in
+    here; a configured or ECB rate reproduces the matcher's exactly, a
+    receipts-derived one can differ when the matcher's pool left a copy out
+    (item 81's residual).
     """
     if not outcome.judgment_required:
         return
+    from .matching.deterministic import (
+        derive_fx_reference_rates,
+        pair_reference_gap_band,
+    )
+
+    derived: list = []
+
+    def _rate_band(tx, rec) -> str | None:
+        if cfg is None:
+            return None
+        if not derived:
+            derived.append(derive_fx_reference_rates(
+                [t for t in tx_by_id.values() if not t.is_credit],
+                list(rec_by_id.values()), cfg,
+            ))
+        return pair_reference_gap_band(tx, rec, cfg, derived[0])
+
     judged: list = []
     suppressed: list = []
     for m in outcome.judgment_required:
@@ -364,7 +398,18 @@ def _apply_judgment(
         )
         # Only a REAL model verdict can be suppressed; the no-client stub
         # (confidence 0.5) always stays, so no-LLM runs are unaffected.
-        if client is not None and full.confidence < suggest_floor:
+        at_floor = suggest_floor > 0.0 and abs(full.confidence - suggest_floor) <= 1e-9
+        rejected = at_floor or full.confidence < suggest_floor
+        if client is not None and rejected:
+            # Item 131: only an at-floor rejection can be kept, and only on
+            # a clean rate; below the floor the owner's cut is final.
+            if at_floor and _rate_band(tx, rec) == "match":
+                judged.append(replace(full, reason=(
+                    m.reason.rstrip(".")
+                    + ". Kept for review although the model disagrees: "
+                    + full.reason
+                )))
+                continue
             suppressed.append(full)
             continue
         judged.append(full)
@@ -790,6 +835,7 @@ def reconcile(
     _apply_judgment(
         outcome, tx_by_id, rec_by_id, llm_client,
         suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
+        cfg=match_cfg or MatchingConfig(),
     )
     _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
     # WS3: opt-in second chance for the leftovers, after the deterministic

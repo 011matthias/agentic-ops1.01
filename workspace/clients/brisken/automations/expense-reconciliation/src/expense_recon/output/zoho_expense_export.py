@@ -251,13 +251,65 @@ def build_expense_rows(
     (document_id -> §17 disposition) withholds personal / do-not-export
     expenses and redirects a reimbursable expense's Paid Through. Every
     map is keyed by `document_id`.
+
+    A receipt whose total was never read writes ONE row with the Amount cell
+    blank (item 97): its lines allocate nothing, so the fan-out has no part
+    to write, and the receipt used to leave no row at all while its page was
+    still in the report.
     """
+    return [
+        row
+        for _doc, doc_rows in build_expense_row_groups(
+            receipts,
+            chart_of_accounts=chart_of_accounts,
+            coa_gate=coa_gate,
+            default_paid_through=default_paid_through,
+            paid_through_by_doc=paid_through_by_doc,
+            entity_by_doc=entity_by_doc,
+            dispositions=dispositions,
+            reimbursable_account=reimbursable_account,
+            receipt_urls=receipt_urls,
+            customer_by_doc=customer_by_doc,
+            card_accounts=card_accounts,
+            card_hint_accounts=card_hint_accounts,
+            card_map_blocked_docs=card_map_blocked_docs,
+        )
+        for row in doc_rows
+    ]
+
+
+def build_expense_row_groups(
+    receipts: "Sequence[Receipt]",
+    *,
+    chart_of_accounts: "ChartOfAccounts | None" = None,
+    coa_gate: "CoaGate | None" = None,
+    default_paid_through: str | None = None,
+    paid_through_by_doc: "Mapping[str, str] | None" = None,
+    entity_by_doc: "Mapping[str, str] | None" = None,
+    dispositions: "Mapping[str, str] | None" = None,
+    reimbursable_account: str | None = None,
+    receipt_urls: "Mapping[str, str | None] | None" = None,
+    customer_by_doc: "Mapping[str, str] | None" = None,
+    card_accounts: "Mapping[str, str] | None" = None,
+    card_hint_accounts: "Mapping[str, str] | None" = None,
+    card_map_blocked_docs: "set[str] | None" = None,
+) -> list[tuple[str, list[list[str]]]]:
+    """`build_expense_rows`, per receipt: `[(document_id, rows written for
+    it)]` in the receipts' order, a withheld receipt with no rows.
+
+    The month report numbers its listing and captions each receipt's pages
+    from THIS pass (item 97), so a caption names the rows actually written
+    for that document. It used to count a second fan-out that ran without
+    the chart and the COA gate, and from the first receipt the two counted
+    differently every later caption named another purchase."""
     if coa_gate is not None:
         gated, _report = coa_gate.run(list(receipts), keep_category=True)
         receipts = gated
 
-    rows: list[list[str]] = []
+    groups: list[tuple[str, list[list[str]]]] = []
     for r in receipts:
+        rows: list[list[str]] = []
+        groups.append((r.document_id, rows))
         disposition = (dispositions or {}).get(r.document_id)
         if disposition in _DISPOSITION_WITHHELD:
             continue
@@ -297,10 +349,25 @@ def build_expense_rows(
             r.document_id in (card_map_blocked_docs or ()),
         )
 
+        parts: list[tuple[str, Decimal | None, list[str]]] = list(
+            expense_posting_parts(
+                r, chart_of_accounts=chart_of_accounts, fallback_desc=vendor
+            )
+        )
+        if not parts and r.detected_total is None:
+            # Item 97: no readable total, so nothing to allocate. One row
+            # with a blank amount keeps the receipt in the listing, where the
+            # report marks it "amount unreadable, not in total".
+            accounts = list(dict.fromkeys(
+                _debit_account_and_note(i.categorization, chart_of_accounts)[0]
+                for i in r.line_items or ()
+            )) or [_UNCATEGORIZED]
+            parts = [(
+                "; ".join(accounts), None,
+                [i.description for i in r.line_items or () if i.description],
+            )]
         first = True
-        for account, amt, part_descs in expense_posting_parts(
-            r, chart_of_accounts=chart_of_accounts, fallback_desc=vendor
-        ):
+        for account, amt, part_descs in parts:
             description = "; ".join(part_descs) or vendor
             rows.append([
                 date_str,
@@ -319,7 +386,7 @@ def build_expense_rows(
                 _str(url),
             ])
             first = False
-    return rows
+    return groups
 
 
 def expense_posting_parts(

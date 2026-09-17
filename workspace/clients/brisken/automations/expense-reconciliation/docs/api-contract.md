@@ -1606,8 +1606,12 @@ An unreadable amount now has two visible places, never a silent drop:
 Both are silent when every amount read, which is the case on every month the
 app has produced: `_amount` formats a Decimal to two places and
 `validate_expense_field` refuses a non-finite total at the edge, so no input
-the app accepts reaches the builder unreadable. The guard is defence in depth
-on a builder whose row contract is "export rows", not two decimals.
+the app accepts reaches the builder as a cell that will not parse. The guard
+is defence in depth on a builder whose row contract is "export rows", not two
+decimals. The real case is a receipt whose total OCR never read
+(`detected_total is None`): since item 97 it writes one row with a blank
+amount, and the caller hands its listing number to the builder
+(`amounts_unreadable`), so it reaches both places too.
 
 `summary.n_amounts_unreadable` is the payload half, on the expense batch
 view. PARALLEL (rule 1): a scalar count beside the existing ones, nothing
@@ -2618,6 +2622,14 @@ Route result:
   review-bucket rows included) and that the rule left for a person.
 - `summary`: the run summary after the writes.
 
+`POST .../decisions/confirm-ready` ("Confirm all Ready") follows the same
+pairing rule since item 133 (2026-09-17): a row must be `review.state:
+"ready"` AND pass `confirmable_pair`. `ready` is a category verdict, so before
+this a categorized receipt paired with ANOTHER merchant's same-amount charge
+(BASE44 100.00 holding an "Anthropic, PBC" receipt, `vendor_pct` 22) was
+ready, and the click booked it. The route's response shape is unchanged;
+route-level in `tests/test_same_amount_other_merchant_item_133.py`.
+
 The other two bulk confirms and a booked row: `POST .../decisions/confirm-ready`
 already never confirmed one (a booked row's `review.state` is `none`, so it is
 never `ready`); `POST .../decisions/bulk` with `"status": "confirmed"` did, and
@@ -3392,6 +3404,71 @@ those rows. Live August 2026 on deploy: 1 (LOVABLE 25.00 on 3645, receipt
 picked as 2838). Route-level in `tests/test_card_scope_item_137.py`. SPA half:
 `docs/lovable-cards-differ-prompt.md`.
 
+## The PDFs say what the screen says (items 96 + 97, 2026-09-17)
+
+No route, request or payload field changes. Both documents read words and
+numbers the run and batch payloads already carry.
+
+### `GET /runs/{id}/reconciliation-report.pdf`
+
+- **Booked is not a to-do.** A charge booked without a receipt (`rows[].section`
+  `posted`, i.e. yellow in the workbook or the reviewer's already-posted
+  verdict, with `effective_bucket` `unmatched`) leaves the "N charges with no
+  receipt" table. Under the to-do tables, flat and per card:
+  `Already booked in your workbook: 48 charges with no receipt, marked already
+  posted in the listing below.` In the charge listing its Status reads
+  `already posted`, not `no receipt`. A month with nothing else open reads
+  `Nothing. Every charge has a receipt or is already booked, ...`. The
+  coverage table's "No receipt" column is the coverage panel's
+  `n_unmatched_tx` and still counts them.
+- **Why.** The receipts-with-no-charge table gains a Why column: the screen's
+  short label for `unmatched_receipts[].reason_code` (`no charge found`,
+  `card not loaded`, `next or previous month`, `not a card payment`).
+- **Captions** (`service.reconciliation_captions`), one per place the payload
+  puts a receipt; `Unmatched receipt` is no longer printed:
+
+| Where the payload puts it | Caption | Detail line ends with |
+|---|---|---|
+| held by a charge (`chosen_document_id`, or `assignable_receipts[].held_by` naming a non-review charge) | `Charge <date> · <vendor>` | `receipt: <vendor>` (unchanged) |
+| `copies_set_aside[]` | `Copy set aside · <vendor>` | `copy of <original vendor> (<original file>), set aside`, original = `duplicate.of` |
+| candidate of a pending review row (`assignable_receipts[].held_by` is a row with `effective_bucket` `review` that holds no pick) | `Waiting for review · <vendor>` | `proposed for the charge <vendor> <amount> <ccy> of <date>, not confirmed yet` |
+| settled outside the card | `Paid by bank transfer · <vendor>` (the month report's tender words) | date and amount only |
+| `unmatched_receipts[]` | `Receipt with no charge · <vendor>` | the screen's long line for its `reason_code` |
+
+The English strings are `unmatched_reasons.RECEIPT_REASON_TEXT` /
+`RECEIPT_REASON_SHORT`, verbatim from the SPA's EN i18n
+(`docs/lovable-unmatched-reasons-prompt.md` section 5). Live July 2026 rendered
+locally: to-do 24 charges (was 72), booked line 30 + 18 = 48 across cards 3876
+and 2838, captions 31 charge / 11 no charge / 8 waiting for review / 2 copies
+(was 31 charge / 21 "Unmatched receipt"). August: 9 / 10 / 1 / 5, no booked rows.
+
+### `GET /runs/{id}/expense-report.pdf` (and `expenses.csv`)
+
+- **One pass numbers the listing and the captions.**
+  `zoho_expense_export.build_expense_row_groups` returns the rows per receipt;
+  `build_expense_rows` is its flattening, so the CSV is unchanged byte for byte
+  on a month whose totals all read. A caption's expense numbers are the rows
+  written for that document. The old width pass ran without the chart and the
+  COA gate and fell back to 1..N whenever it counted differently.
+- **An unreadable total writes one row** in the listing and the CSV: Amount
+  blank, account the lines' account(s) or `(uncategorized - assign)`, vendor,
+  date. The listing row carries `amount unreadable, not in total`, the footer
+  names it, and the header count includes it.
+- A receipt that still writes no row (a total of exactly 0.00) is captioned
+  `Receipt · <vendor>` with `not in the listing` on its detail line, never a
+  borrowed number. Should rows and receipts ever fail to line up, the listing
+  stays flat and the closing note says the captions name the receipt instead.
+
+Live July and August 2026 rendered locally before and after: every caption
+already named its own rows on both, so the live documents did not move. July's
+audit-time mismatch (width pass 56, rows 55) is gone from today's data: 50
+listed receipts (2 copies out since item 94), width pass 54, rows 54, and the
+Microsoft receipt writes its two rows (22, 23), which fits the COA gate keeping
+a categorized part as its own row since item 95. The fix is pinned on synthetic
+months. Route-level in `tests/test_pdfs_match_the_screen_items_96_97.py`, plus
+the status words in `tests/test_coverage_surface.py`
+`test_the_document_headline_agrees_with_the_screen`.
+
 ## A mail that added nothing (item 106, 2026-09-17)
 
 A forward whose every file was set aside (a statement page, a bill notice
@@ -3486,6 +3563,42 @@ still run. A folder with no interrupted job, or with no trustworthy sidecar
 (a drop from before this change, whose month pick is unknown), is deleted
 and its job keeps what it said; so is every `drop-add-*` copy inside a
 month's folder. No new response field.
+
+## A pair the model rejects (item 131, 2026-09-17)
+
+**No new field, and no field retyped.** For a foreign-currency pair the tool
+cannot settle, the model gives a same-purchase probability, and the owner
+ruled on 2026-07-24 that a pair it rejects is not shown. The cut-off read
+"below `fx_judgment_suggest_floor` (0.20)" and the model answers exactly
+0.20, so two live July rows were shown with "likely NOT the same purchase
+(p=0.20)" as their reason. What a consumer sees now:
+
+- A verdict **below** the floor is final, exactly as ruled and as before:
+  the pair leaves `rows[].candidates[]`, the charge reads
+  `effective_bucket: "unmatched"` and the receipt joins `unmatched_receipts`,
+  whatever its rate says.
+- A verdict **exactly at** the floor is now a rejection too, and leaves the
+  same way, with one exception: a pair whose own rate arithmetic sits in the
+  clean band, `fx.reference_gap_band: "match"` (item 81; the view and the
+  judgment layer read one function, `matching.deterministic.reference_gap`),
+  stays in review. Its `match_type` stays `fx_judgment`, `confidence` is the
+  model's number (0.2), `requires_review` true, and `reason` puts the tool's
+  arithmetic first and the model after it:
+
+```
+"Charge 5.61 USD vs receipt 28.73 BRL at monthly reference rate 0.192448: deviation 1.5%. Demoted to judgment: this rate-derived pairing is not conclusive (another charge or receipt agrees just as cleanly). Kept for review although the model disagrees: FX judgment: likely NOT the same purchase (p=0.20). ..."
+```
+
+A pair above the floor keeps the model's reason first, exactly as before, so
+a consumer that reads "the model's verdict" off `reason` should look for
+`FX judgment:` anywhere in the string, not at its start. Measured on the live
+months (DB copy 2026-09-17 evening): July moves one row at its next re-match,
+August none. NOBRE ATACAREJO 65.23 (receipt `0059`, 4.01% off, model 0.20)
+leaves review; NATHALIA KEILA FIRMIN 5.61 (`0062`, 1.46%, model 0.20) stays,
+with the reason reordered; HOTEL AM TIERGARTEN 24.02 (`0034`, Erste Fracht
+21.00 EUR, -1.59%, model 0.10) stays out, because the exception stops at the
+floor. No SPA change is needed: `reason` renders verbatim. Pinned route-level
+in `tests/test_rejected_fx_pair_item_131.py`.
 
 ## An invoice read as a statement page (item 105, 2026-09-17)
 
