@@ -200,15 +200,20 @@ def test_a_bad_range_is_refused_with_a_reason(client):
 
 def test_a_confirmed_private_row_is_not_company_spend(client, monkeypatch):
     """A reimbursement owed is somebody's money, not the project's: the
-    row leaves the roll-up the moment the reviewer confirms it private."""
+    row leaves the roll-up the moment the reviewer confirms it private.
+    Paid with a card Settings does not define (2026-09-17: a company-card
+    row cannot be marked private), so the cost center is the row's own."""
     client.put("/api/settings", json={"cards": CARDS, "cost_centers": CENTERS})
     _patch_ocr(monkeypatch, _extraction(vendor="Lidar Parts Co",
                                         total="100.00",
-                                        payment_hint="Visa ...1111"))
+                                        payment_hint="Visa ...4242"))
     batch = _create_batch(client)
+    doc = _row(client, batch)["document_id"]
+    r = client.put(f"/api/runs/{batch}/expenses/{doc}",
+                   json={"field": "cost_center", "value": "Lidar"})
+    assert r.status_code == 200, r.text
     assert _center(_totals(client), "Lidar")["n_rows"] == 1
 
-    doc = _row(client, batch)["document_id"]
     r = client.post(f"/api/runs/{batch}/expenses/{doc}/private",
                     json={"private": True, "reimburse_to": "Nicolas"})
     assert r.status_code == 200, r.text
