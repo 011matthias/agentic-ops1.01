@@ -17,6 +17,14 @@ So the report is one PDF:
 3. every receipt, appended in listing order behind a caption that names the
    expense number it proves.
 
+A company month is reconciled card by card, so its listing is sectioned per
+card (item 138, owner 2026-09-17: "the PDFs are not organized by the cards
+that were reconciled"): each card gets its caption, a line saying what its
+statement settled, its table and sums, and then that card's receipt pages,
+before the next card starts. Anything that belongs to no card section (the
+reimbursements owed, a copy whose original is gone) keeps its pages at the
+end. Trip and cost-center sections keep every receipt at the end, as before.
+
 The listing is built from `build_expense_rows` — the SAME rows the CSV
 export writes — so the document and the export cannot disagree about money.
 Receipts are appended as delivered: an image becomes one page, a PDF receipt
@@ -32,13 +40,16 @@ from __future__ import annotations
 
 import io
 from collections.abc import Sequence
+from decimal import Decimal
 
 from ._pdf_common import (
     UNREADABLE_CAPTION,
+    caption_mark,
     esc as _esc,
     excluded_note,
     format_totals,
     make_styles,
+    parse_amount,
     prepare_evidence,
     register_fonts,
     stitch,
@@ -62,6 +73,64 @@ _LISTING = (
 )
 
 
+def card_statement_line(section: dict) -> str:
+    """What a card's statement settled, in one line under its caption.
+
+    `section` is one of `card_sections`' entries (item 138). The figures are
+    its coverage entry's, the same numbers the month page's coverage panel
+    shows, so the document and the screen cannot count a card differently.
+    The one figure computed here is booked-without-a-receipt (item 102): the
+    card's charges keyed into the books (`section == "posted"`) that no
+    receipt settles, summed in Decimal off the rows' own amount strings.
+
+    A card with no coverage entry had no statement this month, and says so.
+    The no-card section says nothing then: "no statement for no card" is not
+    a sentence anyone needs."""
+    coverage = section.get("coverage")
+    has_card = bool(section.get("key"))
+    if not coverage:
+        return "No statement loaded for this card." if has_card else ""
+    parts: list[str] = []
+    statements = [
+        str(s) for s in (coverage.get("statements") or []) if str(s).strip()
+    ]
+    if statements:
+        parts.append(
+            ("Statement: " if len(statements) == 1 else "Statements: ")
+            + ", ".join(statements)
+        )
+    elif has_card:
+        parts.append("No statement loaded for this card")
+    n_tx = int(coverage.get("n_transactions") or 0)
+    parts.append(f"{n_tx} charge{'s' if n_tx != 1 else ''}")
+    parts.append(f"{int(coverage.get('n_reconciled') or 0)} matched")
+    still_open = coverage.get("unreconciled_by_ccy") or {}
+    parts.append("still open: " + (
+        ", ".join(f"{ccy} {amt}" for ccy, amt in sorted(still_open.items()))
+        or "nothing"
+    ))
+    n_booked = 0
+    booked: dict[str, Decimal] = {}
+    for row in section.get("rows") or []:
+        if row.get("section") != "posted" or row.get("effective_bucket") != "unmatched":
+            continue
+        n_booked += 1
+        value = parse_amount(row.get("amount"))
+        if value is not None:
+            ccy = str(row.get("currency") or "") or "?"
+            booked[ccy] = booked.get(ccy, Decimal("0")) + abs(value)
+    if n_booked:
+        parts.append(
+            f"booked without a receipt: {n_booked} "
+            f"charge{'s' if n_booked != 1 else ''}"
+            + (", " + ", ".join(
+                f"{ccy} {amt:,.2f}" for ccy, amt in sorted(booked.items())
+            ) if booked else "")
+        )
+    line = "  ·  ".join(parts)
+    return line[:1].upper() + line[1:]
+
+
 def build_expense_report_pdf(
     rows: Sequence[Sequence[str]],
     columns: Sequence[str],
@@ -76,6 +145,7 @@ def build_expense_report_pdf(
     sections_note: str = "",
     copies_set_aside: Sequence[dict] | None = None,
     copies_set_aside_totals: dict[str, str] | None = None,
+    receipts_by_section: bool = False,
 ) -> bytes:
     """Render the month's report: listing first, then the receipts.
 
@@ -125,6 +195,18 @@ def build_expense_report_pdf(
     section: a heading for the partition and the standing note that
     qualifies its sums (for cost centers, the stated limit that this is
     card-and-receipt spend, not total project cost).
+
+    Item 138 partitions a company month per card with the same `caption` /
+    `label` shape plus two optional keys: `detail`, one line under the
+    caption (what the card's statement settled, `card_statement_line`), and
+    `notes`, lines under the sums (a receipt held on this card's charge
+    whose own card is another). A section without them renders as before.
+
+    `receipts_by_section` puts each section's receipt pages right behind
+    that section's sums instead of after the whole document. An evidence
+    entry belongs to the section holding its first row number; entries in
+    no section (reimbursements, a copy whose original is not listed) keep
+    their pages at the end. Off => every caption at the end, as before.
 
     `copies_set_aside` (item 94) is the documents the tool decided repeat a
     listed expense, already left out of `rows`:
@@ -231,12 +313,78 @@ def build_expense_report_pdf(
         t.setStyle(table_style())
         return t
 
+    # Item 138: which page each evidence caption landed on, one list per
+    # entry in `prepared` order, filled by `caption_mark` during the build.
+    # Only read when captions sit inside the document.
+    marks: list[list[int]] = [[] for _ in prepared]
+    placed: set[int] = set()
+    # A caption must own its page: set after a section's last caption, so
+    # whatever comes next starts on a fresh page instead of sharing it.
+    pending_break = False
+
+    def _caption(i: int) -> None:
+        # Its own PageBreak opens the page, so a pending one is spent here
+        # rather than stacked into an empty page.
+        nonlocal pending_break
+        pending_break = False
+        item, pdf_bytes = prepared[i]
+        placed.add(i)
+        story.append(PageBreak())
+        if receipts_by_section:
+            story.append(caption_mark(marks[i]))
+        numbers = [int(n) for n in item.get("rows") or []]
+        if len(numbers) > 1:
+            which = "Expenses " + ", ".join(str(n) for n in numbers)
+        elif numbers:
+            which = f"Expense {numbers[0]}"
+        else:
+            which = "Expense"
+        if item.get("copy"):
+            # Item 94: the pages of a copy set aside, behind its original.
+            which += " (copy set aside)"
+        label = str(item.get("label") or "(no vendor)")
+        story.append(Paragraph(_esc(f"{which} · {label}"), styles["caption"]))
+        if item.get("detail"):
+            story.append(Paragraph(_esc(str(item["detail"])), styles["capsub"]))
+        story.append(Spacer(1, 6))
+        name = str(item.get("name") or "")
+        # `render_note` is what `prepare_evidence` found: the reason a file
+        # produced no pages, or (on a file that did) the part of it that was
+        # left out. Naming it here is the whole point of the caption for a
+        # blocked file: the reviewer has to be able to find the file without
+        # reading a log, and the report itself is the only place they look.
+        note = str(item.get("render_note") or "")
+        if pdf_bytes is not None:
+            story.append(Paragraph(
+                _esc(f"{name}: {note}" if note else name), styles["capsub"]
+            ))
+        elif item.get("data"):
+            why = note or "this file could not be rendered into the report"
+            story.append(Paragraph(
+                _esc(f"{name}: {why}; open it in the app."),
+                styles["capsub"],
+            ))
+        else:
+            story.append(Paragraph(
+                "No receipt document for this expense.", styles["capsub"]
+            ))
+
+    def _flow(*flowables) -> None:
+        # Content after a section's captions opens a new page first.
+        nonlocal pending_break
+        if pending_break:
+            story.append(PageBreak())
+            pending_break = False
+        story.extend(flowables)
+
     if sections:
         # Sectioned listing: one table per section, numbering continuous,
         # per-section sums beneath each; the reimbursements block's shape,
         # applied to the listing itself. A trip sections per person
         # (item 38: `person` / `on_roster`); a company month sections per
-        # cost center (item 47: `caption` / `label`).
+        # cost center (item 47: `caption` / `label`) or, when no cost
+        # center applies, per card (item 138: `caption` / `label` /
+        # `detail` / `notes`, receipts behind each section).
         if sections_heading:
             story.append(Spacer(1, 12))
             story.append(Paragraph(_esc(sections_heading), styles["caption"]))
@@ -257,8 +405,9 @@ def build_expense_report_pdf(
                 (start + i, rows[start - 1 + i]) for i in range(count)
                 if 0 <= start - 1 + i < len(rows)
             ]
-            story.append(Spacer(1, 10))
-            story.append(Paragraph(_esc(caption), styles["caption"]))
+            _flow(Spacer(1, 10), Paragraph(_esc(caption), styles["caption"]))
+            if sec.get("detail"):
+                story.append(Paragraph(_esc(str(sec["detail"])), styles["capsub"]))
             story.append(_listing_table(numbered))
             # Same Decimal sum as the header total, over this slice only,
             # so a per-person line and the month's line cannot disagree.
@@ -273,6 +422,17 @@ def build_expense_report_pdf(
                      f"  ·  {sec_line}"),
                 styles["sub"],
             ))
+            for line in sec.get("notes") or []:
+                story.append(Paragraph(_esc(str(line)), styles["capsub"]))
+            if receipts_by_section:
+                # This section's receipts, before the next section starts.
+                in_section = set(range(start, start + len(numbered)))
+                for i, (item, _pdf) in enumerate(prepared):
+                    first = next(iter(item.get("rows") or []), None)
+                    if i in placed or first is None or int(first) not in in_section:
+                        continue
+                    _caption(i)
+                    pending_break = True
     else:
         story.append(_listing_table(list(enumerate(rows, start=1))))
 
@@ -280,7 +440,7 @@ def build_expense_report_pdf(
     # named. Silent when every amount read.
     excluded = excluded_note(unreadable)
     if excluded:
-        story.append(Paragraph(_esc(excluded), styles["sub"]))
+        _flow(Paragraph(_esc(excluded), styles["sub"]))
 
     # ── copies set aside (item 94): named, summed, never in the total ──
     if copies_set_aside:
@@ -289,7 +449,7 @@ def build_expense_report_pdf(
             f"{ccy} {amount}"
             for ccy, amount in sorted((copies_set_aside_totals or {}).items())
         ) or "no amounts read"
-        story.append(Spacer(1, 8))
+        _flow(Spacer(1, 8))
         story.append(Paragraph(
             _esc(
                 f"Copies set aside: {n_copies} "
@@ -322,7 +482,7 @@ def build_expense_report_pdf(
 
     # ── reimbursements owed (item 41): per person, with sums ────────
     if reimbursements:
-        story.append(Spacer(1, 12))
+        _flow(Spacer(1, 12))
         story.append(Paragraph("Reimbursements owed", styles["caption"]))
         story.append(Paragraph(
             "Private expenses confirmed by the reviewer: paid out of "
@@ -365,7 +525,7 @@ def build_expense_report_pdf(
             ))
 
     if prepared_note:
-        story.append(Spacer(1, 8))
+        _flow(Spacer(1, 8))
         story.append(Paragraph(_esc(prepared_note), styles["sub"]))
 
     # ── caption pages: one per document, its pages appended behind ─────
@@ -374,44 +534,12 @@ def build_expense_report_pdf(
     # caption instead of leaving a caption with nothing behind it (which
     # reads as "the receipt is here" to anyone flipping through) — and the
     # Receipt column in the listing says the same thing.
-    for item, pdf_bytes in prepared:
-        story.append(PageBreak())
-        numbers = [int(n) for n in item.get("rows") or []]
-        if len(numbers) > 1:
-            which = "Expenses " + ", ".join(str(n) for n in numbers)
-        elif numbers:
-            which = f"Expense {numbers[0]}"
-        else:
-            which = "Expense"
-        if item.get("copy"):
-            # Item 94: the pages of a copy set aside, behind its original.
-            which += " (copy set aside)"
-        label = str(item.get("label") or "(no vendor)")
-        story.append(Paragraph(_esc(f"{which} · {label}"), styles["caption"]))
-        if item.get("detail"):
-            story.append(Paragraph(_esc(str(item["detail"])), styles["capsub"]))
-        story.append(Spacer(1, 6))
-        name = str(item.get("name") or "")
-        # `render_note` is what `prepare_evidence` found: the reason a file
-        # produced no pages, or (on a file that did) the part of it that was
-        # left out. Naming it here is the whole point of the caption for a
-        # blocked file: the reviewer has to be able to find the file without
-        # reading a log, and the report itself is the only place they look.
-        note = str(item.get("render_note") or "")
-        if pdf_bytes is not None:
-            story.append(Paragraph(
-                _esc(f"{name}: {note}" if note else name), styles["capsub"]
-            ))
-        elif item.get("data"):
-            why = note or "this file could not be rendered into the report"
-            story.append(Paragraph(
-                _esc(f"{name}: {why}; open it in the app."),
-                styles["capsub"],
-            ))
-        else:
-            story.append(Paragraph(
-                "No receipt document for this expense.", styles["capsub"]
-            ))
+    # With `receipts_by_section` the card sections already placed theirs;
+    # what is left (reimbursements, a copy with no listed original) keeps
+    # its pages at the end, which is every caption when the option is off.
+    for i in range(len(prepared)):
+        if i not in placed:
+            _caption(i)
 
     buf = io.BytesIO()
     SimpleDocTemplate(
@@ -422,4 +550,12 @@ def build_expense_report_pdf(
     ).build(story)
 
     # ── stitch: listing + (caption page, receipt pages) per expense ──
+    if receipts_by_section:
+        # One recorded page per caption, in `prepared` order. A caption
+        # that recorded none shortens the list, and `stitch` then appends
+        # every document at the end: out of place, never dropped.
+        return stitch(
+            buf.getvalue(), prepared,
+            caption_pages=[m[0] for m in marks if m],
+        )
     return stitch(buf.getvalue(), prepared)
