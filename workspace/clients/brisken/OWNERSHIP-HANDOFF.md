@@ -72,6 +72,12 @@ Lovable rebuilds go live.
 Zero org or app tokens exist (`flyctl tokens list`, 2026-09-10), so the only
 Fly credential is Matthias's login.
 
+Uptime of `brisken-expense-recon` is watched from outside the app by
+`.github/workflows/expense-recon-uptime.yml` in the monorepo (every 10
+minutes; an outage opens a `recon-uptime` issue there and mails Matthias),
+and since the monorepo does not transfer, a Brisken-side monitor is part of
+the handoff.
+
 ### GitHub (`011matthias`, no orgs)
 
 | Repo | Role |
