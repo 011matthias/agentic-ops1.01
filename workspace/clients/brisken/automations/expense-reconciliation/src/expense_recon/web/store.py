@@ -25,6 +25,11 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+# Note item T3: which statement upload printed a charge. Its own module,
+# not `service.py`, because the service imports this file.
+from .decision_history import ROW_CHARGE, ROW_RECEIPT
+from .statement_origin import origins_from_snapshot
+
 # Reviewer verdicts. `pending` is the default for every transaction until
 # Chris acts; `confirmed` locks the (possibly picked) match as reconciled;
 # `rejected` drops the match and sends the transaction to unmatched.
@@ -573,6 +578,90 @@ class RunStore:
             self.conn.execute(
                 "ALTER TABLE trips ADD COLUMN cost_center TEXT NOT NULL DEFAULT ''"
             )
+        # decisions / decision_history / receipt_claims .statement_id (note
+        # item T3, 2026-09-18): which statement upload printed the charge
+        # this record is about. NULL on every row written before the column
+        # and on every row whose charge the month cannot place (a month
+        # whose uploads predate `statement_origins` and whose statement is
+        # a PDF, a history line about a receipt that settles nothing, a
+        # duplicate ruling), which reads as "not recorded" and never as
+        # "no statement". `decision_history` is added here as well as in
+        # the CREATE block: the live volume already holds the table from
+        # item 104's deploy, so IF NOT EXISTS is a no-op there.
+        for table, cols in (
+            ("decisions", decision_cols),
+            ("decision_history", None),
+            ("receipt_claims", None),
+        ):
+            names = cols if cols is not None else {
+                row["name"]
+                for row in self.conn.execute(
+                    f"PRAGMA table_info({table})"
+                ).fetchall()
+            }
+            if "statement_id" not in names:
+                self.conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN statement_id TEXT"
+                )
+
+    # -- where a charge was printed (note item T3) --------------------------
+    #
+    # A stored verdict names a `transaction_id`, which is content-derived:
+    # a re-read of a corrected file gives the same printed line a new id
+    # and `rekey_decisions` moves the verdict onto it. The statement the
+    # line was printed on is the fact that does NOT move, so stamping it
+    # beside the id is what lets a decision, a history line or a claim say
+    # which document it was about months later.
+    #
+    # Resolved here rather than passed in by each of the seventeen writers:
+    # the value is a pure function of (run_id, transaction_id), so a
+    # caller could only get it wrong. The snapshot is parsed once per run
+    # per process and dropped whenever this store rewrites it, which is
+    # the only way it changes.
+
+    def _charge_origins(self, run_id: str) -> dict[str, dict]:
+        cache = getattr(self, "_origin_cache", None)
+        if cache is None:
+            cache = self._origin_cache = {}
+        if run_id not in cache:
+            run = self.get_run(run_id)
+            cache[run_id] = origins_from_snapshot(run.snapshot if run else None)
+        return cache[run_id]
+
+    def _forget_charge_origins(self, run_id: str) -> None:
+        """Drop the memo for one run. Called wherever this store writes a
+        snapshot, which is the only event that can change the answer (an
+        attach, a re-read, a manual receipt attach)."""
+        cache = getattr(self, "_origin_cache", None)
+        if cache is not None:
+            cache.pop(run_id, None)
+
+    def statement_id_for_charge(
+        self, run_id: str, transaction_id: str
+    ) -> str | None:
+        """The upload that printed this charge, or None when the month
+        does not record one (see the column comment in `_migrate`)."""
+        origin = self._charge_origins(run_id).get(str(transaction_id))
+        return (origin or {}).get("statement_id") or None
+
+    def _stamp_decision_statement(
+        self, run_id: str, transaction_id: str
+    ) -> None:
+        """Write the charge's statement id onto its decision row, if the
+        row does not already carry one. Runs inside the writer's own
+        transaction, before its commit, so a verdict and the statement it
+        was about land together or not at all. Cheap and idempotent: the
+        id never changes for a given charge, so the guard makes a bulk
+        confirm's second pass over the same row a no-op."""
+        statement_id = self.statement_id_for_charge(run_id, transaction_id)
+        if not statement_id:
+            return
+        self.conn.execute(
+            "UPDATE decisions SET statement_id = ? WHERE run_id = ? "
+            "AND transaction_id = ? AND (statement_id IS NULL "
+            "OR statement_id = '')",
+            (statement_id, run_id, transaction_id),
+        )
 
     # -- decision history (item 104) ---------------------------------------
     #
@@ -597,19 +686,51 @@ class RunStore:
         for entry in entries:
             cur = self.conn.execute(
                 "INSERT INTO decision_history (run_id, row_key, row_kind, "
-                "field, old_value, new_value, who, at, trigger, detail) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "field, old_value, new_value, who, at, trigger, detail, "
+                "statement_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     entry["run_id"], entry["row_key"], entry["row_kind"],
                     entry["field"], entry["old_value"], entry["new_value"],
                     entry["who"], entry["at"], entry["trigger"],
                     entry.get("detail"),
+                    # Note item T3: stamped at INSERT because the table is
+                    # append-only -- a line filled in afterwards would be a
+                    # rewrite, which is the one thing this ledger forbids.
+                    # A charge line resolves through its own row_key; a
+                    # receipt line through the charge that currently holds
+                    # it, which is what the line was about.
+                    self._history_statement_id(entry),
                 ),
             )
             ids.append(int(cur.lastrowid))
         if entries:
             self.conn.commit()
         return ids
+
+    def _history_statement_id(self, entry: dict) -> str | None:
+        """The statement one history line is about.
+
+        `charge`: the line's own `row_key` IS a transaction id.
+        `receipt`: the charge this run currently books the document
+        against, which is the line the category change lands on; None
+        when the receipt settles nothing here.
+        `group` (a duplicate ruling): about no single charge, so None.
+        """
+        run_id = entry["run_id"]
+        kind = entry.get("row_kind")
+        if kind == ROW_CHARGE:
+            return self.statement_id_for_charge(run_id, entry["row_key"])
+        if kind == ROW_RECEIPT:
+            row = self.conn.execute(
+                "SELECT transaction_id FROM decisions WHERE run_id = ? "
+                "AND chosen_document_id = ? LIMIT 1",
+                (run_id, entry["row_key"]),
+            ).fetchone()
+            if row is None:
+                return None
+            return self.statement_id_for_charge(run_id, row["transaction_id"])
+        return None
 
     def list_history(
         self,
@@ -763,6 +884,9 @@ class RunStore:
             "UPDATE runs SET snapshot = ? WHERE run_id = ?",
             (json.dumps(snapshot), run_id),
         )
+        # Note item T3: a new snapshot is the only event that changes which
+        # upload printed which charge, so the memo goes with it.
+        self._forget_charge_origins(run_id)
         self.conn.commit()
         return cur.rowcount > 0
 
@@ -1210,6 +1334,20 @@ class RunStore:
                 (new_id, run_id, old_id),
             )
             moved += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+        # Note item T3: the re-read rebuilt the month's uploads, so the
+        # memo is stale and each moved verdict has to name the statement
+        # its NEW id was printed on. The same bytes re-read give the same
+        # `statement_id`, so on the ordinary re-read this rewrites the
+        # same value; on a corrected file it follows the correction.
+        self._forget_charge_origins(run_id)
+        for new_id in mapping.values():
+            statement_id = self.statement_id_for_charge(run_id, new_id)
+            if statement_id:
+                self.conn.execute(
+                    "UPDATE decisions SET statement_id = ? WHERE run_id = ? "
+                    "AND transaction_id = ?",
+                    (statement_id, run_id, new_id),
+                )
         self.conn.commit()
         return moved
 
@@ -1243,6 +1381,7 @@ class RunStore:
             (run_id, transaction_id, status, chosen_document_id, updated_at,
              decided_by, rule),
         )
+        self._stamp_decision_statement(run_id, transaction_id)
         self.conn.commit()
 
     def set_tool_decision(
@@ -1276,6 +1415,7 @@ class RunStore:
             "OR (decisions.decided_by IS NULL AND decisions.status = 'pending')",
             (run_id, transaction_id, status, chosen_document_id, updated_at, rule),
         )
+        self._stamp_decision_statement(run_id, transaction_id)
         self.conn.commit()
         return cur.rowcount > 0
 
@@ -1307,6 +1447,7 @@ class RunStore:
             "updated_at = excluded.updated_at",
             (run_id, transaction_id, STATUS_PENDING, updated_at, disposition),
         )
+        self._stamp_decision_statement(run_id, transaction_id)
         self.conn.commit()
 
     def set_receipt_requested(
@@ -1335,6 +1476,7 @@ class RunStore:
             (run_id, transaction_id, STATUS_PENDING, updated_at,
              requested_at, requested_to),
         )
+        self._stamp_decision_statement(run_id, transaction_id)
         self.conn.commit()
 
     def set_no_receipt_expected(
@@ -1360,6 +1502,7 @@ class RunStore:
             "updated_at = excluded.updated_at",
             (run_id, transaction_id, STATUS_PENDING, updated_at, reason),
         )
+        self._stamp_decision_statement(run_id, transaction_id)
         self.conn.commit()
 
     # -- category overrides ----------------------------------------------
@@ -1640,11 +1783,13 @@ class RunStore:
         steal is never silent, the caller surfaces it. The same run
         re-claiming (a re-pick onto a different charge) updates in place."""
         cur = self.conn.execute(
-            "UPDATE receipt_claims SET transaction_id = ?, claimed_at = ? "
+            "UPDATE receipt_claims SET transaction_id = ?, claimed_at = ?, "
+            "statement_id = ? "
             "WHERE receipt_run_id = ? AND document_id = ? "
             "AND claimed_by_run_id = ?",
-            (transaction_id, claimed_at, receipt_run_id, document_id,
-             claimed_by_run_id),
+            (transaction_id, claimed_at,
+             self.statement_id_for_charge(claimed_by_run_id, transaction_id),
+             receipt_run_id, document_id, claimed_by_run_id),
         )
         if cur.rowcount > 0:
             self.conn.commit()
@@ -1652,10 +1797,14 @@ class RunStore:
         try:
             self.conn.execute(
                 "INSERT INTO receipt_claims (receipt_run_id, document_id, "
-                "claimed_by_run_id, transaction_id, claimed_at) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "claimed_by_run_id, transaction_id, claimed_at, "
+                "statement_id) VALUES (?, ?, ?, ?, ?, ?)",
                 (receipt_run_id, document_id, claimed_by_run_id,
-                 transaction_id, claimed_at),
+                 transaction_id, claimed_at,
+                 # Note item T3: the claim names a charge in the CLAIMING
+                 # run, so the statement is that run's, not the receipt's.
+                 self.statement_id_for_charge(
+                     claimed_by_run_id, transaction_id)),
             )
         except sqlite3.IntegrityError:
             # Raced or standing claim by another run: the PRIMARY KEY held.
@@ -1708,9 +1857,12 @@ class RunStore:
                 self.conn.execute(
                     "INSERT INTO receipt_claims (receipt_run_id, "
                     "document_id, claimed_by_run_id, transaction_id, "
-                    "claimed_at) VALUES (?, ?, ?, ?, ?)",
+                    "claimed_at, statement_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
                     (receipt_run_id, document_id, claimed_by_run_id,
-                     transaction_id, claimed_at),
+                     transaction_id, claimed_at,
+                     self.statement_id_for_charge(
+                         claimed_by_run_id, transaction_id)),
                 )
             except sqlite3.IntegrityError:
                 conflicts.append((receipt_run_id, document_id, transaction_id))

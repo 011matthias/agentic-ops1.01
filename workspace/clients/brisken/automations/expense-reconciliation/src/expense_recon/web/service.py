@@ -114,6 +114,15 @@ from .month_health import (
     unchecked as unchecked_month_health,
 )
 from .month_readiness import completeness_counts, is_month_complete
+# Note item T3: which upload printed a charge, and where. Defined in its
+# own module because `store.py` reads the same record and must not import
+# the service layer.
+from .statement_origin import (
+    STATEMENT_ORIGINS_KEY,
+    origin_fields,
+    origins_from_snapshot,
+    upload_origins,
+)
 from .serialize import (
     categorization_from_dict,
     categorization_to_dict,
@@ -3221,6 +3230,11 @@ def build_view(
     and no hint on it: the groups and their counts never depend on it."""
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
     rec_by_id = {r.document_id: r for r in receipts}
+    # Note item T3: which upload printed each charge, and where. Read once
+    # per payload (it walks `statements[]` and one map per upload) and put
+    # on every row below, so a booked expense traces back to the statement
+    # line it settles without the reader joining anything by hand.
+    charge_origin = origins_from_snapshot(run.snapshot)
     # What `receipt_image_available` is resolved against (item 52). Read
     # once per payload; `receipt_image_file` gates the receipts-dir branch
     # on the mode exactly as the image endpoint does.
@@ -3741,6 +3755,12 @@ def build_view(
                 # the charge open; `no_receipt_expected` (the reason) closes
                 # it. See `receipt_chase_view`.
                 **receipt_chase_view(decision),
+                # Note item T3: where this charge was printed --
+                # `statement_file`, `statement_id`, and `source_row` (a
+                # workbook line) or `source_page` (a PDF one). Each one
+                # parallel and ABSENT when not recorded, so a month whose
+                # uploads predate the record renders as it did before.
+                **origin_fields(charge_origin.get(tx_id)),
             }
         )
 
@@ -7434,6 +7454,28 @@ def build_expense_view(
             settled_outside=row_settled_outside,
         )
 
+    # Note item T3: the statement line this expense settles, inside this
+    # month. The charge side is read from `charge_state_map`, the month's
+    # EFFECTIVE settlement (the same map the coverage roll-up reads), not
+    # from the raw decisions: item 103 closed the split where the stored
+    # outcome named one receipt on two charges while the page named one.
+    # A receipt that settles nothing here carries none of these keys; a
+    # cross-batch settlement keeps answering with `settled_by`, which
+    # names the other month and is a different question.
+    tx_by_settled_doc: dict[str, str] = {}
+    for charge_tx_id, charge_state in (charge_state_map or {}).items():
+        held = (charge_state or {}).get("held_doc")
+        if held and held not in tx_by_settled_doc:
+            tx_by_settled_doc[str(held)] = str(charge_tx_id)
+    if tx_by_settled_doc:
+        grid_origin = origins_from_snapshot(run.snapshot)
+        for e in expenses:
+            settling_tx = tx_by_settled_doc.get(e.get("document_id"))
+            if not settling_tx:
+                continue
+            e["transaction_id"] = settling_tx
+            e.update(origin_fields(grid_origin.get(settling_tx)))
+
     def n_box(box: str) -> int:
         return sum(1 for e in expenses if box in e["boxes"])
 
@@ -10147,6 +10189,13 @@ def build_statement_entry(
         # into `statement_anchors`, so it never reaches the SPA: it is a
         # per-row map the size of the statement, and nothing renders it.
         "_anchors": _upload_anchors(transactions),
+        # Every charge this upload printed, with wherever it printed it
+        # (note item T3). Popped at commit into `statement_origins`, the
+        # same way and for the same reason as the anchors. Distinct from
+        # them: the anchors keep only the rows the writeback can address,
+        # so a PDF's charges are absent from them entirely and would have
+        # no upload to name.
+        "_origins": upload_origins(transactions),
     }
 
 
@@ -12945,20 +12994,29 @@ def rematch_month(
             # against the entries before it exactly as the appends did.
             rebuilt_entries: list[dict] = []
             rebuilt_anchors: dict[str, dict] = {}
+            rebuilt_origins: dict[str, dict] = {}
             for raw in replace_statements:
                 entry = dict(raw)
                 anchors = entry.pop("_anchors", {})
+                origins = entry.pop("_origins", {})
                 entry["advisory"] = statement_advisory(rebuilt_entries, entry)
                 entry["advisory_detail"] = detail_of(entry["advisory"])
                 rebuilt_entries.append(entry)
                 for anchor_key in _anchor_keys(entry):
                     rebuilt_anchors[anchor_key] = anchors
+                # Note item T3: keyed by the file name alone. The anchors
+                # are keyed by id as well because the writeback addresses
+                # an upload by id; this record is only ever walked through
+                # `statements[]`, where every entry has its file name.
+                rebuilt_origins[str(entry.get("file") or "")] = origins
             new_snapshot[STATEMENTS_KEY] = rebuilt_entries
             new_snapshot[STATEMENT_ANCHORS_KEY] = rebuilt_anchors
+            new_snapshot[STATEMENT_ORIGINS_KEY] = rebuilt_origins
         elif statement_entry is not None:
             prior = list((fresh.snapshot or {}).get(STATEMENTS_KEY) or [])
             entry = dict(statement_entry)
             anchors = entry.pop("_anchors", {})
+            origins = entry.pop("_origins", {})
             statement_advice = statement_advisory(prior, entry)
             entry["advisory"] = statement_advice
             entry["advisory_detail"] = detail_of(statement_advice)
@@ -12967,6 +13025,12 @@ def rematch_month(
                 **((fresh.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}),
                 # Keyed by file AND by `statement_id` (note item T2).
                 **{anchor_key: anchors for anchor_key in _anchor_keys(entry)},
+            }
+            # Note item T3: what this upload printed, keyed by its file
+            # name (see the re-read branch for why the id is not a key).
+            new_snapshot[STATEMENT_ORIGINS_KEY] = {
+                **((fresh.snapshot or {}).get(STATEMENT_ORIGINS_KEY) or {}),
+                str(entry.get("file") or ""): origins,
             }
         n_tx = len(transactions)
         # Item 103: what this commit stores, logs and returns is the
