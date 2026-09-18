@@ -50,6 +50,9 @@ LOVABLE = (datetime(2026, 8, 31), "LOVABLE", "Sale", -15.00)
 PRESSMASTER = (datetime(2026, 8, 18), "PRESSMASTER FZCO", "Sale", -220.00)
 FEE = (datetime(2026, 8, 20), "UBER ONE ANNUAL FEE", "Fee", -95.00)
 PAYMENT = (datetime(2026, 8, 4), "Payment Thank You-Mobile", "Payment", 111.00)
+# The mock categorizer guesses this vendor from its name (source VENDOR),
+# so its row reads `vendor_guess` and note #62's Confirm applies to it.
+UBER = (datetime(2026, 8, 20), "UBER TRIP", "Sale", -22.30)
 
 ENTITY = "Corporate Services"
 PICK = "Professional Services"
@@ -594,6 +597,85 @@ def test_the_gate_covers_both_routes(app_root):
     with TestClient(app) as anon:
         assert anon.get("/api/runs/whatever/history").status_code == 401
         assert anon.post("/api/runs/whatever/history/1/undo").status_code == 401
+
+
+# ------------------------------------- the sites the item's text undercounted
+#
+# The item named "the four write points". Enumerating every set_decision /
+# set_category_override call in src/ found nine, and then three more that are
+# reviewer-driven and were still silent. A ledger with invisible holes is
+# worse than no ledger, because it gets trusted.
+
+
+def test_confirming_the_tools_guess_is_itself_a_line(client, monkeypatch):
+    """Note #62's Confirm writes an override where there was none. That is a
+    reviewer verdict and it left no trace."""
+    batch_id = _month(
+        client, monkeypatch, [UBER, PAYMENT],
+        _extraction("Uber", 22.30, "2026-08-20"),
+    )
+    doc = _doc(client, batch_id)
+    grid = _grid(client, batch_id)["expenses"][0]
+    assert grid["category_confirmable"] is True, grid["review"]
+    resp = client.post(f"/api/runs/{batch_id}/expenses/{doc}/confirm-category")
+    assert resp.status_code == 200, resp.text
+
+    lines = [e for e in _entries(client, batch_id) if e["field"] == "receipt_category"]
+    assert lines, "confirming the guess recorded nothing"
+    assert lines[0]["row_key"] == doc
+    assert lines[0]["who"] == "criss"
+    assert lines[0]["new"] is not None
+
+
+def test_an_expense_field_edit_of_the_category_is_a_line(client, monkeypatch):
+    """`PUT /expenses/{doc}` folds category edits into the same override
+    table the category route writes; it recorded nothing."""
+    batch_id = _month(
+        client, monkeypatch, [LOVABLE, PAYMENT],
+        _extraction("LOVABLE", 15.00, "2026-08-31"),
+    )
+    doc = _doc(client, batch_id)
+    resp = client.put(
+        f"/api/runs/{batch_id}/expenses/{doc}",
+        json={"field": "category", "value": PICK},
+    )
+    assert resp.status_code == 200, resp.text
+
+    lines = [e for e in _entries(client, batch_id) if e["field"] == "receipt_category"]
+    assert lines, "the expense field edit recorded nothing"
+    assert {line["new"]["category"] for line in lines} == {PICK}
+    assert {line["trigger"] for line in lines} == {"bulk"}
+    assert {line["who"] for line in lines} == {"criss"}
+
+    # And the same value again moves nothing, so it records nothing more.
+    n = len(lines)
+    client.put(
+        f"/api/runs/{batch_id}/expenses/{doc}",
+        json={"field": "category", "value": PICK},
+    )
+    again = [e for e in _entries(client, batch_id) if e["field"] == "receipt_category"]
+    assert len(again) == n
+
+
+def test_attaching_a_mailed_receipt_by_hand_is_a_line(client, monkeypatch):
+    """The attach records a confirmed decision against the new document, so
+    the charge changed verdict with nothing on the record."""
+    batch_id = _month(client, monkeypatch, [PRESSMASTER, PAYMENT])
+    tx = _tx(client, batch_id, "PRESSMASTER FZCO")
+    _wire(monkeypatch, _extraction("PRESSMASTER FZCO", 220.00, "2026-08-18"))
+
+    resp = client.post(
+        f"/api/runs/{batch_id}/transactions/{tx}/receipt",
+        files={"file": ("mailed.jpg", JPG + b"-attach", "application/octet-stream")},
+    )
+    assert resp.status_code == 200, resp.text
+
+    lines = _entries(client, batch_id, row_key=tx)
+    assert lines, "the manual attach recorded nothing"
+    assert lines[0]["field"] == "decision"
+    assert lines[0]["new"]["status"] == "confirmed"
+    assert lines[0]["new"]["chosen_document_id"]
+    assert lines[0]["who"] == "criss"
 
 
 # ------------------------------------------------------------- pure module

@@ -4676,11 +4676,21 @@ under a hundred that did not.
 
 | `field` | Written by | `row_key` | Undo offered |
 |---|---|---|---|
-| `decision` | `POST /decisions`, `/decisions/bulk`, `/decisions/confirm-matched`, `/decisions/confirm-ready`, `/manual-match` | transaction id | yes |
+| `decision` | `POST /decisions`, `/decisions/bulk`, `/decisions/confirm-matched`, `/decisions/confirm-ready`, `/manual-match`, `/transactions/{tx}/receipt` | transaction id | yes |
 | `disposition` | `POST /disposition` | transaction id | yes |
 | `charge_category` | `PUT /charges/{tx}/category` (item 109) | transaction id | yes |
-| `receipt_category` | `POST /categories` | document id | yes |
+| `receipt_category` | `POST /categories`, `POST /expenses/{doc}/confirm-category` (note #62), `PUT /expenses/{doc}` with `field: category` / `zoho_account` | document id | yes |
 | `duplicate` | `POST /duplicates/resolve` | group id | **no** |
+
+Twelve write sites, not the four the item's text named. The list came
+from enumerating every `set_decision` / `set_disposition` /
+`set_category_override` / `set_duplicate_resolution` call in `src/` and
+classifying each, because a ledger with invisible holes is worse than no
+ledger: it gets trusted. What is deliberately NOT recorded is
+`set_tool_decision` (the matcher's own writes during a re-match) and the
+non-category half of `PUT /expenses/{doc}` (a header-field correction:
+vendor, date, total), which is a data edit rather than one of the five
+verdicts the item names.
 
 `decision` carries status AND chosen receipt as one value, because a confirm
 sets both together and an undo has to put both back together; two lines
@@ -4769,4 +4779,5 @@ action, outward-facing, and is quoted and decided separately;
 `OWNERSHIP-HANDOFF` step 8 is its plan. The machine's own re-match writes are
 not yet recorded: the triggers exist in the vocabulary, but wiring them means
 threading a `who` through the matcher, and the reviewer-facing half is what
-the item's evidence is about.
+the item's evidence is about. Header-field corrections on an expense
+(vendor, date, total) are not recorded either; see the table.

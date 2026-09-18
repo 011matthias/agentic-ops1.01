@@ -307,6 +307,34 @@ def _current_history_value(store, run, entry_row):
     return _HISTORY_UNREADABLE
 
 
+def _receipt_category_entries(
+    run_id, document_id, before_map, after_map, *, who, at, trigger
+):
+    """One line per LINE of this receipt whose category actually moved.
+
+    Used where the write happens inside a service call that this route does
+    not want to reach into: snapshot the override map before, call it, read
+    the map after, and let `make_entry` drop every line that did not move.
+    A confirm that ratifies eight lines the reviewer already agreed with
+    records nothing, which is correct.
+    """
+    keys = {
+        key for key in set(before_map) | set(after_map)
+        if key[0] == document_id
+    }
+    return [
+        dh.make_entry(
+            run_id=run_id, row_key=document_id, row_kind=dh.ROW_RECEIPT,
+            field=dh.FIELD_RECEIPT_CATEGORY,
+            old=_category_value(before_map.get(key)),
+            new=_category_value(after_map.get(key)),
+            who=who, at=at, trigger=trigger,
+            detail={"document_id": key[0], "line_index": key[1]},
+        )
+        for key in sorted(keys, key=lambda k: k[1])
+    ]
+
+
 def _category_value(override) -> dict | None:
     """A category override as a comparable value: absent stays absent, and
     a cleared pick (category None) is absent too, because clearing is what
@@ -3784,6 +3812,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return JSONResponse({"error": "file required", "code": "file_required"}, status_code=400)
         data = await upload.read()
         filename = upload.filename
+        # Read off the request before the work hands itself to the threadpool.
+        attach_who = _history_who(request)
 
         # Off the event loop: since item 66 attach_emailed_receipt takes the
         # batch writer lock to commit against a fresh re-read, and an OCR
@@ -3800,11 +3830,20 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     return JSONResponse(
                         {"error": "run not found", "code": "run_not_found"}, status_code=404
                     )
+                before = store.get_decisions(run_id).get(transaction_id)
                 err, document_id = attach_emailed_receipt(
                     store, run, transaction_id, filename, data, _now_iso()
                 )
                 if err:
                     return _refused(err)
+                # Item 104: the attach records a confirmed decision against
+                # the new document (service.attach_emailed_receipt), so the
+                # charge changed verdict and owner without a trace until now.
+                _append_history(store, [_decision_entry(
+                    run_id, transaction_id, before, STATUS_CONFIRMED,
+                    document_id, who=attach_who, at=_now_iso(),
+                    trigger=dh.TRIGGER_CLICK,
+                )])
                 run = store.get_run(run_id)  # snapshot changed above
                 view = _run_view(store, run)
             return JSONResponse(jsonable_encoder(
@@ -4807,7 +4846,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return await _expense_edit_reply(run_id, False)
 
     @app.post("/api/runs/{run_id}/expenses/{document_id:path}/confirm-category")
-    async def post_expense_confirm_category(run_id: str, document_id: str):
+    async def post_expense_confirm_category(
+        run_id: str, document_id: str, request: Request
+    ):
         """Note #62: keep the category the tool guessed from the vendor name
         (or could not explain) as the reviewer's own. Before this a right
         guess read "needs a look" until a DIFFERENT category was picked. No
@@ -4819,11 +4860,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run, err = _expense_run_or_error(store, run_id)
             if err is not None:
                 return err
+            # Item 104: accepting the tool's guess IS a reviewer verdict --
+            # it writes an override where there was none -- so it earns a
+            # line like any other category change.
+            before_map = store.get_category_overrides(run_id)
             msg = confirm_expense_category(store, run, document_id, _now_iso())
             if msg == "unknown expense":
                 return _refused(msg, status=404)
             if msg:
                 return _refused(msg)
+            _append_history(store, _receipt_category_entries(
+                run_id, document_id, before_map,
+                store.get_category_overrides(run_id),
+                who=_history_who(request), at=_now_iso(),
+                trigger=dh.TRIGGER_CLICK,
+            ))
         # No re-match (item 70): a category never reaches the matcher.
         return await _expense_edit_reply(run_id, False)
 
@@ -4980,6 +5031,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     store.set_category_override(
                         run_id, document_id, i, category, account, _now_iso()
                     )
+                # Item 104: the same differ the confirm above uses. `bulk`
+                # because one PUT rewrites every line of the expense.
+                _append_history(store, _receipt_category_entries(
+                    run_id, document_id, overrides,
+                    store.get_category_overrides(run_id),
+                    who=_history_who(request), at=_now_iso(),
+                    trigger=dh.TRIGGER_BULK,
+                ))
             else:
                 before = (
                     store.get_expense_field_overrides(run_id).get(document_id)
