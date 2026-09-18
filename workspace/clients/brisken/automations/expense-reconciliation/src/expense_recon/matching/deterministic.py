@@ -51,6 +51,33 @@ def _normalize(s: str) -> str:
     return _NON_ALNUM.sub(" ", s.lower()).strip()
 
 
+def _is_reference_token(token: str) -> bool:
+    """A normalized word that is a reference, not a merchant word (item X1,
+    2026-09-18): four or more characters carrying at least three digits.
+    "g173514057", "p3078900231", "1251593381", "x37l83bi5", "b013" and
+    "2640" are references; "base44" (two digits) and "eleven" are words."""
+    return len(token) >= 4 and sum(ch.isdigit() for ch in token) >= 3
+
+
+def strip_reference_tokens(s: str | None) -> str:
+    """The merchant words of a bank description, normalized, with its
+    reference-shaped tokens taken out (item X1, 2026-09-18).
+
+    Chase prints an order or invoice number inside the description
+    ("Microsoft-G173514057", "LinkedIn SN P3078900231", "Wix.com 1251593381",
+    "CASUALFOOD 2640 8"). `vendor_similarity` averages over the statement's
+    tokens, so such a token halved the merchant score of a pair whose
+    merchant words agreed exactly: live July 2026, the Microsoft invoice
+    printing G173514057 scored 0.50 against "Microsoft-G173514057" and sat
+    below the self-confirm floor (75) for a click it did not need. The
+    reference is evidence in its own right (`reference_match`); it is not a
+    merchant word. When nothing but references remain, the whole normalized
+    string is returned, so a description that IS a number still compares."""
+    norm = _normalize(s or "")
+    kept = [t for t in norm.split() if not _is_reference_token(t)]
+    return " ".join(kept) if kept else norm
+
+
 def _card_keys(s: str | None) -> set[str]:
     """Normalized card identifiers found in a statement account id or a Zoho
     payment-mode label, so the two compare on the same key (2026-06-16).
@@ -176,7 +203,11 @@ def _vendor_score(tx: Transaction, receipt: Receipt, cfg: "MatchingConfig") -> f
     not second-guess it. Otherwise the stdlib `difflib` similarity stands."""
     if cfg.is_alias(tx.legal_entity_id, tx.vendor_from_statement, receipt.detected_vendor):
         return 1.0
-    return vendor_similarity(tx.vendor_from_statement, receipt.detected_vendor)
+    stmt_vendor = tx.vendor_from_statement
+    # Item X1: the description's reference tokens are not merchant words.
+    if cfg.vendor_ignore_reference_tokens:
+        stmt_vendor = strip_reference_tokens(stmt_vendor)
+    return vendor_similarity(stmt_vendor, receipt.detected_vendor)
 
 
 def _signal(
@@ -257,6 +288,7 @@ _TUNABLE_FLOAT = frozenset({
 _TUNABLE_BOOL = frozenset({
     "card_scoping", "fx_self_derived_rates", "fx_self_derived_review",
     "uniqueness_spoken_for",
+    "vendor_ignore_reference_tokens", "no_card_rival_review",
 })
 
 
@@ -495,6 +527,27 @@ class MatchingConfig:
     # acceptance carries the merchant forward. `min` 0.0 disables the rule.
     uniqueness_vendor_dominance_min: float = 0.5
     uniqueness_vendor_dominance_margin: float = 0.25
+
+    # ── The statement description counts (item X1, owner 2026-09-18) ──
+    # `vendor_ignore_reference_tokens`: `_vendor_score` compares the
+    # description's MERCHANT words (`strip_reference_tokens`), so an order
+    # or invoice number Chase prints inside the description no longer
+    # halves the merchant score of a pair whose words agree. Measured
+    # 2026-09-18: live July's Microsoft invoice 0.50 -> 1.00 (crosses the
+    # self-confirm floor), two bundle pairs 0.50 -> 1.00 and 0.43 -> 0.64,
+    # no class moves, 0 wrong. False restores the raw comparison.
+    vendor_ignore_reference_tokens: bool = True
+    # `no_card_rival_review`: the review clause of the no-card fallback
+    # (`card_evidence`, `NO_CARD_RIVAL_REVIEW`). A pair whose receipt names
+    # no card at all keeps its match but asks for review when another
+    # deterministic candidate for the same receipt sits on a DIFFERENT card
+    # and is not spoken for by exact evidence elsewhere: the tool cannot say
+    # which card paid, so a person does. Measured 2026-09-18 over July,
+    # August and the six bundles: 0 pairs flagged (the one candidate, July
+    # `0063` Marinho against GITHUB 10.00 on 2838, is spoken for). False
+    # turns the clause off; the fallback itself (match across every card)
+    # is not a knob.
+    no_card_rival_review: bool = True
 
     @classmethod
     def from_dict(cls, data: Mapping) -> "MatchingConfig":
@@ -1631,6 +1684,50 @@ def cards_differ(tx_keys: set[str], receipt: Receipt) -> bool | None:
     return not (set(receipt.card_scope_keys) & tx_keys)
 
 
+# Item X1 (owner 2026-09-18): where each side of a pair got its card, the ONE
+# definition of "the card cannot be identified" the matcher, the month page
+# and the documents read. Receipt: a card picked on the row, resolved from the
+# printed method or an assigned hint word, remembered from an earlier month
+# (`Receipt.card_scope_source`, which is also where a per-merchant card fact
+# arrives once memory learns one), printed digits no registry card names, or
+# none. Charge: the statement's own card column on the row, the upload's
+# account when the row names none (the Chase PDF's cycle marker and a
+# single-card export both land here: the account IS that card), or none.
+RECEIPT_CARD_EVIDENCE = ("override", "hint", "learned", "printed", "none")
+CHARGE_CARD_EVIDENCE = ("row", "account", "none")
+# `Match.review_code` when the no-card fallback's review clause fired.
+NO_CARD_RIVAL_REVIEW = "no_card_rival_on_other_card"
+
+
+def card_evidence(tx: Transaction, receipt: Receipt) -> tuple[str, str]:
+    """`(receipt_source, charge_source)` from `RECEIPT_CARD_EVIDENCE` x
+    `CHARGE_CARD_EVIDENCE`. "none" on the receipt side is the no-card
+    fallback: such a receipt is matched across every card's charges on
+    amount, date, currency, the reference and the uniqueness gate, exactly
+    as one that names a card the statement does not carry."""
+    if receipt.card_scope_keys and receipt.card_scope_source in CARD_SCOPE_SOURCES:
+        rec = receipt.card_scope_source
+    elif _card_keys(receipt.payment_mode):
+        rec = "printed"
+    else:
+        rec = "none"
+    if _card_keys(tx.card_last4):
+        chg = "row"
+    elif _card_keys(tx.account_id):
+        chg = "account"
+    else:
+        chg = "none"
+    return rec, chg
+
+
+def _no_card_rival_note(rival: Transaction, rival_keys: set[str]) -> str:
+    return (
+        f"the receipt names no card and a charge on another card also fits "
+        f"({rival.vendor_from_statement} {rival.amount} {rival.transaction_currency} "
+        f"on {'/'.join(sorted(rival_keys))})"
+    )
+
+
 def _cards_differ_note(tx_keys: set[str], receipt: Receipt) -> str:
     how = {
         CARD_SCOPE_PICKED: "picked by hand",
@@ -1840,6 +1937,7 @@ def match_month(
     # are the same string; on a multi-card tabular export it is the
     # difference between scoping working and being a no-op.
     tx_card_keys = {tx.transaction_id: _tx_card_keys(tx) for tx in transactions}
+    tx_by_id = {tx.transaction_id: tx for tx in transactions}
     rec_by_id = {r.document_id: r for r in receipts}
 
     # Self-derived per-run reference rates (2026-07-23): computed once for
@@ -2046,6 +2144,66 @@ def match_month(
     # Solutions, the Google twins, August `0025`).
     if cfg.uniqueness_vendor_dominance_min > 0.0:
         _merchant_precedence(cands_by_tx, rec_by_id, transactions, cfg, ambiguous_tx_ids)
+
+    # Item X1 (owner 2026-09-18): the no-card fallback's review clause. A
+    # receipt that names no card (`card_evidence` "none": nothing printed,
+    # picked, assigned or remembered) is matched across every card's charges
+    # on the other criteria, and that is the right default; what it cannot
+    # do is say which card paid. So when another deterministic candidate for
+    # the SAME receipt sits on a DIFFERENT card, the pair keeps its match and
+    # its rank but asks for review, says why, and carries the code, so the
+    # row can show it and it never confirms itself (item 76). A rival that
+    # holds clean EXACT evidence with some other receipt is spoken for (round
+    # B's rule) and does not count; a rival already demoted below the clean
+    # candidates (cards differ, merchant precedence) does not either. A pair
+    # with card evidence on both sides is never reviewed for this reason.
+    # Applied after pass 1, so a tie a person should settle stays a tie.
+    if cfg.no_card_rival_review:
+        exact_elsewhere: dict[str, set[str]] = {}
+        for tx_id, cands in cands_by_tx.items():
+            for c in cands:
+                if c.match.match_type is MatchType.EXACT and not c.match.requires_review:
+                    exact_elsewhere.setdefault(tx_id, set()).add(c.match.document_id)
+        for tx_id, cands in cands_by_tx.items():
+            if tx_id in ambiguous_tx_ids:
+                continue
+            tx_keys = tx_card_keys[tx_id]
+            for i, c in enumerate(cands):
+                doc = c.match.document_id
+                if card_evidence(tx_by_id[tx_id], rec_by_id[doc])[0] != "none":
+                    continue
+                rival: Transaction | None = None
+                rival_keys: set[str] = set()
+                for other_id, others in cands_by_tx.items():
+                    if other_id == tx_id or other_id in ambiguous_tx_ids:
+                        continue
+                    other_keys = tx_card_keys[other_id]
+                    if not other_keys or (other_keys & tx_keys):
+                        continue
+                    if exact_elsewhere.get(other_id, set()) - {doc}:
+                        continue  # spoken for by bank-printed evidence elsewhere
+                    if any(
+                        o.match.document_id == doc
+                        and o.is_determ
+                        and o.match.confidence > CARDS_DIFFER_CONFIDENCE
+                        for o in others
+                    ):
+                        rival, rival_keys = tx_by_id[other_id], other_keys
+                        break
+                if rival is None:
+                    continue
+                cands[i] = replace(
+                    c,
+                    match=replace(
+                        c.match,
+                        requires_review=True,
+                        review_code=NO_CARD_RIVAL_REVIEW,
+                        reason=(
+                            c.match.reason.rstrip(".")
+                            + f". Review: {_no_card_rival_note(rival, rival_keys)}."
+                        ),
+                    ),
+                )
 
     # Pass 2: greedy bipartite assignment over all candidates from
     # non-ambiguous transactions, highest sort_key first. A transaction
