@@ -6278,7 +6278,9 @@ def resolve_batch_row_cost_centers(
     return out
 
 
-def build_card_review(resolution: dict[str, dict]) -> dict:
+def build_card_review(
+    resolution: dict[str, dict], *, copy_docs: "set[str] | None" = None,
+) -> dict:
     """The batch's card-review strip, grouped server-side (the SPA renders,
     never judges): unresolved hints (with the rows they cover, generic
     tenders marked — those never auto-resolve BY DESIGN and can only be
@@ -6299,7 +6301,28 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
     list rides in the PARALLEL `spellings[]`. Digit-less hints (generic
     tenders, word-only hints) keep one row per verbatim string —
     `digits: null` + the `generic` flag are what the SPA partitions the
-    no-card-number sub-strip on."""
+    no-card-number sub-strip on.
+
+    `copy_docs` (item 146) are the documents the grid has decided are
+    copies (`decided_copies`). The four counters at the bottom, the ones
+    that have a `summary` twin, skip them: those twins are box counts
+    (`n_box`), and `expense_boxes` puts a decided copy in NO box by item
+    94's ruling. A strip that counted copies made one payload answer the
+    same question twice on one screen; live July 2026 read
+    `summary.n_needs_person` 13 beside `card_review.n_needs_person` 15,
+    the gap being exactly the two decided copies (Aposto Karlsruhe,
+    Lovable Labs Incorporated). All four take the exemption together: a
+    twin left unexcluded only moves the disagreement to another chip.
+
+    The GROUPING keeps every copy, deliberately. `unresolved_hints`,
+    `resolved`, per-entry `n_rows`, `n_resolved_rows`, `n_unresolved_rows`
+    and `n_no_hint` describe the card-ASSIGNMENT surface, where a decided
+    copy is still a row on screen carrying a payment hint the reviewer can
+    assign; dropping it would take an assignable row she is looking at off
+    the strip. None of them has a `summary` twin, so none of them can
+    disagree with anything. A caller that passes no `copy_docs` counts
+    every row, which is right for a caller outside the Expenses payload:
+    only that payload knows the month's copy decisions."""
     from ..cards import hint_digit_run, is_generic_tender
 
     unresolved: dict[str, dict] = {}
@@ -6372,6 +6395,12 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
             if len(re.findall(r"\d{3,8}", s)) == 1
         ]
         entry["hint"] = (healing or entry["spellings"])[0]
+    # Item 146: the rows the four box-twin counters below read. The
+    # grouping above read every row, decided copies included, by design.
+    counted = [
+        res for doc, res in resolution.items()
+        if doc not in (copy_docs or ())
+    ]
     return {
         "unresolved_hints": sorted(
             unresolved.values(), key=lambda e: (-e["n_rows"], e["hint"])
@@ -6386,8 +6415,19 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
         "n_unresolved_rows": sum(e["n_rows"] for e in unresolved.values()),
         "n_no_hint": n_no_hint,
         # A confirmed private row needs NO entity by design (item 41).
+        #
+        # Item 146: this one DOES take the decided-copy exemption, even
+        # though it deliberately does NOT take item 144's
+        # `settled_off_card` exemption below. Two different rulings, not an
+        # inconsistency: item 144 says the company question still stands on
+        # a row settled off the card system, because a card was never what
+        # was going to answer it; item 94 says a decided copy is in NO box
+        # at all, `needs_entity` included, because nothing done to its
+        # company, person, cost center or private flag changes the month.
+        # `expense_boxes` is the authority for both and already reads them
+        # that way, which is why `counted` is the exemption's only home.
         "n_needs_entity": sum(
-            1 for res in resolution.values()
+            1 for res in counted
             if not res["entity"] and not res.get("private")
         ),
         # Item 40: rows no person owns yet — the count beside MISSING
@@ -6401,18 +6441,20 @@ def build_card_review(resolution: dict[str, dict]) -> dict:
         # resolution, so `card_review.n_needs_person` and
         # `summary.n_needs_person` cannot disagree about a row: they were
         # both 1 on July's Tricarico invoice before the ruling and are both
-        # 0 after. `n_needs_entity` above deliberately does NOT take the
-        # exemption: the company question stands on such a row.
+        # 0 after. `n_needs_entity` above deliberately does NOT take THIS
+        # exemption: the company question stands on such a row. It does
+        # take item 146's decided-copy one, which is a different ruling
+        # about a different population; see the note beside it.
         "n_needs_person": sum(
-            1 for res in resolution.values()
+            1 for res in counted
             if not res.get("person") and not res.get("settled_off_card")
         ),
         # Item 41: the private-expense pair, beside the two above.
         "n_suggested_private": sum(
-            1 for res in resolution.values() if res.get("suggested_private")
+            1 for res in counted if res.get("suggested_private")
         ),
         "n_private": sum(
-            1 for res in resolution.values() if res.get("private")
+            1 for res in counted if res.get("private")
         ),
     }
 
@@ -7486,7 +7528,10 @@ def build_expense_view(
         # grouped server-side (generic tenders marked: assignable, never
         # auto-resolved), resolved cards with hit counts, and the
         # needs-entity population.
-        "card_review": build_card_review(card_res),
+        # Item 146: the month's decided copies, so the strip's four
+        # box-twin counters answer `summary` exactly. `grid_copies` is the
+        # same set every listing surface reads.
+        "card_review": build_card_review(card_res, copy_docs=set(grid_copies)),
         # The set-aside strip (backlog item 1): what the quarantine
         # excluded, why, and whether the reviewer restored it.
         "set_aside": set_aside,
