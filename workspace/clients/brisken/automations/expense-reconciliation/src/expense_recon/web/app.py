@@ -87,7 +87,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from ..batch_period import month_from_label
 from ..cards import card_to_dict, effective_cards, normalize_cards_setting
 from ..cards_provision import card_by_key, load_cards
-from ..error_codes import code_of, fields_of
+from ..error_codes import Refusal, code_of, fields_of  # Refusal: item 104
 from ..ingest.expense_report_images import render_receipt_page
 from .serialize import receipt_from_dict
 from .service import (
@@ -336,23 +336,35 @@ def _receipt_category_entries(
 
 
 def _category_value(override) -> dict | None:
-    """A category override as a comparable value: absent stays absent, and
-    a cleared pick (category None) is absent too, because clearing is what
-    "no override" means to every reader of this table."""
+    """A category override as a comparable value.
+
+    An absent row and a row holding nothing are both `None`. A row holding
+    EITHER half is its own value: an account with no category is a real
+    stored state and a real reviewer decision.
+
+    That distinction is load-bearing twice over, and collapsing it cost both.
+    An account-only pick recorded no line at all (nothing seemed to have
+    moved), and, worse, the undo guard compares this value, so a row that had
+    since moved to "account, no category" compared EQUAL to a stale line's
+    recorded `None` -- the undo was allowed and overwrote the account pick,
+    which is exactly the harm `history_superseded` exists to prevent.
+    """
     if not override:
         return None
     category = override.get("category") or None
-    if category is None:
+    account = override.get("zoho_account") or None
+    if category is None and account is None:
         return None
-    return {"category": category, "zoho_account": override.get("zoho_account") or None}
+    return {"category": category, "zoho_account": account}
 
 
 _HISTORY_UNDO_REFUSALS = {
     "history_already_undone": "this change has already been put back",
     "history_not_undoable": (
-        "this kind of change is recorded but not undone here: reverse a "
+        "this change is recorded but cannot be put back here: reverse a "
         "duplicate ruling by making the opposite ruling on the group, which "
-        "re-matches the month"
+        "re-matches the month, and a first disposition has no earlier value "
+        "to restore"
     ),
     "history_superseded": (
         "this row has changed since; putting this back would throw away the "
@@ -360,6 +372,14 @@ _HISTORY_UNDO_REFUSALS = {
     ),
     "history_no_previous_value": "there was no earlier value to put back",
 }
+
+# Refusals from the write itself that mean "someone else got there": the same
+# condition the original confirm answers 409 for, so the undo answers 409 too.
+_HISTORY_UNDO_CONFLICT_CODES = frozenset({
+    "receipt_settled_elsewhere",
+    "receipt_just_settled",
+    "receipt_claimed_elsewhere",
+})
 
 
 def _apply_history_undo(store, run, entry_row, old, now):
@@ -387,8 +407,8 @@ def _apply_history_undo(store, run, entry_row, old, now):
         store.set_decision(run_id, row_key, status, chosen, now)
         return None, dh.decision_value(status, chosen)
     if field == dh.FIELD_DISPOSITION:
-        if not old:
-            return _HISTORY_UNDO_REFUSALS["history_no_previous_value"], None
+        # `dh.undoable` already refused a first disposition, so `old` is a
+        # real verdict here; there is no "no previous value" case left.
         store.set_disposition(run_id, row_key, old, now)
         return None, old
     if field == dh.FIELD_CHARGE_CATEGORY:
@@ -404,7 +424,14 @@ def _apply_history_undo(store, run, entry_row, old, now):
         document_id = detail.get("document_id")
         line_index = detail.get("line_index")
         if document_id is None or line_index is None:
-            return _HISTORY_UNDO_REFUSALS["history_no_previous_value"], None
+            # Unreachable in practice: `_current_history_value` returns the
+            # unreadable sentinel on the same condition and the route 409s
+            # first. Kept as a refusal rather than an exception because a
+            # ledger read must never 500.
+            return Refusal(
+                "this line does not say which receipt line it changed",
+                code="history_no_previous_value",
+            ), None
         store.set_category_override(
             run_id, document_id, int(line_index),
             (old or {}).get("category"), (old or {}).get("zoho_account"), now,
@@ -3561,7 +3588,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             )
             has_more = len(rows) > limit
             rows = rows[:limit]
-            total = store.count_history(run_id)
+            total = store.count_history(run_id, row_key=row_key)
         entries = [dh.view_entry(r) for r in rows]
         return JSONResponse(jsonable_encoder({
             "run_id": run_id,
@@ -3595,10 +3622,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     {"error": "history entry not found", "code": "history_entry_not_found"},
                     status_code=404,
                 )
+            # The sentinel needs no separate arm: it compares unequal to
+            # every recorded value, so `undo_conflict` already answers
+            # `history_superseded` for it.
             current = _current_history_value(store, run, entry_row)
             conflict = dh.undo_conflict(entry_row, current)
-            if conflict is None and current == _HISTORY_UNREADABLE:
-                conflict = "history_superseded"
             if conflict is not None:
                 return JSONResponse(
                     {"error": _HISTORY_UNDO_REFUSALS[conflict], "code": conflict,
@@ -3608,15 +3636,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             old = dh.decode(entry_row["old_value"])
             err, restored = _apply_history_undo(store, run, entry_row, old, now)
             if err is not None:
-                # A dict is a claim conflict (R4, another month settled this
-                # receipt); a string is a service refusal carrying its code.
-                if isinstance(err, str):
-                    return JSONResponse(
-                        {"error": str(err), "code": code_of(err, "request_refused"),
-                         "entry_id": entry_id, **fields_of(err)},
-                        status_code=400,
-                    )
-                return _refused(err, status=409)
+                # Every refusal on this path is a `Refusal`, which IS a str,
+                # so the type cannot tell them apart; the CODE can. A
+                # cross-run claim conflict answers 409, the same status the
+                # original confirm answers for the same condition, which is
+                # what the contract and the SPA prompt both promise.
+                code = code_of(err, "request_refused")
+                return JSONResponse(
+                    {"error": str(err), "code": code, "entry_id": entry_id,
+                     **fields_of(err)},
+                    status_code=409 if code in _HISTORY_UNDO_CONFLICT_CODES else 400,
+                )
             # Stamped AFTER the write landed, so a line can never read
             # "undone" over a value that was not put back. Writing the same
             # old value twice is the same state, so the losing side of a

@@ -85,6 +85,7 @@ def client(app_root):
     app = create_app(app_root)
     c = _signed_in(app, CRISS_CODE)
     c._app = app
+    c._data_root = app_root
     try:
         yield c
     finally:
@@ -568,9 +569,21 @@ def test_a_duplicate_ruling_is_recorded_but_not_undone_here(client, monkeypatch)
     line = _entries(client, batch_id)[0]
     assert line["field"] == "duplicate"
     assert line["row_kind"] == "group"
+    assert line["old"] is None  # nothing had been ruled on this group
     assert line["new"] == "ignore"
     assert line["who"] == "criss"
     assert line["undoable"] is False
+
+    # A SECOND ruling has to carry the first as its old value, or the
+    # ledger cannot show that a ruling was changed rather than made.
+    second = client.post(
+        f"/api/runs/{batch_id}/duplicates/resolve",
+        json={"group_id": "group-104", "resolution": "confirmed"},
+    )
+    assert second.status_code == 200, second.text
+    latest = _entries(client, batch_id)[0]
+    assert latest["old"] == "ignore"
+    assert latest["new"] == "confirmed"
 
     refused = _undo(client, batch_id, line["id"])
     assert refused.status_code == 409, refused.text
@@ -625,6 +638,9 @@ def test_confirming_the_tools_guess_is_itself_a_line(client, monkeypatch):
     assert lines[0]["row_key"] == doc
     assert lines[0]["who"] == "criss"
     assert lines[0]["new"] is not None
+    # `click`, not the `bulk` the whole-expense PUT writes: keeping a
+    # guess is one decision about one receipt.
+    assert {line["trigger"] for line in lines} == {"click"}
 
 
 def test_an_expense_field_edit_of_the_category_is_a_line(client, monkeypatch):
@@ -676,6 +692,174 @@ def test_attaching_a_mailed_receipt_by_hand_is_a_line(client, monkeypatch):
     assert lines[0]["new"]["status"] == "confirmed"
     assert lines[0]["new"]["chosen_document_id"]
     assert lines[0]["who"] == "criss"
+
+
+# ------------------------------------------ what the adversarial review found
+#
+# Every test below reproduces a defect an adversarial reviewer found in the
+# first cut. They were written before the fixes and watched go from red to
+# green, which is the only evidence that a fix is wired.
+
+
+def test_an_account_only_pick_is_recorded_and_survives_an_undo(client, monkeypatch):
+    """The review's one data-loss defect.
+
+    `_category_value` collapsed "no override at all" and "an override with an
+    account but no category" to the same `None`. Two consequences: setting
+    only the account recorded NO line, and an undo of an older line compared
+    equal to the row's present value, so it was allowed and overwrote the
+    account pick with nothing to show for it.
+    """
+    batch_id = _month(client, monkeypatch, [FEE, PAYMENT])
+    tx = _tx(client, batch_id, "UBER ONE ANNUAL FEE")
+    url = f"/api/runs/{batch_id}/charges/{tx}/category"
+
+    assert client.put(url, json={"category": PICK}).status_code == 200
+    assert client.put(url, json={"category": ""}).status_code == 200
+    stale = _entries(client, batch_id, row_key=tx)[0]
+    assert stale["new"] is None  # the clear
+
+    # An account with no category is a reviewer decision and is stored.
+    before = len(_entries(client, batch_id, row_key=tx))
+    assert client.put(url, json={"zoho_account": "6100 Consulting"}).status_code == 200
+    after = _entries(client, batch_id, row_key=tx)
+    assert len(after) == before + 1, "an account-only pick recorded nothing"
+    assert after[0]["new"]["zoho_account"] == "6100 Consulting"
+
+    # And the stale line can no longer be put back over it.
+    resp = _undo(client, batch_id, stale["id"])
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["code"] == "history_superseded"
+
+
+def test_a_first_disposition_is_not_offered_an_undo_it_cannot_honour(
+    client, monkeypatch
+):
+    """There is no "no disposition" value to write back, so the button would
+    always have failed, and with the wrong code."""
+    batch_id = _month(client, monkeypatch, [PRESSMASTER, PAYMENT])
+    tx = _tx(client, batch_id, "PRESSMASTER FZCO")
+    assert client.post(
+        f"/api/runs/{batch_id}/disposition",
+        json={"transaction_id": tx, "disposition": "reimbursable_personal"},
+    ).status_code == 200
+
+    first = _entries(client, batch_id)[0]
+    assert first["old"] is None
+    assert first["undoable"] is False, "offered an undo that cannot be honoured"
+
+    refused = _undo(client, batch_id, first["id"])
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["code"] == "history_not_undoable"
+
+    # A SECOND disposition has a previous value, so that one IS undoable.
+    assert client.post(
+        f"/api/runs/{batch_id}/disposition",
+        json={"transaction_id": tx, "disposition": "do_not_export"},
+    ).status_code == 200
+    second = _entries(client, batch_id)[0]
+    assert second["undoable"] is True
+    assert _undo(client, batch_id, second["id"]).status_code == 200
+
+
+def test_confirm_ready_actually_confirms_something(client, monkeypatch):
+    """The review caught the old version asserting `0 == 0`: its fixture
+    confirmed nothing, so it passed with the wiring deleted."""
+    batch_id = _month(
+        client, monkeypatch, [LOVABLE, PAYMENT],
+        _extraction("LOVABLE", 15.00, "2026-08-31"),
+    )
+    doc = _doc(client, batch_id)
+    # Give the line a category of the reviewer's own, which is what moves the
+    # row into `ready` for the bulk confirm.
+    assert client.post(
+        f"/api/runs/{batch_id}/categories",
+        json={"document_id": doc, "line_index": 0, "category": PICK},
+    ).status_code == 200
+
+    resp = client.post(f"/api/runs/{batch_id}/decisions/confirm-ready")
+    assert resp.status_code == 200, resp.text
+    confirmed = resp.json()["confirmed"]
+    assert confirmed >= 1, "fixture confirmed nothing, so this proves nothing"
+
+    lines = [e for e in _entries(client, batch_id) if e["field"] == "decision"]
+    assert len(lines) == confirmed
+    assert {line["trigger"] for line in lines} == {"bulk"}
+    assert {line["who"] for line in lines} == {"criss"}
+
+
+def test_the_per_row_count_counts_that_row(client, monkeypatch):
+    """`n_entries` was the month's total even when the list was filtered to
+    one row, and the SPA's per-row fold reads exactly that filter."""
+    batch_id = _month(client, monkeypatch, [PRESSMASTER, FEE, PAYMENT])
+    one = _tx(client, batch_id, "PRESSMASTER FZCO")
+    two = _tx(client, batch_id, "UBER ONE ANNUAL FEE")
+    _decide(client, batch_id, one, "confirmed")
+    _decide(client, batch_id, one, "rejected")
+    _decide(client, batch_id, two, "confirmed")
+
+    whole = _history(client, batch_id)
+    assert whole["n_entries"] == 3
+
+    row = _history(client, batch_id, row_key=one)
+    assert len(row["entries"]) == 2
+    assert row["n_entries"] == 2, "the per-row fold showed the month's count"
+
+
+def test_the_summary_does_not_say_category_twice(client, monkeypatch):
+    """`describe` is the reader-facing line; it read
+    "category category Professional Services to none"."""
+    batch_id = _month(client, monkeypatch, [FEE, PAYMENT])
+    tx = _tx(client, batch_id, "UBER ONE ANNUAL FEE")
+    url = f"/api/runs/{batch_id}/charges/{tx}/category"
+    assert client.put(url, json={"category": PICK}).status_code == 200
+    # The doubling only shows once there is an OLD dict to render as well,
+    # so a single edit would not have reproduced it.
+    assert client.put(url, json={"category": "Software & Subscriptions"}).status_code == 200
+
+    summary = _entries(client, batch_id, row_key=tx)[0]["summary"]
+    assert "category category" not in summary, summary
+    assert summary == f"category {PICK} to Software & Subscriptions", summary
+
+
+def test_deleting_a_month_takes_its_history_with_it(client, monkeypatch):
+    """`delete_run` clears every other per-run table; the ledger was left
+    behind, unreachable through the API."""
+    batch_id = _month(client, monkeypatch, [PRESSMASTER, PAYMENT])
+    tx = _tx(client, batch_id, "PRESSMASTER FZCO")
+    _decide(client, batch_id, tx, "confirmed")
+    assert _history(client, batch_id)["n_entries"] == 1
+
+    # The delete route wants the label typed back, which is its own guard.
+    resp = client.post(
+        f"/api/runs/{batch_id}/delete", json={"confirm": batch_id}
+    )
+    assert resp.status_code == 200, resp.text
+
+    from expense_recon.web.store import RunStore
+    db = RunStore(client._data_root / "recon-web.sqlite")
+    try:
+        left = db.list_history(batch_id, limit=50)
+    finally:
+        db.conn.close()
+    assert left == [], f"{len(left)} orphaned history rows survived the delete"
+
+
+def test_the_gate_lets_a_session_through(app_root):
+    """The 401 half passed with both routes deleted (the middleware answers
+    before routing), so it proved nothing on its own."""
+    app = create_app(app_root)
+    with TestClient(app) as anon:
+        assert anon.get("/api/runs/whatever/history").status_code == 401
+    signed = _signed_in(app, CRISS_CODE)
+    try:
+        # 404 for an unknown run, not 401 and not 405: the route exists and
+        # the session reached it.
+        resp = signed.get("/api/runs/no-such-run/history")
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["code"] == "run_not_found"
+    finally:
+        signed.__exit__(None, None, None)
 
 
 # ------------------------------------------------------------- pure module

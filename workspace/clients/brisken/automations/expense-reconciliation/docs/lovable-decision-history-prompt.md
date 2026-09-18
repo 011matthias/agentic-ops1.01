@@ -29,7 +29,8 @@ actually moved a value, with the name of the person who signed in.
 ```
 
 Query parameters: `limit` (1-500, default 200), `before_id` (page further
-back), `row_key` (one row's own story).
+back), `row_key` (one row's own story). `n_entries` follows the
+filter, so the per-row fold can show its own count.
 
 `field` is `decision`, `disposition`, `charge_category`, `receipt_category`
 or `duplicate`. `trigger` is `click`, `bulk`, `rematch`, `tool` or `undo`.
@@ -78,14 +79,17 @@ the history so the screen agrees with the server:
   Desfazer aqui descartaria a alteração mais recente."
 - `history_already_undone` - "This change has already been put back." /
   "Esta alteração já foi desfeita."
-- `history_not_undoable` - a duplicate ruling. "Reverse a duplicate ruling
-  by making the opposite ruling on the group." / "Para reverter, faça a
-  decisão oposta no grupo de duplicados."
+- `history_not_undoable` - a duplicate ruling, or a first disposition.
+  "This change is recorded but cannot be put back here." / "Esta alteração
+  está registrada, mas não pode ser desfeita aqui."
 - `history_entry_not_found` (404) - the line is gone; refetch.
 
 Also possible: a 409 carrying an R4 claim conflict (another month settled
 that receipt meanwhile) and a 400 carrying a service refusal. Both already
 have handling on this screen; reuse it.
+
+Draw the Undo button from `undoable` alone; do not infer it from `field`.
+The server already withholds it wherever the write could not be honoured.
 
 ## Checking it landed
 

@@ -634,11 +634,16 @@ class RunStore:
         args.append(int(limit))
         return [dict(r) for r in self.conn.execute(sql, args).fetchall()]
 
-    def count_history(self, run_id: str) -> int:
-        row = self.conn.execute(
-            "SELECT COUNT(*) AS n FROM decision_history WHERE run_id = ?",
-            (run_id,),
-        ).fetchone()
+    def count_history(self, run_id: str, *, row_key: str | None = None) -> int:
+        """The count the caller is looking at. `row_key` narrows it to one
+        row, because the per-row fold shows this number and the month's
+        total beside two of that row's lines is simply wrong."""
+        sql = "SELECT COUNT(*) AS n FROM decision_history WHERE run_id = ?"
+        args: list = [run_id]
+        if row_key:
+            sql += " AND row_key = ?"
+            args.append(str(row_key))
+        row = self.conn.execute(sql, args).fetchone()
         return int(row["n"]) if row else 0
 
     def get_history_entry(self, entry_id: int) -> dict | None:
@@ -650,10 +655,15 @@ class RunStore:
     def mark_history_undone(
         self, entry_id: int, *, undone_at: str, undone_by: str
     ) -> bool:
-        """Stamp one line as put back. The WHERE clause carries the
-        `undone_at IS NULL` condition so two undo clicks racing on the same
-        line cannot both win; the loser gets False and its caller answers
-        `history_already_undone` rather than writing the old value twice."""
+        """Stamp one line as put back.
+
+        The WHERE carries `undone_at IS NULL`, so the STAMP is written once
+        however many clicks race: the first sets it, the rest return False
+        and leave the name and time of the real undo alone. The caller
+        discards that False on purpose, because it applies the old value
+        before stamping and writing the same old value twice is the same
+        state.
+        """
         cur = self.conn.execute(
             "UPDATE decision_history SET undone_at = ?, undone_by = ? "
             "WHERE id = ? AND undone_at IS NULL",
@@ -788,6 +798,13 @@ class RunStore:
         resolves."""
         cur = self.conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
         self.conn.execute("DELETE FROM decisions WHERE run_id = ?", (run_id,))
+        # The month's ledger goes with the month (item 104). Append-only is
+        # a rule about editing a line, not about outliving the run it
+        # describes: rows left behind are unreachable through the API, which
+        # is the orphan state the rest of this method exists to prevent.
+        self.conn.execute(
+            "DELETE FROM decision_history WHERE run_id = ?", (run_id,)
+        )
         # R4 (item 38): both claim directions go with the run. Claims BY it
         # release every receipt its matches settled (a trip's receipts become
         # matchable again when the month that consumed them is deleted);

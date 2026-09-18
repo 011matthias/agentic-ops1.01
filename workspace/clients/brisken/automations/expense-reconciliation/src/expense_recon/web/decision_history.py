@@ -17,10 +17,13 @@ Three rules decide the shape:
 1. **Only real changes.** A write whose value equals what was already there
    makes no line. A re-match writes every charge on the month; recording all
    of them would bury the four that moved under a hundred that did not.
-2. **One line per write, not per column.** A confirm sets a status AND a
-   chosen receipt together, and an undo has to put both back together, so
-   they ride one line with a JSON value rather than two lines that can be
-   undone apart and leave the row half-reverted.
+2. **Values that must move together ride one line.** A confirm sets a
+   status AND a chosen receipt together, and an undo has to put both back
+   together, so they ride one line with a JSON value rather than two lines
+   that can be undone apart and leave the row half-reverted. Values that are
+   genuinely independent do not: reclassifying a 33-line receipt writes 33
+   lines, because each line's category is its own decision and undoing one
+   leaves the other 32 standing, which is right.
 3. **Undo is a new line, never an erasure.** Putting a value back appends
    its own line (trigger `undo`) and stamps the original as undone. The
    ledger only ever grows, which is the whole point of having one.
@@ -202,7 +205,13 @@ def _describe_plain(label: str, old, new) -> str:
         if value is None or value == "":
             return "none"
         if isinstance(value, dict):
-            parts = [f"{k} {v}" for k, v in sorted(value.items()) if v not in (None, "")]
+            # The key is dropped for `category` because the label already
+            # said it: without this the line read "category category
+            # Professional Services to none".
+            parts = [
+                str(v) if k == "category" else f"{k} {v}"
+                for k, v in sorted(value.items()) if v not in (None, "")
+            ]
             return ", ".join(parts) or "none"
         return str(value)
     return f"{label} {show(old)} to {show(new)}"
@@ -248,7 +257,7 @@ def view_entry(row: dict) -> dict:
         "at": row["at"],
         "trigger": row["trigger"],
         "summary": describe(row),
-        "undoable": row["field"] in UNDOABLE_FIELDS and undone_at is None,
+        "undoable": undoable(row),
     }
     detail = decode(row.get("detail"))
     if detail:
@@ -259,10 +268,29 @@ def view_entry(row: dict) -> dict:
     return out
 
 
+def undoable(entry_row: dict) -> bool:
+    """Whether putting this line back is offered at all.
+
+    Three reasons it is not. The field is one the undo does not serve (a
+    duplicate ruling). The line has already been put back. Or it is the FIRST
+    disposition on a row: `set_disposition` takes only a real verdict, there
+    is no "no disposition" to write, so the button would fail every single
+    time it was pressed. Offering a control that cannot work is worse than
+    not offering it, because the reader tries it and learns the ledger lies.
+    """
+    if entry_row["field"] not in UNDOABLE_FIELDS:
+        return False
+    if entry_row.get("undone_at"):
+        return False
+    if entry_row["field"] == FIELD_DISPOSITION:
+        return decode(entry_row.get("old_value")) is not None
+    return True
+
+
 def undo_conflict(entry_row: dict, current) -> str | None:
     """Why this line cannot be put back, or `None` when it can.
 
-    The second check is the one that matters. A history line records a move
+    The last check is the one that matters. A history line records a move
     from A to B; putting it back means writing A. If something has happened
     since and the row now holds C, writing A would silently throw that later
     change away, and the reader who clicked undo on a line from Tuesday
@@ -271,7 +299,7 @@ def undo_conflict(entry_row: dict, current) -> str | None:
     """
     if entry_row.get("undone_at"):
         return "history_already_undone"
-    if entry_row["field"] not in UNDOABLE_FIELDS:
+    if not undoable(entry_row):
         return "history_not_undoable"
     if changed(decode(entry_row.get("new_value")), current):
         return "history_superseded"

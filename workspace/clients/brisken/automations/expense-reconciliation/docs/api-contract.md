@@ -4736,7 +4736,16 @@ back, `?row_key=` narrows to one row's own story (the per-row fold).
 the SPA renders its own Portuguese from `old` / `new` / `field`. A line that
 has been put back carries `undone_at` + `undone_by` and `undoable: false`.
 `row_kind` is `charge`, `receipt` or `group`. `detail` rides only on the
-category fields (`document_id` + `line_index`).
+category fields (`document_id` + `line_index`). `n_entries` counts what the
+caller is looking at: with `row_key` it is that row's count, not the month's.
+
+**A category line's `old: null` means "no reviewer override", not "no
+category on screen".** The tool's own guess lives in the run snapshot, not in
+the override table, so a row visibly reading `Travel & Transport` from a
+vendor guess records `old: null` when the reviewer first picks. What the line
+says is true of the thing it tracks: the reviewer had not ruled before, and
+now has. A value carrying only `zoho_account` is its own state, distinct from
+absent.
 
 **A month with no recorded change answers `entries: []`.** That is the honest
 answer for every month that existed before this shipped: nothing was recorded
@@ -4748,15 +4757,28 @@ Writes the old value back through the same store call the original write
 used, stamps the original line undone, and appends its own line
 (`trigger: "undo"`). Nothing is ever erased.
 
+The one case with no new line is an undo that moved nothing: undoing the
+first verdict on a row whose recorded verdict was already `pending` restores
+`pending`, and a line saying "pending to pending" would be noise. The
+original is still stamped, because it was in fact put back.
+
 Refusals, all 409 except where noted:
 
 | code | when |
 |---|---|
 | `history_superseded` | the row no longer holds what this line left there |
 | `history_already_undone` | this line has already been put back |
-| `history_not_undoable` | a duplicate ruling (see above) |
-| `history_no_previous_value` | there was no earlier value to restore (400) |
+| `history_not_undoable` | a duplicate ruling, or the FIRST disposition on a row (`set_disposition` takes only a real verdict, so there is no "no disposition" to write back) |
 | `history_entry_not_found` | no such line, or it belongs to another month (404) |
+
+A refusal from the write itself carries its own code: a cross-run claim
+conflict (R4) answers **409**, the same status the original confirm answers
+for the same condition; any other service refusal answers 400.
+
+`undoable` on a line is the single source of truth for whether the button is
+drawn, and it is false for all three cases above. A control that cannot work
+is worse than no control, because the reader presses it and learns the ledger
+lies.
 
 `history_superseded` is the guard that matters. A line says "A became B";
 undoing it writes A, and if something has moved the row to C since, writing A
