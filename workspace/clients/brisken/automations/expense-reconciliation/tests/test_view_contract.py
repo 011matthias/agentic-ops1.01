@@ -102,6 +102,9 @@ EXPENSE_BATCH_CONTRACT = {
     "coverage[]": "object",
     "coverage[].digits[]": "string",
     "coverage[].statements[]": "string",
+    # Note item T2: the content ids of the entries in `statements[]` that
+    # carry one; strings, empty on an entry whose uploads predate the id.
+    "coverage[].statement_ids[]": "string",
     # Item 47: the row picker's list. OBJECTS, not strings, unlike its two
     # sibling option lists above: each entry carries the display-only `kind`
     # that groups the roll-up, so the picker can show "Lidar (project)"
@@ -164,6 +167,8 @@ RUN_CONTRACT = {
     "coverage[]": "object",
     "coverage[].digits[]": "string",
     "coverage[].statements[]": "string",
+    # Note item T2: content ids of the `statements[]` entries that carry one.
+    "coverage[].statement_ids[]": "string",
     # Item 74: charge-side duplicate detection is deleted. The list stays in
     # the payload, ALWAYS EMPTY, so a consumer pairing groups by kind does not
     # break; its element pin went with the detector (nothing can fill it).
@@ -236,6 +241,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "card_sections[]",
     "card_sections[].digits[]",
     "card_sections[].statements[]",
+    "coverage[].statement_ids[]",
 }
 
 RUN_MUST_COVER = {
@@ -258,6 +264,7 @@ RUN_MUST_COVER = {
     "card_sections[]",
     "card_sections[].digits[]",
     "card_sections[].statements[]",
+    "coverage[].statement_ids[]",
 }
 
 
