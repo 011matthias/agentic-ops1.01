@@ -1,0 +1,9 @@
+document_id,transaction_id,status,source,evidence
+r-01,7ddee46926851fda,confirmed,auto,E2:amount-exact
+r-02,2e275c6cffdc3004,confirmed,human,E4:ref
+r-03,,no_charge,human,
+r-04,,excluded,human,
+r-05,20822a21ede944b1,confirmed,human,E2:amount-exact
+r-06,,excluded,human,
+r-07,,no_charge,human,
+r-08,a7b020a533abcf2e,confirmed,human,
