@@ -76,6 +76,27 @@ def _patch_ocr(monkeypatch, *extractions: ExtractedReceipt) -> None:
     )
 
 
+def _patch_ocr_by_name(monkeypatch, mapping: dict) -> None:
+    """Answer each read by the FILE being read, not by call order.
+
+    The routing pass reads the dropped files on a bounded pool (item 148),
+    so "the first call" stopped being "the first file". A test that gives
+    two files two DIFFERENT months has to name them; a queue would make the
+    assignment a coin flip. Matched on the stored name's suffix, because the
+    ingest pass re-reads the same file under its `NNNN__` spool prefix."""
+    class _ByName(MockLLMClient):
+        def extract_receipt(self, *, file_name, images=None, text=None):
+            for name, extraction in mapping.items():
+                if str(file_name).endswith(name):
+                    return extraction
+            raise AssertionError(f"unbudgeted read of {file_name!r}")
+
+    mock = _ByName()
+    monkeypatch.setattr(
+        "expense_recon.cli._build_llm_client", lambda cfg: (mock, None)
+    )
+
+
 def _drop(client, files, month: str | None = None):
     data = {"month": month} if month else {}
     resp = client.post(
@@ -199,15 +220,13 @@ def test_trip_create_with_files_still_works(client, monkeypatch):
 
 
 def test_drop_routes_two_files_to_two_new_months(client, monkeypatch):
-    # Routing pass reads upload order (a then b); filing runs oldest month
-    # first (M2 then M1), so the ingest reads pop in that order.
-    _patch_ocr(
-        monkeypatch,
-        _extraction(DAY_M1),  # read a.jpg
-        _extraction(DAY_M2),  # read b.jpg
-        _extraction(DAY_M2),  # ingest M2 batch (b.jpg)
-        _extraction(DAY_M1),  # ingest M1 batch (a.jpg)
-    )
+    # Each file's month is a property of the FILE, never of call order: the
+    # routing reads run on a pool, and the filing that follows still runs
+    # oldest month first (M2 then M1).
+    _patch_ocr_by_name(monkeypatch, {
+        "a.jpg": _extraction(DAY_M1),
+        "b.jpg": _extraction(DAY_M2),
+    })
     result = _drop(client, [("a.jpg", JPG), ("b.jpg", JPG + b"2")])
     assert result["n_filed"] == 2, result
     by_file = {r["file"]: r for r in result["files"]}
