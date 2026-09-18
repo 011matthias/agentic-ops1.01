@@ -5811,7 +5811,21 @@ Answer: from the fill colour of that charge's row in the Chase workbook Criss up
 **Test.** `tests/test_pdf_tables_fit_the_page.py` (8) records every Table the document template places while the real builder runs, and asserts each is within its frame, no cell's text is wider than its column, and no count, date, amount or currency breaks a word. Fixtures: a 105-row flat listing with an unreadable amount, a per-card month with receipts, reimbursements and copies, cost centers with cards inside, a trip, the reconciliation report with three cards and with one, and both downloads of a two-card month through the routes. `regress_check` with the old widths: month report 5 red, reconciliation report 3 red; a listing Date column narrowed to 40 pt goes red on the word-break check alone.
 
 **Real data**, read-only DB copy of 2026-09-17 rendered locally in DejaVu Sans with the receipt files, July and August, both documents plus a synthetic cost-center assignment: every table 502 or 503 pt. Rasters of the August listing, the July listing and cost-center listing, and both months' coverage and charge pages show every column inside both edges.
-### 144. Residuals: grid Books-as, decision-reply summary, bank-transfer private suggestion (licence: defect, covered) (SHIPPED 2026-09-17, pending PR)
+### 144. Residuals: grid Books-as, decision-reply summary, bank-transfer private suggestion (licence: defect, covered) (SHIPPED 2026-09-17, pending PR) (SPA copy APPLIED and DRIVEN 2026-09-18, EN and PT; CLOSED)
+
+**2026-09-18: the copy is live and driven.** July's RODRIGO TANURE TRICARICO
+CONSULTORIA row of 2026-07-31 (BRL 27,203.34) reads the prompt's own sentence in
+both languages instead of the backend prose, with no generic "Assign this
+expense's paying card" anywhere on the page, and the row's state beside it is
+unchanged and correct: "Paid by bank transfer", the paid-through picker, no
+person question. Check 3 holds by live API read: July `summary.n_needs_person` is
+still 13.
+
+Found by the re-crawl rule, not by being told: the owner had already published it,
+and the prompt was minutes from being handed over for the second time in two
+sessions. That rule is the one thing standing between this loop and repeating the
+2026-09-18 five-prompt hand-over, and it works only because PROMPT-STATUS now
+phrases it as a rule about actions rather than a fact about audits.
 
 Three leftovers of items 95, 99 and 111: in each the software states something
 it knows to be otherwise. Found by reading the code against the shipped items,

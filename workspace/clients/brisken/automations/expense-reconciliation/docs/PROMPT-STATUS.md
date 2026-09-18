@@ -291,6 +291,7 @@ CHANGES with the state.
 | Prompt | Verified by |
 |---|---|
 | `lovable-charge-category-prompt.md` (item 109) | **Applied and driven, EN and PT.** Bundle 2026-09-18 later (44 chunks, 1,174 KB, i18n chunk `chunk-x-CLnyiug6.js`): `wb.chargeCat.guess` in the i18n chunk and in `chunk-runs._runId`, which is the call site reading it. Two cold drives from the login gate, only non-GET `POST /api/login` on each. August `/runs/074a7b8905d7`, the Charges-without-a-receipt view reached by a JS click on its own pill (the page opens on the receipt-chasing panel, so a drive that never switches views reads a screen with no charge rows on it at all): 205 `button[role=combobox]` and 0 native `select`. The LOVABLE 15.00 row of Aug 31, 2026 carries a combobox reading "Meals & Entertainment", 176x32 px with `offsetParent` set, and a visible `span` "Guess" 38x19 px beside it, which is the prompt's check 1 exactly; SAP SE 1,574.24 of Aug 28 reads "Software & Subscriptions / Guess", check 4's third row. 89 visible Guess chips on the view; "No category yet" twice. PT (`brisken.lang: "pt"`): the pill reads "Lançamentos sem recibo101", "Sem categoria ainda" twice, and the WILLAMS RONALD DA SIL row reads "Professional Services PALPITE". July `/runs/50622baec444`: the pill reads "Charges without a receipt 73 24 open" and the 24 open rows carry 50 comboboxes and 16 Guess chips between them, the other 49 being behind the decided-rows toggle. Not driven: checks 2 and 3, which save a pick and are writes on Criss's month. **Why the earlier pass read 0:** it counted `select` elements, and it matched `body.innerText` for `Guess` case-sensitively while the chip is uppercased by CSS, so `innerText` returns `GUESS`. Two blind instruments on one control. |
+| `lovable-settled-outside-reason-prompt.md` (item 144) | **Applied and driven, EN and PT.** Same bundle: `expx.review.reason.needs_entity_settled_outside` twice in the i18n chunk and the PT sentence "paga fora do sistema de cartões" once. Found live by the re-crawl this file's own rule demands, minutes before the prompt would have been handed over a second time. Cold drive of July `/expenses/50622baec444` in both languages, decided rows shown, 57 rows, only non-GET `POST /api/login` on each: the RODRIGO TANURE TRICARICO CONSULTORIA row of 2026-07-31 (BRL 27,203.34) reads the prompt's English sentence word for word in EN and its Portuguese one in PT, with zero occurrences of the generic "Assign this expense's paying card" reason on the page. The row's own state is unchanged and correct beside it: "Paid by bank transfer" / "Pago por transferencia bancaria", the paid-through picker reading "Pick the card that paid" / "Escolher o cartão que pagou", and no person question. Check 3 holds by live API read: July `summary.n_needs_person` is still 13. |
 | `lovable-error-codes-prompt.md` (item 130) | **Sections 1 to 5 applied and verified; §6 is absent and now has its own prompt.** Same bundle. The helper itself is there, minified: `` `err.${e.code??``}` `` with the `hasKey` guard, exported from the shared chunk, plus the parallel `` `adv.${...}` `` for the advisories (§2 and §4). It is WIRED, which the previous pass could not show: `chunk-runs._runId` holds 16 `toast.error(errorText(e, t))` call sites and **zero** remaining `.message)`, and no chunk anywhere still carries a `toast.error(<x>.message)` (§3). The row chips are on screen in both languages (§5): the LOVABLE row of Aug 31 reads NEAR MISS in EN and QUASE IGUAL in PT, which are `warn.nearMiss`'s two dictionary values. **Check 4 tests a surface this prompt never touched.** `/runs/does-not-exist-abc123` renders the SPA's own missing-run screen, whose Portuguese ("Esta execução não existe mais; ela pode ter sido excluída...") is a separate dictionary entry sitting in the same chunk as `err.run_not_found`; the route guard issues no API refusal, so no `code` ever reaches `errorText` there. `err.run_not_found` is present in both languages and reachable, but only on a refusal that carries the code, such as a download against a deleted month. **§6 did not land:** the crash screen is a client React component in the entry chunk `index-IP_1YWz1.js` (the TanStack root `errorComponent`) with `This page didn't load`, `Something went wrong on our end...`, `Try again` and `Go home` written into the JSX as plain strings, and the not-found component beside it is the same. `data-pt`, "Esta página não carregou", "Algo deu errado do nosso lado", "Tentar de novo" and "Voltar ao início" are absent from all 44 chunks. Driven cold in PT: `/this-route-does-not-exist-xyz` renders "404 / Page not found / The page you're looking for doesn't exist or has been moved. / Go home" in English while the rest of the app is Portuguese. The earlier note that this page is "server-rendered, so a client crawl cannot see it" is wrong: the crawl sees it fine, and what it sees is English. |
 
 These four were drafted 2026-08-28/29, pasted from chat, and lived only in a
@@ -300,18 +301,23 @@ and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
-Two prompts are out. Item 144's review-reason copy, written 2026-09-18 after the
-backend shipped the night before, and item 130's §6 error-screen copy, written
-2026-09-18 later once the drive showed the two screens are still English. Neither
-has a backend gate: both are copy only, so both can be pasted whenever the owner
-next publishes.
+One prompt is out: item 130's §6 error-screen copy, written 2026-09-18 later once
+the drive showed the two screens are still English. Copy only, no backend gate,
+so it goes out whenever the owner next publishes.
+
+**Item 144's row came off this table the way the last five did: the owner had
+already published it.** The re-crawl found
+`expx.review.reason.needs_entity_settled_outside` and "paga fora do sistema de
+cartões" both live, minutes before the prompt would have been handed over for the
+second time in two sessions. The rule at the top of this file is what caught it,
+and it caught it only because it is now phrased as a rule about ACTIONS rather
+than a fact about audits. Its Applied row is below.
 
 The three unverified halves the audit above recorded are now two closed and one
 promoted to the prompt below. Nothing in the Applied table is waiting on a drive.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
-| `lovable-settled-outside-reason-prompt.md` (item 144) | `expx.review.reason.needs_entity_settled_outside` (EN + PT) in the i18n chunk, and the PT sentence "paga fora do sistema de cartões" | Written 2026-09-18, not pasted. No backend gate: PR #1074 is live on Fly and the row already carries `review.reason_code: "needs_entity_settled_outside"`. Until this lands, July's Tricarico row shows the backend's English sentence on Criss's Portuguese screen |
 | `lovable-error-page-lang-prompt.md` (item 130 §6) | "Voltar ao início" and "Página não encontrada" anywhere in the bundle; today "Page not found" is the only spelling of it | Written 2026-09-18 later, not pasted. No backend gate: copy only, in the root route file's two error components. Until this lands, the not-found page and the crash page are the only screens in the tool that stay English for a Portuguese reader, which are the two screens where a reader most needs to understand what happened |
 
 
