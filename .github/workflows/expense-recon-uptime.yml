@@ -69,8 +69,12 @@ jobs:
           set -uo pipefail
           ARGS=()
           if [ -n "${API_OVERRIDE:-}" ]; then ARGS+=(--api "$API_OVERRIDE"); fi
-          uv run tools/recon_uptime_probe.py probe --json ${ARGS[@]+"${ARGS[@]}"} > probe.json
-          rc=$?
+          # GitHub starts this step as `bash -e`, which the script's own
+          # `set -uo pipefail` does not undo, so without the `|| rc=$?` the
+          # shell aborts the moment the probe reports DOWN (exit 1): the
+          # Notify step below is skipped and a real outage alerts nobody.
+          rc=0
+          uv run tools/recon_uptime_probe.py probe --json ${ARGS[@]+"${ARGS[@]}"} > probe.json || rc=$?
           # 1 = the app is down, which is the notifier's business below;
           # 2 = the probe itself broke, which is this job's failure.
           if [ "$rc" -eq 2 ]; then exit 2; fi
