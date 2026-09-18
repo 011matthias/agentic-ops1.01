@@ -6397,6 +6397,52 @@ wiring points proven red by hand (cp the source aside, one-line mutation,
 targeted tests, cp back, sha256 equal), because `tools/regress_check.py`
 prints RED whether or not the suite failed.
 
+### 153. A receipt is named `document_id` everywhere except the set-aside strip, which calls it `file` (note item T1, owner 2026-09-18; traceability; SHIPPED 2026-09-18, pending PR; Shipped row 99)
+
+**Owner, 2026-09-18 (traceability note, item T1):** audit where a receipt
+loses its `document_id`; every surface a receipt appears on carries the same
+one; fix where it does not. Nothing outbound.
+
+**The audit, on live July, August and September.** Every object surface
+already carries it: `expenses[]` (54 of 54 July, 25 of 25 August, 49 of 49
+September), `unmatched_receipts[]`, `assignable_receipts[]`,
+`copies_set_aside[]`, `duplicate_receipts[][]` and
+`rows[].candidates[].receipt`, all at 100%. Three surfaces name a receipt as
+a bare STRING and the string IS the document id, checked against the month's
+own expense ids: `duplicate_groups[].members[]`,
+`card_review.unresolved_hints[].documents[]` and
+`expense_ingest.documents[]`. A `duplicate_groups[]` entry rightly carries no
+`document_id` of its own, because a group is not a receipt. Both PDF
+builders' evidence items already carry it (item 68), and the report caption
+prints the expense NUMBER, which is the right identifier on a page a client
+reads.
+
+**The one gap.** `set_aside[]` named the receipt `file`: 0 of July's 5 and 0
+of September's 3 entries carried a `document_id` key. The VALUE was never
+wrong (`_set_aside_entry` writes `r.document_id` into `file`), and live
+July's three restored entries match an expense's `document_id` exactly. What
+was wrong is that a reader joining the strip to a receipt had to know that
+`file` meant `document_id`, which is the kind of thing that is true until
+somebody writes the next consumer.
+
+**Shipped.** `set_aside[].document_id` beside `file`, which keeps its name,
+its value and its place in the restore route
+(`POST /api/expense-batches/{id}/set-aside/restore` still takes `{"file"}`).
+Parallel and ABSENT, never null, and read from the entry's STORED RECEIPT
+rather than copied out of `file`: a run recorded before the snapshot carried
+the strip derives its entries from the quarantine's parse issues
+(`_derive_legacy_set_aside`), where `file` is a parse-issue file name that
+nothing proves is a document id. Those entries get no key.
+
+**Tests.** Two appended to `tests/test_document_type_quarantine.py`
+(route-level: the strip's `document_id` equals the value a restore turns into
+an expense; a legacy-derived entry has no key) plus a pin in
+`tests/test_view_contract.py`. Two wiring points proven red by hand with
+sha256-equal restores; the second is the load-bearing one, since copying the
+key out of `file` instead of the stored receipt reddens the legacy case.
+
+**No SPA change:** nothing renders the id, and `file` is untouched.
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.
@@ -6447,6 +6493,7 @@ prints RED whether or not the suite failed.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 99 | A receipt is the same receipt on every surface: `set_aside[].document_id` rides beside `file`, read from the entry's stored receipt so a legacy entry derived from parse issues gets no key, and the audit behind it is in the contract | Note item T1 (owner 2026-09-18, traceability, backlog item 153): every object surface already carried the id (100% on all six, across live July, August and September) and the three string surfaces carry it AS the string; the set-aside strip was the only one that named the same value `file`, so nothing rendered wrong but a reader joining the strip to a receipt had to know that. Live July's three restored entries match an expense's `document_id` exactly | 2026-09-18, pending PR; two route-level tests in `tests/test_document_type_quarantine.py` plus a contract pin; two wiring points proven red by hand, the second being that copying the key out of `file` instead of the stored receipt reddens the legacy case; suite 2588 -> 2591 passed / 2 skipped; ruff clean |
 | 98 | A charge names the statement line it was printed on: a new snapshot key `statement_origins` records every charge each upload printed, so `rows[]` and `expenses[]` carry `statement_file`, `statement_id` and `source_row` (workbook) or `source_page` (PDF), each parallel and absent when unrecorded, and `expenses[]` also names the charge that settles it (`transaction_id`, from the EFFECTIVE settlement, so a reject takes it off again). The Chase PDF parser now records the page. `decisions`, `decision_history` and `receipt_claims` each carry `statement_id` beside the transaction id, resolved in the store from the snapshot rather than by seventeen callers | Note item T3 (owner 2026-09-18, traceability, backlog item 152): a booked expense could not name the statement line it settles, and a stored verdict named only a content-derived id, which a re-read MOVES. The one existing record, the writeback's `statement_anchors`, is deliberately empty for a PDF, so live August's three charges from `20260804-statements-1176-.pdf` were placeless in principle. Live July and August resolve their workbook rows through the anchors fallback today and gain their ids at the next re-read | 2026-09-18, pending PR; `tests/test_charge_origin_t3.py` (10, route-level; the end-to-end case pairs a receipt, re-reads the month and asserts the booked expense still resolves to the same document, upload and sheet row) plus two scalar pins in `tests/test_view_contract.py`; ten wiring points proven red by hand with sha256-equal restores; suite 2575 -> 2588 passed / 2 skipped; ruff clean |
 | 97 | The uptime monitor survives an outage: `|| rc=$?` on the probe step, because GitHub's `bash -e` aborted it on the probe's DOWN exit and skipped the notifier; plus `tools/tests/test_recon_uptime_workflow.py`, which drives the workflow's own step text under `bash -e` | Item 123 follow-up: the first outage rehearsal detected the dead API and then alerted nobody, so the monitor would have stayed silent through exactly the event it was built for | 2026-09-18, PR #1106; red-proven by hand against the pre-fix line (DOWN test fails rc=1, the live run's outcome); preflight-hooks OK (1968 passed / 1 skipped), ruff clean; re-rehearsed live after merge |
 | 96 | The month says when it was last matched: `last_rematch` + `rematch_pending` on both month payloads (pure reads of the snapshot's `rematch_log` / pending mark), and the Lovable prompt that renders them on the shared month header in EN + PT-BR (12 trigger labels) | Item 129 / owner notes #53 #54: a re-match ran silently; the only record was a counts-only operator event and a developer mail, and the SPA had nothing on the month payload to render | 2026-09-18, PR #1103; red-proven (five tests fail without the key); suite 2547 passed / 2 skipped; ruff clean; deploy + Lovable paste pending |
