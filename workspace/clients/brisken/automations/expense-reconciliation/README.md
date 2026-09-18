@@ -466,6 +466,8 @@ matches, no_charge false positives, the reconciliation invariant) or cannot
 be measured. `... real --markdown` prints the per-split and per-bundle block
 for a PR body; `--write-baseline` re-records a deliberate move.
 
+Four guards for defect classes that repeated (item 128): `test_reader_parity.py` (CSV and Excel readers agree field by field), `test_view_contract.py` `*_vocabulary_is_pinned` (row_type, reason_code, month_health, rematch trigger as closed literals), `test_extraction_prompt_pin.py` (the reading prompt's fingerprint), `test_smtp_listener_e2e.py` (a real SMTP session through the listener to the month).
+
 ## Data we need from Chris (smallest viable set)
 
 To validate the matching engine against a real Brisken month and tune
