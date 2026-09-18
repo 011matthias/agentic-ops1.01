@@ -1261,10 +1261,19 @@ def _provenance_entry(person: dict, received_at: str, arch: Path | None) -> dict
     flags, so a receipt created from an injected mail shows the flag on its
     grid row exactly where `submitted_by` already shows."""
     entry = {**person, "received_at": received_at}
+    meta = _read_meta(arch)  # {} for arch is None (item 106 / 125 both read it)
     if arch is not None:
         # Item 106: which mail stored this file, so a replay of the same
         # mail recognises its own receipt instead of calling it a copy.
         entry["archive"] = arch.name
+    # Item 125: whether this mail's SMTP session was encrypted, carried from
+    # the archive meta (stamped in archive_incoming) onto the receipt, so
+    # the operator sees on the grid who still delivers in the clear. Present
+    # ONLY when the intake recorded it (every real SMTP arrival does); a
+    # non-SMTP caller and a pre-2026-09-18 archive leave the key absent, so
+    # "not recorded" reads apart from "delivered in the clear" (False).
+    if "transport_tls" in meta:
+        entry["transport_tls"] = bool(meta.get("transport_tls"))
     flags = _untrusted_flags(arch)
     if flags:
         entry["untrusted_instructions"] = flags
@@ -1412,7 +1421,7 @@ def pool_deleted_batch(data_root: Path, batch_id: str) -> tuple[int, int]:
 
 def archive_incoming(
     data_root: Path, raw: bytes, parsed: InboundMessage, peer: str = "",
-    known_sender: bool = True,
+    known_sender: bool = True, transport_tls: bool | None = None,
 ) -> Path:
     """Custody step: archive + acceptance log row, called INLINE in the
     SMTP DATA handler before the 250 goes out. Raises on failure (the
@@ -1420,11 +1429,22 @@ def archive_incoming(
 
     The row records the message's SIZE and whether we recognised the
     sender (item 122), which is what lets the day budget re-seed the
-    unknown-sender byte spend after a restart instead of forgiving it."""
+    unknown-sender byte spend after a restart instead of forgiving it.
+
+    `transport_tls` (item 125) is whether the SMTP session had completed
+    STARTTLS before DATA; the listener always knows and always passes a
+    bool. It lands on the archive meta and the log row, and from the meta
+    onto every receipt the mail produces (`_provenance_entry`). Left None
+    by a non-SMTP caller, the key is ABSENT (never null), so a reader
+    tells "not recorded" from "delivered in the clear"; archives written
+    before 2026-09-18 read the same way."""
+    extra: dict = {"peer": peer}
+    if transport_tls is not None:
+        extra["transport_tls"] = bool(transport_tls)
     arch = archive_message(
-        data_root, raw, parsed, STATUS_RECEIVED, extra={"peer": peer}
+        data_root, raw, parsed, STATUS_RECEIVED, extra=extra
     )
-    _append_log(data_root, {
+    row = {
         "at": _now_iso(),
         "from": parsed.from_addr,
         "subject": parsed.subject,
@@ -1433,7 +1453,10 @@ def archive_incoming(
         "known_sender": bool(known_sender),
         "status": STATUS_RECEIVED,
         "archive": arch.name,
-    })
+    }
+    if transport_tls is not None:
+        row["transport_tls"] = bool(transport_tls)
+    _append_log(data_root, row)
     return arch
 
 
