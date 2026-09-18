@@ -403,6 +403,40 @@ detected_currency, detected_reference, line_items
 Empty / missing → vendor-fallback (Tier 2) categorization path triggers.
 Real OCR (slice 2) populates this directly; CSV is the slice-1 bridge.
 
+## Mail intake (the app's own mailbox)
+
+The app runs its own SMTP listener (`web/smtp_server.py`), enabled with
+`EXPENSE_RECON_INTAKE_SMTP=1`. The MX for `expenses.brisken.com` points at
+it, and anyone may mail a receipt to that domain (the boundaries are the
+recipient domain, so it is not an open relay, plus per-sender and daily
+spend guards).
+
+**Transport (backlog item 125).** The listener offers **opportunistic
+STARTTLS**, TLS 1.2 or newer. A sender that supports TLS (Exchange Online's
+outbound default) encrypts on the wire; STARTTLS is never required, so a
+sender that cannot do it still delivers, which is the point (forcing it
+would bounce real receipts). Every arrival records whether its session was
+encrypted as `provenance.transport_tls` on the receipt, so who still
+delivers in the clear is readable from the data.
+
+The certificate is **self-signed**, made on first start on the data volume
+at `<data>/tls/{cert,key}.pem` (via the `openssl` binary) and renewed
+inside 30 days of expiry. A verifying sender declines a self-signed
+certificate and, being opportunistic, falls back to cleartext; a
+CA-issued certificate removes that fallback.
+
+Environment:
+
+- `EXPENSE_RECON_SMTP_TLS=0` turns the STARTTLS offer off (the listener
+  stays plaintext, the pre-item-125 behaviour).
+- `EXPENSE_RECON_SMTP_TLS_CERT` / `EXPENSE_RECON_SMTP_TLS_KEY` point at a
+  **CA-issued** pair. When both are set the listener loads them and skips
+  generation, so a real certificate drops in with no code change.
+
+Follow-up (not built): a Let's Encrypt certificate issued over DNS-01 on
+the registrar API, dropped in through the two env overrides above, to
+retire the self-signed fallback.
+
 ## Run the tests
 
 ```bash

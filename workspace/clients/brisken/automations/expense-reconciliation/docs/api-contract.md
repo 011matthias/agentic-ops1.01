@@ -5173,6 +5173,34 @@ attribution tool reads the clause off `match_month`'s own outcome
 (`tools/tests/test_recon_match_attribution_gate.py`). SPA half:
 `docs/lovable-no-card-evidence-prompt.md`.
 
+## Whether the receipt travelled encrypted: `submitted_by.transport_tls` (item 125, 2026-09-18)
+
+The intake mailbox now offers opportunistic STARTTLS. Whether a given mail's
+SMTP session was actually encrypted before its body was sent is recorded as
+**`transport_tls`** (a bool) inside the mail-provenance object: `true` when
+the session completed STARTTLS before DATA, `false` when the mail was
+delivered in cleartext. It rides wherever the intake provenance rides, so on
+`GET /api/expense-batches/{id}` it appears inside each mailed expense's
+`submitted_by` object beside `person` / `source` / `address` / `archive`,
+and on `GET /api/inbound/log` and the archive meta it appears on the
+acceptance row.
+
+Present ONLY when the intake recorded it, which every real SMTP arrival on
+or after 2026-09-18 does. It is ABSENT (never null) on a manually uploaded
+receipt (which carries no `submitted_by` at all), on a receipt whose mail
+was archived before 2026-09-18, and on any non-SMTP intake path, so a reader
+tells "not recorded" apart from "delivered in the clear" (`false`). The
+field is deliberately opportunistic: a `false` is expected traffic (a
+sender without TLS still delivers), not an error, and it is what lets the
+operator see who still sends in the clear rather than guessing. Nothing
+outside the tool carries it: the acknowledgement mail, the CSV and the PDFs
+are untouched.
+
+Route-level in `tests/test_smtp_starttls.py`: a STARTTLS session lands the
+mailed receipt with `submitted_by.transport_tls: true` on the grid and on
+the archive meta; a plaintext session on the same listener lands it with
+`false` (present, not absent) rather than being refused.
+
 ## Four vocabularies are now closed literals in CI (2026-09-18, item 128)
 
 Rule 5 above says growing an enum is the same move as retyping a field. Until
