@@ -486,3 +486,52 @@ def test_serialize_defaults_legacy_snapshots_to_receipt():
     """Pre-2026-08-13 snapshots have no document_type key; they must load
     as plain receipts."""
     assert receipt_from_dict(_receipt_dict()).document_type == "receipt"
+
+
+# ── note item T1 (2026-09-18): the strip names the receipt it set aside ──
+
+
+def test_set_aside_entry_names_the_receipt_by_document_id(web_client, monkeypatch):
+    """Every other surface a receipt appears on calls its identity
+    `document_id`; the set-aside strip called the same value `file`, so a
+    reader joining the strip to a receipt had to know that. The strip now
+    says both, and the value is the one a restore turns into an expense."""
+    batch_id, file = _make_batch_with_set_aside(web_client, monkeypatch)
+
+    entry = web_client.get(f"/api/expense-batches/{batch_id}").json()["set_aside"][0]
+    assert entry["document_id"] == file, (
+        "the same value the strip has always carried under `file`"
+    )
+    assert entry["file"] == file, "and `file` keeps its name and its value"
+
+    # The identity is the one the rest of the tool uses: restoring the entry
+    # produces an expense with exactly this document_id.
+    _patch_ocr(monkeypatch)
+    resp = web_client.post(
+        f"/api/expense-batches/{batch_id}/set-aside/restore",
+        json={"file": file},
+    )
+    assert resp.status_code == 200, resp.text
+    grid = resp.json()["batch"]
+    assert entry["document_id"] in {e["document_id"] for e in grid["expenses"]}
+
+
+def test_a_legacy_set_aside_entry_gets_no_document_id(web_client, monkeypatch):
+    """A run recorded before the snapshot carried the strip derives its
+    entries from the quarantine's own parse issues
+    (`_derive_legacy_set_aside`), where `file` is a parse-issue file name
+    and nothing proves it is a document id. Absent, not guessed: the
+    parallel-field rule, and the reason the key is read from the stored
+    receipt rather than copied out of `file`."""
+    from expense_recon.web.service import set_aside_view
+
+    legacy = {
+        "parse_errors": [[
+            "b_statement.jpg", 0,
+            "not a purchase receipt: looks like a bank or card statement "
+            "page; excluded",
+        ]],
+    }
+    (entry,) = set_aside_view(legacy)
+    assert entry["file"] == "b_statement.jpg"
+    assert "document_id" not in entry
