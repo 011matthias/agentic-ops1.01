@@ -12,6 +12,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-18 | Brisken Recon Owner Note Triage | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Brisken%20Recon%20Owner%20Note%20Triage/Mini-Checkpoint-1.md) |
+| 2026-09-18 | Brisken Recon Card Accounts And The Slow Drop | client-dev | [→](docs/2026-09-18%20-%20Brisken%20Recon%20Card%20Accounts%20And%20The%20Slow%20Drop/Checkpoint.md) |
 | 2026-09-18 | Brisken Recon Three Drives And Item 146 | client-dev | [Mini-Checkpoint-2](docs/2026-09-18%20-%20Brisken%20Recon%20Three%20Drives%20And%20Item%20146/Mini-Checkpoint-2.md) |
 | 2026-09-18 | Brisken Recon Three Drives And Item 146 | client-dev | [Mini-Checkpoint-3](docs/2026-09-18%20-%20Brisken%20Recon%20Three%20Drives%20And%20Item%20146/Mini-Checkpoint-3.md) |
 | 2026-09-18 | Brisken Recon Item 104 Decision History | client-dev | [→](docs/2026-09-18%20-%20Brisken%20Recon%20Item%20104%20Decision%20History/Checkpoint.md) |
