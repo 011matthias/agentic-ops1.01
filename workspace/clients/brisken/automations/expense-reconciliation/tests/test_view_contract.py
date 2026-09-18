@@ -1370,16 +1370,20 @@ def test_expense_card_source_is_on_every_row_from_a_closed_set(payloads):
     method or a batch hint assignment), `override` (a per-row card fix this
     month), `learned` (remembered from an earlier month's fix),
     `settled_charge` (item 111: the card of the charge this month that
-    settles the receipt) or `none`, never null; `none` exactly when `card` is
-    null. The per-row fix is the header field `card_key`. A new value is a
-    rule-5 change (api-contract). Route-level behaviour:
-    `tests/test_card_fix_per_row.py`, `tests/test_entity_from_settled_charge_item_111.py`."""
+    settles the receipt), `merchant` (note item M2: the card the merchant
+    registry says this brand's spend is exclusively on, the LAST link of the
+    chain) or `none`, never null; `none` exactly when `card` is null. The
+    per-row fix is the header field `card_key`. A new value is a rule-5
+    change (api-contract). Route-level behaviour:
+    `tests/test_card_fix_per_row.py`, `tests/test_entity_from_settled_charge_item_111.py`,
+    `tests/test_registry_card_key_m2.py`."""
     views = payloads["expense_batch"]
     seen: set[str] = set()
     for view in views:
         for e in view["expenses"]:
             assert e["card_source"] in {
-                "hint", "override", "learned", "settled_charge", "none",
+                "hint", "override", "learned", "settled_charge", "merchant",
+                "none",
             }, e
             assert (e["card_source"] == "none") == (e["card"] is None), e
             seen.add(e["card_source"])

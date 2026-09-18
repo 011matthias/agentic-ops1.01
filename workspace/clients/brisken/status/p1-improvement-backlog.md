@@ -6160,7 +6160,7 @@ exactly as `reading receipts` and `filing September 2026` already were.
 are sequential exactly as before: they take batch write locks and a
 statement-bearing month re-matches on the arrival. Only the read pass moved.
 
-### 149. Merchant-to-category is the default; the exceptions vary by company, on the account (note item M1; owner directive 2026-09-18) (SHIPPED 2026-09-18, pending PR)
+### 149. Merchant-to-category is the default; the exceptions vary by company, on the account (note item M1; owner directive 2026-09-18) (SHIPPED 2026-09-18, PR #1094, merge d1c8e733, Fly v184; Shipped row 98)
 
 **Owner, 2026-09-18 (memory half of the note), and Dirk the same day:** binding
 a merchant to one category works about 90% of the time; the exceptions are
@@ -6385,10 +6385,82 @@ private" stays its own step; item 72 stays the TRACEABILITY session's.
 - Remaining Lovable halves (confirm-all queue rendering, folder-attach
   picker, paid-through cell): each named in its status file row.
 
+### 152. A merchant's spend is often on ONE card, and the tool asks anyway (note item M2; owner 2026-09-18)
+
+**Owner, 2026-09-18:** some vendors are paid from one card and one card only.
+The tool should know that rather than ask every month.
+
+**Measured before the build (read-only, 2026-09-18).** Live July, August and
+September 2026: 128 rows, 60 display vendors, each row's card read off
+`expenses[].card` / `card_source`. **34 vendors on exactly one card, 5 on
+several, 21 on none at all.** Card sources across the three months:
+`hint` 53, `none` 44, `settled_charge` 21, `override` 10, `learned` 0.
+Multi-card, all five: `anthropic, pbc` {3645: 2, card-2838: 7, card-1176: 1,
+card-9693: 1}; `anthropic, pbc (@anthropic)` {3645: 3, card-2838: 2};
+`anthropic, pbc @anthropic` {card-1176: 1, card-9693: 4}; `lovable labs
+incorporated` {3645: 4, 3876: 2, card-2838: 3}; `openai` {3645: 1,
+card-9693: 5}. Single-card, the 34: `martino supermercado` 3876 x6,
+`supermercado fenix` 3876 x3, `github, inc.` card-2838 x2, `google llc`
+card-2838 x2, `obsidian` 3645 x2, `zoho corporation` card-2838 x2,
+`afi technologies inc` card-9693 x2, `eleven labs inc. @elevenlabs`
+card-1176 x2, `network solutions` + `network solutions, llc` 3645,
+`posto santos` 3876 x2, plus 23 with a single sighting each
+(`24 horas bebidas`, `amazon.de`, `aposto karlsruhe`, `atacadao
+popular-maraial`, `brauhaus kuhler krug`, `brave software, inc.`,
+`e a locacoes`, `eleven labs inc.`, `enchilada karlsruhe`, `hostinger`,
+`lidl zeppelinstrasse`, `lovable labs`, `lovable labs incorporated
+(@lovable)`, `microsoft corporation`, `parada obrigatoria`, `petit train
+touristique de colmar`, `posto arca de noe`, `pressmaster fzco`,
+`sarl train's`, `sendgrid`, `typora`, `willams ronald da sil`,
+`zoho books`). The 5 multi-card vendors are exactly the three M1 exceptions
+and the spellings around them, so the fact is true for most merchants and
+false precisely where a guess would hurt.
+
+**Built.** (a) Registry fields `card_key`, `card_key_learned`, `cards_seen`
+on the merchant entry, parallel and absent until set, like `cost_center`;
+`card_key` is not checked against the card registry, so the edit order of
+cards and merchants does not matter. (b) `card_source: "merchant"`, the LAST
+link of the item-87 chain, under the same guard as `learned`: only for a
+receipt that prints no card number, names no assigned hint, is not confirmed
+private, is not settled by a charge of this month and is not remembered.
+`can_mark_private` stays true on it, because a registry card is memory about
+the brand and not a decision about this row. (c) The learner at sign-off
+(`registry_card_upserts_from_expense_run`, beside item 116's whole-entry
+upsert): `cards_seen` accumulates the month's resolved cards per merchant,
+`card_key` is written only while exactly one card has been seen and is marked
+`card_key_learned`, a second card drops a LEARNED key, and a key an editor
+typed is never touched. A row carried by `merchant` teaches nothing, so a
+lent card cannot harden into a fact. (d) Wired on every surface that holds
+live settings: grid, CSV, month PDF (listing, card pass, card sections),
+cost-center roll-up, refresh-master-data preview. api-contract section
+"A merchant's spend is often on ONE card".
+
+**Not wired, deliberately.** `rematch_month` passes no merchant map and
+`merchant` is not in `CARD_SCOPE_SOURCES`, so a card the registry lends never
+scopes matching and the accuracy gate is untouched (that surface is the
+parallel MATCHING session's). Statement-mode `build_view` passes none either.
+
+**Live effect on this deploy: none.** The live registry holds 28 merchants
+and not one carries a card, so no live row moves. The 34 single-card vendors
+become resolvable as sign-offs accumulate `cards_seen`, one month at a time.
+
+**Tests.** `tests/test_registry_card_key_m2.py` (10, route-level through the
+receipt add, the row-fix PUT, the settings PUT, publish and the CSV route);
+`tests/test_view_contract.py` `card_source` vocabulary widened to include
+`merchant`. Three wires proven red under mutation: the chain link (4 tests
+red), the learner at its caller (2 red), the CSV route's argument (1 red, by
+hand after `regress_check` reported no pytest summary line).
+
+**SPA half.** `docs/lovable-merchant-card-prompt.md` (Not applied). The
+Settings editor replaces the whole merchant map on save, so it must carry all
+three new fields or they are erased.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 99 | A merchant's spend is often on ONE card: registry fields `card_key` / `card_key_learned` / `cards_seen` on the merchant entry, `card_source: "merchant"` as the last link of the item-87 chain (same guard as `learned`, private option preserved), and a sign-off learner that accumulates the month's resolved cards per merchant, writes a key only while exactly one card has been seen, drops a LEARNED key the moment a second appears, and never touches a key an editor typed | Note item M2 (owner 2026-09-18, backlog item 152). Measured on live July/August/September first: of 60 display vendors, 34 are on exactly one card, 5 on several (the three AI vendors and their spellings, the same exceptions M1 found for categories) and 21 on none, so the fact is real for most merchants and false precisely where a guess would hurt. A row carried by the registry card teaches nothing, so a lent card cannot harden into a fact; `merchant` is kept out of `CARD_SCOPE_SOURCES` so it never scopes matching | 2026-09-18, this round; `tests/test_registry_card_key_m2.py` (10, route-level); three wires proven red under mutation (chain 4 red, learner-at-caller 2 red, CSV argument 1 red by hand); suite 2519 -> 2529 passed / 2 skipped; ruff clean; no live row moves on the deploy (the 28 live merchants carry no card); SPA half `docs/lovable-merchant-card-prompt.md` (owner applies) |
+| 98 | Merchant-to-category is the default and the account varies by company: the registry's category stamps every receipt of its merchant before any line read, the (company, vendor) rule decides the ACCOUNT (own company, else a no-company rule, else the vendor's rules when they agree; a Zoho-seeded row under another category contributes nothing until validated), receiptless charges consult the registry on every re-match, and `GET /api/memory` gains `by_vendor[]` + `categories[].seeded` | Note item M1 (owner directive + Dirk 2026-09-18): binding a merchant to one category is right ~90% of the time and what varies by company is the account, but the tool conflated the two, so one merchant was judged one way for a company with a rule and another way for a company without one. Live July read LOVABLE as Meals & Entertainment four times | 2026-09-18, PR #1094, merge d1c8e733, Fly v184; four wires proven red under `regress_check`; suite 2511 -> 2519 passed / 2 skipped; live `GET /api/memory` on v184 carries `by_vendor` (97 vendors) and `seeded` on all 103 rows; cold scripted Playwright drive of `/memory` (105 rows, 0 non-GET); SPA half `docs/lovable-memory-by-company-prompt.md` (owner applies) |
 | 97 | The uptime monitor survives an outage: `|| rc=$?` on the probe step, because GitHub's `bash -e` aborted it on the probe's DOWN exit and skipped the notifier; plus `tools/tests/test_recon_uptime_workflow.py`, which drives the workflow's own step text under `bash -e` | Item 123 follow-up: the first outage rehearsal detected the dead API and then alerted nobody, so the monitor would have stayed silent through exactly the event it was built for | 2026-09-18, PR #1106; red-proven by hand against the pre-fix line (DOWN test fails rc=1, the live run's outcome); preflight-hooks OK (1968 passed / 1 skipped), ruff clean; re-rehearsed live after merge |
 | 96 | The month says when it was last matched: `last_rematch` + `rematch_pending` on both month payloads (pure reads of the snapshot's `rematch_log` / pending mark), and the Lovable prompt that renders them on the shared month header in EN + PT-BR (12 trigger labels) | Item 129 / owner notes #53 #54: a re-match ran silently; the only record was a counts-only operator event and a developer mail, and the SPA had nothing on the month payload to render | 2026-09-18, PR #1103; red-proven (five tests fail without the key); suite 2547 passed / 2 skipped; ruff clean; deploy + Lovable paste pending |
 | 95 | Guards for the three repeated defect classes: CSV/XLSX reader parity on a synthetic statement (sign inference, refunds, payments, typed vs text cells), closed-literal pins for `row_type` / `reason_code` / `month_health.state` / `rematch_log.trigger` via `ast` scanners of the emitters, a pin on the receipt-reading prompt fingerprint, and an end-to-end test through the real aiosmtpd listener over `smtplib` | Item 128: the September sign defect was the two readers drifting apart, every prompt edit moved 12-41 of 129 readings unnoticed, and the listener leg of the mail path had never been exercised by a test | 2026-09-18, PR #1100; four red proofs pasted in the PR (XLSX sign flip, an added row type, a one-character prompt edit, a 250 before processing); suite 2544 collected, 2541 passed / 2 skipped / 1 pre-existing timing race; ruff clean |
