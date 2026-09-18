@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-18 | Brisken Recon Five Prompts Were Already Live | client-dev | [Mini-Checkpoint-2](docs/2026-09-18%20-%20Brisken%20Recon%20Five%20Prompts%20Were%20Already%20Live/Mini-Checkpoint-2.md) |
 | 2026-09-18 | Brisken Recon Item 98 One Currency | client-dev | [→](docs/2026-09-18%20-%20Brisken%20Recon%20Item%2098%20One%20Currency/Checkpoint.md) |
 | 2026-09-17 | Brisken Recon Prompts Applied And The Bank Transfer Exit | client-dev | [Mini-Checkpoint-2](docs/2026-09-17%20-%20Brisken%20Recon%20Prompts%20Applied%20And%20The%20Bank%20Transfer%20Exit/Mini-Checkpoint-2.md) |
 | 2026-09-17 | Brisken Recon Item 90 Declined And The Eligibility Lesson | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Recon%20Item%2090%20Declined%20And%20The%20Eligibility%20Lesson/Checkpoint.md) |
