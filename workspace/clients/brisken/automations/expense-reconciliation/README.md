@@ -248,6 +248,34 @@ one copy. The in-app schedule is off until `EXPENSE_RECON_BACKUP=1` and a
 site in `EXPENSE_RECON_BACKUP_SITE`; the restore procedure (unrehearsed) is
 `docs/backup-and-restore.md`.
 
+**Uptime** (item 123): Fly's own `/healthz` check restarts a dead process
+and tells nobody; the outside monitor is `tools/recon_uptime_probe.py`,
+run every 10 minutes from GitHub Actions
+(`.github/workflows/expense-recon-uptime.yml`, from `main` only, so it
+starts after the merge). It probes `GET /healthz` on the Fly app (status
+`ok`, the `/data` volume readable, the intake not refusing; free space
+under 15% is a WARN in the run log and does not page), a `220` banner on
+`mx.expenses.brisken.com:25` followed by `QUIT`, and a 200 from the SPA
+shell at `expenses.brisken.com`, each retried once after 5 s so a blip
+never pages. An outage opens one issue labelled `recon-uptime` in the
+monorepo with the check table and sends one mail to the developer; while
+it lasts each run appends a comment and sends nothing; the recovery run
+comments, closes the issue and mails once more. The mail goes through
+Resend's free tier (`RESEND_API_KEY` secret, `BRIEFING_TO` variable),
+which delivers only to the account owner's address, so nobody at Brisken
+hears about an outage from this monitor. Reaching Criss or Dirk needs
+either the Graph client secret in repo secrets (a Brisken mailbox as
+sender) or a Brisken person subscribed to the issue label; that is an
+owner decision, not made here. Hand test: Actions, "expense-recon
+uptime", Run workflow with `api_override` = `https://127.0.0.1:9` and
+`dry_run` on: the probe reports the api DOWN and the notifier prints what
+it would open and send without doing it. Locally,
+`uv run tools/recon_uptime_probe.py probe` prints the same table (read-only
+against the live host). Unverified until the first dispatched run: that
+GitHub's Azure-hosted runners can open outbound port 25 at all; an `mx
+DOWN` from Actions with `api` and `spa` OK and a laptop probe that says
+OK means the runner, not the MX.
+
 The image installs the versions pinned in `uv.lock`, not the open ranges in
 `pyproject.toml` (backlog item 124), so a deploy ships exactly what the suite
 ran against. An upgrade is therefore a deliberate commit: `uv lock --upgrade`,
