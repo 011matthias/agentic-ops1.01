@@ -1,4 +1,4 @@
-# Lovable prompt: a merchant's card (note item M2, backlog item 152)
+# Lovable prompt: a merchant's card (note item M2, backlog item 154)
 
 Paste the block below into Lovable. It adds one field to the Merchants editor
 in Settings, one read-only line beside it, and one new value in the card-source
