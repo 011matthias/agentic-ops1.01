@@ -5290,7 +5290,131 @@ failure flows through and clears when paid. Presence and shape on every
 fixture payload in `tests/test_view_contract.py`
 (`test_last_rematch_and_rematch_pending_are_on_every_payload`).
 
-## A merchant's spend is often on ONE card: `card_source: "merchant"` (note item M2, backlog item 152, 2026-09-18)
+## A charge names the statement line it was printed on (note item T3, 2026-09-18)
+
+Item 150 gave the statement UPLOAD an identity. This is the other half of
+the same record: which upload printed each CHARGE, and where in it. With
+both, a booked expense traces to the line on the statement it settles, and a
+stored verdict still names that line after the month has been re-read and
+its charges have new ids.
+
+### On `rows[]` (run payload) and `expenses[]` (month payload)
+
+Four parallel keys, each ABSENT (never null) when not recorded:
+
+| Key | What it answers |
+|---|---|
+| `statement_file` | the `statements[]` entry that printed this charge, by its `file` name |
+| `statement_id` | the same entry's content id (item 150), absent on an upload recorded before ids existed |
+| `source_row` | the 1-based sheet row, for a charge a WORKBOOK printed |
+| `source_page` | the 1-based page, for a charge a PDF STATEMENT printed |
+
+`source_row` and `source_page` are mutually exclusive: one upload is a
+workbook or a PDF, never both, and a charge's origin is ONE upload.
+
+`expenses[]` carries these for the charge that settles the expense IN THIS
+MONTH, plus `transaction_id` naming that charge. The settlement read is the
+EFFECTIVE one (the same `charge_states` map the coverage roll-up reads), so
+a rejected pairing takes all five keys off the expense the way it takes the
+receipt off the charge; reading the raw matches here would re-open the split
+item 103 closed. A receipt settled by ANOTHER month keeps answering with
+`settled_by`, which names that month and is a different question.
+
+A charge printed by more than one upload (a mid-month partial and the
+closing cycle both carry it) reports the FIRST upload that printed it: the
+question is where the month got the charge from, and that is the upload that
+put it there.
+
+### Where the record lives: `statement_origins`
+
+A new snapshot key, not on either payload, beside `statement_anchors` and
+kept apart from it on purpose:
+
+* `statement_anchors` is the WRITEBACK's map, id to sheet row per upload,
+  and deliberately EMPTY for a PDF statement. Its emptiness is load-bearing
+  there ("recorded and empty" is not "not recorded") and must not be given a
+  second meaning.
+* `statement_origins` records every charge an upload printed, workbook and
+  PDF alike: `{file: {transaction_id: {"row": n} | {"page": n} | {}}}`. The
+  KEY is the record that this upload printed this charge; the value is the
+  finer answer when there is one. Keyed by `file` only, unlike the anchors,
+  which are keyed by id as well because the writeback addresses an upload by
+  id; this record is only ever walked through `statements[]`, where every
+  entry has its file name.
+
+A month recorded before this key (every live month on 2026-09-18) has no
+entry, and the reader falls back to the anchors: a workbook charge resolves
+to its upload and its sheet row TODAY, and gains its `statement_id` at the
+month's next re-read, exactly as item 150's ids do. A PDF upload of that
+vintage stays unresolved until then, because nothing recorded its charges.
+
+### The PDF page is now recorded
+
+`Transaction.source_page`, filled by the Chase PDF parser. Until this, a PDF
+statement's charges carried no place at all: the text layer was read as one
+concatenated blob and `source_row` stayed None, which is why live August
+2026's three charges from `20260804-statements-1176-.pdf` could name neither
+a row nor (through the anchors) an upload. The reader now keeps the pages
+apart (`_extract_pages`) and hands the line-to-page index to the text core
+(`parse_statement_text(..., page_starts=...)`); `_extract_text` still exists
+and still returns the same join. Synthetic text passed straight to the text
+core records no page, which is the honest answer for text that has none.
+`source_page` is NOT part of the content id (`assign_content_ids` reads
+amount, date, vendor, card and currency), so recording it moved no existing
+`transaction_id`.
+
+### The stored records: `statement_id` beside `transaction_id`
+
+`decisions`, `decision_history` and `receipt_claims` each gained a
+`statement_id` column. The reason is that a `transaction_id` is
+content-derived: a re-read of a corrected file gives the same printed line a
+new id and `rekey_decisions` moves the verdict onto it. The statement the
+line was printed on is the fact that does NOT move, so stamping it beside
+the id is what lets a decision, a history line or a claim say which document
+it was about months later.
+
+Resolved inside the store, not passed in by each of the seventeen writers:
+the value is a pure function of `(run_id, transaction_id)`, so a caller
+could only get it wrong. The snapshot is parsed once per run per process and
+the memo is dropped whenever the store rewrites a snapshot, which is the only
+event that changes the answer.
+
+* `decisions` is stamped when the row does not already carry one, inside the
+  writer's own transaction, so a verdict and the statement it was about land
+  together or not at all. `rekey_decisions` re-resolves every moved verdict
+  against the rebuilt month.
+* `decision_history` is stamped at INSERT, because the table is append-only:
+  a line filled in afterwards would be a rewrite, the one thing that ledger
+  forbids. A `charge` line resolves through its own `row_key`; a `receipt`
+  line through the charge this run currently books the document against,
+  which is the line the change lands on; a `group` line (a duplicate ruling)
+  is about no single charge and stays NULL.
+* `receipt_claims` is stamped against the CLAIMING run: the claim names a
+  charge in the month that took the receipt, not in the month that holds it.
+
+NULL everywhere else, and NULL means "not recorded", never "no statement":
+every row written before the columns, and every row whose month cannot place
+the charge.
+
+### The SPA
+
+Nothing renders any of this yet, so the SPA needs no change. The fields are
+there for the reviewer question the tool could not answer ("which line on
+which statement is this receipt booked against") and for the Zoho Books
+integration, which is where ids were ruled to reach the outside.
+
+### Item 72 is closed
+
+Backlog item 72 (`rematch_month` persists the raw outcome while the view
+shows the effective one) was closed by item 103, whose commit persists the
+effective outcome; its heading says so as of this change.
+
+Route-level in `tests/test_charge_origin_t3.py`: the workbook row, the PDF
+page past a page break, the page index over the parser's own join, a month
+with no statement, a month recorded before the key, the booked expense, the
+released expense, the three stored records, a receipt-side history line, and
+the end-to-end walk-back across a re-read.
+## A merchant's spend is often on ONE card: `card_source: "merchant"` (note item M2, backlog item 153, 2026-09-18)
 
 Owner, 2026-09-18: some vendors are paid from one card and one card only, and
 the tool should know that rather than ask every month. Measured on the live

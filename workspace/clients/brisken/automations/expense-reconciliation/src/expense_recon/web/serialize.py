@@ -127,6 +127,8 @@ def transaction_to_dict(t: Transaction) -> dict:
         # of the positional transaction_id; content-derived ids carry no
         # row, so it has to survive the snapshot round trip.
         "source_row": t.source_row,
+        # Note item T3: the PDF page, for the charges that have no row.
+        "source_page": t.source_page,
         # Item 73: the statement label's row type (None = the sign decides).
         "row_type": t.row_type,
     }
@@ -162,6 +164,10 @@ def transaction_from_dict(d: dict) -> Transaction:
         # those still carry positional ids, and `_anchor_row`'s legacy
         # fallback recovers their sheet row from the id as before.
         source_row=d.get("source_row"),
+        # .get keeps every snapshot written before note item T3 loadable
+        # (no source_page key); those PDF charges stay placeless until
+        # the month is re-read, which is what "not recorded" means.
+        source_page=d.get("source_page"),
         # A key that is present is the parser's answer, None included (no
         # label was read). A snapshot from before item 73 has no key; its
         # row still holds the printed Type cell in `raw_text`, so the label

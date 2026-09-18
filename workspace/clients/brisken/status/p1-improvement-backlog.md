@@ -3327,7 +3327,7 @@ spare the workbench the batch fetch the banner needs.
 evidence row is in `PROMPT-STATUS.md`). One residue for item 79: July's first
 charge row is 18px under a 945px fold while "How this works" is expanded.
 
-### 72. `rematch_month` persists the raw outcome while the view shows the effective one (2026-09-15, found by the round-A review)
+### 72. `rematch_month` persists the raw outcome while the view shows the effective one (2026-09-15, found by the round-A review) (CLOSED by item 103 - see Shipped row 75; marked here by note item T3, 2026-09-18)
 
 Live instance, August 2026 after the round-A re-match on the DB copy:
 receipt `0023` (Anthropic 52.59 invoice, label `excluded`) sits in TWO raw
@@ -6160,7 +6160,7 @@ exactly as `reading receipts` and `filing September 2026` already were.
 are sequential exactly as before: they take batch write locks and a
 statement-bearing month re-matches on the arrival. Only the read pass moved.
 
-### 149. Merchant-to-category is the default; the exceptions vary by company, on the account (note item M1; owner directive 2026-09-18) (SHIPPED 2026-09-18, PR #1094, merge d1c8e733, Fly v184; Shipped row 98)
+### 149. Merchant-to-category is the default; the exceptions vary by company, on the account (note item M1; owner directive 2026-09-18) (SHIPPED 2026-09-18, PR #1094, merge d1c8e733, Fly v184; Shipped row 99)
 
 **Owner, 2026-09-18 (memory half of the note), and Dirk the same day:** binding
 a merchant to one category works about 90% of the time; the exceptions are
@@ -6339,6 +6339,64 @@ the clause off `match_month`'s own outcome. SPA half
 `docs/lovable-no-card-evidence-prompt.md` (not applied). Item 41's "suggest
 private" stays its own step; item 72 stays the TRACEABILITY session's.
 
+### 152. A booked expense cannot name the statement line it settles (note item T3, owner 2026-09-18; traceability; SHIPPED 2026-09-18, pending PR)
+
+**Owner, 2026-09-18 (traceability note, item T3):** the receipt-to-line link
+has to survive as a record. On `rows[]` and `expenses[]`, expose the charge
+side (which statement upload, and where in it) and the receipt side
+(`document_id`) in parallel, absent when unknown; every stored decision
+(`decisions`, `decision_history`) and every `receipt_claims` row carries the
+`statement_id` beside its transaction id; prove it end to end across a
+re-read, which rekeys a month's charges.
+
+**What was true before.** Item 150 gave the statement UPLOAD an identity. The
+charge had none: `rows[]` named a `transaction_id` and nothing about where it
+was printed, and `expenses[]` named no charge at all inside its own month
+(only `settled_by`, for a receipt another month had taken). The one record
+that could answer was `statement_anchors`, the writeback's id-to-row map,
+which is deliberately EMPTY for a PDF statement; live August 2026's three
+charges from `20260804-statements-1176-.pdf` were therefore placeless even in
+principle. And a stored verdict named only a content-derived id, which MOVES:
+a re-read of a corrected file gives the same printed line a new id and
+`rekey_decisions` carries the verdict onto it, so nothing said which document
+the verdict had been about.
+
+**Shipped.** A new snapshot key `statement_origins` records every charge an
+upload printed (`{file: {transaction_id: {"row": n} | {"page": n} | {}}}`),
+written by both callers that write the anchors, kept apart from them because
+the anchors' emptiness is load-bearing for the writeback. `rows[]` and
+`expenses[]` carry `statement_file`, `statement_id`, and `source_row` (a
+workbook line) or `source_page` (a PDF one), each parallel and ABSENT when
+not recorded; `expenses[]` also carries `transaction_id`, read from the
+month's EFFECTIVE settlement (`charge_states`), so a rejected pairing takes
+all five keys off again and item 103's raw-vs-effective split is not
+re-opened. The Chase PDF parser records the page: `_extract_pages` keeps the
+text layer per page and hands `parse_statement_text` a line-to-page index, so
+a PDF charge has a place the way a workbook charge has a row.
+`decisions` / `decision_history` / `receipt_claims` gained a `statement_id`
+column, resolved inside the store from the snapshot (memoized per run,
+dropped on every snapshot write) rather than passed in by each of the
+seventeen writers, since the value is a pure function of
+`(run_id, transaction_id)`.
+
+**Live months.** July and August predate `statement_origins`, so the reader
+falls back to the anchors and their workbook charges resolve to their upload
+and sheet row TODAY (July `July2026.xlsx` 112 rows, August `August2026.xlsx`
+111); `statement_id` stays absent on both until their next re-read, exactly
+as item 150 says, and August's three PDF charges stay placeless until then
+because nothing recorded them. No re-read is triggered by this item (no live
+writes, Criss acts).
+
+**Item 72 is closed by item 103** (Shipped row 75: the commit persists the
+effective outcome). Marked in its heading here; not rebuilt.
+
+**Tests.** `tests/test_charge_origin_t3.py` (10, route-level through the
+attach, both page GETs, the decisions route, the categories route and the
+re-read) plus two scalar pins appended to `tests/test_view_contract.py`. Ten
+wiring points proven red by hand (cp the source aside, one-line mutation,
+targeted tests, cp back, sha256 equal), because `tools/regress_check.py`
+prints RED whether or not the suite failed.
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.
@@ -6385,7 +6443,7 @@ private" stays its own step; item 72 stays the TRACEABILITY session's.
 - Remaining Lovable halves (confirm-all queue rendering, folder-attach
   picker, paid-through cell): each named in its status file row.
 
-### 152. A merchant's spend is often on ONE card, and the tool asks anyway (note item M2; owner 2026-09-18)
+### 153. A merchant's spend is often on ONE card, and the tool asks anyway (note item M2; owner 2026-09-18)
 
 **Owner, 2026-09-18:** some vendors are paid from one card and one card only.
 The tool should know that rather than ask every month.
@@ -6459,8 +6517,9 @@ three new fields or they are erased.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-| 99 | A merchant's spend is often on ONE card: registry fields `card_key` / `card_key_learned` / `cards_seen` on the merchant entry, `card_source: "merchant"` as the last link of the item-87 chain (same guard as `learned`, private option preserved), and a sign-off learner that accumulates the month's resolved cards per merchant, writes a key only while exactly one card has been seen, drops a LEARNED key the moment a second appears, and never touches a key an editor typed | Note item M2 (owner 2026-09-18, backlog item 152). Measured on live July/August/September first: of 60 display vendors, 34 are on exactly one card, 5 on several (the three AI vendors and their spellings, the same exceptions M1 found for categories) and 21 on none, so the fact is real for most merchants and false precisely where a guess would hurt. A row carried by the registry card teaches nothing, so a lent card cannot harden into a fact; `merchant` is kept out of `CARD_SCOPE_SOURCES` so it never scopes matching | 2026-09-18, this round; `tests/test_registry_card_key_m2.py` (10, route-level); three wires proven red under mutation (chain 4 red, learner-at-caller 2 red, CSV argument 1 red by hand); suite 2519 -> 2529 passed / 2 skipped; ruff clean; no live row moves on the deploy (the 28 live merchants carry no card); SPA half `docs/lovable-merchant-card-prompt.md` (owner applies) |
-| 98 | Merchant-to-category is the default and the account varies by company: the registry's category stamps every receipt of its merchant before any line read, the (company, vendor) rule decides the ACCOUNT (own company, else a no-company rule, else the vendor's rules when they agree; a Zoho-seeded row under another category contributes nothing until validated), receiptless charges consult the registry on every re-match, and `GET /api/memory` gains `by_vendor[]` + `categories[].seeded` | Note item M1 (owner directive + Dirk 2026-09-18): binding a merchant to one category is right ~90% of the time and what varies by company is the account, but the tool conflated the two, so one merchant was judged one way for a company with a rule and another way for a company without one. Live July read LOVABLE as Meals & Entertainment four times | 2026-09-18, PR #1094, merge d1c8e733, Fly v184; four wires proven red under `regress_check`; suite 2511 -> 2519 passed / 2 skipped; live `GET /api/memory` on v184 carries `by_vendor` (97 vendors) and `seeded` on all 103 rows; cold scripted Playwright drive of `/memory` (105 rows, 0 non-GET); SPA half `docs/lovable-memory-by-company-prompt.md` (owner applies) |
+| 100 | A merchant's spend is often on ONE card: registry fields `card_key` / `card_key_learned` / `cards_seen` on the merchant entry, `card_source: "merchant"` as the last link of the item-87 chain (same guard as `learned`, private option preserved), and a sign-off learner that accumulates the month's resolved cards per merchant, writes a key only while exactly one card has been seen, drops a LEARNED key the moment a second appears, and never touches a key an editor typed | Note item M2 (owner 2026-09-18, backlog item 153). Measured on live July/August/September first: of 60 display vendors, 34 are on exactly one card, 5 on several (the three AI vendors and their spellings, the same exceptions M1 found for categories) and 21 on none, so the fact is real for most merchants and false precisely where a guess would hurt. A row carried by the registry card teaches nothing, so a lent card cannot harden into a fact; `merchant` is kept out of `CARD_SCOPE_SOURCES` so it never scopes matching | 2026-09-18, this round; `tests/test_registry_card_key_m2.py` (10, route-level); three wires proven red under mutation (chain 4 red, learner-at-caller 2 red, CSV argument 1 red by hand); suite 2575 -> 2585 passed / 2 skipped on the branch, re-run green after merging T3; ruff clean; no live row moves on the deploy (the 28 live merchants carry no card); SPA half `docs/lovable-merchant-card-prompt.md` (owner applies) |
+| 99 | Merchant-to-category is the default and the account varies by company: the registry's category stamps every receipt of its merchant before any line read, the (company, vendor) rule decides the ACCOUNT (own company, else a no-company rule, else the vendor's rules when they agree; a Zoho-seeded row under another category contributes nothing until validated), receiptless charges consult the registry on every re-match, and `GET /api/memory` gains `by_vendor[]` + `categories[].seeded` | Note item M1 (owner directive + Dirk 2026-09-18): binding a merchant to one category is right ~90% of the time and what varies by company is the account, but the tool conflated the two, so one merchant was judged one way for a company with a rule and another way for a company without one. Live July read LOVABLE as Meals & Entertainment four times | 2026-09-18, PR #1094, merge d1c8e733, Fly v184; four wires proven red under `regress_check`; suite 2511 -> 2519 passed / 2 skipped; live `GET /api/memory` on v184 carries `by_vendor` (97 vendors) and `seeded` on all 103 rows; cold scripted Playwright drive of `/memory` (105 rows, 0 non-GET); SPA half `docs/lovable-memory-by-company-prompt.md` (owner applies) |
+| 98 | A charge names the statement line it was printed on: a new snapshot key `statement_origins` records every charge each upload printed, so `rows[]` and `expenses[]` carry `statement_file`, `statement_id` and `source_row` (workbook) or `source_page` (PDF), each parallel and absent when unrecorded, and `expenses[]` also names the charge that settles it (`transaction_id`, from the EFFECTIVE settlement, so a reject takes it off again). The Chase PDF parser now records the page. `decisions`, `decision_history` and `receipt_claims` each carry `statement_id` beside the transaction id, resolved in the store from the snapshot rather than by seventeen callers | Note item T3 (owner 2026-09-18, traceability, backlog item 152): a booked expense could not name the statement line it settles, and a stored verdict named only a content-derived id, which a re-read MOVES. The one existing record, the writeback's `statement_anchors`, is deliberately empty for a PDF, so live August's three charges from `20260804-statements-1176-.pdf` were placeless in principle. Live July and August resolve their workbook rows through the anchors fallback today and gain their ids at the next re-read | 2026-09-18, pending PR; `tests/test_charge_origin_t3.py` (10, route-level; the end-to-end case pairs a receipt, re-reads the month and asserts the booked expense still resolves to the same document, upload and sheet row) plus two scalar pins in `tests/test_view_contract.py`; ten wiring points proven red by hand with sha256-equal restores; suite 2575 -> 2588 passed / 2 skipped; ruff clean |
 | 97 | The uptime monitor survives an outage: `|| rc=$?` on the probe step, because GitHub's `bash -e` aborted it on the probe's DOWN exit and skipped the notifier; plus `tools/tests/test_recon_uptime_workflow.py`, which drives the workflow's own step text under `bash -e` | Item 123 follow-up: the first outage rehearsal detected the dead API and then alerted nobody, so the monitor would have stayed silent through exactly the event it was built for | 2026-09-18, PR #1106; red-proven by hand against the pre-fix line (DOWN test fails rc=1, the live run's outcome); preflight-hooks OK (1968 passed / 1 skipped), ruff clean; re-rehearsed live after merge |
 | 96 | The month says when it was last matched: `last_rematch` + `rematch_pending` on both month payloads (pure reads of the snapshot's `rematch_log` / pending mark), and the Lovable prompt that renders them on the shared month header in EN + PT-BR (12 trigger labels) | Item 129 / owner notes #53 #54: a re-match ran silently; the only record was a counts-only operator event and a developer mail, and the SPA had nothing on the month payload to render | 2026-09-18, PR #1103; red-proven (five tests fail without the key); suite 2547 passed / 2 skipped; ruff clean; deploy + Lovable paste pending |
 | 95 | Guards for the three repeated defect classes: CSV/XLSX reader parity on a synthetic statement (sign inference, refunds, payments, typed vs text cells), closed-literal pins for `row_type` / `reason_code` / `month_health.state` / `rematch_log.trigger` via `ast` scanners of the emitters, a pin on the receipt-reading prompt fingerprint, and an end-to-end test through the real aiosmtpd listener over `smtplib` | Item 128: the September sign defect was the two readers drifting apart, every prompt edit moved 12-41 of 129 readings unnoticed, and the listener leg of the mail path had never been exercised by a test | 2026-09-18, PR #1100; four red proofs pasted in the PR (XLSX sign flip, an added row type, a one-character prompt edit, a 250 before processing); suite 2544 collected, 2541 passed / 2 skipped / 1 pre-existing timing race; ruff clean |

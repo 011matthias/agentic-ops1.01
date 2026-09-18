@@ -125,11 +125,13 @@ def parse_statement_pdf_tolerant(
     statement spans several cards). `legal_entity_id` is the caller's
     (one company per statement)."""
     path = Path(path)
+    pages = _extract_pages(path)
     return parse_statement_text(
-        _extract_text(path),
+        "\n".join(pages),
         file_name=path.name,
         legal_entity_id=legal_entity_id,
         account_card_currency=account_card_currency,
+        page_starts=_page_starts(pages),
     )
 
 
@@ -139,11 +141,21 @@ def parse_statement_text(
     file_name: str,
     legal_entity_id: str,
     account_card_currency: str = "USD",
+    page_starts: list[int] | None = None,
 ) -> tuple[list[Transaction], list[ParseIssue]]:
     """The text-layer parsing core, separated from PDF extraction so tests
     can feed synthetic statement text directly (real Chase statements are
-    client financial data and are never committed as fixtures)."""
+    client financial data and are never committed as fixtures).
+
+    `page_starts` (note item T3, 2026-09-18) is the 0-based line index
+    each page begins at, which only the PDF reader can know once the
+    pages are concatenated. Given, each charge records the 1-based page
+    it was printed on (`Transaction.source_page`); omitted, every charge
+    records None, which is the honest answer for synthetic text that has
+    no pages. The FX detail may straddle a page break; the page recorded
+    is the one the charge line itself was on."""
     lines = text.splitlines()
+    page_of = _page_lookup(page_starts)
 
     period = _parse_period(text)
 
@@ -188,7 +200,8 @@ def parse_statement_text(
                 pending_fx_ccy = None
                 continue
             pending.append(
-                {"date": txdate, "vendor": desc.strip(), "amount": amount, "raw": ln}
+                {"date": txdate, "vendor": desc.strip(), "amount": amount,
+                 "raw": ln, "page": page_of(i)}
             )
             pending_fx_ccy = None
             continue
@@ -225,7 +238,10 @@ def parse_statement_text(
     return assign_content_ids(transactions), issues
 
 
-def _extract_text(path: Path) -> str:
+def _extract_pages(path: Path) -> list[str]:
+    """The text layer, one entry per page. Concatenated by the caller,
+    which is what the parser has always read; kept separate here only so
+    the page each line came from survives the join (note item T3)."""
     try:
         from pypdf import PdfReader
     except ImportError as exc:  # pragma: no cover - dependency declared
@@ -235,7 +251,40 @@ def _extract_text(path: Path) -> str:
     if not path.exists():
         raise StatementParseError(f"statement PDF not found: {path}")
     reader = PdfReader(str(path))
-    return "\n".join((page.extract_text() or "") for page in reader.pages)
+    return [(page.extract_text() or "") for page in reader.pages]
+
+
+def _extract_text(path: Path) -> str:
+    """The whole text layer as one blob, exactly as before the pages were
+    kept apart. Still the parser's input; `_page_starts` is the index
+    over the same join."""
+    return "\n".join(_extract_pages(path))
+
+
+def _page_starts(pages: list[str]) -> list[int]:
+    """The 0-based line index each page begins at, over the "\\n".join of
+    the same pages. Page k's text contributes `count("\\n") + 1` lines to
+    the join, because the join itself puts one separator between pages."""
+    starts: list[int] = []
+    cursor = 0
+    for page in pages:
+        starts.append(cursor)
+        cursor += page.count("\n") + 1
+    return starts
+
+
+def _page_lookup(page_starts: list[int] | None):
+    """A line index to 1-based page number, or a function answering None
+    when no page map was given (synthetic text, and every caller that
+    parses a statement out of a string)."""
+    if not page_starts:
+        return lambda _i: None
+    import bisect
+
+    def page_of(i: int) -> int:
+        return bisect.bisect_right(page_starts, i)
+
+    return page_of
 
 
 def _parse_period(text: str) -> tuple[int, int, int, int] | None:
@@ -316,4 +365,8 @@ def _build_tx(
         # (purchases positive, payments/credits negative), so a negative
         # amount IS a credit (3.15 / LD-5 A5).
         is_credit=p["amount"] < 0,
+        # Note item T3: the page this charge was printed on, so a PDF
+        # charge has a place on its statement the way a workbook charge
+        # has a row. None when the caller passed no page map.
+        source_page=p.get("page"),
     )
