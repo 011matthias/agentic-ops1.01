@@ -3993,6 +3993,10 @@ card item 137 resolved for it; everything else goes to the no-card section.
 Order: `coverage[]` order, then cards only receipts name (pool order), No card
 last. A card with neither charges nor receipts this month is not a section
 (it is still a `coverage[]` entry).
+**Item 147 re-orders this on a month whose registry names an account**: each
+account is followed immediately by its subcards, and an account's figures are
+the group's. See "Cards under an account" at the end of this document; a
+registry with no `parent` anywhere is unaffected, field for field.
 
 **`card_sections[]`** (list of objects), on `GET /api/runs/{id}` and
 `GET /api/expense-batches/{id}`:
@@ -4010,7 +4014,7 @@ last. A card with neither charges nor receipts this month is not a section
 | `n_booked_without_receipt` · `booked_without_receipt_by_ccy` | int · object ccy -> string | item 102 on this card: yellow rows no receipt holds |
 | `n_receipts` | int | every receipt filed on the card, set-aside copies and settled-outside ones included |
 | `n_receipts_without_charge` | int | the card's receipts in `unmatched_receipts[]`, the Matching page's "Receipts without a charge" |
-| `n_expenses` · `totals_by_ccy` | int · object ccy -> string | **Expenses payload only**: rows that count (`counts_in_total` not false) and their totals, summed like `summary.totals_by_ccy`. Their sum over sections equals the summary's |
+| `n_expenses` · `totals_by_ccy` | int · object ccy -> string | **Expenses payload only**: rows that count (`counts_in_total` not false) and their totals, summed like `summary.totals_by_ccy`. Their sum over the sections with NO `parent` equals the summary's (item 147: an account's pair is the group's, so adding every section up counts its subcards twice) |
 
 **Empty list** (`[]`) when the month has fewer than two cards, the PDFs' own
 rule (no tab bar), and on a trip batch (a trip sections per traveler). An
@@ -4404,6 +4408,11 @@ already started, not a refusal of a request, and nothing keyed off it.
 | `card_already_exists` | 400 | creating a card whose slug is taken | card 'X' already exists; edit it in Settings > Cards instead ... | `card` |
 | `card_digits_invalid` | 400 | a digit token that is not 3-8 digits | cards['x'].digits entries must be 3-8 digit strings, got '12' | `card`, `value`, `min_digits`, `max_digits` |
 | `card_alias_generic` | 400 | an alias that names a tender type, not one card | cards['x'].aliases: 'Visa' is a generic tender word ... | `card`, `alias` |
+| `card_parent_self` | 400 | a card named as its own account | cards['x'].parent cannot be the card itself | `card` |
+| `card_parent_unknown` | 400 | an account no card key owns | cards['x'].parent 'y' is not a card in this registry; define the account card first | `card`, `parent` |
+| `card_parent_inactive` | 400 | an account that is deactivated | cards['x'].parent 'y' is inactive; reactivate the account before putting a card under it | `card`, `parent` |
+| `card_parent_cycle` | 400 | a parent chain that closes a loop | cards['x'].parent 'y' closes a loop back onto 'x' | `card`, `parent`, `through` |
+| `card_parent_not_top_level` | 400 | a second level: the named account is itself under one | cards['x'].parent 'y' is itself under 'z'; an account has subcards and a subcard has none | `card`, `parent`, `grandparent` |
 | `card_definition_invalid` | 400 | a card block the registry refuses (shape, from the batch-cards route) | (the registry's own message) | (the registry's own fields) |
 | `assignment_incomplete` | 400 | a card assignment missing its hint or its card | each assignment needs a hint and a card key | |
 | `hint_assigned_twice` | 400 | one hint assigned to two cards in one call | hint 'X' is assigned more than once | `hint` |
@@ -4803,3 +4812,103 @@ not yet recorded: the triggers exist in the vocabulary, but wiring them means
 threading a `who` through the matcher, and the reviewer-facing half is what
 the item's evidence is about. Header-field corrections on an expense
 (vendor, date, total) are not recorded either; see the table.
+
+## Cards under an account: `parent` and the `card_sections` tree (item 147, 2026-09-18)
+
+Owner ruling 2026-09-18, looking at July's card tabs: "card 2838 for example
+should be an account with others as subcards, same thing goes for the other
+cards with subcards". Asked which cards: "only 2838 has subcards, no where
+else". Asked which licence class it falls under: "just do it, no quoting".
+
+**The registry gains one optional field.** A card entry takes `parent`,
+holding ANOTHER CARD'S KEY. An account IS one of these cards rather than a
+separate kind of thing, so it is named in the key space the map is already
+indexed by. Accepted by `PUT /api/settings` `cards`, emitted by
+`GET /api/cards` (`cards[].parent`, `""` when the card sits under nothing),
+snapshotted into a batch at creation and reaching an existing batch only
+through `POST .../refresh-master-data`, exactly as `person` and
+`default_cost_center` do. The cards map is still WHOLE-MAP REPLACE: an editor
+that does not read and write `parent` erases every stored one on save.
+
+It is DATA a person sets, and nothing in the tool derives it. Sharing a
+statement file is evidence and not proof: the four cards on July 2026's one
+Chase file belong to three different people, so person cannot infer the
+grouping either. The registry is told the parentage.
+
+**The tree is one level deep and validated on save.** An account has
+subcards; a subcard has none. Five refusals, each with its own code (item
+130): `card_parent_self`, `card_parent_unknown`, `card_parent_inactive`,
+`card_parent_cycle`, `card_parent_not_top_level`. See the Cards error-code
+table above for the sentences and fields. The read side
+(`cards.card_parents`) is tolerant rather than strict, like every other
+stored-shape reader here: a link whose account is missing, inactive, or
+itself under an account is dropped, so a snapshot that never met the
+validator renders a flatter registry instead of a broken page.
+
+**`card_sections[]` renders the tree** on `GET /api/runs/{id}` and
+`GET /api/expense-batches/{id}`. Every field item 138 defined stays, with the
+same name and the same type. What the tree adds:
+
+| Field | On | Type | Meaning |
+|---|---|---|---|
+| `subcards[]` | an account | string | the keys of the cards under it, in tab order |
+| `own` | an account | object | the account CARD's own figures, under the same names the section uses (`statement`, `statements[]`, `period_start`, `period_end`, `n_charges`, `n_matched`, `unreconciled_by_ccy`, `n_booked_without_receipt`, `booked_without_receipt_by_ccy`, `n_receipts`, `n_receipts_without_charge`, plus `n_expenses` and `totals_by_ccy` on the Expenses payload) |
+| `parent` | a subcard | string | the account's key |
+| `statement_on_account` | a subcard | boolean | its statement is stated on the account, so its own tab points there instead of repeating the file name |
+
+**An account's own figures are the group's.** Every figure listed above sums
+the account card and its subcards: charges, matched, receipts, receipts
+without a charge, open money per currency, booked without a receipt per
+currency, and (on the Expenses payload) counted rows and their totals. The
+period spans the group. `statement` is re-derived from the union, so an
+account whose own card records no upload while a subcard's statement covers
+the group reads `loaded`. The account card's own figures are not lost: they
+are `own`, field for field. **A consumer summing a figure across tabs sums
+the sections with no `parent`.**
+
+**A statement that covers an account is named once.** The account's
+`statements[]` is the union of its own and its subcards', deduped, its own
+first. A subcard whose files are ALL also on the account reads
+`statement_on_account: true` and its tab shows "Statement: on {account}";
+a subcard with a file the account does not carry keeps naming that file,
+because nothing else would. This is the complaint the item was filed for:
+July's `July2026.xlsx` was named on four tabs.
+
+**Order.** Each account is followed immediately by its subcards, in their
+`coverage[]` order; a card with no account keeps its place; No card stays
+last. A link is applied only when BOTH ends have a section this month, so a
+subcard whose account has neither charges nor receipts stands alone, as
+before.
+
+**Both PDFs follow the same tree.** The reconciliation report sections the
+account first, its heading stating the group's figures, "with N subcards",
+and the statement named once; each subcard follows as its own section, its
+heading pointing back at the account. The receipt PAGES behind an account's
+heading are its own card's (each subcard's follow its own section), and the
+heading says "N receipts on this card" so the count cannot read as a group
+figure. The month report puts the account's own card and its subcards as one
+table each inside ONE section, with per-card sums lines and the section's
+sums line over the group, and that section's receipt pages follow it.
+
+**What does not change.** Matching: a charge still resolves to the specific
+card that paid it, `rows[].card_section` and `expenses[].card_section` still
+name that card and never its account. `coverage[]` is untouched. Every count
+outside `card_sections` is untouched. The two-cards-or-more rule for showing
+tabs at all is untouched, and so is the trip rule (no sections).
+
+**Predicted on the two live months** (computed from the payload shapes and
+the live figures recorded in the item-138 section above; no live call was
+made for this build). August 2026 (`074a7b8905d7`): the account
+`card-2838` reads 111 charges (34 + 40 + 37), 9 matched (4 + 5 + 0), USD
+10,862.66 open (7,438.36 + 2,393.15 + 1,031.15), 19 receipts (11 + 8 + 0)
+and 5 without a charge, with `August2026.xlsx` named once instead of three
+times; `own` keeps 34 / 4 / USD 7,438.36 / 11 / 5. `card-1176` (3 charges,
+`not_recorded`), `card-9693` (`not_loaded`, 2 receipts) and No card are
+unchanged, and the tab count stays six. July 2026 (`50622baec444`): the
+account reads 112 charges, the month's whole statement population (36 on
+2838, 48 on 3876, 27 on 3645, 1 on 0340), and `July2026.xlsx` is named once
+instead of four times. July's per-card matched and receipt split is in no
+committed source, so it is not stated here.
+
+Route-level in `tests/test_card_accounts_item_147.py`. SPA half:
+`docs/lovable-card-accounts-prompt.md`.

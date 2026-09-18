@@ -122,6 +122,7 @@ def build_reconciliation_report_pdf(
     title: str,
     evidence: Sequence[dict] | None = None,
     receipt_cards: dict[str, tuple[str, str]] | None = None,
+    card_parents: dict[str, str] | None = None,
 ) -> bytes:
     """Render the reconciliation document from the workbench's OWN view.
 
@@ -134,6 +135,13 @@ def build_reconciliation_report_pdf(
     for every receipt in the pool, the card the tool resolved for it
     (`service.report_receipt_cards`); it decides the section of a receipt no
     charge holds. Omitted, such a receipt files under the no-card section.
+
+    `card_parents` (item 147) is `{subcard key: account key}` from the
+    registry (`cards.card_parents`). Given one, an account's section comes
+    first and the cards under it follow, its heading states the group's
+    figures and names the statement once, and each subcard's heading points
+    back at the account instead of repeating the file. Omitted, the sections
+    are the flat list they were.
     """
     from reportlab.platypus import Paragraph
 
@@ -197,7 +205,7 @@ def build_reconciliation_report_pdf(
     for item in items:
         cards.setdefault(str(item.get("document_id") or ""), ("", ""))
     cards.pop("", None)
-    sections = card_sections(view, cards)
+    sections = card_sections(view, cards, card_parents)
 
     if sum(1 for s in sections if s["key"]) < 2:
         # One card at most (every run older than the card axis, a one-card
@@ -249,10 +257,14 @@ def _card_section(
     story.append(PageBreak())
     story.append(Paragraph(esc(sec["label"]), styles["h2"]))
     n_docs = len(sec["receipt_docs"])
-    line = "  ·  ".join(x for x in (
-        card_statement_line(sec),
-        f"{n_docs} receipt{'' if n_docs == 1 else 's'}",
-    ) if x)
+    # Item 147: an account's heading states the GROUP's charges and money
+    # (`card_statement_line` sums its subcards), but the receipt pages behind
+    # it are its own card's; each subcard's pages follow in its own section
+    # below. Saying which stops the count reading as a group figure it is not.
+    receipts = f"{n_docs} receipt{'' if n_docs == 1 else 's'}" + (
+        " on this card" if sec.get("children") else ""
+    )
+    line = "  ·  ".join(x for x in (card_statement_line(sec), receipts) if x)
     story.append(Paragraph(esc(line), styles["sub"]))
     story.append(Spacer(1, 4))
 

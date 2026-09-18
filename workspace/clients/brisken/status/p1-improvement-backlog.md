@@ -6015,7 +6015,7 @@ equality, it tests equality-in-the-absence-of-the-thing-that-breaks-it. Where a
 claim is about two counters agreeing, the fixture has to contain every row class
 the real month contains.
 
-### 147. The nine cards are a flat list, but some of them are one account with subcards under it (owner, 2026-09-18)
+### 147. The nine cards are a flat list, but some of them are one account with subcards under it (owner, 2026-09-18; SHIPPED)
 
 **Owner, looking at July's card tabs:** "card 2838 for example should be an
 account with others as subcards, same thing goes for the other cards with
@@ -6053,16 +6053,35 @@ Dirk Neumann - Corp Services, 3876 is Nicolas Neumann, 0340 is Criss Neumann),
 which is consistent with one company account holding several people's cards and
 is exactly why a person cannot be used to infer the grouping either.
 
-**Rough shape, once the parentage is known.** A card gains an optional parent
-(account) reference in the registry and in Settings, Cards. The card strip
-renders accounts at the top level with their subcards under them, an account's
-line sums its subcards, and a statement that covers an account is described once
-on the account rather than once per card. Both PDFs follow the same tree. Nothing
-about matching changes: a charge still resolves to the specific card that paid.
+**The owner answered both questions on 2026-09-18.** Which cards:
+**"only 2838 has subcards, no where else"**, so the tree is small and fixed:
+`Credit Card - 2838` is the account, `Credit Card Chase Visa - 3876`, `- 3645`
+and `- 0340` sit under it, and every other card stands alone, 1176 included
+even though it has a statement file of its own. Which licence class:
+**"just do it, no quoting"**, which reverses the quote-separately line below.
 
-**Licence:** new function, not a defect. The tool does what it was built to do;
-the owner is asking it to model a structure it was never told about. Quote
-separately unless the owner reverses that, as he has for several audit items.
+**What shipped (2026-09-18).** A card entry takes an optional `parent` holding
+another card's KEY, validated on save: the account must exist, be active, not
+be the card itself, and not itself sit under an account, each refusal with its
+own code (`card_parent_self`, `card_parent_unknown`, `card_parent_inactive`,
+`card_parent_cycle`, `card_parent_not_top_level`). `card_sections[]` on both
+month pages puts an account first with its subcards behind it, sums every one
+of its figures over itself plus them (charges, matched, receipts, receipts
+without a charge, open money and booked-without-receipt per currency, and the
+Expenses page's counted rows and totals), keeps the account card's own figures
+beside them in `own`, and names a statement that covers the account ONCE: a
+subcard whose file is also the account's reads `statement_on_account` and
+points at the account instead of repeating the line. Both PDFs follow the same
+tree. Matching is untouched: a charge still resolves to the card that paid it,
+and `card_section` still names that card and never its account. A registry
+that names no parent produces exactly the sections it did before, field for
+field, which is what leaves every other month alone.
+
+**The one thing this could not do.** The live card registry has no committed
+seed: `settings["cards"]` lives only in the app's SQLite database, the
+`SETTINGS_DEFAULTS` entry is `{}`, and the `/data` presets file (a different
+shape, with no parent) is never committed. So the owner sets the three parents
+once in Settings, Cards, and the tree appears on the next settings read.
 
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
@@ -6114,6 +6133,7 @@ separately unless the owner reverses that, as he has for several audit items.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 88 | A card can sit under an account: the registry entry takes an optional `parent` holding another card's key, validated one level deep on save with five named refusal codes, and `card_sections[]` renders the tree on both month pages and in both PDFs. An account comes first with its subcards behind it, its figures are the sum of itself plus them (charges, matched, receipts, receipts without a charge, open money and booked-without-receipt per currency, counted rows and totals), its own card's figures stay beside them in `own`, and a statement covering the account is named once instead of once per card. Parentage is DATA a person sets: sharing a statement file is evidence and not proof, and the four cards on July's one Chase file belong to three different people, so nothing in the tool infers it | Item 147, owner 2026-09-18: "card 2838 for example should be an account with others as subcards", "only 2838 has subcards, no where else", "just do it, no quoting". An account's spend was never one figure, so a reader added four tabs in their head, and `July2026.xlsx` was described four times, once per tab. Predicted from the payload shapes and the live figures already in the contract: August's account reads 111 charges / 9 matched / USD 10,862.66 open / 19 receipts against today's 34+40+37 split, and July's reads 112 charges with its file named once instead of four times; 1176, 9693 and No card do not move, and neither does any count outside `card_sections` | 2026-09-18, pending PR; `tests/test_card_accounts_item_147.py` (22, route-level through both page GETs and both documents, on a fixture carrying every row class the live month has: a subcard on the account's own file, a subcard with a statement of its own, a subcard with zero charges, a standalone card, a receipt with no charge and one with no card). The negative case is the contract: a registry with no parent produces the same sections with the same fields and figures, asserted against the tree month's own `own` block. Eleven wiring points proven red BY HAND (cp the source aside, cut one line, run the targeted test, read the FAILED line, cp back, sha256 equal), because `tools/regress_check.py` reports RED whether or not the mutated suite failed. Not built: the SPA half (`docs/lovable-card-accounts-prompt.md`, not pasted) and the registry seed, which has no committed home, so the owner sets the three parents once in Settings |
 | 87 | The card strip counts the rows the boxes count: `build_card_review` takes the month's decided copies (`copy_docs`, the same `decided_copies` set every listing surface reads) and its four box-twin counters skip them, so `card_review.n_needs_entity` / `n_needs_person` / `n_suggested_private` / `n_private` cannot answer differently from their `summary` twins. The GROUPING keeps every copy on purpose: `unresolved_hints`, `resolved` and the three row counts describe the card-assignment surface, where a decided copy is still a row on screen with an assignable hint, and none of them has a twin to disagree with | Item 146. One payload gave two answers to the same question, with nothing telling a reader which was right. **Not on one screen, though: that was checked after the merge and the item as filed had it wrong.** The published SPA reads `summary` for all four and `card_review` for none of them (every occurrence across the 44 chunks is `i.summary.<field>`), so the number beside MISSING ENTITY was always the right one and the user-visible effect of this fix today is zero. It is a contract fix: the next reader of `card_review` would have got the wrong count. Live July read `summary.n_needs_person` 13 beside the strip's 15, `n_needs_entity` 14 beside 16, and (not in the item as filed, found by a live read before the build) `n_suggested_private` 7 beside 9; the gap is exactly the two decided copies. `n_needs_entity` takes THIS exemption though it refuses item 144's, because the two rulings govern different populations and `expense_boxes` already reads them that way | 2026-09-18, PR #1086, Fly v181; `tests/test_card_review_copies_item_146.py` (3, route-level through the real app, fixture asserting its own premise: the copy reads `counts_in_total: false`, `boxes: []`, `n_copies_set_aside: 1`, so a refactor that stops producing a copy reddens the module instead of leaving the counts agreeing about nothing). Proven to bite by hand at the WIRING point, not the helper: reverting the call site alone failed 2 of 3 with all four counters named in the diff (3/3/2/0 against 2/2/1/0), restored byte-identical by sha256; suite 2479 passed / 2 skipped |
 | 86 | A decision history with a name on every line: an append-only `decision_history` table records one line per change that ACTUALLY MOVED a value (row, old, new, who, when, trigger) at TWELVE write sites, not the four the item named; `who` is the label in the signed session token, never the server's environment, so Criss and the developer are finally told apart; `GET /api/runs/{id}/history` (newest first, `limit` / `before_id` / `row_key`, and `n_entries` follows the filter) and `POST .../history/{entry_id}/undo`, refused with `history_superseded` unless the row still holds exactly what that line left there, re-running the R4 claim check, appending its own line and stamping the original rather than erasing anything. A duplicate ruling is recorded but not undone here (reversing it has to re-match the month, item 56) | Item 104's history half, audit rank 11 and the highest-ranked unshipped item. Every verdict was an upsert, so "who confirmed this, and when" had no answer and a bulk action that moved forty rows left no trace; live July carried 108 of 112 rows with a null `decided_by`. The credential half is DECLINED by the owner (2026-09-18) | 2026-09-18, PR #1081, Fly v180; 36 tests route-level through the real app with two named operator codes, zero skips; nine wiring points proven red by hand; suite 2476 passed / 2 skipped; an adversarial review of the committed diff found a DATA-LOSS defect (an undo destroying a later account-only pick, because two different stored states compared equal) plus a dead 409 arm, an undo button that could never work, orphaned rows on month delete, and three tests that did not bite; all fixed, seven of them with a test watched go red then green |
 | 85 | One currency for a month's receipts: `output/single_currency.py` converts each listing row and both documents state the month's figure. Three rungs, in order of what they know: a base-currency row is itself; a receipt settled by a reconciled USD charge converts at THAT CHARGE (implied rate = charge / receipt total, allocated with the remainder on a row that has an amount so a split receipt ties to its charge to the cent); anything else at the matcher's own `_reference_rate_for`, handed a `date` so the ECB rung actually fires. `expenses.csv` fills the EXISTING `Exchange Rate` column (header untouched: the importer is still an open question, item 23) and states the total under the rows, naming any unpriced row by vendor and date because the CSV prints no row numbers; the month report prints each figure and rate as a small second line under the amount (item 65's device, so no tenth column reopens item 143's page width) plus a per-card/cost-center figure on each sums line | Item 98, the audit's rank 5 of 40 and the highest-ranked unshipped item, built under the owner's 2026-09-17 reversal of quote-separately. July closed with three totals and nothing saying what the month cost in one currency while `Exchange Rate` was empty on all 57 rows. Narrowed in one place on purpose: no new CSV column, because the header is a live import contract and the column that exists already means this | 2026-09-18, PR #1076, Fly v179; live July `Total in USD: 58,187.69` (34 of 56 rows priced, 19 at their statement rate) and August `2,808.91`, both matching the pre-build prediction to the cent; 19 tests in `tests/test_single_currency_item_98.py`, route-level through both documents; nine wiring points proven red by hand; suite 2440 passed / 2 skipped; an adversarial diff review found a dead ECB rung plus four smaller defects, all fixed with a test each proven red |
