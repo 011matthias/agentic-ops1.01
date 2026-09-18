@@ -3233,11 +3233,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         aliases, FX means) grouped by table, for the SPA memory screen.
         ?unvalidated=1 filters the categories table to rows no human has
         validated yet. build_memory_view is already a JSON-safe dict;
-        jsonable_encoder is kept for symmetry with the other routes."""
+        jsonable_encoder is kept for symmetry with the other routes.
+        Note item M1: the merchant registry rides along so `by_vendor[]`
+        can say which category a vendor's receipts will actually read."""
+        with open_store() as store:
+            merchants = (store.get_settings() or {}).get("merchants")
         return JSONResponse(
             jsonable_encoder(build_memory_view(
                 app.state.learning_db_path,
                 unvalidated_only=bool(unvalidated),
+                merchants=merchants,
             ))
         )
 
@@ -5440,7 +5445,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
 
     @app.get("/runs/{run_id}/statement-categorized.xlsx")
-    def download_writeback(run_id: str, file: str = ""):
+    def download_writeback(run_id: str, file: str = "", statement_id: str = ""):
         # L3 — her own uploaded workbook with one new "Zoho Account (tool)"
         # column; only for xlsx/xlsm statements.
         #
@@ -5449,14 +5454,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # and 404s otherwise, so the query string cannot address a file the
         # month never loaded. No parameter keeps the existing behavior: the
         # run's current statement, which is the only one a single-statement
-        # month ever had.
+        # month ever had. `?statement_id=` (note item T2) addresses the
+        # upload by its content id instead, resolved against
+        # `statements[].statement_id`; it wins over `?file=` when both are
+        # given, and an unknown id is the same 404.
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
                 return _not_found("Run not found", "run_not_found")
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
-        path = regenerate_writeback(run, decisions, overrides, file)
+        path = regenerate_writeback(
+            run, decisions, overrides, file, statement_id=statement_id,
+        )
         if path is None:
             return JSONResponse(
                 {"error": "This run's statement is not an Excel workbook",

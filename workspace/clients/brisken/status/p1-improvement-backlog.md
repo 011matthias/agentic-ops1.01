@@ -6148,6 +6148,113 @@ exactly as `reading receipts` and `filing September 2026` already were.
 are sequential exactly as before: they take batch write locks and a
 statement-bearing month re-matches on the arrival. Only the read pass moved.
 
+### 149. Merchant-to-category is the default; the exceptions vary by company, on the account (note item M1; owner directive 2026-09-18) (SHIPPED 2026-09-18, pending PR)
+
+**Owner, 2026-09-18 (memory half of the note), and Dirk the same day:** binding
+a merchant to one category works about 90% of the time; the exceptions are
+OpenAI, Anthropic and Lovable, whose receipts book to several places. What
+varies by company is the ACCOUNT, which is what Dirk calls the category.
+
+**Live before the build (read-only, 2026-09-18).** Registry 28 merchants, none
+of the three, `multi_category` on nobody. Memory 103 rules, all from the
+2026-08-06 Zoho seed, 0 validated; two rows for `anthropic` (Cloud Services ->
+COGS - DEV Infrastructure (SAP Apps & others); Corporate Services -> Other Infra
+and IT Costs for Cloud Business). July-September rows for the three vendors:
+52 receipts and 61 charges; the tool's category is Software & Subscriptions
+everywhere except where the model guessed on a receipt with no line items
+(Anthropic "Auto-recharge credits" -> Utilities & Premises twice in September,
+Lovable Labs on the Consulting card -> Professional Services) and on the
+receiptless LOVABLE charges (Meals & Entertainment, four times in July, once in
+August, all `VENDOR`). September: 11 of 27 rows carry no company because their
+card is unknown (OpenAI receipts print no card; the 9693 and 1176 statements are
+not loaded, item 108). OpenAI is paid from 9693 (Cloud) AND 3645 (Corporate).
+
+**Built.** (a) The registry default stamps every receipt of its merchant,
+itemized or not, before any line read; the 2026-08-07 order (a per-company
+learned row outranks the registry outright) is retired for the CATEGORY and kept
+for the ACCOUNT. (b) The (company, vendor) rule decides the account: the rule
+under the receipt's company, else a no-company rule, else the vendor's rules
+when they agree; a seeded rule under another category contributes nothing until
+someone validates it. The line's `provenance` names the rule. (c) `GET
+/api/memory` gains `by_vendor[]` (one entry per vendor, one line per company,
+the registry merchant and the category its receipts read on the vendor line)
+and `categories[].seeded`; SPA half `docs/lovable-memory-by-company-prompt.md`.
+Receiptless charges consult the registry on every re-match (`rematch_month`
+hands it to `categorize_charges`), so LOVABLE reads Software & Subscriptions
+with the company's account instead of Meals. api-contract section
+"Merchant-to-category is the default".
+
+**Not in this PR, owner-gated.** (d) The live registry write for OpenAI /
+Anthropic / Lovable (category Software & Subscriptions, no account,
+`multi_category` off, the seven aliases from the note) is a production
+mutation, put to the owner with the read-modify-write diff after the deploy.
+The account per company for the three vendors (9 cells, 2 known from the seed)
+is Dirk's input, asked once as a 3x3 table.
+
+**Tests.** `tests/test_registry_category_by_company_m1.py` (6, route-level
+through the receipt add, the statement attach and `GET /api/memory`);
+`tests/test_view_contract.py::test_memory_view_list_contract` pins the memory
+payload's lists; `tests/test_merchant_registry.py` precedence rewritten; three
+item-115 tests updated to the registry reading (the sign-off grows the registry,
+so the corrected merchant reads its default without a glance; the glance is
+re-pinned on a Memory-page rule for a merchant with no default). Four wires
+proven red under `regress_check` (the account-from-rule call, the stamp set,
+the `rematch_month` registry argument, the route's `merchants` argument), each
+restored green.
+### 150. A statement upload has no identity of its own (note item T2, owner 2026-09-18; traceability; SHIPPED 2026-09-18, pending PR; Shipped row 90)
+
+**Owner, 2026-09-18 (traceability note, item T2):** give every statement
+upload a content-derived `statement_id`, parallel on every `statements[]`
+entry, carried on `coverage[]` beside the file names, recorded in the anchors
+by id as well as by file, so the writeback and the re-read can address an
+upload by id when two per-card exports share a filename. Contract rule 1:
+add, never retype.
+
+**What was true before.** A receipt has had a stable id since the intake
+(`document_id`) and a statement line since item 29 (`transaction_id`,
+content-derived), but the upload that printed the line had none in the hosted
+app: a `statements[]` entry was keyed by `file`, the name on disk, which
+`_unique_upload_name` makes unique PER UPLOAD (`Chase.xlsx`, `Chase-2.xlsx`).
+Two of Criss's per-card exports sharing the bank's filename got two names for
+what may be one file, a re-upload of the same workbook got a second name for
+the same bytes, and nothing on either payload said whether two entries were
+the same file. `store/statements.py` computes a `content_hash`, but over the
+PARSED TRANSACTIONS and only for the CLI store; the hosted month state never
+uses it.
+
+**Shipped.** `statement_content_id(path)`: sha256 over the stored bytes, 16
+hex. Both callers of `build_statement_entry` (the attach and the re-read)
+compute it from the bytes on disk, so an attach and a later re-read of the
+same file agree, an entry recorded before the id gains one at the month's
+next re-read, and a corrected file gets a new one. Absent, never null, on
+every entry written before it. `coverage[].statement_ids[]` beside
+`coverage[].statements[]` (deduped ids of the named entries; not positional,
+stated in the contract), pinned in `tests/test_view_contract.py` on both
+payloads. The snapshot's `statement_anchors` records each upload's row map
+under its file name AND its id (`_anchor_keys`), and
+`GET /runs/{id}/statement-categorized.xlsx?statement_id=` picks the upload by
+id, winning over `?file=` when both are given, 404 on an unknown id. Nothing
+outbound (ack, CSV, PDFs) carries it, per the owner's deferral of outside ids
+to the Zoho Books integration. `card_sections[].statements[]` stays file
+names (derived from `coverage[]`, joinable on the same payload).
+
+**Live months.** Neither July nor August carries a `statement_id` today and
+neither will until its next re-read; no re-read is triggered by this item
+(no live writes, Criss acts). `coverage[].statement_ids` reads `[]` on both
+until then, which is the truth for uploads recorded before the id existed.
+
+**Tests.** `tests/test_statement_identity_t2.py` (5, route-level through the
+attach, both page GETs, the re-read and the writeback route): the id on both
+payloads and in both anchor keys; the same bytes twice share one id and a
+corrected file gets another; a re-read keeps the id; an entry written before
+the id reads absent and gains one on re-read; the writeback picks the FIRST
+export by id while the month's current statement is the second (so a
+fall-back-to-current cannot pass it). Six wiring points proven red by hand
+(cp the source aside, one-line mutation, targeted tests, cp back, sha256
+equal): attach wire 6 of 28 red, re-read wire 2, coverage ids 5, append-time
+anchors by id 3, re-read anchors by id 2, writeback selector 1; green 28/28
+after each restore. Suite 2511 -> 2516 passed / 2 skipped; ruff clean.
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.
@@ -6198,6 +6305,7 @@ statement-bearing month re-matches on the arrival. Only the read pass moved.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 90 | A statement upload has an identity: `statements[].statement_id` is the sha256 of the stored bytes (16 hex), parallel and absent on entries written before it; `coverage[].statement_ids[]` rides beside the file names; the snapshot's `statement_anchors` records each upload's row map under its id as well as its file name; `GET /runs/{id}/statement-categorized.xlsx?statement_id=` picks an upload by id, winning over `?file=`. The same bytes twice share one id (the fold's `n_new: 0` case), a corrected file gets a new one, a re-read keeps it, and an entry recorded before the id gains one at the month's next re-read | Note item T2 (owner 2026-09-18, traceability, backlog item 150): a `statements[]` entry was keyed only by `file`, a per-upload unique name, so two per-card exports sharing the bank's filename were two names for maybe one file and a re-upload was a second name for the same bytes; nothing on either payload said which entries were one file, and the writeback could only be told which upload by that name. Live July and August carry no id until their next re-read, which this item does not trigger | 2026-09-18, pending PR; `tests/test_statement_identity_t2.py` (5, route-level through the attach, both page GETs, the re-read and the writeback; the writeback test asks for the FIRST export while the month's current statement is the second, so a fall-back-to-current cannot pass it); six wiring points proven red by hand with a one-line mutation each and sha256-equal restores; suite 2511 -> 2516 passed / 2 skipped; ruff clean |
 | 89 | A dropped pile is READ in parallel: the routing pass that learns each receipt's printed month runs on a bounded pool (`_DROP_READ_WORKERS = 6`) instead of one file after the next, and reports `reading receipts (7/40)` as the files land instead of one frozen stage. The ledger is assembled from the staged order by one writer after the reads return, so row order and every field are what the end-to-end loop produced; a read that raises leaves that file `needs_month` and files the rest; a typed `month` still reads nothing at all | Item 148, owner 2026-09-18: "manual receipt injection function is taking way too long". Measured on a stub at 0.2s per read, the drop spent 0.20s / 2.02s / 8.21s reading 1 / 10 / 40 files against 0.11s filing, and a real vision round-trip is not 0.2s. After: 0.20s / 0.41s / 1.42s, 5.8x on the 40-file pile. Proven on the way past: with the extraction cache on, three dropped files cost three transport calls across BOTH passes and six with it off, so the routing's full-extraction read really is the ingest's read | 2026-09-18, pending PR; `tests/test_drop_speed_item_148.py` (10). The contract test is the negative one: the parallel ledger compared field by field against the same folder routed with the pool pinned to one worker |
 | 88 | A card can sit under an account: the registry entry takes an optional `parent` holding another card's key, validated one level deep on save with five named refusal codes, and `card_sections[]` renders the tree on both month pages and in both PDFs. An account comes first with its subcards behind it, its figures are the sum of itself plus them (charges, matched, receipts, receipts without a charge, open money and booked-without-receipt per currency, counted rows and totals), its own card's figures stay beside them in `own`, and a statement covering the account is named once instead of once per card. Parentage is DATA a person sets: sharing a statement file is evidence and not proof, and the four cards on July's one Chase file belong to three different people, so nothing in the tool infers it | Item 147, owner 2026-09-18: "card 2838 for example should be an account with others as subcards", "only 2838 has subcards, no where else", "just do it, no quoting". An account's spend was never one figure, so a reader added four tabs in their head, and `July2026.xlsx` was described four times, once per tab. Predicted from the payload shapes and the live figures already in the contract: August's account reads 111 charges / 9 matched / USD 10,862.66 open / 19 receipts against today's 34+40+37 split, and July's reads 112 charges with its file named once instead of four times; 1176, 9693 and No card do not move, and neither does any count outside `card_sections` | 2026-09-18, pending PR; `tests/test_card_accounts_item_147.py` (22, route-level through both page GETs and both documents, on a fixture carrying every row class the live month has: a subcard on the account's own file, a subcard with a statement of its own, a subcard with zero charges, a standalone card, a receipt with no charge and one with no card). The negative case is the contract: a registry with no parent produces the same sections with the same fields and figures, asserted against the tree month's own `own` block. Eleven wiring points proven red BY HAND (cp the source aside, cut one line, run the targeted test, read the FAILED line, cp back, sha256 equal), because `tools/regress_check.py` reports RED whether or not the mutated suite failed. Not built: the SPA half (`docs/lovable-card-accounts-prompt.md`, not pasted) and the registry seed, which has no committed home, so the owner sets the three parents once in Settings |
 | 87 | The card strip counts the rows the boxes count: `build_card_review` takes the month's decided copies (`copy_docs`, the same `decided_copies` set every listing surface reads) and its four box-twin counters skip them, so `card_review.n_needs_entity` / `n_needs_person` / `n_suggested_private` / `n_private` cannot answer differently from their `summary` twins. The GROUPING keeps every copy on purpose: `unresolved_hints`, `resolved` and the three row counts describe the card-assignment surface, where a decided copy is still a row on screen with an assignable hint, and none of them has a twin to disagree with | Item 146. One payload gave two answers to the same question, with nothing telling a reader which was right. **Not on one screen, though: that was checked after the merge and the item as filed had it wrong.** The published SPA reads `summary` for all four and `card_review` for none of them (every occurrence across the 44 chunks is `i.summary.<field>`), so the number beside MISSING ENTITY was always the right one and the user-visible effect of this fix today is zero. It is a contract fix: the next reader of `card_review` would have got the wrong count. Live July read `summary.n_needs_person` 13 beside the strip's 15, `n_needs_entity` 14 beside 16, and (not in the item as filed, found by a live read before the build) `n_suggested_private` 7 beside 9; the gap is exactly the two decided copies. `n_needs_entity` takes THIS exemption though it refuses item 144's, because the two rulings govern different populations and `expense_boxes` already reads them that way | 2026-09-18, PR #1086, Fly v181; `tests/test_card_review_copies_item_146.py` (3, route-level through the real app, fixture asserting its own premise: the copy reads `counts_in_total: false`, `boxes: []`, `n_copies_set_aside: 1`, so a refactor that stops producing a copy reddens the module instead of leaving the counts agreeing about nothing). Proven to bite by hand at the WIRING point, not the helper: reverting the call site alone failed 2 of 3 with all four counters named in the diff (3/3/2/0 against 2/2/1/0), restored byte-identical by sha256; suite 2479 passed / 2 skipped |

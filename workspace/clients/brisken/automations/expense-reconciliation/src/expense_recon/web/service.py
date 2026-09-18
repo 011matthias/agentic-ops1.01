@@ -102,6 +102,11 @@ from ..cost_centers import (
 )
 from ..cost_centers import CostCenterRegistry, CostCenterResolution
 from ..merchant_registry import MerchantRegistry, normalize_merchants_setting
+# Note item M1: the registry's bare provenance sentence (a line whose
+# account came from a company's rule says more) and the seed marker the
+# Memory page flags a Zoho-history row with.
+from ..categorize import REGISTRY_DEFAULT_REASONING
+from ..learning.consult import ZOHO_SEED_PREFIX
 from .month_health import (
     HEALTH_OK,
     card_scoping_on,
@@ -2598,7 +2603,13 @@ def _receipt_view(
             confidence = cat.confidence
             # Phase 2: a LEARNED row carries its provenance ("learned from
             # your 2026-05 decision") so the reviewer sees why it auto-filled.
-            if cat.source is ClassificationSource.LEARNED:
+            # Note item M1: a REGISTRY line whose ACCOUNT came from a
+            # company's rule says so too; the bare default stays silent.
+            if cat.source is ClassificationSource.LEARNED or (
+                cat.source is ClassificationSource.REGISTRY
+                and cat.reasoning
+                and cat.reasoning != REGISTRY_DEFAULT_REASONING
+            ):
                 provenance = cat.reasoning
         else:
             category = None
@@ -4465,7 +4476,9 @@ def writeback_available(run: RunRow) -> bool:
     return Path(stmt).suffix.lower() in (".xlsx", ".xlsm")
 
 
-def writeback_statement_name(run: RunRow, requested: str = "") -> str | None:
+def writeback_statement_name(
+    run: RunRow, requested: str = "", statement_id: str = "",
+) -> str | None:
     """Which statement file a writeback should annotate, or None.
 
     Default is the run's current `config.statement.path`, which is the last
@@ -4474,7 +4487,19 @@ def writeback_statement_name(run: RunRow, requested: str = "") -> str | None:
     `statements[]`: the parameter reaches the writeback route from a query
     string, and a name that is merely sanitized would still let a caller
     address any file in the work dir. Matching an entry is the check.
+
+    `statement_id` (note item T2) addresses an upload by its content id
+    instead, for the month where two per-card exports share a filename;
+    resolved against `statements[].statement_id` the same way, first entry
+    wins, and an id the month never recorded is None (a 404 at the route).
+    When both are given the id decides, since it is the more specific name.
     """
+    statement_id = (statement_id or "").strip()
+    if statement_id:
+        entry = statement_entry_by_id(run, statement_id)
+        if entry is None:
+            return None
+        return str(entry.get("file") or "") or None
     requested = (requested or "").strip()
     if not requested:
         stmt = (run.config or {}).get("statement", {}).get("path", "")
@@ -4490,6 +4515,7 @@ def regenerate_writeback(
     decisions: dict[str, Decision],
     overrides: dict,
     statement_file: str = "",
+    statement_id: str = "",
 ) -> Path | None:
     """Write the L3 sheet writeback for a run: HER OWN uploaded workbook
     with one new "Zoho Account (tool)" column, after the reviewer's
@@ -4506,7 +4532,7 @@ def regenerate_writeback(
     """
     from ..output.sheet_writeback import write_sheet_writeback
 
-    name = writeback_statement_name(run, statement_file)
+    name = writeback_statement_name(run, statement_file, statement_id)
     if name is None or Path(name).suffix.lower() not in (".xlsx", ".xlsm"):
         return None
 
@@ -4883,14 +4909,25 @@ def commit_to_memory(
 
 def build_memory_view(
     learning_db_path: Path | None, unvalidated_only: bool = False,
+    merchants: dict | None = None,
 ) -> dict:
     """Render model for the /memory page: everything the tool has learned,
     grouped by table. Read-only; an absent store yields an empty view.
     ``unvalidated_only`` filters the categories table to rows no human has
-    validated yet (the review-the-103 workflow)."""
+    validated yet (the review-the-103 workflow).
+
+    ``merchants`` (note item M1, 2026-09-18) is `settings["merchants"]`.
+    With it, `by_vendor[]` groups the category rules per vendor with one
+    line per company, and names the registry merchant the vendor resolves
+    to and the category its receipts will actually read (the registry's
+    default when it has one, else "" for judged-per-receipt), so a reader
+    sees where one merchant's account splits by company. Built from the
+    same rows as `categories[]`, so the `unvalidated` filter applies to
+    both."""
     empty = {
         "categories": [], "aliases": [], "fx": [],
         "entities": [], "field_corrections": [],
+        "by_vendor": [],
         "counts": {
             "merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0,
             "merchant_entity": 0, "field_correction": 0,
@@ -4917,9 +4954,37 @@ def build_memory_view(
             "count": c.decision_count, "last": (c.last_confirmed_at or "")[:10],
             "validated": (c.validated_at or "")[:10],
             "validated_by": c.validated_by or "",
+            # Note item M1: a row seeded from Zoho Books posting history,
+            # not a person's decision (until someone validates it).
+            "seeded": (c.source_run or "").startswith(ZOHO_SEED_PREFIX),
         }
         for c in cats
     ]
+    # Note item M1: the same rows, per vendor, one line per company. The
+    # registry is consulted for the vendor line so the page can say what a
+    # receipt of this vendor will READ: the registry default when the
+    # merchant has one (the company lines then carry the account), else
+    # "" (no default; the company's own rule or the model decides).
+    registry = MerchantRegistry(merchants) if merchants else None
+    grouped: dict[str, list[dict]] = {}
+    for row in categories:
+        grouped.setdefault(row["vendor"], []).append(row)
+    by_vendor = []
+    for vendor_norm in sorted(grouped):
+        hit = registry.resolve(None, vendor_norm) if registry else None
+        by_vendor.append({
+            "vendor": vendor_norm,
+            "merchant": hit.canonical_name if hit else "",
+            "category": (hit.category or "") if hit else "",
+            "multi_category": bool(hit and hit.multi_category),
+            "companies": sorted(
+                (
+                    {k: v for k, v in row.items() if k != "vendor"}
+                    for row in grouped[vendor_norm]
+                ),
+                key=lambda r: r["entity"],
+            ),
+        })
     alias_rows = [
         {
             "entity": a.legal_entity_id, "stmt": a.stmt_vendor_norm,
@@ -4958,6 +5023,7 @@ def build_memory_view(
     return {
         "categories": categories, "aliases": alias_rows, "fx": fx_rows,
         "entities": entity_rows, "field_corrections": correction_rows,
+        "by_vendor": by_vendor,
         "counts": counts, "total": sum(counts.values()),
     }
 
@@ -9777,6 +9843,60 @@ def month_statements(run: RunRow) -> list[dict]:
     return list((run.snapshot or {}).get(STATEMENTS_KEY) or [])
 
 
+# Note item T2 (2026-09-18): a statement upload's identity is its BYTES.
+STATEMENT_ID_HEX = 16
+
+
+def statement_content_id(path: Path) -> str:
+    """The content-derived id of one stored statement file: the first 16 hex
+    characters of the sha256 over its bytes, or "" when the file cannot be
+    read (nothing then records an id, and absence means "not recorded").
+
+    The same bytes uploaded twice, or re-read after a restore, yield the
+    same id; a corrected file yields a new one. That is what `file` cannot
+    say: `file` is the name on disk, made unique per upload
+    (`statement-2.xlsx`), so two per-card exports that share the bank's
+    filename get two names for what may be one file, and a re-upload of the
+    same workbook gets a second name for the same bytes. The CLI store
+    (`store/statements.py`) hashes the parsed transactions instead; this
+    hashes the file, because it is the file a person can put beside the id.
+    """
+    try:
+        digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return ""
+    return digest[:STATEMENT_ID_HEX]
+
+
+def _anchor_keys(entry: dict) -> list[str]:
+    """The keys one upload's anchors are recorded under: its stored file
+    name, and its `statement_id` when the entry carries one. Recording the
+    same map twice is deliberate: the writeback and the re-read can address
+    an upload by id when two per-card exports share a filename, and every
+    reader that only knows the file name keeps working."""
+    keys = [str(entry.get("file") or "")]
+    sid = str(entry.get("statement_id") or "")
+    if sid and sid not in keys:
+        keys.append(sid)
+    return [k for k in keys if k]
+
+
+def statement_entry_by_id(run: RunRow, statement_id: str) -> dict | None:
+    """The FIRST `statements[]` entry recorded with this id, or None.
+
+    Two entries can share an id (the same bytes attached twice, which the
+    fold absorbs as `n_new: 0`); they printed the same rows at the same
+    sheet rows, so their anchors are the same map and the first is as good
+    as the second."""
+    wanted = (statement_id or "").strip()
+    if not wanted:
+        return None
+    for entry in month_statements(run):
+        if str(entry.get("statement_id") or "") == wanted:
+            return entry
+    return None
+
+
 def _parse_utc(value) -> datetime | None:
     """One stored timestamp as an aware UTC datetime, or None when it is not
     a readable ISO string. A naive value is read as UTC, which is what every
@@ -9898,8 +10018,14 @@ def build_statement_entry(
     uploaded_at: str,
     column_map: dict | None = None,
     card_currency: str = "",
+    statement_id: str = "",
 ) -> dict:
     """One `statements[]` row: what this upload was and what it added.
+
+    `statement_id` (note item T2, 2026-09-18) is the content-derived id of
+    the stored file (`statement_content_id`). Parallel and ABSENT on every
+    entry written before it, never null; both callers compute it from the
+    bytes on disk, so an attach and a later re-read of the same file agree.
 
     `file` is the name on disk, which is what `Transaction.source_file`
     carries and what the writeback selector addresses; `upload_name` is what
@@ -9944,6 +10070,8 @@ def build_statement_entry(
         # instead of guessing again. Absent, not null, when unrecorded.
         **({"column_map": recorded_map} if recorded_map else {}),
         **({"card_currency": currency} if currency else {}),
+        # What the bytes are (note item T2). Absent when not computed.
+        **({"statement_id": statement_id} if statement_id else {}),
         # This file's own id-to-row map. Underscored and popped at commit
         # into `statement_anchors`, so it never reaches the SPA: it is a
         # per-row map the size of the statement, and nothing renders it.
@@ -10672,6 +10800,11 @@ def month_coverage(
                 "digits": list(identity.digits),
                 "known": bool(identity.card_key),
                 "statements": [],
+                # Note item T2: the `statement_id` of each entry in
+                # `statements` that carries one. Not positional with
+                # `statements`: an upload recorded before ids existed is
+                # named there and has nothing to add here.
+                "statement_ids": [],
                 "period_start": None,
                 "period_end": None,
                 "n_transactions": 0,
@@ -10731,6 +10864,9 @@ def month_coverage(
             target = row(identity)
             if name not in target["statements"]:
                 target["statements"].append(name)
+            sid = str(stmt.get("statement_id") or "")
+            if sid and sid not in target["statement_ids"]:
+                target["statement_ids"].append(sid)
 
     for key, per_ccy in unreconciled.items():
         entries[key]["unreconciled_by_ccy"] = {
@@ -11648,6 +11784,7 @@ def execute_statement_attach(
             card_currency=(new_cfg.get("statement") or {}).get(
                 "account_card_currency", ""
             ),
+            statement_id=statement_content_id(Path(run.work_dir) / stmt_name),
         ),
         trigger="statement",
     )
@@ -11862,6 +11999,10 @@ def reread_statements(
                 # before item 64 carries both from here on.
                 column_map=column_map,
                 card_currency=form.account_card_currency,
+                # Same bytes, same id (note item T2): a re-read after a
+                # restore keeps the id the attach recorded, and an entry
+                # written before the id existed gains one here.
+                statement_id=statement_content_id(stmt_path),
             )
         )
 
@@ -12504,6 +12645,9 @@ def rematch_month(
         client=llm_client,
         chart_of_accounts=account_labels,
         learned=learned,
+        # Note item M1: a receiptless charge takes its merchant's default
+        # category from the same registry the month's receipts consult.
+        registry=MerchantRegistry.from_settings(store.get_settings()),
     )
 
     _stage("saving")
@@ -12736,7 +12880,8 @@ def rematch_month(
                 entry["advisory"] = statement_advisory(rebuilt_entries, entry)
                 entry["advisory_detail"] = detail_of(entry["advisory"])
                 rebuilt_entries.append(entry)
-                rebuilt_anchors[entry["file"]] = anchors
+                for anchor_key in _anchor_keys(entry):
+                    rebuilt_anchors[anchor_key] = anchors
             new_snapshot[STATEMENTS_KEY] = rebuilt_entries
             new_snapshot[STATEMENT_ANCHORS_KEY] = rebuilt_anchors
         elif statement_entry is not None:
@@ -12749,7 +12894,8 @@ def rematch_month(
             new_snapshot[STATEMENTS_KEY] = [*prior, entry]
             new_snapshot[STATEMENT_ANCHORS_KEY] = {
                 **((fresh.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}),
-                entry["file"]: anchors,
+                # Keyed by file AND by `statement_id` (note item T2).
+                **{anchor_key: anchors for anchor_key in _anchor_keys(entry)},
             }
         n_tx = len(transactions)
         # Item 103: what this commit stores, logs and returns is the
