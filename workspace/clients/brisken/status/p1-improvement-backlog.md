@@ -5086,7 +5086,7 @@ bites it: the shape where its raw and effective counts differ (a tie holding
 another charge's only receipt) does not arise on the classic intake path the
 suite exercises.
 
-### 104. Every decision overwrites the previous one, nobody's name is on it, and one shared password is still live with sessions that never expire (2026-09-17 audit draft #102, unranked; new function, quote separately)
+### 104. Every decision overwrites the previous one, nobody's name is on it, and one shared password is still live with sessions that never expire (2026-09-17 audit draft #102, unranked; new function) (HISTORY HALF SHIPPED PR #1081, Fly v180, see Shipped row 86; CREDENTIAL HALF DECLINED by the owner 2026-09-18, do not re-ask)
 
 **Audit rank 11 of 40; severity medium as merged; verification: one reviewer, plus no-expiry confirmed by hand.** A confirm, reject, undo, category change or duplicate ruling replaces the previous value in place; there is no timeline and no way to see that a bulk reject or a re-match changed forty rows since yesterday. The tool knows 'tool' versus 'reviewer' but not which person: named login codes exist and carry a label, yet the label is written only on feedback notes and the month's operator column comes from the server's environment. Criss logs in with the shared code, so her notes read 'operator' while the developer's read 'matthias'; the sign-off memory cannot say who taught it. The original shared code is still accepted beside the named ones, the laptop script uses it, and a session once issued is valid forever; revoking one person means rotating the signing secret, which logs everyone out.
 
@@ -5097,6 +5097,51 @@ suite exercises.
 **Proposed change:** Append one line per change to a month-level history (row, old value, new value, who from the login label, when, trigger: click, bulk, re-match, tool) at the four write points, shown as a collapsed 'History' fold with per-line undo where undo exists. Hand Criss her named code (it is in the vault), switch the tooling to a named code, delete the shared code, rotate the signing secret once outside close week, and put an expiry inside the signed session. Per-person sign-in stays separately quoted.
 
 **Value:** Dirk can answer 'who confirmed this and when' for any figure, a wrong bulk action or re-match is visible and reversible, and access can be taken from one person without disturbing the others. (effort medium)
+
+**Shipped 2026-09-18 (PR #1081, Fly v180), the decision-history half.** An
+append-only `decision_history` table beside the decisions, a pure
+`web/decision_history.py` (what a line is, whether a write moved anything, how
+it reads, what putting it back means), `GET /api/runs/{id}/history` (newest
+first, `limit` / `before_id` / `row_key`) and
+`POST /api/runs/{id}/history/{entry_id}/undo`. `who` is the label inside the
+SIGNED SESSION TOKEN, never `_operator()`, which reads the server's
+environment and is why Criss's notes read `operator` while the developer's
+read `matthias`. Three rules: only writes that actually moved a value get a
+line (a re-match writes every charge on the month); values that must move
+together ride one line (a status and its chosen receipt, so an undo cannot
+half-revert a row); an undo appends its own line and stamps the original,
+never erases. **The item's text said "four write points"; enumerating every
+`set_decision` / `set_disposition` / `set_category_override` /
+`set_duplicate_resolution` call in `src/` found TWELVE**, three of which were
+reviewer-driven and would have shipped silent (note #62's confirm-the-guess,
+the expense-field category edit, and the manual receipt attach, which records
+a confirmed decision). Not recorded, deliberately and documented:
+`set_tool_decision` (the matcher's own re-match writes) and header-field
+corrections (vendor, date, total), a data edit rather than one of the five
+verdicts the item names. The undo is refused with `history_superseded` unless
+the row still holds exactly what that line left there, and it re-runs the R4
+cross-run claim check. A duplicate ruling is recorded but has no one-click
+undo: reversing it has to re-match the month (item 56), so it is reversed by
+making the opposite ruling. An adversarial review of the committed diff
+returned fifteen findings; the one that mattered was a DATA-LOSS defect
+(`_category_value` collapsed "no override" and "an account with no category"
+to the same value, so an undo of a stale line compared equal to a row that
+had moved and destroyed the later account pick, and an account-only pick
+recorded no line at all). Fixed with seven tests written before the fixes and
+watched go red then green; three of the original tests did not bite and were
+rewritten. 36 tests in `tests/test_decision_history_item_104.py`, zero skips,
+route-level through the real app with two named operator codes; nine wiring
+points proven red by hand (`regress_check.py` is not used here: it reports
+"RED (no pytest summary line)" even for a green suite); module suite 2476
+passed / 2 skipped, exit 0; ruff clean. **Not built:** the SPA's collapsed
+History fold and its per-line Undo button
+(`docs/lovable-decision-history-prompt.md`, EN + PT, NOT pasted), and the
+machine's own re-match writes. **Owner ruling 2026-09-18: the credential half
+(Criss's named code, deleting the shared code, rotating the signing secret,
+session expiry) is left entirely for now, do not re-ask.** Lines written from
+a shared-code session read `operator`, which is the truth about a shared code
+rather than a bug. Live months untouched: the history starts empty on every
+existing month, which is the honest answer for a period nothing recorded.
 
 **Reviewer corrections:** (combined) (1) "already_tracked" understates the ledger: item 48 does not list this "generally", its G2b/G11 gaps and the round-2 line "a ledger row for every edit and every deletion" name this exact change, and the storage-system description ranks the attribution/audit-log gap Highest; the backlog-file grep of 0 hits is literally true but the item-48 docs it points to contain both phrases. (2) OWNERSHIP-HANDOFF step 8 already IS the plan for handing Criss and Dirk named codes, deleting EXPENSE_RECON_OPERATOR_CODE and rotating the secret once, so that half of the proposal is a pending owner/ops action, not an untracked void. (3) The cited file is web/store.py, not store.py (hosting/store.py is a differ
 
@@ -5926,6 +5971,7 @@ the real month contains.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 86 | A decision history with a name on every line: an append-only `decision_history` table records one line per change that ACTUALLY MOVED a value (row, old, new, who, when, trigger) at TWELVE write sites, not the four the item named; `who` is the label in the signed session token, never the server's environment, so Criss and the developer are finally told apart; `GET /api/runs/{id}/history` (newest first, `limit` / `before_id` / `row_key`, and `n_entries` follows the filter) and `POST .../history/{entry_id}/undo`, refused with `history_superseded` unless the row still holds exactly what that line left there, re-running the R4 claim check, appending its own line and stamping the original rather than erasing anything. A duplicate ruling is recorded but not undone here (reversing it has to re-match the month, item 56) | Item 104's history half, audit rank 11 and the highest-ranked unshipped item. Every verdict was an upsert, so "who confirmed this, and when" had no answer and a bulk action that moved forty rows left no trace; live July carried 108 of 112 rows with a null `decided_by`. The credential half is DECLINED by the owner (2026-09-18) | 2026-09-18, PR #1081, Fly v180; 36 tests route-level through the real app with two named operator codes, zero skips; nine wiring points proven red by hand; suite 2476 passed / 2 skipped; an adversarial review of the committed diff found a DATA-LOSS defect (an undo destroying a later account-only pick, because two different stored states compared equal) plus a dead 409 arm, an undo button that could never work, orphaned rows on month delete, and three tests that did not bite; all fixed, seven of them with a test watched go red then green |
 | 85 | One currency for a month's receipts: `output/single_currency.py` converts each listing row and both documents state the month's figure. Three rungs, in order of what they know: a base-currency row is itself; a receipt settled by a reconciled USD charge converts at THAT CHARGE (implied rate = charge / receipt total, allocated with the remainder on a row that has an amount so a split receipt ties to its charge to the cent); anything else at the matcher's own `_reference_rate_for`, handed a `date` so the ECB rung actually fires. `expenses.csv` fills the EXISTING `Exchange Rate` column (header untouched: the importer is still an open question, item 23) and states the total under the rows, naming any unpriced row by vendor and date because the CSV prints no row numbers; the month report prints each figure and rate as a small second line under the amount (item 65's device, so no tenth column reopens item 143's page width) plus a per-card/cost-center figure on each sums line | Item 98, the audit's rank 5 of 40 and the highest-ranked unshipped item, built under the owner's 2026-09-17 reversal of quote-separately. July closed with three totals and nothing saying what the month cost in one currency while `Exchange Rate` was empty on all 57 rows. Narrowed in one place on purpose: no new CSV column, because the header is a live import contract and the column that exists already means this | 2026-09-18, PR #1076, Fly v179; live July `Total in USD: 58,187.69` (34 of 56 rows priced, 19 at their statement rate) and August `2,808.91`, both matching the pre-build prediction to the cent; 19 tests in `tests/test_single_currency_item_98.py`, route-level through both documents; nine wiring points proven red by hand; suite 2440 passed / 2 skipped; an adversarial diff review found a dead ECB rung plus four smaller defects, all fixed with a test each proven red |
 | 84 | A company invoice paid by wire has an exit that is not a lie: a row the reviewer settled OFF the card system leaves `needs_person` on BOTH counts that ask it (`summary.n_needs_person` and `card_review.n_needs_person`, so the payload cannot contradict itself), is not offered the private-card button, and reads its own review reason `needs_entity_settled_outside` asking for the entity instead of for a paying card. One fact, `settled_off_card`, stamped on the row's resolution by the card pass and read by every surface; the printed tender alone still changes nothing but the suggestion | Item 144's open question, ruled by the owner 2026-09-17. July's Tricarico invoice (BRL 27,203.34, Wire Transfer, settled outside by bank transfer) sat in all three boxes with two exits that both stated something untrue, and person resolution is card-only, so no sanctioned action could move it. `needs_entity` deliberately STAYS and nothing is auto-filled: the row carries no bill-to field and the company name exists only in the file name | 2026-09-17, pending PR; `tests/test_bank_transfer_exit_item_144.py` (11, four route-level, one pinning the two counts EQUAL) plus `test_private_suggestion_not_a_card_r3.py` rewritten to the ruling; regress_check red on all four wires (the predicate 5 of 13, the box wiring 3 of 13, the stamp 4 of 14, the counter's own condition 1 of 19); suite 2421 passed / 2 skipped; not deployed |
 | 81 | Every refusal carries a stable `code` beside its unchanged English sentence, and the values the sentence names ride as their own fields: 155 codes over 285 sites, the setup advisories and the two statement advisories carry a code and their numbers, and a source scan fails any NEW refusal that has none | Item 130. A refused save, decision or upload showed Criss the backend's English verbatim on a screen she reads in Portuguese; the code is what the front end translates, with the English sentence as the fallback for a code it does not know. Not built: the SPA half (prompt written, not pasted), the English PDFs and CSV (the auditor's, by ruling), and Criss's own read of the Portuguese wording | 2026-09-17, pending PR; `tests/test_error_codes_item_130.py` (20: 9 source-scan, 11 route-level), regress_check red on all four wires (the 401 code, an advisory code, the service-dict `error_code` plumbing, a `RunInputError` code); suite 2286 passed / 2 skipped; SPA half `docs/lovable-error-codes-prompt.md` |
