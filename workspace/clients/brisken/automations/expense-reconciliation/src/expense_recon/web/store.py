@@ -479,6 +479,23 @@ class RunStore:
                 committed_at TEXT NOT NULL,
                 trigger      TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS decision_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                row_key TEXT NOT NULL,
+                row_kind TEXT NOT NULL,
+                field TEXT NOT NULL,
+                old_value TEXT,
+                new_value TEXT,
+                who TEXT NOT NULL,
+                at TEXT NOT NULL,
+                trigger TEXT NOT NULL,
+                detail TEXT,
+                undone_at TEXT,
+                undone_by TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_decision_history_run
+                ON decision_history (run_id, id);
             CREATE INDEX IF NOT EXISTS idx_client_errors_ts
                 ON client_errors (received_ts);
             CREATE INDEX IF NOT EXISTS idx_login_failures_ts
@@ -556,6 +573,94 @@ class RunStore:
             self.conn.execute(
                 "ALTER TABLE trips ADD COLUMN cost_center TEXT NOT NULL DEFAULT ''"
             )
+
+    # -- decision history (item 104) ---------------------------------------
+    #
+    # Append-only. Nothing in this class updates a history row's values or
+    # deletes one; the single UPDATE below stamps `undone_at` / `undone_by`
+    # and touches no other column, so a line that has been put back still
+    # says what it originally did. The table is created by the CREATE block
+    # above rather than by `_migrate`, which is what every table added since
+    # the live volume existed does: `IF NOT EXISTS` runs on every open, so
+    # the running database grows the table on the first request after the
+    # deploy and starts empty, which is the truth (nothing before the deploy
+    # was recorded).
+
+    def append_history(self, entries: list[dict]) -> list[int]:
+        """Append history lines and return their ids, in order.
+
+        Takes a list because the bulk routes write one line per row moved
+        and a single commit for a hundred rows is the difference between a
+        confirm-all that feels instant and one that does not.
+        """
+        ids: list[int] = []
+        for entry in entries:
+            cur = self.conn.execute(
+                "INSERT INTO decision_history (run_id, row_key, row_kind, "
+                "field, old_value, new_value, who, at, trigger, detail) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    entry["run_id"], entry["row_key"], entry["row_kind"],
+                    entry["field"], entry["old_value"], entry["new_value"],
+                    entry["who"], entry["at"], entry["trigger"],
+                    entry.get("detail"),
+                ),
+            )
+            ids.append(int(cur.lastrowid))
+        if entries:
+            self.conn.commit()
+        return ids
+
+    def list_history(
+        self,
+        run_id: str,
+        *,
+        limit: int = 200,
+        before_id: int | None = None,
+        row_key: str | None = None,
+    ) -> list[dict]:
+        """Newest first, because the question is always "what changed since
+        I last looked". `before_id` pages further back; `row_key` narrows to
+        one row's own story."""
+        sql = "SELECT * FROM decision_history WHERE run_id = ?"
+        args: list = [run_id]
+        if before_id is not None:
+            sql += " AND id < ?"
+            args.append(int(before_id))
+        if row_key:
+            sql += " AND row_key = ?"
+            args.append(str(row_key))
+        sql += " ORDER BY id DESC LIMIT ?"
+        args.append(int(limit))
+        return [dict(r) for r in self.conn.execute(sql, args).fetchall()]
+
+    def count_history(self, run_id: str) -> int:
+        row = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM decision_history WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        return int(row["n"]) if row else 0
+
+    def get_history_entry(self, entry_id: int) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM decision_history WHERE id = ?", (int(entry_id),)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def mark_history_undone(
+        self, entry_id: int, *, undone_at: str, undone_by: str
+    ) -> bool:
+        """Stamp one line as put back. The WHERE clause carries the
+        `undone_at IS NULL` condition so two undo clicks racing on the same
+        line cannot both win; the loser gets False and its caller answers
+        `history_already_undone` rather than writing the old value twice."""
+        cur = self.conn.execute(
+            "UPDATE decision_history SET undone_at = ?, undone_by = ? "
+            "WHERE id = ? AND undone_at IS NULL",
+            (undone_at, undone_by, int(entry_id)),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
 
     # -- runs -------------------------------------------------------------
 

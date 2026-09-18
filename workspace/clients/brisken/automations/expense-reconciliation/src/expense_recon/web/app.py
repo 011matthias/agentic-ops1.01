@@ -197,6 +197,7 @@ from .store import (
     SETTINGS_MAP_KEYS,
     SETTINGS_WRITABLE_KEYS,
     STATUS_CONFIRMED,
+    STATUS_PENDING,  # item 104: the undo target of a first verdict
     VALID_DISPOSITIONS,
     VALID_DUP_RESOLUTIONS,
     VALID_STATUSES,
@@ -204,12 +205,184 @@ from .store import (
     without_retired_entity_keys,
 )
 from . import auth, machine, ratelimit
+from . import decision_history as dh  # item 104
+from .service import charge_category_key  # item 104
 
 log = logging.getLogger("expense_recon.web")
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# A value no comparison can match by accident: `_current_history_value`
+# returns it when the row's present value cannot be read, and the undo
+# route turns that into a refusal. A plain None would have compared equal
+# to "this row has no value", which is a real state and must stay undoable.
+_HISTORY_UNREADABLE = object()
+
+
+def _history_who(request) -> str:
+    """Which named person is making this change.
+
+    `request.state.operator` is the label inside the signed session token,
+    set by the gate middleware: "criss", "matthias", or "operator" for the
+    legacy shared code and the gate-off local case. This is deliberately NOT
+    `_operator()`, which reads the SERVER's environment and therefore answers
+    the same name whoever is logged in; that is the confusion item 104 names
+    (Criss's feedback notes read "operator" while the developer's read
+    "matthias"). A request that somehow carries no state falls back to the
+    unnamed label rather than failing the write.
+    """
+    return getattr(getattr(request, "state", None), "operator", None) or dh.UNNAMED
+
+
+def _decision_entry(run_id, tx_id, before, status, chosen, *, who, at, trigger):
+    """One history line for a decision write, or None when nothing moved.
+
+    `before` is the row's `Decision` as it stood before the write (None when
+    the charge had no row at all). Reading it BEFORE calling `set_decision`
+    is the whole trick: the upsert destroys the old value, so a caller that
+    records afterwards can only ever say what the new value is.
+    """
+    old = None
+    if before is not None:
+        old = dh.decision_value(before.status, before.chosen_document_id)
+    return dh.make_entry(
+        run_id=run_id, row_key=tx_id, row_kind=dh.ROW_CHARGE,
+        field=dh.FIELD_DECISION,
+        old=old, new=dh.decision_value(status, chosen),
+        who=who, at=at, trigger=trigger,
+    )
+
+
+def _append_history(store, entries) -> None:
+    """Append the lines that carry a change; silence otherwise.
+
+    Wrapped so a history failure can never take down the verdict that was
+    already written and already answered for. A month whose ledger lost a
+    line is a smaller harm than a confirm that 500s after the decision
+    landed, and the miss is visible in the log.
+    """
+    real = [e for e in entries if e]
+    if not real:
+        return
+    try:
+        store.append_history(real)
+    except Exception:  # pragma: no cover - defensive
+        log.exception("decision history append failed for %s", real[0]["run_id"])
+
+
+def _current_history_value(store, run, entry_row):
+    """What the row holds RIGHT NOW, in the same shape the line recorded.
+
+    Used by the undo guard: a line may only be put back while the row still
+    holds exactly what that line left there. Returns `_HISTORY_UNREADABLE`
+    when the current value cannot be established, which the caller treats as
+    a conflict rather than as agreement.
+    """
+    run_id = entry_row["run_id"]
+    field = entry_row["field"]
+    row_key = entry_row["row_key"]
+    if field == dh.FIELD_DECISION:
+        current = store.get_decisions(run_id).get(row_key)
+        if current is None:
+            return None
+        return dh.decision_value(current.status, current.chosen_document_id)
+    if field == dh.FIELD_DISPOSITION:
+        current = store.get_decisions(run_id).get(row_key)
+        return getattr(current, "disposition", None) if current else None
+    if field in (dh.FIELD_CHARGE_CATEGORY, dh.FIELD_RECEIPT_CATEGORY):
+        detail = dh.decode(entry_row.get("detail")) or {}
+        document_id = detail.get("document_id")
+        line_index = detail.get("line_index")
+        if document_id is None or line_index is None:
+            return _HISTORY_UNREADABLE
+        override = store.get_category_overrides(run_id).get(
+            (document_id, int(line_index))
+        )
+        return _category_value(override)
+    if field == dh.FIELD_DUPLICATE:
+        return store.get_duplicate_resolutions(run_id).get(row_key)
+    return _HISTORY_UNREADABLE
+
+
+def _category_value(override) -> dict | None:
+    """A category override as a comparable value: absent stays absent, and
+    a cleared pick (category None) is absent too, because clearing is what
+    "no override" means to every reader of this table."""
+    if not override:
+        return None
+    category = override.get("category") or None
+    if category is None:
+        return None
+    return {"category": category, "zoho_account": override.get("zoho_account") or None}
+
+
+_HISTORY_UNDO_REFUSALS = {
+    "history_already_undone": "this change has already been put back",
+    "history_not_undoable": (
+        "this kind of change is recorded but not undone here: reverse a "
+        "duplicate ruling by making the opposite ruling on the group, which "
+        "re-matches the month"
+    ),
+    "history_superseded": (
+        "this row has changed since; putting this back would throw away the "
+        "later change"
+    ),
+    "history_no_previous_value": "there was no earlier value to put back",
+}
+
+
+def _apply_history_undo(store, run, entry_row, old, now):
+    """Write the old value back. Returns (error, restored_value).
+
+    `restored_value` is what the row actually holds afterwards, which is not
+    always `old`: a decision line whose `old` is None recorded the very first
+    verdict on a charge that had no row, and the nearest thing to "no row" a
+    route can write is `pending` with no receipt. That is exactly what the
+    app already calls undoing a confirm (re-POST the row pending), so the
+    undo line records `pending`, not a `None` it did not restore.
+    """
+    run_id = entry_row["run_id"]
+    field = entry_row["field"]
+    row_key = entry_row["row_key"]
+    if field == dh.FIELD_DECISION:
+        status = (old or {}).get("status") or STATUS_PENDING
+        chosen = (old or {}).get("chosen_document_id")
+        # R4 again: putting a confirmed pair back has to pass the same
+        # cross-run claim check the original confirm passed, or an undo
+        # could settle a receipt another month now holds.
+        conflict = sync_claim_for_decision(store, run, row_key, status, chosen, now)
+        if conflict is not None:
+            return conflict, None
+        store.set_decision(run_id, row_key, status, chosen, now)
+        return None, dh.decision_value(status, chosen)
+    if field == dh.FIELD_DISPOSITION:
+        if not old:
+            return _HISTORY_UNDO_REFUSALS["history_no_previous_value"], None
+        store.set_disposition(run_id, row_key, old, now)
+        return None, old
+    if field == dh.FIELD_CHARGE_CATEGORY:
+        err = set_charge_category(
+            store, run, row_key,
+            (old or {}).get("category"), (old or {}).get("zoho_account"), now,
+        )
+        if err is not None:
+            return err, None
+        return None, old
+    if field == dh.FIELD_RECEIPT_CATEGORY:
+        detail = dh.decode(entry_row.get("detail")) or {}
+        document_id = detail.get("document_id")
+        line_index = detail.get("line_index")
+        if document_id is None or line_index is None:
+            return _HISTORY_UNDO_REFUSALS["history_no_previous_value"], None
+        store.set_category_override(
+            run_id, document_id, int(line_index),
+            (old or {}).get("category"), (old or {}).get("zoho_account"), now,
+        )
+        return None, old
+    return _HISTORY_UNDO_REFUSALS["history_not_undoable"], None
 
 
 def _not_found(message: str, code: str) -> JSONResponse:
@@ -2434,12 +2607,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # R4 (item 38): the claim sync runs FIRST -- a verdict that
             # would let this receipt settle a second charge in another
             # batch is refused whole, decision unwritten.
+            # Item 104: read the old verdict BEFORE the upsert destroys it.
+            before = store.get_decisions(run_id).get(tx_id)
             conflict = sync_claim_for_decision(
                 store, run, tx_id, status, chosen, _now_iso()
             )
             if conflict is not None:
                 return _refused(conflict, status=409)
             store.set_decision(run_id, tx_id, status, chosen, _now_iso())
+            _append_history(store, [_decision_entry(
+                run_id, tx_id, before, status, chosen,
+                who=_history_who(request), at=_now_iso(),
+                trigger=dh.TRIGGER_CLICK,
+            )])
             view = _run_view(store, run)
         return JSONResponse(jsonable_encoder({"ok": True, "summary": view["summary"]}))
 
@@ -2456,7 +2636,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
+            before = store.get_decisions(run_id).get(tx_id)
             store.set_disposition(run_id, tx_id, disposition, _now_iso())
+            _append_history(store, [dh.make_entry(
+                run_id=run_id, row_key=tx_id, row_kind=dh.ROW_CHARGE,
+                field=dh.FIELD_DISPOSITION,
+                old=getattr(before, "disposition", None),
+                new=disposition,
+                who=_history_who(request), at=_now_iso(),
+                trigger=dh.TRIGGER_CLICK,
+            )])
             view = _run_view(store, run)
         return JSONResponse(jsonable_encoder({"ok": True, "summary": view["summary"]}))
 
@@ -2622,7 +2811,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
+            before_dup = store.get_duplicate_resolutions(run_id).get(group_id)
             store.set_duplicate_resolution(run_id, group_id, resolution, _now_iso())
+            _append_history(store, [dh.make_entry(
+                run_id=run_id, row_key=group_id, row_kind=dh.ROW_GROUP,
+                field=dh.FIELD_DUPLICATE,
+                old=before_dup, new=resolution,
+                who=_history_who(request), at=_now_iso(),
+                trigger=dh.TRIGGER_CLICK,
+            )])
             reconciling = has_statement(run)
         # Item 56: the resolution decides what the matcher's pool holds (an
         # `ignore` group is NOT collapsed), so a reconciling month has to
@@ -3131,7 +3328,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({"ok": True, "forgotten": forgotten})
 
     @app.post("/api/runs/{run_id}/decisions/confirm-matched")
-    def post_confirm_matched(run_id: str):
+    def post_confirm_matched(run_id: str, request: Request):
         # PR A — one click confirms matched pairs with their auto-picked
         # receipt. Item 101 (2026-09-17): only the pairs the owner's rule
         # lets through without a closer look (`confirmable_pair`: exact,
@@ -3157,6 +3354,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 remaining = len(pairs) - _BULK_DECISION_LIMIT
                 pairs = pairs[:_BULK_DECISION_LIMIT]
             confirmed = 0
+            # Item 104: `decisions` above is the pre-write snapshot, so it
+            # is what each line's "old" comes from.
+            history = []
+            who, at = _history_who(request), _now_iso()
             for tx_id, doc_id in pairs:
                 # R4: a pair whose receipt another run settled meanwhile is
                 # skipped, not confirmed onto a receipt this month no
@@ -3168,7 +3369,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 store.set_decision(
                     run_id, tx_id, STATUS_CONFIRMED, doc_id, _now_iso()
                 )
+                history.append(_decision_entry(
+                    run_id, tx_id, decisions.get(tx_id), STATUS_CONFIRMED,
+                    doc_id, who=who, at=at, trigger=dh.TRIGGER_BULK,
+                ))
                 confirmed += 1
+            _append_history(store, history)
             view = _workbench_view(store, run)
         return JSONResponse(jsonable_encoder({
             "ok": True,
@@ -3179,7 +3385,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         }))
 
     @app.post("/api/runs/{run_id}/decisions/confirm-ready")
-    def post_confirm_ready(run_id: str):
+    def post_confirm_ready(run_id: str, request: Request):
         # Safe "Confirm all Ready" (2026-07-27): confirms ONLY the rows the
         # server classifies review.state == "ready" (reconciled, categorized
         # from a trusted tier, no category/account disagreement), each with the
@@ -3201,6 +3407,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 remaining = len(pairs) - _BULK_DECISION_LIMIT
                 pairs = pairs[:_BULK_DECISION_LIMIT]
             confirmed = 0
+            history = []
+            who, at = _history_who(request), _now_iso()
             for tx_id, doc_id in pairs:
                 # R4: skip a pair whose receipt another run settled
                 # meanwhile (see confirm-matched).
@@ -3211,7 +3419,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 store.set_decision(
                     run_id, tx_id, STATUS_CONFIRMED, doc_id, _now_iso()
                 )
+                history.append(_decision_entry(
+                    run_id, tx_id, decisions.get(tx_id), STATUS_CONFIRMED,
+                    doc_id, who=who, at=at, trigger=dh.TRIGGER_BULK,
+                ))
                 confirmed += 1
+            _append_history(store, history)
             view = _run_view(store, run)
         return JSONResponse(jsonable_encoder({
             "ok": True,
@@ -3262,6 +3475,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             decisions = store.get_decisions(run_id)
             writes = bulk_decisions(run, decisions, tx_ids, status)
             updated = 0
+            history = []
+            who, at = _history_who(request), _now_iso()
             for tx_id, doc_id in writes:
                 # R4: a write whose receipt another run settled meanwhile
                 # is skipped, and lands in `skipped` below.
@@ -3270,7 +3485,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 ) is not None:
                     continue
                 store.set_decision(run_id, tx_id, status, doc_id, _now_iso())
+                history.append(_decision_entry(
+                    run_id, tx_id, decisions.get(tx_id), status, doc_id,
+                    who=who, at=at, trigger=dh.TRIGGER_BULK,
+                ))
                 updated += 1
+            _append_history(store, history)
             view = _run_view(store, run)
         # `skipped` is the honest half of the count: rows already decided,
         # (when confirming) rows with no candidate to confirm against, or
@@ -3280,6 +3500,111 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             "updated": updated,
             "skipped": len(tx_ids) - updated,
             "summary": view["summary"],
+        }))
+
+    # -- decision history (item 104) ---------------------------------------
+    #
+    # Read the month's ledger, and put one line back. Both are scoped to a
+    # run: the history is a month's story, and that is the page it is read
+    # on. A month with no recorded change answers `entries: []`, which is
+    # the honest answer for every month that existed before this shipped --
+    # nothing was recorded then, and nothing is invented now.
+
+    @app.get("/api/runs/{run_id}/history")
+    def api_run_history(
+        run_id: str,
+        limit: int = 200,
+        before_id: int | None = None,
+        row_key: str | None = None,
+    ):
+        """Newest first. `row_key` narrows to one charge's own story (the
+        per-row fold); `before_id` pages further back."""
+        limit = max(1, min(int(limit or 200), 500))
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
+            # One more than asked for, then trimmed: that is the only way
+            # `has_more` can be a fact rather than a guess. Comparing the
+            # page size to the limit says "maybe" and reads as "yes",
+            # which hands the reader a next page that is empty.
+            rows = store.list_history(
+                run_id, limit=limit + 1, before_id=before_id, row_key=row_key
+            )
+            has_more = len(rows) > limit
+            rows = rows[:limit]
+            total = store.count_history(run_id)
+        entries = [dh.view_entry(r) for r in rows]
+        return JSONResponse(jsonable_encoder({
+            "run_id": run_id,
+            "entries": entries,
+            "n_entries": total,
+            "has_more": has_more,
+        }))
+
+    @app.post("/api/runs/{run_id}/history/{entry_id}/undo")
+    async def api_run_history_undo(run_id: str, entry_id: int, request: Request):
+        """Put one recorded change back.
+
+        Refused (409) unless the row still holds exactly what this line left
+        there. A history line says "A became B"; undoing it writes A, and if
+        something has moved the row to C since, writing A would throw that
+        later work away without telling anyone. The reader gets
+        `history_superseded` and can look at what happened after instead.
+
+        The undo is itself a change, so it appends its own line (trigger
+        `undo`) and stamps the original as undone. Nothing is ever erased.
+        """
+        who = _history_who(request)
+        now = _now_iso()
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
+            entry_row = store.get_history_entry(entry_id)
+            if entry_row is None or entry_row["run_id"] != run_id:
+                return JSONResponse(
+                    {"error": "history entry not found", "code": "history_entry_not_found"},
+                    status_code=404,
+                )
+            current = _current_history_value(store, run, entry_row)
+            conflict = dh.undo_conflict(entry_row, current)
+            if conflict is None and current == _HISTORY_UNREADABLE:
+                conflict = "history_superseded"
+            if conflict is not None:
+                return JSONResponse(
+                    {"error": _HISTORY_UNDO_REFUSALS[conflict], "code": conflict,
+                     "entry_id": entry_id},
+                    status_code=409,
+                )
+            old = dh.decode(entry_row["old_value"])
+            err, restored = _apply_history_undo(store, run, entry_row, old, now)
+            if err is not None:
+                # A dict is a claim conflict (R4, another month settled this
+                # receipt); a string is a service refusal carrying its code.
+                if isinstance(err, str):
+                    return JSONResponse(
+                        {"error": str(err), "code": code_of(err, "request_refused"),
+                         "entry_id": entry_id, **fields_of(err)},
+                        status_code=400,
+                    )
+                return _refused(err, status=409)
+            # Stamped AFTER the write landed, so a line can never read
+            # "undone" over a value that was not put back. Writing the same
+            # old value twice is the same state, so the losing side of a
+            # double click costs one no-op write and records nothing (the
+            # append below sees no change and makes no line).
+            store.mark_history_undone(entry_id, undone_at=now, undone_by=who)
+            _append_history(store, [dh.make_entry(
+                run_id=run_id, row_key=entry_row["row_key"],
+                row_kind=entry_row["row_kind"], field=entry_row["field"],
+                old=dh.decode(entry_row["new_value"]), new=restored,
+                who=who, at=now, trigger=dh.TRIGGER_UNDO,
+                detail=dh.decode(entry_row.get("detail")),
+            )])
+            view = _run_view(store, run)
+        return JSONResponse(jsonable_encoder({
+            "ok": True, "entry_id": entry_id, "summary": view["summary"],
         }))
 
     @app.post("/api/runs/{run_id}/categories")
@@ -3313,6 +3638,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 indices = [line_index]
             overrides = store.get_category_overrides(run_id)
             now = _now_iso()
+            # Item 104. One line per LINE that actually moves: a whole-
+            # receipt reclassify to the category it already had records
+            # nothing, and one that changes 33 lines records 33, which is
+            # what happened. `bulk` when the edit covered the receipt.
+            history = []
+            who = _history_who(request)
+            trigger = dh.TRIGGER_CLICK if line_index is not None else dh.TRIGGER_BULK
             for i in indices:
                 base = (
                     rec.line_items[i].categorization
@@ -3327,6 +3659,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 store.set_category_override(
                     run_id, document_id, i, category, account, now
                 )
+                history.append(dh.make_entry(
+                    run_id=run_id, row_key=document_id,
+                    row_kind=dh.ROW_RECEIPT, field=dh.FIELD_RECEIPT_CATEGORY,
+                    old=_category_value(overrides.get((document_id, i))),
+                    new=_category_value(
+                        {"category": category, "zoho_account": account}
+                    ),
+                    who=who, at=now, trigger=trigger,
+                    detail={"document_id": document_id, "line_index": i},
+                ))
+            _append_history(store, history)
         return JSONResponse({"ok": True})
 
     @app.put("/api/runs/{run_id}/charges/{transaction_id}/category")
@@ -3356,6 +3699,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
+            # Item 104: the override this write replaces, read first.
+            charge_key = charge_category_key(transaction_id)
+            before_cat = _category_value(
+                store.get_category_overrides(run_id).get(charge_key)
+            )
             err = set_charge_category(
                 store, run, transaction_id, category or None,
                 zoho_account or None, _now_iso(),
@@ -3370,6 +3718,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
             resolutions = store.get_duplicate_resolutions(run_id)
+            _append_history(store, [dh.make_entry(
+                run_id=run_id, row_key=transaction_id,
+                row_kind=dh.ROW_CHARGE, field=dh.FIELD_CHARGE_CATEGORY,
+                old=before_cat,
+                new=_category_value(overrides.get(charge_key)),
+                who=_history_who(request), at=_now_iso(),
+                trigger=dh.TRIGGER_CLICK,
+                detail={"document_id": charge_key[0],
+                        "line_index": charge_key[1]},
+            )])
         view = build_view(run, decisions, overrides, resolutions)
         return JSONResponse({"ok": True, "summary": view["summary"]})
 
@@ -3394,6 +3752,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # R4: an in-run steal is fine (apply_decisions frees the other
             # charge); a CROSS-run steal is refused -- the receipt already
             # settles a charge in another batch.
+            before = store.get_decisions(run_id).get(tx_id)
             conflict = sync_claim_for_decision(
                 store, run, tx_id, STATUS_CONFIRMED, document_id, _now_iso()
             )
@@ -3402,6 +3761,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             store.set_decision(
                 run_id, tx_id, STATUS_CONFIRMED, document_id, _now_iso()
             )
+            _append_history(store, [_decision_entry(
+                run_id, tx_id, before, STATUS_CONFIRMED, document_id,
+                who=_history_who(request), at=_now_iso(),
+                trigger=dh.TRIGGER_CLICK,
+            )])
             view = _run_view(store, run)
         return JSONResponse(jsonable_encoder({"ok": True, "summary": view["summary"]}))
 
