@@ -4653,3 +4653,153 @@ reconciled-bucket test, same refusal to read a borrowed receipt): two
 derivations of "which charge settled this receipt" would let the company a
 row prints and the rate it converts at describe different charges.
 
+
+## A decision history, with a name on every line (item 104, 2026-09-18)
+
+Every verdict in this tool is an upsert. `set_decision` replaces a row's
+status and chosen receipt in place, `set_disposition` replaces the §17
+verdict, the category routes replace the override, `set_duplicate_resolution`
+replaces the ruling. The previous value was gone the moment the next one
+landed, so "who confirmed this, and when" had no answer, and a bulk action or
+a re-match that moved forty rows left nothing behind saying so.
+
+`decision_history` is an append-only table beside them. Nothing updates a
+line's values and nothing deletes one; the single UPDATE in the store stamps
+`undone_at` / `undone_by` and touches no other column.
+
+### What gets a line
+
+One line per write that ACTUALLY MOVED a value. A write whose value equals
+what was already there records nothing, which is what keeps a re-match (it
+writes every charge on the month) from burying the four rows that moved
+under a hundred that did not.
+
+| `field` | Written by | `row_key` | Undo offered |
+|---|---|---|---|
+| `decision` | `POST /decisions`, `/decisions/bulk`, `/decisions/confirm-matched`, `/decisions/confirm-ready`, `/manual-match`, `/transactions/{tx}/receipt` | transaction id | yes |
+| `disposition` | `POST /disposition` | transaction id | yes |
+| `charge_category` | `PUT /charges/{tx}/category` (item 109) | transaction id | yes |
+| `receipt_category` | `POST /categories`, `POST /expenses/{doc}/confirm-category` (note #62), `PUT /expenses/{doc}` with `field: category` / `zoho_account` | document id | yes |
+| `duplicate` | `POST /duplicates/resolve` | group id | **no** |
+
+Twelve write sites, not the four the item's text named. The list came
+from enumerating every `set_decision` / `set_disposition` /
+`set_category_override` / `set_duplicate_resolution` call in `src/` and
+classifying each, because a ledger with invisible holes is worse than no
+ledger: it gets trusted. What is deliberately NOT recorded is
+`set_tool_decision` (the matcher's own writes during a re-match) and the
+non-category half of `PUT /expenses/{doc}` (a header-field correction:
+vendor, date, total), which is a data edit rather than one of the five
+verdicts the item names.
+
+`decision` carries status AND chosen receipt as one value, because a confirm
+sets both together and an undo has to put both back together; two lines
+undoable apart would leave the row half-reverted.
+
+A duplicate ruling is RECORDED but not undone here. The ruling decides what
+the matcher's pool holds, so the resolve route re-matches the month after
+writing it (item 56); an undo that wrote the old ruling back without that
+re-match would leave a month whose ruling says one thing and whose pairs
+still reflect the other. It is reversed by making the opposite ruling.
+
+### Who
+
+`who` is the label inside the SIGNED SESSION TOKEN (`request.state.operator`),
+never `_operator()`, which reads the SERVER's environment and therefore
+answers the same name whoever signed in. That is the confusion item 104
+names: Criss's feedback notes read `operator` while the developer's read
+`matthias`. A session opened with the legacy shared code reads `operator`,
+which is the truth about a shared code, not a bug.
+
+`trigger` is `click` (one row by hand), `bulk` (the confirm-all / reject-all
+family, and a whole-receipt reclassify), `rematch` / `tool` (reserved for the
+machine's own writes), or `undo`.
+
+### `GET /api/runs/{run_id}/history`
+
+Newest first. `?limit=` (1-500, default 200), `?before_id=` pages further
+back, `?row_key=` narrows to one row's own story (the per-row fold).
+
+```
+{ "run_id": "...", "n_entries": 12, "has_more": false,
+  "entries": [
+    { "id": 12, "row_key": "tx-0007", "row_kind": "charge",
+      "field": "decision",
+      "old": {"status": "pending", "chosen_document_id": null},
+      "new": {"status": "confirmed", "chosen_document_id": "0003__lovable.pdf"},
+      "who": "criss", "at": "2026-09-18T09:12:03+00:00",
+      "trigger": "click", "summary": "pending to confirmed, receipt lovable.pdf",
+      "undoable": true } ] }
+```
+
+`summary` is English, the same division every reason code in this app uses:
+the SPA renders its own Portuguese from `old` / `new` / `field`. A line that
+has been put back carries `undone_at` + `undone_by` and `undoable: false`.
+`row_kind` is `charge`, `receipt` or `group`. `detail` rides only on the
+category fields (`document_id` + `line_index`). `n_entries` counts what the
+caller is looking at: with `row_key` it is that row's count, not the month's.
+
+**A category line's `old: null` means "no reviewer override", not "no
+category on screen".** The tool's own guess lives in the run snapshot, not in
+the override table, so a row visibly reading `Travel & Transport` from a
+vendor guess records `old: null` when the reviewer first picks. What the line
+says is true of the thing it tracks: the reviewer had not ruled before, and
+now has. A value carrying only `zoho_account` is its own state, distinct from
+absent.
+
+**A month with no recorded change answers `entries: []`.** That is the honest
+answer for every month that existed before this shipped: nothing was recorded
+then, and nothing is invented now.
+
+### `POST /api/runs/{run_id}/history/{entry_id}/undo`
+
+Writes the old value back through the same store call the original write
+used, stamps the original line undone, and appends its own line
+(`trigger: "undo"`). Nothing is ever erased.
+
+The one case with no new line is an undo that moved nothing: undoing the
+first verdict on a row whose recorded verdict was already `pending` restores
+`pending`, and a line saying "pending to pending" would be noise. The
+original is still stamped, because it was in fact put back.
+
+Refusals, all 409 except where noted:
+
+| code | when |
+|---|---|
+| `history_superseded` | the row no longer holds what this line left there |
+| `history_already_undone` | this line has already been put back |
+| `history_not_undoable` | a duplicate ruling, or the FIRST disposition on a row (`set_disposition` takes only a real verdict, so there is no "no disposition" to write back) |
+| `history_entry_not_found` | no such line, or it belongs to another month (404) |
+
+A refusal from the write itself carries its own code: a cross-run claim
+conflict (R4) answers **409**, the same status the original confirm answers
+for the same condition; any other service refusal answers 400.
+
+`undoable` on a line is the single source of truth for whether the button is
+drawn, and it is false for all three cases above. A control that cannot work
+is worse than no control, because the reader presses it and learns the ledger
+lies.
+
+`history_superseded` is the guard that matters. A line says "A became B";
+undoing it writes A, and if something has moved the row to C since, writing A
+would silently throw that later change away. The reader is told instead.
+
+Undoing the FIRST verdict on a charge that had no decision row restores
+`pending` with no receipt, and the undo line records `pending`: that is what
+was actually written, and it is already what the app calls undoing a confirm
+(re-POST the row pending). The undo passes the same R4 cross-run claim check
+the original confirm passed, so it can never settle a receipt another month
+now holds.
+
+### What is not built
+
+The SPA's collapsed History fold and its per-line Undo button
+(`docs/lovable-decision-history-prompt.md`, EN + PT, not pasted). The
+credential half of item 104 (Criss's own named code, deleting the shared
+code, rotating the signing secret, a session expiry) is an owner and ops
+action, outward-facing, and is quoted and decided separately;
+`OWNERSHIP-HANDOFF` step 8 is its plan. The machine's own re-match writes are
+not yet recorded: the triggers exist in the vocabulary, but wiring them means
+threading a `who` through the matcher, and the reviewer-facing half is what
+the item's evidence is about. Header-field corrections on an expense
+(vendor, date, total) are not recorded either; see the table.
