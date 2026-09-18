@@ -5089,3 +5089,38 @@ id and a corrected file gets another; a re-read keeps the id; an entry
 written before the id reads absent and gains one on re-read; the writeback
 picks the FIRST export by id while the month's current statement is the
 second. The SPA needs no change: nothing renders the id yet.
+
+## Four vocabularies are now closed literals in CI (2026-09-18, item 128)
+
+Rule 5 above says growing an enum is the same move as retyping a field. Until
+this round only `rows[].turn` and the `duplicate` enums were pinned as
+literals; `row_type`, the review `reason_code`, `month_health.state` and the
+`rematch_log` trigger were asserted against the backend's own constant or not
+at all, so a new backend value passed the suite and reached the screen as
+somebody else's label. `tests/test_view_contract.py` (the `*_vocabulary_is_pinned`
+tests) now holds each as a literal against its source of truth:
+
+| Vocabulary | Source of truth | Pinned values |
+|---|---|---|
+| `rows[].row_type` | `ingest._common.ROW_TYPES` and every `ROW_TYPE_*` constant | `purchase` · `payment` · `refund` · `reversal` · `fee` · `interest` |
+| `review.state` / `review.reason_code` (both payloads) | the literals every `_review(...)` call in `web/service.py` passes (no single constant exists; read with `ast`, a non-literal code fails the pin) | states `ready` · `check` · `pick` · `none`; codes `uncategorized` · `partial_uncategorized` · `category_account_mismatch` · `vendor_guess` · `unknown_provenance` · `uncertain_match` · `receiptless_suggested` · `missing_fields` · `date_outside_period` · `suggested_private` · `needs_entity` · `needs_entity_settled_outside` · `untrusted_instructions` · `invoice_read_as_statement` · `needs_person` · `needs_cost_center` |
+| unmatched `reason_code` | `unmatched_reasons.RECEIPT_REASON_CODES` / `CHARGE_REASON_CODES` | the nine codes in "The unmatched lists say what they hold" |
+| `summary.month_health.state` (+ `reason`, `suspects[]`) | every `HEALTH_*` / `REASON_*` / `SUSPECT_*` constant in `web/month_health.py` | `ok` · `broken`; `zero_match_with_exact_pairs`; `sign` · `currency` · `entity` · `card` · `unknown` |
+| `rematch_log[].trigger` | the `trigger=` literals every `web/*.py` module passes to a re-match call (no single constant exists; read with `ast`) | `statement` · `reread` · `receipts` · `cards` · `master_data` · `set_aside` · `trip` · `adjacent_receipts` · `expense_edit` · `resume` · `duplicates` · `month_move` |
+
+A new backend value fails CI until the pin and the SPA label move together:
+the failure names the value, and the change that adds it edits the literal in
+the test, this file, and the Lovable prompt in the same round. The trigger row
+corrects the "Re-match events" section above, which named ten triggers:
+`duplicates` (a duplicate-group resolution) and `month_move` (a corrected date
+moving a receipt) were live call sites it did not list.
+
+Three sibling guards landed in the same round, outside this payload contract:
+`tests/test_reader_parity.py` (the CSV and Excel statement readers produce the
+same charges, field by field, from the same rows, on both sign paths),
+`tests/test_extraction_prompt_pin.py` (the receipt-reading prompt's cache
+fingerprint is a literal; an edit fails until the stored-readings comparison
+has been run and the count attached to the PR), and
+`tests/test_smtp_listener_e2e.py` (a real `smtplib` session through the app's
+own aiosmtpd listener lands a mailed receipt in its month with provenance, and
+the 550 / 552 refusals are answered and written down).
