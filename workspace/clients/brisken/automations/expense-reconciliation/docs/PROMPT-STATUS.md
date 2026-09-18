@@ -155,8 +155,35 @@ Two signature lessons from the same audit. `errorText` is in the error-codes
 prompt's own checking list and reads ABSENT in every chunk, because it is a local
 function name and the build minifies those away; only the i18n keys and the API
 field names are usable signatures. And `data-pt` (the crash page) is absent from
-the client bundle because that page is server-rendered, so a client-side crawl
-cannot see it either way; the only test is to trigger a crash.
+the client bundle. **The reason given here on 2026-09-18 was wrong and is
+corrected in the audit below: that page is NOT server-rendered.** It is a client
+React component in the entry chunk, fully visible to a crawl, and `data-pt` is
+absent because the prompt's §6 was never applied.
+
+**Re-audited 2026-09-18 later, the same day, after the three unverified halves
+the audit above recorded.** The bundle had moved a fourth time in about 26 hours,
+to 44 chunks / 1,174 KB, with the i18n chunk renamed again from
+`chunk-x-DkEroC52.js` to `chunk-x-CLnyiug6.js`. Two of the three halves close and
+one splits:
+
+- **charge-category (109) is applied and ON SCREEN**, EN and PT. The previous
+  "not seen" was the probe, not the app: see the row below.
+- **error-codes (130) is applied in five of its six sections and verified**,
+  including the row chips the previous pass could not reach. Its §6 is genuinely
+  absent and now has its own prompt.
+- The previous pass's `/runs/does-not-exist-abc123` check tested a surface item
+  130 never touched, so it could not have passed. Corrected in the row.
+
+**Three blind instruments in three sessions, all returning a confident negative,
+and the third one was mine.** A crawler that only accepted quoted imports saw 7
+chunks of 46 because this build writes dynamic imports with backticks. A
+`document.querySelectorAll('select')` probe saw 0 pickers on a page whose every
+picker is a Radix `button[role=combobox]`. And a `body.innerText` match for
+`Guess` returned 0 while the chip was on screen the whole time, because the chip
+is uppercased by CSS and `innerText` returns the RENDERED text, `GUESS`. Each one
+read as evidence of absence. The rule that catches all three: before trusting any
+absence, run the probe against a state you already know, and check that its output
+CHANGES with the state.
 
 ## Applied
 
@@ -256,10 +283,15 @@ cannot see it either way; the only test is to trigger a crash.
 | `lovable-remove-account-picks-prompt.md` (note #61, item 23) | Bundle only. Across two audits 40 minutes apart in the same session, `account_picks` and `set.entities.col.accountPicks` went from PRESENT to ABSENT, `set.entities.help.accountPicks` is absent, and the controls `set.entities.listHelp` and `set.entities.col.scopeGroups` are still present, which is the prompt's own check 3 exactly. Checks 1 and 2 (the entity editor's fields, EN and PT) were NOT driven: `/settings` renders as a jump-nav over lazily-mounted sections, and the Legal entities section never mounted into the page text under the drive script's click, so no field list could be read back |
 
 | `lovable-receipt-chasing-prompt.md` (item 107) | **Applied and driven.** Bundle 2026-09-18 (46 chunks, 1,287 KB, five controls hit): `receipt_chase`, `no_receipt_expected` and `chase.title` in `chunk-runs._runId`, "Recibos a cobrar" and `row.chip.noReceipt` in the i18n chunk. Cold drive from the login gate in PT (headless Chrome, 1440x900), only non-GET `POST /api/login`: August `/runs/074a7b8905d7` renders "Recibos a cobrar (61)" with three holder sections (36, 24 and 1 cobranças), "Sem e-mail cadastrado" on all three, "Ver a mensagem" present and "Enviar solicitação" rendered with `disabled: true`, which is the prompt's own requirement. July `/runs/50622baec444` shows no panel at all, the prompt's check 2. Not driven: Preview's dialog contents, and the two row marks (both are writes on Criss's month). |
-| `lovable-charge-category-prompt.md` (item 109) | **Applied by bundle; the control was NOT seen on screen.** `wb.chargeCat.none`, `wb.chargeCat.guess.tip` and "Sem categoria ainda" are all in the bundle. On the same PT drive, August's "Lançamentos sem recibo" view (101 rows, every one of which should carry the picker) returned `document.querySelectorAll('select').length === 0` and zero occurrences of "Palpite". **That probe is probably blind rather than right:** this app's pickers are Radix comboboxes (`button[role=combobox]`), not native `select` elements, which is how every other card and entity picker in the grid is built, and the prompt's wording ("the same category `select` the candidate card already renders") is what led the probe astray. Re-probe by `[role=combobox]` and by the chip text before concluding anything. Same class as the backtick-blind crawler: a structurally blind probe returns a confident negative. |
-| `lovable-error-codes-prompt.md` (item 130) | **Applied in part.** Live in the bundle: `err.company_card`, `err.batch_deleted`, `err.run_not_found`, `adv.no_chart_of_accounts`, `adv.fx_rate_drift`, `warn.amountMismatch`, and the PT sentences "Este mês foi excluído enquanto você trabalhava nele" and "valor diferente"; `warn.amountMismatch` also hits in `chunk-runs._runId`, so the call site took the keys. **But the prompt's check 4 does not pass:** `/runs/does-not-exist-abc123` in PT renders "Esta execução não existe mais; ela pode ter sido excluída. Escolha uma execução atual no painel.", which is a different, pre-existing Portuguese string, not the prompt's `err.run_not_found` ("Este mês não existe mais."). That route localizes by some other path, so the `errorText` helper is not proven to be wired at the site that matters most. Unverified: the row chips (the drive's pill selector hit "Confirmar todas conciliadas" instead of the Matched view, so the check never ran, and 0 English leaks on the view it did reach is weak evidence), and the crash page, which is server-rendered and invisible to a client crawl. |
+| `lovable-charge-category-prompt.md` (item 109) | **SUPERSEDED by the later 2026-09-18 row below: the control IS on screen, and this row's negative was the blind probe it suspected itself of being.** Applied by bundle; the control was not seen by THIS pass. `wb.chargeCat.none`, `wb.chargeCat.guess.tip` and "Sem categoria ainda" are all in the bundle. On the same PT drive, August's "Lançamentos sem recibo" view (101 rows, every one of which should carry the picker) returned `document.querySelectorAll('select').length === 0` and zero occurrences of "Palpite". **That probe is probably blind rather than right:** this app's pickers are Radix comboboxes (`button[role=combobox]`), not native `select` elements, which is how every other card and entity picker in the grid is built, and the prompt's wording ("the same category `select` the candidate card already renders") is what led the probe astray. Re-probe by `[role=combobox]` and by the chip text before concluding anything. Same class as the backtick-blind crawler: a structurally blind probe returns a confident negative. |
+| `lovable-error-codes-prompt.md` (item 130) | **PARTLY SUPERSEDED by the later 2026-09-18 row below**, which closes the chips, proves the helper wired, and shows why check 4 could never have passed. Its §6 finding stands and gets harder. **Applied in part.** Live in the bundle: `err.company_card`, `err.batch_deleted`, `err.run_not_found`, `adv.no_chart_of_accounts`, `adv.fx_rate_drift`, `warn.amountMismatch`, and the PT sentences "Este mês foi excluído enquanto você trabalhava nele" and "valor diferente"; `warn.amountMismatch` also hits in `chunk-runs._runId`, so the call site took the keys. **But the prompt's check 4 does not pass:** `/runs/does-not-exist-abc123` in PT renders "Esta execução não existe mais; ela pode ter sido excluída. Escolha uma execução atual no painel.", which is a different, pre-existing Portuguese string, not the prompt's `err.run_not_found` ("Este mês não existe mais."). That route localizes by some other path, so the `errorText` helper is not proven to be wired at the site that matters most. Unverified: the row chips (the drive's pill selector hit "Confirmar todas conciliadas" instead of the Matched view, so the check never ran, and 0 English leaks on the view it did reach is weak evidence), and the crash page, which is server-rendered and invisible to a client crawl. |
 | `lovable-untrusted-flag-prompt.md` (item 93) | **Applied by bundle; no live case exists to render.** `expx.review.reason.untrusted_instructions` and the PT sentence "Este recibo contém um texto dirigido à ferramenta" are in the i18n chunk, and `untrusted_instructions` is in `chunk-expenses._batchId`, which is the grid reading the field. No live row carries a flag, so the render is verified on the next flagged receipt. |
 | `lovable-invoice-read-as-statement-prompt.md` (item 105) | **Applied by bundle; no live case exists to render.** `expx.review.reason.invoice_read_as_statement` and "Parecia uma página de extrato bancário" are in the i18n chunk. No live row carries the reason code, so the render is verified on the next invoice the reader calls a statement page. |
+
+| Prompt | Verified by |
+|---|---|
+| `lovable-charge-category-prompt.md` (item 109) | **Applied and driven, EN and PT.** Bundle 2026-09-18 later (44 chunks, 1,174 KB, i18n chunk `chunk-x-CLnyiug6.js`): `wb.chargeCat.guess` in the i18n chunk and in `chunk-runs._runId`, which is the call site reading it. Two cold drives from the login gate, only non-GET `POST /api/login` on each. August `/runs/074a7b8905d7`, the Charges-without-a-receipt view reached by a JS click on its own pill (the page opens on the receipt-chasing panel, so a drive that never switches views reads a screen with no charge rows on it at all): 205 `button[role=combobox]` and 0 native `select`. The LOVABLE 15.00 row of Aug 31, 2026 carries a combobox reading "Meals & Entertainment", 176x32 px with `offsetParent` set, and a visible `span` "Guess" 38x19 px beside it, which is the prompt's check 1 exactly; SAP SE 1,574.24 of Aug 28 reads "Software & Subscriptions / Guess", check 4's third row. 89 visible Guess chips on the view; "No category yet" twice. PT (`brisken.lang: "pt"`): the pill reads "Lançamentos sem recibo101", "Sem categoria ainda" twice, and the WILLAMS RONALD DA SIL row reads "Professional Services PALPITE". July `/runs/50622baec444`: the pill reads "Charges without a receipt 73 24 open" and the 24 open rows carry 50 comboboxes and 16 Guess chips between them, the other 49 being behind the decided-rows toggle. Not driven: checks 2 and 3, which save a pick and are writes on Criss's month. **Why the earlier pass read 0:** it counted `select` elements, and it matched `body.innerText` for `Guess` case-sensitively while the chip is uppercased by CSS, so `innerText` returns `GUESS`. Two blind instruments on one control. |
+| `lovable-error-codes-prompt.md` (item 130) | **Sections 1 to 5 applied and verified; §6 is absent and now has its own prompt.** Same bundle. The helper itself is there, minified: `` `err.${e.code??``}` `` with the `hasKey` guard, exported from the shared chunk, plus the parallel `` `adv.${...}` `` for the advisories (§2 and §4). It is WIRED, which the previous pass could not show: `chunk-runs._runId` holds 16 `toast.error(errorText(e, t))` call sites and **zero** remaining `.message)`, and no chunk anywhere still carries a `toast.error(<x>.message)` (§3). The row chips are on screen in both languages (§5): the LOVABLE row of Aug 31 reads NEAR MISS in EN and QUASE IGUAL in PT, which are `warn.nearMiss`'s two dictionary values. **Check 4 tests a surface this prompt never touched.** `/runs/does-not-exist-abc123` renders the SPA's own missing-run screen, whose Portuguese ("Esta execução não existe mais; ela pode ter sido excluída...") is a separate dictionary entry sitting in the same chunk as `err.run_not_found`; the route guard issues no API refusal, so no `code` ever reaches `errorText` there. `err.run_not_found` is present in both languages and reachable, but only on a refusal that carries the code, such as a download against a deleted month. **§6 did not land:** the crash screen is a client React component in the entry chunk `index-IP_1YWz1.js` (the TanStack root `errorComponent`) with `This page didn't load`, `Something went wrong on our end...`, `Try again` and `Go home` written into the JSX as plain strings, and the not-found component beside it is the same. `data-pt`, "Esta página não carregou", "Algo deu errado do nosso lado", "Tentar de novo" and "Voltar ao início" are absent from all 44 chunks. Driven cold in PT: `/this-route-does-not-exist-xyz` renders "404 / Page not found / The page you're looking for doesn't exist or has been moved. / Go home" in English while the rest of the app is Portuguese. The earlier note that this page is "server-rendered, so a client crawl cannot see it" is wrong: the crawl sees it fine, and what it sees is English. |
 
 These four were drafted 2026-08-28/29, pasted from chat, and lived only in a
 gitignored scratch directory until 2026-09-01. They are in `docs/` now
@@ -268,13 +300,19 @@ and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
-One prompt is out: item 144's review-reason copy, written 2026-09-18 after the
-backend shipped the night before. Three Applied rows above carry an explicit
-unverified half; those are drives to run, not prompts to paste.
+Two prompts are out. Item 144's review-reason copy, written 2026-09-18 after the
+backend shipped the night before, and item 130's §6 error-screen copy, written
+2026-09-18 later once the drive showed the two screens are still English. Neither
+has a backend gate: both are copy only, so both can be pasted whenever the owner
+next publishes.
+
+The three unverified halves the audit above recorded are now two closed and one
+promoted to the prompt below. Nothing in the Applied table is waiting on a drive.
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
 | `lovable-settled-outside-reason-prompt.md` (item 144) | `expx.review.reason.needs_entity_settled_outside` (EN + PT) in the i18n chunk, and the PT sentence "paga fora do sistema de cartões" | Written 2026-09-18, not pasted. No backend gate: PR #1074 is live on Fly and the row already carries `review.reason_code: "needs_entity_settled_outside"`. Until this lands, July's Tricarico row shows the backend's English sentence on Criss's Portuguese screen |
+| `lovable-error-page-lang-prompt.md` (item 130 §6) | "Voltar ao início" and "Página não encontrada" anywhere in the bundle; today "Page not found" is the only spelling of it | Written 2026-09-18 later, not pasted. No backend gate: copy only, in the root route file's two error components. Until this lands, the not-found page and the crash page are the only screens in the tool that stay English for a Portuguese reader, which are the two screens where a reader most needs to understand what happened |
 
 
 
