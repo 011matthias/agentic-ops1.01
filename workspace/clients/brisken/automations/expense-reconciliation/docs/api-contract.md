@@ -4923,6 +4923,172 @@ committed source, so it is not stated here.
 Route-level in `tests/test_card_accounts_item_147.py`. SPA half:
 `docs/lovable-card-accounts-prompt.md`.
 
+## Merchant-to-category is the default; the exceptions vary by company, on the account (note item M1, 2026-09-18)
+
+Owner directive 2026-09-18, with Dirk's clarification the same day: binding a
+merchant to one category is right about 90% of the time; the exceptions are
+OpenAI, Anthropic and Lovable, whose receipts book to several places, and
+what varies by company is the ACCOUNT. Until now the tool conflated the two
+facts: a rule saved under (company, vendor) outranked the merchant registry's
+default outright (the 2026-08-07 order), so a merchant with a default was
+judged one way for a company with a rule and another way for a company
+without one, and item 115 then had to route those receipts around the line
+read.
+
+**What a receipt's category resolves to now**, top to bottom:
+
+1. the reviewer's own pick (a category override), untouched;
+2. **the merchant registry's default category**, on every receipt of that
+   merchant, itemized or not, with the line read never paid for. The ACCOUNT
+   comes from the (company, vendor) rule memory holds for the receipt's
+   company: the rule saved under its own company, else one saved with no
+   company, else (for a receipt with no company) the vendor's rules when they
+   agree on it (item 115's lookup, unchanged). A rule contributes its account
+   only when it agrees with the registry on the category or a person stands
+   behind it (a sign-off correction, a Memory-page edit or a row someone
+   validated): a row seeded from Zoho Books posting history under another
+   category is how the books once posted, not an account for this category.
+   With no rule, or a rule naming no account, the registry's own account
+   stands, which may be nothing (then the chart or the report fills it as
+   before);
+3. a rule a person taught, for a merchant with no registry default (item
+   115's `learned_over_line` glance when the items read something else);
+4. the model's line read, then a Zoho-seeded rule nobody validated, then the
+   vendor guess, then review.
+
+A merchant marked `multi_category` resolves its name only and is judged per
+receipt, as before. A merchant whose category edits at sign-off disagree is
+skipped by the registry upsert, also as before.
+
+**The row.** `posting_category.source` reads `registry` (coarse) and the line
+`REGISTRY`; `posting_category.zoho_account` is the company's account. The
+line's `provenance`, empty on a registry line until now, names the rule when
+one supplied the account:
+
+```
+merchant registry default; account from the rule saved for Cloud Services
+merchant registry default; account from the rule saved with no company
+merchant registry default; account from the rules for Cloud Services, Corporate Services, which agree
+```
+
+A registry line whose account is the registry's own keeps `provenance: ""`.
+
+**Receiptless charges consult the registry too.** `rematch_month` (the path
+every statement attach and re-match takes) now hands the month's registry to
+`categorize_charges`, so a bank description that names a registry merchant
+(`LOVABLE`, `OPENAI`, `ANTHROPIC`) takes that merchant's default category and
+the charge's company's account instead of a model guess:
+`charge_category.source: "REGISTRY"`, `provenance` as above. The bank's own
+description stays on the row; the registry's canonical name is written
+nowhere on a charge. Live July read `LOVABLE` as Meals & Entertainment four
+times (`VENDOR`), which this ends on the next re-match of that month.
+
+**`GET /api/memory` groups the rules per vendor: `by_vendor[]`.** One entry
+per vendor in `categories[]`, one line per company, so a reader sees where a
+merchant's account splits. The vendor line names the registry merchant the
+vendor resolves to and the category its receipts will actually read; `""`
+when the registry has no default (the company's own rule or the model
+decides). Built from the same rows as `categories[]`, so `?unvalidated=1`
+filters both.
+
+```json
+{ "by_vendor": [
+    { "vendor": "anthropic pbc", "merchant": "Anthropic",
+      "category": "Software & Subscriptions", "multi_category": false,
+      "companies": [
+        { "entity": "Cloud Services", "category": "Software & Subscriptions",
+          "zoho_account": "COGS - DEV Infrastructure (SAP Apps & others)",
+          "count": 1, "last": "2026-08-06", "validated": "", "validated_by": "",
+          "seeded": true },
+        { "entity": "Corporate Services", "...": "..." } ] } ] }
+```
+
+`companies[]` carries the `categories[]` row minus `vendor`, sorted by
+`entity` (`""`, a rule saved with no company, first). `categories[]` gains
+the same `seeded` boolean: `true` on a row whose `source_run` starts with
+`zoho-seed`, the 103 live rows today. Every write endpoint keeps its
+`legal_entity_id` + `vendor` body, so a company line is edited, deleted and
+validated exactly as its flat row is.
+
+**What does not change.** The registry is still edited in the Merchants
+editor and still grows at sign-off (item 116's whole-entry rule). Memory
+rows are still keyed on (company, vendor) and still learn at sign-off. The
+accuracy gate (`categorization_gate.py`, no registry) is unchanged and
+green. `reconcile()` still never consults the registry; matching moves for
+no row.
+
+**Live on 2026-09-18, before this ships.** The registry holds 28 merchants,
+none of them OpenAI, Anthropic or Lovable, so no live row moves on this
+deploy alone; the three entries are a separate production write the owner
+approves, and the account per company for the three (9 cells, 2 known from
+the seed: `anthropic` Cloud Services -> COGS - DEV Infrastructure, Corporate
+Services -> Other Infra and IT Costs for Cloud Business) is Dirk's input.
+
+Route-level in `tests/test_registry_category_by_company_m1.py`; the memory
+payload's lists pinned in `tests/test_view_contract.py`
+(`MEMORY_CONTRACT`); precedence in `tests/test_merchant_registry.py`. SPA
+half: `docs/lovable-memory-by-company-prompt.md`.
+## A statement upload has an identity: `statement_id` + `coverage[].statement_ids` (note item T2, backlog item 150, 2026-09-18)
+
+A `statements[]` entry was keyed by `file`, the name on disk. That name is
+made unique PER UPLOAD (`Chase.xlsx`, then `Chase-2.xlsx`), so two per-card
+exports that share the bank's filename got two names for what may be one
+file, a re-upload of the same workbook got a second name for the same bytes,
+and nothing on either payload said whether two entries were the same file.
+A statement line has had a content-derived id since item 29
+(`transaction_id`); the upload that printed it now has one too.
+
+**`statements[].statement_id`** is the first 16 hex characters of the
+sha256 over the STORED BYTES of the upload. The same bytes uploaded twice
+(which the fold absorbs as `n_new: 0`), or re-read after a restore, yield
+the same id; a corrected file yields a new one. Parallel field, rule 1
+below: ABSENT on every entry written before 2026-09-18, never null, so a
+reader tells "not recorded" from "recorded". A re-read
+(`POST .../statements/reread`) reads the same bytes off disk and records the
+id on every entry it rebuilds, so an old month gains ids at its next re-read
+and nothing else has to change. Nothing outside the tool carries it: the
+acknowledgement mail, the CSV and both PDFs are untouched, by the owner's
+ruling that ids reach the outside with the later Zoho Books integration.
+
+```json
+{ "file": "Chase-2.xlsx",
+  "upload_name": "Chase.xlsx",
+  "statement_id": "9f3c1a7be04d5e62",
+  ... }
+```
+
+**`coverage[].statement_ids[]`** rides beside `coverage[].statements[]` on
+both payloads: the ids of the entries named in `statements` that carry one,
+deduped, in upload order. The two lists are NOT positional: three files of
+which two are the same bytes read `statements: [a, b, c]` and
+`statement_ids: [x, y]`, and an upload recorded before ids existed is named
+in `statements` with nothing to add here. Join through `statements[]` by
+`file` when the pairing matters. `coverage[].statements[]` keeps its type
+(strings) and its content. `card_sections[].statements[]` is derived from
+`coverage[]` and stays file names; a consumer needing the id on a tab joins
+it through `coverage[]` on the same payload.
+
+**The anchors are keyed by id as well.** The snapshot's `statement_anchors`
+(not on either payload; see "The statements a month has taken") records each
+upload's id-to-row map under its `file` name AND under its `statement_id`,
+the same map twice, so the writeback and the re-read can address an upload
+by id when two exports share a filename, and every reader that knows only
+the file name keeps working.
+
+**`GET /runs/{id}/statement-categorized.xlsx?statement_id=`** annotates the
+upload with that id, resolved against `statements[].statement_id` exactly
+the way `?file=` is resolved against `statements[].file`; an id the month
+never recorded is the same 404 (`statement_not_workbook`). When both are
+given the id decides. Two entries can share an id (the same bytes twice);
+they printed the same rows at the same sheet rows, so the first is annotated
+and the result is the same workbook either way.
+
+Route-level in `tests/test_statement_identity_t2.py`: an attach records the
+id on both payloads and in both anchor keys; the same bytes twice share one
+id and a corrected file gets another; a re-read keeps the id; an entry
+written before the id reads absent and gains one on re-read; the writeback
+picks the FIRST export by id while the month's current statement is the
+second. The SPA needs no change: nothing renders the id yet.
 ## Matching when the card cannot be identified, and the description's reference tokens (item X1, 2026-09-18)
 
 Owner, 2026-09-18: the statement description must count in matching, and

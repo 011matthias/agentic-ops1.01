@@ -102,6 +102,9 @@ EXPENSE_BATCH_CONTRACT = {
     "coverage[]": "object",
     "coverage[].digits[]": "string",
     "coverage[].statements[]": "string",
+    # Note item T2: the content ids of the entries in `statements[]` that
+    # carry one; strings, empty on an entry whose uploads predate the id.
+    "coverage[].statement_ids[]": "string",
     # Item 47: the row picker's list. OBJECTS, not strings, unlike its two
     # sibling option lists above: each entry carries the display-only `kind`
     # that groups the roll-up, so the picker can show "Lidar (project)"
@@ -164,6 +167,8 @@ RUN_CONTRACT = {
     "coverage[]": "object",
     "coverage[].digits[]": "string",
     "coverage[].statements[]": "string",
+    # Note item T2: content ids of the `statements[]` entries that carry one.
+    "coverage[].statement_ids[]": "string",
     # Item 74: charge-side duplicate detection is deleted. The list stays in
     # the payload, ALWAYS EMPTY, so a consumer pairing groups by kind does not
     # break; its element pin went with the detector (nothing can fill it).
@@ -236,6 +241,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "card_sections[]",
     "card_sections[].digits[]",
     "card_sections[].statements[]",
+    "coverage[].statement_ids[]",
 }
 
 RUN_MUST_COVER = {
@@ -258,6 +264,7 @@ RUN_MUST_COVER = {
     "card_sections[]",
     "card_sections[].digits[]",
     "card_sections[].statements[]",
+    "coverage[].statement_ids[]",
 }
 
 
@@ -1401,6 +1408,67 @@ def test_fx_reference_rate_period_rides_only_on_the_ecb_source(fx_payload, tmp_p
         assert fx[key] == "2026-07", fx
 
 
+# ── note item M1: `GET /api/memory` list fields ──────────────────────────
+#
+# The Memory page is the third payload the SPA maps over, and item M1 adds
+# the first nested list to it (`by_vendor[].companies[]`). Pinned the same
+# way as the two views above; route-level behaviour in
+# `tests/test_registry_category_by_company_m1.py`.
+
+MEMORY_CONTRACT = {
+    "aliases[]": "object",
+    # Item M1: one entry per vendor, one company line each. Objects.
+    "by_vendor[]": "object",
+    "by_vendor[].companies[]": "object",
+    "categories[]": "object",
+    "entities[]": "object",
+    "field_corrections[]": "object",
+    "fx[]": "object",
+}
+
+MEMORY_MUST_COVER = set(MEMORY_CONTRACT)
+
+
+def test_memory_view_list_contract(tmp_path):
+    from expense_recon.learning import LearningStore, normalize_vendor
+
+    with LearningStore(tmp_path / "learning.sqlite") as s:
+        for entity in ("Cloud Services", "Corporate Services"):
+            s.record_merchant_category(
+                entity, normalize_vendor("Anthropic, PBC"),
+                "Software & Subscriptions", f"{entity} account",
+                "2026-09-01T00:00:00", "r1",
+            )
+        s.record_vendor_alias(
+            "Corporate Services", normalize_vendor("ANTHROPIC"),
+            normalize_vendor("Anthropic, PBC"), "2026-09-01T00:00:00", "r1",
+        )
+        s.record_merchant_fx(
+            "Corporate Services", normalize_vendor("Anthropic, PBC"),
+            "EUR", "USD", Decimal("1.10"), "2026-09-01T00:00:00", "r1",
+        )
+        s.record_merchant_entity(
+            normalize_vendor("Anthropic, PBC"), "Corporate Services",
+            "2026-09-01T00:00:00", "r1",
+        )
+        s.record_field_correction(
+            "Corporate Services", normalize_vendor("Anthropic, PBC"),
+            "vendor", "Anthropic", "2026-09-01T00:00:00", "r1",
+        )
+    with TestClient(create_app(tmp_path)) as client:
+        resp = client.put("/api/settings", json={"merchants": {
+            "Anthropic": {"aliases": ["Anthropic, PBC"],
+                          "category": "Software & Subscriptions",
+                          "zoho_account": None},
+        }})
+        assert resp.status_code == 200, resp.text
+        view = client.get("/api/memory").json()
+    _assert_contract(probe(view), MEMORY_CONTRACT, MEMORY_MUST_COVER, "memory view")
+    vendor = view["by_vendor"][0]
+    assert vendor["merchant"] == "Anthropic"
+    assert [c["entity"] for c in vendor["companies"]] == [
+        "Cloud Services", "Corporate Services",
+    ]
 def test_every_candidate_carries_card_evidence_and_review_code_is_absent_or_coded(payloads):
     """Item X1. `rows[].candidates[].card_evidence` is on every candidate,
     `{receipt, charge}` from the matcher's closed sets

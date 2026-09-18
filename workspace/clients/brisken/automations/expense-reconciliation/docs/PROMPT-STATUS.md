@@ -320,6 +320,7 @@ promoted to the prompt below. Nothing in the Applied table is waiting on a drive
 |---|---|---|
 | `lovable-error-page-lang-prompt.md` (item 130 §6) | "Voltar ao início" and "Página não encontrada" anywhere in the bundle; today "Page not found" is the only spelling of it | Written 2026-09-18 later, not pasted. No backend gate: copy only, in the root route file's two error components. Until this lands, the not-found page and the crash page are the only screens in the tool that stay English for a Portuguese reader, which are the two screens where a reader most needs to understand what happened |
 | `lovable-card-accounts-prompt.md` (item 147) | `subcards`, `statement_on_account`, `cards.parent`, `err.card_parent_not_top_level`; today none of the four is in the bundle | Written 2026-09-18, not pasted. TWO gates, and the second is the owner's: the backend fields ship with item 147's PR, and they stay absent from every payload until the owner sets `3876` / `3645` / `0340` to account `card-2838` in Settings, Cards. The registry has no committed seed, so nothing else can set them. Until both, the tab strip renders as it does today and this prompt changes nothing on screen |
+| `lovable-memory-by-company-prompt.md` (note item M1) | `by_vendor`, `memory.vendor.readsDefault`, `memory.company.seeded`; today none is in the bundle | Written 2026-09-18, not pasted. Backend gate: `by_vendor[]` on `GET /api/memory` ships with the M1 PR. The page renders as today until pasted; the 103 seeded rows then show as vendor groups with one line per company |
 
 
 

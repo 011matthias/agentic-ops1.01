@@ -233,13 +233,15 @@ def test_seed_drops_noise_vendors():
     assert m["MARTINO SUPERMERCADO"]["category"] == "Meals & Entertainment"
 
 
-# ── registry vs per-entity memory precedence (2026-08-07) ───────────
+# ── registry default + per-company account (2026-08-07, reshaped by M1) ──
 #
 # Owner call on reviewer feedback r1c: the same merchant legitimately posts
-# to different accounts per legal entity, so a per-entity LEARNED row
-# outranks the registry's single canonical answer. Modeled on Brisken's real
-# Zoho history, where `anthropic` posts to two different accounts across the
-# two entities.
+# to different accounts per legal entity. Modeled on Brisken's real Zoho
+# history, where `anthropic` posts to two different accounts across the two
+# entities. Until note item M1 (2026-09-18) the per-entity LEARNED row
+# outranked the registry outright (category and account). Dirk's rule now
+# splits the two facts: the CATEGORY is the merchant's (the registry's), and
+# the per-company rule decides the ACCOUNT.
 
 _CORP = "Corporate Services"
 _CLOUD = "Cloud Services"
@@ -292,9 +294,10 @@ def _categorization(receipt):
     return receipt.line_items[0].categorization
 
 
-def test_learned_entity_row_outranks_registry_default():
+def test_learned_entity_row_decides_the_account_under_the_registry_category():
     """The entity WITH a learned row gets its own account, not the
-    registry's."""
+    registry's; the category stays the registry's and the line says where
+    the account came from (M1)."""
     from expense_recon.categorize import categorize_receipts_with_registry
     from expense_recon.matching.types import ClassificationSource
 
@@ -305,10 +308,13 @@ def test_learned_entity_row_outranks_registry_default():
         learned=_lookup_with_corp_row(),
     )
     cat = _categorization(out[0])
-    assert cat.source is ClassificationSource.LEARNED
+    assert cat.source is ClassificationSource.REGISTRY
+    assert cat.category == "Software & Subscriptions"
     assert cat.zoho_account == _LEARNED_ACCOUNT
-    # naming is independent of categorization: the registry still supplies
-    # the canonical display vendor even though memory won the category.
+    assert cat.reasoning == (
+        "merchant registry default; account from the rule saved for "
+        "Corporate Services"
+    )
     assert "d-corp" in matches
     assert out[0].canonical_vendor == "Anthropic"
 
@@ -328,10 +334,12 @@ def test_registry_still_wins_for_entity_without_a_learned_row():
     cat = _categorization(out[0])
     assert cat.source is ClassificationSource.REGISTRY
     assert cat.zoho_account == _REGISTRY_ACCOUNT
+    assert cat.reasoning == "merchant registry default"
 
 
 def test_same_vendor_two_entities_diverge_in_one_batch():
-    """Both receipts in ONE batch: the whole point of the owner's call."""
+    """Both receipts in ONE batch: the whole point of the owner's call. One
+    category, two accounts (M1)."""
     from expense_recon.categorize import categorize_receipts_with_registry
     from expense_recon.matching.types import ClassificationSource
 
@@ -342,7 +350,8 @@ def test_same_vendor_two_entities_diverge_in_one_batch():
         learned=_lookup_with_corp_row(),
     )
     by_doc = {r.document_id: _categorization(r) for r in out}
-    assert by_doc["d-corp"].source is ClassificationSource.LEARNED
+    assert by_doc["d-corp"].source is ClassificationSource.REGISTRY
+    assert {c.category for c in by_doc.values()} == {"Software & Subscriptions"}
     assert by_doc["d-corp"].zoho_account == _LEARNED_ACCOUNT
     assert by_doc["d-cloud"].source is ClassificationSource.REGISTRY
     assert by_doc["d-cloud"].zoho_account == _REGISTRY_ACCOUNT
