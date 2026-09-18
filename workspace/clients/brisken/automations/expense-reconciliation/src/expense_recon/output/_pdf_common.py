@@ -372,8 +372,8 @@ def booked_without_receipt(row: dict) -> bool:
     )
 
 
-def card_statement_figures(section: dict) -> dict:
-    """What a card's statement settled, as data: the figures
+def card_own_figures(section: dict) -> dict:
+    """What a card's OWN statement settled, as data: the figures
     `card_statement_line` prints, computed once so the documents and the
     month page's card tabs (item 138, `service.month_card_tabs`) cannot
     describe a card differently.
@@ -389,12 +389,13 @@ def card_statement_figures(section: dict) -> dict:
     live August 2026: 1176, item 108, so "none loaded" would be false),
     "not_loaded" (neither), or None for the no-card section, which names no
     statement. The period and the charge figures describe charges, so a
-    section without any carries no period and zeros."""
+    section without any carries no period and zeros.
+
+    An ACCOUNT's own figures are its own card's, its subcards left out
+    (item 147); `card_statement_figures` is the one that sums the group."""
     coverage = section.get("coverage") or {}
     rows = list(section.get("rows") or [])
-    statements = [
-        str(s) for s in (coverage.get("statements") or []) if str(s).strip()
-    ] if section.get("key") else []
+    statements = _section_statements(section)
     if not section.get("key"):
         statement = None
     elif statements:
@@ -431,6 +432,86 @@ def card_statement_figures(section: dict) -> dict:
     }
 
 
+def _section_statements(section: dict) -> list[str]:
+    """The upload file names recorded on this section's own card. The no-card
+    section names no statement, which is why the key is checked."""
+    coverage = section.get("coverage") or {}
+    if not section.get("key"):
+        return []
+    return [
+        str(s) for s in (coverage.get("statements") or []) if str(s).strip()
+    ]
+
+
+def _add_money(maps: "list[dict]") -> dict:
+    """Per-currency amounts that already travel as formatted strings
+    ("1,234.56"), added in Decimal and printed back the same way.
+
+    An account's line adds the numbers its subcards print rather than
+    re-deriving them from rows, so the account and the cards under it can
+    never state a different total for one statement (the item 138 rule, one
+    level up)."""
+    totals: "dict[str, Decimal]" = {}
+    for part in maps:
+        for ccy, text in (part or {}).items():
+            value = parse_amount(text)
+            if value is None:
+                continue
+            key = str(ccy)
+            totals[key] = totals.get(key, Decimal("0")) + value
+    return {ccy: f"{amt:,.2f}" for ccy, amt in sorted(totals.items())}
+
+
+def card_statement_figures(section: dict) -> dict:
+    """`card_own_figures`, summed over an account and its subcards (item 147).
+
+    Owner ruling 2026-09-18: "card 2838 for example should be an account with
+    others as subcards". An account's figures are the GROUP's, because that is
+    what the owner reads one number for; each subcard keeps its own, and
+    `card_own_figures` still answers the account card's own. A section with no
+    subcards returns exactly what this function returned before the tree
+    existed, field for field, which is what keeps every other month unchanged.
+
+    The period spans the group, the counts and the money add up, and the
+    statement status is re-derived from the union rather than inherited: an
+    account whose own card records no upload while a subcard's statement
+    covers the group reads `loaded`, which is what the file actually says.
+    """
+    own = card_own_figures(section)
+    children = section.get("children") or []
+    if not children:
+        return own
+    parts = [own, *(card_own_figures(child) for child in children)]
+    statements: list[str] = []
+    for part in parts:
+        for name in part["statements"]:
+            if name not in statements:
+                statements.append(name)
+    starts = [p["period_start"] for p in parts if p["period_start"]]
+    ends = [p["period_end"] for p in parts if p["period_end"]]
+    n_charges = sum(p["n_charges"] for p in parts)
+    return {
+        "statement": (
+            "loaded" if statements else
+            "not_recorded" if n_charges else "not_loaded"
+        ),
+        "statements": statements,
+        "period_start": min(starts) if starts else None,
+        "period_end": max(ends) if ends else None,
+        "n_charges": n_charges,
+        "n_matched": sum(p["n_matched"] for p in parts),
+        "unreconciled_by_ccy": _add_money(
+            [p["unreconciled_by_ccy"] for p in parts]
+        ),
+        "n_booked_without_receipt": sum(
+            p["n_booked_without_receipt"] for p in parts
+        ),
+        "booked_without_receipt_by_ccy": _add_money(
+            [p["booked_without_receipt_by_ccy"] for p in parts]
+        ),
+    }
+
+
 def card_statement_line(section: dict) -> str:
     """What a card's statement settled, in one line under its heading.
 
@@ -442,9 +523,21 @@ def card_statement_line(section: dict) -> str:
     names no statement."""
     figures = card_statement_figures(section)
     rows = list(section.get("rows") or [])
+    # An account's own card may have no charges while the group has plenty
+    # (item 147). The two are the same test for a card with no subcards,
+    # where `n_charges` is zero exactly when there are no rows.
+    has_charges = bool(rows) or figures["n_charges"] > 0
+    children = section.get("children") or []
     parts: list[str] = []
     statements = figures["statements"]
-    if figures["statement"] == "loaded":
+    if section.get("statement_on_account"):
+        # Item 147: one statement covers the whole account, so the account
+        # names the file and a card under it points at the account instead of
+        # repeating the same line once per card.
+        parts.append(
+            "Statement: on " + (section.get("parent_label") or "its account")
+        )
+    elif figures["statement"] == "loaded":
         parts.append(
             ("Statement: " if len(statements) == 1 else "Statements: ")
             + ", ".join(statements)
@@ -453,10 +546,14 @@ def card_statement_line(section: dict) -> str:
         parts.append("Statement: not recorded")
     elif figures["statement"] == "not_loaded":
         parts.append("No statement loaded for this card")
+    if children:
+        parts.append(
+            f"with {len(children)} subcard{'' if len(children) == 1 else 's'}"
+        )
     start, end = figures["period_start"], figures["period_end"]
-    if section.get("key") and rows and (start or end):
+    if section.get("key") and has_charges and (start or end):
         parts.append(f"{start or '?'} to {end or '?'}")
-    if rows:
+    if has_charges:
         n_tx = figures["n_charges"]
         parts.append(f"{n_tx} charge{'s' if n_tx != 1 else ''}")
         parts.append(f"{figures['n_matched']} matched")
@@ -480,7 +577,9 @@ def card_statement_line(section: dict) -> str:
 
 
 def card_sections(
-    view: dict, receipt_cards: dict[str, tuple[str, str]]
+    view: dict,
+    receipt_cards: dict[str, tuple[str, str]],
+    parents: dict[str, str] | None = None,
 ) -> list[dict]:
     """The month's per-card sections, in document order.
 
@@ -503,6 +602,12 @@ def card_sections(
     charge order, then the unheld ones in pool order). Sections with
     neither charges nor receipts are left out; a card with nothing this
     month is already a line in the coverage table.
+
+    `parents` is `{subcard key: account key}` from the registry
+    (`cards.card_parents`, item 147). Given one, the sections come back as a
+    tree: see `_card_tree`. Omitted or empty, the result is exactly what it
+    was before accounts existed, which is what leaves every month whose
+    registry names no parent untouched.
     """
     coverage = {
         str(c.get("key") or ""): c for c in (view.get("coverage") or [])
@@ -542,6 +647,58 @@ def card_sections(
             "rows": rows_by.get(key, []),
             "receipt_docs": docs_by.get(key, []),
         })
+    return _card_tree(out, parents) if parents else out
+
+
+def _card_tree(sections: list[dict], parents: dict[str, str]) -> list[dict]:
+    """`sections`, re-ordered so each account is followed by its subcards and
+    the tree links set on the sections that have one (item 147).
+
+    An account gains `subcards` (the keys, in section order) and `children`
+    (those sections themselves, which is what lets `card_statement_figures`
+    sum the group without any caller passing the registry around). A subcard
+    gains `parent`, `parent_label`, and `statement_on_account`: true when
+    every file recorded on the subcard is also recorded on the account, which
+    is the case the owner complained about (July's one Chase file named on
+    four tabs) and the only case where dropping the subcard's file line loses
+    nothing.
+
+    A link is applied only when BOTH ends have a section this month. An
+    account with neither charges nor receipts is not a section at all (the
+    rule above), and a card cannot nest under a heading that does not exist,
+    so such a subcard stands alone for the month exactly as it did before.
+    """
+    by_key = {s["key"]: s for s in sections if s["key"]}
+    links = {
+        key: parent for key, parent in parents.items()
+        if key != parent and key in by_key and parent in by_key
+    }
+    if not links:
+        return sections
+    children: dict[str, list[dict]] = {}
+    for sec in sections:
+        parent = links.get(sec["key"])
+        if parent:
+            children.setdefault(parent, []).append(sec)
+    out: list[dict] = []
+    for sec in sections:
+        if sec["key"] in links:
+            continue  # emitted under its account, below
+        kids = children.get(sec["key"]) or []
+        out.append(sec)
+        if not kids:
+            continue
+        sec["subcards"] = [kid["key"] for kid in kids]
+        sec["children"] = kids
+        account_files = _section_statements(sec)
+        for kid in kids:
+            kid_files = _section_statements(kid)
+            kid["parent"] = sec["key"]
+            kid["parent_label"] = sec["label"]
+            kid["statement_on_account"] = bool(
+                kid_files and all(f in account_files for f in kid_files)
+            )
+        out.extend(kids)
     return out
 
 

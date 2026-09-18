@@ -43,6 +43,15 @@ when the chain runs (``CostCenterRegistry.resolve`` ignores what it cannot
 canonicalize), which leaves the row unresolved rather than stamping
 something invented.
 
+``parent`` (backlog item 147, owner directive 2026-09-18) is the ACCOUNT a
+card sits under: "card 2838 for example should be an account with others as
+subcards". It holds another card's KEY, the same key space this map is
+indexed by, because an account IS one of these cards rather than a separate
+thing. The tree is exactly one level deep, and it is DATA a person sets:
+nothing in the tool derives it. Sharing a statement file is evidence, not
+proof (the four cards on July 2026's one Chase file belong to three different
+people), so the registry is told the parentage and never asked to guess it.
+
 Two design facts carried from production evidence:
 
 * The SAME physical card has multiple digit identities. The Chase
@@ -231,6 +240,7 @@ class Card:
     aliases: tuple[str, ...] = ()
     entity: str = ""
     person: str = ""
+    parent: str = ""
     default_cost_center: str = ""
     zoho_account: str | None = None
     currency: str = ""
@@ -261,6 +271,7 @@ def card_to_dict(card: Card) -> dict:
         "aliases": list(card.aliases),
         "entity": card.entity,
         "person": card.person,
+        "parent": card.parent,
         "default_cost_center": card.default_cost_center,
         "zoho_account": card.zoho_account,
         "currency": card.currency,
@@ -269,7 +280,7 @@ def card_to_dict(card: Card) -> dict:
     }
 
 
-def normalize_cards_setting(raw: object) -> dict:
+def normalize_cards_setting(raw: object, *, known: dict | None = None) -> dict:
     """Validate + clean a ``settings["cards"]`` payload at the edge.
 
     Same contract family as ``normalize_merchants_setting``: the whole map
@@ -277,6 +288,13 @@ def normalize_cards_setting(raw: object) -> dict:
     malformed entry raises ``ValueError`` (the API answers 400). Stored
     shape keeps only meaningful fields (no empty strings, ``active`` only
     when False) so the settings blob stays small and diffs stay honest.
+
+    ``known`` is the stored map this payload will be merged OVER, for the
+    one caller that normalizes a PARTIAL map (the batch-cards learn path,
+    which validates only the entries it touched). A ``parent`` may then name
+    a card that is stored but absent from the payload. The settings PUT
+    passes nothing: it replaces the whole map, so the payload IS the
+    registry and a parent it does not contain does not exist.
     """
     if not isinstance(raw, dict):
         raise CodedValueError("cards must be an object", code="invalid_body")
@@ -292,8 +310,8 @@ def normalize_cards_setting(raw: object) -> dict:
             )
         out: dict = {}
         for skey in (
-            "label", "label_pt", "entity", "person", "default_cost_center",
-            "zoho_account",
+            "label", "label_pt", "entity", "person", "parent",
+            "default_cost_center", "zoho_account",
         ):
             value = str(entry.get(skey) or "").strip()
             if value:
@@ -352,7 +370,95 @@ def normalize_cards_setting(raw: object) -> dict:
         if entry.get("active") is False:
             out["active"] = False
         cleaned[slug] = out
+    _validate_card_parents(cleaned, known)
     return cleaned
+
+
+def _validate_card_parents(cleaned: dict[str, dict], known: dict | None) -> None:
+    """The account tree, checked once the whole map is known (item 147).
+
+    A ``parent`` names the account a card sits under, by card key, and five
+    things make it refusable. Each one is a state a person can type into
+    Settings, and each gets its own code (item 130) so the screen can say
+    which in Portuguese: the card itself, a key no card owns, a deactivated
+    account, a loop, and a second level. The last is the owner's ruling
+    rendered as a constraint: "only 2838 has subcards, no where else" means
+    an account has subcards and a subcard has none, so a card that is under
+    an account can never be an account.
+
+    The checks run over the payload plus ``known`` (see the caller docstring),
+    never over a card's own claim about itself.
+    """
+    universe: dict[str, dict] = {**(known or {}), **cleaned}
+
+    def parent_of(slug: str) -> str:
+        entry = universe.get(slug) or {}
+        return str(entry.get("parent") or "").strip()
+
+    for slug, entry in cleaned.items():
+        parent = str(entry.get("parent") or "").strip()
+        if not parent:
+            continue
+        if parent == slug:
+            raise CodedValueError(
+                f"cards[{slug!r}].parent cannot be the card itself",
+                code="card_parent_self", card=slug,
+            )
+        if parent not in universe:
+            raise CodedValueError(
+                f"cards[{slug!r}].parent {parent!r} is not a card in this "
+                "registry; define the account card first",
+                code="card_parent_unknown", card=slug, parent=parent,
+            )
+        seen = {slug}
+        walk = parent
+        while walk and walk in universe:
+            if walk in seen:
+                raise CodedValueError(
+                    f"cards[{slug!r}].parent {parent!r} closes a loop back "
+                    f"onto {walk!r}",
+                    code="card_parent_cycle",
+                    card=slug, parent=parent, through=walk,
+                )
+            seen.add(walk)
+            walk = parent_of(walk)
+        if universe[parent].get("active") is False:
+            raise CodedValueError(
+                f"cards[{slug!r}].parent {parent!r} is inactive; reactivate "
+                "the account before putting a card under it",
+                code="card_parent_inactive", card=slug, parent=parent,
+            )
+        grandparent = parent_of(parent)
+        if grandparent:
+            raise CodedValueError(
+                f"cards[{slug!r}].parent {parent!r} is itself under "
+                f"{grandparent!r}; an account has subcards and a subcard has "
+                "none",
+                code="card_parent_not_top_level",
+                card=slug, parent=parent, grandparent=grandparent,
+            )
+
+
+def card_parents(cards: dict[str, Card]) -> dict[str, str]:
+    """``{subcard key: account key}`` for the cards that sit under an account.
+
+    The READ side of the tree, and tolerant the way `cards_from_setting` is: a
+    link survives only when the account is a different card that is present,
+    active, and not itself under an account. A blob that never met the
+    validator (an old batch snapshot, a hand-edited settings row) therefore
+    yields a flatter registry rather than a broken view, which is the same
+    bargain every other stored-shape reader here makes.
+    """
+    out: dict[str, str] = {}
+    for key, card in cards.items():
+        parent = (card.parent or "").strip()
+        if not parent or parent == key or parent not in cards:
+            continue
+        account = cards[parent]
+        if not account.active or (account.parent or "").strip():
+            continue
+        out[key] = parent
+    return out
 
 
 def cards_to_setting(cards: dict[str, Card]) -> dict:
@@ -378,6 +484,8 @@ def cards_to_setting(cards: dict[str, Card]) -> dict:
             entry["entity"] = card.entity
         if card.person:
             entry["person"] = card.person
+        if card.parent:
+            entry["parent"] = card.parent
         if card.default_cost_center:
             entry["default_cost_center"] = card.default_cost_center
         if card.zoho_account:
@@ -517,6 +625,7 @@ def _card_from_setting(slug: str, entry: dict) -> Card:
         aliases=tuple(str(a) for a in (entry.get("aliases") or [])),
         entity=str(entry.get("entity") or "").strip(),
         person=str(entry.get("person") or "").strip(),
+        parent=str(entry.get("parent") or "").strip(),
         default_cost_center=str(
             entry.get("default_cost_center") or ""
         ).strip(),

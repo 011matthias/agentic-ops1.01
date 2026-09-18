@@ -7886,6 +7886,7 @@ def build_expense_report(
     in listing order.
     `charge_decisions` feeds the view that sections are read from.
     """
+    from ..cards import card_parents
     from ..output._pdf_common import (
         NO_CARD_SECTION_LABEL,
         card_sections,
@@ -7987,6 +7988,7 @@ def build_expense_report(
             for sec in card_sections(
                 card_view,
                 report_receipt_cards(receipts, run.config, field_overrides),
+                card_parents(_batch_cards(run.config)),
             ):
                 for doc in sec["receipt_docs"]:
                     if doc in listed:
@@ -8074,6 +8076,35 @@ def build_expense_report(
             if sum(1 for k in by_card if k) >= 2:
                 groups = by_card
                 ordered_keys = card_keys
+                # Item 147 (owner ruling 2026-09-18): an account and the
+                # subcards under it are ONE section, a table per card inside
+                # it, so the document reads the way the tabs do and the
+                # account's receipt pages follow the whole group. Reuses the
+                # sub-heading machinery the cost-center listing already has.
+                # A card with no account keeps a section of its own.
+                account_of = {
+                    kid: key
+                    for key in card_keys
+                    for kid in (
+                        (card_section_by_key.get(key) or {}).get("subcards") or []
+                    )
+                    if kid in by_card
+                }
+                if account_of:
+                    ordered_keys = [k for k in card_keys if k not in account_of]
+                    groups = {}
+                    card_of = {}
+                    for key in ordered_keys:
+                        members = [key] + [
+                            k for k in card_keys if account_of.get(k) == key
+                        ]
+                        listed_here = []
+                        for member in members:
+                            for r in by_card.get(member, []):
+                                card_of[r.document_id] = member
+                                listed_here.append(r)
+                        groups[key] = listed_here
+                    cards_in_sections = True
 
                 def _card_fields(key: str) -> dict:
                     sec = card_section_by_key.get(key) or {
@@ -8144,7 +8175,12 @@ def build_expense_report(
         for key in ordered_keys:
             count = sum(len(numbers_by_doc[r.document_id]) for r in groups[key])
             section = {**section_fields(key), "start": pos, "count": count}
-            if by_card_receipts and key in card_section_by_key:
+            # Item 147: with subcards inside the section the per-card notes
+            # are the subsections' own, below; naming them here too would
+            # print each one twice.
+            if by_card_receipts and not cards_in_sections and (
+                key in card_section_by_key
+            ):
                 notes = _differ_notes(key, None, "on this card")
                 if notes:
                     section["notes"] = notes
@@ -8666,12 +8702,29 @@ def month_card_tabs(
     `n_receipts_without_charge` (those in the view's `unmatched_receipts`,
     the page's "Receipts without a charge").
 
+    Item 147 (owner ruling 2026-09-18: "card 2838 for example should be an
+    account with others as subcards") adds the tree, and ONLY when the
+    registry names a parent: an account section carries `subcards` (the keys
+    under it, in tab order), every figure above summed over itself and them,
+    and `own` with the account card's own figures under the same names; a
+    subcard carries `parent` and `statement_on_account`. A registry with no
+    parent anywhere produces the list this returned before, field for field,
+    which is what leaves every other month alone. A consumer that sums a
+    figure across tabs sums the sections with no `parent`, or it counts the
+    subcards twice.
+
     A month with fewer than two cards gets no sections, the PDFs' own rule
     (a heading restating the only card organizes nothing); the two maps are
     filled either way."""
-    from ..output._pdf_common import card_sections, card_statement_figures
+    from ..cards import card_parents
+    from ..output._pdf_common import (
+        card_own_figures,
+        card_sections,
+        card_statement_figures,
+    )
 
-    grouped = card_sections(view, receipt_cards)
+    cards = _batch_cards(cfg)
+    grouped = card_sections(view, receipt_cards, card_parents(cards))
     by_tx = {
         str(row.get("transaction_id") or ""): sec["key"]
         for sec in grouped for row in sec["rows"]
@@ -8681,7 +8734,6 @@ def month_card_tabs(
         str(rec.get("document_id") or "")
         for rec in view.get("unmatched_receipts") or []
     }
-    cards = _batch_cards(cfg)
     sections: list[dict] = []
     for sec in grouped:
         digits = [
@@ -8700,6 +8752,29 @@ def month_card_tabs(
                 1 for doc in sec["receipt_docs"] if doc in unmatched
             ),
         })
+    # Item 147: the receipt counts are the only figures this function owns, so
+    # the account adds its subcards' here while `card_statement_figures` has
+    # already summed the statement ones. `own` is filled from the pre-sum
+    # values, which is why it is written before the addition.
+    by_section = {s["key"]: s for s in sections}
+    for sec, entry in zip(grouped, sections):
+        subcards = [kid["key"] for kid in (sec.get("children") or [])]
+        if subcards:
+            entry["subcards"] = subcards
+            entry["own"] = {
+                **card_own_figures(sec),
+                "n_receipts": entry["n_receipts"],
+                "n_receipts_without_charge": entry["n_receipts_without_charge"],
+            }
+            entry["n_receipts"] += sum(
+                by_section[key]["n_receipts"] for key in subcards
+            )
+            entry["n_receipts_without_charge"] += sum(
+                by_section[key]["n_receipts_without_charge"] for key in subcards
+            )
+        elif sec.get("parent"):
+            entry["parent"] = sec["parent"]
+            entry["statement_on_account"] = bool(sec.get("statement_on_account"))
     if sum(1 for s in sections if s["key"]) < 2:
         sections = []
     return sections, by_tx, by_doc
@@ -8751,7 +8826,10 @@ def attach_expense_card_tabs(
     figures each section carries what the Expenses page counts, from the
     rows it renders: `n_expenses` (rows that count, decided copies left out,
     item 94) and `totals_by_ccy` (their totals, summed in Decimal as
-    `summary.totals_by_ccy` is).
+    `summary.totals_by_ccy` is). On an account (item 147) both are the
+    group's and `own` carries the account card's own, exactly as the
+    statement figures behave, so the page never adds a tab's rows up for
+    itself.
 
     A trip gets no sections: its documents section per traveler, not per
     card. Only the page GETs carry the tabs, so the edit routes that reply
@@ -8790,12 +8868,26 @@ def attach_expense_card_tabs(
     # Every row is placed: the grid's rows and the export pool are one set of
     # documents (both are `apply_expense_edits` over the baseline, then the
     # copy card inheritance), and `card_sections` files every one of them.
+    def _per_ccy(per: dict) -> dict:
+        return {ccy: f"{amt:,.2f}" for ccy, amt in sorted(per.items())}
+
     for sec in sections:
-        sec["n_expenses"] = counted.get(sec["key"], 0)
-        sec["totals_by_ccy"] = {
-            ccy: f"{amt:,.2f}"
-            for ccy, amt in sorted((sums.get(sec["key"]) or {}).items())
-        }
+        own_n = counted.get(sec["key"], 0)
+        own_sums = dict(sums.get(sec["key"]) or {})
+        n_total, sums_total = own_n, dict(own_sums)
+        subcards = sec.get("subcards") or []
+        if subcards:
+            # Item 147: an account's pair is the group's, like every other
+            # figure on its tab, and its own card's pair joins the rest of
+            # its own figures in `own`.
+            sec["own"]["n_expenses"] = own_n
+            sec["own"]["totals_by_ccy"] = _per_ccy(own_sums)
+            for key in subcards:
+                n_total += counted.get(key, 0)
+                for ccy, amount in (sums.get(key) or {}).items():
+                    sums_total[ccy] = sums_total.get(ccy, Decimal("0")) + amount
+        sec["n_expenses"] = n_total
+        sec["totals_by_ccy"] = _per_ccy(sums_total)
     view["card_sections"] = sections
     return view
 
@@ -8944,6 +9036,7 @@ def build_reconciliation_report(
     moment the reviewer acts. Omitted => the pre-item-68 behaviour, which is
     what the CLI and the offline callers want.
     """
+    from ..cards import card_parents
     from ..output.reconciliation_report_pdf import build_reconciliation_report_pdf
 
     _, snapshot_receipts, _, _ = snapshot_from_dict(run.snapshot)
@@ -8995,6 +9088,9 @@ def build_reconciliation_report(
         receipt_cards=report_receipt_cards(
             receipts, run.config, field_overrides
         ),
+        # Item 147: which cards sit under an account, so the document's
+        # sections nest the way the month page's tabs do.
+        card_parents=card_parents(_batch_cards(run.config)),
     )
 
 
@@ -9236,7 +9332,10 @@ def _assign_batch_cards_locked(
             if k in settings_cards
         }
         try:
-            normalized = normalize_cards_setting(touched)
+            # Item 147: `known` is the stored map this partial one merges
+            # over, so a subcard's `parent` still resolves when the account
+            # it names is not one of the entries this request touched.
+            normalized = normalize_cards_setting(touched, known=settings_cards)
         except ValueError as exc:  # defense in depth; tokens are pre-filtered
             raise RunInputError(
                 str(exc),
