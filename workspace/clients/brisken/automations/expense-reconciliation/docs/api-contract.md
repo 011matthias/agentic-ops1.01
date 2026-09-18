@@ -5089,6 +5089,89 @@ id and a corrected file gets another; a re-read keeps the id; an entry
 written before the id reads absent and gains one on re-read; the writeback
 picks the FIRST export by id while the month's current statement is the
 second. The SPA needs no change: nothing renders the id yet.
+## Matching when the card cannot be identified, and the description's reference tokens (item X1, 2026-09-18)
+
+Owner, 2026-09-18: the statement description must count in matching, and
+when the card on an expense cannot be identified another logic must take
+over so the expense is still matched on other criteria. Both halves are in
+`matching/deterministic.py`; no route or request changes.
+
+### The no-card fallback, defined once: `card_evidence`
+
+`deterministic.card_evidence(tx, receipt)` is the one definition of where
+each side of a pair got its card, read by the matcher and by every candidate
+on `GET /api/runs/{id}`:
+
+| Side | Value | Meaning |
+|---|---|---|
+| receipt | `override` | picked by hand on the row |
+| receipt | `hint` | the printed payment method, or a hint word assigned to a card, resolved by the card registry |
+| receipt | `learned` | remembered from an earlier month. This is also where a per-merchant card fact lands once memory learns one (`Receipt.card_scope_keys` / `card_scope_source`): a remembered card is card evidence, and the fallback below stops applying |
+| receipt | `printed` | digits the receipt prints that no registry card names |
+| receipt | `none` | nothing printed, picked, assigned or remembered: **the fallback**. The receipt is matched across every card's charges on amount, date, currency, the reference and the uniqueness gate, exactly as one naming a card the statement does not carry |
+| charge | `row` | the statement's own card column on the row |
+| charge | `account` | the row names no card and the card is the upload's account (the Chase PDF's cycle marker, a single-card export): the account's card, not a card the row named. The matcher still scopes by it, because on every labelled dataset the account IS that card; the value is there so the page can say "account default" rather than print it as a row fact |
+| charge | `none` | neither |
+
+`rows[].candidates[].card_evidence: {receipt, charge}` is on every candidate
+(the hand-made manual candidate included), never null. A new value is a
+rule-5 change.
+
+### The review clause: `review_code`
+
+A pair whose receipt side is `none` keeps its match and its rank, but asks
+for review when another deterministic candidate for the SAME receipt sits on
+a DIFFERENT card and is not spoken for by clean exact evidence elsewhere
+(round B's rule): the tool cannot say which card paid, so a person does.
+Then `candidates[].requires_review` is `true`, `reason` ends "Review: the
+receipt names no card and a charge on another card also fits (LOVABLE 25.00
+USD on 3645).", and `candidates[].review_code` is
+`no_card_rival_on_other_card`. The row stays `effective_bucket: reconciled`
+and never confirms itself (item 76). `review_code` is ABSENT on every other
+candidate; a pair with card evidence on both sides is never reviewed for
+this reason. It rides on `Match.review_code` in the snapshot ("" before this
+item). Knob `no_card_rival_review` (default true) turns the clause off; the
+fallback itself is not a knob.
+
+Measured 2026-09-18 on replays of July, August and September 2026 and the
+six labelled bundles: 0 pairs flagged. July's one candidate (`0063` Marinho
+BRL 10.23 on 3876 against GITHUB 10.00 on 2838) is excluded because GITHUB
+holds an exact receipt of its own. September holds 49 receipts, 27 naming no
+card, and no statement yet; the clause is what stands between them and a
+silent pick between two cards when it lands.
+
+### The description counts: `vendor_pct` without its reference tokens
+
+`_vendor_score` compares the description's merchant words: a token of four
+or more characters carrying three or more digits (`strip_reference_tokens`:
+"G173514057", "P3078900231", "1251593381", "X37L83BI5", "B013", "2640") is an
+order or invoice number, not a merchant word, and no longer halves the score
+of a pair whose words agree. Two digits stay a word ("BASE44"); a description
+that is only a number compares as itself. Knob
+`vendor_ignore_reference_tokens` (default true).
+
+Measured: live July's Microsoft invoice (`0006`, printing G173514057, held
+by "Microsoft-G173514057" 718.20 on 2838) reads `vendor_pct` 50 today and 100
+at the next re-match, which crosses the self-confirm floor (75): the row
+confirms itself instead of waiting for a click. Two bundle pairs rise (0.50
+to 1.00, 0.43 to 0.64) with no class move. Attribution classes are identical
+before and after on all nine datasets, labelled-wrong unchanged (July 0,
+August 1: the pre-existing `0025` on BASE44 50.00, item 133), bundles 70/95.
+
+### Not shipped, measured as a dead end
+
+Reference tokens shared between the description and the receipt's numbers as
+a PROMOTING signal (tie-break, uniqueness dominance, merchant precedence):
+across July, August, September and the six bundles exactly one pair shares
+such a token (the Microsoft pair above), it is already unique and exact, and
+`reference_match` already fires on it. A masked card fragment inside a
+description: none exists on any of the nine datasets. Neither rule moves a
+row, so neither is in the code.
+
+Route-level in `tests/test_match_x1_description_and_no_card.py`; the
+attribution tool reads the clause off `match_month`'s own outcome
+(`tools/tests/test_recon_match_attribution_gate.py`). SPA half:
+`docs/lovable-no-card-evidence-prompt.md`.
 
 ## Four vocabularies are now closed literals in CI (2026-09-18, item 128)
 

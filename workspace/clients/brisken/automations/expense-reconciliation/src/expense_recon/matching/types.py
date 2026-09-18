@@ -430,6 +430,11 @@ class Match:
     # `blend_card_weight`. 0.0 also means "not scored" on a
     # reviewer-built match, same convention as the three sub-scores above.
     card_score: float = 0.0
+    # Item X1 (2026-09-18): a machine-readable reason the matcher set
+    # `requires_review` on this pair, beside the prose in `reason`. "" when
+    # the pair was not flagged this way (the old snapshots, every clean
+    # pair). Values: `deterministic.NO_CARD_RIVAL_REVIEW`.
+    review_code: str = ""
 
 
 @dataclass(frozen=True)
