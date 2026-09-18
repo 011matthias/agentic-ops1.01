@@ -5235,3 +5235,57 @@ has been run and the count attached to the PR), and
 `tests/test_smtp_listener_e2e.py` (a real `smtplib` session through the app's
 own aiosmtpd listener lands a mailed receipt in its month with provenance, and
 the 550 / 552 refusals are answered and written down).
+
+## `last_rematch` and `rematch_pending` on the month payloads (2026-09-18, item 129)
+
+A re-match happened silently: neither the drop page nor the month page said
+one ran. The commit was recorded (`rematch_log`, item 58) and the debt was
+recorded (`rematch_pending`, item 113), but only `GET /api/operator/state`
+served either, and the SPA cannot render what the month payload does not
+carry. Two new top-level fields on BOTH payloads, `GET /api/runs/{id}` and
+`GET /api/expense-batches/{id}`, beside `updated_at`, read off the stored
+snapshot by one helper (`service.rematch_visibility`). Nothing about when a
+re-match runs or what it writes changes.
+
+```json
+"last_rematch": {"at": "2026-09-18T09:41:07+00:00", "trigger": "receipts",
+                 "n_transactions": 111, "n_matched": 14, "n_review": 7,
+                 "n_unmatched_tx": 89, "n_receipts": 31, "n_unmatched_rec": 7,
+                 "event_id": "1f3c9a2b7e4d"},
+"rematch_pending": {"since": "2026-09-18T09:40:59+00:00",
+                    "changed_at": "2026-09-18T09:40:59+00:00",
+                    "trigger": "expense_edit"}
+```
+
+**`last_rematch`** is the newest entry of the month's `rematch_log` (see
+"Re-match events" above for the triggers and what the counts mean; since item
+103 they are the effective counts the page showed at the commit, so
+`n_matched` equals the run payload's `summary.n_reconciled` until a later
+decision moves it). `run_id`, `label` and `match_rate` are not repeated: the
+first two are the payload's own, the third is `n_matched` over
+`n_transactions`. **Null** when the month has never committed a re-match,
+which includes a `rematch_log` that is absent, an empty list, or unreadable.
+A month created before a statement is attached reads null on both endpoints;
+the attach itself is the first commit (`trigger: "statement"`).
+
+**`rematch_pending`** is the month's owed-re-match mark exactly as stored (see
+"An owed re-match (item 113)"), minus its `id`, which correlates the commit
+that pays it and tells a reader nothing: `{since, changed_at, trigger}` plus
+`error`, `failed_at` and `attempts` after a failed attempt. **Null** while
+nothing is owed, so in steady state, and again the moment a re-match that read
+the mark commits. A mark with `error` is a re-match that failed and is retried
+by the next arrival or restart; `last_rematch` does not move on a failure (a
+failed attempt writes no event).
+
+Both keys are always present. The SPA prints them ("Last re-matched 09:41,
+receipts: 14 of 111"; "Re-match owed since 09:40, expense edit; last attempt
+failed") instead of reading `/api/operator/state`, which stays the notifier's
+surface and is unchanged.
+
+Route-level in `tests/test_rematch_visible_item_129.py`: a fresh month reads
+null on both endpoints; an attach and a late receipt each surface their commit
+with the page's own count; a written mark shows until the next arrival pays
+it; an empty, absent or unreadable log is null, not an error; a recorded
+failure flows through and clears when paid. Presence and shape on every
+fixture payload in `tests/test_view_contract.py`
+(`test_last_rematch_and_rematch_pending_are_on_every_payload`).

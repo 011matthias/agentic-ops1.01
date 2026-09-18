@@ -826,6 +826,40 @@ def test_updated_at_is_an_iso_string_on_every_payload(payloads):
             assert at >= created, (view_name, value, view["created_at"])
 
 
+LAST_REMATCH_KEYS = {
+    "at", "trigger", "n_transactions", "n_matched", "n_review",
+    "n_unmatched_tx", "n_receipts", "n_unmatched_rec", "event_id",
+}
+
+
+def test_last_rematch_and_rematch_pending_are_on_every_payload(payloads):
+    """Item 129 (2026-09-18). `last_rematch` and `rematch_pending` are each
+    an object or null, so the list pins above say nothing about them; the
+    SPA prints them so a re-match stops happening silently. Both keys are
+    PRESENT on every payload (a key the SPA reads as `?? null` cannot tell
+    "never re-matched" from "an older build"), each null or an object with
+    the documented keys and none of the payload's own (`run_id`, `label`,
+    the mark's `id`), and `last_rematch` is observed FILLED on the
+    reconciling month, whose two attaches each committed a re-match, so the
+    shape assertion is not vacuous."""
+    filled = 0
+    for view_name, views in payloads.items():
+        for view in views:
+            where = (view_name, view.get("run_id"))
+            assert "last_rematch" in view, where
+            assert "rematch_pending" in view, where
+            last = view["last_rematch"]
+            if last is not None:
+                assert set(last) == LAST_REMATCH_KEYS, (where, last)
+                assert isinstance(last["at"], str) and last["event_id"], (where, last)
+                filled += 1
+            pending = view["rematch_pending"]
+            if pending is not None:
+                assert "id" not in pending, (where, pending)
+                assert {"since", "changed_at", "trigger"} <= set(pending), (where, pending)
+    assert filled >= 2, "the reconciling month must carry its last re-match on both views"
+
+
 def test_posting_category_proposed_is_absent_or_true_never_false(
     tmp_path, monkeypatch
 ):

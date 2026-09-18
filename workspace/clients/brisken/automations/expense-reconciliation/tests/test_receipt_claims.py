@@ -426,11 +426,16 @@ def test_deleting_an_expense_releases_its_claim(client, monkeypatch):
 
 
 _TS = re.compile(r"\d{4}-\d{2}-\d{2}T[0-9:.+\-]*")
+# Item 129: the run view carries its last re-match, whose `event_id` is a
+# fresh uuid per commit (the notifier diffs on it), so each built month has
+# its own. An id, normalized away like the batch id.
+_EVENT_ID = re.compile(r'"event_id": "[0-9a-f]+"')
 
 
 def _normalized(payload, batch_id: str) -> str:
     text = json.dumps(payload, sort_keys=True, default=str)
-    return _TS.sub("TS", text.replace(batch_id, "RUN"))
+    text = _TS.sub("TS", text.replace(batch_id, "RUN"))
+    return _EVENT_ID.sub('"event_id": "ID"', text)
 
 
 def test_with_zero_cross_batch_receipts_the_machinery_changes_nothing(
