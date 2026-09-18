@@ -228,6 +228,17 @@ class Transaction:
     # has always been: the row in the file this charge was first read from.
     source_row: int | None = None
 
+    # The 1-based page a PDF statement printed this charge on (note item
+    # T3, 2026-09-18). A PDF has no tabular row, so `source_row` stays
+    # None on every charge it prints, and until this field a PDF charge
+    # carried no place at all: live August 2026 holds three of them, from
+    # `20260804-statements-1176-.pdf`. None for a workbook charge, which
+    # answers with `source_row` instead, and None on every snapshot
+    # written before this field. Not part of the content id
+    # (`assign_content_ids` reads amount, date, vendor, card and
+    # currency), so recording it moves no existing transaction id.
+    source_page: int | None = None
+
     # What the statement's own Type label says this line is (item 73):
     # purchase / payment / refund / reversal / fee / interest. None when the
     # source printed no label the parser recognises, which is every PDF row

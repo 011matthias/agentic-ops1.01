@@ -3327,7 +3327,7 @@ spare the workbench the batch fetch the banner needs.
 evidence row is in `PROMPT-STATUS.md`). One residue for item 79: July's first
 charge row is 18px under a 945px fold while "How this works" is expanded.
 
-### 72. `rematch_month` persists the raw outcome while the view shows the effective one (2026-09-15, found by the round-A review)
+### 72. `rematch_month` persists the raw outcome while the view shows the effective one (2026-09-15, found by the round-A review) (CLOSED by item 103 - see Shipped row 75; marked here by note item T3, 2026-09-18)
 
 Live instance, August 2026 after the round-A re-match on the DB copy:
 receipt `0023` (Anthropic 52.59 invoice, label `excluded`) sits in TWO raw

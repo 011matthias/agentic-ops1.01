@@ -6,7 +6,7 @@ upload skips the column-map step, derives the account id per card from the
 PDF's cycle markers, and preserves the foreign-currency detail.
 
 Real Chase statements are client financial data and are never committed.
-The byte->text extraction (`_extract_text`, pypdf) is stubbed with synthetic
+The byte->text extraction (`_extract_pages`, pypdf) is stubbed with synthetic
 Chase text — the same seam `parse_statement_text` exposes for the CLI tests —
 so the whole web wiring runs without a real PDF binary.
 """
@@ -118,8 +118,8 @@ def _snapshot(client, run_id) -> dict:
 
 def test_web_pdf_upload_parses_multi_card_and_fx(client, monkeypatch):
     monkeypatch.setattr(
-        "expense_recon.ingest.statement_pdf._extract_text",
-        lambda path: SYNTHETIC_PDF_TEXT,
+        "expense_recon.ingest.statement_pdf._extract_pages",
+        lambda path: [SYNTHETIC_PDF_TEXT],
     )
     files = {
         "statement": (

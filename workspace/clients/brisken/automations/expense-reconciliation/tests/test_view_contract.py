@@ -1813,3 +1813,55 @@ def test_trigger_scan_sees_a_call_site():
         ast.parse(src), SimpleNamespace(SOME_TRIGGER="named"))
     assert found == {"fresh", "named"}
     assert unpinnable == [(5, "str(x or '')")]
+
+
+# Note item T3: the charge-origin scalars. Not in the two list contracts
+# above, which pin element TYPES of lists; these are scalars on a row, so
+# they get their own pin. The rule they have to keep is the parallel-field
+# one: present with a value, or absent, never null.
+CHARGE_ORIGIN_TYPES = {
+    "statement_file": str,
+    "statement_id": str,
+    "source_row": int,
+    "source_page": int,
+    "transaction_id": str,
+}
+
+
+def test_charge_origin_fields_are_absent_or_typed_never_null(payloads):
+    """Note item T3. `rows[]` names the statement line each charge was
+    printed on, and `expenses[]` names the one the receipt settles. Every
+    key is optional and every present value carries a real value: a null
+    would read as "this charge is on no statement", which is the
+    confidently-wrong shape contract rule 5 exists to prevent."""
+    seen: set[str] = set()
+    for view in payloads["run"]:
+        for row in view.get("rows") or []:
+            for key, kind in CHARGE_ORIGIN_TYPES.items():
+                if key not in row:
+                    continue
+                assert isinstance(row[key], kind), (key, row[key])
+                assert row[key] != "" if kind is str else True
+                seen.add(key)
+    for view in payloads["expense_batch"]:
+        for expense in view.get("expenses") or []:
+            for key, kind in CHARGE_ORIGIN_TYPES.items():
+                if key not in expense:
+                    continue
+                assert isinstance(expense[key], kind), (key, expense[key])
+                seen.add(key)
+    # Non-vacuity: the fixtures attach a workbook statement, so the file,
+    # the id and the sheet row are all actually populated somewhere. The
+    # PDF page is not (no fixture here uploads a PDF statement); it is
+    # covered route-level in `tests/test_charge_origin_t3.py`.
+    assert {"statement_file", "statement_id", "source_row"} <= seen, seen
+
+
+def test_a_charge_row_never_carries_both_a_sheet_row_and_a_page(payloads):
+    """A workbook line has a row, a PDF line has a page, and no upload is
+    both. Two places on one charge would mean the origins record merged two
+    uploads' answers, which is the bug the "first upload wins" rule
+    prevents."""
+    for view in payloads["run"]:
+        for row in view.get("rows") or []:
+            assert not ("source_row" in row and "source_page" in row), row
