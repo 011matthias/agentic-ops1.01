@@ -6083,6 +6083,71 @@ seed: `settings["cards"]` lives only in the app's SQLite database, the
 shape, with no parent) is never committed. So the owner sets the three parents
 once in Settings, Cards, and the tree appears on the next settings read.
 
+### 148. A manual drop of receipts reads them one at a time, so the page sits on "reading receipts" for minutes (owner, 2026-09-18; licence: defect, covered) (SHIPPED 2026-09-18, pending PR; Shipped row 89)
+
+**Owner, 2026-09-18:** "manual receipt injection function is taking way too
+long."
+
+**Where the time went.** `POST /api/receipts` stages the files and answers
+`{job_id}` at once, so the HTTP call was never the wait. The wait is
+`route_dropped_receipts`, whose first pass read every dropped file through the
+FULL extraction pipeline to learn the date that routes it to a month, one file
+after the next, and filed nothing until the last one came back. Measured with a
+stub at 0.2s per read: 1 file 0.20s, 10 files 2.02s, 40 files 8.21s of reading
+against 0.11s of filing. The reads are the drop, and they added up. A real
+vision round-trip is not 0.2s, so the shape the owner saw on a real pile is
+minutes.
+
+**Why it reads at all, and why that stays.** The routing needs the date PRINTED
+on the receipt, and the read is deliberately the full extraction rather than a
+date-only prompt: a second prompt would be a second cache namespace and every
+file would pay vision twice. That reasoning holds and is now proven rather than
+asserted. With the extraction cache on, three dropped files cost three
+transport calls across BOTH passes; with it off, the same probe counts six. So
+the ingest that follows the routing is free, and each file pays vision once.
+
+**What shipped (2026-09-18).** The reads run on a bounded thread pool
+(`_DROP_READ_WORKERS = 6`) instead of end to end. Six because the round-trip,
+not our CPU, is the wall clock, so a handful already collapses it, while a wide
+pool would fire one operator's drop at the provider as a burst and spend the
+shared key's per-minute headroom on retries; it also leaves room for the mail
+intake reading on the same key at the same time. Same stub, same piles: 1 file
+0.20s (unchanged, as it must be), 10 files 0.41s, 40 files 1.42s. 5.8x on the
+40-file pile, and 40 files now cost seven waves instead of forty rounds.
+
+Three things the speed was not allowed to cost:
+
+- **The ledger is the same ledger.** Row order and every field match what the
+  end-to-end loop produced for the same staging folder, because the rows and
+  the per-month groups are assembled in staged order by one writer after the
+  reads return, never by the workers.
+- **A failure stays per file.** A read that raises leaves that file
+  `needs_month` and files every other file in the pile. The pool made a second
+  guard necessary: an exception escaping the reader used to end a loop and
+  would now ride a Future into the main thread and fail the whole job.
+- **`month_override` reads nothing.** A typed month short-circuits before any
+  extraction and never enters the pool, so the release valve for an unreadable
+  receipt stays free.
+
+**The wait is legible now.** The pass reported one frozen `reading receipts`
+for its whole duration. It now reports `reading receipts (7/40)` as each file
+lands, through the same `on_stage` the job row already writes, so
+`GET /jobs/{id}` carries it. Throttled, because each report opens its own
+short-lived store connection: every file up to 20, then every fifth, always the
+last. A 500-file drop writes 116 stage rows, not 500.
+
+**No SPA prompt is needed, verified rather than assumed.** The published
+bundle's `chunk-receipts` renders the job's stage string VERBATIM
+(`w||r("rcpt.progress")`, where `w` is the raw `stage` from the poll and the
+i18n key is only the fallback for "no stage yet"). The counter appears on the
+page with nothing pasted. One honest consequence, unchanged by this item and
+not introduced by it: stage strings are English on the Portuguese screen today,
+exactly as `reading receipts` and `filing September 2026` already were.
+
+**Not touched.** The `_MATERIALIZE_LOCK` span and the ingest that follows it
+are sequential exactly as before: they take batch write locks and a
+statement-bearing month re-matches on the arrival. Only the read pass moved.
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.
@@ -6133,6 +6198,7 @@ once in Settings, Cards, and the tree appears on the next settings read.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 89 | A dropped pile is READ in parallel: the routing pass that learns each receipt's printed month runs on a bounded pool (`_DROP_READ_WORKERS = 6`) instead of one file after the next, and reports `reading receipts (7/40)` as the files land instead of one frozen stage. The ledger is assembled from the staged order by one writer after the reads return, so row order and every field are what the end-to-end loop produced; a read that raises leaves that file `needs_month` and files the rest; a typed `month` still reads nothing at all | Item 148, owner 2026-09-18: "manual receipt injection function is taking way too long". Measured on a stub at 0.2s per read, the drop spent 0.20s / 2.02s / 8.21s reading 1 / 10 / 40 files against 0.11s filing, and a real vision round-trip is not 0.2s. After: 0.20s / 0.41s / 1.42s, 5.8x on the 40-file pile. Proven on the way past: with the extraction cache on, three dropped files cost three transport calls across BOTH passes and six with it off, so the routing's full-extraction read really is the ingest's read | 2026-09-18, pending PR; `tests/test_drop_speed_item_148.py` (10). The contract test is the negative one: the parallel ledger compared field by field against the same folder routed with the pool pinned to one worker |
 | 88 | A card can sit under an account: the registry entry takes an optional `parent` holding another card's key, validated one level deep on save with five named refusal codes, and `card_sections[]` renders the tree on both month pages and in both PDFs. An account comes first with its subcards behind it, its figures are the sum of itself plus them (charges, matched, receipts, receipts without a charge, open money and booked-without-receipt per currency, counted rows and totals), its own card's figures stay beside them in `own`, and a statement covering the account is named once instead of once per card. Parentage is DATA a person sets: sharing a statement file is evidence and not proof, and the four cards on July's one Chase file belong to three different people, so nothing in the tool infers it | Item 147, owner 2026-09-18: "card 2838 for example should be an account with others as subcards", "only 2838 has subcards, no where else", "just do it, no quoting". An account's spend was never one figure, so a reader added four tabs in their head, and `July2026.xlsx` was described four times, once per tab. Predicted from the payload shapes and the live figures already in the contract: August's account reads 111 charges / 9 matched / USD 10,862.66 open / 19 receipts against today's 34+40+37 split, and July's reads 112 charges with its file named once instead of four times; 1176, 9693 and No card do not move, and neither does any count outside `card_sections` | 2026-09-18, pending PR; `tests/test_card_accounts_item_147.py` (22, route-level through both page GETs and both documents, on a fixture carrying every row class the live month has: a subcard on the account's own file, a subcard with a statement of its own, a subcard with zero charges, a standalone card, a receipt with no charge and one with no card). The negative case is the contract: a registry with no parent produces the same sections with the same fields and figures, asserted against the tree month's own `own` block. Eleven wiring points proven red BY HAND (cp the source aside, cut one line, run the targeted test, read the FAILED line, cp back, sha256 equal), because `tools/regress_check.py` reports RED whether or not the mutated suite failed. Not built: the SPA half (`docs/lovable-card-accounts-prompt.md`, not pasted) and the registry seed, which has no committed home, so the owner sets the three parents once in Settings |
 | 87 | The card strip counts the rows the boxes count: `build_card_review` takes the month's decided copies (`copy_docs`, the same `decided_copies` set every listing surface reads) and its four box-twin counters skip them, so `card_review.n_needs_entity` / `n_needs_person` / `n_suggested_private` / `n_private` cannot answer differently from their `summary` twins. The GROUPING keeps every copy on purpose: `unresolved_hints`, `resolved` and the three row counts describe the card-assignment surface, where a decided copy is still a row on screen with an assignable hint, and none of them has a twin to disagree with | Item 146. One payload gave two answers to the same question, with nothing telling a reader which was right. **Not on one screen, though: that was checked after the merge and the item as filed had it wrong.** The published SPA reads `summary` for all four and `card_review` for none of them (every occurrence across the 44 chunks is `i.summary.<field>`), so the number beside MISSING ENTITY was always the right one and the user-visible effect of this fix today is zero. It is a contract fix: the next reader of `card_review` would have got the wrong count. Live July read `summary.n_needs_person` 13 beside the strip's 15, `n_needs_entity` 14 beside 16, and (not in the item as filed, found by a live read before the build) `n_suggested_private` 7 beside 9; the gap is exactly the two decided copies. `n_needs_entity` takes THIS exemption though it refuses item 144's, because the two rulings govern different populations and `expense_boxes` already reads them that way | 2026-09-18, PR #1086, Fly v181; `tests/test_card_review_copies_item_146.py` (3, route-level through the real app, fixture asserting its own premise: the copy reads `counts_in_total: false`, `boxes: []`, `n_copies_set_aside: 1`, so a refactor that stops producing a copy reddens the module instead of leaving the counts agreeing about nothing). Proven to bite by hand at the WIRING point, not the helper: reverting the call site alone failed 2 of 3 with all four counters named in the diff (3/3/2/0 against 2/2/1/0), restored byte-identical by sha256; suite 2479 passed / 2 skipped |
 | 86 | A decision history with a name on every line: an append-only `decision_history` table records one line per change that ACTUALLY MOVED a value (row, old, new, who, when, trigger) at TWELVE write sites, not the four the item named; `who` is the label in the signed session token, never the server's environment, so Criss and the developer are finally told apart; `GET /api/runs/{id}/history` (newest first, `limit` / `before_id` / `row_key`, and `n_entries` follows the filter) and `POST .../history/{entry_id}/undo`, refused with `history_superseded` unless the row still holds exactly what that line left there, re-running the R4 claim check, appending its own line and stamping the original rather than erasing anything. A duplicate ruling is recorded but not undone here (reversing it has to re-match the month, item 56) | Item 104's history half, audit rank 11 and the highest-ranked unshipped item. Every verdict was an upsert, so "who confirmed this, and when" had no answer and a bulk action that moved forty rows left no trace; live July carried 108 of 112 rows with a null `decided_by`. The credential half is DECLINED by the owner (2026-09-18) | 2026-09-18, PR #1081, Fly v180; 36 tests route-level through the real app with two named operator codes, zero skips; nine wiring points proven red by hand; suite 2476 passed / 2 skipped; an adversarial review of the committed diff found a DATA-LOSS defect (an undo destroying a later account-only pick, because two different stored states compared equal) plus a dead 409 arm, an undo button that could never work, orphaned rows on month delete, and three tests that did not bite; all fixed, seven of them with a test watched go red then green |

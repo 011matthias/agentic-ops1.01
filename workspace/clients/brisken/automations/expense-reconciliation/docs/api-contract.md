@@ -853,6 +853,16 @@ The server parses at most ~1000 multipart files per request (Starlette
 default), so a client sending giant piles should chunk into sequential
 POSTs well under that.
 
+The drop's `stage` counts the files as they are read (item 148,
+2026-09-18): `reading receipts`, then `reading receipts (7/40)` as each file
+lands, then `filing {month label}` per month. The shape of `result` is
+unchanged; only the stage text gained the counter, and a consumer that renders
+the stage string as-is needs nothing new. The counter is throttled (every file
+up to 20, then every fifth, always the last), so a 500-file drop reports 116
+times rather than 500. The denominator is the number of files being READ, which
+is smaller than the number dropped when some were rejected on type or size, and
+zero when a `month` override was given (an override reads nothing).
+
 Both `n_pooled` and `n_held` count distinct ARCHIVES. The log holds more than
 one row per archive by design (one at acceptance, another when a replay or a
 claim ingests it), so counting rows would report two waiting mails where one

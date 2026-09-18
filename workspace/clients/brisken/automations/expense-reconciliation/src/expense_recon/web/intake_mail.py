@@ -54,6 +54,7 @@ import re
 import shutil
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from email import policy
@@ -4268,6 +4269,32 @@ def drop_rematch_summary(rematch: object) -> dict | None:
     }
 
 
+# How many dropped receipts are READ at once (item 148). Every worker is one
+# concurrent vision round-trip for ONE operator's drop: the round-trip, not
+# our CPU, is the wall clock, so a handful already collapses it, while a wide
+# pool would fire a single drop at the provider as a burst and spend the
+# shared key's per-minute headroom on retries. Six keeps a 40-file drop inside
+# one round-trip-ish instead of forty, and leaves headroom for the mail
+# intake reading on the same key at the same time.
+_DROP_READ_WORKERS = 6
+# Progress granularity for the read pass. Each report is a short-lived store
+# connection, so a 500-file drop reporting every file would spend the saving
+# on bookkeeping.
+_DROP_PROGRESS_ALL_UNTIL = 20
+_DROP_PROGRESS_EVERY = 5
+
+
+def _drop_progress_due(done: int, total: int) -> bool:
+    """Whether `reading receipts (done/total)` is worth a stage write: every
+    file while each one still reads as movement, then every fifth, plus the
+    last one whatever the pile size."""
+    return (
+        done <= _DROP_PROGRESS_ALL_UNTIL
+        or done % _DROP_PROGRESS_EVERY == 0
+        or done == total
+    )
+
+
 def route_dropped_receipts(
     db_path: Path,
     learning_db_path: Path | None,
@@ -4326,8 +4353,14 @@ def route_dropped_receipts(
 
     rows: list[dict] = []
     routed: dict[str, list[tuple[dict, Path]]] = {}
-    client = _UNSET
     _stage("reading receipts")
+    # Pass 1, in staged order: every verdict that costs nothing settles here
+    # (unreadable type, empty, oversized, a typed month), and every file that
+    # has to be READ is queued for the pool below. `records` stays in staged
+    # order start to finish, so the ledger assembled from it at the end is
+    # the one the end-to-end loop assembled.
+    records: list[dict] = []
+    to_read: list[int] = []
     for path in staged:
         display = re.sub(r"^\d{4}__", "", path.name)
         suffix = path.suffix.lower()
@@ -4335,46 +4368,110 @@ def route_dropped_receipts(
             # Zips included, deliberately: a zip's members would each need
             # their own routing verdict, and the page is a drag-and-drop
             # of the files themselves.
-            rows.append({"file": display, "status": "rejected",
-                         "reason": "unsupported-type"})
+            records.append({
+                "row": {"file": display, "status": "rejected",
+                        "reason": "unsupported-type"},
+                "path": path, "month": None, "display": display,
+            })
             continue
         size = path.stat().st_size
         if size == 0:
-            rows.append({"file": display, "status": "rejected",
-                         "reason": "empty-file"})
-            continue
-        if size > FOLDER_RECEIPT_MAX_BYTES:
-            rows.append({"file": display, "status": "rejected",
-                         "reason": "too-large"})
-            continue
-        if month_override:
-            row = {"file": display, "status": "filed",
-                   "month": month_override, "month_source": "operator"}
-            rows.append(row)
-            routed.setdefault(month_override, []).append((row, path))
-            continue
-        if client is _UNSET:
-            client = _arrival_llm_client(settings)
-        dates = (
-            _extract_receipt_dates([path], client)
-            if client is not None else []
-        )
-        month, source, mixed = resolve_receipt_month(dates, now)
-        if source != "receipt":
-            rows.append({
-                "file": display, "status": "needs_month",
-                "reason": (
-                    "implausible-date" if source == "implausible-receipt"
-                    else "no-readable-date"
-                ),
+            records.append({
+                "row": {"file": display, "status": "rejected",
+                        "reason": "empty-file"},
+                "path": path, "month": None, "display": display,
             })
             continue
-        row = {"file": display, "status": "filed", "month": month,
-               "month_source": "receipt"}
-        if mixed:
-            row["mixed_months"] = True
-        rows.append(row)
-        routed.setdefault(month, []).append((row, path))
+        if size > FOLDER_RECEIPT_MAX_BYTES:
+            records.append({
+                "row": {"file": display, "status": "rejected",
+                        "reason": "too-large"},
+                "path": path, "month": None, "display": display,
+            })
+            continue
+        if month_override:
+            # A typed month is believed, so the file is never opened: the
+            # override path pays no vision call and never enters the pool.
+            row = {"file": display, "status": "filed",
+                   "month": month_override, "month_source": "operator"}
+            records.append({"row": row, "path": path,
+                            "month": month_override, "display": display})
+            continue
+        records.append({"row": None, "path": path, "month": None,
+                        "display": display})
+        to_read.append(len(records) - 1)
+
+    if to_read:
+        client = _arrival_llm_client(settings)
+
+        def _verdict(i: int) -> tuple[str, str, bool]:
+            """One file's month verdict, on a pool thread. Reads only its own
+            record and returns it; nothing shared is mutated here, so the
+            assembly below stays the single writer of `rows` and `routed`.
+            `_extract_receipt_dates` already swallows a per-file extraction
+            failure into "no dates"; the guard here covers the rest of the
+            read, so one unreadable file can never take down the pile."""
+            try:
+                dates = (
+                    _extract_receipt_dates([records[i]["path"]], client)
+                    if client is not None else []
+                )
+            except Exception:  # noqa: BLE001 - per file, exactly as before
+                log.warning("drop routing failed for %s",
+                            records[i]["display"], exc_info=True)
+                dates = []
+            return resolve_receipt_month(dates, now)
+
+        # The reads ARE the wall clock of a drop: one vision round-trip each,
+        # and end to end they simply added up (a 40-file drop measured 40x one
+        # round-trip — the "way too long" the owner reported 2026-09-18).
+        # Nothing in a file's verdict depends on its neighbours, so they run
+        # on a bounded pool. A 429 stays a per-file event either way: the SDK
+        # retries it inside the call, and a call that still fails leaves that
+        # one file `needs_month` while the rest file.
+        with ThreadPoolExecutor(
+            max_workers=min(_DROP_READ_WORKERS, len(to_read)),
+            thread_name_prefix="drop-read",
+        ) as pool:
+            futures = {i: pool.submit(_verdict, i) for i in to_read}
+            done = 0
+            for _ in as_completed(futures.values()):
+                done += 1
+                if _drop_progress_due(done, len(to_read)):
+                    # One frozen "reading receipts" for minutes was the whole
+                    # of the page's feedback; the count is what makes the wait
+                    # legible. The SPA renders the stage string verbatim, so
+                    # this needs nothing of it.
+                    _stage(f"reading receipts ({done}/{len(to_read)})")
+
+        for i in to_read:
+            month, source, mixed = futures[i].result()
+            rec = records[i]
+            if source != "receipt":
+                rec["row"] = {
+                    "file": rec["display"], "status": "needs_month",
+                    "reason": (
+                        "implausible-date" if source == "implausible-receipt"
+                        else "no-readable-date"
+                    ),
+                }
+                continue
+            row = {"file": rec["display"], "status": "filed", "month": month,
+                   "month_source": "receipt"}
+            if mixed:
+                row["mixed_months"] = True
+            rec["row"] = row
+            rec["month"] = month
+
+    # One writer, one order: the ledger and the per-month groups are built
+    # from `records` in staged order, so the same staging folder yields a
+    # byte-identical `rows` whether the reads ran one at a time or six.
+    for rec in records:
+        rows.append(rec["row"])
+        if rec["month"] is not None:
+            routed.setdefault(rec["month"], []).append(
+                (rec["row"], rec["path"])
+            )
 
     from .service import FOLDER_MAX_FILES as _drop_cap
 
