@@ -4922,3 +4922,65 @@ committed source, so it is not stated here.
 
 Route-level in `tests/test_card_accounts_item_147.py`. SPA half:
 `docs/lovable-card-accounts-prompt.md`.
+
+## A statement upload has an identity: `statement_id` + `coverage[].statement_ids` (note item T2, backlog item 149, 2026-09-18)
+
+A `statements[]` entry was keyed by `file`, the name on disk. That name is
+made unique PER UPLOAD (`Chase.xlsx`, then `Chase-2.xlsx`), so two per-card
+exports that share the bank's filename got two names for what may be one
+file, a re-upload of the same workbook got a second name for the same bytes,
+and nothing on either payload said whether two entries were the same file.
+A statement line has had a content-derived id since item 29
+(`transaction_id`); the upload that printed it now has one too.
+
+**`statements[].statement_id`** is the first 16 hex characters of the
+sha256 over the STORED BYTES of the upload. The same bytes uploaded twice
+(which the fold absorbs as `n_new: 0`), or re-read after a restore, yield
+the same id; a corrected file yields a new one. Parallel field, rule 1
+below: ABSENT on every entry written before 2026-09-18, never null, so a
+reader tells "not recorded" from "recorded". A re-read
+(`POST .../statements/reread`) reads the same bytes off disk and records the
+id on every entry it rebuilds, so an old month gains ids at its next re-read
+and nothing else has to change. Nothing outside the tool carries it: the
+acknowledgement mail, the CSV and both PDFs are untouched, by the owner's
+ruling that ids reach the outside with the later Zoho Books integration.
+
+```json
+{ "file": "Chase-2.xlsx",
+  "upload_name": "Chase.xlsx",
+  "statement_id": "9f3c1a7be04d5e62",
+  ... }
+```
+
+**`coverage[].statement_ids[]`** rides beside `coverage[].statements[]` on
+both payloads: the ids of the entries named in `statements` that carry one,
+deduped, in upload order. The two lists are NOT positional: three files of
+which two are the same bytes read `statements: [a, b, c]` and
+`statement_ids: [x, y]`, and an upload recorded before ids existed is named
+in `statements` with nothing to add here. Join through `statements[]` by
+`file` when the pairing matters. `coverage[].statements[]` keeps its type
+(strings) and its content. `card_sections[].statements[]` is derived from
+`coverage[]` and stays file names; a consumer needing the id on a tab joins
+it through `coverage[]` on the same payload.
+
+**The anchors are keyed by id as well.** The snapshot's `statement_anchors`
+(not on either payload; see "The statements a month has taken") records each
+upload's id-to-row map under its `file` name AND under its `statement_id`,
+the same map twice, so the writeback and the re-read can address an upload
+by id when two exports share a filename, and every reader that knows only
+the file name keeps working.
+
+**`GET /runs/{id}/statement-categorized.xlsx?statement_id=`** annotates the
+upload with that id, resolved against `statements[].statement_id` exactly
+the way `?file=` is resolved against `statements[].file`; an id the month
+never recorded is the same 404 (`statement_not_workbook`). When both are
+given the id decides. Two entries can share an id (the same bytes twice);
+they printed the same rows at the same sheet rows, so the first is annotated
+and the result is the same workbook either way.
+
+Route-level in `tests/test_statement_identity_t2.py`: an attach records the
+id on both payloads and in both anchor keys; the same bytes twice share one
+id and a corrected file gets another; a re-read keeps the id; an entry
+written before the id reads absent and gains one on re-read; the writeback
+picks the FIRST export by id while the month's current statement is the
+second. The SPA needs no change: nothing renders the id yet.
