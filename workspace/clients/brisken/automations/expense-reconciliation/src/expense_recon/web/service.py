@@ -11133,6 +11133,15 @@ def set_aside_entries(snapshot: dict) -> list[dict]:
     return _derive_legacy_set_aside(snapshot.get("parse_errors", []))
 
 
+def _set_aside_document_id(entry: dict) -> dict:
+    """`{"document_id": ...}` for a set-aside entry that records the
+    receipt it set aside, `{}` for a legacy one that does not."""
+    stored = entry.get("receipt")
+    document_id = (stored or {}).get("document_id") if isinstance(
+        stored, dict) else None
+    return {"document_id": document_id} if document_id else {}
+
+
 def set_aside_view(snapshot: dict, work_dir: Path | None = None) -> list[dict]:
     """The SPA-facing shape: internal receipt dict withheld. `reason` is
     the machine code ("statement" | "report_summary" | "other") the SPA
@@ -11152,6 +11161,20 @@ def set_aside_view(snapshot: dict, work_dir: Path | None = None) -> list[dict]:
             "reason": e.get("reason") or "other",
             "restored": bool(e.get("restored")),
             "at": e.get("at"),
+            # Note item T3/T1: the receipt this entry set aside, under
+            # the name every other surface calls it. `file` has always
+            # HELD the document id (`_set_aside_entry` writes
+            # `r.document_id` into it) but says `file`, so a reader
+            # joining this strip to a receipt had to know that. Read
+            # from the stored receipt rather than from `file`, because
+            # that is the authoritative copy: a legacy entry
+            # (`_derive_legacy_set_aside`, recovered from the
+            # quarantine's parse issues) carries no receipt and its
+            # `file` is a parse-issue file name that is NOT provably a
+            # document id, so it gets no key. Parallel and absent,
+            # never null; `file` keeps its name, its value and its
+            # place in the restore route.
+            **_set_aside_document_id(e),
         }
         if work_dir is not None:
             row["receipt_image_available"] = (

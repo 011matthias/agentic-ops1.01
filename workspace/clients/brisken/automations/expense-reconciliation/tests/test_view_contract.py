@@ -1865,3 +1865,17 @@ def test_a_charge_row_never_carries_both_a_sheet_row_and_a_page(payloads):
     for view in payloads["run"]:
         for row in view.get("rows") or []:
             assert not ("source_row" in row and "source_page" in row), row
+
+
+# Note item T1: the set-aside strip's receipt identity.
+def test_set_aside_names_its_receipt_or_says_nothing(payloads):
+    """`set_aside[].document_id` is parallel and absent, never null, and
+    when present it is a real id. A legacy entry (derived from the
+    quarantine's parse issues) has no key at all, because its `file` is a
+    parse-issue file name that nothing proves is a document id."""
+    for view in payloads["expense_batch"]:
+        for entry in view.get("set_aside") or []:
+            assert entry.get("file"), entry
+            if "document_id" in entry:
+                assert isinstance(entry["document_id"], str), entry
+                assert entry["document_id"], "absent, never empty"

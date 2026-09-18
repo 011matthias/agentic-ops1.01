@@ -5414,3 +5414,49 @@ page past a page break, the page index over the parser's own join, a month
 with no statement, a month recorded before the key, the booked expense, the
 released expense, the three stored records, a receipt-side history line, and
 the end-to-end walk-back across a re-read.
+
+## A receipt is the same receipt on every surface (note item T1, 2026-09-18)
+
+A receipt's identity is its `document_id`. The audit behind this section
+walked every live surface a receipt appears on, across July, August and
+September 2026, and counted how many entries carry it:
+
+| Surface | July | August | September |
+|---|---|---|---|
+| `expenses[]` | 54 of 54 | 25 of 25 | 49 of 49 |
+| `unmatched_receipts[]` | all | 10 of 10 | empty |
+| `assignable_receipts[]` | all | 20 of 20 | empty |
+| `copies_set_aside[]` | all | 5 of 5 | empty |
+| `duplicate_receipts[][]` | all | 10 of 10 | empty |
+| `rows[].candidates[].receipt` | all | 10 of 10 | empty |
+| `set_aside[]` | **0 of 5** | empty | **0 of 3** |
+
+Three surfaces name a receipt as a bare STRING rather than an object, and
+the string IS the `document_id`: `duplicate_groups[].members[]`,
+`card_review.unresolved_hints[].documents[]`, and
+`expense_ingest.documents[]`. Checked against the month's own expense ids
+and they match, so nothing is lost there; a `duplicate_groups[]` entry
+carries no `document_id` of its own because a group is not a receipt.
+Both PDF builders' evidence items carry `document_id` already (item 68).
+
+### The one gap, and the fix
+
+`set_aside[]` named the receipt `file`. The value has always BEEN the
+document id (`_set_aside_entry` writes `r.document_id` into that key), so
+nothing was wrong on screen; what was wrong is that a reader joining the
+strip to a receipt had to know that `file` meant `document_id`. Proven on
+live July, where the three RESTORED entries' `file` values match an
+expense's `document_id` exactly.
+
+`set_aside[].document_id` now rides beside `file`, which keeps its name,
+its value and its place in the restore route
+(`POST /api/expense-batches/{id}/set-aside/restore` still takes `{"file"}`).
+Parallel and ABSENT, never null: the key is read from the entry's STORED
+RECEIPT, not copied out of `file`, because a run recorded before the
+snapshot carried the strip derives its entries from the quarantine's own
+parse issues (`_derive_legacy_set_aside`), where `file` is a parse-issue
+file name and nothing proves it is a document id. Those entries get no key.
+
+Route-level in `tests/test_document_type_quarantine.py`: the strip's
+`document_id` equals the value a restore turns into an expense, and a
+legacy-derived entry has no key.
