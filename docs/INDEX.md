@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-18 | Brisken Recon Ops Tail | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Brisken%20Recon%20Ops%20Tail/Mini-Checkpoint-1.md) |
 | 2026-09-18 | Expense-Recon Matching X1 | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Expense-Recon%20Matching%20X1/Mini-Checkpoint-1.md) |
 | 2026-09-18 | Brisken Recon Traceability T2 | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Brisken%20Recon%20Traceability%20T2/Mini-Checkpoint-1.md) |
 | 2026-09-18 | Brisken Recon Owner Note Triage | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Brisken%20Recon%20Owner%20Note%20Triage/Mini-Checkpoint-1.md) |
