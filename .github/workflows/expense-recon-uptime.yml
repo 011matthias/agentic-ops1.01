@@ -1,0 +1,89 @@
+# expense-recon uptime - the outside monitor for the Brisken expense-recon
+# app (backlog item 123: nobody was told when the app was down).
+#
+# Every 10 minutes tools/recon_uptime_probe.py probes /healthz on the Fly
+# app, the port-25 banner behind the expenses.brisken.com MX, and the SPA
+# shell, each retried once so a blip never pages. An outage becomes ONE
+# `recon-uptime` issue in this repo plus ONE mail to the developer; while it
+# lasts, each run appends a comment (no more mail); the recovery run
+# comments, closes the issue and mails once more.
+#
+# The job stays GREEN when the app is down (the issue is the signal) and
+# goes red only when the probe or the notifier itself broke.
+#
+# Hand test: Actions > expense-recon uptime > Run workflow, with
+# api_override = https://127.0.0.1:9 (a dead API, so the probe reports
+# DOWN) and dry_run = true (the notifier prints what it would do and opens
+# nothing). Leave dry_run off to exercise the real issue path once, then
+# close the issue by re-running with no override.
+#
+# Mail reaches only the developer: RESEND_API_KEY (repo secret) sends from
+# onboarding@resend.dev to the BRIEFING_TO repo variable, and Resend's free
+# tier delivers only to the account owner's address. A Brisken mailbox
+# would need a Graph client secret in repo secrets, which is an owner
+# decision; see the module README, "Uptime".
+#
+# Scheduled workflows run only from the default branch, so this starts
+# after the merge to main.
+
+name: expense-recon uptime
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      api_override:
+        description: "API base URL to probe instead of the Fly app (e.g. https://127.0.0.1:9 to rehearse an outage)"
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Print what the notifier would do; open and send nothing"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: recon-uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Probe (read-only GETs + a port-25 banner)
+        env:
+          API_OVERRIDE: ${{ inputs.api_override }}
+        run: |
+          set -uo pipefail
+          ARGS=()
+          if [ -n "${API_OVERRIDE:-}" ]; then ARGS+=(--api "$API_OVERRIDE"); fi
+          uv run tools/recon_uptime_probe.py probe --json ${ARGS[@]+"${ARGS[@]}"} > probe.json
+          rc=$?
+          # 1 = the app is down, which is the notifier's business below;
+          # 2 = the probe itself broke, which is this job's failure.
+          if [ "$rc" -eq 2 ]; then exit 2; fi
+          exit 0
+
+      - name: Notify (issue + mail policy)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          BRIEFING_TO: ${{ vars.BRIEFING_TO }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          ARGS=()
+          if [ "${DRY_RUN:-false}" = "true" ]; then ARGS+=(--dry-run); fi
+          uv run tools/recon_uptime_probe.py notify --result probe.json ${ARGS[@]+"${ARGS[@]}"}
