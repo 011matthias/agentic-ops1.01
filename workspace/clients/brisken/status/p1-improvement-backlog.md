@@ -5921,6 +5921,55 @@ equality, it tests equality-in-the-absence-of-the-thing-that-breaks-it. Where a
 claim is about two counters agreeing, the fixture has to contain every row class
 the real month contains.
 
+### 147. The nine cards are a flat list, but some of them are one account with subcards under it (owner, 2026-09-18)
+
+**Owner, looking at July's card tabs:** "card 2838 for example should be an
+account with others as subcards, same thing goes for the other cards with
+subcards."
+
+**What the tool models today.** `GET /api/cards` returns nine cards and every
+one of them is a peer. A card carries `active`, `aliases`, `currency`,
+`default_cost_center`, `digits`, `entity`, `key`, `label`, `label_pt`, `person`,
+`source` and `zoho_account`. There is no parent, no account, no grouping field of
+any kind, so nothing in the payload can say that one card sits under another.
+
+**The account is already visible in the data, unnamed.** July's `card_sections`
+has one statement file, `July2026.xlsx`, covering four different card numbers:
+3876 (48 charges), 2838 (36), 3645 (27) and 0340 (1). A bank issues one statement
+per account, so those four numbers are four cards on one account, and the tool
+renders them as four unrelated tabs. August repeats the shape: `August2026.xlsx`
+covers 3645, 3876 and 2838, while 1176 arrives on its own PDF
+(`20260804-statements-1176-.pdf`) and 9693 has no statement at all. The card
+whose parentage the owner named, 2838, is the one the other three share a
+statement with.
+
+**What it costs as a flat list.** The card strip prints a row per card, so an
+account's spend is never one figure and a reader adds four tabs in their head to
+get it. Item 138's per-card split, the PDFs organised by card, and the
+per-card statement lines all inherit the same flatness. A statement that covers
+four cards is described four times, once per tab, each naming the same file.
+
+**Owner data needed before this can be built.** Which card is the account and
+which are its subcards is not derivable: sharing a statement file is evidence,
+not proof, and `Apple Credit Card - 0113`, `Credit Card - 6013` and
+`Credit Card - 8311` appear on no statement at all, so nothing in the live data
+places them. The owner names the parentage; the tool does not guess it. The
+people already differ across the four that share July's file (2838 and 3645 are
+Dirk Neumann - Corp Services, 3876 is Nicolas Neumann, 0340 is Criss Neumann),
+which is consistent with one company account holding several people's cards and
+is exactly why a person cannot be used to infer the grouping either.
+
+**Rough shape, once the parentage is known.** A card gains an optional parent
+(account) reference in the registry and in Settings, Cards. The card strip
+renders accounts at the top level with their subcards under them, an account's
+line sums its subcards, and a statement that covers an account is described once
+on the account rather than once per card. Both PDFs follow the same tree. Nothing
+about matching changes: a charge still resolves to the specific card that paid.
+
+**Licence:** new function, not a defect. The tool does what it was built to do;
+the owner is asking it to model a structure it was never told about. Quote
+separately unless the owner reverses that, as he has for several audit items.
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.
