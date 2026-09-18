@@ -5252,9 +5252,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # Item 94: a copy a reviewer hand-matched holds a charge and
             # stays listed, so the verdicts are part of the question.
             charge_decisions = store.get_decisions(run_id)
+            # Note item M2: the CSV resolves a row's card through the same
+            # chain the grid does, merchant card included, so the two cannot
+            # name different cards for one receipt. Read inside the store
+            # block, like every other input on this route.
+            csv_merchants = (store.get_settings() or {}).get("merchants")
         path = regenerate_expense_export(
             run, overrides, field_overrides, edits, dup_resolutions,
             charge_decisions=charge_decisions,
+            merchants=csv_merchants,
         )
         return FileResponse(
             path,
