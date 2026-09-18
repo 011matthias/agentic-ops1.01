@@ -6148,6 +6148,60 @@ exactly as `reading receipts` and `filing September 2026` already were.
 are sequential exactly as before: they take batch write locks and a
 statement-bearing month re-matches on the arrival. Only the read pass moved.
 
+### 149. Merchant-to-category is the default; the exceptions vary by company, on the account (note item M1; owner directive 2026-09-18) (SHIPPED 2026-09-18, pending PR)
+
+**Owner, 2026-09-18 (memory half of the note), and Dirk the same day:** binding
+a merchant to one category works about 90% of the time; the exceptions are
+OpenAI, Anthropic and Lovable, whose receipts book to several places. What
+varies by company is the ACCOUNT, which is what Dirk calls the category.
+
+**Live before the build (read-only, 2026-09-18).** Registry 28 merchants, none
+of the three, `multi_category` on nobody. Memory 103 rules, all from the
+2026-08-06 Zoho seed, 0 validated; two rows for `anthropic` (Cloud Services ->
+COGS - DEV Infrastructure (SAP Apps & others); Corporate Services -> Other Infra
+and IT Costs for Cloud Business). July-September rows for the three vendors:
+52 receipts and 61 charges; the tool's category is Software & Subscriptions
+everywhere except where the model guessed on a receipt with no line items
+(Anthropic "Auto-recharge credits" -> Utilities & Premises twice in September,
+Lovable Labs on the Consulting card -> Professional Services) and on the
+receiptless LOVABLE charges (Meals & Entertainment, four times in July, once in
+August, all `VENDOR`). September: 11 of 27 rows carry no company because their
+card is unknown (OpenAI receipts print no card; the 9693 and 1176 statements are
+not loaded, item 108). OpenAI is paid from 9693 (Cloud) AND 3645 (Corporate).
+
+**Built.** (a) The registry default stamps every receipt of its merchant,
+itemized or not, before any line read; the 2026-08-07 order (a per-company
+learned row outranks the registry outright) is retired for the CATEGORY and kept
+for the ACCOUNT. (b) The (company, vendor) rule decides the account: the rule
+under the receipt's company, else a no-company rule, else the vendor's rules
+when they agree; a seeded rule under another category contributes nothing until
+someone validates it. The line's `provenance` names the rule. (c) `GET
+/api/memory` gains `by_vendor[]` (one entry per vendor, one line per company,
+the registry merchant and the category its receipts read on the vendor line)
+and `categories[].seeded`; SPA half `docs/lovable-memory-by-company-prompt.md`.
+Receiptless charges consult the registry on every re-match (`rematch_month`
+hands it to `categorize_charges`), so LOVABLE reads Software & Subscriptions
+with the company's account instead of Meals. api-contract section
+"Merchant-to-category is the default".
+
+**Not in this PR, owner-gated.** (d) The live registry write for OpenAI /
+Anthropic / Lovable (category Software & Subscriptions, no account,
+`multi_category` off, the seven aliases from the note) is a production
+mutation, put to the owner with the read-modify-write diff after the deploy.
+The account per company for the three vendors (9 cells, 2 known from the seed)
+is Dirk's input, asked once as a 3x3 table.
+
+**Tests.** `tests/test_registry_category_by_company_m1.py` (6, route-level
+through the receipt add, the statement attach and `GET /api/memory`);
+`tests/test_view_contract.py::test_memory_view_list_contract` pins the memory
+payload's lists; `tests/test_merchant_registry.py` precedence rewritten; three
+item-115 tests updated to the registry reading (the sign-off grows the registry,
+so the corrected merchant reads its default without a glance; the glance is
+re-pinned on a Memory-page rule for a merchant with no default). Four wires
+proven red under `regress_check` (the account-from-rule call, the stamp set,
+the `rematch_month` registry argument, the route's `merchants` argument), each
+restored green.
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.

@@ -10,11 +10,16 @@ for three facts about a receipt's merchant:
   * a default COST CENTER for it (backlog item 47), the project or purpose
     this brand's spend belongs to.
 
-Consulted in `generate_expenses` ONLY (mirrors the Phase-6 `ExpenseMemory`
-contract); `reconcile()` never sees it. It sits ABOVE the learned SQLite
-tables in precedence: registry -> learned -> LLM, and a reviewer override
-always wins over all three. An empty registry resolves nothing, so a
-tenant with no `merchants` key behaves exactly as before.
+Consulted in `generate_expenses` and, since note item M1 (2026-09-18), for
+a month's receiptless charges (`categorize_charges`); `reconcile()` itself
+never sees it. Precedence for the CATEGORY: a reviewer override > the
+registry default > learned memory > the model. The ACCOUNT of a merchant
+with a registry default comes from the (company, vendor) rule memory holds
+for the receipt's company (`categorize._registry_account`), so one
+merchant keeps one category while its account varies by company, which is
+Dirk's 2026-09-18 description of how the books work. An empty registry
+resolves nothing, so a tenant with no `merchants` key behaves exactly as
+before.
 
 Shape:
     settings["merchants"] = {

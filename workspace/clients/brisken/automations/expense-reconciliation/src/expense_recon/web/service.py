@@ -102,6 +102,11 @@ from ..cost_centers import (
 )
 from ..cost_centers import CostCenterRegistry, CostCenterResolution
 from ..merchant_registry import MerchantRegistry, normalize_merchants_setting
+# Note item M1: the registry's bare provenance sentence (a line whose
+# account came from a company's rule says more) and the seed marker the
+# Memory page flags a Zoho-history row with.
+from ..categorize import REGISTRY_DEFAULT_REASONING
+from ..learning.consult import ZOHO_SEED_PREFIX
 from .month_health import (
     HEALTH_OK,
     card_scoping_on,
@@ -2598,7 +2603,13 @@ def _receipt_view(
             confidence = cat.confidence
             # Phase 2: a LEARNED row carries its provenance ("learned from
             # your 2026-05 decision") so the reviewer sees why it auto-filled.
-            if cat.source is ClassificationSource.LEARNED:
+            # Note item M1: a REGISTRY line whose ACCOUNT came from a
+            # company's rule says so too; the bare default stays silent.
+            if cat.source is ClassificationSource.LEARNED or (
+                cat.source is ClassificationSource.REGISTRY
+                and cat.reasoning
+                and cat.reasoning != REGISTRY_DEFAULT_REASONING
+            ):
                 provenance = cat.reasoning
         else:
             category = None
@@ -4883,14 +4894,25 @@ def commit_to_memory(
 
 def build_memory_view(
     learning_db_path: Path | None, unvalidated_only: bool = False,
+    merchants: dict | None = None,
 ) -> dict:
     """Render model for the /memory page: everything the tool has learned,
     grouped by table. Read-only; an absent store yields an empty view.
     ``unvalidated_only`` filters the categories table to rows no human has
-    validated yet (the review-the-103 workflow)."""
+    validated yet (the review-the-103 workflow).
+
+    ``merchants`` (note item M1, 2026-09-18) is `settings["merchants"]`.
+    With it, `by_vendor[]` groups the category rules per vendor with one
+    line per company, and names the registry merchant the vendor resolves
+    to and the category its receipts will actually read (the registry's
+    default when it has one, else "" for judged-per-receipt), so a reader
+    sees where one merchant's account splits by company. Built from the
+    same rows as `categories[]`, so the `unvalidated` filter applies to
+    both."""
     empty = {
         "categories": [], "aliases": [], "fx": [],
         "entities": [], "field_corrections": [],
+        "by_vendor": [],
         "counts": {
             "merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0,
             "merchant_entity": 0, "field_correction": 0,
@@ -4917,9 +4939,37 @@ def build_memory_view(
             "count": c.decision_count, "last": (c.last_confirmed_at or "")[:10],
             "validated": (c.validated_at or "")[:10],
             "validated_by": c.validated_by or "",
+            # Note item M1: a row seeded from Zoho Books posting history,
+            # not a person's decision (until someone validates it).
+            "seeded": (c.source_run or "").startswith(ZOHO_SEED_PREFIX),
         }
         for c in cats
     ]
+    # Note item M1: the same rows, per vendor, one line per company. The
+    # registry is consulted for the vendor line so the page can say what a
+    # receipt of this vendor will READ: the registry default when the
+    # merchant has one (the company lines then carry the account), else
+    # "" (no default; the company's own rule or the model decides).
+    registry = MerchantRegistry(merchants) if merchants else None
+    grouped: dict[str, list[dict]] = {}
+    for row in categories:
+        grouped.setdefault(row["vendor"], []).append(row)
+    by_vendor = []
+    for vendor_norm in sorted(grouped):
+        hit = registry.resolve(None, vendor_norm) if registry else None
+        by_vendor.append({
+            "vendor": vendor_norm,
+            "merchant": hit.canonical_name if hit else "",
+            "category": (hit.category or "") if hit else "",
+            "multi_category": bool(hit and hit.multi_category),
+            "companies": sorted(
+                (
+                    {k: v for k, v in row.items() if k != "vendor"}
+                    for row in grouped[vendor_norm]
+                ),
+                key=lambda r: r["entity"],
+            ),
+        })
     alias_rows = [
         {
             "entity": a.legal_entity_id, "stmt": a.stmt_vendor_norm,
@@ -4958,6 +5008,7 @@ def build_memory_view(
     return {
         "categories": categories, "aliases": alias_rows, "fx": fx_rows,
         "entities": entity_rows, "field_corrections": correction_rows,
+        "by_vendor": by_vendor,
         "counts": counts, "total": sum(counts.values()),
     }
 
@@ -12504,6 +12555,9 @@ def rematch_month(
         client=llm_client,
         chart_of_accounts=account_labels,
         learned=learned,
+        # Note item M1: a receiptless charge takes its merchant's default
+        # category from the same registry the month's receipts consult.
+        registry=MerchantRegistry.from_settings(store.get_settings()),
     )
 
     _stage("saving")

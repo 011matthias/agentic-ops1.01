@@ -88,6 +88,7 @@ def categorize_charges(
     chart_of_accounts: list[str] | None = None,
     learned: "MerchantCategoryLookup | None" = None,
     override_er_category: bool = False,
+    registry=None,
 ) -> dict[str, Categorization]:
     """Categorize every unmatched (receiptless) charge.
 
@@ -99,6 +100,15 @@ def categorize_charges(
     `client` / `chart_of_accounts` / `learned` are passed through to
     `categorize_receipts` unchanged, so the charge path consults the
     same memory and account labels as the receipt path.
+
+    `registry` (note item M1, 2026-09-18) is the merchant registry the
+    month's receipts already consult. A bank description that names a
+    registry merchant ("LOVABLE", "OPENAI") takes that merchant's default
+    category, with the account the charge's company has a rule for,
+    instead of a model guess (live July read LOVABLE as Meals &
+    Entertainment four times). None keeps the pre-M1 path, and the
+    registry's canonical name is NOT written anywhere: the charge keeps the
+    bank's own description on every surface.
     """
     tx_by_id = {tx.transaction_id: tx for tx in transactions}
     pseudo: list[Receipt] = []
@@ -110,10 +120,19 @@ def categorize_charges(
     if not pseudo:
         return {}
 
-    categorized = categorize_receipts(
-        pseudo, client=client, chart_of_accounts=chart_of_accounts, learned=learned,
-        override_er_category=override_er_category,
-    )
+    if registry:
+        from .categorize import categorize_receipts_with_registry
+
+        categorized, _matches = categorize_receipts_with_registry(
+            pseudo, registry=registry, client=client,
+            chart_of_accounts=chart_of_accounts, learned=learned,
+            override_er_category=override_er_category,
+        )
+    else:
+        categorized = categorize_receipts(
+            pseudo, client=client, chart_of_accounts=chart_of_accounts,
+            learned=learned, override_er_category=override_er_category,
+        )
 
     out: dict[str, Categorization] = {}
     for rec in categorized:
