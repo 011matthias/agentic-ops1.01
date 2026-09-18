@@ -275,6 +275,7 @@ def match_to_dict(m: Match) -> dict:
         "date_score": m.date_score,
         "vendor_score": m.vendor_score,
         "card_score": m.card_score,
+        "review_code": m.review_code,
     }
 
 
@@ -293,6 +294,9 @@ def match_from_dict(d: dict) -> Match:
         # Absent from snapshots written before WS3; 0.0 reads as "not
         # scored" exactly like the three above, so an old run still loads.
         card_score=d.get("card_score", 0.0),
+        # Item X1: absent from snapshots written before it; "" is "not
+        # flagged", which is what every earlier pair was.
+        review_code=d.get("review_code", ""),
     )
 
 

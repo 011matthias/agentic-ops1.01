@@ -6254,6 +6254,78 @@ fall-back-to-current cannot pass it). Six wiring points proven red by hand
 equal): attach wire 6 of 28 red, re-read wire 2, coverage ids 5, append-time
 anchors by id 3, re-read anchors by id 2, writeback selector 1; green 28/28
 after each restore. Suite 2511 -> 2516 passed / 2 skipped; ruff clean.
+### 151. The statement description counts, and a receipt whose card cannot be identified is matched on the other criteria (owner, 2026-09-18; note item X1) (SHIPPED 2026-09-18, Shipped row 91)
+
+**Owner, 2026-09-18 (matching item, X1):** the statement description must
+count in matching, and when the card on an expense cannot be identified,
+another logic must take over so the expense is still matched on other
+criteria. Priority; the covered-vs-quote licence question does not gate it.
+
+**Measured first (read-only DB copy of 2026-09-18, replayed with
+`tools/recon-match-attribution.py` on the worktree tree).**
+
+| | July `50622baec444` | August `074a7b8905d7` | September `51a22ad72864` | six bundles |
+|---|---|---|---|---|
+| charges / receipts in pool | 111 / 53 | 111 / 36 | **0** / 49 (no statement yet) | 827 / 218 |
+| labelled right, deterministic | 30 | 6 | - | 70 / 95 |
+| labelled wrong | 0 | 1 (`0025` on BASE44 50.00, item 133, pre-existing) | - | 0 |
+| pairs sharing a reference-like token (description vs receipt numbers) | 1 (`Microsoft-G173514057` / `0006`, already exact + unique) | 0 | 0 | 0 |
+| descriptions printing masked card digits | 0 | 0 | 0 | 0 |
+| receipts naming no card, matched | 19 of 31 | 2 of 10 | 27 of 49 unmatched (no charges) | 0 (Zoho names every card) |
+| of those, a deterministic rival on another card, not spoken for | 0 (the one candidate, `0063` Marinho vs GITHUB 10.00, is spoken for) | 0 | - | 0 |
+| labelled-right pairs resting on the parsed vendor (dominance or the tip-band floor) | 4 | 0 | - | - |
+| vendor score diluted by a reference token inside the description | `0006` Microsoft 0.50, `0007` AMAZON* Z11US7DF5 0.57 | 0 | - | 3 pairs (CASUALFOOD x2, 7-ELEVEN) |
+
+What the description carries on Criss's Chase exports is the merchant name
+plus, on some rows, an order or invoice number (`MICROSOFT#G180053463`,
+`LinkedIn SN P3078900231`, `Wix.com 1251593381`, `AMZ*Amazon.D*X37L83BI5`).
+Almost none of those numbers appear on a receipt in the pool, and the one
+that does is already matched on exact amount, date and card. What the
+number DID do was harm: `vendor_similarity` averages over the description's
+tokens, so a reference token halved the merchant score of a pair whose
+merchant words agreed exactly, and July's Microsoft invoice sat at
+`vendor_pct` 50, under the self-confirm floor of 75, waiting for a click.
+
+**Shipped (this item).**
+
+1. `strip_reference_tokens` / knob `vendor_ignore_reference_tokens`: a token
+   of four or more characters carrying three or more digits is a reference,
+   not a merchant word, and is left out of the merchant comparison. Live
+   July at the next re-match: Microsoft `vendor_pct` 50 to 100 (crosses the
+   self-confirm floor), Amazon `Z11US7DF5` 57 to 100; two bundle pairs rise;
+   0 class moves anywhere; labelled-wrong unchanged; bundles 70/95.
+2. `card_evidence(tx, receipt)`, the ONE definition of "the card cannot be
+   identified": receipt `override` / `hint` / `learned` / `printed` /
+   `none`, charge `row` / `account` / `none`, on every candidate as
+   `card_evidence: {receipt, charge}`. A receipt reading `none` is matched
+   across every card's charges on amount, date, currency, the reference and
+   the uniqueness gate (what the matcher already did; now stated, named and
+   shown). A charge reading `account` took its card from the upload's
+   account, not the row; the matcher still scopes by it because on every
+   labelled dataset the account IS that card, and the page can now say so.
+   The MEMORY session's per-merchant card fact arrives through
+   `Receipt.card_scope_source` `learned` and counts as card evidence.
+3. The review clause, knob `no_card_rival_review`: a `none` receipt keeps its
+   match and rank but asks for review with `review_code`
+   `no_card_rival_on_other_card` when a deterministic rival for the same
+   receipt sits on a different card and is not spoken for. 0 pairs flagged
+   today on all nine datasets; it is what stands between September's 27
+   no-card receipts and a silent pick between two cards when its statement
+   lands.
+
+**Dead ends, measured and not built:** reference tokens shared between the
+description and the receipt's numbers as a promoting signal (tie-break,
+uniqueness dominance, merchant precedence), and a masked card fragment inside
+a description. One shared-token pair exists across nine datasets and
+`reference_match` already fires on it; no masked fragment exists. Neither
+moves a row.
+
+Contract "Matching when the card cannot be identified, and the description's
+reference tokens (item X1)". Route-level
+`tests/test_match_x1_description_and_no_card.py`; the attribution gate reads
+the clause off `match_month`'s own outcome. SPA half
+`docs/lovable-no-card-evidence-prompt.md` (not applied). Item 41's "suggest
+private" stays its own step; item 72 stays the TRACEABILITY session's.
 
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
@@ -6305,6 +6377,7 @@ after each restore. Suite 2511 -> 2516 passed / 2 skipped; ruff clean.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 91 | The statement description counts and the no-card fallback is defined once: `strip_reference_tokens` keeps an order or invoice number inside the bank description out of the merchant comparison (knob `vendor_ignore_reference_tokens`); `card_evidence(tx, receipt)` names where each side of a pair got its card, on every candidate as `card_evidence: {receipt, charge}`; a receipt naming no card is matched across every card's charges and asks for review with `review_code: no_card_rival_on_other_card` when a deterministic rival sits on another card and is not spoken for (knob `no_card_rival_review`); `Match.review_code` in the snapshot | Item 151 (owner note X1). Measured first on July, August, September and the six bundles: the description's reference numbers pair nothing new (one shared-token pair in nine datasets, already exact and unique; no masked card digits anywhere), but a reference token inside the description halved the merchant score of pairs whose words agreed, and July's Microsoft invoice sat at `vendor_pct` 50 under the self-confirm floor for a click it did not need; at the next re-match it reads 100 (Amazon `Z11US7DF5` 57 to 100). The card fallback was already the matcher's behaviour and had no name, no field and no review clause; September holds 27 no-card receipts and no statement yet. 0 class moves, labelled-wrong unchanged, bundles 70/95. Three regressions of the real source proven RED first; the description-token promotion and the masked-fragment rule are documented dead ends, not built | 2026-09-18, this round; suite 2513 -> 2530; SPA half `docs/lovable-no-card-evidence-prompt.md` (owner applies) |
 | 90 | A statement upload has an identity: `statements[].statement_id` is the sha256 of the stored bytes (16 hex), parallel and absent on entries written before it; `coverage[].statement_ids[]` rides beside the file names; the snapshot's `statement_anchors` records each upload's row map under its id as well as its file name; `GET /runs/{id}/statement-categorized.xlsx?statement_id=` picks an upload by id, winning over `?file=`. The same bytes twice share one id (the fold's `n_new: 0` case), a corrected file gets a new one, a re-read keeps it, and an entry recorded before the id gains one at the month's next re-read | Note item T2 (owner 2026-09-18, traceability, backlog item 150): a `statements[]` entry was keyed only by `file`, a per-upload unique name, so two per-card exports sharing the bank's filename were two names for maybe one file and a re-upload was a second name for the same bytes; nothing on either payload said which entries were one file, and the writeback could only be told which upload by that name. Live July and August carry no id until their next re-read, which this item does not trigger | 2026-09-18, pending PR; `tests/test_statement_identity_t2.py` (5, route-level through the attach, both page GETs, the re-read and the writeback; the writeback test asks for the FIRST export while the month's current statement is the second, so a fall-back-to-current cannot pass it); six wiring points proven red by hand with a one-line mutation each and sha256-equal restores; suite 2511 -> 2516 passed / 2 skipped; ruff clean |
 | 89 | A dropped pile is READ in parallel: the routing pass that learns each receipt's printed month runs on a bounded pool (`_DROP_READ_WORKERS = 6`) instead of one file after the next, and reports `reading receipts (7/40)` as the files land instead of one frozen stage. The ledger is assembled from the staged order by one writer after the reads return, so row order and every field are what the end-to-end loop produced; a read that raises leaves that file `needs_month` and files the rest; a typed `month` still reads nothing at all | Item 148, owner 2026-09-18: "manual receipt injection function is taking way too long". Measured on a stub at 0.2s per read, the drop spent 0.20s / 2.02s / 8.21s reading 1 / 10 / 40 files against 0.11s filing, and a real vision round-trip is not 0.2s. After: 0.20s / 0.41s / 1.42s, 5.8x on the 40-file pile. Proven on the way past: with the extraction cache on, three dropped files cost three transport calls across BOTH passes and six with it off, so the routing's full-extraction read really is the ingest's read | 2026-09-18, pending PR; `tests/test_drop_speed_item_148.py` (10). The contract test is the negative one: the parallel ledger compared field by field against the same folder routed with the pool pinned to one worker |
 | 88 | A card can sit under an account: the registry entry takes an optional `parent` holding another card's key, validated one level deep on save with five named refusal codes, and `card_sections[]` renders the tree on both month pages and in both PDFs. An account comes first with its subcards behind it, its figures are the sum of itself plus them (charges, matched, receipts, receipts without a charge, open money and booked-without-receipt per currency, counted rows and totals), its own card's figures stay beside them in `own`, and a statement covering the account is named once instead of once per card. Parentage is DATA a person sets: sharing a statement file is evidence and not proof, and the four cards on July's one Chase file belong to three different people, so nothing in the tool infers it | Item 147, owner 2026-09-18: "card 2838 for example should be an account with others as subcards", "only 2838 has subcards, no where else", "just do it, no quoting". An account's spend was never one figure, so a reader added four tabs in their head, and `July2026.xlsx` was described four times, once per tab. Predicted from the payload shapes and the live figures already in the contract: August's account reads 111 charges / 9 matched / USD 10,862.66 open / 19 receipts against today's 34+40+37 split, and July's reads 112 charges with its file named once instead of four times; 1176, 9693 and No card do not move, and neither does any count outside `card_sections` | 2026-09-18, pending PR; `tests/test_card_accounts_item_147.py` (22, route-level through both page GETs and both documents, on a fixture carrying every row class the live month has: a subcard on the account's own file, a subcard with a statement of its own, a subcard with zero charges, a standalone card, a receipt with no charge and one with no card). The negative case is the contract: a registry with no parent produces the same sections with the same fields and figures, asserted against the tree month's own `own` block. Eleven wiring points proven red BY HAND (cp the source aside, cut one line, run the targeted test, read the FAILED line, cp back, sha256 equal), because `tools/regress_check.py` reports RED whether or not the mutated suite failed. Not built: the SPA half (`docs/lovable-card-accounts-prompt.md`, not pasted) and the registry seed, which has no committed home, so the owner sets the three parents once in Settings |
