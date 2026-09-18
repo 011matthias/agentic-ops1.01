@@ -5213,7 +5213,18 @@ existing month, which is the honest answer for a period nothing recorded.
 
 **Reviewer corrections:** none recorded
 
-### 109. Charges without a receipt get an AI category nobody can correct, and the tool never learns it (2026-09-17 audit draft #107, unranked; new function, quote separately) (SHIPPED 2026-09-17, PR #1059, Fly v172; owner reversed the quote-separately ruling)
+### 109. Charges without a receipt get an AI category nobody can correct, and the tool never learns it (2026-09-17 audit draft #107, unranked; new function, quote separately) (SHIPPED 2026-09-17, PR #1059, Fly v172; owner reversed the quote-separately ruling) (SPA APPLIED and DRIVEN 2026-09-18, EN and PT; CLOSED)
+
+**2026-09-18: closed on screen.** August's Charges-without-a-receipt view renders
+205 category comboboxes and 89 visible "Guess" chips; the LOVABLE 15.00 row of
+Aug 31 carries a 176x32 px picker reading "Meals & Entertainment" with the chip
+beside it, which is the prompt's check 1 word for word, and SAP SE 1,574.24 reads
+"Software & Subscriptions / Guess". Portuguese renders "PALPITE" and "Sem
+categoria ainda". The 2026-09-17 pass that reported the control missing had
+counted native `select` elements on a page whose every picker is a Radix
+`button[role=combobox]`, and had matched "Guess" case-sensitively against
+`innerText`, which returns the CSS-uppercased "GUESS". Two blind instruments on
+one control, and both read as evidence the feature was absent.
 
 **Audit rank 16 of 40; severity high as merged; verification: checked by hand in code (category route needs a receipt); no reviewer pass.** Criss's real job is to give every charge a category. 71 of July's 112 charges and 98 of August's 111 have no receipt, each with a category the AI guessed from the bank description ('AI?' badge). There is no control on those rows to change it: the dropdown exists only inside a candidate receipt card, the category route needs a receipt, and learning reads receipts only. The guesses go into the reconciled CSV as they are and the same charge is guessed again next month. The recall half (learned rows for charges) already exists.
 
@@ -5566,7 +5577,32 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 
 **2026-09-17, note #53 answered and the drop-page half shipped (PR #988, Fly v150).** Answer: yes, each dropped file is read and filed into the month printed on it (created when absent; an unreadable date is held as `needs_month` and asks for a month), and a month that already holds a statement re-matches on the arrival. The drop ledger now carries `months[].has_statement` and `months[].rematch` (`{ok, n_transactions, n_matched, n_review, n_unmatched_tx}` or `{ok: false, error}`) instead of discarding the arrival's re-match result; the matching line is `docs/lovable-feedback-0917b-prompt.md` section 5. Still open from this item: the per-file "matched with X" line, which rows moved, and the month page's "last re-match" line.
 
-### 130. English sentences from the backend still reach Criss's Portuguese screen: every error toast, the setup advisories and the crash page (2026-09-17 audit draft #128, unranked; licence: defect, covered) (SHIPPED 2026-09-17, pending PR; SPA prompt written; Shipped row 72)
+### 130. English sentences from the backend still reach Criss's Portuguese screen: every error toast, the setup advisories and the crash page (2026-09-17 audit draft #128, unranked; licence: defect, covered) (SHIPPED 2026-09-17, pending PR; SPA prompt written; Shipped row 72) (SPA §1-§5 APPLIED AND VERIFIED 2026-09-18; §6 the two error screens NOT applied, prompt `docs/lovable-error-page-lang-prompt.md` written 2026-09-18, awaiting paste)
+
+**2026-09-18 verification, and one half that has to be re-asked.** Five of the
+six sections are live and driven. The `errorText` helper and the advisory helper
+are both in the shipped bundle with their `hasKey` guard, and they are WIRED, not
+merely present: the workbench route chunk holds 16 `toast.error(errorText(e, t))`
+call sites and zero remaining `.message)`, and no chunk anywhere still shows a
+caught error's raw `.message` to the reader. The row chips render in both
+languages on the same row: NEAR MISS in EN, QUASE IGUAL in PT.
+
+**§6 did not land, and the note saying it could not be checked was wrong.** The
+crash screen and the not-found screen are client React components in the entry
+chunk (the TanStack root `errorComponent` and `notFoundComponent`) with their
+English written straight into the JSX, so a bundle crawl sees them perfectly
+well. Driven cold in Portuguese, `/this-route-does-not-exist-xyz` renders "404 /
+Page not found / The page you're looking for doesn't exist or has been moved. /
+Go home" while every other surface is Portuguese. These are the two screens a
+reader meets when something has already gone wrong, which makes them the worst
+two to leave in a language she does not read. Copy only, no backend gate.
+
+**The prompt's own check 4 could never have passed** and should not be counted
+against the work: `/runs/does-not-exist-abc123` renders the SPA's own missing-run
+screen, which has always had its own Portuguese string and issues no API refusal,
+so no `code` reaches `errorText` there. `err.run_not_found` is in the dictionary
+in both languages and fires on a refusal that carries the code, such as a
+download against a deleted month.
 
 **Audit rank 37 of 40; severity medium as merged; verification: one reviewer, severity lowered.** The front-end dictionary is complete (1,403 keys in both languages), but the text Criss reads at the worst moments is not in it. A refused save or decision shows the backend's English sentence verbatim; the two amber advisory boxes at the top of a month print English prose; the 'amount mismatch' chip is a hard-coded English string; the crash page is English only; the two PDFs and CSV headers are English. Criss's August note was 'language should not differ from what is set by user'; the shipped fix covered review reasons and upload issues only, and the Portuguese wording of the newest screens has never been read by her.
 
@@ -5775,7 +5811,21 @@ Answer: from the fill colour of that charge's row in the Chase workbook Criss up
 **Test.** `tests/test_pdf_tables_fit_the_page.py` (8) records every Table the document template places while the real builder runs, and asserts each is within its frame, no cell's text is wider than its column, and no count, date, amount or currency breaks a word. Fixtures: a 105-row flat listing with an unreadable amount, a per-card month with receipts, reimbursements and copies, cost centers with cards inside, a trip, the reconciliation report with three cards and with one, and both downloads of a two-card month through the routes. `regress_check` with the old widths: month report 5 red, reconciliation report 3 red; a listing Date column narrowed to 40 pt goes red on the word-break check alone.
 
 **Real data**, read-only DB copy of 2026-09-17 rendered locally in DejaVu Sans with the receipt files, July and August, both documents plus a synthetic cost-center assignment: every table 502 or 503 pt. Rasters of the August listing, the July listing and cost-center listing, and both months' coverage and charge pages show every column inside both edges.
-### 144. Residuals: grid Books-as, decision-reply summary, bank-transfer private suggestion (licence: defect, covered) (SHIPPED 2026-09-17, pending PR)
+### 144. Residuals: grid Books-as, decision-reply summary, bank-transfer private suggestion (licence: defect, covered) (SHIPPED 2026-09-17, pending PR) (SPA copy APPLIED and DRIVEN 2026-09-18, EN and PT; CLOSED)
+
+**2026-09-18: the copy is live and driven.** July's RODRIGO TANURE TRICARICO
+CONSULTORIA row of 2026-07-31 (BRL 27,203.34) reads the prompt's own sentence in
+both languages instead of the backend prose, with no generic "Assign this
+expense's paying card" anywhere on the page, and the row's state beside it is
+unchanged and correct: "Paid by bank transfer", the paid-through picker, no
+person question. Check 3 holds by live API read: July `summary.n_needs_person` is
+still 13.
+
+Found by the re-crawl rule, not by being told: the owner had already published it,
+and the prompt was minutes from being handed over for the second time in two
+sessions. That rule is the one thing standing between this loop and repeating the
+2026-09-18 five-prompt hand-over, and it works only because PROMPT-STATUS now
+phrases it as a rule about actions rather than a fact about audits.
 
 Three leftovers of items 95, 99 and 111: in each the software states something
 it knows to be otherwise. Found by reading the code against the shipped items,
