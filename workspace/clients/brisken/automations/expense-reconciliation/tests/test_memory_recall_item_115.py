@@ -143,10 +143,37 @@ def test_a_corrected_category_arrives_on_next_months_receipt(client, monkeypatch
         label="August 2026", name="aug.jpg", data=JPG + b"aug",
     )
     row = _row(client, august, "Contoso")
-    # The correction arrives pre-filled, and because the receipt's own items
-    # read something else the row asks for one glance rather than claiming
-    # certainty. Same reason code (and so the same sentence and the same
-    # Keep button) as a vendor-name guess.
+    # The correction arrives pre-filled. Since note item M1 (2026-09-18) the
+    # sign-off's registry upsert makes it the MERCHANT'S default, so the
+    # row reads it from the registry with no glance: one merchant, one
+    # category, is the rule the owner stated. The glance stays on a rule
+    # that reaches a merchant with no default (next test).
+    assert row["posting_category"]["category"] == "Office Supplies & Consumables"
+    assert row["posting_category"]["source"] == "registry"
+    assert row["review"]["reason_code"] != "vendor_guess"
+
+
+def test_a_memory_page_rule_on_a_merchant_with_no_default_asks_for_a_glance(
+    client, monkeypatch
+):
+    # A rule a person taught on the Memory page, for a merchant the registry
+    # has no default for: item 115's behaviour, unchanged by M1. The rule
+    # fills the row, and because the receipt's own items read something
+    # else the row asks for one glance rather than claiming certainty. Same
+    # reason code (and so the same sentence and the same Keep button) as a
+    # vendor-name guess.
+    resp = client.put("/api/memory/categories", json={
+        "legal_entity_id": "Corporate Services", "vendor": "Contoso Hardware",
+        "category": "Office Supplies & Consumables",
+    })
+    assert resp.status_code == 200, resp.text
+    assert client.get("/api/settings").json()["merchants"] == {}
+
+    august = _month(
+        client, monkeypatch, _chair_receipt(date="2026-08-02"),
+        label="August 2026", name="aug.jpg", data=JPG + b"aug",
+    )
+    row = _row(client, august, "Contoso")
     assert row["posting_category"]["category"] == "Office Supplies & Consumables"
     assert row["posting_category"]["source"] == "learned"
     assert row["review"]["state"] == "check"
@@ -210,7 +237,18 @@ def test_a_rule_saved_with_no_company_reaches_a_row_that_has_one(client, monkeyp
     row = _row(client, august, "Contoso")
     assert row["legal_entity_id"] == "Corporate Services"
     assert row["posting_category"]["category"] == "Office Supplies & Consumables"
-    assert row["posting_category"]["source"] == "learned"
+    # The sign-off also grew the registry, so M1 reads the category from
+    # there ("registry"). Take the registry away and the company-less RULE
+    # alone still reaches the row that has a company: hole 2, as built.
+    assert row["posting_category"]["source"] == "registry"
+    resp = client.put("/api/settings", json={"merchants": {}})
+    assert resp.status_code == 200, resp.text
+    _add(client, monkeypatch, august, _chair_receipt(date="2026-08-09"),
+         name="aug2.jpg", data=JPG + b"aug2")
+    later = [r for r in _rows(client, august) if r["document_id"] != row["document_id"]]
+    assert later[0]["legal_entity_id"] == "Corporate Services"
+    assert later[0]["posting_category"]["category"] == "Office Supplies & Consumables"
+    assert later[0]["posting_category"]["source"] == "learned"
 
 
 # ── hole 3: sign-off on a month with a statement teaches the pairs ──────
@@ -323,8 +361,9 @@ def test_a_reviewer_edit_survives_a_remembered_category(client, monkeypatch):
     )
     row = _row(client, august, "Contoso")
     aug_doc = row["document_id"]
-    # The remembered category filled the row; the reviewer disagrees.
-    assert row["posting_category"]["source"] == "learned"
+    # The remembered category filled the row (through the registry the
+    # sign-off grew, since M1); the reviewer disagrees.
+    assert row["posting_category"]["source"] == "registry"
     _set_category(client, august, aug_doc, "Travel & Transport")
 
     # A later arrival re-runs the whole pass over the month. Her category

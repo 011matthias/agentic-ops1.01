@@ -189,7 +189,6 @@ def categorize_receipts(
     chart_of_accounts: list[str] | None = None,
     learned: "MerchantCategoryLookup | None" = None,
     override_er_category: bool = False,
-    registry_backed: "frozenset[str] | None" = None,
     judge_each_receipt: "frozenset[str] | None" = None,
 ) -> list[Receipt]:
     """Return a new list of receipts with line_items carrying
@@ -214,16 +213,13 @@ def categorize_receipts(
     from Zoho Books posting history that nobody has validated still stays
     below a confident line read. None / empty => behaviour unchanged.
 
-    `registry_backed` (item 115, internal) names the documents whose
-    merchant carries a registry default category. The registry already
-    preempts a line read, and a per-company learned row already outranks
-    the registry (2026-08-07), so for those documents the learned row
-    applies over the line read whatever taught it -- the alternative was
-    the old cycle, where a remembered row blocked the merchant default and
-    the line read won both. `judge_each_receipt` (item 115, internal) names
-    the documents whose merchant is marked multi-category: that mark is an
-    instruction to judge every receipt on its own items, so no remembered
-    category flattens its lines.
+    A merchant with a registry default category never reaches this function
+    (note item M1, 2026-09-18): `categorize_receipts_with_registry` stamps
+    it before the line read, so item 115's `registry_backed` plumbing is
+    gone. `judge_each_receipt` (item 115, internal) names the documents
+    whose merchant is marked multi-category: that mark is an instruction to
+    judge every receipt on its own items, so no remembered category
+    flattens its lines.
 
     `override_er_category` (2026-07-21 owner decision) flips who owns the
     posting account. Default False keeps the 2026-06-16 behaviour (the
@@ -239,9 +235,6 @@ def categorize_receipts(
         _categorize_one(
             r, client, chart_of_accounts, learned,
             override_er_category=override_er_category,
-            registry_backed=bool(
-                registry_backed and r.document_id in registry_backed
-            ),
             judge_each_receipt=bool(
                 judge_each_receipt and r.document_id in judge_each_receipt
             ),
@@ -250,24 +243,27 @@ def categorize_receipts(
     ]
 
 
+REGISTRY_DEFAULT_REASONING = "merchant registry default"
+
+
 def apply_registry_category(
     receipt: Receipt,
     category: str | None,
     zoho_account: str | None,
     *,
     override_er_category: bool = False,
+    reasoning: str = REGISTRY_DEFAULT_REASONING,
 ) -> Receipt:
     """Stamp a deterministic REGISTRY categorization on every line of a
     receipt whose merchant carries a registry default category (2026-07-29).
 
-    Deterministic and LLM-preempting (the caller does not run the LLM for
-    these receipts), but since 2026-08-07 it sits BELOW a per-entity LEARNED
-    row: the caller only routes a receipt here when memory has nothing
-    entity-specific for that merchant. `confidence=1.0`,
-    `source=REGISTRY`. When the registry
-    also names a `zoho_account` it is kept (the ER account never clobbers it);
-    when it does not, the account resolves from the ER `zoho_category` / chart
-    exactly as the LLM path does, via `_carry_zoho_account`.
+    Deterministic and LLM-preempting: the caller does not run the LLM for
+    these receipts. `confidence=1.0`, `source=REGISTRY`. `zoho_account` is
+    whatever the caller resolved for this receipt's COMPANY (note item M1:
+    the company's rule first, the registry's own account second), and
+    `reasoning` says which; when neither names one, the account resolves
+    from the ER `zoho_category` / chart exactly as the LLM path does, via
+    `_carry_zoho_account`.
 
     No-op when the registry entry carries no category (naming-only merchant);
     the caller then runs the LLM as usual and only the canonical display name
@@ -279,7 +275,7 @@ def apply_registry_category(
         zoho_account=zoho_account or None,
         confidence=1.0,
         source=ClassificationSource.REGISTRY,
-        reasoning="merchant registry default",
+        reasoning=reasoning,
     )
     items = receipt.line_items or (_synthesize_total_line(receipt),)
     stamped = replace(receipt, line_items=tuple(replace(li, categorization=cat) for li in items))
@@ -303,31 +299,40 @@ def categorize_receipts_with_registry(
     scope_groups=None,
 ) -> tuple[list[Receipt], dict]:
     """Categorize a batch of receipt-first expenses with the merchant registry
-    as a deterministic tier above the LLM (2026-07-29) and below per-entity
-    memory (2026-08-07).
+    as the deterministic tier above the LLM (2026-07-29).
 
-    Tier order since item 115: LEARNED (a rule a person taught, or any rule
-    for a merchant the registry also has a default for) > REGISTRY > a
-    confident LINE read > LEARNED (a Zoho-seeded rule nobody validated) >
-    LLM / keyword vendor guess > REVIEW. A receipt with no readable line
-    items has no LINE tier, so there memory leads outright, as it has since
-    Phase 2.
+    Tier order since note item M1 (owner directive 2026-09-18, Dirk's rule:
+    binding a merchant to ONE category is right about 90% of the time, and
+    the exceptions vary by company on the ACCOUNT): a reviewer override >
+    REGISTRY (the merchant's default category, with the account the
+    (company, vendor) rule names, see `_registry_account`) > LEARNED (a rule
+    a person taught, on a merchant with no registry default) > a confident
+    LINE read > LEARNED (a Zoho-seeded rule nobody validated) > LLM /
+    keyword vendor guess > REVIEW. A receipt with no readable line items has
+    no LINE tier, so there memory leads outright, as it has since Phase 2.
+
+    This retires the 2026-08-07 order for the CATEGORY only: a per-company
+    learned row used to outrank the registry default outright, which meant
+    a merchant with a default was judged one way for a company with a rule
+    and another way for a company without one. The reason for that order
+    (the same merchant books to a different ACCOUNT per company) is kept
+    whole: the rule still decides the account. A merchant marked
+    `multi_category` resolves its name only and is judged per receipt.
 
     For each receipt it resolves a canonical merchant (stamping
-    `canonical_vendor` + `vendor_source="registry"` on every match — naming is
-    independent of categorization, so a merchant whose CATEGORY comes from
-    memory still displays the registry's canonical name). A match that carries
-    a default category AND has no learned row for this receipt's company is
-    stamped a REGISTRY categorization and SKIPS the LLM (deterministic-first);
-    the rest run through `categorize_receipts`, and through
-    `adjudicate_receipts` when `cat_chart` is supplied and
+    `canonical_vendor` + `vendor_source="registry"` on every match; naming is
+    independent of categorization). A match that carries a default category
+    is stamped a REGISTRY categorization and SKIPS the LLM
+    (deterministic-first); the rest run through `categorize_receipts`, and
+    through `adjudicate_receipts` when `cat_chart` is supplied and
     `override_er_category` is on. An empty / None registry behaves exactly
     like `categorize_receipts` alone.
 
     Returns `(receipts, registry_matches)` where `registry_matches` maps
     document_id -> MerchantMatch, for the grid's display vendor + provenance.
-    Order is preserved. Consulted in the statement-free expense paths only;
-    `reconcile()` never calls it."""
+    Order is preserved. Consulted in the expense paths and, since M1, for a
+    month's receiptless charges (`categorize_charges`); `reconcile()` itself
+    never calls it."""
     registry_matches: dict = {}
     if registry:
         for r in receipts:
@@ -344,38 +349,17 @@ def categorize_receipts_with_registry(
             else r
             for r in receipts
         ]
-    # Precedence (2026-08-07, owner call on reviewer feedback r1c): a
-    # per-entity LEARNED row OUTRANKS the registry default. The registry
-    # holds one canonical answer per merchant, but the same merchant
-    # legitimately posts to different accounts per legal entity — Brisken's
-    # own Zoho history has `anthropic` under "Other Infra and IT Costs" for
-    # Corporate Services and "COGS - DEV Infrastructure" for Cloud Services,
-    # and the Zoho seed skipped Amazon / Microsoft / OpenAI precisely because
-    # their real postings disagree. So the registry now stamps only the
-    # merchants memory has nothing entity-specific on; where both exist the
-    # entity-specific fact wins and the receipt flows through
-    # `categorize_receipts`, which applies LEARNED on the vendor-fallback
-    # path (still below a confident line read — the Phase-2 invariant).
-    # `_company_recall` is the same predicate that will actually apply the
-    # row, so the two can never disagree about who wins.
-    #
-    # Item 115 closes the cycle this created. A receipt WITH line items used
-    # to fall past both: the learned row sent it here, and here the line read
-    # beat the learned row, so the merchant default it displaced never
-    # applied either. Those documents are named in `registry_backed`, and
-    # `categorize_receipts` applies the learned row over the line read for
-    # them. A rule recalled on the VENDOR alone (this receipt has no company)
-    # does not displace the registry: the registry's default is curated and
-    # company-independent, which is exactly what a company-less receipt needs.
-    rec_by_doc = {r.document_id: r for r in receipts}
-    cat_docs = {
-        doc
-        for doc, m in registry_matches.items()
-        if m.category and _company_recall(rec_by_doc[doc], learned) is None
-    }
-    registry_backed = frozenset(
-        doc for doc, m in registry_matches.items() if m.category
-    ) - cat_docs
+    # Note item M1 (2026-09-18): every merchant with a registry default is
+    # stamped here, whatever memory holds for it. The 2026-08-07 order let a
+    # per-company learned row outrank the default (Brisken's own books post
+    # `anthropic` to "Other Infra and IT Costs" for Corporate Services and
+    # to "COGS - DEV Infrastructure" for Cloud Services), and item 115 then
+    # had to route those receipts around the line read. Dirk's 2026-09-18
+    # clarification separates the two facts the old order conflated: the
+    # CATEGORY is the merchant's (one per merchant, the registry's), and
+    # what varies by company is the ACCOUNT, which the (company, vendor)
+    # rule still decides through `_registry_account`.
+    cat_docs = {doc for doc, m in registry_matches.items() if m.category}
     to_llm = [r for r in receipts if r.document_id not in cat_docs]
     multi_category = frozenset(
         doc for doc, m in registry_matches.items() if m.multi_category
@@ -383,7 +367,6 @@ def categorize_receipts_with_registry(
     categorized = categorize_receipts(
         to_llm, client=client, chart_of_accounts=chart_of_accounts,
         learned=learned, override_er_category=override_er_category,
-        registry_backed=registry_backed,
         judge_each_receipt=multi_category,
     )
     if override_er_category and cat_chart is not None:
@@ -394,11 +377,52 @@ def categorize_receipts_with_registry(
     for r in receipts:
         if r.document_id in cat_docs:
             m = registry_matches[r.document_id]
+            account, reasoning = _registry_account(r, m, learned)
             by_doc[r.document_id] = apply_registry_category(
-                r, m.category, m.zoho_account,
+                r, m.category, account,
                 override_er_category=override_er_category,
+                reasoning=reasoning,
             )
     return [by_doc[r.document_id] for r in receipts], registry_matches
+
+
+def _registry_account(
+    receipt: Receipt, match, learned: "MerchantCategoryLookup | None"
+) -> tuple[str | None, str]:
+    """The posting account for a receipt whose merchant has a registry
+    default category, and the provenance sentence that names its source
+    (note item M1).
+
+    The (company, vendor) rule memory holds for this receipt decides the
+    account: the rule saved under the receipt's own company, else one saved
+    with no company, else (for a receipt with no company) the vendor's
+    rules when they agree on it (`MerchantCategoryLookup.recall`, item
+    115). A rule contributes its account only when it agrees with the
+    registry on the category or a person stands behind it (a sign-off
+    correction, a Memory-page edit or a validated row): a row seeded from
+    Zoho Books posting history under ANOTHER category is how the books
+    once posted, not an account for this category, so it is left alone.
+    With no rule, or a rule that names no account, the registry's own
+    account stands, which may be nothing."""
+    recall = _recall_for(receipt, learned)
+    if (
+        recall is None
+        or not recall.zoho_account
+        or (recall.category != match.category and not recall.taught_by_person)
+    ):
+        return match.zoho_account, REGISTRY_DEFAULT_REASONING
+    if recall.kind == RECALL_VENDOR_ONLY:
+        companies = ", ".join(
+            r.legal_entity_id or "no company" for r in recall.rows
+        )
+        rule = f"the rules for {companies}, which agree"
+    else:
+        company = recall.rows[0].legal_entity_id
+        rule = (
+            f"the rule saved for {company}" if company
+            else "the rule saved with no company"
+        )
+    return recall.zoho_account, f"{REGISTRY_DEFAULT_REASONING}; account from {rule}"
 
 
 def _categorize_one(
@@ -408,7 +432,6 @@ def _categorize_one(
     learned: "MerchantCategoryLookup | None" = None,
     *,
     override_er_category: bool = False,
-    registry_backed: bool = False,
     judge_each_receipt: bool = False,
 ) -> Receipt:
     """Apply the LD-2 tier rules to a single receipt."""
@@ -418,16 +441,16 @@ def _categorize_one(
     if has_lines:
         # LINE path (Tier 1). Item 115: memory IS consulted here now, but it
         # only leads when a person stands behind the rule (a correction saved
-        # at sign-off or the button, a Memory-page edit, a validated row) or
-        # when the merchant also carries a registry default the line read
-        # would otherwise have displaced. A Zoho-seeded row nobody has
-        # validated still sits below the line read (the Phase-2 invariant,
-        # kept: those rows are how the books posted, not what a person said
-        # about this merchant). A multi-category merchant is never flattened.
+        # at sign-off or the button, a Memory-page edit, a validated row). A
+        # Zoho-seeded row nobody has validated still sits below the line read
+        # (the Phase-2 invariant, kept: those rows are how the books posted,
+        # not what a person said about this merchant). A multi-category
+        # merchant is never flattened. A merchant with a registry default
+        # never arrives here (note item M1: the registry stamps it first).
         leads = (
             recall is not None
             and not judge_each_receipt
-            and (recall.taught_by_person or registry_backed)
+            and recall.taught_by_person
         )
         if not leads:
             if client is not None:
@@ -528,19 +551,6 @@ def _recall_for(
     if learned is None or not receipt.detected_vendor:
         return None
     return learned.recall(receipt.legal_entity_id, receipt.detected_vendor)
-
-
-def _company_recall(
-    receipt: Receipt, learned: "MerchantCategoryLookup | None"
-) -> "LearnedRecall | None":
-    """The recall that outranks the merchant registry: one keyed on this
-    receipt's own company (or saved with no company at all). A recall the
-    VENDOR alone produced does not, so the registry's curated default still
-    stamps a company-less receipt."""
-    recall = _recall_for(receipt, learned)
-    if recall is None or recall.kind == RECALL_VENDOR_ONLY:
-        return None
-    return recall
 
 
 def _learned_categorization(recall: "LearnedRecall") -> Categorization:
