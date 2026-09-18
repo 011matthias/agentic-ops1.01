@@ -1503,3 +1503,30 @@ def test_memory_view_list_contract(tmp_path):
     assert [c["entity"] for c in vendor["companies"]] == [
         "Cloud Services", "Corporate Services",
     ]
+def test_every_candidate_carries_card_evidence_and_review_code_is_absent_or_coded(payloads):
+    """Item X1. `rows[].candidates[].card_evidence` is on every candidate,
+    `{receipt, charge}` from the matcher's closed sets
+    (`deterministic.RECEIPT_CARD_EVIDENCE` / `CHARGE_CARD_EVIDENCE`), never
+    null; `rows[].candidates[].review_code` is ABSENT unless the matcher set
+    `requires_review` for a coded reason, and then one of its codes. A new
+    value in either is a rule-5 change (api-contract). Route-level:
+    `tests/test_match_x1_description_and_no_card.py`."""
+    from expense_recon.matching.deterministic import (
+        CHARGE_CARD_EVIDENCE,
+        NO_CARD_RIVAL_REVIEW,
+        RECEIPT_CARD_EVIDENCE,
+    )
+
+    seen = 0
+    for view in payloads["run"]:
+        for row in view["rows"]:
+            for cand in row["candidates"]:
+                seen += 1
+                ev = cand["card_evidence"]
+                assert set(ev) == {"receipt", "charge"}, cand
+                assert ev["receipt"] in RECEIPT_CARD_EVIDENCE, cand
+                assert ev["charge"] in CHARGE_CARD_EVIDENCE, cand
+                if "review_code" in cand:
+                    assert cand["review_code"] in {NO_CARD_RIVAL_REVIEW}, cand
+                    assert cand["requires_review"] is True, cand
+    assert seen, "the contract fixtures carry no candidate"

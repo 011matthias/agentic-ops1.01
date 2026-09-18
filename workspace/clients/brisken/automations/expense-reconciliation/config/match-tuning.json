@@ -37,5 +37,7 @@
   "blend_vendor_weight": 0.15,
   "uniqueness_spoken_for": true,
   "uniqueness_vendor_dominance_min": 0.5,
-  "uniqueness_vendor_dominance_margin": 0.25
+  "uniqueness_vendor_dominance_margin": 0.25,
+  "vendor_ignore_reference_tokens": true,
+  "no_card_rival_review": true
 }

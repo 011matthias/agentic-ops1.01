@@ -3336,7 +3336,7 @@ def build_view(
     # confirmed before item 137 (live August 2026: LOVABLE 25.00 on 3645
     # with a receipt picked as 2838) is named on the page, not only the next
     # proposal.
-    from ..matching.deterministic import _tx_card_keys, cards_differ
+    from ..matching.deterministic import _tx_card_keys, card_evidence, cards_differ
 
     card_res_view = resolve_batch_row_cards(receipts, run.config, field_overrides or {})
     card_scope_view = {
@@ -3433,6 +3433,18 @@ def build_view(
         else `{}` so the key is absent rather than false."""
         return {"rejected": True} if charge_status == STATUS_REJECTED else {}
 
+    def _candidate_card_evidence(tx, doc: str) -> dict:
+        """Item X1: `card_evidence: {receipt, charge}` from the matcher's own
+        definition, read on the receipt as the matcher saw it (the card
+        scope baked). Always present on a candidate; `{}` only when the
+        receipt is not in the pool at all (a borrowed copy the view has
+        lost), so the key is absent rather than invented."""
+        receipt = card_scope_view.get(doc) or rec_by_id.get(doc)
+        if receipt is None:
+            return {}
+        rec_src, chg_src = card_evidence(tx, receipt)
+        return {"card_evidence": {"receipt": rec_src, "charge": chg_src}}
+
     for tx in transactions:
         tx_id = tx.transaction_id
         decision = decisions.get(tx_id)
@@ -3506,6 +3518,11 @@ def build_view(
                     # (none / lag / mismatch). Label only; ABSENT when
                     # either date is missing.
                     **_candidate_date_gap(tx, r),
+                    # Item X1: where each side's card came from, on every
+                    # candidate; and the matcher's review code, ABSENT
+                    # unless it flagged the pair.
+                    **_candidate_card_evidence(tx, m.document_id),
+                    **({"review_code": m.review_code} if m.review_code else {}),
                 }
             )
         # PR B — a hand-made manual match: the held receipt was never an
@@ -3534,6 +3551,7 @@ def build_view(
                     ),
                     **_from_batch(held_doc),
                     **_candidate_date_gap(tx, rec_by_id[held_doc]),
+                    **_candidate_card_evidence(tx, held_doc),
                 }
             )
 
