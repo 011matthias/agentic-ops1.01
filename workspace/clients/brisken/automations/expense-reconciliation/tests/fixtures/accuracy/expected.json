@@ -1,0 +1,30 @@
+{
+  "eur-card-fx-2026-06": {
+    "ambiguous": 0,
+    "composite": 4.6,
+    "confirmed": 6,
+    "deferred_ok": 2,
+    "determ_ok": 4,
+    "determ_wrong": 0,
+    "double_bound_receipts": 0,
+    "invariant_ok": true,
+    "nc_deferred": 1,
+    "nc_determ_matched": 0,
+    "no_charge": 1,
+    "unresolved": 0
+  },
+  "usd-card-2026-05": {
+    "ambiguous": 1,
+    "composite": 2.3,
+    "confirmed": 4,
+    "deferred_ok": 1,
+    "determ_ok": 2,
+    "determ_wrong": 0,
+    "double_bound_receipts": 0,
+    "invariant_ok": true,
+    "nc_deferred": 0,
+    "nc_determ_matched": 0,
+    "no_charge": 2,
+    "unresolved": 0
+  }
+}

@@ -412,6 +412,26 @@ uv run --with 'pytest>=8.0' pytest -v
 
 Expected: 98 passed.
 
+### Accuracy gate (backlog item 127)
+
+Matching accuracy is measured by the pinned scorer
+(`tools/scorers/recon-match-accuracy.py`) and gated in two places. CI
+(`.github/workflows/expense-recon-tests.yml`, job `accuracy`) replays the
+committed synthetic labelled bundles under `tests/fixtures/accuracy/` and
+compares twelve per-bundle fields with `expected.json` on exact equality: the
+scorer is deterministic, so a red job means the matcher's behaviour on those
+bundles changed. If the change is deliberate, re-record in the same PR
+(`uv run tools/recon_accuracy_check.py ci --fixtures <this dir>/tests/fixtures/accuracy --expected <this dir>/tests/fixtures/accuracy/expected.json --write-expected`,
+from the repo root) and the `expected.json` diff is the review artefact; if
+not, fix the matcher. The six real labelled months never reach CI (gitignored
+client context), so `.claude/hooks/recon-accuracy-deploy-gate.py` scores them
+before every `flyctl deploy` of `brisken-expense-recon`
+(`uv run tools/recon_accuracy_check.py real`) and asks when a split drops
+below `tools/recon-accuracy-baseline.json` (composite, wrong deterministic
+matches, no_charge false positives, the reconciliation invariant) or cannot
+be measured. `... real --markdown` prints the per-split and per-bundle block
+for a PR body; `--write-baseline` re-records a deliberate move.
+
 Four guards for defect classes that repeated (item 128): `test_reader_parity.py` (CSV and Excel readers agree field by field), `test_view_contract.py` `*_vocabulary_is_pinned` (row_type, reason_code, month_health, rematch trigger as closed literals), `test_extraction_prompt_pin.py` (the reading prompt's fingerprint), `test_smtp_listener_e2e.py` (a real SMTP session through the listener to the month).
 
 ## Data we need from Chris (smallest viable set)
