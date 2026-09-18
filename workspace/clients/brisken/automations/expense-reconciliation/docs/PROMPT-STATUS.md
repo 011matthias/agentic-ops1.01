@@ -325,6 +325,7 @@ promoted to the prompt below. Nothing in the Applied table is waiting on a drive
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
+| `lovable-no-card-evidence-prompt.md` (item X1, 2026-09-18) | `card_evidence`, `review_code`, `wb.noCardRival`, `wb.noCardOnReceipt`, `wb.chargeCardFromAccount` | Backend live with the X1 deploy; the flagged line has no live case (0 pairs flagged on July and August), the "no card on the receipt" line has 19 on July |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.
