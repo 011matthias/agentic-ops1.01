@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-18 | Expense-Recon Matching X1 | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Expense-Recon%20Matching%20X1/Mini-Checkpoint-1.md) |
 | 2026-09-18 | Brisken Recon Traceability T2 | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Brisken%20Recon%20Traceability%20T2/Mini-Checkpoint-1.md) |
 | 2026-09-18 | Brisken Recon Owner Note Triage | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Brisken%20Recon%20Owner%20Note%20Triage/Mini-Checkpoint-1.md) |
 | 2026-09-18 | Brisken Recon Card Accounts And The Slow Drop | client-dev | [→](docs/2026-09-18%20-%20Brisken%20Recon%20Card%20Accounts%20And%20The%20Slow%20Drop/Checkpoint.md) |
