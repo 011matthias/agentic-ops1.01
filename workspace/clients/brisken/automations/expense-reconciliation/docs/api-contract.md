@@ -5028,3 +5028,264 @@ Route-level in `tests/test_registry_category_by_company_m1.py`; the memory
 payload's lists pinned in `tests/test_view_contract.py`
 (`MEMORY_CONTRACT`); precedence in `tests/test_merchant_registry.py`. SPA
 half: `docs/lovable-memory-by-company-prompt.md`.
+## A statement upload has an identity: `statement_id` + `coverage[].statement_ids` (note item T2, backlog item 150, 2026-09-18)
+
+A `statements[]` entry was keyed by `file`, the name on disk. That name is
+made unique PER UPLOAD (`Chase.xlsx`, then `Chase-2.xlsx`), so two per-card
+exports that share the bank's filename got two names for what may be one
+file, a re-upload of the same workbook got a second name for the same bytes,
+and nothing on either payload said whether two entries were the same file.
+A statement line has had a content-derived id since item 29
+(`transaction_id`); the upload that printed it now has one too.
+
+**`statements[].statement_id`** is the first 16 hex characters of the
+sha256 over the STORED BYTES of the upload. The same bytes uploaded twice
+(which the fold absorbs as `n_new: 0`), or re-read after a restore, yield
+the same id; a corrected file yields a new one. Parallel field, rule 1
+below: ABSENT on every entry written before 2026-09-18, never null, so a
+reader tells "not recorded" from "recorded". A re-read
+(`POST .../statements/reread`) reads the same bytes off disk and records the
+id on every entry it rebuilds, so an old month gains ids at its next re-read
+and nothing else has to change. Nothing outside the tool carries it: the
+acknowledgement mail, the CSV and both PDFs are untouched, by the owner's
+ruling that ids reach the outside with the later Zoho Books integration.
+
+```json
+{ "file": "Chase-2.xlsx",
+  "upload_name": "Chase.xlsx",
+  "statement_id": "9f3c1a7be04d5e62",
+  ... }
+```
+
+**`coverage[].statement_ids[]`** rides beside `coverage[].statements[]` on
+both payloads: the ids of the entries named in `statements` that carry one,
+deduped, in upload order. The two lists are NOT positional: three files of
+which two are the same bytes read `statements: [a, b, c]` and
+`statement_ids: [x, y]`, and an upload recorded before ids existed is named
+in `statements` with nothing to add here. Join through `statements[]` by
+`file` when the pairing matters. `coverage[].statements[]` keeps its type
+(strings) and its content. `card_sections[].statements[]` is derived from
+`coverage[]` and stays file names; a consumer needing the id on a tab joins
+it through `coverage[]` on the same payload.
+
+**The anchors are keyed by id as well.** The snapshot's `statement_anchors`
+(not on either payload; see "The statements a month has taken") records each
+upload's id-to-row map under its `file` name AND under its `statement_id`,
+the same map twice, so the writeback and the re-read can address an upload
+by id when two exports share a filename, and every reader that knows only
+the file name keeps working.
+
+**`GET /runs/{id}/statement-categorized.xlsx?statement_id=`** annotates the
+upload with that id, resolved against `statements[].statement_id` exactly
+the way `?file=` is resolved against `statements[].file`; an id the month
+never recorded is the same 404 (`statement_not_workbook`). When both are
+given the id decides. Two entries can share an id (the same bytes twice);
+they printed the same rows at the same sheet rows, so the first is annotated
+and the result is the same workbook either way.
+
+Route-level in `tests/test_statement_identity_t2.py`: an attach records the
+id on both payloads and in both anchor keys; the same bytes twice share one
+id and a corrected file gets another; a re-read keeps the id; an entry
+written before the id reads absent and gains one on re-read; the writeback
+picks the FIRST export by id while the month's current statement is the
+second. The SPA needs no change: nothing renders the id yet.
+## Matching when the card cannot be identified, and the description's reference tokens (item X1, 2026-09-18)
+
+Owner, 2026-09-18: the statement description must count in matching, and
+when the card on an expense cannot be identified another logic must take
+over so the expense is still matched on other criteria. Both halves are in
+`matching/deterministic.py`; no route or request changes.
+
+### The no-card fallback, defined once: `card_evidence`
+
+`deterministic.card_evidence(tx, receipt)` is the one definition of where
+each side of a pair got its card, read by the matcher and by every candidate
+on `GET /api/runs/{id}`:
+
+| Side | Value | Meaning |
+|---|---|---|
+| receipt | `override` | picked by hand on the row |
+| receipt | `hint` | the printed payment method, or a hint word assigned to a card, resolved by the card registry |
+| receipt | `learned` | remembered from an earlier month. This is also where a per-merchant card fact lands once memory learns one (`Receipt.card_scope_keys` / `card_scope_source`): a remembered card is card evidence, and the fallback below stops applying |
+| receipt | `printed` | digits the receipt prints that no registry card names |
+| receipt | `none` | nothing printed, picked, assigned or remembered: **the fallback**. The receipt is matched across every card's charges on amount, date, currency, the reference and the uniqueness gate, exactly as one naming a card the statement does not carry |
+| charge | `row` | the statement's own card column on the row |
+| charge | `account` | the row names no card and the card is the upload's account (the Chase PDF's cycle marker, a single-card export): the account's card, not a card the row named. The matcher still scopes by it, because on every labelled dataset the account IS that card; the value is there so the page can say "account default" rather than print it as a row fact |
+| charge | `none` | neither |
+
+`rows[].candidates[].card_evidence: {receipt, charge}` is on every candidate
+(the hand-made manual candidate included), never null. A new value is a
+rule-5 change.
+
+### The review clause: `review_code`
+
+A pair whose receipt side is `none` keeps its match and its rank, but asks
+for review when another deterministic candidate for the SAME receipt sits on
+a DIFFERENT card and is not spoken for by clean exact evidence elsewhere
+(round B's rule): the tool cannot say which card paid, so a person does.
+Then `candidates[].requires_review` is `true`, `reason` ends "Review: the
+receipt names no card and a charge on another card also fits (LOVABLE 25.00
+USD on 3645).", and `candidates[].review_code` is
+`no_card_rival_on_other_card`. The row stays `effective_bucket: reconciled`
+and never confirms itself (item 76). `review_code` is ABSENT on every other
+candidate; a pair with card evidence on both sides is never reviewed for
+this reason. It rides on `Match.review_code` in the snapshot ("" before this
+item). Knob `no_card_rival_review` (default true) turns the clause off; the
+fallback itself is not a knob.
+
+Measured 2026-09-18 on replays of July, August and September 2026 and the
+six labelled bundles: 0 pairs flagged. July's one candidate (`0063` Marinho
+BRL 10.23 on 3876 against GITHUB 10.00 on 2838) is excluded because GITHUB
+holds an exact receipt of its own. September holds 49 receipts, 27 naming no
+card, and no statement yet; the clause is what stands between them and a
+silent pick between two cards when it lands.
+
+### The description counts: `vendor_pct` without its reference tokens
+
+`_vendor_score` compares the description's merchant words: a token of four
+or more characters carrying three or more digits (`strip_reference_tokens`:
+"G173514057", "P3078900231", "1251593381", "X37L83BI5", "B013", "2640") is an
+order or invoice number, not a merchant word, and no longer halves the score
+of a pair whose words agree. Two digits stay a word ("BASE44"); a description
+that is only a number compares as itself. Knob
+`vendor_ignore_reference_tokens` (default true).
+
+Measured: live July's Microsoft invoice (`0006`, printing G173514057, held
+by "Microsoft-G173514057" 718.20 on 2838) reads `vendor_pct` 50 today and 100
+at the next re-match, which crosses the self-confirm floor (75): the row
+confirms itself instead of waiting for a click. Two bundle pairs rise (0.50
+to 1.00, 0.43 to 0.64) with no class move. Attribution classes are identical
+before and after on all nine datasets, labelled-wrong unchanged (July 0,
+August 1: the pre-existing `0025` on BASE44 50.00, item 133), bundles 70/95.
+
+### Not shipped, measured as a dead end
+
+Reference tokens shared between the description and the receipt's numbers as
+a PROMOTING signal (tie-break, uniqueness dominance, merchant precedence):
+across July, August, September and the six bundles exactly one pair shares
+such a token (the Microsoft pair above), it is already unique and exact, and
+`reference_match` already fires on it. A masked card fragment inside a
+description: none exists on any of the nine datasets. Neither rule moves a
+row, so neither is in the code.
+
+Route-level in `tests/test_match_x1_description_and_no_card.py`; the
+attribution tool reads the clause off `match_month`'s own outcome
+(`tools/tests/test_recon_match_attribution_gate.py`). SPA half:
+`docs/lovable-no-card-evidence-prompt.md`.
+
+## Whether the receipt travelled encrypted: `submitted_by.transport_tls` (item 125, 2026-09-18)
+
+The intake mailbox now offers opportunistic STARTTLS. Whether a given mail's
+SMTP session was actually encrypted before its body was sent is recorded as
+**`transport_tls`** (a bool) inside the mail-provenance object: `true` when
+the session completed STARTTLS before DATA, `false` when the mail was
+delivered in cleartext. It rides wherever the intake provenance rides, so on
+`GET /api/expense-batches/{id}` it appears inside each mailed expense's
+`submitted_by` object beside `person` / `source` / `address` / `archive`,
+and on `GET /api/inbound/log` and the archive meta it appears on the
+acceptance row.
+
+Present ONLY when the intake recorded it, which every real SMTP arrival on
+or after 2026-09-18 does. It is ABSENT (never null) on a manually uploaded
+receipt (which carries no `submitted_by` at all), on a receipt whose mail
+was archived before 2026-09-18, and on any non-SMTP intake path, so a reader
+tells "not recorded" apart from "delivered in the clear" (`false`). The
+field is deliberately opportunistic: a `false` is expected traffic (a
+sender without TLS still delivers), not an error, and it is what lets the
+operator see who still sends in the clear rather than guessing. Nothing
+outside the tool carries it: the acknowledgement mail, the CSV and the PDFs
+are untouched.
+
+Route-level in `tests/test_smtp_starttls.py`: a STARTTLS session lands the
+mailed receipt with `submitted_by.transport_tls: true` on the grid and on
+the archive meta; a plaintext session on the same listener lands it with
+`false` (present, not absent) rather than being refused.
+
+## Four vocabularies are now closed literals in CI (2026-09-18, item 128)
+
+Rule 5 above says growing an enum is the same move as retyping a field. Until
+this round only `rows[].turn` and the `duplicate` enums were pinned as
+literals; `row_type`, the review `reason_code`, `month_health.state` and the
+`rematch_log` trigger were asserted against the backend's own constant or not
+at all, so a new backend value passed the suite and reached the screen as
+somebody else's label. `tests/test_view_contract.py` (the `*_vocabulary_is_pinned`
+tests) now holds each as a literal against its source of truth:
+
+| Vocabulary | Source of truth | Pinned values |
+|---|---|---|
+| `rows[].row_type` | `ingest._common.ROW_TYPES` and every `ROW_TYPE_*` constant | `purchase` · `payment` · `refund` · `reversal` · `fee` · `interest` |
+| `review.state` / `review.reason_code` (both payloads) | the literals every `_review(...)` call in `web/service.py` passes (no single constant exists; read with `ast`, a non-literal code fails the pin) | states `ready` · `check` · `pick` · `none`; codes `uncategorized` · `partial_uncategorized` · `category_account_mismatch` · `vendor_guess` · `unknown_provenance` · `uncertain_match` · `receiptless_suggested` · `missing_fields` · `date_outside_period` · `suggested_private` · `needs_entity` · `needs_entity_settled_outside` · `untrusted_instructions` · `invoice_read_as_statement` · `needs_person` · `needs_cost_center` |
+| unmatched `reason_code` | `unmatched_reasons.RECEIPT_REASON_CODES` / `CHARGE_REASON_CODES` | the nine codes in "The unmatched lists say what they hold" |
+| `summary.month_health.state` (+ `reason`, `suspects[]`) | every `HEALTH_*` / `REASON_*` / `SUSPECT_*` constant in `web/month_health.py` | `ok` · `broken`; `zero_match_with_exact_pairs`; `sign` · `currency` · `entity` · `card` · `unknown` |
+| `rematch_log[].trigger` | the `trigger=` literals every `web/*.py` module passes to a re-match call (no single constant exists; read with `ast`) | `statement` · `reread` · `receipts` · `cards` · `master_data` · `set_aside` · `trip` · `adjacent_receipts` · `expense_edit` · `resume` · `duplicates` · `month_move` |
+
+A new backend value fails CI until the pin and the SPA label move together:
+the failure names the value, and the change that adds it edits the literal in
+the test, this file, and the Lovable prompt in the same round. The trigger row
+corrects the "Re-match events" section above, which named ten triggers:
+`duplicates` (a duplicate-group resolution) and `month_move` (a corrected date
+moving a receipt) were live call sites it did not list.
+
+Three sibling guards landed in the same round, outside this payload contract:
+`tests/test_reader_parity.py` (the CSV and Excel statement readers produce the
+same charges, field by field, from the same rows, on both sign paths),
+`tests/test_extraction_prompt_pin.py` (the receipt-reading prompt's cache
+fingerprint is a literal; an edit fails until the stored-readings comparison
+has been run and the count attached to the PR), and
+`tests/test_smtp_listener_e2e.py` (a real `smtplib` session through the app's
+own aiosmtpd listener lands a mailed receipt in its month with provenance, and
+the 550 / 552 refusals are answered and written down).
+
+## `last_rematch` and `rematch_pending` on the month payloads (2026-09-18, item 129)
+
+A re-match happened silently: neither the drop page nor the month page said
+one ran. The commit was recorded (`rematch_log`, item 58) and the debt was
+recorded (`rematch_pending`, item 113), but only `GET /api/operator/state`
+served either, and the SPA cannot render what the month payload does not
+carry. Two new top-level fields on BOTH payloads, `GET /api/runs/{id}` and
+`GET /api/expense-batches/{id}`, beside `updated_at`, read off the stored
+snapshot by one helper (`service.rematch_visibility`). Nothing about when a
+re-match runs or what it writes changes.
+
+```json
+"last_rematch": {"at": "2026-09-18T09:41:07+00:00", "trigger": "receipts",
+                 "n_transactions": 111, "n_matched": 14, "n_review": 7,
+                 "n_unmatched_tx": 89, "n_receipts": 31, "n_unmatched_rec": 7,
+                 "event_id": "1f3c9a2b7e4d"},
+"rematch_pending": {"since": "2026-09-18T09:40:59+00:00",
+                    "changed_at": "2026-09-18T09:40:59+00:00",
+                    "trigger": "expense_edit"}
+```
+
+**`last_rematch`** is the newest entry of the month's `rematch_log` (see
+"Re-match events" above for the triggers and what the counts mean; since item
+103 they are the effective counts the page showed at the commit, so
+`n_matched` equals the run payload's `summary.n_reconciled` until a later
+decision moves it). `run_id`, `label` and `match_rate` are not repeated: the
+first two are the payload's own, the third is `n_matched` over
+`n_transactions`. **Null** when the month has never committed a re-match,
+which includes a `rematch_log` that is absent, an empty list, or unreadable.
+A month created before a statement is attached reads null on both endpoints;
+the attach itself is the first commit (`trigger: "statement"`).
+
+**`rematch_pending`** is the month's owed-re-match mark exactly as stored (see
+"An owed re-match (item 113)"), minus its `id`, which correlates the commit
+that pays it and tells a reader nothing: `{since, changed_at, trigger}` plus
+`error`, `failed_at` and `attempts` after a failed attempt. **Null** while
+nothing is owed, so in steady state, and again the moment a re-match that read
+the mark commits. A mark with `error` is a re-match that failed and is retried
+by the next arrival or restart; `last_rematch` does not move on a failure (a
+failed attempt writes no event).
+
+Both keys are always present. The SPA prints them ("Last re-matched 09:41,
+receipts: 14 of 111"; "Re-match owed since 09:40, expense edit; last attempt
+failed") instead of reading `/api/operator/state`, which stays the notifier's
+surface and is unchanged.
+
+Route-level in `tests/test_rematch_visible_item_129.py`: a fresh month reads
+null on both endpoints; an attach and a late receipt each surface their commit
+with the page's own count; a written mark shows until the next arrival pays
+it; an empty, absent or unreadable log is null, not an error; a recorded
+failure flows through and clears when paid. Presence and shape on every
+fixture payload in `tests/test_view_contract.py`
+(`test_last_rematch_and_rematch_pending_are_on_every_payload`).

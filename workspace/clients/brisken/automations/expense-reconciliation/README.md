@@ -248,6 +248,34 @@ one copy. The in-app schedule is off until `EXPENSE_RECON_BACKUP=1` and a
 site in `EXPENSE_RECON_BACKUP_SITE`; the restore procedure (unrehearsed) is
 `docs/backup-and-restore.md`.
 
+**Uptime** (item 123): Fly's own `/healthz` check restarts a dead process
+and tells nobody; the outside monitor is `tools/recon_uptime_probe.py`,
+run every 10 minutes from GitHub Actions
+(`.github/workflows/expense-recon-uptime.yml`, from `main` only, so it
+starts after the merge). It probes `GET /healthz` on the Fly app (status
+`ok`, the `/data` volume readable, the intake not refusing; free space
+under 15% is a WARN in the run log and does not page), a `220` banner on
+`mx.expenses.brisken.com:25` followed by `QUIT`, and a 200 from the SPA
+shell at `expenses.brisken.com`, each retried once after 5 s so a blip
+never pages. An outage opens one issue labelled `recon-uptime` in the
+monorepo with the check table and sends one mail to the developer; while
+it lasts each run appends a comment and sends nothing; the recovery run
+comments, closes the issue and mails once more. The mail goes through
+Resend's free tier (`RESEND_API_KEY` secret, `BRIEFING_TO` variable),
+which delivers only to the account owner's address, so nobody at Brisken
+hears about an outage from this monitor. Reaching Criss or Dirk needs
+either the Graph client secret in repo secrets (a Brisken mailbox as
+sender) or a Brisken person subscribed to the issue label; that is an
+owner decision, not made here. Hand test: Actions, "expense-recon
+uptime", Run workflow with `api_override` = `https://127.0.0.1:9` and
+`dry_run` on: the probe reports the api DOWN and the notifier prints what
+it would open and send without doing it. Locally,
+`uv run tools/recon_uptime_probe.py probe` prints the same table (read-only
+against the live host). Unverified until the first dispatched run: that
+GitHub's Azure-hosted runners can open outbound port 25 at all; an `mx
+DOWN` from Actions with `api` and `spa` OK and a laptop probe that says
+OK means the runner, not the MX.
+
 The image installs the versions pinned in `uv.lock`, not the open ranges in
 `pyproject.toml` (backlog item 124), so a deploy ships exactly what the suite
 ran against. An upgrade is therefore a deliberate commit: `uv lock --upgrade`,
@@ -375,6 +403,40 @@ detected_currency, detected_reference, line_items
 Empty / missing → vendor-fallback (Tier 2) categorization path triggers.
 Real OCR (slice 2) populates this directly; CSV is the slice-1 bridge.
 
+## Mail intake (the app's own mailbox)
+
+The app runs its own SMTP listener (`web/smtp_server.py`), enabled with
+`EXPENSE_RECON_INTAKE_SMTP=1`. The MX for `expenses.brisken.com` points at
+it, and anyone may mail a receipt to that domain (the boundaries are the
+recipient domain, so it is not an open relay, plus per-sender and daily
+spend guards).
+
+**Transport (backlog item 125).** The listener offers **opportunistic
+STARTTLS**, TLS 1.2 or newer. A sender that supports TLS (Exchange Online's
+outbound default) encrypts on the wire; STARTTLS is never required, so a
+sender that cannot do it still delivers, which is the point (forcing it
+would bounce real receipts). Every arrival records whether its session was
+encrypted as `provenance.transport_tls` on the receipt, so who still
+delivers in the clear is readable from the data.
+
+The certificate is **self-signed**, made on first start on the data volume
+at `<data>/tls/{cert,key}.pem` (via the `openssl` binary) and renewed
+inside 30 days of expiry. A verifying sender declines a self-signed
+certificate and, being opportunistic, falls back to cleartext; a
+CA-issued certificate removes that fallback.
+
+Environment:
+
+- `EXPENSE_RECON_SMTP_TLS=0` turns the STARTTLS offer off (the listener
+  stays plaintext, the pre-item-125 behaviour).
+- `EXPENSE_RECON_SMTP_TLS_CERT` / `EXPENSE_RECON_SMTP_TLS_KEY` point at a
+  **CA-issued** pair. When both are set the listener loads them and skips
+  generation, so a real certificate drops in with no code change.
+
+Follow-up (not built): a Let's Encrypt certificate issued over DNS-01 on
+the registrar API, dropped in through the two env overrides above, to
+retire the self-signed fallback.
+
 ## Run the tests
 
 ```bash
@@ -383,6 +445,28 @@ uv run --with 'pytest>=8.0' pytest -v
 ```
 
 Expected: 98 passed.
+
+### Accuracy gate (backlog item 127)
+
+Matching accuracy is measured by the pinned scorer
+(`tools/scorers/recon-match-accuracy.py`) and gated in two places. CI
+(`.github/workflows/expense-recon-tests.yml`, job `accuracy`) replays the
+committed synthetic labelled bundles under `tests/fixtures/accuracy/` and
+compares twelve per-bundle fields with `expected.json` on exact equality: the
+scorer is deterministic, so a red job means the matcher's behaviour on those
+bundles changed. If the change is deliberate, re-record in the same PR
+(`uv run tools/recon_accuracy_check.py ci --fixtures <this dir>/tests/fixtures/accuracy --expected <this dir>/tests/fixtures/accuracy/expected.json --write-expected`,
+from the repo root) and the `expected.json` diff is the review artefact; if
+not, fix the matcher. The six real labelled months never reach CI (gitignored
+client context), so `.claude/hooks/recon-accuracy-deploy-gate.py` scores them
+before every `flyctl deploy` of `brisken-expense-recon`
+(`uv run tools/recon_accuracy_check.py real`) and asks when a split drops
+below `tools/recon-accuracy-baseline.json` (composite, wrong deterministic
+matches, no_charge false positives, the reconciliation invariant) or cannot
+be measured. `... real --markdown` prints the per-split and per-bundle block
+for a PR body; `--write-baseline` re-records a deliberate move.
+
+Four guards for defect classes that repeated (item 128): `test_reader_parity.py` (CSV and Excel readers agree field by field), `test_view_contract.py` `*_vocabulary_is_pinned` (row_type, reason_code, month_health, rematch trigger as closed literals), `test_extraction_prompt_pin.py` (the reading prompt's fingerprint), `test_smtp_listener_e2e.py` (a real SMTP session through the listener to the month).
 
 ## Data we need from Chris (smallest viable set)
 

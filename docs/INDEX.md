@@ -12,6 +12,9 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-18 | Brisken Recon Memory M1 Merchant Category Default | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Brisken%20Recon%20Memory%20M1%20Merchant%20Category%20Default/Mini-Checkpoint-1.md) |
+| 2026-09-18 | Brisken Recon Ops Tail | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Brisken%20Recon%20Ops%20Tail/Mini-Checkpoint-1.md) |
+| 2026-09-18 | Expense-Recon Matching X1 | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Expense-Recon%20Matching%20X1/Mini-Checkpoint-1.md) |
+| 2026-09-18 | Brisken Recon Traceability T2 | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Brisken%20Recon%20Traceability%20T2/Mini-Checkpoint-1.md) |
 | 2026-09-18 | Brisken Recon Owner Note Triage | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Brisken%20Recon%20Owner%20Note%20Triage/Mini-Checkpoint-1.md) |
 | 2026-09-18 | Brisken Recon Card Accounts And The Slow Drop | client-dev | [→](docs/2026-09-18%20-%20Brisken%20Recon%20Card%20Accounts%20And%20The%20Slow%20Drop/Checkpoint.md) |
 | 2026-09-18 | Brisken Recon Three Drives And Item 146 | client-dev | [Mini-Checkpoint-2](docs/2026-09-18%20-%20Brisken%20Recon%20Three%20Drives%20And%20Item%20146/Mini-Checkpoint-2.md) |

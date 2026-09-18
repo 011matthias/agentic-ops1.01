@@ -102,6 +102,9 @@ EXPENSE_BATCH_CONTRACT = {
     "coverage[]": "object",
     "coverage[].digits[]": "string",
     "coverage[].statements[]": "string",
+    # Note item T2: the content ids of the entries in `statements[]` that
+    # carry one; strings, empty on an entry whose uploads predate the id.
+    "coverage[].statement_ids[]": "string",
     # Item 47: the row picker's list. OBJECTS, not strings, unlike its two
     # sibling option lists above: each entry carries the display-only `kind`
     # that groups the roll-up, so the picker can show "Lidar (project)"
@@ -164,6 +167,8 @@ RUN_CONTRACT = {
     "coverage[]": "object",
     "coverage[].digits[]": "string",
     "coverage[].statements[]": "string",
+    # Note item T2: content ids of the `statements[]` entries that carry one.
+    "coverage[].statement_ids[]": "string",
     # Item 74: charge-side duplicate detection is deleted. The list stays in
     # the payload, ALWAYS EMPTY, so a consumer pairing groups by kind does not
     # break; its element pin went with the detector (nothing can fill it).
@@ -236,6 +241,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "card_sections[]",
     "card_sections[].digits[]",
     "card_sections[].statements[]",
+    "coverage[].statement_ids[]",
 }
 
 RUN_MUST_COVER = {
@@ -258,6 +264,7 @@ RUN_MUST_COVER = {
     "card_sections[]",
     "card_sections[].digits[]",
     "card_sections[].statements[]",
+    "coverage[].statement_ids[]",
 }
 
 
@@ -817,6 +824,40 @@ def test_updated_at_is_an_iso_string_on_every_payload(payloads):
             if created.tzinfo is None:
                 created = created.replace(tzinfo=timezone.utc)
             assert at >= created, (view_name, value, view["created_at"])
+
+
+LAST_REMATCH_KEYS = {
+    "at", "trigger", "n_transactions", "n_matched", "n_review",
+    "n_unmatched_tx", "n_receipts", "n_unmatched_rec", "event_id",
+}
+
+
+def test_last_rematch_and_rematch_pending_are_on_every_payload(payloads):
+    """Item 129 (2026-09-18). `last_rematch` and `rematch_pending` are each
+    an object or null, so the list pins above say nothing about them; the
+    SPA prints them so a re-match stops happening silently. Both keys are
+    PRESENT on every payload (a key the SPA reads as `?? null` cannot tell
+    "never re-matched" from "an older build"), each null or an object with
+    the documented keys and none of the payload's own (`run_id`, `label`,
+    the mark's `id`), and `last_rematch` is observed FILLED on the
+    reconciling month, whose two attaches each committed a re-match, so the
+    shape assertion is not vacuous."""
+    filled = 0
+    for view_name, views in payloads.items():
+        for view in views:
+            where = (view_name, view.get("run_id"))
+            assert "last_rematch" in view, where
+            assert "rematch_pending" in view, where
+            last = view["last_rematch"]
+            if last is not None:
+                assert set(last) == LAST_REMATCH_KEYS, (where, last)
+                assert isinstance(last["at"], str) and last["event_id"], (where, last)
+                filled += 1
+            pending = view["rematch_pending"]
+            if pending is not None:
+                assert "id" not in pending, (where, pending)
+                assert {"since", "changed_at", "trigger"} <= set(pending), (where, pending)
+    assert filled >= 2, "the reconciling month must carry its last re-match on both views"
 
 
 def test_posting_category_proposed_is_absent_or_true_never_false(
@@ -1462,3 +1503,313 @@ def test_memory_view_list_contract(tmp_path):
     assert [c["entity"] for c in vendor["companies"]] == [
         "Cloud Services", "Corporate Services",
     ]
+def test_every_candidate_carries_card_evidence_and_review_code_is_absent_or_coded(payloads):
+    """Item X1. `rows[].candidates[].card_evidence` is on every candidate,
+    `{receipt, charge}` from the matcher's closed sets
+    (`deterministic.RECEIPT_CARD_EVIDENCE` / `CHARGE_CARD_EVIDENCE`), never
+    null; `rows[].candidates[].review_code` is ABSENT unless the matcher set
+    `requires_review` for a coded reason, and then one of its codes. A new
+    value in either is a rule-5 change (api-contract). Route-level:
+    `tests/test_match_x1_description_and_no_card.py`."""
+    from expense_recon.matching.deterministic import (
+        CHARGE_CARD_EVIDENCE,
+        NO_CARD_RIVAL_REVIEW,
+        RECEIPT_CARD_EVIDENCE,
+    )
+
+    seen = 0
+    for view in payloads["run"]:
+        for row in view["rows"]:
+            for cand in row["candidates"]:
+                seen += 1
+                ev = cand["card_evidence"]
+                assert set(ev) == {"receipt", "charge"}, cand
+                assert ev["receipt"] in RECEIPT_CARD_EVIDENCE, cand
+                assert ev["charge"] in CHARGE_CARD_EVIDENCE, cand
+                if "review_code" in cand:
+                    assert cand["review_code"] in {NO_CARD_RIVAL_REVIEW}, cand
+                    assert cand["requires_review"] is True, cand
+    assert seen, "the contract fixtures carry no candidate"
+
+
+# ── the enum-shaped vocabularies, pinned as closed literals (item 128) ──
+#
+# Rule 5 of `docs/api-contract.md`: growing an enum is the same move as
+# retyping a field, and the SPA maps these values by hand. `TURNS` and
+# `DUPLICATE_ENUMS` above were pinned as literals; `row_type`, the review
+# `reason_code`, `month_health.state` and the `rematch_log` trigger were
+# asserted only against the backend's own constant (or not at all), so a new
+# backend value passed the suite and reached the screen as somebody else's
+# label. Each pin below is a LITERAL held against the backend's source of
+# truth: a new value goes red until the literal, `docs/api-contract.md` and
+# the SPA label move together.
+
+ROW_TYPES_PIN = ("purchase", "payment", "refund", "reversal", "fee", "interest")
+CREDIT_ROW_TYPES_PIN = {"payment", "refund", "reversal"}
+
+MONTH_HEALTH_STATES_PIN = {"ok", "broken"}
+MONTH_HEALTH_REASONS_PIN = {"zero_match_with_exact_pairs"}
+MONTH_HEALTH_SUSPECTS_PIN = ("sign", "currency", "entity", "card", "unknown")
+
+REVIEW_STATES_PIN = {"ready", "check", "pick", "none"}
+REVIEW_REASON_CODES_PIN = {
+    # the category judgment (`_matched_category_review`, both payloads)
+    "uncategorized", "partial_uncategorized", "category_account_mismatch",
+    "vendor_guess", "unknown_provenance",
+    # the run row (`resolve_review`)
+    "uncertain_match", "receiptless_suggested",
+    # the expense row (`_expense_review`)
+    "missing_fields", "date_outside_period", "suggested_private",
+    "needs_entity", "needs_entity_settled_outside", "untrusted_instructions",
+    "invoice_read_as_statement", "needs_person", "needs_cost_center",
+}
+
+UNMATCHED_RECEIPT_REASON_CODES_PIN = (
+    "duplicate_copy", "card_statement_not_loaded", "not_a_card_charge",
+    "charge_in_neighbouring_period", "no_charge_on_any_loaded_statement",
+)
+UNMATCHED_CHARGE_REASON_CODES_PIN = (
+    "not_a_purchase", "receipt_held_by_another_charge", "already_booked",
+    "no_receipt_found",
+)
+
+# `docs/api-contract.md` ("Re-match events") named ten of these when this pin
+# was written; `duplicates` and `month_move` were live call sites it did not
+# list. The doc now names all twelve.
+REMATCH_TRIGGERS_PIN = {
+    "statement", "reread", "receipts", "cards", "master_data", "set_aside",
+    "trip", "adjacent_receipts", "expense_edit", "resume", "duplicates",
+    "month_move",
+}
+
+
+def _review_vocabulary(tree) -> tuple[set[str], set[str], list]:
+    """Every `_review(state, reason, code)` call in a parsed module: the
+    states and codes passed as string literals, plus the calls whose state
+    or code is NOT a literal (which this pin cannot see, so they fail it)."""
+    import ast
+
+    states: set[str] = set()
+    codes: set[str] = set()
+    unpinnable: list = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "_review"):
+            continue
+        kws = {k.arg: k.value for k in node.keywords}
+        state = node.args[0] if node.args else kws.get("state")
+        code = node.args[2] if len(node.args) > 2 else kws.get("code")
+        for label, value, into in (("state", state, states), ("code", code, codes)):
+            if value is None:
+                continue  # code omitted: None on the wire
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                into.add(value.value)
+            elif isinstance(value, ast.Constant) and value.value is None:
+                continue
+            else:
+                unpinnable.append((node.lineno, label, ast.unparse(value)))
+    return states, codes, unpinnable
+
+
+def _rematch_triggers(tree, module) -> tuple[set[str], list]:
+    """Every `trigger=` a parsed module passes to a re-match call, by name
+    (a callee with `rematch` in its name): string literals, and ALL-CAPS
+    names resolved on `module`. A bare lowercase name is the caller's own
+    `trigger` passed through and is not a value. Anything else is
+    unpinnable and fails the pin."""
+    import ast
+
+    found: set[str] = set()
+    unpinnable: list = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = (func.id if isinstance(func, ast.Name)
+                else func.attr if isinstance(func, ast.Attribute) else "")
+        if "rematch" not in name:
+            continue
+        for kw in node.keywords:
+            if kw.arg != "trigger":
+                continue
+            value = kw.value
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                found.add(value.value)
+            elif isinstance(value, ast.Name) and value.id.isupper():
+                found.add(getattr(module, value.id))
+            elif isinstance(value, ast.Name):
+                continue
+            else:
+                unpinnable.append((node.lineno, ast.unparse(value)))
+    return found, unpinnable
+
+
+def _observed_reviews(payloads) -> tuple[set[str], set[str]]:
+    states: set[str] = set()
+    codes: set[str] = set()
+    for view in payloads["run"]:
+        for row in view["rows"]:
+            review = row.get("review")
+            if isinstance(review, dict):
+                states.add(review["state"])
+                if review.get("reason_code") is not None:
+                    codes.add(review["reason_code"])
+    for view in payloads["expense_batch"]:
+        for exp in view["expenses"]:
+            review = exp["review"]
+            states.add(review["state"])
+            if review.get("reason_code") is not None:
+                codes.add(review["reason_code"])
+    return states, codes
+
+
+def test_row_type_vocabulary_is_pinned(payloads):
+    """Item 128. `rows[].row_type` is one of a closed literal set, held
+    against `ingest._common.ROW_TYPES` (the source of truth) and every
+    `ROW_TYPE_*` constant beside it. A new backend value goes red here until
+    this literal and the SPA label are updated together."""
+    from expense_recon.ingest import _common
+
+    assert _common.ROW_TYPES == ROW_TYPES_PIN
+    constants = {v for k, v in vars(_common).items()
+                 if k.startswith("ROW_TYPE_") and isinstance(v, str)}
+    assert constants == set(ROW_TYPES_PIN), constants
+    assert set(_common.ROW_TYPE_BY_LABEL.values()) <= set(ROW_TYPES_PIN)
+    assert set(_common.CREDIT_ROW_TYPES) == CREDIT_ROW_TYPES_PIN
+    observed = {row["row_type"] for view in payloads["run"] for row in view["rows"]}
+    assert observed, "no run row observed"
+    assert observed <= set(ROW_TYPES_PIN), observed
+
+
+def test_review_reason_code_vocabulary_is_pinned(payloads):
+    """Item 128. `review.reason_code` (and `review.state`) on both payloads
+    is one of a closed literal set. No single backend constant holds these
+    codes: every value is a literal at a `_review(...)` call in
+    `web/service.py`, so the pin is held against the set of literals those
+    calls pass (read with `ast`). A new backend value, or a call whose code
+    is not a literal, goes red here until this literal and the SPA label
+    are updated together."""
+    import ast
+
+    from expense_recon.web import month_readiness, service
+
+    tree = ast.parse(Path(service.__file__).read_text(encoding="utf-8"))
+    states, codes, unpinnable = _review_vocabulary(tree)
+    assert not unpinnable, unpinnable
+    assert states == REVIEW_STATES_PIN, states
+    assert codes == REVIEW_REASON_CODES_PIN, codes ^ REVIEW_REASON_CODES_PIN
+    # the two consumers that key on a code by name agree with the pin
+    assert month_readiness._RECEIPTLESS_GUESS in REVIEW_REASON_CODES_PIN
+    assert service._CONFIRMABLE_CATEGORY_CODES <= REVIEW_REASON_CODES_PIN
+
+    observed_states, observed_codes = _observed_reviews(payloads)
+    assert observed_states and observed_codes, (observed_states, observed_codes)
+    assert observed_states <= REVIEW_STATES_PIN, observed_states
+    assert observed_codes <= REVIEW_REASON_CODES_PIN, observed_codes
+
+
+def test_review_scan_sees_a_call_and_refuses_a_variable_code():
+    """The scanner itself: a literal code at a `_review` call is collected,
+    a variable one is reported as unpinnable. Without this the pin above
+    could pass on a scanner that reads nothing."""
+    import ast
+
+    literal = ast.parse('_review("check", "why", "brand_new_code")\n_review("none")')
+    states, codes, unpinnable = _review_vocabulary(literal)
+    assert (states, codes, unpinnable) == ({"check", "none"}, {"brand_new_code"}, [])
+    variable = ast.parse('_review("check", "why", code)')
+    _, _, unpinnable = _review_vocabulary(variable)
+    assert unpinnable == [(1, "code", "code")]
+
+
+def test_unmatched_reason_code_vocabulary_is_pinned():
+    """Item 128. The `reason_code` on the unmatched lists is one of a
+    closed literal set per side, held against `unmatched_reasons`'
+    `RECEIPT_REASON_CODES` / `CHARGE_REASON_CODES` (the source of truth).
+    A new backend value goes red here until this literal and the SPA label
+    are updated together. The observed side is
+    `test_unmatched_reason_code_is_on_every_unmatched_item_and_nowhere_else`."""
+    from expense_recon import unmatched_reasons as ur
+
+    assert ur.RECEIPT_REASON_CODES == UNMATCHED_RECEIPT_REASON_CODES_PIN
+    assert ur.CHARGE_REASON_CODES == UNMATCHED_CHARGE_REASON_CODES_PIN
+    # every receipt code but the copy marker has the screen's words
+    worded = set(UNMATCHED_RECEIPT_REASON_CODES_PIN) - {"duplicate_copy"}
+    assert set(ur.RECEIPT_REASON_TEXT) == set(ur.RECEIPT_REASON_SHORT) == worded
+
+
+def test_month_health_vocabulary_is_pinned(payloads):
+    """Item 128. `summary.month_health.state` is one of a closed literal
+    set, held against every `HEALTH_*` constant in `web/month_health.py`
+    (the source of truth); `reason` against `REASON_*` and `suspects[]`
+    against `SUSPECT_*` in their fixed order. A new backend value goes red
+    here until this literal and the SPA label are updated together."""
+    from expense_recon.web import month_health as mh
+
+    states = {v for k, v in vars(mh).items() if k.startswith("HEALTH_")}
+    assert states == MONTH_HEALTH_STATES_PIN, states
+    reasons = {v for k, v in vars(mh).items() if k.startswith("REASON_")}
+    assert reasons == MONTH_HEALTH_REASONS_PIN, reasons
+    suspects = {v for k, v in vars(mh).items() if k.startswith("SUSPECT_")}
+    assert suspects == set(MONTH_HEALTH_SUSPECTS_PIN), suspects
+    assert mh._SUSPECT_ORDER == MONTH_HEALTH_SUSPECTS_PIN
+    assert set(mh._SUSPECT_TEXT) == suspects
+
+    observed: set[str] = set()
+    for views in payloads.values():
+        for view in views:
+            health = view["summary"]["month_health"]
+            assert health["state"] in MONTH_HEALTH_STATES_PIN, health
+            assert health["reason"] is None or health["reason"] in reasons, health
+            assert set(health["suspects"]) <= suspects, health
+            observed.add(health["state"])
+    assert observed
+
+
+def test_rematch_trigger_vocabulary_is_pinned():
+    """Item 128. `rematch_log[].trigger` (and the `rematch_pending` mark's)
+    is one of a closed literal set. No backend constant holds these values:
+    each is a literal at a re-match call site in `web/service.py` or
+    `web/app.py`, so the pin is held against the set of `trigger=` literals
+    every `web/*.py` module passes to a re-match call (read with `ast`).
+    A new backend value goes red here until this literal, the doc and the
+    notifier / SPA label are updated together."""
+    import ast
+    import importlib
+
+    from expense_recon import web as web_pkg
+    from expense_recon.web import service
+
+    found: set[str] = set()
+    unpinnable: list = []
+    for path in sorted(Path(web_pkg.__file__).parent.glob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        module = importlib.import_module(f"expense_recon.web.{path.stem}")
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        hits, bad = _rematch_triggers(tree, module)
+        found |= hits
+        unpinnable += [(path.name, *b) for b in bad]
+    assert not unpinnable, unpinnable
+    assert found == REMATCH_TRIGGERS_PIN, found ^ REMATCH_TRIGGERS_PIN
+    assert service.ADJACENT_REMATCH_TRIGGER in REMATCH_TRIGGERS_PIN
+
+
+def test_trigger_scan_sees_a_call_site():
+    """The scanner itself: a literal trigger at a re-match call is
+    collected, an ALL-CAPS name is resolved, a pass-through is skipped, and
+    an expression is unpinnable."""
+    import ast
+    from types import SimpleNamespace
+
+    src = (
+        'rematch_after_change(s, r, trigger="fresh")\n'
+        "svc.rematch_month(s, r, trigger=SOME_TRIGGER)\n"
+        "rematch_after_change(s, r, trigger=trigger)\n"
+        'other_call(trigger="ignored")\n'
+        'rematch_after_change(s, r, trigger=str(x or ""))\n'
+    )
+    found, unpinnable = _rematch_triggers(
+        ast.parse(src), SimpleNamespace(SOME_TRIGGER="named"))
+    assert found == {"fresh", "named"}
+    assert unpinnable == [(5, "str(x or '')")]

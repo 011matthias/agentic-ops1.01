@@ -3336,7 +3336,7 @@ def build_view(
     # confirmed before item 137 (live August 2026: LOVABLE 25.00 on 3645
     # with a receipt picked as 2838) is named on the page, not only the next
     # proposal.
-    from ..matching.deterministic import _tx_card_keys, cards_differ
+    from ..matching.deterministic import _tx_card_keys, card_evidence, cards_differ
 
     card_res_view = resolve_batch_row_cards(receipts, run.config, field_overrides or {})
     card_scope_view = {
@@ -3433,6 +3433,18 @@ def build_view(
         else `{}` so the key is absent rather than false."""
         return {"rejected": True} if charge_status == STATUS_REJECTED else {}
 
+    def _candidate_card_evidence(tx, doc: str) -> dict:
+        """Item X1: `card_evidence: {receipt, charge}` from the matcher's own
+        definition, read on the receipt as the matcher saw it (the card
+        scope baked). Always present on a candidate; `{}` only when the
+        receipt is not in the pool at all (a borrowed copy the view has
+        lost), so the key is absent rather than invented."""
+        receipt = card_scope_view.get(doc) or rec_by_id.get(doc)
+        if receipt is None:
+            return {}
+        rec_src, chg_src = card_evidence(tx, receipt)
+        return {"card_evidence": {"receipt": rec_src, "charge": chg_src}}
+
     for tx in transactions:
         tx_id = tx.transaction_id
         decision = decisions.get(tx_id)
@@ -3506,6 +3518,11 @@ def build_view(
                     # (none / lag / mismatch). Label only; ABSENT when
                     # either date is missing.
                     **_candidate_date_gap(tx, r),
+                    # Item X1: where each side's card came from, on every
+                    # candidate; and the matcher's review code, ABSENT
+                    # unless it flagged the pair.
+                    **_candidate_card_evidence(tx, m.document_id),
+                    **({"review_code": m.review_code} if m.review_code else {}),
                 }
             )
         # PR B — a hand-made manual match: the held receipt was never an
@@ -3534,6 +3551,7 @@ def build_view(
                     ),
                     **_from_batch(held_doc),
                     **_candidate_date_gap(tx, rec_by_id[held_doc]),
+                    **_candidate_card_evidence(tx, held_doc),
                 }
             )
 
@@ -4214,6 +4232,9 @@ def build_view(
             rows, dict(autopick_pairs(outcome, decisions))
         )),
     }
+    # Item 129: the last committed re-match and any owed one, off the
+    # snapshot as stored, so the month page can say a re-match ran.
+    visibility = rematch_visibility(run.snapshot)
 
     return {
         "run_id": run.run_id,
@@ -4222,6 +4243,12 @@ def build_view(
         # When the month last changed (2026-09-16); the SPA's "Last updated"
         # reads `updated_at ?? created_at`, so it printed the creation day.
         "updated_at": month_updated_at(run, decisions=decisions, edited_at=edited_at),
+        # Item 129 (2026-09-18): when the month was last re-matched and
+        # whether one is still owed, so the page prints it instead of
+        # reading `/api/operator/state`. Null / null until a re-match commits
+        # / while nothing is owed.
+        "last_rematch": visibility["last_rematch"],
+        "rematch_pending": visibility["rematch_pending"],
         # Item 100: the sign-off, on the page that shows the month. Who
         # published (the session's operator label), when, and whether the
         # completeness gate was overridden; null / false while unpublished.
@@ -4476,7 +4503,9 @@ def writeback_available(run: RunRow) -> bool:
     return Path(stmt).suffix.lower() in (".xlsx", ".xlsm")
 
 
-def writeback_statement_name(run: RunRow, requested: str = "") -> str | None:
+def writeback_statement_name(
+    run: RunRow, requested: str = "", statement_id: str = "",
+) -> str | None:
     """Which statement file a writeback should annotate, or None.
 
     Default is the run's current `config.statement.path`, which is the last
@@ -4485,7 +4514,19 @@ def writeback_statement_name(run: RunRow, requested: str = "") -> str | None:
     `statements[]`: the parameter reaches the writeback route from a query
     string, and a name that is merely sanitized would still let a caller
     address any file in the work dir. Matching an entry is the check.
+
+    `statement_id` (note item T2) addresses an upload by its content id
+    instead, for the month where two per-card exports share a filename;
+    resolved against `statements[].statement_id` the same way, first entry
+    wins, and an id the month never recorded is None (a 404 at the route).
+    When both are given the id decides, since it is the more specific name.
     """
+    statement_id = (statement_id or "").strip()
+    if statement_id:
+        entry = statement_entry_by_id(run, statement_id)
+        if entry is None:
+            return None
+        return str(entry.get("file") or "") or None
     requested = (requested or "").strip()
     if not requested:
         stmt = (run.config or {}).get("statement", {}).get("path", "")
@@ -4501,6 +4542,7 @@ def regenerate_writeback(
     decisions: dict[str, Decision],
     overrides: dict,
     statement_file: str = "",
+    statement_id: str = "",
 ) -> Path | None:
     """Write the L3 sheet writeback for a run: HER OWN uploaded workbook
     with one new "Zoho Account (tool)" column, after the reviewer's
@@ -4517,7 +4559,7 @@ def regenerate_writeback(
     """
     from ..output.sheet_writeback import write_sheet_writeback
 
-    name = writeback_statement_name(run, statement_file)
+    name = writeback_statement_name(run, statement_file, statement_id)
     if name is None or Path(name).suffix.lower() not in (".xlsx", ".xlsm"):
         return None
 
@@ -7530,6 +7572,8 @@ def build_expense_view(
     # prevent, and this count's whole job is telling a reviewer to go look.
     if render_state:
         summary["n_receipts_unrenderable"] = n_box("receipts_unrenderable")
+    # Item 129: same helper and same snapshot keys as the run payload.
+    visibility = rematch_visibility(run.snapshot)
 
     return {
         "run_id": run.run_id,
@@ -7540,6 +7584,10 @@ def build_expense_view(
         "updated_at": month_updated_at(
             run, decisions=decisions, edits=edits, edited_at=edited_at
         ),
+        # Item 129 (2026-09-18): the last committed re-match and any owed
+        # one, same shape and same null rule as on the run payload.
+        "last_rematch": visibility["last_rematch"],
+        "rematch_pending": visibility["rematch_pending"],
         "mode": MODE_EXPENSE_GENERATION,
         # Item 38: the declared kind, "company-month" on every batch that
         # predates the split (absent marker reads as company). Scalar,
@@ -9720,6 +9768,44 @@ def rematch_pending(run) -> dict | None:
     return mark if isinstance(mark, dict) and mark.get("id") else None
 
 
+# Item 129 (2026-09-18): the keys of a `rematch_log` event the month payload
+# repeats. `run_id` and `label` are the payload's own top-level fields, and
+# `match_rate` is `n_matched` over `n_transactions`, which are both here.
+_LAST_REMATCH_KEYS = (
+    "at", "trigger", "n_transactions", "n_matched", "n_review",
+    "n_unmatched_tx", "n_receipts", "n_unmatched_rec", "event_id",
+)
+
+
+def rematch_visibility(snapshot: dict | None) -> dict:
+    """Item 129 (2026-09-18): what the month page prints about re-matching,
+    read off two stored snapshot keys and nothing else. A re-match happened
+    silently: neither the drop page nor the month page said it ran, because
+    neither payload carried the last commit or the owed mark, and the SPA
+    cannot render what it is not handed.
+
+    `last_rematch`: the newest `rematch_log` event (the log is oldest first)
+    reduced to `_LAST_REMATCH_KEYS`; None when the month has never committed
+    a re-match, an empty or malformed log included. `rematch_pending`: the
+    owed mark as stored minus its `id` (a correlation handle for the commit
+    that pays it, not a fact for a reader); None when nothing is owed, by
+    the same rule `rematch_pending` applies (a mark without an id is not a
+    mark). Never raises: a corrupt value reads as null.
+    """
+    snap = snapshot if isinstance(snapshot, dict) else {}
+    last = None
+    log = snap.get(REMATCH_LOG_KEY)
+    if isinstance(log, list):
+        events = [e for e in log if isinstance(e, dict)]
+        if events:
+            last = {key: events[-1].get(key) for key in _LAST_REMATCH_KEYS}
+    mark = snap.get(REMATCH_PENDING_KEY)
+    pending = None
+    if isinstance(mark, dict) and mark.get("id"):
+        pending = {key: value for key, value in mark.items() if key != "id"}
+    return {"last_rematch": last, "rematch_pending": pending}
+
+
 def _record_rematch_failure(store: RunStore, run_id: str, trigger: str, error: str) -> None:
     """Write a failed re-match onto the month's mark (creating the mark when
     the change that owed it did not write one). Best-effort: a failure to
@@ -9826,6 +9912,60 @@ def month_statements(run: RunRow) -> list[dict]:
     all.
     """
     return list((run.snapshot or {}).get(STATEMENTS_KEY) or [])
+
+
+# Note item T2 (2026-09-18): a statement upload's identity is its BYTES.
+STATEMENT_ID_HEX = 16
+
+
+def statement_content_id(path: Path) -> str:
+    """The content-derived id of one stored statement file: the first 16 hex
+    characters of the sha256 over its bytes, or "" when the file cannot be
+    read (nothing then records an id, and absence means "not recorded").
+
+    The same bytes uploaded twice, or re-read after a restore, yield the
+    same id; a corrected file yields a new one. That is what `file` cannot
+    say: `file` is the name on disk, made unique per upload
+    (`statement-2.xlsx`), so two per-card exports that share the bank's
+    filename get two names for what may be one file, and a re-upload of the
+    same workbook gets a second name for the same bytes. The CLI store
+    (`store/statements.py`) hashes the parsed transactions instead; this
+    hashes the file, because it is the file a person can put beside the id.
+    """
+    try:
+        digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return ""
+    return digest[:STATEMENT_ID_HEX]
+
+
+def _anchor_keys(entry: dict) -> list[str]:
+    """The keys one upload's anchors are recorded under: its stored file
+    name, and its `statement_id` when the entry carries one. Recording the
+    same map twice is deliberate: the writeback and the re-read can address
+    an upload by id when two per-card exports share a filename, and every
+    reader that only knows the file name keeps working."""
+    keys = [str(entry.get("file") or "")]
+    sid = str(entry.get("statement_id") or "")
+    if sid and sid not in keys:
+        keys.append(sid)
+    return [k for k in keys if k]
+
+
+def statement_entry_by_id(run: RunRow, statement_id: str) -> dict | None:
+    """The FIRST `statements[]` entry recorded with this id, or None.
+
+    Two entries can share an id (the same bytes attached twice, which the
+    fold absorbs as `n_new: 0`); they printed the same rows at the same
+    sheet rows, so their anchors are the same map and the first is as good
+    as the second."""
+    wanted = (statement_id or "").strip()
+    if not wanted:
+        return None
+    for entry in month_statements(run):
+        if str(entry.get("statement_id") or "") == wanted:
+            return entry
+    return None
 
 
 def _parse_utc(value) -> datetime | None:
@@ -9949,8 +10089,14 @@ def build_statement_entry(
     uploaded_at: str,
     column_map: dict | None = None,
     card_currency: str = "",
+    statement_id: str = "",
 ) -> dict:
     """One `statements[]` row: what this upload was and what it added.
+
+    `statement_id` (note item T2, 2026-09-18) is the content-derived id of
+    the stored file (`statement_content_id`). Parallel and ABSENT on every
+    entry written before it, never null; both callers compute it from the
+    bytes on disk, so an attach and a later re-read of the same file agree.
 
     `file` is the name on disk, which is what `Transaction.source_file`
     carries and what the writeback selector addresses; `upload_name` is what
@@ -9995,6 +10141,8 @@ def build_statement_entry(
         # instead of guessing again. Absent, not null, when unrecorded.
         **({"column_map": recorded_map} if recorded_map else {}),
         **({"card_currency": currency} if currency else {}),
+        # What the bytes are (note item T2). Absent when not computed.
+        **({"statement_id": statement_id} if statement_id else {}),
         # This file's own id-to-row map. Underscored and popped at commit
         # into `statement_anchors`, so it never reaches the SPA: it is a
         # per-row map the size of the statement, and nothing renders it.
@@ -10723,6 +10871,11 @@ def month_coverage(
                 "digits": list(identity.digits),
                 "known": bool(identity.card_key),
                 "statements": [],
+                # Note item T2: the `statement_id` of each entry in
+                # `statements` that carries one. Not positional with
+                # `statements`: an upload recorded before ids existed is
+                # named there and has nothing to add here.
+                "statement_ids": [],
                 "period_start": None,
                 "period_end": None,
                 "n_transactions": 0,
@@ -10782,6 +10935,9 @@ def month_coverage(
             target = row(identity)
             if name not in target["statements"]:
                 target["statements"].append(name)
+            sid = str(stmt.get("statement_id") or "")
+            if sid and sid not in target["statement_ids"]:
+                target["statement_ids"].append(sid)
 
     for key, per_ccy in unreconciled.items():
         entries[key]["unreconciled_by_ccy"] = {
@@ -11699,6 +11855,7 @@ def execute_statement_attach(
             card_currency=(new_cfg.get("statement") or {}).get(
                 "account_card_currency", ""
             ),
+            statement_id=statement_content_id(Path(run.work_dir) / stmt_name),
         ),
         trigger="statement",
     )
@@ -11913,6 +12070,10 @@ def reread_statements(
                 # before item 64 carries both from here on.
                 column_map=column_map,
                 card_currency=form.account_card_currency,
+                # Same bytes, same id (note item T2): a re-read after a
+                # restore keeps the id the attach recorded, and an entry
+                # written before the id existed gains one here.
+                statement_id=statement_content_id(stmt_path),
             )
         )
 
@@ -12790,7 +12951,8 @@ def rematch_month(
                 entry["advisory"] = statement_advisory(rebuilt_entries, entry)
                 entry["advisory_detail"] = detail_of(entry["advisory"])
                 rebuilt_entries.append(entry)
-                rebuilt_anchors[entry["file"]] = anchors
+                for anchor_key in _anchor_keys(entry):
+                    rebuilt_anchors[anchor_key] = anchors
             new_snapshot[STATEMENTS_KEY] = rebuilt_entries
             new_snapshot[STATEMENT_ANCHORS_KEY] = rebuilt_anchors
         elif statement_entry is not None:
@@ -12803,7 +12965,8 @@ def rematch_month(
             new_snapshot[STATEMENTS_KEY] = [*prior, entry]
             new_snapshot[STATEMENT_ANCHORS_KEY] = {
                 **((fresh.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}),
-                entry["file"]: anchors,
+                # Keyed by file AND by `statement_id` (note item T2).
+                **{anchor_key: anchors for anchor_key in _anchor_keys(entry)},
             }
         n_tx = len(transactions)
         # Item 103: what this commit stores, logs and returns is the

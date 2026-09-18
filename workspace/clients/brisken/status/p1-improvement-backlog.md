@@ -5475,7 +5475,7 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 
 **Shipped 2026-09-17 (pending PR).** The floor is read from the volume instead of a constant: 5% of the disk, never below 200 MB, never above half of it. On the live 1 GB volume that is 200 MB where it was 500 MiB, so usable space goes from about 500 MB to about 800 MB; on a 5 GB volume the same code asks for 256 MB and leaves 4.75 GB. `/healthz` carries a `disk` block (total, free, used, free percent, the floor, and `intake_refusing`), so a monitor sees a filling disk rather than learning about it from bounced receipts; an unreadable volume answers `available: false` and still never refuses mail. An unrecognised sender is held to 5 MB per message (552, permanent) and all strangers together to 50 MB a day (452, so their own mail system retries tomorrow); the daily budget is global rather than per-sender because From is forgeable, and it re-seeds from the acceptance log after a restart (rows now record `n_bytes` and `known_sender`). Our own people (inside @brisken.com or listed in `intake.known_senders`) keep the full 25 MB and are exempt from the 40-file per-sender cap a month-end backfill exceeds; the 200-file global cap still binds everyone, because that is the ceiling on a day's vision spend. The dismissed-archive purge is built and ships INERT: `intake.dismissed_purge_days` defaults to 0 (never) and the boot sweep does nothing until it is set. Live numbers read while building (2026-09-17, `flyctl ssh`): /data is 997,076 KB with 97,876 KB used and 831,208 KB free, 11% used, on the 1 GB `recon_data_v2` volume. **Owner actions:** (a) `flyctl volumes extend` to 5 GB, still worth doing and untouched here (the code is tested on both sizes); (b) one settings write to turn the purge on, if deleting dismissed junk after N days is wanted - deleting Brisken's mail is not an agent's call.
 
-### 123. Nobody is told when the app is down; the last outage was surfaced by the owner, not by a monitor (2026-09-17 audit draft #121, unranked; operations)
+### 123. Nobody is told when the app is down; the last outage was surfaced by the owner, not by a monitor (2026-09-17 audit draft #121, unranked; operations) (SHIPPED 2026-09-18, PR #1098; see Shipped row below)
 
 **Audit rank 30 of 40; severity medium as merged; verification: one reviewer, plus health check read by hand.** There is no outside check on the app or its mailbox and no alert to anyone at Brisken; hosting notices go to the developer's personal account; logs die with the machine. The 2026-09-10 outage lasted about 50 minutes and was noticed when Criss's upload failed. During close week an hour down is an hour she cannot work, and a mailbox down means receipts bounce.
 
@@ -5488,6 +5488,8 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 **Value:** An outage is known within minutes by someone who can act, and a filling disk is known a month before it bites. (effort small)
 
 **Reviewer corrections:** (combined) (1) "found by Criss" is not what the record says: the 2026-09-10 checkpoint and friction-register row 318 state "the owner surfaced the outage, not me"; Criss's "Failed to fetch" screenshot (item 50, 10:00:43Z) is recorded as unexplained and 42 minutes before the failed deploys, so tying it to the 50-minute wedge is unproven. The outage was triggered by the agent's own HTTP probing that woke a scale-to-zero machine which then wedged on a capacity-exhausted host. (2) A free-disk check already exists in code: intake_mail.py disk_low() refuses inbound mail below MIN_FREE_DISK_BYTES (500 MB); what is missing is only surfacing that floor via /healthz before it refuses, so "add free disk space to 
+
+**Shipped 2026-09-18 (PR #1098).** Outside-in and boring: `tools/recon_uptime_probe.py` checks `/healthz` (status, `disk.available`, `disk.intake_refusing`, free_pct warn under 15), the port-25 banner on `mx.expenses.brisken.com` and the SPA shell, each retried once after 5 s, and `.github/workflows/expense-recon-uptime.yml` runs it every 10 minutes: a down app opens ONE `recon-uptime` issue and sends one Resend mail to `BRIEFING_TO`, comments while it stays down, closes with one recovery mail. Red-proven against a dead API (api DOWN, mx and spa OK, exit 1); live read-only run all OK, free_pct 79. Not built: a Brisken mailbox as recipient (Resend free tier reaches only the account owner; a Graph secret in repo secrets is an owner decision). First dispatch after merge (run 35354794530, dry_run): all three checks OK from the GitHub runner, port 25 included, so the runner is a valid vantage point and the 10-minute cron is live. The health-check enrichment the item asked for (disk, listener state) had already shipped with items 50 and 122.
 
 ### 124. Each deploy installs whatever library versions are newest that day, not the tested ones (2026-09-17 audit draft #122, unranked; operations) (SHIPPED 2026-09-17, pending PR)
 
@@ -5505,7 +5507,7 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 
 **Shipped 2026-09-17 (pending PR).** The Dockerfile copies `uv.lock` into the image and installs from it: `uv export --frozen --no-dev --extra web --no-emit-project` writes a fully pinned, hash-checked requirements file, that is installed first, and the project itself goes in with `--no-deps` so nothing re-resolves behind the lock. `--frozen` means a drifted lock fails the build instead of quietly resolving something new. Built locally (`docker build`, no deploy) and the image's versions read back: fastapi 0.136.3, openai 2.38.0, pypdf 6.13.2, aiosmtpd 1.4.6, uvicorn 0.49.0, reportlab 5.0.1, pillow 12.2.0, and `expense-recon-web` still on PATH. The drift the reviewer called latent is real and live: the running machine (v169, read over `flyctl ssh` 2026-09-17) carries fastapi 0.141.1, **openai 3.14.1**, pypdf 6.19.0, uvicorn 0.53.0, pillow 12.3.0 - a major openai version the suite has never run against. **Owner action:** the first deploy after this lands moves production back onto the locked set, openai 3.14.1 down to 2.38.0 included; that is the point of the change (run what was tested), and it is a real behaviour change to make deliberately rather than notice afterwards. An upgrade from here is `uv lock --upgrade`, the suite, then a deploy (README Deploy section).
 
-### 125. Receipts travel to the mailbox without encryption on the wire (2026-09-17 audit draft #123, unranked; operations)
+### 125. Receipts travel to the mailbox without encryption on the wire (2026-09-17 audit draft #123, unranked; operations) (SHIPPED 2026-09-18, PR #1101; see Shipped row below)
 
 **Audit rank 32 of 40; severity medium as merged; verification: one reviewer (inferred from the listener config, no live transit observed).** The listener on port 25 does not offer STARTTLS, so a sending mail system that would normally encrypt falls back to plain text for this domain. Every forwarded invoice, card slip and receipt crosses the internet readable, with card digits, names, addresses and amounts, into an archive kept ten years. Nothing is lost, but the compliance write-up rates this High and a client's IT department may reject it at ownership transfer.
 
@@ -5518,6 +5520,8 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 **Value:** Receipts and card data stop crossing the internet in the clear; the handover to Brisken IT loses one objection. (effort medium)
 
 **Reviewer corrections:** (combined) "SPF/DMARC exist for outbound only" is loosely phrased: the DNS records for expenses.brisken.com are `v=spf1 -all` and DMARC `p=reject` (memory project_brisken_expense_recon_mail_intake), i.e. anti-spoofing declarations that nothing legitimately sends from that domain; they say nothing about transport encryption either way, so they are not counter-evidence, just irrelevant to this risk. The cleartext fallback is inferred from standard Exchange Online behaviour, as the finding itself admits; no live transit was observed (a live EHLO probe was not run to avoid adding refused-log entries). Otherwise numbers and citations check out; smtp_server.py line span is ~182-188, not 183-189.
+
+**Shipped 2026-09-18 (PR #1101).** Rechecked live first, read-only: `mx.expenses.brisken.com:25` answered `454 TLS not available` to STARTTLS, so the finding stands and is no longer inferred. `web/smtp_tls.py` makes a self-signed pair under `<data>/tls/` with the image's `openssl` binary (RSA 2048, CN/SAN `mx.expenses.brisken.com`, renewed 30 days before expiry) and a TLS 1.2+ server context; the aiosmtpd Controller gets `tls_context=` with `require_starttls=False` (opportunistic: a sender without TLS still delivers, forcing it would bounce receipts). Env `EXPENSE_RECON_SMTP_TLS_CERT`/`_KEY` take a CA pair later without code, `EXPENSE_RECON_SMTP_TLS=0` turns the offer off, every failure path leaves the listener plaintext with a logged reason. Every arrival records `transport_tls` (archive meta, acceptance log row, receipt `submitted_by.transport_tls`) so who still delivers in the clear is readable from the data. Red-proven through the real `start_intake_smtp` caller (removing `tls_context=` leaves EHLO at exactly today's live feature set); the builder's first proof did not bite because its tests built their own Controller, which is why the caller-level test exists. Storage description gap 6 narrowed, not closed: a CA certificate (Let's Encrypt via DNS-01 on the registrar API) and the integrity half stay open. Live proof after deploy: EHLO shows `250-STARTTLS`; the next real mail's receipt carries `transport_tls: true`.
 
 ### 126. No month has ever been closed by Criss, so 'done' has never been tested on the only test that counts (2026-09-17 audit draft #124, unranked; operations)
 
@@ -5533,7 +5537,7 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 
 **Reviewer corrections:** none recorded
 
-### 127. Matching accuracy is measured by hand, offline, and nothing runs it before a deploy (2026-09-17 audit draft #125, unranked; operations)
+### 127. Matching accuracy is measured by hand, offline, and nothing runs it before a deploy (2026-09-17 audit draft #125, unranked; operations) (SHIPPED 2026-09-18, PR #1099; see Shipped row below)
 
 **Audit rank 34 of 40; severity high as merged; verification: finder's evidence only, not independently rechecked.** The one instrument that catches a silent wrong auto-match (the labelled-month scorer with its holdout guard and the attribution tool) lives outside the automated checks: the labels are Brisken data in a git-ignored folder, the pipeline runs unit tests only, and the shipped fixtures hold one synthetic seven-row file. The scorer was broken for seven weeks and nobody noticed until a session tried to use it. Criss's own verdicts (rejected pairings, re-picks, withdrawn self-confirmations) are recorded but never added up, so an October precision slip would be found by her one wrong row at a time.
 
@@ -5547,7 +5551,9 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 
 **Reviewer corrections:** none recorded
 
-### 128. Three defect classes that repeated still have no automatic guard: reader drift, prompt edits, and the mail path end to end (2026-09-17 audit draft #126, unranked; operations)
+**Shipped 2026-09-18 (PR #1099).** Two halves, neither touching `matching/` or the pinned scorer. CI: `tools/recon_accuracy_check.py ci` imports the pinned scorer by path and replays two committed SYNTHETIC labelled bundles (`tests/fixtures/accuracy/`, invented data: E1, E2, E3 clean and review-zone, E4, no_charge near a charge, one charge with two identical receipts, refunds) against `expected.json` on twelve per-bundle fields, as a new `accuracy` job in `expense-recon-tests.yml`. It GATES on exact equality: the scorer is deterministic, so the only thing that moves a number is a matcher behaviour change, which the PR then writes down by re-recording `expected.json` (`--write-expected`); a delta comment would rot unread. Deploy: `.claude/hooks/recon-accuracy-deploy-gate.py` runs `real` over the six gitignored labelled months before any `flyctl deploy` of brisken-expense-recon and asks with the table on a drop below `tools/recon-accuracy-baseline.json` (train 56.8, holdout 19.2, all 76.0, 0 wrong), silent otherwise; `real --markdown` is the PR-body block. Red-proven four ways (widened FX knob, a mislabelled pair, a missing labels.csv, the hook seam). Not built: the per-month tally of Criss's own verdicts (rejected pairings, re-picks, withdrawn self-confirmations) on the operator state; that reads the review-verdict tables the M/T rounds are reshaping. Matcher finding for the owner, not fixed: two identical charges on nearby days against one receipt resolve greedily to the first charge in statement order instead of deferring (fixture row labelled `excluded`).
+
+### 128. Three defect classes that repeated still have no automatic guard: reader drift, prompt edits, and the mail path end to end (2026-09-17 audit draft #126, unranked; operations) (SHIPPED 2026-09-18, PR #1100; see Shipped row below)
 
 **Audit rank 35 of 40; severity medium as merged; verification: one reviewer.** The CSV and Excel statement readers are separate code with no test that feeds the same statement through both and demands the same result; the September sign defect was exactly the two drifting apart. A repaired reader cannot find the months it already misread (the per-statement version stamp was not built; the re-read route is terminal-only). Status vocabularies added since item 21 (turn, row_type, reason_code, month_health.state, duplicate state) are mapped by hand in the SPA with no label pin, so a new backend value renders as someone else's label. Any edit to the receipt-reading prompt moves 12 to 41 of 129 stored readings and empties the cache, with no check that notices a prompt edit. The mailbox tests stub routing at the acceptance reply; no test starts the real listener and follows a message to a receipt in a month.
 
@@ -5561,7 +5567,9 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 
 **Reviewer corrections:** (combined) (1) "nothing automated proves a mailed receipt lands in a month" is wrong: test_intake_mail.py:392 test_mail_lands_in_open_batch_with_provenance runs process_message(synchronous=True) on a raw mail and asserts the receipt appears in /api/expense-batches/{id} with provenance; only the SMTP listener leg (Controller on a port to handle_DATA) is untested. (2) "the bundle audit lives in a temp folder" is wrong: tools/lovable-bundle-audit.py is committed in the main repo's tools/ (with controls and exit codes); only prompt_ledger.py and the A/B runner are in %TEMP%. (3) "no label pin" is overstated for turn: tests/test_view_contract.py:1115 pins TURNS as a literal closed set, so a new backend turn
 
-### 129. A re-match happens silently: neither the drop page nor the month page says it ran or which rows moved (notes #53, #54) (2026-09-17 audit draft #127, unranked; UI prompt for the owner to paste)
+**Shipped 2026-09-18 (PR #1100).** Four cheap guards, `src/` untouched, each proven red by a one-line mutation and restored byte-identical. (1) Reader parity, `tests/test_reader_parity.py`: one synthetic Chase-style statement written as CSV and as XLSX from the same rows, parsed through both readers and `cli._load_statement`, compared field by field (content-derived ids are equal across formats; `raw_text` is the one excluded field); negating one XLSX amount fails on id, amount and `is_credit` under sign inference, the path September's defect lived on. (2) Status vocabularies pinned as closed literals in `tests/test_view_contract.py` (`row_type`, review `reason_code`, `month_health.state`, `rematch_log.trigger`) against the code's own emitters via `ast` scanners; a new backend value fails CI until the pin and the SPA label move together. Finding: the code emits 12 triggers where `api-contract.md` listed 10 (`duplicates`, `month_move` were live and unlisted; documented). (3) `tests/test_extraction_prompt_pin.py` pins `_EXTRACT_FINGERPRINT`; the failure text says how to bump. (4) `tests/test_smtp_listener_e2e.py` starts the real aiosmtpd Controller on a free port, sends over a real `smtplib` session with an attachment and asserts the receipt on `GET /api/expense-batches/{id}`, plus foreign-domain and oversize refusals (on Windows the readiness probe is pointed at 127.0.0.1 in the test only). Not built, not cheap: the per-statement reader-version stamp as a month advisory (snapshot + payload + SPA), and committing the A/B runner + prompt ledger (they need client readings; still in `%TEMP%/claude/recon-probe/`). Absent parity classes: fill-coloured rows, formula columns, unrecognised Type labels, accounting negatives, letter card values, the PDF reader. Seen once in the full suite, not in this PR's files: `test_renaming_a_batch_into_a_month_claims_its_pool` reads the grid before the claimed receipt's async ingest lands under load.
+
+### 129. A re-match happens silently: neither the drop page nor the month page says it ran or which rows moved (notes #53, #54) (2026-09-17 audit draft #127, unranked; UI prompt for the owner to paste) (backend half SHIPPED 2026-09-18, PR #1103; SPA prompt `docs/lovable-rematch-visible-prompt.md` written, not pasted; see Shipped row below)
 
 **Audit rank 36 of 40; severity medium as merged; verification: one reviewer.** When a receipt arrives, a card is fixed or master data changes, the month is re-matched in the background. The only record is a counts-only event on an operator endpoint and a developer mail; the app shows nothing but a toast if it fails. The drop page tells Criss which month a file was filed into, not whether it found its charge; the month page has no 'last re-match' line and no way to see what changed since she last looked. The owner's notes #53 and #54 ask whether dropped or mailed receipts get the full treatment; the answer is yes (F27) but she cannot observe it, and finding rows she already looked at silently changed is how trust is lost.
 
@@ -5576,6 +5584,8 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 **Reviewer corrections:** (combined) (1) "the app shows nothing but a toast if it fails" is true only for the in-app edit/upload routes (app.py:2051, 2873 return `rematch`); the receipts-drop route drops the rematch object before replying, so the drop page shows nothing even on failure, and mail intake has no screen at all. (2) "no 'last re-match' line" is overstated: both payloads carry `updated_at` (shipped 2026-09-16, api-contract.md:2093), which the SPA prints as "Last updated" and which advances on every re-match commit; what is missing is the trigger and the result, not the time. (3) Live rematches[] count is 23, not 18 (brief snapshot); August's latest event reads 114 charges / 30 receipts / 21 unmatched receipts, so the
 
 **2026-09-17, note #53 answered and the drop-page half shipped (PR #988, Fly v150).** Answer: yes, each dropped file is read and filed into the month printed on it (created when absent; an unreadable date is held as `needs_month` and asks for a month), and a month that already holds a statement re-matches on the arrival. The drop ledger now carries `months[].has_statement` and `months[].rematch` (`{ok, n_transactions, n_matched, n_review, n_unmatched_tx}` or `{ok: false, error}`) instead of discarding the arrival's re-match result; the matching line is `docs/lovable-feedback-0917b-prompt.md` section 5. Still open from this item: the per-file "matched with X" line, which rows moved, and the month page's "last re-match" line.
+
+**Shipped 2026-09-18 (PR #1103), backend half + prompt.** The month payloads (`GET /api/runs/{id}`, `GET /api/expense-batches/{id}`) now carry `last_rematch` (the newest `rematch_log` entry: `at`, `trigger`, the four effective counts, receipts counts, `event_id`; `null` when never re-matched) and `rematch_pending` (the stored mark minus `id`; `error`/`failed_at`/`attempts` after a failure; `null` while nothing is owed), beside `updated_at`, one helper `rematch_visibility(snapshot)`, pure reads. Red-proven: removing the key from `build_view` fails five tests. The SPA prompt `docs/lovable-rematch-visible-prompt.md` (EN + PT-BR, Not-applied row in PROMPT-STATUS) puts one fragment on the shared month header after "Last updated": "Last matched <date> (<trigger>): N of M charges paired, R to review", or "A new match is queued since …", or "Matching failed … runs again on the next change", with the 12 triggers labelled. Notes #53 and #54 are answered yes (every arrival on a month with a statement re-matches it) and now visibly. Still open from this item: the per-file "matched with X" line on the drop page and which rows moved (the events carry counts, no row ids).
 
 ### 130. English sentences from the backend still reach Criss's Portuguese screen: every error toast, the setup advisories and the crash page (2026-09-17 audit draft #128, unranked; licence: defect, covered) (SHIPPED 2026-09-17, pending PR; SPA prompt written; Shipped row 72) (SPA §1-§5 APPLIED AND VERIFIED 2026-09-18; §6 the two error screens NOT applied, prompt `docs/lovable-error-page-lang-prompt.md` written 2026-09-18, awaiting paste)
 
@@ -6201,6 +6211,131 @@ re-pinned on a Memory-page rule for a merchant with no default). Four wires
 proven red under `regress_check` (the account-from-rule call, the stamp set,
 the `rematch_month` registry argument, the route's `merchants` argument), each
 restored green.
+### 150. A statement upload has no identity of its own (note item T2, owner 2026-09-18; traceability; SHIPPED 2026-09-18, pending PR; Shipped row 90)
+
+**Owner, 2026-09-18 (traceability note, item T2):** give every statement
+upload a content-derived `statement_id`, parallel on every `statements[]`
+entry, carried on `coverage[]` beside the file names, recorded in the anchors
+by id as well as by file, so the writeback and the re-read can address an
+upload by id when two per-card exports share a filename. Contract rule 1:
+add, never retype.
+
+**What was true before.** A receipt has had a stable id since the intake
+(`document_id`) and a statement line since item 29 (`transaction_id`,
+content-derived), but the upload that printed the line had none in the hosted
+app: a `statements[]` entry was keyed by `file`, the name on disk, which
+`_unique_upload_name` makes unique PER UPLOAD (`Chase.xlsx`, `Chase-2.xlsx`).
+Two of Criss's per-card exports sharing the bank's filename got two names for
+what may be one file, a re-upload of the same workbook got a second name for
+the same bytes, and nothing on either payload said whether two entries were
+the same file. `store/statements.py` computes a `content_hash`, but over the
+PARSED TRANSACTIONS and only for the CLI store; the hosted month state never
+uses it.
+
+**Shipped.** `statement_content_id(path)`: sha256 over the stored bytes, 16
+hex. Both callers of `build_statement_entry` (the attach and the re-read)
+compute it from the bytes on disk, so an attach and a later re-read of the
+same file agree, an entry recorded before the id gains one at the month's
+next re-read, and a corrected file gets a new one. Absent, never null, on
+every entry written before it. `coverage[].statement_ids[]` beside
+`coverage[].statements[]` (deduped ids of the named entries; not positional,
+stated in the contract), pinned in `tests/test_view_contract.py` on both
+payloads. The snapshot's `statement_anchors` records each upload's row map
+under its file name AND its id (`_anchor_keys`), and
+`GET /runs/{id}/statement-categorized.xlsx?statement_id=` picks the upload by
+id, winning over `?file=` when both are given, 404 on an unknown id. Nothing
+outbound (ack, CSV, PDFs) carries it, per the owner's deferral of outside ids
+to the Zoho Books integration. `card_sections[].statements[]` stays file
+names (derived from `coverage[]`, joinable on the same payload).
+
+**Live months.** Neither July nor August carries a `statement_id` today and
+neither will until its next re-read; no re-read is triggered by this item
+(no live writes, Criss acts). `coverage[].statement_ids` reads `[]` on both
+until then, which is the truth for uploads recorded before the id existed.
+
+**Tests.** `tests/test_statement_identity_t2.py` (5, route-level through the
+attach, both page GETs, the re-read and the writeback route): the id on both
+payloads and in both anchor keys; the same bytes twice share one id and a
+corrected file gets another; a re-read keeps the id; an entry written before
+the id reads absent and gains one on re-read; the writeback picks the FIRST
+export by id while the month's current statement is the second (so a
+fall-back-to-current cannot pass it). Six wiring points proven red by hand
+(cp the source aside, one-line mutation, targeted tests, cp back, sha256
+equal): attach wire 6 of 28 red, re-read wire 2, coverage ids 5, append-time
+anchors by id 3, re-read anchors by id 2, writeback selector 1; green 28/28
+after each restore. Suite 2511 -> 2516 passed / 2 skipped; ruff clean.
+### 151. The statement description counts, and a receipt whose card cannot be identified is matched on the other criteria (owner, 2026-09-18; note item X1) (SHIPPED 2026-09-18, Shipped row 91)
+
+**Owner, 2026-09-18 (matching item, X1):** the statement description must
+count in matching, and when the card on an expense cannot be identified,
+another logic must take over so the expense is still matched on other
+criteria. Priority; the covered-vs-quote licence question does not gate it.
+
+**Measured first (read-only DB copy of 2026-09-18, replayed with
+`tools/recon-match-attribution.py` on the worktree tree).**
+
+| | July `50622baec444` | August `074a7b8905d7` | September `51a22ad72864` | six bundles |
+|---|---|---|---|---|
+| charges / receipts in pool | 111 / 53 | 111 / 36 | **0** / 49 (no statement yet) | 827 / 218 |
+| labelled right, deterministic | 30 | 6 | - | 70 / 95 |
+| labelled wrong | 0 | 1 (`0025` on BASE44 50.00, item 133, pre-existing) | - | 0 |
+| pairs sharing a reference-like token (description vs receipt numbers) | 1 (`Microsoft-G173514057` / `0006`, already exact + unique) | 0 | 0 | 0 |
+| descriptions printing masked card digits | 0 | 0 | 0 | 0 |
+| receipts naming no card, matched | 19 of 31 | 2 of 10 | 27 of 49 unmatched (no charges) | 0 (Zoho names every card) |
+| of those, a deterministic rival on another card, not spoken for | 0 (the one candidate, `0063` Marinho vs GITHUB 10.00, is spoken for) | 0 | - | 0 |
+| labelled-right pairs resting on the parsed vendor (dominance or the tip-band floor) | 4 | 0 | - | - |
+| vendor score diluted by a reference token inside the description | `0006` Microsoft 0.50, `0007` AMAZON* Z11US7DF5 0.57 | 0 | - | 3 pairs (CASUALFOOD x2, 7-ELEVEN) |
+
+What the description carries on Criss's Chase exports is the merchant name
+plus, on some rows, an order or invoice number (`MICROSOFT#G180053463`,
+`LinkedIn SN P3078900231`, `Wix.com 1251593381`, `AMZ*Amazon.D*X37L83BI5`).
+Almost none of those numbers appear on a receipt in the pool, and the one
+that does is already matched on exact amount, date and card. What the
+number DID do was harm: `vendor_similarity` averages over the description's
+tokens, so a reference token halved the merchant score of a pair whose
+merchant words agreed exactly, and July's Microsoft invoice sat at
+`vendor_pct` 50, under the self-confirm floor of 75, waiting for a click.
+
+**Shipped (this item).**
+
+1. `strip_reference_tokens` / knob `vendor_ignore_reference_tokens`: a token
+   of four or more characters carrying three or more digits is a reference,
+   not a merchant word, and is left out of the merchant comparison. Live
+   July at the next re-match: Microsoft `vendor_pct` 50 to 100 (crosses the
+   self-confirm floor), Amazon `Z11US7DF5` 57 to 100; two bundle pairs rise;
+   0 class moves anywhere; labelled-wrong unchanged; bundles 70/95.
+2. `card_evidence(tx, receipt)`, the ONE definition of "the card cannot be
+   identified": receipt `override` / `hint` / `learned` / `printed` /
+   `none`, charge `row` / `account` / `none`, on every candidate as
+   `card_evidence: {receipt, charge}`. A receipt reading `none` is matched
+   across every card's charges on amount, date, currency, the reference and
+   the uniqueness gate (what the matcher already did; now stated, named and
+   shown). A charge reading `account` took its card from the upload's
+   account, not the row; the matcher still scopes by it because on every
+   labelled dataset the account IS that card, and the page can now say so.
+   The MEMORY session's per-merchant card fact arrives through
+   `Receipt.card_scope_source` `learned` and counts as card evidence.
+3. The review clause, knob `no_card_rival_review`: a `none` receipt keeps its
+   match and rank but asks for review with `review_code`
+   `no_card_rival_on_other_card` when a deterministic rival for the same
+   receipt sits on a different card and is not spoken for. 0 pairs flagged
+   today on all nine datasets; it is what stands between September's 27
+   no-card receipts and a silent pick between two cards when its statement
+   lands.
+
+**Dead ends, measured and not built:** reference tokens shared between the
+description and the receipt's numbers as a promoting signal (tie-break,
+uniqueness dominance, merchant precedence), and a masked card fragment inside
+a description. One shared-token pair exists across nine datasets and
+`reference_match` already fires on it; no masked fragment exists. Neither
+moves a row.
+
+Contract "Matching when the card cannot be identified, and the description's
+reference tokens (item X1)". Route-level
+`tests/test_match_x1_description_and_no_card.py`; the attribution gate reads
+the clause off `match_month`'s own outcome. SPA half
+`docs/lovable-no-card-evidence-prompt.md` (not applied). Item 41's "suggest
+private" stays its own step; item 72 stays the TRACEABILITY session's.
 
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
@@ -6252,6 +6387,13 @@ restored green.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 96 | The month says when it was last matched: `last_rematch` + `rematch_pending` on both month payloads (pure reads of the snapshot's `rematch_log` / pending mark), and the Lovable prompt that renders them on the shared month header in EN + PT-BR (12 trigger labels) | Item 129 / owner notes #53 #54: a re-match ran silently; the only record was a counts-only operator event and a developer mail, and the SPA had nothing on the month payload to render | 2026-09-18, PR #1103; red-proven (five tests fail without the key); suite 2547 passed / 2 skipped; ruff clean; deploy + Lovable paste pending |
+| 95 | Guards for the three repeated defect classes: CSV/XLSX reader parity on a synthetic statement (sign inference, refunds, payments, typed vs text cells), closed-literal pins for `row_type` / `reason_code` / `month_health.state` / `rematch_log.trigger` via `ast` scanners of the emitters, a pin on the receipt-reading prompt fingerprint, and an end-to-end test through the real aiosmtpd listener over `smtplib` | Item 128: the September sign defect was the two readers drifting apart, every prompt edit moved 12-41 of 129 readings unnoticed, and the listener leg of the mail path had never been exercised by a test | 2026-09-18, PR #1100; four red proofs pasted in the PR (XLSX sign flip, an added row type, a one-character prompt edit, a 250 before processing); suite 2544 collected, 2541 passed / 2 skipped / 1 pre-existing timing race; ruff clean |
+| 94 | The mailbox offers opportunistic STARTTLS (TLS 1.2+, self-signed pair generated on the volume with the image's `openssl`, renewed 30 days before expiry, CA pair via env later); `transport_tls` recorded on every arrival's archive meta, log row and receipt provenance | Item 125: the port-25 listener answered `454 TLS not available` (rechecked live today), so Exchange Online's opportunistic TLS fell back to cleartext and every forwarded receipt crossed the internet readable | 2026-09-18, PR #1101; red-proven through the real caller; suite 2534 passed / 2 skipped; ruff clean; deploy + EHLO + first-mail `transport_tls` check pending |
+| 93 | The accuracy scorer runs in CI and before a deploy: `tools/recon_accuracy_check.py ci` replays two committed synthetic labelled bundles through the pinned scorer as a CI job gating on exact equality (`expected.json` re-recorded on purpose in the same PR); `.claude/hooks/recon-accuracy-deploy-gate.py` scores the six real labelled months before any recon `flyctl deploy` and asks with the table on a drop below `tools/recon-accuracy-baseline.json` | Item 127: matching quality is the product and nothing measured it before a deploy; the scorer had been broken for seven weeks unnoticed, and the real labels are client data that cannot reach CI | 2026-09-18, PR #1099; red-proven on a widened FX knob, a mislabelled pair, a missing labels.csv and the hook seam; real months train 56.8 / holdout 19.2 / all 76.0, 0 wrong; suite 2511 passed / 2 skipped, hook tests 46, ruff clean |
+| 92 | An outside monitor says when the app is down: `tools/recon_uptime_probe.py` (healthz status + disk floor, port-25 banner, SPA shell; one retry) on a 10-minute GitHub Actions cron, one `recon-uptime` issue + one Resend mail per outage, comment while down, close + one mail on recovery; `workflow_dispatch` with `api_override`/`dry_run` for a hand test | Item 123: the 2026-09-10 outage was found by the owner; Fly's health check had no alerting target, and the only alarm path was a script on the developer's laptop (item 121) | 2026-09-18, PR #1098 (repo-side, no deploy); red-proven against a dead API from the laptop; live run all OK; 19 tests, ruff clean, preflight-hooks OK; port 25 from the runner unverified until the first dispatch |
+| 91 | The statement description counts and the no-card fallback is defined once: `strip_reference_tokens` keeps an order or invoice number inside the bank description out of the merchant comparison (knob `vendor_ignore_reference_tokens`); `card_evidence(tx, receipt)` names where each side of a pair got its card, on every candidate as `card_evidence: {receipt, charge}`; a receipt naming no card is matched across every card's charges and asks for review with `review_code: no_card_rival_on_other_card` when a deterministic rival sits on another card and is not spoken for (knob `no_card_rival_review`); `Match.review_code` in the snapshot | Item 151 (owner note X1). Measured first on July, August, September and the six bundles: the description's reference numbers pair nothing new (one shared-token pair in nine datasets, already exact and unique; no masked card digits anywhere), but a reference token inside the description halved the merchant score of pairs whose words agreed, and July's Microsoft invoice sat at `vendor_pct` 50 under the self-confirm floor for a click it did not need; at the next re-match it reads 100 (Amazon `Z11US7DF5` 57 to 100). The card fallback was already the matcher's behaviour and had no name, no field and no review clause; September holds 27 no-card receipts and no statement yet. 0 class moves, labelled-wrong unchanged, bundles 70/95. Three regressions of the real source proven RED first; the description-token promotion and the masked-fragment rule are documented dead ends, not built | 2026-09-18, this round; suite 2513 -> 2530; SPA half `docs/lovable-no-card-evidence-prompt.md` (owner applies) |
+| 90 | A statement upload has an identity: `statements[].statement_id` is the sha256 of the stored bytes (16 hex), parallel and absent on entries written before it; `coverage[].statement_ids[]` rides beside the file names; the snapshot's `statement_anchors` records each upload's row map under its id as well as its file name; `GET /runs/{id}/statement-categorized.xlsx?statement_id=` picks an upload by id, winning over `?file=`. The same bytes twice share one id (the fold's `n_new: 0` case), a corrected file gets a new one, a re-read keeps it, and an entry recorded before the id gains one at the month's next re-read | Note item T2 (owner 2026-09-18, traceability, backlog item 150): a `statements[]` entry was keyed only by `file`, a per-upload unique name, so two per-card exports sharing the bank's filename were two names for maybe one file and a re-upload was a second name for the same bytes; nothing on either payload said which entries were one file, and the writeback could only be told which upload by that name. Live July and August carry no id until their next re-read, which this item does not trigger | 2026-09-18, pending PR; `tests/test_statement_identity_t2.py` (5, route-level through the attach, both page GETs, the re-read and the writeback; the writeback test asks for the FIRST export while the month's current statement is the second, so a fall-back-to-current cannot pass it); six wiring points proven red by hand with a one-line mutation each and sha256-equal restores; suite 2511 -> 2516 passed / 2 skipped; ruff clean |
 | 89 | A dropped pile is READ in parallel: the routing pass that learns each receipt's printed month runs on a bounded pool (`_DROP_READ_WORKERS = 6`) instead of one file after the next, and reports `reading receipts (7/40)` as the files land instead of one frozen stage. The ledger is assembled from the staged order by one writer after the reads return, so row order and every field are what the end-to-end loop produced; a read that raises leaves that file `needs_month` and files the rest; a typed `month` still reads nothing at all | Item 148, owner 2026-09-18: "manual receipt injection function is taking way too long". Measured on a stub at 0.2s per read, the drop spent 0.20s / 2.02s / 8.21s reading 1 / 10 / 40 files against 0.11s filing, and a real vision round-trip is not 0.2s. After: 0.20s / 0.41s / 1.42s, 5.8x on the 40-file pile. Proven on the way past: with the extraction cache on, three dropped files cost three transport calls across BOTH passes and six with it off, so the routing's full-extraction read really is the ingest's read | 2026-09-18, pending PR; `tests/test_drop_speed_item_148.py` (10). The contract test is the negative one: the parallel ledger compared field by field against the same folder routed with the pool pinned to one worker |
 | 88 | A card can sit under an account: the registry entry takes an optional `parent` holding another card's key, validated one level deep on save with five named refusal codes, and `card_sections[]` renders the tree on both month pages and in both PDFs. An account comes first with its subcards behind it, its figures are the sum of itself plus them (charges, matched, receipts, receipts without a charge, open money and booked-without-receipt per currency, counted rows and totals), its own card's figures stay beside them in `own`, and a statement covering the account is named once instead of once per card. Parentage is DATA a person sets: sharing a statement file is evidence and not proof, and the four cards on July's one Chase file belong to three different people, so nothing in the tool infers it | Item 147, owner 2026-09-18: "card 2838 for example should be an account with others as subcards", "only 2838 has subcards, no where else", "just do it, no quoting". An account's spend was never one figure, so a reader added four tabs in their head, and `July2026.xlsx` was described four times, once per tab. Predicted from the payload shapes and the live figures already in the contract: August's account reads 111 charges / 9 matched / USD 10,862.66 open / 19 receipts against today's 34+40+37 split, and July's reads 112 charges with its file named once instead of four times; 1176, 9693 and No card do not move, and neither does any count outside `card_sections` | 2026-09-18, pending PR; `tests/test_card_accounts_item_147.py` (22, route-level through both page GETs and both documents, on a fixture carrying every row class the live month has: a subcard on the account's own file, a subcard with a statement of its own, a subcard with zero charges, a standalone card, a receipt with no charge and one with no card). The negative case is the contract: a registry with no parent produces the same sections with the same fields and figures, asserted against the tree month's own `own` block. Eleven wiring points proven red BY HAND (cp the source aside, cut one line, run the targeted test, read the FAILED line, cp back, sha256 equal), because `tools/regress_check.py` reports RED whether or not the mutated suite failed. Not built: the SPA half (`docs/lovable-card-accounts-prompt.md`, not pasted) and the registry seed, which has no committed home, so the owner sets the three parents once in Settings |
 | 87 | The card strip counts the rows the boxes count: `build_card_review` takes the month's decided copies (`copy_docs`, the same `decided_copies` set every listing surface reads) and its four box-twin counters skip them, so `card_review.n_needs_entity` / `n_needs_person` / `n_suggested_private` / `n_private` cannot answer differently from their `summary` twins. The GROUPING keeps every copy on purpose: `unresolved_hints`, `resolved` and the three row counts describe the card-assignment surface, where a decided copy is still a row on screen with an assignable hint, and none of them has a twin to disagree with | Item 146. One payload gave two answers to the same question, with nothing telling a reader which was right. **Not on one screen, though: that was checked after the merge and the item as filed had it wrong.** The published SPA reads `summary` for all four and `card_review` for none of them (every occurrence across the 44 chunks is `i.summary.<field>`), so the number beside MISSING ENTITY was always the right one and the user-visible effect of this fix today is zero. It is a contract fix: the next reader of `card_review` would have got the wrong count. Live July read `summary.n_needs_person` 13 beside the strip's 15, `n_needs_entity` 14 beside 16, and (not in the item as filed, found by a live read before the build) `n_suggested_private` 7 beside 9; the gap is exactly the two decided copies. `n_needs_entity` takes THIS exemption though it refuses item 144's, because the two rulings govern different populations and `expense_boxes` already reads them that way | 2026-09-18, PR #1086, Fly v181; `tests/test_card_review_copies_item_146.py` (3, route-level through the real app, fixture asserting its own premise: the copy reads `counts_in_total: false`, `boxes: []`, `n_copies_set_aside: 1`, so a refactor that stops producing a copy reddens the module instead of leaving the counts agreeing about nothing). Proven to bite by hand at the WIRING point, not the helper: reverting the call site alone failed 2 of 3 with all four counters named in the diff (3/3/2/0 against 2/2/1/0), restored byte-identical by sha256; suite 2479 passed / 2 skipped |

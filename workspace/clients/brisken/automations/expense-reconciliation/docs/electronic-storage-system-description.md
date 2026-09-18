@@ -5,7 +5,7 @@ kind: compliance-description
 backlog_item: 48
 state: draft-pending-owner-and-cpa-review
 created: 2026-09-08
-updated: 2026-09-17
+updated: 2026-09-18
 revision: 2
 ---
 
@@ -150,14 +150,19 @@ and directories different from those described in 5.1 and 6.1.
 **4.1 By e-mail.** The application runs its own mail listener. The MX record
 for `expenses.brisken.com` points at it, and anyone may send a receipt to
 that domain; there is deliberately no sender allowlist, because suppliers
-and staff both send receipts. The listener accepts plain, unauthenticated
-SMTP on port 25 and offers neither transport encryption nor authentication,
-so a message and its attachments travel to it in cleartext across the public
-internet. Nothing in the system detects a message that was altered,
-substituted or injected in transit, and because no digest of the received
-bytes is retained as an integrity control (8.1), there is no later means of
-establishing that what is on the volume is what the sender transmitted.
-Adding transport security to the listener is on the remediation list.
+and staff both send receipts. The listener accepts SMTP on port 25 and,
+since 2026-09-18 (backlog item 125), offers opportunistic STARTTLS (TLS 1.2
+or newer) with a self-signed certificate, recording on each receipt whether
+its session was encrypted (`transport_tls`). STARTTLS is not required: a
+sender that supports it is encrypted on the wire, while a sender that does
+not, or that declines a self-signed certificate, still delivers in cleartext,
+so the encryption is opportunistic rather than guaranteed. The listener
+remains unauthenticated. Nothing in the system detects a message that was
+altered, substituted or injected in transit, and because no digest of the
+received bytes is retained as an integrity control (8.1), there is no later
+means of establishing that what is on the volume is what the sender
+transmitted. A certificate from a public authority, which a verifying sender
+would accept, is the remaining transport step.
 
 Boundaries that do apply: the envelope recipient must be inside the intake
 domain, so the listener is not an open relay; at most 10 recipients and 25
@@ -886,7 +891,7 @@ open.
 | 3 | 4.01(8) | No retention control over the run store; one request deletes a period. ~~Queued-file replacement and same-name re-attach destroy bytes silently~~ REMEDIATED 2026-09-15 (backlog item 66): both archive the superseded file under a versioned name instead of destroying it | High |
 | 4 | 4.01(2)(c) | No inspection or quality-assurance program | High |
 | 5 | 4.01(1) | Preservation: one volume, one region, no replication. NARROWED 2026-09-17 (backlog item 119): an application-level backup to a client-controlled SharePoint library and a written restore procedure now exist, but the backup is off by default and the restore has never been rehearsed, so preservation is documented rather than demonstrated | High |
-| 6 | 4.01(2)(b) | Mail arrives over unauthenticated, unencrypted SMTP; no transport security and no means of establishing what the sender transmitted | High |
+| 6 | 4.01(2)(b) | ~~Mail arrives over unauthenticated, unencrypted SMTP; no transport security~~ NARROWED 2026-09-18 (backlog item 125): the listener now offers opportunistic STARTTLS (TLS 1.2 or newer) with a self-signed certificate, and records on each receipt whether the session was encrypted (`transport_tls`). It is not required, so a sender that does not support STARTTLS, or does not accept a self-signed certificate, still delivers in cleartext; a CA-issued certificate is the remaining transport step. The listener remains unauthenticated, and there is still no means of establishing what the sender transmitted | High |
 | 7 | 4.01(1), 4.01(6) | A single unreadable PDF makes a whole period unreproducible, with no message naming the file; a large period may exhaust memory and produce nothing | High |
 | 8 | 4.01(4) | Receipt-location column empty on every row of both exports; no receipt carries a stored location | Medium |
 | 9 | 4.01(4) | The export is not retained, so the version posted to the books cannot be reproduced after a later edit | Medium |
