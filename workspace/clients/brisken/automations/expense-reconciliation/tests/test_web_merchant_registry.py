@@ -268,6 +268,10 @@ def test_publishing_a_month_with_no_edits_leaves_the_registry_whole(client, monk
     assert memory["saved"] is True
     assert memory["learned"]["registry"] == {
         "aliases_added": 0, "categories_set": 0, "skipped_conflict": 0,
+        # Note item M2: the same reply now also counts the card
+        # observations of the month. No card resolves on this month, so
+        # the registry keeps its exact stored shape either way.
+        "cards_seen": 0, "card_keys_learned": 0, "card_keys_dropped": 0,
     }
     assert client.get("/api/settings").json()["merchants"] == before
 
@@ -288,6 +292,7 @@ def test_saving_corrections_changes_only_what_the_edits_touched(client, monkeypa
     assert resp.status_code == 200, resp.text
     assert resp.json()["learned"]["registry"] == {
         "aliases_added": 1, "categories_set": 1, "skipped_conflict": 0,
+        "cards_seen": 0, "card_keys_learned": 0, "card_keys_dropped": 0,
     }
 
     after = client.get("/api/settings").json()["merchants"]
@@ -305,5 +310,6 @@ def test_saving_corrections_changes_only_what_the_edits_touched(client, monkeypa
     assert resp.status_code == 200, resp.text
     assert resp.json()["learned"]["registry"] == {
         "aliases_added": 0, "categories_set": 0, "skipped_conflict": 0,
+        "cards_seen": 0, "card_keys_learned": 0, "card_keys_dropped": 0,
     }
     assert client.get("/api/settings").json()["merchants"] == after

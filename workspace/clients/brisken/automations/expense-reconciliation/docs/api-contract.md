@@ -5460,3 +5460,107 @@ file name and nothing proves it is a document id. Those entries get no key.
 Route-level in `tests/test_document_type_quarantine.py`: the strip's
 `document_id` equals the value a restore turns into an expense, and a
 legacy-derived entry has no key.
+## A merchant's spend is often on ONE card: `card_source: "merchant"` (note item M2, backlog item 154, 2026-09-18)
+
+Owner, 2026-09-18: some vendors are paid from one card and one card only, and
+the tool should know that rather than ask every month. Measured on the live
+July, August and September 2026 payloads (128 rows, 60 display vendors, each
+row's resolved card read off `expenses[].card`): **34 vendors were seen on
+exactly one card, 5 on several, 21 on none at all.** The five are the AI
+vendors and the spellings around them (`anthropic, pbc` on four cards;
+`lovable labs incorporated` on three; `openai` on two), which is the same
+split note item M1 found for their categories. So the fact is real for most
+merchants and false for exactly the ones a guess would hurt.
+
+### The registry carries the card, three fields
+
+`settings["merchants"]["<name>"]` gains three optional keys, stored only when
+set so an entry that has none keeps its exact shape:
+
+| Key | Written by | Meaning |
+|---|---|---|
+| `card_key` | an editor, or the learner | the card this brand's spend is exclusively on |
+| `card_key_learned` | the learner only | the key above was machine-written, so the learner may withdraw it |
+| `cards_seen` | the learner only | every card this merchant's receipts have resolved to, sorted, deduped, accumulated across months |
+
+`card_key` is stored as typed and is NOT checked against the card registry,
+for the reason `cost_center` is not: merchants and cards are edited
+independently, so the edit ORDER must not matter. A key no card defines
+resolves to nothing at resolution time and the row stays uncarded, rather
+than being stamped with a card nobody has. `cards_seen` is capped at 32
+entries and each key at 64 characters, so a long-lived merchant cannot grow
+the settings blob without bound.
+
+### The last link of the row's card chain
+
+`resolve_batch_row_cards` takes the merchant map (`merchants=`) and adds ONE
+link at the END of the item-87 chain. The full order, top to bottom:
+
+1. `override` - the reviewer's own pick on the row;
+2. `hint` - the printed payment method, or a hint word assigned to a card;
+3. `settled_charge` - the card of the charge in this month that settles the
+   receipt (item 111);
+4. `learned` - a card remembered from an earlier month's fix;
+5. **`merchant` - the registry's `card_key` for this row's merchant** (NEW);
+6. `none`.
+
+Links 3-5 share one guard, unchanged: they apply only when the receipt prints
+no card number at all, names no hint the batch resolves, and is not confirmed
+private. Memory never overrides a number the document shows, and the registry
+is memory about the brand rather than about this row, so `can_mark_private`
+stays **true** on a `merchant` row exactly as it does on a `learned` one: the
+reviewer can still say a private card paid it.
+
+`expenses[].card_source` gains `merchant` as a value. That is a rule-5 change:
+the pin in `tests/test_view_contract.py`
+(`test_expense_card_source_is_on_every_row_from_a_closed_set`) and the SPA
+label move with it.
+
+**Which surfaces resolve it.** Every surface that has the live settings in
+hand, so the grid, the CSV export, the month PDF (its listing, its card pass
+and its card sections), the cost-center roll-up and the refresh-master-data
+preview all name the same card for one receipt. Read LIVE from settings, like
+the cost-center registry and unlike the card snapshot, so the day a merchant
+gains a card the existing months resolve without a refresh pass.
+
+**Which do not, deliberately.** `rematch_month` passes no merchant map, and
+`merchant` is not in `matching.deterministic.CARD_SCOPE_SOURCES`: a card the
+registry lends never scopes matching, never moves a pair, and the accuracy
+gate is untouched. The statement-mode `build_view` passes none either
+(`reconcile()` has never seen the registry).
+
+### What sign-off learns
+
+At publish, beside the category/alias upsert (item 116's whole-entry rule),
+`registry_card_upserts_from_expense_run` folds the month's resolved cards
+into the registry:
+
+* every receipt whose card came from `override`, `hint`, `settled_charge` or
+  `learned` adds that card to its merchant's `cards_seen`. A row carried by
+  `merchant` adds nothing, on purpose: a card the registry lent is not
+  evidence about the merchant, and feeding it back would let one observation
+  harden into a fact.
+* `card_key` is written only while `cards_seen` holds exactly ONE card and
+  the entry has no key yet, and is marked `card_key_learned: true`.
+* a second card DROPS a learned key in the same pass. Two cards are a fact
+  about the merchant, not a conflict to resolve by guessing, so the row goes
+  back to asking.
+* a key an editor typed carries no `card_key_learned` mark and is never
+  touched, whatever the observations say.
+
+The publish reply's `memory.learned.registry` gains `cards_seen`,
+`card_keys_learned` and `card_keys_dropped` beside the existing counts.
+
+### Live before this ships
+
+The live registry holds 28 merchants and not one of them carries a card, so
+**no live row moves on this deploy**. The measured 34 single-card vendors are
+mostly not registry merchants yet; they become resolvable as sign-offs
+accumulate `cards_seen`, one month at a time, and the first learned key
+appears the first time a registry merchant publishes a month on one card.
+
+Route-level in `tests/test_registry_card_key_m2.py` (10, through the receipt
+add, the row-fix PUT, the settings PUT, publish and the CSV route). SPA half:
+`docs/lovable-merchant-card-prompt.md` - the Settings editor replaces the
+whole merchant map on save, so it MUST carry `card_key`, `card_key_learned`
+and `cards_seen` on every save or they are erased.

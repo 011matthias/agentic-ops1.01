@@ -4826,6 +4826,116 @@ def registry_upserts_from_expense_run(
     return new_merchants, summary
 
 
+# Note item M2 (2026-09-18): the card sources that count as an OBSERVATION of
+# where a merchant's spend actually lands. `merchant` is deliberately absent —
+# a card the registry itself lent must never teach itself back — and so is
+# `none`. `learned` is in: a card remembered per receipt is still a card the
+# tool resolved for this merchant this month.
+_CARD_OBSERVATION_SOURCES = frozenset({"override", "hint", "settled_charge", "learned"})
+
+
+def registry_card_upserts_from_expense_run(
+    merchants: dict,
+    *,
+    effective_receipts: "list[Receipt]",
+    card_res: dict[str, dict],
+) -> tuple[dict, dict]:
+    """Fold the month's resolved cards into a COPY of the merchants registry
+    (note item M2, the card half of the self-improving registry). Returns
+    `(new_merchants, summary)`.
+
+    A merchant's spend is often exclusively on one card: measured over live
+    July, August and September 2026, 34 of the 60 merchants that carry a card
+    at all were seen on exactly one, and 5 (the three AI vendors and the two
+    spellings around them) on several. So the tool keeps the evidence rather
+    than a guess:
+
+    * ``cards_seen`` accumulates every card this merchant's receipts resolved
+      to, across months. It is the machine's record and grows monotonically.
+    * ``card_key`` is written by this learner ONLY while ``cards_seen`` holds
+      exactly one card and the entry has no key yet, and is marked
+      ``card_key_learned``. A second card drops the learned key in the same
+      pass — two cards mean the tool cannot say which one paid, and saying
+      nothing is the correct answer.
+    * A key an editor typed carries no ``card_key_learned`` mark and is NEVER
+      touched, whatever the observations say. The person outranks the record.
+
+    Pure: it never touches the store, so the caller decides whether to
+    persist. Every entry is carried WHOLE (item 116's rule): only a merchant
+    an observation actually changed is rewritten, and only its card fields
+    move.
+    """
+    from ..merchant_registry import MerchantRegistry
+
+    base: dict = merchants or {}
+    empty = {"cards_seen": 0, "card_keys_learned": 0, "card_keys_dropped": 0}
+    registry = MerchantRegistry.from_settings({"merchants": base})
+    if not registry:
+        return base, empty
+
+    seen: dict[str, set[str]] = {}
+    for r in effective_receipts:
+        res = card_res.get(r.document_id) or {}
+        card = res.get("card")
+        if card is None or res.get("card_source") not in _CARD_OBSERVATION_SOURCES:
+            continue
+        match = registry.resolve(r.vendor_clean, r.detected_vendor)
+        if match is None:
+            continue
+        key = str(getattr(card, "key", "") or "").strip()
+        if key:
+            seen.setdefault(match.canonical_name, set()).add(key)
+    if not seen:
+        return base, empty
+
+    new_merchants = copy.deepcopy(base)
+    n_seen = n_learned = n_dropped = 0
+    for canonical, observed in seen.items():
+        stored_entry = new_merchants.get(canonical)
+        if not isinstance(stored_entry, dict):
+            continue
+        entry = copy.deepcopy(stored_entry)
+        was = {
+            str(c or "").strip()
+            for c in (entry.get("cards_seen") or [])
+            if str(c or "").strip()
+        }
+        union = sorted(was | observed)
+        if set(union) != was:
+            entry["cards_seen"] = union
+            n_seen += 1
+        typed_key = str(entry.get("card_key") or "").strip()
+        machine_key = bool(entry.get("card_key_learned")) and bool(typed_key)
+        if len(union) == 1 and not typed_key:
+            entry["card_key"] = union[0]
+            entry["card_key_learned"] = True
+            n_learned += 1
+        elif len(union) > 1 and machine_key:
+            entry.pop("card_key", None)
+            entry.pop("card_key_learned", None)
+            n_dropped += 1
+        if entry == stored_entry:
+            continue
+        try:
+            cleaned = normalize_merchants_setting({canonical: entry}).get(canonical)
+        except ValueError:
+            continue
+        if cleaned is None:
+            continue
+        # The cleaned entry is authoritative about the card fields, including
+        # their ABSENCE: a dropped learned key must not survive in `entry`.
+        merged = {**entry, **cleaned}
+        for k in ("card_key", "card_key_learned", "cards_seen"):
+            if k not in cleaned:
+                merged.pop(k, None)
+        new_merchants[canonical] = merged
+    return new_merchants, {
+        "cards_seen": n_seen,
+        "card_keys_learned": n_learned,
+        "card_keys_dropped": n_dropped,
+    }
+
+
 def commit_to_memory(
     run: RunRow,
     decisions: dict[str, Decision],
@@ -4925,6 +5035,18 @@ def commit_to_memory(
                 field_overrides=field_overrides or {},
                 category_overrides=overrides,
             )
+            # Note item M2: and the month's resolved cards per merchant.
+            # Resolved WITHOUT the registry on purpose — a card the registry
+            # lent this month is not evidence about the merchant, and feeding
+            # it back would let one observation harden into a fact.
+            new_merchants, card_summary = registry_card_upserts_from_expense_run(
+                new_merchants,
+                effective_receipts=effective,
+                card_res=resolve_batch_row_cards(
+                    effective, run.config, field_overrides or {}
+                ),
+            )
+            reg_summary.update(card_summary)
             if new_merchants != (settings.get("merchants") or {}):
                 settings_store.set_settings({"merchants": new_merchants}, now_iso)
             result["registry"] = reg_summary
@@ -6057,6 +6179,7 @@ def resolve_batch_row_cards(
     *,
     settled_cards: dict[str, str] | None = None,
     settled_outside: dict[str, dict] | None = None,
+    merchants: dict | None = None,
 ) -> dict[str, dict]:
     """Per-document card + entity resolution for an expense batch:
     ``{document_id: {hint, card: Card|None, entity, entity_source}}``.
@@ -6135,12 +6258,37 @@ def resolve_batch_row_cards(
     (`bank_transfer_tender`) does NOT take the option away, because that
     is the document's claim about itself; only the reviewer's own
     disposition does.
+
+    `merchants` (note item M2, 2026-09-18) is `settings["merchants"]`, read
+    LIVE like the cost-center registry rather than from the batch snapshot,
+    so the day a merchant gains a card the existing months resolve without a
+    refresh pass. It adds ONE link at the END of the chain, source
+    `merchant`: a merchant whose registry entry names a `card_key` lends it
+    to a receipt that prints no card number, names no assigned hint, is not
+    confirmed private, is not settled by a charge of this month and is not
+    remembered from an earlier one. It is memory about the brand, not a
+    decision about this row, so `can_mark_private` stays true exactly as it
+    does for `learned`. A caller that passes nothing behaves as before, which
+    is every caller with no settings in hand (the CSV without a store, the
+    matcher's re-match) -- and the matcher is deliberate: `merchant` is not
+    in `CARD_SCOPE_SOURCES`, so a card the registry lends never scopes
+    matching.
     """
     from ..cards import masked_short_ending, resolve_hinted_card_ex
     from ..matching.deterministic import _card_keys
 
     cards = _batch_cards(cfg)
     hints_map = _batch_card_hints(cfg)
+    # Note item M2: built once, and only when a merchant map was passed. The
+    # per-row lookup is a fuzzy sweep, so it runs lazily inside the loop for
+    # the rows that reach the last link -- the ones with no card at all.
+    merchant_registry = None
+    if merchants:
+        from ..merchant_registry import MerchantRegistry
+
+        merchant_registry = MerchantRegistry.from_settings(
+            {"merchants": merchants}
+        ) or None
     batch_entity = ((cfg or {}).get("expense") or {}).get("legal_entity_id", "")
     out: dict[str, dict] = {}
     for r in receipts:
@@ -6197,6 +6345,17 @@ def resolve_batch_row_cards(
                 card, card_source = settled, "settled_charge"
             elif remembered is not None:
                 card, card_source = remembered, "learned"
+            elif merchant_registry is not None:
+                # Note item M2: the brand's own card, last. A merchant whose
+                # spend is exclusively on one card answers "which card paid"
+                # for a receipt that prints nothing -- and a merchant seen on
+                # two cards carries no key, so it stays unanswered.
+                match = merchant_registry.resolve(r.vendor_clean, r.detected_vendor)
+                from_merchant = _batch_row_card(
+                    cards, match.card_key if match is not None else None
+                )
+                if from_merchant is not None:
+                    card, card_source = from_merchant, "merchant"
         override = fields.get("legal_entity", "")
         if override.strip():
             entity, source = override.strip(), "override"
@@ -6229,7 +6388,7 @@ def resolve_batch_row_cards(
             "can_mark_private": private or (
                 not settled_off
                 and not ambiguous
-                and (card is None or card_source == "learned")
+                and (card is None or card_source in ("learned", "merchant"))
             ),
             "ambiguous": ambiguous,
             # A reviewer's (or remembered) pick settles the ambiguity the
@@ -7011,6 +7170,7 @@ def build_expense_view(
         receipts, run.config, field_overrides,
         settled_cards=settled_charge_cards(run, charges, charge_state_map),
         settled_outside=grid_settled_outside,
+        merchants=(settings or {}).get("merchants"),
     )
     # Item 47: the cost-center chain, over the same pass's cards. Silent
     # for every row while the owner has defined no cost centers.
@@ -7725,6 +7885,7 @@ def _expense_export_inputs(
     edits: list[dict],
     dup_resolutions: dict[str, str] | None = None,
     settled_cards: dict[str, str] | None = None,
+    merchants: dict | None = None,
 ) -> tuple[list, dict]:
     """`(receipts, kwargs)` for the expense export — the overlay order the
     view uses (`apply_expense_edits` then `apply_overrides`) plus the card /
@@ -7769,7 +7930,10 @@ def _expense_export_inputs(
     # Cards R3: the export runs the SAME card/entity resolution pass the
     # grid renders (assign a card after an export, re-export, and the new
     # file carries it — exports are regenerable, never stale by design).
-    card_res = resolve_batch_row_cards(receipts, run.config, field_overrides, settled_cards=settled_cards)
+    card_res = resolve_batch_row_cards(
+        receipts, run.config, field_overrides, settled_cards=settled_cards,
+        merchants=merchants,
+    )
     # Item 41: a confirmed private expense was paid out of somebody's
     # pocket. In the one-file export it stays a row (mixed-entity ruling:
     # one file, entity as a column) with both columns saying so — the
@@ -7813,6 +7977,7 @@ def regenerate_expense_export(
     edits: list[dict],
     dup_resolutions: dict[str, str] | None = None,
     charge_decisions: dict | None = None,
+    merchants: dict | None = None,
 ) -> Path:
     """Write the expense CSV for a batch with every reviewer edit applied.
     Returns the path.
@@ -7825,7 +7990,7 @@ def regenerate_expense_export(
     csv_settled = export_settled_cards(run, charge_decisions)
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits, dup_resolutions,
-        settled_cards=csv_settled,
+        settled_cards=csv_settled, merchants=merchants,
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
@@ -8038,9 +8203,10 @@ def build_expense_report(
     # Item 111: the Expenses page's card of the charge a receipt settles, for
     # the listing's rows (company, paid-through) and the card pass below.
     report_settled = export_settled_cards(run, charge_decisions)
+    report_merchants = (settings or {}).get("merchants")
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits, dup_resolutions,
-        settled_cards=report_settled,
+        settled_cards=report_settled, merchants=report_merchants,
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
@@ -8080,7 +8246,8 @@ def build_expense_report(
     # The same card pass the grid runs: it names the person a trip
     # sections on and the card whose default a cost center falls back to.
     card_res_report = resolve_batch_row_cards(
-        company, run.config, field_overrides, settled_cards=report_settled
+        company, run.config, field_overrides, settled_cards=report_settled,
+        merchants=report_merchants,
     )
     if is_trip_batch(run):
         def _person_of(r) -> str:
@@ -8128,7 +8295,10 @@ def build_expense_report(
             sec_by_key: dict[str, dict] = {}
             for sec in card_sections(
                 card_view,
-                report_receipt_cards(receipts, run.config, field_overrides),
+                report_receipt_cards(
+                    receipts, run.config, field_overrides,
+                    merchants=report_merchants,
+                ),
                 card_parents(_batch_cards(run.config)),
             ):
                 for doc in sec["receipt_docs"]:
@@ -8705,7 +8875,10 @@ def build_cost_center_totals(
         )
         private_by_doc = _private_reimbursements(field_overrides)
         company = [r for r in receipts if r.document_id not in private_by_doc]
-        card_res = resolve_batch_row_cards(company, run.config, field_overrides)
+        card_res = resolve_batch_row_cards(
+            company, run.config, field_overrides,
+            merchants=(settings or {}).get("merchants"),
+        )
         cost_res = resolve_batch_row_cost_centers(
             company, field_overrides, settings=settings, trip=trip,
             card_res=card_res,
@@ -8800,6 +8973,8 @@ def report_receipt_cards(
     receipts: "list[Receipt]",
     cfg: dict | None,
     field_overrides: dict[str, dict[str, str]] | None,
+    *,
+    merchants: dict | None = None,
 ) -> dict[str, tuple[str, str]]:
     """Item 138: `{document_id: (card key, card label)}` for every receipt,
     in pool order, `("", "")` for one with no card. The card is the one
@@ -8807,7 +8982,9 @@ def report_receipt_cards(
     method or an assigned hint, a remembered card), the same chain
     `bake_card_scope` hands the matcher (item 137), so a document files a
     receipt under the card it was matched on."""
-    res = resolve_batch_row_cards(receipts, cfg, field_overrides or {})
+    res = resolve_batch_row_cards(
+        receipts, cfg, field_overrides or {}, merchants=merchants
+    )
     out: dict[str, tuple[str, str]] = {}
     for r in receipts:
         card = (res.get(r.document_id) or {}).get("card")
@@ -9635,8 +9812,13 @@ def _refresh_batch_master_data_locked(
         try:
             _, receipts, _, _ = snapshot_from_dict(run.snapshot)
             fo = store.get_expense_field_overrides(run.run_id)
-            before = resolve_batch_row_cards(receipts, run.config, fo)
-            after = resolve_batch_row_cards(receipts, cfg, fo)
+            reg_merchants = (settings or {}).get("merchants")
+            before = resolve_batch_row_cards(
+                receipts, run.config, fo, merchants=reg_merchants
+            )
+            after = resolve_batch_row_cards(
+                receipts, cfg, fo, merchants=reg_merchants
+            )
             n_moved = sum(
                 1
                 for doc in before
