@@ -6443,6 +6443,61 @@ key out of `file` instead of the stored receipt reddens the legacy case.
 
 **No SPA change:** nothing renders the id, and `file` is untouched.
 
+### 154. Dirk types the filing instruction above the forward and the tool drops it (note item T4, owner 2026-09-18; traceability; evidence gathered 2026-09-18, BUILD NOT STARTED)
+
+**Owner, 2026-09-18 (traceability note, item T4):** the entire email is read.
+
+**What the live archive actually holds** (91 stored `.eml` scanned in-machine,
+read-only, 2026-09-18, `/data/inbound`): 0 HEIC, 0 nested `message/rfc822`,
+49 of 51 PDFs one page, 19 mails with 2+ PDFs (each part already kept), 2
+mails with inline `cid:` images (kept at >= 4096 bytes; the one skipped
+`image.png` was signature-sized), 48 body-only, 1 bill-behind-link. **30**
+mails carry BOTH a PDF attachment and a real body.
+
+**Closed by the evidence: do NOT render the body beside an attachment.** On
+every one of the 30, the body's numbers are mostly the PDF's: 9 of 10, 11 of
+12, 10 of 11, 12 of 15, 14 of 28. A rendered body page would be a second copy
+of the invoice in the month report and a second candidate in the pool. The
+reopen condition is a mail whose body carries an AMOUNT the attachment does
+not. Also not built, for the same reason the archive gives: HEIC conversion
+and a nested-`.eml` unpacker, because `msg.walk()` already descends into a
+`message/rfc822` part and no stored mail has that shape. That walk is now
+PINNED (`tests/test_intake_mail.py`), so the decision rests on an assertion
+rather than on a reading.
+
+**The finding the judging turned up, which the note did not anticipate.** The
+body is not only a copy of the invoice: above the forward, Dirk types the
+FILING INSTRUCTION, and it exists nowhere in the PDF. Verbatim from the live
+archive:
+
+- "This is ZOHO BOOKS for CorpServ So it is split between BCS and BTS Booked
+  to It subscriptions in CorpServ." (Zoho invoice 50102456463)
+- "CorpServ only Dev IT costs" (Lovable #2247-1655-6392)
+- "BTS only" (Google Workspace 5668402379)
+- "BTS" (Brave #2244-2487)
+- "Reviewed the account..." (Afi Technologies #2568-2661)
+
+That is the entity, the cost split and the category, stated by the person who
+knows, and the tool reads it (`_archive_body_text` fingerprints it) and then
+drops it: `_provenance_entry` records sender, `received_at`, `archive`,
+`transport_tls` and the untrusted flags, and no body text at all. Pinned as it
+behaves today in `tests/test_intake_mail.py`.
+
+**Proposed change (not built):** carry the operator's own prose (the text
+ABOVE the quoted forward header) onto the provenance of the files that mail
+delivered, and show it on the expense row as a note from the sender. **It is
+DISPLAY ONLY and must never route:** mail text is untrusted inbound
+([[rule_untrusted_inbound]]), so it cannot choose an entity, a category, a
+cost center or a recipient; the reviewer reads it and decides. Sizing the
+"text above the forward" boundary is the real work (a plain-text forward
+marker, an Outlook `From:` block, a `<blockquote>`), and getting it wrong in
+the safe direction means showing too much, never too little.
+
+**Value:** the 89 July card charges with no receipt are one half of Criss's
+month; the other half is guessing which company a receipt belongs to. Five of
+30 mails already carry the answer in prose nobody downstream can read.
+(effort medium)
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.
@@ -6493,6 +6548,7 @@ key out of `file` instead of the stored receipt reddens the legacy case.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 100 | The whole message is walked, and the evidence says stop there: two fixtures pin that a mail forwarded AS AN ATTACHMENT has its PDF read one level down (`msg.walk()` descends into `message/rfc822`) and that an operator's note above a forward is readable but reaches no receipt | Note item T4 (owner 2026-09-18, traceability, backlog item 154). The live archive (91 `.eml`, scanned in-machine) holds 0 HEIC and 0 nested rfc822, so an unpacker and a converter would build for shapes nobody sends; and on all 30 mails carrying both a PDF and a body, the body's numbers are mostly the PDF's (9 of 10, 11 of 12, 14 of 28), so rendering the body would duplicate the invoice. What the judging DID turn up is item 154: Dirk types the filing instruction above the forward ("BTS only", "CorpServ only Dev IT costs") and the tool reads it and drops it | 2026-09-18, pending PR; 2 tests in `tests/test_intake_mail.py`; the decisions not to build are recorded with the count that supports each |
 | 99 | A receipt is the same receipt on every surface: `set_aside[].document_id` rides beside `file`, read from the entry's stored receipt so a legacy entry derived from parse issues gets no key, and the audit behind it is in the contract | Note item T1 (owner 2026-09-18, traceability, backlog item 153): every object surface already carried the id (100% on all six, across live July, August and September) and the three string surfaces carry it AS the string; the set-aside strip was the only one that named the same value `file`, so nothing rendered wrong but a reader joining the strip to a receipt had to know that. Live July's three restored entries match an expense's `document_id` exactly | 2026-09-18, pending PR; two route-level tests in `tests/test_document_type_quarantine.py` plus a contract pin; two wiring points proven red by hand, the second being that copying the key out of `file` instead of the stored receipt reddens the legacy case; suite 2588 -> 2591 passed / 2 skipped; ruff clean |
 | 98 | A charge names the statement line it was printed on: a new snapshot key `statement_origins` records every charge each upload printed, so `rows[]` and `expenses[]` carry `statement_file`, `statement_id` and `source_row` (workbook) or `source_page` (PDF), each parallel and absent when unrecorded, and `expenses[]` also names the charge that settles it (`transaction_id`, from the EFFECTIVE settlement, so a reject takes it off again). The Chase PDF parser now records the page. `decisions`, `decision_history` and `receipt_claims` each carry `statement_id` beside the transaction id, resolved in the store from the snapshot rather than by seventeen callers | Note item T3 (owner 2026-09-18, traceability, backlog item 152): a booked expense could not name the statement line it settles, and a stored verdict named only a content-derived id, which a re-read MOVES. The one existing record, the writeback's `statement_anchors`, is deliberately empty for a PDF, so live August's three charges from `20260804-statements-1176-.pdf` were placeless in principle. Live July and August resolve their workbook rows through the anchors fallback today and gain their ids at the next re-read | 2026-09-18, pending PR; `tests/test_charge_origin_t3.py` (10, route-level; the end-to-end case pairs a receipt, re-reads the month and asserts the booked expense still resolves to the same document, upload and sheet row) plus two scalar pins in `tests/test_view_contract.py`; ten wiring points proven red by hand with sha256-equal restores; suite 2575 -> 2588 passed / 2 skipped; ruff clean |
 | 97 | The uptime monitor survives an outage: `|| rc=$?` on the probe step, because GitHub's `bash -e` aborted it on the probe's DOWN exit and skipped the notifier; plus `tools/tests/test_recon_uptime_workflow.py`, which drives the workflow's own step text under `bash -e` | Item 123 follow-up: the first outage rehearsal detected the dead API and then alerted nobody, so the monitor would have stayed silent through exactly the event it was built for | 2026-09-18, PR #1106; red-proven by hand against the pre-fix line (DOWN test fails rc=1, the live run's outcome); preflight-hooks OK (1968 passed / 1 skipped), ruff clean; re-rehearsed live after merge |

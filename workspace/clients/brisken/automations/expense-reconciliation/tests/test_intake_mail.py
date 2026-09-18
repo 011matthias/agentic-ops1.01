@@ -3987,3 +3987,76 @@ def test_the_same_bytes_as_a_set_aside_page_are_not_already_on_file(
     body = [c for c in calls if c[1].startswith("No expense added")][0][2]
     assert "No action needed" not in body
     assert "restored" in body
+
+
+# ── note item T4 (2026-09-18): the whole message is walked ──────────────
+
+
+def _forwarded_as_attachment(
+    outer_from: str = "dirk.neumann@brisken.com",
+    note: str = "BTS only",
+    inner_pdf: tuple[str, bytes] = ("invoice-IUS25300.pdf", b"%PDF-1.4 inner"),
+) -> bytes:
+    """A mail whose payload is ANOTHER mail attached whole, the shape Outlook
+    produces for "Forward as attachment". The receipt PDF is one level down,
+    inside a `message/rfc822` part, and the operator's own note sits in the
+    outer body."""
+    from email.message import EmailMessage
+
+    inner = EmailMessage()
+    inner["From"] = "Sagar Pardeshi <sagar.pardeshi@redis.com>"
+    inner["To"] = outer_from
+    inner["Subject"] = "Reminder Invoice from Redis IUS25300"
+    inner["Message-ID"] = "<inner@redis.com>"
+    inner.set_content("Your invoice is attached.")
+    inner.add_attachment(inner_pdf[1], maintype="application", subtype="pdf",
+                         filename=inner_pdf[0])
+
+    outer = EmailMessage()
+    outer["From"] = outer_from
+    outer["To"] = f"receipts@{DOMAIN}"
+    outer["Subject"] = "FW: Reminder Invoice from Redis IUS25300"
+    outer["Message-ID"] = "<outer@brisken.com>"
+    outer.set_content(note)
+    # An EmailMessage payload IS the message/rfc822 part; passing
+    # maintype/subtype here routes to set_message_content, which takes
+    # neither.
+    outer.add_attachment(inner)
+    return outer.as_bytes()
+
+
+def test_a_mail_forwarded_as_an_attachment_is_read_all_the_way_down():
+    """`msg.walk()` descends into a `message/rfc822` part, so a receipt one
+    level down is taken exactly as one attached directly.
+
+    The live archive holds no mail of this shape today (91 stored .eml, 0
+    nested rfc822, scanned 2026-09-18), which is precisely why it is pinned:
+    the walk is the reason we did NOT build an unpacker, and a reader of that
+    decision needs the behaviour asserted rather than asserted about.
+    """
+    parsed = parse_inbound(_forwarded_as_attachment(), DOMAIN)
+    assert [n for n, _ in parsed.attachments] == ["invoice-IUS25300.pdf"]
+    assert parsed.from_addr == "dirk.neumann@brisken.com"
+    assert parsed.body_only is False
+
+
+def test_the_operator_note_above_a_forward_is_read_but_reaches_no_receipt():
+    """The T4 finding, pinned as it actually behaves today.
+
+    Dirk types the filing instruction above the forward: live bodies carry
+    "BTS only", "CorpServ only Dev IT costs", and "This is ZOHO BOOKS for
+    CorpServ So it is split between BCS and BTS". The intake READS that text
+    (it fingerprints it) and then drops it: a mail with attachments records
+    no body anywhere a reviewer can see. Asserted, not assumed, so backlog
+    item 154 starts from behaviour rather than from a claim.
+    """
+    from expense_recon.web.body_render import extract_body_text
+
+    raw = _forwarded_as_attachment(note="CorpServ only Dev IT costs")
+    assert "CorpServ only Dev IT costs" in extract_body_text(raw), (
+        "the text is readable, so dropping it is a choice, not a limit"
+    )
+    parsed = parse_inbound(raw, DOMAIN)
+    assert parsed.body_only is False, (
+        "an attachment-bearing mail takes the body-only path for nothing"
+    )
