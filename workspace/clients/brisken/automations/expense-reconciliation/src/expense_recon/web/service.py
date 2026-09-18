@@ -4214,6 +4214,9 @@ def build_view(
             rows, dict(autopick_pairs(outcome, decisions))
         )),
     }
+    # Item 129: the last committed re-match and any owed one, off the
+    # snapshot as stored, so the month page can say a re-match ran.
+    visibility = rematch_visibility(run.snapshot)
 
     return {
         "run_id": run.run_id,
@@ -4222,6 +4225,12 @@ def build_view(
         # When the month last changed (2026-09-16); the SPA's "Last updated"
         # reads `updated_at ?? created_at`, so it printed the creation day.
         "updated_at": month_updated_at(run, decisions=decisions, edited_at=edited_at),
+        # Item 129 (2026-09-18): when the month was last re-matched and
+        # whether one is still owed, so the page prints it instead of
+        # reading `/api/operator/state`. Null / null until a re-match commits
+        # / while nothing is owed.
+        "last_rematch": visibility["last_rematch"],
+        "rematch_pending": visibility["rematch_pending"],
         # Item 100: the sign-off, on the page that shows the month. Who
         # published (the session's operator label), when, and whether the
         # completeness gate was overridden; null / false while unpublished.
@@ -7545,6 +7554,8 @@ def build_expense_view(
     # prevent, and this count's whole job is telling a reviewer to go look.
     if render_state:
         summary["n_receipts_unrenderable"] = n_box("receipts_unrenderable")
+    # Item 129: same helper and same snapshot keys as the run payload.
+    visibility = rematch_visibility(run.snapshot)
 
     return {
         "run_id": run.run_id,
@@ -7555,6 +7566,10 @@ def build_expense_view(
         "updated_at": month_updated_at(
             run, decisions=decisions, edits=edits, edited_at=edited_at
         ),
+        # Item 129 (2026-09-18): the last committed re-match and any owed
+        # one, same shape and same null rule as on the run payload.
+        "last_rematch": visibility["last_rematch"],
+        "rematch_pending": visibility["rematch_pending"],
         "mode": MODE_EXPENSE_GENERATION,
         # Item 38: the declared kind, "company-month" on every batch that
         # predates the split (absent marker reads as company). Scalar,
@@ -9733,6 +9748,44 @@ def rematch_pending(run) -> dict | None:
         return None
     mark = (run.snapshot or {}).get(REMATCH_PENDING_KEY)
     return mark if isinstance(mark, dict) and mark.get("id") else None
+
+
+# Item 129 (2026-09-18): the keys of a `rematch_log` event the month payload
+# repeats. `run_id` and `label` are the payload's own top-level fields, and
+# `match_rate` is `n_matched` over `n_transactions`, which are both here.
+_LAST_REMATCH_KEYS = (
+    "at", "trigger", "n_transactions", "n_matched", "n_review",
+    "n_unmatched_tx", "n_receipts", "n_unmatched_rec", "event_id",
+)
+
+
+def rematch_visibility(snapshot: dict | None) -> dict:
+    """Item 129 (2026-09-18): what the month page prints about re-matching,
+    read off two stored snapshot keys and nothing else. A re-match happened
+    silently: neither the drop page nor the month page said it ran, because
+    neither payload carried the last commit or the owed mark, and the SPA
+    cannot render what it is not handed.
+
+    `last_rematch`: the newest `rematch_log` event (the log is oldest first)
+    reduced to `_LAST_REMATCH_KEYS`; None when the month has never committed
+    a re-match, an empty or malformed log included. `rematch_pending`: the
+    owed mark as stored minus its `id` (a correlation handle for the commit
+    that pays it, not a fact for a reader); None when nothing is owed, by
+    the same rule `rematch_pending` applies (a mark without an id is not a
+    mark). Never raises: a corrupt value reads as null.
+    """
+    snap = snapshot if isinstance(snapshot, dict) else {}
+    last = None
+    log = snap.get(REMATCH_LOG_KEY)
+    if isinstance(log, list):
+        events = [e for e in log if isinstance(e, dict)]
+        if events:
+            last = {key: events[-1].get(key) for key in _LAST_REMATCH_KEYS}
+    mark = snap.get(REMATCH_PENDING_KEY)
+    pending = None
+    if isinstance(mark, dict) and mark.get("id"):
+        pending = {key: value for key, value in mark.items() if key != "id"}
+    return {"last_rematch": last, "rematch_pending": pending}
 
 
 def _record_rematch_failure(store: RunStore, run_id: str, trigger: str, error: str) -> None:
