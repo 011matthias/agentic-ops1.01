@@ -29,6 +29,9 @@ Shape:
             "zoho_account": "<chart label>" | None,
             "multi_category": True,            # optional (2026-08-19)
             "cost_center": "<defined name>" | None,   # optional (item 47)
+            "card_key": "<card key>",          # optional (note item M2)
+            "card_key_learned": True,          # optional, machine-set
+            "cards_seen": ["<card key>", ...], # optional, machine-kept
         },
         ...
     }
@@ -48,6 +51,40 @@ cost-center registry here: merchants and cost centers are edited
 independently, so the edit ORDER must not matter. A name the registry does
 not define fails to resolve at resolution time and leaves the row
 unassigned, rather than stamping a centre nobody defined.
+
+``card_key`` (note item M2, 2026-09-18) is the card this brand's spend is
+exclusively on, when it has one: the last link of the row's card chain
+(`web/service.resolve_batch_row_cards`), consulted only for a receipt that
+prints no card number, names no assigned hint word, and is not remembered
+from an earlier month. Like ``cost_center`` it is stored as typed and is NOT
+checked against the card registry, so the edit ORDER of cards and merchants
+does not matter; a key no card defines resolves to nothing and the row stays
+uncarded rather than being stamped with a card nobody has.
+
+``cards_seen`` is the machine's own record of every card this merchant's
+receipts actually resolved to, accumulated at sign-off, and ``card_key_learned``
+marks a ``card_key`` the machine wrote from it rather than a person. The
+learner sets a key only while ``cards_seen`` holds exactly ONE card, drops a
+learned key the moment a second card appears, and never touches a key an
+editor typed. Two cards are a fact about the merchant, not a conflict to
+resolve by guessing.
+
+``card_key`` (note item M2, 2026-09-18) is the card this brand's spend is
+exclusively on, when it has one: the last link of the row's card chain
+(`web/service.resolve_batch_row_cards`), consulted only for a receipt that
+prints no card number, names no assigned hint word, and is not remembered
+from an earlier month. Like ``cost_center`` it is stored as typed and is NOT
+checked against the card registry, so the edit ORDER of cards and merchants
+does not matter; a key no card defines resolves to nothing and the row stays
+uncarded rather than being stamped with a card nobody has.
+
+``cards_seen`` is the machine's own record of every card this merchant's
+receipts actually resolved to, accumulated at sign-off, and ``card_key_learned``
+marks a ``card_key`` the machine wrote from it rather than a person. The
+learner sets a key only while ``cards_seen`` holds exactly ONE card, drops a
+learned key the moment a second card appears, and never touches a key an
+editor typed. Two cards are a fact about the merchant, not a conflict to
+resolve by guessing.
 
 Matching (`resolve`): normalized-exact on the canonical name or any alias,
 then rapidfuzz `token_set_ratio >= threshold` over the same strings, else
@@ -246,6 +283,18 @@ class MerchantMatch:
     # receipt on its own items", so a remembered category must not flatten
     # its lines either.
     multi_category: bool = False
+    # Note item M2: the card this brand's spend is exclusively on, when the
+    # registry carries one. None when unset, and unaffected by
+    # `multi_category` (which decouples CATEGORY only) for the same reason
+    # `cost_center` is: a vendor can book to several categories and still be
+    # paid from one card.
+    card_key: str | None = None
+    # Note item M2: the card this brand's spend is exclusively on, when the
+    # registry carries one. None when unset, and unaffected by
+    # `multi_category` (which decouples CATEGORY only) for the same reason
+    # `cost_center` is: a vendor can book to several categories and still be
+    # paid from one card.
+    card_key: str | None = None
 
 
 class MerchantRegistry:
@@ -376,6 +425,7 @@ class MerchantRegistry:
                 kind=kind,
                 cost_center=(entry.get("cost_center") or None),
                 multi_category=True,
+                card_key=(entry.get("card_key") or None),
             )
         category = (entry.get("category") or None)
         return MerchantMatch(
@@ -386,6 +436,7 @@ class MerchantRegistry:
             score=float(score),
             kind=kind,
             cost_center=(entry.get("cost_center") or None),
+            card_key=(entry.get("card_key") or None),
         )
 
     @classmethod
@@ -489,5 +540,27 @@ def normalize_merchants_setting(raw: object, *, stored: object = None) -> dict:
         portal = str(entry.get("receipt_portal") or "").strip()
         if portal:
             cleaned["receipt_portal"] = portal[:200]
+        # Note item M2: the card this brand's spend is exclusively on, the
+        # machine's record of the cards it has been seen on, and whether the
+        # key was learned rather than typed. All three stored only when set,
+        # so an entry that has none keeps its exact shape. `card_key` is not
+        # checked against the card registry (edit order must not matter --
+        # see the module docstring), and `cards_seen` is capped so a long-
+        # lived merchant cannot grow the settings blob without bound.
+        card_key = str(entry.get("card_key") or "").strip()
+        if card_key:
+            cleaned["card_key"] = card_key[:64]
+        seen_keys: list[str] = []
+        for c in entry.get("cards_seen") or []:
+            s = str(c or "").strip()[:64]
+            if s and s not in seen_keys:
+                seen_keys.append(s)
+        if seen_keys:
+            cleaned["cards_seen"] = sorted(seen_keys)[:32]
+        # Only meaningful beside a key, and only as a machine mark: an entry
+        # a person typed carries no flag, which is exactly what protects it
+        # from the learner.
+        if card_key and entry.get("card_key_learned"):
+            cleaned["card_key_learned"] = True
         out[canonical] = cleaned
     return out
