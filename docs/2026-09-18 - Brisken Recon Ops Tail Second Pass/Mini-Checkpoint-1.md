@@ -26,6 +26,7 @@ Second of the four parallel p1 sessions' ops tail. The queue's three watch items
 - **The monitor's own first rehearsal.** It was run to prove the alert path and proved the opposite: probe DOWN, step red, Notify skipped, nobody told. That failure is the session's finding rather than a detour, but the plan it broke was "item 123 is shipped and only needs watching".
 - **Guessing the PR number before opening the PR.** The docs went in citing `#1105`, which a sibling session's checkpoint took first; the real number is #1106, corrected in a follow-up commit on the same branch. Write the number after `gh pr create` returns it.
 - **`git show origin/main:<path>` in Git Bash.** MSYS rewrites the colon pathspec into a Windows path list, so the command fails with "unknown revision"; `MSYS_NO_PATHCONV=1` then breaks `git -C /c/...` instead, since the POSIX root stops resolving. Reading through the worktree, or through the PowerShell tool, avoids both.
+- **Closing the session without the confirm line.** The checkpoint ran end to end and merged as PR #1108, and the closing reply never said so, so it read as not having happened and the user re-asked for it. Step 9 of the skill exists for exactly this: the work is not reported until the saved path is in the reply.
 - **`gh run list -w <file> --limit N` as the cron instrument.** It answers "runs of this workflow", not "scheduled runs", so the first read looked like a throttle question; `gh api .../runs?event=schedule` returning `total_count = 0` is the reading that actually settles it.
 
 ## Current Status
