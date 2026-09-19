@@ -185,10 +185,33 @@ read as evidence of absence. The rule that catches all three: before trusting an
 absence, run the probe against a state you already know, and check that its output
 CHANGES with the state.
 
+**Re-audited 2026-09-18 evening, after the owner published rematch-visible
+(item 129).** 44 chunks / 1,186 KB, the i18n chunk renamed again to
+`chunk-x-DUs6kjCC.js`. All four decisive names are present, and the two halves
+sit in different chunks the way the prompt splits them: `last_rematch` and
+`rematch_pending` are READ in `chunk-SettledByBadge-BWMNqN58.js`, the month
+header's own chunk, while `mh.rematch.last` and all 12 `mh.rematch.trigger.*`
+labels are in the i18n chunk in both languages. A second discovery pass over
+the 44 fetched chunks found 0 further chunk references, so the corpus is
+closed and the positives are not an artefact of a partial crawl.
+
+**A fourth blind instrument, and it was mine.** The first Portuguese drive
+returned a confident negative: no header found. The page was English. The app
+reads `localStorage.getItem('brisken.lang') === 'pt' ? 'pt' : 'en'`, so the
+`pt-BR` I set (the tag the prompt and this file both use for the LANGUAGE) is
+not the value the switch takes, and anything that is not `pt` silently becomes
+`en`. What caught it was a control I had not planned as one: the rendered body
+was 6,571 characters in both runs, to the character. Identical output for two
+states that must differ is the signature of a probe that never changed the
+state. With `pt` the body is 6,753 characters and the header is Portuguese.
+The same rule as the three above: prove the instrument moves with the state
+before believing what it says is absent.
+
 ## Applied
 
 | Prompt | Verified by |
 |---|---|
+| `lovable-rematch-visible-prompt.md` (item 129, notes #53 #54) | Bundle 2026-09-18 evening (44 chunks, 1,186 KB, corpus closed): `last_rematch` and `rematch_pending` read in `chunk-SettledByBadge-BWMNqN58.js`, `mh.rematch.last` and `mh.rematch.trigger.receipts` present, all 12 trigger labels in EN and PT-BR. Driven cold twice in headless Chrome (fresh context, no minted session, in through the operator-code gate) on August `/runs/074a7b8905d7`. EN: "Last matched Sep 17, 2026, 01:35 PM (an expense was edited): 9 of 114 charges paired, 1 to review." PT: "Última comparação 17 de set. de 2026, 13:35 (uma despesa foi editada): 9 de 114 cobranças pareadas, 1 para revisar." Both agree field by field with the payload's `last_rematch` read minutes earlier (`at` 2026-09-17T11:35:23Z, `trigger` expense_edit, 9 / 114 / 1), no unresolved `{when}`/`{trigger}` token and no fallback string. `rematch_pending` is null today, so the queued and failed lines are verified on the next pending re-match. One non-GET in each drive: the login POST |
 | `lovable-invoice-read-as-statement-prompt.md` (item 105) | Bundle 2026-09-17 late (45 files, 1,217 KB, controls hit): `expx.review.reason.invoice_read_as_statement` present. No live row carries the code yet, so the render is verified on the next invoice the reader calls a statement page |
 | `lovable-untrusted-flag-prompt.md` (item 93) | Same bundle: `expx.review.reason.untrusted_instructions` and the `expx.untrusted.kind.*` family present. No live row carries a flag (0 of 135), so the excerpt render is verified on the next flagged receipt |
 | `lovable-charge-category-prompt.md` (item 109) | Same bundle: `wb.chargeCat.none`, `wb.chargeCat.guess.tip`. Cold drive of August `/runs/074a7b8905d7?view=unmatched`: the LOVABLE 15.00 row of 2026-08-31 reads "Meals & Entertainment / GUESS" with the picker beside it, OPENAI 20.00 the same, rows with no category read "No category yet". No non-GET request; no pick was saved (the writes are Criss's) |
@@ -301,9 +324,12 @@ and a rollback would otherwise have nothing to re-apply.
 
 ## Not applied
 
-One prompt is out: item 130's §6 error-screen copy, written 2026-09-18 later once
+Item 130's §6 error-screen copy is out, written 2026-09-18 later once
 the drive showed the two screens are still English. Copy only, no backend gate,
 so it goes out whenever the owner next publishes.
+The tables below are the live out-list, one row per prompt with its own gate;
+four sessions append to them in parallel, so read the rows and not a count in
+this sentence.
 
 **Item 144's row came off this table the way the last five did: the owner had
 already published it.** The re-crawl found
@@ -321,7 +347,6 @@ promoted to the prompt below. Nothing in the Applied table is waiting on a drive
 | `lovable-error-page-lang-prompt.md` (item 130 §6) | "Voltar ao início" and "Página não encontrada" anywhere in the bundle; today "Page not found" is the only spelling of it | Written 2026-09-18 later, not pasted. No backend gate: copy only, in the root route file's two error components. Until this lands, the not-found page and the crash page are the only screens in the tool that stay English for a Portuguese reader, which are the two screens where a reader most needs to understand what happened |
 | `lovable-card-accounts-prompt.md` (item 147) | `subcards`, `statement_on_account`, `cards.parent`, `err.card_parent_not_top_level`; today none of the four is in the bundle | Written 2026-09-18, not pasted. TWO gates, and the second is the owner's: the backend fields ship with item 147's PR, and they stay absent from every payload until the owner sets `3876` / `3645` / `0340` to account `card-2838` in Settings, Cards. The registry has no committed seed, so nothing else can set them. Until both, the tab strip renders as it does today and this prompt changes nothing on screen |
 | `lovable-memory-by-company-prompt.md` (note item M1) | `by_vendor`, `memory.vendor.readsDefault`, `memory.company.seeded`; today none is in the bundle | Written 2026-09-18, not pasted. Backend gate: `by_vendor[]` on `GET /api/memory` ships with the M1 PR. The page renders as today until pasted; the 103 seeded rows then show as vendor groups with one line per company |
-| `lovable-rematch-visible-prompt.md` (item 129, notes #53 #54) | `last_rematch`, `rematch_pending`, `mh.rematch.last`, `mh.rematch.trigger.receipts`; today none of the four is in the bundle | Written 2026-09-18, not pasted. Backend gate: `last_rematch` + `rematch_pending` on both month payloads ship with PR #1103; until deployed the header renders as today. Live check: August header reads "Last matched <date> (<trigger>): N of 111 charges paired" with N = the payload's `n_matched` |
 | `lovable-merchant-card-prompt.md` (note item M2, backlog item 154) | `card_key`, `cards_seen`, `settings.merchants.cardsSeen`, `expx.card.source.merchant`; today none is in the bundle | Written 2026-09-18, not pasted. TWO gates, and the second is the owner's: the backend fields ship with the M2 PR, and no live merchant carries a card until someone sets one in Settings or a month is published with a registry merchant on a single card. Until both, every row resolves exactly as today and this prompt changes nothing on screen. The whole-map-replace check in its §6.2 is the one that matters: a save that drops `cards_seen` throws away accumulated observation the screen cannot rebuild |
 
 
