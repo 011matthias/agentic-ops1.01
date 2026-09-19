@@ -6489,6 +6489,61 @@ key out of `file` instead of the stored receipt reddens the legacy case.
 
 **No SPA change:** nothing renders the id, and `file` is untouched.
 
+### 155. Dirk types the filing instruction above the forward and the tool drops it (note item T4, owner 2026-09-18; traceability; evidence gathered 2026-09-18, BUILD NOT STARTED)
+
+**Owner, 2026-09-18 (traceability note, item T4):** the entire email is read.
+
+**What the live archive actually holds** (91 stored `.eml` scanned in-machine,
+read-only, 2026-09-18, `/data/inbound`): 0 HEIC, 0 nested `message/rfc822`,
+49 of 51 PDFs one page, 19 mails with 2+ PDFs (each part already kept), 2
+mails with inline `cid:` images (kept at >= 4096 bytes; the one skipped
+`image.png` was signature-sized), 48 body-only, 1 bill-behind-link. **30**
+mails carry BOTH a PDF attachment and a real body.
+
+**Closed by the evidence: do NOT render the body beside an attachment.** On
+every one of the 30, the body's numbers are mostly the PDF's: 9 of 10, 11 of
+12, 10 of 11, 12 of 15, 14 of 28. A rendered body page would be a second copy
+of the invoice in the month report and a second candidate in the pool. The
+reopen condition is a mail whose body carries an AMOUNT the attachment does
+not. Also not built, for the same reason the archive gives: HEIC conversion
+and a nested-`.eml` unpacker, because `msg.walk()` already descends into a
+`message/rfc822` part and no stored mail has that shape. That walk is now
+PINNED (`tests/test_intake_mail.py`), so the decision rests on an assertion
+rather than on a reading.
+
+**The finding the judging turned up, which the note did not anticipate.** The
+body is not only a copy of the invoice: above the forward, Dirk types the
+FILING INSTRUCTION, and it exists nowhere in the PDF. Verbatim from the live
+archive:
+
+- "This is ZOHO BOOKS for CorpServ So it is split between BCS and BTS Booked
+  to It subscriptions in CorpServ." (Zoho invoice 50102456463)
+- "CorpServ only Dev IT costs" (Lovable #2247-1655-6392)
+- "BTS only" (Google Workspace 5668402379)
+- "BTS" (Brave #2244-2487)
+- "Reviewed the account..." (Afi Technologies #2568-2661)
+
+That is the entity, the cost split and the category, stated by the person who
+knows, and the tool reads it (`_archive_body_text` fingerprints it) and then
+drops it: `_provenance_entry` records sender, `received_at`, `archive`,
+`transport_tls` and the untrusted flags, and no body text at all. Pinned as it
+behaves today in `tests/test_intake_mail.py`.
+
+**Proposed change (not built):** carry the operator's own prose (the text
+ABOVE the quoted forward header) onto the provenance of the files that mail
+delivered, and show it on the expense row as a note from the sender. **It is
+DISPLAY ONLY and must never route:** mail text is untrusted inbound
+([[rule_untrusted_inbound]]), so it cannot choose an entity, a category, a
+cost center or a recipient; the reviewer reads it and decides. Sizing the
+"text above the forward" boundary is the real work (a plain-text forward
+marker, an Outlook `From:` block, a `<blockquote>`), and getting it wrong in
+the safe direction means showing too much, never too little.
+
+**Value:** the 89 July card charges with no receipt are one half of Criss's
+month; the other half is guessing which company a receipt belongs to. Five of
+30 mails already carry the answer in prose nobody downstream can read.
+(effort medium)
+
 ### Set aside by the 2026-09-17 audit (not items; one line each so nothing is lost)
 
 - [learning] The 'validated' stamp on learned rows changes nothing; unreviewed rules apply as trusted: The owner accepted the one-off-becomes-rule trade-off in item 88; revisit after F11 makes recall work and the first real sign-off fires.
@@ -6609,6 +6664,7 @@ three new fields or they are erased.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 102 | The whole message is walked, and the evidence says stop there: two fixtures pin that a mail forwarded AS AN ATTACHMENT has its PDF read one level down (`msg.walk()` descends into `message/rfc822`) and that an operator's note above a forward is readable but reaches no receipt | Note item T4 (owner 2026-09-18, traceability, backlog item 155). The live archive (91 `.eml`, scanned in-machine) holds 0 HEIC and 0 nested rfc822, so an unpacker and a converter would build for shapes nobody sends; and on all 30 mails carrying both a PDF and a body, the body's numbers are mostly the PDF's (9 of 10, 11 of 12, 14 of 28), so rendering the body would duplicate the invoice. What the judging DID turn up is item 155: Dirk types the filing instruction above the forward ("BTS only", "CorpServ only Dev IT costs") and the tool reads it and drops it | 2026-09-18, pending PR; 2 tests in `tests/test_intake_mail.py`; the decisions not to build are recorded with the count that supports each |
 | 101 | A merchant's spend is often on ONE card: registry fields `card_key` / `card_key_learned` / `cards_seen` on the merchant entry, `card_source: "merchant"` as the last link of the item-87 chain (same guard as `learned`, private option preserved), and a sign-off learner that accumulates the month's resolved cards per merchant, writes a key only while exactly one card has been seen, drops a LEARNED key the moment a second appears, and never touches a key an editor typed | Note item M2 (owner 2026-09-18, backlog item 154). Measured on live July/August/September first: of 60 display vendors, 34 are on exactly one card, 5 on several (the three AI vendors and their spellings, the same exceptions M1 found for categories) and 21 on none, so the fact is real for most merchants and false precisely where a guess would hurt. A row carried by the registry card teaches nothing, so a lent card cannot harden into a fact; `merchant` is kept out of `CARD_SCOPE_SOURCES` so it never scopes matching | 2026-09-18, this round; `tests/test_registry_card_key_m2.py` (10, route-level); three wires proven red under mutation (chain 4 red, learner-at-caller 2 red, CSV argument 1 red by hand); suite 2575 -> 2585 passed / 2 skipped on the branch, re-run green after merging T3; ruff clean; no live row moves on the deploy (the 28 live merchants carry no card); SPA half `docs/lovable-merchant-card-prompt.md` (owner applies) |
 | 100 | Merchant-to-category is the default and the account varies by company: the registry's category stamps every receipt of its merchant before any line read, the (company, vendor) rule decides the ACCOUNT (own company, else a no-company rule, else the vendor's rules when they agree; a Zoho-seeded row under another category contributes nothing until validated), receiptless charges consult the registry on every re-match, and `GET /api/memory` gains `by_vendor[]` + `categories[].seeded` | Note item M1 (owner directive + Dirk 2026-09-18): binding a merchant to one category is right ~90% of the time and what varies by company is the account, but the tool conflated the two, so one merchant was judged one way for a company with a rule and another way for a company without one. Live July read LOVABLE as Meals & Entertainment four times | 2026-09-18, PR #1094, merge d1c8e733, Fly v184; four wires proven red under `regress_check`; suite 2511 -> 2519 passed / 2 skipped; live `GET /api/memory` on v184 carries `by_vendor` (97 vendors) and `seeded` on all 103 rows; cold scripted Playwright drive of `/memory` (105 rows, 0 non-GET); SPA half `docs/lovable-memory-by-company-prompt.md` (owner applies) |
 | 99 | A receipt is the same receipt on every surface: `set_aside[].document_id` rides beside `file`, read from the entry's stored receipt so a legacy entry derived from parse issues gets no key, and the audit behind it is in the contract | Note item T1 (owner 2026-09-18, traceability, backlog item 153): every object surface already carried the id (100% on all six, across live July, August and September) and the three string surfaces carry it AS the string; the set-aside strip was the only one that named the same value `file`, so nothing rendered wrong but a reader joining the strip to a receipt had to know that. Live July's three restored entries match an expense's `document_id` exactly | 2026-09-18, pending PR; two route-level tests in `tests/test_document_type_quarantine.py` plus a contract pin; two wiring points proven red by hand, the second being that copying the key out of `file` instead of the stored receipt reddens the legacy case; suite 2588 -> 2591 passed / 2 skipped; ruff clean |
