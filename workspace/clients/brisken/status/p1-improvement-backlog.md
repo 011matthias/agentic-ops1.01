@@ -6683,6 +6683,82 @@ hand after `regress_check` reported no pytest summary line).
 Settings editor replaces the whole merchant map on save, so it must carry all
 three new fields or they are erased.
 
+### 156. Two years of Zoho Books can seed the registry, and 30% of the category vocabulary is unruled (note item M3; owner 2026-09-18, decided 2026-09-19)
+
+**Owner-authorised READ, done 2026-09-18.** One read-only pass over Zoho Books
+Expenses + Bills, 2024-09-01 to 2026-09-18, all seven real orgs (the TEST
+sandbox 822116290 was deliberately not read): **2,355 expenses + 1,179 bills,
+174 distinct vendors.** Cloud Services 311+641, Consulting 126+310, Corporate
+Services 1909+220, GmbH 8+8, Holding 1+0, Tech LTDA and DN empty. Raw pull and
+the derived candidates live in the gitignored
+`workspace/clients/brisken/context/expense-reconciliation/`
+(`zoho-books-24mo.json`, `zoho-seed-candidates.json`); the build/apply script
+is `zoho_seed_write.py` (dry run by default, `--go` applies).
+
+**Derived, nothing applied.** (i) 91 registry candidates not already in the
+registry and carrying a category; (ii) 32 genuinely new (company, vendor)
+account rules (not 95: the first count compared the read payload's `entity`
+against the write endpoint's `legal_entity_id`, which is None on every read row,
+so every existing rule counted as new); (iii) 90 vendors seen on exactly one
+Zoho paid-through account, which maps cleanly to a tool card key by the printed
+digits.
+
+**The owner's decision, 2026-09-19: apply nothing yet.** Three findings drove it,
+each measured rather than asserted.
+
+1. **The derived categories are Zoho's account taxonomy, not the tool's.**
+   Slack, Canva, Miro, Supabase, Vercel, Perplexity, Hugging Face, Fiverr,
+   Unsplash, GoDaddy and NameCheap all resolve to Marketing & Advertising,
+   because Brisken books them to "Marketing Expenses - others" / "Other
+   Advertising and Promotions Expenses". Since note item M1 the registry
+   category outranks the model's line read, so applying them re-labels those
+   receipts on the next re-match. **The blocking measurement: the 24 months use
+   52 distinct Zoho expense accounts and the account -> category map inferred
+   from the 103 live seeded rows covers only 20 of them. The 32 unmapped
+   accounts carry 699 of 2,355 rows (30%), and they are the substantive spend:
+   LinkedIn Ads 99, Google Ads 75, Meta Ads 65, and the whole travel tree
+   (transportation, parking, food, accommodation, conferences).** So the
+   category half is gated on a 52-row account -> category table somebody rules
+   on once; it is not a script.
+2. **Five near-duplicate spellings** would enter as separate merchants: Antropic
+   / Anthropic, OpenAI - ChatGPT / Open AI - CHAT GPT, Sendgrid / Sendgrid -
+   Twilio INC, Timeneye / Timeneye.com, JPM Chase / JP Morgan Chase. Owner:
+   excluded from any integration. That also keeps the three AI vendors out of
+   the seed while Dirk's 3x3 account table is pending, which is consistent.
+3. **One entry is measurably unsafe.** Run through the tool's own resolver
+   against every live and historical vendor string, **`N Neumann` fuzzy-matches
+   `M Neumann` at score 100** - two different people, one initial apart,
+   collapsed into one merchant, so a receipt from one would display and export
+   under the other's name. The other eight suspected non-merchants (Wise, JPM
+   Chase, JP Morgan Chase, DB, ENT PRO, Govizle, SL.Nord, Crossmedia) claim only
+   themselves and are harmless; `DB` correctly picks up the live `DB AG`.
+
+**The safety measurement for the narrowed write, kept for whoever runs it.** With
+those 11 excluded, 80 entries remain (66 carrying a card_key), and against every
+live and historical vendor string they produce 8 cross-name claims: seven are
+correct canonicalisations (Amazon.de -> Amazon, Microsoft Corporation ->
+Microsoft, Redis -> Redis, Inc, Perplexity -> Perplexity AI, Network Solutions,
+LLC -> NetWork Solutions, Commitly GmbH -> Commitly, DB AG -> DB) and **one is
+wrong: `Google LLC` -> `Google Ads`**, which would read a Workspace receipt as
+Ads. One card also disagrees with live evidence: Zoho puts Eleven Labs on 2838
+while July and August show it on 3645 and 1176 (note item M2's guard means the
+live evidence still wins, but the key would be wrong). The recommended shape was
+therefore 79 merchants, 65 carded, every category NULL: 8 live vendor spellings
+gain a card, 3 of which already resolve the same way, 4 genuinely new (Redis
+9693, AT&T 2838, GoDaddy 2838, Perplexity 2838), and no receipt changes
+category.
+
+**What reopens this.** The owner raising it. Then: re-run the derivation (the
+pull is a point-in-time artifact and Zoho has moved on), re-run the resolver
+safety check, and apply with the 11 + Google Ads excluded and Eleven Labs'
+card_key dropped. The category half stays behind the 52-account table.
+
+**Incidental finding, unrelated to this item.** `settings["entities"]["Brisken
+Corp Services, LLC"].org_id` reads `8227416528` (ten digits); the real Corporate
+Services org is `822741658` (nine). Nothing in this item depended on it, and the
+COA provisioning that does read it is out of this item's scope, so it is
+recorded rather than changed.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
