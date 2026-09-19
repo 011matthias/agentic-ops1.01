@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-18 | Brisken Recon Traceability T3 T1 T4 | client-dev | [Mini-Checkpoint-2](docs/2026-09-18%20-%20Brisken%20Recon%20Traceability%20T3%20T1%20T4/Mini-Checkpoint-2.md) |
 | 2026-09-18 | Brisken Recon Ops Tail Third Pass | client-dev | [Mini-Checkpoint-2](docs/2026-09-18%20-%20Brisken%20Recon%20Ops%20Tail%20Third%20Pass/Mini-Checkpoint-2.md) |
 | 2026-09-18 | Brisken Recon Ops Tail Second Pass | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Brisken%20Recon%20Ops%20Tail%20Second%20Pass/Mini-Checkpoint-1.md) |
 | 2026-09-18 | Brisken Recon Memory M1 Merchant Category Default | client-dev | [Mini-Checkpoint-1](docs/2026-09-18%20-%20Brisken%20Recon%20Memory%20M1%20Merchant%20Category%20Default/Mini-Checkpoint-1.md) |
