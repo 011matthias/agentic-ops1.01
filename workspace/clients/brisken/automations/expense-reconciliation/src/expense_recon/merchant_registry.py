@@ -32,6 +32,7 @@ Shape:
             "card_key": "<card key>",          # optional (note item M2)
             "card_key_learned": True,          # optional, machine-set
             "cards_seen": ["<card key>", ...], # optional, machine-kept
+            "profile": "<free prose>",         # optional (note item M4)
         },
         ...
     }
@@ -69,22 +70,21 @@ learned key the moment a second card appears, and never touches a key an
 editor typed. Two cards are a fact about the merchant, not a conflict to
 resolve by guessing.
 
-``card_key`` (note item M2, 2026-09-18) is the card this brand's spend is
-exclusively on, when it has one: the last link of the row's card chain
-(`web/service.resolve_batch_row_cards`), consulted only for a receipt that
-prints no card number, names no assigned hint word, and is not remembered
-from an earlier month. Like ``cost_center`` it is stored as typed and is NOT
-checked against the card registry, so the edit ORDER of cards and merchants
-does not matter; a key no card defines resolves to nothing and the row stays
-uncarded rather than being stamped with a card nobody has.
-
-``cards_seen`` is the machine's own record of every card this merchant's
-receipts actually resolved to, accumulated at sign-off, and ``card_key_learned``
-marks a ``card_key`` the machine wrote from it rather than a person. The
-learner sets a key only while ``cards_seen`` holds exactly ONE card, drops a
-learned key the moment a second card appears, and never touches a key an
-editor typed. Two cards are a fact about the merchant, not a conflict to
-resolve by guessing.
+``profile`` (note item M4, 2026-09-20) is the unstructured knowledge beside
+all of the above: what the business actually buys from this merchant, on
+which card and for which company, anything Criss or Dirk would tell a new
+bookkeeper on their first day. Free prose, because the whole point is the
+part that does not fit a field. It is read by the categorizer as CONTEXT for
+that merchant's receipts and by nothing else: no resolver keys on it, no
+review state fires on it, and it never carries a category or an account of
+its own. Per `rule_untrusted_inbound` it is fenced as untrusted data in
+every prompt that carries it (`llm/client._merchant_profile_block`) — a
+profile informs the category, it never instructs the model — because the
+learning path may append to it and a machine line is only as trustworthy as
+the receipts it was read from. Lines a person wrote and lines the tool
+appended are told apart by the ``[tool YYYY-MM-DD]`` prefix
+(`append_machine_note`); the tool only ever appends, so an editor's prose is
+never rewritten by the machine.
 
 Matching (`resolve`): normalized-exact on the canonical name or any alias,
 then rapidfuzz `token_set_ratio >= threshold` over the same strings, else
@@ -94,6 +94,7 @@ probes, so a path that never produced a `vendor_clean` still resolves.
 """
 from __future__ import annotations
 
+import re
 import unicodedata
 from dataclasses import dataclass
 
@@ -289,12 +290,12 @@ class MerchantMatch:
     # `cost_center` is: a vendor can book to several categories and still be
     # paid from one card.
     card_key: str | None = None
-    # Note item M2: the card this brand's spend is exclusively on, when the
-    # registry carries one. None when unset, and unaffected by
-    # `multi_category` (which decouples CATEGORY only) for the same reason
-    # `cost_center` is: a vendor can book to several categories and still be
-    # paid from one card.
-    card_key: str | None = None
+    # Note item M4: the merchant's free-prose profile, when it carries one.
+    # Context for the categorizer's prompts and nothing else; never a
+    # resolver. Carried on a `multi_category` merchant too, where it is worth
+    # the most: a vendor that books to several categories is exactly the one
+    # whose receipts need the background a field cannot hold.
+    profile: str | None = None
 
 
 class MerchantRegistry:
@@ -426,6 +427,7 @@ class MerchantRegistry:
                 cost_center=(entry.get("cost_center") or None),
                 multi_category=True,
                 card_key=(entry.get("card_key") or None),
+                profile=(entry.get("profile") or None),
             )
         category = (entry.get("category") or None)
         return MerchantMatch(
@@ -437,6 +439,7 @@ class MerchantRegistry:
             kind=kind,
             cost_center=(entry.get("cost_center") or None),
             card_key=(entry.get("card_key") or None),
+            profile=(entry.get("profile") or None),
         )
 
     @classmethod
@@ -562,5 +565,66 @@ def normalize_merchants_setting(raw: object, *, stored: object = None) -> dict:
         # from the learner.
         if card_key and entry.get("card_key_learned"):
             cleaned["card_key_learned"] = True
+        # Note item M4: the merchant's free-prose profile. Stored only when
+        # set, for the same reason, and capped generously rather than tightly
+        # (`receipt_portal` is a hint, this is prose a bookkeeper writes).
+        # Control characters are stripped because the value is rendered in a
+        # page and pasted into a prompt; the newlines that separate its lines
+        # survive, because the machine-note convention needs them.
+        profile = _clean_profile(entry.get("profile"))
+        if profile:
+            cleaned["profile"] = profile
         out[canonical] = cleaned
     return out
+
+
+# A profile is prose, so the cap is generous: enough for the paragraph a
+# bookkeeper would write plus a year of machine lines, short enough that the
+# settings blob stays a settings blob and the prompt stays affordable.
+PROFILE_CHARS = 2000
+
+_PROFILE_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+# A line the TOOL wrote, not a person: "[tool 2026-09-20] seen on 3 cards".
+# The prefix is the whole convention — the Memory page dims these lines, the
+# categorizer's prompt carries them like any other context, and `append_
+# machine_note` only ever adds one, so a person's prose is never rewritten.
+MACHINE_NOTE_PREFIX = "[tool "
+_MACHINE_NOTE_RE = re.compile(r"^\[tool \d{4}-\d{2}-\d{2}\] ")
+
+
+def _clean_profile(raw: object) -> str:
+    """Normalize a profile value for storage: control characters out,
+    trailing whitespace off each line, capped at `PROFILE_CHARS`."""
+    text = _PROFILE_CONTROL.sub(" ", str(raw or ""))
+    lines = [ln.rstrip() for ln in text.replace("\r\n", "\n").split("\n")]
+    return "\n".join(lines).strip()[:PROFILE_CHARS]
+
+
+def is_machine_note(line: str | None) -> bool:
+    """True for a line the tool appended (`[tool YYYY-MM-DD] ...`)."""
+    return bool(_MACHINE_NOTE_RE.match(str(line or "")))
+
+
+def append_machine_note(profile: object, note: str, *, today: str) -> str:
+    """Return `profile` with one machine line appended, or unchanged.
+
+    The learning path may add an OBSERVATION to a merchant's profile; it may
+    never edit what a person wrote there. So this only ever appends, and only
+    a line marked `[tool <today>]` so the two are told apart on sight.
+
+    Unchanged when the note is empty, when the same note text is already
+    present (re-signing a month must not grow the field every time), or when
+    the line would not fit under `PROFILE_CHARS` — a full profile keeps the
+    prose it has rather than dropping the beginning of it to make room."""
+    base = _clean_profile(profile)
+    body = " ".join(str(note or "").split())
+    if not body:
+        return base
+    if body in base:
+        return base
+    line = f"{MACHINE_NOTE_PREFIX}{today}] {body}"
+    candidate = f"{base}\n{line}" if base else line
+    if len(candidate) > PROFILE_CHARS:
+        return base
+    return candidate
