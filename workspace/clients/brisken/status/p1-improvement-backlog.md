@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-20
+updated: 2026-09-21
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -6617,7 +6617,7 @@ fall-back-to-current cannot pass it). Six wiring points proven red by hand
 equal): attach wire 6 of 28 red, re-read wire 2, coverage ids 5, append-time
 anchors by id 3, re-read anchors by id 2, writeback selector 1; green 28/28
 after each restore. Suite 2511 -> 2516 passed / 2 skipped; ruff clean.
-### 151. The statement description counts, and a receipt whose card cannot be identified is matched on the other criteria (owner, 2026-09-18; note item X1) (SHIPPED 2026-09-18, Shipped row 91)
+### 151. The statement description counts, and a receipt whose card cannot be identified is matched on the other criteria (owner, 2026-09-18; note item X1) (SHIPPED 2026-09-18, Shipped row 91; SPA APPLIED 2026-09-20; live July re-matched 2026-09-20)
 
 **Owner, 2026-09-18 (matching item, X1):** the statement description must
 count in matching, and when the card on an expense cannot be identified,
@@ -6687,8 +6687,24 @@ Contract "Matching when the card cannot be identified, and the description's
 reference tokens (item X1)". Route-level
 `tests/test_match_x1_description_and_no_card.py`; the attribution gate reads
 the clause off `match_month`'s own outcome. SPA half
-`docs/lovable-no-card-evidence-prompt.md` (not applied). Item 41's "suggest
-private" stays its own step; item 72 stays the TRACEABILITY session's.
+`docs/lovable-no-card-evidence-prompt.md` (APPLIED: bundle-verified 2026-09-20
+evening, PROMPT-STATUS). Item 41's "suggest private" stays its own step; item
+72 stays the TRACEABILITY session's.
+
+**Live July re-matched 2026-09-20 22:10 UTC (owner order, read-first).** Pre-state
+saved, then `POST /api/expense-batches/50622baec444/refresh-master-data`, the
+one route that re-matches a month without a data change (`changes: []`, the
+card snapshot already equalled Settings; 13 judgments reused, 0 new). Result
+against the saved pre-state: Microsoft 718.20 `vendor_pct` 50 to 100 and score
+92 to 100; Amazon 315.56 `vendor_pct` 57 to 100 and score 80 to 87; 31
+reconciled / 7 review / 73 unmatched unchanged; no row changed bucket, no
+decision, entity or expense field moved; `review_code` still fires on 0 pairs.
+Nothing self-confirmed because nothing could: both rows were already in
+`reconciled` (Microsoft `turn: posted`, Amazon `confirmed`), and
+`confirmable_pair` needs `turn: decide`. The "waiting for a click" line above
+overstated it; the fix was cosmetic on July's live rows and structural for the
+next month whose merchant words agree behind a reference number. August not
+re-matched: its two `none` pairs are already reconciled.
 
 ### 152. A booked expense cannot name the statement line it settles (note item T3, owner 2026-09-18; traceability; SHIPPED 2026-09-18, pending PR)
 
