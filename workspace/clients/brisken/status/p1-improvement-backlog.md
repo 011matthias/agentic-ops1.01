@@ -475,7 +475,16 @@ not reduce to exactly four digits never reaches the entity chain. The card list
 is part of the extraction-cache key, since the same photo asked against a
 different set of cards is a different question.
 
-### 29. The living month: date-pooled mail, gradual statements (2026-08-24)
+### 29. The living month: date-pooled mail, gradual statements (2026-08-24) (ALL NAMED PRs SHIPPED; open only for want of a closing marker, confirmed 2026-09-20)
+
+**What this item means, asked by the owner 2026-09-20.** The month stops being
+"upload everything, then sit an exam" and becomes a workspace worked across the
+whole month: mail files by the month printed ON the receipt rather than into
+whatever batch is open, statements arrive in pieces instead of as one closing
+event, and the month stays editable while they do. Every PR this item names is
+marked SHIPPED in the body below (PR 1, 2a, 2b-1, 2b-1b, 2b-2a, 2b-2b-1,
+2b-2b-2 and PR 3). It reads as open in a status sweep only because no line says
+so at the top.
 
 **Owner directives (2026-08-24), a three-PR plan.** The month stops being
 "upload everything, then sit an exam" and becomes a workspace the accountant
@@ -1101,6 +1110,18 @@ no-card-number section with no SPA change.
 
 ### 38. Two functions: monthly company expenses and trips (owner directive 2026-09-06)
 
+**2026-09-20, owner: "this distinguishment has already been made with cost
+centers". Recorded, NOT closed, because one thing does not fit.** Cost centers do
+carry the attribution this item wanted (a Brazil trip is a cost center like any
+other purpose), and on that reading R3's trip entity is redundant. But item 48's
+round 2 lists "days-away on trip reports" as a US-substantiation rendering change,
+and a days-away count needs a trip with dates, which a cost center does not have:
+live, the month payload's `trip` key is `null` and `expenses[]` carries no
+`trip_id`. So closing this as superseded would quietly remove something item 48
+expects to exist. One owner answer settles it: if trip reports are wanted for
+substantiation, R3 survives in a reduced form (dates on a cost center is enough);
+if they are not, this item closes and item 48's round 2 drops that line.
+
 **Owner:** "Expense creation should be split and separated into 2 functions:
 One for overall monthly company expenses and one for travel expenses." One of
 three directives given together (with items 39 and 40); they ship as one
@@ -1242,7 +1263,28 @@ commit via a pre-commit re-check (`execute_expense_batch(pre_commit=)`)
 and the mail joins the winner. Item 42 (refusals split) shipped ahead as
 PR #683. Residuals in item 43.
 
-### 40. Every expense belongs to a person, through the card (owner directive 2026-09-06)
+### 40. Every expense belongs to a person, through the card (owner directive 2026-09-06) (ENFORCED AND LIVE, verified 2026-09-20; the open half is data quality, not code)
+
+**2026-09-20, owner: "this distinguishment is already enforced". Confirmed live.**
+All 9 registry cards carry both `person` and `entity`, and August's `expenses[]`
+carry `person` with `person_source` reading `card` (or `none` where the card is
+unresolved), which is exactly the mechanism this item specified: person is the
+last link of the card chain.
+
+**One correction worth keeping, because the owner's summary included it:** the
+email sender is NOT part of the attribution, by this item's own ruling. Person
+comes from the card even for mailed receipts, and `submitted_by` stays ingest
+provenance, a claim about who MAILED the file. The two answer different
+questions and conflating them is the thing the 2026-09-06 ruling forbade.
+
+**The open half is the data, and it is not clean.** Only 3 of the 9 cards hold a
+bare person name (Nicolas Neumann, Dirk Neumann, Criss Neumann). Four hold a
+person-and-entity mashup (`Dirk Neumann - Corp Services`, `Dirk Neumann - Cloud
+Services`, twice each) and two hold a company where a person belongs
+(`Brisken Cloud Services` on card-9693, `Brisken Consulting` on card-1176). The
+chain resolves for every card, so nothing is broken; but a per-person report
+built on this today would group Dirk under two spellings and file two cards under
+a company name. Owner-side data entry, same class as item 26.
 
 **Owner:** "All injected expenses whether email or manual need to be
 attributed to a person." Ruling on the mechanism, near-verbatim: "The person
@@ -1498,7 +1540,25 @@ already published v1 mid-day (the drop page is LIVE; the operator's
 chunking, this item's create-UI removal, the nav redesign, the
 Open-month release (travel rows excluded).
 
-### 47. Cost centers: attribute expenses to projects and purposes (owner directive 2026-09-08)
+### 47. Cost centers: attribute expenses to projects and purposes (owner directive 2026-09-08) (CODE LIVE both halves; the REGISTRY IS EMPTY, so the feature is inert until Dirk authors the list)
+
+**2026-09-20, owner: "has been implemented". Confirmed live, and what is left
+is data, not code.** Read off the deployed app the same day: `GET /api/settings`
+carries `cost_centers` and `cost_center_options`, the August payload carries
+`cost_center_options` and every row of `expenses[]` carries `cost_center` and
+`cost_center_source`, and the SPA half is applied (35 `cost_center` and 17
+`costCenter` hits across the 44 live chunks; its Applied row in PROMPT-STATUS
+records `/api/cost-centers/totals` and the lifted whole-map gate, so cost centers
+can be typed). The build order in this item is therefore satisfied down to the
+report sections.
+
+**`cost_centers` is 0 entries, so `cost_center_options` is `[]` and every live
+expense resolves to `cost_center: None` with an empty `cost_center_source`.**
+D1 made the list owner-authored on purpose ("Dirk creates and defines the cost
+centers manually"), so nothing an agent does fills it: until Dirk types the
+centers in Settings, the resolution chain has nothing to resolve and no roll-up
+has a row. That is the whole of what remains here, plus the learning half already
+tracked separately as item 118 (a pick on a row teaches nothing).
 
 **Owner (Dirk's ask):** a cost-center view deriving which costs belong to
 which projects/purposes — examples given: Nicolas's Brazil expenses, the
@@ -1691,6 +1751,24 @@ cross-month route. The cross-month view last, because it is the only piece
 that needs data the earlier pieces produce.
 
 ### 48. Report structures against US accounting law, tool-scope only (owner directive 2026-09-08)
+
+**2026-09-20, owner: this is important, the tool is being finalized.** Priority
+signal recorded. This is the largest open item and the only one with a legal
+edge, and both its research rounds landed without anything being built: round 1
+(`us-substantiation-criteria.md`, 27 criteria on primary sources) and G7
+(`electronic-storage-system-description.md`) are both PENDING OWNER REVIEW, and
+G7 additionally wants a CPA read and two blanks filled (which entities file US,
+the deployed access-code configuration). Those reviews gate the build, and the
+which-entities answer scopes every criterion, so they are the first move.
+
+The three ranked gaps are unchanged and all three are live: business purpose
+exists nowhere in the tool (a required 274(d) element whose absence can turn a
+reimbursement into wages under 1.62-2(c)(5)); there is no retention control and
+`delete_run` drops a whole month; and `expense_location` is captured on the Zoho
+ingest path and dies at the API layer, so a required element is thrown away
+before any PDF, CSV or XLSX sees it. G2b sits beside them: the content-addressed
+receipt store is CLI-only, nothing under `web/` imports it, so no digest survives
+and a changed stored receipt cannot be detected.
 
 **Owner:** the tool's output is lawfully regulated; there are specific
 report structures and criteria that must be fulfilled — reference
@@ -5201,6 +5279,12 @@ existing month, which is the honest answer for a period nothing recorded.
 
 ### 108. Cloud Services and Consulting card spend cannot close: 5 of 9 cards have never had a statement loaded, and the UI offers one statement (2026-09-17 audit draft #106, unranked; UI prompt for the owner to paste)
 
+**2026-09-20, owner: not a build, a matter of time.** "It is just a matter of
+time before Criss runs a complete reconciliation with multiple bank statements
+originating from separate banks." The multi-statement path this needs is already
+shipped (item 29's PR 2b-2b-2 made `POST .../statement` append-capable and
+repeatable), so this item is waiting on a month being worked, not on code.
+
 **Audit rank 15 of 40; severity high as merged; verification: checked by hand against live August coverage; no reviewer pass.** All 223 live charges belong to Corporate Services because the only workbook ever attached is the Chase export for account 2838. Receipts paid with the Cloud card 9693 and the Consulting card 1176 arrive monthly and park as 'card statement not loaded' (August: OpenAI 80.12 and 80.04; Anthropic 100; Lovable 50); 0113, 6013 and 8311 have no statement either. The backend accepts one workbook per card, but the Lovable page offers one 'Attach bank statement' dialog and one download, so Criss cannot add a second. Nothing checks that the card typed in the dialog matches the card printed in the file, so a workbook with no card column uploaded under the default would book to Corporate Services.
 
 **Evidence:** Live August coverage[]: card-0113, card-6013, card-8311, card-1176, card-9693 statements [] n_transactions 0; rows legal_entity_id Corporate Services 111/111 (July 112/112); unmatched_receipts reason card_statement_not_loaded 4 (0001/0003 OpenAI on 9693, 0015 Anthropic and 0025 Lovable on 1176); statements[] one file per month, account_id card-2838, card_key ''. web/service.py:7810-7850 (advisory only for same card_key under two ids), :220 (account_id defaults to 'card'); item 59 record (2514-2554). Backlog 2742 and 3182 ('owner's call to load them'); item 53 (2032-2047).
@@ -5462,7 +5546,7 @@ signed off with a pick on it.
 
 **Shipped 2026-09-17 (pending PR).** `web/backup.py` zips the whole data folder and uploads it to a SharePoint library Brisken controls, through the app-only Graph credential the estate already holds (drive API, no mailbox). Live databases are copied through SQLite's own backup API rather than off the disk, because a byte copy of a database being written to restores as "disk image is malformed" and looks like a backup until the day it is needed. Three ways to run it: `expense-recon backup --dry-run` (the default: says what it would upload and how big, reads nothing but the volume), `--check` (read-only Graph: resolves the target and lists the folder), `--go` (takes one copy), plus an in-app scheduler thread on the same pattern as the boot sweeps. The schedule is OFF unless `EXPENSE_RECON_BACKUP=1`, so this deploy changes nothing by itself. Refusals are plain, never exceptions into a boot thread: no credential, no target, or a folder over the 100 MB ceiling each come back with a reason (half a ledger is not a backup). The Graph path was validated read-only against the live tenant on 2026-09-17: token minted, `brisken.sharepoint.com:/sites/MARKETING` and its default library resolved, root listed (15 folders), and the intended backup folder read as empty because it does not exist yet. Nothing was uploaded. Restore procedure: `docs/backup-and-restore.md`, and it says plainly at the top that **no restore has been rehearsed** because rehearsing it needs a throwaway app and the owner's go-ahead. `docs/electronic-storage-system-description.md` §5.4 and gap row 5 are corrected from "no application-level backup or restore" to narrowed-not-closed. **Owner actions:** (a) pick the site and set `EXPENSE_RECON_BACKUP_SITE` (MARKETING is what the credential demonstrably reaches; a finance-owned site is a grant question); (b) `EXPENSE_RECON_BACKUP=1` to turn the schedule on; (c) a rehearsal run into a throwaway app, which is the only thing that turns the runbook into a proven restore; (d) snapshot retention beyond 5 days is still a Fly-side change, untouched here.
 
-### 120. Only the developer can restart, redeploy or recover the app, and nothing in the repository would let a stand-in do it (2026-09-17 audit draft #118, unranked; operations)
+### 120. Only the developer can restart, redeploy or recover the app, and nothing in the repository would let a stand-in do it (2026-09-17 audit draft #118, unranked; operations) (RUNBOOK THIRD SHIPPED 2026-09-20; the hosting-org move and the restore rehearsal stay OPEN)
 
 **Audit rank 27 of 40; severity high as merged; verification: finder's evidence only, not independently rechecked.** The app, its disk, the mail address, the Lovable seat and the code all run under the developer's personal accounts with a single login and no delegated access. The 2026-09-10 outage (about 50 minutes) needed the developer to destroy the machine, fork the disk and redeploy; nobody at Brisken could have. All 249 commits are by one person, 13 releases went out in 36 hours by hand from a temporary checkout, the running app does not say which commit it carries, the working knowledge is spread over fifteen memory files outside the repo, and the README still describes a May command-line tool with a Zoho export, 98 tests and the retired UI address.
 
@@ -5475,6 +5559,29 @@ signed off with a pick on it.
 **Value:** Brisken can restart its own tool on a Sunday and keeps its records whatever happens to the developer's accounts; a stand-in can deploy, verify and restore from the repository alone. (effort medium)
 
 **Reviewer corrections:** none recorded
+**The third that needed no decision is built: `docs/if-it-is-down.md`
+(2026-09-20).** The item asks for three things and only one of them was ever
+the agent's: a hosting organisation Brisken pays for needs Dirk and money, and
+rehearsing a restore is a live-volume action needing its own yes. The one-page
+"if it is down, do this" needed neither, so it is written, from values read off
+the live app rather than off older documents: the three independent checks
+(API `/healthz`, the port-25 MX banner, the SPA), the `FLY_API_TOKEN` export
+that works around `flyctl` answering "no access token available" on this box,
+the three failure shapes (dead process, full disk, the 2026-09-10 wedged
+machine with its destroy / `volumes fork` / redeploy recovery), deploying only
+from a detached `origin/main` worktree, rolling back by image from
+`flyctl releases --image`, and what to check before calling it back up (all
+three checks plus a real login and a month opened, not `/healthz` alone).
+
+**Two limits it states rather than hides, both verified live 2026-09-20.**
+`flyctl status` prints `Owner: personal`, so the app still runs under the
+developer's personal Fly account and no organisation token exists; a stand-in
+with the token can work, and Brisken alone cannot. And `EXPENSE_RECON_BACKUP`
+is NOT among the app's nine secrets, so the SharePoint backup built in item
+119 has never started: the only copies are the live volume and Fly's 5-day
+snapshots, both inside that same personal account. Turning it on is one
+secret and is the cheapest risk reduction left on this item.
+
 
 ### 121. Every alarm the tool raises goes to the developer only, through a script on his laptop (2026-09-17 audit draft #119, unranked; owner data; held-mail half SHIPPED PR #1001, Fly v153)
 
@@ -6801,6 +6908,8 @@ three new fields or they are erased.
 
 ### 156. Two years of Zoho Books can seed the registry, and 30% of the category vocabulary is unruled (note item M3; owner 2026-09-18, decided 2026-09-19)
 
+**2026-09-20, owner: to be picked up later.** Deferred by decision, not blocked.
+
 **Owner-authorised READ, done 2026-09-18.** One read-only pass over Zoho Books
 Expenses + Bills, 2024-09-01 to 2026-09-18, all seven real orgs (the TEST
 sandbox 822116290 was deliberately not read): **2,355 expenses + 1,179 bills,
@@ -7191,7 +7300,7 @@ comes from and why it is grouped by card holder. SPA half
 `docs/lovable-chase-section-label-prompt.md`, written and not pasted.
 
 
-### 162. The reader sees two colours and Criss marks the sheet with eight (owner directive 2026-09-20) (SHIPPED 2026-09-20, pending PR; Shipped row 108)
+### 162. The reader sees two colours and Criss marks the sheet with eight (owner directive 2026-09-20) (SHIPPED 2026-09-20, pending PR; Shipped row 109)
 
 **The directive, verbatim**: *"dont attribute colors in the statements or
 receipts any deeper meaning, all i need you to be able to do, is get the
@@ -7278,7 +7387,8 @@ tinting would re-attach the meaning the directive removes.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-| 108 | The statement reader names every colour it can read and infers meaning from two: `colour_family` is total over the RGB cube (HSV hue bands, twelve stable family names) replacing the ad-hoc RGB inequalities, `_FAMILY_ENTRY_STATUS` maps only yellow and gray to the two existing verdicts, and `rows[].fills[]` records `{column, index, hex, family}` for every coloured cell on the source row, over every column rather than only the mapped ones | Backlog item 162 (owner directive: read all these colours and more, and attribute no deeper meaning). The reader understood two families, so a row Criss had marked with something else was indistinguishable from a row she had marked with nothing: 84 of July's 112 rows. The census also settled the shape - the colours are a per-column scheme with THREE channels (`Card` orange/blue/mid-gray, `Description` gray, `Amount` yellow), which decomposes July's 85/27 split exactly into 44 yellow-only + 41 tie + 27 gray-majority | 2026-09-20, pending PR; `tests/test_statement_fill_colours_item_162.py` (route-level through `GET /api/runs/{id}`, plus the family-to-verdict map held as a property over the cube rather than a list of examples, plus an instrument check that the THEME fill path is the one under test, since both live workbooks are theme-typed and an rgb-only fixture would pass while testing nothing); six wiring points proven RED by hand with sha256-equal restores; **0 of 452 live filled cells change verdict**, measured by running both classifiers over both stored workbooks; whole-cube divergence enumerated in the PR; SPA half `docs/lovable-statement-colour-prompt.md` (Not applied) |
+| 109 | The statement reader names every colour it can read and infers meaning from two: `colour_family` is total over the RGB cube (HSV hue bands, twelve stable family names) replacing the ad-hoc RGB inequalities, `_FAMILY_ENTRY_STATUS` maps only yellow and gray to the two existing verdicts, and `rows[].fills[]` records `{column, index, hex, family}` for every coloured cell on the source row, over every column rather than only the mapped ones | Backlog item 162 (owner directive: read all these colours and more, and attribute no deeper meaning). The reader understood two families, so a row Criss had marked with something else was indistinguishable from a row she had marked with nothing: 84 of July's 112 rows. The census also settled the shape - the colours are a per-column scheme with THREE channels (`Card` orange/blue/mid-gray, `Description` gray, `Amount` yellow), which decomposes July's 85/27 split exactly into 44 yellow-only + 41 tie + 27 gray-majority | 2026-09-20, pending PR; `tests/test_statement_fill_colours_item_162.py` (route-level through `GET /api/runs/{id}`, plus the family-to-verdict map held as a property over the cube rather than a list of examples, plus an instrument check that the THEME fill path is the one under test, since both live workbooks are theme-typed and an rgb-only fixture would pass while testing nothing); six wiring points proven RED by hand with sha256-equal restores; **0 of 452 live filled cells change verdict**, measured by running both classifiers over both stored workbooks; whole-cube divergence enumerated in the PR; SPA half `docs/lovable-statement-colour-prompt.md` (Not applied) |
+| 108 | A stand-in can bring the app back: `docs/if-it-is-down.md`, written from values read off the live app, covers which of the three services is down, the three failure shapes and their fixes, deploy and image-rollback from the repository alone, and what to check before calling it up. It also states the two limits it cannot fix | Backlog item 120's third part, the only one needing no decision from Dirk. The 2026-09-10 outage ran ~50 minutes because the one person who could recover it had to notice first; recovery needed a machine destroy plus a volume fork, which nothing in the repo described | 2026-09-20 |
 | 107 | The chase section says what it lists: `chase.title` reuses the exact words of the box above it ("Charges without a receipt" / "Lançamentos sem recibo") and a new `chase.subtitle` names the population and the grouping. Copy only; the counts were verified correct first | Backlog item 161 (feedback note #72, "what is this"). A cold drive refuted the item's own hypothesis: 85.3 and 14.9 are never rendered on that page. The real defect is one population named twice, four lines apart - a box reading "Charges without a receipt · 65" over a section reading "Receipts to chase (65)", whose own columns are the charge columns | 2026-09-20 |
 | 106 | The row says WHICH line still needs a category: `expenses[].uncategorized_lines` names each line item carrying none (index, description, amount), built from `uncategorized_line_indexes` - the one predicate `_matched_category_review` turns into the `partial_uncategorized` verdict, so the row cannot name a line the sentence is not about | Backlog item 160 (feedback note #71). July's Microsoft Corporation 718.20 showed `posting_category` "Software & Subscriptions" AND "One or more receipt lines still need a category". Read live, both were true: the row category is the roll-up of the lines that have one, and line 2 (25.20, "(illegible)") has none. The message was correct and read as a mistake because it named nothing beside a filled field | 2026-09-20 |
 | 105 | The tool's own verdict carries the statement id too: `set_tool_decision`'s `statement_id` stamp, the one of item 152's five `decisions` writers that no fixture reached, is pinned through the route that reaches it (the item-76 self-confirm rule, inside `rematch_month` on statement attach), and the T3 docstring that asserted the opposite is corrected | Backlog item 158. A wire no test reaches is a wire nobody knows is working, and this one carries the most common verdict on a real month: the self-confirm rule decides every clean exact pair without anyone clicking, and an unstamped tool verdict is exactly the row a reader could not trace back to its statement line after a re-read moved its content-derived `transaction_id`. What hid it was an active claim, not silence: a `tests/test_charge_origin_t3.py` docstring said "on a fresh month the matcher's `set_tool_decision` has already written a verdict for every charge and stamped it", while THAT fixture's charges pair with nothing and its month ends with no `decided_by='tool'` row at all. Outcome is the good one: the route exists, the wire works, and it is covered rather than recorded as a known gap | 2026-09-20, PR #1129; `tests/test_tool_decision_statement_id_158.py` (3, route-level): the premise asserted separately first (exactly one `decided_by='tool'` row, `decided_rule` `exact_vendor_75`, agreeing with the row the page shows) so the stamp test cannot pass over an empty table, then the stamp, then that a person taking the charge over later leaves the id alone. Red-proven at an anchor the mutation script refuses to place anywhere but inside `set_tool_decision` (the call is textually identical in all five writers): the premise test stays GREEN, both stamp tests go RED, `store.py` restored sha256-equal. Test-only, no deploy needed |
