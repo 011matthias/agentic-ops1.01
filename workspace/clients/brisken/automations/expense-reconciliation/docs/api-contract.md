@@ -84,6 +84,7 @@ receives after `jsonable_encoder`.
 | `copies_set_aside[].line_items[]` | object |
 | `card_sections[]` | object (item 138, the Matching page's card tabs) |
 | `card_sections[].digits[]` · `card_sections[].statements[]` | string |
+| `rows[].fills[]` | object `{column, index, hex, family}` (item 162: the row's coloured cells, named not interpreted; ABSENT when the row has no readable fill) |
 
 ## `parse_issues` specifically
 
@@ -5814,3 +5815,87 @@ The copy and the placement are the SPA's half:
 Route-level in `tests/test_uncategorized_lines_160.py` (4: the premise on its
 own, the named line, the absent key after a reviewer's edit, and the fully
 uncategorized row); the set equality pinned in `tests/test_view_contract.py`.
+
+## The colours a statement row is marked with: `rows[].fills` (item 162, 2026-09-20)
+
+Criss marks her workbook with cell fill, and the reader understood two
+families of it: yellow meant "already in Zoho" and gray meant "a
+subscription" (the 2026-07-15 walkthrough). Every other shade was
+indistinguishable from an uncoloured cell, so the payload could not tell
+"she marked this with something we do not act on" from "she marked nothing".
+
+Owner directive 2026-09-20: *"dont attribute colors in the statements or
+receipts any deeper meaning, all i need you to be able to do, is get the
+classifier to read all these colors and more."* So this field is a RECORD,
+not a verdict. `entry_status` keeps its exact meaning and stays the only
+thing any colour decides.
+
+```json
+"fills": [
+  { "column": "Card",   "index": 0, "hex": "F4B183", "family": "orange" },
+  { "column": "Amount", "index": 6, "hex": "FFFF00", "family": "yellow" }
+]
+```
+
+Four keys on every element, always present, so a consumer maps over them
+with no shape checks:
+
+| Key | Meaning |
+|---|---|
+| `column` | the header text of the cell's column, `""` when the column has no header |
+| `index` | the 0-based column, which is the identity when a header repeats (both live workbooks carry two `Memo` columns) |
+| `hex` | the fill as read, six uppercase hex digits, no `#`. The exact truth; `family` is a coarse grouping of it |
+| `family` | the shade's name, one of `white` `gray` `black` `red` `orange` `yellow` `olive` `green` `cyan` `blue` `purple` `pink` |
+
+The list reads left to right and is never empty: the whole key is ABSENT
+instead (rule 1). It is also absent on every month ingested before the item,
+because a statement is parsed at UPLOAD time; a re-read is what fills it in,
+and re-reading Criss's months is hers to trigger.
+
+**Every column, not only the mapped ones.** `entry_status` is still decided
+by the mapped columns alone, by the same majority vote with the same
+tie-break. `fills` records every coloured cell on the row, including columns
+no logical key maps, because seeing is not voting: July's `Memo` column
+carries a gray and a green that the mapped-column scan never reached.
+
+**A family carries no meaning beyond the two that already existed.** The map
+from family to verdict is `{yellow: posted, gray: subscription}` and nothing
+else; `tests/test_statement_fill_colours_item_162.py` holds that as a
+property over the RGB cube rather than a list of examples, so a third family
+cannot acquire a meaning by accident. There is deliberately no settings map
+from colour to semantics and no model call: what orange means is Criss's to
+say.
+
+**Measured on the live months 2026-09-20** (in-machine, read-only, before
+the change). Of 452 filled cells across July and August, 174 were invisible
+to the reader:
+
+| Fill | July | August | Family | Verdict |
+|---|---|---|---|---|
+| `#FFFF00` | 118 | 7 | yellow | `posted` |
+| `#D9D9D9` | 68 | 16 | gray | `subscription` |
+| `#F4B183` | 48 | 37 | orange | none |
+| `#B4C7E7` | 45 | 43 | blue | none |
+| `#ADADAD` | 27 | 40 | gray | `subscription` |
+| `#C9C9C9` | 1 | 0 | gray | `subscription` |
+| `#FFFFCC` | 1 | 0 | yellow | `posted` |
+| `#C6DEB5` | 1 | 0 | green | none |
+
+The orange and blue are a THIRD annotation channel, in the `Card` column,
+beside the yellow `Amount` and the gray `Description`. Both months use
+`theme`-typed fills for them (theme 5 tint 0.4 and theme 4 tint 0.6), which
+is the path the fixtures exercise.
+
+**No verdict moved.** Both classifiers were run over every cell of both
+stored workbooks: 0 of 452 changed. The hue bands do differ from the old RGB
+arithmetic on colours neither month contains, in two directions, and the
+divergence is enumerated in the item's PR rather than left implicit: the old
+predicate called sage greens (hue 61-75) and dark ambers "yellow", which the
+bands correct, and the bands call a handful of pale creams yellow that the
+old `b <= min(r,g) - 40` cut excluded by a unit (`FFFFCC` was in, `FCF0C9`
+out, the same cream).
+
+Pinned as `rows[].fills[]` (`object`) in `tests/test_view_contract.py`, in
+the run payload only. `expenses[]` gets nothing: an expense is a receipt, and
+a receipt has no workbook row. The SPA's half is
+`docs/lovable-statement-colour-prompt.md`.

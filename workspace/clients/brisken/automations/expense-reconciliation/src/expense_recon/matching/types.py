@@ -125,6 +125,25 @@ class LineItem:
 
 
 @dataclass(frozen=True)
+class CellFill:
+    """One coloured cell on the statement row that produced a transaction.
+
+    A NAME for a shade, never a verdict (owner directive 2026-09-20: the
+    tool's job is to see the colour, the reviewer's is to interpret it).
+    `family` is one of the vocabulary in `ingest.statement_xlsx`
+    (white / gray / black / red / orange / yellow / olive / green / cyan /
+    blue / purple / pink); `hex` is the fill as it was read, six uppercase
+    hex digits, no `#`. `index` is the 0-based column, because a header can
+    repeat (both live workbooks carry two `Memo` columns).
+    """
+
+    column: str
+    index: int
+    hex: str
+    family: str
+
+
+@dataclass(frozen=True)
 class Transaction:
     """A line on a card / bank statement (v2 spec §23.8).
 
@@ -180,6 +199,16 @@ class Transaction:
     # charge for month completeness, a derived mark is a guess and closes
     # nothing (`web.month_readiness`).
     entry_status_source: str | None = None
+
+    # Every coloured cell on the source workbook row, left to right (item
+    # 162, owner directive 2026-09-20). The RECORD of what the sheet is
+    # marked with, parallel to `entry_status`, which stays the two-mark
+    # VERDICT and is still decided by the mapped columns alone. A fill whose
+    # family carries no verdict (orange, blue, green, ...) appears here and
+    # nowhere else, so "coloured with something we do not act on" is finally
+    # distinguishable from "not coloured". Empty for CSV and PDF statements,
+    # which have no fills, and for every month ingested before the item.
+    fills: tuple[CellFill, ...] = ()
 
     # Refund / credit flag (3.10 / LD-5 A5), set at INGEST from the source's
     # own convention (a Type column, sign inference, or the PDF's negative
