@@ -74,7 +74,13 @@ def test_magic_link_carries_next_and_lands_there(gated):
     assert res["status"] == "sent"
     assert "&next=%2Freview%2Fseptember-2026" in res["link"]
     verify_path = res["link"].removeprefix("https://x")
-    r = gated.get(verify_path, follow_redirects=False)
+    page = gated.get(verify_path)
+    assert page.status_code == 200
+    assert 'name="next" value="/review/september-2026"' in page.text
+    token = res["link"].split("token=")[1].split("&")[0]
+    r = gated.post("/auth/verify",
+                   data={"token": token, "next": "/review/september-2026"},
+                   follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/review/september-2026"
     assert auth.COOKIE_NAME in r.cookies
@@ -87,8 +93,13 @@ def test_verify_with_unsafe_next_lands_on_board(gated):
             store, MATTHIAS, base_url="https://x", ip=None, now=now_iso(),
             mailer=mail)
     token = res["link"].split("token=")[1]
-    r = gated.get(f"/auth/verify?token={token}&next=https%3A%2F%2Fevil.com",
-                  follow_redirects=False)
+    # The landing page refuses to carry the foreign destination forward,
+    page = gated.get(f"/auth/verify?token={token}&next=https%3A%2F%2Fevil.com")
+    assert 'name="next" value="/"' in page.text and "evil.com" not in page.text
+    # and the redeem itself re-checks rather than trusting the posted field.
+    r = gated.post("/auth/verify",
+                   data={"token": token, "next": "https://evil.com"},
+                   follow_redirects=False)
     assert r.headers["location"] == "/"
 
 
