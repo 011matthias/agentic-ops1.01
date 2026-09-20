@@ -7050,7 +7050,7 @@ wording and placement question; if they are not, it is a defect in how
 `partial_uncategorized` is decided. Do not rewrite the sentence until that is
 known, because the two answers call for opposite fixes.
 
-### 161. Two numbers on one page look like they contradict each other (feedback note #72, owner 2026-09-20)
+### 161. Two numbers on one page look like they contradict each other (feedback note #72, owner 2026-09-20) (SHIPPED 2026-09-20, pending PR; Shipped row 107)
 
 **The note, verbatim**: *"what is this"*. Note #72, ts
 `2026-09-20T15:15:00+00:00`, role operator, operator `matthias`, page
@@ -7075,11 +7075,42 @@ they may be asking what the SECTION is for, not why the numbers disagree. Both
 readings point the same way though, which is that the label does not say what
 it lists. Whoever takes it should put the question to the owner in one line and
 drive the April page cold to see the two figures as they sit together.
+**Settled 2026-09-20 by a cold drive of the page, and the item's own
+hypothesis is REFUTED.** `receipt_match_rate` 85.3 and `match_rate` 14.9 are
+payload fields the SPA does **not render on this page at all**: the full
+rendered body of `/runs/0603bb0e6f38` is 5,919 characters and contains
+neither string, and the only percentage anywhere on it is an unrelated
+`3.3%`. So the two figures never sat together and the reader was never
+comparing them. What is actually on screen is narrower and worse:
+
+* a box row four lines above the section reads **"Charges without a receipt ·
+  65"** - the correct label for the population;
+* the section directly below reads **"Receipts to chase (65)"** - the SAME
+  number, relabelled as receipts;
+* the section's own table headers are `Date | Vendor | Amount | Card`, the
+  charge columns, while the receipts table on the same page reads
+  `Date | Vendor | Total | Document`. The page itself proves the title wrong.
+
+So the owner's answer ("what the section LISTS") is the whole of it: one
+population is named two ways within one screen, four lines apart. The count
+is not in doubt - the section's own `receipt_chase` groups sum to exactly
+`summary.n_charges_need_receipt` on every month that has one (April 65 = 65
+over 3 holders, August 61 = 61, July 0), so there is no arithmetic defect
+behind it.
+
+**Copy only, no backend half.** The SPA needs no new field to say this: it
+already holds `summary.n_charges_need_receipt` and the `receipt_chase`
+groups. The fix is `chase.title` reusing the exact words of
+`wb.view.unmatched`, plus a new `chase.subtitle` saying where the number
+comes from and why it is grouped by card holder. SPA half
+`docs/lovable-chase-section-label-prompt.md`, written and not pasted.
+
 
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 107 | The chase section says what it lists: `chase.title` reuses the exact words of the box above it ("Charges without a receipt" / "Lançamentos sem recibo") and a new `chase.subtitle` names the population and the grouping. Copy only; the counts were verified correct first | Backlog item 161 (feedback note #72, "what is this"). A cold drive refuted the item's own hypothesis: 85.3 and 14.9 are never rendered on that page. The real defect is one population named twice, four lines apart - a box reading "Charges without a receipt · 65" over a section reading "Receipts to chase (65)", whose own columns are the charge columns | 2026-09-20 |
 | 106 | The row says WHICH line still needs a category: `expenses[].uncategorized_lines` names each line item carrying none (index, description, amount), built from `uncategorized_line_indexes` - the one predicate `_matched_category_review` turns into the `partial_uncategorized` verdict, so the row cannot name a line the sentence is not about | Backlog item 160 (feedback note #71). July's Microsoft Corporation 718.20 showed `posting_category` "Software & Subscriptions" AND "One or more receipt lines still need a category". Read live, both were true: the row category is the roll-up of the lines that have one, and line 2 (25.20, "(illegible)") has none. The message was correct and read as a mistake because it named nothing beside a filled field | 2026-09-20 |
 | 105 | The tool's own verdict carries the statement id too: `set_tool_decision`'s `statement_id` stamp, the one of item 152's five `decisions` writers that no fixture reached, is pinned through the route that reaches it (the item-76 self-confirm rule, inside `rematch_month` on statement attach), and the T3 docstring that asserted the opposite is corrected | Backlog item 158. A wire no test reaches is a wire nobody knows is working, and this one carries the most common verdict on a real month: the self-confirm rule decides every clean exact pair without anyone clicking, and an unstamped tool verdict is exactly the row a reader could not trace back to its statement line after a re-read moved its content-derived `transaction_id`. What hid it was an active claim, not silence: a `tests/test_charge_origin_t3.py` docstring said "on a fresh month the matcher's `set_tool_decision` has already written a verdict for every charge and stamped it", while THAT fixture's charges pair with nothing and its month ends with no `decided_by='tool'` row at all. Outcome is the good one: the route exists, the wire works, and it is covered rather than recorded as a known gap | 2026-09-20, PR #1129; `tests/test_tool_decision_statement_id_158.py` (3, route-level): the premise asserted separately first (exactly one `decided_by='tool'` row, `decided_rule` `exact_vendor_75`, agreeing with the row the page shows) so the stamp test cannot pass over an empty table, then the stamp, then that a person taking the charge over later leaves the id alone. Red-proven at an anchor the mutation script refuses to place anywhere but inside `set_tool_decision` (the call is textually identical in all five writers): the premise test stays GREEN, both stamp tests go RED, `store.py` restored sha256-equal. Test-only, no deploy needed |
 | 104 | What the bookkeeper knows about a merchant gets a home: `profile`, free prose on the registry entry, read by the two categorize calls that still have a judgement to make and fenced as UNTRUSTED data per `rule_untrusted_inbound` (per-call nonce, an inner fence marker neutralised) so it informs the category and never instructs. Shown on `GET /api/memory` `by_vendor[].profile`. Backlog item 118's code half closes with it: a cost centre picked on a row now teaches its merchant at sign-off | The registry could hold a merchant's structured facts and nothing else, so what Criss or Dirk would tell a new bookkeeper (what we buy here, on which card, for which company) lived only in their heads. Two limits are the substance: BLUEPRINT LD-2's Tier-1 contract is kept, so a profile may only break a tie the DESCRIPTION already leaves open and can never rescue a vague line; and item 115's disagreement read is left without one, because prose about what a merchant is usually bought for is evidence for the answer memory already holds, and feeding it in would teach that detector to agree with itself | 2026-09-20, backlog item 157; 28 tests in `tests/test_merchant_profile_m4.py`, 3 regress proofs each watched going red; no live merchant carries a profile and no cost centre is defined, so no live row moves on the deploy |
