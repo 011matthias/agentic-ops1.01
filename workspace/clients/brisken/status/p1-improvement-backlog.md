@@ -5546,7 +5546,7 @@ signed off with a pick on it.
 
 **Shipped 2026-09-17 (pending PR).** `web/backup.py` zips the whole data folder and uploads it to a SharePoint library Brisken controls, through the app-only Graph credential the estate already holds (drive API, no mailbox). Live databases are copied through SQLite's own backup API rather than off the disk, because a byte copy of a database being written to restores as "disk image is malformed" and looks like a backup until the day it is needed. Three ways to run it: `expense-recon backup --dry-run` (the default: says what it would upload and how big, reads nothing but the volume), `--check` (read-only Graph: resolves the target and lists the folder), `--go` (takes one copy), plus an in-app scheduler thread on the same pattern as the boot sweeps. The schedule is OFF unless `EXPENSE_RECON_BACKUP=1`, so this deploy changes nothing by itself. Refusals are plain, never exceptions into a boot thread: no credential, no target, or a folder over the 100 MB ceiling each come back with a reason (half a ledger is not a backup). The Graph path was validated read-only against the live tenant on 2026-09-17: token minted, `brisken.sharepoint.com:/sites/MARKETING` and its default library resolved, root listed (15 folders), and the intended backup folder read as empty because it does not exist yet. Nothing was uploaded. Restore procedure: `docs/backup-and-restore.md`, and it says plainly at the top that **no restore has been rehearsed** because rehearsing it needs a throwaway app and the owner's go-ahead. `docs/electronic-storage-system-description.md` §5.4 and gap row 5 are corrected from "no application-level backup or restore" to narrowed-not-closed. **Owner actions:** (a) pick the site and set `EXPENSE_RECON_BACKUP_SITE` (MARKETING is what the credential demonstrably reaches; a finance-owned site is a grant question); (b) `EXPENSE_RECON_BACKUP=1` to turn the schedule on; (c) a rehearsal run into a throwaway app, which is the only thing that turns the runbook into a proven restore; (d) snapshot retention beyond 5 days is still a Fly-side change, untouched here.
 
-### 120. Only the developer can restart, redeploy or recover the app, and nothing in the repository would let a stand-in do it (2026-09-17 audit draft #118, unranked; operations) (RUNBOOK THIRD SHIPPED 2026-09-20; the hosting-org move and the restore rehearsal stay OPEN)
+### 120. Only the developer can restart, redeploy or recover the app, and nothing in the repository would let a stand-in do it (2026-09-17 audit draft #118, unranked; operations) (DOCS + OBSERVABILITY HALF SHIPPED 2026-09-20/21; the hosting-org move and the restore rehearsal stay OPEN)
 
 **Audit rank 27 of 40; severity high as merged; verification: finder's evidence only, not independently rechecked.** The app, its disk, the mail address, the Lovable seat and the code all run under the developer's personal accounts with a single login and no delegated access. The 2026-09-10 outage (about 50 minutes) needed the developer to destroy the machine, fork the disk and redeploy; nobody at Brisken could have. All 249 commits are by one person, 13 releases went out in 36 hours by hand from a temporary checkout, the running app does not say which commit it carries, the working knowledge is spread over fifteen memory files outside the repo, and the README still describes a May command-line tool with a Zoho export, 98 tests and the retired UI address.
 
@@ -5572,6 +5572,65 @@ machine with its destroy / `volumes fork` / redeploy recovery), deploying only
 from a detached `origin/main` worktree, rolling back by image from
 `flyctl releases --image`, and what to check before calling it back up (all
 three checks plus a real login and a month opened, not `/healthz` alone).
+
+**The documentation and observability half shipped 2026-09-20/21.** Five
+pieces, each verified against the live app rather than against the local
+checkout.
+
+`/healthz` now reports build identity (PR #1156, Fly v195). `server.commit`
+is baked into the image at build time (Dockerfile `ARG GIT_COMMIT`) and
+`server.image` is `FLY_IMAGE_REF`, which Fly sets from the image the
+machine actually booted. Neither is a file anybody edits, and the commit
+travels INSIDE the artifact, so it cannot drift from the code it was built
+with; the only failure left is absence (a deploy omitting the build arg
+reports `""`), which declines to answer rather than answering wrongly.
+Proved live: deployed `640be61b` and `/healthz` reported
+`640be61b6264b8cdd01c96d631a5ccac2d68aee6`. Parallel fields only, and the
+real consumer was driven, not assumed: `tools/recon_uptime_probe.py` run
+against the live app returned api/mx/spa all OK, exit 0.
+
+`docs/operating.md` (PR #1158) covers the remainder item 120 asked for that
+`if-it-is-down.md` did not already carry: read live state, audit a publish,
+where the labels and the notifier live, plus the deploy command with the
+build stamp. Two findings came out of writing it. **There is no publish
+log**: `published_by` / `published_at` / `published_override` are current
+state, unpublish deliberately clears all three, and publishing writes no
+decision-history entry, so a publish-unpublish-republish leaves no trace of
+the first. And **no month has ever been published** (`published_runs` empty
+across all 7 months), so that section is read from code rather than from a
+publish anyone has watched.
+
+`docs/screen-field-map.md` (PR #1157) routes a wrong value on screen to the
+function that produced it: the run-mode dispatch that decides which builder
+owns a screen, the returned keys, which LAYER is actually wrong, and how to
+prove the function before editing. Keyed on names, not line numbers,
+because `service.py` went from 11,729 to 15,408 lines between 09-17 and
+09-20 and every offset in this item's own evidence block moved with it
+(`build_view` is at 3219, not 952). A map, not a refactor.
+
+`README.md` cut from 559 lines to 119 (PR #1159). The rot was the frame,
+not the cited lines: it opened by calling itself the multi-tenant SaaS
+build, waiting on a Phase 0 stack decision. Also false and now gone: "98
+passing" tests (the suite is 2714), a four-package file tree (there are
+nine), the retired `brisken-reconcile-dash.lovable.app` address, and the
+role-split `EXPENSE_RECON_ACCESS_CODE` section including a `fly secrets
+set` line for a secret with zero references left in `src/`.
+
+The doc reconciliation is **closed as superseded** (PR #1160), not done.
+ANNEALING E4 and SPEC-GAP-REGISTER shortlist item 1 turned out to be the
+same ask; TARGET-ARCHITECTURE P5 is not doc reconciliation at all but the
+hosting migration, which stays open. The v2 spec is not a stale description
+of this program, it is the design for a different one (multi-tenant SaaS on
+Firebase, Anthropic Claude, mobile capture), descoped 2026-05-27. Rewriting
+66 KB of it to match a tool several hundred commits past it would create a
+second document claiming to describe the build, which is the failure E4
+records. The spec now carries a header saying what it is and what to read
+instead.
+
+**What the stand-in still cannot do**, unchanged by any of this and both
+re-verified 2026-09-20: the app runs under the developer's personal Fly
+account, and `EXPENSE_RECON_BACKUP` is still absent from the nine deployed
+secrets. Both are owner decisions.
 
 **Two limits it states rather than hides, both verified live 2026-09-20.**
 `flyctl status` prints `Owner: personal`, so the app still runs under the
