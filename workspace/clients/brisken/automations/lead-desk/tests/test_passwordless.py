@@ -203,7 +203,10 @@ def _magic_login(client, email):
     assert r.status_code == 303 and "notice=sent" in r.headers["location"]
     link = client._mail.sent[-1]["body"]
     token = link.split("token=")[1].split()[0].strip()
-    r2 = client.get(f"/auth/verify?token={token}", follow_redirects=False)
+    page = client.get(f"/auth/verify?token={token}")
+    assert page.status_code == 200 and 'action="/auth/verify"' in page.text
+    r2 = client.post("/auth/verify", data={"token": token},
+                     follow_redirects=False)
     assert r2.status_code == 303 and r2.headers["location"] == "/"
     assert auth.COOKIE_NAME in r2.cookies
 

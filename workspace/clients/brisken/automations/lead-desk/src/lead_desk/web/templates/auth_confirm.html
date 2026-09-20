@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in - Brisken Lead Desk</title>
+<link rel="icon" type="image/png" href="/static/favicon.png?v=2">
+<meta name="robots" content="noindex, nofollow">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme');
+    document.documentElement.setAttribute('data-theme',
+      t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme:dark)').matches)
+        ? 'dark' : 'light');
+  })();
+</script>
+<link rel="stylesheet" href="/static/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .card {
+    width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 28px 26px; box-shadow: var(--shadow); margin: 16px;
+    text-align: center;
+  }
+  .brand { display: flex; justify-content: center; margin-bottom: 18px; }
+  .brand-logo { height: 26px; display: none; }
+  [data-theme="light"] .brand-logo--light { display: block; }
+  [data-theme="dark"] .brand-logo--dark { display: block; }
+  h1 { font-size: 18px; margin: 0 0 4px; color: var(--heading); }
+  p.sub { color: var(--muted); font-size: 13.5px; margin: 0 0 20px; }
+  .who {
+    display: block; font-size: 14px; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    word-break: break-all;
+  }
+  button {
+    width: 100%; margin-top: 16px; background: var(--accent); color: var(--btn-ink); border: 0;
+    border-radius: 999px; padding: 11px 14px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  button:hover { background: var(--accent-light); }
+  .foot { color: var(--muted); font-size: 12px; margin-top: 18px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <img class="brand-logo brand-logo--light" src="/static/brisken-logo-light.png" alt="Brisken">
+      <img class="brand-logo brand-logo--dark" src="/static/brisken-logo-dark.png" alt="Brisken">
+    </div>
+    <h1>Lead Desk</h1>
+    <p class="sub">Your sign-in link is valid. One click and you're in.</p>
+    <span class="who">{{ email }}</span>
+
+    <form method="post" action="/auth/verify">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="next" value="{{ next_path }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button type="submit" autofocus>Continue to Lead Desk</button>
+    </form>
+
+    <div class="foot">UnpauseAI</div>
+  </div>
+</body>
+</html>

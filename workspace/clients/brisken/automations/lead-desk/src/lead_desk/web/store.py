@@ -1413,6 +1413,19 @@ class ContactStore:
         )
         self._commit()
 
+    def peek_login_token(self, token_hash: str, now: str) -> str | None:
+        """Whose token this is, iff it is still redeemable - WITHOUT spending
+        it. The landing page reads a link with this so that a fetch of the URL
+        (a mail-security scanner, a link preview, a prefetching client) cannot
+        use up the one click the recipient has."""
+        row = self.conn.execute(
+            "SELECT email, expires_at, used_at FROM login_tokens WHERE token_hash = ?",
+            (token_hash,),
+        ).fetchone()
+        if row is None or row["used_at"] is not None or row["expires_at"] < now:
+            return None
+        return row["email"]
+
     def consume_login_token(self, token_hash: str, now: str) -> str | None:
         """Single-use redemption: return the token's email iff it exists, is
         unused, and is unexpired - and atomically mark it used so a replay (or
