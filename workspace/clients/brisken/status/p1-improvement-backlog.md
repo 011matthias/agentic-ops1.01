@@ -475,7 +475,16 @@ not reduce to exactly four digits never reaches the entity chain. The card list
 is part of the extraction-cache key, since the same photo asked against a
 different set of cards is a different question.
 
-### 29. The living month: date-pooled mail, gradual statements (2026-08-24)
+### 29. The living month: date-pooled mail, gradual statements (2026-08-24) (ALL NAMED PRs SHIPPED; open only for want of a closing marker, confirmed 2026-09-20)
+
+**What this item means, asked by the owner 2026-09-20.** The month stops being
+"upload everything, then sit an exam" and becomes a workspace worked across the
+whole month: mail files by the month printed ON the receipt rather than into
+whatever batch is open, statements arrive in pieces instead of as one closing
+event, and the month stays editable while they do. Every PR this item names is
+marked SHIPPED in the body below (PR 1, 2a, 2b-1, 2b-1b, 2b-2a, 2b-2b-1,
+2b-2b-2 and PR 3). It reads as open in a status sweep only because no line says
+so at the top.
 
 **Owner directives (2026-08-24), a three-PR plan.** The month stops being
 "upload everything, then sit an exam" and becomes a workspace the accountant
@@ -1101,6 +1110,18 @@ no-card-number section with no SPA change.
 
 ### 38. Two functions: monthly company expenses and trips (owner directive 2026-09-06)
 
+**2026-09-20, owner: "this distinguishment has already been made with cost
+centers". Recorded, NOT closed, because one thing does not fit.** Cost centers do
+carry the attribution this item wanted (a Brazil trip is a cost center like any
+other purpose), and on that reading R3's trip entity is redundant. But item 48's
+round 2 lists "days-away on trip reports" as a US-substantiation rendering change,
+and a days-away count needs a trip with dates, which a cost center does not have:
+live, the month payload's `trip` key is `null` and `expenses[]` carries no
+`trip_id`. So closing this as superseded would quietly remove something item 48
+expects to exist. One owner answer settles it: if trip reports are wanted for
+substantiation, R3 survives in a reduced form (dates on a cost center is enough);
+if they are not, this item closes and item 48's round 2 drops that line.
+
 **Owner:** "Expense creation should be split and separated into 2 functions:
 One for overall monthly company expenses and one for travel expenses." One of
 three directives given together (with items 39 and 40); they ship as one
@@ -1242,7 +1263,28 @@ commit via a pre-commit re-check (`execute_expense_batch(pre_commit=)`)
 and the mail joins the winner. Item 42 (refusals split) shipped ahead as
 PR #683. Residuals in item 43.
 
-### 40. Every expense belongs to a person, through the card (owner directive 2026-09-06)
+### 40. Every expense belongs to a person, through the card (owner directive 2026-09-06) (ENFORCED AND LIVE, verified 2026-09-20; the open half is data quality, not code)
+
+**2026-09-20, owner: "this distinguishment is already enforced". Confirmed live.**
+All 9 registry cards carry both `person` and `entity`, and August's `expenses[]`
+carry `person` with `person_source` reading `card` (or `none` where the card is
+unresolved), which is exactly the mechanism this item specified: person is the
+last link of the card chain.
+
+**One correction worth keeping, because the owner's summary included it:** the
+email sender is NOT part of the attribution, by this item's own ruling. Person
+comes from the card even for mailed receipts, and `submitted_by` stays ingest
+provenance, a claim about who MAILED the file. The two answer different
+questions and conflating them is the thing the 2026-09-06 ruling forbade.
+
+**The open half is the data, and it is not clean.** Only 3 of the 9 cards hold a
+bare person name (Nicolas Neumann, Dirk Neumann, Criss Neumann). Four hold a
+person-and-entity mashup (`Dirk Neumann - Corp Services`, `Dirk Neumann - Cloud
+Services`, twice each) and two hold a company where a person belongs
+(`Brisken Cloud Services` on card-9693, `Brisken Consulting` on card-1176). The
+chain resolves for every card, so nothing is broken; but a per-person report
+built on this today would group Dirk under two spellings and file two cards under
+a company name. Owner-side data entry, same class as item 26.
 
 **Owner:** "All injected expenses whether email or manual need to be
 attributed to a person." Ruling on the mechanism, near-verbatim: "The person
@@ -1498,7 +1540,25 @@ already published v1 mid-day (the drop page is LIVE; the operator's
 chunking, this item's create-UI removal, the nav redesign, the
 Open-month release (travel rows excluded).
 
-### 47. Cost centers: attribute expenses to projects and purposes (owner directive 2026-09-08)
+### 47. Cost centers: attribute expenses to projects and purposes (owner directive 2026-09-08) (CODE LIVE both halves; the REGISTRY IS EMPTY, so the feature is inert until Dirk authors the list)
+
+**2026-09-20, owner: "has been implemented". Confirmed live, and what is left
+is data, not code.** Read off the deployed app the same day: `GET /api/settings`
+carries `cost_centers` and `cost_center_options`, the August payload carries
+`cost_center_options` and every row of `expenses[]` carries `cost_center` and
+`cost_center_source`, and the SPA half is applied (35 `cost_center` and 17
+`costCenter` hits across the 44 live chunks; its Applied row in PROMPT-STATUS
+records `/api/cost-centers/totals` and the lifted whole-map gate, so cost centers
+can be typed). The build order in this item is therefore satisfied down to the
+report sections.
+
+**`cost_centers` is 0 entries, so `cost_center_options` is `[]` and every live
+expense resolves to `cost_center: None` with an empty `cost_center_source`.**
+D1 made the list owner-authored on purpose ("Dirk creates and defines the cost
+centers manually"), so nothing an agent does fills it: until Dirk types the
+centers in Settings, the resolution chain has nothing to resolve and no roll-up
+has a row. That is the whole of what remains here, plus the learning half already
+tracked separately as item 118 (a pick on a row teaches nothing).
 
 **Owner (Dirk's ask):** a cost-center view deriving which costs belong to
 which projects/purposes — examples given: Nicolas's Brazil expenses, the
@@ -1691,6 +1751,24 @@ cross-month route. The cross-month view last, because it is the only piece
 that needs data the earlier pieces produce.
 
 ### 48. Report structures against US accounting law, tool-scope only (owner directive 2026-09-08)
+
+**2026-09-20, owner: this is important, the tool is being finalized.** Priority
+signal recorded. This is the largest open item and the only one with a legal
+edge, and both its research rounds landed without anything being built: round 1
+(`us-substantiation-criteria.md`, 27 criteria on primary sources) and G7
+(`electronic-storage-system-description.md`) are both PENDING OWNER REVIEW, and
+G7 additionally wants a CPA read and two blanks filled (which entities file US,
+the deployed access-code configuration). Those reviews gate the build, and the
+which-entities answer scopes every criterion, so they are the first move.
+
+The three ranked gaps are unchanged and all three are live: business purpose
+exists nowhere in the tool (a required 274(d) element whose absence can turn a
+reimbursement into wages under 1.62-2(c)(5)); there is no retention control and
+`delete_run` drops a whole month; and `expense_location` is captured on the Zoho
+ingest path and dies at the API layer, so a required element is thrown away
+before any PDF, CSV or XLSX sees it. G2b sits beside them: the content-addressed
+receipt store is CLI-only, nothing under `web/` imports it, so no digest survives
+and a changed stored receipt cannot be detected.
 
 **Owner:** the tool's output is lawfully regulated; there are specific
 report structures and criteria that must be fulfilled — reference
@@ -5201,6 +5279,12 @@ existing month, which is the honest answer for a period nothing recorded.
 
 ### 108. Cloud Services and Consulting card spend cannot close: 5 of 9 cards have never had a statement loaded, and the UI offers one statement (2026-09-17 audit draft #106, unranked; UI prompt for the owner to paste)
 
+**2026-09-20, owner: not a build, a matter of time.** "It is just a matter of
+time before Criss runs a complete reconciliation with multiple bank statements
+originating from separate banks." The multi-statement path this needs is already
+shipped (item 29's PR 2b-2b-2 made `POST .../statement` append-capable and
+repeatable), so this item is waiting on a month being worked, not on code.
+
 **Audit rank 15 of 40; severity high as merged; verification: checked by hand against live August coverage; no reviewer pass.** All 223 live charges belong to Corporate Services because the only workbook ever attached is the Chase export for account 2838. Receipts paid with the Cloud card 9693 and the Consulting card 1176 arrive monthly and park as 'card statement not loaded' (August: OpenAI 80.12 and 80.04; Anthropic 100; Lovable 50); 0113, 6013 and 8311 have no statement either. The backend accepts one workbook per card, but the Lovable page offers one 'Attach bank statement' dialog and one download, so Criss cannot add a second. Nothing checks that the card typed in the dialog matches the card printed in the file, so a workbook with no card column uploaded under the default would book to Corporate Services.
 
 **Evidence:** Live August coverage[]: card-0113, card-6013, card-8311, card-1176, card-9693 statements [] n_transactions 0; rows legal_entity_id Corporate Services 111/111 (July 112/112); unmatched_receipts reason card_statement_not_loaded 4 (0001/0003 OpenAI on 9693, 0015 Anthropic and 0025 Lovable on 1176); statements[] one file per month, account_id card-2838, card_key ''. web/service.py:7810-7850 (advisory only for same card_key under two ids), :220 (account_id defaults to 'card'); item 59 record (2514-2554). Backlog 2742 and 3182 ('owner's call to load them'); item 53 (2032-2047).
@@ -6823,6 +6907,8 @@ Settings editor replaces the whole merchant map on save, so it must carry all
 three new fields or they are erased.
 
 ### 156. Two years of Zoho Books can seed the registry, and 30% of the category vocabulary is unruled (note item M3; owner 2026-09-18, decided 2026-09-19)
+
+**2026-09-20, owner: to be picked up later.** Deferred by decision, not blocked.
 
 **Owner-authorised READ, done 2026-09-18.** One read-only pass over Zoho Books
 Expenses + Bills, 2024-09-01 to 2026-09-18, all seven real orgs (the TEST
