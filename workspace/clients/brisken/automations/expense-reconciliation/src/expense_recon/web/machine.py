@@ -24,6 +24,34 @@ timestamp is enough to look the event up later.
 Uptime is measured on the monotonic clock so an NTP correction cannot make
 a process look older or younger than it is; `started_at` is wall-clock,
 for a human reading the row.
+
+Build identity (backlog item 120) rides in the same snapshot, for the same
+reason the machine id does: a stand-in looking at the app has to be able to
+answer "is what I am looking at what I just shipped" without asking the
+author. Until this existed the release list said only "Release" and the app
+said nothing, so tying a running app to a commit meant correlating
+timestamps by hand.
+
+Two values, and NEITHER is a file anybody edits.
+
+`image` is `FLY_IMAGE_REF`, which Fly sets on the machine from the image it
+actually booted. No human writes it and no file holds it, so it cannot be
+stale; it is also the exact string `flyctl releases --image` prints, which
+makes it the join from a running process back to a release.
+
+`commit` is baked into the image at build time (Dockerfile `ARG
+GIT_COMMIT` becomes `ENV EXPENSE_RECON_COMMIT`), so it travels INSIDE the
+artifact. That is what stops it going quietly stale: the version-file
+failure, where a file claims one version while the code is another, needs
+the claim and the code to be two separate things that can drift apart, and
+here they are one layer of one image. A given image always reports the same
+commit, and `image` names that image.
+
+The failure still possible is absence: a deploy that omits `--build-arg
+GIT_COMMIT=...` bakes an empty string. That reads as `""`, which is visibly
+not a commit, and `image` still identifies the release. So the worst this
+can do is decline to answer, never answer wrongly, which is the only trade
+worth making in something an emergency reads.
 """
 from __future__ import annotations
 
@@ -45,17 +73,50 @@ def started_at() -> str:
     return _STARTED_AT.isoformat()
 
 
+def commit() -> str:
+    """The commit this image was built from, or "" if the build did not say.
+
+    Empty is a truthful "I cannot tell you", never a guess. Nothing falls
+    back to reading git: the container holds no repository (the build
+    context is this module directory and `.dockerignore` excludes `.git/`),
+    so a fallback could only invent something.
+    """
+    return os.environ.get("EXPENSE_RECON_COMMIT", "").strip()
+
+
+def image() -> str:
+    """The image this machine booted, as Fly reports it at runtime.
+
+    Identical to the string `flyctl releases --image` prints, so this is
+    how a running process is tied back to a release.
+    """
+    return os.environ.get("FLY_IMAGE_REF", "").strip()
+
+
 def snapshot() -> dict:
     """The parallel block `/healthz` and every failure report carry.
 
     Empty strings off Fly (local dev, tests): absent identity is stated as
     absent rather than invented, so a local row never reads like a
-    production one.
+    production one. The same holds for `commit` and `image`.
+
+    Build identity lives HERE rather than only in the health route so that
+    every surface stamping this snapshot reports the same string, with no
+    second stamp to keep in step.
+
+    What that does NOT yet cover: the stored client-error rows carry
+    `machine` and `process_started_at` but no commit, so a historical
+    failure is tied to a build through Fly's release list rather than from
+    the row alone. Adding the column is a migration on the live database
+    and item 120 asks only for the health endpoint, so it is left open
+    deliberately rather than half-done.
     """
     return {
         "machine": os.environ.get("FLY_MACHINE_ID", ""),
         "region": os.environ.get("FLY_REGION", ""),
         "app": os.environ.get("FLY_APP_NAME", ""),
+        "commit": commit(),
+        "image": image(),
         "started_at": started_at(),
         "uptime_s": round(uptime_seconds(), 1),
     }

@@ -36,6 +36,26 @@ RUN uv export --frozen --no-dev --extra web --no-emit-project \
     && uv pip install --system --no-cache --no-deps . \
     && rm /tmp/requirements.lock.txt
 
+# Build identity (backlog item 120). The running app has to be able to say
+# which commit it carries, so a stand-in can answer "is what I am looking at
+# what I just shipped" without asking the author.
+#
+# It arrives as a build arg and is baked into the image as an ENV layer, so
+# the value travels INSIDE the artifact. That is the point: a version FILE
+# goes stale because the claim and the code are two things that can drift
+# apart, and a baked layer cannot drift from the image it is a layer of.
+#
+# Unset (a deploy that forgot --build-arg, or a local `docker build`) leaves
+# it empty, and /healthz then reports "" rather than a guess. Absent, never
+# wrong; FLY_IMAGE_REF still names the release either way.
+#
+# The deploy command that sets it, with the clean-tree guard that keeps the
+# stamp honest, is in docs/operating.md ("Deploy"). Short version:
+#   flyctl deploy . -a brisken-expense-recon --remote-only \
+#     --build-arg GIT_COMMIT=$(git rev-parse HEAD)
+ARG GIT_COMMIT=""
+ENV EXPENSE_RECON_COMMIT=$GIT_COMMIT
+
 ENV EXPENSE_RECON_WEB_DATA=/data
 EXPOSE 8080
 
