@@ -4040,23 +4040,30 @@ def test_a_mail_forwarded_as_an_attachment_is_read_all_the_way_down():
     assert parsed.body_only is False
 
 
-def test_the_operator_note_above_a_forward_is_read_but_reaches_no_receipt():
-    """The T4 finding, pinned as it actually behaves today.
+def test_the_operator_note_above_a_forward_is_kept():
+    """The T4 finding, now built (backlog item 155).
 
     Dirk types the filing instruction above the forward: live bodies carry
     "BTS only", "CorpServ only Dev IT costs", and "This is ZOHO BOOKS for
-    CorpServ So it is split between BCS and BTS". The intake READS that text
-    (it fingerprints it) and then drops it: a mail with attachments records
-    no body anywhere a reviewer can see. Asserted, not assumed, so backlog
-    item 154 starts from behaviour rather than from a claim.
+    CorpServ So it is split between BCS and BTS". The intake read that text
+    and dropped it; it now carries it onto the provenance of every file the
+    mail delivered, as `operator_note`, display only.
+
+    Kept here as the shape this file owns (a forward-as-attachment mail,
+    whose body is the operator's own note and nothing else). The boundary
+    rule and the route-level walk to `expenses[]` live in
+    `tests/test_operator_note_155.py`.
     """
-    from expense_recon.web.body_render import extract_body_text
+    from expense_recon.web.body_render import extract_body_text, operator_note
 
     raw = _forwarded_as_attachment(note="CorpServ only Dev IT costs")
-    assert "CorpServ only Dev IT costs" in extract_body_text(raw), (
-        "the text is readable, so dropping it is a choice, not a limit"
-    )
+    assert "CorpServ only Dev IT costs" in extract_body_text(raw)
     parsed = parse_inbound(raw, DOMAIN)
     assert parsed.body_only is False, (
         "an attachment-bearing mail takes the body-only path for nothing"
     )
+    # This mail carries no quoted header at all (Outlook attached the whole
+    # message instead of quoting it), so the boundary rule finds nothing to
+    # cut at and keeps nothing: the note reaches a receipt through the
+    # ordinary quoted forward, which is the shape all 30 live notes have.
+    assert operator_note(extract_body_text(raw)) == ""

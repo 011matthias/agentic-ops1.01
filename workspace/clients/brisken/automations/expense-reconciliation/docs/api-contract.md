@@ -5564,3 +5564,86 @@ add, the row-fix PUT, the settings PUT, publish and the CSV route). SPA half:
 `docs/lovable-merchant-card-prompt.md` - the Settings editor replaces the
 whole merchant map on save, so it MUST carry `card_key`, `card_key_learned`
 and `cards_seen` on every save or they are erased.
+
+## The note the sender typed above the forward (note item T4, backlog item 155, 2026-09-19)
+
+Dirk forwards a vendor invoice and types the FILING INSTRUCTION above it.
+It exists nowhere in the attached PDF, and it is the entity, the cost split
+and the category, stated by the person who knows. Until this, the intake
+read that text (it fingerprints it) and dropped it.
+
+### `expenses[].operator_note`
+
+A parallel scalar string, ABSENT (never `""`, never null) when the mail
+carried no prose of its own. It rides in provenance too, at
+`submitted_by.operator_note`, which is where it is recorded; the row key is
+a LIFT of that, exactly as `untrusted_instructions` is lifted.
+
+**Display only, and this is the whole of its contract.** Mail text is
+untrusted inbound ([[rule_untrusted_inbound]]): this string chooses no
+entity, no category, no cost center, no card and no recipient, it reaches
+no model as instruction, and nothing in the tool branches on it. The
+reviewer reads it and decides. `test_the_note_decides_nothing` is the
+differential that says so rather than promising it: two identical receipts,
+one of whose mails names an entity, a cost center, a category and a card in
+the plainest words it could, land on identical `legal_entity_id`,
+`entity_source`, `person`, `posting_category`, `card_source`,
+`cost_center` and `private`.
+
+### Where the text ends and the quote begins
+
+The boundary rule is the work, and it was derived from the live archive (92
+stored `.eml`, scanned in-machine read-only 2026-09-19), not guessed.
+`body_render.operator_note` keeps everything at or above the LAST
+forward-header block in the first 30 lines, minus the header lines, the
+separator rules, the forward markers and the mail client's own noise (an
+`[image.png]` placeholder, a `[cid:...]` image line, Outlook's "You don't
+often get email from" banner, a "Get Outlook for Mac" footer).
+
+Two measured facts decide it:
+
+* **A forward can be nested.** Criss forwards Dirk's forward, and Dirk's
+  instruction sits BETWEEN the two header blocks. Cutting at the FIRST
+  boundary loses it; 8 of the 30 live notes are of that shape (`BTA /
+  Marketing/Sales`, `BCS / IT Security / 2883`, `FYI - all these charges
+  are CorpServ only / Perplexity has been cancelled.`).
+* **No boundary, no note.** A body with no forward header yields `""`.
+  Erring long is safe and erring short loses the instruction, but this one
+  bound earns its place: without it every vendor mailing us directly would
+  carry its whole body as a "note". It costs nothing live, because all 15
+  boundary-less bodies in the archive are test drills or body-only mail
+  whose text is already the rendered receipt.
+
+A block counts as a boundary only once a `Subject:`-class line has been
+seen, or when a `Begin forwarded message:`-class marker opened it, so a
+lone `From:` in a vendor's footer is not a forward. The note is capped at
+40 lines and 2000 characters; the longest live note is 211.
+
+Measured over the whole archive with the shipped function: **86 readable
+bodies, 71 carrying a forward boundary, 30 carrying a note.** All six known
+carriers come back verbatim, the three-line Zoho split included.
+
+### The body-only call, made explicitly
+
+A body-only mail already becomes a rendered receipt, so recording its note
+as well looks like double-recording. It is recorded anyway, and the reason
+is what the caution actually protects: a second copy of the INVOICE. The
+boundary rule cannot produce one, because it keeps only what sits ABOVE the
+forward and the invoice is always below it. What it keeps on those mails is
+the one to three lines of instruction, which otherwise sit inside a
+rendered image the reviewer has to open. **13 of the 30 live notes arrive
+on body-only mail**, so the alternative reading would drop nearly half of
+what the item is for.
+
+### The SPA
+
+`docs/lovable-operator-note-prompt.md`: the note renders on the expense row
+as a quoted block attributed to the sender, beside `submitted_by`, with the
+untrusted framing item 93's flag already uses. EN + PT-BR.
+
+Route-level in `tests/test_operator_note_155.py` (12): the five live
+boundary shapes including the nested forward and the flattened HTML
+blockquote, a quote with nothing above it, a body with no boundary, a lone
+footer `From:`, the size bound, the note on the row and in provenance, both
+files of a two-attachment mail, the absent key, an uploaded receipt, the
+rendered body-only mail, and the decides-nothing differential.

@@ -1277,7 +1277,35 @@ def _provenance_entry(person: dict, received_at: str, arch: Path | None) -> dict
     flags = _untrusted_flags(arch)
     if flags:
         entry["untrusted_instructions"] = flags
+    # Item 155: the sender's own prose above the forward - the filing
+    # instruction that exists nowhere in the attached PDF. Parallel and
+    # ABSENT when the mail carried none (56 of the 86 readable live
+    # bodies), never "". DISPLAY ONLY (rule_untrusted_inbound): it is
+    # shown to the reviewer and routes nothing.
+    #
+    # Recorded for a RENDERED body-only mail too, deliberately. The
+    # caution against double-recording guards against a second copy of
+    # the invoice, and the boundary rule cannot produce one: it keeps
+    # only what sits ABOVE the forward, and the invoice is always below.
+    # What it keeps on those mails is the 1-3 lines of instruction, which
+    # on a body-only mail are otherwise buried inside a rendered image the
+    # reviewer has to open - 13 of the 30 live notes arrive that way.
+    note = _archive_operator_note(arch)
+    if note:
+        entry["operator_note"] = note
     return entry
+
+
+def _archive_operator_note(arch: Path | None) -> str:
+    """The operator's note above the forward in this mail's body, or ""."""
+    if arch is None:
+        return ""
+    from .body_render import operator_note
+
+    try:
+        return operator_note(_archive_body_text(arch))
+    except Exception:  # noqa: BLE001 - a display note is never worth a crash
+        return ""
 
 
 def _archive_body_text(arch: Path) -> str:

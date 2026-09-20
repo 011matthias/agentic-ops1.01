@@ -7461,6 +7461,13 @@ def build_expense_view(
                 res["person"] and roster
                 and str(res["person"]).strip().casefold() not in roster
             )
+        # Item 155: the filing instruction the sender typed above the
+        # forward, lifted out of provenance to its own row key the way
+        # `untrusted_instructions` is, so the screen renders it beside the
+        # entity decision it speaks to. Absent when the mail carried none.
+        _note = (intake_provenance.get(r.document_id) or {}).get("operator_note")
+        if _note:
+            expenses[-1]["operator_note"] = str(_note)
         if r.document_id in grid_copies:
             # Item 94: the row stays, the money does not count. Absent on
             # every row that counts, which is every row an older backend

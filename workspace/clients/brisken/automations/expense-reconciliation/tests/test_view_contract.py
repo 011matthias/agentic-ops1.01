@@ -1883,3 +1883,22 @@ def test_set_aside_names_its_receipt_or_says_nothing(payloads):
             if "document_id" in entry:
                 assert isinstance(entry["document_id"], str), entry
                 assert entry["document_id"], "absent, never empty"
+
+
+# Note item T4: the note the sender typed above the forward (item 155).
+def test_an_operator_note_is_a_non_empty_string_or_is_absent(payloads):
+    """Parallel scalar, ABSENT rather than "" or null, and a string when
+    present, on the row and in the provenance it is lifted from.
+
+    A type guard, deliberately vacuous here: these fixtures build their
+    receipts by upload, and only a MAILED receipt can carry a note. The
+    non-vacuity is route-level in `tests/test_operator_note_155.py`, which
+    drives a real forward through the intake and reads the note back.
+    """
+    for view in payloads["expense_batch"]:
+        for expense in view.get("expenses") or []:
+            for holder in (expense, expense.get("submitted_by") or {}):
+                if "operator_note" not in holder:
+                    continue
+                assert isinstance(holder["operator_note"], str), holder
+                assert holder["operator_note"].strip(), "absent, never empty"
