@@ -5396,6 +5396,19 @@ NULL everywhere else, and NULL means "not recorded", never "no statement":
 every row written before the columns, and every row whose month cannot place
 the charge.
 
+**Coverage of the five `decisions` writers (backlog item 158, 2026-09-20).**
+The stamp was wired into all five and exercised in four. `set_tool_decision`
+was the exception, and nothing said so: the T3 fixture attaches a workbook
+whose charges pair with nothing, so its month ends with no `decided_by='tool'`
+row at all, and a T3 docstring asserted the opposite ("on a fresh month the
+matcher has already written a verdict for every charge"), which is what hid
+the gap. The route that reaches the tool's writer is the self-confirm rule
+(item 76), which runs inside `rematch_month` on statement attach and needs a
+clean exact pair whose category is already settled. That is now pinned in
+`tests/test_tool_decision_statement_id_158.py`, which asserts its own premise
+first (exactly one `decided_by='tool'` row, `decided_rule='exact_vendor_75'`)
+so the stamp assertion cannot pass over an empty table.
+
 ### The SPA
 
 Nothing renders any of this yet, so the SPA needs no change. The fields are
