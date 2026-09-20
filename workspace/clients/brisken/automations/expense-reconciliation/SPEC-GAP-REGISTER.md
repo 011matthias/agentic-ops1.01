@@ -221,12 +221,16 @@ here.)
 
 ### Real gaps, prioritized (inside working-tool scope)
 
-1. **Reconcile the spec to the build** (small, documentation). Add a
-   working-tool section to the spec (or a v3) stating the single-tenant
-   descope and the slice-based order, closing ANNEALING E4. This is the
-   most direct answer to note #4's "I don't see the doc reflected", and
-   half of that note is the doc being stale. **Do this first** (nothing
-   else needs building for it, and it is what note #4 literally asks).
+1. ~~**Reconcile the spec to the build**~~ **CLOSED 2026-09-20 as
+   superseded** (backlog item 120). When this was written the fix was a
+   small edit: a working-tool section stating the single-tenant descope.
+   Three months and several hundred commits later, reconciling a 66 KB
+   multi-tenant SaaS spec to a single-tenant tool is a rewrite, and the
+   rewrite would re-rot at the rate the build moves. The spec now carries
+   a header saying what it is and what to read instead; the maintained
+   authorities are this register, `BLUEPRINT.md`, `ANNEALING.md`,
+   `README.md`, `docs/operating.md` and the status file. Reasoning in
+   ANNEALING E4.
 2. **Reframe the entry workflow to expenses-first** (note #1, medium,
    product). Make expenses/receipts the accumulating primary surface and
    the statement load the month-end reconcile step, so the operator is not
@@ -252,8 +256,8 @@ here.)
 9. **Retention config + GDPR deletion (§9.1, §25.4)** (low urgency
    internal, prerequisite for any commercialization).
 
-Items 1, 2, 3, 5, 6 need no external gate and are the fastest path to
-making Dirk's four notes visibly answered. Items 4, 7, 8 wait on an owner
+Items 2, 3, 5, 6 need no external gate and are the fastest path to
+making Dirk's four notes visibly answered (item 1 is closed, above). Items 4, 7, 8 wait on an owner
 action (Zoho re-consent, send-Criss-the-link).
 
 ### Descoped, not gaps (do not build unless commercializing)
