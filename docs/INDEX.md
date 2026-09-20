@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-20 | Brisken Recon Backlog Truth Pass | client-dev | [Mini-Checkpoint-2](docs/2026-09-20%20-%20Brisken%20Recon%20Backlog%20Truth%20Pass/Mini-Checkpoint-2.md) |
 | 2026-09-20 | Recon Prompt Re-Audit And Down-Runbook | client-dev | [Mini-Checkpoint-1](docs/2026-09-20%20-%20Recon%20Prompt%20Re-Audit%20And%20Down-Runbook/Mini-Checkpoint-1.md) |
 | 2026-09-20 | Statement Fill-Colour Classifier Findings | client-dev | [Mini-Checkpoint-1](docs/2026-09-20%20-%20Statement%20Fill-Colour%20Classifier%20Findings/Mini-Checkpoint-1.md) |
 | 2026-09-20 | Expense-Recon Item 155 Close-Out | client-dev | [→](docs/2026-09-20%20-%20Expense-Recon%20Item%20155%20Close-Out/Checkpoint.md) |
