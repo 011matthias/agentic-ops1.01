@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-20 | Brisken Recon Ops Tail Follow-Ups | client-dev | [Mini-Checkpoint-2](docs/2026-09-20%20-%20Brisken%20Recon%20Ops%20Tail%20Follow-Ups/Mini-Checkpoint-2.md) |
 | 2026-09-20 | Expense-Recon Memory M2 M3 | client-dev | [Mini-Checkpoint-2](docs/2026-09-20%20-%20Expense-Recon%20Memory%20M2%20M3/Mini-Checkpoint-2.md) |
 | 2026-09-19 | Brisken Recon Traceability Round Close | client-dev | [→](docs/2026-09-19%20-%20Brisken%20Recon%20Traceability%20Round%20Close/Checkpoint.md) |
 | 2026-09-18 | Brisken Recon Traceability T3 T1 T4 | client-dev | [Mini-Checkpoint-2](docs/2026-09-18%20-%20Brisken%20Recon%20Traceability%20T3%20T1%20T4/Mini-Checkpoint-2.md) |
