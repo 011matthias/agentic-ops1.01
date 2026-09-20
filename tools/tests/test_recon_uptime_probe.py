@@ -473,3 +473,20 @@ def test_notify_failing_gh_is_exit_2(tmp_path, seams):
     assert p.returncode == 2
     assert "gh issue list failed (3)" in p.stderr
     assert seams.mails() == []
+
+
+def test_notify_mail_sender_defaults_and_is_overridable(tmp_path, seams):
+    """The from address is production config, not a constant.
+
+    Resend refuses every recipient but the account owner while the sender is the
+    shared onboarding address, so reaching a Brisken mailbox means sending from a
+    verified domain. Proven live 2026-09-20: 403 validation_error.
+    """
+    run_notify(seams.env, _result_file(tmp_path, down=True))
+    assert seams.mails()[0]["body"]["from"] == "onboarding@resend.dev"
+
+    env = {**seams.env, "RECON_UPTIME_RESEND_FROM": "no-reply@unpauseai.com"}
+    p = run_notify(env, _result_file(tmp_path, down=True))
+    assert p.returncode == 0, p.stderr
+    sent = [m["body"]["from"] for m in seams.mails()]
+    assert sent[-1] == "no-reply@unpauseai.com", sent
