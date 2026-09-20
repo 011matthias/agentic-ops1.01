@@ -454,11 +454,17 @@ def test_a_decision_row_written_before_the_column_gains_the_id_on_the_next_verdi
     did not exist when they were written. The next verdict on that charge
     fills it in.
 
-    This is also the only case that exercises `set_decision`'s own stamp. On
-    a fresh month the matcher's `set_tool_decision` has already written a
-    verdict for every charge and stamped it, so a reviewer's click lands on a
-    row that already carries the id; blanking the column first is what makes
-    the reviewer's write the one under test.
+    This is also the only case that exercises `set_decision`'s own stamp.
+    Blanking the column first is what makes the reviewer's write the one
+    under test: without it the row already carries the id from the attach.
+
+    Corrected 2026-09-20 (backlog item 157): this said the matcher's
+    `set_tool_decision` had already written a verdict for every charge on a
+    fresh month. It has not. THIS fixture's charges pair with nothing, so the
+    month ends with no `decided_by='tool'` row at all and `set_tool_decision`
+    was the one `decisions` writer no fixture reached. The route that does
+    reach it is the self-confirm rule, and it is covered now in
+    `tests/test_tool_decision_statement_id_157.py`.
     """
     batch_id = _create_batch(client)
     payload = _xlsx_bytes(ROWS)
