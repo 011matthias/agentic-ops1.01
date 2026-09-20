@@ -5411,7 +5411,7 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 
 **Reviewer corrections:** (combined) Live USD unassigned is 34,677.52 (not 34,622); totals also reports n_batches 6 scanned (5 carry unassigned rows) and n_undated 1. "Dirk must define the centers" is already possible from the SPA: PROMPT-STATUS records the settings chunk saving cost_centers per section since the 2026-09-15 bundle, so the data-entry path is open, not blocked. The design did not say "remembered per merchant" loosely; it specified a learned merchant->cost-center table (D2 step 3), which was silently replaced by the registry `cost_center` carrier. The strongest fact is missing from the finding: sign-off learning erases merchant `cost_center` entries (service.py:4025-4033), which makes the "fix F10 first" ordering 
 
-**CODE HALF SHIPPED 2026-09-20** (with note item M4, backlog item 157). `registry_cost_center_upserts_from_expense_run` (web/service.py,
+**CODE HALF SHIPPED 2026-09-20** (with note item M4, backlog item 157; PR #1131, merge 9ea2b30f, Fly v192). `registry_cost_center_upserts_from_expense_run` (web/service.py,
 beside the M2 card learner) folds the month's cost-centre picks into the
 merchant entry at sign-off, which is item 47's D2 step 3, the half that was
 reported BUILT and was not. Rules, each matching an existing pass rather than
@@ -6853,7 +6853,7 @@ Services org is `822741658` (nine). Nothing in this item depended on it, and the
 COA provisioning that does read it is out of this item's scope, so it is
 recorded rather than changed.
 
-### 157. What the bookkeeper knows about a merchant has nowhere to live (note item M4; owner 2026-09-20) (SHIPPED 2026-09-20; Shipped row 104, PR and Fly release recorded in the follow-up)
+### 157. What the bookkeeper knows about a merchant has nowhere to live (note item M4; owner 2026-09-20) (SHIPPED 2026-09-20, PR #1131, merge 9ea2b30f, Fly v192; Shipped row 104)
 
 **Owner (note item M4).** A profile of unstructured knowledge beside the
 registry: what the business buys from this merchant, on which card and for
@@ -6930,6 +6930,8 @@ green: the profile into `categorize_receipts` (2 red), the memory-page field
 (1 red), the cost-centre fold's wiring (3 red). Also fixed an M2 merge
 artifact in `merchant_registry.py`: a docstring paragraph and the
 `MerchantMatch.card_key` field were each declared twice.
+
+**Live verification (2026-09-20, Fly v192).** `GET /api/memory` now carries `profile` on all 97 `by_vendor` rows, every one `""` because no merchant has prose yet; the 28 registry merchants are unchanged and `settings.cost_centers` is still `{}`. July's 54 rows were fingerprinted (category, source, account, cost centre) before the deploy and re-read after: byte-identical, so no live row moved. Cold scripted Playwright drive (no prior session, sign-in from the login page) of `/memory` and `/expenses/50622baec444`: both render, 54 tbody rows on July, no fallback string, and the only non-GET request in the whole drive was `POST /api/login`. The SPA has no renderer for `profile` yet (its prompt is unpasted), so the drive proves the changed routes still render without regression and the API read proves the field; the renderer itself is NOT verified.
 
 **Still open (owner).** SPA half `docs/lovable-merchant-profile-prompt.md`, not
 pasted. The Settings editor replaces the whole merchant map on save, so it must
