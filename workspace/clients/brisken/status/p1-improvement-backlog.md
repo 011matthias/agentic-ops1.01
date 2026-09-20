@@ -6907,13 +6907,31 @@ the one whose receipts need the background most.
   keeps its prose rather than dropping the beginning to make room.
 
 **One thing built and deliberately not wired: no learner writes a machine
-line yet.** Every observation the tool computes about a merchant today (its
-cards, its category, its cost centre) already has a structured field that
-states it, so an automatic appender would write the same fact a second time as
-prose on every sign-off and degrade the field rather than fill it. The
-convention and its guards are built and pinned so the first learner with
-something prose-shaped to say can use them; that is the condition that reopens
-this.
+line yet.** Owner agreed 2026-09-20. Enumerated against `origin/main` rather
+than assumed: a registry entry can store `card_key`, `card_key_learned`,
+`cards_seen`, `cost_center`, `multi_category`, `profile`, `receipt_portal`,
+and every per-merchant VALUE the sign-off learner computes (category, account,
+aliases, card, cost centre) lands in one of them. An automatic appender would
+restate a field as prose on every sign-off and degrade the profile rather than
+fill it.
+
+What genuinely has no per-merchant home is the other three counters, and all
+three are EXPLANATIONS rather than values: `skipped_conflict` (this merchant's
+category picks disagreed this month), `cost_centers_skipped_conflict` (its
+cost-centre picks disagreed) and `card_keys_dropped` (a second card appeared,
+so the tool stopped naming one). They exist only as run-level totals, so they
+name no merchant and are discarded once the publish reply is read. "Criss filed
+this vendor two different ways in July" is exactly the prose a new bookkeeper
+wants and exactly what no field can hold.
+
+**The condition that reopens this is a measurement, not a hunch: the first
+NON-ZERO value of any of those three counters on a live sign-off.** All three
+read 0 across every live month today (no cost centre is defined, no registry
+merchant carries a card, and no category conflict has been recorded), so a
+learner built now would be written against zero real instances and testable
+only on fixtures. When one fires, the merchant it fired for is the first real
+machine line, and `append_machine_note` is already built, capped, deduped and
+pinned for it.
 
 **Item 118's code half closed in the same PR.** See the item 118 entry:
 `registry_cost_center_upserts_from_expense_run` folds the month's explicit
