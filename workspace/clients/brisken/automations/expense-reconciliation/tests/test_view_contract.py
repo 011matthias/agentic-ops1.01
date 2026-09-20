@@ -154,6 +154,9 @@ EXPENSE_BATCH_CONTRACT = {
     "expenses[].boxes[]": "string",
     # Item 106: per file, why it created no expense ({file, why, reason?}).
     "expense_ingest.not_added[]": "object",
+    # Item 160: the receipt lines with no category yet -- the exact set
+    # the `partial_uncategorized` review reason is about.
+    "expenses[].uncategorized_lines[]": "object",
 }
 
 RUN_CONTRACT = {
@@ -242,6 +245,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "card_sections[].digits[]",
     "card_sections[].statements[]",
     "coverage[].statement_ids[]",
+    "expenses[].uncategorized_lines[]",
 }
 
 RUN_MUST_COVER = {
@@ -1907,3 +1911,37 @@ def test_an_operator_note_is_a_non_empty_string_or_is_absent(payloads):
                     continue
                 assert isinstance(holder["operator_note"], str), holder
                 assert holder["operator_note"].strip(), "absent, never empty"
+
+
+# Item 160: the lines a row's category verdict is actually about.
+def test_uncategorized_lines_are_exactly_the_lines_without_a_category(payloads):
+    """Parallel list, ABSENT rather than [] or null, and when present it is
+    exactly the set of line items carrying no category.
+
+    The equality is the point, not the types: the field exists so the SPA can
+    say WHICH line the `partial_uncategorized` sentence is about, and a row
+    naming a different line than the verdict counts is worse than the generic
+    sentence it replaces. Both directions are asserted, so a row that holds an
+    uncategorized line and carries no field fails here too.
+    """
+    seen = 0
+    for view in payloads["expense_batch"]:
+        for expense in view.get("expenses") or []:
+            missing = {
+                li["index"] for li in expense.get("line_items") or []
+                if li.get("category") is None
+            }
+            if "uncategorized_lines" not in expense:
+                assert not missing, expense
+                continue
+            entries = expense["uncategorized_lines"]
+            assert isinstance(entries, list) and entries, "absent, never empty"
+            for entry in entries:
+                assert isinstance(entry["index"], int), entry
+                assert isinstance(entry["description"], str), entry
+                assert isinstance(entry["line_total"], str), entry
+            assert {e["index"] for e in entries} == missing, expense
+            seen += 1
+    # Not a vacuous pass: these fixtures really do build partly-uncategorized
+    # rows, which is the state the owner's July row is in.
+    assert seen, "no fixture row carried an uncategorized line"
