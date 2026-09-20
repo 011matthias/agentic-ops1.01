@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-20 | Expense-Recon Tool-Verdict Stamp And Three Notes | client-dev | [Mini-Checkpoint-2](docs/2026-09-20%20-%20Expense-Recon%20Tool-Verdict%20Stamp%20And%20Three%20Notes/Mini-Checkpoint-2.md) |
 | 2026-09-20 | Expense-Recon Memory M4 | client-dev | [Mini-Checkpoint-1](docs/2026-09-20%20-%20Expense-Recon%20Memory%20M4/Mini-Checkpoint-1.md) |
 | 2026-09-20 | Expense-Recon Operator Note Above The Forward | client-dev | [Mini-Checkpoint-1](docs/2026-09-20%20-%20Expense-Recon%20Operator%20Note%20Above%20The%20Forward/Mini-Checkpoint-1.md) |
 | 2026-09-20 | Brisken Recon Ops Tail Follow-Ups | client-dev | [Mini-Checkpoint-2](docs/2026-09-20%20-%20Brisken%20Recon%20Ops%20Tail%20Follow-Ups/Mini-Checkpoint-2.md) |
