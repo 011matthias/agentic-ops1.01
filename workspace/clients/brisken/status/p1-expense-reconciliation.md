@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-09-18
+updated: 2026-09-20
 ---
 
 # Brisken / Expense Reconciliation (p1)
