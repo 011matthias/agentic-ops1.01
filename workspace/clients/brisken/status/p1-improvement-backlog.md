@@ -5510,7 +5510,7 @@ signed off with a pick on it.
 
 **Shipped 2026-09-17 (pending PR).** The floor is read from the volume instead of a constant: 5% of the disk, never below 200 MB, never above half of it. On the live 1 GB volume that is 200 MB where it was 500 MiB, so usable space goes from about 500 MB to about 800 MB; on a 5 GB volume the same code asks for 256 MB and leaves 4.75 GB. `/healthz` carries a `disk` block (total, free, used, free percent, the floor, and `intake_refusing`), so a monitor sees a filling disk rather than learning about it from bounced receipts; an unreadable volume answers `available: false` and still never refuses mail. An unrecognised sender is held to 5 MB per message (552, permanent) and all strangers together to 50 MB a day (452, so their own mail system retries tomorrow); the daily budget is global rather than per-sender because From is forgeable, and it re-seeds from the acceptance log after a restart (rows now record `n_bytes` and `known_sender`). Our own people (inside @brisken.com or listed in `intake.known_senders`) keep the full 25 MB and are exempt from the 40-file per-sender cap a month-end backfill exceeds; the 200-file global cap still binds everyone, because that is the ceiling on a day's vision spend. The dismissed-archive purge is built and ships INERT: `intake.dismissed_purge_days` defaults to 0 (never) and the boot sweep does nothing until it is set. Live numbers read while building (2026-09-17, `flyctl ssh`): /data is 997,076 KB with 97,876 KB used and 831,208 KB free, 11% used, on the 1 GB `recon_data_v2` volume. **Owner actions:** (a) `flyctl volumes extend` to 5 GB, still worth doing and untouched here (the code is tested on both sizes); (b) one settings write to turn the purge on, if deleting dismissed junk after N days is wanted - deleting Brisken's mail is not an agent's call.
 
-### 123. Nobody is told when the app is down; the last outage was surfaced by the owner, not by a monitor (2026-09-17 audit draft #121, unranked; operations) (SHIPPED 2026-09-18, PR #1098; alert path fixed PR #1106; the cron DOES fire; the owner ACCEPTED its ~5h worst-case blind window 2026-09-20 and the alert path fired for real the same day; open: getting the mail to a Brisken mailbox, blocked at the sender; see Shipped rows below)
+### 123. Nobody is told when the app is down; the last outage was surfaced by the owner, not by a monitor (2026-09-17 audit draft #121, unranked; operations) (SHIPPED 2026-09-18, PR #1098; alert path fixed PR #1106; the cron DOES fire; the owner ACCEPTED its ~5h worst-case blind window 2026-09-20 and the alert path fired for real the same day; recipient SETTLED 2026-09-20, alerts go to the Gmail and that is the owner's decision; item closed; see Shipped rows below)
 
 **Audit rank 30 of 40; severity medium as merged; verification: one reviewer, plus health check read by hand.** There is no outside check on the app or its mailbox and no alert to anyone at Brisken; hosting notices go to the developer's personal account; logs die with the machine. The 2026-09-10 outage lasted about 50 minutes and was noticed when Criss's upload failed. During close week an hour down is an hour she cannot work, and a mailbox down means receipts bounce.
 
@@ -5569,6 +5569,28 @@ unpauseai.com would serve was then tested in one run instead of a code change. I
 does not: `The unpauseai.com domain is not verified`. Both variables are restored
 to the working default, so alerts reach the Gmail today and nothing is left half
 configured.
+
+**2026-09-20, the recipient question is SETTLED and this item is closed.** Told
+that Resend refuses every recipient but the account owner, the owner's answer was
+that the Resend account is their own and the Gmail is theirs to read: "then thats
+fine send it to gmail". So `BRIEFING_TO` stays `matneumann07@gmail.com`, nothing
+is verified, no secret is added, and the three options below are the record of
+what was weighed rather than work waiting to be done. **Do not reopen this.** A
+future session reading "the alert cannot reach a Brisken mailbox" should read it
+as a decision, not a defect.
+
+Three redirect attempts were made before the decision, and each was refused by
+Resend with the same message: `matthias.silva@brisken.com` (the first ask),
+`no-reply@unpauseai.com` as the sender (unverified domain), and
+`neumath4@icloud.com` (the second ask). The knob PR #1128 added
+(`RECON_UPTIME_RESEND_FROM`) stays, unset and harmless, because it is what made
+the unpauseai.com hypothesis testable in one run instead of a code change; if a
+domain is ever verified, setting one variable is the whole of the work.
+
+State left behind: alerts deliver to the Gmail (`RESEND_OK` on the last recovery
+run), no `recon-uptime` issue open, both repo variables at their working values.
+Every drill issue opened during the testing (#1125, #1130, #1144) was commented
+as a drill and closed by its recovery run.
 
 What remains is a credential question rather than an engineering one, which is why
 nothing further was built:
