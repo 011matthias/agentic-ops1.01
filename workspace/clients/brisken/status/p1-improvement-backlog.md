@@ -7000,6 +7000,64 @@ whoever takes it, both checked rather than assumed:
   no trace, so the API logs cannot settle it and a cold browser drive of the
   "Add more receipts" control on a live month is the instrument that can.
 
+### 160. A row with a settled category still says a category is missing (feedback note #71, owner 2026-09-20)
+
+**The note, verbatim** (read live from `/feedback.jsonl`): *"this should not be
+mentioned here i think..."*. Note #71, ts `2026-09-20T15:12:07+00:00`, role
+operator, operator `matthias`, page `/expenses/50622baec444` (July 2026), no
+section, 93% down the page.
+
+**What it points at, resolved from the selector rather than guessed.** The
+selector names the row and the column:
+`#exp-row-0006__G173514057_5b606b64167e43cbb3a834880b5b0941.pdf >
+td:nth-of-type(6) > div > div:nth-of-type(1) > p`. That document is July's
+**Microsoft Corporation, 718.20**, `transaction_id` `49ace8baae6b6723`,
+`source_row` 27 of `July2026.xlsx`. Read live the same minute, the row carries:
+
+* `posting_category`: `Software & Subscriptions` / `Software & Subscriptions`,
+  source `llm; review` - a category IS settled on the row;
+* `review`: `{"state": "pick", "reason": "One or more receipt lines still need
+  a category before this can post.", "reason_code": "partial_uncategorized"}`.
+
+Column 6's first paragraph is where that reason renders, so the sentence the
+owner says should not be mentioned is the `partial_uncategorized` reason, on a
+row that already shows a category.
+
+**The question to settle before building.** The row-level category and the
+LINE-level categories are different things, and the reason is about the lines.
+So either the message is correct and reads wrong beside a filled category
+field, or the line state is stale on this row. Check which on this exact row
+before changing any copy: if the lines really are uncategorised, this is a
+wording and placement question; if they are not, it is a defect in how
+`partial_uncategorized` is decided. Do not rewrite the sentence until that is
+known, because the two answers call for opposite fixes.
+
+### 161. Two numbers on one page look like they contradict each other (feedback note #72, owner 2026-09-20)
+
+**The note, verbatim**: *"what is this"*. Note #72, ts
+`2026-09-20T15:15:00+00:00`, role operator, operator `matthias`, page
+`/runs/0603bb0e6f38` (**April 2026**), section **"Receipts to chase (65)"**,
+12% down the page.
+
+**Read live.** April holds 94 charge rows and 34 receipts.
+`summary.n_charges_need_receipt` is **65**, which is the section's number, and
+`summary.receipt_match_rate` is **85.3** (`n_receipts_matched` 29 of
+`n_receipts` 34). `n_receipts_need_charge` is 5; `n_booked_no_receipt` and
+`n_charges_receipt_requested` are both 0.
+
+**The likely reading.** The two headline figures on that page are computed over
+different denominators: the match rate is receipts matched over receipts, while
+"Receipts to chase" counts CHARGES with no receipt. A page that says 85.3%
+matched directly above a list of 65 things to chase reads as a contradiction
+unless the reader already knows which population each number describes. "What
+is this" is the question that produces.
+
+**Not yet confirmed with the owner**, and worth asking rather than assuming:
+they may be asking what the SECTION is for, not why the numbers disagree. Both
+readings point the same way though, which is that the label does not say what
+it lists. Whoever takes it should put the question to the owner in one line and
+drive the April page cold to see the two figures as they sit together.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
