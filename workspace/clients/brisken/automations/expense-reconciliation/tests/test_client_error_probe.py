@@ -74,7 +74,9 @@ def test_healthz_keeps_status_and_gains_the_server_block(client):
     body = resp.json()
     assert body["status"] == "ok"
     server = body["server"]
-    assert set(server) == {"machine", "region", "app", "started_at", "uptime_s"}
+    assert set(server) == {
+        "machine", "region", "app", "commit", "image", "started_at", "uptime_s",
+    }
     assert server["uptime_s"] >= 0
     assert server["started_at"]
 
@@ -84,6 +86,90 @@ def test_the_machine_identity_is_absent_not_invented_off_fly(client, monkeypatch
     row must not read like a production one (B4)."""
     server = client.get("/healthz").json()["server"]
     assert server["machine"] == "" and server["region"] == ""
+
+
+# --- build identity: which commit is this (backlog item 120) -----------
+#
+# These go through /healthz rather than through machine.py, because the
+# thing worth pinning is the WIRING. A green machine.py proves a helper
+# works; it does not prove the health route carries what the helper
+# returns, and the route is the only surface an emergency actually reads.
+
+
+def test_healthz_reports_the_commit_the_image_was_built_from(client, monkeypatch):
+    """The item's headline ask: the running app says which commit it is.
+
+    The value is read from the environment the image baked it into, so
+    this asserts the whole path the deploy uses, not a constant.
+    """
+    monkeypatch.setenv("EXPENSE_RECON_COMMIT", "0123456789abcdef0123456789abcdef01234567")
+    server = client.get("/healthz").json()["server"]
+    assert server["commit"] == "0123456789abcdef0123456789abcdef01234567"
+
+
+def test_healthz_reports_the_image_fly_actually_booted(client, monkeypatch):
+    """`image` is the join back to a release: it is the same string
+    `flyctl releases --image` prints, so a running process can be tied to
+    the release that produced it without correlating timestamps."""
+    ref = "registry.fly.io/brisken-expense-recon:deployment-01TESTTESTTESTTESTTEST"
+    monkeypatch.setenv("FLY_IMAGE_REF", ref)
+    server = client.get("/healthz").json()["server"]
+    assert server["image"] == ref
+
+
+def test_an_unstamped_build_says_nothing_rather_than_guessing(client, monkeypatch):
+    """The one failure this design still allows is absence, and absence has
+    to read as absence.
+
+    A deploy that omits --build-arg bakes an empty string. Reporting ""
+    tells the reader "I cannot say"; reporting a git read from the
+    container, or a plausible-looking default, would tell them something
+    false in the one place they are trusting to be literal. Wrong identity
+    is worse than no identity, so this pins the blank.
+    """
+    monkeypatch.delenv("EXPENSE_RECON_COMMIT", raising=False)
+    monkeypatch.delenv("FLY_IMAGE_REF", raising=False)
+    server = client.get("/healthz").json()["server"]
+    assert server["commit"] == ""
+    assert server["image"] == ""
+
+
+def test_build_identity_does_not_disturb_the_uptime_probe_contract(client, monkeypatch):
+    """House rule 1, parallel fields only. tools/recon_uptime_probe.py reads
+    `status`, `disk.available`, `disk.intake_refusing` and `disk.free_pct`
+    every ten minutes and opens an issue when they are wrong; the SPA reads
+    this endpoint too. Adding build identity must leave all of that with
+    the same names, types and meanings."""
+    monkeypatch.setenv("EXPENSE_RECON_COMMIT", "deadbeef")
+    body = client.get("/healthz").json()
+    assert body["status"] == "ok"
+    disk = body["disk"]
+    assert isinstance(disk["available"], bool)
+    assert isinstance(disk["intake_refusing"], bool)
+    assert isinstance(disk["free_pct"], (int, float))
+
+
+def test_the_failure_list_names_the_build_reading_it(client, monkeypatch):
+    """One source, so the two surfaces can never disagree.
+
+    Both /healthz and this list stamp machine.snapshot(), so the build
+    identity an investigator reads beside the failures is the same string
+    the health probe reports, with no second stamp to keep in step.
+
+    The limit, stated because a reader will otherwise assume otherwise:
+    `server` here is the process reading the rows, NOT the process that
+    served each failure. The stored row carries `machine` and
+    `process_started_at` but no commit, because adding one is a schema
+    migration on the live database and backlog item 120 asks only for the
+    health endpoint. So a row can be tied to a build only while the
+    serving process is still up; once it restarts, `process_started_at`
+    plus Fly's release list is the route, not this field.
+    """
+    monkeypatch.setenv("EXPENSE_RECON_COMMIT", "cafebabe0000111122223333444455556666aaaa")
+    _report(client, kind="fetch-failed", seconds_ago=5)
+    out = _rows(client)
+    assert out["client_errors"], "the report should have landed"
+    assert out["server"]["commit"] == "cafebabe0000111122223333444455556666aaaa"
 
 
 # --- the report lands, stamped with this process ------------------------
