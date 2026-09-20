@@ -34,8 +34,11 @@ With --json the table goes to stderr and the JSON result to stdout, so
 is OK or WARN, 1 when any check is DOWN, 2 when the probe itself broke.
 
 `notify --result probe.json [--dry-run]`: applies the alert policy using
-`gh` (GH_TOKEN) and Resend (RESEND_API_KEY, recipient BRIEFING_TO, the
-morning-briefing conventions):
+`gh` (GH_TOKEN) and Resend (RESEND_API_KEY, recipient BRIEFING_TO, sender
+RECON_UPTIME_RESEND_FROM defaulting to onboarding@resend.dev, the
+morning-briefing conventions). Resend delivers to the account owner only
+while the sender is the shared onboarding address; a sender on a verified
+domain reaches anyone, which is what a Brisken recipient needs:
 
   DOWN, no open `recon-uptime` issue  -> create the label if absent, open
                                           ONE issue with the check table,
@@ -89,7 +92,7 @@ DEFAULT_REPO = "011matthias/agentic-ops1.01"
 PROBE_UA = "Mozilla/5.0 (compatible; agentic-ops-recon-uptime/1.0)"
 RESEND_UA = "agentic-ops-recon-uptime/1.0"
 RESEND_URL = "https://api.resend.com/emails"
-RESEND_FROM = "onboarding@resend.dev"
+RESEND_FROM = "onboarding@resend.dev"  # default; RECON_UPTIME_RESEND_FROM overrides
 SUBJECT_HOST = "expenses.brisken.com"
 
 
@@ -377,7 +380,8 @@ def send_mail(subject: str, text: str) -> bool | None:
         print("mail: BRIEFING_TO unset, skipping (the issue is the floor)")
         return None
     url = os.environ.get("RECON_UPTIME_RESEND_URL") or RESEND_URL
-    payload = json.dumps({"from": RESEND_FROM, "to": to,
+    frm = os.environ.get("RECON_UPTIME_RESEND_FROM") or RESEND_FROM
+    payload = json.dumps({"from": frm, "to": to,
                           "subject": subject, "text": text}).encode()
     req = urllib.request.Request(
         url, data=payload,
@@ -413,7 +417,9 @@ def cmd_notify(a: argparse.Namespace) -> int:
         print(f"  probe: {result.get('summary', '?')} at {stamp}")
         if down:
             print(f"  if no open '{LABEL}' issue in {repo}: create the label if absent, "
-                  f"open issue {title!r}, send one mail to {to}")
+                  f"open issue {title!r}, send one mail from "
+                  f"{os.environ.get('RECON_UPTIME_RESEND_FROM') or RESEND_FROM} "
+                  f"to {to}")
             print("  if an open issue exists: append one comment with the table, no mail")
         else:
             print(f"  if an open '{LABEL}' issue exists in {repo}: comment "

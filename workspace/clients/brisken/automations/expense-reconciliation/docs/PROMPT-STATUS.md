@@ -355,6 +355,7 @@ promoted to the prompt below. Nothing in the Applied table is waiting on a drive
 | Prompt | Decisive field names | Gate |
 |---|---|---|
 | `lovable-no-card-evidence-prompt.md` (item X1, 2026-09-18) | `card_evidence`, `review_code`, `wb.noCardRival`, `wb.noCardOnReceipt`, `wb.chargeCardFromAccount` | Backend live with the X1 deploy; the flagged line has no live case (0 pairs flagged on July and August), the "no card on the receipt" line has 19 on July |
+| `lovable-merchant-profile-prompt.md` (note item M4) | `merchants.profile`, `by_vendor[].profile`, `merchants.profile.label`, `memory.profile.heading` | Written 2026-09-20, not pasted. Backend ships with the M4 PR; no live merchant carries a profile until somebody writes one in Settings, so until then the Memory page renders no block and nothing on screen changes. Its §2 whole-map-replace check is the one that matters: a Merchants save that omits `profile` erases the prose on every merchant, and unlike `cards_seen` no learner can rebuild it. §1 also asks the editor to preserve `[tool YYYY-MM-DD]` lines verbatim, which is a contract for a learner that does not exist yet |
 
 The previous clean slate (2026-09-07) lasted one day; the backlog's habit
 holds. Verify by field names, not display copy.

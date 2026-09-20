@@ -4936,6 +4936,108 @@ def registry_card_upserts_from_expense_run(
     }
 
 
+def registry_cost_center_upserts_from_expense_run(
+    merchants: dict,
+    *,
+    effective_receipts: "list[Receipt]",
+    field_overrides: dict[str, dict[str, str]],
+    cost_centers: dict | None,
+) -> tuple[dict, dict]:
+    """Fold the month's explicit cost-center picks into a COPY of the
+    merchants registry (backlog item 118, the missing half of item 47's D2
+    step 3). Returns `(new_merchants, summary)`.
+
+    Item 47 designed a learned merchant -> cost centre and the build shipped
+    only the carrier: `merchants[].cost_center` resolved a row, and nothing
+    ever wrote it, so every vendor had to be typed by hand in Settings once
+    and for all. A reviewer picking a centre on a row is the same kind of
+    explicit human decision a category reclassification is, and it teaches
+    the same way:
+
+    * only an EXPLICIT per-row override teaches; a centre the row merely
+      inherited from the trip, the card or the merchant entry is the tool's
+      own answer coming back and teaches nothing;
+    * a merchant whose picks disagree across the month is SKIPPED, exactly as
+      the category pass skips one (a vendor split across two projects is a
+      fact about the vendor, not a conflict to resolve by guessing);
+    * only a name Dirk has already DEFINED and left active is written. Item
+      47 D1 is explicit that the tool never invents a cost centre and never
+      learns a new NAME, and the field is free text on the row, so this is
+      the guard that keeps a typo out of the registry. An empty or absent
+      cost-centre registry therefore learns nothing at all, which is the same
+      empty-registry contract the resolver and the review state already keep.
+
+    Pure: it never touches the store, so the caller decides whether to
+    persist. Every entry is carried WHOLE (item 116's rule): only a merchant
+    a pick actually changed is rewritten, and only its `cost_center` moves.
+    """
+    from ..merchant_registry import MerchantRegistry
+
+    base: dict = merchants or {}
+    empty = {"cost_centers_set": 0, "cost_centers_skipped_conflict": 0}
+    defined = {
+        str(name).strip(): entry
+        for name, entry in (cost_centers or {}).items()
+        if str(name or "").strip() and isinstance(entry, dict)
+    }
+    active = {
+        name for name, entry in defined.items()
+        if entry.get("active", True)
+    }
+    if not active:
+        return base, empty
+    registry = MerchantRegistry.from_settings({"merchants": base})
+    if not registry:
+        return base, empty
+
+    # merchant -> the picked centre, or None once two picks disagree.
+    picked: dict[str, str | None] = {}
+    by_id = {r.document_id: r for r in effective_receipts}
+    for document_id, fields in (field_overrides or {}).items():
+        name = str((fields or {}).get("cost_center") or "").strip()
+        if not name or name not in active:
+            continue
+        receipt = by_id.get(document_id)
+        if receipt is None:
+            continue
+        match = registry.resolve(receipt.vendor_clean, receipt.detected_vendor)
+        if match is None:
+            continue
+        canonical = match.canonical_name
+        if canonical not in picked:
+            picked[canonical] = name
+        elif picked[canonical] != name:
+            picked[canonical] = None
+    if not picked:
+        return base, empty
+
+    new_merchants = copy.deepcopy(base)
+    n_set = n_conflict = 0
+    for canonical, name in sorted(picked.items()):
+        if name is None:
+            n_conflict += 1
+            continue
+        stored_entry = new_merchants.get(canonical)
+        if not isinstance(stored_entry, dict):
+            continue
+        if str(stored_entry.get("cost_center") or "").strip() == name:
+            continue
+        entry = copy.deepcopy(stored_entry)
+        entry["cost_center"] = name
+        try:
+            cleaned = normalize_merchants_setting({canonical: entry}).get(canonical)
+        except ValueError:
+            continue
+        if cleaned is None:
+            continue
+        new_merchants[canonical] = {**entry, **cleaned}
+        n_set += 1
+    return new_merchants, {
+        "cost_centers_set": n_set,
+        "cost_centers_skipped_conflict": n_conflict,
+    }
+
+
 def commit_to_memory(
     run: RunRow,
     decisions: dict[str, Decision],
@@ -5047,6 +5149,17 @@ def commit_to_memory(
                 ),
             )
             reg_summary.update(card_summary)
+            # Item 118: and the month's explicit cost-center picks, so the
+            # centre Dirk defines is typed once per vendor instead of once
+            # per receipt. Only a name he has defined and left active is
+            # learned, so an empty cost-center registry teaches nothing.
+            new_merchants, cc_summary = registry_cost_center_upserts_from_expense_run(
+                new_merchants,
+                effective_receipts=effective,
+                field_overrides=field_overrides or {},
+                cost_centers=settings.get("cost_centers") or {},
+            )
+            reg_summary.update(cc_summary)
             if new_merchants != (settings.get("merchants") or {}):
                 settings_store.set_settings({"merchants": new_merchants}, now_iso)
             result["registry"] = reg_summary
@@ -5092,7 +5205,8 @@ def build_memory_view(
     default when it has one, else "" for judged-per-receipt), so a reader
     sees where one merchant's account splits by company. Built from the
     same rows as `categories[]`, so the `unvalidated` filter applies to
-    both."""
+    both. Each vendor line also carries the merchant's `profile` (note item
+    M4), the free prose the categorizer reads as context for its receipts."""
     empty = {
         "categories": [], "aliases": [], "fx": [],
         "entities": [], "field_corrections": [],
@@ -5146,6 +5260,11 @@ def build_memory_view(
             "merchant": hit.canonical_name if hit else "",
             "category": (hit.category or "") if hit else "",
             "multi_category": bool(hit and hit.multi_category),
+            # Note item M4: the merchant's free-prose profile, so the page
+            # shows the background the categorizer is actually reading for
+            # this vendor. "" when the merchant has none, or when the vendor
+            # resolves to no merchant at all.
+            "profile": (hit.profile or "") if hit else "",
             "companies": sorted(
                 (
                     {k: v for k, v in row.items() if k != "vendor"}

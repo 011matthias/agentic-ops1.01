@@ -85,6 +85,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           BRIEFING_TO: ${{ vars.BRIEFING_TO }}
+          RECON_UPTIME_RESEND_FROM: ${{ vars.RECON_UPTIME_RESEND_FROM }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
