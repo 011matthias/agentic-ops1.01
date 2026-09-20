@@ -1,4 +1,4 @@
-"""The TOOL's own verdict carries the statement id too (backlog item 157).
+"""The TOOL's own verdict carries the statement id too (backlog item 158).
 
 Item 152 (note item T3) put `statement_id` on `decisions`, `decision_history`
 and `receipt_claims`, and wired the stamp into all five writers that touch
