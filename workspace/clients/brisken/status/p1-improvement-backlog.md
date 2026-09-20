@@ -5411,7 +5411,7 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 
 **Reviewer corrections:** (combined) Live USD unassigned is 34,677.52 (not 34,622); totals also reports n_batches 6 scanned (5 carry unassigned rows) and n_undated 1. "Dirk must define the centers" is already possible from the SPA: PROMPT-STATUS records the settings chunk saving cost_centers per section since the 2026-09-15 bundle, so the data-entry path is open, not blocked. The design did not say "remembered per merchant" loosely; it specified a learned merchant->cost-center table (D2 step 3), which was silently replaced by the registry `cost_center` carrier. The strongest fact is missing from the finding: sign-off learning erases merchant `cost_center` entries (service.py:4025-4033), which makes the "fix F10 first" ordering 
 
-**CODE HALF SHIPPED 2026-09-20** (with note item M4, backlog item 157). `registry_cost_center_upserts_from_expense_run` (web/service.py,
+**CODE HALF SHIPPED 2026-09-20** (with note item M4, backlog item 157; PR #1131, merge 9ea2b30f, Fly v192). `registry_cost_center_upserts_from_expense_run` (web/service.py,
 beside the M2 card learner) folds the month's cost-centre picks into the
 merchant entry at sign-off, which is item 47's D2 step 3, the half that was
 reported BUILT and was not. Rules, each matching an existing pass rather than
@@ -6853,7 +6853,7 @@ Services org is `822741658` (nine). Nothing in this item depended on it, and the
 COA provisioning that does read it is out of this item's scope, so it is
 recorded rather than changed.
 
-### 157. What the bookkeeper knows about a merchant has nowhere to live (note item M4; owner 2026-09-20) (SHIPPED 2026-09-20; Shipped row 104, PR and Fly release recorded in the follow-up)
+### 157. What the bookkeeper knows about a merchant has nowhere to live (note item M4; owner 2026-09-20) (SHIPPED 2026-09-20, PR #1131, merge 9ea2b30f, Fly v192; Shipped row 104)
 
 **Owner (note item M4).** A profile of unstructured knowledge beside the
 registry: what the business buys from this merchant, on which card and for
@@ -6907,13 +6907,31 @@ the one whose receipts need the background most.
   keeps its prose rather than dropping the beginning to make room.
 
 **One thing built and deliberately not wired: no learner writes a machine
-line yet.** Every observation the tool computes about a merchant today (its
-cards, its category, its cost centre) already has a structured field that
-states it, so an automatic appender would write the same fact a second time as
-prose on every sign-off and degrade the field rather than fill it. The
-convention and its guards are built and pinned so the first learner with
-something prose-shaped to say can use them; that is the condition that reopens
-this.
+line yet.** Owner agreed 2026-09-20. Enumerated against `origin/main` rather
+than assumed: a registry entry can store `card_key`, `card_key_learned`,
+`cards_seen`, `cost_center`, `multi_category`, `profile`, `receipt_portal`,
+and every per-merchant VALUE the sign-off learner computes (category, account,
+aliases, card, cost centre) lands in one of them. An automatic appender would
+restate a field as prose on every sign-off and degrade the profile rather than
+fill it.
+
+What genuinely has no per-merchant home is the other three counters, and all
+three are EXPLANATIONS rather than values: `skipped_conflict` (this merchant's
+category picks disagreed this month), `cost_centers_skipped_conflict` (its
+cost-centre picks disagreed) and `card_keys_dropped` (a second card appeared,
+so the tool stopped naming one). They exist only as run-level totals, so they
+name no merchant and are discarded once the publish reply is read. "Criss filed
+this vendor two different ways in July" is exactly the prose a new bookkeeper
+wants and exactly what no field can hold.
+
+**The condition that reopens this is a measurement, not a hunch: the first
+NON-ZERO value of any of those three counters on a live sign-off.** All three
+read 0 across every live month today (no cost centre is defined, no registry
+merchant carries a card, and no category conflict has been recorded), so a
+learner built now would be written against zero real instances and testable
+only on fixtures. When one fires, the merchant it fired for is the first real
+machine line, and `append_machine_note` is already built, capped, deduped and
+pinned for it.
 
 **Item 118's code half closed in the same PR.** See the item 118 entry:
 `registry_cost_center_upserts_from_expense_run` folds the month's explicit
@@ -6931,16 +6949,223 @@ green: the profile into `categorize_receipts` (2 red), the memory-page field
 artifact in `merchant_registry.py`: a docstring paragraph and the
 `MerchantMatch.card_key` field were each declared twice.
 
+**Live verification (2026-09-20, Fly v192).** `GET /api/memory` now carries `profile` on all 97 `by_vendor` rows, every one `""` because no merchant has prose yet; the 28 registry merchants are unchanged and `settings.cost_centers` is still `{}`. July's 54 rows were fingerprinted (category, source, account, cost centre) before the deploy and re-read after: byte-identical, so no live row moved. Cold scripted Playwright drive (no prior session, sign-in from the login page) of `/memory` and `/expenses/50622baec444`: both render, 54 tbody rows on July, no fallback string, and the only non-GET request in the whole drive was `POST /api/login`. The SPA has no renderer for `profile` yet (its prompt is unpasted), so the drive proves the changed routes still render without regression and the API read proves the field; the renderer itself is NOT verified.
+
 **Still open (owner).** SPA half `docs/lovable-merchant-profile-prompt.md`, not
 pasted. The Settings editor replaces the whole merchant map on save, so it must
 carry `profile` or the prose is erased on every merchant, and unlike
 `cards_seen` no learner can rebuild it. No live merchant carries a profile
 until somebody writes one, so nothing on screen changes until then.
+### 158. The tool's own verdict was the one `decisions` writer no test reached (traceability follow-up; owner 2026-09-18) (SHIPPED 2026-09-20, PR #1129; Shipped row 105)
+
+**The gap.** Item 152 (note item T3) put `statement_id` on `decisions` and wired
+the stamp into all five writers. Four were exercised. `set_tool_decision` was
+not, and nothing said so, because the T3 fixture attaches a workbook whose
+charges pair with nothing: that month ends with **no `decided_by='tool'` row at
+all**. A wire no test reaches is a wire nobody knows is working, and this one
+carries the most common verdict on a real month, since the self-confirm rule
+(item 76) decides every clean exact pair without anyone clicking.
+
+**What actively hid it.** A docstring in `tests/test_charge_origin_t3.py`
+asserted the opposite: "on a fresh month the matcher's `set_tool_decision` has
+already written a verdict for every charge and stamped it". A reader checking
+whether the writer was covered would have believed it. Corrected in place.
+
+**Outcome: the route exists and the wire works.** It is reached by the
+self-confirm rule inside `rematch_month` on statement attach, which needs a
+clean exact pair whose category is already settled by the merchant registry.
+Pinned in `tests/test_tool_decision_statement_id_158.py` (3, route-level): the
+premise first (exactly one `decided_by='tool'` row, `decided_rule`
+`exact_vendor_75`, agreeing with the row the page shows), then the stamp, then
+that a person taking the charge over later leaves the id alone. Asserting the
+premise separately is the point: without it the stamp test would pass over an
+empty table, which is exactly how the gap survived T3.
+
+**Red-proven at the right anchor.** The stamp call is textually identical in
+all five writers, and on 2026-09-18 a mutation aimed at `set_decision` landed
+in `set_tool_decision` and read as "does not bite". The mutation script here
+refuses to run unless the enclosing `def` at the target line is
+`set_tool_decision`. Disabling that one line: the premise test stays GREEN and
+both stamp tests go RED, which is what separates "the stamp is broken" from
+"the fixture stopped reaching the writer".
+
+### 159. "Add more receipts" opens the receipt view in a new tab and adds nothing (feedback note #70, operator matthias 2026-09-18) (CLOSED 2026-09-20, does not reproduce; reopen condition below)
+
+**The note, verbatim** (read live from `/feedback.jsonl` 2026-09-20, and
+re-read rather than taken from a report): *"add receipts function just opens
+receipt view in new tab but does not really add it"*. Note #70 of 70, ts
+`2026-09-18T10:19:09+00:00`, role operator, operator `matthias`, page
+`/expenses/af8936c6b05a`, title "Expenses · Brisken", section "Add more
+receipts", `selector` `body > div:nth-of-type(3)`, click at 14% of the page.
+
+**Filed 2026-09-20, unfiled for two days.** Not in this backlog under any of
+"add more receipts", "#70", "opens receipt view", "does not really add" or
+"new tab"; the highest note number referenced anywhere here was #69. That is
+the failure mode the usability-loop memory already names (note #32 waited a
+week, #34 five days), so the filing matters even before the diagnosis.
+
+**Not reproduced yet, and not diagnosed.** Two facts worth carrying into
+whoever takes it, both checked rather than assumed:
+
+* The run the note was written on, `af8936c6b05a`, is **not one of the seven
+  batches `GET /api/expense-batches` lists today** (April, January, June, May,
+  September, August, July). So the month it happened on is gone, and a
+  reproduction has to be built on a current month rather than by opening that
+  page.
+* The complaint is about what a control DOES after the click, which is SPA
+  behaviour. Check first whether the button is wired to the upload route at
+  all or only to a viewer link; a backend route that was never called leaves
+  no trace, so the API logs cannot settle it and a cold browser drive of the
+  "Add more receipts" control on a live month is the instrument that can.
+**CLOSED 2026-09-20: driven end to end on the live app, and it adds the
+receipt.** The owner approved one scratch batch for this, since the half that
+reading cannot settle is what the control DOES after the submit.
+
+Read-only half first, on a current month (`/expenses/51a22ad72864`,
+September), cold:
+
+* the control is a single `BUTTON` reading "Add receipts" with an `onclick`,
+  and the page carries **no `input[type=file]` at all** until it is clicked.
+  Clicking it opens a MODAL whose title is "Add more receipts" - which is the
+  `section` the note recorded, so the note was written from inside the modal,
+  not from a page section;
+* the modal holds a real file input (`#add-receipts-files`, `accept`
+  `.pdf,.png,.jpg,.jpeg,.webp,.zip`, `multiple`), the dropzone "Drop receipts
+  here or choose files", and its own submit. **No second tab opened**;
+* the component that renders it, `chunk-expenses._batchId-LMSoldU3.js` in the
+  published bundle, contains **no receipts-view route and no `window.open`**.
+  Its only route literals are `/expenses`, `/expenses/$batchId`, `/inbound`,
+  `/runs/$runId`, `/runs/${k}/expense-report.pdf`, `/runs/${k}/expenses.csv`
+  and `/settings`.
+
+Then the half that needed a write, on a scratch batch "TEST - item 159"
+created and deleted in the same session, never on a month of Criss's:
+
+* the modal was driven exactly as an operator drives it (open, choose one
+  synthetic receipt PDF, submit);
+* the ONLY non-GET requests of the whole drive were the login and
+  **`POST /api/expense-batches/{id}/receipts`** - the append route, not
+  `/api/receipts` and not a viewer link;
+* the batch went from **0 expenses to 1**, nothing set aside, and the row read
+  back correctly: vendor "TEST VENDOR ITEM 159 LTDA", total 12.34,
+  `source_file` `TEST-item159-receipt.pdf`;
+* cleanup verified rather than assumed: `POST /api/runs/{id}/delete` needs
+  `{"confirm": "<label>"}` (a bare body 400s `delete_confirm_required`), and
+  after it both `/api/expense-batches/{id}` and `/api/runs/{id}` return 404,
+  the list is back to the seven real months, and `/api/memory` and
+  `/api/settings` hold no trace of the synthetic vendor.
+
+**Why it probably happened anyway.** The month the note names,
+`af8936c6b05a`, no longer exists, and the note is timestamped 2026-09-18
+10:19 UTC - the same day item 148 reworked this exact path (a dropped pile is
+now read in parallel) and the receipts-drop prompt's own history records a
+`expenses/new` / "Start a new month" flow being replaced. The behaviour the
+owner hit is most likely that build's, on a month that is gone. Stated as the
+likely explanation, not as a proven one: nothing in the API logs can confirm
+it, because a route that was never called leaves no trace.
+
+**Reopen condition.** Seen again on a month that still exists, with the
+control named (the "Add receipts" button on the Expenses page, or "Add
+digital receipts (folder or zip)" on the reconciliation page, which is a
+DIFFERENT control) and what appeared after the click. No code and no Lovable
+prompt was written: there is nothing on the current build to change.
+
+
+### 160. A row with a settled category still says a category is missing (feedback note #71, owner 2026-09-20) (SHIPPED 2026-09-20, pending PR; Shipped row 106)
+
+**The note, verbatim** (read live from `/feedback.jsonl`): *"this should not be
+mentioned here i think..."*. Note #71, ts `2026-09-20T15:12:07+00:00`, role
+operator, operator `matthias`, page `/expenses/50622baec444` (July 2026), no
+section, 93% down the page.
+
+**What it points at, resolved from the selector rather than guessed.** The
+selector names the row and the column:
+`#exp-row-0006__G173514057_5b606b64167e43cbb3a834880b5b0941.pdf >
+td:nth-of-type(6) > div > div:nth-of-type(1) > p`. That document is July's
+**Microsoft Corporation, 718.20**, `transaction_id` `49ace8baae6b6723`,
+`source_row` 27 of `July2026.xlsx`. Read live the same minute, the row carries:
+
+* `posting_category`: `Software & Subscriptions` / `Software & Subscriptions`,
+  source `llm; review` - a category IS settled on the row;
+* `review`: `{"state": "pick", "reason": "One or more receipt lines still need
+  a category before this can post.", "reason_code": "partial_uncategorized"}`.
+
+Column 6's first paragraph is where that reason renders, so the sentence the
+owner says should not be mentioned is the `partial_uncategorized` reason, on a
+row that already shows a category.
+
+**The question to settle before building.** The row-level category and the
+LINE-level categories are different things, and the reason is about the lines.
+So either the message is correct and reads wrong beside a filled category
+field, or the line state is stale on this row. Check which on this exact row
+before changing any copy: if the lines really are uncategorised, this is a
+wording and placement question; if they are not, it is a defect in how
+`partial_uncategorized` is decided. Do not rewrite the sentence until that is
+known, because the two answers call for opposite fixes.
+
+### 161. Two numbers on one page look like they contradict each other (feedback note #72, owner 2026-09-20) (SHIPPED 2026-09-20, pending PR; Shipped row 107)
+
+**The note, verbatim**: *"what is this"*. Note #72, ts
+`2026-09-20T15:15:00+00:00`, role operator, operator `matthias`, page
+`/runs/0603bb0e6f38` (**April 2026**), section **"Receipts to chase (65)"**,
+12% down the page.
+
+**Read live.** April holds 94 charge rows and 34 receipts.
+`summary.n_charges_need_receipt` is **65**, which is the section's number, and
+`summary.receipt_match_rate` is **85.3** (`n_receipts_matched` 29 of
+`n_receipts` 34). `n_receipts_need_charge` is 5; `n_booked_no_receipt` and
+`n_charges_receipt_requested` are both 0.
+
+**The likely reading.** The two headline figures on that page are computed over
+different denominators: the match rate is receipts matched over receipts, while
+"Receipts to chase" counts CHARGES with no receipt. A page that says 85.3%
+matched directly above a list of 65 things to chase reads as a contradiction
+unless the reader already knows which population each number describes. "What
+is this" is the question that produces.
+
+**Not yet confirmed with the owner**, and worth asking rather than assuming:
+they may be asking what the SECTION is for, not why the numbers disagree. Both
+readings point the same way though, which is that the label does not say what
+it lists. Whoever takes it should put the question to the owner in one line and
+drive the April page cold to see the two figures as they sit together.
+**Settled 2026-09-20 by a cold drive of the page, and the item's own
+hypothesis is REFUTED.** `receipt_match_rate` 85.3 and `match_rate` 14.9 are
+payload fields the SPA does **not render on this page at all**: the full
+rendered body of `/runs/0603bb0e6f38` is 5,919 characters and contains
+neither string, and the only percentage anywhere on it is an unrelated
+`3.3%`. So the two figures never sat together and the reader was never
+comparing them. What is actually on screen is narrower and worse:
+
+* a box row four lines above the section reads **"Charges without a receipt ·
+  65"** - the correct label for the population;
+* the section directly below reads **"Receipts to chase (65)"** - the SAME
+  number, relabelled as receipts;
+* the section's own table headers are `Date | Vendor | Amount | Card`, the
+  charge columns, while the receipts table on the same page reads
+  `Date | Vendor | Total | Document`. The page itself proves the title wrong.
+
+So the owner's answer ("what the section LISTS") is the whole of it: one
+population is named two ways within one screen, four lines apart. The count
+is not in doubt - the section's own `receipt_chase` groups sum to exactly
+`summary.n_charges_need_receipt` on every month that has one (April 65 = 65
+over 3 holders, August 61 = 61, July 0), so there is no arithmetic defect
+behind it.
+
+**Copy only, no backend half.** The SPA needs no new field to say this: it
+already holds `summary.n_charges_need_receipt` and the `receipt_chase`
+groups. The fix is `chase.title` reusing the exact words of
+`wb.view.unmatched`, plus a new `chase.subtitle` saying where the number
+comes from and why it is grouped by card holder. SPA half
+`docs/lovable-chase-section-label-prompt.md`, written and not pasted.
+
 
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 107 | The chase section says what it lists: `chase.title` reuses the exact words of the box above it ("Charges without a receipt" / "Lançamentos sem recibo") and a new `chase.subtitle` names the population and the grouping. Copy only; the counts were verified correct first | Backlog item 161 (feedback note #72, "what is this"). A cold drive refuted the item's own hypothesis: 85.3 and 14.9 are never rendered on that page. The real defect is one population named twice, four lines apart - a box reading "Charges without a receipt · 65" over a section reading "Receipts to chase (65)", whose own columns are the charge columns | 2026-09-20 |
+| 106 | The row says WHICH line still needs a category: `expenses[].uncategorized_lines` names each line item carrying none (index, description, amount), built from `uncategorized_line_indexes` - the one predicate `_matched_category_review` turns into the `partial_uncategorized` verdict, so the row cannot name a line the sentence is not about | Backlog item 160 (feedback note #71). July's Microsoft Corporation 718.20 showed `posting_category` "Software & Subscriptions" AND "One or more receipt lines still need a category". Read live, both were true: the row category is the roll-up of the lines that have one, and line 2 (25.20, "(illegible)") has none. The message was correct and read as a mistake because it named nothing beside a filled field | 2026-09-20 |
+| 105 | The tool's own verdict carries the statement id too: `set_tool_decision`'s `statement_id` stamp, the one of item 152's five `decisions` writers that no fixture reached, is pinned through the route that reaches it (the item-76 self-confirm rule, inside `rematch_month` on statement attach), and the T3 docstring that asserted the opposite is corrected | Backlog item 158. A wire no test reaches is a wire nobody knows is working, and this one carries the most common verdict on a real month: the self-confirm rule decides every clean exact pair without anyone clicking, and an unstamped tool verdict is exactly the row a reader could not trace back to its statement line after a re-read moved its content-derived `transaction_id`. What hid it was an active claim, not silence: a `tests/test_charge_origin_t3.py` docstring said "on a fresh month the matcher's `set_tool_decision` has already written a verdict for every charge and stamped it", while THAT fixture's charges pair with nothing and its month ends with no `decided_by='tool'` row at all. Outcome is the good one: the route exists, the wire works, and it is covered rather than recorded as a known gap | 2026-09-20, PR #1129; `tests/test_tool_decision_statement_id_158.py` (3, route-level): the premise asserted separately first (exactly one `decided_by='tool'` row, `decided_rule` `exact_vendor_75`, agreeing with the row the page shows) so the stamp test cannot pass over an empty table, then the stamp, then that a person taking the charge over later leaves the id alone. Red-proven at an anchor the mutation script refuses to place anywhere but inside `set_tool_decision` (the call is textually identical in all five writers): the premise test stays GREEN, both stamp tests go RED, `store.py` restored sha256-equal. Test-only, no deploy needed |
 | 104 | What the bookkeeper knows about a merchant gets a home: `profile`, free prose on the registry entry, read by the two categorize calls that still have a judgement to make and fenced as UNTRUSTED data per `rule_untrusted_inbound` (per-call nonce, an inner fence marker neutralised) so it informs the category and never instructs. Shown on `GET /api/memory` `by_vendor[].profile`. Backlog item 118's code half closes with it: a cost centre picked on a row now teaches its merchant at sign-off | The registry could hold a merchant's structured facts and nothing else, so what Criss or Dirk would tell a new bookkeeper (what we buy here, on which card, for which company) lived only in their heads. Two limits are the substance: BLUEPRINT LD-2's Tier-1 contract is kept, so a profile may only break a tie the DESCRIPTION already leaves open and can never rescue a vague line; and item 115's disagreement read is left without one, because prose about what a merchant is usually bought for is evidence for the answer memory already holds, and feeding it in would teach that detector to agree with itself | 2026-09-20, backlog item 157; 28 tests in `tests/test_merchant_profile_m4.py`, 3 regress proofs each watched going red; no live merchant carries a profile and no cost centre is defined, so no live row moves on the deploy |
 | 103 | The note the sender typed ABOVE the forward reaches the expense row: `expenses[].operator_note` (parallel scalar, absent when the mail carried none), recorded on the provenance of every file that mail delivered and lifted to the row the way `untrusted_instructions` is | Backlog item 155 (note item T4). Dirk types the filing instruction above the forward ("BTS only", "CorpServ only / Dev IT costs", the three-line Zoho split) and it exists nowhere in the attached PDF; the intake fingerprinted that text and dropped it. **The boundary rule was measured, not guessed**: the shipped function was run over the live archive in-machine (92 stored `.eml`) and reports 86 readable bodies, 71 carrying a forward boundary, **30 carrying a note** - six times the 5 the item named, because the item only looked at the 30 attachment-bearing mails. Two findings shaped it. A forward can be NESTED (Criss forwards Dirk's forward and his instruction sits BETWEEN the two header blocks, so a cut at the FIRST boundary loses it; 8 of the 30). And a body with no boundary yields nothing, which is the one bound on erring long and costs nothing live, because all 15 boundary-less bodies are test drills or body-only mail. **One call reverses the item's default**: a body-only mail's note IS recorded even though its body also becomes the receipt, because the caution guards against a second copy of the INVOICE and the rule cannot produce one (it keeps only what is above the forward), while 13 of the 30 live notes arrive that way. DISPLAY ONLY (rule_untrusted_inbound), asserted as a differential rather than promised: two identical receipts, one mail naming an entity, a cost center, a category and a card, land on identical decisions | PR #1123, merge `a2276f06`, 2026-09-20, live on Fly v191; `tests/test_operator_note_155.py` (11) + the rewritten T4 pin in `tests/test_intake_mail.py` + a contract pin; three wiring points proven RED by hand; SPA half `docs/lovable-operator-note-prompt.md` (Not applied). Live after the deploy: `operator_note` is absent on all 85 mail-delivered rows across July, August and September, which is the design and not a failed deploy - `intake_provenance` is written into the run snapshot at INGEST and read back from it, so a receipt already in a month keeps the provenance it arrived with and the field can only appear on mail that arrives from v191 on. The deployed build was proven to carry the code by running it in-machine over `/data/inbound`: 94 archives, 88 readable bodies, **32 notes**, and the two named differential cases (the Zoho split carries, Criss's rule-then-quote forward does not) answer correctly. Lighting up the 32 archived notes on existing rows would need a re-ingest per archive, which is a live write on Criss's months and hers to make |
 | 102 | The whole message is walked, and the evidence says stop there: two fixtures pin that a mail forwarded AS AN ATTACHMENT has its PDF read one level down (`msg.walk()` descends into `message/rfc822`) and that an operator's note above a forward is readable but reaches no receipt | Note item T4 (owner 2026-09-18, traceability, backlog item 155). The live archive (91 `.eml`, scanned in-machine) holds 0 HEIC and 0 nested rfc822, so an unpacker and a converter would build for shapes nobody sends; and on all 30 mails carrying both a PDF and a body, the body's numbers are mostly the PDF's (9 of 10, 11 of 12, 14 of 28), so rendering the body would duplicate the invoice. What the judging DID turn up is item 155: Dirk types the filing instruction above the forward ("BTS only", "CorpServ only Dev IT costs") and the tool reads it and drops it | 2026-09-18, pending PR; 2 tests in `tests/test_intake_mail.py`; the decisions not to build are recorded with the count that supports each |

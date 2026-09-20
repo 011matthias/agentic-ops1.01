@@ -5396,6 +5396,19 @@ NULL everywhere else, and NULL means "not recorded", never "no statement":
 every row written before the columns, and every row whose month cannot place
 the charge.
 
+**Coverage of the five `decisions` writers (backlog item 158, 2026-09-20).**
+The stamp was wired into all five and exercised in four. `set_tool_decision`
+was the exception, and nothing said so: the T3 fixture attaches a workbook
+whose charges pair with nothing, so its month ends with no `decided_by='tool'`
+row at all, and a T3 docstring asserted the opposite ("on a fresh month the
+matcher has already written a verdict for every charge"), which is what hid
+the gap. The route that reaches the tool's writer is the self-confirm rule
+(item 76), which runs inside `rematch_month` on statement attach and needs a
+clean exact pair whose category is already settled. That is now pinned in
+`tests/test_tool_decision_statement_id_158.py`, which asserts its own premise
+first (exactly one `decided_by='tool'` row, `decided_rule='exact_vendor_75'`)
+so the stamp assertion cannot pass over an empty table.
+
 ### The SPA
 
 Nothing renders any of this yet, so the SPA needs no change. The fields are
@@ -5758,3 +5771,46 @@ corrections" paragraph says sign-off ERASES merchant `cost_center` entries;
 that was true before item 116 and is not true now: `registry_upserts_from_expense_run`
 deep-copies the whole stored entry and moves only aliases, category and
 account.
+
+
+## Which line still needs a category: `uncategorized_lines` (backlog item 160, 2026-09-20)
+
+The owner, on July's page: *"this should not be mentioned here i think..."*.
+The row was Microsoft Corporation 718.20, showing `posting_category`
+"Software & Subscriptions" and, in the same column, "One or more receipt
+lines still need a category before this can post."
+
+Both were true. `posting_category` is the roll-up of the lines that DO carry
+a category; that receipt's second line (25.20, "(illegible)") carried none,
+which `books_as[1].unassigned` already said in the money column. Beside a
+filled category field, a sentence that names nothing reads as a mistake.
+
+`expenses[].uncategorized_lines` names them:
+
+```
+"uncategorized_lines": [
+  {"index": 1, "description": "(illegible)", "line_total": "25.20"}
+]
+```
+
+Parallel and ABSENT when every line carries a category, which is every row an
+older backend served. `index` indexes `line_items`, so the SPA can anchor the
+sentence on the line rather than print it above the category.
+
+**One predicate, two readers.** `service.uncategorized_line_indexes` is what
+`_matched_category_review` turns into the `uncategorized` /
+`partial_uncategorized` verdict AND what this field is built from. They
+cannot drift: a row that named a line the verdict was not about would be
+worse than the generic sentence. A reviewer's own per-line edit counts as
+categorized on both sides, so `POST /api/runs/{id}/categories` clears the
+field and the verdict together.
+
+The English sentence is unchanged, deliberately. `reason_code` is the stable
+enum the SPA localizes into EN and PT-BR; the backend's English is a
+developer-facing hint, so rewriting it would change nothing the owner sees.
+The copy and the placement are the SPA's half:
+`docs/lovable-uncategorized-lines-prompt.md`.
+
+Route-level in `tests/test_uncategorized_lines_160.py` (4: the premise on its
+own, the named line, the absent key after a reviewer's edit, and the fully
+uncategorized row); the set equality pinned in `tests/test_view_contract.py`.
