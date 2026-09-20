@@ -2897,6 +2897,31 @@ def _review(state: str, reason: str | None = None, code: str | None = None) -> d
     return {"state": state, "reason": reason, "reason_code": code}
 
 
+def uncategorized_line_indexes(rec: "Receipt | None", overrides: dict) -> list[int]:
+    """The indexes of the line items that carry no category (item 160).
+
+    ONE predicate, read by two callers: `_matched_category_review`, which
+    turns it into the `uncategorized` / `partial_uncategorized` verdict, and
+    `build_expense_view`, which names those lines on the row. They have to be
+    the same set or the row names a line the verdict is not about, which is
+    worse than the generic sentence it replaces.
+
+    A reviewer's own edit categorizes the line whatever the extraction read,
+    so an override counts as categorized here exactly as it does there.
+    """
+    if rec is None or not rec.line_items:
+        return []
+    out: list[int] = []
+    for i, li in enumerate(rec.line_items):
+        ov = overrides.get((rec.document_id, i))
+        if ov and ov.get("category"):
+            continue
+        base = li.categorization
+        if base is None or not base.category:
+            out.append(i)
+    return out
+
+
 def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
     """Review-state for a matched/held receipt, judged from the CATEGORY it
     will post (2026-07-27). Verdict order is pick > check > ready.
@@ -2911,7 +2936,9 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
         return _review("pick", "No category yet. Assign one before this charge can post.", "uncategorized")
     srcs: list[str | None] = []
     decs: list[str | None] = []
-    uncategorized = False
+    # Item 160: the same predicate the row's `uncategorized_lines` is built
+    # from, so the verdict and the lines it names cannot disagree.
+    uncategorized = bool(uncategorized_line_indexes(rec, overrides))
     for i, li in enumerate(rec.line_items):
         ov = overrides.get((rec.document_id, i))
         if ov and ov.get("category"):
@@ -2920,7 +2947,8 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
             continue
         base = li.categorization
         if base is None or not base.category:
-            uncategorized = True  # a line with no category cannot post cleanly
+            # A line with no category cannot post cleanly; counted above,
+            # and contributing neither a source nor a decision token.
             continue
         srcs.append(base.source.value if base.source else None)
         decs.append(getattr(base, "decision", None))
@@ -7587,6 +7615,26 @@ def build_expense_view(
         _note = (intake_provenance.get(r.document_id) or {}).get("operator_note")
         if _note:
             expenses[-1]["operator_note"] = str(_note)
+        # Item 160 (feedback note #71): name the lines the category verdict
+        # is actually about. `posting_category` is the roll-up of the lines
+        # that DO carry one, so "Software & Subscriptions" and "one or more
+        # receipt lines still need a category" are both true at once; beside
+        # a filled category field the sentence reads as a mistake while it
+        # names nothing. Built from `uncategorized_line_indexes`, the same
+        # predicate the verdict reads, so the two cannot drift. Absent on
+        # every row whose lines all carry a category, which is every row an
+        # older backend served.
+        _unc = uncategorized_line_indexes(r, overrides)
+        if _unc:
+            _lines = r.line_items or ()
+            expenses[-1]["uncategorized_lines"] = [
+                {
+                    "index": i,
+                    "description": _lines[i].description or "",
+                    "line_total": _fmt_amount(_lines[i].line_total),
+                }
+                for i in _unc
+            ]
         if r.document_id in grid_copies:
             # Item 94: the row stays, the money does not count. Absent on
             # every row that counts, which is every row an older backend
