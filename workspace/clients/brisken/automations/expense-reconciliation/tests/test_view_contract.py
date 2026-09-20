@@ -1497,7 +1497,8 @@ def test_memory_view_list_contract(tmp_path):
         resp = client.put("/api/settings", json={"merchants": {
             "Anthropic": {"aliases": ["Anthropic, PBC"],
                           "category": "Software & Subscriptions",
-                          "zoho_account": None},
+                          "zoho_account": None,
+                          "profile": "Claude API for the dev team."},
         }})
         assert resp.status_code == 200, resp.text
         view = client.get("/api/memory").json()
@@ -1507,6 +1508,10 @@ def test_memory_view_list_contract(tmp_path):
     assert [c["entity"] for c in vendor["companies"]] == [
         "Cloud Services", "Corporate Services",
     ]
+    # Note item M4: the merchant's free-prose profile rides the vendor line,
+    # always present as a string ("" when the merchant has none), so the page
+    # can show the background the categorizer is reading for this vendor.
+    assert vendor["profile"] == "Claude API for the dev team."
 def test_every_candidate_carries_card_evidence_and_review_code_is_absent_or_coded(payloads):
     """Item X1. `rows[].candidates[].card_evidence` is on every candidate,
     `{receipt, charge}` from the matcher's closed sets

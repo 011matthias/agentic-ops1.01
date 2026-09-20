@@ -190,6 +190,7 @@ def categorize_receipts(
     learned: "MerchantCategoryLookup | None" = None,
     override_er_category: bool = False,
     judge_each_receipt: "frozenset[str] | None" = None,
+    merchant_profiles: "dict[str, str] | None" = None,
 ) -> list[Receipt]:
     """Return a new list of receipts with line_items carrying
     Categorization results per LD-2.
@@ -221,6 +222,11 @@ def categorize_receipts(
     judge every receipt on its own items, so no remembered category
     flattens its lines.
 
+    `merchant_profiles` (note item M4, internal) maps document_id -> the
+    registry's free prose for that receipt's merchant, and rides into the
+    two LLM classify calls as fenced untrusted context. A document with no
+    entry, or an empty registry, makes exactly the calls it made before M4.
+
     `override_er_category` (2026-07-21 owner decision) flips who owns the
     posting account. Default False keeps the 2026-06-16 behaviour (the
     Zoho Expense report's own GL account is authoritative). True makes the
@@ -238,6 +244,7 @@ def categorize_receipts(
             judge_each_receipt=bool(
                 judge_each_receipt and r.document_id in judge_each_receipt
             ),
+            merchant_profile=(merchant_profiles or {}).get(r.document_id),
         )
         for r in receipts
     ]
@@ -364,10 +371,21 @@ def categorize_receipts_with_registry(
     multi_category = frozenset(
         doc for doc, m in registry_matches.items() if m.multi_category
     )
+    # Note item M4: the merchant's free prose rides into the classify calls
+    # for every receipt that still needs judging. Only these do: a receipt
+    # the registry stamped a category on never reaches the model at all, so
+    # a profile on a merchant with a default category is background for the
+    # Memory page and the editor, not a prompt cost.
+    profiles = {
+        doc: m.profile
+        for doc, m in registry_matches.items()
+        if m.profile
+    }
     categorized = categorize_receipts(
         to_llm, client=client, chart_of_accounts=chart_of_accounts,
         learned=learned, override_er_category=override_er_category,
         judge_each_receipt=multi_category,
+        merchant_profiles=profiles,
     )
     if override_er_category and cat_chart is not None:
         categorized = adjudicate_receipts(
@@ -433,6 +451,7 @@ def _categorize_one(
     *,
     override_er_category: bool = False,
     judge_each_receipt: bool = False,
+    merchant_profile: str | None = None,
 ) -> Receipt:
     """Apply the LD-2 tier rules to a single receipt."""
     recall = _recall_for(receipt, learned)
@@ -455,7 +474,8 @@ def _categorize_one(
         if not leads:
             if client is not None:
                 categorized = _classify_lines_via_llm(
-                    receipt.line_items, client, chart_of_accounts
+                    receipt.line_items, client, chart_of_accounts,
+                    merchant_profile,
                 )
             else:
                 categorized = tuple(
@@ -492,7 +512,7 @@ def _categorize_one(
     if client is not None:
         classified = _classify_vendor_via_llm(
             synthesized, receipt.detected_vendor, receipt.detected_total,
-            client, chart_of_accounts,
+            client, chart_of_accounts, merchant_profile,
         )
     else:
         classified = _classify_vendor_keyword(synthesized, receipt.detected_vendor)
@@ -602,7 +622,14 @@ def _apply_learned_over_lines(
     wins: the same read the LINE tier would have paid for anyway, and when
     it disagrees the row says so (`decision = learned_over_line`) and the
     review state asks for a glance. A validated rule is applied without the
-    call: a person has already certified that answer for this merchant."""
+    call: a person has already certified that answer for this merchant.
+
+    Note item M4: this read deliberately gets NO merchant profile. Its job is
+    to be an INDEPENDENT second opinion on a remembered category, and prose
+    describing what the business usually buys from this merchant is evidence
+    for the same answer memory already holds. Feeding it in would teach the
+    detector to agree with itself, and the disagreement glance item 115
+    exists for would quietly stop firing."""
     cat = _learned_categorization(recall)
     if not recall.validated:
         if client is not None:
@@ -638,13 +665,33 @@ def _apply_learned_over_lines(
 # ── LLM-path implementations (slice 2) ──────────────────────────────
 
 
+def _profile_kwarg(merchant_profile: str | None) -> dict:
+    """`{"merchant_profile": ...}` when the merchant has prose, else `{}`
+    (note item M4).
+
+    The parallel-field contract applied to a call signature: a merchant with
+    no profile produces the exact call the categorizer made before M4, so no
+    existing `LLMClient` implementation — the mock, a test fake, a provider
+    subclass written against the old Protocol — has to change to keep
+    working. Only a merchant somebody wrote a profile for sees the new
+    keyword."""
+    text = str(merchant_profile or "").strip()
+    return {"merchant_profile": text} if text else {}
+
+
 def _classify_lines_via_llm(
     items: tuple[LineItem, ...],
     client: LLMClient,
     chart_of_accounts: list[str] | None = None,
+    merchant_profile: str | None = None,
 ) -> tuple[LineItem, ...]:
     """Tier 1 via LLM. One batched call per receipt regardless of
-    line-item count (cost discipline)."""
+    line-item count (cost discipline).
+
+    `merchant_profile` (note item M4) is the registry's free prose about this
+    receipt's merchant. It is forwarded ONLY when the merchant actually has
+    one, so a client implementation that predates M4 keeps being called with
+    exactly the arguments it already accepts."""
     inputs = [
         LineItemInput(
             description=it.description,
@@ -656,6 +703,7 @@ def _classify_lines_via_llm(
     results = client.classify_line_items(
         inputs, categories=list(EXPENSE_CATEGORIES),
         chart_of_accounts=chart_of_accounts,
+        **_profile_kwarg(merchant_profile),
     )
 
     out: list[LineItem] = []
@@ -677,8 +725,12 @@ def _classify_vendor_via_llm(
     total: Decimal | None,
     client: LLMClient,
     chart_of_accounts: list[str] | None = None,
+    merchant_profile: str | None = None,
 ) -> LineItem:
-    """Tier 2 via LLM. Single call with vendor name + total."""
+    """Tier 2 via LLM. Single call with vendor name + total, plus the
+    merchant's profile when the registry carries one (note item M4). This is
+    the tier the prose helps most: the vendor name is otherwise the only
+    clue this path has."""
     if not vendor:
         return replace(
             item,
@@ -693,6 +745,7 @@ def _classify_vendor_via_llm(
         total=total or Decimal("0"),
         categories=list(EXPENSE_CATEGORIES),
         chart_of_accounts=chart_of_accounts,
+        **_profile_kwarg(merchant_profile),
     )
     return replace(
         item,
