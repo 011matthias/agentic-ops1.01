@@ -7093,7 +7093,7 @@ DIFFERENT control) and what appeared after the click. No code and no Lovable
 prompt was written: there is nothing on the current build to change.
 
 
-### 160. A row with a settled category still says a category is missing (feedback note #71, owner 2026-09-20) (SHIPPED 2026-09-20, pending PR; Shipped row 106)
+### 160. A row with a settled category still says a category is missing (feedback note #71, owner 2026-09-20) (SHIPPED 2026-09-20, PR #1140, merge `edb98a4d`, Fly v193; Shipped row 106) (SPA APPLIED + DRIVEN 2026-09-20 evening; CLOSED)
 
 **The note, verbatim** (read live from `/feedback.jsonl`): *"this should not be
 mentioned here i think..."*. Note #71, ts `2026-09-20T15:12:07+00:00`, role
@@ -7124,6 +7124,16 @@ before changing any copy: if the lines really are uncategorised, this is a
 wording and placement question; if they are not, it is a defect in how
 `partial_uncategorized` is decided. Do not rewrite the sentence until that is
 known, because the two answers call for opposite fixes.
+**SPA half APPLIED and DRIVEN 2026-09-20 evening.** The owner pasted
+`lovable-uncategorized-lines-prompt.md` and published; the re-audit found all
+four keys in the bundle in EN and PT-BR, and a cold drive of July
+`/expenses/50622baec444` shows the owner's own row rendering it: "1 of 2
+receipt lines still needs a category: 25.20.", with the category cell
+carrying "1 line on this receipt has no category" over the line
+`(illegible) 25.20 · Needs a category`. The generic "One or more receipt
+lines still need a category" is gone from the page entirely. One non-GET
+request, the login. Item closed.
+
 
 ### 161. Two numbers on one page look like they contradict each other (feedback note #72, owner 2026-09-20) (SHIPPED 2026-09-20, pending PR; Shipped row 107)
 
