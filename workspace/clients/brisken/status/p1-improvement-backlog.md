@@ -5475,7 +5475,7 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 
 **Shipped 2026-09-17 (pending PR).** The floor is read from the volume instead of a constant: 5% of the disk, never below 200 MB, never above half of it. On the live 1 GB volume that is 200 MB where it was 500 MiB, so usable space goes from about 500 MB to about 800 MB; on a 5 GB volume the same code asks for 256 MB and leaves 4.75 GB. `/healthz` carries a `disk` block (total, free, used, free percent, the floor, and `intake_refusing`), so a monitor sees a filling disk rather than learning about it from bounced receipts; an unreadable volume answers `available: false` and still never refuses mail. An unrecognised sender is held to 5 MB per message (552, permanent) and all strangers together to 50 MB a day (452, so their own mail system retries tomorrow); the daily budget is global rather than per-sender because From is forgeable, and it re-seeds from the acceptance log after a restart (rows now record `n_bytes` and `known_sender`). Our own people (inside @brisken.com or listed in `intake.known_senders`) keep the full 25 MB and are exempt from the 40-file per-sender cap a month-end backfill exceeds; the 200-file global cap still binds everyone, because that is the ceiling on a day's vision spend. The dismissed-archive purge is built and ships INERT: `intake.dismissed_purge_days` defaults to 0 (never) and the boot sweep does nothing until it is set. Live numbers read while building (2026-09-17, `flyctl ssh`): /data is 997,076 KB with 97,876 KB used and 831,208 KB free, 11% used, on the 1 GB `recon_data_v2` volume. **Owner actions:** (a) `flyctl volumes extend` to 5 GB, still worth doing and untouched here (the code is tested on both sizes); (b) one settings write to turn the purge on, if deleting dismissed junk after N days is wanted - deleting Brisken's mail is not an agent's call.
 
-### 123. Nobody is told when the app is down; the last outage was surfaced by the owner, not by a monitor (2026-09-17 audit draft #121, unranked; operations) (SHIPPED 2026-09-18, PR #1098; alert path fixed PR #1106; the cron DOES fire, first scheduled run 2026-09-18T17:42:18Z, but at roughly a quarter-hour past every two hours rather than the `*/10` it asks for; see Shipped rows below)
+### 123. Nobody is told when the app is down; the last outage was surfaced by the owner, not by a monitor (2026-09-17 audit draft #121, unranked; operations) (SHIPPED 2026-09-18, PR #1098; alert path fixed PR #1106; the cron DOES fire, first scheduled run 2026-09-18T17:42:18Z, but over 44 hours it averages one run every 3h09m and has gone 4h46m at its worst, against the `*/10` it asks for; see Shipped rows below)
 
 **Audit rank 30 of 40; severity medium as merged; verification: one reviewer, plus health check read by hand.** There is no outside check on the app or its mailbox and no alert to anyone at Brisken; hosting notices go to the developer's personal account; logs die with the machine. The 2026-09-10 outage lasted about 50 minutes and was noticed when Criss's upload failed. During close week an hour down is an hour she cannot work, and a mailbox down means receipts bounce.
 
@@ -5515,12 +5515,19 @@ so. A zero that has only ever been measured inside one window is a statement
 about the window.
 
 What survives the correction is smaller and more useful than the original
-finding: the cadence is wrong, not the delivery. The runs sit at 17:42, 19:58,
-22:23 and 00:27, gaps of 2h16m, 2h24m and 2h04m, against a `*/10` that asks for
-one every ten minutes. GitHub is delivering approximately 6% of the requested
-rate, which is its documented best-effort behaviour on a busy public runner
-pool and not something a change on our side fixes. So an outage is now detected,
-but a bad one can sit unreported for over two hours.
+finding: the cadence is wrong, not the delivery. GitHub is delivering about 5%
+of the requested rate, which is its documented best-effort behaviour on a busy
+public runner pool and not something a change on our side fixes. So an outage is
+now detected, but a bad one can sit unreported for hours.
+
+**Measured over 44 hours (2026-09-20).** 15 scheduled runs between
+2026-09-18T17:42Z and 2026-09-20T13:50Z, every one green, no `recon-uptime`
+issue opened in the window. 14 gaps: mean 3h09m, shortest 1h39m, longest 4h46m,
+against the ~265 runs `*/10` asks for in that span, so 5.3% delivered. The
+first-day estimate in this item said "roughly every 2h15m"; four runs were not
+enough to characterise it, and the honest number for a monitor is the worst gap,
+not the mean. **An outage starting just after a run can go unseen for nearly
+five hours.**
 
 That re-frames the choice rather than settling it. Option 1 is no longer "the
 monitor may never run"; it is "the monitor runs with a two-hour blind window",
