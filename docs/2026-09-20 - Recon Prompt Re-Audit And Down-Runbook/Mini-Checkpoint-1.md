@@ -68,8 +68,11 @@ document and **lost** is the old one.
 
 ## Current Status
 
-Live is **Fly v193**; nothing merged is undeployed. PR #1148 is the only
-thing in flight. Next free backlog number is **162**; next free Shipped
+Live is **Fly v193**; nothing merged is undeployed. This checkpoint's
+own entry is session **10**: a sibling's "Statement Fill-Colour
+Classifier Findings" landed as 9 while this one was being written, so
+mine moved after theirs rather than renumbering a row already on `main`.
+PR #1148 merged on green; nothing is in flight but this checkpoint. Next free backlog number is **162**; next free Shipped
 iteration is **109** (108 = the runbook).
 
 **Five shipped features are inert on missing owner-side data**, all read off
