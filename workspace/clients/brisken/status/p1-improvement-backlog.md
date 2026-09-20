@@ -5475,7 +5475,7 @@ SPA half `docs/lovable-charge-category-prompt.md` (owner applies).
 
 **Shipped 2026-09-17 (pending PR).** The floor is read from the volume instead of a constant: 5% of the disk, never below 200 MB, never above half of it. On the live 1 GB volume that is 200 MB where it was 500 MiB, so usable space goes from about 500 MB to about 800 MB; on a 5 GB volume the same code asks for 256 MB and leaves 4.75 GB. `/healthz` carries a `disk` block (total, free, used, free percent, the floor, and `intake_refusing`), so a monitor sees a filling disk rather than learning about it from bounced receipts; an unreadable volume answers `available: false` and still never refuses mail. An unrecognised sender is held to 5 MB per message (552, permanent) and all strangers together to 50 MB a day (452, so their own mail system retries tomorrow); the daily budget is global rather than per-sender because From is forgeable, and it re-seeds from the acceptance log after a restart (rows now record `n_bytes` and `known_sender`). Our own people (inside @brisken.com or listed in `intake.known_senders`) keep the full 25 MB and are exempt from the 40-file per-sender cap a month-end backfill exceeds; the 200-file global cap still binds everyone, because that is the ceiling on a day's vision spend. The dismissed-archive purge is built and ships INERT: `intake.dismissed_purge_days` defaults to 0 (never) and the boot sweep does nothing until it is set. Live numbers read while building (2026-09-17, `flyctl ssh`): /data is 997,076 KB with 97,876 KB used and 831,208 KB free, 11% used, on the 1 GB `recon_data_v2` volume. **Owner actions:** (a) `flyctl volumes extend` to 5 GB, still worth doing and untouched here (the code is tested on both sizes); (b) one settings write to turn the purge on, if deleting dismissed junk after N days is wanted - deleting Brisken's mail is not an agent's call.
 
-### 123. Nobody is told when the app is down; the last outage was surfaced by the owner, not by a monitor (2026-09-17 audit draft #121, unranked; operations) (SHIPPED 2026-09-18, PR #1098; alert path fixed PR #1106; the cron DOES fire, first scheduled run 2026-09-18T17:42:18Z, but over 44 hours it averages one run every 3h09m and has gone 4h46m at its worst, against the `*/10` it asks for; see Shipped rows below)
+### 123. Nobody is told when the app is down; the last outage was surfaced by the owner, not by a monitor (2026-09-17 audit draft #121, unranked; operations) (SHIPPED 2026-09-18, PR #1098; alert path fixed PR #1106; the cron DOES fire; the owner ACCEPTED its ~5h worst-case blind window 2026-09-20 and the alert path fired for real the same day; open: getting the mail to a Brisken mailbox, blocked at the sender; see Shipped rows below)
 
 **Audit rank 30 of 40; severity medium as merged; verification: one reviewer, plus health check read by hand.** There is no outside check on the app or its mailbox and no alert to anyone at Brisken; hosting notices go to the developer's personal account; logs die with the machine. The 2026-09-10 outage lasted about 50 minutes and was noticed when Criss's upload failed. During close week an hour down is an hour she cannot work, and a mailbox down means receipts bounce.
 
@@ -5504,6 +5504,58 @@ Nothing was built for this, because the fix is a choice about where the watcher 
 3. **Point a free external monitor at `/healthz`**, which is what this item originally proposed. Needs one signup and a URL, and it is the only option whose vantage point shares a failure mode with neither GitHub nor the laptop.
 
 Recommendation: 3, with 1 left running underneath it at no cost. The monitor's whole value is being outside the thing it watches, and options 1 and 2 each sit inside something that can fail quietly. Until one is chosen, treat the uptime workflow as a hand tool: `gh workflow run expense-recon-uptime.yml -R 011matthias/agentic-ops1.01`.
+
+**2026-09-20, owner decision: the blind window is accepted, and the alert path
+has now fired for real.** Asked whether a gap of up to about five hours is
+acceptable, the owner said yes, so the scheduling question is CLOSED and nothing
+is built for it. The cron stays as it is; the three options below are kept only
+as the record of what was weighed.
+
+The same decision authorised the first live firing, which had never happened: a
+dry run cannot prove the real GitHub and Resend calls, and this exact path was
+silently broken once already (PR #1106). Rehearsed against a dead endpoint, run
+35517060243 opened issue #1125 and created the `recon-uptime` label; the recovery
+run commented on it, closed it, and delivered its mail (`RESEND_OK`). Both halves
+are now proven end to end rather than in rehearsal. Each drill issue was commented
+as a drill before closing, because the repo is public and an issue reading
+"expenses.brisken.com is down" should not be mistaken for a real outage by anyone
+reading it later.
+
+**The Brisken-recipient residue is no longer a guess: it is blocked at the SENDER,**
+and the owner asked for exactly that (alerts to matthias.silva@brisken.com, not
+the developer's Gmail). Two live 403s, a week's worth of assumption replaced by
+two facts. With BRIEFING_TO set to the Brisken address: `You can only send testing
+emails to your own email address (matneumann07@gmail.com)`. So the recipient is not
+the knob. `onboarding@resend.dev` is Resend's shared onboarding sender and is
+owner-only by design; a sender on a verified domain reaches anyone. That address
+was a module constant, so PR #1128 made it settable
+(`RECON_UPTIME_RESEND_FROM`, passed from a repo variable) and the hypothesis that
+unpauseai.com would serve was then tested in one run instead of a code change. It
+does not: `The unpauseai.com domain is not verified`. Both variables are restored
+to the working default, so alerts reach the Gmail today and nothing is left half
+configured.
+
+What remains is a credential question rather than an engineering one, which is why
+nothing further was built:
+
+- **Verify a sending domain in Resend.** Free and the cleanest fit, since the knob
+  already exists. Needs Resend account access plus DNS records on a domain we
+  control. Do NOT reach for brisken.com: adding sender records to the client's
+  production mail domain for a monitor risks their real deliverability.
+- **Send through the Brisken Graph app**, which already holds `Mail.Send` and has
+  matthias.silva@brisken.com on its hard allowlist ([[rule_brisken_graph_first]]).
+  It would put a tenant client secret into a PUBLIC repo's Actions secrets. Fork
+  PRs cannot read those, so the exposure is small, but it is the owner's call and
+  not an agent's.
+- **Forward the Gmail to Brisken.** Zero code, zero credentials, one filter, and it
+  works today. The least elegant and by some distance the cheapest.
+
+Worth weighing against all three: the GitHub ISSUE is the primary signal and it
+already works, and GitHub mails issue activity to whoever watches the repo. If
+that account's notification address is already the Brisken one, the alert reaches
+the right inbox with nothing built at all. The `gh` token here lacks the `user`
+and `notifications` scopes, so this was NOT verified; it needs one look at the
+GitHub notification settings.
 
 **2026-09-19 correction: it fires, and the paragraph above called it too
 early.** The first scheduled run landed at 2026-09-18T17:42:18Z, 46 minutes
