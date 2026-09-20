@@ -6989,7 +6989,7 @@ refuses to run unless the enclosing `def` at the target line is
 both stamp tests go RED, which is what separates "the stamp is broken" from
 "the fixture stopped reaching the writer".
 
-### 159. "Add more receipts" opens the receipt view in a new tab and adds nothing (feedback note #70, operator matthias 2026-09-18)
+### 159. "Add more receipts" opens the receipt view in a new tab and adds nothing (feedback note #70, operator matthias 2026-09-18) (CLOSED 2026-09-20, does not reproduce; reopen condition below)
 
 **The note, verbatim** (read live from `/feedback.jsonl` 2026-09-20, and
 re-read rather than taken from a report): *"add receipts function just opens
@@ -7017,6 +7017,59 @@ whoever takes it, both checked rather than assumed:
   all or only to a viewer link; a backend route that was never called leaves
   no trace, so the API logs cannot settle it and a cold browser drive of the
   "Add more receipts" control on a live month is the instrument that can.
+**CLOSED 2026-09-20: driven end to end on the live app, and it adds the
+receipt.** The owner approved one scratch batch for this, since the half that
+reading cannot settle is what the control DOES after the submit.
+
+Read-only half first, on a current month (`/expenses/51a22ad72864`,
+September), cold:
+
+* the control is a single `BUTTON` reading "Add receipts" with an `onclick`,
+  and the page carries **no `input[type=file]` at all** until it is clicked.
+  Clicking it opens a MODAL whose title is "Add more receipts" - which is the
+  `section` the note recorded, so the note was written from inside the modal,
+  not from a page section;
+* the modal holds a real file input (`#add-receipts-files`, `accept`
+  `.pdf,.png,.jpg,.jpeg,.webp,.zip`, `multiple`), the dropzone "Drop receipts
+  here or choose files", and its own submit. **No second tab opened**;
+* the component that renders it, `chunk-expenses._batchId-LMSoldU3.js` in the
+  published bundle, contains **no receipts-view route and no `window.open`**.
+  Its only route literals are `/expenses`, `/expenses/$batchId`, `/inbound`,
+  `/runs/$runId`, `/runs/${k}/expense-report.pdf`, `/runs/${k}/expenses.csv`
+  and `/settings`.
+
+Then the half that needed a write, on a scratch batch "TEST - item 159"
+created and deleted in the same session, never on a month of Criss's:
+
+* the modal was driven exactly as an operator drives it (open, choose one
+  synthetic receipt PDF, submit);
+* the ONLY non-GET requests of the whole drive were the login and
+  **`POST /api/expense-batches/{id}/receipts`** - the append route, not
+  `/api/receipts` and not a viewer link;
+* the batch went from **0 expenses to 1**, nothing set aside, and the row read
+  back correctly: vendor "TEST VENDOR ITEM 159 LTDA", total 12.34,
+  `source_file` `TEST-item159-receipt.pdf`;
+* cleanup verified rather than assumed: `POST /api/runs/{id}/delete` needs
+  `{"confirm": "<label>"}` (a bare body 400s `delete_confirm_required`), and
+  after it both `/api/expense-batches/{id}` and `/api/runs/{id}` return 404,
+  the list is back to the seven real months, and `/api/memory` and
+  `/api/settings` hold no trace of the synthetic vendor.
+
+**Why it probably happened anyway.** The month the note names,
+`af8936c6b05a`, no longer exists, and the note is timestamped 2026-09-18
+10:19 UTC - the same day item 148 reworked this exact path (a dropped pile is
+now read in parallel) and the receipts-drop prompt's own history records a
+`expenses/new` / "Start a new month" flow being replaced. The behaviour the
+owner hit is most likely that build's, on a month that is gone. Stated as the
+likely explanation, not as a proven one: nothing in the API logs can confirm
+it, because a route that was never called leaves no trace.
+
+**Reopen condition.** Seen again on a month that still exists, with the
+control named (the "Add receipts" button on the Expenses page, or "Add
+digital receipts (folder or zip)" on the reconciliation page, which is a
+DIFFERENT control) and what appeared after the click. No code and no Lovable
+prompt was written: there is nothing on the current build to change.
+
 
 ### 160. A row with a settled category still says a category is missing (feedback note #71, owner 2026-09-20) (SHIPPED 2026-09-20, pending PR; Shipped row 106)
 
