@@ -57,6 +57,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from expense_recon.llm.client import ExtractedReceipt, MockLLMClient  # noqa: E402
 from expense_recon.matching.types import (  # noqa: E402
+    CellFill,
     LineItem,
     Match,
     MatchOutcome,
@@ -193,6 +194,10 @@ RUN_CONTRACT = {
     "rows[]": "object",
     "rows[].candidates[]": "object",
     "rows[].candidates[].receipt.line_items[]": "object",
+    # Item 162: every coloured cell on the charge's source workbook row,
+    # named but not interpreted. Objects, four keys, ABSENT on a row with
+    # no readable fill.
+    "rows[].fills[]": "object",
     "statements[]": "object",
     # Item 57: same field as on the expense batch view; see above.
     "summary.month_health.suspects[]": "string",
@@ -269,6 +274,7 @@ RUN_MUST_COVER = {
     "card_sections[].digits[]",
     "card_sections[].statements[]",
     "coverage[].statement_ids[]",
+    "rows[].fills[]",
 }
 
 
@@ -376,12 +382,14 @@ def _extraction(**overrides) -> ExtractedReceipt:
 
 
 def _transaction(tx_id: str, day: int, vendor: str = "AMAZON",
-                 amount: str = "180") -> Transaction:
+                 amount: str = "180",
+                 fills: tuple = ()) -> Transaction:
     return Transaction(
         transaction_id=tx_id, legal_entity_id="le1", account_id="amex-usd",
         transaction_date=date(2026, 4, day), posting_date=None,
         amount=Decimal(amount), transaction_currency="USD",
         account_card_currency="USD", vendor_from_statement=vendor,
+        fills=fills,
     )
 
 
@@ -422,7 +430,10 @@ def _synthetic_run(client, data_root: Path) -> dict:
     ambiguous candidates, duplicate charges, duplicate receipts, parse issues
     of BOTH severities."""
     t1, t2, t3 = (_transaction("t1", 7), _transaction("t2", 8),
-                  _transaction("t3", 9, "CAFE", "20"))
+                  _transaction("t3", 9, "CAFE", "20",
+                               fills=(CellFill(column="Amount", index=2,
+                                               hex="FFFF00",
+                                               family="yellow"),)))
     r1, r2 = _receipt("d1", 7), _receipt("d2", 8, items=[_item("180")])
     r3 = _receipt("d3", 9, "CAFE", "20", items=[_item("20")])
     r4 = _receipt("d4", 10, "SOLO", "77", items=[_item("77")])

@@ -3747,6 +3747,13 @@ def build_view(
                     {"entry_status_source": tx.entry_status_source}
                     if tx.entry_status_source is not None else {}
                 ),
+                # Item 162 (owner directive 2026-09-20): every coloured cell
+                # on the source workbook row, named but NOT interpreted. A
+                # record of what the sheet is marked with; `entry_status`
+                # above stays the only verdict any colour produces. Parallel
+                # field, ABSENT on a row with no readable fill and on every
+                # month read before the item (the parse happens at upload).
+                **({"fills": _fills_view(tx)} if tx.fills else {}),
                 # Slice 10: the tool's suggested category for a receiptless
                 # charge (None on matched rows and pre-Slice-10 snapshots).
                 "charge_category": charge_cat_view,
@@ -15373,3 +15380,29 @@ def apply_ecb_rates(cfg: dict, months) -> dict:
     matching["fx_ecb_monthly_rates"] = dict(sorted(table.items()))
     out["matching"] = matching
     return out
+
+
+def _fills_view(tx) -> list[dict]:
+    """The coloured cells of a charge's source workbook row (item 162).
+
+    Four keys on every element, always present, so a consumer maps over
+    them with no shape checks: `column` (the header text, `""` when the
+    column has none), `index` (0-based, the identity when a header
+    repeats), `hex` (six uppercase digits, no `#`) and `family` (the
+    shade's name, from `ingest.statement_xlsx.colour_family`). The list
+    reads left to right and is never empty: the whole key is absent
+    instead (parallel-field contract, rule 1).
+
+    Deliberately carries no verdict, no colour-to-meaning map and no
+    suggestion. Whether orange means anything is Criss's to say, not the
+    tool's; `entry_status` stays the only thing a colour decides.
+    """
+    return [
+        {
+            "column": f.column,
+            "index": f.index,
+            "hex": f.hex,
+            "family": f.family,
+        }
+        for f in tx.fills
+    ]

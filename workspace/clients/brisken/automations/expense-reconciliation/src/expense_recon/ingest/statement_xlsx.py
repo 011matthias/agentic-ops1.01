@@ -67,7 +67,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-from ..matching.types import Transaction
+from ..matching.types import CellFill, Transaction
 from ._common import (
     OPTIONAL_KEYS,
     REQUIRED_KEYS,
@@ -94,44 +94,121 @@ __all__ = [
 
 # ── L1 fill classification ────────────────────────────────────────────
 #
-# Tunable thresholds, unit-tested against the common Excel palette. Her
-# real sheet may use a shade these misses; widen here, never inline.
+# The reader NAMES every fill it can read, and infers meaning from exactly
+# two of those names. Owner directive 2026-09-20: "dont attribute colors in
+# the statements or receipts any deeper meaning, all i need you to be able
+# to do, is get the classifier to read all these colors and more." So the
+# families below are a vocabulary of shades, not a vocabulary of verdicts;
+# `_FAMILY_ENTRY_STATUS` is the whole of the meaning, and it is the same two
+# marks the 2026-07-15 walkthrough established.
 #
-# Yellow ("posted"): strongly red+green, weak blue. Catches FFFF00,
-# FFFF99, FFE699, FFEB9C; excludes white (blue too high) and orange
-# FFC000 (green too far below red).
-# Gray ("subscription"): low saturation, mid lightness. Catches D9D9D9,
-# BFBFBF, A6A6A6, 808080; excludes white and black.
-_YELLOW_MIN_RED = 180
-_YELLOW_GREEN_RATIO = 0.8
-_YELLOW_BLUE_GAP = 40
-_GRAY_MAX_SPREAD = 24
+# Measured on the live workbooks 2026-09-20 (in-machine, read-only): July
+# carries eight distinct fills and August five, of which the pre-directive
+# thresholds could name only the yellows and the neutrals. 84 of July's 112
+# rows carried a colour the reader could not see at all (48 orange + 35 blue
+# + 1 blue/green), every one of them in the `Card` column, which is a THIRD
+# annotation channel beside the yellow `Amount` and the gray `Description`.
+# Naming them changes no verdict; see `_FAMILY_ENTRY_STATUS`.
+#
+# Hue bands (HSV) replace the ad-hoc RGB arithmetic they grew out of, so a
+# shade Criss has not used yet still lands in the right family instead of
+# falling off the edge of a hand-tuned inequality. Two carve-outs keep the
+# two MEANINGFUL families exactly where they were:
+#
+#  * amber: hue 45-52 at high saturation is gold (FFC000), not the pale
+#    yellow highlight (FFE699, same theme colour two tints lighter). The
+#    old thresholds already split that ramp; the saturation cap is that
+#    split, stated in the terms that actually separate the two.
+#  * olive: a yellow-hued fill below `_YELLOW_MIN_VALUE` is a dark olive,
+#    not a highlighter. This is the old `r >= 180` floor, unchanged.
+_NEUTRAL_MAX_CHROMA = 24
 _GRAY_MIN_MEAN = 110
 _GRAY_MAX_MEAN = 224
+_YELLOW_MIN_HUE = 45.0
+_YELLOW_MAX_HUE = 61.0          # above 60 green dominates: a chartreuse
+_YELLOW_MIN_VALUE = 180         # was `_YELLOW_MIN_RED`
+_AMBER_MAX_HUE = 52.0
+_AMBER_MIN_SAT = 0.72
+
+# Upper edge of each chromatic band, in hue degrees. Yellow is handled
+# before this table because of the two carve-outs above.
+_HUE_BANDS: tuple[tuple[float, str], ...] = (
+    (15.0, "red"),
+    (45.0, "orange"),
+    (61.0, "yellow"),
+    (165.0, "green"),
+    (195.0, "cyan"),
+    (255.0, "blue"),
+    (290.0, "purple"),
+    (330.0, "pink"),
+)
+
+# The ONLY meaning any colour carries. A family absent from this map is
+# recorded on the row and votes on nothing (`_row_entry_status`), which is
+# what keeps "read more colours" from silently re-classifying a month.
+_FAMILY_ENTRY_STATUS: dict[str, str] = {
+    "yellow": "posted",
+    "gray": "subscription",
+}
 
 # Default-Office theme colors (index -> RGB hex) for `theme`-typed fills.
-# Only the slots that plausibly produce yellows/grays matter; an unknown
-# index resolves to None (unclassified is always safe).
+# 10 / 11 are the hyperlink pair, added 2026-09-20 with the rest of the
+# widening: neither is yellow or neutral, so neither can move a verdict.
+# An unknown index still resolves to None (unnamed is always safe).
 _THEME_RGB = {
     0: "FFFFFF", 1: "000000", 2: "E7E6E6", 3: "44546A", 4: "4472C4",
     5: "ED7D31", 6: "A5A5A5", 7: "FFC000", 8: "5B9BD5", 9: "70AD47",
+    10: "0563C1", 11: "954F72",
 }
 
 
+def _hue(r: int, g: int, b: int) -> float:
+    """Hue in degrees (0-360). Undefined for a neutral; callers check
+    chroma first."""
+    hi, lo = max(r, g, b), min(r, g, b)
+    delta = hi - lo
+    if delta == 0:
+        return 0.0
+    if hi == r:
+        hue = 60.0 * (((g - b) / delta) % 6.0)
+    elif hi == g:
+        hue = 60.0 * (((b - r) / delta) + 2.0)
+    else:
+        hue = 60.0 * (((r - g) / delta) + 4.0)
+    return hue % 360.0
+
+
+def colour_family(r: int, g: int, b: int) -> str:
+    """The fill's colour family: a NAME, never a verdict.
+
+    Total over the RGB cube — every readable fill gets a family, so the
+    payload can tell "coloured, and this is the shade" apart from "not
+    coloured", which before 2026-09-20 were both `None`.
+    """
+    hi, lo = max(r, g, b), min(r, g, b)
+    chroma = hi - lo
+    if chroma <= _NEUTRAL_MAX_CHROMA:
+        mean = (r + g + b) / 3
+        if mean > _GRAY_MAX_MEAN:
+            return "white"
+        if mean < _GRAY_MIN_MEAN:
+            return "black"
+        return "gray"
+    hue = _hue(r, g, b)
+    if _YELLOW_MIN_HUE <= hue < _YELLOW_MAX_HUE:
+        saturation = chroma / hi if hi else 0.0
+        if hue < _AMBER_MAX_HUE and saturation >= _AMBER_MIN_SAT:
+            return "orange"
+        return "yellow" if hi >= _YELLOW_MIN_VALUE else "olive"
+    for edge, name in _HUE_BANDS:
+        if hue < edge:
+            return name
+    return "red"
+
+
 def _classify_rgb(r: int, g: int, b: int) -> str | None:
-    if (
-        r >= _YELLOW_MIN_RED
-        and g >= _YELLOW_GREEN_RATIO * r
-        and b <= min(r, g) - _YELLOW_BLUE_GAP
-    ):
-        return "posted"
-    mean = (r + g + b) / 3
-    if (
-        max(r, g, b) - min(r, g, b) <= _GRAY_MAX_SPREAD
-        and _GRAY_MIN_MEAN <= mean <= _GRAY_MAX_MEAN
-    ):
-        return "subscription"
-    return None
+    """The two marks Criss's workbook carries, and nothing else."""
+    return _FAMILY_ENTRY_STATUS.get(colour_family(r, g, b))
 
 
 def _apply_tint(component: int, tint: float) -> int:
@@ -191,6 +268,33 @@ def _classify_fill(cell) -> str | None:
     if rgb is None:
         return None
     return _classify_rgb(*rgb)
+
+
+def _row_fills(row_cells, headers: list[str]) -> tuple[CellFill, ...]:
+    """Every readable fill on the row, as `CellFill(column, index, hex,
+    family)`, left to right.
+
+    Records EVERY column, not only the mapped ones. The verdict still reads
+    mapped columns alone (`_row_entry_status`), but seeing is not voting:
+    July's `Memo` column carries a gray and a green the mapped-column scan
+    never reached, and the directive is that the reader sees them. A column
+    header can repeat (both live workbooks have two `Memo` columns), so the
+    index is what identifies the cell.
+    """
+    fills: list[CellFill] = []
+    for index, cell in enumerate(row_cells):
+        rgb = _fill_rgb(getattr(cell, "fill", None))
+        if rgb is None:
+            continue
+        fills.append(
+            CellFill(
+                column=headers[index] if index < len(headers) else "",
+                index=index,
+                hex="%02X%02X%02X" % rgb,
+                family=colour_family(*rgb),
+            )
+        )
+    return tuple(fills)
 
 
 def _row_entry_status(row_cells, mapped_indices: list[int]) -> str | None:
@@ -437,6 +541,7 @@ def parse_statement_xlsx_tolerant(
                     original_currency=original_currency,
                     fx_rate=fx_rate,
                     entry_status=_row_entry_status(row_cells, mapped_indices),
+                    fills=_row_fills(row_cells, headers),
                     is_credit=is_credit,
                     card_last4=card_last4,
                     row_type=row_type,

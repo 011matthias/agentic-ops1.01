@@ -7191,10 +7191,94 @@ comes from and why it is grouped by card holder. SPA half
 `docs/lovable-chase-section-label-prompt.md`, written and not pasted.
 
 
+### 162. The reader sees two colours and Criss marks the sheet with eight (owner directive 2026-09-20) (SHIPPED 2026-09-20, pending PR; Shipped row 108)
+
+**The directive, verbatim**: *"dont attribute colors in the statements or
+receipts any deeper meaning, all i need you to be able to do, is get the
+classifier to read all these colors and more."*
+
+**Measured live first**, in-machine over `/data/runs/*/*.xlsx`, read-only.
+The statement reader classified a row by the fill colour of its cells and
+understood two families. Of 452 filled cells across July and August, 174
+were invisible to it:
+
+| Fill | July | August | Was | Now |
+|---|---|---|---|---|
+| `#FFFF00` | 118 | 7 | `posted` | yellow, `posted` |
+| `#D9D9D9` | 68 | 16 | `subscription` | gray, `subscription` |
+| `#F4B183` | 48 | 37 | **nothing** | orange, no verdict |
+| `#B4C7E7` | 45 | 43 | **nothing** | blue, no verdict |
+| `#ADADAD` | 27 | 40 | `subscription` | gray, `subscription` |
+| `#C9C9C9` | 1 | 0 | `subscription` | gray, `subscription` |
+| `#FFFFCC` | 1 | 0 | `posted` | yellow, `posted` |
+| `#C6DEB5` | 1 | 0 | **nothing** | green, no verdict |
+
+**What the census settled, and the prompt for this item had not.** The
+colours are a PER-COLUMN scheme, not row highlighting, and there are THREE
+channels, not one: the `Card` column carries the orange / blue / mid-gray,
+`Description` carries the light gray, `Amount` carries the yellow. That
+decomposes the vote exactly: July's 112 rows are 44 with a yellow `Amount`
+alone (`posted`), 27 with a yellow `Amount` plus a gray `Description` plus a
+mid-gray `Card` (2-1, `subscription`), and 41 with a yellow `Amount` plus a
+gray `Description` (1-1, tie-broken to `posted`). 44 + 41 = 85 `posted`, 27
+`subscription`, which is the live payload to the row. The per-column map is
+therefore the honest carrier, and it is what shipped.
+
+**Two premises in the item's own brief were refuted by measurement**, both
+worth not re-deriving. `_fill_rgb` is NOT hiding colours behind unknown
+theme slots: every theme index either workbook uses (0, 2, 4, 5, 6, 9)
+is in `_THEME_RGB` and the per-hex counts reconcile to the per-type counts
+with nothing dropped. And the fills are overwhelmingly `theme`-typed rather
+than `rgb`-typed (July: 190 theme, 119 rgb), so a fixture built only from
+rgb fills exercises a path the live data never takes; the test asserts
+which path ran before believing anything that rests on it.
+
+**What shipped.** `colour_family(r, g, b)` is total over the RGB cube and
+returns a stable name (white / gray / black / red / orange / yellow / olive
+/ green / cyan / blue / purple / pink) from HSV hue bands, replacing the
+ad-hoc RGB inequalities. `_FAMILY_ENTRY_STATUS` maps exactly two of those
+families to the two existing verdicts and is the whole of the meaning; a
+newly named family is recorded and votes on nothing. `rows[].fills[]`
+carries `{column, index, hex, family}` per coloured cell, over EVERY column
+rather than the mapped ones, because seeing is not voting. `entry_status`,
+its vote, its tie-break and its consumers are untouched.
+
+**No live verdict moved**, and that is measured rather than argued: both
+classifiers were run over every cell of both stored workbooks and 0 of 452
+changed. Over the whole RGB cube the two rules do differ, in two directions,
+enumerated rather than left implicit: the old predicate called sage greens
+(hue 61-75) and dark ambers `posted`, which the bands correct, and the bands
+call a thin shell of pale creams yellow that the old `b <= min(r,g) - 40`
+cut excluded by one unit (`#FFFFCC` was in, `#FCF0C9` out; the same cream).
+Neither class appears in either live month. The amber carve-out exists
+because `#FFC000` and `#FFE699` are the same theme colour two tints apart
+and the old thresholds already split that ramp: saturation, not hue, is what
+separates gold from a pale highlight, and the pinned table demands the split.
+
+**Explicitly NOT in this item: the 1-1 tie-break.** 41 of July's 112 rows
+(37%) read "already booked" because a tie resolves to `posted`. Changing it
+flips a third of a month and contradicts the shipped gray-recurring ruling
+(PR #1020). It is an owner decision and it is recorded here, not taken.
+
+**Also not in this item:** no settings map from colour to meaning, no model
+call, and nothing on `expenses[]` (an expense is a receipt and a receipt has
+no workbook row).
+
+**A statement is parsed at UPLOAD**, so July and August carry no `fills`
+until they are next read, and re-reading Criss's months is hers to trigger
+([[feedback_recon_no_live_writes_criss_acts]]). A correct deploy therefore
+looks like a no-op on the live payloads; it is verified by running the
+changed function in-machine over the stored workbooks instead.
+
+SPA half: `docs/lovable-statement-colour-prompt.md` (Not applied). The
+render is swatches beside the existing chip, deliberately not a row tint:
+tinting would re-attach the meaning the directive removes.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 108 | The statement reader names every colour it can read and infers meaning from two: `colour_family` is total over the RGB cube (HSV hue bands, twelve stable family names) replacing the ad-hoc RGB inequalities, `_FAMILY_ENTRY_STATUS` maps only yellow and gray to the two existing verdicts, and `rows[].fills[]` records `{column, index, hex, family}` for every coloured cell on the source row, over every column rather than only the mapped ones | Backlog item 162 (owner directive: read all these colours and more, and attribute no deeper meaning). The reader understood two families, so a row Criss had marked with something else was indistinguishable from a row she had marked with nothing: 84 of July's 112 rows. The census also settled the shape - the colours are a per-column scheme with THREE channels (`Card` orange/blue/mid-gray, `Description` gray, `Amount` yellow), which decomposes July's 85/27 split exactly into 44 yellow-only + 41 tie + 27 gray-majority | 2026-09-20, pending PR; `tests/test_statement_fill_colours_item_162.py` (route-level through `GET /api/runs/{id}`, plus the family-to-verdict map held as a property over the cube rather than a list of examples, plus an instrument check that the THEME fill path is the one under test, since both live workbooks are theme-typed and an rgb-only fixture would pass while testing nothing); six wiring points proven RED by hand with sha256-equal restores; **0 of 452 live filled cells change verdict**, measured by running both classifiers over both stored workbooks; whole-cube divergence enumerated in the PR; SPA half `docs/lovable-statement-colour-prompt.md` (Not applied) |
 | 107 | The chase section says what it lists: `chase.title` reuses the exact words of the box above it ("Charges without a receipt" / "Lançamentos sem recibo") and a new `chase.subtitle` names the population and the grouping. Copy only; the counts were verified correct first | Backlog item 161 (feedback note #72, "what is this"). A cold drive refuted the item's own hypothesis: 85.3 and 14.9 are never rendered on that page. The real defect is one population named twice, four lines apart - a box reading "Charges without a receipt · 65" over a section reading "Receipts to chase (65)", whose own columns are the charge columns | 2026-09-20 |
 | 106 | The row says WHICH line still needs a category: `expenses[].uncategorized_lines` names each line item carrying none (index, description, amount), built from `uncategorized_line_indexes` - the one predicate `_matched_category_review` turns into the `partial_uncategorized` verdict, so the row cannot name a line the sentence is not about | Backlog item 160 (feedback note #71). July's Microsoft Corporation 718.20 showed `posting_category` "Software & Subscriptions" AND "One or more receipt lines still need a category". Read live, both were true: the row category is the roll-up of the lines that have one, and line 2 (25.20, "(illegible)") has none. The message was correct and read as a mistake because it named nothing beside a filled field | 2026-09-20 |
 | 105 | The tool's own verdict carries the statement id too: `set_tool_decision`'s `statement_id` stamp, the one of item 152's five `decisions` writers that no fixture reached, is pinned through the route that reaches it (the item-76 self-confirm rule, inside `rematch_month` on statement attach), and the T3 docstring that asserted the opposite is corrected | Backlog item 158. A wire no test reaches is a wire nobody knows is working, and this one carries the most common verdict on a real month: the self-confirm rule decides every clean exact pair without anyone clicking, and an unstamped tool verdict is exactly the row a reader could not trace back to its statement line after a re-read moved its content-derived `transaction_id`. What hid it was an active claim, not silence: a `tests/test_charge_origin_t3.py` docstring said "on a fresh month the matcher's `set_tool_decision` has already written a verdict for every charge and stamped it", while THAT fixture's charges pair with nothing and its month ends with no `decided_by='tool'` row at all. Outcome is the good one: the route exists, the wire works, and it is covered rather than recorded as a known gap | 2026-09-20, PR #1129; `tests/test_tool_decision_statement_id_158.py` (3, route-level): the premise asserted separately first (exactly one `decided_by='tool'` row, `decided_rule` `exact_vendor_75`, agreeing with the row the page shows) so the stamp test cannot pass over an empty table, then the stamp, then that a person taking the charge over later leaves the id alone. Red-proven at an anchor the mutation script refuses to place anywhere but inside `set_tool_decision` (the call is textually identical in all five writers): the premise test stays GREEN, both stamp tests go RED, `store.py` restored sha256-equal. Test-only, no deploy needed |

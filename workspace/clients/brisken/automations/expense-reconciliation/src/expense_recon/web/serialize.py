@@ -21,6 +21,7 @@ from decimal import Decimal
 from ..ingest._common import row_type_for_label, type_label_from_raw_text
 from ..matching.types import (
     Categorization,
+    CellFill,
     ClassificationSource,
     LineItem,
     Match,
@@ -116,6 +117,15 @@ def transaction_to_dict(t: Transaction) -> dict:
         # nothing, a gray fill closes the charge, so the provenance has to
         # survive the snapshot.
         "entry_status_source": t.entry_status_source,
+        # Item 162: the row's coloured cells, so a re-read is not needed to
+        # know what the sheet was marked with. Always written (possibly
+        # `[]`); `transaction_from_dict` tolerates its absence, which is
+        # every snapshot taken before the item.
+        "fills": [
+            {"column": f.column, "index": f.index, "hex": f.hex,
+             "family": f.family}
+            for f in t.fills
+        ],
         "is_credit": t.is_credit,
         # Per-row card identity (WS3). Load-bearing when a snapshot is
         # re-matched later (the bulk receipts-folder attach): without it the
@@ -155,6 +165,18 @@ def transaction_from_dict(d: dict) -> Transaction:
         # no key means the mark came from the workbook fill (the web layer
         # never derived one).
         entry_status_source=d.get("entry_status_source"),
+        # .get keeps pre-item-162 snapshots loadable: no key means the
+        # month was read before the parser recorded fills, not that the
+        # sheet was uncoloured. A re-read is what fills them in.
+        fills=tuple(
+            CellFill(
+                column=f.get("column", ""),
+                index=f.get("index", -1),
+                hex=f.get("hex", ""),
+                family=f.get("family", ""),
+            )
+            for f in d.get("fills") or ()
+        ),
         # .get keeps pre-3.15 snapshots loadable (no is_credit key).
         is_credit=d.get("is_credit", False),
         # .get keeps pre-WS3 snapshots loadable (no card_last4 key); those
