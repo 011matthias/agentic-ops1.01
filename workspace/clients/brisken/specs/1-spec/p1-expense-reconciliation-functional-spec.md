@@ -50,7 +50,37 @@ next_steps:
 # p1 — AI-Assisted Expense Reconciliation Platform
 ## Functional Specification, v2
 
-> **Authority:** This document supersedes v1 (`reference/2026-05-14-functional-spec-original.md`)
+> **This spec is the original design, not a description of what runs.**
+> Read this before anything below it.
+>
+> It specifies a multi-tenant SaaS on Firebase / Cloud SQL, with Anthropic
+> Claude as the judgment layer and a mobile receipt-capture page. Dirk
+> descoped that on 2026-05-27 ("We just need a working tool. Anneal
+> quality through real-data use, not architecture up front"). What was
+> actually built is a **single-tenant tool**: a FastAPI JSON API on
+> Fly.io, OpenAI for the judgment calls, and a Lovable SPA as the screen.
+> Multi-tenancy, RBAC, the Firebase/GCP platform and mobile capture are
+> out of scope by that decision, not pending.
+>
+> The spec was last revised 2026-05-24 and is kept as the record of what
+> was originally scoped and why. It is deliberately **not** being rewritten
+> to match the build: it describes a different product, and a rewrite
+> would re-rot at the rate the build moves while creating a second
+> document claiming to describe it (reasoning in
+> `../../automations/expense-reconciliation/ANNEALING.md`, E4, closed
+> 2026-09-20 as superseded).
+>
+> **For what the program actually does, read instead:**
+> `automations/expense-reconciliation/README.md` (orientation),
+> `SPEC-GAP-REGISTER.md` (this spec mapped to the build, section by
+> section), `BLUEPRINT.md` (the design as built), `docs/operating.md`
+> (running it), `docs/api-contract.md` (the surface), and
+> `../../status/p1-expense-reconciliation.md` (where the work stands).
+
+---
+
+> **Authority (as of 2026-05-24, within the v1/v2 lineage):** This document supersedes v1
+> (`reference/2026-05-14-functional-spec-original.md`)
 > for all build decisions. v1 is preserved verbatim as a primary source. Where v2 and v1
 > diverge, v2 is binding. Every v2 change traces to an entry in
 > `context/2026-05-20-call-outcomes.md` (cited inline).
