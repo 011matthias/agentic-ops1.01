@@ -7,6 +7,11 @@ because it costs a second machine and a second volume. Treat the restore
 half as untested until that run happens, and do it before anyone has to
 rely on it in anger.
 
+**If the app is DOWN rather than lost, start at
+[`if-it-is-down.md`](if-it-is-down.md)** (item 120): which of the three
+services is down, the three failure shapes, and the deploy and rollback
+paths. Come back here only when the data itself has to be recovered.
+
 ## What exists today
 
 | Copy | Where | Who controls it | Age |
