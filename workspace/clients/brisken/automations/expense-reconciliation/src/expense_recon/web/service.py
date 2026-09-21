@@ -5943,7 +5943,7 @@ def create_expense_batch(
 
 def execute_expense_batch(
     store: RunStore, prepared: PreparedExpenseBatch, *, on_stage=None,
-    pre_commit=None,
+    pre_commit=None, learning_db_path: Path | None = None,
 ) -> str:
     """Run OCR + categorization for a prepared expense batch and persist the
     run row (mode marker in config AND summary). Slow (vision per file);
@@ -6028,7 +6028,14 @@ def execute_expense_batch(
     # same trigger the gradual-add path fires (item 38 ruling 3).
     created = store.get_run(prepared.run_id)
     if created is not None and is_trip_batch(created):
-        rematch_months_after_trip_change(store, created)
+        # R4.1: `learning_db_path` is threaded so a month re-matched by a
+        # trip MATERIALIZING reconciles with the same MatchMemory the
+        # gradual-add path gives it; before it was passed, whether a month
+        # saw its learned corrections depended on which of the two trip
+        # entrances fired.
+        rematch_months_after_trip_change(
+            store, created, learning_db_path=learning_db_path
+        )
     return prepared.run_id
 
 
@@ -11841,6 +11848,16 @@ def add_receipts_to_expense_batch(
                 )
             except Exception as exc:  # noqa: BLE001 - reported in the result
                 result["neighbour_rematch_error"] = f"{type(exc).__name__}: {exc}"
+        # R4.1: the same debt for a TRIP add, owed in this same span. The
+        # months are chosen by the trip's dates rather than the receipts'
+        # (a trip lends its whole pool), so this does not gate on
+        # `documents`, only on something having been added.
+        trip_months: list[str] = []
+        if result.get("n_added") and is_trip_batch(run):
+            try:
+                trip_months = _owe_trip_month_rematches_locked(store, run)
+            except Exception as exc:  # noqa: BLE001 - reported in the result
+                result["trip_rematch_error"] = f"{type(exc).__name__}: {exc}"
 
     # OUTSIDE the lock (`rematch_month` takes the same non-reentrant lock to
     # commit). A month whose statement is already loaded reconciles the
@@ -11861,8 +11878,11 @@ def add_receipts_to_expense_batch(
         # span it (item 38 ruling 3), so they re-match now rather than
         # waiting for their own next change.
         if is_trip_batch(run):
-            cross = rematch_months_after_trip_change(
-                store, run, learning_db_path=learning_db_path
+            # The debt was already written inside the lock span above, so
+            # this only PAYS it; a restart in between leaves the mark and
+            # `resume_pending_rematches` finishes the job at boot.
+            cross = rematch_trip_months(
+                store, trip_months, learning_db_path=learning_db_path
             )
             if cross:
                 result["months_rematched"] = cross
@@ -12693,29 +12713,47 @@ def trip_pool_for_month(
     return borrowed, origins
 
 
-def rematch_months_after_trip_change(
+TRIP_REMATCH_TRIGGER = "trip"
+
+
+def trip_months_covering(
     store: RunStore,
     trip_batch: RunRow,
     *,
-    learning_db_path: Path | None = None,
-) -> list[dict]:
-    """A trip's receipt pool changed; every RECONCILING company month
-    whose charge span overlaps the trip re-matches, because its candidate
-    pool spans this trip. A month without a statement pays nothing (the
-    re-match no-ops), and errors report per month rather than raising --
-    the trip's own add already committed."""
+    ranges: "list[tuple[date, date]] | None" = None,
+) -> list[RunRow]:
+    """The RECONCILING company months whose charge span overlaps the trip,
+    the sibling of `neighbour_months_covering` for the trip trigger.
+
+    `ranges` overrides the trip's own current range, which is what a date
+    EDIT needs: the months owed a re-match are the union of those the OLD
+    range covered and those the NEW one does, or a month the trip has just
+    stopped overlapping would keep the receipts it may no longer borrow.
+    Passing an empty list selects nothing; passing None reads the trip.
+
+    A candidate is skipped unless it is an expense-generation run: a legacy
+    statement-mode run cannot borrow from a trip, and re-matching it on
+    every trip add is work with no effect (the neighbour path has carried
+    this filter since item 112)."""
     tid = str((trip_batch.config or {}).get("trip_id") or "")
-    trip = store.get_trip(tid) if tid else None
-    if trip is None:
+    if ranges is None:
+        trip = store.get_trip(tid) if tid else None
+        if trip is None:
+            return []
+        try:
+            ranges = [(
+                date.fromisoformat(trip.start_date),
+                date.fromisoformat(trip.end_date),
+            )]
+        except ValueError:
+            return []
+    if not ranges:
         return []
-    try:
-        t0 = date.fromisoformat(trip.start_date)
-        t1 = date.fromisoformat(trip.end_date)
-    except ValueError:
-        return []
-    results: list[dict] = []
+    found: list[RunRow] = []
     for candidate in store.list_runs():
         if candidate.run_id == trip_batch.run_id or is_trip_batch(candidate):
+            continue
+        if (candidate.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
             continue
         if not has_statement(candidate):
             continue
@@ -12726,15 +12764,108 @@ def rematch_months_after_trip_change(
                 dates.append(date.fromisoformat(raw))
             except ValueError:
                 continue
-        if not dates or max(dates) < t0 or min(dates) > t1:
+        if not dates:
             continue
-        rematch = rematch_after_change(
-            store, candidate.run_id, learning_db_path=learning_db_path,
-            trigger="trip",
+        lo, hi = min(dates), max(dates)
+        if any(not (hi < t0 or lo > t1) for t0, t1 in ranges):
+            found.append(candidate)
+    return found
+
+
+def _owe_trip_month_rematches_locked(
+    store: RunStore,
+    trip_batch: RunRow,
+    *,
+    ranges: "list[tuple[date, date]] | None" = None,
+) -> list[str]:
+    """Write the owed-re-match mark on every month the trip overlaps, and
+    return their ids. Caller holds `_BATCH_ADD_LOCK`.
+
+    The sibling of `_owe_neighbour_rematches_locked`, and it exists for the
+    same reason: the debt has to be on the month BEFORE the lock is
+    released, or a restart between the trip's own commit and the month's
+    turn in the paying loop loses it silently, leaving a month reporting
+    charges as settled by receipts it can no longer see (measured
+    2026-09-21: July read 33 reconciled where 31 was true)."""
+    owed: list[str] = []
+    for other in trip_months_covering(store, trip_batch, ranges=ranges):
+        current = store.get_run(other.run_id)
+        if current is None:
+            continue
+        snapshot = dict(current.snapshot or {})
+        snapshot[REMATCH_PENDING_KEY] = rematch_pending_mark(
+            snapshot, TRIP_REMATCH_TRIGGER
         )
+        store.update_run_snapshot(other.run_id, snapshot)
+        owed.append(other.run_id)
+    return owed
+
+
+def owe_trip_month_rematches(
+    store: RunStore,
+    trip_batch: RunRow,
+    *,
+    ranges: "list[tuple[date, date]] | None" = None,
+) -> list[str]:
+    """`_owe_trip_month_rematches_locked` for a caller that does NOT already
+    hold `_BATCH_ADD_LOCK` (the trip routes, the create path). The lock is
+    not reentrant, so the two entrances stay separate."""
+    with _BATCH_ADD_LOCK:
+        return _owe_trip_month_rematches_locked(
+            store, trip_batch, ranges=ranges
+        )
+
+
+def rematch_trip_months(
+    store: RunStore,
+    run_ids: list[str],
+    *,
+    learning_db_path: Path | None = None,
+) -> list[dict]:
+    """Pay the months' owed re-matches, outside every lock. Never raises:
+    the trip change that owed them is committed, so a failure stays on that
+    month's mark for the operator state, the notifier and the boot retry,
+    and the REMAINING months are still paid. Mirrors
+    `rematch_neighbour_months`; before this existed a raise on the first
+    month aborted every month after it."""
+    results: list[dict] = []
+    for run_id in run_ids:
+        try:
+            rematch = rematch_after_change(
+                store, run_id, learning_db_path=learning_db_path,
+                trigger=TRIP_REMATCH_TRIGGER,
+            )
+        except Exception as exc:  # noqa: BLE001 - recorded on the trip mark
+            error = f"{type(exc).__name__}: {exc}"
+            _record_rematch_failure(
+                store, run_id, TRIP_REMATCH_TRIGGER, error
+            )
+            rematch = {"error": error}
         if rematch is not None:
-            results.append({"run_id": candidate.run_id, **rematch})
+            results.append({"run_id": run_id, **rematch})
     return results
+
+
+def rematch_months_after_trip_change(
+    store: RunStore,
+    trip_batch: RunRow,
+    *,
+    learning_db_path: Path | None = None,
+    ranges: "list[tuple[date, date]] | None" = None,
+) -> list[dict]:
+    """A trip's receipt pool or date range changed; every RECONCILING
+    company month whose charge span overlaps it re-matches, because its
+    candidate pool spans this trip. Owes the debt under the lock first,
+    then pays it outside, so a restart in between leaves the debt rather
+    than a month whose counts silently disagree with its receipts.
+
+    For a caller that already holds `_BATCH_ADD_LOCK`, owe inside its own
+    span with `_owe_trip_month_rematches_locked` and pay with
+    `rematch_trip_months` instead of calling this."""
+    owed = owe_trip_month_rematches(store, trip_batch, ranges=ranges)
+    return rematch_trip_months(
+        store, owed, learning_db_path=learning_db_path
+    )
 
 
 def effective_settlements(
@@ -13917,6 +14048,49 @@ def rematch_neighbour_months(
         if rematch is not None:
             results.append({"run_id": run_id, **rematch})
     return results
+
+
+def relabel_borrowed_sources(
+    store: RunStore, lender_run_id: str, label: str
+) -> list[str]:
+    """Carry a lender's new label onto every month that borrowed from it,
+    and return those months (R4.1).
+
+    A borrowing month records `{run_id, trip_id, label}` in its snapshot at
+    BORROW time, and `rows[].settled_by` renders that copy. So renaming a
+    trip moved its batch label and left every borrowing month's badge
+    naming the old one until that month happened to re-match. Rewriting the
+    stored copies keeps the snapshot self-consistent, which is how the rest
+    of the month's record already works, and costs one write per borrowing
+    month on an operation that happens rarely."""
+    touched: list[str] = []
+    with _BATCH_ADD_LOCK:
+        for run in store.list_runs():
+            snapshot = run.snapshot or {}
+            sources = snapshot.get("receipt_sources") or {}
+            if not isinstance(sources, dict):
+                continue
+            hits = [
+                doc for doc, entry in sources.items()
+                if isinstance(entry, dict)
+                and str(entry.get("run_id") or "") == str(lender_run_id)
+                and str(entry.get("label") or "") != str(label)
+            ]
+            if not hits:
+                continue
+            fresh = store.get_run(run.run_id)
+            if fresh is None:
+                continue
+            snap = dict(fresh.snapshot or {})
+            live = dict(snap.get("receipt_sources") or {})
+            for doc in hits:
+                entry = live.get(doc)
+                if isinstance(entry, dict):
+                    live[doc] = {**entry, "label": label}
+            snap["receipt_sources"] = live
+            store.update_run_snapshot(run.run_id, snap)
+            touched.append(run.run_id)
+    return touched
 
 
 def borrowed_source_view(entry: object) -> dict | None:

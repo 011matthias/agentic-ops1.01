@@ -1150,6 +1150,33 @@ claims are released correctly on delete, and the next re-match heals the month
 completely. Full findings, with the numbers, in the R4 row of
 `status/p1-expense-reconciliation.md`.
 
+**Owner rulings on those findings, 2026-09-21.**
+
+1. **The lifecycle re-match: BUILD IT.** "Must be done because later on if
+   expenses and items in statement dont line up we will have a problem."
+   Shipped as R4.1 (see the Shipped row): four entrances now owe the debt
+   inside their own lock span, the paying loop records a per-month failure
+   instead of aborting the rest, a rename carries onto the batch label and
+   the borrowing months' badges, and the trip-batch create slot is released
+   on any failure rather than only on `RunInputError`.
+2. **The trip report's missing cost center: HOLD.** Not a defect to fix
+   piecemeal; the owner wants to design trip reports and cost centers
+   together. What both are TODAY is written up in
+   `automations/expense-reconciliation/docs/trip-reports-and-cost-centers-today.md`
+   as the input to that. Nothing in R4.1 touches either.
+3. The stale `grep` count: already corrected in PR #1167.
+4. **The live card registry is correct.** Three cards genuinely share one
+   Zoho account, so the trip report's Paid-through column repeating it under
+   three person headings is faithful. Refutation stands, closed.
+5. **`roster_mismatch` rendering: FIX.** `docs/lovable-roster-mismatch-prompt.md`,
+   registered Pending in PROMPT-STATUS. Rendering only; both fields shipped
+   2026-09-07.
+
+**Q1 answered: the trip entity SURVIVES, and its integration with cost
+centers is ON HOLD** for the owner's brainstorm. **Q2: Dirk will author the
+four cost centers** (the first save flags 183 rows, see item 47). **Q3: a
+real trip may be created in the live app.**
+
 **Owner:** "Expense creation should be split and separated into 2 functions:
 One for overall monthly company expenses and one for travel expenses." One of
 three directives given together (with items 39 and 40); they ship as one
@@ -7499,6 +7526,7 @@ tinting would re-attach the meaning the directive removes.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 114 | R4.1, the trip lifecycle owes its months a re-match. Four entrances now stamp `rematch_pending(trigger="trip")` INSIDE their own `_BATCH_ADD_LOCK` span and pay it outside: a receipt joining a trip, a date edit (the UNION of the months the old range covered and the new one does), a trip-batch delete (the borrowing months chosen BEFORE the delete) and a trip-receipt delete. The paying loop gained the per-month try/except `rematch_neighbour_months` has always had, the candidate filter gained the expense-generation check, `learning_db_path` is threaded through both trip entrances, a rename carries onto the batch label and onto every borrowing month's stored `settled_by` label, and the trip-batch create slot is released on ANY failure rather than only on `RunInputError` | Owner ruling 2026-09-21 on the R4.0 findings: "must be done because later on if expenses and items in statement dont line up we will have a problem." Measured on a copy of the live store the day before: moving a trip's dates off July, and deleting its batch, each left July reporting **33 charges reconciled where 31 was true**, with `settled_by` badges naming a run that no longer existed. Nothing corrupted (claims released correctly, and July's next re-match healed it completely) and nothing scheduled that next re-match, so a month stayed wrong until something unrelated happened to touch it. The adversarial catch during the build was the repo's own item-18 guard: `put_trip` and `delete_expense` are `async def`, and the first draft blocked the EVENT LOOP on a lock an OCR ingest holds for minutes; both locked spans now go through `run_in_threadpool` | 2026-09-21, this round; `tests/test_trip_lifecycle_rematch.py` (12, route-level, self-contained fixtures); suite 2714 -> 2726 passed / 2 skipped; ruff clean. Eight wiring points proven RED under `tools/regress_check.py`, the date gate in BOTH directions (forced off reddens the move-off test, forced on reddens the roster-edit test that asserts a non-date edit owes nothing): `--replace` literals recorded in the PR. The first draft's durability test did NOT bite (it drove create-with-receipt while the mutated wire was the gradual-add path); caught by `regress_check` and closed with two add-path tests |
 | 113 | Item 38's SPA half: the four Lovable prompts for R3 and R4 published and bundle-verified applied on the same day the backend landed (`lovable-trips-prompt.md`, `lovable-r4-settled-by-prompt.md`, and the two cost-center prompts that followed) | Recorded retroactively 2026-09-21. All four were audited by bundle only; none had ever been driven in a browser, because no trip and no cost center existed live to render. The 2026-09-21 cold drive against a local copy closed that: the Trips screen, the trip batch page and July's "Settled by trip ..." badge all render. The one field that does NOT render is `roster_mismatch` / `n_roster_mismatch`, emitted and documented since R3 and carried by no prompt | PR #698, 2026-09-07 |
 | 112 | R4a, the cross-batch guarantee: the `receipt_claims` registry, `(receipt_run_id, document_id)` as the global one-receipt-one-charge key, advisory exclusion before matching, the authoritative re-check inside `_BATCH_ADD_LOCK` at commit, and the reviewer verdicts that keep it current (release on reject, move on re-pick, 409 `receipt_settled_elsewhere` / `receipt_just_settled` on a pick that would steal another run's receipt) | Recorded retroactively 2026-09-21. Without the registry a receipt sitting in a trip could settle a charge in July AND in August; the claims table is what makes the spanning pool safe rather than double-counting | PR #685, commit `fc75c8a9`, 2026-09-07; `tests/test_receipt_claims.py` |
 | 111 | R4b, item 38's second half, same commit as R4a: `trip_pool_for_month` (every trip whose inclusive date range overlaps the month's charge span lends its receipts, confirmed-private and foreign-claimed excluded), `settled_by` on both sides, and the per-person trip report (`build_expense_report`'s `is_trip_batch` branch, roster order first, off-roster captioned, sums per person). SPA half applied the same day: `lovable-trips-prompt.md` + `lovable-r4-settled-by-prompt.md` | Recorded retroactively 2026-09-21, and re-proven on real data the same day rather than taken on trust, because nothing had ever exercised it live: `GET /api/trips` was `{"trips": []}` and stored `cost_centers` was `null`, so the whole feature pair was code-live and data-dead. All seven behaviours hold on the real July and August months; both remaining defects are in trip lifecycle, not in the match path (see item 38) | PR #685, commit `fc75c8a9`, 2026-09-07, live on Fly (running commit `640be61b` contains it); `tests/test_trip_settlement.py` (7, route-level) |
