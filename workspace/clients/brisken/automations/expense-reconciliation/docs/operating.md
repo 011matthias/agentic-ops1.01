@@ -260,12 +260,14 @@ properties of the arrangement rather than of the documentation:
 1. The app runs under the developer's **personal** Fly account
    (`flyctl status` prints `Owner: personal`). Everything here works for
    someone holding that token, and for nobody at Brisken independently.
-2. The SharePoint backup exists in code but has never been switched on:
-   `EXPENSE_RECON_BACKUP` was still absent from the nine deployed secrets
-   when this was checked on 2026-09-20. The only copies are the live
-   volume and Fly's 5-day snapshots, both inside that same account.
+2. ~~The SharePoint backup has never been switched on.~~ Turned on
+   2026-09-21 by owner directive: daily, to `ExpenseTool` on the MARKETING
+   site, first copy 127.2 MB. Brisken now holds a copy it controls. What
+   remains is that **no restore has been rehearsed**, so the copy is
+   verified to exist and not verified to work;
+   `docs/backup-and-restore.md` carries the rehearsal.
 
-Both are owner decisions tied to the October arrangement, not tasks.
+The first is an owner decision tied to the October arrangement, not a task.
 
 Related: `docs/if-it-is-down.md`, `docs/backup-and-restore.md`,
 `docs/screen-field-map.md`, `docs/api-contract.md`.
