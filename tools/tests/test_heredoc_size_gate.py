@@ -207,3 +207,45 @@ def test_classify_matrix(cmd, kind):
     gate = load_hook(GATE)
     hit = gate.classify(cmd)
     assert (hit[0] if hit else None) == kind
+
+
+# ------------------------------------------- deny: PowerShell here-string in Bash
+#
+# Register 2026-06-10, 2026-06-12 x2, 2026-07-22: `@'...'@` handed to the Bash
+# tool, whose leading `@` became the payload's first word. The 07-22 instance
+# squash-landed a commit whose subject was literally `@` on main. Every prior
+# fix was `documented`; the class recurred anyway.
+
+PS_HERESTRING = "git commit -m @'\nSubject line here.\nBody with $literal text.\n'@\n"
+
+
+def test_powershell_here_string_in_bash_is_denied(tmp_path):
+    p = _run(PS_HERESTRING, tmp_path=tmp_path)
+    assert permission_decision(p.stdout) == "deny"
+    assert "POWERSHELL HERE-STRING" in _reason(p)
+    assert "-m" in _reason(p)
+
+
+def test_double_quoted_here_string_in_bash_is_denied(tmp_path):
+    cmd = 'git commit -m @"\nSubject.\nBody.\n"@\n'
+    p = _run(cmd, tmp_path=tmp_path)
+    assert permission_decision(p.stdout) == "deny"
+    assert "POWERSHELL HERE-STRING" in _reason(p)
+
+
+def test_here_string_in_the_powershell_tool_is_allowed(tmp_path):
+    # Valid syntax there; denying it would break the documented workaround for
+    # classifier-blocked Bash (register 2026-07-17).
+    assert _run(PS_HERESTRING, tool="PowerShell", tmp_path=tmp_path).stdout.strip() == ""
+
+
+def test_at_quote_without_the_line_structure_does_not_false_deny(tmp_path):
+    # An `@'` that does not end its line, and no terminator opening one.
+    cmd = "grep -n \"user@'host\" file.txt && echo done"
+    assert _run(cmd, tmp_path=tmp_path).stdout.strip() == ""
+
+
+def test_here_string_override_downgrades_to_advisory(tmp_path):
+    p = _run(PS_HERESTRING, env={"HEREDOC_GATE_ALLOW": "1"}, tmp_path=tmp_path)
+    assert permission_decision(p.stdout) is None
+    assert "OVERRIDE ACTIVE" in p.stdout
