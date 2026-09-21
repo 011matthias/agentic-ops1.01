@@ -5601,7 +5601,7 @@ signed off with a pick on it.
 
 **Shipped 2026-09-17 (pending PR).** `web/backup.py` zips the whole data folder and uploads it to a SharePoint library Brisken controls, through the app-only Graph credential the estate already holds (drive API, no mailbox). Live databases are copied through SQLite's own backup API rather than off the disk, because a byte copy of a database being written to restores as "disk image is malformed" and looks like a backup until the day it is needed. Three ways to run it: `expense-recon backup --dry-run` (the default: says what it would upload and how big, reads nothing but the volume), `--check` (read-only Graph: resolves the target and lists the folder), `--go` (takes one copy), plus an in-app scheduler thread on the same pattern as the boot sweeps. The schedule is OFF unless `EXPENSE_RECON_BACKUP=1`, so this deploy changes nothing by itself. Refusals are plain, never exceptions into a boot thread: no credential, no target, or a folder over the 100 MB ceiling each come back with a reason (half a ledger is not a backup). The Graph path was validated read-only against the live tenant on 2026-09-17: token minted, `brisken.sharepoint.com:/sites/MARKETING` and its default library resolved, root listed (15 folders), and the intended backup folder read as empty because it does not exist yet. Nothing was uploaded. Restore procedure: `docs/backup-and-restore.md`, and it says plainly at the top that **no restore has been rehearsed** because rehearsing it needs a throwaway app and the owner's go-ahead. `docs/electronic-storage-system-description.md` §5.4 and gap row 5 are corrected from "no application-level backup or restore" to narrowed-not-closed. **Owner actions:** (a) pick the site and set `EXPENSE_RECON_BACKUP_SITE` (MARKETING is what the credential demonstrably reaches; a finance-owned site is a grant question); (b) `EXPENSE_RECON_BACKUP=1` to turn the schedule on; (c) a rehearsal run into a throwaway app, which is the only thing that turns the runbook into a proven restore; (d) snapshot retention beyond 5 days is still a Fly-side change, untouched here.
 
-### 120. Only the developer can restart, redeploy or recover the app, and nothing in the repository would let a stand-in do it (2026-09-17 audit draft #118, unranked; operations) (DOCS + OBSERVABILITY HALF SHIPPED 2026-09-20/21; the hosting-org move and the restore rehearsal stay OPEN)
+### 120. Only the developer can restart, redeploy or recover the app, and nothing in the repository would let a stand-in do it (2026-09-17 audit draft #118, unranked; operations) (DOCS + OBSERVABILITY SHIPPED 2026-09-20/21; three loose ends CLOSED 2026-09-21 incl. the backup now LIVE; the hosting-org move and the restore rehearsal stay OPEN)
 
 **Audit rank 27 of 40; severity high as merged; verification: finder's evidence only, not independently rechecked.** The app, its disk, the mail address, the Lovable seat and the code all run under the developer's personal accounts with a single login and no delegated access. The 2026-09-10 outage (about 50 minutes) needed the developer to destroy the machine, fork the disk and redeploy; nobody at Brisken could have. All 249 commits are by one person, 13 releases went out in 36 hours by hand from a temporary checkout, the running app does not say which commit it carries, the working knowledge is spread over fifteen memory files outside the repo, and the README still describes a May command-line tool with a Zoho export, 98 tests and the retired UI address.
 
@@ -5696,6 +5696,109 @@ is NOT among the app's nine secrets, so the SharePoint backup built in item
 snapshots, both inside that same personal account. Turning it on is one
 secret and is the cheapest risk reduction left on this item.
 
+**The three loose ends closed 2026-09-21.** Each was left open deliberately
+on 09-20 and named as open; none was missed.
+
+*A client-failure row names the build that served it* (PR #1170). The stored
+row carried `machine` and `process_started_at` but no build identity, so
+"which build was the browser talking to when this broke" was answerable only
+while the serving process was still up; after a restart it meant correlating
+a report timestamp against Fly's release list by hand, which is the work
+`/healthz.server.commit` was added to end. `client_errors` gains
+`server_commit` and `server_image`, stamped from `machine.snapshot()` when
+the report ARRIVES, so a row keeps its build however many deploys later it is
+read. Named `server_*` because `commit` is a SQLite keyword and cannot be a
+bare column name. The migration is the existing one (`PRAGMA table_info` plus
+`ALTER TABLE` in `_migrate`, beside the eleven columns already added to the
+live volume that way); pre-existing rows read `""`, because the build that
+served them is unrecoverable and a back-fill could only write the build doing
+the back-filling. `machine.py`'s docstring and the probe test both stated the
+gap as open and now describe the code; `docs/api-contract.md` also gained the
+`server.commit` / `server.image` rows PR #1156 shipped without documenting.
+Suite 2714 -> 2718 passed, 2 skipped; both wiring points regressed red
+(handler stamp 3 tests, `_migrate` ALTER 1). NOT deployed: the column
+appears on the live volume at the next deploy, and until then live rows
+keep reading `""`.
+
+*The notifier runs from its own self-updating checkout* (PR #1173). It ran
+from the shared working tree, which nothing updates, so it executed whatever
+that tree held. The operating page recorded this as "has not caused a known
+failure"; it had. Item 113 (PR #1026) added re-match FAILURE alerts to the
+notifier and landed on main at 2026-09-17 17:10; the shared tree's previous
+pull was 12:47 that day and its next was 2026-09-21 10:19, so for **89 hours**
+the task ran a notifier with no `diff_rematch_failures` in it. An alarm class
+shipped, green in CI, and absent from the only path that mails anybody. The
+clone-wide "283 commits behind" figure both overstates and understates it:
+the notifier file has changed five times in its life, and what matters is not
+the distance but whether one of those five landed since the last pull.
+`tools/brisken-recon-notify-run.py` runs it from a dedicated clone that
+fast-forwards itself first; the clone has its own `.git` and the runner
+issues no git command against the shared tree, so neither can move the other.
+It reads the shared tree's gitignored `.env` (one copy of the secret) and the
+EXISTING state file, both gitignored. Resolving state by finding an existing
+file is the whole migration: a fresh state announces the entire history at
+once, measured at 8+ mails in a dry run against an empty state where the real
+state plans none. A failed fast-forward logs `STALE` and runs anyway; a
+missing `.env` exits non-zero, because a notifier that cannot send must not
+look like a quiet day. Verified by behaviour, not config: the Windows task
+`BriskenReconNotify` ran 2026-09-21 18:16:32 UTC, `LastTaskResult` 0, and the
+log line the task itself wrote names `commit=8be609b6`, equal to the clone's
+HEAD and the `origin/main` tip. The shared tree's HEAD was `a7a5a4b1` before
+and after, clean, zero stashes.
+
+*The SharePoint backup is ON* (owner directive 2026-09-21, "there is now a
+folder named ExpenseTool do it there"). Brisken now holds a copy of its own
+reconciliation data for the first time. Daily, to `ExpenseTool` on the
+MARKETING site; first copy `expense-recon-data-20260921T181135Z.zip`, 127.2
+MB, written 42 seconds after the restart.
+
+It was three settings, exactly as the Correction above (PR #1171, merged
+17:52 UTC, ~20 minutes before the secrets were set) had established from the
+file sum: 144.0 MB over 586 files against the 100 MB default. That
+measurement is the better one and is what this row rests on; an independent
+read of `/healthz` `used_bytes` the same hour said 146 MB on the volume, and
+the archive that actually uploaded came to 127.2 MB, so all three agree the
+refusal was certain rather than likely. Two sessions reached the finding
+separately within the hour, which is worth noting only because the
+conclusion was acted on rather than re-derived.
+
+Set together in one command, so one restart: `_SITE`, `_FOLDER`,
+`_MAX_BYTES=400 MB` (2.7x today's size, so ordinary growth does not silently
+re-break it), `_BACKUP=1`. As secrets rather than `fly.toml` env
+deliberately, so the running image stayed `640be61b` and a config change was
+not conflated with a deploy.
+
+**The accumulation the Correction flagged is now real and is the open
+follow-up.** Nothing prunes the SharePoint folder, and a 127.2 MB copy a day
+is about **3.8 GB a month** in Brisken's tenant, growing as the receipt and
+mail archives do. That is the cost of the arrangement as switched on, and
+setting a retention rule (or a weekly cadence via
+`EXPENSE_RECON_BACKUP_INTERVAL_HOURS`) is an owner decision nobody has
+taken. It is not urgent and it does not resolve itself.
+
+Readiness before the mutating call, all read-only: right app and machine;
+site, default library and the `ExpenseTool` folder all resolving app-only;
+the three Graph secrets already deployed; 0 processing and 0
+`rematch_pending`; 78.2% free disk. Verified after by looking at the target
+rather than at an exit code.
+
+Two things this proved that the estate had wrong. **App-only SharePoint
+works**, including writes: `Sites.ReadWrite.All` was granted 2026-09-10 and
+`rule_brisken_graph_first` still claimed MARKETING needed a delegated
+`Files.ReadWrite.All` token; the rule is corrected. And **`backup --check`
+cannot tell an unreachable target from an empty folder**: `list_folder`
+folds any Graph 404 into `[]`, including a 404 raised while resolving the
+drive, so "0 file(s)" is not evidence of reach. That nearly produced a false
+finding here and is now written into `docs/backup-and-restore.md`; the
+honest check is to list the drive root and confirm it returns folders you
+recognise, which it did (18 of them, ~50 GB).
+
+Still open on this item, both owner decisions and both unchanged: the app
+runs under the developer's **personal** Fly account (`Owner: personal`), and
+**no restore has ever been rehearsed**, so the copy is now verified to exist
+and still not verified to work. The rehearsal needs a throwaway app and
+volume, and is the next thing worth buying on this item.
+
 **Correction 2026-09-21: it is not one secret, and today it would copy
 nothing.** Measured on the live volume 2026-09-21: the data folder is **144.0 MB** (586 files; `/data/runs` 87 MB of stored receipts, `/data/inbound` 60 MB of mail archive), against the backup's **100 MB default ceiling**. It is 44 MB OVER, so `run_backup` would refuse on every round with `over_limit`, log one warning, and sleep 24 hours; nothing surfaces a skipped backup (`/healthz` has no backup field and `/api/operator/state` no backup key), so it would read as on and copy nothing. `EXPENSE_RECON_BACKUP_SITE` is unset too, which is a second, separate refusal. So switching it on is **three settings, not one**: a SharePoint target, a ceiling raised past the real size, and the enable flag. The ceiling is a deliberate tripwire ("past
 it, look before uploading"), and it has genuinely tripped: the growth is
@@ -5721,6 +5824,17 @@ the SharePoint folder, so a daily copy of ~140 MB accumulates at roughly
 **Reviewer corrections:** none recorded
 
 **Held-mail half shipped 2026-09-17 (PR #1001, Fly v153), owner ruling: "one to matthias and one to the email it was sent by".** The operator alert is unchanged (recipients `intake.alert_recipients`, still unset, so the default matthias.silva). The address a held mail came from now gets one plain-English notice ("Receipt not filed yet", worded per held status), under exactly the ack's guards: `intake.auto_ack` on, not auto-generated, no agent-directed text, and only @brisken.com or `intake.known_senders` (a stranger gets nothing, per rule_untrusted_inbound); stamped once per archive in `held_notice_at`. No settings write was made. Still open from this item: the laptop notifier (feedback notes, re-matches, publish pings) stays Matthias-only, Criss's Hotmail is not a known sender, and the owner is correcting the misspelled known sender `neuamth4@icloud.com` by hand.
+
+**The notifier no longer runs stale, which is NOT this item (2026-09-21,
+PR #1173).** Item 120's loose end gave the laptop task its own self-updating
+checkout, after finding that this item's own notifier had run for 89 hours
+without item 113's re-match FAILURE alerts because the shared tree had not
+been pulled. That removes one failure mode and none of this item's: every
+alarm still leaves from one Windows laptop, through one person's mailbox,
+and if that machine is off nothing reaches anybody and nothing in the app
+notices. Moving the notifier INTO the app remains the fix, and the smaller
+change does not reduce the case for it; it only means the interim
+arrangement fails for fewer reasons.
 
 **Alert recipients set 2026-09-17 ~16:55 UTC, owner ruling "Criss + you".** One `PUT /api/settings` `{intake}` carrying the stored object back with only `alert_recipients` changed to `["cristiane.cavalcanti@brisken.com", "matthias.silva@brisken.com"]` (`applied: ["intake"]`); re-read after: every other intake key identical (aliases, `auto_ack` true, `known_senders` now spelled `neumath4@icloud.com`, `travel_alias`). Held-mail operator alerts now go to both, sent from the matthias.silva mailbox; the alert body is English. Unchanged and still open: the laptop notifier (feedback notes, re-match and publish pings) is Matthias-only, and Criss's Hotmail is not a known sender.
 
