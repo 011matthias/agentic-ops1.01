@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-21 | Brisken Recon Item 120 Docs And Observability | client-dev | [→](docs/2026-09-21%20-%20Brisken%20Recon%20Item%20120%20Docs%20And%20Observability/Checkpoint.md) |
 | 2026-09-21 | Brisken Item 38 R4 Re-Plan | client-dev | [Mini-Checkpoint-1](docs/2026-09-21%20-%20Brisken%20Item%2038%20R4%20Re-Plan/Mini-Checkpoint-1.md) |
 | 2026-09-20 | Expense-Recon Item 162 Statement Colours | client-dev | [Mini-Checkpoint-1](docs/2026-09-20%20-%20Expense-Recon%20Item%20162%20Statement%20Colours/Mini-Checkpoint-1.md) |
 | 2026-09-20 | Brisken Recon Backlog Truth Pass | client-dev | [Mini-Checkpoint-2](docs/2026-09-20%20-%20Brisken%20Recon%20Backlog%20Truth%20Pass/Mini-Checkpoint-2.md) |
