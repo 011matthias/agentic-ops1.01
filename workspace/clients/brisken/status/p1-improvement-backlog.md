@@ -5725,17 +5725,29 @@ reconciliation data for the first time. Daily, to `ExpenseTool` on the
 MARKETING site; first copy `expense-recon-data-20260921T181135Z.zip`, 127.2
 MB, written 42 seconds after the restart.
 
-It was **three settings, not the one this item and item 119 both called it**,
-and done as one it would have silently done nothing. `run_backup` refuses on
-`EXPENSE_RECON_BACKUP_MAX_BYTES` (default 100 MB) before it reaches
-SharePoint, and `/healthz` reported 146 MB used on `/data`; the first archive
-alone came to 127.2 MB, so the refusal was certain. Setting only
-`EXPENSE_RECON_BACKUP=1` would have started a scheduler that refused every
-run while reading as enabled, which is worse than a backup that is visibly
-off. Set together in one command, so one restart: `_SITE`, `_FOLDER`,
-`_MAX_BYTES=400 MB`, `_BACKUP=1`. As secrets rather than `fly.toml` env
+It was three settings, exactly as the Correction above (PR #1171, merged
+17:52 UTC, ~20 minutes before the secrets were set) had established from the
+file sum: 144.0 MB over 586 files against the 100 MB default. That
+measurement is the better one and is what this row rests on; an independent
+read of `/healthz` `used_bytes` the same hour said 146 MB on the volume, and
+the archive that actually uploaded came to 127.2 MB, so all three agree the
+refusal was certain rather than likely. Two sessions reached the finding
+separately within the hour, which is worth noting only because the
+conclusion was acted on rather than re-derived.
+
+Set together in one command, so one restart: `_SITE`, `_FOLDER`,
+`_MAX_BYTES=400 MB` (2.7x today's size, so ordinary growth does not silently
+re-break it), `_BACKUP=1`. As secrets rather than `fly.toml` env
 deliberately, so the running image stayed `640be61b` and a config change was
 not conflated with a deploy.
+
+**The accumulation the Correction flagged is now real and is the open
+follow-up.** Nothing prunes the SharePoint folder, and a 127.2 MB copy a day
+is about **3.8 GB a month** in Brisken's tenant, growing as the receipt and
+mail archives do. That is the cost of the arrangement as switched on, and
+setting a retention rule (or a weekly cadence via
+`EXPENSE_RECON_BACKUP_INTERVAL_HOURS`) is an owner decision nobody has
+taken. It is not urgent and it does not resolve itself.
 
 Readiness before the mutating call, all read-only: right app and machine;
 site, default library and the `ExpenseTool` folder all resolving app-only;
