@@ -5669,6 +5669,15 @@ is NOT among the app's nine secrets, so the SharePoint backup built in item
 snapshots, both inside that same personal account. Turning it on is one
 secret and is the cheapest risk reduction left on this item.
 
+**Correction 2026-09-21: it is not one secret, and today it would copy
+nothing.** Measured on the live volume 2026-09-21: the data folder is **144.0 MB** (586 files; `/data/runs` 87 MB of stored receipts, `/data/inbound` 60 MB of mail archive), against the backup's **100 MB default ceiling**. It is 44 MB OVER, so `run_backup` would refuse on every round with `over_limit`, log one warning, and sleep 24 hours; nothing surfaces a skipped backup (`/healthz` has no backup field and `/api/operator/state` no backup key), so it would read as on and copy nothing. `EXPENSE_RECON_BACKUP_SITE` is unset too, which is a second, separate refusal. So switching it on is **three settings, not one**: a SharePoint target, a ceiling raised past the real size, and the enable flag. The ceiling is a deliberate tripwire ("past
+it, look before uploading"), and it has genuinely tripped: the growth is
+the real receipt and mail archive, not an anomaly. Raising it is a
+judgment call about what an archive should cost, which makes this an
+owner decision with more in it than a flag. Note also that nothing prunes
+the SharePoint folder, so a daily copy of ~140 MB accumulates at roughly
+4 GB a month in Brisken's tenant unless a retention rule is set.
+
 
 ### 121. Every alarm the tool raises goes to the developer only, through a script on his laptop (2026-09-17 audit draft #119, unranked; owner data; held-mail half SHIPPED PR #1001, Fly v153)
 

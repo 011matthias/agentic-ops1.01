@@ -64,8 +64,12 @@ from . import graph_notify
 log = logging.getLogger("expense_recon.backup")
 
 GRAPH = "https://graph.microsoft.com/v1.0"
-# The whole data folder is ~95 MB (2026-09-17). The ceiling is a tripwire,
-# not a budget: past it, look before uploading.
+# The ceiling is a tripwire, not a budget: past it, look before uploading.
+# Measured sizes: ~95 MB 2026-09-17, 144.0 MB 2026-09-21 (586 files; runs
+# 87 MB, inbound 60 MB). The folder is ALREADY over this default, so the
+# scheduler refuses every round until EXPENSE_RECON_BACKUP_MAX_BYTES is
+# raised on purpose. That is the tripwire working, and it is also why
+# turning the backup on is not just EXPENSE_RECON_BACKUP=1.
 DEFAULT_MAX_BYTES = 100 * 1024 * 1024
 DEFAULT_FOLDER = "Expense Reconciliation Backups"
 DEFAULT_INTERVAL_HOURS = 24
