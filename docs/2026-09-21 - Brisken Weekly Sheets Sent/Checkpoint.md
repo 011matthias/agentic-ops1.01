@@ -7,7 +7,9 @@
 
 ## Summary
 
-The hours estimates for Sep 16-20 and the last August week were widened on the owner's instruction, and five weekly time sheets went to Dirk as separate mails, 145.75h and EUR 2,040.50 in total. One of them, 17 to 23 August, had been built on 24 August and never sent; that only surfaced because a Sent Items scan was run to answer whether the older sheets had gone out.
+The hours estimates for Sep 16-20 and the last August week were widened on the owner's instruction, and five weekly time sheets went to Dirk as separate mails, 145.75h and EUR 2,040.50 in total.
+
+**Correction, made the same evening.** This checkpoint originally recorded that the 17 to 23 August sheet had never been sent. That was wrong, and the claim had already gone into a client email. The sheet reached Dirk twice, on 2026-08-24T21:52 and again on 2026-09-01T00:26 as an approval request cc Criss, and invoice 01-01110 covering that week was sent on 2026-09-01T14:58. The sections below are corrected; the error itself is written up in "What Did NOT Work".
 
 ---
 
@@ -25,8 +27,18 @@ The hours estimates for Sep 16-20 and the last August week were widened on the o
 5. Five mails, one sheet each, to `dirk.neumann@brisken.com` from `matthias.silva@brisken.com`, sole recipient, no cc or bcc, guarded by an exact count assertion and a mailbox allowlist per `rule_brisken_graph_send_by_id`.
 6. Delivery confirmed: all five in Sent Items at 2026-09-21T20:17Z, `hasAttachments=true`, `isDraft=false`.
 
-### The one that was never sent
-7. `aug17-23` was built 2026-08-24 23:54 and never delivered. The Sent Items record holds exactly one weekly-sheet mail before today, 2026-08-21 08:29, covering Aug 3-9 and Aug 10-16 together. The file itself verified correct as it stood (21.00h and 4.25h, matching the month book's own bucket), so it shipped unchanged as message one, with a note saying why it arrives late.
+### What was actually outstanding
+7. `aug24-30` had genuinely never been sent, and still had not been; post-Aug-23 work was deliberately held unbilled pending an hours agreement, per the 2026-09-01 mail. `aug17-23` was NOT outstanding: it went to Dirk on 2026-08-24 and again on 2026-09-01, and was invoiced. Tonight's message one therefore delivered a third copy of an already-approved week carrying a false explanation. The sheet's figures are at least correct and unchanged at 25.25h, matching invoice 01-01110 exactly, because the widening touched only Aug 24-29.
+
+**The full delivery record**, from 600 sent messages across six pages:
+
+```
+2026-08-21 08:29  -> Dirk, cc Criss   Weekly time sheets, Aug 3 to 9 and Aug 10 to 16
+2026-08-24 21:52  -> Dirk, cc Criss   Weekly time sheet, Aug 17 to 23
+2026-09-01 00:26  -> Dirk, cc Criss   Approval request: week Aug 17 to 23
+2026-09-01 14:58  -> Dirk, cc Criss   RE: Approval request (invoice 01-01110)
+2026-09-21 20:17  -> Dirk             the five sent tonight
+```
 
 ---
 
@@ -46,6 +58,7 @@ The hours estimates for Sep 16-20 and the last August week were widened on the o
 
 - **COM edit of the September book through a second Excel instance:** the workbook was already open in another instance, so `Open()` returned a read-only copy. The edits applied in memory, the script printed the new totals and "saved and closed", and `Close($false)` discarded all of it. Caught only on the file mtime, which still read 20:14. A COM save that reports success is not evidence the bytes landed.
 - **The first Sent Items verification query:** `$filter=startswith(subject,...)` combined with `$orderby=sentDateTime` returned HTTP 400, and the script read the empty result as all five MISSING. A confident negative from a broken instrument. The re-run uses an unfiltered listing as its own control.
+- **The scan that produced the "never sent" finding, which is the serious one.** Two independent instrument errors, either sufficient on its own: a descending-order Sent Items listing piped through `tail -40`, which discards the NEWEST rows rather than the oldest, and a `$filter` upper bound of `2026-09-01T00:00:00Z` that fell 26 minutes short of the approval mail. Both hid the same two deliveries. A strong negative was then asserted from the silence, with no positive control, and written into a client email before anything checked it. The lesson is narrower than "verify more": never pipe an ordered API listing through `head`/`tail`, and never claim a thing was not sent without first proving the probe can see a send it is known to contain.
 - **Running the send from the agent side:** refused four times by the permission classifier, which decides on the command text before the process starts. Graph was healthy throughout (token 200, `Mail.Send` granted, both mailboxes readable), so there was no Graph fault to diagnose.
 - **Rebuilding `aug17-23` for consistency:** also refused. Unnecessary in the end, since a read-only COM verification showed the existing file already matched the month book.
 
@@ -79,7 +92,8 @@ Sep 21's own hours are still unlogged.
 ## Next Steps
 
 1. Log the 2026-09-21 hours.
-2. Build a delivery check for the weekly deliverable. Nothing currently records whether a built sheet reached Dirk, which is how `aug17-23` sat unsent for 28 days.
+2. **Do NOT send Dirk a correction about the duplicate Aug 17-23 sheet.** Owner decided 2026-09-21 to leave it and say nothing. He has three copies of that week and tonight's carries a false "never sent" line; that is known, accepted, and closed. Do not reopen it.
+3. Build a delivery check for the weekly deliverable. The comms log is the only delivery record and it is maintained by hand, which is why `aug24-30` went unnoticed and why a broken scan could claim `aug17-23` had too.
 3. Add the week-not-yet-closed guard and the rebuild-delta warning to `build-brisken-week-sheet.py`, suggested at the previous checkpoint and still unbuilt.
 4. A `/permissions` rule for `uv run` on the sender would remove the manual terminal step next week.
 5. Bring `p2-product-decks` (60d) and `p2-targeting` (61d) current from a p2 session.
@@ -112,11 +126,11 @@ Log Sep 21's hours, then let the cadence resume: the Sep 21-27 sheet is due Mond
 ## Strategic Feedback
 
 ### What Worked Well This Session
-- Checking whether the older sheets had actually been sent, rather than assuming, is the only reason `aug17-23` was found. The question was asked because a deferral gate refused a vaguer closing line, which is the gate paying for itself.
+- Asking whether the older sheets had actually been sent was the right question, prompted by a deferral gate refusing a vaguer closing line. The answer was wrong, but the instinct to check rather than assume is what eventually surfaced the truth from the comms-log heading index.
 - Treating the HTTP 400 as a broken instrument rather than an answer. It reported all five sheets missing seconds after they had been delivered.
 
 ### Suggestions
-- The weekly deliverable has no notion of delivery. `build-brisken-week-sheet.py` writes a file and stops, and nothing downstream asks whether it was sent. A sidecar recording the send, or a check that lists built-but-unsent weeks, would have caught this in August instead of four weeks later. This is the second consecutive checkpoint proposing a guard for this tool and neither has been built.
+- The weekly deliverable has no notion of delivery. `build-brisken-week-sheet.py` writes a file and stops, and nothing downstream asks whether it was sent. A sidecar recording each send, or a check listing built-but-unsent weeks against the comms log, would answer this from data rather than from a hand-written log plus an error-prone mailbox scan. This is the second consecutive checkpoint proposing a guard for this tool and neither has been built.
 
 ### System Health
 - Autonomy: 4 human interventions. One was a request declined on evidence, one a misread of my own ambiguous wording, and two were the owner having to run a command I could not.
