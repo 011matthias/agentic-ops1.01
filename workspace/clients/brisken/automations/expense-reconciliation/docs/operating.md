@@ -211,24 +211,41 @@ laptop, not by the app. The app holds no Graph credential and never sends
 mail; `tools/brisken-recon-notify.py` polls `/api/operator/state`, diffs it
 against a local state file, and sends via Microsoft Graph.
 
-Verified on 2026-09-20:
+Verified on 2026-09-21:
 
 | | |
 |---|---|
 | Task | `BriskenReconNotify`, state Ready |
 | Every | 15 minutes (`PT15M`) |
-| Last run | 2026-09-20 23:47, result code 0 |
-| Runs from | `C:\Users\neuma_p1qrsic\Repo\agentic-ops1` |
+| Runs | `tools/brisken-recon-notify-run.py --once` |
+| Runs from | `C:\Users\neuma_p1qrsic\Repo\agentic-ops1-notify` |
 
 It sends on: a new operator run, a new intake, a newly published run, new
 reviewer feedback, and each living-month re-match event.
 
-**The checkout it runs from was 283 commits behind `origin/main` when this
-was written.** It is a long-lived clone that nothing updates automatically,
-so the notifier is running code from some earlier day. That has not caused
-a known failure, and it is not a thing a stand-in can fix from the
-repository; it is named here so that "the notifier did something odd" has
-somewhere to start.
+**It has its own clone, which fast-forwards itself before every run**
+(2026-09-21). Until then it ran from the shared working tree, which nothing
+updates automatically, so the code it executed was whatever that tree
+happened to hold. That did cost something: item 113 added re-match FAILURE
+alerts to the notifier and landed on `main` at 2026-09-17 17:10, the shared
+tree's next pull was 2026-09-21 10:19, and for the 89 hours between them
+the task ran a notifier with no `diff_rematch_failures` in it. A whole
+alarm class, shipped and green in CI, absent from the only path that mails
+anybody, with nothing to notice it.
+
+Reading the freshness, when the notifier does something odd:
+
+```bash
+tail -3 /c/Users/neuma_p1qrsic/Repo/agentic-ops1/.scratch/recon-notify-runs.log
+# 2026-09-21T19:47:02Z commit=aa2980f9 update=Already up to date. exit=0
+```
+
+`update=STALE (...)` means the fast-forward failed and the run went ahead
+on the commit named, which is the intended order: running slightly stale
+beats not running. A missing `.env` is the one fatal case and exits
+non-zero, so it shows up as a non-zero `LastTaskResult` rather than as a
+quiet day. The clone shares no `.git` with the shared tree and the runner
+issues no git command against it, so neither can move the other.
 
 The larger point, which is backlog item 121 rather than this page: if that
 laptop is off, no alarm reaches anybody, and nothing in the app notices.
