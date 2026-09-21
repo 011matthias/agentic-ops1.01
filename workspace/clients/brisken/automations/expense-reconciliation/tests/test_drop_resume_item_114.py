@@ -171,9 +171,19 @@ def test_a_drop_cut_off_again_after_resuming_is_given_up(
     with TestClient(create_app(tmp_path)) as c:
         job_id = _post_drop(c, [("a.jpg", JPG)], month=MONTH_M2)
     # First restart resumes it, and that run is killed too.
+    #
+    # Wait on the STAGE, not on the sidecar. `_resume_drops_quietly` bumps
+    # the sidecar count first (the crash-loop guard has to be durable before
+    # the run starts) and only then opens a RunStore to write the stage, so
+    # the two land in different stores a moment apart. Polling the sidecar
+    # and asserting the stage reads whatever is in that window, which on a
+    # loaded runner is still "waiting to resume after a server restart" —
+    # the flake that turned main red on 2026-09-21. Since the sidecar is
+    # written first, a visible stage also guarantees the count below.
     with TestClient(create_app(tmp_path)) as c:
         deadline = time.monotonic() + 10
-        while (_sidecar(tmp_path, job_id)["resumed"] == 0
+        while (c.get(f"/jobs/{job_id}").json().get("stage")
+               != "resuming after a server restart"
                and time.monotonic() < deadline):
             time.sleep(0.02)
         job = c.get(f"/jobs/{job_id}").json()
