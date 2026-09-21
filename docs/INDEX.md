@@ -371,6 +371,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-21 | Friction Register Voids Closed | system-infra | [→](docs/2026-09-21%20-%20Friction%20Register%20Voids%20Closed/Checkpoint.md) |
 | 2026-09-17 | Friction Fix Program Complete | system-infra | [→](docs/2026-09-17%20-%20Friction%20Fix%20Program%20Complete/Checkpoint.md) |
 | 2026-09-17 | Friction Fix Program Close-Out | system-infra | [→](docs/2026-09-17%20-%20Friction%20Fix%20Program%20Close-Out/Checkpoint.md) |
 | 2026-09-17 | Friction Check And Gate Fixes | system-infra | [→](docs/2026-09-17%20-%20Friction%20Check%20And%20Gate%20Fixes/Checkpoint.md) |
