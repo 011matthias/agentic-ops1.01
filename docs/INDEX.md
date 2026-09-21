@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-21 | Brisken Item 38 R4 Close | client-dev | [→](docs/2026-09-21%20-%20Brisken%20Item%2038%20R4%20Close/Checkpoint.md) |
 | 2026-09-21 | Brisken Hours Catch-Up and Weekly Sheets | client-dev | [→](docs/2026-09-21%20-%20Brisken%20Hours%20Catch-Up%20and%20Weekly%20Sheets/Checkpoint.md) |
 | 2026-09-21 | Recon No-Card Logic Status And July Re-Match | client-dev | [Mini-Checkpoint-1](docs/2026-09-21%20-%20Recon%20No-Card%20Logic%20Status%20And%20July%20Re-Match/Mini-Checkpoint-1.md) |
 | 2026-09-21 | Brisken Recon Item 120 Docs And Observability | client-dev | [→](docs/2026-09-21%20-%20Brisken%20Recon%20Item%20120%20Docs%20And%20Observability/Checkpoint.md) |
