@@ -173,7 +173,12 @@ fixable from the repository:
    `EXPENSE_RECON_BACKUP` is not among the app's secrets, verified
    2026-09-20, so the schedule never starts. The copies that do exist are
    the live volume and Fly's own 5-day snapshots, both inside that same
-   personal account. Turning it on is one secret.
+   personal account. **Turning it on is not one secret.** Measured on the
+   live volume 2026-09-21, the data folder is 144.0 MB against the
+   backup's 100 MB default ceiling, so it would refuse every round and
+   log a warning nothing reads; `EXPENSE_RECON_BACKUP_SITE` is unset as
+   well. It needs a SharePoint target, `EXPENSE_RECON_BACKUP_MAX_BYTES`
+   raised past the real size, and only then `EXPENSE_RECON_BACKUP=1`.
 3. **No restore has ever been rehearsed.** `docs/backup-and-restore.md`
    says so in its own opening line. The restore path is written down and
    has never been run, so treat section 5 and any restore as a first
