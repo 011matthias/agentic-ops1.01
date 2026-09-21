@@ -3,9 +3,11 @@
 import datetime as dt
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -195,6 +197,60 @@ class TestFinalizeFresh:
 
     def test_missing_required_field(self, root: Path):
         assert run_finalize(root, {"topic": "X"}) == 2
+
+
+class TestPayloadIsolation:
+    """The finalize payload belongs to ONE session.
+
+    2026-09-09 (register, boundary-violation): the skill documented a single
+    fixed path, `.scratch/checkpoint-payload.json`, in a clone that routinely
+    runs concurrent sessions. A sibling wrote its payload there between this
+    session's write and its finalize, so finalize appended the sibling's INDEX
+    row, session entry and context YAML.
+    """
+
+    @pytest.fixture()
+    def root(self, tmp_path: Path) -> Path:
+        (tmp_path / "docs" / "sessions").mkdir(parents=True)
+        return tmp_path
+
+    def _finalize(self, root: Path, path: Path) -> int:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(base_payload()), encoding="utf-8")
+        return cs.main(
+            ["--root", str(root), "finalize", "--payload", str(path),
+             "--context-root", str(root)]
+        )
+
+    def test_shared_payload_path_is_refused(self, root: Path, capsys):
+        assert self._finalize(root, root / ".scratch" / cs.LEGACY_PAYLOAD_NAME) == 2
+        out = capsys.readouterr().out
+        assert "refusing the shared payload path" in out
+        assert "checkpoint-payload-" in out  # names the per-session path to use
+
+    def test_per_session_payload_path_is_accepted(self, root: Path):
+        assert self._finalize(root, cs.payload_path(root)) == 0
+
+    def test_stale_payload_is_refused(self, root: Path, capsys):
+        p = cs.payload_path(root)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(base_payload()), encoding="utf-8")
+        old = time.time() - (cs.PAYLOAD_MAX_AGE_H + 1) * 3600
+        os.utime(p, (old, old))
+        rc = cs.main(["--root", str(root), "finalize", "--payload", str(p),
+                      "--context-root", str(root)])
+        assert rc == 2
+        assert "stale payload" in capsys.readouterr().out
+
+    def test_path_is_distinct_per_session(self, root: Path, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "aaaaaaaa-1111")
+        mine = cs.payload_path(root)
+        monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "bbbbbbbb-2222")
+        assert cs.payload_path(root) != mine
+
+    def test_pre_prints_the_payload_path(self, root: Path, capsys):
+        cs.main(["--root", str(root), "pre"])
+        assert str(cs.payload_path(root)) in capsys.readouterr().out
 
 
 class TestNotWorked:
