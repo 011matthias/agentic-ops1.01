@@ -104,12 +104,16 @@ def snapshot() -> dict:
     every surface stamping this snapshot reports the same string, with no
     second stamp to keep in step.
 
-    What that does NOT yet cover: the stored client-error rows carry
-    `machine` and `process_started_at` but no commit, so a historical
-    failure is tied to a build through Fly's release list rather than from
-    the row alone. Adding the column is a migration on the live database
-    and item 120 asks only for the health endpoint, so it is left open
-    deliberately rather than half-done.
+    Since 2026-09-21 that includes the stored client-error rows, which
+    carry `server_commit` and `server_image` beside `machine` and
+    `process_started_at`. The stamp happens when the report ARRIVES, so a
+    row keeps the build that served the failure however many deploys later
+    it is read; before the columns existed, a historical failure could be
+    tied to a build only while its serving process was still up, and after
+    that only by correlating timestamps against Fly's release list. Rows
+    written before the migration read `""` for the same reason an unstamped
+    build does: the answer is not recoverable, and a back-fill could only
+    write the build doing the back-filling.
     """
     return {
         "machine": os.environ.get("FLY_MACHINE_ID", ""),

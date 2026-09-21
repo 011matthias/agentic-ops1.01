@@ -474,6 +474,8 @@ class RunStore:
                 detail TEXT NOT NULL,
                 machine TEXT NOT NULL,
                 region TEXT NOT NULL,
+                server_commit TEXT NOT NULL DEFAULT '',
+                server_image TEXT NOT NULL DEFAULT '',
                 process_started_at TEXT NOT NULL,
                 uptime_s REAL NOT NULL,
                 process_predates_failure INTEGER
@@ -602,6 +604,28 @@ class RunStore:
             if "statement_id" not in names:
                 self.conn.execute(
                     f"ALTER TABLE {table} ADD COLUMN statement_id TEXT"
+                )
+
+        # client_errors.server_commit + server_image (item 120, 2026-09-21):
+        # which BUILD served the failure, stamped at the moment the report
+        # arrives. Rows written before the column read "" for the same
+        # reason /healthz reports "" on an unstamped build: the build that
+        # served them is not recoverable from the row, and a back-fill
+        # could only write the build doing the back-filling. Absent
+        # identity is honest; wrong identity sends the next investigation
+        # to the wrong release. Named `server_*` because `commit` is a
+        # SQLite keyword and cannot be a bare column name.
+        error_cols = {
+            row["name"]
+            for row in self.conn.execute(
+                "PRAGMA table_info(client_errors)"
+            ).fetchall()
+        }
+        for column in ("server_commit", "server_image"):
+            if column not in error_cols:
+                self.conn.execute(
+                    f"ALTER TABLE client_errors ADD COLUMN {column} "
+                    "TEXT NOT NULL DEFAULT ''"
                 )
 
     # -- where a charge was printed (note item T3) --------------------------
@@ -1944,13 +1968,14 @@ class RunStore:
             INSERT INTO client_errors (
                 received_at, received_ts, operator, caller, kind, url,
                 method, message, occurred_at, seconds_ago, duration_ms,
-                online, detail, machine, region, process_started_at,
-                uptime_s, process_predates_failure
+                online, detail, machine, region, server_commit, server_image,
+                process_started_at, uptime_s, process_predates_failure
             ) VALUES (
                 :received_at, :received_ts, :operator, :caller, :kind, :url,
                 :method, :message, :occurred_at, :seconds_ago, :duration_ms,
-                :online, :detail, :machine, :region, :process_started_at,
-                :uptime_s, :process_predates_failure
+                :online, :detail, :machine, :region, :server_commit,
+                :server_image, :process_started_at, :uptime_s,
+                :process_predates_failure
             )
             """,
             row,
