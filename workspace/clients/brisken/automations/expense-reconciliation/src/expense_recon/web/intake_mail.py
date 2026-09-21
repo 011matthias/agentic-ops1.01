@@ -3530,7 +3530,9 @@ def join_trip(
                 provenance_by_digest=provenance,
             )
             with RunStore(db_path) as store:
-                run_id = execute_expense_batch(store, prepared)
+                run_id = execute_expense_batch(
+                    store, prepared, learning_db_path=learning_db_path,
+                )
                 created = store.get_run(run_id)
         except Exception as exc:  # noqa: BLE001 - pool it back, keep it clickable
             if prepared is not None:

@@ -5899,3 +5899,57 @@ Pinned as `rows[].fills[]` (`object`) in `tests/test_view_contract.py`, in
 the run payload only. `expenses[]` gets nothing: an expense is a receipt, and
 a receipt has no workbook row. The SPA's half is
 `docs/lovable-statement-colour-prompt.md`.
+
+## A trip lifecycle change owes its months a re-match (R4.1, 2026-09-21)
+
+R4b made a month's candidate pool span overlapping trips. It told those
+months when a RECEIPT joined the trip, and nothing else. Measured on a copy
+of the live store 2026-09-21: moving a trip's dates off July, and deleting
+the trip's batch, each left July untouched, reporting 33 charges reconciled
+where 31 was true and still rendering `settled_by` badges naming a run that
+no longer existed. The claims were released correctly and July's next
+re-match healed it completely; nothing scheduled that next re-match.
+
+**Four entrances now owe the debt**, all with the existing
+`rematch_pending` shape and trigger `"trip"`:
+
+| Change | Which months | Reply |
+|---|---|---|
+| a receipt joins a trip (create or add) | every month the trip's range overlaps | `months_rematched` (unchanged) |
+| `PUT /api/trips/{id}` moves `start`/`end` | the UNION of the months the OLD range covered and the NEW one does | `months_rematched` |
+| `POST /api/runs/{id}/delete` on a trip batch | every month borrowing from it, chosen BEFORE the delete | `months_rematched` |
+| `DELETE /api/runs/{id}/expenses/{doc}` on a trip receipt | the same | (none; the existing reply is unchanged) |
+
+`months_rematched` is a parallel field on the trip PUT and the delete
+replies: absent unless a month actually re-matched, so a company-month
+delete and a roster-only trip edit answer byte-identically to before.
+
+**A roster or cost-center edit owes nothing.** Neither moves which months
+may borrow, and the grid resolves both from the live trip on every read.
+Only a DATE change re-matches.
+
+**The debt is written before the lock is released.** Each entrance stamps
+the mark inside its own `_BATCH_ADD_LOCK` span and pays it outside, so a
+restart in between leaves the debt on the month and
+`resume_pending_rematches` finishes it at boot, rather than leaving a month
+whose counts silently disagree with its receipts.
+
+**The paying loop records a per-month failure instead of raising.** It
+mirrors `rematch_neighbour_months`: a month that raises gets the error on
+its own mark and the REMAINING months are still paid. Before this, a raise
+on the first month aborted every month after it.
+
+**A rename carries.** `PUT /api/trips/{id}` changing `name` re-labels the
+trip's batch and rewrites the stored `receipt_sources[].label` on every
+borrowing month, so the batch header, the delete confirm (which is keyed on
+the label) and the `settled_by` badge stop naming the trip's creation-time
+name. Only a leading occurrence is replaced, so an operator's own suffix
+survives.
+
+**Candidate months are expense-generation runs only.** A legacy
+statement-mode run cannot borrow from a trip, so re-matching it on every
+trip change was work with no effect. The neighbour path has carried the
+same filter since item 112.
+
+Tests: `tests/test_trip_lifecycle_rematch.py` (12, route-level), eight
+wiring points proven red under `tools/regress_check.py`.

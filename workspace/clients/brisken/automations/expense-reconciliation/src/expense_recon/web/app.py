@@ -142,6 +142,9 @@ from .service import (
     prepare_intake_run,
     prepare_run,
     rematch_after_change,
+    owe_trip_month_rematches,
+    rematch_trip_months,
+    relabel_borrowed_sources,
     refresh_batch_master_data,
     regenerate_expense_export,
     regenerate_reconciled,
@@ -440,6 +443,42 @@ def _apply_history_undo(store, run, entry_row, old, now):
     return _HISTORY_UNDO_REFUSALS["history_not_undoable"], None
 
 
+def _trip_range(start: object, end: object):
+    """One inclusive `(start, end)` date pair, or None when either side is
+    unreadable. A trip whose stored dates cannot be parsed selects no
+    months rather than raising inside a route."""
+    try:
+        return (
+            date.fromisoformat(str(start)[:10]),
+            date.fromisoformat(str(end)[:10]),
+        )
+    except ValueError:
+        return None
+
+
+def _sync_trip_batch_label(store, batch, old_name: str, new_name: str) -> None:
+    """Carry a trip rename onto its batch label (R4.1).
+
+    The batch is labelled from the trip's name at CREATION and nothing
+    updated it afterwards, so a rename left three surfaces naming a trip
+    that no longer went by that name: the batch's own header, the delete
+    confirm (which is keyed on the label), and the `settled_by` badge on
+    every month borrowing from it. Only the leading occurrence of the old
+    name is replaced, so an operator's own suffix (" receipts") survives;
+    a label that does not start with the old name is left alone rather
+    than guessed at."""
+    old, new = str(old_name).strip(), str(new_name).strip()
+    label = str(batch.label or "")
+    if not old or not new or not label.startswith(old):
+        return
+    store.set_run_label(batch.run_id, new + label[len(old):])
+    # A borrowing month renders its own stored copy of the lender's label,
+    # so the badge stays on the old name until those copies move too. The
+    # stored label is the TRIP's name, not the batch's, which is what the
+    # badge reads ("Settled by trip {name}").
+    relabel_borrowed_sources(store, batch.run_id, new)
+
+
 def _not_found(message: str, code: str) -> JSONResponse:
     return JSONResponse({"error": message.lower(), "code": code}, status_code=404)
 
@@ -618,6 +657,7 @@ def _run_expense_job(
                 store,
                 prepared,
                 on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
+                learning_db_path=learning_db_path,
             )
             store.set_job_status(
                 job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
@@ -1922,7 +1962,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # and freeze every endpoint including /healthz (adversarial review
         # 2026-08-21, delete-during-ingest is the designed contention).
         from .intake_mail import open_batch, pool_deleted_batch
-        from .service import batch_write_lock
+        from .service import _owe_trip_month_rematches_locked, batch_write_lock
 
         with open_store() as store:
             if store.get_run(run_id) is None:
@@ -1940,6 +1980,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                  "code": "delete_confirm_required"},
                 status_code=400,
             )
+        owed_trip_months: list[str] = []
         # Serialize with the batch writers: rows must not vanish under an
         # in-flight ingest RMW, and a writer entering after us re-fetches
         # None and refuses (mail goes held_failed, stays replayable).
@@ -1954,6 +1995,20 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                          "code": "delete_confirm_mismatch"},
                         status_code=409
                     )
+                # R4.1: a TRIP batch going away is a pool change for every
+                # month borrowing from it. Chosen BEFORE the delete, while
+                # the trip and its batch still exist, and stamped in this
+                # same lock span so a restart before the paying loop leaves
+                # the debt on the month instead of leaving it reporting
+                # charges as settled by a run that no longer exists
+                # (measured 2026-09-21: July read 33 reconciled, not 31).
+                if is_trip_batch(run):
+                    try:
+                        owed_trip_months = _owe_trip_month_rematches_locked(
+                            store, run
+                        )
+                    except Exception:  # noqa: BLE001 - never block a delete
+                        owed_trip_months = []
                 store.delete_run(run_id)
                 # A deleted run must not leave its intake pointing at a gone
                 # run; put the intake back in the queue so it can be re-run.
@@ -1982,8 +2037,20 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 shutil.rmtree(work_dir, ignore_errors=True)
         except (OSError, ValueError):
             pass
+        # R4.1: pay the trip debt outside the lock (`rematch_month` takes
+        # the same non-reentrant lock to commit). Parallel field: absent
+        # unless a trip batch was deleted and some month owed a re-match.
+        months_rematched = []
+        if owed_trip_months:
+            with open_store() as store:
+                months_rematched = rematch_trip_months(
+                    store, owed_trip_months,
+                    learning_db_path=app.state.learning_db_path,
+                )
         return JSONResponse({
             "ok": True, "run_id": run_id, "deleted": True,
+            **({"months_rematched": months_rematched}
+               if months_rematched else {}),
             # inbound_marked keeps its old meaning (legacy mail stamped
             # "month deleted"); pooled_back is the parallel field for the
             # mail that simply went back to waiting for this month.
@@ -4194,38 +4261,50 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                  "code": "trip_id_not_allowed"},
                 status_code=400,
             )
-        with open_store() as store:
-            settings = store.get_settings()
+        # R4.1: the slot is claimed above and handed to `_run_expense_job`
+        # below, so everything between the two has to release it on ANY
+        # failure. It used to release only on `RunInputError`, and any
+        # other exception (an OSError spooling the upload, a store error
+        # creating the job) left the slot held for the life of the
+        # process: every later create and every `DELETE /api/trips`
+        # answering 409 `trip_batch_being_created` until a restart.
+        # `join_trip` has had this `finally` since it was written.
+        handed_off = False
         try:
-            prepared = create_expense_batch(
-                app.state.data_root,
-                files=files,
-                legal_entity=legal_entity,
-                default_currency=default_currency,
-                label=label,
-                now_iso=_now_iso(),
-                operator=_operator(),
-                learning_db_path=app.state.learning_db_path,
-                settings=settings,
-                batch_type=declared,
-                trip_id=trip_id,
-                # A company month is a legal empty container since
-                # 2026-09-08; a trip batch still requires its first
-                # receipt (create-with-receipt or first join).
-                allow_empty=declared != BATCH_TYPE_TRIP,
-            )
-        except RunInputError as exc:
-            if declared == BATCH_TYPE_TRIP:
-                release_trip_batch_slot(trip_id)
-            return _input_refused(exc)
+            with open_store() as store:
+                settings = store.get_settings()
+            try:
+                prepared = create_expense_batch(
+                    app.state.data_root,
+                    files=files,
+                    legal_entity=legal_entity,
+                    default_currency=default_currency,
+                    label=label,
+                    now_iso=_now_iso(),
+                    operator=_operator(),
+                    learning_db_path=app.state.learning_db_path,
+                    settings=settings,
+                    batch_type=declared,
+                    trip_id=trip_id,
+                    # A company month is a legal empty container since
+                    # 2026-09-08; a trip batch still requires its first
+                    # receipt (create-with-receipt or first join).
+                    allow_empty=declared != BATCH_TYPE_TRIP,
+                )
+            except RunInputError as exc:
+                return _input_refused(exc)
 
-        job_id = uuid.uuid4().hex[:12]
-        with open_store() as store:
-            store.create_job(job_id, None, _now_iso())
-        background.add_task(
-            _run_expense_job, app.state.db_path, job_id, prepared,
-            app.state.learning_db_path, app.state.data_root,
-        )
+            job_id = uuid.uuid4().hex[:12]
+            with open_store() as store:
+                store.create_job(job_id, None, _now_iso())
+            background.add_task(
+                _run_expense_job, app.state.db_path, job_id, prepared,
+                app.state.learning_db_path, app.state.data_root,
+            )
+            handed_off = True
+        finally:
+            if declared == BATCH_TYPE_TRIP and not handed_off:
+                release_trip_batch_slot(trip_id)
         month = month_from_label(prepared.label)
         body = {
             "ok": True,
@@ -4377,7 +4456,20 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     @app.put("/api/trips/{trip_id}")
     async def put_trip(trip_id: str, request: Request):
         """Update name / range / roster. Whole-object semantics on the
-        fields it takes: `travelers` replaces the whole roster."""
+        fields it takes: `travelers` replaces the whole roster.
+
+        R4.1: a DATE change moves which months may borrow this trip's
+        receipts, so the months that overlapped the OLD range and those
+        that overlap the NEW one are both owed a re-match (the union: a
+        month the trip has just moved off has to let go of receipts it
+        can no longer see, and a month it has just moved onto has to pick
+        them up). The reply carries `months_rematched` when any ran.
+        Roster and cost-center changes owe nothing, because the grid
+        resolves both from the live trip on every read.
+
+        A RENAME also re-labels the batch, so the months screen, the
+        delete confirm and the `settled_by` badge on a borrowing month
+        stop naming the trip's creation-time name."""
         if not _receipt_first_on():
             return _flag_off()
         try:
@@ -4402,9 +4494,58 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             cleaned, err = validate_trip_fields(merged)
             if err is not None:
                 return _refused(err)
-            store.update_trip(trip_id, updated_at=_now_iso(), **cleaned)
-            trip = store.get_trip(trip_id)
-            view = trip_view(store, trip, find_trip_batch(store, trip_id))
+
+        # Item 18: the rename and the owe both take the batch writer lock,
+        # so the whole span runs in the threadpool. An `async def` handler
+        # blocking on that lock parks the EVENT LOOP for as long as an OCR
+        # ingest holds it, which stops /healthz and gets the machine
+        # restarted mid-ingest.
+        def _apply() -> tuple[dict, list[str]]:
+            with open_store() as store:
+                before = store.get_trip(trip_id)
+                if before is None:
+                    return {}, []
+                old_name = before.name
+                old_range = _trip_range(before.start_date, before.end_date)
+                store.update_trip(trip_id, updated_at=_now_iso(), **cleaned)
+                trip = store.get_trip(trip_id)
+                batch = find_trip_batch(store, trip_id)
+                owed: list[str] = []
+                if batch is not None:
+                    if str(trip.name) != str(old_name):
+                        _sync_trip_batch_label(
+                            store, batch, old_name, trip.name
+                        )
+                        batch = store.get_run(batch.run_id) or batch
+                    if (
+                        cleaned["start_date"] != before.start_date
+                        or cleaned["end_date"] != before.end_date
+                    ):
+                        new_range = _trip_range(
+                            cleaned["start_date"], cleaned["end_date"]
+                        )
+                        owed = owe_trip_month_rematches(
+                            store, batch,
+                            ranges=[
+                                r for r in (old_range, new_range) if r
+                            ],
+                        )
+                return trip_view(store, trip, batch), owed
+
+        view, owed = await run_in_threadpool(_apply)
+        if not view:
+            return _not_found("Trip not found", "trip_not_found")
+        if owed:
+            def _pay() -> list[dict]:
+                with open_store() as store:
+                    return rematch_trip_months(
+                        store, owed,
+                        learning_db_path=app.state.learning_db_path,
+                    )
+
+            paid = await run_in_threadpool(_pay)
+            if paid:
+                view = {**view, "months_rematched": paid}
         return JSONResponse({"ok": True, **view})
 
     @app.delete("/api/trips/{trip_id}")
@@ -5177,6 +5318,33 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # Item 70: the receipt leaves the matcher's pool, so its charge
             # has to be re-matched or it keeps pairing with nothing real.
             rematch_needed = has_statement(run) and not already
+            # R4.1: on a TRIP that condition is never true (a trip has no
+            # statement of its own), so deleting a trip receipt used to
+            # tell nobody, and the month that had borrowed it kept the
+            # settlement and the count. The months that borrow from this
+            # trip are the ones owed the re-match, not the trip.
+            owes_trip_months = is_trip_batch(run) and not already
+        if owes_trip_months:
+            # Item 18: this handler is `async def`, so the locked span goes
+            # to the threadpool. Blocking here would park the EVENT LOOP on
+            # a lock an OCR ingest can hold for minutes, stopping /healthz
+            # and getting the machine restarted mid-ingest.
+            def _pay_trip_debt() -> None:
+                with open_store() as store:
+                    fresh = store.get_run(run_id)
+                    if fresh is None:
+                        return
+                    try:
+                        owed = owe_trip_month_rematches(store, fresh)
+                    except Exception:  # noqa: BLE001 - never block a delete
+                        return
+                    if owed:
+                        rematch_trip_months(
+                            store, owed,
+                            learning_db_path=app.state.learning_db_path,
+                        )
+
+            await run_in_threadpool(_pay_trip_debt)
         return await _expense_edit_reply(run_id, rematch_needed)
 
     @app.post("/api/runs/{run_id}/expenses/{document_id:path}/move")
