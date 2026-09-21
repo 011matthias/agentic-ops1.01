@@ -1393,6 +1393,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             "detail": detail_text,
             "machine": snap["machine"],
             "region": snap["region"],
+            # Which BUILD served this failure (item 120). Stamped from the
+            # same snapshot as the machine id, and stamped HERE rather than
+            # read back later: this is the process that took the report, and
+            # after a restart nothing can reconstruct which build it was.
+            "server_commit": snap["commit"],
+            "server_image": snap["image"],
             "process_started_at": snap["started_at"],
             "uptime_s": snap["uptime_s"],
             "process_predates_failure": (

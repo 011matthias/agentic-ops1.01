@@ -2073,6 +2073,8 @@ moment the report arrived.
 | `server.machine` | string | `FLY_MACHINE_ID`; `""` off Fly, never invented |
 | `server.region` | string | `FLY_REGION`; `""` off Fly |
 | `server.app` | string | `FLY_APP_NAME`; `""` off Fly |
+| `server.commit` | string | the commit this image was built from, baked in by the Dockerfile `ARG GIT_COMMIT` (item 120, 2026-09-20). `""` when a deploy omitted the build arg, which declines to answer rather than answering wrongly |
+| `server.image` | string | `FLY_IMAGE_REF`, the image the machine actually booted; the same string `flyctl releases --image` prints, so it is the join from a running process back to a release |
 | `server.started_at` | string | wall-clock ISO time this process started |
 | `server.uptime_s` | number | seconds since start, on the monotonic clock |
 
@@ -2144,6 +2146,21 @@ could reach the app AFTER the failure, so an empty list is not proof that
 nothing failed. The table keeps the newest 500 rows; it shares a 1GB volume
 with receipts, and a diagnostic log that can grow without limit is a second
 fault. Pinned by `tests/test_client_error_probe.py`.
+
+**Which build served the failure** (item 120, 2026-09-21). Each row carries
+`server_commit` and `server_image`, stamped from the same snapshot as
+`machine` at the moment the report ARRIVED. That is the distinction to hold
+on to when reading the payload: the top-level `server` block is the process
+answering your read, and the row's own fields are the process that took the
+report, which after any deploy is a different build. Before these columns a
+failure could be tied to a build only while its serving process was still up.
+
+Two properties a reader can rely on. Rows written before the migration read
+`""`, and so does a row served by a build deployed without `--build-arg`;
+absence is stated rather than guessed, because a plausible-looking commit
+would send an investigation to the wrong release. And the columns are named
+`server_*` rather than `commit` / `image` because `commit` is a SQLite
+keyword and cannot be a bare column name.
 
 ## Edits on a month with a statement: the five routes reopen + `rematch` (item 70, 2026-09-15)
 
