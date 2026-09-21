@@ -1122,6 +1122,34 @@ expects to exist. One owner answer settles it: if trip reports are wanted for
 substantiation, R3 survives in a reduced form (dates on a cost center is enough);
 if they are not, this item closes and item 48's round 2 drops that line.
 
+**2026-09-21: R3 and R4 are both SHIPPED, and this item's own body was the
+stale source that hid it.** R3 (the trip entity, `/api/trips`, travel-alias
+routing) landed in PR #688 and R4 in PR #685, commit `fc75c8a9`, 2026-09-07,
+both halves in one commit: the `receipt_claims` registry (R4a), the
+trip-spanning match pool and the per-person trip report (R4b). The four SPA
+prompts were applied the same day. Live `/healthz` reports the running commit
+as `640be61b`, which contains `fc75c8a9`. The trip already resolves a cost
+center at D2 position 2 (`TripRow.cost_center`), so "how do trips and cost
+centers relate" is decided and shipped, not open.
+
+What was genuinely untested is that **none of it had ever run against real
+data**: `GET /api/trips` is `{"trips": []}` and stored `cost_centers` is
+`null`. Proven 2026-09-21 on a read-only copy of the live store (one trip over
+July, two travelers, three receipts, four cost centers; copy deleted after).
+All seven behaviours `tests/test_trip_settlement.py` asserts hold on the real
+July and August months, and all three trip screens render in the published SPA.
+Two defects confirmed on real data, both in trip LIFECYCLE rather than in the
+match path: a trip date-edit or a trip-batch deletion leaves every borrowing
+month stale, over-reporting `n_reconciled` (July read 33 where 31 was true) and
+still showing "Settled by trip ..." badges naming a run that no longer exists,
+until something unrelated happens to re-match that month, which nothing
+schedules; and `roster_mismatch` / `n_roster_mismatch` are emitted, tested and
+documented but rendered by no prompt, so the off-roster traveler is invisible
+on screen while the PDF captions her. Neither corrupts the claims table: the
+claims are released correctly on delete, and the next re-match heals the month
+completely. Full findings, with the numbers, in the R4 row of
+`status/p1-expense-reconciliation.md`.
+
 **Owner:** "Expense creation should be split and separated into 2 functions:
 One for overall monthly company expenses and one for travel expenses." One of
 three directives given together (with items 39 and 40); they ship as one
@@ -1564,7 +1592,7 @@ tracked separately as item 118 (a pick on a row teaches nothing).
 which projects/purposes — examples given: Nicolas's Brazil expenses, the
 Lidar project Nicolas works on, Matthias's work on this tool, marketing.
 
-**BUILD ORDERED 2026-09-10** (owner: add cost centers, with the configuration and setup discussed, into the UI and the backend). Nothing exists yet: `grep -rn cost_center src/` returns zero hits, so this is backend AND Lovable, in that order. The design below stands unchanged and is the spec; build to it rather than re-deciding it. Sequence: (1) `settings["cost_centers"]` whole-map replace + the empty-registry contract (resolve nothing, flag nothing) with its mutation test FIRST, (2) the resolution chain override > trip > learned merchant > card `default_cost_center` > unresolved, with person and category deliberately not resolvers, (3) the parallel API fields plus `cost_center_source_label`, (4) the month report grouped by cost center (reuses the `sections` partition item 38 built), (5) `GET /api/cost-centers/totals` for the cross-month roll-up, (6) the Settings editor and the row picker in Lovable. The stated limit rides both surfaces: this tool sees card and receipt spend only, never contractor invoices or salaries, so a cost-center figure is not a total project cost.
+**BUILD ORDERED 2026-09-10** (owner: add cost centers, with the configuration and setup discussed, into the UI and the backend). ~~Nothing exists yet: `grep -rn cost_center src/` returns zero hits, so this is backend AND Lovable, in that order.~~ **RETRACTED 2026-09-21: both halves shipped.** The same grep returns 137 hits at `fd5f4cb4`, and the SPA renders the value with its source label (driven on a local copy of the live store: a trip row reads "Zzmarker / from the trip"). What is still true is that the live registry is EMPTY, so the feature is inert. Measured 2026-09-21 on a local copy of the live store: authoring four centers turns `needs_cost_center` on for **183 expense rows across all seven company months** (April 34, May 3, June 7, July 54, August 25, September 60, January 0) and resolves none of them, because no merchant or card default names a center yet. That is the real cost of the first save, and it is the thing to decide before Dirk types the list. The design below stands unchanged and is the spec; build to it rather than re-deciding it. Sequence: (1) `settings["cost_centers"]` whole-map replace + the empty-registry contract (resolve nothing, flag nothing) with its mutation test FIRST, (2) the resolution chain override > trip > learned merchant > card `default_cost_center` > unresolved, with person and category deliberately not resolvers, (3) the parallel API fields plus `cost_center_source_label`, (4) the month report grouped by cost center (reuses the `sections` partition item 38 built), (5) `GET /api/cost-centers/totals` for the cross-month roll-up, (6) the Settings editor and the row picker in Lovable. The stated limit rides both surfaces: this tool sees card and receipt spend only, never contractor invoices or salaries, so a cost-center figure is not a total project cost.
 
 **DESIGN ANSWERED 2026-09-08** in an owner decision round (four questions
 put with recommendations; three taken, D1 answered against the
@@ -1686,7 +1714,7 @@ Expense-batch payload:
 | Path | Element | Meaning |
 |---|---|---|
 | `expenses[].cost_center` | string | the resolved name; `""` unresolved |
-| `expenses[].cost_center_source` | string | `override` \| `trip` \| `learned` \| `card` \| `none` |
+| `expenses[].cost_center_source` | string | `override` \| `trip` \| `merchant` \| `card` \| `""` (the two right-hand values were written here as `learned` / `none`; the shipped code and `docs/api-contract.md` emit `merchant` and the empty string, corrected 2026-09-21) |
 | `expenses[].cost_center_source_label` | string | the parallel human-readable label |
 | `summary.n_needs_cost_center` | int | beside `n_needs_person` |
 | `cost_center_options[]` | string | beside `account_options[]` / `entity_options[]` |
@@ -7462,6 +7490,10 @@ tinting would re-attach the meaning the directive removes.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 113 | Item 38's SPA half: the four Lovable prompts for R3 and R4 published and bundle-verified applied on the same day the backend landed (`lovable-trips-prompt.md`, `lovable-r4-settled-by-prompt.md`, and the two cost-center prompts that followed) | Recorded retroactively 2026-09-21. All four were audited by bundle only; none had ever been driven in a browser, because no trip and no cost center existed live to render. The 2026-09-21 cold drive against a local copy closed that: the Trips screen, the trip batch page and July's "Settled by trip ..." badge all render. The one field that does NOT render is `roster_mismatch` / `n_roster_mismatch`, emitted and documented since R3 and carried by no prompt | PR #698, 2026-09-07 |
+| 112 | R4a, the cross-batch guarantee: the `receipt_claims` registry, `(receipt_run_id, document_id)` as the global one-receipt-one-charge key, advisory exclusion before matching, the authoritative re-check inside `_BATCH_ADD_LOCK` at commit, and the reviewer verdicts that keep it current (release on reject, move on re-pick, 409 `receipt_settled_elsewhere` / `receipt_just_settled` on a pick that would steal another run's receipt) | Recorded retroactively 2026-09-21. Without the registry a receipt sitting in a trip could settle a charge in July AND in August; the claims table is what makes the spanning pool safe rather than double-counting | PR #685, commit `fc75c8a9`, 2026-09-07; `tests/test_receipt_claims.py` |
+| 111 | R4b, item 38's second half, same commit as R4a: `trip_pool_for_month` (every trip whose inclusive date range overlaps the month's charge span lends its receipts, confirmed-private and foreign-claimed excluded), `settled_by` on both sides, and the per-person trip report (`build_expense_report`'s `is_trip_batch` branch, roster order first, off-roster captioned, sums per person). SPA half applied the same day: `lovable-trips-prompt.md` + `lovable-r4-settled-by-prompt.md` | Recorded retroactively 2026-09-21, and re-proven on real data the same day rather than taken on trust, because nothing had ever exercised it live: `GET /api/trips` was `{"trips": []}` and stored `cost_centers` was `null`, so the whole feature pair was code-live and data-dead. All seven behaviours hold on the real July and August months; both remaining defects are in trip lifecycle, not in the match path (see item 38) | PR #685, commit `fc75c8a9`, 2026-09-07, live on Fly (running commit `640be61b` contains it); `tests/test_trip_settlement.py` (7, route-level) |
+| 110 | R3, item 38's first half: the trip entity and its routing. `trips` table, `POST`/`PUT`/`DELETE /api/trips` and `GET /api/trips`, the batch-materializes-on-first-join rule, travel-alias mail routing in `intake_mail.py`, and the refusals a trip needs (400 `statement_on_trip`, 409 on a second batch per trip, 409 on deleting a trip a batch still references) | Recorded retroactively 2026-09-21. The row was never written, so item 38's body still read as though R3 were open, and three sessions in a row re-planned shipped code from it | PR #688, 2026-09-07 |
 | 109 | The statement reader names every colour it can read and infers meaning from two: `colour_family` is total over the RGB cube (HSV hue bands, twelve stable family names) replacing the ad-hoc RGB inequalities, `_FAMILY_ENTRY_STATUS` maps only yellow and gray to the two existing verdicts, and `rows[].fills[]` records `{column, index, hex, family}` for every coloured cell on the source row, over every column rather than only the mapped ones | Backlog item 162 (owner directive: read all these colours and more, and attribute no deeper meaning). The reader understood two families, so a row Criss had marked with something else was indistinguishable from a row she had marked with nothing: 84 of July's 112 rows. The census also settled the shape - the colours are a per-column scheme with THREE channels (`Card` orange/blue/mid-gray, `Description` gray, `Amount` yellow), which decomposes July's 85/27 split exactly into 44 yellow-only + 41 tie + 27 gray-majority | 2026-09-20, pending PR; `tests/test_statement_fill_colours_item_162.py` (route-level through `GET /api/runs/{id}`, plus the family-to-verdict map held as a property over the cube rather than a list of examples, plus an instrument check that the THEME fill path is the one under test, since both live workbooks are theme-typed and an rgb-only fixture would pass while testing nothing); six wiring points proven RED by hand with sha256-equal restores; **0 of 452 live filled cells change verdict**, measured by running both classifiers over both stored workbooks; whole-cube divergence enumerated in the PR; SPA half `docs/lovable-statement-colour-prompt.md` (Not applied) |
 | 108 | A stand-in can bring the app back: `docs/if-it-is-down.md`, written from values read off the live app, covers which of the three services is down, the three failure shapes and their fixes, deploy and image-rollback from the repository alone, and what to check before calling it up. It also states the two limits it cannot fix | Backlog item 120's third part, the only one needing no decision from Dirk. The 2026-09-10 outage ran ~50 minutes because the one person who could recover it had to notice first; recovery needed a machine destroy plus a volume fork, which nothing in the repo described | 2026-09-20 |
 | 107 | The chase section says what it lists: `chase.title` reuses the exact words of the box above it ("Charges without a receipt" / "Lançamentos sem recibo") and a new `chase.subtitle` names the population and the grouping. Copy only; the counts were verified correct first | Backlog item 161 (feedback note #72, "what is this"). A cold drive refuted the item's own hypothesis: 85.3 and 14.9 are never rendered on that page. The real defect is one population named twice, four lines apart - a box reading "Charges without a receipt · 65" over a section reading "Receipts to chase (65)", whose own columns are the charge columns | 2026-09-20 |

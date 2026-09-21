@@ -4712,10 +4712,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return err
         if is_trip_batch(run):
             # Item 38 ruling 3: trips DO reconcile, but through the
-            # company month's statement (the cross-batch match pool is
-            # R4's round). A statement never attaches to a trip; opening
-            # that here would give one charge two competing settlement
-            # homes. Deny-by-default until the cross-batch design lands.
+            # company month's statement. A statement never attaches to a
+            # trip; opening that here would give one charge two competing
+            # settlement homes. The cross-batch design HAS landed (R4,
+            # PR #685, 2026-09-07): `trip_pool_for_month` lends this
+            # trip's receipts to every overlapping month and
+            # `receipt_claims` arbitrates, so the refusal below is the
+            # permanent rule, not a placeholder.
             return JSONResponse(
                 {"error": "statements attach to company months; a trip's "
                           "receipts reconcile against the month statement "
