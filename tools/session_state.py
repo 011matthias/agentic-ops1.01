@@ -174,6 +174,10 @@ def _default_state(session_id: str = "") -> dict:
         # Transient tool failures (lock / 429 / 5xx / MCP transport) that
         # tool-failure-gate turned into an in-turn retry advisory.
         "transient_blocks": 0,
+        # One-shot advisory claims, {key: True}. load() rebuilds state from
+        # this schema and drops anything not declared here, so a once-key
+        # must live in the default or it never persists. See mark_once().
+        "once": {},
     }
 
 
@@ -529,6 +533,26 @@ def mark_b1_primed() -> dict:
         state["b1_primed"] = int(state.get("b1_blocks", 0))
         return state
     return _modify(_fn)
+
+
+def mark_once(key: str) -> bool:
+    """Claim `key` for this session: True the first time, False afterwards.
+
+    For advisories that are worth saying once and become noise if repeated.
+    Fail-closed on a state error (no claim, so no advisory) rather than
+    risking one on every prompt.
+    """
+    claimed = {"v": False}
+
+    def _fn(state: dict) -> dict:
+        flags = state.setdefault("once", {})
+        if not flags.get(key):
+            flags[key] = True
+            claimed["v"] = True
+        return state
+
+    _modify(_fn)
+    return claimed["v"]
 
 
 def add_candidate(signal: str, source: str, context: str = "") -> bool:
