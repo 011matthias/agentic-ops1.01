@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-22 | Zoho Sandbox Posting Guards | client-dev | [Mini-Checkpoint-1](docs/2026-09-22%20-%20Zoho%20Sandbox%20Posting%20Guards/Mini-Checkpoint-1.md) |
 | 2026-09-22 | Zoho Month-End Injection | client-dev | [Mini-Checkpoint-1](docs/2026-09-22%20-%20Zoho%20Month-End%20Injection/Mini-Checkpoint-1.md) |
 | 2026-09-21 | Brisken Weekly Sheets Sent | client-dev | [→](docs/2026-09-21%20-%20Brisken%20Weekly%20Sheets%20Sent/Checkpoint.md) |
 | 2026-09-21 | Brisken Recon Item 120 Loose Ends | client-dev | [→](docs/2026-09-21%20-%20Brisken%20Recon%20Item%20120%20Loose%20Ends/Checkpoint.md) |
