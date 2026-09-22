@@ -227,6 +227,51 @@ report is `ok` only when a re-list confirms the org is empty, because a
 - **`zoho/sandbox_reset.py`** plus `client.delete_expense`, to empty
   TEST-BTS between rehearsals. Guards described in the section above.
 
+## The posting path (`zoho/expense_post.py`)
+
+`read_expense_csv` → `group_by_reference` → `plan_expense_post` →
+`execute_expense_post`. It posts the reviewed CSV rather than rebuilding
+from receipts, so what reaches Zoho is what someone approved.
+
+**One receipt is one expense.** The CSV writes one row per ACCOUNT and a
+split receipt's rows share a `Reference#`, so rows are grouped back into a
+single itemized expense, which is the shape the trial produced (header
+`Itemized`). A row with a blank reference never merges with another blank:
+fusing on a shared absence would combine unrelated purchases into a record
+that still ties out to the cent.
+
+**The audit envelope has exactly one builder.** In the trial it was on 7 of
+9 rows and missing on precisely the split, because the itemized path wrote
+a different description format. Every payload now goes through
+`audit_note`, and a parametrized test asserts it on both shapes.
+
+**Refusals**, all deny-by-default: an account that does not resolve to a
+numeric id; a blank amount (the export writes one when a receipt's total
+was never read, and a blank is not a zero); a reference already in the
+ledger; and any foreign-currency row, because Zoho wants a `currency_id`
+rather than a code and the re-consented grant dropped `settings.READ`, so
+`/settings/currencies` 401s and there is no way to resolve one. A plan
+carrying any refusal refuses to post at all, since a partial post leaves a
+month half-entered.
+
+**Failure handling** follows the 4.8 shape: write-ahead `inflight`
+committed before the POST fires, a clean 4xx releases the intent and the
+batch continues (Zoho answered and wrote nothing), anything else marks
+`ambiguous` and aborts the rest, because continuing past an unknown commit
+turns one uncertainty into several.
+
+### Do not post a test month into the sandbox
+
+Without `ZohoBooks.expenses.DELETE`, **every month posted to TEST-BTS is
+permanently occupied** and the occupancy guard will refuse it afterwards.
+Posting synthetic rows into July to "try the loop" would burn the one
+month we are preserving for the real rehearsal, and there would be no way
+to clear it.
+
+So the first real post is the real July data. Until then the loop is
+exercised by its tests and by `plan_expense_post`, which resolves and
+cross-references the ledger without touching Zoho.
+
 ## Still open
 
 - The scope grant above, which blocks every write.
