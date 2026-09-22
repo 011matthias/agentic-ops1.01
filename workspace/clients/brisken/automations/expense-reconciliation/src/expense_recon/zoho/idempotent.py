@@ -64,6 +64,11 @@ from ..output.posting_common import (
 )
 from ..output.zoho_export import ZOHO_COLUMNS
 from .client import ZohoAPIError, ZohoAuthError
+from .orgs import (  # noqa: F401  (re-exported for the CLI and its tests)
+    DEFAULT_ORG_ALLOWLIST,
+    PRODUCTION_ORG_IDS,
+    SANDBOX_ORG_ID,
+)
 
 if TYPE_CHECKING:
     from ..ingest.chart_of_accounts import ChartOfAccounts
@@ -89,12 +94,10 @@ __all__ = [
     "verify_ambiguous",
 ]
 
-# The two Brisken Books orgs the tool is provisioned for (Corporate
-# Services / Cloud Services, verified in-container 2026-07-01). Posting
-# to any org outside this set is refused outright; widening the set is a
-# deliberate, PR-reviewed config change (`zoho.post.org_allowlist`),
-# mirroring the hard mailbox allowlist in rule_brisken_graph_first.
-DEFAULT_ORG_ALLOWLIST = frozenset({"822741658", "697686691"})
+# Org identity lives in `zoho.orgs` so the occupancy guard can ask the
+# same question without importing this module (sqlite, the COA gate and
+# the export writer come with it). Re-exported here because the CLI and
+# the existing tests import the allowlist from this module.
 
 # CSV column positions derived from ZOHO_COLUMNS itself (never
 # hand-numbered): a column reorder in the writer cannot silently

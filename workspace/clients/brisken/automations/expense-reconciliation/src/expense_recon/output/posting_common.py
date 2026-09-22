@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from ..matching.types import Categorization, ClassificationSource
 
 if TYPE_CHECKING:
-    from ..ingest.chart_of_accounts import ChartOfAccounts
+    from ..ingest.chart_of_accounts import Account, ChartOfAccounts
 
 
 _CARD_ACCOUNT = "Card: {account_id}"
@@ -87,15 +87,19 @@ def _str(value: str | None) -> str:
     return value or ""
 
 
-def _resolve_account(ref: str | None, coa: "ChartOfAccounts") -> str | None:
-    """Resolve an account reference to its canonical posting account name.
+def resolve_ref(ref: str | None, coa: "ChartOfAccounts") -> "Account | None":
+    """Resolve an account reference to its chart Account, or None.
 
     `ref` is what the categorizer / config carries: a `"CODE name"`
     label, a bare code, or a bare name. Resolution order: exact
     code-or-name (`ChartOfAccounts.resolve`), then the leading token as
-    a code, then the remainder as a name. Returns the account name, or
-    None when nothing in the chart matches (caller flags it, never
-    guesses).
+    a code, then the remainder as a name. None when nothing in the chart
+    matches; the caller flags it and never guesses.
+
+    The single resolution order for the whole posting surface. The file
+    exports want the account's NAME (`_resolve_account` below) and the
+    API poster wants its numeric `account_id` (`zoho.accounts`), and the
+    two must never disagree about WHICH account a reference means.
     """
     ref = (ref or "").strip()
     if not ref:
@@ -106,6 +110,13 @@ def _resolve_account(ref: str | None, coa: "ChartOfAccounts") -> str | None:
         acct = coa.by_code(head.strip())
         if acct is None and tail.strip():
             acct = coa.by_name(tail.strip())
+    return acct
+
+
+def _resolve_account(ref: str | None, coa: "ChartOfAccounts") -> str | None:
+    """The canonical posting account NAME for a reference, or None when
+    nothing in the chart matches. Thin wrapper over `resolve_ref`."""
+    acct = resolve_ref(ref, coa)
     return acct.name if acct else None
 
 

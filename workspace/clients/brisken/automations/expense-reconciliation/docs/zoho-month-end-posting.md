@@ -127,14 +127,113 @@ existing COA gate already refuses an account that is inactive, non-leaf,
 out of scope or marked "DO NOT USE", and posting reuses it rather than
 growing a second opinion.
 
+## Sandbox rehearsal in TEST-BTS
+
+Owner direction 2026-09-22: decouple from the production blockers and the
+Criss handoff by pointing integration testing at the sandbox org
+**TEST-BTS (`822116290`)**, a clone of a production org. Real writes and
+readbacks, no live books, July untouched.
+
+`822116290` is now on `DEFAULT_ORG_ALLOWLIST` beside the two production
+orgs. A run config can only ever INTERSECT that list, never extend it, so
+admitting an org stays a reviewed code change; `test_zoho_org_allowlist.py`
+pins both that property and the exact membership, so a fourth org fails a
+test rather than passing quietly.
+
+Nothing about a cloned org's id or chart announces that it is not
+production. The only things keeping a real org out of a rehearsal are that
+list and the `--org` the operator passes, which is why `SANDBOX_ORG_ID` and
+`PRODUCTION_ORG_IDS` are kept as separate, disjoint sets.
+
+### Rehearsing real months, starting with July
+
+Owner direction 2026-09-22: empty the sandbox and rehearse real months,
+July first. That exposed a flaw in the first cut of the occupancy guard,
+now fixed.
+
+**The standing July lock is production-only.** What makes July dangerous
+is 118 rows a human typed, and those exist only in the production orgs. In
+a clone July is empty, and it is the month most worth rehearsing because a
+full month is the shape the tool has to survive. A global lock would
+forbid exactly the rehearsal that de-risks the real run: a safety rule
+protecting nothing, at the cost of the thing it exists to make safe. So
+`LOCKED_PERIOD` now applies when `is_production_org(org_id)`, and a
+sandbox run states in its verdict that the lock was waived rather than
+skipping it silently. `ALREADY_OCCUPIED` is NOT waived for the sandbox: a
+rehearsal that double-posts is still a bug, and catching it there is the
+entire reason to rehearse.
+
+`is_production_org` is a positive list, deliberately not "anything that is
+not the sandbox". A typo'd or newly-cloned org must not inherit
+production's protections by accident.
+
+Driven live 2026-09-22, four cases through one instrument:
+
+| Org | Period | Verdict | Why |
+|---|---|---|---|
+| TEST-BTS | 2026-07 | `CLEAR` | lock waived, clone holds no July rows |
+| TEST-BTS | 2026-09 | `ALREADY_OCCUPIED` | the trial's 8 dummy-card rows |
+| TEST-BTS | 2026-10 | `CLEAR` | never used |
+| Corporate Services | 2026-07 | `LOCKED_PERIOD` | real books, refuses without an API call |
+
+Three distinct verdicts is the differential that makes the `CLEAR`
+trustworthy; a guard answering the same for all four would be blind
+rather than correct.
+
+### Emptying the sandbox
+
+`zoho/sandbox_reset.py`. TEST-BTS holds **10 expenses, all ours** (every
+one created 2026-09-21 or 09-22; the 2023 clone carried no expenses, and
+bills and journals are both 0), so there is no inherited baseline to
+destroy. Blocked only on `ZohoBooks.expenses.DELETE`; the dry run already
+enumerates all 10 by id.
+
+It is the one destructive path in the tool, so the guards are the module.
+A clone is the dangerous case precisely because every signal that would
+say "this is only a test" is missing: same chart, same account names, same
+id shape. Therefore the org is asserted by equality against
+`SANDBOX_ORG_ID` before anything is read, production is refused by name
+rather than merely absent from a list, `execute_reset` re-asserts instead
+of trusting the plan it was handed, deletion is by enumerated id with no
+filter or bulk endpoint (`rule_brisken_graph_send_by_id`: a query that
+decides what to destroy can match one row more than you meant), and the
+report is `ok` only when a re-list confirms the org is empty, because a
+200 per delete proves each call was accepted and nothing more.
+
+## Built 2026-09-22
+
+- **`zoho/accounts.py`** resolves a reference to a numeric `account_id` or
+  returns a refusal naming why; there is no third branch and no default.
+  Refuses on: empty reference, an export placeholder, a reference absent
+  from this org's chart, a chart carrying no ids at all (the `from_csv`
+  case), an inactive account, and one marked DO NOT USE. Resolution order
+  is not re-derived; it comes from `posting_common.resolve_ref`, which the
+  file exports also use, so the CSV a human reviews and the payload the API
+  receives cannot disagree about which account a reference meant.
+  Driven live against the TEST-BTS chart: 196 of 196 accounts carry an id,
+  the four references the trial used resolve to four distinct ids, and
+  `Meals & Entertainment` plus both placeholders refuse.
+- **`zoho/occupancy.py`** refuses a month someone else already entered.
+  The 4.8 ledger stops this tool re-posting but cannot see Criss, so this
+  asks Zoho rather than our own records. `LOCKED_PERIOD` is a standing rule
+  needing no call, scoped to production orgs (see the July rehearsal
+  section); `ALREADY_OCCUPIED` is measured per run against the org, card
+  and month, in every org including the sandbox; `UNVERIFIABLE` is what a
+  failed query returns, because an unreadable month and an empty one must
+  never take the same branch.
+- **`zoho/orgs.py`** holds org identity as a leaf module, so the guard can
+  ask whether an org is real books without importing the ledger (sqlite,
+  the COA gate and the export writer come with it).
+- **`zoho/sandbox_reset.py`** plus `client.delete_expense`, to empty
+  TEST-BTS between rehearsals. Guards described in the section above.
+
 ## Still open
 
-- The scope grant above.
+- The scope grant above, which blocks every write.
 - Per-org routing for the 5 cards across separate organizations, and the
-  BRL/EUR/USD cases. The sandbox test was one card, nine rows, one currency.
-- A month-occupancy guard: refuse to post into an org, card and month that
-  already holds rows, unless explicitly overridden. This is what makes the
-  July hazard structural rather than remembered.
+  BRL/EUR/USD cases. The trial was one card, nine rows, one currency.
+- Wiring the two new guards into the posting CLI's pre-flight, and the
+  expense payload builder itself.
 - Whether custom fields are wanted at all, and if so they must be defined
   per org before import or they drop silently, as `cf_netting_key_exp` did.
 - Whether to auto-create vendors or leave the field empty and let Criss
