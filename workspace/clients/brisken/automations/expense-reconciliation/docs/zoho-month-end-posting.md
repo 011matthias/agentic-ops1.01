@@ -272,6 +272,63 @@ So the first real post is the real July data. Until then the loop is
 exercised by its tests and by `plan_expense_post`, which resolves and
 cross-references the ledger without touching Zoho.
 
+## July dry run against TEST-BTS, 2026-09-23
+
+Ran end to end: fetched the July batch's export from the live app
+(`POST /api/login` for a bearer token, then `GET /runs/50622baec444/
+expenses.csv`), pulled the TEST-BTS chart, checked occupancy, planned.
+Posted nothing. Only Zoho org touched was `822116290`.
+
+The batch has grown since the 09-10 note of 32 receipts: **54 expenses,
+56 CSV rows, 46 purchases** (6 split across accounts). Occupancy for
+2026-07 came back `CLEAR`, as designed.
+
+**Result: 0 postable, 46 refused.** The tooling worked; the data is not
+ready. Two independent gaps, and they do not overlap:
+
+| | count |
+|---|---|
+| USD, account unresolved | 14 |
+| account unresolved AND EUR | 12 |
+| account unresolved AND BRL | 10 |
+| account resolves, BRL blocks | 10 |
+| **postable today** | **0** |
+
+**Gap 1: 36 of 46 purchases carry no Zoho account.** The "Expense Account"
+column holds the app's own CATEGORY taxonomy (`Software & Subscriptions`
+x22, `Meals & Entertainment` x11, `Professional Services` x4, `Travel &
+Transport`, `Equipment & Hardware`, ...). Resolved through the real
+resolver against all 8 charts in the local snapshot, **none of those names
+exists in any Brisken org**. Only `E100010-31 - Travel Expense | Food`
+(x9) and `E100010 - Travel Expense` (x1) resolve. That is the fallback
+echo item 23 already measured on the workbook (64 real GL codes of 341
+cells, ~19%); this is the same ratio on the export, 10 of 56 rows. Closing
+it is the merchant-registry / category-to-account mapping, not a posting
+change.
+
+**Gap 2: 34 of 56 rows are not USD** (USD 22, BRL 21, EUR 13). TEST-BTS is
+a USD org and the poster refuses a foreign currency because Zoho wants a
+`currency_id` and the re-consented grant dropped `settings.READ`. A
+partial workaround exists and is worth knowing: currency ids can be
+harvested from an org's OWN existing expenses (`currency_id` is on every
+expense record), no settings scope needed. TEST-BTS currently yields only
+`USD -> 4369050000000000097`, because every sandbox expense so far is USD,
+so that route cannot cover EUR or BRL there yet.
+
+**The two gaps are disjoint**, which is why the intersection is empty: all
+10 rows carrying a real GL code are BRL, and all 22 USD rows carry an
+unresolved category. So there is no subset of July that can be rehearsed
+today, however the guards are configured.
+
+A methodology note worth keeping: the first version of the account
+diagnostic compared raw `account_name` strings and reported that even
+`E100010-31 - Travel Expense | Food` was absent everywhere. That was the
+instrument, not the data: `resolve_ref` also matches the `"CODE - name"`
+label form by splitting the leading token as a code. Re-run through the
+real resolver with a known-present control, two references resolved. A
+name-only comparison fails in the dangerous direction, since it would have
+sent someone renaming categories that were already fine.
+
 ## Still open
 
 - The scope grant above, which blocks every write.
