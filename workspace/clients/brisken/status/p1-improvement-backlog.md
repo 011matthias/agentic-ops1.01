@@ -191,9 +191,43 @@ counts table and the one-name-one-question rule.
 
 ### 23. Cut every tie to Zoho (owner directive 2026-08-22)
 
+> **REVERSED 2026-09-22. Zoho is the month-end destination again, and this
+> item stops being a deletion plan.** Dirk: at the end of each month the
+> reconciled data has to be imported properly into Zoho Books. The owner
+> chose API injection over a CSV hand-off, so the connection layer-1 deleted
+> is being restored on `client/brisken/zoho-month-end-injection`.
+>
+> **Rounds 4 and 5 are OFF.** Round 4 (delete the journal artifact, the
+> `/runs/{id}/zoho.csv` route and `export_approved_only`) and round 5 (rename
+> `zoho_expense_export.py` + `EXPENSE_COLUMNS` out of Zoho's import shape)
+> were both queued and unblocked; executing either now would delete or rename
+> the machinery the new requirement needs. Do not run them. Rounds 2, 6b, 7-9
+> (internal renames, the parallel `posting_account` field, the SPA flip) are
+> unaffected: they were always about vocabulary the SPA reads, not about the
+> connection.
+>
+> **What the live probe found, 2026-09-22** (read-only, Books API, both
+> target orgs): there is **no bank feed**. 0 of 39 sampled expense rows carry
+> `imported_transactions`, so nothing in Books links to an imported bank
+> transaction, and this file's own "Books holds the charges from the card
+> feed" (July receipt-gap section) was an inference the record contradicts.
+> The rows are hand-entered and weeks late: Corporate Services' 108 July rows
+> were created across 13 days from 07-05 to 09-08, in bursts of 23 (08-25),
+> 19 (08-26) and 45 (09-08). August holds 5 rows and September 9. So the
+> duplicate hazard for injection is not a feed to disconnect, it is Criss's
+> own entry, and the handoff has to be explicit: she stops entering the month
+> the tool imports. July is already entered and must never be injected.
+>
+> **The write path is blocked on a scope grant.** The Books refresh token is
+> read-only (`documents/expenses/bills/accountants/settings .READ`). Creating
+> an expense needs `ZohoBooks.expenses.CREATE`, and resolving `vendor_id`
+> needs contacts scope. Re-consenting the Self Client grant is an owner
+> action in the Zoho console; nothing can post until it happens.
+
 **Owner direction:** "zoho does not matter anymore, the app should have no
 connection or ties to zoho anymore" (answering the Cards R4 question about
-per-entity Zoho accounts).
+per-entity Zoho accounts). Superseded 2026-09-22, see the block above; kept
+because the layers below were built to serve it and still read against it.
 
 The surface splits into four layers, and they do NOT ship together:
 
