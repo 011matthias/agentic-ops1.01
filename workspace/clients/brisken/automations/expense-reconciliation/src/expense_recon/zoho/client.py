@@ -191,6 +191,29 @@ class ZohoClient:
             )
         return resp
 
+    def _delete(self, path: str) -> dict:
+        """DELETE one resource. Same error split as `_post`: a Zoho-level
+        rejection raises with the HTTP status attached, a transport
+        failure raises without one, and the caller must not assume a
+        network error means nothing was deleted."""
+        url = f"{self._cfg.api_domain}{path}?{urlencode({'organization_id': self._cfg.org_id})}"
+        status, resp = self._http(
+            "DELETE",
+            url,
+            {"Authorization": f"Zoho-oauthtoken {self._token()}"},
+            None,
+        )
+        if not isinstance(resp, dict):
+            raise ZohoAPIError(f"DELETE {path}: non-JSON response", status=status)
+        code = resp.get("code", 0)
+        if status != 200 or code not in (0, None):
+            raise ZohoAPIError(
+                f"DELETE {path} failed: {resp.get('message', 'unknown error')}",
+                status=status,
+                code=code,
+            )
+        return resp
+
     # ── endpoints ────────────────────────────────────────────────────
 
     def list_organizations(self) -> list[dict]:
@@ -317,6 +340,16 @@ class ZohoClient:
                 status=None,
             )
         return expense_obj
+
+    def delete_expense(self, expense_id: str) -> dict:
+        """DELETE one expense by id. Only ever called for one explicitly
+        enumerated id at a time; there is no bulk or filter-based delete
+        here on purpose, for the same reason the Graph sender only sends
+        by id (rule_brisken_graph_send_by_id): a query that decides what
+        to destroy can always match one row more than intended."""
+        if not str(expense_id or "").strip():
+            raise ValueError("delete_expense requires an expense_id")
+        return self._delete(f"/books/v3/expenses/{expense_id}")
 
     def list_contacts(self, *, contact_type: str | None = None) -> list[dict]:
         """All contacts (paginated per_page=200), for resolving a vendor
