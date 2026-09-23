@@ -8001,6 +8001,121 @@ red -> green under `tools/regress_check.py`.
 unchanged (the asset's `fx_reference_rates` was already empty). SPA half:
 `docs/lovable-fx-daily-rates-prompt.md`, rewritten as one prompt that
 removes the editor and adds the read-only fetched-rates panel.
+## Attribution and categorization, measured before the next round (2026-09-23)
+
+Owner direction, end of the learning-loop session: improve the matching and
+fallback logic in the two areas that work least well, **which card (and
+through it which legal entity and which person) paid a receipt**, and **which
+category an expense gets**. Read-only measurement first, because every
+generalization this project shipped without one came back (item 117's
+one-word aliases, item 133's merchant floor, item 156's Zoho taxonomy).
+
+**The live estate, read through `GET /api/expense-batches/{id}` and
+`GET /api/runs/{id}` on 2026-09-23** (July `50622baec444`, August
+`074a7b8905d7`, September `51a22ad72864`; 154 receipts, 226 charges, September
+has no statement):
+
+| | July | Aug | Sep | total |
+|---|---|---|---|---|
+| receipts | 54 | 25 | 75 | 154 |
+| card from a printed hint | 19 | 12 | 46 | 77 |
+| card from the settled charge (item 111) | 19 | 2 | 0 | 21 |
+| card picked by hand | 1 | 9 | 1 | 11 |
+| card from the merchant registry (item 154) | 0 | 0 | 2 | 2 |
+| card from memory (`learned`) | 0 | 0 | 0 | 0 |
+| **no card at all** | 15 | 2 | 26 | **43** |
+| no legal entity | 14 | 1 | 25 | 40 |
+| no person | 14 | 2 | 25 | 41 |
+
+**The card is the root.** Every entity-less and person-less row is a card-less
+row, in all three months (July 14 of 14, August 1 of 1, September 25 of 25).
+Of the 43 card-less receipts, **25 print no payment method at all** (12 of
+them September OpenAI) and **18 print something the registry cannot resolve**:
+`DEBIT`, `VISA`, `EC-Karte`, `girocard`, `Bar`, `Cash`, `Link`,
+`Wire Transfer`, `saved payment method`, and digits that name no registered
+card (`...2544`, `0501-1462-9129`, `***** 3281`). One of those 18 is a
+GoDaddy receipt reading *"We have billed your Visa card ending with the last
+two digits: 38"*, where exactly one registry card ends in 38: the note-#60
+two-digit rule (`cards.py:166-199`) does not match that phrasing.
+
+22 of the 43 have a carded sibling of the same vendor elsewhere, but the
+vendors that fail are the multi-card ones, so a merchant-to-card guess cannot
+decide them: `openai` resolves to card-9693 eight times and 3645 once,
+`lovable labs incorporated` to four cards, `anthropic, pbc` to four. That is
+the same set item 154 measured, and the registry withholds `card_key` on
+`cards_seen > 1` by design. `expenses[].customer` (bill-to) is empty on
+154 of 154 receipts, so no company signal survives the missing card.
+
+**Categorization, same read.** Of 154 receipts: 94 rest on the model
+(`LINE` or `VENDOR`), 33 carry a reviewer override, 8 come from the registry,
+**1 reads `learned`**, 15 have no category at all. 21 of the 33 overrides sit
+on a vendor that appears in another row or month, so the correction had a
+second row to reach and did not. Of 174 receiptless charges, **138 are a
+model guess off the bank descriptor** (88 distinct descriptions). Memory
+holds 108 category rules, 102 of them still the 2026-08-06 Zoho seed and
+**0 validated**; `vendor_alias` and `merchant_fx` are empty.
+
+**The live registry has moved since M1 and the record had not caught up.**
+`GET /api/settings` now returns **33** merchants (M1 measured 28), including
+`Anthropic`, `Lovable Labs`, `Lovable Labs Incorporated`, `Brave Software,
+Inc.` and `ZOHO Corp.`, each with category Software & Subscriptions and
+**`aliases: []`**. So M1's registry default never fires for them: three
+September rows spelled `anthropic, pbc @anthropic` read Utilities &
+Premises off the line text *"Auto-recharge credits"*, and September produced
+0 registry-sourced lines. The gap is the alias list, not the entry. Still
+absent: an `OpenAI` merchant, and Dirk's 3x3 account table (memory holds one
+account cell, Corporate Services / anthropic).
+
+### Item 169 — the card chain's fallbacks, where the evidence exists and is refused
+
+Four code facts, each measurable before it is changed:
+
+1. **A printed number that resolves nothing blocks every fallback.**
+   `service.py:6533` guards the settled-charge, learned and merchant steps
+   with `not _card_keys(hint)`, so a receipt printing `...2544` or a masked
+   `***** 3281` is refused the card of the charge it actually settles. The
+   guard's reason ("memory never overrides a number the document shows") is
+   right for a number that NAMES a card and wrong for one that names none.
+2. **The card learner cannot see the settled-charge evidence it is allowed to
+   learn from.** `_CARD_OBSERVATION_SOURCES` (`service.py:4885`) includes
+   `settled_charge`, but the `card_res` handed to
+   `registry_card_upserts_from_expense_run` (`:5207-5212`) is resolved without
+   `settled_cards`, so those 21 rows teach nothing. Latent until a month is
+   published, which has never happened (item 126).
+3. **The learned `card_key` is keyed on a company the failing row does not
+   have.** `consult.py:209-226` looks up `(legal_entity_id, vendor_norm)` with
+   no company-less fallback, while the rows needing a card are exactly the
+   rows with no entity. Categories got that fallback in item 115 (rule 2);
+   field corrections did not.
+4. **The matcher bake and the learner resolve a different chain from the
+   grid** (`service.py:13170` and `:5210-5212` pass neither `settled_cards`
+   nor `merchants`), so one receipt reads `settled_charge` on the grid and
+   `card_evidence.receipt: none` in the matcher on the same month.
+
+Not code, and larger than all four: cards 9693 and 1176 have never had a
+statement loaded (item 108), which is why September's OpenAI receipts cannot
+attribute at all. Coverage, not matching.
+
+### Item 170 — a correction that reaches the vendor's other spellings
+
+Memory recalls and captures on the raw normalized `detected_vendor`
+(`categorize.py:571-573`, `capture.py:350-355`), never on the registry's
+canonical name, which `registry_upserts_from_expense_run` already computes
+(`service.py:4824-4829`). So three spellings of Anthropic hold three
+independent rules and a correction on one teaches none of the others. This is
+note #80's "norms applied universally across multiple vendors" in the only
+form the record supports: the registry's curated alias graph, **not** a fuzzy
+key, which item 117 measured as 8 wrong canonicals out of 8 probes.
+
+Both items are gated the way item 164 says: measure what the rule would have
+done to the next month's rows before it fires. That instrument does not
+exist. The item-115 replay was a scratch script over a `/data` copy and is
+not in the repo, `labels.csv` carries only pair labels
+(`document_id,transaction_id,status,source,evidence`), and nothing anywhere
+judges a card, an entity, a person or a category. Three truths are free and
+unused: the statement's own `Card` column on every confirmed pair (37 July +
+9 August rows), and `payment_mode` plus `zoho_category` printed per receipt in
+the six ER-PDF bundles (~218 rows, Criss's own filing).
 
 ## Shipped (loop history)
 
