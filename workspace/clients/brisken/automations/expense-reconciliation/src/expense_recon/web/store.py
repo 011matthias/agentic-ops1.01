@@ -198,6 +198,12 @@ SETTINGS_WRITABLE_KEYS = (
 # are the PUT response's own fields, listed here for the same reason.
 SETTINGS_DERIVED_KEYS = (
     "categories",
+    # The curated GL leaves, per entity, and the taxonomy revision they came
+    # from. Derived beside `categories` rather than replacing it, so a
+    # client that reads the payload and sends the whole object back does not
+    # trip `unknown_settings_keys` on them (2026-09-23).
+    "gl_accounts",
+    "gl_revision",
     "entity_options",
     "cards_effective",
     "merchants_inert",
