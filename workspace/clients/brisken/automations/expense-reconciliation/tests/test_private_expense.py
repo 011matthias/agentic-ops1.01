@@ -428,7 +428,9 @@ def test_a_private_card_expense_refuses_a_company_card_pick(client, monkeypatch)
     batch = _create_batch(client)
     doc = _grid(client, batch)["expenses"][0]["document_id"]
     _confirm_private(client, batch, doc, person="Dirk")
-    assert _grid(client, batch)["expenses"][0]["can_mark_private"] is True
+    # Item 176: a row that IS private is not offered the private control
+    # again; the screen keys its undo on `private` itself.
+    assert _grid(client, batch)["expenses"][0]["can_mark_private"] is False
 
     pick = {"field": "card_key", "value": "corp-1672"}
     r = client.put(f"/api/runs/{batch}/expenses/{doc}", json=pick)
