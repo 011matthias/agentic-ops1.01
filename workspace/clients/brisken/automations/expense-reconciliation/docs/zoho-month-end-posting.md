@@ -329,6 +329,94 @@ real resolver with a known-present control, two references resolved. A
 name-only comparison fails in the dangerous direction, since it would have
 sent someone renaming categories that were already fine.
 
+## 2026-09-23, later: closing Gap 1 with a per-org category map
+
+Gap 1 above turned out to have a more precise cause than "the categories
+are not in the chart", and the precise version is what made it fixable.
+
+**Why a category was sitting in an account column at all.** One branch in
+`output.posting_common._debit_account_and_note` passes
+`cat.zoho_account or cat.category` straight through when no chart is
+loaded. So a receipt whose vendor has no account rule leaks its CATEGORY
+into the account column. The July export took that branch: with a chart
+the column can only ever hold a resolved chart name, `(account unmapped -
+assign)` or `(uncategorized - assign)`, and the export has raw category
+labels and not one `(account unmapped - assign)`. That is a code-path
+reading, not an inference from the shape of the data.
+
+So the category was a real signal being discarded, and the fix is to map
+it rather than to re-categorize 36 receipts.
+
+**`zoho/category_accounts.py`** holds a per-org table from the app's own
+category to a GL **code**. Four properties are load-bearing:
+
+- **Fallback, never override.** Consulted only after `resolve_ref` fails
+  to match the reference as a code or a name, so a (company, vendor) rule
+  that already picked an account still wins, exactly as the M1 registry
+  design intends.
+- **Keyed by org.** Brisken's own history is the reason: `anthropic`
+  posts to different accounts under Corporate Services and Cloud
+  Services. One global table would be wrong in some org by construction.
+- **Production orgs are deliberately absent**, so an unmapped org refuses
+  exactly as before rather than inheriting a sandbox guess. Which GL
+  account a category posts to is Brisken's call; `test_no_production_org_is_mapped`
+  is the tripwire.
+- **Maps to a code, not an `account_id`.** The code goes back through the
+  same `resolve_ref` the file exports use, so there is still one
+  resolution order and the account still passes the inactive /
+  DO-NOT-USE checks. It also sidesteps a name collision: two accounts are
+  named `Other Expenses`.
+
+**The leaf rule, which the first draft got wrong.** Zoho posts only to
+leaf accounts; parents are roll-ups. The first version of the table
+pointed three categories at parents (`Professional Fees`, `Travel
+Expense`, `Marketing & Selling Expenses`). `ChartOfAccounts.leaf_accounts`
+already knew the rule, and asking it caught all three before anything was
+posted. `test_every_shipped_mapping_targets_a_leaf_account` now asserts
+it, with a companion test proving that assertion can fail.
+
+**The shipped table (TEST-BTS), each pick from data rather than from what
+the name suggests:**
+
+| Category | Code | Account | Why |
+|---|---|---|---|
+| Software & Subscriptions | E500010-30 | IT: Cloud Subscriptions-Others | the unbranded leaf; Microsoft / ZOHO siblings stay for vendor rules |
+| Meals & Entertainment | E100010-31 | Travel Expense:Meals | the exact account the 9 already-resolving food rows post to |
+| Professional Services | E600060-70 | Professional Fees > Other Expenses | July's rows are consulting, so the catch-all leaf under the right parent |
+| Office Supplies & Consumables | E500030-20 | Office Supplies | direct |
+| Equipment & Hardware | E500010-40 | IT: equipment, peripherals, phones, devices | direct |
+| Marketing & Advertising | E600010-05-09 | Other Promotions and Advertising Channels | July's row is a 360Crossmedia listing, not channel ad spend |
+| Utilities & Premises | E500030-60 | Utilities | direct |
+
+**`Travel & Transport` is deliberately unmapped.** Its two July rows are
+gasoline (POSTO ARCA DE NOE) and a vehicle rental (E A LOCACOES), which
+belong to different leaves, and Travel Expense has no generic leaf to
+hold both. A default wrong half the time is worse than a refusal naming
+the row.
+
+**Measured effect, live TEST-BTS, same script as the morning dry run:**
+
+| | before | after |
+|---|---|---|
+| postable | 0 | **13** ($30,864.42) |
+| refused: account unresolved | 14 | **1** |
+| refused: foreign currency | 32 | 32 |
+
+The single surviving account refusal is `(uncategorized - assign)` on
+`G173514057`, which is the correct outcome: that marker means a human
+still owes a decision, and `NEVER_MAPPED` keeps it refusing.
+
+Verification was a `regress_check` on the wiring, not a green suite: with
+`org_id` unthreaded from `plan_expense_post`, two caller-level tests go
+red and return green on restore. A second run proved the leaf guard by
+re-introducing the parent-account mistake.
+
+**Worth flagging for month-end discipline:** 3 of the 13 postable
+purchases are dated in JUNE (2026-06-30 x2, 2026-06-21) inside a batch
+labelled "July 2026". Whether that is correct (a June transaction date on
+a July card charge) or a boundary error is Criss's call, but a month-end
+import should not decide it silently.
+
 ## Still open
 
 - The scope grant above, which blocks every write.
