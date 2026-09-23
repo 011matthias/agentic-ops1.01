@@ -8773,7 +8773,73 @@ read off the token response. `settings.READ` is gone with it, which is why
 `GET /organizations` now 401s with code 57 and why the puller does not route
 through the org directory.
 
-### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account
+### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account (HALF B SHIPPED 2026-09-24; half A is an owner decision, see below)
+
+**Half B shipped 2026-09-24.** A disagreeing account is now a conflict in BOTH
+learners, and a category-only teach no longer wipes a learned account. What
+landed, and why it is wider than this item's wording:
+
+- The settings registry (`registry_upserts_from_expense_run`) records an
+  account disagreement separately and refuses the merchant, counted as the new
+  `skipped_account_conflict`. Absence is not disagreement: a row naming no
+  account is silent, so the first account NAMED wins over rows naming none.
+- **The same defect was in `_learn_categories`** (`learning/capture.py`), which
+  this item did not name and which matters more: it writes
+  `learning/store.merchant_category`, Tier 1 of the direct-to-GL chain,
+  consulted AHEAD of the settings registry. Fixing only the registry would
+  have left the nearest-plausible default in the layer that outranks it, so
+  item 183 would not actually have been a completed prerequisite.
+- `record_merchant_category` overwrote `zoho_account` unconditionally while its
+  operator twin has carried a `keep_account` guard for exactly this. A month
+  whose reviewer picked a category and named no account was nulling the learned
+  posting account the COA gate depends on. It now takes the same guard.
+- `PlannedWrite` carries kwargs and `apply_plan` replays them. Without that the
+  memory-plan preview would promise the account was kept and the applied write
+  would wipe it.
+
+An already-stored account is deliberately LEFT STANDING when this month's rows
+disagree. The registry carries no provenance on `zoho_account` (unlike
+`card_key_learned`), so a clear could not tell a value Dirk typed on the
+Settings screen from one a run learned. The new count is what keeps that choice
+from being silent.
+
+Five wiring points proven RED under `tools/regress_check.py`; suite 3171 ->
+3177 passed / 2 skipped. Tests:
+`tests/test_registry_account_conflict_item_183.py`.
+
+**Half A ("the upsert on a deliberate save") was NOT done, and needs an owner
+ruling rather than an agent's.** It would partially reverse the owner ruling of
+2026-09-16 recorded verbatim at `web/service.py:15555-15562`, which moved the
+write ONTO Publish precisely because the deliberate-save button had been
+pressed zero times and the live store held 0 learned entities and 0 field
+corrections. This item's premise that "nobody chose to teach anything" is not
+accurate: someone did, on the record. Since item 163 the Publish-path save is
+also previewed, journalled with a pre-image, and undoable, so the remaining gap
+is that Publish does not SHOW the plan first, not that the write is
+unrecoverable.
+
+If the owner does want it, the machinery already exists and the change is
+small: `POST /api/runs/{id}/commit-memory` already runs this code with
+`trigger=MEMORY_TRIGGER_BUTTON`, `GET /api/runs/{id}/memory-plan` already
+returns the per-merchant before/after diff, and the trigger enum already
+distinguishes them. It is threading the trigger down and gating ONLY the
+category/account fold, leaving aliases, cards and cost centres teaching at
+Publish (gating the whole registry block would force the single
+`settings_store.set_settings` write to be split, against a `PUT /api/settings`
+the SPA sends wholesale). The risk to weigh is starvation: if nobody presses
+Save, the registry's category half stops growing silently. It is bounded,
+because Tier 1 keeps teaching at Publish.
+
+Two smaller questions surfaced and are deliberately deferred: whether a
+single-row recategorization that names no account should clear the account
+stored for the OLD category (not a conflict, so outside this item's wording,
+and it changes what an ordinary one-receipt edit does every month), and whether
+the written `zoho_account` should be validated against the curated per-entity
+leaf list (belongs to the conversion, where that list becomes the vocabulary).
+
+---
+
+Original filing:
 
 `registry_upserts_from_expense_run` fires automatically on Publish, not on a
 deliberate reviewer save. Two things follow from that, and the second is the

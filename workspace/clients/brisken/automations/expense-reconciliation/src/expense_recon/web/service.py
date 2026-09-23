@@ -4712,6 +4712,7 @@ def registry_upserts_from_expense_run(
         return entry
 
     n_skipped = 0
+    n_account_skipped = 0
 
     # 1) Vendor edits -> canonical + alias.
     for document_id, fields in (field_overrides or {}).items():
@@ -4747,15 +4748,49 @@ def registry_upserts_from_expense_run(
         if not canonical:
             continue
         prior = pending.get(canonical)
-        cell = {"category": category, "zoho_account": (ov or {}).get("zoho_account")}
+        account = (ov or {}).get("zoho_account")
         if prior is None:
-            pending[canonical] = {**cell, "conflict": False}
-        elif prior["category"] != category:
+            pending[canonical] = {
+                "category": category,
+                "zoho_account": account,
+                "conflict": False,
+                "account_conflict": False,
+            }
+            continue
+        if prior["category"] != category:
             prior["conflict"] = True
+        # Item 183: two rows agreeing on the category and naming DIFFERENT
+        # accounts used to agree. The per-row `cell` was discarded from the
+        # second row on, so only the first account ever survived and the
+        # disagreement was invisible. Under a design where the account IS
+        # the answer rather than a detail hanging off the category, that is
+        # a nearest-plausible default sitting inside the writer of durable
+        # memory, which later runs consult ahead of the model.
+        #
+        # Absence is not disagreement. A row that names no account is
+        # silent, not a second opinion, so the first account NAMED wins over
+        # rows that name none; only two rows naming different accounts
+        # conflict.
+        if account:
+            if not prior["zoho_account"]:
+                prior["zoho_account"] = account
+            elif account != prior["zoho_account"]:
+                prior["account_conflict"] = True
 
     for canonical, val in pending.items():
         if val["conflict"]:
             n_skipped += 1
+            continue
+        if val["account_conflict"]:
+            # Item 183: the rows agree on the category and disagree on where
+            # the money posts. Teach nothing for this merchant rather than
+            # letting the first row's account win, and leave whatever is
+            # already stored exactly where it is: the registry carries no
+            # provenance on `zoho_account` (unlike `card_key_learned`), so a
+            # clear here could not tell a value Dirk typed on the Settings
+            # screen from one a run learned. The count is what keeps that
+            # choice from being silent.
+            n_account_skipped += 1
             continue
         entry = _ensure(canonical)
         before = (entry.get("category"), entry.get("zoho_account"))
@@ -4790,6 +4825,7 @@ def registry_upserts_from_expense_run(
         "aliases_added": n_alias,
         "categories_set": n_category,
         "skipped_conflict": n_skipped,
+        "skipped_account_conflict": n_account_skipped,
     }
     return new_merchants, summary
 

@@ -15,7 +15,7 @@ one list by construction, not two code paths kept in step by hand.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 # Primary-key columns per learning table, in the order the `record_*` call
@@ -46,6 +46,11 @@ class PlannedWrite:
     key: tuple[str, ...]
     method: str
     args: tuple[Any, ...]
+    # Item 183: `record_merchant_category` takes `keep_account`, and a plan
+    # that dropped it would preview "the account is kept" and then apply a
+    # write that wipes it. A dry run is only exact if it carries the whole
+    # call.
+    kwargs: dict[str, Any] = field(default_factory=dict)
 
     @property
     def key_dict(self) -> dict[str, str]:
@@ -70,33 +75,35 @@ class RecordingStore:
     def __exit__(self, *exc: Any) -> None:
         return None
 
-    def _record(self, method: str, *args: Any) -> None:
+    def _record(self, method: str, *args: Any, **kwargs: Any) -> None:
         table = _METHOD_TABLE[method]
         n = len(TABLE_KEYS[table])
         key = tuple("" if a is None else str(a) for a in args[:n])
-        self.writes.append(PlannedWrite(table, key, method, tuple(args)))
+        self.writes.append(
+            PlannedWrite(table, key, method, tuple(args), dict(kwargs))
+        )
 
-    def record_merchant_category(self, *args: Any) -> None:
-        self._record("record_merchant_category", *args)
+    def record_merchant_category(self, *args: Any, **kwargs: Any) -> None:
+        self._record("record_merchant_category", *args, **kwargs)
 
-    def record_merchant_entity(self, *args: Any) -> None:
-        self._record("record_merchant_entity", *args)
+    def record_merchant_entity(self, *args: Any, **kwargs: Any) -> None:
+        self._record("record_merchant_entity", *args, **kwargs)
 
-    def record_field_correction(self, *args: Any) -> None:
-        self._record("record_field_correction", *args)
+    def record_field_correction(self, *args: Any, **kwargs: Any) -> None:
+        self._record("record_field_correction", *args, **kwargs)
 
-    def record_vendor_alias(self, *args: Any) -> None:
-        self._record("record_vendor_alias", *args)
+    def record_vendor_alias(self, *args: Any, **kwargs: Any) -> None:
+        self._record("record_vendor_alias", *args, **kwargs)
 
-    def record_merchant_fx(self, *args: Any) -> None:
-        self._record("record_merchant_fx", *args)
+    def record_merchant_fx(self, *args: Any, **kwargs: Any) -> None:
+        self._record("record_merchant_fx", *args, **kwargs)
 
 
 def apply_plan(store: Any, writes: list[PlannedWrite]) -> int:
     """Replay the plan on a real `LearningStore`, in order. Returns the
     number of calls made."""
     for w in writes:
-        getattr(store, w.method)(*w.args)
+        getattr(store, w.method)(*w.args, **(w.kwargs or {}))
     return len(writes)
 
 
