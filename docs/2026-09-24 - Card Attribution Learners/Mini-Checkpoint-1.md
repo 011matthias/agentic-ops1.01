@@ -69,6 +69,23 @@ only at the ingest of a new one.
 
 Brisken platform ops status: unknown plan, last assessed unknown.
 
+**Close-out (amended after the checkpoint's own PR landed).** The ledger
+shipped as #1254 (`67fd96b7`) and the p1 status roll-up as #1255
+(`afb51c32`); this session's five worktrees are pruned and its `bg_watch`
+entries cleared (the remaining `workflow-wf-67f7bc1f` watch belongs to a
+sibling). Nothing uncommitted, nothing half-deployed.
+
+One friction worth naming, because it cost a second CI round on both ledger
+PRs: **#1254 went `dirty` between opening and merging**, when a sibling landed
+its own 2026-09-24 checkpoint (#1253) touching `docs/INDEX.md`,
+`docs/sessions/2026-09-24.md` and `p1-expense-reconciliation.md`. GitHub
+reported `mergeable_state: dirty` only at the merge attempt, and `gh pr merge`
+refused. The remedy is already in the continuation prompt's How-to-work
+section: on a shared-clone day, merge `origin/main` again immediately before
+merging a ledger PR rather than only before pushing it, and read
+`mergeable_state`, not just the check list. Four sessions were live in this
+clone today, so the window is wide, not exceptional.
+
 ## Next Steps
 
 1. **Item 175** — a private expense asks which card paid, not who owes the
