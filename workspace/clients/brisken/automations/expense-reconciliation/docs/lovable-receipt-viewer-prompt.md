@@ -8,11 +8,26 @@
 | #32 | 2026-09-08 | *recibo nao estar abrindo* |
 | #82 | 2026-09-23 | *Se possivel ter uma lupa para ampliar a foto do recibo.* |
 
-Item 52 already drove the live app for #32 and found the "View receipt"
-button dead. The reason is underneath it: `/image` used to hand back the
-stored file with its own media type, and **70 of September's 75 receipts are
-PDFs**. A PDF cannot go in an `<img>`, so the only thing the screen could do
-with one was download it, which is note #3 word for word.
+The reason is in the payload: `/image` used to hand back the stored file with
+its own media type, and **70 of September's 75 receipts are PDFs**. A PDF
+cannot go in an `<img>`, so the only thing the screen could do with one was
+download it, which is note #3 word for word.
+
+**What the published app does today, measured 2026-09-24** by driving the
+live September month over CDP, not inferred from the bundle:
+
+- **Zero `<img>` elements on the entire page.** Not just on the row with the
+  receipt: the whole month view renders no image element at all.
+- **Zero network requests to `/receipts/`.** The page never asks the API for
+  a receipt, so there is no broken image and no failed fetch to find in
+  devtools. Nothing is attempted.
+- The receipt cell is **column 9**, and it renders the filename as text
+  inside a single button, e.g.
+  `processed-0EDA78B9-0BCF-4620-8842-A66CF80CA032.jpeg`.
+
+So this is not a repair of a broken viewer. There is no viewer. Item 52 read
+the same symptom from the other side and recorded it as a dead "View receipt"
+button; the drive says the control is now the filename in column 9.
 
 **The backend half is shipped.** The API can now render any receipt to an
 image, so this is a pure front-end change: no new endpoint, no payload field.
@@ -102,9 +117,13 @@ filename, for example `0024__processed-0EDA78B9-0BCF-4620-8842-A66CF80CA032.jpeg
    - While the fetch is in flight show a spinner in the frame, not a layout
      jump.
 
-3. **Replace the dead "View receipt" control.** Whatever currently renders it
-   should open this modal. If the old handler downloads the file, remove that
-   path: download is now the secondary action inside the viewer.
+3. **Wire the receipt cell to open the viewer.** Column 9 of the expense
+   table currently renders the receipt filename as text inside one button,
+   and that button does not fetch anything. Make it open this modal. Keep the
+   filename visible as the label; it is how she tells two receipts on one
+   charge apart. If any older "View receipt" control survives elsewhere and
+   downloads the file, point it here instead: download is now the secondary
+   action inside the viewer.
 
 4. **In `src/lib/i18n.tsx`**, add in both languages:
 
@@ -141,3 +160,8 @@ Then open any row whose receipt name ends `.pdf` (most of them). It must
 display, and if it has more than one page the pager must appear.
 
 Both of those failing today is the whole of item 178.
+
+To confirm you have actually wired it, open devtools on the network tab and
+click a receipt. Today that click produces **no request at all**; afterwards
+it must show a request to `/receipts/.../image?as=png`. A viewer that opens
+with a spinner and no request is the same bug in a new shape.
