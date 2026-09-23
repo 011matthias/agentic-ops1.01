@@ -1,7 +1,7 @@
 # Mini-Checkpoint: Attribution Instrument And The Card Memory That Never Arrived
 
 **Date:** 2026-09-23
-**Status:** Item 169 shipped and deployed; 171 and 172 open; 170 closed by owner direction
+**Status:** Items 169 + 173 shipped and deployed; 171 and 172 open; 170 closed by owner direction
 **Type:** mini
 
 ---
@@ -102,6 +102,35 @@ continues.
 - `tools/recon-attribution-replay.py`
 - `workspace/clients/brisken/automations/expense-reconciliation/src/expense_recon/web/service.py`
   (`fill_remembered_cards`, `resolve_batch_row_cards`)
+
+---
+
+## Addendum: item 173 reversed the 12 rows, on purpose (same day)
+
+Everything above about item 169's **12 filled rows is superseded**. The
+instrument's next read said the fix reached further without being right: all 12
+rows were OpenAI, and OpenAI's hard evidence is card-9693 eight times against
+3645 once, so Criss's single correction had taught the minority card by 8 to 1.
+Ten vendors carry evidence on more than one card.
+
+Owner ruling the same day: gate it. **Item 173 shipped and deployed** (PR
+#1228, merge `46130b06`): `service.merchant_vouches_one_card` applies a
+remembered card only to a brand the registry vouches is paid on ONE card, and
+a brand it cannot resolve is not vouched. September is back to card-less 26,
+no entity 25, no person 25. Verified live by API and a cold-Chrome drive: the
+OpenAI rows render "No legal entity yet / Pick the card that paid" -- an
+honest prompt -- and the single row still showing 3645 is Criss's own explicit
+override, which correctly still stands.
+
+Item 169's structural fix is unaffected and still worth having: a correction is
+no longer frozen at ingest, so the day a single-card brand is corrected, every
+existing month takes it.
+
+The continuation prompt below predates this. Read its numbers as the
+pre-gate state; the live state is the one in this addendum, and the
+authoritative record is backlog items 169 and 173. One item it does not carry:
+`ExpenseMemory.apply` still stamps a remembered card at INGEST without the
+gate, which is the same ruling's unbuilt second half.
 
 ---
 
