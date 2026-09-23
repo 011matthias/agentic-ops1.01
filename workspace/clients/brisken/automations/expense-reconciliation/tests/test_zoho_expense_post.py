@@ -8,6 +8,7 @@ the wrong account and on a split that had lost its audit trail.
 from __future__ import annotations
 
 import csv
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -28,6 +29,7 @@ from expense_recon.zoho.expense_post import (
     group_by_reference,
     plan_expense_post,
     read_expense_csv,
+    reference_date_spread,
 )
 from expense_recon.zoho.idempotent import PostLedger
 
@@ -361,3 +363,32 @@ def test_an_unknown_outcome_marks_ambiguous_and_aborts_the_rest(tmp_path):
         assert client.posted == []  # nothing after the unknown
         row = ledger.status_for("822116290", "1188-2026-JUL")
         assert row is not None and row.state == "ambiguous"
+
+
+# ── the date-spread helper ──────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("dates", "expect"),
+    [
+        # Hostinger: two documents on one invoice number.
+        (("2026-07-03", "2026-07-28"), (date(2026, 7, 3), date(2026, 7, 28))),
+        # A genuine split: one receipt, one date, zero spread.
+        (("2026-07-14", "2026-07-14"), (date(2026, 7, 14), date(2026, 7, 14))),
+        # Fewer than two readable dates is no spread. The unreadable
+        # cases belong to `date_precedes_period_window`, which names them
+        # better than a spread could.
+        (("2026-07-14",), None),
+        (("2026-07-14", ""), None),
+        (("2026-07-14", "not-a-date"), None),
+        (("", ""), None),
+        # Min and max, not first and last: CSV order is not date order.
+        (("2026-07-28", "2026-07-03", "2026-07-10"),
+         (date(2026, 7, 3), date(2026, 7, 28))),
+    ],
+)
+def test_the_spread_reads_min_and_max_of_the_readable_dates(dates, expect):
+    group = ExpenseGroup(
+        reference="R", rows=tuple({"Expense Date": d} for d in dates)
+    )
+    assert reference_date_spread(group) == expect

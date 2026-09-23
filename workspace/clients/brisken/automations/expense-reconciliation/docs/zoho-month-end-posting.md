@@ -1002,9 +1002,97 @@ shared `Reference#` assumes a reference names ONE purchase, split across
 accounts. Hostinger reuses its invoice number, so the assumption merged
 two documents 25 days apart into a single expense and stamped it with the
 earlier date. Even had both been real charges, that posting would have
-been wrong. A same-reference group whose rows carry different
-`Expense Date` values is a candidate refusal of its own; it is not built,
-and it wants the owner's read on the Hostinger pair first.
+been wrong. That structural half is now closed by
+`conflicting_reference_dates` (next section); the 172.61 itself is still
+the owner's call, because only the statement can say how many charges
+there really were.
+
+## 2026-09-23: a reference whose rows disagree on the date is refused
+
+The Hostinger case above is now a refusal,
+`conflicting_reference_dates`, fired from `build_expense_payload` when
+the rows of one group carry `Expense Date` values more than
+`MAX_REFERENCE_DATE_SPREAD_DAYS` (2) apart.
+
+### Why a refusal and not compound keying
+
+Keying the group on reference AND date, so Hostinger's two documents
+become two purchases, was the obvious alternative and was rejected:
+
+1. It would POST BOTH, and one of the two is known to have no statement
+   line. A silent duplicate is not an improvement on a silent merge.
+2. It changes the ledger key shape for every reference, which is the
+   migration pain the synthetic-reference section above documents.
+3. Nothing in the code can tell "two real charges on one invoice number"
+   from "one charge documented twice". Only a human holding the statement
+   can, and the refusal is how they get asked.
+
+The tolerance is 2 days rather than 0 because a genuine split is one
+receipt, so its rows share a date exactly; 2 absorbs a
+statement-vs-transaction-date nuance if the export ever starts writing
+per-row dates. Hostinger's spread is 25.
+
+Rows whose date cell is empty or unparseable are not this refusal's
+business: the spread is computed over readable dates only, and a group
+with fewer than two of them falls through to
+`date_precedes_period_window`, which names that problem better. July's
+`00000031010` (empty date cell) keeps its existing reason.
+
+### Placed first inside the build, and ungated by period
+
+Ahead of the stale-date guard, because that guard reads
+`group.cell("Expense Date")`, which is row[0] only. While the rows
+disagree, WHICH date it judges is an accident of CSV order, so "is this
+row inside the period" is not yet a meaningful question. Unlike the
+stale-date guard it is not gated on `period`: a reference whose rows span
+a month is not one purchase regardless of which month is being posted.
+
+Both orderings are pinned by tests through `run_month`:
+`test_conflicting_dates_outrank_a_stale_date` (the new guard is first
+inside the build) and `test_an_already_posted_conflicting_group_refuses_as_ledger`
+(the ledger still answers before the build at all, per the #1211 order).
+Each was verified by regression, not assertion: moving the guard below
+the stale check reddens the first test and nothing else; replacing the
+spread with `None` reddens four caller-level tests.
+
+### Measured on the durable ledger: both months byte-identical
+
+| | July 2026-07 | August 2026-08 |
+|---|---|---|
+| rows / purchases | 56 / 46 | 20 / 20 |
+| `already_in_ledger` | 41 | 19 |
+| `account_unresolved` | 3 | 1 |
+| `date_precedes_period_window` | 2 | 0 |
+| `conflicting_reference_dates` | 0 | 0 |
+| postable | 0 | 0 |
+
+Zero, and correctly so: `H_46243348` is already posted, so the ledger
+answers first and the build never runs on it. A move here would have
+meant the ledger-first ordering had broken.
+
+### On a fresh ledger the count did NOT move, and that was a surprise
+
+The prediction going in was July 30 postable to 29. Measured through
+`plan_expense_post` with a throwaway sqlite and the live chart:
+
+| | before the guard | after |
+|---|---|---|
+| July postable | 30 (USD 2,104.73) | **30 (USD 2,104.73)** |
+| July `card_or_entity_unassigned` | 11 | **10** |
+| July `conflicting_reference_dates` | 0 | **1** |
+| August postable | 17 (USD 2,452.87) | 17 (USD 2,452.87) |
+
+`H_46243348` moved between two refusal buckets rather than out of
+postable, because it ALSO carries an unassigned card and the
+`card_or_entity_unassigned` guard was already holding it back. Confirmed
+by differential probe, not inferred: disabling the guard on the same
+source and re-planning puts `H_46243348` back at the head of the
+`card_or_entity_unassigned` list.
+
+So the guard buys the reviewer the right question, "were there really two
+charges here?", in place of the wrong one, "which card paid for this?".
+It becomes count-changing the moment somebody assigns that card, which is
+precisely when a wrong post would otherwise have gone out.
 
 ## Still open
 
@@ -1021,9 +1109,6 @@ and it wants the owner's read on the Hostinger pair first.
   statement line. TEST-BTS is overstated by 748.61 in total. Correcting
   either means deleting the sandbox expense and its ledger row, not just
   re-running.
-- **A same-reference group spanning different dates is not refused.**
-  Hostinger reuses its invoice number, which merged two documents 25 days
-  apart into one expense dated the earlier of them.
 - **Card and entity assignment is the gate on the production run.** With
   an empty ledger the new `card_or_entity_unassigned` refusal holds back
   11 of July's 46 purchases, carrying 96% of the month's value, and 2 of
