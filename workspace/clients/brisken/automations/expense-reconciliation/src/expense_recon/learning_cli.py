@@ -37,6 +37,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .category_vocabulary import recognize as recognize_category
 from .learning import LearningStore, normalize_vendor
 from .matching.types import EXPENSE_CATEGORIES
 
@@ -145,10 +146,19 @@ def cmd_reset(args) -> int:
 
 def cmd_set(args) -> int:
     """Author one standing vendor -> category/account rule (Slice 10)."""
-    if args.category not in EXPENSE_CATEGORIES:
+    # Both live vocabularies are accepted here, because this writes the same
+    # `merchant_category` table the GL chain reads first and a curated leaf
+    # code has to be seedable from the CLI. Unlike the HTTP write paths this
+    # one still REFUSES an unrecognised value instead of dropping it: there
+    # is no wholesale round-trip to break, the caller is a human who reads
+    # the message before anything is stored, and a silent no-op on a typed
+    # argument is worse feedback than an error.
+    category = recognize_category(args.category)
+    if category is None:
         print(
-            f"ERROR: category {args.category!r} is not one of the tool's "
-            f"{len(EXPENSE_CATEGORIES)} categories:",
+            f"ERROR: category {args.category!r} is neither one of the tool's "
+            f"{len(EXPENSE_CATEGORIES)} categories nor a curated GL leaf "
+            "code:",
             file=sys.stderr,
         )
         for c in EXPENSE_CATEGORIES:
@@ -166,11 +176,11 @@ def cmd_set(args) -> int:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     with LearningStore(db) as s:
         s.record_merchant_category(
-            args.entity, vendor_norm, args.category, args.account, now, "manual-set"
+            args.entity, vendor_norm, category, args.account, now, "manual-set"
         )
     acct = f"  [{args.account}]" if args.account else ""
     print(
-        f"set '{vendor_norm}' -> {args.category}{acct}  (entity: {args.entity})\n"
+        f"set '{vendor_norm}' -> {category}{acct}  (entity: {args.entity})\n"
         f"db: {db}"
     )
     if not args.account:

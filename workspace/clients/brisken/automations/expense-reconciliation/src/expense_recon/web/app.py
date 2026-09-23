@@ -190,6 +190,7 @@ from .month_readiness import (  # items 99 + 100
     not_complete_detail,
     readiness_of,
 )
+from ..category_vocabulary import recognize as recognize_category
 from ..matching.types import EXPENSE_CATEGORIES
 from ..cost_centers import (
     CostCenterRegistry,
@@ -3122,6 +3123,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 status_code=400,
             )
         patch: dict = {}
+        # Per-merchant categories the save carried that the server no longer
+        # knows. Collected rather than refused (see `category_vocabulary`)
+        # and reported as dotted paths in `ignored` below, so the caller is
+        # told exactly which merchant lost its category.
+        dropped_categories: list[tuple[str, str]] = []
         if "export_approved_only" in body:
             patch["export_approved_only"] = bool(body["export_approved_only"])
         # Master-data maps (FX reference rates, card -> legal entity, card
@@ -3229,7 +3235,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 )
             try:
                 patch["merchants"] = normalize_merchants_setting(
-                    body["merchants"], stored=stored_merchants
+                    body["merchants"], stored=stored_merchants,
+                    dropped=dropped_categories,
                 )
             except ValueError as exc:
                 return JSONResponse({
@@ -3306,9 +3313,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # at all. Both are accepted and reported rather than refused,
             # so the published SPA can keep sending `fx_reference_rates`
             # until its removal prompt is applied.
+            # A dropped merchant category joins this list as the dotted path
+            # `merchants.<name>.category`. Still a list of strings, so a
+            # caller testing for a key it sent is unaffected; the path says
+            # which merchant to re-pick rather than just that something went.
             "ignored": sorted(
-                k for k in body
-                if k in SETTINGS_DERIVED_KEYS or k in RETIRED_SETTINGS_KEYS
+                [
+                    k for k in body
+                    if k in SETTINGS_DERIVED_KEYS or k in RETIRED_SETTINGS_KEYS
+                ]
+                + [f"merchants.{name}.category" for name, _ in dropped_categories]
             ),
         })
 
@@ -3373,7 +3387,6 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         write is count-preserving (an operator correction is not another
         independent confirmation)."""
         from ..learning import LearningStore
-        from ..matching.types import EXPENSE_CATEGORIES
 
         try:
             body = await request.json()
@@ -3394,24 +3407,35 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 {"error": "legal_entity_id and a non-empty vendor are "
                           "required", "code": "memory_row_key_required"},
                 status_code=400)
-        if category not in EXPENSE_CATEGORIES:
+        if not category:
             return JSONResponse(
-                {"error": f"category must be one of the tool's "
-                          f"{len(EXPENSE_CATEGORIES)} categories",
-                 "code": "category_not_allowed",
-                 "categories": sorted(EXPENSE_CATEGORIES)},
+                {"error": "category is required",
+                 "code": "category_required"},
                 status_code=400)
+        # Two vocabularies are live at once, so this accepts both and
+        # refuses neither (`category_vocabulary`). A value from neither is
+        # DROPPED and named under `ignored`, never written: this row is
+        # durable memory consulted ahead of the model on every later run,
+        # and a string the tool cannot match would sit in it looking like a
+        # decision somebody made. The stored row is left exactly as it was.
+        stored_category = recognize_category(category)
         with LearningStore(app.state.learning_db_path) as s:
-            s.set_merchant_category_manual(
-                legal_entity_id, vendor_norm, category, zoho_account,
-                _now_iso(), keep_account=keep_account,
-            )
+            if stored_category is not None:
+                s.set_merchant_category_manual(
+                    legal_entity_id, vendor_norm, stored_category,
+                    zoho_account, _now_iso(), keep_account=keep_account,
+                )
             row = s.get_merchant_category(legal_entity_id, vendor_norm)
-        return JSONResponse({
+        reply = {
             "ok": True, "entity": legal_entity_id, "vendor": vendor_norm,
-            "category": row.category, "zoho_account": row.zoho_account or "",
-            "count": row.decision_count, "source_run": row.source_run,
-        })
+            "category": row.category if row else "",
+            "zoho_account": (row.zoho_account or "") if row else "",
+            "count": row.decision_count if row else 0,
+            "source_run": row.source_run if row else "",
+        }
+        if stored_category is None:
+            reply["ignored"] = {"category": category}
+        return JSONResponse(reply)
 
     @app.delete("/api/memory/categories")
     async def api_memory_delete_category(request: Request):
@@ -3862,17 +3886,26 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         raw = (body or {}).get("category")
         category = "" if raw is None else str(raw).strip()
         zoho_account = str((body or {}).get("zoho_account") or "").strip()
-        if category and category not in EXPENSE_CATEGORIES:
-            return JSONResponse(
-                {"error": f"category must be one of {sorted(EXPENSE_CATEGORIES)}",
-                 "code": "unknown_category",
-                 "categories": sorted(EXPENSE_CATEGORIES)},
-                status_code=400,
-            )
+        # Both vocabularies are accepted; a value from neither is dropped and
+        # named under `ignored` rather than refused. Dropped means the stored
+        # pick is LEFT ALONE, not cleared: clearing on an unrecognised string
+        # would destroy a reviewer's earlier choice to honour a client bug.
+        stored_category = recognize_category(category) if category else ""
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
+            if stored_category is None:
+                view = build_view(
+                    run, store.get_decisions(run_id),
+                    store.get_category_overrides(run_id),
+                    store.get_duplicate_resolutions(run_id),
+                )
+                return JSONResponse({
+                    "ok": True, "summary": view["summary"],
+                    "ignored": {"category": category},
+                })
+            category = stored_category
             # Item 104: the override this write replaces, read first.
             charge_key = charge_category_key(transaction_id)
             before_cat = _category_value(
@@ -5121,14 +5154,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 status_code=400
             )
         if value:
-            if field == "category" and value not in EXPENSE_CATEGORIES:
-                return JSONResponse(
-                    {"error": f"category must be one of "
-                              f"{sorted(EXPENSE_CATEGORIES)}",
-                     "code": "category_not_allowed",
-                     "categories": sorted(EXPENSE_CATEGORIES)},
-                    status_code=400,
-                )
+            if field == "category":
+                # Both vocabularies accepted; neither refused. A value from
+                # neither is dropped and named under `ignored`, leaving the
+                # stored pick untouched (an empty value is the clear).
+                stored_category = recognize_category(value)
+                if stored_category is None:
+                    return await _expense_edit_reply(
+                        run_id, False, {"ignored": {"category": value}}
+                    )
+                value = stored_category
             err_msg = validate_expense_field(field, value)
             if err_msg:
                 return _refused(err_msg)
@@ -5304,14 +5339,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                  "code": "vendor_and_total_required"},
                 status_code=400
             )
-        if payload.get("category") and payload["category"] not in EXPENSE_CATEGORIES:
-            return JSONResponse(
-                {"error": f"category must be one of "
-                          f"{sorted(EXPENSE_CATEGORIES)}",
-                 "code": "category_not_allowed",
-                 "categories": sorted(EXPENSE_CATEGORIES)},
-                status_code=400,
-            )
+        # Both vocabularies accepted; neither refused. A category from
+        # neither is dropped from the payload and named under `ignored`, and
+        # the expense is still added: the vendor and total are what the add
+        # is for, and refusing the whole row over one field would lose them.
+        dropped_category = ""
+        if payload.get("category"):
+            stored_category = recognize_category(payload["category"])
+            if stored_category is None:
+                dropped_category = payload.pop("category")
+            else:
+                payload["category"] = stored_category
         for f in ("date", "total", "currency", "tax"):
             if payload.get(f):
                 err_msg = validate_expense_field(f, payload[f])
@@ -5326,9 +5364,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             store.set_expense_edit(run_id, document_id, "add", payload, _now_iso())
             # Item 70: the add joins the matcher's pool on a reconciling month.
             rematch_needed = has_statement(run)
-        return await _expense_edit_reply(
-            run_id, rematch_needed, {"document_id": document_id}
-        )
+        extra: dict = {"document_id": document_id}
+        if dropped_category:
+            extra["ignored"] = {"category": dropped_category}
+        return await _expense_edit_reply(run_id, rematch_needed, extra)
 
     @app.delete("/api/runs/{run_id}/expenses/{document_id:path}")
     async def delete_expense(run_id: str, document_id: str):

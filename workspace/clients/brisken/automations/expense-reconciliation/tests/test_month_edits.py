@@ -345,7 +345,12 @@ def test_every_other_validation_still_refuses(client, monkeypatch):
     batch_id = _reconciling_month(client, monkeypatch)
 
     assert _put(client, batch_id, "nope", "x").status_code == 400
-    assert _put(client, batch_id, "category", "Not A Category").status_code == 400
+    # The category is the one field that stopped refusing: two vocabularies
+    # are live, so a string from neither is dropped and named under
+    # `ignored` rather than 400'd. Everything around it still refuses.
+    bad_cat = _put(client, batch_id, "category", "Not A Category")
+    assert bad_cat.status_code == 200, bad_cat.text
+    assert bad_cat.json()["ignored"] == {"category": "Not A Category"}
     assert _put(client, batch_id, "cost_center", "Undefined").status_code == 400
     assert _put(client, batch_id, "private", "1").status_code == 400
     assert client.post(
