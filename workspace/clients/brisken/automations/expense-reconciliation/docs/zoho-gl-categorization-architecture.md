@@ -81,15 +81,48 @@ resolution that infers a family from a code prefix mis-resolves CRM travel. Matc
 on the account name or the id, never the prefix. This coexists with the rule
 above: the code is a stable cross-entity KEY, not a path.
 
-**`zoho-books-coa.json` is silently truncated for Cloud Services.** It holds 199
-accounts for org 697686691 with zero `cost_of_goods_sold` and zero
-`other_expense`, while Consulting carries 25 and 5 and Corporate Services 11 and
-4. 199 sits on a 200-row page boundary. Nineteen accounts Dirk marked Y are
-absent from it, including `2031056000014161139 COGS - DEV Infrastructure (SAP
-Apps & others)`, which is the account Anthropic posts to under Cloud Services and
-the design's own flagship Tier 1 example. So the sheet is the source for the
-compiled asset and that pull is only a cross-check. Anything else reading the
-pull inherits the gap.
+**`zoho-books-coa.json` was short for Cloud Services, and not because of
+pagination.** It held 199 accounts for org 697686691 with zero
+`cost_of_goods_sold` and zero `other_expense`, while Consulting carried 25 and 5
+and Corporate Services 11 and 4. Nineteen accounts Dirk marked Y were absent,
+including `2031056000014161139 COGS - DEV Infrastructure (SAP Apps & others)`,
+the account Anthropic posts to under Cloud Services and the design's own
+flagship Tier 1 example.
+
+199 sits one below a 200-row page boundary, which is what a pull that stopped
+paginating looks like, and that is how it was first filed. Measured against the
+live API on 2026-09-24, walking `has_more_page` to exhaustion every time, it is
+not what happened:
+
+| params | per_page | rows | pages | `has_more_page` |
+|---|---|---|---|---|
+| default | 200 | 199 | 1 | false |
+| default | 100 | 89 | 1 | false |
+| default | 50 | 47 | 1 | false |
+| showbalance | 200 | 247 | 2 | false at the end |
+| showbalance | 100 | 86 | 1 | false |
+
+A smaller page returns fewer total rows, and the server reports completion every
+time. So no page size makes this endpoint trustworthy for this org, and the fix
+the first reading implies, "follow the pagination and fail on a short page",
+cannot work: every short page here also says there is nothing more.
+
+The two listings are not nested either. Seven accounts appear only under the
+default params and 55 only under `showbalance`, whose documented spelling
+`show_balance` is accepted and silently ignored. Their union is 254 and still
+omits `2031056000023745007 E600010-30-10 Marketing Expenses - people`, which
+`GET /chartofaccounts/{id}` returns as active and typed `expense`.
+
+Completeness therefore cannot be judged from inside the listing, because the
+listing is the thing that is wrong. It needs the curated taxonomy as an outside
+answer key, which is what `tools/pull-brisken-zoho-coa.py` asserts: every
+account_id Dirk marked postable is present, topped up by id where no listing
+produced it. Live on 2026-09-24 that took Cloud Services from 199 to 255 with
+nothing dropped, 67 of 67 curated accounts present.
+
+The sheet remains the source for the compiled asset and the pull remains a
+cross-check; what changed is that the pull is now complete enough for the COA
+gate, which reads it and answers UNKNOWN for anything absent.
 
 **`resolve_account_id` does not check leaf-ness or scope.** A reference naming a
 parent or roll-up resolves and posts today (`zoho/accounts.py:121-218`, no

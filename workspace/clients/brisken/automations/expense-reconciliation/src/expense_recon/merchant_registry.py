@@ -25,7 +25,7 @@ Shape:
     settings["merchants"] = {
         "<canonical name>": {
             "aliases": ["raw pattern", ...],   # extra strings to match on
-            "category": "<one of EXPENSE_CATEGORIES>" | None,
+            "category": "<a bucket, or a curated GL leaf code>" | None,
             "zoho_account": "<chart label>" | None,
             "multi_category": True,            # optional (2026-08-19)
             "cost_center": "<defined name>" | None,   # optional (item 47)
@@ -103,7 +103,6 @@ from rapidfuzz import fuzz
 from .matching.deterministic import _normalize as normalize_vendor
 from .category_vocabulary import recognize as recognize_category
 from .error_codes import CodedValueError
-from .matching.types import EXPENSE_CATEGORIES
 from .vendor_names import _LEGAL_SUFFIXES, clean_vendor_name
 
 # token_set_ratio (0-100) at or above this counts as a confident brand
@@ -510,7 +509,15 @@ class MerchantRegistry:
         category = (entry.get("category") or None)
         return MerchantMatch(
             canonical_name=canonical,
-            category=category if category in EXPENSE_CATEGORIES else None,
+            # Re-validate our OWN store against the vocabulary that store is
+            # allowed to hold. `normalize_merchants_setting` has accepted
+            # curated leaf codes since #1236 (:532), so filtering here on the
+            # eight buckets threw away exactly what the write path had just
+            # saved: the rule went inert, the receipt fell through to the LLM
+            # at full cost, and nothing errored or logged. That is the shape
+            # this whole change set exists to remove, so it may not sit in the
+            # reader of the registry.
+            category=recognize_category(category),
             zoho_account=(entry.get("zoho_account") or None),
             matched_alias=original,
             score=float(score),

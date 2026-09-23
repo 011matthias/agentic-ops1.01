@@ -27,11 +27,21 @@ with zero packaging change, and there is a precedent two files away in
 `zoho/category_accounts.py`.
 
 THE SHEET IS THE SOURCE; THE PULL IS A CROSS-CHECK
-`zoho-books-coa.json` is silently truncated for Cloud Services: 199 accounts on
-a 200-row page boundary, zero `cost_of_goods_sold` and zero `other_expense`
-while both sibling orgs carry theirs. Nineteen accounts Dirk marked Y are absent
-from it, including the account Anthropic posts to under Cloud Services. So the
-pull reports and never vetoes.
+`zoho-books-coa.json` was short for Cloud Services: 199 accounts, zero
+`cost_of_goods_sold` and zero `other_expense` while both sibling orgs carried
+theirs, with nineteen accounts Dirk marked Y absent including the one Anthropic
+posts to. 199 sits one below a 200-row page boundary, so this was first read as
+a pull that stopped paginating. It was not: measured 2026-09-24, the listing
+returns 199 rows at per_page=200, 89 at per_page=100 and 47 at per_page=50,
+reporting `has_more_page: false` every time. A smaller page yields fewer rows
+and the server always claims completion, so no pagination strategy fixes it.
+`tools/pull-brisken-zoho-coa.py` merges both listing parameterizations and tops
+up by id against this taxonomy as the answer key (Cloud Services 199 -> 255,
+67 of 67 curated accounts present).
+
+The direction of trust is unchanged and is the point: the sheet decides, and
+the pull reports without ever vetoing. A pull that can be wrong in a way that
+takes a day to characterize is not a thing to gate a compile on.
 
 NON-POSTABLE ROWS ARE COMPILED IN, WITH A REASON
 Omitting them would collapse four different facts into one "unknown reference":
@@ -283,7 +293,9 @@ def cross_check(leaves, coa_path):
                 print("    absent from pull: org %s  %-16s %s" % (org, code, name))
     print("cross-check: %d postable leaves absent from the live pull %s"
           % (sum(absent.values()), dict(absent)))
-    print("(reported, not vetoed: the pull is known to truncate)")
+    print("(reported, not vetoed: the sheet decides, the pull only reports.")
+    print(" a non-zero count means the pull is stale or short; re-run")
+    print(" tools/pull-brisken-zoho-coa.py, which asserts this same set)")
 
 
 def main():

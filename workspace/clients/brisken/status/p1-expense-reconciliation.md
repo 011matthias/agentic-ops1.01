@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # Brisken / Expense Reconciliation (p1)
@@ -16,7 +16,48 @@ the multi-tenant SaaS in spec v2 is deferred. Per-slice authority is
 `automations/expense-reconciliation/BLUEPRINT.md` + `ANNEALING.md`; this is the
 roll-up.
 
-**2026-09-23 (latest): the GL vocabulary and the chain that picks a leaf.**
+**2026-09-24 (latest): the chart pull is complete and provable, and the
+registry reads back what it accepts.** Two queue items of the GL change
+shipped, both on `main`.
+
+`tools/pull-brisken-zoho-coa.py` (#1246, backlog item 182). The filed cause
+was wrong: the pull was not short because it stopped paginating. Zoho's
+`/chartofaccounts` under-reports for Cloud Services and claims completion
+every time, returning 199 rows at `per_page=200`, 89 at 100 and 47 at 50,
+all with `has_more_page: false`. A smaller page yields fewer TOTAL rows, so
+no pagination strategy helps and a short-page assertion would fire on every
+call while proving nothing. Nor are the two listings nested: 7 accounts
+appear only under the default params, 55 only under `showbalance` (the
+documented `show_balance` is accepted and ignored), and their union of 254
+still omits one account that `GET /chartofaccounts/{id}` returns as active.
+So completeness is now judged against an OUTSIDE answer key, the curated
+taxonomy: both listings merged, missing postable accounts topped up by id,
+and a hard failure when one cannot be obtained at all. Live: Cloud Services
+199 -> 255 (+56, -0), every org a strict superset, 67/64/68 present.
+Verified through the consumer, `load_entity_chart` moving two probes
+False -> True with a control that does not move. The compiler's cross-check
+went 19 -> 0 absent with the asset's sha unchanged. **This unblocks the step
+that deletes `category_accounts.py`**, because an account absent from the
+chart answers UNKNOWN before OUT_OF_SCOPE is evaluated.
+
+The registry read/write asymmetry (#1249, queue item 2). #1236 taught the
+write path both vocabularies while both read paths kept filtering against
+the eight buckets, so a stored leaf code was accepted on save and discarded
+on read: the rule went inert and the receipt went to the LLM at full cost,
+with no error and no log line. `merchant_registry._match` and
+`categorize.apply_registry_category` now both use
+`category_vocabulary.recognize`. `categorize.py:771` is deliberately NOT
+changed; it validates an LLM result against the vocabulary the model was
+handed, so a leaf code there means the model invented a string and review is
+the right answer until `llm_leaf_labels` is what gets sent.
+
+**Found and not acted on: the Zoho token is no longer read-only.** Its
+granted scope reads `ZohoBooks.expenses.CREATE expenses.READ contacts.READ
+accountants.READ`, read off the token response. `settings.READ` went with
+it, so `GET /organizations` now 401s. The API is no longer what stops a
+write into Criss's months; our own gates are.
+
+**2026-09-23: the GL vocabulary and the chain that picks a leaf.**
 Phase 1 of direct-to-Zoho-GL categorization advanced from "the taxonomy
 exists and nothing can store or show a leaf code" to steps 1-3 shipped plus
 the chain itself. Every write path now takes both vocabularies and drops
@@ -34,9 +75,9 @@ backlog item 183 is its prerequisite rather than a later tidy-up:
 deliberate save, and its conflict check compares category only and never
 `zoho_account`, so two rows naming different accounts do not conflict and
 the first wins silently. That is where the chain would start writing.
-Items 182 (the chart pull truncated at a page boundary, 19 of Dirk's
-accounts missing) and 184 (`paid_through_account_id` unvalidated, the same
-bug class on the card side) were filed with it.
+Item 184 (`paid_through_account_id` unvalidated, the same bug class on the
+card side) was filed with it and is still open. Item 182 shipped 2026-09-24;
+see above, including why its stated cause turned out to be wrong.
 
 Still Dirk's: the six `SPOT-CHECK` accounts, card 3645's real chart account
 (item 172), and whether Tier 2 trip-purpose inheritance should exist at all
