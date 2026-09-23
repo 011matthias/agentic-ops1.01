@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-23 | Recon Attribution Grounding And The Live Write Recovery | client-dev | [→](docs/2026-09-23%20-%20Recon%20Attribution%20Grounding%20And%20The%20Live%20Write%20Recovery/Checkpoint.md) |
 | 2026-09-23 | FX Consumer Gate Closed | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20FX%20Consumer%20Gate%20Closed/Mini-Checkpoint-1.md) |
 | 2026-09-23 | Attribution Measured Card Entity Person And Category | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Attribution%20Measured%20Card%20Entity%20Person%20And%20Category/Mini-Checkpoint-1.md) |
 | 2026-09-23 | Zoho Posting Refuses Unassigned Cards | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Zoho%20Posting%20Refuses%20Unassigned%20Cards/Mini-Checkpoint-1.md) |
