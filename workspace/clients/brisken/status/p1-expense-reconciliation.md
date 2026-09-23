@@ -9,6 +9,44 @@ updated: 2026-09-24
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-24: a receipt renders as an image whatever was stored** (backlog
+item 178, feedback notes #3 / #32 / #82). The same person had asked three
+times in 69 days and the cause was the payload, not the viewer: `/image`
+served the stored file with its own media type and 70 of September's 75
+receipts are PDFs, which cannot go in an `<img>`. `?as=png` now rasterizes
+the stored file whatever it was, `?page=N` is 0-based and clamped,
+`X-Receipt-Pages` carries the count, and an unrenderable PDF falls back to
+the stored bytes with `X-Receipt-Render: failed` rather than 404. Without the
+parameter the response is byte-for-byte unchanged, which is the negative case
+the tests pin. Shipped PR #1245, merge `264a4bc6`, DEPLOYED to Fly and the
+`/healthz` stamp matches. **Proven on live data, not a fixture**: all 77
+September receipts fetched twice, 72 PDFs now return real PNGs (magic bytes,
+not the content-type header), 5 photos byte-identical, 0 failures, 9 receipts
+multi-page. 13 tests red-proven with `regress_check` (3 caller-level tests go
+red under mutation); module suite 3147 / 2.
+
+**The SPA half is the actual fix for Criss and is NOT pasted:**
+`docs/lovable-receipt-viewer-prompt.md`. A CDP drive of the live September
+month on 2026-09-24 measured what the published app does today: **zero `<img>`
+elements on the entire page and zero network requests to `/receipts/`**. The
+receipt cell is column 9 and renders the filename as text in a button that
+fetches nothing. So there is no viewer to repair; the prompt builds one, and
+carries the measurement that decides its design (note #82's row is a 444x2573
+JPEG, 5.8x taller than wide, so zoom is the feature and fit-to-window answers
+none of the three notes). That same drive closed the deploy consumer gate: 77
+rows render, no error text, no fallback strings.
+
+**2026-09-23/24: the feedback store is fully itemized.** Notes #73-#85 all
+have backlog items; the eight that had none became items 174-181 (PR #1229),
+each filed against a live read rather than transcribed. Item 176 was filed as
+"does not reproduce" and corrected the same session (PR #1231): it reproduces
+via `can_mark_private`, which stays true on a row that is already private, 2
+of 2 across the estate. Item 178 and 181 gained measurements (PR #1233).
+Note #35 was audited and deliberately NOT filed: it is cited nowhere, and
+live July shows both Google rows now carry `posting_category.source:
+"override"`, so the symptom is gone.
+
+
 AI-assisted expense reconciliation tool for Brisken: turn Chris's multi-day
 reconciliation grind into minutes of review, with a 1:1 Zoho journal export.
 Scope is the "working tool" (single-tenant, Brisken-only) per Dirk's directive;
