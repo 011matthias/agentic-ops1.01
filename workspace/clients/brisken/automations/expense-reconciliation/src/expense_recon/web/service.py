@@ -5108,6 +5108,16 @@ def commit_to_memory(
             # Resolved WITHOUT the registry on purpose — a card the registry
             # lent this month is not evidence about the merchant, and feeding
             # it back would let one observation harden into a fact.
+            # Item 171 (measured 2026-09-23, NOT fixed here): this resolution
+            # is built without `settled_cards`, and that is the only input
+            # that can produce the `settled_charge` source.
+            # `_CARD_OBSERVATION_SOURCES` has listed that source since item
+            # 111, so the path was always meant to learn from the card the
+            # STATEMENT named, and cannot. 24 rows across the seven live
+            # batches carry it, teaching pairs like MARTINO SUPERMERCADO ->
+            # 3876. Its live effect today is zero: no month has ever been
+            # signed off. Left alone deliberately -- this is the writer of
+            # durable memory, and the fix has no bite test yet.
             new_merchants, card_summary = registry_card_upserts_from_expense_run(
                 new_merchants,
                 effective_receipts=effective,
@@ -6271,6 +6281,59 @@ def settled_off_card(entry: object) -> bool:
     return bool(isinstance(entry, dict) and entry.get("how"))
 
 
+def fill_remembered_cards(
+    receipts: "list[Receipt]", learning_db_path: "Path | None"
+) -> "list[Receipt]":
+    """Item 169: read the remembered card LIVE, the way every link beside it
+    is read.
+
+    `resolve_batch_row_cards` takes its `learned` candidate off
+    `Receipt.card_key`, and the only thing that ever writes that field is
+    `ExpenseMemory.apply` during `generate_expenses`. So a card correction is
+    frozen at the moment a month was ingested: it reaches the months ingested
+    after it and can never reach the ones ingested before, which is not a rule
+    anybody chose. Every other link in the same chain resolves against current
+    state -- the reviewer's pick, the batch's hint assignments, the settled
+    charge, and (note item M2, in as many words) the merchant registry, "read
+    LIVE like the cost-center registry rather than from the batch snapshot, so
+    the day a merchant gains a card the existing months resolve without a
+    refresh pass". This closes the one exception.
+
+    Measured on the live store 2026-09-23, before anything was changed:
+    September held 26 receipts with no card, 25 with no legal entity and 25
+    with no person; the correction `('', 'openai') -> 3645` had been saved
+    that morning, names a card the batch holds, and matched 12 of those rows
+    on a key that already lined up. It reached none of them. Filling the field
+    here moves all three columns by 12, because every entity-less and
+    person-less row in all three live months is a card-less row.
+
+    Only rows carrying no card key are filled, so a value the batch already
+    holds is never overwritten, and the chain's own precedence is untouched:
+    the remembered card still loses to a reviewer's pick, a printed card
+    number and the settled charge. An absent or unreadable learning store
+    leaves every receipt exactly as it was.
+    """
+    if learning_db_path is None or not Path(learning_db_path).exists():
+        return receipts
+    from ..learning.consult import FieldCorrectionLookup
+    from ..learning.store import LearningStore
+
+    with LearningStore(Path(learning_db_path)) as store:
+        lookup = FieldCorrectionLookup.from_store(store)
+    if not lookup:
+        return receipts
+    out: list[Receipt] = []
+    for r in receipts:
+        if not (r.card_key or "").strip():
+            remembered = lookup.get(
+                (r.legal_entity_id or "").strip(), r.detected_vendor
+            ).get("card_key")
+            if remembered:
+                r = replace(r, card_key=remembered)
+        out.append(r)
+    return out
+
+
 def resolve_batch_row_cards(
     receipts: "list[Receipt]",
     cfg: dict | None,
@@ -7162,6 +7225,7 @@ def build_expense_view(
     settled_elsewhere: dict[str, dict] | None = None,
     edited_at: str | None = None,
     month_batch=None,
+    learning_db_path: "Path | None" = None,
 ) -> dict:
     """Compose the receipt-spine render model for an expense batch: one row
     per expense with the reviewer's edits applied, review-by-exception
@@ -7209,6 +7273,10 @@ def build_expense_view(
     # and an operator-assigned hint word is never overwritten (grid).
     grid_hints = _batch_card_hints(run.config)
     receipts = inherit_card_from_copies(receipts, resolutions, grid_hints)  # grid
+    # Item 169: and the card a correction remembers, read live rather than
+    # off the stamp ingest left, so a fix taught after this month was
+    # ingested reaches it. Silent without a learning store.
+    receipts = fill_remembered_cards(receipts, learning_db_path)  # grid
     receipts_dir = Path(run.work_dir) / "receipts"
     intake_provenance = (run.snapshot or {}).get("intake_provenance") or {}
     # Override-applied twins for the `books_as` fan-out (backlog item 2):
@@ -8012,6 +8080,7 @@ def _expense_export_inputs(
     dup_resolutions: dict[str, str] | None = None,
     settled_cards: dict[str, str] | None = None,
     merchants: dict | None = None,
+    learning_db_path: "Path | None" = None,
 ) -> tuple[list, dict]:
     """`(receipts, kwargs)` for the expense export — the overlay order the
     view uses (`apply_expense_edits` then `apply_overrides`) plus the card /
@@ -8045,6 +8114,10 @@ def _expense_export_inputs(
     # together on a copy that borrowed its card.
     export_hints = _batch_card_hints(run.config)
     receipts = inherit_card_from_copies(receipts, dup_resolutions, export_hints)  # export
+    # Item 169: the grid's live read of a remembered card, so the file a
+    # reviewer downloads files a receipt under the card the screen showed it
+    # on. Cards R3 is the whole reason this sits on both paths.
+    receipts = fill_remembered_cards(receipts, learning_db_path)  # export
     receipts = apply_overrides(receipts, overrides)
     coa_gate = _coa_gate_from_config(run.config, run.work_dir)
     chart = getattr(coa_gate, "chart", None) if coa_gate is not None else None
@@ -8104,6 +8177,7 @@ def regenerate_expense_export(
     dup_resolutions: dict[str, str] | None = None,
     charge_decisions: dict | None = None,
     merchants: dict | None = None,
+    learning_db_path: "Path | None" = None,
 ) -> Path:
     """Write the expense CSV for a batch with every reviewer edit applied.
     Returns the path.
@@ -8117,6 +8191,7 @@ def regenerate_expense_export(
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits, dup_resolutions,
         settled_cards=csv_settled, merchants=merchants,
+        learning_db_path=learning_db_path,
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
@@ -8250,6 +8325,7 @@ def build_expense_report(
     render_outcomes: dict | None = None,
     dup_resolutions: dict[str, str] | None = None,
     charge_decisions: dict | None = None,
+    learning_db_path: "Path | None" = None,
 ) -> bytes:
     """The month's report PDF: the listing, then every receipt (owner
     directive 2026-08-23 — nothing imports the output any more, so the
@@ -8333,6 +8409,7 @@ def build_expense_report(
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits, dup_resolutions,
         settled_cards=report_settled, merchants=report_merchants,
+        learning_db_path=learning_db_path,
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,

@@ -8068,6 +8068,60 @@ account cell, Corporate Services / anthropic).
 
 ### Item 169 — the card chain's fallbacks, where the evidence exists and is refused
 
+**SHIPPED 2026-09-23** (the instrument, and the one fact that was worth rows).
+Four code facts were named here before anything was built. `tools/recon-attribution-replay.py`
+now replays a month through `build_expense_view` itself and scores card, entity,
+person and category by link, against the statement's own `Card` column on every
+confirmed pair and against the reviewer's own fixes held out. It was proven
+before it was trusted: a fabricated hint rule for a hint exactly one row prints
+moved the card-less count by exactly one, in all three coupled columns.
+
+What the instrument then said about the four facts, which is not what the facts
+predicted:
+
+* **Fact 1 measures ZERO.** Narrowing `_card_keys` to digits the batch can
+  resolve moves no row in any of the seven batches, 198 receipts. The three
+  July rows it would unblock (`...2544`, `0501-1462-9129`, `Cartao Credito 30
+  Dias`) have no matched charge and no remembered card, so there is nothing
+  behind the guard to give them; September has no statement at all. The guard's
+  reasoning is still wrong for a number naming no card, and fixing it today
+  buys nothing. Not built.
+* **Fact 2 confirmed, 24 rows, still latent.** Now item 171 below.
+* **Fact 3 was the wrong diagnosis, and the real cause sat beside it.** The
+  lookup key was never the problem: September's batch entity is `''`, every
+  card-less row carries `''`, and the correction saved that morning is keyed
+  `('', 'openai')`, so `lookup('', 'OPENAI')` returns `{'card_key': '3645'}`
+  and the batch holds a card under exactly that key. It reached none of the 12
+  rows because **`resolve_batch_row_cards` reads the remembered card off
+  `Receipt.card_key`, and the only writer of that field is
+  `ExpenseMemory.apply` inside `generate_expenses`**. A correction is frozen at
+  the moment a month was ingested: it reaches months ingested after it and can
+  never reach the ones ingested before. Every link beside it is read live, and
+  note item M2 says so in as many words about the merchant registry.
+  **Fixed**: `service.fill_remembered_cards`, wired into the grid and the CSV
+  export (Cards R3: the two surfaces that must name one card for one receipt),
+  and through the export into the month report. Measured on the live snapshot,
+  September card-less **26 -> 14**, no legal entity **25 -> 13**, no person
+  **25 -> 13**, 12 rows now sourced `learned`; July and August do not move.
+  Precedence untouched: a printed card number, a reviewer pick and the settled
+  charge all still win. Tests `test_remembered_card_read_time_item_169.py`,
+  route-level; both wiring points regress-checked green -> red -> green.
+* **Fact 4 is exactly one row.** `0051__rendered-body.pdf`, GoDaddy, "We have
+  billed your Visa card ending with the last two digits: 38"; the two receipts
+  printing "ending with ...2838" both resolve. Not built.
+
+Deliberately NOT wired: `rematch_month` and the pool builders. `learned` is in
+`CARD_SCOPE_SOURCES`, so feeding the live memory there would let a remembered
+card newly SCOPE the matcher, which is a separate decision with its own risk.
+
+**A risk to name rather than bury**: the live rule came from one reviewer pick,
+and OpenAI is one of the three multi-card vendors item 154 refuses to guess
+for. The fix does not change what is learned or its rank; it makes an existing
+rule reach consistently instead of by accident of ingest order, and that rule
+was already going to be applied to every month ingested from now on. The
+statement always outranks it. If the owner wants remembered cards gated on
+single-card vendors the way the merchant registry is, that is its own item.
+
 **Read the pointers below by symbol, not by offset.** They were taken at
 commit `5710a675`, and `service.py` shifted 196 lines by `f3ecd6bc` the same
 afternoon, so every number here is stale as an offset while still correct as
@@ -8076,7 +8130,8 @@ a location. The symbols are `resolve_batch_row_cards`,
 `FieldCorrectionLookup.get`, `categorize_receipts_with_registry` and
 `_registry_account`.
 
-Four code facts, each measurable before it is changed:
+**Still open here** (both measured, neither worth building today):
+
 
 1. **A printed number that resolves nothing blocks every fallback.**
    `service.py:6533` guards the settled-charge, learned and merchant steps
@@ -8104,6 +8159,28 @@ Not code, and larger than all four: cards 9693 and 1176 have never had a
 statement loaded (item 108), which is why September's OpenAI receipts cannot
 attribute at all. Coverage, not matching.
 
+### Item 171 — the sign-off card learner cannot see the statement's own answer
+
+Split out of item 169 fact 2, measured 2026-09-23, **not built**.
+`_CARD_OBSERVATION_SOURCES` has listed `settled_charge` since item 111, so the
+sign-off learner was always meant to learn the card the STATEMENT named for a
+settled pair. It cannot: the `card_res` handed to
+`registry_card_upserts_from_expense_run` in `commit_to_memory` is resolved
+without `settled_cards`, which is the only input that can produce that source,
+so the branch is unreachable. 24 rows across the seven live batches carry it
+today, and they would teach pairs like MARTINO SUPERMERCADO -> 3876 (5 rows),
+Hostinger -> card-2838, Typora -> card-2838. Anthropic appears on two cards
+(2838 five times, 3645 once), which is exactly the case the upsert already
+refuses to pin, so the guard that matters is in place.
+
+Live effect today is **zero**: no month has ever been signed off. The fix is
+about three lines (`month_charge_states(run, decisions or {})` then
+`settled_charge_cards(...)` into the resolution). It was written and reverted
+in the item-169 PR for one reason: this is the writer of DURABLE memory, and a
+change there with no regress-checked bite test is the wrong kind of cheap.
+Build it with a statement-attached month and a publish, asserting the registry
+gains the card, and regress it before merging.
+
 ### Item 170 — a correction that reaches the vendor's other spellings
 
 Memory recalls and captures on the raw normalized `detected_vendor`
@@ -8115,15 +8192,60 @@ note #80's "norms applied universally across multiple vendors" in the only
 form the record supports: the registry's curated alias graph, **not** a fuzzy
 key, which item 117 measured as 8 wrong canonicals out of 8 probes.
 
-Both items are gated the way item 164 says: measure what the rule would have
-done to the next month's rows before it fires. That instrument does not
-exist. The item-115 replay was a scratch script over a `/data` copy and is
-not in the repo, `labels.csv` carries only pair labels
-(`document_id,transaction_id,status,source,evidence`), and nothing anywhere
-judges a card, an entity, a person or a category. Three truths are free and
-unused: the statement's own `Card` column on every confirmed pair (37 July +
-9 August rows), and `payment_mode` plus `zoho_category` printed per receipt in
-the six ER-PDF bundles (~218 rows, Criss's own filing).
+**MEASURED 2026-09-23, not built.** The instrument this was gated on now
+exists (`tools/recon-attribution-replay.py`, item 169). What it says:
+
+**Canonical keying is worth 7 live rows.** Four stored rules resolve to a
+canonical whose OTHER spellings appear in the live months: `antropic` ->
+Anthropic (1 row), `lovable labs` -> Lovable Labs (1), `zoho` -> ZOHO Corp.
+(3), `zoho corp` -> ZOHO Corp. (2). Real, correct, and small.
+
+It is small for a reason worth more than the fix: **the registry resolves
+almost none of the vendors that matter.** `OpenAI` (21 rows), `Anthropic, PBC`
+(18), `Anthropic, PBC @anthropic` (6) and `Anthropic, PBC (@anthropic)` (5)
+resolve to nothing at all, 50 rows between them, because `Anthropic` is in the
+registry with `aliases: []` and OpenAI is not in it. Keying memory on a
+canonical the registry cannot produce changes nothing for those rows.
+
+**And filling the alias lists would move 0 rows on the existing months.** This
+started as a suspicious zero and was proven: a control that rewrote EVERY
+merchant's category to one value also moved 0 rows. The probe is blind by
+construction, and what it is blind to is the finding.
+`categorize_receipts_with_registry` is called only from `_add_receipts_locked`
+and `_restore_set_aside_locked` (plus the CLI and the charge path) -- when
+receipts are ADDED. It is never called at view time, so the registry CATEGORY
+is stamped at ingest and frozen, exactly as the remembered card was before
+item 169. The registry is half-live: note item M2 made the merchant's CARD
+resolve live on every payload, and its CATEGORY did not come with it.
+
+So the alias write is worth doing and is worth less than it looks: it fixes
+October onward and leaves July, August and September where they are until
+those rows are re-categorized. The exact diff is prepared below and NOT sent;
+a settings write on Criss's live data is the owner's.
+
+```json
+{
+ "Anthropic": ["Anthropic, PBC", "Anthropic, PBC @anthropic",
+               "Anthropic, PBC (@anthropic)"],
+ "ZOHO Corp.": ["ZOHO Corporation"],
+ "Lovable Labs": ["Lovable Labs Incorporated (@lovable)"]
+}
+```
+
+(`PUT /api/settings`, merged into the live 33-entry `merchants` map, aliases
+only, no category or account touched. OpenAI is deliberately absent: adding
+that merchant is the owner's call and he has said he raises it.)
+
+The multi-card refusal is visible and working, incidentally: `Anthropic`
+carries `cards_seen: ['card-1176', 'card-9693']` and `Lovable Labs` carries
+`['3645', '3876', 'card-1176']`, so neither lends a card.
+
+**Where the category chain actually stands** (held out against the reviewer's
+own 35 corrections, all three live months): 14 right, 6 wrong, 15 silent.
+Every one of the 15 silents is `REVIEW` -- the chain declines rather than
+guessing wrong -- and `REGISTRY` is right wherever it fires (2 of 2). The
+honest read is that the category chain's problem is coverage, not accuracy:
+it is silent on 43% of the rows a human went on to correct.
 
 ## Shipped (loop history)
 
