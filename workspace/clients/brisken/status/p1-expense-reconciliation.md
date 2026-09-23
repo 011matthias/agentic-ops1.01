@@ -16,6 +16,17 @@ the multi-tenant SaaS in spec v2 is deferred. Per-slice authority is
 `automations/expense-reconciliation/BLUEPRINT.md` + `ANNEALING.md`; this is the
 roll-up.
 
+**2026-09-23 (later): typing an FX rate in Settings is gone** (backlog
+item 168, owner directive). The settings key, the matcher's typed rung and
+item 132's drift advisory are removed; every rate is now either derived
+from the client's own statement and receipts or fetched from a central
+bank. A month tops up its ECB table when it re-matches, which is what keeps
+July -- created before item 82 and carrying no ECB table -- from being left
+with no rate at all. July's FX panels show no reference rate until that
+month next re-matches on its own; nothing was re-matched for Criss. The
+Settings FX tab becomes a read-only view of the fetched rates once
+`docs/lovable-fx-daily-rates-prompt.md` is pasted.
+
 **2026-09-23: the FX reference rates are polled daily from OpenTickers
 (backlog item 167, feedback note #79).** The app keeps a daily table of
 central-bank reference rates (ECB where published) and the matcher reads the

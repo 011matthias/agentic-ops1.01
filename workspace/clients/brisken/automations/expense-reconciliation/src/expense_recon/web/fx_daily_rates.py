@@ -195,15 +195,15 @@ def as_table(rows) -> dict[str, dict[str, str]]:
 
 
 def needed_currencies(settings: dict | None, runs=()) -> list[str]:
-    """The currencies to poll, besides EUR: the defaults, every currency a
-    typed Settings pair names, every card currency in Settings, and the
-    statement currency of every month. Sorted, EUR excluded."""
+    """The currencies to poll, besides EUR: the defaults, every card
+    currency in Settings, and the statement currency of every month.
+    Sorted, EUR excluded.
+
+    A rate typed in Settings used to name currencies here too. That key
+    was retired on 2026-09-23 (item 168) and is stripped from the stored
+    settings, so the cards and the months are what the poll follows."""
     want = set(DEFAULT_CURRENCIES)
     settings = settings or {}
-    for pair in settings.get("fx_reference_rates") or {}:
-        for ccy in str(pair).upper().split(":"):
-            if _CCY.fullmatch(ccy.strip()):
-                want.add(ccy.strip())
     for entry in (settings.get("cards") or {}).values():
         if isinstance(entry, dict):
             ccy = str(entry.get("currency") or "").upper().strip()

@@ -323,22 +323,25 @@ def test_route_a_charge_on_a_day_with_no_fix_reads_the_nearest_day_earlier_on_a_
     assert chosen["match_type"] == "fx_reference"
 
 
-def test_route_a_rate_typed_in_settings_still_wins(client, monkeypatch, ot):
-    """Owner rulings 2026-09-16 / 09-17: a typed rate wins. With EUR:USD
-    typed, the Amazon pair keeps 1.162275, source `settings`, no period; BRL,
-    not typed, reads the daily rate. So today's live months, which carry
-    both typed rates, do not move on this deploy."""
+def test_route_a_rate_typed_in_settings_is_ignored_and_the_daily_rate_answers(
+    client, monkeypatch, ot
+):
+    """Owner directive 2026-09-23 retired the typed rates outright, so the
+    ruling they used to win under no longer applies: a PUT still carrying
+    the key is accepted and ignored, and every pair reads the polled daily
+    rate."""
     _settings(client, {"EUR:USD": "1.162275"})
     batch_id = _create_july(client, monkeypatch)
     _poll(client)
     _attach_statement(client, batch_id)
     view = client.get(f"/api/runs/{batch_id}").json()
 
+    assert "fx_reference_rates" not in client.get("/api/settings").json()
     fx = _chosen(_row(view, "AMAZON"))["fx"]
-    assert fx["reference_rate"] == "1.162275"
-    assert fx["reference_rate_source"] == "settings"
-    assert "reference_rate_period" not in fx
-    assert fx["reference_gap"] == "-5.32"
+    assert Decimal(fx["reference_rate"]) == Decimal("1.143")
+    assert fx["reference_rate_source"] == "opentickers_day"
+    assert fx["reference_rate_period"] == "2026-07-02"
+    assert fx["reference_gap"] == "0.00"
 
     fx = _chosen(_row(view, "SUPERMEC"))["fx"]
     assert fx["reference_rate_source"] == "opentickers_day"
@@ -561,14 +564,15 @@ def test_a_day_with_no_fix_reads_the_nearest_inside_the_window_earlier_on_a_tie(
     assert _cfg(fx_daily_rate_max_gap_days=1).daily_rate("EUR", "USD", date(2026, 7, 5)) is None
 
 
-def test_the_rung_order_is_typed_then_derived_then_daily_then_ecb():
+def test_the_rung_order_is_derived_then_daily_then_ecb():
     cfg = MatchingConfig.from_dict({
         "fx_reference_rates": {"EUR:USD": "1.162275"},
         "fx_daily_rates": {"2026-07-02": {"USD": "1.1430", "BRL": "5.8450"}},
         "fx_ecb_monthly_rates": {"2026-07": {"USD": "1.1417478", "BRL": "5.8448957"}},
     })
     on = date(2026, 7, 2)
-    assert _reference_rate_for(cfg, "EUR", "USD", None, on=on) == (Decimal("1.162275"), "configured", 0)
+    # The typed rate is in the config and is ignored: the daily rate answers.
+    assert _reference_rate_for(cfg, "EUR", "USD", None, on=on) == (Decimal("1.143"), "opentickers_day", 0)
     derived = {("BRL", "USD"): (Decimal("0.19"), "statement", 3)}
     assert _reference_rate_for(cfg, "BRL", "USD", derived, on=on) == (Decimal("0.19"), "statement", 3)
     assert _reference_rate_for(cfg, "BRL", "USD", None, on=on) == (Decimal("0.195552"), "opentickers_day", 0)
@@ -624,10 +628,14 @@ def test_needed_currencies_grows_with_settings_and_the_months():
 
     assert fx_daily_rates.needed_currencies({}, []) == ["BRL", "USD"]
     assert fx_daily_rates.needed_currencies(
-        {"fx_reference_rates": {"GBP:USD": "1.3", "eur:chf": "0.9"},
-         "cards": {"c1": {"currency": "jpy"}, "c2": "not a dict"}},
+        {"cards": {"c1": {"currency": "jpy"}, "c2": "not a dict"}},
         [_Run({"statement": {"account_card_currency": "cad"}}), _Run({})],
-    ) == ["BRL", "CAD", "CHF", "GBP", "JPY", "USD"]
+    ) == ["BRL", "CAD", "JPY", "USD"]
+    # A retired typed pair names no currency any more (item 168): GBP and
+    # CHF used to widen the poll from here and no longer do.
+    assert fx_daily_rates.needed_currencies(
+        {"fx_reference_rates": {"GBP:USD": "1.3", "eur:chf": "0.9"}}, [],
+    ) == ["BRL", "USD"]
 
 
 def test_backfill_start_is_the_month_before_the_earliest_month():

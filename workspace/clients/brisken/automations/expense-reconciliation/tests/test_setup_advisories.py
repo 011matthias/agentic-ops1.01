@@ -39,10 +39,14 @@ def _receipt(currency: str, doc: str = "d1") -> Receipt:
     )
 
 
-def _settings_for(rates: dict | None = None, card_account: bool = False) -> dict:
+def _settings_for(per_eur: dict | None = None, card_account: bool = False) -> dict:
+    """`per_eur` is an ECB monthly table (units per one EUR), the only way a
+    rate reaches a month since typed Settings rates were retired."""
     cfg: dict = {}
-    if rates:
-        cfg["matching"] = {"fx_reference_rates": rates}
+    if per_eur:
+        cfg["matching"] = {
+            "fx_ecb_monthly_rates": {"2026-%02d" % m: dict(per_eur) for m in range(1, 13)}
+        }
     if card_account:
         cfg["zoho"] = {"card_accounts": {"2838": "1010 Chase"}}
     return cfg
@@ -59,12 +63,16 @@ def test_missing_fx_rate_is_named_with_its_cost():
     fx = [a for a in out if a["setting"] == "fx_reference_rates"]
     assert len(fx) == 1
     assert "BRL" in fx[0]["message"]
-    assert "Settings" in fx[0]["message"], "says where to fix it"
+    # It no longer tells the operator to type a rate: it names the two
+    # fetched sources that came up empty (typed rates retired 2026-09-23).
+    assert "daily rate" in fx[0]["message"], fx[0]["message"]
+    assert "ECB" in fx[0]["message"], fx[0]["message"]
+    assert "Settings" not in fx[0]["message"], fx[0]["message"]
 
 
-def test_configured_rate_produces_no_fx_advisory():
+def test_a_fetched_rate_produces_no_fx_advisory():
     out = _setup_advisories(
-        _settings_for({"BRL:USD": "0.192448"}),
+        _settings_for({"USD": "1.162275", "BRL": "6.039423636515"}),
         [_tx()],
         [_receipt("BRL")],
         has_coa=True,

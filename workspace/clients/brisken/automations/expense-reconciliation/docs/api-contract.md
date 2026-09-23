@@ -3255,6 +3255,62 @@ live record shape of 2026-09-23); the rung order and the day window at unit
 level in the same file; `regress_check` proved the re-match wiring bites.
 Renders in `docs/lovable-fx-daily-rates-prompt.md`.
 
+## Typed FX rates retired: `fx_reference_rates` is gone (owner 2026-09-23)
+
+Owner directive, the afternoon note #79 shipped: "no more typing them in
+settings you can remove that function entirely, we will only rely on these
+daily rates API stuff."
+
+**The settings key is retired.** `GET /api/settings` no longer returns
+`fx_reference_rates`; `PUT` accepts it, reports it in `ignored` and stores
+nothing (a 400 would break the published SPA, which keeps sending the key
+on every FX-tab save until its removal prompt is applied); and `RunStore`
+deletes it from the stored row on open, so the two rates the live estate
+carried (EUR:USD 1.162275, BRL:USD 0.192448) are gone rather than hidden.
+`store.RETIRED_SETTINGS_KEYS` is the list; `SETTINGS_WRITABLE_KEYS` and
+`SETTINGS_MAP_KEYS` no longer name it.
+
+**The matcher rung is retired.** `_reference_rate_for` runs
+`statement` -> `receipts` -> `opentickers_day` -> `ecb_month`; the
+`configured` source can no longer occur and `fx.reference_rate_source`
+can no longer read `settings`. `MatchingConfig` has no
+`fx_reference_rates` field and no `fx_reference_rate()`. The key stays
+PARSEABLE and is dropped (`_RETIRED_TUNABLES`), because every month
+created before today has it frozen in its stored config and the shipped
+scorer asset still carries it: refusing it would make both unloadable.
+A stored copy is therefore inert, not obeyed, and no client data was
+rewritten.
+
+**`apply_master_data` no longer writes rates into a run config.** A
+month's rates are fetched: `apply_fx_daily_rates` on every re-match, and
+`apply_ecb_rates` at creation, at statement attach, and now also
+`top_up_ecb_rates` on every re-match for any month the stored table does
+not already cover. That top-up is what keeps the retirement safe: July
+2026 was created before item 82 shipped, so its config carried the typed
+rates and NO ECB table, and without it the month would have been left
+with no rate on any rung.
+
+**Item 132's `fx_rate_drift` advisory is gone**, along with its code: it
+existed to say a typed rate had drifted from the ECB's. `fx_rate_missing`
+stays, and its message now names the two fetched sources that came up
+empty instead of telling the operator to set a rate. Its `setting` field
+still reads `fx_reference_rates`, kept as the stable identifier the SPA
+already maps; it is a label, not a live settings key.
+
+**What it did not change:** the self-derived rungs (`statement`,
+`receipts`) read the client's own documents and were never typed, so they
+stay, and stay above the fetched rates on item 82's bundle evidence. The
+labelled-bundle accuracy gate is unchanged (the shipped asset carries
+`"fx_reference_rates": {}`, so no bundle ever matched through the rung).
+
+Route and unit level in `tests/test_ecb_band_item_132.py`
+(`test_a_rate_typed_in_settings_is_no_longer_read_from_a_stored_config`),
+`tests/test_settings_put_contract.py`
+(`test_a_retired_key_is_accepted_and_ignored_never_refused`),
+`tests/test_ecb_month_rates.py`, `tests/test_fx_daily_rates.py`,
+`tests/test_master_data_settings.py`. Renders in
+`docs/lovable-fx-daily-rates-prompt.md`.
+
 ## What a settings save wrote: `applied` + `ignored` (item 91, 2026-09-17)
 
 The settings screen saves ONE group per request and always has: the page

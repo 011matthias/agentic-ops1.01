@@ -534,37 +534,29 @@ def resolve_entity(form: RunForm, settings: dict | None) -> str:
 def apply_master_data(
     cfg: dict, form: RunForm, settings: dict | None
 ) -> dict:
-    """Return `cfg` with the stored master data folded in: the month's FX
-    reference rates as an inline `matching` block, and the card's Zoho bank
-    account as the `zoho.card_accounts` entry the journal's balancing credit
-    resolves against.
+    """Return `cfg` with the stored master data folded in: the card's Zoho
+    bank account as the `zoho.card_accounts` entry the journal's balancing
+    credit resolves against.
 
-    The rates are inlined rather than written as a `matching.tuning_path`
-    because they are per-run master data, not a file on the machine — this
-    also carries them into `run.local.json`, so pulling a run off the volume
-    reproduces the hosted match exactly. Empty settings => `cfg` unchanged.
+    It used to fold in the month's typed FX reference rates as well. The
+    owner retired that on 2026-09-23 ("no more typing them in settings"), so
+    a month's rates now come from the daily OpenTickers poll
+    (`apply_fx_daily_rates`, refreshed on every re-match) and the ECB
+    monthly average (`apply_ecb_rates`, fetched at creation and attach).
+    Empty settings => `cfg` unchanged.
     """
     from ..cards import effective_cards, zoho_account_for
 
     settings = settings or {}
-    rates = {
-        str(k).strip(): str(v).strip()
-        for k, v in (settings.get("fx_reference_rates") or {}).items()
-        if str(k).strip() and str(v).strip()
-    }
     # Card -> Zoho account resolution reads the composed card registry
     # (settings `cards` + legacy `card_accounts`, `cards.effective_cards`)
     # since 2026-08-21; same digit-token matching as before.
     cards = effective_cards(settings)
     have_accounts = any(c.zoho_account for c in cards.values() if c.active)
-    if not rates and not have_accounts:
+    if not have_accounts:
         return cfg
 
     out = dict(cfg)
-    if rates:
-        matching = dict(out.get("matching") or {})
-        matching.setdefault("fx_reference_rates", rates)
-        out["matching"] = matching
     account_id = (form.account_id or "").strip()
     if have_accounts and account_id:
         resolved = zoho_account_for(account_id, cards)
@@ -653,10 +645,7 @@ def _setup_advisories(
 
     # Cross-currency receipts with no reference rate for their pair: the
     # single cause of the 0-of-94 April run.
-    configured = {
-        str(k).split(":")[0].upper()
-        for k in ((cfg.get("matching") or {}).get("fx_reference_rates") or {})
-    }
+    configured: set[str] = set()
     card_ccy = (
         transactions[0].account_card_currency if transactions else "USD"
     ).upper()
@@ -691,9 +680,8 @@ def _setup_advisories(
             "message": (
                 f"{count} receipt(s) are in {ccy} but no {ccy}:{card_ccy} "
                 f"reference rate is available (no daily rate has been polled "
-                f"for it, the ECB publishes no monthly average for this "
-                f"month and none is set in Settings), so they cannot match "
-                f"deterministically."
+                f"for it and the ECB publishes no monthly average for this "
+                f"month), so they cannot match deterministically."
             ),
         })
 
@@ -738,102 +726,6 @@ def _setup_advisories(
                 "(optional: only the data export uses it). Export "
                 "entries balance to a visible 'Card: ...' placeholder until "
                 "one is set in Settings > Cards."
-            ),
-        })
-    out.extend(_fx_rate_drift_advisories(cfg, transactions, receipts, card_ccy))
-    return out
-
-
-def _fx_rate_drift_advisories(
-    cfg: dict, transactions: list, receipts: list, card_ccy: str
-) -> list[dict]:
-    """Item 132: a rate typed in Settings that has drifted from the ECB.
-
-    A Settings rate wins over the month's ECB average (item 82's ruling), so
-    once it drifts, every month keeps matching at it and nothing says so.
-    One advisory per typed pair this month's receipts use, when the month's
-    ECB table holds that pair and the gap is wider than the two bands leave
-    room for: a receipt the ECB rate pairs within `fx_ecb_match_pct` stays
-    inside the Settings rate's `fx_reference_match_pct` band only while the
-    two rates are no further apart than the difference of the bands (3% -
-    2% = 1%). `code` and the numbers ride beside the English `message`, so
-    the screen can say it in the reviewer's language (item 130)."""
-    from collections import Counter
-    from decimal import ROUND_HALF_UP
-
-    from ..matching.deterministic import MatchingConfig
-
-    matching = cfg.get("matching") or {}
-    typed = matching.get("fx_reference_rates") or {}
-    ecb_table = matching.get("fx_ecb_monthly_rates") or {}
-    if not typed or not ecb_table:
-        return []
-    try:
-        # The matcher's own parse and lookup, so the advisory speaks only
-        # for a pair the matcher really reads from Settings (its keys are
-        # case-sensitive: a stored "eur:usd" is not a EUR:USD rate).
-        mc = MatchingConfig.from_dict({
-            k: matching[k]
-            for k in (
-                "fx_reference_rates", "fx_ecb_monthly_rates",
-                "fx_reference_match_pct", "fx_ecb_match_pct",
-            )
-            if k in matching
-        })
-    except (ValueError, ArithmeticError, AttributeError, TypeError):
-        return []
-    limit = mc.fx_reference_match_pct - mc.fx_ecb_match_pct
-    if limit <= 0:
-        return []
-    dated = [t.transaction_date for t in transactions if getattr(t, "transaction_date", None)]
-    if not dated:
-        dated = [r.detected_date for r in receipts if getattr(r, "detected_date", None)]
-    if not dated:
-        return []
-    month = Counter(d.strftime("%Y-%m") for d in dated).most_common(1)[0][0]
-    counts = Counter(
-        (r.detected_currency or "").upper() for r in receipts
-        if (r.detected_currency or "").upper() not in ("", card_ccy)
-    )
-    out: list[dict] = []
-    dst = card_ccy
-    for src in sorted(counts):
-        settings_rate = mc.fx_reference_rate(src, dst)
-        if settings_rate is None or settings_rate <= 0:
-            continue
-        ecb = mc.ecb_monthly_rate(src, dst, month)
-        if ecb is None:
-            continue
-        ecb_rate, ecb_month = ecb
-        try:
-            gap = (settings_rate - ecb_rate) / ecb_rate
-            if abs(gap) <= limit:
-                continue
-            gap_pct = float((gap * 100).quantize(Decimal("0.1"), ROUND_HALF_UP))
-        except ArithmeticError:
-            # A rate Settings accepted but no month can use ("1e30"): the
-            # advisory never fails the month it describes.
-            continue
-        side = "above" if gap > 0 else "below"
-        n = counts[src]
-        out.append({
-            "setting": "fx_reference_rates",
-            "code": "fx_rate_drift",
-            "pair": f"{src}:{dst}",
-            "settings_rate": _fmt_rate(settings_rate),
-            "ecb_rate": _fmt_rate(ecb_rate),
-            "ecb_month": ecb_month,
-            "gap_pct": gap_pct,
-            "limit_pct": float(limit * 100),
-            "n_receipts": n,
-            "message": (
-                f"The {src}:{dst} rate set in Settings ({_fmt_rate(settings_rate)}) "
-                f"is {abs(gap_pct):.1f}% {side} the ECB's {ecb_month} average "
-                f"({_fmt_rate(ecb_rate)}). A Settings rate wins over the ECB for "
-                f"this month's {n} {src} receipt(s); more than "
-                f"{float(limit * 100):g}% away, a receipt the ECB rate pairs "
-                f"cleanly can fall outside the clean band. Removing the rate in "
-                f"Settings lets the ECB average apply."
             ),
         })
     return out
@@ -2462,7 +2354,11 @@ def _fx_breakdown(
 # says it. `configured` is Settings to anyone reading the screen; every other
 # source passes through unchanged, so a source the matcher gains later (item
 # 82's `ecb_month`) reaches the payload without a change here.
-_FX_REFERENCE_SOURCE_NAMES = {"configured": "settings"}
+# Rename map for `fx.reference_rate_source`. Empty since 2026-09-23: its
+# one entry renamed the retired `configured` rung to "settings". Kept as
+# the seam the payload builder already reads, so a future rename needs no
+# change at the call site.
+_FX_REFERENCE_SOURCE_NAMES: dict[str, str] = {}
 
 
 @dataclass(frozen=True)
@@ -2494,6 +2390,14 @@ def fx_reference_lookup(run: "RunRow", transactions: list, receipts: list):
     rate the screen shows that the matcher did not use would be the drift
     item 81 exists to prevent. Because it reads the stored config and
     snapshot, it answers for a month matched before this code shipped.
+
+    One consequence of retiring the typed rates (2026-09-23) is visible
+    here: a month matched BEFORE the retirement was paired at its typed
+    rate, and this function now answers with the rung below it, so the FX
+    panel prints the fetched rate while the stored pairing still reflects
+    the typed one. The two converge at that month's next natural re-match
+    (a receipt arriving, a reviewer's edit). Nothing is re-matched on the
+    reviewer's behalf.
 
     Charges go in with credits removed, the matcher's own first filter.
     Receipts are the month's current pool, so a rate DERIVED from receipt
@@ -13130,6 +13034,14 @@ def rematch_month(
     # last one, and committed with the run's config below, so the screen's
     # FX block and a pulled-down replay read the table the matcher did.
     cfg = apply_fx_daily_rates(cfg, store, run.label, transactions)
+    # 2026-09-23: and the ECB monthly averages, for any month this re-match
+    # can reach that the stored table does not already hold. Until now they
+    # were fetched at creation and statement attach only, so July 2026 --
+    # created 2026-09-07, before item 82 shipped, and never re-attached --
+    # carried no ECB table at all and leaned entirely on the typed Settings
+    # rates. Retiring those without this top-up would leave its
+    # cross-currency pairs with no rate on any rung.
+    cfg = top_up_ecb_rates(cfg, run.label, transactions)
 
     # Bake the reviewer's truth into the receipt pool the matcher sees.
     _, receipts0, _, parse_errors = snapshot_from_dict(run.snapshot)
@@ -15789,8 +15701,7 @@ def apply_ecb_rates(cfg: dict, months) -> dict:
 
     A fetched month replaces the stored one (a published average is final,
     so this only ever adds what the ECB has published since); months the
-    fetch did not return stay as they were. Settings' `fx_reference_rates`
-    are not touched: a rate the operator typed still wins in the matcher.
+    fetch did not return stay as they were.
     Fail-open: when the ECB returns nothing, `cfg` comes back unchanged, key
     for key, so a month created offline is the month created before this
     item shipped."""
@@ -15836,8 +15747,7 @@ def apply_fx_daily_rates(cfg: dict, store, label: str | None, transactions=()) -
     the provider's digits as text). The store is the truth, so the table is
     REPLACED, not merged: a re-match reads what has been polled by now. A
     store with nothing for the span leaves `cfg` unchanged, key for key, so
-    a month matched before the poll ever ran keeps its rungs as they were.
-    Settings' `fx_reference_rates` are not touched: a typed rate still wins."""
+    a month matched before the poll ever ran keeps its rungs as they were."""
     span = fx_days_for(label, transactions)
     if span is None:
         return cfg
@@ -15859,6 +15769,38 @@ def apply_fx_daily_rates(cfg: dict, store, label: str | None, transactions=()) -
     }
     out["matching"] = matching
     return out
+
+
+def top_up_ecb_rates(cfg: dict, label: str | None, transactions=()) -> dict:
+    """`cfg` with any ECB monthly average this month can reach that its
+    stored table does not already carry (2026-09-23).
+
+    `apply_ecb_rates` fetches; this decides whether a fetch is needed at
+    all, so an ordinary re-match of a month whose table is already complete
+    costs no request. A published monthly average never changes, so a month
+    already present is never re-fetched. Fail-open rides on
+    `apply_ecb_rates`: no network, no change.
+
+    Months the ECB cannot have published yet (the current month and later)
+    are not counted as missing -- `ecb_rates.rates_for_months` drops them
+    before asking, so treating them as missing would fetch on every single
+    re-match for the whole of the running month."""
+    from datetime import date
+
+    from . import ecb_rates
+
+    wanted = ecb_months_for(label, transactions)
+    if not wanted:
+        return cfg
+    now = date.today().strftime("%Y-%m")
+    publishable = [
+        m for m in wanted
+        if ecb_rates.month_index(m) <= ecb_rates.month_index(now)
+    ]
+    have = set((cfg.get("matching") or {}).get("fx_ecb_monthly_rates") or {})
+    if not [m for m in publishable if m not in have]:
+        return cfg
+    return apply_ecb_rates(cfg, publishable)
 
 
 def _fills_view(tx) -> list[dict]:

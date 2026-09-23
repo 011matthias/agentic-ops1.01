@@ -9,6 +9,8 @@ something in this file goes red.
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 
 pytest.importorskip("fastapi")
@@ -20,6 +22,7 @@ from expense_recon.web.app import create_app  # noqa: E402
 from expense_recon.web.store import (  # noqa: E402
     SETTINGS_DERIVED_KEYS,
     SETTINGS_WRITABLE_KEYS,
+    RunStore,
 )
 
 # One minimal VALID payload per writable key. The meta-test below walks this
@@ -27,7 +30,6 @@ from expense_recon.web.store import (  # noqa: E402
 # (or without a sample here) fails instead of silently doing nothing.
 VALID_SAMPLE: dict[str, object] = {
     "export_approved_only": True,
-    "fx_reference_rates": {"EUR:USD": "1.162275"},
     "card_entities": {"2838": "Corporate Services"},
     "card_accounts": {"2838": "Chase 2838"},
     "entities": {"Corporate Services": {"org_id": "60021234567"}},
@@ -73,9 +75,63 @@ def test_every_writable_key_actually_lands(client):
         assert r.json()["applied"] == [key], key
     stored = client.get("/api/settings").json()
     assert stored["export_approved_only"] is True
-    assert stored["fx_reference_rates"] == {"EUR:USD": "1.162275"}
     assert stored["cost_centers"]["Lidar"]["kind"] == "project"
     assert stored["intake"]["aliases"] == {"dirk": "Dirk Neumann"}
+
+
+def test_a_retired_key_is_accepted_and_ignored_never_refused(client):
+    """`fx_reference_rates` was retired on 2026-09-23. The published SPA
+    keeps sending it on every FX-tab save until its removal prompt is
+    applied, so refusing it would break that tab with a 400 over a key that
+    no longer means anything. It is reported in `ignored`, like a derived
+    key, and nothing is stored under it."""
+    r = client.put("/api/settings", json={"fx_reference_rates": {"EUR:USD": "1.1"}})
+    assert r.status_code == 200, r.text
+    assert r.json()["applied"] == []
+    assert r.json()["ignored"] == ["fx_reference_rates"]
+    assert "fx_reference_rates" not in client.get("/api/settings").json()
+
+
+def test_the_typed_rates_are_deleted_from_the_stored_row_not_merely_hidden(
+    tmp_path,
+):
+    """The estate really carried two typed rates (EUR:USD 1.162275,
+    BRL:USD 0.192448). Dropping them from the GET would hide them while
+    leaving them in the database, where a rollback of the read side would
+    bring them straight back; the migration on open deletes them.
+
+    `RunStore.get_settings` is the instrument because it reads the row as
+    stored. The route's GET strips the key either way, so a test driven
+    through the API reports success on an unwired migration, which is
+    exactly what it did before this test existed."""
+    db = tmp_path / "recon-web.sqlite"
+    store = RunStore(db)
+    try:
+        store.conn.execute(
+            "INSERT INTO settings (id, data, updated_at) VALUES (1, ?, ?)",
+            (json.dumps({
+                "fx_reference_rates": {
+                    "EUR:USD": "1.162275", "BRL:USD": "0.192448",
+                },
+                "card_accounts": {"2838": "Chase 2838"},
+            }), "2026-09-22T10:00:00+00:00"),
+        )
+        store.conn.commit()
+    finally:
+        store.close()
+
+    store = RunStore(db)
+    try:
+        stored = store.get_settings()
+        assert "fx_reference_rates" not in stored
+        # Everything beside it survives: the migration drops keys, not rows.
+        assert stored["card_accounts"] == {"2838": "Chase 2838"}
+        raw = store.conn.execute(
+            "SELECT data FROM settings WHERE id = 1"
+        ).fetchone()["data"]
+        assert "1.162275" not in raw
+    finally:
+        store.close()
 
 
 def test_an_unknown_key_is_refused_by_name_and_writes_nothing(client):
