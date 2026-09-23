@@ -23,7 +23,6 @@ The negative cases are the contract, in both directions:
 from __future__ import annotations
 
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 
