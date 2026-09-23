@@ -417,6 +417,79 @@ labelled "July 2026". Whether that is correct (a June transaction date on
 a July card charge) or a boundary error is Criss's call, but a month-end
 import should not decide it silently.
 
+## 2026-09-23: the July rehearsal actually posted (13 rows, TEST-BTS)
+
+Owner greenlight. Org 822116290 only; the Self Client credential was used
+rather than the fullaccess one below, because CREATE + READ is all a post
+needs and the real month-end run will carry the narrower grant, so the
+rehearsal stays faithful to it.
+
+**Posted: 13 of 13. Rejected 0, ambiguous 0, aborted false.**
+
+Selection followed the send-by-id shape rather than "post the plan":
+`execute_expense_post` refuses any plan carrying refusals, so the 13
+references were named explicitly and **re-planned on their own**, giving
+a plan with zero refusals instead of a filtered view of one holding 33.
+Guards before `go`: sandbox asserted, production ids refused, count
+`expect=13`, and a total tie-out to $30,864.42.
+
+### Readback, by id, field by field
+
+The accept code proves nothing here: the 2026-09-22 trial returned 201
+with a valid `expense_id` on rows that had landed in the wrong account.
+So each expense was read back from `GET /expenses/{id}` (the surface the
+write lands on) and compared against the payload the builder produces.
+
+**13/13 clean. Stored total $30,864.42, exact match.** Every line's
+`account_id` matches what was sent, including the three splits (2, 3 and
+5 line items), so itemization survived and nothing was re-defaulted.
+`paid_through` is the card on all 13, and the `[External Match Audit]`
+envelope is present on all 13.
+
+**The readback was then proven able to fail**, because one that cannot is
+not evidence. Corrupting each checked field in turn against a real stored
+record: wrong account, wrong amount, wrong date, wrong reference, a
+dropped split line, wrong paid-through card. All six caught; the
+uncorrupted control passes clean.
+
+### Both duplicate defenses fire, independently
+
+- **Ledger:** re-planning the same 13 yields 0 postable / 13 refused,
+  `already_in_ledger`.
+- **Month occupancy:** `2026-07` went `CLEAR` to `ALREADY_OCCUPIED` after
+  the post, naming the 10 July-dated rows on that card.
+
+### Dates held; the period is ours to choose
+
+The 3 June-dated rows (2026-06-30 x2, 2026-06-21) stored as June. Zoho
+coerced nothing into the July period, so which period a row belongs to is
+decided by our selection, not by Zoho. That is the fact the production
+rule needs: filtering by transaction date and filtering by statement
+period are both implementable, and the choice is Criss's.
+
+### New defect: `vendor_name` is silently discarded
+
+**0 of 13** posted expenses carry a vendor. Zoho accepts `vendor_name`
+as text, returns 201, and stores nothing: every record reads back
+`vendor_name=""` and `vendor_id=""`. The payload builder's comment
+claimed this "at least keeps the name visible"; that was an assumption
+and it is now measured false. The audit note does not carry the vendor
+either, so **vendor attribution is absent from every posted record**.
+
+This is the same silent-accept shape as the account defaulting: Zoho
+neither rejects nor warns. Fixing it means resolving contacts to a real
+`vendor_id`, or folding the vendor into `audit_note`. Not changed in this
+slice, because it alters what posts.
+
+### The sandbox credential is far wider than the Self Client grant
+
+Vault entry `Zoho API Brisken Sandbox` (org_id `822116290`, org_name
+`TEST`) mints a token carrying **`ZohoBooks.fullaccess.all`**. That
+covers `expenses.DELETE` for automated cleanup, and **`settings.READ`**,
+which is the scope the currency refusal says is missing. So Gap 2 is
+reachable in the sandbox without re-consent. Note the scope is not
+org-bound: only our own org guards keep it off production books.
+
 ## Still open
 
 - The scope grant above, which blocks every write.

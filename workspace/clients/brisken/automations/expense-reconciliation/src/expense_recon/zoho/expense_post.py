@@ -290,9 +290,16 @@ def build_expense_payload(
         payload["line_items"] = lines
     vendor = group.cell("Vendor")
     if vendor:
-        # Carried as text. Without contacts resolution Zoho leaves the
-        # vendor field empty (9 of 9 in the trial); this at least keeps
-        # the name visible rather than dropping it silently.
+        # MEASURED 2026-09-23, and the hope below did not survive: Zoho
+        # accepts `vendor_name` and stores NOTHING. All 13 rehearsal
+        # expenses read back `vendor_name=""` and `vendor_id=""`, so the
+        # field is silently discarded without a contact to link to, and
+        # it does NOT keep the name visible as this once assumed.
+        # Vendor attribution is therefore absent from every posted
+        # record, and the audit note does not carry it either. Fixing it
+        # means resolving contacts to a real `vendor_id`, or folding the
+        # vendor into `audit_note`. Left in place because it is inert
+        # rather than harmful, and removing it would hide the gap.
         payload["vendor_name"] = vendor
     return payload
 
