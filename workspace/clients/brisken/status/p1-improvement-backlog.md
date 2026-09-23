@@ -8192,15 +8192,60 @@ note #80's "norms applied universally across multiple vendors" in the only
 form the record supports: the registry's curated alias graph, **not** a fuzzy
 key, which item 117 measured as 8 wrong canonicals out of 8 probes.
 
-Both items are gated the way item 164 says: measure what the rule would have
-done to the next month's rows before it fires. That instrument does not
-exist. The item-115 replay was a scratch script over a `/data` copy and is
-not in the repo, `labels.csv` carries only pair labels
-(`document_id,transaction_id,status,source,evidence`), and nothing anywhere
-judges a card, an entity, a person or a category. Three truths are free and
-unused: the statement's own `Card` column on every confirmed pair (37 July +
-9 August rows), and `payment_mode` plus `zoho_category` printed per receipt in
-the six ER-PDF bundles (~218 rows, Criss's own filing).
+**MEASURED 2026-09-23, not built.** The instrument this was gated on now
+exists (`tools/recon-attribution-replay.py`, item 169). What it says:
+
+**Canonical keying is worth 7 live rows.** Four stored rules resolve to a
+canonical whose OTHER spellings appear in the live months: `antropic` ->
+Anthropic (1 row), `lovable labs` -> Lovable Labs (1), `zoho` -> ZOHO Corp.
+(3), `zoho corp` -> ZOHO Corp. (2). Real, correct, and small.
+
+It is small for a reason worth more than the fix: **the registry resolves
+almost none of the vendors that matter.** `OpenAI` (21 rows), `Anthropic, PBC`
+(18), `Anthropic, PBC @anthropic` (6) and `Anthropic, PBC (@anthropic)` (5)
+resolve to nothing at all, 50 rows between them, because `Anthropic` is in the
+registry with `aliases: []` and OpenAI is not in it. Keying memory on a
+canonical the registry cannot produce changes nothing for those rows.
+
+**And filling the alias lists would move 0 rows on the existing months.** This
+started as a suspicious zero and was proven: a control that rewrote EVERY
+merchant's category to one value also moved 0 rows. The probe is blind by
+construction, and what it is blind to is the finding.
+`categorize_receipts_with_registry` is called only from `_add_receipts_locked`
+and `_restore_set_aside_locked` (plus the CLI and the charge path) -- when
+receipts are ADDED. It is never called at view time, so the registry CATEGORY
+is stamped at ingest and frozen, exactly as the remembered card was before
+item 169. The registry is half-live: note item M2 made the merchant's CARD
+resolve live on every payload, and its CATEGORY did not come with it.
+
+So the alias write is worth doing and is worth less than it looks: it fixes
+October onward and leaves July, August and September where they are until
+those rows are re-categorized. The exact diff is prepared below and NOT sent;
+a settings write on Criss's live data is the owner's.
+
+```json
+{
+ "Anthropic": ["Anthropic, PBC", "Anthropic, PBC @anthropic",
+               "Anthropic, PBC (@anthropic)"],
+ "ZOHO Corp.": ["ZOHO Corporation"],
+ "Lovable Labs": ["Lovable Labs Incorporated (@lovable)"]
+}
+```
+
+(`PUT /api/settings`, merged into the live 33-entry `merchants` map, aliases
+only, no category or account touched. OpenAI is deliberately absent: adding
+that merchant is the owner's call and he has said he raises it.)
+
+The multi-card refusal is visible and working, incidentally: `Anthropic`
+carries `cards_seen: ['card-1176', 'card-9693']` and `Lovable Labs` carries
+`['3645', '3876', 'card-1176']`, so neither lends a card.
+
+**Where the category chain actually stands** (held out against the reviewer's
+own 35 corrections, all three live months): 14 right, 6 wrong, 15 silent.
+Every one of the 15 silents is `REVIEW` -- the chain declines rather than
+guessing wrong -- and `REGISTRY` is right wherever it fires (2 of 2). The
+honest read is that the category chain's problem is coverage, not accuracy:
+it is silent on 43% of the rows a human went on to correct.
 
 ## Shipped (loop history)
 
