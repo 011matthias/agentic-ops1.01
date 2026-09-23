@@ -1,7 +1,17 @@
 # Direct-to-Zoho-GL categorization
 
-**Status:** Phase 1 in flight, 2026-09-23. The tolerant read shipped (PR #1232);
-the taxonomy module and the precedence chain have not.
+**Status:** Phase 1 in flight, 2026-09-23. Steps 1 to 3 of the order below have
+shipped, plus the chain itself: the tolerant read (#1232), the taxonomy module
+(#1234), accept-and-drop on every write path (#1236), and `gl_accounts` served
+beside the old keys together with `zoho/posting_resolution.py` (#1238).
+
+**Nothing is deployed, and nothing calls the chain yet.** The engine still
+classifies into the eight buckets; `posting_resolution` is pure and reached
+only by its own tests. Step 4 (converting the engine) is where it gets wired,
+and backlog item 183 is a prerequisite for that step rather than a later
+tidy-up: the conversion is when the chain starts writing through
+`registry_upserts_from_expense_run`, whose conflict check cannot see an
+account. Items 182 and 184 were filed the same day.
 
 Receipts are classified directly into Dirk's curated Zoho GL leaf accounts, per
 legal entity. The eight coarse buckets (`EXPENSE_CATEGORIES`) and the
@@ -108,6 +118,16 @@ resolves to more than one account, the chain refuses; it does not pick.
 `resolve_account_id` validates that the target is an active, postable leaf and
 returns a numeric `account_id`, never a name.
 
+Built as `zoho/posting_resolution.py` (PR #1238), pure and called by nothing
+yet. Two rules in it are worth restating because they are easy to soften
+later. A learned rule naming a leaf this entity cannot post to REFUSES rather
+than falling through to the model, since falling through is the same
+substitution the translation table made one layer up; a learned rule naming NO
+leaf does fall through, because a bucket-only rule answers a different
+question and overrides nothing. And `PostingResolution` rejects a non-numeric
+`account_id` at construction, which is the assertion the 2026-09-22 mis-post
+went through unchallenged.
+
 ## Tier 2 is deferred, and not for scheduling reasons
 
 Trip-purpose inheritance is not built, and it is deliberately not built.
@@ -169,9 +189,17 @@ Order:
 
 1. Tolerant read, alone and first. Shipped, PR #1232.
 2. Accept-and-drop on every 400-ing write path, before any behaviour changes.
+   Shipped, PR #1236. Six paths, not the five that were planned:
+   `learning_cli.cmd_set` writes the same table the chain reads first, and it
+   takes both vocabularies now while still refusing an unrecognised value,
+   because a CLI has no wholesale round-trip to break and a silent no-op on a
+   typed argument is worse feedback than an error.
 3. Serve both vocabularies, adding a new key beside `categories` and
    `category_options` rather than repurposing them, so the published SPA keeps
-   rendering until the owner publishes a new bundle.
+   rendering until the owner publishes a new bundle. Shipped, PR #1238, as
+   `gl_accounts` + `gl_revision`; both joined `SETTINGS_DERIVED_KEYS`, without
+   which adding them would have broken every save that round-trips the
+   payload.
 4. Convert the engine, keeping `category` written as a mirror of the leaf so no
    truthiness gate flips silently.
 5. In the same PR as 4, remove both copies of the leak and every gate that would
