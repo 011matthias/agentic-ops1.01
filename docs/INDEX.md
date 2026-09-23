@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-23 | Zoho GL Categorization Phase 1 | client-dev | [→](docs/2026-09-23%20-%20Zoho%20GL%20Categorization%20Phase%201/Checkpoint.md) |
 | 2026-09-23 | Recon Zoho Refuses Conflicting Reference Dates | client-dev | [→](docs/2026-09-23%20-%20Recon%20Zoho%20Refuses%20Conflicting%20Reference%20Dates/Checkpoint.md) |
 | 2026-09-23 | Attribution Instrument And The Card Memory That Never Arrived | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Attribution%20Instrument%20And%20The%20Card%20Memory%20That%20Never%20Arrived/Mini-Checkpoint-1.md) |
 | 2026-09-23 | Recon Attribution Grounding And The Live Write Recovery | client-dev | [→](docs/2026-09-23%20-%20Recon%20Attribution%20Grounding%20And%20The%20Live%20Write%20Recovery/Checkpoint.md) |
