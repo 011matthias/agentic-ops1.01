@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-21
+updated: 2026-09-23
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -7909,7 +7909,7 @@ tests red with it unwired, green restored. SPA half:
 `daily rate, {day}` label; pending). Contract: `docs/api-contract.md`,
 "FX rates polled daily from OpenTickers".
 
-### 168. Typing an FX rate in Settings is gone (owner directive 2026-09-23, follows 167) (SHIPPED 2026-09-23, pending PR; Shipped row 116)
+### 168. Typing an FX rate in Settings is gone (owner directive 2026-09-23, follows 167) (SHIPPED 2026-09-23, PR #1210, DEPLOYED Fly `cf54561a`; Shipped row 116)
 
 **Owner, on reading item 167 shipped:** *"no more typing them in settings
 you can remove that function entirely, we will only rely on these daily
@@ -7962,11 +7962,15 @@ SAO JOSE at +2.93%, pinned in `test_fx_breakdown.py`. Item 90 measured this
 trade and the owner took it: at 2% under fetched rates July scored 32 right
 against 30.
 
-**Live effect, measured read-only before and after the deploy.** July's 18
-and August's 2 FX blocks all read `settings` beforehand. August re-reads its
-own ECB table; July shows no reference rate until its next natural re-match,
-which is when `top_up_ecb_rates` gives it one. Nothing was re-matched on
-Criss's behalf ([[feedback_recon_no_live_writes_criss_acts]]).
+**Live effect, MEASURED read-only before and after the deploy** (census at
+`131fd5d2` then at `cf54561a`). July's 18 and August's 2 FX blocks all read
+`settings` beforehand. Afterwards August's 2 read `ecb_month` off its own
+stored table and July's 18 carry no reference rate at all, exactly as
+predicted; match rates unchanged at 27.7 and 7.9, review counts unchanged at
+7 and 1, because nothing re-matched. `GET /api/settings` no longer carries
+`fx_reference_rates`. July gains a table at its next natural re-match, from
+`top_up_ecb_rates`. Nothing was re-matched on Criss's behalf
+([[feedback_recon_no_live_writes_criss_acts]]).
 
 **Not changed:** the self-derived `statement` / `receipts` rungs (read off
 the client's documents, never typed) stay, and stay above the fetched rates
