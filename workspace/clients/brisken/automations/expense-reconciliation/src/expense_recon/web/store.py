@@ -486,6 +486,24 @@ class RunStore:
                 committed_at TEXT NOT NULL,
                 trigger      TEXT NOT NULL
             );
+            -- Item 163: one row per memory SAVE, carrying the pre-image of
+            -- every learning row it touched and of the merchant registry,
+            -- so a save can be read back ("where did this go") and put back
+            -- ("this should be reversible"). Its own table beside
+            -- memory_commits, which holds only the last digest per run and
+            -- is overwritten by the next save.
+            CREATE TABLE IF NOT EXISTS memory_journal (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id           TEXT NOT NULL,
+                label            TEXT NOT NULL DEFAULT '',
+                committed_at     TEXT NOT NULL,
+                trigger          TEXT NOT NULL,
+                rows_json        TEXT NOT NULL,
+                merchants_before TEXT NOT NULL,
+                merchants_after  TEXT NOT NULL,
+                learned_json     TEXT NOT NULL,
+                reverted_at      TEXT
+            );
             CREATE TABLE IF NOT EXISTS decision_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_id TEXT NOT NULL,
@@ -1692,6 +1710,89 @@ class RunStore:
             (run_id,),
         ).fetchone()
         return dict(row) if row else None
+
+    def clear_memory_commit(self, run_id: str) -> None:
+        """Forget that this run's corrections were saved (item 163's undo).
+        The next publish then teaches them again instead of answering
+        "unchanged" over a memory that no longer holds them."""
+        self.conn.execute("DELETE FROM memory_commits WHERE run_id = ?", (run_id,))
+        self.conn.commit()
+
+    # -- memory_journal (item 163) ------------------------------------------
+
+    def add_memory_journal(
+        self,
+        *,
+        run_id: str,
+        label: str,
+        committed_at: str,
+        trigger: str,
+        rows: list[dict],
+        merchants_before: dict,
+        merchants_after: dict,
+        learned: dict,
+    ) -> int:
+        """Record one memory save with everything an undo needs, and return
+        its id."""
+        cur = self.conn.execute(
+            "INSERT INTO memory_journal (run_id, label, committed_at, trigger, "
+            "rows_json, merchants_before, merchants_after, learned_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                run_id, label or "", committed_at, trigger,
+                json.dumps(rows, default=str),
+                json.dumps(merchants_before or {}, default=str),
+                json.dumps(merchants_after or {}, default=str),
+                json.dumps(learned or {}, default=str),
+            ),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    @staticmethod
+    def _memory_journal_row(row) -> dict:
+        return {
+            "id": int(row["id"]),
+            "run_id": row["run_id"],
+            "label": row["label"] or "",
+            "committed_at": row["committed_at"],
+            "trigger": row["trigger"],
+            "rows": json.loads(row["rows_json"]),
+            "merchants_before": json.loads(row["merchants_before"]),
+            "merchants_after": json.loads(row["merchants_after"]),
+            "learned": json.loads(row["learned_json"]),
+            "reverted_at": row["reverted_at"] or "",
+        }
+
+    def get_memory_journal(self, journal_id: int) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM memory_journal WHERE id = ?", (journal_id,)
+        ).fetchone()
+        return self._memory_journal_row(row) if row else None
+
+    def list_memory_journal(self, limit: int = 50) -> list[dict]:
+        """The saves, newest first."""
+        rows = self.conn.execute(
+            "SELECT * FROM memory_journal ORDER BY id DESC LIMIT ?", (int(limit),)
+        ).fetchall()
+        return [self._memory_journal_row(r) for r in rows]
+
+    def latest_memory_journal(self) -> dict | None:
+        """The newest save that has not been undone; None when every save
+        has been. Saves stack on the same rows, so this is the only one an
+        undo can put back without discarding a later one."""
+        row = self.conn.execute(
+            "SELECT * FROM memory_journal WHERE reverted_at IS NULL "
+            "ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return self._memory_journal_row(row) if row else None
+
+    def set_memory_journal_reverted(self, journal_id: int, at: str) -> None:
+        self.conn.execute(
+            "UPDATE memory_journal SET reverted_at = ? WHERE id = ?",
+            (at, journal_id),
+        )
+        self.conn.commit()
 
     def set_memory_commit(
         self, run_id: str, digest: str, committed_at: str, trigger: str

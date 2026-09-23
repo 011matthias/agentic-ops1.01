@@ -15,6 +15,14 @@ from .capture import (
     learn_from_expense_run,
     learn_from_run,
 )
+from .commits import (
+    TABLE_KEYS,
+    PlannedWrite,
+    RecordingStore,
+    apply_plan,
+    distinct_keys,
+    registry_diff,
+)
 from .consult import (
     ExpenseMemory,
     FieldCorrectionLookup,
@@ -35,6 +43,12 @@ from .store import (
 
 __all__ = [
     "LearningStore",
+    "TABLE_KEYS",
+    "PlannedWrite",
+    "RecordingStore",
+    "apply_plan",
+    "distinct_keys",
+    "registry_diff",
     "MerchantCategory",
     "MerchantEntity",
     "FieldCorrection",

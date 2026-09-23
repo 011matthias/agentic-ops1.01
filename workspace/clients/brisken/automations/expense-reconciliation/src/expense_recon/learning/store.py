@@ -54,6 +54,23 @@ __all__ = [
 ]
 
 
+def _key_columns(table: str, key: dict[str, str]) -> tuple[str, ...]:
+    """The primary-key columns of one learning table, validated against the
+    journal's own table map (item 163). Interpolating a table name into SQL
+    is only safe because both the name and the columns come from that map
+    and never from the caller's strings; anything else raises here rather
+    than reaching the database."""
+    from .commits import TABLE_KEYS
+
+    cols = TABLE_KEYS.get(table)
+    if cols is None:
+        raise ValueError(f"unknown learning table: {table!r}")
+    missing = [c for c in cols if c not in (key or {})]
+    if missing:
+        raise ValueError(f"{table} key needs {', '.join(missing)}")
+    return cols
+
+
 @dataclass(frozen=True)
 class MerchantCategory:
     legal_entity_id: str
@@ -640,6 +657,40 @@ class LearningStore:
         "merchant_entity",
         "field_correction",
     )
+
+    # -- item 163: whole-row read / restore for the commit journal ----------
+
+    def read_row(self, table: str, key: dict[str, str]) -> dict | None:
+        """The full row behind one primary key, as a plain dict of every
+        column, or None when there is none. `table` must be one of the five
+        learning tables (`learning.commits.TABLE_KEYS`); the columns come
+        from the key dict, so a caller cannot name a table or column the
+        journal does not know."""
+        cols = _key_columns(table, key)
+        where = " AND ".join(f"{c} = ?" for c in cols)
+        row = self.conn.execute(
+            f"SELECT * FROM {table} WHERE {where}",  # noqa: S608 - table validated
+            tuple(key[c] for c in cols),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def restore_row(self, table: str, key: dict[str, str], row: dict | None) -> None:
+        """Put one row back exactly as `read_row` returned it; `None` means
+        the row did not exist, so it is deleted."""
+        cols = _key_columns(table, key)
+        where = " AND ".join(f"{c} = ?" for c in cols)
+        self.conn.execute(
+            f"DELETE FROM {table} WHERE {where}",  # noqa: S608 - table validated
+            tuple(key[c] for c in cols),
+        )
+        if row is not None:
+            names = [n for n in row if n.isidentifier()]
+            self.conn.execute(
+                f"INSERT INTO {table} ({', '.join(names)}) "  # noqa: S608
+                f"VALUES ({', '.join('?' for _ in names)})",
+                tuple(row[n] for n in names),
+            )
+        self.conn.commit()
 
     def forget_vendor(
         self, legal_entity_id: str, vendor_norm: str

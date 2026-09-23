@@ -7670,6 +7670,153 @@ SPA half: `docs/lovable-statement-colour-prompt.md` (Not applied). The
 render is swatches beside the existing chip, deliberately not a row tint:
 tinting would re-attach the meaning the directive removes.
 
+## The learning loop (the 2026-09-23 feedback wave, notes #76 / #78 / #80 / #81)
+
+Four notes the owner left in one twenty-minute pass on September, all about
+the same thing and none about a single row: a correction the reviewer makes
+should become a rule that holds beyond the row it was made on, that rule
+should be inspectable and editable, and saving it should say what it did and
+be reversible. They are grouped here because they are one mechanism seen
+from four sides, and because the tool's matching processes already learn on
+five separate axes with no shared account of what was learned:
+category / account (`merchant_category`), legal entity
+(`merchant_entity`), vendor spelling and card (`field_correction`),
+statement-to-receipt vendor equivalence (`vendor_alias`) and per-merchant FX
+(`merchant_fx`), plus the settings-backed merchant registry beside them.
+
+**Measured live before any of it (read-only, 2026-09-23).** July, August and
+September hold **153 expense rows over 62 distinct vendors**; 22 of those
+vendors appear more than once, and **88 of the 113 rows on a repeat vendor
+still carry a model guess or no category at all**. Across all three months
+exactly **one row reads `learned`**. Learning memory holds 108 category
+rules (102 of them still the 2026-08-06 Zoho seed, 0 validated), 1 merchant
+entity, 2 field corrections, 0 aliases and 0 FX rates. So the loop is wired
+end to end and almost nothing flows through it: the recall side has been
+fixed twice (items 115, 149) while the teach side still depends on a person
+pressing a button whose effects they cannot see beforehand and cannot
+reverse afterwards. That is what note #81 is about, and it is why it ranks
+first of the four.
+
+An instrument note for whoever re-measures: `GET /api/runs/{id}` returns
+**zero** expenses for July and August and 74 for September, because the
+first two are read through `GET /api/expense-batches/{id}`. A count taken
+from the runs endpoint alone reports a third of the estate and looks like a
+finding.
+
+### 163. A memory save says nothing about what it will do, where it goes, or how to take it back (note #81, owner 2026-09-23) (SHIPPED 2026-09-23, pending PR)
+
+**Owner, on the "Save corrections to memory" button:** *"based on what? this
+should be reversible for now, and state explicitly where these are saved so
+user can manage this."*
+
+Three asks. Before this, pressing the button wrote to five SQLite tables and
+rewrote the merchant registry with no preview, no record of which month
+taught what, and no undo beyond per-merchant Forget on the Memory page,
+which cannot distinguish a rule this save wrote from one that was there
+before.
+
+**Built.** One mechanism serves all three: the writes a save would make are
+computed as a list before anything is written.
+
+* `learning/commits.py` — `RecordingStore` accepts the five `record_*` calls
+  the learners make and keeps them as `PlannedWrite`s instead of writing.
+  The learners only ever call; they read nothing back, which is what makes a
+  dry run exact rather than approximate.
+* `GET /api/runs/{id}/memory-plan` — what the save would write, per table,
+  per key, with the value and the surface that manages it, plus the
+  per-merchant registry diff. It runs the real learners, so the preview
+  cannot describe a different save from the one that happens.
+* `GET /api/memory/commits` — the ledger. One entry per save: which month,
+  when, which trigger, what it learned, every row it touched, whether it has
+  been undone.
+* `POST /api/memory/commits/{id}/undo` — every learning row back to the
+  pre-image the journal recorded (a row the save CREATED is deleted), the
+  registry back to the map that preceded the save, and the month's
+  `memory_commits` digest cleared so the next publish teaches those
+  corrections again rather than answering `unchanged` over a memory that no
+  longer holds them.
+
+Two calls worth not re-deriving. **Only the most recent un-undone save can
+be undone** (`memory_journal_not_latest`, carrying `latest_id`): saves stack
+on the same rows, so restoring an older pre-image would silently discard a
+newer save's values, which is the shape of a wrong-money bug rather than a
+wrong-text one. And **the plan is computed inside the save**, not beside it:
+the pre-image the journal stores is read from the plan the save is about to
+apply, so a journal entry can never describe a different set of rows from
+the one the save touched.
+
+**Tests.** `tests/test_memory_journal_item_163.py` (10, route-level
+throughout: the plan writes nothing, the plan and the save agree key for
+key, the save is recorded, the undo restores a changed row, deletes a
+created row, restores the registry, re-arms the next publish, and the two
+refusals plus the 404). Six wiring points proven RED under
+`tools/regress_check.py`, each watched green → red → green: the journal
+write, the row restore, the registry restore, the digest clear, the
+latest-only guard, and the recorder seam itself.
+
+**Not built, deliberately.** No automatic undo window, no undo of a save
+that a later save has written over (refused instead), and no SPA half yet:
+the prompt is `docs/lovable-memory-journal-prompt.md` for the owner to
+paste.
+
+### 164. A correction teaches one vendor when the reviewer meant a rule (note #76, owner 2026-09-23)
+
+**Owner, on September's "Needs a look · 27":** *"from manual input from user
+create a system to derive a higher standard of logic that is applicable
+universally for the specific vendors/expenses that were interacted with."*
+
+Today every teach is keyed on one normalized vendor string (plus a company,
+for the category and account). Correcting DB Fernverkehr teaches DB
+Fernverkehr. Nothing generalizes: not to the merchant's other spellings
+beyond the registry's alias list, not to the class of expense, and not to
+the pattern the reviewer was actually applying when she made three similar
+corrections in a row.
+
+**What a build would have to settle first, and has not.** Which
+generalizations are safe is an empirical question, not a design one, and the
+estate above says the sample is thin: 22 repeat vendors, one live `learned`
+row. The honest first step is to measure what a rule derived from one
+month's corrections would have done to the next month's rows, the way item
+115 was measured (replay both months' stored readings through the candidate
+code and count the lines that move), before any rule generalizes anything.
+A generalization that fires on a month nobody has labelled is the failure
+mode item 117 already produced once, when one-word aliases acted as
+wildcards and filed unrelated vendors under the wrong merchant.
+
+Ranked below 163 because 163 is what makes this safe to attempt: a rule that
+generalizes is exactly the kind you want to be able to preview and take
+back.
+
+### 165. What the tool learned cannot be edited where it was taught (note #78, owner 2026-09-23)
+
+**Owner:** *"when learning from manual input from user, you must be able to
+edit vendor lists etc."*
+
+Partly true today and worth splitting. Learned CATEGORIES are editable on
+the Memory page (PUT / DELETE per row, validate, per-merchant Forget) and
+merchant aliases in the Merchants editor. What has no editor at all:
+`merchant_entity`, `field_correction`, `vendor_alias` and `merchant_fx` are
+read-only on the Memory page, so a wrong vendor spelling or a wrong learned
+card can only be removed by forgetting the whole vendor. Item 163's ledger
+now at least says which save wrote them.
+
+### 166. Categorization norms are per vendor, and the owner wants them per rule (note #80, owner 2026-09-23)
+
+**Owner:** *"categorization needs a good mechanism to be corrected and
+categorization norms or standards that are applied universally across
+multiple vendors or expenses should be flexible in that same sense."*
+
+The sibling of 164 on the category axis specifically. The registry binds one
+merchant to one category (note item M1) and the learned rules bind
+(company, vendor) to an account; there is no object anywhere that says
+"anything from a cloud-infrastructure vendor books here" or "this class of
+expense is always Travel". The eight categories in settings are a closed
+vocabulary with no structure between them.
+
+Gated on the same thing item 156 is gated on: the 52-row Zoho account to
+category table nobody has ruled on. A norm that spans vendors needs a
+vocabulary that spans them first.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
