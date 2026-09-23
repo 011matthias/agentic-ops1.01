@@ -8068,6 +8068,14 @@ account cell, Corporate Services / anthropic).
 
 ### Item 169 — the card chain's fallbacks, where the evidence exists and is refused
 
+**Read the pointers below by symbol, not by offset.** They were taken at
+commit `5710a675`, and `service.py` shifted 196 lines by `f3ecd6bc` the same
+afternoon, so every number here is stale as an offset while still correct as
+a location. The symbols are `resolve_batch_row_cards`,
+`_CARD_OBSERVATION_SOURCES`, `registry_card_upserts_from_expense_run`,
+`FieldCorrectionLookup.get`, `categorize_receipts_with_registry` and
+`_registry_account`.
+
 Four code facts, each measurable before it is changed:
 
 1. **A printed number that resolves nothing blocks every fallback.**
