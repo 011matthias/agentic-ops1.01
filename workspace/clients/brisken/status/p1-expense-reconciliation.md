@@ -16,7 +16,24 @@ the multi-tenant SaaS in spec v2 is deferred. Per-slice authority is
 `automations/expense-reconciliation/BLUEPRINT.md` + `ANNEALING.md`; this is the
 roll-up.
 
-**2026-09-24 (latest): the chart pull is complete and provable, and the
+**2026-09-24, card attribution: both learner defects closed** (backlog items
+171 and 173). The sign-off learner could never see the card the STATEMENT
+named, because `commit_to_memory` was the one caller that built its card
+resolution without `settled_cards`; it passes `export_settled_cards` now, so
+`settled_charge` is reachable after four months of being listed and dead
+(#1247). And the single-card gate item 173 put on the read-time path was
+missing from the INGEST stamp, so which month was created first decided
+whether the owner's ruling applied; the rule now lives once, on
+`MerchantRegistry.vouches_one_card`, and `drop_unvouched_remembered_cards`
+clears an unvouched stamp in all three `ExpenseMemory.apply` callers (#1252).
+Three existing tests were relying on that ungated stamp and went red, which is
+the defect demonstrated rather than argued. Item 172's answer also shipped as
+a record (#1244): card `3645`'s `zoho_account` should read
+`CHASE VISA - 2838 - TRAVEL`, unwritten because Criss's master data is hers.
+Live rows are unchanged by design; neither path fires without a new month or a
+sign-off, and no month has ever been published.
+
+**2026-09-24: the chart pull is complete and provable, and the
 registry reads back what it accepts.** Two queue items of the GL change
 shipped, both on `main`.
 
