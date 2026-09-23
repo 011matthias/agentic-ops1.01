@@ -61,6 +61,26 @@ CARDS = {
     },
 }
 
+# Item 173: a remembered card applies only to a brand the registry vouches is
+# paid on ONE card. `cards_seen` is the machine-kept record note item M2's own
+# card learner already gates on; these mirror it.
+ONE_CARD_MERCHANT = {
+    "OpenAI": {
+        "aliases": [],
+        "category": "Software & Subscriptions",
+        "zoho_account": None,
+        "cards_seen": ["corp-1672"],
+    }
+}
+TWO_CARD_MERCHANT = {
+    "OpenAI": {
+        "aliases": [],
+        "category": "Software & Subscriptions",
+        "zoho_account": None,
+        "cards_seen": ["corp-1672", "cloud-9999"],
+    }
+}
+
 _SEQ = [0]
 
 
@@ -138,7 +158,7 @@ def _teach_openai_card(client, monkeypatch, key="corp-1672") -> None:
 
 
 def test_a_month_ingested_before_the_correction_takes_it(client, monkeypatch):
-    client.put("/api/settings", json={"cards": CARDS})
+    client.put("/api/settings", json={"cards": CARDS, "merchants": ONE_CARD_MERCHANT})
     # September exists FIRST, with nothing taught yet.
     september = _create_batch(
         client, monkeypatch,
@@ -167,7 +187,7 @@ def test_a_month_ingested_before_the_correction_takes_it(client, monkeypatch):
 
 
 def test_a_printed_card_number_still_wins_over_the_memory(client, monkeypatch):
-    client.put("/api/settings", json={"cards": CARDS})
+    client.put("/api/settings", json={"cards": CARDS, "merchants": ONE_CARD_MERCHANT})
     september = _create_batch(
         client, monkeypatch,
         _extraction(payment_hint="VISA ending 9999"),
@@ -181,7 +201,7 @@ def test_a_printed_card_number_still_wins_over_the_memory(client, monkeypatch):
 
 
 def test_a_reviewer_pick_on_the_row_still_wins(client, monkeypatch):
-    client.put("/api/settings", json={"cards": CARDS})
+    client.put("/api/settings", json={"cards": CARDS, "merchants": ONE_CARD_MERCHANT})
     september = _create_batch(client, monkeypatch, _extraction())
     _teach_openai_card(client, monkeypatch, key="corp-1672")
     doc = _rows(client, september, "OpenAI")[0]["document_id"]
@@ -192,7 +212,7 @@ def test_a_reviewer_pick_on_the_row_still_wins(client, monkeypatch):
 
 
 def test_the_export_files_it_under_the_card_the_grid_showed(client, monkeypatch):
-    client.put("/api/settings", json={"cards": CARDS})
+    client.put("/api/settings", json={"cards": CARDS, "merchants": ONE_CARD_MERCHANT})
     september = _create_batch(client, monkeypatch, _extraction())
     _teach_openai_card(client, monkeypatch)
     assert _rows(client, september, "OpenAI")[0]["card"]["key"] == "corp-1672"
@@ -219,10 +239,40 @@ def test_without_a_learning_store_every_receipt_passes_through(tmp_path):
     ]
     assert fill_remembered_cards(receipts, None) == receipts
     assert fill_remembered_cards(receipts, tmp_path / "nope.sqlite") == receipts
+    assert fill_remembered_cards(receipts, None, ONE_CARD_MERCHANT) == receipts
+
+
+def test_a_multi_card_brand_is_refused_the_remembered_card(client, monkeypatch):
+    """Item 173, the owner's ruling. The live case: Criss's one OpenAI fix
+    taught card 3645 while the hard evidence showed OpenAI on card-9693 eight
+    times and 3645 once, and 12 September rows took the minority card. A brand
+    the registry has seen on two cards lends neither."""
+    client.put("/api/settings", json={"cards": CARDS, "merchants": TWO_CARD_MERCHANT})
+    september = _create_batch(client, monkeypatch, _extraction())
+    _teach_openai_card(client, monkeypatch, key="corp-1672")
+
+    row = _rows(client, september, "OpenAI")[0]
+    assert row["card"] is None and row["card_source"] == "none"
+    # And the two columns that ride the card stay honestly empty rather than
+    # taking a company and a person off a card nobody vouched for.
+    assert not str(row["legal_entity_id"] or "").strip()
+    assert not str(row["person"] or "").strip()
+
+
+def test_a_brand_the_registry_cannot_resolve_is_refused(client, monkeypatch):
+    """No evidence of a second card is not evidence of one card. The vendor
+    that motivated the ruling is exactly this case: OpenAI is not in the live
+    registry at all, and adding it is the owner's call."""
+    client.put("/api/settings", json={"cards": CARDS})  # no merchants at all
+    september = _create_batch(client, monkeypatch, _extraction())
+    _teach_openai_card(client, monkeypatch, key="corp-1672")
+
+    row = _rows(client, september, "OpenAI")[0]
+    assert row["card"] is None and row["card_source"] == "none"
 
 
 def test_a_month_with_no_correction_for_its_vendor_is_untouched(client, monkeypatch):
-    client.put("/api/settings", json={"cards": CARDS})
+    client.put("/api/settings", json={"cards": CARDS, "merchants": ONE_CARD_MERCHANT})
     september = _create_batch(client, monkeypatch, _extraction(vendor="Hostinger"))
     _teach_openai_card(client, monkeypatch)
 
