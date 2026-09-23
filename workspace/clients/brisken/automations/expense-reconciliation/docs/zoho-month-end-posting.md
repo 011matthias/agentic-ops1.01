@@ -656,6 +656,90 @@ the batch reported both rather than aborting, and a re-run posted them.
 * The **ledger** released every intent behind all 13 rejections across
   the two failures, so every retry was possible without manual repair.
 
+## The runner: one command for the month end (2026-09-23)
+
+`zoho/reconcile_month.py` composes the proven pieces into a single run.
+Nothing in it re-derives resolution order, conversion math, the envelope
+or a guard; each stage calls the function the sections above describe.
+
+```
+uv run python -m expense_recon.zoho.reconcile_month \
+    --month 2026-08 --csv <reviewed export CSV> \
+    --ledger workspace/clients/brisken/context/zoho-post-ledger-testbts.sqlite \
+    --env-file workspace/clients/brisken/context/.env \
+    [--org 822116290] [--card ID --card-name NAME] [--dry-run]
+```
+
+Run it from the app directory. `--csv` is the REVIEWED export (post the
+reviewed artifact, never a rebuild). `--ledger` is the durable ledger and
+is part of the guard: a fresh one would plan an already-posted month as
+new. `--env-file` loads the gitignored credentials without overriding
+anything already in the environment. Live posting also needs
+`EXPENSE_RECON_ZOHO_POST=1`, the same deployment switch `zoho-post` uses;
+without it the live path refuses before reading anything.
+
+Stages, in order: ingest and group (`read_expense_csv`,
+`group_by_reference`); occupancy (`check_month_occupancy` by card NAME);
+chart pulled live (`ChartOfAccounts.from_api`, a CSV chart carries no
+ids); plan (`plan_expense_post` with `convert_foreign_to_base=True` and
+`period=<month>`, so the stale-date, ledger, account and rate checks all
+run there); plan assertion; post (`execute_expense_post`, unchanged);
+readback by id against `build_expense_payload` with the same flags;
+summary. The planning flags are set in one place (`_plan_kwargs`) so the
+plan, the send plan and the readback rebuild cannot disagree.
+
+**Org.** Only `822116290` is accepted. A production id is refused by
+name, any other id by not being the sandbox, before a client exists. Card
+id `4369050000000320002`, card name `Visa dummy card Matthias` and
+statement currency USD are the sandbox's profile in `ORG_PROFILES`; a
+future org needs its own row, after Brisken signs off its mapping.
+
+**The resume rule.** `ALREADY_OCCUPIED` is not fatal on its own. If the
+ledger holds at least one of this batch's references as `posted` for the
+org, the occupied month is at least partly ours: the runner reports the
+occupancy and continues, and `already_in_ledger` refuses per reference.
+If the ledger holds none of them, the rows are somebody else's
+hand-entered month (Criss's, in production) and the run aborts before
+the chart is pulled. `UNVERIFIABLE` and `LOCKED_PERIOD` always abort.
+
+**Plan assertion, send-by-id.** The full plan is printed, every postable
+row and every refusal grouped by reason. Then only the postable
+references are re-planned on their own, and the runner asserts that plan
+carries zero refusals, exactly those references, and the same tie-out
+total as the full plan. The total the poster is held to is read from
+that plan, never typed (a from-memory total already refused one run at
+125.42 against the real 97.40). A postable row with a blank reference is
+refused at the runner (`reference_blank`): it cannot be selected by id.
+
+**Readback.** Expense ids are snapshotted before the post. Each posted id
+is read back with `GET /expenses/{id}` and compared field by field
+against a rebuild through `build_expense_payload`, not
+`plan_expense_post` (which would refuse every row as `already_in_ledger`
+by then): total, date, reference, `currency_code` USD, paid-through id,
+per-line account and amount, envelope present, `Original:` on every
+converted row, description under 500, id absent from the snapshot. The
+exit code is non-zero on any mismatch, rejection, ambiguity or abort.
+
+**Dry run.** `--dry-run` runs the first four stages and prints
+`readback: SKIPPED (dry run)`. The post stage is a separate function
+reached only from the live branch, so the dry-run path cannot call
+`execute_expense_post` at all; the ledger is only read.
+
+**Acceptance numbers, live TEST-BTS, 2026-09-23.** The July export
+(batch `50622baec444`, 56 rows, 46 purchases) dry-run against the durable
+ledger must report exactly **0 postable / 46 refused = 41
+`already_in_ledger` + 3 `account_unresolved` + 2
+`date_precedes_period_window`**, occupancy `ALREADY_OCCUPIED` (38 July
+rows on the card) reported and not fatal because the ledger holds all
+41, exit 0. Different numbers mean the composition is wrong; diagnose,
+never adjust the expectation.
+
+Tests run through `run_month` and `main` with an injected fake client
+(`tests/test_zoho_reconcile_month.py`). Three `regress_check` bites on
+the runner: unthreading `period=`, unthreading
+`convert_foreign_to_base=`, and disabling the resume rule each turn
+runner-level tests red and green again on restore.
+
 ## Still open
 
 - The scope grant above, which blocks every write.
