@@ -8648,28 +8648,58 @@ Found while building the direct-to-Zoho-GL chain (PRs #1232, #1234, #1236,
 three are places where something plausible is accepted with nothing checking
 it.
 
-### 182. The chart pull is silently truncated, and 19 of Dirk's accounts are missing from it
+### 182. The chart pull is silently truncated, and 19 of Dirk's accounts are missing from it (SHIPPED 2026-09-24, `tools/pull-brisken-zoho-coa.py`)
 
-`zoho-books-coa.json` holds exactly 199 accounts for Cloud Services
+`zoho-books-coa.json` held exactly 199 accounts for Cloud Services
 (697686691), with zero `cost_of_goods_sold` and zero `other_expense`, while
-Consulting carries 25 and 5 and Corporate Services 11 and 4. 199 sits on a
-200-row page boundary, which is what a pull that stopped paginating looks
-like.
-
-Nineteen accounts Dirk marked expense-relevant are absent from it, including
+Consulting carried 25 and 5 and Corporate Services 11 and 4. Nineteen
+accounts Dirk marked expense-relevant were absent, including
 `2031056000014161139 COGS - DEV Infrastructure (SAP Apps & others)`, the
 account Anthropic posts to under Cloud Services.
 
-The curated taxonomy is compiled from Dirk's workbook and not from this
-pull, so the GL chain is unaffected; the compile reports the divergence
-rather than failing on it. But the pull is still what `load_entity_chart`
-and the COA gate read, and a missing account there reads as "no such
-account" rather than as "we did not fetch page two". Anything else that
-reads it inherits the same gap.
+**The stated cause was wrong, and the fix it implied does not work.** 199
+sits one below a 200-row page boundary, so this was filed as a pull that
+stopped paginating, with "re-pull following pagination plus a count
+assertion so a short page fails loudly" as the remedy. The puller in
+`.scratch/zoho_coa_refresh.py` already followed `has_more_page`, and
+returned the same 199. Measured against the live API on 2026-09-24, walking
+pagination to exhaustion each time:
 
-Fix is a re-pull that follows pagination, plus a count assertion so a short
-page fails loudly instead of arriving as a small chart. **Bounded and ours**,
-needs nothing from Dirk.
+| params | per_page | rows | pages | `has_more_page` |
+|---|---|---|---|---|
+| default | 200 | 199 | 1 | false |
+| default | 100 | 89 | 1 | false |
+| default | 50 | 47 | 1 | false |
+| showbalance | 200 | 247 | 2 | false at the end |
+| showbalance | 100 | 86 | 1 | false |
+
+A smaller page returns fewer total rows and the server reports completion
+every time, so there is no page size at which this endpoint is trustworthy
+for this org, and a short-page assertion would fire on every call while
+proving nothing. The two listings are not nested either: 7 accounts appear
+only under the default params, 55 only under `showbalance` (whose documented
+spelling `show_balance` is accepted and silently ignored), and their union of
+254 still omits `2031056000023745007 E600010-30-10 Marketing Expenses -
+people`, which `GET /chartofaccounts/{id}` returns as active and typed
+`expense`.
+
+**Shipped:** `tools/pull-brisken-zoho-coa.py` merges both listing
+parameterizations, then tops up by id against the compiled curated taxonomy
+as an outside answer key, and asserts that every account_id Dirk marked
+postable is present per org. That assertion has independent ground truth,
+which "we saw N rows" never did. Live 2026-09-24: Cloud Services 199 -> 255
+(+56, -0), Holding 189 -> 193, sandbox 195 -> 196, every other org unchanged
+and every merge a strict superset; 67 / 64 / 68 curated postable accounts all
+present, one recovered by id. Tests `tools/tests/test_pull_brisken_zoho_coa.py`
+(18, CI-run); three regress proofs red first at the caller (the by-id top-up
+call, the `showbalance` plan, the org-name carry-forward).
+
+**Also found, not part of this item:** the Zoho token is no longer read-only.
+Its granted scope on 2026-09-24 reads `ZohoBooks.expenses.CREATE
+ZohoBooks.expenses.READ ZohoBooks.contacts.READ ZohoBooks.accountants.READ`,
+read off the token response. `settings.READ` is gone with it, which is why
+`GET /organizations` now 401s with code 57 and why the puller does not route
+through the org directory.
 
 ### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account
 
