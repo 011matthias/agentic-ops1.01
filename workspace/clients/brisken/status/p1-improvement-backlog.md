@@ -8193,6 +8193,47 @@ data, which is the owner's, and the correct account name for 3645 has to come
 from Zoho's chart rather than be guessed here. Twelve live September rows
 currently carry it.
 
+### Item 173 — a remembered card only for a brand seen on ONE card
+
+**SHIPPED 2026-09-23, owner ruling the same day.** Item 169 made a remembered
+card reach months ingested before the correction, and the first thing the
+instrument said afterwards is that reaching further is not the same as being
+right.
+
+The read that settled it, live and read-only across all seven batches: every
+one of the 12 rows sitting on a remembered card was OpenAI, and OpenAI's HARD
+evidence -- a printed card number, a reviewer's own pick, or the statement --
+is **card-9693 eight times against 3645 once**. Criss's single correction had
+taught 3645, so the memory was the minority card by 8 to 1, on 12 live rows.
+And it is not one vendor: ten vendors carry hard evidence on more than one
+card (`Anthropic, PBC` on four, `Lovable Labs Incorporated` on four,
+`MARTINO SUPERMERCADO` on three), so the problem grows with the memory.
+
+The deeper reason it fires where it is least safe: the vendors a human bothers
+to correct are disproportionately the multi-card ones.
+
+**Owner's call, put to him with the 8-to-1 split**: gate it. "A blank prompts
+Criss to look; a wrong card silently books the receipt to the wrong entity AND
+the wrong person", because both ride the card.
+
+`service.merchant_vouches_one_card` mirrors the rule note item M2 already
+applies to the registry's own card learner, which sets a merchant's `card_key`
+only while `cards_seen` holds exactly one card. Deliberately conservative on
+the unknown case: a vendor the registry cannot resolve is NOT vouched, because
+no evidence of a second card is not evidence of one card. OpenAI is exactly
+that vendor, which is what makes the ruling bite today.
+
+Live effect, measured: September's 12 `learned` rows go back to blank (card-less
+26, no entity 25, no person 25 -- the pre-169 numbers). Item 169's structural
+fix stands and is unaffected: a correction is no longer frozen at ingest, so
+the day a single-card brand is corrected, every existing month takes it.
+
+Tests in `test_remembered_card_read_time_item_169.py` (8, route-level;
+the gate regress-checked green -> red -> green). Gated at the read-time path
+only. **Still open**: `ExpenseMemory.apply` stamps a remembered card at INGEST
+without this gate, so a newly ingested month can still take a multi-card
+brand's remembered card. Same ruling, second half, not yet built.
+
 ### Item 171 — the sign-off card learner cannot see the statement's own answer
 
 Split out of item 169 fact 2, measured 2026-09-23, **not built**.

@@ -6281,8 +6281,42 @@ def settled_off_card(entry: object) -> bool:
     return bool(isinstance(entry, dict) and entry.get("how"))
 
 
+def merchant_vouches_one_card(merchants: dict | None, registry, r) -> bool:
+    """Item 173: does the merchant registry vouch that this brand is paid on
+    exactly ONE card?
+
+    The registry's own card learner already works this way -- note item M2
+    sets a merchant's `card_key` only while `cards_seen` holds exactly one
+    card, precisely so a brand seen on two never lends either. The remembered
+    correction did not inherit that rule, and the live data says it needed it:
+    Criss's single OpenAI fix taught card 3645, while the hard evidence
+    (printed numbers, her own picks, the statement) shows OpenAI on card-9693
+    eight times and 3645 once. The memory was the minority card, 8 to 1, on 12
+    live September rows.
+
+    Owner ruling 2026-09-23, given that split: gate it. A blank prompts a human
+    to look; a confidently wrong card silently books the receipt to the wrong
+    entity AND the wrong person, because both ride the card.
+
+    Deliberately conservative about the unknown case: a vendor the registry
+    cannot resolve at all is NOT vouched, because "no evidence of a second
+    card" is not evidence of one card. OpenAI is exactly that vendor -- adding
+    it to the registry is the owner's call and he has said he raises it -- so
+    refusing the unresolved case is what makes this ruling bite today.
+    """
+    if not merchants or registry is None:
+        return False
+    match = registry.resolve(r.vendor_clean, r.detected_vendor)
+    if match is None:
+        return False
+    entry = (merchants or {}).get(match.canonical_name) or {}
+    return len(entry.get("cards_seen") or []) <= 1
+
+
 def fill_remembered_cards(
-    receipts: "list[Receipt]", learning_db_path: "Path | None"
+    receipts: "list[Receipt]",
+    learning_db_path: "Path | None",
+    merchants: dict | None = None,
 ) -> "list[Receipt]":
     """Item 169: read the remembered card LIVE, the way every link beside it
     is read.
@@ -6322,13 +6356,22 @@ def fill_remembered_cards(
         lookup = FieldCorrectionLookup.from_store(store)
     if not lookup:
         return receipts
+    registry = None
+    if merchants:
+        from ..merchant_registry import MerchantRegistry
+
+        registry = MerchantRegistry.from_settings({"merchants": merchants}) or None
     out: list[Receipt] = []
     for r in receipts:
         if not (r.card_key or "").strip():
             remembered = lookup.get(
                 (r.legal_entity_id or "").strip(), r.detected_vendor
             ).get("card_key")
-            if remembered:
+            # Item 173: only for a brand the registry vouches is paid on one
+            # card. Without that gate this fires hardest exactly where it is
+            # least safe, because the vendors a human bothers to correct are
+            # the multi-card ones.
+            if remembered and merchant_vouches_one_card(merchants, registry, r):
                 r = replace(r, card_key=remembered)
         out.append(r)
     return out
@@ -7276,7 +7319,9 @@ def build_expense_view(
     # Item 169: and the card a correction remembers, read live rather than
     # off the stamp ingest left, so a fix taught after this month was
     # ingested reaches it. Silent without a learning store.
-    receipts = fill_remembered_cards(receipts, learning_db_path)  # grid
+    receipts = fill_remembered_cards(
+        receipts, learning_db_path, (settings or {}).get("merchants")
+    )  # grid
     receipts_dir = Path(run.work_dir) / "receipts"
     intake_provenance = (run.snapshot or {}).get("intake_provenance") or {}
     # Override-applied twins for the `books_as` fan-out (backlog item 2):
@@ -8117,7 +8162,9 @@ def _expense_export_inputs(
     # Item 169: the grid's live read of a remembered card, so the file a
     # reviewer downloads files a receipt under the card the screen showed it
     # on. Cards R3 is the whole reason this sits on both paths.
-    receipts = fill_remembered_cards(receipts, learning_db_path)  # export
+    receipts = fill_remembered_cards(
+        receipts, learning_db_path, merchants
+    )  # export
     receipts = apply_overrides(receipts, overrides)
     coa_gate = _coa_gate_from_config(run.config, run.work_dir)
     chart = getattr(coa_gate, "chart", None) if coa_gate is not None else None
