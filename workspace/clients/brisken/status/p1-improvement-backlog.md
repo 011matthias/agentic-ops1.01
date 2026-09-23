@@ -8122,6 +8122,14 @@ was already going to be applied to every month ingested from now on. The
 statement always outranks it. If the owner wants remembered cards gated on
 single-card vendors the way the merchant registry is, that is its own item.
 
+**Read the pointers below by symbol, not by offset.** They were taken at
+commit `5710a675`, and `service.py` shifted 196 lines by `f3ecd6bc` the same
+afternoon, so every number here is stale as an offset while still correct as
+a location. The symbols are `resolve_batch_row_cards`,
+`_CARD_OBSERVATION_SOURCES`, `registry_card_upserts_from_expense_run`,
+`FieldCorrectionLookup.get`, `categorize_receipts_with_registry` and
+`_registry_account`.
+
 **Still open here** (both measured, neither worth building today):
 
 
