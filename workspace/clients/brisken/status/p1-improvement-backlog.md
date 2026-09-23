@@ -8393,17 +8393,26 @@ Scale today: `private` 1, `suggested_private` 5, `can_mark_private` 28 of 75.
 **Operator:** *"no need to set this as private again, if user has already set
 as private"*
 
-**Does not reproduce in the payload.** Across September's 75 rows, zero carry
-both `private: true` and `suggested_private: true`, which is the shape that
-would make the tool re-suggest something already settled. The one private row
-has `suggested_private: false`.
+**REPRODUCES, in `can_mark_private`.** The first filing of this item said it
+did not, on the strength of `private` and `suggested_private` never being
+true together. That was the wrong pair of fields: the tool is not
+re-SUGGESTING private, it is re-OFFERING the control.
 
-So either the re-offer is SPA-side (the control renders regardless of
-`private`, and `can_mark_private` is true on 28 rows), or it was the
-suggestion strip on a row whose state has since changed. Reproduce it on the
-row the note names before building anything; the anchor the note captured is
-"Private (Dirk Neumann)Private (Dirk Neumann)", the same label twice, which
-points at a duplicated control rather than a duplicated suggestion.
+Read on the exact row the note names, September row 0046
+(`processed-D61F3B74-...jpeg`, Luigi Buchholz, 11.80 EUR): `private: true`,
+`person_source: "private"`, `reimburse_to: "Dirk Neumann"` **and**
+`can_mark_private: true`. So the payload is still telling the screen this row
+can be marked private after it already is, which is what renders the label
+the note captured twice ("Private (Dirk Neumann)Private (Dirk Neumann)").
+
+**Estate-wide, 2 of 2.** Every private row in the store carries
+`can_mark_private: true`: September's one and July's one. August, April,
+January, June and May hold no private row. The flag is not simply always on
+either, which is what makes this a finding rather than a tautology: 47 of
+September's 75 rows read false.
+
+The fix is one predicate, backend-side: `can_mark_private` is false once
+`private` is true. Leave the un-mark path alone, it is a different control.
 
 ### 177. Settings saves all 33 merchants at once, so nothing ever folds away (note #77, operator 2026-09-23)
 
