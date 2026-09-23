@@ -45,6 +45,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -80,6 +81,9 @@ __all__ = [
     "build_expense_payload",
     "execute_expense_post",
     "group_by_reference",
+    "is_synthetic_reference",
+    "migrate_legacy_synthetic_references",
+    "period_scoped_reference",
     "plan_expense_post",
     "read_expense_csv",
 ]
@@ -105,6 +109,11 @@ REFUSAL_EXCHANGE_RATE = "exchange_rate_missing"
 REFUSAL_STALE_DATE = "date_precedes_period_window"
 
 AUDIT_PREFIX = "[External Match Audit]"
+
+# The one ledger state that is safe to re-key: a posted row's Zoho-side
+# truth is known. Mirrors `idempotent._STATE_POSTED`, kept local rather
+# than imported because it is a private name there.
+_STATE_POSTED = "posted"
 
 # How far before a period's first day a purchase may be dated before it
 # needs sign-off. 45 days clears the ordinary case (a charge posting in
@@ -157,17 +166,71 @@ def read_expense_csv(path: str | Path) -> list[dict[str, str]]:
     return rows
 
 
+# A reference that is really a FILENAME, not an issuer's number. The
+# export writes `ref = r.detected_reference or r.document_id`
+# (`output/zoho_expense_export.py`), so a receipt whose invoice number was
+# never read falls back to its archive filename, and a mail-rendered
+# receipt's filename is `NNNN__rendered-body.pdf` where NNNN is only its
+# index within that batch. Those indexes restart every month, so the same
+# string names a different purchase in every month: July's
+# `0003__rendered-body.pdf` is Konsultancy Finance EUR 15,972.00 and
+# August's is OpenAI USD 80.04. The app already knows this collision
+# exists (`web/service.py: adjacent_pool_for_month`, "July and August
+# share four ids today"); what it did NOT survive is the ledger, whose
+# key is (org, reference), so August's OpenAI row read as already posted.
+#
+# Both halves are required. The `NNNN__` prefix alone would match an
+# issuer reference that happens to start with digits and a double
+# underscore, and the extension alone would match a reference someone
+# genuinely wrote as a filename. Together they identify the export's own
+# fallback shape and nothing a vendor would print on an invoice.
+_SYNTHETIC_REFERENCE = re.compile(
+    r"^\d+__.+\.(?:pdf|jpe?g|png|heic|webp|tiff?|gif|eml|msg|html?)$", re.I
+)
+
+
+def is_synthetic_reference(reference: str | None) -> bool:
+    """Whether this reference is the export's filename fallback rather
+    than a number the vendor or the bank issued."""
+    return bool(_SYNTHETIC_REFERENCE.match((reference or "").strip()))
+
+
+def period_scoped_reference(reference: str | None, period: str | None) -> str:
+    """A synthetic reference namespaced by the month it belongs to.
+
+    Real references are returned untouched: they are already unique
+    across months because an issuer assigned them, and rewriting one
+    would break the tie back to the vendor's own document. Only the
+    filename fallback is scoped, because only it repeats per batch.
+    """
+    text = (reference or "").strip()
+    if not period or not is_synthetic_reference(text):
+        return text
+    return f"{period}_{text}"
+
+
 @dataclass(frozen=True)
 class ExpenseGroup:
     """The rows of ONE purchase: a single row, or the split of a receipt
-    across several accounts, sharing a `Reference#`."""
+    across several accounts, sharing a `Reference#`.
+
+    `reference` is the EFFECTIVE reference, period-scoped when the export
+    fell back to a filename. `raw_reference` is what the CSV actually
+    said, kept so the ledger can still recognise a purchase recorded
+    before scoping existed (see `ledger_row_for`).
+    """
 
     reference: str
     rows: tuple[dict[str, str], ...]
+    raw_reference: str = ""
 
     @property
     def is_split(self) -> bool:
         return len(self.rows) > 1
+
+    @property
+    def was_scoped(self) -> bool:
+        return bool(self.raw_reference) and self.raw_reference != self.reference
 
     def cell(self, column: str) -> str:
         """A header-level value, taken from the first row. Date, card,
@@ -175,29 +238,125 @@ class ExpenseGroup:
         return (self.rows[0].get(column) or "").strip()
 
 
-def group_by_reference(rows: "list[dict[str, str]]") -> list[ExpenseGroup]:
+def group_by_reference(
+    rows: "list[dict[str, str]]", *, period: str | None = None
+) -> list[ExpenseGroup]:
     """Group rows into purchases, preserving first-appearance order.
 
     A row with an EMPTY reference gets a group of its own rather than
     joining every other blank-referenced row. Merging on a shared absence
     would fuse unrelated purchases into one expense, which is the kind of
     quiet wrong that ties out to the cent and still misstates the books.
+
+    `period` (YYYY-MM) scopes SYNTHETIC references to the month, so the
+    per-batch filename fallback stops colliding across months. Grouping
+    still happens on the scoped value, which is safe because the indexes
+    are unique WITHIN a batch; it is only across batches that they
+    repeat. Omit `period` and the behaviour is byte-for-byte what it was.
     """
     groups: list[ExpenseGroup] = []
     index: dict[str, int] = {}
     for row in rows:
-        ref = (row.get("Reference#") or "").strip()
+        raw = (row.get("Reference#") or "").strip()
+        ref = period_scoped_reference(raw, period)
         if ref and ref in index:
             pos = index[ref]
             existing = groups[pos]
             groups[pos] = ExpenseGroup(
-                reference=ref, rows=existing.rows + (row,)
+                reference=ref, rows=existing.rows + (row,), raw_reference=raw
             )
             continue
         if ref:
             index[ref] = len(groups)
-        groups.append(ExpenseGroup(reference=ref, rows=(row,)))
+        groups.append(ExpenseGroup(reference=ref, rows=(row,), raw_reference=raw))
     return groups
+
+
+def migrate_legacy_synthetic_references(
+    ledger: PostLedger,
+    org_id: str,
+    groups: "list[ExpenseGroup]",
+    *,
+    client: "ZohoClient",
+    go: bool = False,
+) -> "list[tuple[str, str]]":
+    """Move this month's pre-scoping ledger keys onto their scoped form.
+
+    A purchase posted BEFORE references were scoped is recorded under the
+    bare filename, so after the change its month computes a key the
+    ledger does not hold and would post it a second time. The ledger has
+    to be taught the new key.
+
+    **A read-time fallback to the raw key cannot do this job**, and that
+    was the first attempt: from August, a miss on
+    `2026-08_0003__rendered-body.pdf` falls back to `0003__rendered-body.pdf`
+    and finds JULY's row, which is the collision the scoping exists to
+    remove. The bare key carries no month, so nothing at read time can
+    say which month's purchase it names. Only the month that actually
+    posted it knows, which is why this is a migration driven by that
+    month's own export rather than a lookup.
+
+    **The month is confirmed against Zoho, not assumed from the export
+    being processed.** Run from August, a bare-key row would otherwise be
+    re-keyed to `2026-08_...` even though it records July's purchase,
+    destroying both months' records at once. So the ledger row's stored
+    expense is read back and its `date` must equal this group's own
+    `Expense Date`; that is exact, because the payload's date is the CSV
+    cell verbatim, and it does not assume the purchase's date falls
+    inside its statement period (July's batch legitimately holds three
+    June-dated rows). A row whose expense cannot be read is left alone.
+
+    Returns the `(from, to)` pairs, so a dry run can be read before it is
+    applied. Only `posted` rows are moved: an inflight or ambiguous row's
+    Zoho-side truth is unknown, and renaming it would hide that from
+    `verify_ambiguous`. The new key is written BEFORE the old one is
+    removed, so an interruption leaves a duplicate (harmless, and fixed
+    by re-running) rather than no record at all.
+    """
+    moves: list[tuple[str, str]] = []
+    for group in groups:
+        if not group.was_scoped:
+            continue
+        if ledger.status_for(org_id, group.reference) is not None:
+            continue  # already migrated, or posted under the new key
+        legacy = ledger.status_for(org_id, group.raw_reference)
+        if legacy is None:
+            continue
+        if legacy.state != _STATE_POSTED:
+            raise ValueError(
+                f"{group.raw_reference!r} is in state {legacy.state!r}, not "
+                "posted; resolve it with --verify before migrating, because "
+                "renaming an unresolved row hides it from reconciliation"
+            )
+        if not legacy.zoho_journal_id:
+            raise ValueError(
+                f"{group.raw_reference!r} is posted but records no expense "
+                "id, so which purchase it names cannot be confirmed; refusing "
+                "to re-key it"
+            )
+        try:
+            stored = (
+                client._get(f"/books/v3/expenses/{legacy.zoho_journal_id}")
+                .get("expense")
+                or {}
+            )
+        except Exception:  # noqa: BLE001 - unverified is not verified
+            continue
+        if (stored.get("date") or "") != group.cell("Expense Date"):
+            # A different month's purchase wearing the same filename.
+            continue
+        moves.append((group.raw_reference, group.reference))
+        if go:
+            ledger.mark_posted(
+                org_id,
+                group.reference,
+                zoho_journal_id=legacy.zoho_journal_id or "",
+                entry_number=legacy.entry_number,
+                now_iso=legacy.posted_at or legacy.recorded_at,
+                content_hash=legacy.content_hash,
+            )
+            ledger.remove(org_id, group.raw_reference)
+    return moves
 
 
 # ── payload ─────────────────────────────────────────────────────────

@@ -362,6 +362,47 @@ def test_a_clear_month_with_a_fresh_ledger_continues(tmp_path):
     assert run.occupancy.verdict == VERDICT_CLEAR
 
 
+# ── synthetic references, scoped by the runner ──────────────────────
+
+
+def test_the_runner_scopes_a_synthetic_reference(tmp_path):
+    """The export falls back to the archive filename when it reads no
+    invoice number, and those filenames restart every batch. Unthread
+    `period=` from the runner's group_by_reference call and this goes
+    red: the bare filename would reach both Zoho and the ledger."""
+    run, out = _run(
+        tmp_path, [_row(**{"Reference#": "0003__rendered-body.pdf"})],
+        client=FakeClient(),
+    )
+    (p,) = run.send_plan.postable
+    assert p.reference == "2026-07_0003__rendered-body.pdf"
+    assert p.payload["reference_number"] == "2026-07_0003__rendered-body.pdf"
+    assert "1 synthetic reference(s) scoped to 2026-07" in out
+
+
+def test_the_runner_reads_the_ledger_on_the_scoped_key(tmp_path):
+    """Once migrated, the ledger holds the scoped key and the runner must
+    match it there. A fallback to the bare key is deliberately absent:
+    from another month it would find the wrong month's row, which is the
+    collision the scoping removes."""
+    with PostLedger(tmp_path / "ledger.sqlite") as ledger:
+        ledger.mark_posted(
+            ORG, "2026-07_0003__rendered-body.pdf", zoho_journal_id="OLD",
+            entry_number=None, now_iso="2026-09-23T09:39:55+00:00",
+            content_hash="h",
+        )
+    client = FakeClient(
+        existing=[_existing(ref="0003__rendered-body.pdf", expense_id="OLD")]
+    )
+    run, _ = _run(
+        tmp_path, [_row(**{"Reference#": "0003__rendered-body.pdf"})],
+        client=client,
+    )
+    assert run.ours_in_ledger == ("2026-07_0003__rendered-body.pdf",)
+    assert run.abort_reason is None
+    assert run.send_plan.postable == ()
+
+
 # ── org refusal ─────────────────────────────────────────────────────
 
 
