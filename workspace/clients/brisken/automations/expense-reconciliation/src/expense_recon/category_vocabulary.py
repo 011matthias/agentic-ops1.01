@@ -40,10 +40,16 @@ here returns an account, and recognizing a code does not make it postable.
 """
 from __future__ import annotations
 
+from .coa_provision import entity_from_settings
 from .matching.types import EXPENSE_CATEGORIES
 from .zoho import curated_leaves
 
-__all__ = ["recognize", "is_recognized"]
+__all__ = [
+    "gl_account_options",
+    "gl_revision",
+    "is_recognized",
+    "recognize",
+]
 
 
 def _is_curated_code(text: str) -> bool:
@@ -85,3 +91,70 @@ def recognize(value: str | None) -> str | None:
 
 def is_recognized(value: str | None) -> bool:
     return recognize(value) is not None
+
+
+# ── serving the new vocabulary, beside the old one ──────────────────────
+
+
+def gl_revision() -> str:
+    """The compiled taxonomy's revision, so a stale client is diagnosable.
+
+    Empty rather than raising when the asset cannot be read: a payload that
+    is missing this line is a smaller problem than one that never arrives.
+    """
+    try:
+        return curated_leaves.curated_revision()
+    except curated_leaves.CuratedLeavesError:
+        return ""
+
+
+def gl_account_options(settings: dict | None) -> dict[str, list[dict]]:
+    """Per legal entity, the curated leaves that entity may actually post to.
+
+    Served BESIDE `categories` / `category_options`, never in place of them
+    (`cost_centers.py:104`: never repurpose a name, add beside it). The
+    published SPA keeps rendering the eight buckets from the old keys until
+    the owner publishes a bundle that reads this one.
+
+    Keyed by the entity LABEL the rest of the app holds (a batch's
+    `legal_entity_id`, a settings `entities` key), because the org id it
+    maps to is an implementation detail of the chart.
+
+    An entity whose settings entry names no `org_id`, or names an org
+    outside the curated set, gets NO entry at all rather than an empty list.
+    Absent says "this entity is not covered by the curated chart"; an empty
+    list would say "covered, and there is nothing here to post to". Those
+    send different people to look, which is the distinction
+    `curated_leaves` was built to preserve.
+
+    Each row carries the code to send back, this entity's own wording to
+    show, and the branch root to group under. The name is presentation and
+    is deliberately not a key: the same code is named differently across
+    entities.
+    """
+    entities = (settings or {}).get("entities")
+    if not isinstance(entities, dict):
+        return {}
+    out: dict[str, list[dict]] = {}
+    for label in entities:
+        name = str(label or "").strip()
+        if not name:
+            continue
+        entry = entity_from_settings(settings, name)
+        org_id = str((entry or {}).get("org_id") or "").strip()
+        try:
+            if not curated_leaves.covers_org(org_id):
+                continue
+            out[name] = [
+                {
+                    "code": code,
+                    "name": curated_leaves.binding(code, org_id).name,
+                    "category": curated_leaves.display_category_for(code) or "",
+                }
+                for code in sorted(curated_leaves.postable_codes(org_id))
+            ]
+        except curated_leaves.CuratedLeavesError:
+            # Same reasoning as `_is_curated_code`: a malformed asset must
+            # not take down a render. It surfaces at the posting path.
+            return {}
+    return out

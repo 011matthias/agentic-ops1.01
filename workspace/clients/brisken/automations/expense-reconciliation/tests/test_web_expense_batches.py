@@ -282,6 +282,29 @@ def test_field_edit_validation(client, monkeypatch):
     assert (kept.get("posting_category") or {}).get("source") != "override"
 
 
+def test_the_month_view_serves_both_vocabularies(client, monkeypatch):
+    """`gl_accounts` arrives BESIDE `category_options`, never instead.
+
+    The published SPA renders `category_options`; it keeps working until the
+    owner publishes a bundle that reads the curated leaves. An entity the
+    curated chart does not cover is absent from the map rather than served
+    an empty list, which would read as "covered, nothing to post to".
+    """
+    from expense_recon.zoho import curated_leaves
+
+    _patch_ocr(monkeypatch, _extraction())
+    batch_id = _create_batch(client, legal_entity="Consulting LLC")
+    client.put("/api/settings", json={
+        "entities": {"Consulting LLC": {"org_id": "808232536"}},
+    })
+    grid = _grid(client, batch_id)
+
+    assert grid["category_options"], "the eight are still served"
+    assert grid["gl_revision"] == curated_leaves.curated_revision()
+    codes = [r["code"] for r in grid["gl_accounts"]["Consulting LLC"]]
+    assert codes == sorted(curated_leaves.postable_codes("808232536"))
+
+
 def test_category_edit_folds_into_overrides(client, monkeypatch):
     _patch_ocr(monkeypatch, _extraction())
     batch_id = _create_batch(client)
