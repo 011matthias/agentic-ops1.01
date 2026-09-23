@@ -221,8 +221,13 @@ def build_expense_payload(
     paid_through_account_id: str,
     base_currency: str,
     source: str = "expense-recon",
+    org_id: str | None = None,
 ) -> "dict | PostRefusal":
-    """The Zoho POST body for one purchase, or a refusal naming why not."""
+    """The Zoho POST body for one purchase, or a refusal naming why not.
+
+    `org_id` is passed to account resolution so this org's category
+    fallback applies; without it, a category label refuses as before.
+    """
     currency = group.cell("Currency Code") or base_currency
     if currency.upper() != base_currency.upper():
         return PostRefusal(
@@ -250,7 +255,9 @@ def build_expense_payload(
                     "never read, and a blank is not a zero"
                 ),
             )
-        resolved = resolve_account_id(row.get("Expense Account"), coa)
+        resolved = resolve_account_id(
+            row.get("Expense Account"), coa, org_id=org_id
+        )
         if isinstance(resolved, AccountRefusal):
             return PostRefusal(
                 reference=group.reference,
@@ -334,6 +341,7 @@ def plan_expense_post(
             paid_through_account_id=paid_through_account_id,
             base_currency=base_currency,
             source=source,
+            org_id=org_id,
         )
         if isinstance(built, PostRefusal):
             refusals.append(built)
