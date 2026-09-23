@@ -8359,6 +8359,23 @@ merchants). Numbering starts at **174** because
 Nothing below is built. Each item says what was measured, so whoever picks it
 up starts from the payload rather than from the note.
 
+**Checked and NOT filed: note #35** (2026-09-14, *"Qdo entro na categoria e eu
+coloco a categoria certa, nao acontece nada... permanece sem categoria mesmo
+dando refresh"*, a flat report that setting a category does nothing). It is
+cited nowhere in this backlog, so it was audited against live July rather than
+assumed either way: both Google LLC rows now read
+`posting_category.source: "override"`, which is a stored user edit. The
+symptom is gone, most likely via the recall fixes in items 115 / 149 / 160.
+Recorded here so the next reader does not re-file a resolved bug, and does not
+read "uncited" as "ignored".
+
+**Caveat on any such audit.** This backlog cites some notes by number and
+whole waves by prose ("the operator walked the whole tool on 2026-08-21 and
+left 14 notes"), so a grep for `note #N` cannot tell an unaddressed note from
+one answered inside a wave. Do not publish a count of ignored notes off that
+grep. It is also why #73-#82 could sit as a verbatim table for three days: a
+note is only findable if someone gave it a number.
+
 ### 174. "From email" on a month that was never sent a statement (note #73, owner 2026-09-20)
 
 **Owner:** *"why does it say this even though there has been no statement sent
@@ -8445,14 +8462,35 @@ a save that says what it did, per row.
 **Operator (PT):** *"Se possivel ter uma lupa para ampliar a foto do recibo"*
 ("if possible, a magnifier to enlarge the receipt photo").
 
+**This is the third time the same person has asked, over 69 days.** A scan of
+all 85 notes for the receipt image returns exactly three, all Portuguese, all
+the same underlying need, and nothing else:
+
+| Note | Date | Comment | Reads as |
+|---|---|---|---|
+| #3 | 2026-07-16 | *Precisa ser baixado a foto do recibo para ser usada.* | the photo has to be downloaded before it is usable |
+| #32 | 2026-09-08 | *recibo nao estar abrindo* | the receipt is not opening |
+| #82 | 2026-09-23 | *Se possivel ter uma lupa para ampliar a foto do recibo.* | if possible, a magnifier |
+
+Read the escalation in the phrasing rather than the content: a flat statement
+in July, a fault report in September, and "if possible" three weeks later.
+That last register is what someone writes after asking twice. #32 was itemized
+and #3 never was.
+
 Pure SPA, and the bytes are already there: 73 of September's 75 rows read
 `has_receipt_image: true` and all 75 read `receipt_image_available: true`.
 `receipt_url` is empty on every row, so the SPA builds the path itself; a
 viewer reuses whatever it already fetches for the thumbnail.
 
-The smallest thing that answers the note is click-to-open at full size. Criss
-reads amounts and dates off phone photos of paper receipts, so zoom and pan
-are the point, not a lightbox.
+The smallest thing that answers it is click-to-open at full size with zoom and
+pan. She is reading amounts and dates off phone photos of paper receipts, so
+magnification IS the feature; a lightbox that fits the image to the window
+answers none of the three notes.
+
+**Rank it against the wave it arrived in, not against its size.** Nine of the
+thirteen notes in the #73-#85 range are system architecture. This one is
+somebody unable to read a receipt while reconciling it, for the third time
+since July.
 
 ### 179. The pickable categories are eight strings, not Brisken's Zoho chart (note #83, owner 2026-09-23)
 
@@ -8519,10 +8557,24 @@ answers with nothing, and it falls through to the company rule or the chart.
 Two of those names are one vendor spelled twice, which is item 170's canonical
 problem showing up again in a different column.
 
+**It is already posting, and the account is not an account.** Measured on live
+July while checking something else: both Google LLC rows (2026-06-30, 71.64)
+read `posting_category.zoho_account: "Software & Subscriptions"`. That is the
+category name standing in for an account, which is the documented fallback
+(`posting_common._debit_account_and_note` passes `cat.zoho_account or
+cat.category` through when no chart is loaded, the same branch that caused the
+July export's Gap 1). So an absent registry account does not surface as a
+refusal; it surfaces as a plausible-looking string that Zoho has no account
+for.
+
+That moves this out of tidiness. Every cloud charge is one chart-load away
+from posting to a name that does not exist, and cloud is the category with
+zero coverage.
+
 This is the concrete, bounded half of 179 and 180: it needs an account per
 cloud vendor from the owner, not a vocabulary redesign. **FILED AS RECORD**,
 but of the three it is the one that could ship the moment the owner gives the
-accounts.
+five accounts, and the one with a live consequence if he does not.
 
 ## Shipped (loop history)
 
