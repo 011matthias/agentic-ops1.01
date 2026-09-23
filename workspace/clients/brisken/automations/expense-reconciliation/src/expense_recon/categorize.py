@@ -41,6 +41,7 @@ from .llm.client import (
     LineItemInput,
     LLMClient,
 )
+from .category_vocabulary import recognize as recognize_category
 from .matching.types import (
     EXPENSE_CATEGORIES,
     Categorization,
@@ -278,7 +279,11 @@ def apply_registry_category(
     if not category:
         return receipt
     cat = Categorization(
-        category=category if category in EXPENSE_CATEGORIES else None,
+        # Same reason as `merchant_registry._match`: this is the second of two
+        # filters on one stored value, and the value reaching here has already
+        # passed that one. Fixing either alone leaves the leaf code dropped,
+        # so both move together.
+        category=recognize_category(category),
         zoho_account=zoho_account or None,
         confidence=1.0,
         source=ClassificationSource.REGISTRY,
