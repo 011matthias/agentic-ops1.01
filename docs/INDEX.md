@@ -12,6 +12,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-23 | Attribution Measured Card Entity Person And Category | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Attribution%20Measured%20Card%20Entity%20Person%20And%20Category/Mini-Checkpoint-1.md) |
+| 2026-09-23 | Zoho Posting Refuses Unassigned Cards | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Zoho%20Posting%20Refuses%20Unassigned%20Cards/Mini-Checkpoint-1.md) |
 | 2026-09-23 | Typing An FX Rate In Settings Is Gone | client-dev | [→](docs/2026-09-23%20-%20Typing%20An%20FX%20Rate%20In%20Settings%20Is%20Gone/Checkpoint.md) |
 | 2026-09-23 | August Posted Through The Unified Runner | client-dev | [→](docs/2026-09-23%20-%20August%20Posted%20Through%20The%20Unified%20Runner/Checkpoint.md) |
 | 2026-09-23 | FX Rates Polled Daily From OpenTickers | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20FX%20Rates%20Polled%20Daily%20From%20OpenTickers/Mini-Checkpoint-1.md) |
