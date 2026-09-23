@@ -8068,7 +8068,62 @@ account cell, Corporate Services / anthropic).
 
 ### Item 169 — the card chain's fallbacks, where the evidence exists and is refused
 
-Four code facts, each measurable before it is changed:
+**SHIPPED 2026-09-23** (the instrument, and the one fact that was worth rows).
+Four code facts were named here before anything was built. `tools/recon-attribution-replay.py`
+now replays a month through `build_expense_view` itself and scores card, entity,
+person and category by link, against the statement's own `Card` column on every
+confirmed pair and against the reviewer's own fixes held out. It was proven
+before it was trusted: a fabricated hint rule for a hint exactly one row prints
+moved the card-less count by exactly one, in all three coupled columns.
+
+What the instrument then said about the four facts, which is not what the facts
+predicted:
+
+* **Fact 1 measures ZERO.** Narrowing `_card_keys` to digits the batch can
+  resolve moves no row in any of the seven batches, 198 receipts. The three
+  July rows it would unblock (`...2544`, `0501-1462-9129`, `Cartao Credito 30
+  Dias`) have no matched charge and no remembered card, so there is nothing
+  behind the guard to give them; September has no statement at all. The guard's
+  reasoning is still wrong for a number naming no card, and fixing it today
+  buys nothing. Not built.
+* **Fact 2 confirmed, 24 rows, still latent.** Now item 171 below.
+* **Fact 3 was the wrong diagnosis, and the real cause sat beside it.** The
+  lookup key was never the problem: September's batch entity is `''`, every
+  card-less row carries `''`, and the correction saved that morning is keyed
+  `('', 'openai')`, so `lookup('', 'OPENAI')` returns `{'card_key': '3645'}`
+  and the batch holds a card under exactly that key. It reached none of the 12
+  rows because **`resolve_batch_row_cards` reads the remembered card off
+  `Receipt.card_key`, and the only writer of that field is
+  `ExpenseMemory.apply` inside `generate_expenses`**. A correction is frozen at
+  the moment a month was ingested: it reaches months ingested after it and can
+  never reach the ones ingested before. Every link beside it is read live, and
+  note item M2 says so in as many words about the merchant registry.
+  **Fixed**: `service.fill_remembered_cards`, wired into the grid and the CSV
+  export (Cards R3: the two surfaces that must name one card for one receipt),
+  and through the export into the month report. Measured on the live snapshot,
+  September card-less **26 -> 14**, no legal entity **25 -> 13**, no person
+  **25 -> 13**, 12 rows now sourced `learned`; July and August do not move.
+  Precedence untouched: a printed card number, a reviewer pick and the settled
+  charge all still win. Tests `test_remembered_card_read_time_item_169.py`,
+  route-level; both wiring points regress-checked green -> red -> green.
+* **Fact 4 is exactly one row.** `0051__rendered-body.pdf`, GoDaddy, "We have
+  billed your Visa card ending with the last two digits: 38"; the two receipts
+  printing "ending with ...2838" both resolve. Not built.
+
+Deliberately NOT wired: `rematch_month` and the pool builders. `learned` is in
+`CARD_SCOPE_SOURCES`, so feeding the live memory there would let a remembered
+card newly SCOPE the matcher, which is a separate decision with its own risk.
+
+**A risk to name rather than bury**: the live rule came from one reviewer pick,
+and OpenAI is one of the three multi-card vendors item 154 refuses to guess
+for. The fix does not change what is learned or its rank; it makes an existing
+rule reach consistently instead of by accident of ingest order, and that rule
+was already going to be applied to every month ingested from now on. The
+statement always outranks it. If the owner wants remembered cards gated on
+single-card vendors the way the merchant registry is, that is its own item.
+
+**Still open here** (both measured, neither worth building today):
+
 
 1. **A printed number that resolves nothing blocks every fallback.**
    `service.py:6533` guards the settled-charge, learned and merchant steps
@@ -8095,6 +8150,28 @@ Four code facts, each measurable before it is changed:
 Not code, and larger than all four: cards 9693 and 1176 have never had a
 statement loaded (item 108), which is why September's OpenAI receipts cannot
 attribute at all. Coverage, not matching.
+
+### Item 171 — the sign-off card learner cannot see the statement's own answer
+
+Split out of item 169 fact 2, measured 2026-09-23, **not built**.
+`_CARD_OBSERVATION_SOURCES` has listed `settled_charge` since item 111, so the
+sign-off learner was always meant to learn the card the STATEMENT named for a
+settled pair. It cannot: the `card_res` handed to
+`registry_card_upserts_from_expense_run` in `commit_to_memory` is resolved
+without `settled_cards`, which is the only input that can produce that source,
+so the branch is unreachable. 24 rows across the seven live batches carry it
+today, and they would teach pairs like MARTINO SUPERMERCADO -> 3876 (5 rows),
+Hostinger -> card-2838, Typora -> card-2838. Anthropic appears on two cards
+(2838 five times, 3645 once), which is exactly the case the upsert already
+refuses to pin, so the guard that matters is in place.
+
+Live effect today is **zero**: no month has ever been signed off. The fix is
+about three lines (`month_charge_states(run, decisions or {})` then
+`settled_charge_cards(...)` into the resolution). It was written and reverted
+in the item-169 PR for one reason: this is the writer of DURABLE memory, and a
+change there with no regress-checked bite test is the wrong kind of cheap.
+Build it with a statement-attached month and a publish, asserting the registry
+gains the card, and regress it before merging.
 
 ### Item 170 — a correction that reaches the vendor's other spellings
 

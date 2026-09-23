@@ -2626,6 +2626,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # Item 77: which batch a move offer would join. Called only for
             # rows that carry an offer, so a month with none pays nothing.
             month_batch=lambda month: _month_batch_id(store, month),
+            # Item 169: the remembered card, read live rather than off the
+            # stamp ingest left, so a correction taught after this month was
+            # ingested still names its card.
+            learning_db_path=app.state.learning_db_path,
         )
 
     def _expense_page_view(store: RunStore, run) -> dict:
@@ -5472,6 +5476,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run, overrides, field_overrides, edits, dup_resolutions,
             charge_decisions=charge_decisions,
             merchants=csv_merchants,
+            learning_db_path=app.state.learning_db_path,
         )
         return FileResponse(
             path,
@@ -5547,6 +5552,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             render_outcomes=outcomes,
             dup_resolutions=dup_resolutions,
             charge_decisions=charge_decisions,
+            learning_db_path=app.state.learning_db_path,
         )
         # Item 67: building the report is the only moment renderability is
         # known, so it is the moment the answer gets recorded. The grid reads
