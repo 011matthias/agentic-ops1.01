@@ -35,8 +35,21 @@ Settings rates still win, so July and August did not move. Live once the PR
 merges and deploys; the FX tab's "Polled daily rates" card and the `daily
 rate, {day}` label wait on `docs/lovable-fx-daily-rates-prompt.md`. Open
 owner decision: clear the two typed rates so every month reads the daily
-rate. Feedback notes #73-#82 (09-20 to 09-23) are new and listed unitemized
-at the top of the backlog's Open section (#76, #78, #80, #81 became items 163-166 in PR #1202 the same afternoon).
+rate. Feedback notes #73-#85 (09-20 to 09-23) are ALL itemized as of the
+evening of 09-23: #76, #78, #80, #81 became items 163-166 in PR #1202 that
+afternoon, and the remaining eight (#73, #74, #75, #77, #82, #83, #84, #85)
+became items 174-181, each filed against a live read of the store, the
+September month and `GET /api/settings` rather than transcribed. Numbering
+skips 173, held by `client/brisken/p1-item-173-single-card-gate`. #83, #84
+and #85 concern the category vocabulary and the merchant GL account and
+were left about an hour BEFORE the direction that closed item 170, so they
+are filed as record, not queued; whether that direction reaches them is the
+owner's call. **One finding from filing them stands on its own**: the
+registry holds 3 distinct `zoho_account` values across 28 of its 33
+merchants, all in the travel tree, so both Professional Services merchants
+(MEGA CENTER / MEGA CENTRE, one vendor spelled twice) carry `E100010 -
+Travel Expense`, and all five Software & Subscriptions merchants (Brave,
+Lovable x2, ZOHO Corp., Anthropic) carry no account at all.
 
 **This app is the consolidation target for the whole Brisken estate**
 (2026-09-09, `../TARGET-ARCHITECTURE.md`). It already owns the dedicated
