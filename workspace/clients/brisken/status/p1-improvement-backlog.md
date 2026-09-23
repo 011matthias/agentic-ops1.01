@@ -21,11 +21,13 @@ have to hand-fix every month beats a one-off.
 
 ## Open
 
-### Feedback notes #73-#82 (2026-09-20 to 09-23): new since the backlog's #72, not yet itemized
+### Feedback notes #73-#82 (2026-09-20 to 09-23): new since the backlog's #72
 
 Read off `GET /feedback.jsonl` on 2026-09-23 (82 notes; the backlog stopped
-at #72). #79 is item 163 below; the rest are listed verbatim so they do not
-sit unread again. Times UTC, read raw off `ts`.
+at #72). Two sessions itemized the same afternoon: #79 is item 167, and PR
+#1202 took #81 as item 163, #76 as 164, #78 as 165 and #80 as 166. **Not
+yet itemized: #73, #74, #75, #77, #82**, listed verbatim so they do not sit
+unread again. Times UTC, read raw off `ts`.
 
 | # | When | Who | Where | Comment (verbatim) |
 |---|---|---|---|---|
@@ -40,10 +42,11 @@ sit unread again. Times UTC, read raw off `ts`.
 | 81 | 09-23 12:38 | operator | September, "Save corrections to memory" | based on what? this should be reversible for now, and state explicitly where these are saved so user can manage t... (truncated in the store) |
 | 82 | 09-23 12:40 | operator | September, row 0024 (processed-0EDA78B9...jpeg), receipt cell | Se possivel ter uma lupa para ampliar a foto do recibo. |
 
-Four of them (#76, #77, #80, #81) are one theme: what the tool learns from a
-manual correction, where it is saved, and how the operator sees and edits
-it. Item 81's "reversible" and "state explicitly where these are saved"
-overlap items 88 and 104. Not itemized in this session.
+#77 (a merchant-specific save, for overseeability) belongs to the learning
+theme items 163-166 now cover and is the one of that theme still open; #73
+(a "From email" cell on a month with no statement), #74 and #75 (private
+expenses: who reimburses, and not re-asking once set), #82 (a magnifier on
+the receipt photo) are each their own item when picked up.
 
 ### The 2026-08-21 feedback wave (14 notes, sequencing decided)
 
@@ -7694,7 +7697,153 @@ SPA half: `docs/lovable-statement-colour-prompt.md` (Not applied). The
 render is swatches beside the existing chip, deliberately not a row tint:
 tinting would re-attach the meaning the directive removes.
 
-### 163. FX rates polled daily from OpenTickers (feedback note #79, owner 2026-09-23) (SHIPPED 2026-09-23, pending PR; Shipped row 115)
+## The learning loop (the 2026-09-23 feedback wave, notes #76 / #78 / #80 / #81)
+
+Four notes the owner left in one twenty-minute pass on September, all about
+the same thing and none about a single row: a correction the reviewer makes
+should become a rule that holds beyond the row it was made on, that rule
+should be inspectable and editable, and saving it should say what it did and
+be reversible. They are grouped here because they are one mechanism seen
+from four sides, and because the tool's matching processes already learn on
+five separate axes with no shared account of what was learned:
+category / account (`merchant_category`), legal entity
+(`merchant_entity`), vendor spelling and card (`field_correction`),
+statement-to-receipt vendor equivalence (`vendor_alias`) and per-merchant FX
+(`merchant_fx`), plus the settings-backed merchant registry beside them.
+
+**Measured live before any of it (read-only, 2026-09-23).** July, August and
+September hold **153 expense rows over 62 distinct vendors**; 22 of those
+vendors appear more than once, and **88 of the 113 rows on a repeat vendor
+still carry a model guess or no category at all**. Across all three months
+exactly **one row reads `learned`**. Learning memory holds 108 category
+rules (102 of them still the 2026-08-06 Zoho seed, 0 validated), 1 merchant
+entity, 2 field corrections, 0 aliases and 0 FX rates. So the loop is wired
+end to end and almost nothing flows through it: the recall side has been
+fixed twice (items 115, 149) while the teach side still depends on a person
+pressing a button whose effects they cannot see beforehand and cannot
+reverse afterwards. That is what note #81 is about, and it is why it ranks
+first of the four.
+
+An instrument note for whoever re-measures: `GET /api/runs/{id}` returns
+**zero** expenses for July and August and 74 for September, because the
+first two are read through `GET /api/expense-batches/{id}`. A count taken
+from the runs endpoint alone reports a third of the estate and looks like a
+finding.
+
+### 163. A memory save says nothing about what it will do, where it goes, or how to take it back (note #81, owner 2026-09-23) (SHIPPED 2026-09-23, pending PR)
+
+**Owner, on the "Save corrections to memory" button:** *"based on what? this
+should be reversible for now, and state explicitly where these are saved so
+user can manage this."*
+
+Three asks. Before this, pressing the button wrote to five SQLite tables and
+rewrote the merchant registry with no preview, no record of which month
+taught what, and no undo beyond per-merchant Forget on the Memory page,
+which cannot distinguish a rule this save wrote from one that was there
+before.
+
+**Built.** One mechanism serves all three: the writes a save would make are
+computed as a list before anything is written.
+
+* `learning/commits.py` — `RecordingStore` accepts the five `record_*` calls
+  the learners make and keeps them as `PlannedWrite`s instead of writing.
+  The learners only ever call; they read nothing back, which is what makes a
+  dry run exact rather than approximate.
+* `GET /api/runs/{id}/memory-plan` — what the save would write, per table,
+  per key, with the value and the surface that manages it, plus the
+  per-merchant registry diff. It runs the real learners, so the preview
+  cannot describe a different save from the one that happens.
+* `GET /api/memory/commits` — the ledger. One entry per save: which month,
+  when, which trigger, what it learned, every row it touched, whether it has
+  been undone.
+* `POST /api/memory/commits/{id}/undo` — every learning row back to the
+  pre-image the journal recorded (a row the save CREATED is deleted), the
+  registry back to the map that preceded the save, and the month's
+  `memory_commits` digest cleared so the next publish teaches those
+  corrections again rather than answering `unchanged` over a memory that no
+  longer holds them.
+
+Two calls worth not re-deriving. **Only the most recent un-undone save can
+be undone** (`memory_journal_not_latest`, carrying `latest_id`): saves stack
+on the same rows, so restoring an older pre-image would silently discard a
+newer save's values, which is the shape of a wrong-money bug rather than a
+wrong-text one. And **the plan is computed inside the save**, not beside it:
+the pre-image the journal stores is read from the plan the save is about to
+apply, so a journal entry can never describe a different set of rows from
+the one the save touched.
+
+**Tests.** `tests/test_memory_journal_item_163.py` (10, route-level
+throughout: the plan writes nothing, the plan and the save agree key for
+key, the save is recorded, the undo restores a changed row, deletes a
+created row, restores the registry, re-arms the next publish, and the two
+refusals plus the 404). Six wiring points proven RED under
+`tools/regress_check.py`, each watched green → red → green: the journal
+write, the row restore, the registry restore, the digest clear, the
+latest-only guard, and the recorder seam itself.
+
+**Not built, deliberately.** No automatic undo window, no undo of a save
+that a later save has written over (refused instead), and no SPA half yet:
+the prompt is `docs/lovable-memory-journal-prompt.md` for the owner to
+paste.
+
+### 164. A correction teaches one vendor when the reviewer meant a rule (note #76, owner 2026-09-23)
+
+**Owner, on September's "Needs a look · 27":** *"from manual input from user
+create a system to derive a higher standard of logic that is applicable
+universally for the specific vendors/expenses that were interacted with."*
+
+Today every teach is keyed on one normalized vendor string (plus a company,
+for the category and account). Correcting DB Fernverkehr teaches DB
+Fernverkehr. Nothing generalizes: not to the merchant's other spellings
+beyond the registry's alias list, not to the class of expense, and not to
+the pattern the reviewer was actually applying when she made three similar
+corrections in a row.
+
+**What a build would have to settle first, and has not.** Which
+generalizations are safe is an empirical question, not a design one, and the
+estate above says the sample is thin: 22 repeat vendors, one live `learned`
+row. The honest first step is to measure what a rule derived from one
+month's corrections would have done to the next month's rows, the way item
+115 was measured (replay both months' stored readings through the candidate
+code and count the lines that move), before any rule generalizes anything.
+A generalization that fires on a month nobody has labelled is the failure
+mode item 117 already produced once, when one-word aliases acted as
+wildcards and filed unrelated vendors under the wrong merchant.
+
+Ranked below 163 because 163 is what makes this safe to attempt: a rule that
+generalizes is exactly the kind you want to be able to preview and take
+back.
+
+### 165. What the tool learned cannot be edited where it was taught (note #78, owner 2026-09-23)
+
+**Owner:** *"when learning from manual input from user, you must be able to
+edit vendor lists etc."*
+
+Partly true today and worth splitting. Learned CATEGORIES are editable on
+the Memory page (PUT / DELETE per row, validate, per-merchant Forget) and
+merchant aliases in the Merchants editor. What has no editor at all:
+`merchant_entity`, `field_correction`, `vendor_alias` and `merchant_fx` are
+read-only on the Memory page, so a wrong vendor spelling or a wrong learned
+card can only be removed by forgetting the whole vendor. Item 163's ledger
+now at least says which save wrote them.
+
+### 166. Categorization norms are per vendor, and the owner wants them per rule (note #80, owner 2026-09-23)
+
+**Owner:** *"categorization needs a good mechanism to be corrected and
+categorization norms or standards that are applied universally across
+multiple vendors or expenses should be flexible in that same sense."*
+
+The sibling of 164 on the category axis specifically. The registry binds one
+merchant to one category (note item M1) and the learned rules bind
+(company, vendor) to an account; there is no object anywhere that says
+"anything from a cloud-infrastructure vendor books here" or "this class of
+expense is always Travel". The eight categories in settings are a closed
+vocabulary with no structure between them.
+
+Gated on the same thing item 156 is gated on: the 52-row Zoho account to
+category table nobody has ruled on. A norm that spans vendors needs a
+vocabulary that spans them first.
+### 167. FX rates polled daily from OpenTickers (feedback note #79, owner 2026-09-23) (SHIPPED 2026-09-23, PR #1203; Shipped row 115)
 
 **The note, verbatim**, anchored on Settings > FX reference rates: *"fx
 rates should be polled daily via open tickers API"*, with the OpenTickers
@@ -7764,7 +7913,7 @@ tests red with it unwired, green restored. SPA half:
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-| 115 | Daily FX reference rates polled from OpenTickers: a boot + 24 h poll thread, a one-time backfill of the live months (the key is a paid tier), the `fx_daily_rates` store table (units per EUR by day, ECB record preferred), the matcher's `opentickers_day` rung on the charge's own day (nearest day within four, earlier on a tie) between the self-derived rates and the ECB monthly average with the 2% band, the table refreshed into every month on each re-match, `GET /api/settings.fx_daily_rates` and `POST /api/fx/poll`. Typed Settings rates still win, so July and August did not move | Backlog item 163 (feedback note #79, Dirk, anchored on Settings > FX reference rates: "fx rates should be polled daily via open tickers API"). regress_check proved the re-match wiring bites (4 route tests red unwired) | 2026-09-23 |
+| 115 | Daily FX reference rates polled from OpenTickers: a boot + 24 h poll thread, a one-time backfill of the live months (the key is a paid tier), the `fx_daily_rates` store table (units per EUR by day, ECB record preferred), the matcher's `opentickers_day` rung on the charge's own day (nearest day within four, earlier on a tie) between the self-derived rates and the ECB monthly average with the 2% band, the table refreshed into every month on each re-match, `GET /api/settings.fx_daily_rates` and `POST /api/fx/poll`. Typed Settings rates still win, so July and August did not move | Backlog item 167 (feedback note #79, Dirk, anchored on Settings > FX reference rates: "fx rates should be polled daily via open tickers API"). regress_check proved the re-match wiring bites (4 route tests red unwired) | 2026-09-23 |
 | 114 | R4.1, the trip lifecycle owes its months a re-match. Four entrances now stamp `rematch_pending(trigger="trip")` INSIDE their own `_BATCH_ADD_LOCK` span and pay it outside: a receipt joining a trip, a date edit (the UNION of the months the old range covered and the new one does), a trip-batch delete (the borrowing months chosen BEFORE the delete) and a trip-receipt delete. The paying loop gained the per-month try/except `rematch_neighbour_months` has always had, the candidate filter gained the expense-generation check, `learning_db_path` is threaded through both trip entrances, a rename carries onto the batch label and onto every borrowing month's stored `settled_by` label, and the trip-batch create slot is released on ANY failure rather than only on `RunInputError` | Owner ruling 2026-09-21 on the R4.0 findings: "must be done because later on if expenses and items in statement dont line up we will have a problem." Measured on a copy of the live store the day before: moving a trip's dates off July, and deleting its batch, each left July reporting **33 charges reconciled where 31 was true**, with `settled_by` badges naming a run that no longer existed. Nothing corrupted (claims released correctly, and July's next re-match healed it completely) and nothing scheduled that next re-match, so a month stayed wrong until something unrelated happened to touch it. The adversarial catch during the build was the repo's own item-18 guard: `put_trip` and `delete_expense` are `async def`, and the first draft blocked the EVENT LOOP on a lock an OCR ingest holds for minutes; both locked spans now go through `run_in_threadpool` | 2026-09-21, this round; `tests/test_trip_lifecycle_rematch.py` (12, route-level, self-contained fixtures); suite 2714 -> 2726 passed / 2 skipped; ruff clean. Eight wiring points proven RED under `tools/regress_check.py`, the date gate in BOTH directions (forced off reddens the move-off test, forced on reddens the roster-edit test that asserts a non-date edit owes nothing): `--replace` literals recorded in the PR. The first draft's durability test did NOT bite (it drove create-with-receipt while the mutated wire was the gradual-add path); caught by `regress_check` and closed with two add-path tests |
 | 113 | Item 38's SPA half: the four Lovable prompts for R3 and R4 published and bundle-verified applied on the same day the backend landed (`lovable-trips-prompt.md`, `lovable-r4-settled-by-prompt.md`, and the two cost-center prompts that followed) | Recorded retroactively 2026-09-21. All four were audited by bundle only; none had ever been driven in a browser, because no trip and no cost center existed live to render. The 2026-09-21 cold drive against a local copy closed that: the Trips screen, the trip batch page and July's "Settled by trip ..." badge all render. The one field that does NOT render is `roster_mismatch` / `n_roster_mismatch`, emitted and documented since R3 and carried by no prompt | PR #698, 2026-09-07 |
 | 112 | R4a, the cross-batch guarantee: the `receipt_claims` registry, `(receipt_run_id, document_id)` as the global one-receipt-one-charge key, advisory exclusion before matching, the authoritative re-check inside `_BATCH_ADD_LOCK` at commit, and the reviewer verdicts that keep it current (release on reject, move on re-pick, 409 `receipt_settled_elsewhere` / `receipt_just_settled` on a pick that would steal another run's receipt) | Recorded retroactively 2026-09-21. Without the registry a receipt sitting in a trip could settle a charge in July AND in August; the claims table is what makes the spanning pool safe rather than double-counting | PR #685, commit `fc75c8a9`, 2026-09-07; `tests/test_receipt_claims.py` |

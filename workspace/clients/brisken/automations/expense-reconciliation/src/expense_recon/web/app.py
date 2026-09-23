@@ -175,6 +175,11 @@ from .service import (  # item 88
     MEMORY_TRIGGER_PUBLISH,
     commit_month_memory,
 )
+from .service import (  # item 163
+    MEMORY_TABLE_SURFACE,
+    plan_month_memory,
+    undo_memory_commit,
+)
 from .service import confirm_expense_category  # note #62
 from .service import set_charge_category  # item 109
 from .service import attach_expense_card_tabs, attach_run_card_tabs  # item 138
@@ -5589,6 +5594,71 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
         return JSONResponse({"ok": True, "forgotten": forgotten})
 
+    @app.get("/api/runs/{run_id}/memory-plan")
+    def get_memory_plan(run_id: str):
+        """Item 163 (note #81): what "Save corrections to memory" would
+        write, before it is pressed. Read-only: every row is computed by
+        running the real learners against a recording stand-in, so the
+        preview and the save cannot disagree. `writes[]` names the table,
+        the key, the value and the surface that manages it; `registry` is
+        the per-merchant before/after of the same save."""
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return _not_found("Run not found", "run_not_found")
+            plan = plan_month_memory(
+                store, run, app.state.learning_db_path, now_iso=_now_iso()
+            )
+        return JSONResponse(jsonable_encoder(plan))
+
+    @app.get("/api/memory/commits")
+    def get_memory_commits(limit: int = 50):
+        """Item 163: the saves themselves, newest first — which month, when,
+        by which trigger, what it taught, and whether it has been undone.
+        This is the "where are these saved" answer: each entry lists the
+        keys it wrote and the surface each one is managed on."""
+        with open_store() as store:
+            entries = store.list_memory_journal(limit=limit)
+        out = []
+        for e in entries:
+            out.append({
+                "id": e["id"],
+                "run_id": e["run_id"],
+                "label": e["label"],
+                "committed_at": e["committed_at"],
+                "trigger": e["trigger"],
+                "learned": e["learned"],
+                "reverted_at": e["reverted_at"],
+                "n_rows": len(e["rows"]),
+                "rows": [
+                    {"table": r["table"], "key": r["key"],
+                     "surface": MEMORY_TABLE_SURFACE.get(r["table"], ""),
+                     "existed": r["row"] is not None}
+                    for r in e["rows"]
+                ],
+                "n_merchants_changed": sum(
+                    1 for name in set(e["merchants_before"]) | set(e["merchants_after"])
+                    if e["merchants_before"].get(name) != e["merchants_after"].get(name)
+                ),
+            })
+        return JSONResponse(jsonable_encoder({"commits": out}))
+
+    @app.post("/api/memory/commits/{journal_id}/undo")
+    def post_memory_commit_undo(journal_id: int):
+        """Item 163: put one save back. Every learning row it touched
+        returns to its pre-image (a row it created is deleted), the merchant
+        registry returns to the map that preceded it, and the month's saved
+        digest is cleared so the next publish teaches the corrections
+        again. Only the most recent un-undone save can be undone."""
+        with open_store() as store:
+            result = undo_memory_commit(
+                store, journal_id, app.state.learning_db_path, _now_iso()
+            )
+        if isinstance(result, Refusal):
+            status = 404 if code_of(result, "") == "memory_journal_not_found" else 409
+            return _refused(result, status=status)
+        return JSONResponse(jsonable_encoder(result))
+
     @app.post("/api/runs/{run_id}/commit-memory")
     def post_commit_memory(run_id: str):
         # Explicit finalize: fold THIS run's confirmed decisions into the
@@ -5604,11 +5674,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # self-improving registry) in the same transaction context. Item
             # 88: the same helper Publish uses, which records the save so a
             # Publish right after it does not teach the same corrections twice.
-            learned = commit_month_memory(
+            saved = commit_month_memory(
                 store, run, app.state.learning_db_path, _now_iso(),
                 trigger=MEMORY_TRIGGER_BUTTON, only_if_changed=False,
-            )["learned"]
-        return JSONResponse({"ok": True, "learned": learned})
+            )
+        # Item 163: the id of the journal entry this save wrote, so the
+        # caller can undo exactly this save rather than "the last one".
+        return JSONResponse({
+            "ok": True, "learned": saved["learned"],
+            "journal_id": saved.get("journal_id"),
+        })
 
     @app.get("/runs/{run_id}/report.xlsx")
     def download_report(run_id: str):

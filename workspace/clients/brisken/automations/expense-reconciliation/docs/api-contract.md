@@ -4299,6 +4299,58 @@ every live mail would carry `blocked: "no_address"` today. Route-level in
 `tests/test_receipt_chasing_item_107.py`; pins in `tests/test_view_contract.py`
 and `tests/test_settings_put_contract.py`. SPA half:
 `docs/lovable-receipt-chasing-prompt.md`.
+## A memory save is a plan, a journal and an undo (item 163, 2026-09-23)
+
+Feedback note #81, on the "Save corrections to memory" button: *"based on
+what? this should be reversible for now, and state explicitly where these
+are saved so user can manage this"*. Three routes answer the three asks, and
+one mechanism backs all of them: the writes a save would make are computed
+as a list BEFORE anything is written.
+
+**`GET /api/runs/{id}/memory-plan`** says what pressing save would do, and
+writes nothing. The plan is produced by running the real learners against
+`learning.RecordingStore`, which accepts the same `record_*` calls and keeps
+them, so the preview cannot describe a different save from the one that
+happens. `writes[]` carries `{table, key, value, surface}` per write,
+`keys[]` the distinct rows, `counts` per table, and `registry` the
+per-merchant `{before, after}` of the same save.
+
+```json
+{"writes": [{"table": "field_correction",
+             "key": {"legal_entity_id": "Corporate Services",
+                     "vendor_norm": "staples", "field": "paid_through"},
+             "value": "1010 Chase", "surface": "memory"}],
+ "counts": {"field_correction": 1}, "registry": {}, "learned": {...}}
+```
+
+**`GET /api/memory/commits`** is the ledger: one entry per save, newest
+first, with the month that taught it, the trigger (`button` / `publish`),
+what it learned, every row it touched with the surface that manages it, and
+`reverted_at` once it has been undone. `surface` is named in
+`service.MEMORY_TABLE_SURFACE` rather than in the SPA, so the answer to
+"where is this saved" cannot drift from the code that saves it.
+
+**`POST /api/memory/commits/{id}/undo`** puts one save back. Every learning
+row returns to the pre-image the journal recorded (a row the save CREATED is
+deleted), the merchant registry returns to the map that preceded the save,
+and the month's `memory_commits` digest is cleared so the next publish
+teaches those corrections again instead of answering `unchanged` over a
+memory that no longer holds them.
+
+Two limits, stated because neither is enforceable in code here. The undo
+restores the pre-image, so a rule EDITED BY HAND on the Memory page after
+the save is overwritten by the undo rather than kept. And the learning store
+and the run store are two SQLite files, so a failure between applying a save
+and journalling it leaves writes that no entry describes; the publish path
+catches it and names it in `memory.error` rather than failing the publish.
+
+Both write paths now return `journal_id` (`POST .../commit-memory`, and
+`memory.journal_id` on publish), so a caller undoes exactly the save it
+made. Refusals: `memory_journal_not_found` (404),
+`memory_journal_already_reverted` (409), and `memory_journal_not_latest`
+(409, carrying `latest_id`) -- saves stack on the same rows, so restoring an
+older pre-image would silently discard a newer save's values.
+
 ## A corrected category comes back next month: what memory decides now (item 115, 2026-09-17)
 
 The sign-off promise is that a category Criss fixes arrives pre-filled the
@@ -4563,6 +4615,9 @@ already started, not a refusal of a request, and nothing keyed off it.
 | `memory_rows_required` | 400 | a bulk validate with no rows | rows must be a non-empty list of {legal_entity_id, vendor} | |
 | `memory_rows_invalid` | 400 | a bulk validate whose rows all failed normalization | no valid rows in the list | |
 | `comment_required` | 400 | a feedback note with no comment | comment is required | |
+| `memory_journal_not_found` | 404 | undoing a save that is not there | no such memory save | |
+| `memory_journal_already_reverted` | 409 | undoing a save that was already undone | this memory save was already undone | `reverted_at` |
+| `memory_journal_not_latest` | 409 | undoing a save a later save has written over | only the most recent memory save can be undone; undo save N first | `latest_id` |
 
 ### Mail intake
 

@@ -5099,6 +5099,8 @@ def commit_to_memory(
     field_overrides: dict[str, dict[str, str]] | None = None,
     edits: list[dict] | None = None,
     settings_store=None,
+    store_factory=None,
+    persist: bool = True,
 ) -> dict:
     """Harvest this run's confirmed decisions into the durable learning
     store (Phase 2 capture). This is the explicit finalize gate: only
@@ -5110,7 +5112,17 @@ def commit_to_memory(
     overrides teach merchant -> entity, header edits teach per-merchant
     field corrections (keyed on the ORIGINAL extracted vendor), category
     reclassifications teach merchant -> category. `field_overrides` /
-    `edits` are the expense-mode overlays; ignored in statement mode."""
+    `edits` are the expense-mode overlays; ignored in statement mode.
+
+    Item 163 (feedback note #81): `store_factory` and `persist` are the one
+    seam a DRY RUN needs. `plan_month_memory` passes
+    `learning.RecordingStore`, which accepts the same `record_*` calls and
+    keeps them instead of writing, and `persist=False`, which computes the
+    registry half without saving it and returns the map it would have saved
+    as `merchants_after`. So the preview and the save are the same code
+    reading the same inputs, rather than two implementations kept in step
+    by hand."""
+    store_factory = store_factory or LearningStore
     if run_mode(run) == MODE_EXPENSE_GENERATION:
         # The baseline, because this path keys what it learns on the ORIGINAL
         # extracted vendor: harvesting a baked pool would teach the
@@ -5127,7 +5139,7 @@ def commit_to_memory(
         manual_payloads = {
             e["document_id"]: e["payload"] for e in edits if e["op"] == "add"
         }
-        with LearningStore(learning_db_path) as store:
+        with store_factory(learning_db_path) as store:
             summary = learn_from_expense_run(
                 store,
                 receipts=receipts,
@@ -5211,8 +5223,14 @@ def commit_to_memory(
                 cost_centers=settings.get("cost_centers") or {},
             )
             reg_summary.update(cc_summary)
-            if new_merchants != (settings.get("merchants") or {}):
-                settings_store.set_settings({"merchants": new_merchants}, now_iso)
+            if persist:
+                if new_merchants != (settings.get("merchants") or {}):
+                    settings_store.set_settings({"merchants": new_merchants}, now_iso)
+            else:
+                # Item 163: the dry run hands the map back instead of
+                # storing it, so the caller can diff it against the live one
+                # and show which merchants a save would change.
+                result["merchants_after"] = new_merchants
             result["registry"] = reg_summary
         return result
 
@@ -5221,7 +5239,7 @@ def commit_to_memory(
     confirmed_tx_ids = {
         tx_id for tx_id, d in decisions.items() if d.status == STATUS_CONFIRMED
     }
-    with LearningStore(learning_db_path) as store:
+    with store_factory(learning_db_path) as store:
         summary = learn_from_run(
             store,
             transactions=transactions,
@@ -15522,12 +15540,225 @@ def commit_month_memory(
         last = store.get_memory_commit(run.run_id)
         if last is not None and last["digest"] == digest:
             return {"saved": False, "reason": "unchanged"}
+    # Item 163: what this save is ABOUT to write, and what each of those
+    # rows holds right now. Read before the write, so the journal's
+    # pre-image is the state a later undo has to put back. A plan that
+    # fails to compute must not silently disarm the undo, so it is not
+    # wrapped: the save fails with it, which is the safe direction.
+    plan = plan_month_memory(
+        store, run, learning_db_path,
+        decisions=decisions, overrides=overrides,
+        field_overrides=field_overrides, edits=edits, now_iso=now_iso,
+    )
+    before_rows = _memory_pre_image(learning_db_path, plan["writes"])
+    merchants_before = copy.deepcopy((store.get_settings() or {}).get("merchants") or {})
     learned = commit_to_memory(
         run, decisions, overrides, learning_db_path, now_iso,
         field_overrides=field_overrides, edits=edits, settings_store=store,
     )
     store.set_memory_commit(run.run_id, digest, now_iso, trigger)
-    return {"saved": True, "learned": learned}
+    merchants_after = (store.get_settings() or {}).get("merchants") or {}
+    journal_id = store.add_memory_journal(
+        run_id=run.run_id,
+        label=run.label,
+        committed_at=now_iso,
+        trigger=trigger,
+        rows=before_rows,
+        merchants_before=merchants_before,
+        merchants_after=copy.deepcopy(merchants_after),
+        learned=learned,
+    )
+    return {"saved": True, "learned": learned, "journal_id": journal_id}
+
+
+# --------------------------------------------------------------------------
+# Item 163: the memory-save plan, its journal, and the undo
+#
+# Feedback note #81 (2026-09-23) on "Save corrections to memory": "based on
+# what? this should be reversible for now, and state explicitly where these
+# are saved so user can manage this". So a save answers all three: the plan
+# says what it would write and from which row of the month, the journal says
+# where it went and keeps the pre-image, and the undo puts that pre-image
+# back.
+# --------------------------------------------------------------------------
+
+# Which surface a reader manages each learning table on. Named here rather
+# than in the SPA so the answer to "where is this saved" cannot drift from
+# the code that saves it.
+MEMORY_TABLE_SURFACE: dict[str, str] = {
+    "merchant_category": "memory",
+    "merchant_entity": "memory",
+    "field_correction": "memory",
+    "vendor_alias": "memory",
+    "merchant_fx": "memory",
+}
+
+
+def plan_month_memory(
+    store,
+    run: RunRow,
+    learning_db_path: Path,
+    *,
+    decisions=None,
+    overrides=None,
+    field_overrides=None,
+    edits=None,
+    now_iso: str,
+) -> dict:
+    """What saving this month's corrections WOULD write, writing nothing.
+
+    Returns `{"writes": [...], "counts": {...}, "registry": {...},
+    "learned": {...}}`. Each write names its table, its primary key, the
+    surface that manages it, and the value it would set. The registry half
+    is a per-merchant before/after diff.
+
+    Computed by running the real learners against `RecordingStore`, so the
+    preview cannot disagree with the save."""
+    from ..learning import RecordingStore, distinct_keys, registry_diff
+
+    decisions = store.get_decisions(run.run_id) if decisions is None else decisions
+    overrides = (
+        store.get_category_overrides(run.run_id) if overrides is None else overrides
+    )
+    field_overrides = (
+        store.get_expense_field_overrides(run.run_id)
+        if field_overrides is None else field_overrides
+    )
+    edits = store.get_expense_edits(run.run_id) if edits is None else edits
+
+    recorder: dict = {}
+
+    def factory(_path):
+        rec = RecordingStore()
+        recorder["store"] = rec
+        return rec
+
+    learned = commit_to_memory(
+        run, decisions, overrides, learning_db_path, now_iso,
+        field_overrides=field_overrides, edits=edits, settings_store=store,
+        store_factory=factory, persist=False,
+    )
+    merchants_after = learned.pop("merchants_after", None)
+    rec = recorder.get("store")
+    writes = list(rec.writes) if rec is not None else []
+    counts: dict[str, int] = {}
+    for table, _key in distinct_keys(writes):
+        counts[table] = counts.get(table, 0) + 1
+    return {
+        "writes": [_planned_write_view(w) for w in writes],
+        "keys": [
+            {"table": t, "key": list(k), "surface": MEMORY_TABLE_SURFACE.get(t, "")}
+            for t, k in distinct_keys(writes)
+        ],
+        "counts": counts,
+        "registry": registry_diff(
+            (store.get_settings() or {}).get("merchants") or {}, merchants_after
+        ) if merchants_after is not None else {},
+        "learned": learned,
+    }
+
+
+def _planned_write_view(w) -> dict:
+    """One planned write, as the screen reads it: which table, which key,
+    where it is managed, and the value it sets. `value` is the column the
+    row is ABOUT (the category, the entity, the corrected value); an FX
+    sample and an alias carry their own shape, so those read as the key
+    they add."""
+    from ..learning import TABLE_KEYS
+
+    value = ""
+    if w.table == "merchant_category":
+        value = str(w.args[2] or "")
+    elif w.table == "merchant_entity":
+        value = str(w.args[1] or "")
+    elif w.table == "field_correction":
+        value = str(w.args[3] or "")
+    elif w.table == "merchant_fx":
+        value = str(w.args[4])
+    elif w.table == "vendor_alias":
+        value = str(w.args[2] or "")
+    return {
+        "table": w.table,
+        "key": dict(zip(TABLE_KEYS[w.table], w.key)),
+        "surface": MEMORY_TABLE_SURFACE.get(w.table, ""),
+        "value": value,
+    }
+
+
+def _memory_pre_image(learning_db_path: Path, writes: list[dict]) -> list[dict]:
+    """The rows behind a plan's keys as they stand BEFORE it runs:
+    `[{table, key, row|None}]`. `row: None` records a key that does not
+    exist yet, which is what an undo deletes rather than restores."""
+    out: list[dict] = []
+    seen: set[tuple] = set()
+    if not writes:
+        return out
+    with LearningStore(learning_db_path) as s:
+        for w in writes:
+            ident = (w["table"], tuple(sorted(w["key"].items())))
+            if ident in seen:
+                continue
+            seen.add(ident)
+            out.append({
+                "table": w["table"],
+                "key": w["key"],
+                "row": s.read_row(w["table"], w["key"]),
+            })
+    return out
+
+
+def undo_memory_commit(
+    store, journal_id: int, learning_db_path: Path, now_iso: str
+) -> dict:
+    """Put one recorded save back the way it was (item 163).
+
+    Every learning row the save touched is restored to its pre-image (a row
+    that did not exist is deleted), the merchant registry is restored to the
+    map that preceded the save, and the run's `memory_commits` digest is
+    cleared so the next publish teaches those corrections again rather than
+    reporting "unchanged" over a memory that no longer holds them.
+
+    Refuses (`Refusal`) an unknown entry, one already reverted, and one that
+    is not the LATEST save: saves stack on the same rows, so putting an
+    older pre-image back would silently discard a newer save's values."""
+    entry = store.get_memory_journal(journal_id)
+    if entry is None:
+        return Refusal(
+            "no such memory save", code="memory_journal_not_found",
+        )
+    if entry["reverted_at"]:
+        return Refusal(
+            "this memory save was already undone",
+            code="memory_journal_already_reverted",
+            reverted_at=entry["reverted_at"],
+        )
+    latest = store.latest_memory_journal()
+    if latest is not None and latest["id"] != journal_id:
+        return Refusal(
+            "only the most recent memory save can be undone; undo "
+            f"save {latest['id']} first",
+            code="memory_journal_not_latest",
+            latest_id=latest["id"],
+        )
+    restored = 0
+    if entry["rows"]:
+        with LearningStore(learning_db_path) as s:
+            for r in entry["rows"]:
+                s.restore_row(r["table"], r["key"], r["row"])
+                restored += 1
+    registry_restored = False
+    if entry["merchants_before"] != entry["merchants_after"]:
+        store.set_settings({"merchants": entry["merchants_before"]}, now_iso)
+        registry_restored = True
+    store.clear_memory_commit(entry["run_id"])
+    store.set_memory_journal_reverted(journal_id, now_iso)
+    return {
+        "undone": True,
+        "journal_id": journal_id,
+        "rows_restored": restored,
+        "registry_restored": registry_restored,
+        "run_id": entry["run_id"],
+    }
 
 
 # ---------------------------------------------------------------------------
