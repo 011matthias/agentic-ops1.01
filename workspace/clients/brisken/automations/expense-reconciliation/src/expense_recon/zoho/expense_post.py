@@ -30,10 +30,13 @@ cleanly is worse than one that fails:
 
 * any account that does not resolve to a numeric id (`zoho.accounts`)
 * a row whose amount is missing or unparseable
-* a foreign-currency row. Zoho wants a `currency_id`, not a code, and the
-  re-consented grant dropped `settings.READ`, so `/settings/currencies`
-  now 401s and there is no way to resolve one. Guessing the base currency
-  for a BRL charge would misstate the amount, so it refuses and says why.
+* a foreign-currency row, UNLESS the caller supplies a `currencies` map
+  (code -> the target org's numeric `currency_id`). Zoho wants the id, not
+  the code. The RATE is never invented: it is read from the reviewed CSV's
+  own `Exchange Rate` column, so the posted amount is the one a human
+  signed off. Still refused: a currency the target org does not define
+  (TEST-BTS has 11 and BRL is not among them), and a foreign row with no
+  usable rate, because Zoho would then apply one nobody chose.
 * a reference already in the ledger for this org, or in flight, or
   ambiguous
 """
@@ -46,6 +49,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from ..output.zoho_expense_export import EXPENSE_COLUMNS
@@ -60,6 +64,8 @@ __all__ = [
     "REFUSAL_AMOUNT",
     "REFUSAL_ACCOUNT",
     "REFUSAL_CURRENCY",
+    "REFUSAL_CURRENCY_UNDEFINED",
+    "REFUSAL_EXCHANGE_RATE",
     "REFUSAL_LEDGER",
     "ExpenseGroup",
     "ExpensePlan",
@@ -78,6 +84,16 @@ REFUSAL_ACCOUNT = "account_unresolved"
 REFUSAL_AMOUNT = "amount_unreadable"
 REFUSAL_CURRENCY = "foreign_currency_unresolvable"
 REFUSAL_LEDGER = "already_in_ledger"
+# A foreign currency the TARGET ORG does not define. Distinct from
+# REFUSAL_CURRENCY: that one means we cannot resolve a currency at all,
+# this one means the org has no such currency and somebody must add it
+# there. TEST-BTS defines 11 currencies and BRL is not among them, while
+# 20 of July's purchases are BRL.
+REFUSAL_CURRENCY_UNDEFINED = "currency_not_defined_in_org"
+# A foreign row whose `Exchange Rate` cell is blank or unusable. Posting
+# a foreign amount without a rate lets Zoho apply one nobody chose, which
+# misstates the amount in exactly the silent way this path refuses.
+REFUSAL_EXCHANGE_RATE = "exchange_rate_missing"
 
 AUDIT_PREFIX = "[External Match Audit]"
 
@@ -178,6 +194,15 @@ def audit_note(group: ExpenseGroup, *, source: str) -> str:
         f"{AUDIT_PREFIX} Ref: {group.reference or '(none)'}",
         f"Source: {source}",
     ]
+    # The vendor rides in the envelope because `vendor_name` does not
+    # survive the POST: measured 2026-09-23, all 13 rehearsal expenses
+    # read back `vendor_name=""` and `vendor_id=""`. Zoho accepts the
+    # field, answers 201 and stores nothing without a contact to link.
+    # Without this line a reviewer in the Zoho UI sees no vendor at all,
+    # which is the attribution half of what makes a row checkable.
+    vendor = group.cell("Vendor")
+    if vendor:
+        parts.append(f"Vendor: {vendor}")
     if group.is_split:
         parts.append(f"Split: {len(group.rows)} accounts")
     entity = group.cell("Legal Entity")
@@ -222,24 +247,59 @@ def build_expense_payload(
     base_currency: str,
     source: str = "expense-recon",
     org_id: str | None = None,
+    currencies: "Mapping[str, str] | None" = None,
 ) -> "dict | PostRefusal":
     """The Zoho POST body for one purchase, or a refusal naming why not.
 
     `org_id` is passed to account resolution so this org's category
     fallback applies; without it, a category label refuses as before.
+
+    `currencies` maps an upper-case currency code to the target org's
+    numeric `currency_id` (from `GET /settings/currencies`). Omit it and
+    a foreign row refuses exactly as it did before, which keeps the
+    default deny-by-default. The RATE is never invented here: it comes
+    from the reviewed CSV's own `Exchange Rate` cell, so what posts is
+    the rate a human signed off rather than one fetched at post time.
     """
-    currency = group.cell("Currency Code") or base_currency
-    if currency.upper() != base_currency.upper():
-        return PostRefusal(
-            reference=group.reference,
-            reason=REFUSAL_CURRENCY,
-            detail=(
-                f"{currency} is not the org's base currency ({base_currency}) "
-                "and Zoho needs a currency_id, not a code. The grant no "
-                "longer carries settings.READ, so /settings/currencies "
-                "cannot resolve one; posting it would misstate the amount"
-            ),
-        )
+    currency = (group.cell("Currency Code") or base_currency).upper()
+    base = base_currency.upper()
+    fx: dict[str, object] = {}
+    if currency != base:
+        if not currencies:
+            return PostRefusal(
+                reference=group.reference,
+                reason=REFUSAL_CURRENCY,
+                detail=(
+                    f"{currency} is not the org's base currency ({base}) and "
+                    "Zoho needs a currency_id, not a code; no currency map "
+                    "was supplied, so posting it would misstate the amount"
+                ),
+            )
+        currency_id = currencies.get(currency)
+        if not currency_id:
+            return PostRefusal(
+                reference=group.reference,
+                reason=REFUSAL_CURRENCY_UNDEFINED,
+                detail=(
+                    f"org {org_id or '(unknown)'} defines no {currency} "
+                    f"currency (it has: {', '.join(sorted(currencies)) or 'none'}). "
+                    "Add it in that org's settings before posting; this is a "
+                    "config gap in the target org, not a problem with the data"
+                ),
+            )
+        rate = _amount(group.cell("Exchange Rate"))
+        if rate is None or rate <= 0:
+            return PostRefusal(
+                reference=group.reference,
+                reason=REFUSAL_EXCHANGE_RATE,
+                detail=(
+                    f"the {currency} row carries no usable Exchange Rate "
+                    f"({group.cell('Exchange Rate')!r}); without one Zoho "
+                    "applies a rate nobody chose and the posted amount stops "
+                    "matching the reviewed export"
+                ),
+            )
+        fx = {"currency_id": currency_id, "exchange_rate": float(rate)}
 
     lines: list[dict] = []
     total = Decimal("0")
@@ -280,6 +340,7 @@ def build_expense_payload(
         "reference_number": group.reference,
         "description": audit_note(group, source=source),
         "currency_code": currency,
+        **fx,
     }
     if len(lines) == 1:
         # A single-account expense posts flat; Zoho's line_items form is
@@ -336,6 +397,7 @@ def plan_expense_post(
     paid_through_account_id: str,
     base_currency: str,
     source: str = "expense-recon",
+    currencies: "Mapping[str, str] | None" = None,
 ) -> ExpensePlan:
     """Resolve every group and cross-reference the ledger. Pure apart
     from ledger READS; posts nothing."""
@@ -349,6 +411,7 @@ def plan_expense_post(
             base_currency=base_currency,
             source=source,
             org_id=org_id,
+            currencies=currencies,
         )
         if isinstance(built, PostRefusal):
             refusals.append(built)

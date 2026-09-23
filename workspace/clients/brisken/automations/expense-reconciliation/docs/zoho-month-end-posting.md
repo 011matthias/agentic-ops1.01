@@ -490,6 +490,89 @@ which is the scope the currency refusal says is missing. So Gap 2 is
 reachable in the sandbox without re-consent. Note the scope is not
 org-bound: only our own org guards keep it off production books.
 
+## 2026-09-23: Gap 2 is a billing tier, not a scope or a bug
+
+Owner greenlit the sandbox `fullaccess` credential for
+`GET /settings/currencies`. The read worked, the code works, and the post
+is blocked by something neither could fix.
+
+### The export already carried the rate
+
+The first finding cut the work in half. `EXPENSE_COLUMNS` has an
+**`Exchange Rate`** column, populated on 12 of 12 EUR rows and 20 of 20
+BRL rows, and the payload builder was ignoring it. So no FX lookup, no
+rate service, no settings dependency for the rate: the reviewed CSV
+already holds the rate a human approved, which is exactly what
+"post the reviewed artifact" asks for. `build_expense_payload` now reads
+it, and refuses (`exchange_rate_missing`) when a foreign row has none,
+because Zoho would otherwise apply a rate nobody chose.
+
+`currencies` (code to the org's numeric `currency_id`) is an injected
+map, defaulting to `None`, so a caller that does not supply one refuses
+foreign rows exactly as before. Deny-by-default survives the change.
+
+### What the currency map showed
+
+TEST-BTS defines 11 currencies: AED AUD CAD CNY EUR GBP INR JPY SAR USD
+ZAR. **BRL is not among them**, and 20 of July's 46 purchases are BRL.
+That is a config gap in the target org, so it gets its own reason code
+(`currency_not_defined_in_org`) rather than being confused with missing
+data.
+
+Planning the whole batch with the map: **24 postable** (the 13 already
+posted plus 11 new EUR), 20 refused on BRL, 2 on account. The second
+account refusal is new only in the sense that it was previously masked:
+the currency check ran first, so fixing currency uncovered it.
+
+### The post was rejected, 11 for 11, by the subscription plan
+
+> `Your current plan does not support creating Expense with any currency
+> other than your organizations base currency.`
+
+`GET /organizations` names it: TEST-BTS is
+`plan_name = 'FREE'`. Multi-currency expenses are a paid-tier feature, so
+**no amount of scope, config or code will post a EUR expense in this
+sandbox.** Gap 2 cannot be rehearsed here at all, and that is true for
+EUR, which the org defines, as much as for BRL, which it does not.
+
+This is very likely sandbox-only. Brisken's production orgs run real BRL
+and EUR operations, so they are on a paid tier; that should be confirmed
+before the production run rather than assumed.
+
+### The failure was the machinery working
+
+Worth recording because it is the first time the guards were tested by a
+real rejection rather than by a test:
+
+- 400 is a clean rejection, so each intent was **released**, not left
+  inflight: 0 of 11 references remain in the ledger, and a retry is
+  possible the moment the block lifts.
+- **23 expenses before, 23 after.** Nothing was written.
+- Nothing was marked ambiguous, so the batch did not abort; it reported
+  all 11 rejections rather than stopping at the first.
+- The 13 USD rows from the earlier run are still `posted` and untouched.
+
+### Blast radius of the fullaccess credential
+
+`GET /organizations` with it returns **exactly one** organization,
+822116290. So despite `ZohoBooks.fullaccess.all` being an unrestricted
+scope name, this credential cannot see or reach Brisken's production
+books at all. That is a stronger guarantee than the in-code org guard,
+and independent of it.
+
+### Vendor attribution restored
+
+`audit_note` now carries `Vendor: {name}`, so a reviewer in the Zoho UI
+sees the vendor even though `vendor_name` is discarded. It goes through
+the one envelope builder, so splits carry it too; a blank vendor adds no
+empty field. `vendor_name` is still sent, inert, so it starts working the
+day contacts are resolved.
+
+**`vendor_id` could not be populated.** TEST-BTS has **0 vendor
+contacts**, and July names 33 distinct vendors, so there is nothing to
+resolve against: filling it means CREATING 33 contacts, which is a write
+of a different kind and was not in scope here.
+
 ## Still open
 
 - The scope grant above, which blocks every write.
