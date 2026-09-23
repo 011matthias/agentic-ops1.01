@@ -8274,9 +8274,9 @@ only. **Still open**: `ExpenseMemory.apply` stamps a remembered card at INGEST
 without this gate, so a newly ingested month can still take a multi-card
 brand's remembered card. Same ruling, second half, not yet built.
 
-### Item 171 — the sign-off card learner cannot see the statement's own answer
+### Item 171 — the sign-off card learner cannot see the statement's own answer — SHIPPED 2026-09-24
 
-Split out of item 169 fact 2, measured 2026-09-23, **not built**.
+Split out of item 169 fact 2, measured 2026-09-23, **built 2026-09-24**.
 `_CARD_OBSERVATION_SOURCES` has listed `settled_charge` since item 111, so the
 sign-off learner was always meant to learn the card the STATEMENT named for a
 settled pair. It cannot: the `card_res` handed to
@@ -8288,13 +8288,44 @@ Hostinger -> card-2838, Typora -> card-2838. Anthropic appears on two cards
 (2838 five times, 3645 once), which is exactly the case the upsert already
 refuses to pin, so the guard that matters is in place.
 
-Live effect today is **zero**: no month has ever been signed off. The fix is
-about three lines (`month_charge_states(run, decisions or {})` then
-`settled_charge_cards(...)` into the resolution). It was written and reverted
-in the item-169 PR for one reason: this is the writer of DURABLE memory, and a
-change there with no regress-checked bite test is the wrong kind of cheap.
-Build it with a statement-attached month and a publish, asserting the registry
-gains the card, and regress it before merging.
+Live effect today is **zero**: no month has ever been signed off. It was
+written and reverted in the item-169 PR for one reason: this is the writer of
+DURABLE memory, and a change there with no regress-checked bite test is the
+wrong kind of cheap.
+
+**Built 2026-09-24.** `commit_to_memory` now passes
+`settled_cards=export_settled_cards(run, decisions)` into the resolution it
+hands the card learner, so the statement's own answer reaches `cards_seen`.
+Six route-level tests in `tests/test_settled_charge_learner_item_171.py`, all
+through `POST /api/runs/{id}/publish`; regress-checked (disabling the wiring
+turns three of them red, restoring turns them green).
+
+**The one design call, and it went the opposite way from the obvious.** The
+settled map is the EFFECTIVE reconciled bucket, which includes a pair the
+matcher proposed and nobody has confirmed by hand. Every other learner in
+`commit_to_memory` is confirmed-only, so narrowing this one to match looked
+like the disciplined choice. Measured against the live months first
+(read-only replay of both statement batches, 2026-09-24):
+
+| settled map | July teaches | August teaches |
+|---|---|---|
+| reconciled bucket (shipped) | MARTINO SUPERMERCADO -> 3876, Supermercado Fenix -> 3876, Anthropic -> card-2838, Lovable Labs -> card-2838 (19 rows) | Anthropic -> 3645, Lovable Labs -> 3645 (3 rows) |
+| confirmed pairs only | nothing (its 1 row is Amazon, not in the registry) | **Anthropic -> 3645** (1 row) |
+
+Confirming pairs by hand is something Criss has barely done, so the narrow
+map does not teach less of the same thing: it teaches a DIFFERENT, wrong
+thing. Anthropic would enter `cards_seen` as a single-card merchant on 3645,
+which is the false singleton item 173 gates against, on one of the three
+vendors item 154 forbids guessing. The full bucket sees Anthropic on both
+cards and the upsert pins neither.
+
+The asymmetry generalises and is worth keeping: under-observing this learner
+INVENTS facts, over-observing it only makes it say nothing. A reconciled pair
+is also exactly as trustworthy as what already ships, being the pairing the
+grid shows, the CSV exports and the month report prints. No item-173 vouch is
+needed on the write side either, because the upsert already is that rule:
+`cards_seen` accumulates, `card_key` is written only while it holds exactly
+one card, and a second card drops a learned key in the same pass.
 
 ### Item 170 — a correction that reaches the vendor's other spellings
 
