@@ -59,7 +59,15 @@ Two changes:
 
 Nothing about `created_by` changes, and a month whose `created_by` is absent still renders no badge.
 
-## 5. Do not change
+## 5. The Paid Through cell prints the private label twice
+
+This is the duplicate the operator saw, "Private (Dirk Neumann)Private (Dirk Neumann)", and it is in the Paid Through column, not in either private control. The cell renders the resolved value twice: once as a plain `<div class="px-1 text-sm text-foreground">` inside the cell's `flex flex-col gap-1` wrapper, and once as the `<span>` inside the account select's `role="combobox"` trigger. On an ordinary row those two carry different text, or the static line is absent; on a private row both resolve to `Private ({person})` and collide.
+
+Measured on the live September month, 2026-09-24: of 80 rows on the page, exactly ONE has a repeated string in that cell, and it is the private one. So this is not a general Paid Through problem to redesign; it is one collision to remove.
+
+Render one of the two, never both: when the static line's text equals the select trigger's current value, drop the static line. Do not special-case the word "Private", and do not remove the select, which is how the account gets changed on every other row.
+
+## 6. Do not change
 
 The undo button and what it posts. The private badge's own text. The refusal messages the backend returns. The card picker on any row that is not private. Every count, every other cell of the months list.
 

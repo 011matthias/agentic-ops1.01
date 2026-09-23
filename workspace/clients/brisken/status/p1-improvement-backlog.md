@@ -8555,7 +8555,7 @@ adjacent.
 Prompt written, not pasted: `docs/lovable-private-reimburse-prompt.md`, which
 also carries item 174's copy change. No backend work is left on this item.
 
-### 176. The private control is offered again on a row already marked private (note #75, operator 2026-09-23) — SHIPPED 2026-09-24 (backend; the visible duplicate is NOT this and is still open)
+### 176. The private control is offered again on a row already marked private (note #75, operator 2026-09-23) — SHIPPED 2026-09-24 (backend, live); the doubled label is the Paid Through cell and is SPA-side
 
 **Operator:** *"no need to set this as private again, if user has already set
 as private"*
@@ -8610,11 +8610,27 @@ escapes for another reason:
 The private row's own render is the badge `expx.private.badge` ("Private card:
 reimburse {name}") plus the button `expx.reimburse.undo`, and neither is gated
 on this flag. So the flip is **safe** (it removes no control the reviewer has)
-and **invisible today** (it changes nothing on screen). The doubled "Private
-(Dirk Neumann)Private (Dirk Neumann)" the note captured has a different cause,
-still unidentified; neither of those two strings is "Private (name)", so it is
-not the badge either. Find it with one cold drive of September row 0046 while
-doing item 175, which touches the same card-picker area.
+and **invisible today** (it changes nothing on screen).
+
+**The duplicate is found, and it is in the Paid Through column.** Cold drive
+of September row 0046 after the deploy, 2026-09-24: the row renders the badge
+"Private card: reimburse Dirk Neumann", the button "Undo private card" (so the
+flip removed nothing, which was this change's one real risk), and then
+`Private (Dirk Neumann)` twice. Both copies sit in cell index 7, the Paid
+Through column, and they are different elements rendering the same value: a
+plain `div.px-1.text-sm.text-foreground` inside the cell's
+`flex flex-col gap-1` wrapper, and the `span` inside the account select's
+`role="combobox"` trigger. On an ordinary row those two carry different text
+or the static line is absent; on a private row both resolve to
+`Private ({person})` and collide. Of 80 rows on the page exactly ONE doubles,
+and it is the private one, so this is one collision to remove and not a Paid
+Through redesign. Fix is §5 of `docs/lovable-private-reimburse-prompt.md`:
+drop the static line when it equals the select's current value.
+
+So the note had two halves and they live in different places. The flag saying
+"you may mark this private" on a row already private is this item and is
+shipped; the doubled label is the Paid Through cell and is SPA-side, pending
+that prompt.
 
 Shipping the predicate anyway is not bookkeeping: `Zt` is the screen's whole
 answer to "may I offer the private control here", it answers *yes* on a row
