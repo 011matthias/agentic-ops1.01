@@ -8272,6 +8272,17 @@ gains the card, and regress it before merging.
 > record of what was found, not a plan. Do not pick it up, and do not send the
 > prepared alias `PUT /api/settings` diff. The CARD half of the attribution
 > work (items 169, 171, 172) is unaffected and continues.
+>
+> **Scope of the direction, reconciled 2026-09-23 evening (operator, on the
+> Phase 1 GL brief).** It closes work on the EIGHT-BUCKET vocabulary: refining
+> what a bucket means, teaching a bucket across a vendor's spellings, sending
+> the alias diff. It does NOT close the work that DELETES that vocabulary.
+> Dirk hand-marked `Expense Relevant` on his own chart of accounts the same
+> afternoon and revised it at 18:56, six minutes before this closure merged,
+> and feedback notes #83-85 ask for exactly that replacement. Two sessions ran
+> in parallel and neither saw the other: the card session took the direction,
+> the CoA session wrote the brief. The direct-to-Zoho-GL work (items 173-175)
+> is IN scope and subsumes this item's goal by removing the layer it corrects.
 
 
 Memory recalls and captures on the raw normalized `detected_vendor`

@@ -67,8 +67,15 @@ def categorization_from_dict(d: dict | None) -> Categorization | None:
     if d is None:
         return None
     return Categorization(
-        category=d["category"],
-        zoho_account=d["zoho_account"],
+        # .get on both halves of the classification: the eight-bucket
+        # vocabulary is being retired in favour of a GL leaf, so a snapshot
+        # written by a later version may carry the account and omit the
+        # category. A bare subscript would KeyError on load, and a month
+        # that cannot be opened is not a recoverable state. Same reasoning
+        # as `decision` below; this read has to tolerate the absence BEFORE
+        # any writer stops emitting the key.
+        category=d.get("category"),
+        zoho_account=d.get("zoho_account"),
         confidence=d["confidence"],
         source=ClassificationSource(d["source"]),
         reasoning=d.get("reasoning", ""),
