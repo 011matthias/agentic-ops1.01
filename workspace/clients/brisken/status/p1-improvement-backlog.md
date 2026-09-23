@@ -8196,10 +8196,42 @@ card label rather than a Zoho account name, which no other row does. Whether
 `3876` and `card-0340` genuinely post to card-2838's TRAVEL account is a
 bookkeeping fact this side cannot judge; they may well be correct.
 
-**Not touched.** This is a `PUT /api/settings` write on Criss's live master
-data, which is the owner's, and the correct account name for 3645 has to come
-from Zoho's chart rather than be guessed here. Twelve live September rows
-currently carry it.
+**ANSWERED 2026-09-23 from Zoho's own chart** (owner: "you can look it up and
+find out for yourself"). Read-only pull of `chartofaccounts`, which the Books
+token's `ZohoBooks.accountants.READ` scope covers:
+
+| org | credit-card accounts that exist |
+|---|---|
+| Corporate Services `822741658` (177 accounts) | `CHASE VISA - 2838 - TRAVEL`, `GSBANK Apple Master Card 0113 \| Dirk Neumann` |
+| Cloud Services `697686691` (199 accounts) | `Chase Visa \| 9693 \| Cloud Expenses`, `Chase United Visa 8311 \| business expenses \| Dirk Neumann`, `VISA 6013 TRAVEL EXPENSE active since 230601` |
+
+**There is no Zoho account for card 3645, and there does not need to be.**
+Corporate Services has exactly ONE Chase Visa credit-card account, and cards
+`3876` and `card-0340` already point at it. So this is a typo of the right
+idea, not a missing account: whoever filled 3645 in typed the CARD's label
+(`Credit Card - 2838`) where the ACCOUNT's name belongs.
+
+**The fix, exact:** card `3645`'s `zoho_account` becomes
+`CHASE VISA - 2838 - TRAVEL`, byte-identical to what `3876`, `card-0340` and
+`card-2838` already carry. No other field changes.
+
+**Still not written.** It is a `PUT /api/settings` on Criss's live master data
+([[feedback_recon_no_live_writes_criss_acts]]), so she makes it in the Cards
+editor, or the owner says to. The value is now a fact read from Zoho rather
+than a guess, so nobody has to work it out again. No live rows point at it
+right now: item 173 took the 12 September rows back to blank.
+
+**One loose thread, unrelated:** `card-1176` carries
+`Chase Visa 1176 | Travel Expenses | Dirk Neumann` under entity Consulting,
+and that account exists in NEITHER org checked. It may live in one of the
+other six Books orgs; not chased, and nothing currently resolves to that card.
+
+**Also noticed, not acted on:** the Books token's scope now reads
+`ZohoBooks.expenses.CREATE ZohoBooks.expenses.READ ZohoBooks.contacts.READ
+ZohoBooks.accountants.READ`. `expenses.CREATE` is granted, which
+[[project_brisken_zoho_books]] still records as the missing grant blocking any
+post, and `settings.READ` is gone (so `/organizations` now 401s and org ids
+have to come from the repo). Posting stays OFF and invasive regardless.
 
 ### Item 173 — a remembered card only for a brand seen on ONE card
 
