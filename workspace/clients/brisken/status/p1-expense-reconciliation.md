@@ -16,6 +16,17 @@ the multi-tenant SaaS in spec v2 is deferred. Per-slice authority is
 `automations/expense-reconciliation/BLUEPRINT.md` + `ANNEALING.md`; this is the
 roll-up.
 
+**2026-09-23: the FX reference rates are polled daily from OpenTickers
+(backlog item 167, feedback note #79).** The app keeps a daily table of
+central-bank reference rates (ECB where published) and the matcher reads the
+rate for each purchase's own day above the ECB monthly average; the two typed
+Settings rates still win, so July and August did not move. Live once the PR
+merges and deploys; the FX tab's "Polled daily rates" card and the `daily
+rate, {day}` label wait on `docs/lovable-fx-daily-rates-prompt.md`. Open
+owner decision: clear the two typed rates so every month reads the daily
+rate. Feedback notes #73-#82 (09-20 to 09-23) are new and listed unitemized
+at the top of the backlog's Open section (#76, #78, #80, #81 became items 163-166 in PR #1202 the same afternoon).
+
 **This app is the consolidation target for the whole Brisken estate**
 (2026-09-09, `../TARGET-ARCHITECTURE.md`). It already owns the dedicated
 IPv4, the `expenses.brisken.com` MX, the rDNS and the cert, so the plan

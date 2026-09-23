@@ -59,7 +59,8 @@ _CENT = Decimal("0.01")
 
 # What produced a row's figure, in the order the rungs above run. The strings
 # are the ones `_reference_rate_for` already returns for its own rungs
-# ("configured", "statement", "receipts", "ecb_month"), plus the two this
+# ("configured", "statement", "receipts", "opentickers_day", "ecb_month"),
+# plus the two this
 # module adds, so one vocabulary covers both.
 SOURCE_SAME = "same"
 SOURCE_CHARGE = "charge"
@@ -70,6 +71,7 @@ _SOURCE_TEXT = {
     "configured": "your rate",
     "statement": "statement FX",
     "receipts": "receipt rates",
+    "opentickers_day": "OpenTickers",
     "ecb_month": "ECB",
 }
 
