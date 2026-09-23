@@ -335,11 +335,15 @@ def run_month(
 
     # 1. INGEST & GROUP
     rows = read_expense_csv(csv_path)
-    groups = group_by_reference(rows)
+    # Period-scoped, so the export's per-batch filename fallback
+    # (`NNNN__rendered-body.pdf`) cannot collide with another month's.
+    groups = group_by_reference(rows, period=period)
     run.rows, run.purchases = len(rows), len(groups)
     splits = sum(1 for g in groups if g.is_split)
+    scoped = sum(1 for g in groups if g.was_scoped)
     emit(f"\n[1/7] ingest: {csv_path.name}: {len(rows)} rows -> {len(groups)} "
-         f"purchases ({splits} split across accounts)")
+         f"purchases ({splits} split across accounts, {scoped} synthetic "
+         f"reference(s) scoped to {period})")
 
     client = factory(org.org_id)
 

@@ -740,9 +740,73 @@ the runner: unthreading `period=`, unthreading
 `convert_foreign_to_base=`, and disabling the resume rule each turn
 runner-level tests red and green again on restore.
 
+## 2026-09-23: synthetic references collided across months
+
+August's first dry run refused its OpenAI purchase as `already_in_ledger`
+against a row July had posted. Both are real, different purchases, and
+both are called `0003__rendered-body.pdf`.
+
+The export writes `ref = detected_reference or document_id`
+(`output/zoho_expense_export.py`), so a receipt whose invoice number was
+never read falls back to its archive filename, and a mail-rendered
+receipt's filename is `NNNN__rendered-body.pdf` where NNNN is only its
+index within that batch. Those indexes restart every month. The app
+already knew (`web/service.py: adjacent_pool_for_month`, "July and August
+share four ids today"); what had never met it was the ledger, whose key
+is `(org, reference)`.
+
+`period_scoped_reference` now prefixes ONLY the filename fallback with
+its month, so July's is `2026-07_0003__rendered-body.pdf` and August's is
+`2026-08_...`. A real issuer reference is left untouched: it is already
+unique across months, and rewriting one would break the tie back to the
+vendor's own document. The detector needs both the `NNNN__` prefix and a
+document extension; the negative cases in
+`tests/test_zoho_synthetic_references.py` are the contract, and every one
+of them is a real July or August reference.
+
+### A read-time fallback cannot do this, and that was the first attempt
+
+The first cut kept a fallback: when the scoped key missed, look up the
+bare one. It passed its tests and failed on live data, because from
+August that fallback finds JULY's row. The bare key carries no month, so
+nothing at read time can tell which month's purchase it names. The test
+that should have caught it seeded the ledger with the SCOPED July key,
+which is not the shape the real ledger had.
+
+So the ledger is migrated instead, by
+`migrate_legacy_synthetic_references`, and the month is confirmed against
+Zoho rather than assumed from the export being processed: the stored
+expense is read back and its `date` must equal the group's own
+`Expense Date`. Run from August against July's row, that comparison
+refuses and the row is left alone. Date equality is exact here because
+the payload's date is the CSV cell verbatim, and unlike a period-window
+test it does not trip over July's three legitimate June-dated rows.
+
+Applied to the durable ledger 2026-09-23 (backup first): one row,
+`0003__rendered-body.pdf` to `2026-07_0003__rendered-body.pdf`, 41 rows
+before and after. July's known-answer dry run is unchanged at 0 postable
+/ 41 + 3 + 2, and August's false ledger refusal is gone.
+
+### The sandbox reset can now take a subset
+
+TEST-BTS holds months the durable ledger records as `posted`, so a full
+reset would silently desynchronise the ledger from Zoho and destroy the
+July rehearsal. `plan_reset(only_ids=[...])` deletes named rows and
+keeps the rest; `ResetReport.ok` compares against
+`expected_remaining` rather than demanding an empty org, and an id the
+org does not hold aborts the whole plan instead of being skipped.
+
 ## Still open
 
 - The scope grant above, which blocks every write.
+- **The stray August row in TEST-BTS.** Expense `4369050000000330001`
+  (Microsoft 365, USD 156.00, dated 2026-08-31, created 2026-09-21) is a
+  rehearsal artifact that was never ledgered. It is the only thing
+  occupying August, so the August run aborts: none of that batch's
+  references are in the ledger, which is exactly the "someone else's
+  hand-entered month" case the resume rule refuses. Deleting it needs
+  `expenses.DELETE`, which the Self Client grant in `context/.env` does
+  not carry; the sandbox vault credential does.
 - Per-org routing for the 5 cards across separate organizations, and the
   BRL/EUR/USD cases. The trial was one card, nine rows, one currency.
 - Wiring the two new guards into the posting CLI's pre-flight, and the
