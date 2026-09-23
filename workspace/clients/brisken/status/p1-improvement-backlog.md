@@ -8576,6 +8576,78 @@ cloud vendor from the owner, not a vocabulary redesign. **FILED AS RECORD**,
 but of the three it is the one that could ship the moment the owner gives the
 five accounts, and the one with a live consequence if he does not.
 
+### Feedback notes: none. Items 182-184 come from the GL categorization build (2026-09-23)
+
+Found while building the direct-to-Zoho-GL chain (PRs #1232, #1234, #1236,
+#1238) and recorded in `docs/zoho-gl-categorization-architecture.md` under
+"Open, and whose it is". None of the three is a vocabulary question; all
+three are places where something plausible is accepted with nothing checking
+it.
+
+### 182. The chart pull is silently truncated, and 19 of Dirk's accounts are missing from it
+
+`zoho-books-coa.json` holds exactly 199 accounts for Cloud Services
+(697686691), with zero `cost_of_goods_sold` and zero `other_expense`, while
+Consulting carries 25 and 5 and Corporate Services 11 and 4. 199 sits on a
+200-row page boundary, which is what a pull that stopped paginating looks
+like.
+
+Nineteen accounts Dirk marked expense-relevant are absent from it, including
+`2031056000014161139 COGS - DEV Infrastructure (SAP Apps & others)`, the
+account Anthropic posts to under Cloud Services.
+
+The curated taxonomy is compiled from Dirk's workbook and not from this
+pull, so the GL chain is unaffected; the compile reports the divergence
+rather than failing on it. But the pull is still what `load_entity_chart`
+and the COA gate read, and a missing account there reads as "no such
+account" rather than as "we did not fetch page two". Anything else that
+reads it inherits the same gap.
+
+Fix is a re-pull that follows pagination, plus a count assertion so a short
+page fails loudly instead of arriving as a small chart. **Bounded and ours**,
+needs nothing from Dirk.
+
+### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account
+
+`registry_upserts_from_expense_run` fires automatically on Publish, not on a
+deliberate reviewer save. Two things follow from that, and the second is the
+one that matters under the new design.
+
+Its conflict detection compares the **category only, never `zoho_account`**.
+So two rows that agree on the category and name different accounts do not
+conflict, and the first account wins silently. Under a design where the
+account IS the answer rather than a detail hanging off the category, that is
+a nearest-plausible default sitting inside the writer of durable memory: the
+thing later runs consult ahead of the model.
+
+That the write rides on Publish rather than on an explicit save compounds
+it. Nobody chose to teach anything; a month was published and the registry
+changed.
+
+Wanted: the upsert on a deliberate save, and conflict detection that treats
+a disagreeing account as a conflict rather than as agreement. **Needs fixing
+before the chain writes through it**, which makes it a prerequisite for the
+step that converts the engine, not a later tidy-up.
+
+### 184. `paid_through_account_id` is a raw id that passes through no resolution and no check
+
+`zoho/expense_post.py:596-597` sends `paid_through_account_id` to Zoho as a
+numeric id that nothing resolved and nothing validated: not against the
+entity's chart, not for leaf-ness, not for being active, not for belonging
+to this org at all.
+
+This is the same class as the bug the GL change removes, on the card side
+rather than the expense side. The expense account now goes through
+`curated_leaves.account_id_for(org_id, code)`, which refuses anything this
+entity cannot post to; the account the money is paid FROM goes through
+nothing. A wrong id here posts to a real account in the wrong place exactly
+as quietly as the category-to-account table did.
+
+Wanted: the same treatment the debit side just got. Resolve it per entity,
+assert it is numeric and postable-from, refuse rather than default.
+**Bounded and ours**, though the correct value per card is master data and
+overlaps item 172 (card 3645's account, which is Dirk's).
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
