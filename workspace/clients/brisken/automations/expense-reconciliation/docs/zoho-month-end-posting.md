@@ -796,17 +796,76 @@ keeps the rest; `ResetReport.ok` compares against
 `expected_remaining` rather than demanding an empty org, and an id the
 org does not hold aborts the whole plan instead of being skipped.
 
+## 2026-09-23: August posted through the unified runner, 19 of 19
+
+The first month run end to end by `reconcile_month` rather than by hand.
+The stray trial row (`4369050000000330001`, Microsoft 365, USD 156.00)
+was deleted first through `plan_reset(only_ids=...)`, which took the org
+from 51 expenses to 50 and left August empty.
+
+| stage | result |
+|---|---|
+| occupancy 2026-08 | `CLEAR` |
+| ingest | 20 rows, 20 purchases, 4 synthetic references scoped |
+| postable | 19, tie-out USD 2,758.91 read from the plan |
+| posted | 19, 0 rejected, 0 ambiguous |
+| readback | 19 of 19 clean, stored total USD 2,758.91, MATCH |
+| refused | 1, `account_unresolved` on `H0LHY2WQ-0032` |
+
+**Card delta measured, not assumed.** A census of the dummy card before
+and after: 60,482.18 to 63,241.09 USD, a delta of exactly 2,758.91. The
+whole card now reconciles to the cent:
+
+```
+  4,297.74   the 2026-09-22 trial (9 rows)
+   -156.00   the stray August row, deleted
+ +56,340.44  July batch (41 rows: 3 June-dated + 38 July-dated)
+  +2,758.91  August batch (19 rows)
+ ----------
+  63,241.09  measured on the card, 68 expenses
+```
+
+**Both duplicate defenses re-armed** on a re-run: occupancy went `CLEAR`
+to `ALREADY_OCCUPIED`, and the ledger refuses all 19 as
+`already_in_ledger` (60 posted rows now, 41 + 19). 0 postable.
+
+### The batch page's 25 against the export's 20 is not a discrepancy
+
+Worth recording because it reads like missing money and is not. The page
+lists 25 DOCUMENTS; the export writes one row per CHARGE. Five documents
+carry `counts_in_total: False`, and each is a second copy of a purchase
+already in the export, at an identical amount:
+
+| kept | withheld | vendor | amount |
+|---|---|---|---|
+| `0004__rendered-body.pdf` | `0005__rendered-body.pdf` | Obsidian | 96.00 |
+| `0008__Invoice-HMVWDWIL-0029` | `0009__Receipt-2247-1655-6392` | Lovable | 15.00 |
+| `0015__Invoice-DZ9BH3VA-0037` | `0016__Receipt-2428-2412-7739` | Anthropic | 100.00 |
+| `0000__rendered-body.pdf` | `0018__billet-16530.pdf` | the Nice tourist train | 32.00 |
+| `0023__Invoice-DZ9BH3VA-0034` | `0024__Receipt-2248-4597-2811` | Anthropic | 52.59 |
+
+Three are an invoice and a receipt for one charge; two are the same mail
+rendered twice. 25 documents, 20 charges, nothing dropped.
+
 ## Still open
 
-- The scope grant above, which blocks every write.
-- **The stray August row in TEST-BTS.** Expense `4369050000000330001`
-  (Microsoft 365, USD 156.00, dated 2026-08-31, created 2026-09-21) is a
-  rehearsal artifact that was never ledgered. It is the only thing
-  occupying August, so the August run aborts: none of that batch's
-  references are in the ledger, which is exactly the "someone else's
-  hand-entered month" case the resume rule refuses. Deleting it needs
-  `expenses.DELETE`, which the Self Client grant in `context/.env` does
-  not carry; the sandbox vault credential does.
+- The scope grant above, which blocks every write in the production orgs.
+- **Five rows held back across the two months, all for a human.** August:
+  `H0LHY2WQ-0032` (Lovable, USD 50.00) still reads
+  `(uncategorized - assign)`. July: three `account_unresolved`
+  (`G173514057`, `052155`, `000598540`) and two
+  `date_precedes_period_window` (`360172592` dated 2026-03-30;
+  `00000031010` with an empty date cell).
+- **Two August rows at 576.00 on the same date and card**
+  (`RPS2004132748584` "Zoho Books, Professional (Plan)" and
+  `50102456463` "ZOHO Corporation"). They posted to different accounts
+  and are NOT flagged as duplicates by the app, but they may be one
+  charge with two receipts. Worth a look before the production run.
+- Per-org routing for the 5 cards across separate organizations. Both
+  rehearsed months were posted to one sandbox card; the August export
+  alone names 5 paid-through cards and 5 legal entities, and two rows
+  still carry `(paid-through - assign)` / `(entity - assign)`, which the
+  poster does not refuse.
 - Per-org routing for the 5 cards across separate organizations, and the
   BRL/EUR/USD cases. The trial was one card, nine rows, one currency.
 - Wiring the two new guards into the posting CLI's pre-flight, and the

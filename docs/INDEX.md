@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-23 | August Posted Through The Unified Runner | client-dev | [→](docs/2026-09-23%20-%20August%20Posted%20Through%20The%20Unified%20Runner/Checkpoint.md) |
 | 2026-09-23 | FX Rates Polled Daily From OpenTickers | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20FX%20Rates%20Polled%20Daily%20From%20OpenTickers/Mini-Checkpoint-1.md) |
 | 2026-09-23 | Recon Learning Loop Save Previews And Undoes | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Recon%20Learning%20Loop%20Save%20Previews%20And%20Undoes/Mini-Checkpoint-1.md) |
 | 2026-09-23 | Zoho July Rehearsal Posted | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Zoho%20July%20Rehearsal%20Posted/Mini-Checkpoint-1.md) |
