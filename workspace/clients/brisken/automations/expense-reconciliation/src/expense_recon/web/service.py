@@ -5117,21 +5117,40 @@ def commit_to_memory(
             # Resolved WITHOUT the registry on purpose — a card the registry
             # lent this month is not evidence about the merchant, and feeding
             # it back would let one observation harden into a fact.
-            # Item 171 (measured 2026-09-23, NOT fixed here): this resolution
-            # is built without `settled_cards`, and that is the only input
-            # that can produce the `settled_charge` source.
-            # `_CARD_OBSERVATION_SOURCES` has listed that source since item
-            # 111, so the path was always meant to learn from the card the
-            # STATEMENT named, and cannot. 24 rows across the seven live
-            # batches carry it, teaching pairs like MARTINO SUPERMERCADO ->
-            # 3876. Its live effect today is zero: no month has ever been
-            # signed off. Left alone deliberately -- this is the writer of
-            # durable memory, and the fix has no bite test yet.
+            # Item 171: WITH the statement's own answer, though. A receipt a
+            # charge of this month settles was paid by that charge's card,
+            # and the bank naming it is the hardest evidence this tool ever
+            # gets about which plastic a merchant is on.
+            # `_CARD_OBSERVATION_SOURCES` has listed `settled_charge` since
+            # item 111, but this resolution was the one caller that never
+            # passed `settled_cards`, so the branch was unreachable and the
+            # learner could not see it. Empty for a month with no statement,
+            # which is every month before its first one.
+            #
+            # The map is the EFFECTIVE reconciled bucket, not the narrower
+            # set of pairs the reviewer confirmed by hand, and that is
+            # deliberate. Measured over the live months 2026-09-24: confining
+            # it to confirmed pairs leaves August teaching `Anthropic -> 3645`
+            # and July teaching nothing, so Anthropic would enter `cards_seen`
+            # as a SINGLE-card merchant -- the exact false singleton item 173
+            # gates against, on one of the three vendors item 154 forbids
+            # guessing. The full bucket sees Anthropic on both cards and the
+            # upsert then refuses to pin either, which is the safe direction.
+            # Under-observing this learner invents facts; over-observing it
+            # only makes it say nothing. A reconciled pair is also exactly as
+            # trustworthy as what already ships: it is the pairing the grid
+            # shows, the CSV exports and the month report prints.
+            #
+            # No item-173 vouch is needed on this side. The upsert already
+            # IS that rule for the write direction: `cards_seen` accumulates,
+            # `card_key` is written only while it holds exactly one card, and
+            # a second card drops a learned key in the same pass.
             new_merchants, card_summary = registry_card_upserts_from_expense_run(
                 new_merchants,
                 effective_receipts=effective,
                 card_res=resolve_batch_row_cards(
-                    effective, run.config, field_overrides or {}
+                    effective, run.config, field_overrides or {},
+                    settled_cards=export_settled_cards(run, decisions),
                 ),
             )
             reg_summary.update(card_summary)
@@ -10950,10 +10969,16 @@ def settled_charge_cards(
 
 
 def export_settled_cards(run: RunRow, charge_decisions: dict | None) -> dict[str, str]:
-    """`settled_charge_cards` for the CSV and the month report, from the same
-    snapshot read and verdicts the Expenses payload uses (`decisions or {}`),
-    so a document resolves a row exactly as the screen does. Empty for a
-    month with no statement."""
+    """`settled_charge_cards` for the CSV, the month report and (item 171)
+    the sign-off card learner, from the same snapshot read and verdicts the
+    Expenses payload uses (`decisions or {}`), so a document resolves a row
+    exactly as the screen does. Empty for a month with no statement.
+
+    The name is older than the third caller and now undersells it: every
+    consumer OUTSIDE the grid's own payload reads its settled cards here,
+    which is the point. A learner deriving "which charge settled this
+    receipt" its own way would eventually teach a card the screen never
+    showed."""
     charges, states = month_charge_states(run, charge_decisions or {})
     return settled_charge_cards(run, charges, states)
 
