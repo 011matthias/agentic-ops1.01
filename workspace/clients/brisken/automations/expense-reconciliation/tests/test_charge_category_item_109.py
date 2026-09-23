@@ -287,8 +287,15 @@ def test_the_route_refuses_what_it_should(client, monkeypatch):
     view = _view(client, batch)
     fee = _row(view, "UBER ONE ANNUAL FEE")
 
+    # A category from neither live vocabulary is no longer refused: it is
+    # dropped and named under `ignored`, and the stored pick survives it.
+    assert _set_category(
+        client, batch, fee["transaction_id"], PICK).status_code == 200
     outside = _set_category(client, batch, fee["transaction_id"], "Groceries")
-    assert outside.status_code == 400, outside.text
+    assert outside.status_code == 200, outside.text
+    assert outside.json()["ignored"] == {"category": "Groceries"}
+    after = _row(_view(client, batch), "UBER ONE ANNUAL FEE")
+    assert after["charge_category"]["category"] == PICK
 
     unknown = _set_category(client, batch, "no-such-charge", PICK)
     assert unknown.status_code == 404, unknown.text

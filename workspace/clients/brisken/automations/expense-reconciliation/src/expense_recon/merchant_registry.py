@@ -101,6 +101,7 @@ from dataclasses import dataclass
 from rapidfuzz import fuzz
 
 from .matching.deterministic import _normalize as normalize_vendor
+from .category_vocabulary import recognize as recognize_category
 from .error_codes import CodedValueError
 from .matching.types import EXPENSE_CATEGORIES
 from .vendor_names import _LEGAL_SUFFIXES, clean_vendor_name
@@ -450,14 +451,23 @@ class MerchantRegistry:
         return cls(merchants, threshold=threshold)
 
 
-def normalize_merchants_setting(raw: object, *, stored: object = None) -> dict:
+def normalize_merchants_setting(
+    raw: object, *, stored: object = None,
+    dropped: list[tuple[str, str]] | None = None,
+) -> dict:
     """Validate + clean a `merchants` settings payload into the stored shape.
 
     Raises ValueError on a malformed structure (the settings PUT surfaces it
     as HTTP 400). Mirrors the `entities` map contract: the whole map replaces
     the stored one, a blank canonical name is dropped, and each entry must be
     a dict. Aliases are trimmed + de-duplicated on their normalized key; a
-    category, when given, must be one of the fixed expense categories.
+    category, when given, must be one the tool still knows (either of the two
+    live vocabularies) and is otherwise dropped rather than refused.
+
+    ``dropped``, when given, receives one ``(merchant, category)`` pair per
+    dropped category so the caller can name the loss in its reply. Callers
+    that pass nothing drop silently, which is what the internal callers
+    (memory at sign-off, the seed) want.
 
     ``stored`` (item 117) is the merchant map already saved, passed by the
     settings PUT only. When given, an alias made only of generic words
@@ -512,13 +522,17 @@ def normalize_merchants_setting(raw: object, *, stored: object = None) -> dict:
                 seen.add(key)
                 aliases.append(s)
         category = str(entry.get("category") or "").strip() or None
-        if category is not None and category not in EXPENSE_CATEGORIES:
-            raise CodedValueError(
-                f"merchant {canonical!r} category {category!r} is not one of the "
-                "expense categories",
-                code="merchant_category_invalid",
-                merchant=canonical, category=category,
-            )
+        if category is not None:
+            # Two vocabularies are live at once (`category_vocabulary`), and
+            # a value from neither is DROPPED, not refused. A settings save
+            # replaces the whole map, so one merchant holding a string the
+            # server no longer knows would have 400'd the entire save, the
+            # cards and entities tabs included, for an edit that never
+            # touched it. `dropped` carries the loss out to the reply.
+            recognized = recognize_category(category)
+            if recognized is None and dropped is not None:
+                dropped.append((canonical, category))
+            category = recognized
         zoho_account = str(entry.get("zoho_account") or "").strip() or None
         cleaned: dict = {
             "aliases": aliases,

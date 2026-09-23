@@ -92,10 +92,17 @@ def test_settings_merchants_roundtrip_and_validation(client):
     assert got["Uber"]["aliases"] == ["UBER *EATS"]      # deduped
     assert got["Uber"]["zoho_account"] == "E1"
 
-    # Bad category / non-dict entry are rejected at the edge.
-    assert client.put(
+    # A non-dict entry is still rejected at the edge; a category from
+    # neither live vocabulary is DROPPED and named in `ignored`. The save
+    # replaces the whole map, so refusing it would have 400'd the cards and
+    # entities tabs too, over a value the editor never touched.
+    resp = client.put(
         "/api/settings", json={"merchants": {"X": {"category": "Nope"}}}
-    ).status_code == 400
+    )
+    assert resp.status_code == 200, resp.text
+    assert "merchants.X.category" in resp.json()["ignored"]
+    assert client.get(
+        "/api/settings").json()["merchants"]["X"]["category"] is None
     assert client.put(
         "/api/settings", json={"merchants": {"X": "nope"}}
     ).status_code == 400
