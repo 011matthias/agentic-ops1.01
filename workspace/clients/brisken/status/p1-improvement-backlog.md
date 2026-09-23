@@ -8159,6 +8159,40 @@ Not code, and larger than all four: cards 9693 and 1176 have never had a
 statement loaded (item 108), which is why September's OpenAI receipts cannot
 attribute at all. Coverage, not matching.
 
+### Item 172 — card 3645 posts to another card's name (master data, owner's)
+
+Found 2026-09-23 by the post-deploy consumer drive of item 169, which is what
+that drive is for: the twelve September OpenAI rows that newly resolved to
+card **3645** render "Paid through: **Credit Card - 2838**". The account is
+read from the card's own `zoho_account`, and card 3645's registry entry holds
+the string `Credit Card - 2838`, which is another CARD's LABEL sitting in an
+account field. Not a code defect and not caused by the change: it predates it,
+and giving those rows a card is only what made it visible.
+
+The whole registry, read live 2026-09-23:
+
+| card | label | `zoho_account` |
+|---|---|---|
+| `3645` | Credit Card Chase Visa - 3645 | **`Credit Card - 2838`** |
+| `3876` | Credit Card Chase Visa - 3876 | `CHASE VISA - 2838 - TRAVEL` |
+| `card-0340` | Credit Card Chase Visa - 0340 | `CHASE VISA - 2838 - TRAVEL` |
+| `card-2838` | Credit Card - 2838 | `CHASE VISA - 2838 - TRAVEL` |
+| `card-0113` | Apple Credit Card - 0113 | `GSBANK Apple Master Card 0113 \| Dirk Neumann` |
+| `card-1176` | Credit Card Chase Visa - 1176 | `Chase Visa 1176 \| Travel Expenses \| Dirk Neumann` |
+| `card-6013` | Credit Card - 6013 | `VISA 6013 TRAVEL EXPENSE active since 230601` |
+| `card-8311` | Credit Card - 8311 | `Chase United Visa 8311 \| business expenses \| Dirk Neumann` |
+| `card-9693` | Credit Card Chase Visa - 9693 | `Chase Visa \| 9693 \| Cloud Expenses` |
+
+Two separate questions, and only the first is clearly wrong: `3645` holds a
+card label rather than a Zoho account name, which no other row does. Whether
+`3876` and `card-0340` genuinely post to card-2838's TRAVEL account is a
+bookkeeping fact this side cannot judge; they may well be correct.
+
+**Not touched.** This is a `PUT /api/settings` write on Criss's live master
+data, which is the owner's, and the correct account name for 3645 has to come
+from Zoho's chart rather than be guessed here. Twelve live September rows
+currently carry it.
+
 ### Item 171 — the sign-off card learner cannot see the statement's own answer
 
 Split out of item 169 fact 2, measured 2026-09-23, **not built**.
