@@ -21,13 +21,15 @@ have to hand-fix every month beats a one-off.
 
 ## Open
 
-### Feedback notes #73-#82 (2026-09-20 to 09-23): new since the backlog's #72
+### Feedback notes #73-#85 (2026-09-20 to 09-23): new since the backlog's #72
 
-Read off `GET /feedback.jsonl` on 2026-09-23 (82 notes; the backlog stopped
-at #72). Two sessions itemized the same afternoon: #79 is item 167, and PR
-#1202 took #81 as item 163, #76 as 164, #78 as 165 and #80 as 166. **Not
-yet itemized: #73, #74, #75, #77, #82**, listed verbatim so they do not sit
-unread again. Times UTC, read raw off `ts`.
+Read off `GET /feedback.jsonl` on 2026-09-23, **re-read the same evening at
+85 notes** (the backlog stopped at #72). Two sessions itemized that
+afternoon: #79 is item 167, and PR #1202 took #81 as item 163, #76 as 164,
+#78 as 165 and #80 as 166. **Every remaining note now has an item: #73, #74,
+#75, #77, #82, #83, #84, #85 became items 174-181**, filed the same evening.
+Listed verbatim so they do not sit unread again. Times UTC, read raw off
+`ts`.
 
 | # | When | Who | Where | Comment (verbatim) |
 |---|---|---|---|---|
@@ -41,12 +43,18 @@ unread again. Times UTC, read raw off `ts`.
 | 80 | 09-23 12:37 | operator | September, menu bar | categorization needs a good mechanism to be corrected and categorization norms or standards that are applied universally acroos multiple ve... (truncated in the store) |
 | 81 | 09-23 12:38 | operator | September, "Save corrections to memory" | based on what? this should be reversible for now, and state explicitly where these are saved so user can manage t... (truncated in the store) |
 | 82 | 09-23 12:40 | operator | September, row 0024 (processed-0EDA78B9...jpeg), receipt cell | Se possivel ter uma lupa para ampliar a foto do recibo. |
+| 83 | 09-23 15:48 | matthias | May 2026 (`86929f2a909a`) | available categories should be zoho chart of accounts that brisken uses in zoho expense |
+| 84 | 09-23 16:07 | matthias | Settings > Merchants, "Zoho GL account (optional)" | This should not be applied automatically to new months because some merchants can have more than one GL account. Manual editing by the user should adjust the merchant's registry. Per entity expense account relevant zoho accounts |
+| 85 | 09-23 16:09 | matthias | Settings > Merchants, same field | dont forget the accounts criss would match for cloud expenses |
 
-#77 (a merchant-specific save, for overseeability) belongs to the learning
-theme items 163-166 now cover and is the one of that theme still open; #73
-(a "From email" cell on a month with no statement), #74 and #75 (private
-expenses: who reimburses, and not re-asking once set), #82 (a magnifier on
-the receipt photo) are each their own item when picked up.
+All eight are now items 174-181, at the bottom of Open. #77 stays inside the
+learning theme items 163-166 cover; the rest are their own.
+
+**#83, #84 and #85 were left about an hour BEFORE the direction that closed
+item 170** ("no working on expense category definition anymore", commit
+`2cb42e7b`, 19:02 CEST against 17:48-18:09 CEST). They are filed as record,
+not queued. Whether that direction was meant to reach them is the owner's
+call and not an inference to make here.
 
 ### The 2026-08-21 feedback wave (14 notes, sequencing decided)
 
@@ -8329,6 +8337,172 @@ Every one of the 15 silents is `REVIEW` -- the chain declines rather than
 guessing wrong -- and `REGISTRY` is right wherever it fires (2 of 2). The
 honest read is that the category chain's problem is coverage, not accuracy:
 it is silent on 43% of the rows a human went on to correct.
+
+## The notes that had no item (2026-09-23 evening, notes #73 / #74 / #75 / #77 / #82 / #83 / #84 / #85)
+
+Filed the evening of 2026-09-23 against a live read of the store (85 notes),
+the September month (`51a22ad72864`, 75 expenses) and `GET /api/settings` (33
+merchants). Numbering starts at **174** because
+`client/brisken/p1-item-173-single-card-gate` holds 173.
+
+Nothing below is built. Each item says what was measured, so whoever picks it
+up starts from the payload rather than from the note.
+
+### 174. "From email" on a month that was never sent a statement (note #73, owner 2026-09-20)
+
+**Owner:** *"why does it say this even though there has been no statement sent
+for this month"*
+
+**The premise is correct and the month is innocent.** September reads
+`has_statement: false`, `statements: []` and `coverage: []` while holding 75
+expenses, so whatever that cell says, it is not reading a statement.
+
+The string "From email" appears in **no field of the payload**, so it is SPA
+copy over an enum. The candidate is `card_source`, which on September reads
+`hint` 46, `none` 14, `learned` 12, `merchant` 2, `override` 1. On that
+reading the cell is naming where the CARD came from (the receipt mail) and the
+reviewer read it as a claim that a statement arrived; the fix is then a label,
+not a pipeline bug.
+
+**Not concluded.** Which field renders that string needs one cold drive of the
+September row the note was left on. Do that before writing any copy: the
+sibling reading, that the cell is a provenance label on the ROW and correct as
+written, ends the item with no change at all.
+
+### 175. A private expense asks which card paid, not who owes the money back (note #74, operator 2026-09-23)
+
+**Operator (PT):** *"No privado, deve haver quem deve reembolsar a despesa"*
+("on a private one, there must be someone who has to reimburse the expense").
+
+Left on row 0033's card picker, whose two options are "Leave blank (resolve
+from card)" and "Pick the card that paid". On a private expense that is the
+wrong question: the company did not pay it, so no card is the answer, and the
+one that matters is who gets paid back.
+
+**The field already exists.** September's single private row carries
+`reimburse_to: "Dirk Neumann"` and `reimburse_to_prefill: "Dirk Neumann"`, and
+`person_source` reads `private` for exactly that row. `reimbursable` is
+`null` on it. So this is a UI-shape item, not a data-model one: when `private`
+is set, the row should be asking for `reimburse_to` and offering the card
+picker second, or not at all.
+
+Scale today: `private` 1, `suggested_private` 5, `can_mark_private` 28 of 75.
+
+### 176. The private control is offered again on a row already marked private (note #75, operator 2026-09-23)
+
+**Operator:** *"no need to set this as private again, if user has already set
+as private"*
+
+**Does not reproduce in the payload.** Across September's 75 rows, zero carry
+both `private: true` and `suggested_private: true`, which is the shape that
+would make the tool re-suggest something already settled. The one private row
+has `suggested_private: false`.
+
+So either the re-offer is SPA-side (the control renders regardless of
+`private`, and `can_mark_private` is true on 28 rows), or it was the
+suggestion strip on a row whose state has since changed. Reproduce it on the
+row the note names before building anything; the anchor the note captured is
+"Private (Dirk Neumann)Private (Dirk Neumann)", the same label twice, which
+points at a duplicated control rather than a duplicated suggestion.
+
+### 177. Settings saves all 33 merchants at once, so nothing ever folds away (note #77, operator 2026-09-23)
+
+**Operator:** *"to maintain overseeability save merchant should be merchant
+specific so that merchants fold away once confirmed by user"*
+
+`GET /api/settings` returns `merchants` as ONE object of 33 entries and the
+write side takes it whole, so "Save merchants" is a single all-or-nothing
+write over the registry and no entry has a confirmed state of its own to fold
+on. The ask is per-merchant save plus a confirmed flag, in that order: without
+the flag there is nothing for the fold to key on.
+
+Belongs to the learning theme items 163-166 cover, and is the one note of that
+wave still open. Item 163's memory ledger is the precedent for the write half:
+a save that says what it did, per row.
+
+### 178. No way to enlarge a receipt photo (note #82, operator 2026-09-23)
+
+**Operator (PT):** *"Se possivel ter uma lupa para ampliar a foto do recibo"*
+("if possible, a magnifier to enlarge the receipt photo").
+
+Pure SPA, and the bytes are already there: 73 of September's 75 rows read
+`has_receipt_image: true` and all 75 read `receipt_image_available: true`.
+`receipt_url` is empty on every row, so the SPA builds the path itself; a
+viewer reuses whatever it already fetches for the thumbnail.
+
+The smallest thing that answers the note is click-to-open at full size. Criss
+reads amounts and dates off phone photos of paper receipts, so zoom and pan
+are the point, not a lightbox.
+
+### 179. The pickable categories are eight strings, not Brisken's Zoho chart (note #83, owner 2026-09-23)
+
+**Owner:** *"available categories should be zoho chart of accounts that
+brisken uses in zoho expense"*
+
+`settings.categories` is a closed list of exactly eight: Travel & Transport,
+Meals & Entertainment, Software & Subscriptions, Office Supplies &
+Consumables, Equipment & Hardware, Marketing & Advertising, Professional
+Services, Utilities & Premises. None of them is a Zoho account, and the
+account a row actually posts to is resolved separately (the merchant's
+`zoho_account`, else the company rule, else the chart).
+
+So the reviewer picks from one vocabulary and the export posts from another,
+which is the same gap item 156 named as the 52-row Zoho-account-to-category
+table nobody has ruled on.
+
+**FILED AS RECORD, NOT QUEUED.** This is expense category definition, and the
+direction closing item 170 landed 53 minutes after the note. Do not start it
+on the strength of the note alone.
+
+### 180. One merchant holds one GL account, and it is applied forward (note #84, owner 2026-09-23)
+
+**Owner:** *"This should not be applied automatically to new months because
+some merchants can have more than one GL account. Manual editing by the user
+should adjust the merchant's registry. Per entity expense account relevant
+zoho accounts"*
+
+The field is real and it is single-valued: each registry entry carries one
+`zoho_account` string, labelled in Settings as overriding the chart-derived
+account. 28 of the 33 merchants have one set. The owner is naming three
+separate things and they should not be merged into one build:
+
+1. **One value cannot hold two accounts.** A merchant that legitimately books
+   to more than one account has no way to say so, and the single value wins
+   over the chart every time.
+2. **It carries forward silently.** A registry value applies to every month
+   that matches the merchant afterwards, which is what "not applied
+   automatically to new months" objects to.
+3. **The relevant account is per legal entity**, and `zoho_account` has no
+   entity dimension at all.
+
+**Measured, and it already misfires**: the registry holds only **3 distinct
+accounts** across 28 merchants, all in the travel tree, and both Professional
+Services merchants (MEGA CENTER, MEGA CENTRE, two spellings of one merchant)
+carry `E100010 - Travel Expense`. A professional-services charge is sitting on
+a travel account today because one registry value was applied forward.
+
+That misfire is worth surfacing to the owner on its own, and does not need the
+category work to move.
+
+**FILED AS RECORD, NOT QUEUED**, same reason as 179.
+
+### 181. Every cloud vendor in the registry has no account at all (note #85, owner 2026-09-23)
+
+**Owner:** *"dont forget the accounts criss would match for cloud expenses"*
+
+Measured, and it is the sharpest of the three: **all five Software &
+Subscriptions merchants carry no `zoho_account`** (Brave Software, Lovable
+Labs, Lovable Labs Incorporated, ZOHO Corp., Anthropic). Every other populated
+category has one. So cloud spend is the one class of expense the registry
+answers with nothing, and it falls through to the company rule or the chart.
+
+Two of those names are one vendor spelled twice, which is item 170's canonical
+problem showing up again in a different column.
+
+This is the concrete, bounded half of 179 and 180: it needs an account per
+cloud vendor from the owner, not a vocabulary redesign. **FILED AS RECORD**,
+but of the three it is the one that could ship the moment the owner gives the
+accounts.
 
 ## Shipped (loop history)
 
