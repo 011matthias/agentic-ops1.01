@@ -16,6 +16,36 @@ the multi-tenant SaaS in spec v2 is deferred. Per-slice authority is
 `automations/expense-reconciliation/BLUEPRINT.md` + `ANNEALING.md`; this is the
 roll-up.
 
+**2026-09-23 (latest): the GL vocabulary and the chain that picks a leaf.**
+Phase 1 of direct-to-Zoho-GL categorization advanced from "the taxonomy
+exists and nothing can store or show a leaf code" to steps 1-3 shipped plus
+the chain itself. Every write path now takes both vocabularies and drops
+rather than refuses what it does not know (#1236, six paths, one more than
+planned: `learning_cli.cmd_set` writes the same table the chain reads
+first). `gl_accounts` + `gl_revision` are served beside `categories` and
+`category_options`, with an uncovered entity ABSENT rather than given an
+empty list (#1238). `zoho/posting_resolution.py` walks learned rule ->
+deferred trip branch -> model's pick -> refusal (#1238).
+
+**Nothing is deployed and nothing calls the chain.** The engine still
+classifies into the eight buckets. The next step is the conversion, and
+backlog item 183 is its prerequisite rather than a later tidy-up:
+`registry_upserts_from_expense_run` fires on Publish rather than a
+deliberate save, and its conflict check compares category only and never
+`zoho_account`, so two rows naming different accounts do not conflict and
+the first wins silently. That is where the chain would start writing.
+Items 182 (the chart pull truncated at a page boundary, 19 of Dirk's
+accounts missing) and 184 (`paid_through_account_id` unvalidated, the same
+bug class on the card side) were filed with it.
+
+Still Dirk's: the six `SPOT-CHECK` accounts, card 3645's real chart account
+(item 172), and whether Tier 2 trip-purpose inheritance should exist at all
+(also behind item 38's hold). July and August dry runs remain BLOCKED and
+not by anything we can code around: `reconcile_month.assert_org` permits
+only the sandbox `822116290`, and Dirk's three curated orgs are in neither
+`PRODUCTION_ORG_IDS` nor `SANDBOX_ORG_ID`, so the only runner that can post
+cannot be aimed at any org the curated leaves cover.
+
 **2026-09-23 (later): typing an FX rate in Settings is gone** (backlog
 item 168, owner directive). The settings key, the matcher's typed rung and
 item 132's drift advisory are removed; every rate is now either derived
