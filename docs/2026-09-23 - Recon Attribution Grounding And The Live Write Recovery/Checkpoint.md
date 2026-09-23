@@ -225,6 +225,22 @@ had moved since 2026-09-17, and the registry had grown from 28 merchants to
 33. That is the pattern worth carrying forward: in this repo, a backlog number
 older than a week is a prior, not a reading.
 
+**The code pointers in items 169 and 170 are offsets as of commit
+`5710a675` and have already moved.** The full synthesis, which ran after the
+merges, measured `service.py` shifting 196 lines between `5710a675` and
+`f3ecd6bc`, so `service.py:6533` and its siblings are stale as offsets while
+correct as locations. Search by symbol (`resolve_batch_row_cards`,
+`_CARD_OBSERVATION_SOURCES`, `registry_card_upserts_from_expense_run`,
+`FieldCorrectionLookup.get`) rather than jumping to the line. The same
+synthesis corrected two reader claims that never reached the backlog, worth
+knowing if they resurface: category overrides do NOT all land on three
+categories (two July rows carry two categories each), and
+`summary.n_charges_category_guessed` reading 0 beside 24 and 99
+`receiptless_suggested` rows is not a disagreement but the readiness
+counter's definition, which excludes gray-filled recurring rows and rows
+still needing a receipt (`month_readiness.py:126-137`; August 99 minus 40
+gray minus 59 needing a receipt is exactly 0).
+
 ### Reference Materials
 
 - PRs #1202, #1204, #1208, #1214, #1215
