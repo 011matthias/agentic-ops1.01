@@ -190,7 +190,11 @@ from .month_readiness import (  # items 99 + 100
     not_complete_detail,
     readiness_of,
 )
-from ..category_vocabulary import recognize as recognize_category
+from ..category_vocabulary import (
+    gl_account_options,
+    gl_revision,
+    recognize as recognize_category,
+)
 from ..matching.types import EXPENSE_CATEGORIES
 from ..cost_centers import (
     CostCenterRegistry,
@@ -3026,6 +3030,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     without_retired_entity_keys(settings)
                 ),
                 "categories": list(EXPENSE_CATEGORIES),
+                # The new vocabulary, served BESIDE the eight rather than
+                # instead of them: the published SPA keeps rendering
+                # `categories` until the owner publishes a bundle that
+                # reads these. `gl_revision` makes a stale one diagnosable.
+                "gl_accounts": gl_account_options(settings),
+                "gl_revision": gl_revision(),
                 "entity_options": available_entities(settings),
                 "cards_effective": [
                     card_to_dict(c)
@@ -3305,6 +3315,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({
             **without_retired_entity_keys(settings),
             "categories": list(EXPENSE_CATEGORIES),
+            # Both vocabularies on the save reply too, so an editor that
+            # just added an entity sees its leaves without a second GET.
+            "gl_accounts": gl_account_options(settings),
+            "gl_revision": gl_revision(),
             # What this request wrote, and what it carried that the server
             # derives. A caller shows "saved" on its own key appearing in
             # `applied`, never on the 200 alone.

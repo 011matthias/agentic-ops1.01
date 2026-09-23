@@ -19,7 +19,10 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from expense_recon.category_vocabulary import recognize  # noqa: E402
+from expense_recon.category_vocabulary import (  # noqa: E402
+    gl_account_options,
+    recognize,
+)
 from expense_recon.learning import LearningStore, normalize_vendor  # noqa: E402
 from expense_recon.matching.types import EXPENSE_CATEGORIES  # noqa: E402
 from expense_recon.merchant_registry import (  # noqa: E402
@@ -179,3 +182,64 @@ def test_the_registry_normaliser_keeps_a_leaf_code():
     code, _name = _a_leaf()
     out = normalize_merchants_setting({"A": {"category": code}})
     assert out["A"]["category"] == code
+
+
+# ── serving both vocabularies ───────────────────────────────────────────
+
+
+def test_an_uncovered_entity_is_absent_not_empty():
+    """Absent and empty are different facts and send different people.
+
+    Absent means the curated chart does not cover this entity. An empty
+    list would mean it does, and there is nothing to post to.
+    """
+    out = gl_account_options({"entities": {
+        "Consulting LLC": {"org_id": ORG},
+        "Sandbox": {"org_id": "822116290"},   # a real org, not curated
+        "No org yet": {},
+    }})
+    assert sorted(out) == ["Consulting LLC"]
+    assert len(out["Consulting LLC"]) == len(curated_leaves.postable_codes(ORG))
+
+
+def test_a_served_row_carries_code_name_and_branch():
+    rows = gl_account_options({"entities": {"X": {"org_id": ORG}}})["X"]
+    row = rows[0]
+    assert set(row) == {"code", "name", "category"}
+    assert curated_leaves.account_id_for(ORG, row["code"]), "postable only"
+    assert row["name"] == curated_leaves.binding(row["code"], ORG).name
+
+
+def test_settings_serves_the_new_vocabulary_beside_the_old(client):
+    """Beside, never instead: the published SPA still reads `categories`."""
+    client.put("/api/settings", json={
+        "entities": {"Consulting LLC": {"org_id": ORG}},
+    })
+    got = client.get("/api/settings").json()
+    assert got["categories"] == list(EXPENSE_CATEGORIES)
+    assert got["gl_revision"] == curated_leaves.curated_revision()
+    assert [r["code"] for r in got["gl_accounts"]["Consulting LLC"]] == sorted(
+        curated_leaves.postable_codes(ORG)
+    )
+
+
+def test_the_whole_settings_payload_can_be_sent_straight_back(client):
+    """The round-trip the SPA actually performs.
+
+    It reads the payload, edits one group and PUTs the whole object. The new
+    keys are DERIVED, so they have to be accepted and ignored; if they were
+    not, adding them would have broken every save — the same failure this
+    change set out to remove.
+    """
+    client.put("/api/settings", json={
+        "entities": {"Consulting LLC": {"org_id": ORG}},
+    })
+    payload = client.get("/api/settings").json()
+    assert "gl_accounts" in payload and "gl_revision" in payload
+
+    resp = client.put("/api/settings", json=payload)
+    assert resp.status_code == 200, resp.text
+    assert "gl_accounts" in resp.json()["ignored"]
+    assert "gl_revision" in resp.json()["ignored"]
+    assert client.get("/api/settings").json()["entities"][
+        "Consulting LLC"]["org_id"] == ORG

@@ -101,6 +101,7 @@ from ..cost_centers import (
     UNRESOLVED_SILENT as UNRESOLVED_COST_CENTER,
 )
 from ..cost_centers import CostCenterRegistry, CostCenterResolution
+from ..category_vocabulary import gl_account_options, gl_revision
 from ..merchant_registry import MerchantRegistry, normalize_merchants_setting
 # Note item M1: the registry's bare provenance sentence (a line whose
 # account came from a company's rule says more) and the seed marker the
@@ -4243,6 +4244,14 @@ def build_view(
         "duplicate_receipts": duplicate_receipts,
         "duplicate_groups": duplicate_groups,
         "category_options": list(EXPENSE_CATEGORIES),
+        # The curated GL leaves this batch may post to, per entity,
+        # served BESIDE the eight rather than replacing them: a
+        # published SPA keeps rendering category_options until a
+        # bundle that reads these is published. Absent entity = not
+        # covered by the curated chart, which is not the same fact
+        # as an entity with nothing to post to.
+        "gl_accounts": gl_account_options(settings),
+        "gl_revision": gl_revision(),
         "parse_errors": parse_errors,
         # Severity-tagged view of the same issues, so the UI can separate a
         # real error from an advisory note (2026-07-22). `parse_errors`
@@ -8077,6 +8086,14 @@ def build_expense_view(
         "set_aside": set_aside,
         "duplicate_groups": duplicate_groups,
         "category_options": list(EXPENSE_CATEGORIES),
+        # The curated GL leaves this batch may post to, per entity,
+        # served BESIDE the eight rather than replacing them: a
+        # published SPA keeps rendering category_options until a
+        # bundle that reads these is published. Absent entity = not
+        # covered by the curated chart, which is not the same fact
+        # as an entity with nothing to post to.
+        "gl_accounts": gl_account_options(settings),
+        "gl_revision": gl_revision(),
         "account_options": _expense_account_options(run),
         "entity_options": entity_options,
         # Item 47: the row picker's list, active entries only, name-sorted,
