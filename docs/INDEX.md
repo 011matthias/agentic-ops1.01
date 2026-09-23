@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-23 | Zoho Month-End Posting Engine Proven | client-dev | [→](docs/2026-09-23%20-%20Zoho%20Month-End%20Posting%20Engine%20Proven/Checkpoint.md) |
 | 2026-09-23 | Zoho July Rehearsal Posted | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Zoho%20July%20Rehearsal%20Posted/Mini-Checkpoint-1.md) |
 | 2026-09-22 | Zoho Sandbox Posting Guards | client-dev | [Mini-Checkpoint-1](docs/2026-09-22%20-%20Zoho%20Sandbox%20Posting%20Guards/Mini-Checkpoint-1.md) |
 | 2026-09-22 | Zoho Month-End Injection | client-dev | [Mini-Checkpoint-1](docs/2026-09-22%20-%20Zoho%20Month-End%20Injection/Mini-Checkpoint-1.md) |
