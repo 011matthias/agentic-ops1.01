@@ -96,7 +96,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from rapidfuzz import fuzz
 
@@ -265,6 +265,41 @@ def _fuzzy_score(
     return score * covered / total
 
 
+def drop_unvouched_remembered_cards(receipts: list, registry) -> list:
+    """Item 173, second half: clear the remembered card off any receipt whose
+    brand the registry does not vouch is paid on ONE card.
+
+    `Receipt.card_key` is by its own contract the card remembered from a
+    reviewer's per-row fix on an earlier month, never anything read off the
+    document, so at ingest every value in it came from `ExpenseMemory.apply`
+    and clearing an unvouched one takes nothing else with it.
+
+    An absent or empty registry vouches for NOTHING, so every remembered card
+    is cleared. That is not over-reach, it is the same answer the read-time
+    twin already gives: `merchant_vouches_one_card` returns False without a
+    registry, so on a registry-free run the grid declines to lend a
+    remembered card anyway. Letting the ingest stamp survive there would put
+    the card back by the other door, which is the whole defect.
+    """
+    out = []
+    for r in receipts:
+        if not (getattr(r, "card_key", "") or "").strip():
+            out.append(r)
+            continue
+        vouched = registry is not None and registry.vouches_one_card(
+            getattr(r, "vendor_clean", None), getattr(r, "detected_vendor", None)
+        )
+        out.append(r if vouched else replace(r, card_key=None))
+    return out
+
+
+def _cards_seen(entry: dict) -> tuple[str, ...]:
+    """The merchant's `cards_seen` as a clean tuple; () when it has none."""
+    return tuple(
+        s for s in (str(c or "").strip() for c in (entry.get("cards_seen") or [])) if s
+    )
+
+
 @dataclass(frozen=True)
 class MerchantMatch:
     """A registry hit for one receipt's merchant."""
@@ -291,6 +326,13 @@ class MerchantMatch:
     # `cost_center` is: a vendor can book to several categories and still be
     # paid from one card.
     card_key: str | None = None
+    # Item 173: every card this merchant's receipts have actually resolved
+    # to, the machine's own record. Carried on the match so the single-card
+    # question can be asked of the REGISTRY rather than of a raw settings
+    # dict the asker happens to hold. `card_key` answers "which card", this
+    # answers "may anything lend one at all", and the second question has
+    # two askers in two layers (ingest and the grid) that must agree.
+    cards_seen: tuple[str, ...] = ()
     # Note item M4: the merchant's free-prose profile, when it carries one.
     # Context for the categorizer's prompts and nothing else; never a
     # resolver. Carried on a `multi_category` merchant too, where it is worth
@@ -408,6 +450,40 @@ class MerchantRegistry:
             return self._match(best_canonical, best_original, best_score, "fuzzy")
         return None
 
+    def vouches_one_card(
+        self, vendor_clean: str | None, vendor_raw: str | None
+    ) -> bool:
+        """Item 173: does the registry vouch that this brand is paid on
+        exactly ONE card, so a card REMEMBERED from an earlier correction may
+        lend itself to a receipt of it?
+
+        The registry's own card learner already works this way: note item M2
+        sets a merchant's `card_key` only while `cards_seen` holds exactly one
+        card, precisely so a brand seen on two never lends either. The
+        remembered correction did not inherit that rule, and the live data
+        says it needed it. Criss's single OpenAI fix taught card 3645, while
+        the hard evidence (printed numbers, her own picks, the statement) puts
+        OpenAI on card-9693 eight times and 3645 once. The memory was the
+        minority card, 8 to 1, on 12 live September rows.
+
+        Owner ruling 2026-09-23, given that split: gate it. A blank prompts a
+        human to look; a confidently wrong card silently books the receipt to
+        the wrong entity AND the wrong person, because both ride the card.
+
+        Deliberately conservative about the unknown case: a vendor the
+        registry cannot resolve at all is NOT vouched, because "no evidence of
+        a second card" is not evidence of one card. OpenAI is exactly that
+        vendor (adding it is the owner's call and he has said he raises it),
+        which is what makes this ruling bite today.
+
+        It lives on the registry rather than beside one caller because two
+        layers ask it: `ExpenseMemory`'s stamp at INGEST and
+        `fill_remembered_cards` at read time. A gate held in one and not the
+        other is the shape of the bug item 173 was split in half by.
+        """
+        match = self.resolve(vendor_clean, vendor_raw)
+        return match is not None and len(match.cards_seen) <= 1
+
     def _match(
         self, canonical: str, original: str, score: float, kind: str
     ) -> MerchantMatch:
@@ -428,6 +504,7 @@ class MerchantRegistry:
                 cost_center=(entry.get("cost_center") or None),
                 multi_category=True,
                 card_key=(entry.get("card_key") or None),
+                cards_seen=_cards_seen(entry),
                 profile=(entry.get("profile") or None),
             )
         category = (entry.get("category") or None)
@@ -440,6 +517,7 @@ class MerchantRegistry:
             kind=kind,
             cost_center=(entry.get("cost_center") or None),
             card_key=(entry.get("card_key") or None),
+            cards_seen=_cards_seen(entry),
             profile=(entry.get("profile") or None),
         )
 

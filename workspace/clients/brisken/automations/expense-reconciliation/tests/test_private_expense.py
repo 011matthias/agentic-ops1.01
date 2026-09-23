@@ -449,7 +449,14 @@ def test_a_private_card_expense_refuses_a_company_card_pick(client, monkeypatch)
 
 
 def test_a_remembered_card_does_not_block_the_private_card(client, monkeypatch):
-    client.put("/api/settings", json={"cards": CORP})
+    # Item 173: the remembered card needs a brand the registry vouches is
+    # paid on one card, at ingest as well as at read time. A bare entry is
+    # the vouch: known brand, no evidence of a second card.
+    client.put("/api/settings", json={
+        "cards": CORP,
+        "merchants": {"Staples": {"aliases": [], "category": None,
+                                  "zoho_account": None}},
+    })
     _patch_ocr(monkeypatch, _extraction(date="2026-07-10"))
     july = _create_batch(client, label="July 2026", seed=1)
     doc = _grid(client, july)["expenses"][0]["document_id"]

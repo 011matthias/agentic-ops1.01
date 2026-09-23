@@ -8233,7 +8233,7 @@ ZohoBooks.accountants.READ`. `expenses.CREATE` is granted, which
 post, and `settings.READ` is gone (so `/organizations` now 401s and org ids
 have to come from the repo). Posting stays OFF and invasive regardless.
 
-### Item 173 — a remembered card only for a brand seen on ONE card
+### Item 173 — a remembered card only for a brand seen on ONE card — SHIPPED 2026-09-24 (both halves)
 
 **SHIPPED 2026-09-23, owner ruling the same day.** Item 169 made a remembered
 card reach months ingested before the correction, and the first thing the
@@ -8269,10 +8269,51 @@ fix stands and is unaffected: a correction is no longer frozen at ingest, so
 the day a single-card brand is corrected, every existing month takes it.
 
 Tests in `test_remembered_card_read_time_item_169.py` (8, route-level;
-the gate regress-checked green -> red -> green). Gated at the read-time path
-only. **Still open**: `ExpenseMemory.apply` stamps a remembered card at INGEST
-without this gate, so a newly ingested month can still take a multi-card
-brand's remembered card. Same ruling, second half, not yet built.
+the gate regress-checked green -> red -> green).
+
+**Second half BUILT 2026-09-24.** `ExpenseMemory.apply` stamped a remembered
+card at INGEST with no gate, so which month was created first decided whether
+the ruling applied: a month ingested AFTER a multi-card brand was corrected
+carried the minority card in `Receipt.card_key`, where
+`resolve_batch_row_cards` reads it as the `learned` candidate and the entity
+and the person ride it. Not a rule anybody chose.
+
+The rule now lives in ONE place, `MerchantRegistry.vouches_one_card`, reached
+off a new `MerchantMatch.cards_seen` rather than a raw settings dict the asker
+happens to hold; `service.merchant_vouches_one_card` delegates to it.
+`merchant_registry.drop_unvouched_remembered_cards` clears an unvouched stamp,
+and **three** ingest paths call it, all before the entity stamping (the card
+resolves the company and the person, so a card nobody vouched for must not
+answer either):
+
+| path | where |
+|---|---|
+| full ingest | `cli.generate_expenses` |
+| the add job / mail intake | `service.add_receipts_to_expense_batch` |
+| restore from quarantine | `service` restore path |
+
+An absent or empty registry vouches for nothing, so every remembered card is
+cleared there too. That is the same answer the read-time twin already gives
+(`merchant_vouches_one_card` returns False without a registry); letting the
+stamp survive would put the card back by the other door.
+
+**Three existing tests were relying on the ungated stamp** and went red:
+`test_card_fix_per_row.py::test_publishing_remembers_the_fix_and_next_month_takes_it`,
+`test_entity_from_settled_charge_item_111.py::test_the_settled_charge_outranks_a_card_remembered_from_an_earlier_month`,
+and `test_private_expense.py::test_a_remembered_card_does_not_block_the_private_card`.
+All three set up cards and no registry, so the card reached the next month
+through the ingest door with the read-time gate already shipped. That is the
+defect, demonstrated by the suite rather than argued: each now puts its brand
+in the registry (a bare entry is the vouch) and asserts the same thing it
+always did.
+
+Tests: `test_remembered_card_ingest_gate_item_173.py` (9 -- four route-level
+through the add job, three through `generate_expenses` itself, two on the rule).
+Both wiring points regress-checked green -> red -> green. The restore path has
+no biting test; it shares the helper and the two others cover it.
+
+Live effect today: none. No month has been ingested since the correction was
+taught, and September's rows were already blank after the read-time half.
 
 ### Item 171 — the sign-off card learner cannot see the statement's own answer
 
