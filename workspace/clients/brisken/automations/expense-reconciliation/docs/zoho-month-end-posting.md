@@ -573,6 +573,89 @@ contacts**, and July names 33 distinct vendors, so there is nothing to
 resolve against: filling it means CREATING 33 contacts, which is a write
 of a different kind and was not in scope here.
 
+## 2026-09-23: statement currency clears the batch, 41 of 46 posted
+
+Owner call: adopt the house rule `posting_common` already states for the
+journal. The bank statement is what the company actually paid, so a EUR
+receipt on a USD card posts as `amount x rate` USD. That is both the
+right answer for the books and the way past the FREE plan, which refuses
+any expense in a non-base currency.
+
+### What posted
+
+| | count | |
+|---|---|---|
+| USD, posted 2026-09-23 earlier | 13 | $30,864.42 |
+| EUR, converted | 10 | |
+| BRL, converted | 18 | |
+| converted subtotal | 28 | $25,476.02 |
+| **total in TEST-BTS** | **41** | **$56,340.44** |
+
+**Readback: 41 of 41 clean, tie-out exact.** Every line's `account_id`
+matches, splits preserved, `paid_through` correct on all 41, the audit
+envelope present on all 41, and every converted row carries its
+`Original:` tag naming the source currency.
+
+Refused, correctly: 3 `account_unresolved` and 2
+`date_precedes_period_window`.
+
+### Conversion details worth keeping
+
+`_convert_lines` converts the TOTAL once and lands the residual on the
+largest line, rather than rounding each line independently. Two lines of
+10.005 round to 10.01 each (20.02) while the total rounds to 20.01, and
+an expense that disagrees with its own line items by a cent is the kind
+of wrong that survives review. Same allocation rule
+`posting_common._posting_amounts` already uses.
+
+`audit_note` gained `Original: {currency} {amount} @ {rate}`, so the
+conversion is auditable from the record itself; without it the books show
+a USD figure with no trace of the EUR or BRL receipt behind it. Rates are
+the reviewed CSV's own, never fetched at post time.
+
+`convert_foreign_to_base` defaults to False, so nothing converts unless a
+caller opts in.
+
+### The stale-date guard caught two, and the second was a surprise
+
+`period` + `stale_days` (default 45) refuses a purchase dated more than
+45 days before the period's first day. For 2026-07 the cutoff is
+2026-05-17, which clears July's three legitimate June-dated rows and
+refuses:
+
+* **`360172592`**, dated **2026-03-30** (360Crossmedia, EUR 900). The
+  outlier that prompted the guard.
+* **`00000031010`**, whose `Expense Date` cell is **empty**. Not what the
+  guard was built for, and the more interesting catch: without it that
+  row would have posted with `date=""`. A date that cannot be verified is
+  not posted.
+
+### A defect this session introduced, caught by Zoho
+
+Adding `Vendor:` and `Original:` to the envelope pushed two descriptions
+over a limit nobody knew about:
+
+> `Please ensure that the "Description" has less than 500 characters.`
+
+Two Brazilian grocery receipts, whose itemisation runs 370 and 459
+characters, came to 523 and 630. `audit_note` now caps at
+`MAX_DESCRIPTION_CHARS = 499` by trimming **the receipt's own prose and
+never the envelope**, with a `... (+N chars)` marker so the cut is
+visible. The envelope is the audit trail; the prose is a line-item list
+whose tail is the least load-bearing text in the record. Only 2 of 46
+July purchases were ever over the cap, so no already-posted row drifted.
+
+The rejection was clean again: both intents released, nothing written,
+the batch reported both rather than aborting, and a re-run posted them.
+
+### Two guards earned their keep this session
+
+* The **tie-out assertion** refused a follow-up run because the expected
+  total was typed from memory (125.42) instead of read from the plan
+  (97.40). It posted nothing and named the difference.
+* The **ledger** released every intent behind all 13 rejections across
+  the two failures, so every retry was possible without manual repair.
+
 ## Still open
 
 - The scope grant above, which blocks every write.

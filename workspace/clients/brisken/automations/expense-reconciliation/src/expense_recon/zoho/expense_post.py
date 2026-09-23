@@ -46,8 +46,8 @@ import csv
 import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
+from datetime import date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
@@ -55,18 +55,22 @@ from typing import TYPE_CHECKING
 from ..output.zoho_expense_export import EXPENSE_COLUMNS
 from .accounts import AccountRefusal, ResolvedAccount, resolve_account_id
 from .idempotent import PostedConflictError, PostLedger
+from .occupancy import month_bounds
 
 if TYPE_CHECKING:
     from ..ingest.chart_of_accounts import ChartOfAccounts
     from .client import ZohoClient
 
 __all__ = [
+    "DEFAULT_STALE_DAYS",
+    "MAX_DESCRIPTION_CHARS",
     "REFUSAL_AMOUNT",
     "REFUSAL_ACCOUNT",
     "REFUSAL_CURRENCY",
     "REFUSAL_CURRENCY_UNDEFINED",
     "REFUSAL_EXCHANGE_RATE",
     "REFUSAL_LEDGER",
+    "REFUSAL_STALE_DATE",
     "ExpenseGroup",
     "ExpensePlan",
     "ExpensePostReport",
@@ -94,8 +98,26 @@ REFUSAL_CURRENCY_UNDEFINED = "currency_not_defined_in_org"
 # a foreign amount without a rate lets Zoho apply one nobody chose, which
 # misstates the amount in exactly the silent way this path refuses.
 REFUSAL_EXCHANGE_RATE = "exchange_rate_missing"
+# A row dated long before the period being posted. July's batch held a
+# 2026-03-30 invoice (ref 360172592, 360Crossmedia EUR 900): four months
+# out is not a statement-vs-transaction-date nuance, it is an outlier
+# that should reach the books only with a human's explicit sign-off.
+REFUSAL_STALE_DATE = "date_precedes_period_window"
 
 AUDIT_PREFIX = "[External Match Audit]"
+
+# How far before a period's first day a purchase may be dated before it
+# needs sign-off. 45 days clears the ordinary case (a charge posting in
+# the next statement cycle, like July's three June-dated rows) without
+# clearing a months-old invoice.
+DEFAULT_STALE_DAYS = 45
+
+# Zoho rejects an expense whose description reaches 500 characters
+# ("Please ensure that the \"Description\" has less than 500
+# characters", 400). Measured 2026-09-23 on two Brazilian grocery
+# receipts whose itemisation runs 370 and 459 characters; adding the
+# vendor and the original-amount tags to the envelope pushed both over.
+MAX_DESCRIPTION_CHARS = 499
 
 
 # ── reading the reviewed artifact ───────────────────────────────────
@@ -181,13 +203,20 @@ def group_by_reference(rows: "list[dict[str, str]]") -> list[ExpenseGroup]:
 # ── payload ─────────────────────────────────────────────────────────
 
 
-def audit_note(group: ExpenseGroup, *, source: str) -> str:
+def audit_note(
+    group: ExpenseGroup, *, source: str, original: str = ""
+) -> str:
     """The audit envelope. The ONLY place it is built.
 
     Every payload passes through here, single-account or itemized, which
     is the fix for the trial's 7-of-9: there the split took a different
     code path and wrote a different description, so the envelope was
     absent on exactly the row whose provenance mattered most.
+
+    `original` names the pre-conversion amount and rate for a row posted
+    in the statement currency. Without it the books would show a USD
+    figure with no trace of the EUR or BRL receipt behind it, and the
+    conversion would be unauditable from the record itself.
     """
     own = group.cell("Expense Description")
     parts = [
@@ -203,13 +232,35 @@ def audit_note(group: ExpenseGroup, *, source: str) -> str:
     vendor = group.cell("Vendor")
     if vendor:
         parts.append(f"Vendor: {vendor}")
+    if original:
+        parts.append(f"Original: {original}")
     if group.is_split:
         parts.append(f"Split: {len(group.rows)} accounts")
     entity = group.cell("Legal Entity")
     if entity:
         parts.append(f"Entity: {entity}")
     envelope = " | ".join(parts)
-    return f"{envelope} | {own}" if own else envelope
+    if not own:
+        return envelope
+    full = f"{envelope} | {own}"
+    if len(full) <= MAX_DESCRIPTION_CHARS:
+        return full
+
+    # Over Zoho's limit. Trim the RECEIPT'S OWN PROSE and never the
+    # envelope: the envelope is the audit trail that makes a posted row
+    # traceable, while the prose is a line-item list whose tail is the
+    # least load-bearing text in the record. The marker states how much
+    # was dropped, because a silent truncation reads as a short receipt.
+    room = MAX_DESCRIPTION_CHARS - len(envelope) - 3
+    if room <= 0:
+        # The envelope alone fills the budget. Return it whole rather
+        # than cutting audit data; an envelope this size is its own bug
+        # and should surface as one.
+        return envelope
+    template = "... (+{} chars)"
+    marker_width = len(template.format("0" * len(str(len(own)))))
+    keep = max(0, room - marker_width)
+    return f"{envelope} | {own[:keep]}{template.format(len(own) - keep)}"
 
 
 def _amount(text: str) -> Decimal | None:
@@ -227,6 +278,37 @@ class PostRefusal:
     reference: str
     reason: str
     detail: str
+
+
+_CENT = Decimal("0.01")
+
+
+def _to_base(amount: Decimal, rate: Decimal) -> Decimal:
+    """One foreign amount in the base currency, rounded to the cent."""
+    return (amount * rate).quantize(_CENT, rounding=ROUND_HALF_UP)
+
+
+def _convert_lines(
+    line_amounts: "list[Decimal]", rate: Decimal
+) -> "tuple[list[Decimal], Decimal]":
+    """Convert a purchase's lines, keeping them summed to the converted
+    TOTAL exactly.
+
+    Rounding each line independently does not give the rounded total:
+    two lines of 10.005 each round to 10.01 + 10.01 = 20.02 while the
+    total rounds to 20.01. So the total is converted once and the
+    residual lands on the largest line, the same allocation rule
+    `posting_common._posting_amounts` already uses for the split case.
+    A one-cent disagreement between an expense and its own line items is
+    exactly the kind of quiet wrong that survives review.
+    """
+    total = _to_base(sum(line_amounts, Decimal("0")), rate)
+    out = [_to_base(a, rate) for a in line_amounts]
+    residual = total - sum(out, Decimal("0"))
+    if residual and out:
+        biggest = max(range(len(out)), key=lambda i: out[i])
+        out[biggest] += residual
+    return out, total
 
 
 @dataclass(frozen=True)
@@ -248,23 +330,88 @@ def build_expense_payload(
     source: str = "expense-recon",
     org_id: str | None = None,
     currencies: "Mapping[str, str] | None" = None,
+    convert_foreign_to_base: bool = False,
+    period: str | None = None,
+    stale_days: int = DEFAULT_STALE_DAYS,
 ) -> "dict | PostRefusal":
     """The Zoho POST body for one purchase, or a refusal naming why not.
 
     `org_id` is passed to account resolution so this org's category
     fallback applies; without it, a category label refuses as before.
 
-    `currencies` maps an upper-case currency code to the target org's
-    numeric `currency_id` (from `GET /settings/currencies`). Omit it and
-    a foreign row refuses exactly as it did before, which keeps the
-    default deny-by-default. The RATE is never invented here: it comes
-    from the reviewed CSV's own `Exchange Rate` cell, so what posts is
-    the rate a human signed off rather than one fetched at post time.
+    Foreign currency has three policies, checked in this order:
+
+    * `convert_foreign_to_base` posts in the STATEMENT currency, the
+      house rule `posting_common` already states for the journal: the
+      bank statement is what the company actually paid, so a EUR receipt
+      on a USD card posts as `amount x rate` USD. Needs no `currency_id`
+      and no paid Zoho plan, and the original amount and rate ride in the
+      audit note so the conversion stays auditable from the record.
+    * `currencies` (code -> the org's numeric `currency_id`) posts
+      NATIVELY in the receipt's own currency. Correct, and blocked on
+      TEST-BTS: `plan_name = 'FREE'` rejects any expense whose currency
+      is not the org's base, with a 400 naming the plan.
+    * neither: refuse, which is the default and keeps deny-by-default.
+
+    The RATE is never invented here under either policy. It comes from
+    the reviewed CSV's own `Exchange Rate` cell, so what posts is the
+    rate a human signed off rather than one fetched at post time.
+
+    `period` (YYYY-MM) enables the stale-date guard: a purchase dated
+    more than `stale_days` before that period's first day refuses rather
+    than posting quietly. Omit `period` and the guard is off.
     """
+    when_text = group.cell("Expense Date")
+    if period:
+        window_start, _ = month_bounds(period)
+        cutoff = date.fromisoformat(window_start) - timedelta(days=stale_days)
+        try:
+            when = date.fromisoformat(when_text)
+        except ValueError:
+            return PostRefusal(
+                reference=group.reference,
+                reason=REFUSAL_STALE_DATE,
+                detail=(
+                    f"date {when_text!r} is not a readable ISO date, so it "
+                    f"cannot be checked against the {period} window; a row "
+                    "whose date cannot be verified is not posted"
+                ),
+            )
+        if when < cutoff:
+            return PostRefusal(
+                reference=group.reference,
+                reason=REFUSAL_STALE_DATE,
+                detail=(
+                    f"dated {when.isoformat()}, more than {stale_days} days "
+                    f"before {period} begins ({window_start}); cutoff is "
+                    f"{cutoff.isoformat()}. An outlier this far out needs "
+                    "explicit sign-off rather than posting silently with "
+                    "the month"
+                ),
+            )
+
     currency = (group.cell("Currency Code") or base_currency).upper()
     base = base_currency.upper()
     fx: dict[str, object] = {}
-    if currency != base:
+    original = ""
+    convert = False
+    rate = Decimal("1")
+    if currency != base and convert_foreign_to_base:
+        got = _amount(group.cell("Exchange Rate"))
+        if got is None or got <= 0:
+            return PostRefusal(
+                reference=group.reference,
+                reason=REFUSAL_EXCHANGE_RATE,
+                detail=(
+                    f"the {currency} row carries no usable Exchange Rate "
+                    f"({group.cell('Exchange Rate')!r}), so it cannot be "
+                    "converted to the statement currency; inventing a rate "
+                    "would misstate what the card was charged"
+                ),
+            )
+        rate = got
+        convert = True
+    elif currency != base:
         if not currencies:
             return PostRefusal(
                 reference=group.reference,
@@ -334,11 +481,23 @@ def build_expense_payload(
             }
         )
 
+    if convert:
+        # Post what hit the card. The lines are converted together so
+        # they still sum to the converted total exactly.
+        converted, total_base = _convert_lines(
+            [Decimal(str(li["amount"])) for li in lines], rate
+        )
+        for li, value in zip(lines, converted, strict=True):
+            li["amount"] = float(value)
+        original = f"{currency} {total:f} @ {rate:f}"
+        total = total_base
+        currency = base
+
     payload: dict = {
-        "date": group.cell("Expense Date"),
+        "date": when_text,
         "paid_through_account_id": paid_through_account_id,
         "reference_number": group.reference,
-        "description": audit_note(group, source=source),
+        "description": audit_note(group, source=source, original=original),
         "currency_code": currency,
         **fx,
     }
@@ -398,6 +557,9 @@ def plan_expense_post(
     base_currency: str,
     source: str = "expense-recon",
     currencies: "Mapping[str, str] | None" = None,
+    convert_foreign_to_base: bool = False,
+    period: str | None = None,
+    stale_days: int = DEFAULT_STALE_DAYS,
 ) -> ExpensePlan:
     """Resolve every group and cross-reference the ledger. Pure apart
     from ledger READS; posts nothing."""
@@ -412,6 +574,9 @@ def plan_expense_post(
             source=source,
             org_id=org_id,
             currencies=currencies,
+            convert_foreign_to_base=convert_foreign_to_base,
+            period=period,
+            stale_days=stale_days,
         )
         if isinstance(built, PostRefusal):
             refusals.append(built)
