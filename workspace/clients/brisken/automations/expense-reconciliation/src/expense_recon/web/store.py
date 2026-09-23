@@ -106,7 +106,7 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 # operator input the pipeline needs, so three capabilities were dead on
 # every hosted run while working locally from a config file:
 #
-#   fx_reference_rates  {"BRL:USD": "0.192448"} — the month's reference
+#   fx_reference_rates  RETIRED 2026-09-23 (rates come from the daily
 #     rate per currency pair. Without one, a cross-currency receipt can
 #     only reach the implied-rate band / LLM judgment: the real April run
 #     matched 0 of 94 while the same two files matched 29/36 locally with
@@ -151,7 +151,6 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 #     card entry exists (no write migration).
 SETTINGS_DEFAULTS: dict = {
     "export_approved_only": False,
-    "fx_reference_rates": {},
     "card_entities": {},
     "card_accounts": {},
     "entities": {},
@@ -173,7 +172,7 @@ SETTINGS_DEFAULTS: dict = {
 
 # Settings keys holding a {str: str} map. Values are kept as STRINGS: a
 # Decimal FX rate keeps full precision as text, a json float does not.
-SETTINGS_MAP_KEYS = ("fx_reference_rates", "card_entities", "card_accounts")
+SETTINGS_MAP_KEYS = ("card_entities", "card_accounts")
 
 # Every top-level key `PUT /api/settings` actually writes. The settings
 # screen saves ONE group per request (the tabbed page sends {"cards": ...}
@@ -215,6 +214,25 @@ SETTINGS_DERIVED_KEYS = (
 # its prompt lands) and the settings payload never serves a value stored
 # before the removal.
 RETIRED_ENTITY_KEYS = frozenset({"account_picks"})
+
+# Whole settings keys the app no longer stores. `GET` never serves them,
+# `PUT` drops them silently (a 400 would break the published SPA, which
+# keeps sending the key until its removal prompt is applied), and
+# `_migrate` deletes them from the stored row once.
+#
+# `fx_reference_rates` retired 2026-09-23, owner directive: "no more typing
+# them in settings you can remove that function entirely, we will only rely
+# on these daily rates API stuff". The live row held EUR:USD 1.162275 and
+# BRL:USD 0.192448, which outranked every fetched rate for every month.
+RETIRED_SETTINGS_KEYS = frozenset({"fx_reference_rates"})
+
+
+def without_retired_settings_keys(settings: dict) -> dict:
+    """`settings` with every retired top-level key removed. A shallow copy:
+    the stored row is never touched (the migration does that once)."""
+    if not any(k in settings for k in RETIRED_SETTINGS_KEYS):
+        return settings
+    return {k: v for k, v in settings.items() if k not in RETIRED_SETTINGS_KEYS}
 
 
 def without_retired_entity_keys(settings: dict) -> dict:
@@ -548,7 +566,12 @@ class RunStore:
     def _migrate(self) -> None:
         """Idempotent column adds for databases created before testing mode.
         Existing runs stay published=0 (operator-visible only) until an
-        operator publishes them explicitly."""
+        operator publishes them explicitly.
+
+        Also drops any `RETIRED_SETTINGS_KEYS` still in the stored settings
+        row, so retiring a settings function actually removes its data
+        instead of merely hiding it behind the read path."""
+        self._drop_retired_settings()
         existing = {
             row["name"]
             for row in self.conn.execute("PRAGMA table_info(runs)").fetchall()
@@ -1898,6 +1921,29 @@ class RunStore:
         self.conn.commit()
 
     # -- settings (§16 export policy; one row, id=1) -----------------------
+
+    def _drop_retired_settings(self) -> None:
+        """Delete every retired key from the stored settings row, once.
+        Runs on every open and is a no-op when none is present, so it needs
+        no version stamp and a rollback simply stops dropping."""
+        row = self.conn.execute(
+            "SELECT data FROM settings WHERE id = 1"
+        ).fetchone()
+        if row is None:
+            return
+        try:
+            data = json.loads(row["data"])
+        except (TypeError, ValueError):
+            return
+        if not isinstance(data, dict):
+            return
+        keep = {k: v for k, v in data.items() if k not in RETIRED_SETTINGS_KEYS}
+        if len(keep) != len(data):
+            self.conn.execute(
+                "UPDATE settings SET data = ? WHERE id = 1",
+                (json.dumps(keep),),
+            )
+            self.conn.commit()
 
     def get_settings(self) -> dict:
         """The current settings, with defaults applied. No row yet => the

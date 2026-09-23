@@ -61,7 +61,6 @@ import threading
 import time
 import uuid
 from datetime import date, datetime, timezone
-from decimal import Decimal
 from pathlib import Path
 
 from fastapi import (
@@ -203,6 +202,7 @@ from .store import (
     INTAKE_RECEIVED,
     JOB_DONE,
     JOB_ERROR,
+    RETIRED_SETTINGS_KEYS,
     SETTINGS_DERIVED_KEYS,
     SETTINGS_MAP_KEYS,
     SETTINGS_WRITABLE_KEYS,
@@ -213,6 +213,7 @@ from .store import (
     VALID_STATUSES,
     RunStore,
     without_retired_entity_keys,
+    without_retired_settings_keys,
 )
 from . import auth, machine, ratelimit
 from . import decision_history as dh  # item 104
@@ -3016,7 +3017,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             settings = store.get_settings()
             return JSONResponse({
-                **without_retired_entity_keys(settings),
+                **without_retired_settings_keys(
+                    without_retired_entity_keys(settings)
+                ),
                 "categories": list(EXPENSE_CATEGORIES),
                 "entity_options": available_entities(settings),
                 "cards_effective": [
@@ -3039,10 +3042,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     settings
                 ).options(),
                 # Note #79: the poll's state and the newest polled day's
-                # rates (units per EUR + every pair), so the FX tab can set
-                # them beside the typed ones. Derived and read-only; PUT
-                # ignores it. The typed `fx_reference_rates` still win in
-                # the matcher (owner rulings 2026-09-16 / 09-17).
+                # rates (units per EUR + every pair), so the FX tab can
+                # show what the app fetched. Derived and read-only; PUT
+                # ignores it. Since the typed rates were retired (item
+                # 168) these and the ECB monthly average are the only
+                # reference rates the matcher has, besides the ones a run
+                # derives from its own statement and receipts.
                 "fx_daily_rates": fx_daily_rates.settings_view(store),
             })
 
@@ -3102,7 +3107,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         unknown = sorted(
             k
             for k in body
-            if k not in SETTINGS_WRITABLE_KEYS and k not in SETTINGS_DERIVED_KEYS
+            if k not in SETTINGS_WRITABLE_KEYS
+            and k not in SETTINGS_DERIVED_KEYS
+            and k not in RETIRED_SETTINGS_KEYS
         )
         if unknown:
             return JSONResponse(
@@ -3135,27 +3142,6 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 value = str(v).strip()
                 if not name or not value:
                     continue
-                if key == "fx_reference_rates":
-                    from_ccy, _, to_ccy = name.partition(":")
-                    if not from_ccy.strip() or not to_ccy.strip():
-                        return JSONResponse(
-                            {"error": f"rate key {name!r} must be 'FROM:TO'",
-                             "code": "fx_rate_key_invalid",
-                             "setting": "fx_reference_rates",
-                             "rate_key": name},
-                            status_code=400,
-                        )
-                    try:
-                        if Decimal(value) <= 0:
-                            raise ValueError(value)
-                    except (ArithmeticError, ValueError):
-                        return JSONResponse(
-                            {"error": f"rate {name} must be a positive number",
-                             "code": "fx_rate_not_positive",
-                             "setting": "fx_reference_rates",
-                             "rate_key": name},
-                            status_code=400,
-                        )
                 cleaned[name] = value
             patch[key] = cleaned
         # Legal-entity registry (Phase 5): {label: {org_id, chart_path,
@@ -3312,7 +3298,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # derives. A caller shows "saved" on its own key appearing in
             # `applied`, never on the 200 alone.
             "applied": sorted(patch),
-            "ignored": sorted(k for k in body if k in SETTINGS_DERIVED_KEYS),
+            # A derived key is read-only; a RETIRED key no longer exists
+            # at all. Both are accepted and reported rather than refused,
+            # so the published SPA can keep sending `fx_reference_rates`
+            # until its removal prompt is applied.
+            "ignored": sorted(
+                k for k in body
+                if k in SETTINGS_DERIVED_KEYS or k in RETIRED_SETTINGS_KEYS
+            ),
         })
 
     @app.get("/api/compare")

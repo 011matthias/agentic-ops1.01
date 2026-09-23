@@ -46,6 +46,24 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 MONTH_RATE = "0.192448"  # the live Settings BRL:USD rate
 
 
+@pytest.fixture(autouse=True)
+def _ecb(monkeypatch):
+    """MONTH_RATE (BRL:USD 0.192448) as a fetched rate.
+
+    Units per ONE EUR, the ECB's own shape: a pair X:USD is
+    units["USD"] / units["X"], and EUR itself is 1. Every month answers the
+    same rates, so no test has to know which month its charges fall in.
+    Typed Settings rates were retired 2026-09-23; a rate now reaches a
+    month only by being fetched."""
+    from expense_recon.web import ecb_rates
+
+    def _fetch(start, end, **kw):
+        months = ["2026-%02d" % m for m in range(1, 13)]
+        return {m: {"USD": "1.162275", "BRL": "6.039423636515"} for m in months if start <= m <= end}
+
+    monkeypatch.setattr(ecb_rates, "fetch_monthly", _fetch)
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
@@ -95,7 +113,8 @@ def _month(client, monkeypatch, receipt: ExtractedReceipt, p: float, charges) ->
                 "entity": "Corporate Services", "currency": "USD",
             },
         },
-        "fx_reference_rates": {"BRL:USD": MONTH_RATE},
+        # MONTH_RATE, reached through the ECB table (typed rates retired
+        # 2026-09-23): units per EUR, so BRL:USD = units["USD"]/units["BRL"].
     })
     assert resp.status_code == 200, resp.text
     resp = client.post(
@@ -182,7 +201,8 @@ def test_a_rejection_at_the_floor_inside_the_clean_band_stays_in_review_with_the
     assert cand["fx"]["reference_gap_pct"] == 1.46
 
     reason = cand["reason"]
-    tool = f"Charge 5.61 USD vs receipt 28.73 BRL at monthly reference rate {MONTH_RATE}: deviation 1.5%."
+    tool = (f"Charge 5.61 USD vs receipt 28.73 BRL at ECB monthly average "
+            f"rate {MONTH_RATE} (2026-07): deviation 1.5%.")
     model = f"FX judgment: likely NOT the same purchase (p={p:.2f})."
     assert reason.startswith(tool), reason
     assert "Demoted to judgment" in reason, reason  # the live row's route in

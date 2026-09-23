@@ -35,7 +35,7 @@ def test_settings_default_is_off(tmp_path):
         assert settings["export_approved_only"] is False
         # The master-data maps (2026-07-22) default empty, so a fresh
         # install matches the pre-master-data behaviour exactly.
-        assert settings["fx_reference_rates"] == {}
+        assert "fx_reference_rates" not in settings  # retired 2026-09-23
         assert settings["card_entities"] == {}
         assert settings["card_accounts"] == {}
 

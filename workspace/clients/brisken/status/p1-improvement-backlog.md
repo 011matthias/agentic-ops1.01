@@ -7909,10 +7909,100 @@ tests red with it unwired, green restored. SPA half:
 `daily rate, {day}` label; pending). Contract: `docs/api-contract.md`,
 "FX rates polled daily from OpenTickers".
 
+### 168. Typing an FX rate in Settings is gone (owner directive 2026-09-23, follows 167) (SHIPPED 2026-09-23, pending PR; Shipped row 116)
+
+**Owner, on reading item 167 shipped:** *"no more typing them in settings
+you can remove that function entirely, we will only rely on these daily
+rates API stuff."* This is the step 4 of item 90 the owner declined on
+09-17, now asked for outright and gone further: not just clearing the two
+rates, removing the function.
+
+**What went.** The settings key (`GET` drops it, `PUT` accepts-and-ignores
+it, `RunStore` deletes it from the stored row on open), the matcher's
+`configured` rung and `MatchingConfig.fx_reference_rates`, the per-rate
+validation in the PUT, `apply_master_data`'s rate copying, item 132's
+`fx_rate_drift` advisory and its four tests, and the `"your rate"` /
+`settings` labels. The rung order is now `statement` -> `receipts` ->
+`opentickers_day` -> `ecb_month`: every rate is either read off the
+client's own documents or fetched from a central bank.
+
+**Two quieter reads went with it**, both found by grepping the key after the
+first suite rather than by reading the diff. `fx_daily_rates.needed_currencies`
+widened the poll's own currency list from the typed pairs; with the key
+stripped from the stored settings that read can never fire, so the poll now
+follows the cards and the months alone, which is what it really tracked.
+And `test_fx_ladder`'s band-scoring proof (item 69's fix: a pair agreeing with
+the rate must outscore one sitting at the band midpoint) pinned its rate
+through the typed rung, so it now pins the same proof through the daily rung,
+where a fetched rate reads its band off `fx_ecb_match_pct`.
+
+**The key stays parseable on purpose.** Every month created before today
+has the typed rates frozen in its config, and the shipped scorer asset
+carries the key too; refusing it would make both unloadable. It is dropped
+at load (`_RETIRED_TUNABLES`), so the stored copies are inert and no client
+data was rewritten.
+
+**The trap this nearly walked into, measured in-container before building.**
+`apply_ecb_rates` only ran at month creation and statement attach. July 2026
+(`50622baec444`) was created 2026-09-07, before item 82 shipped, and never
+re-attached, so its stored config held `fx_reference_rates` and **no ECB
+table at all** -- while August (`074a7b8905d7`) and April hold both, and
+January/May/June/September hold neither. Removing the typed rung alone would
+have left July's 18 cross-currency pairs with no rate on any rung, blanking
+the FX panel and the month report's USD figures. So `rematch_month` now also
+calls `top_up_ecb_rates`, which fetches only the months the stored table is
+missing (nothing published for the running month, so an ordinary re-match
+costs no request).
+
+**The band moves with the rate, and that is the real cost.** A typed rate
+carried the 3% clean band; a central-bank rate carries 2%
+(`fx_ecb_match_pct`, item 90). A pair between the two bands that used to
+auto-reconcile now defers to judgment. The shipped example: July's SUPERMEC
+SAO JOSE at +2.93%, pinned in `test_fx_breakdown.py`. Item 90 measured this
+trade and the owner took it: at 2% under fetched rates July scored 32 right
+against 30.
+
+**Live effect, measured read-only before and after the deploy.** July's 18
+and August's 2 FX blocks all read `settings` beforehand. August re-reads its
+own ECB table; July shows no reference rate until its next natural re-match,
+which is when `top_up_ecb_rates` gives it one. Nothing was re-matched on
+Criss's behalf ([[feedback_recon_no_live_writes_criss_acts]]).
+
+**Not changed:** the self-derived `statement` / `receipts` rungs (read off
+the client's documents, never typed) stay, and stay above the fetched rates
+on item 82's bundle evidence. Whether a daily rate should outrank a
+receipts-derived median is unmeasured -- no labelled bundle carries daily
+rates -- and stays open.
+
+**Both load-bearing wires had to be caught by the bite check, not the
+suite.** `top_up_ecb_rates` was tested as a helper only, so cutting its call
+in `rematch_month` left all 3043 tests green -- the exact shape B2's
+fix-bites-the-caller clause exists for. It now runs through a caller that
+fetches nothing of its own (adding a receipt to a month that already has its
+statement; creation and the statement read each fetch for themselves), with
+the ECB down for both the creation and the attach, which is July's shape.
+The stored-row migration was invisible for a subtler reason: the route's GET
+strips the key whether or not the row still holds it, so an API-driven test
+reports success on an unwired migration. That difference is the whole point
+of the migration -- gone rather than hidden -- so it is asserted against
+`RunStore.get_settings`, which reads the row as stored. Both now go green ->
+red -> green under `tools/regress_check.py`.
+
+**Tests:** the retirement pinned in `test_ecb_band_item_132.py`
+(`test_a_rate_typed_in_settings_is_no_longer_read_from_a_stored_config`),
+`test_settings_put_contract.py`
+(`test_a_retired_key_is_accepted_and_ignored_never_refused`),
+`test_master_data_settings.py`, and the inverted route tests in
+`test_ecb_month_rates.py` / `test_fx_daily_rates.py`. Accuracy gate
+unchanged (the asset's `fx_reference_rates` was already empty). SPA half:
+`docs/lovable-fx-daily-rates-prompt.md`, rewritten as one prompt that
+removes the editor and adds the read-only fetched-rates panel.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 116 | Typing an FX rate in Settings is gone: the settings key retired (read drops it, write ignores it, the stored row is migrated), the matcher's `configured` rung and `MatchingConfig.fx_reference_rates` removed, `apply_master_data` stops writing rates into a run config, item 132's drift advisory deleted, and `rematch_month` tops up a month's ECB table so no month is left without a rate. The retired key stays parseable and is dropped, so every existing month and the scorer asset still load | Backlog item 168 (owner: "no more typing them in settings you can remove that function entirely"). Measured in-container first: July 2026 carried the typed rates and NO ECB table, so removing the rung alone would have blanked its 18 cross-currency pairs | 2026-09-23 |
 | 115 | Daily FX reference rates polled from OpenTickers: a boot + 24 h poll thread, a one-time backfill of the live months (the key is a paid tier), the `fx_daily_rates` store table (units per EUR by day, ECB record preferred), the matcher's `opentickers_day` rung on the charge's own day (nearest day within four, earlier on a tie) between the self-derived rates and the ECB monthly average with the 2% band, the table refreshed into every month on each re-match, `GET /api/settings.fx_daily_rates` and `POST /api/fx/poll`. Typed Settings rates still win, so July and August did not move | Backlog item 167 (feedback note #79, Dirk, anchored on Settings > FX reference rates: "fx rates should be polled daily via open tickers API"). regress_check proved the re-match wiring bites (4 route tests red unwired) | 2026-09-23 |
 | 114 | R4.1, the trip lifecycle owes its months a re-match. Four entrances now stamp `rematch_pending(trigger="trip")` INSIDE their own `_BATCH_ADD_LOCK` span and pay it outside: a receipt joining a trip, a date edit (the UNION of the months the old range covered and the new one does), a trip-batch delete (the borrowing months chosen BEFORE the delete) and a trip-receipt delete. The paying loop gained the per-month try/except `rematch_neighbour_months` has always had, the candidate filter gained the expense-generation check, `learning_db_path` is threaded through both trip entrances, a rename carries onto the batch label and onto every borrowing month's stored `settled_by` label, and the trip-batch create slot is released on ANY failure rather than only on `RunInputError` | Owner ruling 2026-09-21 on the R4.0 findings: "must be done because later on if expenses and items in statement dont line up we will have a problem." Measured on a copy of the live store the day before: moving a trip's dates off July, and deleting its batch, each left July reporting **33 charges reconciled where 31 was true**, with `settled_by` badges naming a run that no longer existed. Nothing corrupted (claims released correctly, and July's next re-match healed it completely) and nothing scheduled that next re-match, so a month stayed wrong until something unrelated happened to touch it. The adversarial catch during the build was the repo's own item-18 guard: `put_trip` and `delete_expense` are `async def`, and the first draft blocked the EVENT LOOP on a lock an OCR ingest holds for minutes; both locked spans now go through `run_in_threadpool` | 2026-09-21, this round; `tests/test_trip_lifecycle_rematch.py` (12, route-level, self-contained fixtures); suite 2714 -> 2726 passed / 2 skipped; ruff clean. Eight wiring points proven RED under `tools/regress_check.py`, the date gate in BOTH directions (forced off reddens the move-off test, forced on reddens the roster-edit test that asserts a non-date edit owes nothing): `--replace` literals recorded in the PR. The first draft's durability test did NOT bite (it drove create-with-receipt while the mutated wire was the gradual-add path); caught by `regress_check` and closed with two add-path tests |
 | 113 | Item 38's SPA half: the four Lovable prompts for R3 and R4 published and bundle-verified applied on the same day the backend landed (`lovable-trips-prompt.md`, `lovable-r4-settled-by-prompt.md`, and the two cost-center prompts that followed) | Recorded retroactively 2026-09-21. All four were audited by bundle only; none had ever been driven in a browser, because no trip and no cost center existed live to render. The 2026-09-21 cold drive against a local copy closed that: the Trips screen, the trip batch page and July's "Settled by trip ..." badge all render. The one field that does NOT render is `roster_mismatch` / `n_roster_mismatch`, emitted and documented since R3 and carried by no prompt | PR #698, 2026-09-07 |
