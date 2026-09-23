@@ -8520,7 +8520,7 @@ Belongs to the learning theme items 163-166 cover, and is the one note of that
 wave still open. Item 163's memory ledger is the precedent for the write half:
 a save that says what it did, per row.
 
-### 178. No way to enlarge a receipt photo (note #82, operator 2026-09-23)
+### 178. A receipt you cannot read (notes #3 / #32 / #82, 2026-07-16 to 09-23) (BACKEND SHIPPED 2026-09-24, pending PR; SPA half `docs/lovable-receipt-viewer-prompt.md`, not pasted)
 
 **Operator (PT):** *"Se possivel ter uma lupa para ampliar a foto do recibo"*
 ("if possible, a magnifier to enlarge the receipt photo").
@@ -8554,6 +8554,38 @@ answers none of the three notes.
 thirteen notes in the #73-#85 range are system architecture. This one is
 somebody unable to read a receipt while reconciling it, for the third time
 since July.
+
+**The cause was the payload, not the viewer (found 2026-09-24).** `/image`
+served the stored file with its own media type, and **70 of September's 75
+receipts are PDFs**. A PDF cannot go in an `<img>`, so the only thing a
+browser-side viewer could do with one is download it, which is note #3 word
+for word. Item 52 had already driven the live SPA for #32 and found its "View
+receipt" button dead; this is the half underneath that button. Confirmed by
+reading the published bundles: the SPA fetches the receipt as a blob and its
+ONLY `createObjectURL` is the download helper, so downloading is not a
+workaround anyone chose, it is the only thing the payload allowed.
+
+**BACKEND SHIPPED.** `?as=png` on the existing route renders the stored file
+to a raster whatever it was: a PDF page comes back `image/png`, a photo comes
+back untouched (re-encoding a JPEG would only cost quality). `?page=N` is
+0-based and clamped so a viewer asking past the end gets the last page rather
+than an error, `X-Receipt-Pages` carries the count, and a PDF that will not
+rasterize falls back to the stored bytes with `X-Receipt-Render: failed`
+rather than 404, because a receipt the reviewer can download beats one the
+tool says does not exist. **Without the parameter the response is byte-for-byte
+what it was**, which is the negative case the tests pin: a change that only
+proved the new path works would let every existing caller rot silently.
+New module `src/expense_recon/receipt_render.py`; tests
+`tests/test_receipt_render_178.py` (13), red-proven with `regress_check.py`
+(disabling the wiring reddens 3 caller-level tests, not just the helper's).
+
+**The SPA half is the actual fix for Criss** and is not pasted:
+`docs/lovable-receipt-viewer-prompt.md`. It carries the measurement that
+decides the design, which is why the prompt insists on zoom over a lightbox:
+the row note #82 was left on is a **444 x 2573** JPEG, 5.8 times taller than
+wide. Fit-to-window puts that at roughly a third of full size on a 913px
+viewport and the text is gone. A bigger thumbnail answers none of the three
+notes.
 
 ### 179. The pickable categories are eight strings, not Brisken's Zoho chart (note #83, owner 2026-09-23)
 
