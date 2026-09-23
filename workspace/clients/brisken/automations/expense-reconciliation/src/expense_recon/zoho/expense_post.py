@@ -39,6 +39,9 @@ cleanly is worse than one that fails:
   usable rate, because Zoho would then apply one nobody chose.
 * a purchase whose `Paid Through` or `Legal Entity` cell still holds the
   export's assign-me placeholder
+* a reference whose own rows disagree on the date by more than two days,
+  because a vendor reusing one invoice number across separate documents
+  is not the split this grouping assumes
 * a reference already in the ledger for this org, or in flight, or
   ambiguous
 
@@ -76,8 +79,10 @@ if TYPE_CHECKING:
 __all__ = [
     "DEFAULT_STALE_DAYS",
     "MAX_DESCRIPTION_CHARS",
+    "MAX_REFERENCE_DATE_SPREAD_DAYS",
     "REFUSAL_AMOUNT",
     "REFUSAL_ACCOUNT",
+    "REFUSAL_CONFLICTING_DATES",
     "REFUSAL_CURRENCY",
     "REFUSAL_CURRENCY_UNDEFINED",
     "REFUSAL_EXCHANGE_RATE",
@@ -98,6 +103,7 @@ __all__ = [
     "period_scoped_reference",
     "plan_expense_post",
     "read_expense_csv",
+    "reference_date_spread",
 ]
 
 REFUSAL_ACCOUNT = "account_unresolved"
@@ -126,6 +132,38 @@ REFUSAL_STALE_DATE = "date_precedes_period_window"
 # it. Different questions, different people, different fixes, so the
 # summary names them apart.
 REFUSAL_UNASSIGNED = "card_or_entity_unassigned"
+# A reference whose own rows disagree on the date. `group_by_reference`
+# reads a shared `Reference#` as ONE purchase split across accounts, and
+# Hostinger breaks that premise: it reuses its invoice number, so
+# `H_46243348` merged documents dated 2026-07-03 and 2026-07-28 (172.61
+# each) into a single expense of USD 345.22 stamped with the earlier
+# date. July's statement carries exactly one Hostinger charge, 172.61 on
+# 2026-07-03; the second document matches nothing on either month's
+# statement.
+#
+# **Why a refusal and not compound keying.** Keying the group on
+# reference AND date, so the two become separate purchases, was
+# considered and rejected. Three reasons, recorded here so it is not
+# re-litigated:
+#
+# 1. It would POST BOTH, and one of the two is known to have no
+#    statement line. Turning a silent merge into a silent duplicate is
+#    not a fix.
+# 2. It changes the ledger key shape for EVERY reference, which is
+#    exactly the migration pain the synthetic-reference section of
+#    `docs/zoho-month-end-posting.md` documents.
+# 3. The module's posture is deny-by-default. Nothing here can tell
+#    "two real charges on one invoice number" from "one charge
+#    documented twice"; only a human holding the statement can, and
+#    this refusal is how they get asked.
+REFUSAL_CONFLICTING_DATES = "conflicting_reference_dates"
+
+# How far apart the rows of one purchase may be dated before the group
+# stops being believable as a split. A genuine split is ONE receipt, so
+# its rows share a date exactly; 2 days absorbs a statement-vs-
+# transaction-date nuance if the export ever starts writing per-row
+# dates. Hostinger's spread is 25 days.
+MAX_REFERENCE_DATE_SPREAD_DAYS = 2
 
 AUDIT_PREFIX = "[External Match Audit]"
 
@@ -481,6 +519,29 @@ def _unassigned_columns(group: "ExpenseGroup") -> tuple[str, ...]:
     )
 
 
+def reference_date_spread(group: "ExpenseGroup") -> "tuple[date, date] | None":
+    """The earliest and latest READABLE `Expense Date` across a group's
+    rows, or None when fewer than two rows carry a readable one.
+
+    Unreadable and empty cells are skipped rather than counted as a
+    conflict. "This row's date cannot be checked" is already
+    `date_precedes_period_window`'s message, and it names the problem
+    better than a spread would: July's `00000031010` has an empty date
+    cell and must keep that reason. So a group of one real date and one
+    blank has no spread to speak of, and falls through to the existing
+    branch.
+    """
+    seen: list[date] = []
+    for row in group.rows:
+        try:
+            seen.append(date.fromisoformat((row.get("Expense Date") or "").strip()))
+        except ValueError:
+            continue
+    if len(seen) < 2:
+        return None
+    return min(seen), max(seen)
+
+
 @dataclass(frozen=True)
 class PostRefusal:
     reference: str
@@ -569,6 +630,36 @@ def build_expense_payload(
     more than `stale_days` before that period's first day refuses rather
     than posting quietly. Omit `period` and the guard is off.
     """
+    # **First, because a group that disagrees with itself cannot be
+    # asked anything else yet.** Every guard below reads the purchase as
+    # a single fact: the stale-date check reads `group.cell("Expense
+    # Date")`, which is row[0] only. When the rows carry different
+    # dates, WHICH date that checks is an accident of CSV order, so "is
+    # this row inside the period" is not a meaningful question until the
+    # group agrees on what day it happened.
+    #
+    # Ungated by `period`, unlike the stale-date guard below: a
+    # reference whose rows span a month is not one purchase regardless
+    # of which month is being posted, so there is no period for this to
+    # depend on.
+    spread = reference_date_spread(group)
+    if spread is not None and (spread[1] - spread[0]).days > MAX_REFERENCE_DATE_SPREAD_DAYS:
+        first, last = spread
+        return PostRefusal(
+            reference=group.reference,
+            reason=REFUSAL_CONFLICTING_DATES,
+            detail=(
+                f"rows of {group.reference!r} are dated {first.isoformat()} "
+                f"and {last.isoformat()}, {(last - first).days} days apart "
+                f"(at most {MAX_REFERENCE_DATE_SPREAD_DAYS} is a split of one "
+                "receipt). A shared reference is read as ONE purchase split "
+                "across accounts; this looks instead like a vendor reusing an "
+                "invoice number across separate documents, which would post "
+                "them as a single expense on the earlier date. Check the "
+                "statement for how many charges there really were"
+            ),
+        )
+
     when_text = group.cell("Expense Date")
     if period:
         window_start, _ = month_bounds(period)

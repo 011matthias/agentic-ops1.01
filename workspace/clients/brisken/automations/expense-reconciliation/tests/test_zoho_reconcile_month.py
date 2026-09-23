@@ -23,6 +23,7 @@ from expense_recon.zoho import reconcile_month as rm
 from expense_recon.zoho.client import ZohoAPIError
 from expense_recon.zoho.expense_post import (
     REFUSAL_ACCOUNT,
+    REFUSAL_CONFLICTING_DATES,
     REFUSAL_LEDGER,
     REFUSAL_STALE_DATE,
     REFUSAL_UNASSIGNED,
@@ -495,7 +496,134 @@ def test_a_split_refuses_when_only_its_second_line_is_unassigned(tmp_path):
     assert [r.reason for r in run.plan.refusals] == [REFUSAL_UNASSIGNED]
 
 
+# ── a reference whose rows disagree on the date ──────────────────────
+
+
+HOSTINGER = "H_46243348"
+
+
+def _hostinger():
+    """The real July case: one invoice number reused across two documents
+    dated 25 days apart, 172.61 each, which `group_by_reference` merged
+    into a single USD 345.22 expense stamped 2026-07-03. The statement
+    carries exactly ONE Hostinger charge."""
+    return [
+        _row(**{"Reference#": HOSTINGER, "Expense Date": "2026-07-03",
+                "Expense Amount": "172.61"}),
+        _row(**{"Reference#": HOSTINGER, "Expense Date": "2026-07-28",
+                "Expense Amount": "172.61"}),
+    ]
+
+
+def test_a_reference_whose_rows_are_25_days_apart_refuses(tmp_path):
+    run, out = _run(tmp_path, [_row(), *_hostinger()], client=FakeClient())
+
+    assert [(r.reference, r.reason) for r in run.plan.refusals] == [
+        (HOSTINGER, REFUSAL_CONFLICTING_DATES)
+    ]
+    assert [p.reference for p in run.send_plan.postable] == ["R1"]
+    assert REFUSAL_CONFLICTING_DATES in out
+
+
+def test_the_refusal_names_both_dates(tmp_path):
+    """Named in the detail so the reviewer sees the spread without
+    opening the CSV to find out what disagreed."""
+    run, _ = _run(tmp_path, _hostinger(), client=FakeClient())
+
+    (refusal,) = run.plan.refusals
+    assert "2026-07-03" in refusal.detail
+    assert "2026-07-28" in refusal.detail
+    assert "25 days apart" in refusal.detail
+
+
+def test_a_genuine_split_on_one_date_still_posts_as_one_expense(tmp_path):
+    """THE REGRESSION THIS GUARD MUST NOT CAUSE. A real split is one
+    receipt across several accounts, so its rows share a date exactly and
+    must still group into a single itemized expense."""
+    rows = [
+        _row(**{"Reference#": "SPLIT", "Expense Amount": "10.00"}),
+        _row(**{"Reference#": "SPLIT", "Expense Amount": "5.50",
+                "Expense Account": "Office Supplies & Consumables"}),
+    ]
+    run, _ = _run(tmp_path, rows, client=FakeClient())
+
+    assert run.plan.refusals == ()
+    (planned,) = run.send_plan.postable
+    assert planned.reference == "SPLIT"
+    assert [li["account_id"] for li in planned.payload["line_items"]] == [
+        SOFTWARE, OFFICE
+    ]
+    assert planned.total == Decimal("15.50")
+
+
+@pytest.mark.parametrize(
+    ("second_date", "posts"), [("2026-07-16", True), ("2026-07-17", False)]
+)
+def test_the_boundary_is_two_days(tmp_path, second_date, posts):
+    """Base row is 2026-07-14, so these are a 2-day and a 3-day spread."""
+    rows = [
+        _row(**{"Reference#": "SPLIT", "Expense Amount": "10.00"}),
+        _row(**{"Reference#": "SPLIT", "Expense Date": second_date,
+                "Expense Amount": "5.50",
+                "Expense Account": "Office Supplies & Consumables"}),
+    ]
+    run, _ = _run(tmp_path, rows, client=FakeClient())
+
+    if posts:
+        assert run.plan.refusals == ()
+        assert [p.reference for p in run.send_plan.postable] == ["SPLIT"]
+    else:
+        assert run.send_plan.postable == ()
+        assert [r.reason for r in run.plan.refusals] == [REFUSAL_CONFLICTING_DATES]
+
+
+def test_a_group_with_one_unreadable_date_keeps_the_stale_date_reason(tmp_path):
+    """July's `00000031010` has an empty date cell. A spread computed over
+    one readable date is no spread, so this falls through to the branch
+    that already names the problem exactly."""
+    rows = [
+        _row(**{"Reference#": "00000031010", "Expense Date": ""}),
+        _row(**{"Reference#": "00000031010", "Expense Date": "2026-07-28",
+                "Expense Account": "Office Supplies & Consumables"}),
+    ]
+    run, _ = _run(tmp_path, rows, client=FakeClient())
+
+    (refusal,) = run.plan.refusals
+    assert refusal.reason == REFUSAL_STALE_DATE
+    assert "not a readable ISO date" in refusal.detail
+
+
 # ── refusal precedence, both halves decided deliberately ────────────
+
+
+def test_conflicting_dates_outrank_a_stale_date(tmp_path):
+    """INTRA-BUILD ORDER. The stale check reads row[0]'s date only, so
+    which date it judges is an accident of CSV order while the rows
+    disagree. Move the spread guard below it and this goes red."""
+    rows = [
+        _row(**{"Reference#": "OLD", "Expense Date": "2026-03-30"}),
+        _row(**{"Reference#": "OLD", "Expense Date": "2026-03-05",
+                "Expense Account": "Office Supplies & Consumables"}),
+    ]
+    run, _ = _run(tmp_path, rows, client=FakeClient())
+
+    assert [r.reason for r in run.plan.refusals] == [REFUSAL_CONFLICTING_DATES]
+
+
+def test_an_already_posted_conflicting_group_refuses_as_ledger(tmp_path):
+    """LEDGER-FIRST ORDER SURVIVES. What the cells say now cannot change
+    what went to Zoho, so a recorded purchase answers `already_in_ledger`
+    even when its rows disagree. This is what keeps both rehearsed
+    months' refusal mix byte-identical."""
+    with PostLedger(tmp_path / "ledger.sqlite") as ledger:
+        ledger.mark_posted(ORG, HOSTINGER, zoho_journal_id="OLD", entry_number=None,
+                           now_iso="2026-09-23T10:00:00+00:00", content_hash="h")
+    run, _ = _run(tmp_path, [_row(), *_hostinger()], client=FakeClient())
+
+    assert [(r.reference, r.reason) for r in run.plan.refusals] == [
+        (HOSTINGER, REFUSAL_LEDGER)
+    ]
+    assert [p.reference for p in run.send_plan.postable] == ["R1"]
 
 
 def test_an_already_posted_row_refuses_as_ledger_not_unassigned(tmp_path):
