@@ -53,7 +53,6 @@ from __future__ import annotations
 
 import json
 import logging
-import mimetypes
 import os
 import re
 import shutil
@@ -89,6 +88,13 @@ from ..cards import card_to_dict, effective_cards, normalize_cards_setting
 from ..cards_provision import card_by_key, load_cards
 from ..error_codes import Refusal, code_of, fields_of  # Refusal: item 104
 from ..ingest.expense_report_images import render_receipt_page
+from ..receipt_render import (
+    ReceiptRenderError,
+    guess_media_type,
+    is_pdf,
+    page_count,
+    render_page_png,
+)
 from .serialize import receipt_from_dict
 from . import fx_daily_rates
 from .service import (
@@ -4097,18 +4103,65 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({"ok": True, "job_id": job_id, "n_files": saved})
 
     @app.get("/api/runs/{run_id}/receipts/{document_id:path}/image")
-    def receipt_image(run_id: str, document_id: str):
+    def receipt_image(
+        run_id: str,
+        document_id: str,
+        as_: str | None = Query(default=None, alias="as"),
+        page: int = Query(default=0, ge=0),
+    ):
         # Receipt preview (owner directive 2026-07-25): a reviewer working
         # the needs-review queue gets a quick look at the actual receipt.
         # Serves the vision-mapped page of the uploaded ER PDF (rendered to
         # PNG) or an operator-uploaded manual receipt file, straight from
         # the run's work dir. 404 whenever no image is attributable — the
         # SPA keys its preview control off `receipt_image_available`.
+        #
+        # `?as=png` (backlog item 178) renders the stored file to a raster
+        # instead of handing back its own bytes, because 70 of September's
+        # 75 receipts are PDFs and a PDF cannot go in an <img>. Without it
+        # the only thing a viewer can do with a receipt is download it,
+        # which is feedback note #3 word for word. `?page=N` picks the page
+        # and `X-Receipt-Pages` says how many there are. No param means the
+        # old behaviour exactly, so nothing that works today changes.
         with open_store() as store:
             run = store.get_run(run_id)
         if run is None:
             return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
         work_dir = Path(run.work_dir)
+
+        want_png = (as_ or "").lower() == "png"
+
+        def serve(target: Path) -> Response:
+            """The one place a receipt file becomes an HTTP response."""
+            pages = page_count(target) if want_png else 1
+            headers = {"X-Receipt-Pages": str(pages)}
+            if want_png and is_pdf(target):
+                try:
+                    png = render_page_png(target, page)
+                except ReceiptRenderError as exc:
+                    log.warning(
+                        "receipt render failed for %s page %s: %s",
+                        target.name, page, exc,
+                    )
+                    # Fall back to the stored bytes rather than 404: a
+                    # reviewer who can download the receipt is better off
+                    # than one told it does not exist.
+                    return FileResponse(
+                        target,
+                        media_type=guess_media_type(target),
+                        headers={"X-Receipt-Render": "failed"},
+                    )
+                return Response(
+                    png,
+                    media_type="image/png",
+                    headers={
+                        **headers,
+                        "Cache-Control": "private, max-age=86400",
+                    },
+                )
+            return FileResponse(
+                target, media_type=guess_media_type(target), headers=headers
+            )
 
         if document_id.startswith("manual:"):
             tx_part = document_id[len("manual:"):]
@@ -4119,11 +4172,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return JSONResponse(
                     {"error": "no receipt image", "code": "receipt_image_not_found"}, status_code=404
                 )
-            media = (
-                mimetypes.guess_type(hits[0].name)[0]
-                or "application/octet-stream"
-            )
-            return FileResponse(hits[0], media_type=media)
+            return serve(hits[0])
 
         if document_id.startswith("folder:"):
             # Bulk folder receipt (2026-07-27): the file is stored under
@@ -4137,11 +4186,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return JSONResponse(
                     {"error": "no receipt image", "code": "receipt_image_not_found"}, status_code=404
                 )
-            media = (
-                mimetypes.guess_type(hits[0].name)[0]
-                or "application/octet-stream"
-            )
-            return FileResponse(hits[0], media_type=media)
+            return serve(hits[0])
 
         if run_mode(run) == MODE_EXPENSE_GENERATION:
             # Expense batch (receipt-first): document ids ARE filenames
@@ -4151,11 +4196,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             try:
                 target = (exp_dir / document_id).resolve()
                 if exp_dir in target.parents and target.is_file():
-                    media = (
-                        mimetypes.guess_type(target.name)[0]
-                        or "application/octet-stream"
-                    )
-                    return FileResponse(target, media_type=media)
+                    return serve(target)
             except (OSError, ValueError):
                 pass
             return JSONResponse({"error": "no receipt image", "code": "receipt_image_not_found"}, status_code=404)
