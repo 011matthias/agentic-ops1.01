@@ -102,7 +102,11 @@ from ..cost_centers import (
 )
 from ..cost_centers import CostCenterRegistry, CostCenterResolution
 from ..category_vocabulary import gl_account_options, gl_revision
-from ..merchant_registry import MerchantRegistry, normalize_merchants_setting
+from ..merchant_registry import (
+    MerchantRegistry,
+    drop_unvouched_remembered_cards,
+    normalize_merchants_setting,
+)
 # Note item M1: the registry's bare provenance sentence (a line whose
 # account came from a company's rule says more) and the seed marker the
 # Memory page flags a Zoho-history row with.
@@ -6310,35 +6314,18 @@ def settled_off_card(entry: object) -> bool:
 
 
 def merchant_vouches_one_card(merchants: dict | None, registry, r) -> bool:
-    """Item 173: does the merchant registry vouch that this brand is paid on
-    exactly ONE card?
+    """Item 173, read-time half: may a REMEMBERED card lend itself to this
+    receipt? The rule itself is `MerchantRegistry.vouches_one_card` and its
+    reasoning lives there, because the ingest stamp asks the same question
+    (item 173's second half) and a gate held in one layer and not the other
+    is the bug this was split in half by.
 
-    The registry's own card learner already works this way -- note item M2
-    sets a merchant's `card_key` only while `cards_seen` holds exactly one
-    card, precisely so a brand seen on two never lends either. The remembered
-    correction did not inherit that rule, and the live data says it needed it:
-    Criss's single OpenAI fix taught card 3645, while the hard evidence
-    (printed numbers, her own picks, the statement) shows OpenAI on card-9693
-    eight times and 3645 once. The memory was the minority card, 8 to 1, on 12
-    live September rows.
-
-    Owner ruling 2026-09-23, given that split: gate it. A blank prompts a human
-    to look; a confidently wrong card silently books the receipt to the wrong
-    entity AND the wrong person, because both ride the card.
-
-    Deliberately conservative about the unknown case: a vendor the registry
-    cannot resolve at all is NOT vouched, because "no evidence of a second
-    card" is not evidence of one card. OpenAI is exactly that vendor -- adding
-    it to the registry is the owner's call and he has said he raises it -- so
-    refusing the unresolved case is what makes this ruling bite today.
+    `merchants` stays in the signature as the caller's own "is there a
+    registry at all" evidence; the cards themselves now come off the match.
     """
     if not merchants or registry is None:
         return False
-    match = registry.resolve(r.vendor_clean, r.detected_vendor)
-    if match is None:
-        return False
-    entry = (merchants or {}).get(match.canonical_name) or {}
-    return len(entry.get("cards_seen") or []) <= 1
+    return registry.vouches_one_card(r.vendor_clean, r.detected_vendor)
 
 
 def fill_remembered_cards(
@@ -11799,14 +11786,17 @@ def _restore_set_aside_locked(
     # registry, categorization. The quarantine skipped all of it.
     from ..cards import stamp_card_entities as _stamp
 
+    registry = MerchantRegistry.from_settings(store.get_settings())
     memory = ExpenseMemory.from_db_path(learning_db_path)
     batch = memory.apply([restored])
+    # Item 173, second half: same card gate as the full ingest and the add
+    # job, and before the entity stamping for the same reason.
+    batch = drop_unvouched_remembered_cards(batch, registry)
     batch = _stamp(batch, _batch_cards(cfg), _batch_card_hints(cfg))
     learned = (
         MerchantCategoryLookup.from_db_path(learning_db_path)
         if learning_db_path is not None else None
     )
-    registry = MerchantRegistry.from_settings(store.get_settings())
     llm_client, _tracker, _src = _batch_llm_client(cfg)
     try:
         _, account_labels, _scope = _resolve_categorizer_chart(
@@ -12182,8 +12172,17 @@ def _add_receipts_locked(
 
     if new_receipts:
         _stage("categorizing")
+        # Hoisted above the memory pass (item 173): the card gate below needs
+        # it, and the categorizer further down reads the same one.
+        registry = MerchantRegistry.from_settings(store.get_settings())
         memory = ExpenseMemory.from_db_path(learning_db_path)
         new_receipts = memory.apply(new_receipts)
+        # Item 173, second half: the remembered CARD only for a brand the
+        # registry vouches is paid on one card, the same gate the full
+        # ingest and the grid hold. Before the entity stamping below, not
+        # after: the card resolves the company and the person, so a card
+        # nobody vouched for must not be allowed to answer either.
+        new_receipts = drop_unvouched_remembered_cards(new_receipts, registry)
         # Cards R3: same post-OCR entity stamping as generate_expenses —
         # the paying card (batch config snapshot + explicit assignments)
         # resolves each added receipt's entity before categorization, so
@@ -12197,7 +12196,6 @@ def _add_receipts_locked(
             MerchantCategoryLookup.from_db_path(learning_db_path)
             if learning_db_path is not None else None
         )
-        registry = MerchantRegistry.from_settings(store.get_settings())
         try:
             _, account_labels, _scope = _resolve_categorizer_chart(
                 cfg, work_dir, None, {}

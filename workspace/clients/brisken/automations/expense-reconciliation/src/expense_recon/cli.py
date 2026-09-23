@@ -108,7 +108,7 @@ from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from .llm.client import LLMClient, OpenAIClient
 from .llm.cost import CostTracker
 from .llm.extraction_cache import ExtractionCache
-from .merchant_registry import MerchantRegistry
+from .merchant_registry import MerchantRegistry, drop_unvouched_remembered_cards
 from .matching.deterministic import MatchingConfig, match_month
 from .matching.judgment import judge_ambiguous, judge_fx_match, judge_unmatched
 from .matching.types import Categorization, Match, MatchOutcome, Receipt, Transaction
@@ -1047,6 +1047,16 @@ def generate_expenses(
     # downstream. Provenance lands on data_quality_note (grid-visible).
     if expense_memory is not None:
         receipts = expense_memory.apply(receipts)
+        # Item 173, second half: the remembered CARD only for a brand the
+        # registry vouches is paid on one card. The read-time twin of this
+        # gate shipped in `fill_remembered_cards`, and this stamp did not, so
+        # a month ingested after a multi-card brand was corrected still took
+        # the minority card -- the same 8-to-1 OpenAI memory, arriving by the
+        # other door. Run AFTER the pass rather than inside it, so the vouch
+        # resolves against the same corrected vendor the grid will resolve
+        # against; a gate keyed on the pre-correction name would answer a
+        # different question than its twin.
+        receipts = drop_unvouched_remembered_cards(receipts, registry)
 
     # Cards R3: each receipt's paying card resolves its legal entity (the
     # card registry snapshotted into this run's config + the batch's

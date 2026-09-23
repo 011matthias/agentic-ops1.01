@@ -304,7 +304,14 @@ def test_the_settled_charge_outranks_a_card_remembered_from_an_earlier_month(
     Obsidian charge on 3645; once that pair settles (confirmed here), the
     statement's card is the row's card, and memory, which is no decision on
     this row, gives way."""
-    assert client.put("/api/settings", json={"cards": CARDS}).status_code == 200
+    # Item 173: July's fix can only be remembered into August for a brand the
+    # registry vouches is paid on one card, at ingest as well as at read time.
+    # A bare entry is the vouch: known brand, no evidence of a second card.
+    assert client.put("/api/settings", json={
+        "cards": CARDS,
+        "merchants": {"Obsidian": {"aliases": [], "category": None,
+                                   "zoho_account": None}},
+    }).status_code == 200
     _wire(monkeypatch, _extraction("Obsidian", "96.00", "2026-07-30", "VISA"))
     resp = client.post(
         "/api/expense-batches", data={"legal_entity": "", "label": "July 2026"}
