@@ -203,6 +203,7 @@ SETTINGS_DERIVED_KEYS = (
     "cards_effective",
     "merchants_inert",
     "cost_center_options",
+    "fx_daily_rates",
     "applied",
     "ignored",
 )
@@ -485,6 +486,18 @@ class RunStore:
                 digest       TEXT NOT NULL,
                 committed_at TEXT NOT NULL,
                 trigger      TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS fx_daily_rates (
+                day        TEXT NOT NULL,
+                ccy        TEXT NOT NULL,
+                per_eur    TEXT NOT NULL,
+                source     TEXT NOT NULL,
+                fetched_at TEXT NOT NULL,
+                PRIMARY KEY (day, ccy)
+            );
+            CREATE TABLE IF NOT EXISTS fx_daily_rates_meta (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS decision_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1705,6 +1718,81 @@ class RunStore:
             "digest = excluded.digest, committed_at = excluded.committed_at, "
             "trigger = excluded.trigger",
             (run_id, digest, committed_at, trigger),
+        )
+        self.conn.commit()
+
+    # -- daily FX rates (note #79; polled from OpenTickers) ------------------
+
+    def upsert_fx_daily_rates(self, rows, fetched_at: str) -> int:
+        """Store `(day, currency, units per EUR, source)` rows, replacing a
+        (day, currency) already held: a provider revision for the same day
+        wins. Values are kept as the text they arrived as (a Decimal rate
+        keeps its digits, a float does not). Returns the row count."""
+        rows = [
+            (str(day), str(ccy).upper(), str(per_eur), str(source), fetched_at)
+            for day, ccy, per_eur, source in rows
+        ]
+        self.conn.executemany(
+            "INSERT INTO fx_daily_rates (day, ccy, per_eur, source, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?) ON CONFLICT(day, ccy) DO UPDATE SET "
+            "per_eur = excluded.per_eur, source = excluded.source, "
+            "fetched_at = excluded.fetched_at",
+            rows,
+        )
+        self.conn.commit()
+        return len(rows)
+
+    def fx_daily_rates(
+        self, start: str | None = None, end: str | None = None
+    ) -> dict[str, dict[str, str]]:
+        """`{day: {currency: units per EUR}}` for start..end inclusive
+        (ISO days; either bound optional), days ascending."""
+        query = "SELECT day, ccy, per_eur FROM fx_daily_rates"
+        clauses, params = [], []
+        if start:
+            clauses.append("day >= ?")
+            params.append(str(start))
+        if end:
+            clauses.append("day <= ?")
+            params.append(str(end))
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY day, ccy"
+        out: dict[str, dict[str, str]] = {}
+        for row in self.conn.execute(query, params).fetchall():
+            out.setdefault(row["day"], {})[row["ccy"]] = row["per_eur"]
+        return out
+
+    def fx_daily_rates_status(self) -> dict:
+        """How far the table reaches: `{n_days, first_day, last_day,
+        currencies}`; zeros / None / [] when empty."""
+        row = self.conn.execute(
+            "SELECT COUNT(DISTINCT day) AS n, MIN(day) AS first, MAX(day) AS last "
+            "FROM fx_daily_rates"
+        ).fetchone()
+        ccys = [
+            r["ccy"] for r in self.conn.execute(
+                "SELECT DISTINCT ccy FROM fx_daily_rates ORDER BY ccy"
+            ).fetchall()
+        ]
+        return {
+            "n_days": int(row["n"] or 0),
+            "first_day": row["first"],
+            "last_day": row["last"],
+            "currencies": ccys,
+        }
+
+    def get_fx_meta(self, key: str) -> str | None:
+        row = self.conn.execute(
+            "SELECT value FROM fx_daily_rates_meta WHERE key = ?", (key,)
+        ).fetchone()
+        return row["value"] if row else None
+
+    def set_fx_meta(self, key: str, value: str) -> None:
+        self.conn.execute(
+            "INSERT INTO fx_daily_rates_meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, str(value)),
         )
         self.conn.commit()
 

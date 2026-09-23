@@ -21,6 +21,30 @@ have to hand-fix every month beats a one-off.
 
 ## Open
 
+### Feedback notes #73-#82 (2026-09-20 to 09-23): new since the backlog's #72, not yet itemized
+
+Read off `GET /feedback.jsonl` on 2026-09-23 (82 notes; the backlog stopped
+at #72). #79 is item 163 below; the rest are listed verbatim so they do not
+sit unread again. Times UTC, read raw off `ts`.
+
+| # | When | Who | Where | Comment (verbatim) |
+|---|---|---|---|---|
+| 73 | 09-20 21:57 | matthias | September, expenses table, "From email" cell | why does it say this even though there has been no statement sent for this month |
+| 74 | 09-23 12:21 | operator | September, row 0033 (Invoice-HMVWDWIL-0032.pdf), card picker | No privado, deve haver quem deve reembolsar a despesa |
+| 75 | 09-23 12:24 | operator | September, row 0046, "Private (Dirk Neumann)" | no need to set this as private again, if user has already set as private |
+| 76 | 09-23 12:30 | operator | September, "Needs a look · 27" | from manual input from user create a system to derive a higher standard of logic that is applicable universally f... (truncated in the store) |
+| 77 | 09-23 12:32 | operator | Settings > Merchants, "Add merchant / Save merchants" | to maintain overseeability save merchant should be merchant specific so tha... (truncated in the store) |
+| 78 | 09-23 12:33 | operator | September, "Needs a look · 27" | when learning from manual input from user, you must be able to edit vendor lists etc |
+| 79 | 09-23 12:34 | operator | Settings > FX reference rates | fx rates should be polled daily via open tickers API |
+| 80 | 09-23 12:37 | operator | September, menu bar | categorization needs a good mechanism to be corrected and categorization norms or standards that are applied universally acroos multiple ve... (truncated in the store) |
+| 81 | 09-23 12:38 | operator | September, "Save corrections to memory" | based on what? this should be reversible for now, and state explicitly where these are saved so user can manage t... (truncated in the store) |
+| 82 | 09-23 12:40 | operator | September, row 0024 (processed-0EDA78B9...jpeg), receipt cell | Se possivel ter uma lupa para ampliar a foto do recibo. |
+
+Four of them (#76, #77, #80, #81) are one theme: what the tool learns from a
+manual correction, where it is saved, and how the operator sees and edits
+it. Item 81's "reversible" and "state explicitly where these are saved"
+overlap items 88 and 104. Not itemized in this session.
+
 ### The 2026-08-21 feedback wave (14 notes, sequencing decided)
 
 The operator walked the whole tool on 2026-08-21 and left 14 notes via the
@@ -7670,10 +7694,77 @@ SPA half: `docs/lovable-statement-colour-prompt.md` (Not applied). The
 render is swatches beside the existing chip, deliberately not a row tint:
 tinting would re-attach the meaning the directive removes.
 
+### 163. FX rates polled daily from OpenTickers (feedback note #79, owner 2026-09-23) (SHIPPED 2026-09-23, pending PR; Shipped row 115)
+
+**The note, verbatim**, anchored on Settings > FX reference rates: *"fx
+rates should be polled daily via open tickers API"*, with the OpenTickers
+API key and dashboard login sent over Teams the same afternoon (key in
+`context/.env` `OPENTICKERS_API_KEY` + the Fly secret; login in the vault as
+"OpenTickers Brisken").
+
+**What the provider is.** `api.opentickers.com/api/public/exchange_rates`,
+Bearer auth. `/latest` answers one record per SOURCE for a pair (BCCR, BDI,
+BPT, ECB on 2026-09-22 for EUR->USD, the ECB one 1.1463 = `D.USD.EUR.SP00.A`),
+units of the quote currency per one base. The public page says free keys get
+`/latest` only; this key answered `/historical` with 200 (ECB daily rates for
+September) and the response header reads `X-RateLimit-Limit: 50000`, so it is
+a paid tier and a one-time backfill of the live months was possible.
+
+**Built (`web/fx_daily_rates.py` + store + matcher + routes).** A daemon
+thread polls at boot and every 24 h: EUR->{USD, BRL} by default, plus every
+currency a typed pair or a card names and every month's statement currency;
+the ECB record wins, else the median of the other sources' `mid` values;
+scaled, non-positive or malformed records are skipped. The first round
+backfills from the month before the earliest labelled month (December 2025
+for the live estate, January being the earliest month) to today, once; a 403
+on history is remembered and the round keeps to `/latest`. Rows land in the
+new `fx_daily_rates` table as units per EUR by day, the provider's digits as
+text. `rematch_month` copies the days a month can reach into
+`matching.fx_daily_rates` from the store on EVERY re-match and commits them
+with the run, so the FX block, the single-currency document and a
+pulled-down replay read the table the matcher did. `MatchingConfig.daily_rate`
+crosses through EUR on the CHARGE's own date, or the nearest day within four
+(earlier on a tie, so a Saturday purchase reads Friday's fix). New rung
+`opentickers_day` between the self-derived rates and `ecb_month` (a day is the
+grain the card locked the rate at; the bundle evidence of item 82 keeps the
+receipts' booked rates above it), clean band `fx_ecb_match_pct` (2%),
+`reference_rate_period` = the day. `GET /api/settings` gains the derived
+`fx_daily_rates` block (state + newest day as units per EUR and as every
+pair, six decimals); `POST /api/fx/poll` runs a round now (409
+`fx_poll_disabled` without a key). The setup advisory is quiet for a currency
+the daily table crosses.
+
+**Fail-open by contract.** A provider outage or a refused endpoint leaves the
+table as it was; no month creation, attach or re-match waits on it. Off
+without `OPENTICKERS_API_KEY` or with `EXPENSE_RECON_FX_POLL=0`.
+
+**What did not move.** The two typed Settings rates (EUR:USD 1.162275,
+BRL:USD 0.192448) still win for every month (owner rulings 2026-09-16 and
+09-17, the second one declining to remove them), so July and August keep
+every FX block as it was and the daily rate fires only for a pair Settings
+does not hold. The screen shows the polled rates beside the typed ones once
+the SPA prompt is applied. **Open owner decision, re-raised because Dirk asked
+for the poll himself:** clear the two typed rates (one `PUT /api/settings`),
+after which every month reads the daily rate for its purchase days on its
+next re-match; July's and August's frozen copies stay until their own
+re-match. Not written in this session.
+
+**Tests:** `tests/test_fx_daily_rates.py` (20: three routes on the item-82
+July, the nearest-day tie, typed-rate-wins, a pre-poll month picking the
+table up on re-read, backfill-once + settings block + PUT-ignored, ECB-vs-
+median rows, outage, refused history, no-key 409 + no thread, the boot
+thread, rung order, day window, band, malformed key, `pick`, currencies,
+backfill start, store). `regress_check` on the `rematch_month` wiring: 4 route
+tests red with it unwired, green restored. SPA half:
+`docs/lovable-fx-daily-rates-prompt.md` (FX tab card + "Poll now", the
+`daily rate, {day}` label; pending). Contract: `docs/api-contract.md`,
+"FX rates polled daily from OpenTickers".
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 115 | Daily FX reference rates polled from OpenTickers: a boot + 24 h poll thread, a one-time backfill of the live months (the key is a paid tier), the `fx_daily_rates` store table (units per EUR by day, ECB record preferred), the matcher's `opentickers_day` rung on the charge's own day (nearest day within four, earlier on a tie) between the self-derived rates and the ECB monthly average with the 2% band, the table refreshed into every month on each re-match, `GET /api/settings.fx_daily_rates` and `POST /api/fx/poll`. Typed Settings rates still win, so July and August did not move | Backlog item 163 (feedback note #79, Dirk, anchored on Settings > FX reference rates: "fx rates should be polled daily via open tickers API"). regress_check proved the re-match wiring bites (4 route tests red unwired) | 2026-09-23 |
 | 114 | R4.1, the trip lifecycle owes its months a re-match. Four entrances now stamp `rematch_pending(trigger="trip")` INSIDE their own `_BATCH_ADD_LOCK` span and pay it outside: a receipt joining a trip, a date edit (the UNION of the months the old range covered and the new one does), a trip-batch delete (the borrowing months chosen BEFORE the delete) and a trip-receipt delete. The paying loop gained the per-month try/except `rematch_neighbour_months` has always had, the candidate filter gained the expense-generation check, `learning_db_path` is threaded through both trip entrances, a rename carries onto the batch label and onto every borrowing month's stored `settled_by` label, and the trip-batch create slot is released on ANY failure rather than only on `RunInputError` | Owner ruling 2026-09-21 on the R4.0 findings: "must be done because later on if expenses and items in statement dont line up we will have a problem." Measured on a copy of the live store the day before: moving a trip's dates off July, and deleting its batch, each left July reporting **33 charges reconciled where 31 was true**, with `settled_by` badges naming a run that no longer existed. Nothing corrupted (claims released correctly, and July's next re-match healed it completely) and nothing scheduled that next re-match, so a month stayed wrong until something unrelated happened to touch it. The adversarial catch during the build was the repo's own item-18 guard: `put_trip` and `delete_expense` are `async def`, and the first draft blocked the EVENT LOOP on a lock an OCR ingest holds for minutes; both locked spans now go through `run_in_threadpool` | 2026-09-21, this round; `tests/test_trip_lifecycle_rematch.py` (12, route-level, self-contained fixtures); suite 2714 -> 2726 passed / 2 skipped; ruff clean. Eight wiring points proven RED under `tools/regress_check.py`, the date gate in BOTH directions (forced off reddens the move-off test, forced on reddens the roster-edit test that asserts a non-date edit owes nothing): `--replace` literals recorded in the PR. The first draft's durability test did NOT bite (it drove create-with-receipt while the mutated wire was the gradual-add path); caught by `regress_check` and closed with two add-path tests |
 | 113 | Item 38's SPA half: the four Lovable prompts for R3 and R4 published and bundle-verified applied on the same day the backend landed (`lovable-trips-prompt.md`, `lovable-r4-settled-by-prompt.md`, and the two cost-center prompts that followed) | Recorded retroactively 2026-09-21. All four were audited by bundle only; none had ever been driven in a browser, because no trip and no cost center existed live to render. The 2026-09-21 cold drive against a local copy closed that: the Trips screen, the trip batch page and July's "Settled by trip ..." badge all render. The one field that does NOT render is `roster_mismatch` / `n_roster_mismatch`, emitted and documented since R3 and carried by no prompt | PR #698, 2026-09-07 |
 | 112 | R4a, the cross-batch guarantee: the `receipt_claims` registry, `(receipt_run_id, document_id)` as the global one-receipt-one-charge key, advisory exclusion before matching, the authoritative re-check inside `_BATCH_ADD_LOCK` at commit, and the reviewer verdicts that keep it current (release on reject, move on re-pick, 409 `receipt_settled_elsewhere` / `receipt_just_settled` on a pick that would steal another run's receipt) | Recorded retroactively 2026-09-21. Without the registry a receipt sitting in a trip could settle a charge in July AND in August; the claims table is what makes the spanning pool safe rather than double-counting | PR #685, commit `fc75c8a9`, 2026-09-07; `tests/test_receipt_claims.py` |

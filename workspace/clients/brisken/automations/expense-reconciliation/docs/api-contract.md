@@ -3170,6 +3170,91 @@ Route-level in `tests/test_ecb_month_rates.py`; the shape in
 (`test_fx_reference_rate_period_rides_only_on_the_ecb_source`). Renders in
 `docs/lovable-ecb-rates-prompt.md`.
 
+## FX rates polled daily from OpenTickers: `opentickers_day`, `fx_daily_rates`, `POST /api/fx/poll` (feedback note #79, 2026-09-23)
+
+Owner directive 2026-09-23, anchored on Settings > FX reference rates: "fx
+rates should be polled daily via open tickers API". The two rulings of item
+82 and item 90 stand: a rate typed in Settings still wins, for every month.
+
+**Where the rates live.** The store table `fx_daily_rates` holds one row per
+(day, currency): units of the currency per one EUR, the provider's digits as
+text, and the source (`ECB` when OpenTickers carries the ECB record for the
+day, else `median:<sources>`). The run config carries the days a month can
+reach as `matching.fx_daily_rates`, the same shape as the ECB table keyed by
+DAY, refreshed from the store on EVERY re-match (`service.apply_fx_daily_rates`,
+called first thing in `rematch_month`) and committed with the run, so the FX
+block, the single-currency document and a pulled-down `run.local.json` read
+the table the matcher did:
+
+```json
+"matching": {
+  "fx_reference_rates": {"EUR:USD": "1.162275"},
+  "fx_ecb_monthly_rates": {"2026-07": {"USD": "1.1417478260869562", "...": "..."}},
+  "fx_daily_rates": {
+    "2026-07-01": {"USD": "1.144", "BRL": "5.86"},
+    "2026-07-02": {"USD": "1.143", "BRL": "5.845"}
+  }
+}
+```
+
+**The poll.** One daemon thread (`web/fx_daily_rates.py`, the backup
+scheduler's shape) runs a round at boot and every 24 h: once, a backfill from
+the month before the earliest labelled month to today through
+`/exchange_rates/historical` (the account's plan allows it, checked
+2026-09-23; a 403 is remembered and the round keeps to `/latest`), then
+`/exchange_rates/latest` for every currency the estate needs
+(`needed_currencies`: USD and BRL by default, plus every currency a typed
+pair or a card names and every month's statement currency). Fail-open: a
+failed fetch leaves the table as it was and the next round tries again;
+nothing waits on the provider. OFF unless `OPENTICKERS_API_KEY` is set
+(`EXPENSE_RECON_FX_POLL=0` also switches it off).
+
+**How the matcher reads them.** `MatchingConfig.daily_rate`: the cross
+through EUR on the CHARGE's `transaction_date`, or the nearest day inside
+`fx_daily_rate_max_gap_days` (4; earlier wins a tie, so a Saturday purchase
+reads Friday's fix), six decimals. The rungs, in order: `configured`,
+`statement`, `receipts`, `opentickers_day`, then `ecb_month`. The daily rate
+sits above the monthly average because a day is the grain the card locked
+the rate at (Visa and Mastercard fix it at authorization), and below the
+self-derived rates on item 82's bundle evidence. Its clean band is
+`fx_ecb_match_pct` (2%), shared with `ecb_month`. The reason reads
+`OpenTickers daily reference rate 1.143 (2026-07-02)`.
+
+**`fx.reference_rate_source`** gains `opentickers_day`.
+
+**`fx.reference_rate_period`** is present for `opentickers_day` too, as a
+DAY, `YYYY-MM-DD` (the day whose rate was used, which differs from the
+charge's date when that day had no fix); for `ecb_month` it stays
+`YYYY-MM`; absent on every other source, never null.
+
+**`GET /api/settings`** gains the derived, read-only key `fx_daily_rates`
+(`SETTINGS_DERIVED_KEYS`; a PUT carrying it answers `ignored`):
+`{provider: "opentickers", enabled, poll_interval_hours: 24,
+last_fetched_at, last_error, backfilled_from, history_refused, n_days,
+first_day, last_day, currencies[], latest: {day, per_eur{}, pairs{}}}`.
+`latest.pairs` uses the typed rates' `FROM:TO` keys (every ordered pair
+among the polled currencies and EUR, six decimals) so the screen can set
+the two side by side; `latest` is `{}` until the first successful round.
+
+**`POST /api/fx/poll`**, new: runs one round now and answers its summary
+`{ok, n_stored, currencies, backfilled_from, errors[], fetched_at, n_days,
+first_day, last_day}`; `ok: false` with `errors[]` when the provider
+failed; `409 {"error", "code": "fx_poll_disabled"}` when no key is set.
+
+**Setup advisory.** `fx_rate_missing` is quiet for a currency the month's
+daily table crosses into the card currency; its message now names all three
+sources it looked at.
+
+**What it did not change live.** July `50622baec444` and August
+`074a7b8905d7` carry the typed Settings rates, which win, so their matching
+and every FX block are unchanged by this deploy. A month whose config holds
+no typed rate for a pair reads the daily rate on its next re-match.
+
+Route-level in `tests/test_fx_daily_rates.py` (the provider stub answers the
+live record shape of 2026-09-23); the rung order and the day window at unit
+level in the same file; `regress_check` proved the re-match wiring bites.
+Renders in `docs/lovable-fx-daily-rates-prompt.md`.
+
 ## What a settings save wrote: `applied` + `ignored` (item 91, 2026-09-17)
 
 The settings screen saves ONE group per request and always has: the page

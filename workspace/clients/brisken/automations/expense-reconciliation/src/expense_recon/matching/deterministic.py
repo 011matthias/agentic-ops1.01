@@ -34,6 +34,8 @@ from .types import Match, MatchOutcome, MatchType, Receipt, Transaction
 
 # A month key in `fx_ecb_monthly_rates` (item 82): the ECB's TIME_PERIOD.
 _MONTH_KEY = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
+# A day key in `fx_daily_rates` (note #79): the provider's effectiveDate.
+_DAY_KEY = re.compile(r"\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])")
 
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
@@ -275,7 +277,7 @@ _TUNABLE_DECIMAL = frozenset({
 })
 _TUNABLE_INT = frozenset({
     "date_exact_window_days", "date_probable_window_days",
-    "fx_date_window_days",
+    "fx_date_window_days", "fx_daily_rate_max_gap_days",
     "fx_self_derived_min_statement_rates", "fx_self_derived_min_receipts",
 })
 _TUNABLE_FLOAT = frozenset({
@@ -359,6 +361,23 @@ class MatchingConfig:
     fx_ecb_monthly_rates: Mapping[str, Mapping[str, Decimal]] = field(
         default_factory=dict
     )
+    # Feedback note #79 (owner 2026-09-23: "fx rates should be polled daily
+    # via open tickers API"): the daily reference rates the app polls from
+    # OpenTickers, the same shape as the ECB table but keyed by DAY:
+    # {"2026-09-22": {"USD": Decimal("1.1463"), "BRL": Decimal("5.8726")}},
+    # units per ONE EUR. A pair's rate is the cross through EUR on the
+    # CHARGE's own date, or the nearest polled day within
+    # `fx_daily_rate_max_gap_days` (a weekend or holiday has no fix; four
+    # days spans Good Friday to Easter Monday), earlier winning a tie. Sits
+    # one rung ABOVE the monthly average (a day is the grain the card locked
+    # the rate at) and below a typed rate and the self-derived rates. The
+    # hosted surface refreshes the table from its store on every re-match
+    # (`service.apply_fx_daily_rates`); empty keeps every pair on the rungs
+    # around it, byte for byte. See `daily_rate`.
+    fx_daily_rates: Mapping[str, Mapping[str, Decimal]] = field(
+        default_factory=dict
+    )
+    fx_daily_rate_max_gap_days: int = 4
     fx_reference_match_pct: Decimal = Decimal("0.03")
     fx_reference_review_pct: Decimal = Decimal("0.13")
     # Item 90 / 132 (owner ruling 2026-09-17: tighten the band first, then
@@ -603,10 +622,22 @@ class MatchingConfig:
                         for ccy, units in (per_eur or {}).items()
                     }
                 kwargs[key] = table
+            elif key == "fx_daily_rates":
+                daily: dict[str, dict[str, Decimal]] = {}
+                for day, per_eur in value.items():
+                    if not _DAY_KEY.fullmatch(str(day)):
+                        raise ValueError(
+                            f"fx_daily_rates key {day!r} must be 'YYYY-MM-DD'"
+                        )
+                    daily[str(day)] = {
+                        str(ccy).upper(): Decimal(str(units))
+                        for ccy, units in (per_eur or {}).items()
+                    }
+                kwargs[key] = daily
             else:
                 raise ValueError(
                     f"unknown matching-tuning key {key!r} "
-                    f"(tunables: {sorted(_TUNABLE_DECIMAL | _TUNABLE_INT | _TUNABLE_FLOAT | _TUNABLE_BOOL | {'fx_rate_bands', 'fx_reference_rates', 'fx_ecb_monthly_rates'})})"
+                    f"(tunables: {sorted(_TUNABLE_DECIMAL | _TUNABLE_INT | _TUNABLE_FLOAT | _TUNABLE_BOOL | {'fx_rate_bands', 'fx_reference_rates', 'fx_ecb_monthly_rates', 'fx_daily_rates'})})"
                 )
         return cls(**kwargs)
 
@@ -636,12 +667,69 @@ class MatchingConfig:
     def reference_match_pct(self, source: str | None) -> Decimal:
         """The clean band for a reference-rate pair, by where its rate came
         from (`_reference_rate_for`'s source): `fx_ecb_match_pct` for
-        `ecb_month`, `fx_reference_match_pct` for every other source. The
-        matcher, the band a reviewer sees (item 81) and the judgment layer's
-        rejected-pair rule (item 131) all read it here."""
-        if source == "ecb_month":
+        `ecb_month` and for `opentickers_day` (both are central-bank
+        reference rates, and the daily one is closer to the rate the card
+        locked, never further), `fx_reference_match_pct` for every other
+        source. The matcher, the band a reviewer sees (item 81) and the
+        judgment layer's rejected-pair rule (item 131) all read it here."""
+        if source in ("ecb_month", "opentickers_day"):
             return self.fx_ecb_match_pct
         return self.fx_reference_match_pct
+
+    def daily_rate(
+        self, from_ccy: str, to_ccy: str, on: "date | str | None"
+    ) -> tuple[Decimal, str] | None:
+        """Note #79: the polled daily reference rate for receipt->charge
+        currency on the day of `on` (a date or 'YYYY-MM-DD'), as (rate, day
+        used).
+
+        The day itself when the table holds it with both currencies, else
+        the nearest day that does within `fx_daily_rate_max_gap_days`
+        (earlier wins a tie: a Saturday purchase reads Friday's fix). Cross
+        rate through EUR (EUR is 1 unit per EUR), to six decimals, the
+        precision a rate typed in Settings carries. None when `on` is
+        missing or not a full date, the table is empty, or no day inside the
+        window carries the pair; the caller then falls through to the
+        monthly average."""
+        if not self.fx_daily_rates or on is None:
+            return None
+        src, dst = (from_ccy or "").upper(), (to_ccy or "").upper()
+        if not src or not dst or src == dst:
+            return None
+        from datetime import date as _date
+
+        want = on if isinstance(on, str) else on.isoformat()
+        if not _DAY_KEY.fullmatch(want):
+            return None
+        target = _date.fromisoformat(want)
+
+        def _units(table: Mapping[str, Decimal], ccy: str) -> Decimal | None:
+            if ccy == "EUR":
+                return Decimal(1)
+            units = table.get(ccy)
+            return units if units is not None and units > 0 else None
+
+        best: tuple[tuple[int, _date], str, Mapping[str, Decimal]] | None = None
+        for day, table in self.fx_daily_rates.items():
+            if _units(table, src) is None or _units(table, dst) is None:
+                continue
+            try:
+                d = _date.fromisoformat(day)
+            except ValueError:
+                continue
+            gap = abs((d - target).days)
+            if gap > self.fx_daily_rate_max_gap_days:
+                continue
+            key = (gap, d)
+            if best is None or key < best[0]:
+                best = (key, day, table)
+        if best is None:
+            return None
+        _key, day, table = best
+        rate = (_units(table, dst) / _units(table, src)).quantize(
+            Decimal("0.000001")
+        )
+        return (rate, day) if rate > 0 else None
 
     def ecb_monthly_rate(
         self, from_ccy: str, to_ccy: str, on: "date | str | None"
@@ -978,10 +1066,11 @@ def _reference_rate_for(
     on: "date | str | None" = None,
 ) -> tuple[Decimal, str, int] | None:
     """The best reference rate for a pair: configured (operator intent)
-    wins, else this run's self-derived rate, else the ECB monthly average
-    for the month of `on` (the charge date, item 82). Returns (rate, source,
-    n) with source in {"configured", "statement", "receipts", "ecb_month"},
-    or None.
+    wins, else this run's self-derived rate, else the polled daily rate for
+    the day of `on` (the charge date, note #79), else the ECB monthly
+    average for its month (item 82). Returns (rate, source, n) with source
+    in {"configured", "statement", "receipts", "opentickers_day",
+    "ecb_month"}, or None.
 
     The ECB rung sits BELOW the self-derived rates on the evidence: a
     statement's printed FX lines are the rate the card actually charged,
@@ -997,6 +1086,9 @@ def _reference_rate_for(
         hit = derived.get(((from_ccy or "").upper(), (to_ccy or "").upper()))
         if hit is not None:
             return hit
+    daily = cfg.daily_rate(from_ccy, to_ccy, on)
+    if daily is not None:
+        return daily[0], "opentickers_day", 0
     ecb = cfg.ecb_monthly_rate(from_ccy, to_ccy, on)
     if ecb is not None:
         return ecb[0], "ecb_month", 0
@@ -1209,6 +1301,12 @@ def match_one(
             rate, source, n = ref
             if source == "configured":
                 return f"monthly reference rate {rate}"
+            if source == "opentickers_day":
+                _rate, day = cfg.daily_rate(
+                    receipt.detected_currency, tx.transaction_currency,
+                    tx.transaction_date,
+                )
+                return f"OpenTickers daily reference rate {rate} ({day})"
             if source == "ecb_month":
                 _rate, month = cfg.ecb_monthly_rate(
                     receipt.detected_currency, tx.transaction_currency,
@@ -1349,7 +1447,7 @@ def match_one(
                 tx.legal_entity_id, receipt.detected_vendor,
                 receipt.detected_currency, tx.transaction_currency,
             )
-            if ref is not None and ref[1] in ("configured", "ecb_month"):
+            if ref is not None and ref[1] in ("configured", "opentickers_day", "ecb_month"):
                 score_rate = ref[0]
                 score_src = _rate_phrase()
             elif learned_mean is not None and lo <= learned_mean <= hi:

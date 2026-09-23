@@ -24,6 +24,7 @@ reached parity. This app serves JSON plus file downloads only:
     PUT  /api/runs/{id}/charges/{tx}/category   a category on a CHARGE row
                                    (no receipt needed; item 109)
     GET/PUT /api/settings          §16 export policy
+    POST /api/fx/poll              poll the daily FX rates now (note #79)
     GET  /api/compare              across-runs bucket deltas
     GET  /api/memory               learned facts; POST /api/memory/forget,
                                    POST /api/memory/reset to correct them
@@ -90,6 +91,7 @@ from ..cards_provision import card_by_key, load_cards
 from ..error_codes import Refusal, code_of, fields_of  # Refusal: item 104
 from ..ingest.expense_report_images import render_receipt_page
 from .serialize import receipt_from_dict
+from . import fx_daily_rates
 from .service import (
     BATCH_TYPE_COMPANY,
     BATCH_TYPE_TRIP,
@@ -1198,6 +1200,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     except Exception:  # noqa: BLE001 - a backup never blocks startup
         app.state.backup = None
         log.warning("backup scheduler could not start", exc_info=True)
+
+    # Feedback note #79 (owner 2026-09-23): the daily FX reference rates,
+    # polled from OpenTickers at boot and every 24 h. OFF unless
+    # OPENTICKERS_API_KEY is set (a Fly secret); `start_poll_thread` answers
+    # None in that case and the attribute says so. The first round also
+    # backfills the days the live months span (once; the plan allows it).
+    try:
+        app.state.fx_poll = fx_daily_rates.start_poll_thread(db_path)
+    except Exception:  # noqa: BLE001 - a rate poll never blocks startup
+        app.state.fx_poll = None
+        log.warning("fx poll could not start", exc_info=True)
 
     def open_store() -> RunStore:
         return RunStore(db_path)
@@ -3020,7 +3033,30 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 "cost_center_options": CostCenterRegistry.from_settings(
                     settings
                 ).options(),
+                # Note #79: the poll's state and the newest polled day's
+                # rates (units per EUR + every pair), so the FX tab can set
+                # them beside the typed ones. Derived and read-only; PUT
+                # ignores it. The typed `fx_reference_rates` still win in
+                # the matcher (owner rulings 2026-09-16 / 09-17).
+                "fx_daily_rates": fx_daily_rates.settings_view(store),
             })
+
+    @app.post("/api/fx/poll")
+    def api_fx_poll():
+        """Poll the daily FX rates now (note #79): the same round the
+        24-hour thread runs, synchronously, so the screen's "Poll now" and
+        a deploy check see the result. 409 `fx_poll_disabled` when no
+        provider key is configured; otherwise 200 with the round's summary,
+        `ok: false` + `errors[]` when the provider failed (nothing is lost:
+        the table keeps what it had)."""
+        with open_store() as store:
+            result = fx_daily_rates.poll_once(store)
+        if result.get("code") == "fx_poll_disabled":
+            return JSONResponse(
+                {"error": result.get("reason"), "code": "fx_poll_disabled"},
+                status_code=409,
+            )
+        return JSONResponse(result)
 
     @app.get("/api/cards")
     def api_get_cards():

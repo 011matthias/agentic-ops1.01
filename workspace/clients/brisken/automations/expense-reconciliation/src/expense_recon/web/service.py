@@ -669,6 +669,13 @@ def _setup_advisories(
     }
     if ecb_table and card_ccy in ecb_ccys:
         configured |= ecb_ccys
+    # Note #79: likewise a currency the polled daily table covers.
+    daily_table = (cfg.get("matching") or {}).get("fx_daily_rates") or {}
+    daily_ccys = {"EUR"} | {
+        str(c).upper() for per_eur in daily_table.values() for c in (per_eur or {})
+    }
+    if daily_table and card_ccy in daily_ccys:
+        configured |= daily_ccys
     missing: dict[str, int] = {}
     for r in receipts:
         ccy = (r.detected_currency or "").upper()
@@ -683,9 +690,10 @@ def _setup_advisories(
             "n_receipts": count,
             "message": (
                 f"{count} receipt(s) are in {ccy} but no {ccy}:{card_ccy} "
-                f"reference rate is available (the ECB publishes none for "
-                f"this month and none is set in Settings), so they cannot "
-                f"match deterministically."
+                f"reference rate is available (no daily rate has been polled "
+                f"for it, the ECB publishes no monthly average for this "
+                f"month and none is set in Settings), so they cannot match "
+                f"deterministically."
             ),
         })
 
@@ -2469,7 +2477,9 @@ class FxReference:
     review_pct: Decimal
     # Item 82: the month whose ECB average the rate is ('2026-07'), only
     # for `ecb_month`; it can differ from the charge's month when that
-    # month's average was not in the table.
+    # month's average was not in the table. Note #79: the DAY the polled
+    # rate is for ('2026-09-22'), only for `opentickers_day`; it differs
+    # from the charge's date when that day had no fix (weekend, holiday).
     period: str | None = None
 
 
@@ -2525,6 +2535,12 @@ def fx_reference_lookup(run: "RunRow", transactions: list, receipts: list):
                 tx.transaction_date,
             )
             period = ecb[1] if ecb is not None else None
+        elif source == "opentickers_day":
+            daily = cfg.daily_rate(
+                receipt.detected_currency, tx.transaction_currency,
+                tx.transaction_date,
+            )
+            period = daily[1] if daily is not None else None
         return FxReference(
             rate=rate,
             source=source,
@@ -10982,6 +10998,9 @@ def usd_reference_rate(run: RunRow):
         if source == "ecb_month":
             ecb = cfg.ecb_monthly_rate(currency, BASE_CURRENCY, when)
             month = ecb[1] if ecb else ""
+        elif source == "opentickers_day":
+            daily = cfg.daily_rate(currency, BASE_CURRENCY, when)
+            month = daily[1] if daily else ""
         return rate, source, month
 
     return lookup
@@ -13088,6 +13107,11 @@ def rematch_month(
 
     work_dir = Path(run.work_dir)
     batch_entity = (cfg.get("expense") or {}).get("legal_entity_id", "")
+    # Note #79: the daily reference rates the app polls, read from the
+    # store on EVERY re-match so a month sees the days polled since its
+    # last one, and committed with the run's config below, so the screen's
+    # FX block and a pulled-down replay read the table the matcher did.
+    cfg = apply_fx_daily_rates(cfg, store, run.label, transactions)
 
     # Bake the reviewer's truth into the receipt pool the matcher sees.
     _, receipts0, _, parse_errors = snapshot_from_dict(run.snapshot)
@@ -15552,6 +15576,56 @@ def apply_ecb_rates(cfg: dict, months) -> dict:
     }
     table.update({month: dict(per_eur) for month, per_eur in fetched.items()})
     matching["fx_ecb_monthly_rates"] = dict(sorted(table.items()))
+    out["matching"] = matching
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Note #79: the polled daily FX rates in the run config
+# ---------------------------------------------------------------------------
+
+
+def fx_days_for(label: str | None, transactions=()) -> tuple[str, str] | None:
+    """The span of days a month's matching can reach, as (first, last) ISO
+    days: the same months `ecb_months_for` names (the labelled month, one
+    neighbour either side, every charge's month), whole. None when nothing
+    names a month (a trip with no charges)."""
+    import calendar
+
+    months = ecb_months_for(label, transactions)
+    if not months:
+        return None
+    y, m = int(months[-1][:4]), int(months[-1][5:7])
+    return f"{months[0]}-01", f"{months[-1]}-{calendar.monthrange(y, m)[1]:02d}"
+
+
+def apply_fx_daily_rates(cfg: dict, store, label: str | None, transactions=()) -> dict:
+    """Return `cfg` with the store's polled daily rates for the span
+    `fx_days_for` names as `matching.fx_daily_rates` (units per EUR by day,
+    the provider's digits as text). The store is the truth, so the table is
+    REPLACED, not merged: a re-match reads what has been polled by now. A
+    store with nothing for the span leaves `cfg` unchanged, key for key, so
+    a month matched before the poll ever ran keeps its rungs as they were.
+    Settings' `fx_reference_rates` are not touched: a typed rate still wins."""
+    span = fx_days_for(label, transactions)
+    if span is None:
+        return cfg
+    try:
+        table = store.fx_daily_rates(span[0], span[1])
+    except Exception:  # noqa: BLE001 - a rate table never blocks a re-match
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "daily FX rates unreadable for %s..%s", *span, exc_info=True,
+        )
+        return cfg
+    if not table:
+        return cfg
+    out = dict(cfg)
+    matching = dict(out.get("matching") or {})
+    matching["fx_daily_rates"] = {
+        day: dict(per_eur) for day, per_eur in sorted(table.items())
+    }
     out["matching"] = matching
     return out
 
