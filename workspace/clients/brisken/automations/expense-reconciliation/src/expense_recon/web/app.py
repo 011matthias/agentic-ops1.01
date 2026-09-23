@@ -4252,7 +4252,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         private card, never both, so nobody is reimbursed for money a company
         card already paid. Marking private is refused on a row a defined
         company card paid; a company-card pick is refused on a confirmed
-        private row. Reads the row from the grid's own view, so the refusal
+        private row. A row that is ALREADY private is not refused (item
+        176): since `can_mark_private` went false on it, this check would
+        otherwise answer a correction of who gets reimbursed with the
+        company-card wording, about a row no company card paid.
+        Reads the row from the grid's own view, so the refusal
         and `expenses[].can_mark_private` cannot disagree. A document the
         view does not list keeps the old behavior (no check)."""
         view = _expense_view(store, run)
@@ -4262,7 +4266,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
         if row is None:
             return None
-        if marking_private and not row.get("can_mark_private", True):
+        if (
+            marking_private
+            and not row.get("private")
+            and not row.get("can_mark_private", True)
+        ):
             card = row.get("card") or {}
             label = card.get("label") or card.get("key") or "a company card"
             return JSONResponse(

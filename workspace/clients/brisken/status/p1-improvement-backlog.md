@@ -8480,7 +8480,7 @@ one answered inside a wave. Do not publish a count of ignored notes off that
 grep. It is also why #73-#82 could sit as a verbatim table for three days: a
 note is only findable if someone gave it a number.
 
-### 174. "From email" on a month that was never sent a statement (note #73, owner 2026-09-20)
+### 174. "From email" on a month that was never sent a statement (note #73, owner 2026-09-20) — DIAGNOSED 2026-09-24 (`months.origin.intake` on the months list; SPA copy + placement, no backend change)
 
 **Owner:** *"why does it say this even though there has been no statement sent
 for this month"*
@@ -8496,12 +8496,28 @@ reading the cell is naming where the CARD came from (the receipt mail) and the
 reviewer read it as a claim that a statement arrived; the fix is then a label,
 not a pipeline bug.
 
-**Not concluded.** Which field renders that string needs one cold drive of the
-September row the note was left on. Do that before writing any copy: the
-sibling reading, that the cell is a provenance label on the ROW and correct as
-written, ends the item with no change at all.
+**CONCLUDED 2026-09-24 from the published bundle; `card_source` is refuted and
+no drive is needed.** The string is the i18n key `months.origin.intake`, and
+it lives on the MONTHS LIST, not on a row. `assets/chunk-months-D64oN5EB.js`
+renders it as a plain outline badge when `month.created_by === "intake"` (its
+sibling `months.origin.drop` covers `"drop"`), off
+`GET /api/expense-batches`'s `created_by`, which `app.py` ~4505 lifts from the
+run summary. `card_source` never produces it: that field appears once in the
+grid chunk and nowhere near this string, and "From email" appears exactly once
+in the whole bundle.
 
-### 175. A private expense asks which card paid, not who owes the money back (note #74, operator 2026-09-23)
+So the badge is correct as written and the month is innocent twice over. What
+makes it misread is placement: the badge sits in the same table cell as, and
+immediately before, `months.state.matchedStatement`. A reader scanning that
+cell sees an origin label next to a statement-state label and takes both as
+statements about the statement.
+
+The fix is copy plus separation, SPA-side, no backend change: say what the
+badge means about receipts ("Receipts by email" / "Receipts uploaded") and
+keep it out of the statement badge's cell. Worth folding into the item-175
+Lovable prompt rather than pasting on its own.
+
+### 175. A private expense asks which card paid, not who owes the money back (note #74, operator 2026-09-23) — SCOPED 2026-09-24, SPA-only (`docs/lovable-private-reimburse-prompt.md`, not pasted)
 
 **Operator (PT):** *"No privado, deve haver quem deve reembolsar a despesa"*
 ("on a private one, there must be someone who has to reimburse the expense").
@@ -8520,7 +8536,26 @@ picker second, or not at all.
 
 Scale today: `private` 1, `suggested_private` 5, `can_mark_private` 28 of 75.
 
-### 176. The private control is offered again on a row already marked private (note #75, operator 2026-09-23)
+**2026-09-24, read off the published bundle: there is a harder half than the
+ordering, and it is a dead end in the UI.** The dialog that holds the
+`reimburse_to` input is rendered INSIDE the card picker, and the card picker
+opens with `if (row.private) return null`. So the field is reachable exactly
+once, on the way in. Once a row is confirmed private there is no way in the
+SPA to correct who gets reimbursed: the only path is undo the private mark and
+set it again, discarding the decision to change one word in it. That is much
+closer to what the operator actually wrote ("there must be someone who has to
+reimburse the expense") than the option ordering is.
+
+The backend already takes the correction (`POST .../private` with
+`{private: true, reimburse_to: <new>}`), but only since item 176 shipped the
+same day: before it that call was refused, with the company-card wording, on a
+row no company card paid. So 176 was a precondition for this and not merely
+adjacent.
+
+Prompt written, not pasted: `docs/lovable-private-reimburse-prompt.md`, which
+also carries item 174's copy change. No backend work is left on this item.
+
+### 176. The private control is offered again on a row already marked private (note #75, operator 2026-09-23) — SHIPPED 2026-09-24 (backend; the visible duplicate is NOT this and is still open)
 
 **Operator:** *"no need to set this as private again, if user has already set
 as private"*
@@ -8545,6 +8580,58 @@ September's 75 rows read false.
 
 The fix is one predicate, backend-side: `can_mark_private` is false once
 `private` is true. Leave the un-mark path alone, it is a different control.
+
+**SHIPPED 2026-09-24 (backend).** `can_mark_private` is now `not private and
+...` in `build_expense_view`'s card resolution, and `_paid_by_conflict` skips
+its company-card refusal on a row that is already private. That second half is
+not cosmetic: the private route reads the same flag before it writes, so
+without it a correction of who gets reimbursed would have been refused with
+the wording "this expense was paid with the company card", about a row no
+company card paid. Five route-level tests in
+`tests/test_private_not_reoffered_item_176.py`; both wires regress-checked.
+
+**The read of the PUBLISHED bundle, which changes what this item claims.**
+The item said the flag "is what renders the label the note captured twice".
+That is not supported. The live SPA reads `can_mark_private` in exactly one
+place, the grid chunk `assets/chunk-expenses._batchId-7cO7KDYP.js`, through
+one helper:
+
+```js
+Zt(row) = typeof row.can_mark_private === "boolean" ? row.can_mark_private
+                                                    : row.card == null
+```
+
+and `Zt` has two callers, both of which a confirmed private row already
+escapes for another reason:
+
+* the "Suggested private expense" chip renders on `Zt(row) && row.suggested_private`, and a private row reads `suggested_private: false`;
+* the card picker computes `Zt(row)` but opens with `if (row.private) return null`.
+
+The private row's own render is the badge `expx.private.badge` ("Private card:
+reimburse {name}") plus the button `expx.reimburse.undo`, and neither is gated
+on this flag. So the flip is **safe** (it removes no control the reviewer has)
+and **invisible today** (it changes nothing on screen). The doubled "Private
+(Dirk Neumann)Private (Dirk Neumann)" the note captured has a different cause,
+still unidentified; neither of those two strings is "Private (name)", so it is
+not the badge either. Find it with one cold drive of September row 0046 while
+doing item 175, which touches the same card-picker area.
+
+Shipping the predicate anyway is not bookkeeping: `Zt` is the screen's whole
+answer to "may I offer the private control here", it answers *yes* on a row
+that is already private, and item 175's work adds a private control to exactly
+that area. Fixing the contract before building on it is the cheap order.
+
+**Instrument note (a confident negative that was wrong for 20 minutes).** The
+first bundle scan reported `can_mark_private` absent from every chunk, on a
+probe that had validated itself against `suggested_private` and `reimburse_to`
+and found them. The probe was fine; the file list was not. Chunk names were
+harvested with `chunk-[A-Za-z0-9_-]*\.js`, which cannot match
+`chunk-expenses._batchId-7cO7KDYP.js` because of the dot, so the one chunk
+that holds the grid was never downloaded. A validated probe over an
+incomplete corpus still returns a confident absence. Harvest asset names with
+a pattern that allows dots, and sanity-check the corpus by requiring a field
+you know the page must read (`document_id` sat in one unrelated chunk, which
+was the tell).
 
 ### 177. Settings saves all 33 merchants at once, so nothing ever folds away (note #77, operator 2026-09-23)
 

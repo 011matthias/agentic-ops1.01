@@ -6446,10 +6446,13 @@ def resolve_batch_row_cards(
     row at all. True when no defined company card paid it (no card, not a
     two-card contest) or when the card is only REMEMBERED from an earlier
     month (memory is not a decision on this row, and the reviewer has no
-    way to take it off), and always on a confirmed private row so it can be
-    undone. A company card from the printed number, a strip assignment or
-    this row's own card pick means the company paid: nothing to reimburse.
-    A confirmed private row never picks up a remembered card.
+    way to take it off). False once the row IS private (item 176, operator
+    2026-09-23: "no need to set this as private again, if user has already
+    set as private") -- the control that belongs on a confirmed private row
+    is undo, which the screen keys on `private` itself, never on this flag.
+    A company card from the printed number, a strip assignment or this row's
+    own card pick means the company paid: nothing to reimburse. A confirmed
+    private row never picks up a remembered card.
 
     `settled_cards` (item 111, `settled_charge_cards`): `{document_id: card
     key}` of the charge in this month that settles the receipt. Only the
@@ -6605,8 +6608,9 @@ def resolve_batch_row_cards(
                 hint and card is None and not ambiguous and not private
                 and not not_a_card
             ),
-            "can_mark_private": private or (
-                not settled_off
+            "can_mark_private": (
+                not private
+                and not settled_off
                 and not ambiguous
                 and (card is None or card_source in ("learned", "merchant"))
             ),
