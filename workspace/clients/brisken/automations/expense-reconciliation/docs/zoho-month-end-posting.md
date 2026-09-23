@@ -847,6 +847,165 @@ already in the export, at an identical amount:
 Three are an invoice and a receipt for one charge; two are the same mail
 rendered twice. 25 documents, 20 charges, nothing dropped.
 
+## 2026-09-23: the card and entity columns become load-bearing
+
+`(paid-through - assign)` and `(entity - assign)` in the `Paid Through` and
+`Legal Entity` cells are now a hard refusal, `card_or_entity_unassigned`,
+as hard as `account_unresolved` and reported apart from it.
+
+**This fixes no mis-post today, and that is the reason to do it now.**
+Both columns are cosmetic in the payload: the card comes from
+`paid_through_account_id` (the runner's `ORG_PROFILES` or `--card`) and
+never from the `Paid Through` cell, and `Legal Entity` only rides along
+inside `audit_note`. Per-org multi-card routing is the next thing to
+build, and it is the moment an unassigned cell stops being cosmetic and
+starts meaning "post it to whichever card the profile happened to name".
+A guard added after that routing ships is a guard added after the
+wrong-card post.
+
+The two strings are now imported from `output/zoho_expense_export.py`,
+the module that writes them, rather than re-spelled a fourth time;
+`accounts.py` lost its own copy in the same change, and a test pins
+`NEVER_MAPPED` to the imported values so the remaining restatement cannot
+drift.
+
+### Two ordering calls, both deliberate, both tested
+
+**The ledger is now read BEFORE the payload is built.** A purchase this
+tool has already posted is history: what its cells say now cannot change
+what went to Zoho, so `already_in_ledger` is the true answer, and a
+build-time refusal on the same row would be noise that also MOVED the
+known-answer refusal mix of both rehearsed months. The cost, taken
+deliberately: a data defect on an already-recorded row stops being
+reported by the plan. For a `posted` row that is moot; for an unresolved
+one, "unresolved from an earlier run" is the more urgent message anyway.
+
+**Within the build, the stale-date guard still runs first.** "Dated four
+months before the period" is the more alarming fact about a row that
+carries both defects, and it is the one that should be named. Both July
+rows that carry a placeholder AND a bad date (`360172592`,
+`00000031010`) therefore keep reading `date_precedes_period_window`.
+
+Each order is a test that bites: disable the ledger-first move and
+`test_an_already_posted_row_refuses_as_ledger_not_unassigned` goes red;
+put the placeholder check above the date guard and
+`test_a_stale_date_outranks_an_unassigned_card` does. Both were run
+through `tools/regress_check.py`, not assumed.
+
+### Measured, not guessed: both months are unchanged
+
+Re-running the two rehearsed months against the durable ledger gives a
+refusal mix byte-identical to before the change:
+
+| | July 2026-07 | August 2026-08 |
+|---|---|---|
+| purchases | 46 | 20 |
+| `already_in_ledger` | 41 | 19 |
+| `account_unresolved` | 3 | 1 |
+| `date_precedes_period_window` | 2 | 0 |
+| `card_or_entity_unassigned` | 0 | 0 |
+
+Zero, because every purchase carrying a placeholder is already posted and
+the ledger answers first. The guard is therefore unexercised on live
+data, which is exactly why the number below matters more.
+
+### What it would catch on a fresh month, which is the production case
+
+Planned through `plan_expense_post` with an EMPTY ledger and the live
+chart, which is what a production month sees:
+
+| | July | August |
+|---|---|---|
+| postable before | 41 | 19 |
+| postable after | **30** | **17** |
+| held by `card_or_entity_unassigned` | **11** | **2** |
+
+Those 11 July purchases carry **USD 54,235.71 of the month's 56,340.44**,
+96% of its value: Konsultancy Finance (EUR 15,972.00), Rodrigo Tanure
+(BRL 27,203.34), Redis (USD 12,000.00) and AWS (USD 3,352.59) are all
+unassigned. So card assignment is not a tidy-up before the production
+run, it is the gate on it.
+
+### The scan reads every row, and July proves why
+
+The check runs over EVERY row of a purchase, not the header row alone.
+`H_46243348` is why: its two rows disagree, the first naming
+`CHASE VISA - 2838 - TRAVEL` and `Corporate Services`, the second reading
+both placeholders. A header-only check would have passed it. Both columns
+are per-expense, so a purchase cannot legitimately disagree with itself,
+and a disagreement is itself worth stopping on.
+
+## 2026-09-23: the two USD 576.00 Zoho charges are ONE charge
+
+Answered read-only, nothing written to either month.
+
+**The statement is the arbiter and it is unambiguous.** `August2026.xlsx`
+(card 2838, 2026-07-31 to 2026-08-31, 111 rows) carries exactly ONE line
+at 576.00: `ZOHOCORP`, 2026-08-30, source row 7, transaction
+`515905d5b715db56`. There is no second one.
+
+The two documents are the payment confirmation and the invoice it
+announces:
+
+| | `0006__rendered-body.pdf` | `0007__50102456463.pdf` |
+|---|---|---|
+| what it is | Zoho Store mail, "Your subscription is renewed" | the invoice |
+| its number | Payment ID `RPS2004132748584` | Invoice# `50102456463` |
+| says | "your renewal payment has been processed successfully and you will receive the invoice in a separate e-mail shortly" | "Payment Made (-) 576.00", "Balance Due US$0.00", "charged from the credit card ending with 2838" |
+| plan | Professional, AutoScan 50, Yearly, next renewal 2027-08-30 | Professional, AutoScan 50, Yearly, 30 Aug 2026 to 29 Aug 2027 |
+| statement line | none, it is in `unmatched_receipts` | matched at score 95 |
+
+Same company (BRISKEN, LLC), same payment date, same card, same plan,
+same amount. The mail says the invoice is coming separately; the invoice
+is document 0007.
+
+**So TEST-BTS is overstated by USD 576.00**, and the August batch's 20
+charges are really 19.
+
+**Why the app did not flag it.** Duplicate suppression demonstrably works
+in this batch: it set aside 5 copies, on bases `reference`,
+`printed_reference` and `vendor_date`. Neither basis can fire here. The
+printed references are genuinely different (a payment id against an
+invoice number, no shared substring), and the vendor strings are
+"Zoho Books" against "ZOHO Corporation", so the vendor-and-date basis
+does not group them either. This is a real gap rather than a misfire: a
+payment confirmation and its invoice carry different issuer numbers by
+design.
+
+**Deciding is the owner's.** If Brisken wants it corrected, the repair is
+to set `0006__rendered-body.pdf` aside as a copy in the batch and re-run
+August. The ledger already holds `RPS2004132748584` as posted, so a
+re-run would refuse it as `already_in_ledger` and would NOT unpost the
+existing expense: the sandbox expense `4369050000000367035` has to be
+deleted explicitly and its ledger row removed. No production month is
+affected, because none has been posted.
+
+### A second, larger one in July: Hostinger `H_46243348`
+
+Found while measuring the guard, same shape, bigger amount.
+
+Two Hostinger receipts share the printed reference `H_46243348` at USD
+172.61 each, dated 2026-07-03 and 2026-07-28. `group_by_reference` merged
+them into ONE expense of **USD 345.22** dated 2026-07-03, posted as two
+identical lines to the same account.
+
+July's statement (`July2026.xlsx`, 2026-06-30 to 2026-07-31, 112 rows)
+carries exactly one Hostinger charge at 172.61, on 2026-07-03, matched to
+`0000__rendered-body.pdf`. Its other Hostinger line is 161.89 on
+2026-07-20, a different amount. August's statement carries neither. So
+`0002__rendered-body.pdf` (172.61, dated 2026-07-28) corresponds to no
+charge on any loaded statement, and July looks overstated by 172.61 as
+well.
+
+**The structural half is worth more than the 172.61.** Grouping on a
+shared `Reference#` assumes a reference names ONE purchase, split across
+accounts. Hostinger reuses its invoice number, so the assumption merged
+two documents 25 days apart into a single expense and stamped it with the
+earlier date. Even had both been real charges, that posting would have
+been wrong. A same-reference group whose rows carry different
+`Expense Date` values is a candidate refusal of its own; it is not built,
+and it wants the owner's read on the Hostinger pair first.
+
 ## Still open
 
 - The scope grant above, which blocks every write in the production orgs.
@@ -856,16 +1015,24 @@ rendered twice. 25 documents, 20 charges, nothing dropped.
   (`G173514057`, `052155`, `000598540`) and two
   `date_precedes_period_window` (`360172592` dated 2026-03-30;
   `00000031010` with an empty date cell).
-- **Two August rows at 576.00 on the same date and card**
-  (`RPS2004132748584` "Zoho Books, Professional (Plan)" and
-  `50102456463` "ZOHO Corporation"). They posted to different accounts
-  and are NOT flagged as duplicates by the app, but they may be one
-  charge with two receipts. Worth a look before the production run.
+- **Two double-counted purchases, both answered and neither corrected**
+  (owner's call, section above): August's 576.00 Zoho pair is one charge,
+  and July's Hostinger `H_46243348` at 345.22 is backed by one 172.61
+  statement line. TEST-BTS is overstated by 748.61 in total. Correcting
+  either means deleting the sandbox expense and its ledger row, not just
+  re-running.
+- **A same-reference group spanning different dates is not refused.**
+  Hostinger reuses its invoice number, which merged two documents 25 days
+  apart into one expense dated the earlier of them.
+- **Card and entity assignment is the gate on the production run.** With
+  an empty ledger the new `card_or_entity_unassigned` refusal holds back
+  11 of July's 46 purchases, carrying 96% of the month's value, and 2 of
+  August's 20.
 - Per-org routing for the 5 cards across separate organizations. Both
   rehearsed months were posted to one sandbox card; the August export
-  alone names 5 paid-through cards and 5 legal entities, and two rows
-  still carry `(paid-through - assign)` / `(entity - assign)`, which the
-  poster does not refuse.
+  alone names 5 paid-through cards and 5 legal entities. The two columns
+  the routing will read are now refused when unassigned, so the routing
+  can be built on top of a guard rather than behind one.
 - Per-org routing for the 5 cards across separate organizations, and the
   BRL/EUR/USD cases. The trial was one card, nine rows, one currency.
 - Wiring the two new guards into the posting CLI's pre-flight, and the

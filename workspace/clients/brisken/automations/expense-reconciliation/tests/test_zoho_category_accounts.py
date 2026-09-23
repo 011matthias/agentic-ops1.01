@@ -25,6 +25,10 @@ from expense_recon.zoho.accounts import (
     ResolvedAccount,
     resolve_account_id,
 )
+from expense_recon.output.zoho_expense_export import (
+    ENTITY_PLACEHOLDER,
+    PAID_THROUGH_PLACEHOLDER,
+)
 from expense_recon.zoho.category_accounts import (
     CATEGORY_ACCOUNT_CODES,
     NEVER_MAPPED,
@@ -238,6 +242,15 @@ def test_placeholders_are_never_mapped(tmp_path):
     assert plan.postable == ()
     assert isinstance(plan.refusals[0], PostRefusal)
     assert REASON_PLACEHOLDER in plan.refusals[0].detail
+
+
+def test_never_mapped_holds_the_export_s_own_card_and_entity_strings():
+    """`NEVER_MAPPED` restates its markers as literals, deliberately, to
+    keep the guarantee local and testable. That restatement is also where
+    a rename in the export would go unnoticed: change
+    `PAID_THROUGH_PLACEHOLDER` there and this set would quietly stop
+    matching the cell it is meant to refuse."""
+    assert {PAID_THROUGH_PLACEHOLDER, ENTITY_PLACEHOLDER} <= NEVER_MAPPED
 
 
 def test_a_direct_reference_outranks_its_categorys_default():

@@ -35,6 +35,10 @@ from ..output.posting_common import (
     _UNMAPPED,
     resolve_ref,
 )
+from ..output.zoho_expense_export import (
+    ENTITY_PLACEHOLDER,
+    PAID_THROUGH_PLACEHOLDER,
+)
 from .category_accounts import category_account_code
 
 if TYPE_CHECKING:
@@ -74,8 +78,8 @@ _PLACEHOLDERS = frozenset(
         _UNCATEGORIZED,
         _UNMAPPED,
         _REIMBURSABLE_PLACEHOLDER,
-        "(paid-through - assign)",
-        "(entity - assign)",
+        PAID_THROUGH_PLACEHOLDER,
+        ENTITY_PLACEHOLDER,
     }
 )
 # `_CARD_ACCOUNT` is a format string ("Card: {account_id}"), so it is
