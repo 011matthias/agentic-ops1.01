@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-22 | Verve Beta Boundary Testing | client-dev | [Mini-Checkpoint-1](docs/2026-09-22%20-%20Verve%20Beta%20Boundary%20Testing/Mini-Checkpoint-1.md) |
 | 2026-09-21 | Brisken Weekly Sheets Sent | client-dev | [→](docs/2026-09-21%20-%20Brisken%20Weekly%20Sheets%20Sent/Checkpoint.md) |
 | 2026-09-21 | Brisken Recon Item 120 Loose Ends | client-dev | [→](docs/2026-09-21%20-%20Brisken%20Recon%20Item%20120%20Loose%20Ends/Checkpoint.md) |
 | 2026-09-21 | Brisken Item 38 R4 Close | client-dev | [→](docs/2026-09-21%20-%20Brisken%20Item%2038%20R4%20Close/Checkpoint.md) |
