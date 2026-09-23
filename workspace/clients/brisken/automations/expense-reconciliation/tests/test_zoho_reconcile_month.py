@@ -14,13 +14,18 @@ from decimal import Decimal
 
 import pytest
 
-from expense_recon.output.zoho_expense_export import EXPENSE_COLUMNS
+from expense_recon.output.zoho_expense_export import (
+    ENTITY_PLACEHOLDER,
+    EXPENSE_COLUMNS,
+    PAID_THROUGH_PLACEHOLDER,
+)
 from expense_recon.zoho import reconcile_month as rm
 from expense_recon.zoho.client import ZohoAPIError
 from expense_recon.zoho.expense_post import (
     REFUSAL_ACCOUNT,
     REFUSAL_LEDGER,
     REFUSAL_STALE_DATE,
+    REFUSAL_UNASSIGNED,
 )
 from expense_recon.zoho.idempotent import PostLedger
 from expense_recon.zoho.occupancy import (
@@ -401,6 +406,139 @@ def test_the_runner_reads_the_ledger_on_the_scoped_key(tmp_path):
     assert run.ours_in_ledger == ("2026-07_0003__rendered-body.pdf",)
     assert run.abort_reason is None
     assert run.send_plan.postable == ()
+
+
+# ── unassigned card / entity ────────────────────────────────────────
+#
+# Both columns are COSMETIC in the payload today: the card comes from the
+# org profile and the entity only rides inside the audit note. So these
+# tests do not protect a mis-post that exists now; they hold the columns
+# load-bearing for the moment per-org routing starts reading them. That
+# is also why every one of them drives `run_month`: the guard lives in
+# `build_expense_payload`, and a test that called it directly would stay
+# green if the runner ever stopped planning through it.
+
+
+def _unassigned(ref, **over):
+    row = {"Reference#": ref, "Paid Through": PAID_THROUGH_PLACEHOLDER}
+    row.update(over)
+    return _row(**row)
+
+
+def test_an_unassigned_card_refuses_through_the_runner(tmp_path):
+    run, out = _run(tmp_path, [_row(), _unassigned("R2")], client=FakeClient())
+
+    assert [p.reference for p in run.send_plan.postable] == ["R1"]
+    assert [(r.reference, r.reason) for r in run.plan.refusals] == [
+        ("R2", REFUSAL_UNASSIGNED)
+    ]
+    (refusal,) = run.plan.refusals
+    assert "Paid Through" in refusal.detail
+    assert "Legal Entity" not in refusal.detail
+    assert REFUSAL_UNASSIGNED in out
+
+
+def test_an_unassigned_entity_refuses_through_the_runner(tmp_path):
+    rows = [_row(), _row(**{"Reference#": "R2", "Legal Entity": ENTITY_PLACEHOLDER})]
+    run, _ = _run(tmp_path, rows, client=FakeClient())
+
+    (refusal,) = run.plan.refusals
+    assert (refusal.reference, refusal.reason) == ("R2", REFUSAL_UNASSIGNED)
+    assert "Legal Entity" in refusal.detail
+    assert "Paid Through" not in refusal.detail
+
+
+def test_one_refusal_names_both_unassigned_columns(tmp_path):
+    """A reviewer who fixes the card and re-runs, only to be told about
+    the entity, has paid for two round trips on one row."""
+    run, _ = _run(
+        tmp_path,
+        [_unassigned("R2", **{"Legal Entity": ENTITY_PLACEHOLDER})],
+        client=FakeClient(),
+    )
+    (refusal,) = run.plan.refusals
+    assert refusal.reason == REFUSAL_UNASSIGNED
+    assert "Paid Through and Legal Entity" in refusal.detail
+
+
+def test_the_refusal_is_not_the_account_one(tmp_path):
+    """`account_unresolved` means nobody said which GL account; this means
+    nobody said which card or company. The summary must tell them apart,
+    or the operator reads one number and fixes the wrong thing."""
+    rows = [
+        _unassigned("CARD"),
+        _row(**{"Reference#": "ACCT", "Expense Account": "(uncategorized - assign)"}),
+    ]
+    run, out = _run(tmp_path, rows, client=FakeClient())
+
+    assert {(r.reference, r.reason) for r in run.plan.refusals} == {
+        ("CARD", REFUSAL_UNASSIGNED),
+        ("ACCT", REFUSAL_ACCOUNT),
+    }
+    assert f"1  {REFUSAL_UNASSIGNED}" in out and f"1  {REFUSAL_ACCOUNT}" in out
+
+
+def test_a_split_refuses_when_only_its_second_line_is_unassigned(tmp_path):
+    """Both columns are per-expense, so a split cannot legitimately
+    disagree with itself. If one ever does, the disagreement is the thing
+    to stop on: the header row alone would have posted this."""
+    rows = [
+        _row(**{"Reference#": "SPLIT", "Expense Amount": "10.00"}),
+        _unassigned(
+            "SPLIT",
+            **{"Expense Amount": "5.50", "Expense Account": "Office Supplies & Consumables"},
+        ),
+    ]
+    run, _ = _run(tmp_path, rows, client=FakeClient())
+
+    assert run.send_plan.postable == ()
+    assert [r.reason for r in run.plan.refusals] == [REFUSAL_UNASSIGNED]
+
+
+# ── refusal precedence, both halves decided deliberately ────────────
+
+
+def test_an_already_posted_row_refuses_as_ledger_not_unassigned(tmp_path):
+    """THE ORDER DECISION. A purchase this tool already posted is history:
+    what its cells say now cannot change what went to Zoho, so the ledger
+    answers first. Move `ledger.status_for` back below the payload build
+    in `plan_expense_post` and this goes red, taking both rehearsed
+    months' known refusal mix with it."""
+    with PostLedger(tmp_path / "ledger.sqlite") as ledger:
+        ledger.mark_posted(ORG, "R2", zoho_journal_id="OLD", entry_number=None,
+                           now_iso="2026-09-23T10:00:00+00:00", content_hash="h")
+    run, _ = _run(tmp_path, [_row(), _unassigned("R2")], client=FakeClient())
+
+    assert [(r.reference, r.reason) for r in run.plan.refusals] == [
+        ("R2", REFUSAL_LEDGER)
+    ]
+    assert [p.reference for p in run.send_plan.postable] == ["R1"]
+
+
+def test_a_stale_date_outranks_an_unassigned_card(tmp_path):
+    """Within the build the date guard stays first. "Dated four months
+    before the period" is the more alarming fact about a row carrying
+    both; the unassigned card is the second defect, met once the first is
+    settled."""
+    run, _ = _run(
+        tmp_path, [_unassigned("OLD", **{"Expense Date": "2026-03-30"})],
+        client=FakeClient(),
+    )
+    assert [r.reason for r in run.plan.refusals] == [REFUSAL_STALE_DATE]
+
+
+def test_a_live_run_posts_the_neighbours_and_leaves_the_unassigned_row(tmp_path):
+    client = FakeClient()
+    run, out = _run(
+        tmp_path, [_row(), _unassigned("R2"), _row(**{"Reference#": "R3"})],
+        client=client, dry_run=False,
+    )
+
+    assert run.exit_code == 0, out
+    assert [ref for ref, _ in run.report.posted] == ["R1", "R3"]
+    assert [r["reference_number"] for r in client.created] == ["R1", "R3"]
+    assert all(r.clean for r in run.readback)
+    assert _ledger_states(tmp_path) == {"posted": 2}
 
 
 # ── org refusal ─────────────────────────────────────────────────────

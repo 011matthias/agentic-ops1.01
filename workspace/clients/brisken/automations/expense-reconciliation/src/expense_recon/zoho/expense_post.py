@@ -37,8 +37,15 @@ cleanly is worse than one that fails:
   signed off. Still refused: a currency the target org does not define
   (TEST-BTS has 11 and BRL is not among them), and a foreign row with no
   usable rate, because Zoho would then apply one nobody chose.
+* a purchase whose `Paid Through` or `Legal Entity` cell still holds the
+  export's assign-me placeholder
 * a reference already in the ledger for this org, or in flight, or
   ambiguous
+
+**The ledger is consulted BEFORE the payload is built.** A purchase this
+tool has already posted is history, and nothing its cells say now can
+change what went to Zoho, so `already_in_ledger` is both the true answer
+and the useful one.
 """
 from __future__ import annotations
 
@@ -53,7 +60,11 @@ from pathlib import Path
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
-from ..output.zoho_expense_export import EXPENSE_COLUMNS
+from ..output.zoho_expense_export import (
+    ENTITY_PLACEHOLDER,
+    EXPENSE_COLUMNS,
+    PAID_THROUGH_PLACEHOLDER,
+)
 from .accounts import AccountRefusal, ResolvedAccount, resolve_account_id
 from .idempotent import PostedConflictError, PostLedger
 from .occupancy import month_bounds
@@ -72,6 +83,7 @@ __all__ = [
     "REFUSAL_EXCHANGE_RATE",
     "REFUSAL_LEDGER",
     "REFUSAL_STALE_DATE",
+    "REFUSAL_UNASSIGNED",
     "ExpenseGroup",
     "ExpensePlan",
     "ExpensePostReport",
@@ -107,6 +119,13 @@ REFUSAL_EXCHANGE_RATE = "exchange_rate_missing"
 # out is not a statement-vs-transaction-date nuance, it is an outlier
 # that should reach the books only with a human's explicit sign-off.
 REFUSAL_STALE_DATE = "date_precedes_period_window"
+# A purchase whose `Paid Through` or `Legal Entity` cell still holds the
+# export's assign-me placeholder. Deliberately NOT `account_unresolved`:
+# that one means nobody has said which GL ACCOUNT the money lands in,
+# this one means nobody has said which CARD paid or which COMPANY owns
+# it. Different questions, different people, different fixes, so the
+# summary names them apart.
+REFUSAL_UNASSIGNED = "card_or_entity_unassigned"
 
 AUDIT_PREFIX = "[External Match Audit]"
 
@@ -432,6 +451,36 @@ def _amount(text: str) -> Decimal | None:
         return None
 
 
+# The columns whose placeholder means "a human still has to assign
+# this", paired with the exact string the export writes there. Both
+# strings are IMPORTED from the writer, so the cell and the refusal that
+# reads it cannot drift apart.
+_ASSIGNABLE_COLUMNS = (
+    ("Paid Through", PAID_THROUGH_PLACEHOLDER),
+    ("Legal Entity", ENTITY_PLACEHOLDER),
+)
+
+
+def _unassigned_columns(group: "ExpenseGroup") -> tuple[str, ...]:
+    """The columns of this purchase still holding an assign-me
+    placeholder, ALL of them, so one refusal can name every one.
+
+    Reporting them together is the point: a reviewer who assigns the card
+    and re-runs, only to be told about the entity, has paid for two round
+    trips on one row.
+
+    Scanned across every row of the purchase rather than the header row
+    alone. Both columns are per-expense, so a split cannot legitimately
+    disagree with itself; if one ever does, that disagreement is itself
+    worth stopping on.
+    """
+    return tuple(
+        column
+        for column, placeholder in _ASSIGNABLE_COLUMNS
+        if any((row.get(column) or "").strip() == placeholder for row in group.rows)
+    )
+
+
 @dataclass(frozen=True)
 class PostRefusal:
     reference: str
@@ -548,6 +597,36 @@ def build_expense_payload(
                     "the month"
                 ),
             )
+
+    # **These two columns are cosmetic in the payload TODAY.** The card
+    # comes from `paid_through_account_id` (the runner's `ORG_PROFILES`
+    # or `--card`) and never from the `Paid Through` cell; `Legal Entity`
+    # only rides along inside `audit_note`. So this refusal corrects no
+    # mis-post today. It makes the two columns LOAD-BEARING before
+    # per-org multi-card routing starts reading them, which is the exact
+    # moment an unassigned cell would stop being cosmetic and silently
+    # become "whatever card the org profile happened to name". A guard
+    # added after that routing ships is a guard added after the
+    # wrong-card post.
+    #
+    # Placed AFTER the stale-date guard on purpose. "This row is dated
+    # four months before the period" is the more alarming fact about a
+    # row that carries both, and it is the one that should be named; an
+    # unassigned card on the same row is a second defect the reviewer
+    # meets once the first is settled.
+    unassigned = _unassigned_columns(group)
+    if unassigned:
+        return PostRefusal(
+            reference=group.reference,
+            reason=REFUSAL_UNASSIGNED,
+            detail=(
+                f"{' and '.join(unassigned)} still reads the export's "
+                "assign-me placeholder, so nobody has said which card paid "
+                "for this or which company it belongs to. Assign it in the "
+                "review surface and re-export; posting it now would file it "
+                "under whichever card the run was configured with"
+            ),
+        )
 
     currency = (group.cell("Currency Code") or base_currency).upper()
     base = base_currency.upper()
@@ -721,10 +800,35 @@ def plan_expense_post(
     stale_days: int = DEFAULT_STALE_DAYS,
 ) -> ExpensePlan:
     """Resolve every group and cross-reference the ledger. Pure apart
-    from ledger READS; posts nothing."""
+    from ledger READS; posts nothing.
+
+    **The ledger is read BEFORE the payload is built.** For a purchase
+    already recorded for this org, what its cells say now cannot change
+    what went to Zoho, so `already_in_ledger` is the true answer and a
+    build-time refusal on the same row is noise that would also shift the
+    refusal mix of every month already rehearsed. The cost, taken
+    deliberately: a data defect on an already-recorded row stops being
+    reported here. For a `posted` row that is moot, and for an unresolved
+    one the ledger's own "unresolved from an earlier run" is the more
+    urgent of the two messages anyway.
+    """
     postable: list[PlannedExpense] = []
     refusals: list[PostRefusal] = []
     for group in groups:
+        existing = ledger.status_for(org_id, group.reference)
+        if existing is not None:
+            refusals.append(
+                PostRefusal(
+                    reference=group.reference,
+                    reason=REFUSAL_LEDGER,
+                    detail=(
+                        f"the ledger already holds {group.reference!r} for org "
+                        f"{org_id} in state {existing.state!r}; this expense "
+                        "has been posted or is unresolved from an earlier run"
+                    ),
+                )
+            )
+            continue
         built = build_expense_payload(
             group,
             coa,
@@ -739,20 +843,6 @@ def plan_expense_post(
         )
         if isinstance(built, PostRefusal):
             refusals.append(built)
-            continue
-        existing = ledger.status_for(org_id, group.reference)
-        if existing is not None:
-            refusals.append(
-                PostRefusal(
-                    reference=group.reference,
-                    reason=REFUSAL_LEDGER,
-                    detail=(
-                        f"the ledger already holds {group.reference!r} for org "
-                        f"{org_id} in state {existing.state!r}; this expense "
-                        "has been posted or is unresolved from an earlier run"
-                    ),
-                )
-            )
             continue
         payload = built
         total = Decimal(str(payload.get("amount", 0))) if "amount" in payload else sum(
