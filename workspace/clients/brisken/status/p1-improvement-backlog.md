@@ -8217,6 +8217,14 @@ gains the card, and regress it before merging.
 
 ### Item 170 — a correction that reaches the vendor's other spellings
 
+> **CLOSED 2026-09-23 by owner direction: "no working on expense category
+> definition anymore."** Not paused and not deferred. Everything below is the
+> measurement taken before the direction landed, kept because it is the
+> record of what was found, not a plan. Do not pick it up, and do not send the
+> prepared alias `PUT /api/settings` diff. The CARD half of the attribution
+> work (items 169, 171, 172) is unaffected and continues.
+
+
 Memory recalls and captures on the raw normalized `detected_vendor`
 (`categorize.py:571-573`, `capture.py:350-355`), never on the registry's
 canonical name, which `registry_upserts_from_expense_run` already computes
