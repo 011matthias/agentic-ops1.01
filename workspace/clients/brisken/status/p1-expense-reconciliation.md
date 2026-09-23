@@ -16,6 +16,27 @@ the multi-tenant SaaS in spec v2 is deferred. Per-slice authority is
 `automations/expense-reconciliation/BLUEPRINT.md` + `ANNEALING.md`; this is the
 roll-up.
 
+**2026-09-23 (latest): the GL-account allowlist exists, and the coarse
+buckets are being retired.** Feedback notes **#83, #84, #85** (all Zoho GL
+and categories, unitemized) opened it: the available categories should be
+the Zoho chart Brisken actually uses, a merchant's GL account must not
+apply itself to new months because one merchant can have several accounts,
+and Criss's Cloud Services accounts must be carried. Dirk hand-marked an
+`Expense Relevant` column on the CorpServ chart (revised the same evening to
+**68 Y / 29 N**, the eight payroll and payroll-tax rows moving to N while
+`Payroll Service` and `Continuing Education` stayed Y, which is the test:
+can a card pay for it). BCS and BTS were derived from his scheme and are
+complete: **BCS 67 Y / 58 N, BTS 64 Y / 40 N**, 229 accounts, no conflicts,
+six rows flagged SPOT-CHECK for him. Data and the re-runnable derivation
+live in `context/expense-reconciliation/`
+(`CoA-expense-relevant-BCS-BTS-260923.xlsx`,
+`derive_expense_relevant.py`); the scheme is memory
+`project_brisken_coa_expense_relevant`. **BTS is Consulting LLC
+`808232536`, NOT the TEST-BTS sandbox.** Allocation across companies stays
+in Zoho (owner ruling). Phase 1 (taxonomy module, the
+vendor -> trip-purpose -> LLM -> refuse precedence chain) is designed and
+handed off, not built; nothing in the module changed.
+
 **2026-09-23 (later): typing an FX rate in Settings is gone** (backlog
 item 168, owner directive). The settings key, the matcher's typed rung and
 item 132's drift advisory are removed; every rate is now either derived
