@@ -9323,6 +9323,47 @@ fresh session having none proves nothing). Evidence row in
 "Nothing on card {card} in {month}" state still shows the tabs and an all-zero
 Reconciliation line above its one line.
 
+### 191. The months strip nests 2838's subcards under it (owner 2026-09-24) (BACKEND SHIPPED; the SPA half is a Lovable prompt, not pasted)
+
+**Owner:** *"adjust the subcards' tabs in the filter in months menu to not be
+next to the 2838 tab but rather only appear once viewer clicks on 2838.
+maintain their filter function"*. The tree is item 147's: 3645, 3876 and 0340
+under 2838, every other card standing alone.
+
+**Read live before building (2026-09-24).** The strip is item 190's
+`CardStrip` over `GET /api/cards/status`, which carried no tree: `parent` was
+read only by a month's `card_sections` and the PDFs. And the live registry
+(`GET /api/cards`) has `parent` EMPTY on all nine cards: item 147 shipped the
+field and its Settings picker on 2026-09-18, and nobody ever entered the three
+parents. Hard-coding "2838 owns 3645/3876/0340" in the SPA would have
+duplicated the registry and silently disagreed with it the first time a card
+moved, so the nesting reads the registry.
+
+**Shipped (backend):** `cards[].parent` (the account's row key, `""` when
+standalone) and `cards[].subcards` (the account's subcards in strip order,
+`[]` otherwise), from `card_parents` over the LIVE registry, not a month's
+snapshot: a month keeps the registry it was created with, and this is a
+navigation aid over all of them. A link survives only when both cards are on
+the list, so a subcard never nests under a tab the strip does not show.
+Figures untouched: the account's count stays its own. Tests
+`tests/test_card_status_subcards_item_191.py` (5, route-level);
+`tools/regress_check.py` red on both wiring points (the route's `parents=`
+argument, and the per-row stamp).
+
+**SPA half:** `docs/lovable-months-subcards-prompt.md`. `CardStrip` gains a
+`nestSubcards` prop that only `/months` passes; subcards leave the top row and
+its disclosure, a chevron marks the account, and a second indented tablist
+opens while the account or one of its subcards is active, derived from
+`?card=` alone so a deep link opens it. `/cards` stays flat. The filter logic
+is untouched.
+
+**Live data gate.** Until the three parents are set in Settings, Cards (the
+"Account" picker on 3645, 3876, 0340 = "Credit Card - 2838"), the payload
+nests nothing and the published strip is unchanged. That write is the card
+registry on the live app; existing months do not read it (their snapshot is
+fixed until a refresh-master-data pass, which is Criss's), so it changes this
+strip and any month created afterwards, and nothing else.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |

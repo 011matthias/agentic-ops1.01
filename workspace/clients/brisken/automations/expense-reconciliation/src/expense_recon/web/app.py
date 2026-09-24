@@ -84,7 +84,12 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..batch_period import month_from_label
-from ..cards import card_to_dict, effective_cards, normalize_cards_setting
+from ..cards import (
+    card_parents,
+    card_to_dict,
+    effective_cards,
+    normalize_cards_setting,
+)
 from ..cards_provision import card_by_key, load_cards
 from ..error_codes import Refusal, code_of, fields_of  # Refusal: item 104
 from ..ingest.expense_report_images import render_receipt_page
@@ -4595,6 +4600,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 store,
                 receipt_cards=lambda run: receipt_card_counts(
                     _expense_page_view(store, run)
+                ),
+                # The live registry's tree, so the months strip can nest a
+                # subcard under its account (item 191).
+                parents=card_parents(
+                    effective_cards(store.get_settings(), load_cards())
                 ),
             ))
 
