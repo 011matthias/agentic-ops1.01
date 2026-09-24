@@ -51,7 +51,8 @@ any month, and finding that out today means opening every month in turn.
       "unreconciled_by_ccy": {"USD": "36.00"},   // formatted strings
       "months": [                  // newest first; only months it is ON
         {"run_id": "074a7b8905d7", "label": "August 2026",
-         "batch_type": "expense_month", "n_transactions": 3,
+         "batch_type": "company-month",   // "company-month" or "trip"
+         "n_transactions": 3,
          "n_reconciled": 0, "n_review": 0, "n_unmatched_tx": 1,
          "n_refunds": 2, "statements": ["20260804-statements-1176-.pdf"],
          "period_start": "2026-07-06", "period_end": "2026-08-04",
@@ -60,9 +61,9 @@ any month, and finding that out today means opening every month in turn.
     }
   ],
   "months": [{"run_id": "...", "label": "August 2026",
-              "batch_type": "expense_month", "created_at": "...",
-              "n_transactions": 114, "n_cards": 5,
-              "period_start": "...", "period_end": "..."}],
+              "batch_type": "company-month", "created_at": "...",
+              "n_transactions": 114, "n_cards": 4,
+              "period_start": "2026-07-06", "period_end": "2026-08-31"}],
   "unreadable": [],                // run ids whose snapshot could not be read
   "note": "..."                    // the stated limit, render it as a footnote
 }
@@ -110,7 +111,7 @@ card:
   `Statements` lists the file names. The whole row links to
   `/expenses/{run_id}`, which is where the work actually happens.
 - A trip month is marked with the same badge the trips list uses
-  (`batch_type !== "expense_month"`), so a card's spend on a trip is
+  (`batch_type === "trip"`), so a card's spend on a trip is
   visible as a trip rather than silently mixed into a month.
 
 With "All" selected, show one row per card instead: the same columns, summed,
@@ -136,8 +137,23 @@ thing no month page can say.
 
 ## How to check it worked
 
-On production data, `/cards` should show 9 chips plus `digits:4700`. Card
-1176 selects to one month (August 2026), 3 charges, 1 with no receipt, one
-statement `20260804-statements-1176-.pdf`, still open USD 36.00. Cards 9693,
-0113, 6013 and 8311 sit behind the "nothing loaded" disclosure and each show
-the single line from section 4.
+Read live from the route on 2026-09-24, so these are the exact numbers the
+page must reproduce.
+
+Six chips visible, four behind the disclosure:
+
+| chip | charges | no receipt | statements | months |
+|---|---|---|---|---|
+| 2838 | 111 | 75 | 3 | August, July, April |
+| 3645 | 85 | 77 | 3 | August, July, April |
+| 3876 | 85 | 26 | 2 | August, July |
+| 0340 | 34 | 15 | 2 | July, April |
+| 1176 | 3 | 1 | 1 | August |
+| 4700 (not in Settings) | 2 | 2 | 1 | April |
+
+Card 1176 selects to one month, August 2026, 3 charges, 1 with no receipt,
+one statement `20260804-statements-1176-.pdf`, span Jul 06 to Aug 04, still
+open USD 36.00, entity Consulting. Cards 9693, 0113, 6013 and 8311 sit behind
+"Show 4 cards with nothing loaded" and each show the single line from section
+4. The month roster runs August, July, April, then January, June, May and
+September, which hold no charges at all.
