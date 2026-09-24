@@ -28,7 +28,7 @@ p1 expense-recon live at `f744680b` (v225). No SPA change needed (the chip hides
 
 ## Next Steps
 1. Private-card-list session: fold `positive_non_brisken_evidence` into `cards.classify_payment_evidence` (its step 4 = this evidence list, step 7 = WAIT); a number on that list is private outright.
-2. Item 200 (vendor card history) waits on the owner's threshold call; items 201 and 202 (GL hand-picked account exports unmapped; US date read day-first) are open from the GL prompt drive.
+2. Item 200 (vendor card history) is closed, deliberately not built on its failed usefulness test (owner 2026-09-25: no decision pending). Items 201 and 202 (GL hand-picked account exports unmapped; US date read day-first) are open from the GL prompt drive.
 3. Named for the owner, not built: PayPal / PIX / boleto / cheque are no private evidence now (no live suggestion carried one); "caixa" on the issuer list is also the Portuguese word for a till.
 
 ## Files to Read First
