@@ -9362,12 +9362,17 @@ opens while the account or one of its subcards is active, derived from
 `?card=` alone so a deep link opens it. `/cards` stays flat. The filter logic
 is untouched.
 
-**Live data gate.** Until the three parents are set in Settings, Cards (the
-"Account" picker on 3645, 3876, 0340 = "Credit Card - 2838"), the payload
-nests nothing and the published strip is unchanged. That write is the card
-registry on the live app; existing months do not read it (their snapshot is
-fixed until a refresh-master-data pass, which is Criss's), so it changes this
-strip and any month created afterwards, and nothing else.
+**Live data gate: CLEARED 2026-09-24.** Owner yes ("set them now, since in
+books there is only 2838 registered"): `parent` = `card-2838` on 3645, 3876 and
+card-0340, one read-modify-write `PUT /api/settings` of the cards group after a
+read-only readiness check (all four cards present and active, 2838 not itself
+under an account, stored group byte-equal to the readiness read). Diffed after:
+exactly three field changes, all `parent`; `/api/cards/status` reads
+`card-2838.subcards = ["3645", "3876", "card-0340"]`. Existing months do not read
+the live registry (their snapshot is fixed until a refresh-master-data pass,
+which is Criss's), so the write reaches this strip and months created from now
+on, and nothing else. Undo: clear the three Account fields. The prompt's
+publish is the one step left.
 
 ### 192. /cards becomes an overview, not a door into the months (owner 2026-09-24) (BACKEND LIVE; SPA prompt written, NOT pasted)
 
