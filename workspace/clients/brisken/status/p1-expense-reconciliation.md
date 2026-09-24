@@ -9,6 +9,24 @@ updated: 2026-09-24
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-24 evening: 9693 loaded into August only; September HELD on backlog
+item 197.** The OpenAI key is funded again (a body-only mail ingested through
+vision at 18:02 UTC), so the one mail the outage held (16:21 UTC, OpenAI
+USD 10.00 on 9693) was rendered into September via
+`POST /api/inbound/{archive}/render-ingest`; the brief named `re-ingest`, which
+refuses body-only mail (`mail_no_attachment`). Snapshots
+`vs_9xqGKXeR13lsL9JpXVmwbP` (before any write) and
+`vs_JVnq4D86XGYSm0DD2nqvo6` (before the attach). `20260804-statements-9693-.pdf`
+attached to August (`account_id=card-9693`, USD): +21 rows, all 9693, all Cloud
+Services, Jul 3 to Aug 4, receipts untouched, one `statement_period_overlap`
+warning. It also moved two 2838 rows: ANTHROPIC* CLAUDE SUB 104.95 (Aug 28) and
+108.53 (Aug 29) went reconciled -> review, because the file's one printed FX
+line (SAP, Jul 16, 1.146292906) became August's rate for every EUR pair
+(item 197). Neither row carried a person's decision. The September file prints
+three FX lines, so it waits for item 197's fix or an owner ruling. The GL
+prompt is still unpasted (repo and live bundle both lack all five markers), so
+the GL drive did not run.
+
 **2026-09-24: the strip's chip number means "needs category"** (backlog item
 193). It was `n_transactions` with no label (1176's "3" = one charge, two
 credits). Owner's pick: expenses needing a category, all months, each card its
@@ -319,8 +337,8 @@ absent data**: 9693, 0113, 6013 and 8311 have no statement in any month.
 Found 2026-09-24 on the ADMIN CLOUD SERVICES LLC SharePoint site (Graph
 app-only, read): 9693 has every 2026 statement through 0904; 8311 and 6013 are
 dormant (fee-only cycles, no receipts); 0113 exists nowhere in SharePoint and is
-Dirk's to export. Loading 9693 into the months is the owner's call (backlog
-item 108).
+Dirk's to export. The owner ordered the 9693 load the same day; August holds
+its cycle, September's waits on item 197 (see the top of this file).
 
 Item 185 came from note #86 and was raised as a quote-separately new surface;
 the owner answered with a directive instead: *"the same per card filter system
