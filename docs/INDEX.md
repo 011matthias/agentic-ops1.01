@@ -12,6 +12,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-24 | Brisken Recon Subcards Months and Cards | client-dev | [→](docs/2026-09-24%20-%20Brisken%20Recon%20Subcards%20Months%20and%20Cards/Checkpoint.md) |
+| 2026-09-24 | Recon Strip Count Needs Category | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Strip%20Count%20Needs%20Category/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken P1 Phase 1 Code Complete And Spot Check Settled | client-dev | [→](docs/2026-09-24%20-%20Brisken%20P1%20Phase%201%20Code%20Complete%20And%20Spot%20Check%20Settled/Checkpoint.md) |
 | 2026-09-24 | Recon Cards Overview Backend | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Cards%20Overview%20Backend/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Recon Card Scope Applied | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Card%20Scope%20Applied/Mini-Checkpoint-1.md) |
