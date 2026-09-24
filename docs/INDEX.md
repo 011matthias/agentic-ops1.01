@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-24 | Brisken P2 Dormant Workstreams Brought To Live State | client-dev | [→](docs/2026-09-24%20-%20Brisken%20P2%20Dormant%20Workstreams%20Brought%20To%20Live%20State/Checkpoint.md) |
 | 2026-09-24 | Brisken P1 Item 6 Gate Relabel And Paid Through | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20P1%20Item%206%20Gate%20Relabel%20And%20Paid%20Through/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Recon Duplicates Deletable From Either Copy | client-dev | [→](docs/2026-09-24%20-%20Recon%20Duplicates%20Deletable%20From%20Either%20Copy/Checkpoint.md) |
 | 2026-09-24 | Recon Card Filter Leaves The Month | client-dev | [→](docs/2026-09-24%20-%20Recon%20Card%20Filter%20Leaves%20The%20Month/Checkpoint.md) |
