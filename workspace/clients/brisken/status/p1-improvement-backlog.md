@@ -9665,6 +9665,122 @@ Out of scope, next: case 6 vocabulary ("VENDA CREDITO VISA", "CreditCard",
 "Link", "saved payment method", "Kartenzahlung erhalten", "girocardOLV");
 "Bar" as a cash word; GoDaddy's "ending with the last two digits: 38".
 
+### 200. A vendor's card from its own receipts, continuously (gap 1 of the card-attribution map, owner 2026-09-24) (MEASURED 2026-09-24: Phase 1 gate FAILED at N = 2 and at N = 3, not built; the threshold is the owner's call)
+
+Numbered 200 because two sibling branches both claim 198 (card type, card
+endings) and one of them will take 199.
+
+**Owner direction, 2026-09-24.** Vendor-card memory that learns from evidence
+all the time, not only at month sign-off (no month has ever been signed off,
+item 126; 2 of 33 registry vendors carry a card, Brave on card-1176 and ZOHO on
+card-2838; both re-read on the live copy below). Two rulings come with the
+request:
+
+1. **Observations may decide a vendor's card**, not only corrections: a printed
+   Brisken card number and a statement charge count as evidence. This amends
+   the 2026-09-24 learning ruling ("only corrections may be memorized") for
+   this one purpose, which memorizes nothing (the index is derived from the
+   live months on every read). The ruling stays in force for every learner
+   that writes durable memory.
+2. **Minimum evidence:** at least 2 separate receipts on the same card and none
+   on any other card; measure 3 as well.
+
+**The rule measured.** A vendor-to-card index over all seven live months,
+keyed by the registry canonical when `MerchantRegistry.resolve` matches, else
+the exact casefolded `clean_vendor_name`. Hard evidence (counts toward the
+minimum): a card resolved from a printed Brisken card number (not a two-digit
+ending, not an assigned alias) and `card_source: settled_charge` (pending or
+confirmed pairs). Contradiction evidence (can only silence): a reviewer's
+per-row pick, an assigned hint alias, and a two-digit ending (added as the
+conservative reading; it silenced nothing extra). Never evidence: `learned`,
+`merchant`, copies (`counts_in_total: false`), private and settled-outside
+rows. OpenAI, Anthropic and Lovable are never pinned (owner hold 2026-09-18).
+Scored leave-one-out: a row's own evidence is removed before its vendor is
+judged. Truth is the reviewer's pick (held out), then the statement's card on a
+reconciled pair, then a printed Brisken number.
+
+Measured on a read-only copy of `/data/recon-web.sqlite` and
+`/data/learning.sqlite` (on-machine `sqlite3.backup`, pulled 2026-09-24 23:37,
+deleted after), replayed through `build_expense_view` with the card chain's own
+inputs captured, no model call. The card-type item was not yet on origin/main
+(sibling branch `client/brisken/p1-card-type-not-private`, commit `cc2d09c9`),
+so eligibility ("nothing printed" or "a Brisken card type with no number") used
+that commit's `names_registry_card_type`. It then landed as item 198 (#1334),
+and `cards.py` on main is identical to `cc2d09c9`, so the numbers stand. The
+gate verdict never depended on it: every wrong row below is judged on printed
+numbers and statement charges.
+
+| Month | Receipts | Checkable | N=2 fills | N=2 right / wrong / silent | N=3 fills | N=3 right / wrong / silent |
+|---|---|---|---|---|---|---|
+| January 2026 | 1 | 1 | 0 | 0 / 0 / 1 | 0 | 0 / 0 / 1 |
+| April 2026 | 34 | 25 | 0 | 0 / 2 / 23 | 0 | 0 / 1 / 24 |
+| May 2026 | 21 | 10 | 2 | 5 / 0 / 5 | 2 | 2 / 0 / 8 |
+| June 2026 | 25 | 14 | 2 | 1 / 0 / 13 | 2 | 1 / 0 / 13 |
+| July 2026 | 82 | 43 | 0 | 4 / 0 / 39 | 0 | 2 / 0 / 41 |
+| August 2026 | 55 | 35 | 0 | 4 / 0 / 31 | 0 | 2 / 0 / 33 |
+| September 2026 | 87 | 15 | 2 | 4 / 1 / 10 | 0 | 2 / 0 / 13 |
+| Total | 305 | 143 | 6 | 18 / 3 / 122 | 4 | 9 / 1 / 133 |
+
+"Checkable" rows carry a truth; "fills" are rows the link would fill today, all
+of them unverifiable. The gate asked for zero wrong at N = 2 and at least 10
+answered: 21 answered, 3 wrong. At N = 3, 10 answered, 1 wrong.
+
+**The wrong rows are real, not instrument error.** Each was read back row by
+row:
+
+- **GitHub** (September `0056`, printed `...9693`): two other receipts printed
+  `...2838` (July, and September's "BriskenFinancials" org), so it would have
+  read 2838. Two GitHub orgs billed on two cards, on two companies (Corporate
+  Services and Cloud Services).
+- **WILLAMS RONALD DA SIL** (April `0006`, printed `...0340`): July and August
+  receipts are on 3876, so it would have read Nicolas's 3876 for Criss's
+  receipt. Same company, wrong person.
+- **Supermercado Fenix** (April `0033`, "TEF", settled by a charge on card-0340):
+  four printed-3876 receipts in May to July, so it would have read 3876 for
+  Criss's purchase. Wrong at N = 3 as well.
+
+3876 and card-0340 are both subcards of 2838 on the same company and Zoho
+account, but on Nicolas and Criss respectively, so "same company" does not
+make these harmless: the person is wrong.
+
+**The motivating cases do not fill.** July's Martino "VISA" ×3 and Fenix "TEF"
+×2 stay blank under the rule as specified, because neither vendor has only
+ever been paid on 3876: Martino (registry `MARTINO SUPERMERCADO`) has 16 hard
+receipts on 3876, one printed `...0340` and one printed `...2838` (both April);
+Fenix has the April 0340 charge. 12 vendors carry evidence on two or more
+cards: the three held AI vendors, GitHub, Hostinger, Obsidian, and six Brazil
+merchants (Fenix, Martino, Mega Center, Nobre Atacarejo, Auto Posto Pimentel,
+Willams), where Nicolas's 3876, Criss's 0340 and Dirk's 2838 all pay. What the link would fill today at N = 2 is six SaaS rows
+(Network Solutions ×2 on 3645 in September; Fireflies ×3 and Wispr ×1 on 3876
+in May and June); at N = 3, the four Fireflies/Wispr rows. September holds 20
+card-less rows that print nothing or only a card type (copies, private and
+settled-outside rows left out): 14 are OpenAI, Anthropic or Lovable (owner
+hold), 2 have no evidence in any month, 2 have one receipt, and 2 (Network
+Solutions) would pin.
+
+**Owner decision needed (not re-raised by the agent).** Recommendation: do not
+build. The link reaches 4 to 6 subscription rows. Checked against known
+answers, it gives the wrong person or company 3 times in 21 at N = 2 and once
+in 10 at N = 3, and a wrong card leaves Criss's to-do list silently (item 173
+ruling). If those subscription rows should resolve, a card typed on the
+merchant in the Merchants editor does it with no wrong-card risk; adding
+merchants was outside this item's scope.
+
+**Found on the way, not built (it was part of the gated build).** The
+sign-off card learner (`registry_card_upserts_from_expense_run`, filter
+`service._CARD_OBSERVATION_SOURCES = {"override", "hint", "settled_charge",
+"learned"}`) folds rows carried by a REMEMBERED card into the registry's
+`cards_seen` and can write a learned `card_key`, so a remembered card confirms
+itself into durable memory. Under the 2026-09-24 ruling ("only corrections may
+be memorized") this is a fourth leak beside the three recorded in the learning
+memory, and so are `hint` and `settled_charge` (observations, not corrections)
+for this learner. Removing `learned` is the minimal fix, with a route-level test
+through `POST /api/runs/{id}/publish` that goes red when it is put back.
+
+**Named follow-up if this is ever built:** freezing a closed month against
+later evidence, to be decided before the first close. The scratch replay that
+produced the table is not kept; the method above rebuilds it.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
