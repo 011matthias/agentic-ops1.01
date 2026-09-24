@@ -54,8 +54,7 @@ and receiptless charge against ITS entity's leaves, by org id, never by name.
 `not_expense_relevant`, `no_such_code_in_org`, `account_unresolved`) up to the
 row review as `category_refused`. `POST /api/runs/{id}/categories` clears on
 ""/null and drops unknown strings under `ignored` (3c). Batches without the key
-keep buckets. The ER-report account posting path (`zoho/accounts.py` via
-`category_accounts.py`) is untouched until item 4.
+keep buckets.
 
 **Owner decisions 2026-09-24, all three DONE.** (1) Settings
 `Brisken Corp Services, LLC` org_id corrected `8227416528` -> `822741658`
@@ -71,10 +70,26 @@ changed through a later card assignment is not covered. All 7 live months
 are not migrated (standing no-live-writes ruling); the first GL month is the
 first batch created after deploy.
 
-Queue after it: delete `category_accounts.py` + lift `NON_LEAF`/`OUT_OF_SCOPE`
-into `resolve_account_id` (same change), the three copies of the category leak
-(`output/posting_common.py:137`, `sheet_writeback.py:143` and `:186`), then
-relabel `categorization_gate.py` and validate item 184.
+**Items 4 and 5 (2026-09-24, NOT deployed).** Item 4 (PR #1291,
+`f20326f7`): `category_accounts.py` deleted; `resolve_account_id` judges
+postable per org, by the curated marking in the three curated orgs (it
+approves 35 chart parents, and Zoho takes parent postings: 8 in the 24-month
+history) and by the chart's parent rule elsewhere, and refuses a chart whose
+id disagrees with the target org's. Item 5: no account column carries a
+category any more (`posting_common._debit_account_and_note`, both
+`sheet_writeback` cells); a categorized line with no account reads
+`(account unmapped - assign)` with or without a chart. Owner ruled
+"everywhere" (2026-09-24), knowing the cost: on the next deploy the CSV, the
+grid's "books as" and the writeback stop showing the category as a hint on
+Criss's bucket-era lines that have no account (entity-less batches, whose
+multi-entity gate has no single chart; charted batches already showed the
+marker), and a multi-category receipt without accounts books as one flagged
+part instead of one per category.
+
+Queue: **4b** the export COA gate contradicts the curation (diverts 56 of 194
+postable accounts on a GL batch, `COGS - DEV Infrastructure` among them; key a
+curated gate on `gl_entity_orgs`, bucket batches unchanged), then relabel
+`categorization_gate.py` and validate item 184 (item 6).
 
 **2026-09-24: a payment reminder is no longer a purchase** (backlog item 186,
 PR #1268, merge `0726b428`, DEPLOYED and cold-driven; `/healthz` commit

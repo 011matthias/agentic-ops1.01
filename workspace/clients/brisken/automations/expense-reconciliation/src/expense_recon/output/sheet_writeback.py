@@ -51,7 +51,7 @@ from ..matching.types import (
     Receipt,
     Transaction,
 )
-from .posting_common import _resolve_account
+from .posting_common import _UNMAPPED, _resolve_account
 
 if TYPE_CHECKING:
     from ..ingest.chart_of_accounts import ChartOfAccounts
@@ -128,21 +128,26 @@ def _account_cell_value(
 ) -> str:
     """The matched receipt's posting account(s), for one cell.
 
-    Each line item's categorization contributes ``zoho_account or
-    category``; with a chart, the reference is resolved to the
-    canonical Zoho account name (an unresolvable reference keeps the
-    raw label — this is a review surface, so showing the pick beats
-    hiding it). Distinct accounts join with "; " in first-seen order.
-    No categorizations at all → flagged, never guessed.
+    Each line item's categorization contributes its ``zoho_account``;
+    with a chart, the reference is resolved to the canonical Zoho account
+    name (an unresolvable reference keeps the raw label — this is a
+    review surface, so showing the pick beats hiding it). A categorized
+    line with no account contributes ``(account unmapped - assign)``, the
+    export's own marker, never its category: this is the account column.
+    Distinct accounts join with "; " in first-seen order. No
+    categorizations at all → flagged, never guessed.
     """
     values: list[str] = []
     for item in rec.line_items:
         cat = item.categorization
         if cat is None:
             continue
-        ref = cat.zoho_account or cat.category
-        if not ref:
+        if not cat.zoho_account:
+            if cat.category and cat.source is not ClassificationSource.REVIEW:
+                if _UNMAPPED not in values:
+                    values.append(_UNMAPPED)
             continue
+        ref = cat.zoho_account
         value = ref
         if coa is not None:
             value = _resolve_account(ref, coa) or ref
@@ -183,7 +188,11 @@ def _cell_value(
     if tx.transaction_id in unmatched_tx:
         cat = (charge_cats or {}).get(tx.transaction_id)
         if cat is not None and cat.category:
-            ref = cat.zoho_account or cat.category
+            ref = cat.zoho_account
+            if not ref:
+                # A guessed category with no account: nothing to confirm,
+                # and the category is not an account (see above).
+                return _UNMAPPED
             value = (_resolve_account(ref, coa) or ref) if coa is not None else ref
             if cat.source is ClassificationSource.LEARNED:
                 return value

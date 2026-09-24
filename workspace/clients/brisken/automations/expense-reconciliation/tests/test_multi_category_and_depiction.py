@@ -134,19 +134,27 @@ def _cat(category, account=None):
     )
 
 
-def _split_receipt():
+MEALS = "6002 Meals"
+FEES = "6400 Professional Fees"
+UNMAPPED = "(account unmapped - assign)"
+
+
+def _split_receipt(with_accounts=True):
+    def cat(category, account):
+        return _cat(category, account if with_accounts else None)
+
     return _receipt(
         "s.jpg", "Recanto", total="30.00",
         items=[
             LineItem(description="pizza", line_total=Decimal("20.00"),
                      quantity=None, unit_price=None,
-                     categorization=_cat("Meals & Entertainment")),
+                     categorization=cat("Meals & Entertainment", MEALS)),
             LineItem(description="beer", line_total=Decimal("6.00"),
                      quantity=None, unit_price=None,
-                     categorization=_cat("Meals & Entertainment")),
+                     categorization=cat("Meals & Entertainment", MEALS)),
             LineItem(description="paint", line_total=Decimal("4.00"),
                      quantity=None, unit_price=None,
-                     categorization=_cat("Professional Services")),
+                     categorization=cat("Professional Services", FEES)),
         ],
     )
 
@@ -161,8 +169,21 @@ def test_posting_parts_match_export_rows_exactly():
     # And the split is what the ruling requires: sums exact, one part per
     # account, order = first appearance.
     assert [(a, str(amt)) for a, amt, _ in parts] == [
-        ("Meals & Entertainment", "26.00"),
-        ("Professional Services", "4.00"),
+        (MEALS, "26.00"),
+        (FEES, "4.00"),
+    ]
+
+
+def test_categories_without_accounts_book_as_one_flagged_part():
+    """Item 5 (owner: everywhere). The split is by ACCOUNT; categories with
+    no account are not accounts, so the lines book together, flagged, and
+    the total still ties out. Before item 5 this receipt split by category
+    label."""
+    r = _split_receipt(with_accounts=False)
+    parts = expense_posting_parts(r)
+    assert [(a, str(amt)) for a, amt, _ in parts] == [(UNMAPPED, "30.00")]
+    assert [(row[1], row[2]) for row in build_expense_rows([r])] == [
+        (UNMAPPED, "30.00")
     ]
 
 
@@ -174,7 +195,7 @@ def test_posting_parts_single_account_and_bare_receipt():
                         categorization=_cat("Travel & Transport"))],
     )
     assert [(a, str(amt)) for a, amt, _ in expense_posting_parts(single)] == [
-        ("Travel & Transport", "24.30")
+        (UNMAPPED, "24.30")
     ]
     bare = _receipt("bare.jpg", "ANNADA", total="5.00")
     parts = expense_posting_parts(bare)
@@ -289,11 +310,12 @@ def test_grid_variance_chip_and_books_as(web_client, monkeypatch):
     uber = rows[docs["Uber"]]
     assert uber["category_variance"]["varies"] is False
 
-    # books_as follows the override: one part, the overridden account,
-    # the receipt's own total; a single-account receipt is not "split".
+    # books_as follows the override: one part, the receipt's own total; a
+    # single-account receipt is not "split". The override set a category
+    # and no account, so the part is flagged rather than labelled with the
+    # category (item 5).
     first = rows[staples_docs[0]]
     assert first["is_split"] is False
     assert first["books_as"] == [
-        {"account": "Meals & Entertainment", "amount": "42.50",
-         "unassigned": False}
+        {"account": UNMAPPED, "amount": "42.50", "unassigned": False}
     ]
