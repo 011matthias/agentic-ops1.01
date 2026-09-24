@@ -25,6 +25,7 @@ import os
 import re
 import threading
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from typing import NamedTuple
@@ -9167,7 +9168,24 @@ def build_expense_report(
     return pdf
 
 
-def build_card_status(store: RunStore) -> dict:
+def receipt_card_counts(view: dict) -> dict[str, int]:
+    """Receipts per card on an Expenses page payload: `expenses[].card_section`
+    over the rows that count, decided copies left out, which is exactly what
+    the month's own card tabs count (`card_sections[].n_expenses`). The key
+    "" is the no-card section."""
+    counts: dict[str, int] = {}
+    for expense in view.get("expenses") or []:
+        if expense.get("counts_in_total") is False:
+            continue
+        key = str(expense.get("card_section") or "")
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def build_card_status(
+    store: RunStore,
+    receipt_cards: Callable[[RunRow], dict[str, int]] | None = None,
+) -> dict:
     """The cross-month card roll-up (item 185, owner 2026-09-24): "the same
     per card filter system inside the months should be outside of the
     months".
@@ -9202,12 +9220,24 @@ def build_card_status(store: RunStore) -> dict:
     A run whose snapshot cannot be read is named in `unreadable` and
     skipped, never fatal: an unreadable month is a reason to report fewer
     months, not none.
+
+    Item 190 (owner 2026-09-24: the card filter leaves the month and "a
+    month is clicked on ... he should then only see data from the card that
+    he selected") adds the receipt side, as parallel fields so nothing above
+    changes: `cards[].receipt_months[]` names each month holding receipts on
+    the card, and `no_card` the months holding receipts on no card. Without
+    them a month with receipts and no statement yet (September, while Criss
+    works it) is on no card at all. `receipt_cards` is the Expenses page's
+    own per-card count for a run (`receipt_card_counts`), so a month's tab
+    and its line here cannot disagree; a month it fails on is named in
+    `unreadable` and keeps its charge figures.
     """
     from ..output._pdf_common import _add_money
 
     months: list[dict] = []
     per_card: dict[str, dict] = {}
     unreadable: list[str] = []
+    no_card_months: list[dict] = []
 
     def _slot(row: dict) -> dict:
         slot = per_card.get(row["key"])
@@ -9228,6 +9258,7 @@ def build_card_status(store: RunStore) -> dict:
                 "period_start": None,
                 "period_end": None,
                 "months": [],
+                "receipt_months": [],
                 "_ccy": [],
             }
         # The entity is the registry's and only a known row carries one;
@@ -9313,6 +9344,24 @@ def build_card_status(store: RunStore) -> dict:
                 "period_end": row.get("period_end"),
                 "unreconciled_by_ccy": dict(row.get("unreconciled_by_ccy") or {}),
             })
+        if receipt_cards is None:
+            continue
+        try:
+            counts = receipt_cards(run)
+        except Exception:  # noqa: BLE001 - one bad month must not blank the page
+            unreadable.append(run.run_id)
+            continue
+        for key, n in sorted(counts.items()):
+            entry = {
+                "run_id": run.run_id,
+                "label": month["label"],
+                "batch_type": month["batch_type"],
+                "n_expenses": n,
+            }
+            if key:
+                _slot({"key": key, "label": key})["receipt_months"].append(entry)
+            else:
+                no_card_months.append(entry)
 
     _fold_unknown_cards(per_card)
 
@@ -9344,7 +9393,9 @@ def build_card_status(store: RunStore) -> dict:
     order = {m["run_id"]: i for i, m in enumerate(months)}
     for card in cards:
         card["months"].sort(key=lambda m: order.get(m["run_id"], 1 << 30))
+        card["receipt_months"].sort(key=lambda m: order.get(m["run_id"], 1 << 30))
         card["statements"].sort(key=lambda s: order.get(s["run_id"], 1 << 30))
+    no_card_months.sort(key=lambda m: order.get(m["run_id"], 1 << 30))
     # The month strip's own order: the busiest card first, the ones with
     # nothing in them last, alphabetical inside each.
     cards.sort(key=lambda c: (
@@ -9353,6 +9404,10 @@ def build_card_status(store: RunStore) -> dict:
     return {
         "cards": cards,
         "months": months,
+        "no_card": {
+            "months": no_card_months,
+            "n_expenses": sum(m["n_expenses"] for m in no_card_months),
+        },
         "unreadable": unreadable,
         # Rendered verbatim as the page's footnote, so it is prose for
         # Criss, not a field guide: the first version named the payload key
@@ -9391,6 +9446,7 @@ def _fold_unknown_cards(per_card: dict[str, dict]) -> None:
             target[field] += slot[field]
         target["statements"].extend(slot["statements"])
         target["months"].extend(slot["months"])
+        target["receipt_months"].extend(slot["receipt_months"])
         target["_ccy"].extend(slot["_ccy"])
         for field, better in (("period_start", min), ("period_end", max)):
             if slot[field]:

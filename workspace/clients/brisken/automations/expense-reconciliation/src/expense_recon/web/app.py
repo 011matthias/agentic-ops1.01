@@ -119,6 +119,7 @@ from .service import (
     baseline_receipts,
     batch_list_summary,
     build_card_status,
+    receipt_card_counts,
     build_cost_center_totals,
     build_expense_report,
     build_reconciliation_report,
@@ -4590,7 +4591,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not _receipt_first_on():
             return _flag_off()
         with open_store() as store:
-            return JSONResponse(build_card_status(store))
+            return JSONResponse(build_card_status(
+                store,
+                receipt_cards=lambda run: receipt_card_counts(
+                    _expense_page_view(store, run)
+                ),
+            ))
 
     @app.get("/api/cost-centers/totals")
     def cost_center_totals(
