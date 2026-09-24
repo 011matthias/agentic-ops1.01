@@ -9174,6 +9174,9 @@ Set aside / Statement / Created`, which is the scope holding. The caption reads
 "Figures are each month's totals, not this card's. Open Cards for this card's
 own numbers." and is absent under All.
 
+Its caption and its month list are superseded by item 190, which carries the
+selection into the month and lists receipt-only months too.
+
 ### 188. A duplicate can only be deleted from its second copy, and the duplicates filter does not look like one (owner 2026-09-24)
 
 **Owner**, on the September Fireflies.ai Corp pair (2026-09-15, both from
@@ -9216,6 +9219,51 @@ SPA-only: hide the override while there is no card and nothing to override,
 collapse it behind "Override account" once resolved, unchanged where an
 override is already set. `docs/lovable-paid-through-follows-card-prompt.md`,
 NOT pasted.
+
+### 190. The card filter leaves the month, and the selection carries in (owner 2026-09-24) (BACKEND SHIPPED; SPA prompt NOT pasted)
+
+**Owner:** *"i think the logical next step is removing the card filter from
+inside the months since its outside now."* Then: *"when using this filter, and
+a month is clicked on by user he should then only see data from the card that
+he selected in the filter. that is part of extracting the filter from inside
+the month because we need to maintain the functionality, but layer it
+differently"*. A re-layering, not a deletion.
+
+**Read live before writing (cold Chrome on August, 2026-09-24).** The strip is
+on both halves of a month, which are two routes: Expenses `/expenses/{id}`
+(`All · 3645 5 · 3876 30 · 2838 10 · 1176 1 · 9693 2 · No card 2`, receipt
+counts) and Matching `/runs/{id}` (`All · 3645 40 · 3876 37 · 2838 34 · 1176 3 ·
+9693 0 · No card`, charge counts). The pick is kept per month in localStorage
+`brisken.month.cardTab.v1:{run_id}` and follows between the tabs. A pick
+re-scopes the list, the boxes and the card's statement line; the tab badges and
+the Reconciliation line stay month-wide. "Add another statement for this card"
+opens the Attach bank statement dialog with the card preselected, its only
+route. The keys are one space: `/api/cards/status` `cards[].key` equals the
+month's `card_sections[].key` and every row's `card_section`.
+
+**The gap that made it a backend item (owner chose "backend first").**
+`/api/cards/status` knew only charges and statements, so the filter outside the
+months could never offer a month holding only receipts on a card: all of
+September (Criss's working month, no statement yet), May and June, and August
+for 9693. Nor could it offer No card, and receipts on no card sit in six of
+seven months (September 30, July 15, May 9, April 8, June 8, August 2). The
+strip being removed reached all of them.
+
+**Shipped:** `cards[].receipt_months[]` (`run_id`, `label`, `batch_type`,
+`n_expenses`) and top-level `no_card` (`months[]`, `n_expenses`), counted by
+`receipt_card_counts` over the Expenses page's own payload, so a month's tab
+and its line in the roll-up cannot disagree. Parallel fields: `cards[].months`,
+`never_loaded` and everything `/cards` reads are unchanged. Tests
+`tests/test_card_status_receipt_months_item_190.py`; regress-checked through the
+app wiring (3 route tests red with the count disabled).
+
+**SPA half:** `docs/lovable-card-scope-carries-into-month-prompt.md`. The
+selection lives in the URL (`?card=<key>`, `none` for no card) on `/months`,
+`/expenses/{id}` and `/runs/{id}`; a scope line replaces the strip on both
+tabs; the per-card statement line and "Add another statement for this card"
+move under it; `cardTabs.*` splits into `cardStrip.*` (the chips `/months` and
+`/cards` share) and `cardScope.*` (the line), and `under`, `subcards` and
+`wb.filter.card.empty` are dropped.
 
 ## Shipped (loop history)
 
