@@ -96,6 +96,7 @@ from .categorize import (
 )
 from .cards import cards_from_setting, stamp_card_entities
 from .categorize_charges import categorize_charges, derive_subscription_status
+from .coa_provision import GL_ENTITY_ORGS_KEY
 from .correspondence import CORRESPONDENCE, quarantine_correspondence
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
@@ -793,9 +794,13 @@ def reconcile(
         (cfg.get("categorization") or {}).get("override_er_category", False)
     )
     _stage("categorizing")
+    # Phase 1, item 3: a run carrying the entity -> org map is categorized
+    # straight into its entity's curated GL leaves (see categorize_receipts).
+    entity_orgs = cfg.get(GL_ENTITY_ORGS_KEY)
     receipts = categorize_receipts(
         receipts, client=llm_client, chart_of_accounts=account_labels, learned=learned,
         override_er_category=override_er_category,
+        entity_orgs=entity_orgs,
     )
 
     # WS2 (2026-07-21): top-level adjudication. Under override_er_category the
@@ -803,7 +808,8 @@ def reconcile(
     # (a different Zoho root-group between the tool's pick and the report's
     # category). Same root-group => the report's category is kept. Deterministic
     # (no LLM call); runs only with a chart to resolve root-groups against.
-    if override_er_category and cat_chart is not None:
+    # Not on the GL path: there the report's account is not a candidate.
+    if entity_orgs is None and override_er_category and cat_chart is not None:
         receipts = adjudicate_receipts(
             receipts, cat_chart, scope_groups=scope_groups
         )
@@ -861,6 +867,7 @@ def reconcile(
         chart_of_accounts=account_labels,
         learned=learned,
         override_er_category=override_er_category,
+        entity_orgs=entity_orgs,
     )
     if charge_categorizations:
         n_categorized = sum(
@@ -1123,6 +1130,7 @@ def generate_expenses(
         override_er_category=override_er_category,
         cat_chart=cat_chart,
         scope_groups=scope_groups,
+        entity_orgs=cfg.get(GL_ENTITY_ORGS_KEY),
     )
 
     # No statement => no matching. Every receipt IS an expense; they live in

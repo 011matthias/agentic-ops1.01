@@ -50,11 +50,14 @@ from . import curated_leaves
 
 __all__ = [
     "ACCOUNT_UNRESOLVED",
+    "ENTITY_MISSING",
+    "NOT_EXPENSE_RELEVANT",
     "SOURCE_LEARNED_RULE",
     "SOURCE_LLM_LEAF",
     "SOURCE_REFUSED",
     "TIER2_DEFERRED",
     "PostingResolution",
+    "refusal_text",
     "resolve_posting_account",
 ]
 
@@ -78,6 +81,50 @@ ACCOUNT_UNRESOLVED = "account_unresolved"
 # a refusal that names the row. Item 38 holds the trip design pending the
 # owner's brainstorm; when Dirk rules, the implementation goes HERE.
 TIER2_DEFERRED = "trip_purpose_inheritance_deferred"
+
+
+NOT_EXPENSE_RELEVANT = "not_expense_relevant"
+
+# The receipt names no legal entity at all, so there is no chart to judge it
+# against. Kept apart from `org_not_curated` (a named company with no curated
+# list) because the fixes differ: this one is "set the company", that one is
+# "provision the company".
+ENTITY_MISSING = "entity_missing"
+
+# What each refusal says to the person who has to act on it. One sentence per
+# code, naming what is missing and who fixes it, because "No category yet"
+# over a refused row reads as "the tool has not looked yet" when it looked and
+# declined on purpose.
+_REFUSAL_TEXT = {
+    ENTITY_MISSING: (
+        "This expense has no company yet, so no account was picked. Set the "
+        "company, then pick the account."
+    ),
+    curated_leaves.NOT_COVERED: (
+        "No curated Zoho account list is set up for this company, so the "
+        "tool did not guess an account. Pick one by hand."
+    ),
+    curated_leaves.NO_SUCH_CODE: (
+        "The account remembered for this merchant does not exist in this "
+        "company's Zoho chart. Pick one by hand."
+    ),
+    NOT_EXPENSE_RELEVANT: (
+        "The account remembered for this merchant is not one a card expense "
+        "may post to in this company. Pick one by hand."
+    ),
+    ACCOUNT_UNRESOLVED: (
+        "The tool could not tell which Zoho account this belongs to. Pick "
+        "one by hand."
+    ),
+    TIER2_DEFERRED: (
+        "A trip does not decide the account. Pick one by hand."
+    ),
+}
+
+
+def refusal_text(code: str | None) -> str:
+    """The reviewer-facing sentence for a refusal code; generic if unknown."""
+    return _REFUSAL_TEXT.get(code or "", _REFUSAL_TEXT[ACCOUNT_UNRESOLVED])
 
 
 @dataclass(frozen=True)

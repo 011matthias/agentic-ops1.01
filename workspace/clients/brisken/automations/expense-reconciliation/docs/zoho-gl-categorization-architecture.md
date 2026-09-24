@@ -5,13 +5,27 @@ shipped, plus the chain itself: the tolerant read (#1232), the taxonomy module
 (#1234), accept-and-drop on every write path (#1236), and `gl_accounts` served
 beside the old keys together with `zoho/posting_resolution.py` (#1238).
 
-**Nothing is deployed, and nothing calls the chain yet.** The engine still
-classifies into the eight buckets; `posting_resolution` is pure and reached
-only by its own tests. Step 4 (converting the engine) is where it gets wired,
-and backlog item 183 is a prerequisite for that step rather than a later
-tidy-up: the conversion is when the chain starts writing through
-`registry_upserts_from_expense_run`, whose conflict check cannot see an
-account. Items 182 and 184 were filed the same day.
+**Step 4 is built (2026-09-24), not deployed.** The engine calls the chain:
+a run whose config carries `gl_entity_orgs` (injected by
+`coa_provision.apply_to_config` for every hosted batch created from now on,
+settings registry first, then the `/data` file) categorizes each receipt and
+receiptless charge into ITS entity's curated leaves, with the org id, never
+the entity name, handed to `llm_leaf_labels`. `category` is the leaf code or
+None; a refusal carries a named `refusal` that reaches the row's review as
+`category_refused`. A batch without the key (every batch created before, every
+CLI run) keeps the eight buckets, so no month mixes vocabularies. Steps 5 and 6
+are still open, and so is the SPA: the published bundle renders buckets and
+does not localize `category_refused`, so nothing here deploys before the owner
+publishes a bundle that reads leaf codes.
+
+Two gaps the wiring surfaced. The live settings registry keys entities by the
+long legal names (`Brisken Corp Services, LLC` ...) while receipts carry the
+short ones the `/data` file uses, and its Corp Services row reads org
+`8227416528`, one digit off `822741658`; the short-name receipts resolve
+through the file, a receipt on the long name refuses `org_not_curated`.
+`Consulting` has an org id in neither source, so its receipts refuse. And the
+categorization is fixed at ingest: an expense whose company is set later keeps
+its `entity_missing` refusal until something re-categorizes it.
 
 Receipts are classified directly into Dirk's curated Zoho GL leaf accounts, per
 legal entity. The eight coarse buckets (`EXPENSE_CATEGORIES`) and the

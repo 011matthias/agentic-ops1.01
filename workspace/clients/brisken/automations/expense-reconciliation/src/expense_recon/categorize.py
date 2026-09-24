@@ -29,8 +29,9 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Mapping
 
+from .coa_provision import org_id_for_entity
 from .learning.consult import (
     RECALL_NO_COMPANY,
     RECALL_VENDOR_ONLY,
@@ -48,6 +49,14 @@ from .matching.types import (
     ClassificationSource,
     LineItem,
     Receipt,
+)
+from .zoho import curated_leaves
+from .zoho.posting_resolution import (  # noqa: F401 (refusal_text re-exported)
+    ACCOUNT_UNRESOLVED,
+    ENTITY_MISSING,
+    PostingResolution,
+    refusal_text,
+    resolve_posting_account,
 )
 
 if TYPE_CHECKING:
@@ -192,9 +201,19 @@ def categorize_receipts(
     override_er_category: bool = False,
     judge_each_receipt: "frozenset[str] | None" = None,
     merchant_profiles: "dict[str, str] | None" = None,
+    entity_orgs: "Mapping[str, str] | None" = None,
 ) -> list[Receipt]:
     """Return a new list of receipts with line_items carrying
     Categorization results per LD-2.
+
+    `entity_orgs` (Phase 1, item 3) switches the run to direct-to-GL
+    categorization: legal-entity label -> Zoho org id, as
+    `coa_provision.entity_org_ids` builds it. Present (even empty), every
+    receipt is judged against ITS entity's curated leaves and either carries
+    a leaf code as `category` or refuses with `category=None` and a named
+    `refusal` (see `_categorize_one_gl`). `chart_of_accounts` and
+    `override_er_category` do not apply on that path. None keeps the bucket
+    path below byte for byte.
 
     When `client` is provided, uses LLM calls. When None (default),
     falls back to the keyword stub — preserves slice-1 behaviour for
@@ -238,6 +257,18 @@ def categorize_receipts(
 
     Pure function; does not mutate inputs.
     """
+    if entity_orgs is not None:
+        return [
+            _categorize_one_gl(
+                r, client, learned,
+                org_id=org_id_for_entity(r.legal_entity_id, entity_orgs),
+                judge_each_receipt=bool(
+                    judge_each_receipt and r.document_id in judge_each_receipt
+                ),
+                merchant_profile=(merchant_profiles or {}).get(r.document_id),
+            )
+            for r in receipts
+        ]
     return [
         _categorize_one(
             r, client, chart_of_accounts, learned,
@@ -309,6 +340,7 @@ def categorize_receipts_with_registry(
     override_er_category: bool = False,
     cat_chart=None,
     scope_groups=None,
+    entity_orgs: "Mapping[str, str] | None" = None,
 ) -> tuple[list[Receipt], dict]:
     """Categorize a batch of receipt-first expenses with the merchant registry
     as the deterministic tier above the LLM (2026-07-29).
@@ -344,7 +376,13 @@ def categorize_receipts_with_registry(
     document_id -> MerchantMatch, for the grid's display vendor + provenance.
     Order is preserved. Consulted in the expense paths and, since M1, for a
     month's receiptless charges (`categorize_charges`); `reconcile()` itself
-    never calls it."""
+    never calls it.
+
+    `entity_orgs` (Phase 1, item 3) runs the batch on the GL engine. The
+    registry stays the tier above the model, but its answer has to name a
+    leaf THIS receipt's entity may post to (`_registry_gl`): a default that
+    names no leaf (one of the eight buckets) falls through to the engine
+    rather than stamping a bucket, and no ER adjudication runs."""
     registry_matches: dict = {}
     if registry:
         for r in receipts:
@@ -372,6 +410,19 @@ def categorize_receipts_with_registry(
     # what varies by company is the ACCOUNT, which the (company, vendor)
     # rule still decides through `_registry_account`.
     cat_docs = {doc for doc, m in registry_matches.items() if m.category}
+    gl = entity_orgs is not None
+    gl_stamped: dict[str, Receipt] = {}
+    if gl:
+        for r in receipts:
+            if r.document_id not in cat_docs:
+                continue
+            stamped = _registry_gl(
+                r, registry_matches[r.document_id], learned,
+                org_id_for_entity(r.legal_entity_id, entity_orgs),
+            )
+            if stamped is not None:
+                gl_stamped[r.document_id] = stamped
+        cat_docs = set(gl_stamped)
     to_llm = [r for r in receipts if r.document_id not in cat_docs]
     multi_category = frozenset(
         doc for doc, m in registry_matches.items() if m.multi_category
@@ -391,14 +442,17 @@ def categorize_receipts_with_registry(
         learned=learned, override_er_category=override_er_category,
         judge_each_receipt=multi_category,
         merchant_profiles=profiles,
+        entity_orgs=entity_orgs,
     )
-    if override_er_category and cat_chart is not None:
+    if not gl and override_er_category and cat_chart is not None:
         categorized = adjudicate_receipts(
             categorized, cat_chart, scope_groups=scope_groups
         )
     by_doc = {r.document_id: r for r in categorized}
     for r in receipts:
-        if r.document_id in cat_docs:
+        if r.document_id in gl_stamped:
+            by_doc[r.document_id] = gl_stamped[r.document_id]
+        elif r.document_id in cat_docs:
             m = registry_matches[r.document_id]
             account, reasoning = _registry_account(r, m, learned)
             by_doc[r.document_id] = apply_registry_category(
@@ -665,6 +719,268 @@ def _apply_learned_over_lines(
             replace(li, categorization=cat) for li in receipt.line_items
         ),
     )
+
+
+# ── Direct-to-GL engine (Phase 1, item 3) ───────────────────────────
+#
+# One invariant carries the whole path: `bool(cat.category)` is False
+# exactly when the engine REFUSED. A resolved line's `category` is the curated
+# leaf CODE (the cross-entity identity) and its `zoho_account` that leaf's
+# name in the receipt's own org; a refused line has `category=None`, no
+# account, source REVIEW and a named `refusal`. No placeholder string ever
+# stands in for a category, so the seventeen truthiness gates downstream read
+# a refusal as "uncategorized" and never as an answer.
+#
+# Every answer, whichever tier produced it, goes through
+# `resolve_posting_account`, so there is one place a reference becomes an
+# account and it is org-scoped: a Cloud Services name cannot resolve on a
+# Corporate Services receipt.
+
+
+def _refused_cat(
+    code: str, *, confidence: float = 0.0, detail: str = ""
+) -> Categorization:
+    text = refusal_text(code)
+    return Categorization(
+        category=None,
+        zoho_account=None,
+        confidence=confidence,
+        source=ClassificationSource.REVIEW,
+        reasoning=f"{text} ({detail})" if detail else text,
+        refusal=code,
+    )
+
+
+def _gl_categorization(
+    res: PostingResolution,
+    org_id: str,
+    *,
+    source: ClassificationSource,
+    confidence: float,
+    reasoning: str,
+    decision: str | None = None,
+) -> Categorization:
+    """A resolution as a line's categorization: the leaf, or the refusal."""
+    if not res.resolved:
+        return _refused_cat(
+            res.reason or ACCOUNT_UNRESOLVED, confidence=confidence,
+            detail=reasoning,
+        )
+    binding = curated_leaves.binding(res.code, org_id)
+    return Categorization(
+        category=res.code,
+        zoho_account=binding.name if binding is not None else None,
+        confidence=confidence,
+        source=source,
+        reasoning=reasoning,
+        decision=decision,
+    )
+
+
+def _stamp_lines(receipt: Receipt, cat: Categorization) -> Receipt:
+    items = receipt.line_items or (_synthesize_total_line(receipt),)
+    return replace(
+        receipt,
+        line_items=tuple(replace(li, categorization=cat) for li in items),
+    )
+
+
+def _gl_leaf_labels(org_id: str | None) -> tuple[str, ...]:
+    """This org's `"CODE name"` labels. Takes the ORG ID, never an entity
+    name: `llm_leaf_labels` answers a name with an empty tuple, silently, so
+    the caller must have resolved the org first (`org_id_for_entity`)."""
+    if not org_id or not org_id.isdigit():
+        return ()
+    return curated_leaves.llm_leaf_labels(org_id)
+
+
+def _gl_model_result(
+    result: ClassificationResult,
+    org_id: str,
+    *,
+    source_on_hit: ClassificationSource,
+) -> Categorization:
+    """The model's pick as a leaf of THIS org, or a refusal. The reply is
+    resolved only within `org_id` (`code_of`), so a leaf the model names from
+    another entity's wording refuses rather than posting."""
+    if result.category is None or result.confidence < REVIEW_THRESHOLD:
+        return _refused_cat(
+            ACCOUNT_UNRESOLVED, confidence=result.confidence,
+            detail=result.reasoning or "",
+        )
+    res = resolve_posting_account(
+        org_id=org_id, legal_entity_id=None, vendor=None,
+        llm_leaf=result.category or result.zoho_account,
+    )
+    return _gl_categorization(
+        res, org_id, source=source_on_hit, confidence=result.confidence,
+        reasoning=result.reasoning,
+    )
+
+
+def _gl_read_lines(
+    items: tuple[LineItem, ...],
+    labels: tuple[str, ...],
+    org_id: str,
+    client: LLMClient,
+    merchant_profile: str | None = None,
+) -> tuple[LineItem, ...]:
+    """Tier 3 on a receipt with readable lines: one batched call, the
+    entity's leaves as the only choices."""
+    assert labels, "an empty leaf list is a refusal, never a prompt"
+    inputs = [
+        LineItemInput(
+            description=it.description,
+            line_total=it.line_total,
+            quantity=it.quantity,
+        )
+        for it in items
+    ]
+    results = client.classify_line_items(
+        inputs, categories=list(labels), chart_of_accounts=None,
+        **_profile_kwarg(merchant_profile),
+    )
+    out = []
+    for i, item in enumerate(items):
+        cat = (
+            _gl_model_result(
+                results[i], org_id, source_on_hit=ClassificationSource.LINE)
+            if i < len(results)
+            else _refused_cat(ACCOUNT_UNRESOLVED)
+        )
+        out.append(replace(item, categorization=cat))
+    return tuple(out)
+
+
+def _gl_learned(
+    receipt: Receipt,
+    recall: "LearnedRecall",
+    org_id: str,
+    learned: "MerchantCategoryLookup",
+    labels: tuple[str, ...],
+    client: LLMClient | None,
+    has_lines: bool,
+) -> Receipt | None:
+    """Tier 1, the (entity, vendor) rule a person taught. None when the rule
+    names no leaf (a bucket-only rule, or a vendor-only recall, which never
+    decides an account): the engine then asks the model, overriding nothing.
+
+    A rule naming a leaf this entity cannot post to REFUSES rather than
+    falling through (`posting_resolution`: the model must not overrule a
+    person). A rule nobody validated still gets the item-115 second read on a
+    receipt with lines, and says so when the lines disagree."""
+    res = resolve_posting_account(
+        org_id=org_id, legal_entity_id=receipt.legal_entity_id,
+        vendor=receipt.detected_vendor, lookup=learned,
+    )
+    if not res.resolved and res.code is None:
+        return None
+    reasoning = _learned_categorization(recall).reasoning
+    decision = None
+    if res.resolved and has_lines and not recall.validated and client is not None:
+        read = _gl_read_lines(receipt.line_items, labels, org_id, client)
+        disagreed = sorted({
+            li.categorization.category
+            for li in read
+            if li.categorization is not None
+            and li.categorization.category
+            and li.categorization.category != res.code
+        })
+        if disagreed:
+            reasoning = (
+                f"{reasoning}; the receipt's items read {', '.join(disagreed)}"
+            )
+            decision = DECISION_LEARNED_OVER_LINE
+    cat = _gl_categorization(
+        res, org_id, source=ClassificationSource.LEARNED, confidence=1.0,
+        reasoning=reasoning, decision=decision,
+    )
+    return _stamp_lines(receipt, cat)
+
+
+def _categorize_one_gl(
+    receipt: Receipt,
+    client: LLMClient | None,
+    learned: "MerchantCategoryLookup | None" = None,
+    *,
+    org_id: str | None,
+    judge_each_receipt: bool = False,
+    merchant_profile: str | None = None,
+) -> Receipt:
+    """The GL chain for one receipt: rule -> model -> refuse.
+
+    `org_id` is the receipt's entity already resolved to its Zoho org. An
+    entity with no org id, or one outside the curated set, refuses
+    `org_not_curated` before anything is asked, and so does an org whose leaf
+    list comes back empty: an empty list is a refusal, not a prompt.
+
+    The keyword stub has no leaf vocabulary, so without a client a receipt no
+    rule resolves refuses `account_unresolved` rather than being given a
+    bucket. The ER report's own account is not consulted: this path is the
+    tool's own judgment against Dirk's curated chart.
+    """
+    if not str(receipt.legal_entity_id or "").strip():
+        return _stamp_lines(receipt, _refused_cat(ENTITY_MISSING))
+    labels = _gl_leaf_labels(org_id)
+    if not curated_leaves.covers_org(org_id) or not labels:
+        return _stamp_lines(receipt, _refused_cat(curated_leaves.NOT_COVERED))
+
+    recall = _recall_for(receipt, learned)
+    has_lines = bool(receipt.line_items) and not _all_vague(receipt.line_items)
+    leads = recall is not None and (
+        not has_lines or (not judge_each_receipt and recall.taught_by_person)
+    )
+    if leads:
+        taught = _gl_learned(
+            receipt, recall, org_id, learned, labels, client, has_lines)
+        if taught is not None:
+            return taught
+
+    if client is None:
+        return _stamp_lines(receipt, _refused_cat(ACCOUNT_UNRESOLVED))
+    if has_lines:
+        return replace(receipt, line_items=_gl_read_lines(
+            receipt.line_items, labels, org_id, client, merchant_profile))
+    if not receipt.detected_vendor:
+        return _stamp_lines(receipt, _refused_cat(
+            ACCOUNT_UNRESOLVED, detail="no vendor and no line items"))
+    result = client.classify_by_vendor(
+        vendor=receipt.detected_vendor,
+        total=receipt.detected_total or Decimal("0"),
+        categories=list(labels),
+        chart_of_accounts=None,
+        **_profile_kwarg(merchant_profile),
+    )
+    return _stamp_lines(receipt, _gl_model_result(
+        result, org_id, source_on_hit=ClassificationSource.VENDOR))
+
+
+def _registry_gl(
+    receipt: Receipt, match, learned: "MerchantCategoryLookup | None",
+    org_id: str | None,
+) -> Receipt | None:
+    """The registry tier on the GL engine, or None to hand the receipt to it.
+
+    The account the M1 order picks (`_registry_account`: the company's rule,
+    else the registry's own) is tried first, then the default category
+    itself, each resolved within THIS org. The first that names a leaf
+    decides: postable stamps it, anything else refuses. A default naming no
+    leaf, and an uncovered org, return None; the engine then answers (and an
+    uncovered org refuses there, without a model call)."""
+    if not curated_leaves.covers_org(org_id):
+        return None
+    account, reasoning = _registry_account(receipt, match, learned)
+    for ref in (account, match.category):
+        code = curated_leaves.code_of(ref, org_id)
+        if code is None:
+            continue
+        res = resolve_posting_account(
+            org_id=org_id, legal_entity_id=None, vendor=None, llm_leaf=code)
+        return _stamp_lines(receipt, _gl_categorization(
+            res, org_id, source=ClassificationSource.REGISTRY,
+            confidence=1.0, reasoning=reasoning,
+        ))
+    return None
 
 
 # ── LLM-path implementations (slice 2) ──────────────────────────────

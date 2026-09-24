@@ -88,6 +88,15 @@ class Categorization:
     (`"kept_er"`), or the comparison could not be made and the report's
     category was kept conservatively (`"review_unresolved"`). None when no
     adjudication ran (no chart wired, or override_er_category off).
+
+    `refusal` (Phase 1 GL engine, 2026-09-24) is the machine reason a row
+    was REFUSED an account (`zoho.posting_resolution` / `curated_leaves`
+    codes: `org_not_curated`, `not_expense_relevant`, `account_unresolved`,
+    ...). Set only on a refusal, and a refusal always has `category=None`:
+    `bool(category)` is False exactly when the engine refused, so no
+    truthiness gate downstream reads a placeholder as a category. None on
+    every row the old bucket path wrote, which keeps "no signal" and
+    "refused, for this reason" apart at the display boundary.
     """
 
     category: str | None
@@ -96,6 +105,7 @@ class Categorization:
     source: ClassificationSource
     reasoning: str = ""
     decision: str | None = None
+    refusal: str | None = None
 
 
 @dataclass(frozen=True)

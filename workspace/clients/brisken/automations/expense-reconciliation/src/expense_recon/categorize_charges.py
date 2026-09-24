@@ -89,6 +89,7 @@ def categorize_charges(
     learned: "MerchantCategoryLookup | None" = None,
     override_er_category: bool = False,
     registry=None,
+    entity_orgs=None,
 ) -> dict[str, Categorization]:
     """Categorize every unmatched (receiptless) charge.
 
@@ -109,6 +110,10 @@ def categorize_charges(
     Entertainment four times). None keeps the pre-M1 path, and the
     registry's canonical name is NOT written anywhere: the charge keeps the
     bank's own description on every surface.
+
+    `entity_orgs` (Phase 1, item 3) runs the charges on the GL engine, each
+    judged against the curated leaves of the company the charge belongs to
+    (`categorize.categorize_receipts`). None keeps the bucket path.
     """
     tx_by_id = {tx.transaction_id: tx for tx in transactions}
     pseudo: list[Receipt] = []
@@ -127,11 +132,13 @@ def categorize_charges(
             pseudo, registry=registry, client=client,
             chart_of_accounts=chart_of_accounts, learned=learned,
             override_er_category=override_er_category,
+            entity_orgs=entity_orgs,
         )
     else:
         categorized = categorize_receipts(
             pseudo, client=client, chart_of_accounts=chart_of_accounts,
             learned=learned, override_er_category=override_er_category,
+            entity_orgs=entity_orgs,
         )
 
     out: dict[str, Categorization] = {}

@@ -383,7 +383,9 @@ def test_a_history_line_about_a_receipt_names_the_charge_it_is_booked_against(
     resp = client.post(
         f"/api/runs/{batch_id}/categories",
         json={"document_id": expense["document_id"], "line_index": 0,
-              "category": "Software"},
+              # A real bucket: since item 3c a string from neither
+              # vocabulary is dropped under `ignored`, not stored.
+              "category": "Software & Subscriptions"},
     )
     assert resp.status_code == 200, resp.text
 

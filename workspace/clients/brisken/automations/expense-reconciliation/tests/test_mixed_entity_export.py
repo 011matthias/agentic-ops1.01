@@ -323,6 +323,12 @@ def test_a_categorized_row_with_a_company_exports_its_category(client, monkeypat
     from expense_recon.llm.client import ClassificationResult, ExtractedLineItem
 
     _provision_charts(client._data_root, monkeypatch)
+    # Pins the BUCKET-era export, which every batch created before the GL
+    # engine keeps using (their config carries no entity -> org map). Without
+    # this the provisioning above would put the batch on the GL engine; item
+    # 5 retires the leak this test documents.
+    monkeypatch.setattr(
+        "expense_recon.coa_provision.entity_org_ids", lambda *a, **k: {})
     mock = MockLLMClient(
         extraction_responses=[
             _extraction(vendor="Uber", total="42.50"),
