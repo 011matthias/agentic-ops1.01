@@ -9403,27 +9403,6 @@ published. Bundle carries every signature with all five controls found, and
 every row of the prompt's check table matched in a cold headless-Chrome drive;
 evidence row in `docs/PROMPT-STATUS.md` → Applied.
 
-### 193. The Cards overview nests 2838's subcards under it (owner 2026-09-24) (SPA prompt written, NOT pasted; no backend work)
-
-**Owner, on the published `/cards` overview (item 192):** apply the same
-subcard logic as item 191, "adapted to the corresponding structure" of the
-overview. A strip has tabs and a table has rows, so the adaptation collapses a
-subcard's ROW under its account's row: 3645, 3876 and 0340 leave the main list
-and open directly under 2838 when its row is clicked (chevron + "3 cards on
-this account"), in the table's own open-work order, indented on a light
-background, every figure their own. The account keeps its own figures and its
-own sorted place; the "nothing loaded" fold never holds a subcard; every
-account starts collapsed on each load; non-account rows stay unclickable, as
-item 192 made them.
-
-**No backend work.** `parent` / `subcards` have been on `/api/cards/status`
-since item 191 and the three parents are live. Read 2026-09-24: top level
-after nesting is 2838 (open work 96), 9693 (16), 1176 (9), 4700 (2), No card;
-under 2838: 3645 (83), 3876 (77), 0340 (24); the fold 0113, 6013, 8311.
-
-**SPA half:** `docs/lovable-cards-overview-subcards-prompt.md`, one new key
-(`cardsPage.subcards.count`), the chevron reusing `cardStrip.subcards.aria`.
-
 ### 192. /cards becomes an overview, not a door into the months (owner 2026-09-24) (BACKEND LIVE; SPA prompt written, NOT pasted)
 
 **Owner, on the Cards page:** *"this should just be an overview and not
@@ -9489,6 +9468,27 @@ card equal its `summary.n_uncategorized` through the routes; the per-card total;
 a helper differential with mixed boxes and a decided copy). `regress_check` red
 on both wiring points: the roll-up entry (route test) and the box predicate
 (helper test only, because every fixture row needs a category).
+
+### 194. The Cards overview nests 2838's subcards under it (owner 2026-09-24) (SPA prompt written, NOT pasted; no backend work)
+
+**Owner, on the published `/cards` overview (item 192):** apply the same
+subcard logic as item 191, "adapted to the corresponding structure" of the
+overview. A strip has tabs and a table has rows, so the adaptation collapses a
+subcard's ROW under its account's row: 3645, 3876 and 0340 leave the main list
+and open directly under 2838 when its row is clicked (chevron + "3 cards on
+this account"), in the table's own open-work order, indented on a light
+background, every figure their own. The account keeps its own figures and its
+own sorted place; the "nothing loaded" fold never holds a subcard; every
+account starts collapsed on each load; non-account rows stay unclickable, as
+item 192 made them.
+
+**No backend work.** `parent` / `subcards` have been on `/api/cards/status`
+since item 191 and the three parents are live. Read 2026-09-24: top level
+after nesting is 2838 (open work 96), 9693 (16), 1176 (9), 4700 (2), No card;
+under 2838: 3645 (83), 3876 (77), 0340 (24); the fold 0113, 6013, 8311.
+
+**SPA half:** `docs/lovable-cards-overview-subcards-prompt.md`, one new key
+(`cardsPage.subcards.count`), the chevron reusing `cardStrip.subcards.aria`.
 
 ## Shipped (loop history)
 

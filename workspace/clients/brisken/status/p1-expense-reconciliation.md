@@ -35,7 +35,7 @@ The SPA half, `docs/lovable-months-subcards-prompt.md`, is **published and
 driven** (2026-09-24): the three parents were entered the same day on the
 owner's yes ("in books there is only 2838 registered"), and every row of the
 prompt's check table matched cold. The same logic for the `/cards` overview
-table is item 193, `docs/lovable-cards-overview-subcards-prompt.md`, **not
+table is item 194, `docs/lovable-cards-overview-subcards-prompt.md`, **not
 pasted**, no backend work. Cold drive after the deploy: the
 published strip is unchanged chip for chip and still filters (3645 five months,
 2838 six, 0340 two).
