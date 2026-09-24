@@ -28,7 +28,20 @@ Both month payloads, `GET /api/expense-batches/{id}` (Expenses page) and `GET /a
 
 A company that is NOT a key of `gl_accounts` has no account list. That is different from an empty list; treat both as "no list" on screen.
 
-Look a row's company up with its `legal_entity_id`, trimmed and case-insensitive against the keys.
+Look a row's company up with one helper, used everywhere, trimmed and case-insensitive against the keys (a direct `gl_accounts[entity]` misses on a spelling difference in case or spacing):
+
+```ts
+export function accountsFor(
+  gl: Record<string, GlAccount[]> | undefined,
+  company: string | null | undefined,
+): GlAccount[] | undefined {
+  const key = (company ?? "").trim().toLowerCase();
+  if (!key || !gl) return undefined;
+  return Object.entries(gl).find(([k]) => k.trim().toLowerCase() === key)?.[1];
+}
+```
+
+`undefined` or an empty list both mean "no list".
 
 ## 2. Only when `category_vocabulary === "gl"`
 
@@ -42,7 +55,18 @@ Everything in this section applies only on a `"gl"` month. On a `"buckets"` mont
 3. the Add expense dialog's category `Select`,
 4. the Matching charge category cell (`ChargeCategoryCell` in `RunWorkbench`) and the candidate rows it passes `categoryOptions` to.
 
-On a `"gl"` month each offers `gl_accounts[company]` instead of `category_options`, where `company` is the row's `legal_entity_id` (in the Add expense dialog, the company currently chosen in that dialog). Group the items with `SelectGroup` + `SelectLabel` by `category`, in the order they arrive; each item shows `name` with the code in muted text, and its value is the `code`. Send the `code` to the same endpoints and fields as today; the server stores it as the account. Keep the existing undo item where it exists.
+On a `"gl"` month each offers `accountsFor(gl_accounts, company)` instead of `category_options`, where `company` is the row's `legal_entity_id` (in the Add expense dialog, the company currently chosen in that dialog). A company holds 62 to 68 accounts, so use a searchable combobox, not a plain `Select`: the existing `Popover` + `Command` components (`src/components/ui/command.tsx`), with a `CommandInput` (placeholder `gl.picker.search`) that matches the name or the code, a `CommandGroup` per `category` in the order they arrive, and `CommandEmpty` showing `gl.picker.noMatch`. Each item shows `name` with the code in muted text; the value sent is the `code`. The trigger shows the current account the way "Showing a category" above describes. Keep the existing undo item where it exists.
+
+Send the code exactly where each picker sends the category name today; only the value changes:
+
+| Picker | Call and body |
+|---|---|
+| Expenses row | the existing row mutation, `{ field: "category", value: "<code>" }` |
+| Per-line | `postCategory(runId, { document_id, line_index, category: "<code>" })`, with NO `zoho_account` on a `"gl"` month |
+| Add expense | `addExpense(runId, { ..., category: "<code>" })` |
+| Matching charge | `setChargeCategory(runId, transactionId, "<code>")`, i.e. `PUT .../charges/{id}/category` with `{ category: "<code>" }` |
+
+Clearing is unchanged (`""`). On a `"gl"` month, hide the Expenses row's separate Zoho account picker (the `Select` that sends `{ field: "zoho_account" }`): the account IS the category there, and a second account field would contradict it.
 
 - No company on the row (empty `legal_entity_id`): the picker is disabled and shows `gl.picker.noCompany` as its placeholder.
 - A company with no list: the picker is disabled and shows `gl.picker.noList`.
@@ -65,6 +89,8 @@ A row's `review` can now carry `reason_code: "category_refused"` with a second f
 | `gl.picker.placeholder` | Pick an account | Escolha uma conta |
 | `gl.picker.noCompany` | Set the company first | Defina a empresa primeiro |
 | `gl.picker.noList` | No account list for this company | Sem lista de contas para esta empresa |
+| `gl.picker.search` | Search accounts | Buscar contas |
+| `gl.picker.noMatch` | No account matches | Nenhuma conta encontrada |
 | `gl.code.notInList` | not in this company's accounts | fora das contas desta empresa |
 | `gl.refusal.entity_missing` | This expense has no company yet, so no account was picked. Set the company, then pick the account. | Esta despesa ainda não tem empresa, então nenhuma conta foi escolhida. Defina a empresa e depois escolha a conta. |
 | `gl.refusal.org_not_curated` | No curated Zoho account list is set up for this company, so the tool did not guess an account. Pick one by hand. | Nenhuma lista de contas do Zoho está definida para esta empresa, então a ferramenta não tentou adivinhar uma conta. Escolha uma manualmente. |
@@ -87,6 +113,7 @@ Account names come from Zoho and are never translated.
 3. A row with no company shows a disabled picker reading "Set the company first", and its review line reads "This expense has no company yet, so no account was picked. Set the company, then pick the account."
 4. Switch the language to Portuguese: the same review line reads "Esta despesa ainda não tem empresa, então nenhuma conta foi escolhida. Defina a empresa e depois escolha a conta."
 5. Pick an account on that row after setting its company: the row shows the account name, and a reload keeps it.
+6. In a Corporate Services picker, typing `food` keeps `CorpServ | Travel Expense | Food` among the matches, and typing `E100010-31` leaves that one item. The row shows no separate Zoho account picker.
 ````
 
 ## Checking it landed (for us, after the owner publishes)
@@ -96,7 +123,15 @@ Account names come from Zoho and are never translated.
    not the repo alone: pasted is not published).
 2. Cold drive of July on `expenses.brisken.com`: pickers list the eight, no
    `gl.` string renders.
-3. A GL month: none exists live yet. Drive a `TEST - GL drive` batch with one
-   synthetic receipt for Corporate Services and one with no company, check
-   rows 2 to 5 of section 6 in EN and PT, then delete the batch in the same
-   session.
+3. A GL month: none exists live yet. Create a batch labelled exactly
+   `TEST - GL drive` (no month name, so mail intake never routes to it and no
+   month borrows from it) via `POST /api/expense-batches`. Add one synthetic
+   receipt for Corporate Services and one with no company by DIRECT upload
+   (`POST /api/expense-batches/{id}/receipts`), never by mail: a deleted
+   batch's mail archives are re-pooled, direct uploads are not. Check rows 2
+   to 6 of section 6 in EN and PT. Never Publish it (Publish writes durable
+   memory). Purge in the same session with
+   `POST /api/runs/{id}/delete` and body `{"confirm": "TEST - GL drive"}`,
+   then prove it gone: `GET /api/runs/{id}` answers 404 and the months list
+   no longer shows it. Uploading costs a little OpenAI credit, so it waits
+   for the top-up too.
