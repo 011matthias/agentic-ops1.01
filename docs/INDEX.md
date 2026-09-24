@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-24 | Brisken Recon Private Control And Paid Through | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20Recon%20Private%20Control%20And%20Paid%20Through/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Card Attribution Learners | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Card%20Attribution%20Learners/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Recon Feedback Triage And Receipt Viewer | client-dev | [→](docs/2026-09-24%20-%20Recon%20Feedback%20Triage%20And%20Receipt%20Viewer/Checkpoint.md) |
 | 2026-09-24 | Zoho GL Chart Pull And Registry Reads | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Zoho%20GL%20Chart%20Pull%20And%20Registry%20Reads/Mini-Checkpoint-1.md) |
