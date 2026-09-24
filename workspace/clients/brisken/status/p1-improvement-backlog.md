@@ -5409,6 +5409,21 @@ originating from separate banks." The multi-statement path this needs is already
 shipped (item 29's PR 2b-2b-2 made `POST .../statement` append-capable and
 repeatable), so this item is waiting on a month being worked, not on code.
 
+**2026-09-24: card 1176 now HAS a statement, so do not ask the client for it.**
+Read-only pass over `coverage[]` in all three months that carry any (April,
+July, August). August's `statements` list holds
+`20260804-statements-1176-.pdf`, and `card-1176` reads `n_tx: 3`,
+`n_unmatched_tx: 1`, period 2026-07-06 to 2026-08-04. Its coverage row still
+reads `statements: 0`, and the same month carries an unattributed coverage row
+(`?`, `known: false`) holding `statements: 1`, so the statement landed without
+being linked to the card whose charges it produced; that link, not a missing
+file, is what is left for 1176.
+
+Card 9693 is unchanged and is the real half of this item: `n_tx: 0`,
+`statements: 0` in every month that has coverage, so no 9693 charge has ever
+existed. `card-0113`, `card-6013` and `card-8311` read the same. Item 185 is
+the view that would make this readable without a probe.
+
 **Audit rank 15 of 40; severity high as merged; verification: checked by hand against live August coverage; no reviewer pass.** All 223 live charges belong to Corporate Services because the only workbook ever attached is the Chase export for account 2838. Receipts paid with the Cloud card 9693 and the Consulting card 1176 arrive monthly and park as 'card statement not loaded' (August: OpenAI 80.12 and 80.04; Anthropic 100; Lovable 50); 0113, 6013 and 8311 have no statement either. The backend accepts one workbook per card, but the Lovable page offers one 'Attach bank statement' dialog and one download, so Criss cannot add a second. Nothing checks that the card typed in the dialog matches the card printed in the file, so a workbook with no card column uploaded under the default would book to Corporate Services.
 
 **Evidence:** Live August coverage[]: card-0113, card-6013, card-8311, card-1176, card-9693 statements [] n_transactions 0; rows legal_entity_id Corporate Services 111/111 (July 112/112); unmatched_receipts reason card_statement_not_loaded 4 (0001/0003 OpenAI on 9693, 0015 Anthropic and 0025 Lovable on 1176); statements[] one file per month, account_id card-2838, card_key ''. web/service.py:7810-7850 (advisory only for same card_key under two ids), :220 (account_id defaults to 'card'); item 59 record (2514-2554). Backlog 2742 and 3182 ('owner's call to load them'); item 53 (2032-2047).
@@ -8982,6 +8997,52 @@ Wanted: the same treatment the debit side just got. Resolve it per entity,
 assert it is numeric and postable-from, refuse rather than default.
 **Bounded and ours**, though the correct value per card is master data and
 overlaps item 172 (card 3645's account, which is Dirk's).
+
+### 185. A card-first status view, across months (note #86, owner 2026-09-24)
+
+**Owner:** *"I'm looking for a feature where I'm able to sort and find a
+status for a single card. For example if I want an overview of: which cards
+are missing / which receipts are missing or don't have a corresponding
+statement / which statements don't have a corresponding receipt. I don't know
+which month it is on or I don't really just want a grand overview of what's
+open on the card. There is no feature for that right now. Somehow being able
+to select which card I'm trying to find and then see what the status is on
+that card would be pretty useful."*
+
+Left on `/months` at 00:05 UTC, so it is about the month list being the only
+entry point: everything the tool knows is filed by month, and the owner's
+question is filed by card.
+
+**Most of the arithmetic already exists; it is the axis that does not.**
+`coverage[]` on a batch already carries, per card:
+`card_key`, `label`, `known`, `digits`, `entity`, `n_transactions`,
+`n_reconciled`, `n_unmatched_tx`, `n_review`, `n_refunds`, `period_start`,
+`period_end`, `statements`, `statement_ids`, `unreconciled_by_ccy`. So "which
+statements have no receipt" is `n_unmatched_tx` and "what is open on this
+card" is `n_review` + `unreconciled_by_ccy`, both already computed per card
+per month. What is missing is a route that pivots them: card first, months
+underneath.
+
+**Measured across all 7 batches, 2026-09-24 (read-only):** 9 cards defined in
+Settings, and only 3 batches carry `coverage[]` at all (April 10 entries,
+August 10, July 9). September, June, May and January have ZERO coverage and
+zero statements, so a card-first view would show four of seven months as
+blank, and that blankness IS the answer to "which cards are missing" for
+those months. Two coverage rows are not cards at all (`digits:4700` and `?`,
+both `known=False`), which is the tool naming a card it saw on a statement
+and cannot resolve; those belong in the view, since an unrecognised card is
+exactly what the owner wants surfaced.
+
+Three cards (`card-0113`, `card-6013`, `card-8311`) read `n_tx=0, stmts=0` in
+every month that has coverage and carry zero expense rows anywhere. Either
+they are dormant or they have never been fed a statement; the view is how
+that question stops needing a probe to answer.
+
+Scope note: this is a new surface, not a defect fix, so it is a quote-separately
+candidate under the licence's defect-class scope rather than covered work.
+Recommended shape when it is built: one backend route that aggregates the
+existing `coverage[]` across batches keyed by `card_key`, then an SPA page;
+no new per-card arithmetic.
 
 ## Shipped (loop history)
 
