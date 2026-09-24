@@ -23,7 +23,9 @@ warning. It also moved two 2838 rows: ANTHROPIC* CLAUDE SUB 104.95 (Aug 28) and
 108.53 (Aug 29) went reconciled -> review, because the file's one printed FX
 line (SAP, Jul 16, 1.146292906) became August's rate for every EUR pair
 (item 197). Neither row carried a person's decision. The September file prints
-three FX lines, so it waits for item 197's fix or an owner ruling. The GL
+three FX lines, so it waits for item 197. The owner picked the fix the same
+evening: the charge-day rate now outranks the statement median (see item 197);
+September attaches after that deploy. The GL
 prompt is still unpasted (repo and live bundle both lack all five markers), so
 the GL drive did not run.
 

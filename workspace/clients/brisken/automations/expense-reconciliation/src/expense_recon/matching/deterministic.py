@@ -1057,12 +1057,21 @@ def _reference_rate_for(
     derived: "Mapping[tuple[str, str], tuple[Decimal, str, int]] | None",
     on: "date | str | None" = None,
 ) -> tuple[Decimal, str, int] | None:
-    """The best reference rate for a pair: this run's self-derived rate
-    (read off its own statement or receipts) wins, else the polled daily
-    rate for the day of `on` (the charge date, note #79), else the ECB
-    monthly average for its month (item 82). Returns (rate, source, n) with
-    source in {"statement", "receipts", "opentickers_day", "ecb_month"}, or
-    None.
+    """The best reference rate for a pair: the polled daily rate for the day
+    of `on` (the charge date, note #79) wins, else this run's self-derived
+    rate (read off its own statement or receipts), else the ECB monthly
+    average for its month (item 82). Returns (rate, source, n) with source
+    in {"opentickers_day", "statement", "receipts", "ecb_month"}, or None.
+
+    Item 197 (2026-09-24) put the daily rate first. A self-derived median is
+    ONE rate for the whole month, so on a hosted month it priced a late-August
+    pair at a mid-July rate: one SAP line printed on another card's statement
+    (1.146292906 on 07-16) outranked the charge-day rate for every EUR pair,
+    at the wider self-derived band, and two clean 2838 pairs turned
+    ambiguous. A charge that printed its OWN FX line never needs a rate here:
+    `match_one` compares its original amount to the receipt directly. Where
+    no daily table exists (the CLI bundles), the order below the daily rung
+    is unchanged.
 
     A rate typed in Settings used to outrank all of these. The owner
     retired that on 2026-09-23 ("no more typing them in settings ... we
@@ -1078,13 +1087,13 @@ def _reference_rate_for(
     hosted month has neither (the Chase export prints no FX columns and no
     mailed receipt carries a booked rate), so there the ECB rate is what
     fires whenever Settings holds none."""
+    daily = cfg.daily_rate(from_ccy, to_ccy, on)
+    if daily is not None:
+        return daily[0], "opentickers_day", 0
     if derived:
         hit = derived.get(((from_ccy or "").upper(), (to_ccy or "").upper()))
         if hit is not None:
             return hit
-    daily = cfg.daily_rate(from_ccy, to_ccy, on)
-    if daily is not None:
-        return daily[0], "opentickers_day", 0
     ecb = cfg.ecb_monthly_rate(from_ccy, to_ccy, on)
     if ecb is not None:
         return ecb[0], "ecb_month", 0
@@ -1276,9 +1285,9 @@ def match_one(
         if receipt.base_amount is not None and receipt.base_amount > 0:
             base_dev = abs(tx.amount - receipt.base_amount) / tx.amount
 
-        # Reference-rate deviation under the best available rate:
-        # configured (operator intent) wins, else this run's self-derived
-        # median (statement FX lines, else receipt Zoho rates).
+        # Reference-rate deviation under the best available rate: the
+        # charge-day rate, else this run's self-derived median (statement
+        # FX lines, else receipt Zoho rates), else the ECB month (item 197).
         ref = _reference_rate_for(
             cfg, receipt.detected_currency, tx.transaction_currency,
             derived_rates, on=tx.transaction_date,
