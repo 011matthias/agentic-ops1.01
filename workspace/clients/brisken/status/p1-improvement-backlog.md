@@ -9598,6 +9598,17 @@ Two leftovers from the same outage, both small:
   `20260804-statements-9693--2.pdf`. The name is cosmetic; a dead job leaving
   a file behind is the thing to fix.
 
+**Both leftovers FIXED 2026-09-25 (Shipped row 122); the decision above is
+untouched.** The intake log stops presenting `error` on a row that reads
+`ingested` (read-side: the archive meta and the row logged at the time keep
+the 429 text as the record); live, exactly one of 146 rows carried it,
+`20260924T162158-0f4f64aa`. An attach job that fails before its commit now
+removes the upload it saved (`service.discard_unrecorded_upload`, called
+from the job's failure path), so a retry keeps the name; a file the month's
+`statements[]` names is never removed. August's existing `--2.pdf` name
+stays as recorded. The third leftover recorded under item 197 (the overlap
+advisory's "same account") shipped with item 195.
+
 ### 197. One printed FX line from another card and another month becomes the rate for every pair in the month (found live 2026-09-24, on the ordered 9693 load) (FIXED and LIVE 2026-09-24: PR #1329, Fly `69de469b`; September's 9693 cycle attached after it)
 
 `derive_fx_reference_rates` takes the median of a month's printed statement FX
@@ -10293,6 +10304,7 @@ test through the card fix.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 122 | Items 196/197 leftovers from the 2026-09-24 LLM-key outage: an `ingested` intake-log row no longer presents the `error` of a failed first try, and a statement attach whose job fails before its commit removes the file it saved (`discard_unrecorded_upload`), never a file `statements[]` names | A surface showing `error` showed a 429 beside "Added" on the one recovered mail, and a dead attach kept its file's name, so the operator's retry was stored as `20260804-statements-9693--2.pdf` | 2026-09-25; `tests/test_attach_leftovers_196_197.py` (6: 3 red on origin/main, 3 controls: a held mail keeps its error, the archive keeps the record, a failure after the commit keeps the file); three wiring points proven RED under `tools/regress_check.py`; suite 3454 passed / 2 skipped |
 | 121 | Item 195: a statement PDF keeps its company through a re-read. A PDF entry records the account it was filed under (`statement_entry_account`); a re-read never lends a PDF `config.statement`'s account; a PDF filed under no account, or recorded before this, takes the registry entity every card it prints resolves to, blank on two companies or an unnamed card (`pdf_entity_from_printed_cards`), at the attach and the re-read alike. `statement_period_overlap` no longer calls two unrecorded accounts "the same account" (leftover 3 of items 196/197) | A PDF charge prints no `card_last4`, so item 59's match-time stamp never repairs it: its company is whatever the upload says. Both live August PDF entries recorded `account_id: ""` although the SPA sent a card key, so a re-read would have put the 1176 file's 3 charges and the 9693 file's 21 under the company "card", or under Corporate Services when the workbook was the last upload, and every pair on them would have left scope. Code-traced, never triggered live (nobody re-reads a month holding a PDF) | 2026-09-25; `tests/test_reread_pdf_entity_item_195.py` (9: 8 red on origin/main, 1 control green); four wiring points proven RED under `tools/regress_check.py` (the marker branch, the no-borrow fallback, the entry writer, the advisory guard); no live row moves on the deploy |
 | 120 | Item 200's side finding: `learned` leaves `service._CARD_OBSERVATION_SOURCES`, so the sign-off card learner no longer counts a remembered card as an observation of where a merchant's spend lands | A remembered card could confirm itself into `cards_seen` and write a learned `card_key` with no new evidence, against the 2026-09-24 ruling that only corrections may be memorized. The leak reaches months ingested after a correction (the card is stamped at ingest, item 173), not ones filled at read time (item 169) | PR TBD, 2026-09-25; `tests/test_remembered_card_read_time_item_169.py::test_signing_off_a_remembered_card_teaches_the_registry_nothing` (regress RED) |
 | 119 | Item 203: a private expense is suggested only on positive evidence (`cards.positive_non_brisken_evidence`: a number or ending no Brisken card has, cash, a network / kind / issuer the registry does not carry; conflict waits; acquirers neutral), glued words read (`cards.payment_words`), and seventeen "a card was used" words made generic so they never become aliases. Supersedes item 41's trigger | Unrecognised phrases ("Link", "saved payment method", "OUTRO") read as private money when the statement would have named the card; nine live rows stop suggesting private and none starts | PR TBD, 2026-09-25; `tests/test_private_needs_evidence.py` |
