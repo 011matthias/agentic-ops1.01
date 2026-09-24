@@ -9185,6 +9185,7 @@ def receipt_card_counts(view: dict) -> dict[str, int]:
 def build_card_status(
     store: RunStore,
     receipt_cards: Callable[[RunRow], dict[str, int]] | None = None,
+    parents: dict[str, str] | None = None,
 ) -> dict:
     """The cross-month card roll-up (item 185, owner 2026-09-24): "the same
     per card filter system inside the months should be outside of the
@@ -9231,6 +9232,17 @@ def build_card_status(
     own per-card count for a run (`receipt_card_counts`), so a month's tab
     and its line here cannot disagree; a month it fails on is named in
     `unreadable` and keeps its charge figures.
+
+    Item 191 (owner 2026-09-24: the subcards of 2838 should "not be next to
+    the 2838 tab but rather only appear once viewer clicks on 2838") adds
+    the tree, again as parallel fields: `cards[].parent` names the account a
+    card sits under ("" when it stands alone) and `cards[].subcards` the
+    cards under an account, in the strip's own order. `parents` is
+    `card_parents` over the LIVE registry, not a month's snapshot: this is
+    a navigation aid over every month, and a month keeps the registry it
+    was created with. A link survives only when both cards are on the list,
+    so a strip never nests a card under a tab it does not show. Nothing
+    else here reads the tree; the figures stay each card's own.
     """
     from ..output._pdf_common import _add_money
 
@@ -9401,6 +9413,18 @@ def build_card_status(
     cards.sort(key=lambda c: (
         -c["n_transactions"], -c["n_statements"], c["label"].lower(), c["key"],
     ))
+    # The tree (item 191). `parents` is keyed by registry key; a row's key
+    # is the registry key for a known card, but translate through
+    # `card_key` rather than assume it.
+    row_key = {c["card_key"]: c["key"] for c in cards if c["card_key"]}
+    subcards: dict[str, list[str]] = {}
+    for card in cards:
+        account = row_key.get((parents or {}).get(card["card_key"], ""), "")
+        card["parent"] = account if account != card["key"] else ""
+        if card["parent"]:
+            subcards.setdefault(card["parent"], []).append(card["key"])
+    for card in cards:
+        card["subcards"] = subcards.get(card["key"], [])
     return {
         "cards": cards,
         "months": months,
