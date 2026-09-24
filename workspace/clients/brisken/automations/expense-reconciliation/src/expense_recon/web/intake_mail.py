@@ -2103,6 +2103,7 @@ _SET_ASIDE_READS = {
     "statement": "a bank or card statement page",
     "report_summary": "a summary page",
     "other": "not a receipt",
+    "correspondence": "a payment reminder about another invoice",
 }
 _RENDERED_BODY = "rendered-body.pdf"
 
@@ -2137,6 +2138,8 @@ def no_expense_label(not_added) -> str:
             return "Nothing added: read as a statement page"
         if reasons == {"report_summary"}:
             return "Nothing added: read as a summary page"
+        if reasons == {"correspondence"}:
+            return "Nothing added: read as a payment reminder"
         return "Nothing added: not read as a receipt"
     if whys <= {"set_aside", "already_on_file"}:
         return "Nothing added: set aside or already on file"
@@ -2430,6 +2433,50 @@ def _month_stamps(
     }
 
 
+def body_text_by_digest(arch: "Path | None", staging: Path) -> dict[str, str]:
+    """`sha1[:16] -> the mail's body text`, for the rendered-body PDF only.
+
+    A body-only mail renders to an IMAGE pdf (`body_render.render_body_pdf`
+    pastes Pillow pages), so it carries no text layer and the extractor keeps
+    the model's notes as `ocr_text` instead of the body's own words. The
+    rendered body IS the mail, so the mail body is that document's text and
+    nothing else can supply it.
+
+    An ATTACHMENT is deliberately never mapped. "FW: Reminder Invoice from
+    Redis IUS25300" attaches the genuine invoice; lending the reminder's
+    words to the invoice would set the invoice aside with the reminder.
+
+    Read-only and fail-open: an unreadable archive yields {}.
+    """
+    if arch is None:
+        return {}
+    try:
+        eml = arch / "message.eml"
+        if not eml.is_file():
+            return {}
+        # Staging writes files position-prefixed (`0000__rendered-body.pdf`),
+        # so match the SUFFIX; an exact-name lookup here silently never hits.
+        rendered = [
+            p for p in Path(staging).iterdir()
+            if p.is_file() and (
+                p.name == _RENDERED_BODY or p.name.endswith(f"__{_RENDERED_BODY}")
+            )
+        ]
+        if not rendered:
+            return {}
+        from .body_render import extract_body_text
+
+        text = extract_body_text(eml.read_bytes())
+        if not (text or "").strip():
+            return {}
+        return {
+            hashlib.sha1(p.read_bytes()).hexdigest()[:16]: text
+            for p in rendered
+        }
+    except Exception:  # noqa: BLE001 - a damaged archive is evidence of nothing
+        return {}
+
+
 def _ingest_job(
     db_path: Path, job_id: str, run_id: str, staging: Path,
     learning_db_path: Path | None, provenance: dict[str, dict],
@@ -2452,6 +2499,7 @@ def _ingest_job(
                 learning_db_path=learning_db_path,
                 on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
                 provenance_by_digest=provenance,
+                text_by_digest=body_text_by_digest(arch, staging),
             )
             store.set_job_status(
                 job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()

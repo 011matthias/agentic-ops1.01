@@ -45,6 +45,7 @@ from ..cli import (  # item 105
 )
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
+from ..correspondence import quarantine_correspondence
 from ..error_codes import Refusal, code_of, detail_of, fields_of
 from ..duplicates import (
     STATE_OPEN,
@@ -11974,6 +11975,7 @@ def add_receipts_to_expense_batch(
     learning_db_path: Path | None = None,
     on_stage=None,
     provenance_by_digest: dict[str, dict] | None = None,
+    text_by_digest: dict[str, str] | None = None,
 ) -> dict:
     """Add receipts to an EXISTING expense batch (they arrive gradually all
     month). Only the new files are OCR'd (never a re-read of the pool),
@@ -11981,7 +11983,13 @@ def add_receipts_to_expense_batch(
     creation, and they append to the snapshot's receipt pool. Identical
     bytes (within this upload or vs an already-stored file) are skipped.
     Refused once a statement is attached — the pool is then the
-    reconciliation's provenance and must not shift under it."""
+    reconciliation's provenance and must not shift under it.
+
+    `text_by_digest` (sha1[:16] -> the document's own text) supplies text for
+    a file the extractor cannot read one from. A mail body renders to an
+    IMAGE pdf, so `ocr_text` would otherwise be the model's notes rather than
+    the body; the correspondence rung needs the real words. Only ever applied
+    when the extraction produced no text of its own."""
 
     def _stage(name: str) -> None:
         if on_stage is not None:
@@ -12033,6 +12041,7 @@ def add_receipts_to_expense_batch(
             learning_db_path=learning_db_path,
             on_stage=on_stage,
             provenance_by_digest=provenance_by_digest,
+            text_by_digest=text_by_digest,
             _stage=_stage,
             rematch_owed=bool(refresh.get("changes")),
         )
@@ -12107,6 +12116,7 @@ def _add_receipts_locked(
     learning_db_path: Path | None,
     on_stage,
     provenance_by_digest: dict[str, dict] | None,
+    text_by_digest: dict[str, str] | None = None,
     _stage,
     rematch_owed: bool = False,
 ) -> dict:
@@ -12257,7 +12267,21 @@ def _add_receipts_locked(
         # (which survives later adds and carries the restore path); the
         # stored file stays on disk (its hash also keeps a re-upload from
         # costing another OCR call).
+        # A mail body renders to an image PDF, so the extractor keeps the
+        # model's notes as `ocr_text` rather than the body's words. Carry the
+        # real text in, and only where the extraction found none of its own.
+        if text_by_digest and not (receipt.ocr_text or "").strip():
+            carried = text_by_digest.get(digest)
+            if carried:
+                receipt = replace(receipt, ocr_text=carried)
         receipt = keep_invoice_read_as_statement(receipt) or receipt  # item 105
+        # Correspondence rung (2026-09-24): a payment reminder / past-due
+        # notice about ANOTHER document is not a purchase. Read the STORED
+        # file's own text, never the mail that carried it — a "Reminder
+        # Invoice" mail legitimately attaches the real invoice, and judging
+        # the mail would set the invoice aside with it. This is the path a
+        # mailed receipt actually takes, so it is the one that matters.
+        receipt = quarantine_correspondence(receipt) or receipt
         label = NON_RECEIPT_LABELS.get(receipt.document_type)
         if label is not None:
             issues.append(
