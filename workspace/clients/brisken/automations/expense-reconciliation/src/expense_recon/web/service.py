@@ -9168,23 +9168,30 @@ def build_expense_report(
     return pdf
 
 
-def receipt_card_counts(view: dict) -> dict[str, int]:
+def receipt_card_counts(view: dict) -> dict[str, dict[str, int]]:
     """Receipts per card on an Expenses page payload: `expenses[].card_section`
     over the rows that count, decided copies left out, which is exactly what
     the month's own card tabs count (`card_sections[].n_expenses`). The key
-    "" is the no-card section."""
-    counts: dict[str, int] = {}
+    "" is the no-card section.
+
+    Each key carries `n_expenses` and `n_without_charge` (item 192): of those
+    rows, the ones `expenses[].without_charge` marks, so the overview's
+    "without a charge" is the month's own verdict and never a second one."""
+    counts: dict[str, dict[str, int]] = {}
     for expense in view.get("expenses") or []:
         if expense.get("counts_in_total") is False:
             continue
         key = str(expense.get("card_section") or "")
-        counts[key] = counts.get(key, 0) + 1
+        entry = counts.setdefault(key, {"n_expenses": 0, "n_without_charge": 0})
+        entry["n_expenses"] += 1
+        if expense.get("without_charge"):
+            entry["n_without_charge"] += 1
     return counts
 
 
 def build_card_status(
     store: RunStore,
-    receipt_cards: Callable[[RunRow], dict[str, int]] | None = None,
+    receipt_cards: Callable[[RunRow], dict[str, int | dict[str, int]]] | None = None,
     parents: dict[str, str] | None = None,
 ) -> dict:
     """The cross-month card roll-up (item 185, owner 2026-09-24): "the same
@@ -9243,6 +9250,18 @@ def build_card_status(
     was created with. A link survives only when both cards are on the list,
     so a strip never nests a card under a tab it does not show. Nothing
     else here reads the tree; the figures stay each card's own.
+
+    Item 192 (owner 2026-09-24: `/cards` "should just be an overview and
+    not another gate to inside the months. we can insert more relevant
+    data") makes the receipt side a figure and not only a list of months,
+    so the page can say what note #86 asks per card without opening one:
+    each `receipt_months[]` entry adds `n_without_charge` (the month's own
+    verdict, `receipt_card_counts`) and `statement` (this card has a
+    statement in that month), and each card adds `n_receipts`,
+    `n_receipts_without_charge` and `n_receipts_no_statement` (receipts in
+    months where the card has no statement: waiting for one, not
+    unmatched). `no_card` adds `n_without_charge`. Parallel fields again;
+    nothing above changes.
     """
     from ..output._pdf_common import _add_money
 
@@ -9363,14 +9382,24 @@ def build_card_status(
         except Exception:  # noqa: BLE001 - one bad month must not blank the page
             unreadable.append(run.run_id)
             continue
-        for key, n in sorted(counts.items()):
+        # The cards this month holds a statement for, in the coverage's own
+        # key space, which is the space `card_section` is stamped in.
+        stated = {
+            str(row.get("key") or "") for row in coverage
+            if any(str(f) for f in (row.get("statements") or []))
+        }
+        for key, figures in sorted(counts.items()):
+            if not isinstance(figures, dict):
+                figures = {"n_expenses": int(figures)}
             entry = {
                 "run_id": run.run_id,
                 "label": month["label"],
                 "batch_type": month["batch_type"],
-                "n_expenses": n,
+                "n_expenses": int(figures.get("n_expenses") or 0),
+                "n_without_charge": int(figures.get("n_without_charge") or 0),
             }
             if key:
+                entry["statement"] = key in stated
                 _slot({"key": key, "label": key})["receipt_months"].append(entry)
             else:
                 no_card_months.append(entry)
@@ -9393,6 +9422,15 @@ def build_card_status(
         # which today is only answerable by querying every month by hand.
         slot["never_loaded"] = not (
             slot["n_transactions"] or slot["n_statements"]
+        )
+        # Item 192: the receipt side as figures, over the folded months.
+        receipt_months = slot["receipt_months"]
+        slot["n_receipts"] = sum(m["n_expenses"] for m in receipt_months)
+        slot["n_receipts_without_charge"] = sum(
+            m["n_without_charge"] for m in receipt_months
+        )
+        slot["n_receipts_no_statement"] = sum(
+            m["n_expenses"] for m in receipt_months if not m["statement"]
         )
         cards.append(slot)
 
@@ -9431,15 +9469,21 @@ def build_card_status(
         "no_card": {
             "months": no_card_months,
             "n_expenses": sum(m["n_expenses"] for m in no_card_months),
+            "n_without_charge": sum(
+                m["n_without_charge"] for m in no_card_months
+            ),
         },
         "unreadable": unreadable,
         # Rendered verbatim as the page's footnote, so it is prose for
         # Criss, not a field guide: the first version named the payload key
         # `never_loaded` and shipped that identifier onto the screen.
         "note": (
+            # Item 192: the overview folds away only a card with no receipt
+            # either, so the footnote says what the fold now holds.
             "Per card, across every month and trip. Each figure is that "
             "month's own card total, added up; the cards listed as having "
-            "nothing loaded carry no charge and no statement anywhere."
+            "nothing loaded carry no charge, no statement and no receipt "
+            "anywhere."
         ),
     }
 
@@ -9857,12 +9901,20 @@ def attach_expense_card_tabs(
         r.document_id: (r.detected_currency or "?", r.detected_total)
         for r in receipts
     }
+    # Item 192: whether a charge holds the row, from the same set the tab's
+    # "{n} without a charge" counts (`month_card_tabs`), stamped on every row
+    # because a month with fewer than two cards has no sections to carry it.
+    unmatched = {
+        str(rec.get("document_id") or "")
+        for rec in card_view.get("unmatched_receipts") or []
+    }
     counted: dict[str, int] = {}
     sums: dict[str, dict[str, Decimal]] = {}
     for expense in view.get("expenses") or []:
         doc = str(expense.get("document_id") or "")
         key = by_doc.get(doc, "")
         expense["card_section"] = key
+        expense["without_charge"] = doc in unmatched
         if expense.get("counts_in_total") is False:
             continue
         counted[key] = counted.get(key, 0) + 1
