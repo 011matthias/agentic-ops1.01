@@ -172,6 +172,14 @@ SETTINGS_DEFAULTS: dict = {
     # missing-receipts list and still composes the mail for preview, and
     # nothing sends either way (receipt_chase.py sends nothing at all).
     "receipt_requests": {"enabled": False, "holders": {}},
+    # The private-card list (owner direction 2026-09-24, card-attribution
+    # cases 2 + 4): {last4: {person, note, active}}, cards that are NOT
+    # Brisken's, whose printed number makes a receipt a private expense
+    # reimbursed to `person`. Empty until Criss or the owner lists one;
+    # never seeded by the tool (nobody here knows who owns 3281). A
+    # separate key from `cards` on purpose: every company-card consumer
+    # iterates `cards`, and the SPA's Cards editor replaces that map whole.
+    "private_cards": {},
 }
 
 # Settings keys holding a {str: str} map. Values are kept as STRINGS: a
@@ -193,6 +201,7 @@ SETTINGS_WRITABLE_KEYS = (
     "cost_centers",
     "intake",
     "receipt_requests",
+    "private_cards",
 )
 
 # Keys `GET /api/settings` DERIVES and the PUT never stores. A client that

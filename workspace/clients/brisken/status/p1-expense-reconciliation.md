@@ -9,6 +9,20 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: the private-card list, a personal card confirmed private once**
+(backlog item 207, owner direction 2026-09-24 fusing cases 2 + 4 of the
+card-attribution map). `settings["private_cards"]` is its own key, read live
+by every month; a printed number on it makes the row private, reimbursed to
+the listed person, on every surface a row Criss confirmed reaches (report,
+CSV, counts, boxes), through ONE decision order (`cards.classify_payment_evidence`:
+Brisken number or type, listed number, case 6's evidence, wait) and a new
+`expenses[].private_source`. Two ways on: the Settings panel and the strip's
+"Private card of..." (month-only, or remembered with the switch); never a
+single row's confirm. Two ways off a row: undo stores an opt-out, a card pick
+wins. The list starts EMPTY and the tool never seeds it (nobody here knows
+who owns 3281), so the deploy moves no row; the SPA half
+(`docs/lovable-private-card-list-prompt.md`) is what lets anyone add one.
+
 **2026-09-25: case 9 ("no payment info") is planned, not built** (backlog
 item 204, PR #1346). Live: 34 receipts print nothing, 12 only a Brisken card
 type, 7 an unrecognised phrase. Six steps, in order of rows resolved per unit

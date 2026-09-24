@@ -410,6 +410,226 @@ def positive_non_brisken_evidence(
     return None
 
 
+# ── the private-card list (owner direction 2026-09-24, cases 2 + 4) ────
+#
+# "fuze items 2 and 4 together, fix a) by setting up private card
+# memory/registry and b) any credit card types or numbers that dont belong
+# to brisken will then be suggested as private expenses". Case 6 above is
+# half (b); the list below is half (a): a card that is NOT Brisken's, known
+# by its last four digits and the person it belongs to, so a personal card
+# that recurs (3281 every month) is confirmed private once, in Settings or
+# from the unknown-card strip, and never again by hand.
+#
+# It is `settings["private_cards"]`, a SEPARATE key from `cards`: every
+# company-card consumer iterates `cards` (the matcher's card scope, the
+# coverage rows, the months strip, the Cards overview, statement linking,
+# `/api/cards`), and the SPA's Cards editor replaces that whole map on save,
+# so a flag on a company card would be read as a company card everywhere
+# and erased by the published screen. Read LIVE at view time (like the
+# remembered card since item 169 and the merchant registry since M2), never
+# snapshotted into a batch, so an entry reaches every existing month at
+# once with no refresh and no write to any month.
+
+
+@dataclass(frozen=True)
+class PrivateCard:
+    """One entry of `settings["private_cards"]`."""
+
+    digits: str
+    person: str
+    note: str = ""
+    active: bool = True
+
+
+PRIVATE_SOURCE_ROW = "row"
+PRIVATE_SOURCE_MONTH = "month"
+PRIVATE_SOURCE_LIST = "private_card_list"
+PRIVATE_SOURCES = (PRIVATE_SOURCE_ROW, PRIVATE_SOURCE_MONTH, PRIVATE_SOURCE_LIST, "")
+
+
+def private_card_digits(text: str | None) -> str | None:
+    """The four digits a private-card entry is keyed on: the last 4 of the
+    LAST 4+ digit run in `text`, read with the matcher's own extraction
+    (`hint_digit_run`: a run followed by a mask is a BIN and is skipped), the
+    leading zero kept ("0340" stays "0340"). None for text with no such run
+    and for a two-digit ending: money owed to a person needs the full last
+    4, so "xx78" never names a private card."""
+    run = hint_digit_run(text)
+    if not run or not run.isdigit() or len(run) < 4:
+        return None
+    return run[-4:]
+
+
+def private_cards_from_setting(raw: object) -> dict[str, PrivateCard]:
+    """`{last4: PrivateCard}` from the stored map. Tolerant: read-time never
+    400s, so an entry that cannot be read is dropped rather than raised."""
+    out: dict[str, PrivateCard] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, entry in raw.items():
+        digits = private_card_digits(str(key))
+        if digits is None or not isinstance(entry, dict):
+            continue
+        person = str(entry.get("person") or "").strip()
+        if not person:
+            continue
+        out[digits] = PrivateCard(
+            digits=digits,
+            person=person,
+            note=str(entry.get("note") or "").strip(),
+            active=entry.get("active", True) is not False,
+        )
+    return out
+
+
+def normalize_private_cards_setting(
+    raw: object, *, company_cards: "dict[str, Card] | None" = None
+) -> dict:
+    """Validate + clean a ``settings["private_cards"]`` payload at the edge.
+
+    Same contract family as ``normalize_cards_setting``: the whole map
+    replaces the stored one; a malformed entry raises ``CodedValueError``
+    (the API answers 400 with the code). Keys normalize to the four digits
+    (`private_card_digits`), so "***3281" and "3281" are one entry, and
+    `person` is required and trimmed. Refused, by code:
+
+    * ``private_card_digits_short``: the key holds no 4+ digit run (a
+      two-digit ending, a word). Money owed to a person needs the full
+      last 4.
+    * ``private_card_person_required``: no person to reimburse.
+    * ``private_card_duplicate``: two keys normalize to the same digits.
+    * ``private_card_is_company_card``: an ACTIVE company card in
+      `company_cards` carries the digits. A card is Brisken's OR private,
+      never both (the same rule the per-row routes enforce), and the
+      company-card PUT refuses the reverse with the same code.
+    """
+    if not isinstance(raw, dict):
+        raise CodedValueError(
+            "private_cards must be an object", code="invalid_body"
+        )
+    cleaned: dict[str, dict] = {}
+    for key, entry in raw.items():
+        label = str(key).strip()
+        if not label:
+            continue
+        digits = private_card_digits(label)
+        if digits is None:
+            raise CodedValueError(
+                f"private card {label!r} needs the full last 4 digits of "
+                "the card",
+                code="private_card_digits_short", private_card=label,
+            )
+        if not isinstance(entry, dict):
+            raise CodedValueError(
+                f"private_cards[{label!r}] must be an object",
+                code="invalid_body", private_card=label,
+            )
+        person = str(entry.get("person") or "").strip()
+        if not person:
+            raise CodedValueError(
+                f"private card {digits} needs the person to reimburse",
+                code="private_card_person_required", private_card=digits,
+            )
+        if digits in cleaned:
+            raise CodedValueError(
+                f"private card {digits} is listed twice ({label!r})",
+                code="private_card_duplicate", private_card=digits,
+            )
+        cleaned[digits] = {
+            "person": person,
+            "note": str(entry.get("note") or "").strip(),
+            "active": entry.get("active", True) is not False,
+        }
+    hit = private_company_collision(
+        company_cards or {}, private_cards_from_setting(cleaned)
+    )
+    if hit is not None:
+        digits, card_key = hit
+        raise CodedValueError(
+            f"private card {digits} is the company card {card_key!r}; a "
+            "card is Brisken's or private, never both",
+            code="private_card_is_company_card",
+            private_card=digits, card=card_key,
+        )
+    return cleaned
+
+
+def private_company_collision(
+    company_cards: "dict[str, Card]", private_cards: dict[str, PrivateCard]
+) -> tuple[str, str] | None:
+    """`(private digits, company card key)` of the first ACTIVE private
+    entry an ACTIVE company card also carries, else None. Both directions
+    of the "company OR private, never both" rule read this: the private
+    list's PUT (and the strip's learn path) against the composed registry,
+    and the company cards' PUT against the stored list."""
+    for digits, entry in private_cards.items():
+        if not entry.active:
+            continue
+        keys = _card_keys(digits)
+        for key, card in (company_cards or {}).items():
+            if card.active and (card.digit_keys() & keys):
+                return digits, key
+    return None
+
+
+def private_card_for(
+    hint: str | None, private_cards: dict[str, PrivateCard] | None
+) -> PrivateCard | None:
+    """The ACTIVE private-card entry a hint's printed number names, else
+    None. The number is read with the matcher's extraction (`_card_keys`:
+    3+ digit runs, a masked BIN skipped, "0340" and "340" one key), so the
+    list is consulted exactly where the company registry would have been.
+    A two-digit ending never reaches it (the extraction floor), and a
+    hint printing no number never does."""
+    text = (hint or "").strip()
+    if not text or not private_cards:
+        return None
+    keys = _card_keys(text)
+    if not keys:
+        return None
+    for digits, entry in private_cards.items():
+        if entry.active and (_card_keys(digits) & keys):
+            return entry
+    return None
+
+
+def classify_payment_evidence(
+    hint: str | None,
+    cards: "dict[str, Card]",
+    private_cards: dict[str, PrivateCard] | None,
+    hints: dict | None = None,
+) -> "tuple[PrivateCard | None, str | None]":
+    """Whose money a payment hint says paid, steps 1-4 of the decision
+    order (`docs/api-contract.md`, "Whose money paid"), as ONE entry point
+    so the resolver reaches the private-card answer and the private
+    suggestion through one function and not two sets of conditions:
+
+    1. a printed number (or an assigned hint, `hints`) naming a Brisken
+       card, or 2. a Brisken card type with no number: `(None, None)`, no
+       private answer of any kind (the card chain decides);
+    3. a printed number on the PRIVATE-CARD LIST: `(entry, None)`, the row
+       is private and the listed person is reimbursed;
+    4. positive evidence the payment was not Brisken's
+       (`positive_non_brisken_evidence`): `(None, reason)`, suggested
+       private.
+
+    Everything else is `(None, None)` and waits. A number always outranks a
+    type word in the same hint, so step 3 is read before step 4's `number`
+    reason ("DEBIT-MASTERCARD 3281" is decided by 3281). A two-digit ending
+    is never looked up on the list; one two Brisken cards share stays
+    unguessed and is not private. Pure, like its parts."""
+    text = (hint or "").strip()
+    if not text:
+        return None, None
+    card, ambiguous = resolve_hinted_card_ex(text, cards, hints)
+    if card is not None or ambiguous:
+        return None, None
+    listed = private_card_for(text, private_cards)
+    if listed is not None:
+        return listed, None
+    return None, positive_non_brisken_evidence(text, cards)
+
+
 # Note #60 (owner, 2026-09-17): some receipts print only the last TWO
 # digits of the card ("42463153XXXXXX38" on the June Fenix and August SARL
 # TRAIN'S receipts). Two digits sit below the matcher's 3-digit floor, so
