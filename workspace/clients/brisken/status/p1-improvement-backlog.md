@@ -10289,7 +10289,7 @@ pick) stay silent. `/api/cards/status` 1.39 s before. Tests
 middleware, the export site, the purchase collapse, the evidence
 classification, the threshold and the contradiction rule.
 
-### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (BUILT 2026-09-25, same PR as item 201)
+### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (APPLIED 2026-09-25: PR #1356, Fly `071b19d7`, all three months switched live)
 
 Owner, 2026-09-25: "i need july, august and september recategorized with this
 new zoho logic". The three months were created on 2026-09-07, before the GL
@@ -10311,6 +10311,34 @@ failure (an exhausted key) or a month that changed mid-run writes nothing.
 Tests: `tests/test_gl_conversion.py` (7, through the route, the job, the grid,
 the CSV and a receiptless charge); six wiring points regress-checked.
 
+**Applied live 2026-09-25** (Fly `071b19d7`, after snapshot
+`vs_V9ka1J80opbTj8gxvqQ59X5`), one month at a time through the route:
+
+| Month | Lines categorized | No company yet | Model unsure | Other refusal | Receiptless charges categorized | Bucket picks retired | Model cost |
+|---|---|---|---|---|---|---|---|
+| July | 154 / 261 | 45 | 62 | 0 | 44 / 57 | 20 | USD 0.025 |
+| August | 91 / 133 | 1 | 26 | 15 (`org_not_curated`, one Brisken GmbH receipt) | 86 / 92 | 9 | USD 0.032 |
+| September | 38 / 111 | 35 | 38 | 0 | 25 / 25 | 6 | USD 0.020 |
+
+Read back after the switch: all three report `category_vocabulary: "gl"`;
+every category is a leaf code; "a category with no account" went from
+16 / 12 / 12 to 0 / 0 / 0. The CSV exports name a real Zoho account on 37 / 34 /
+25 rows; the refused rows read `(uncategorized - assign)` for Criss to pick
+(item 201 makes a hand pick export under its name). Cold SPA drive (EN): every
+month's pickers show "name · code", none shows a bucket or a `gl.` key, a picker
+lists the company's 68 (Corporate) or 64 (Cloud) accounts, and the only
+non-GET was the login. The drive's "retired Zoho picker" probe flagged two
+August controls; both are the Paid through select, so the probe was too broad,
+not the page.
+
+Most "model unsure" rows are AI vendors on Corporate Services (Anthropic,
+OpenRouter, Lovable, Wispr, Rize) and grocery receipts. Corporate Services
+offers several plausible homes for an AI subscription (`CorpServ | IT
+Expenses`, `IT: Cloud Subscriptions-Others`, the COGS infrastructure
+accounts), so the model answers 0.5 and the engine refuses rather than guess.
+That is item 181: those merchants need an account from Dirk in the registry,
+after which the registry tier decides them without the model.
+
 ### 206. Assigning a card that gives a row its company does not re-run the engine (found 2026-09-25, code-traced)
 
 The owner's 2026-09-24 decision ("assigning the company must categorize it")
@@ -10328,6 +10356,21 @@ grid shows at the moment it runs. Every GL month from October is.
 card hint, the company itself), compare the row's resolved company before and
 after, and re-run the engine for the resolved one when it changed. Route-level
 test through the card fix.
+
+### 207. The live export gate blanks an account Dirk marked postable (found 2026-09-25 on the switched September)
+
+September's SendGrid receipt (Cloud Services, USD 89.95) is filed by a
+learned rule to `E700030-30` "COGS - Other Infra and IT Costs for Cloud
+Business". Dirk's curated list marks it postable for Cloud Services, and the
+engine's name for it is right, but the grid's `books_as` and the CSV both read
+`(account unmapped - assign)`: the export gate refused it. Run locally against
+the chart file in `context/zoho-books-coa.json` (Sep 24), the same gate passes
+it (`CoaVerdict.OK`, id `2031056000001432081`). So the chart file the live
+gate reads on the Fly volume most likely predates the item 182 refresh or
+holds another id for it. One row of 209 across the three exports. Not read on
+production (a volume read was refused earlier in the session); the next step
+is a read of the live chart file's entry for that code, then a refresh of the
+file if it is stale.
 
 ## Shipped (loop history)
 
