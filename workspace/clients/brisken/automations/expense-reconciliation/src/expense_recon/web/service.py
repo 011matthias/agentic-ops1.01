@@ -6553,7 +6553,12 @@ def resolve_batch_row_cards(
     the suggestion (owner 2026-09-17): the entity says which company the
     expense books to, not how it was paid, and the old exemption left an
     "EC-Karte" restaurant bill in August on needs_person, pointing at a
-    Settings card that does not exist.
+    Settings card that does not exist. A generic tender hint that names only
+    a card type the batch's own cards carry ("VISA CREDIT", "Cartão de
+    Crédito", "TEF"; `cards.names_registry_card_type`) suggests nothing
+    (owner ruling 2026-09-24, superseding item 41's "Cartao de Credito"
+    example): Brisken's cards ARE Visa credit cards. It still selects no
+    card, and `can_mark_private` is untouched.
 
     `can_mark_private` (owner 2026-09-17: "expenses on cards that are not
     defined in settings ... the option of defining as an expense that went
@@ -6612,7 +6617,11 @@ def resolve_batch_row_cards(
     in `CARD_SCOPE_SOURCES`, so a card the registry lends never scopes
     matching.
     """
-    from ..cards import masked_short_ending, resolve_hinted_card_ex
+    from ..cards import (
+        masked_short_ending,
+        names_registry_card_type,
+        resolve_hinted_card_ex,
+    )
     from ..matching.deterministic import _card_keys
 
     cards = _batch_cards(cfg)
@@ -6719,9 +6728,14 @@ def resolve_batch_row_cards(
             "person_source": person_source,
             "private": private,
             "reimburse_to": reimburse_to if private else "",
+            # Owner ruling 2026-09-24: a tender word naming a card type the
+            # registry's own cards have ("VISA CREDIT") is no evidence a
+            # non-Brisken card paid. The row falls to the ordinary company /
+            # person question and the private option stays open.
             "suggested_private": bool(
                 hint and card is None and not ambiguous and not private
                 and not not_a_card
+                and not names_registry_card_type(hint, cards)
             ),
             "can_mark_private": (
                 not private

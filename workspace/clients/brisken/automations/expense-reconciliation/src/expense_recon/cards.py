@@ -150,9 +150,7 @@ def is_generic_tender(text: str | None) -> bool:
         return False
     if _card_keys(text) or masked_short_ending(text):
         return False
-    folded = unicodedata.normalize("NFKD", text)
-    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
-    words = _normalize(folded).split()
+    words = _folded_words(text)
     return (
         any(w in GENERIC_TENDER_WORDS for w in words)
         and all(
@@ -161,6 +159,100 @@ def is_generic_tender(text: str | None) -> bool:
             for w in words
         )
     )
+
+
+def _folded_words(text: str) -> list[str]:
+    """Lower-case ASCII words with diacritics folded first ("Cartão de
+    crédito" -> cartao, de, credito)."""
+    folded = unicodedata.normalize("NFKD", text)
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    return _normalize(folded).split()
+
+
+# Owner ruling 2026-09-24 (card-attribution case 5): a generic tender hint
+# suggests a private expense only when it gives positive evidence of a
+# payment method Brisken does NOT have. Brisken's own cards are Visa credit
+# cards, so "VISA CREDIT" on a receipt is no such evidence; item 111
+# measured it, 15 rows July's statement settled had been suggested private
+# on words like VISA CREDIT, VISA and TEF. Supersedes the digit-less
+# "Cartao de Credito" example of item 41 (2026-09-06); everything else in
+# item 41 holds. The words split three ways: a NETWORK or a KIND is
+# evidence only when no active card in the registry carries it, a NON-CARD
+# tender (cash, a wire, PayPal) is always evidence, and every other word of
+# GENERIC_TENDER_WORDS ("card", "cartao", "tef", "compra", a short number)
+# is neutral. "express" and "club" count toward amex / diners so a lone
+# fragment of those names stays conservative.
+CARD_NETWORK_WORDS = {
+    "visa": "visa",
+    "mastercard": "mastercard", "master": "mastercard",
+    "amex": "amex", "american": "amex", "express": "amex",
+    "elo": "elo",
+    "maestro": "maestro",
+    "discover": "discover",
+    "diners": "diners", "club": "diners",
+    "girocard": "girocard", "girokarte": "girocard", "ec": "girocard",
+}
+CARD_KIND_WORDS = {
+    "credit": "credit", "credito": "credit", "kredit": "credit",
+    "kreditkarte": "credit",
+    "debit": "debit", "debito": "debit", "lastschrift": "debit",
+}
+NON_CARD_TENDER_WORDS = frozenset({
+    "cash", "bar", "dinheiro", "check", "cheque", "paypal", "pix", "wire",
+    "transfer", "bank", "boleto", "transferencia", "uberweisung",
+    "ueberweisung",
+})
+
+
+def registry_card_types(
+    cards: "dict[str, Card]",
+) -> tuple[frozenset[str], frozenset[str]]:
+    """The card networks and kinds the ACTIVE cards carry, read from each
+    card's own `label` and `zoho_account` wording ("Credit Card Chase Visa -
+    3645" -> visa, credit; "GSBANK Apple Master Card 0113" -> mastercard).
+    Derived, never stored: the Settings cards editor replaces the whole map
+    on save, so a new card field would be erased by the published screen."""
+    networks: set[str] = set()
+    kinds: set[str] = set()
+    for card in (cards or {}).values():
+        if not card.active:
+            continue
+        for word in _folded_words(f"{card.label} {card.zoho_account or ''}"):
+            if word in CARD_NETWORK_WORDS:
+                networks.add(CARD_NETWORK_WORDS[word])
+            if word in CARD_KIND_WORDS:
+                kinds.add(CARD_KIND_WORDS[word])
+    return frozenset(networks), frozenset(kinds)
+
+
+def names_registry_card_type(
+    hint: str | None, cards: "dict[str, Card]"
+) -> bool:
+    """True when a generic tender hint names nothing but a card type the
+    registry's own cards have ("VISA CREDIT", "Cartão de Crédito", "CARTAO
+    TEF", "credit card"), so it is no evidence that a non-Brisken card paid.
+
+    Only ever True for a hint `is_generic_tender` calls generic: a printed
+    number, a two-digit ending or an unrecognised phrase keeps its own path.
+    False when the hint holds a non-card tender word, or a network / kind no
+    active card carries (girocard, EC-Karte, DEBIT on a credit-only
+    registry). A registry that yields no network and no kind (empty, or
+    labels without either word) yields False for every hint, which is the
+    behaviour before this rule. Never selects a card: the type is shared by
+    every card that carries it (owner ruling 2026-08-21)."""
+    if not is_generic_tender(hint):
+        return False
+    networks, kinds = registry_card_types(cards)
+    if not networks and not kinds:
+        return False
+    for word in _folded_words(hint or ""):
+        if word in NON_CARD_TENDER_WORDS:
+            return False
+        if word in CARD_NETWORK_WORDS and CARD_NETWORK_WORDS[word] not in networks:
+            return False
+        if word in CARD_KIND_WORDS and CARD_KIND_WORDS[word] not in kinds:
+            return False
+    return True
 
 
 # Note #60 (owner, 2026-09-17): some receipts print only the last TWO
@@ -172,7 +264,7 @@ def is_generic_tender(text: str | None) -> bool:
 # number ("Cartao Credito 30 Dias", "$15.00") is not, so it never counts.
 # A single "x" is not a mask here ("3x" is an instalment count); "xx" is.
 _ENDING_MASKS = r"[Xx]{2,}|[*#•●]+|\.{2,}|…"
-# Item 198 (owner, 2026-09-24): the ending words, one EXPLICIT phrase per
+# Item 199 (owner, 2026-09-24): the ending words, one EXPLICIT phrase per
 # entry, matched on diacritic-folded text. September's GoDaddy printed "card
 # ending with the last two digits: 38", which the old two-word list missed.
 # A lead is followed only by separators and the two digits, never by other

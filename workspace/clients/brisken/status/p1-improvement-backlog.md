@@ -9632,7 +9632,40 @@ Also seen on this load: the overlap warning says the 1176 file "already covers
 cards; and the OpenAI funding receipts rendered from mail carry
 `card_ending: ""` although each body prints "credit card ending in 9693".
 
-### 198. A two-digit card ending printed in other words names no card (case 3 of the card-attribution map, owner 2026-09-24) (FIXED 2026-09-24: explicit lead phrases in five languages)
+### 198. A Brisken card TYPE on a receipt is suggested as a private expense (owner ruling 2026-09-24, card-attribution case 5) (SHIPPED 2026-09-24)
+
+Owner: "widen Item 1 to be receipt shows a brisken card number or card type
+(like VISA CREDIT) ... the alternative logic for this case is to wait for data
+in statement to match the expense to a card, but expense does not get labeled
+as potential private expense". Brisken's own cards are Visa credit cards, so
+"VISA CREDIT", "Cartão de Crédito" or "TEF" on a receipt is no evidence of a
+non-Brisken card; item 111 counted 15 July rows its statement settled that had
+been suggested private on such words. Supersedes item 41's digit-less
+"Cartao de Credito" example; the rest of item 41 holds.
+
+Built: `cards.names_registry_card_type(hint, cards)` beside
+`is_generic_tender`, wired at the one place the suggestion is decided
+(`service.resolve_batch_row_cards`). A generic hint suggests private only when
+it holds a non-card tender word or a network / kind no ACTIVE card carries;
+networks and kinds are read from each card's `label` + `zoho_account` (live:
+{visa, mastercard}, {credit}), never stored. An empty or wordless registry
+changes nothing. `can_mark_private` untouched; the type word selects no card.
+Contract: `docs/api-contract.md`, "A Brisken card type is not a
+private-expense signal".
+
+Live, read-only census before the deploy: exactly the 12 counted rows the
+ruling predicted move (April MARTINO "CARTAO TEF", RMA "Cartão de Crédito",
+Fenix "VISA CREDIT"; May Fenix "VISA CREDIT"; June Fenix "VISA CREDIT", MEGA
+CENTER "Cartao Credito 30 Dias"; July MARTINO "VISA" x3, Fenix "TEF" x2;
+September Contabilizei "credit card"). July's Aposto "VISA CREDIT" also flips
+its row flag but is a decided copy (`boxes: []`), so no count moves for it.
+Kept: DINHEIRO, Bar, girocard, EC-Karte, DEBIT, and every non-generic hint.
+
+Out of scope, next: case 6 vocabulary ("VENDA CREDITO VISA", "CreditCard",
+"Link", "saved payment method", "Kartenzahlung erhalten", "girocardOLV");
+"Bar" as a cash word; GoDaddy's "ending with the last two digits: 38".
+
+### 199. A two-digit card ending printed in other words names no card (case 3 of the card-attribution map, owner 2026-09-24) (FIXED 2026-09-24: explicit lead phrases in five languages)
 
 Note #60's rule read two digits as a card ending only behind a mask or
 directly after `ending` / `ending in` / `ending with` / `final`. September's
@@ -9671,7 +9704,8 @@ Out of scope, still open: settling a shared ending (76: 3876/1176; 13:
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-| 117 | Item 198: a two-digit card ending printed in other words names its card. `cards._ENDING_LEADS`, explicit lead phrases in EN/PT/DE/FR/ES on diacritic-folded text, with an amount guard (`38,00` is money) and a second-ending rule (`38 and 49` names nothing) | September's GoDaddy, 446.99 EUR, printed "ending with the last two digits: 38" and sat card-less and suggested private; census over 88 live hints moved that one and nothing else | 2026-09-24 |
+| 118 | Item 199: a two-digit card ending printed in other words names its card. `cards._ENDING_LEADS`, explicit lead phrases in EN/PT/DE/FR/ES on diacritic-folded text, with an amount guard (`38,00` is money) and a second-ending rule (`38 and 49` names nothing) | September's GoDaddy, 446.99 EUR, printed "ending with the last two digits: 38" and sat card-less and suggested private; census over 88 live hints moved that one and nothing else | 2026-09-24 |
+| 117 | A Brisken card type on a receipt stops suggesting a private expense: `cards.names_registry_card_type` reads the networks and kinds the batch's active cards carry from their own label and account wording, and a generic tender hint naming only those ("VISA CREDIT", "Cartão de Crédito", "TEF", "credit card") no longer raises `suggested_private`. Non-card tenders and types Brisken lacks (girocard, EC-Karte, DEBIT, cash) still do; `can_mark_private` and the card chain are untouched | Backlog item 198 (owner ruling 2026-09-24, case 5). Twelve counted rows across April, May, June, July and September were asking Criss who to reimburse for purchases Brisken's own Visa credit cards made | 2026-09-24; `tests/test_card_type_not_private.py` (route-level through the batch payload); regress_check: 5 caller tests RED with the wiring disabled |
 | 116 | Typing an FX rate in Settings is gone: the settings key retired (read drops it, write ignores it, the stored row is migrated), the matcher's `configured` rung and `MatchingConfig.fx_reference_rates` removed, `apply_master_data` stops writing rates into a run config, item 132's drift advisory deleted, and `rematch_month` tops up a month's ECB table so no month is left without a rate. The retired key stays parseable and is dropped, so every existing month and the scorer asset still load | Backlog item 168 (owner: "no more typing them in settings you can remove that function entirely"). Measured in-container first: July 2026 carried the typed rates and NO ECB table, so removing the rung alone would have blanked its 18 cross-currency pairs | 2026-09-23 |
 | 115 | Daily FX reference rates polled from OpenTickers: a boot + 24 h poll thread, a one-time backfill of the live months (the key is a paid tier), the `fx_daily_rates` store table (units per EUR by day, ECB record preferred), the matcher's `opentickers_day` rung on the charge's own day (nearest day within four, earlier on a tie) between the self-derived rates and the ECB monthly average with the 2% band, the table refreshed into every month on each re-match, `GET /api/settings.fx_daily_rates` and `POST /api/fx/poll`. Typed Settings rates still win, so July and August did not move | Backlog item 167 (feedback note #79, Dirk, anchored on Settings > FX reference rates: "fx rates should be polled daily via open tickers API"). regress_check proved the re-match wiring bites (4 route tests red unwired) | 2026-09-23 |
 | 114 | R4.1, the trip lifecycle owes its months a re-match. Four entrances now stamp `rematch_pending(trigger="trip")` INSIDE their own `_BATCH_ADD_LOCK` span and pay it outside: a receipt joining a trip, a date edit (the UNION of the months the old range covered and the new one does), a trip-batch delete (the borrowing months chosen BEFORE the delete) and a trip-receipt delete. The paying loop gained the per-month try/except `rematch_neighbour_months` has always had, the candidate filter gained the expense-generation check, `learning_db_path` is threaded through both trip entrances, a rename carries onto the batch label and onto every borrowing month's stored `settled_by` label, and the trip-batch create slot is released on ANY failure rather than only on `RunInputError` | Owner ruling 2026-09-21 on the R4.0 findings: "must be done because later on if expenses and items in statement dont line up we will have a problem." Measured on a copy of the live store the day before: moving a trip's dates off July, and deleting its batch, each left July reporting **33 charges reconciled where 31 was true**, with `settled_by` badges naming a run that no longer existed. Nothing corrupted (claims released correctly, and July's next re-match healed it completely) and nothing scheduled that next re-match, so a month stayed wrong until something unrelated happened to touch it. The adversarial catch during the build was the repo's own item-18 guard: `put_trip` and `delete_expense` are `async def`, and the first draft blocked the EVENT LOOP on a lock an OCR ingest holds for minutes; both locked spans now go through `run_in_threadpool` | 2026-09-21, this round; `tests/test_trip_lifecycle_rematch.py` (12, route-level, self-contained fixtures); suite 2714 -> 2726 passed / 2 skipped; ruff clean. Eight wiring points proven RED under `tools/regress_check.py`, the date gate in BOTH directions (forced off reddens the move-off test, forced on reddens the roster-edit test that asserts a non-date edit owes nothing): `--replace` literals recorded in the PR. The first draft's durability test did NOT bite (it drove create-with-receipt while the mutated wire was the gradual-add path); caught by `regress_check` and closed with two add-path tests |

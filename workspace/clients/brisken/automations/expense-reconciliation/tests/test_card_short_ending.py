@@ -79,7 +79,7 @@ def test_a_masked_two_digit_tail_is_an_ending(hint, ending):
     "VISA",
     "",
     None,
-    # item 198: an ending word next to an amount, a balance or a period
+    # item 199: an ending word next to an amount, a balance or a period
     "valor final 38,00",
     "Total final: 38.50",
     "ending balance 38",
@@ -95,7 +95,7 @@ def test_anything_else_is_not_an_ending(hint):
     assert masked_short_ending(hint) is None
 
 
-# Item 198 (owner, 2026-09-24): more wordings. September's GoDaddy printed
+# Item 199 (owner, 2026-09-24): more wordings. September's GoDaddy printed
 # the first one verbatim and stayed card-less under the two-word list.
 @pytest.mark.parametrize("hint", [
     "We have billed your Visa card ending with the last two digits: 38",
@@ -285,7 +285,7 @@ GODADDY = "We have billed your Visa card ending with the last two digits: 38"
 
 
 def test_the_godaddy_wording_gets_its_card_and_is_not_private(client, monkeypatch):
-    # item 198: September's GoDaddy, 446.99 EUR, card-less and suggested
+    # item 199: September's GoDaddy, 446.99 EUR, card-less and suggested
     # private under the two-word list although only card-2838 ends in 38
     client.put("/api/settings", json={"cards": _live_setting()})
     view, rows = _batch(

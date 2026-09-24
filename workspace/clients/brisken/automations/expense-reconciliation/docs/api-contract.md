@@ -1457,6 +1457,42 @@ their receipts stay in the evidence pages. The CSV keeps them as rows
 and `Paid Through` = `Private ({person})` — the same strings the grid
 shows.
 
+## A Brisken card type is not a private-expense signal (added 2026-09-24)
+
+Owner ruling 2026-09-24 (card-attribution case 5): a receipt that prints
+only a card type Brisken's own cards have ("VISA CREDIT", "Cartão de
+Crédito", "TEF", "credit card") is not evidence of a non-Brisken card, so
+it is no longer suggested private. This supersedes the digit-less "Cartao de
+Credito" example of item 41; the rest of item 41 stands. No new field.
+
+The rule (`cards.names_registry_card_type`, decided once in
+`resolve_batch_row_cards`): a hint `is_generic_tender` calls generic
+suggests private only when it holds a non-card tender word (cash, bar,
+dinheiro, check, cheque, paypal, pix, wire, transfer, bank, boleto,
+transferencia, uberweisung), or a network or kind that no ACTIVE card in the
+batch's registry snapshot carries. Networks: visa; mastercard/master;
+amex/american express; elo; maestro; discover; diners; girocard/girokarte/ec.
+Kinds: credit/credito/kredit/kreditkarte; debit/debito/lastschrift. Every
+other tender word (card, cartao, karte, compra, tef, contactless, chip,
+apple, google, pay, de, dias, a short number) is neutral. The registry's
+networks and kinds are READ from each active card's `label` +
+`zoho_account` wording, never stored (the Settings editor replaces the whole
+cards map on save); live that is {visa, mastercard} and {credit}, the
+Mastercard coming from 0113's "GSBANK Apple Master Card". A registry that
+yields neither (empty, or labels with no such word) changes nothing.
+
+On such a row: `suggested_private` false (so the strip entry, both
+`n_suggested_private` counts, the `suggested_private` box and the review
+reason follow), `reimburse_to_prefill` empty, `can_mark_private` unchanged
+(still true), and the review falls to the ordinary `needs_entity` /
+`needs_person` question. The type word never selects a card, even when only
+one card has the network (owner ruling 2026-08-21); the card chain (a
+settled statement charge, a remembered card, the merchant registry, an
+assigned hint) runs as before. Printed numbers, two-digit endings and
+unrecognised phrases ("VENDA CREDITO VISA", "CreditCard", "Link") are out
+of scope. Read-time: every month moves on deploy with no re-match. Pinned
+route-level in `tests/test_card_type_not_private.py`.
+
 ## Cost centers: which project or purpose the money belongs to (added 2026-09-10)
 
 Backlog item 47, owner directive 2026-09-08. A cost-center DIMENSION on the
@@ -3455,7 +3491,7 @@ card's number: `42463153XXXXXX38` groups as `38`, not `42463153`.
 
 Tests: `tests/test_card_short_ending.py` (unit + the batch route).
 
-**More wordings (item 198, 2026-09-24).** The ending words are now a list of
+**More wordings (item 199, 2026-09-24).** The ending words are now a list of
 explicit lead phrases (`cards._ENDING_LEADS`), matched case-insensitively on
 diacritic-folded text:
 
