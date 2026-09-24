@@ -9255,7 +9255,13 @@ strip being removed reached all of them.
 and its line in the roll-up cannot disagree. Parallel fields: `cards[].months`,
 `never_loaded` and everything `/cards` reads are unchanged. Tests
 `tests/test_card_status_receipt_months_item_190.py`; regress-checked through the
-app wiring (3 route tests red with the count disabled).
+app wiring (3 route tests red with the count disabled). PR #1293, merge
+`93c69551`, deployed. Live after deploy: every card's month set as predicted
+from the months' own `card_sections`, plus January for 3876 (one receipt; a
+one-card month has no sections, but its rows still carry `card_section`);
+`no_card` 72 receipts over six months. Cost: the call went from ~0.07 s to
+~2.2 s (seven month views built per call); a per-run cache keyed on the month's
+`updated_at` is the fix if the strip's load is felt.
 
 **SPA half:** `docs/lovable-card-scope-carries-into-month-prompt.md`. The
 selection lives in the URL (`?card=<key>`, `none` for no card) on `/months`,
