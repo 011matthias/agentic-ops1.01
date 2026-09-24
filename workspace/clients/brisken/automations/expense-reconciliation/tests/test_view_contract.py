@@ -1976,3 +1976,33 @@ def test_uncategorized_lines_are_exactly_the_lines_without_a_category(payloads):
     # Not a vacuous pass: these fixtures really do build partly-uncategorized
     # rows, which is the state the owner's July row is in.
     assert seen, "no fixture row carried an uncategorized line"
+
+
+# Item 204, case 9 steps 1 and 5: the waiting status and the suggestion.
+def test_case9_row_fields_are_absent_or_well_formed(payloads):
+    """Two parallel fields on an expense row, ABSENT rather than [] or null.
+
+    `waits_for_statements` is a non-empty list of card labels, and it only
+    rides on a row that has no card and is not private. `card_suggestion` is
+    `{card_key, label, evidence: [{month, date, amount, currency,
+    description}]}` with at least one piece of evidence, and never sits on a
+    row whose `card` is set: it is a suggestion, not an assignment. A type
+    guard; the route-level proofs are `tests/test_case9_status_c9.py`.
+    """
+    for view in payloads["expense_batch"]:
+        for expense in view.get("expenses") or []:
+            if "waits_for_statements" in expense:
+                waits = expense["waits_for_statements"]
+                assert isinstance(waits, list) and waits, "absent, never empty"
+                assert all(isinstance(w, str) and w for w in waits), waits
+                assert expense["card"] is None and not expense["private"]
+            if "card_suggestion" in expense:
+                s = expense["card_suggestion"]
+                assert isinstance(s["card_key"], str) and s["card_key"], s
+                assert isinstance(s["label"], str), s
+                assert isinstance(s["evidence"], list) and s["evidence"], s
+                for ev in s["evidence"]:
+                    assert set(ev) == {
+                        "month", "date", "amount", "currency", "description"
+                    }, ev
+                assert expense["card"] is None, "a suggestion is never applied"

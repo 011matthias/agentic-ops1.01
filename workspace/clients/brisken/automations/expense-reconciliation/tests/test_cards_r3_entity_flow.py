@@ -682,8 +682,9 @@ def test_graduation_bakes_card_resolved_entities(client, monkeypatch):
     # Owner ruling 2026-09-24: "Visa" names a card type the registry's own
     # card carries ("CHASE VISA"), so it is no private-expense evidence; the
     # row asks the ordinary company question instead (was item 41's
-    # suggested_private), and the private option stays open.
-    assert row["review"]["reason_code"] == "needs_entity"
+    # suggested_private), and the private option stays open. Item 204: with no
+    # statement loaded that question reads as waiting for the statements.
+    assert row["review"]["reason_code"] in ("needs_entity", "waits_for_statement")
     assert row["suggested_private"] is False
     assert row["can_mark_private"] is True
     resp = client.post(

@@ -152,7 +152,9 @@ def test_a_brisken_card_type_is_not_suggested_private(client, monkeypatch):
         assert row["can_mark_private"] is True, (
             hint, "the tool stops SUGGESTING private; Criss can still say so")
         assert "suggested_private" not in row["boxes"], hint
-        assert row["review"]["reason_code"] == "needs_entity", (
+        # Item 204: with no statement loaded the company question reads as
+        # waiting for the statements; either way it is not the private one.
+        assert row["review"]["reason_code"] in ("needs_entity", "waits_for_statement"), (
             hint, "the ordinary company question, not the private one")
         assert row["card"] is None and row["card_source"] == "none", (
             hint, "a type word never selects a card (ruling 2026-08-21)")

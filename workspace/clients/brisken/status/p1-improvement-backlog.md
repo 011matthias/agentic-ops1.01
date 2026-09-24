@@ -10260,6 +10260,30 @@ reported no coverage anywhere; the valid read is `card_key` / `statements` /
 `period_start` / `period_end` / `n_transactions`, and a receipts-only month
 returns `[]` by design.
 
+**Build 5 (steps 1 and 5), 2026-09-25:** built in `card_suggestion.py`.
+A statement covers a card's day when an upload that printed the card spans it,
+in any month; one printed card covers its whole `parent` family (a Chase
+export carries every subcard, so August's 2838 export covers 0340 though 0340
+spent nothing). An open card-less row (no card, not private or suggested
+private, no printed digits, not settled outside) with some active card
+uncovered reads `waits_for_statement` in `needs_entity`'s place with
+`waits_for_statements: [labels]`; `unmatched_receipts[].reason_code` reads
+`card_statement_not_loaded` for the same receipt. `card_suggestion` = lever E
+exactly as measured (first vendor word of 3+ characters, amount within 3% in
+the receipt's currency, 45 days, all on one named card), never applied.
+`POST /api/expense-batches/{id}/cards/by-vendor {vendor, card_key[, dry_run]}`
+writes the row PUT's own override to the vendor's open, counting rows and
+re-matches a statement month; `dry_run` gives the SPA its N. `statements[]
+.month_suggestion` + advisory `statement_month_differs`, ranked after the two
+doubling advisories. The view builders have no store, so each gained one
+trailing kwarg (`statement_evidence`, an `EvidenceSource` read once per
+request and only when a card-less row asks) passed from its `app.py` call,
+and `build_statement_entry` an `attached_month` passed at its two calls: the
+only lines outside the round's "You own" list. Three older tests widened to
+the new code (`needs_entity` or `waits_for_statement`; no DOUBLING advisory
+on two July cycles filed in August). Live counts after deploy: see the
+Shipped row. SPA half `docs/lovable-case9-status-prompt.md`, not pasted.
+
 ### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (BUILT 2026-09-25, same PR as item 201)
 
 Owner, 2026-09-25: "i need july, august and september recategorized with this

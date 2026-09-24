@@ -9,6 +9,16 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: case 9 build 5 (item 204 steps 1 and 5) shipped.** A receipt
+that names no card now says which cards' statements it is waiting for
+(`waits_for_statement`, read across every month) instead of asking for a
+company, carries a recurring-charge `card_suggestion` with its evidence
+(never applied), and one picked card can be applied to the same vendor's
+other card-less rows with an explicit click (`POST .../cards/by-vendor`). A
+statement upload names its majority month and advises when it is filed in
+another. SPA half `docs/lovable-case9-status-prompt.md` waits on the owner's
+paste. Builds 1 to 4 run in sibling sessions.
+
 **2026-09-25: case 9 ("no payment info") is planned, not built** (backlog
 item 204, PR #1346). Live: 34 receipts print nothing, 12 only a Brisken card
 type, 7 an unrecognised phrase. Six steps, in order of rows resolved per unit
