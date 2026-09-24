@@ -9,6 +9,37 @@ updated: 2026-09-24
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-24: a row that is private is no longer offered the private control**
+(backlog item 176, operator note #75). `can_mark_private` read
+`private or (...)`, so both private rows in the estate told the screen they
+could still be marked private; it is now `not private and (...)`, and
+`_paid_by_conflict` skips its company-card refusal on a row that is already
+private (without that, correcting who gets reimbursed would have been refused
+with the wording "paid with the company card", on a row no company card paid).
+Shipped PR #1258, merge `43305aea`, DEPLOYED. Five route-level tests, both
+wires red-proven with `regress_check`; module suite 3176 / 2. **Verified
+live**: September 0046 and July 0028 both read `can_mark_private: false`, all
+15 `suggested_private` rows across the three months still read true, and
+nothing was written to Criss's months (the flag is derived at read time).
+
+**The doubled label the note captured is a different thing, and it is now
+located.** A cold Chrome drive of September row 0046 after the deploy found
+the badge and "Undo private card" both intact (this change's one real risk),
+and `Private (Dirk Neumann)` twice in cell index 7, the Paid Through column:
+a static `div.px-1.text-sm.text-foreground` and the `span` inside the account
+select's `role="combobox"` trigger, colliding because both resolve to
+`Private ({person})`. One row in 80 doubles. SPA-side, PR #1260.
+
+**Items 175 and 174 are scoped and need no backend work**, both in
+`docs/lovable-private-reimburse-prompt.md` (NOT pasted). 175's real half is
+not option ordering: the `reimburse_to` dialog is rendered inside the card
+picker, which returns `null` once `row.private` is true, so there is no way in
+the SPA to correct who gets reimbursed short of undoing the private mark; item
+176 is what makes that correction possible at all. 174's "From email" is
+`months.origin.intake` on the months list, off `created_by`, rendered in the
+statement badge's own cell, which is why the owner read it as a statement
+claim; `card_source` is refuted.
+
 **2026-09-24: a receipt renders as an image whatever was stored** (backlog
 item 178, feedback notes #3 / #32 / #82). The same person had asked three
 times in 69 days and the cause was the payload, not the viewer: `/image`
