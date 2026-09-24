@@ -249,6 +249,9 @@ def test_an_entityless_batch_is_provisioned_against_every_entity_chart(tmp_path)
         "Cloud Services", "Corporate Services",
     ]
 
+    # Judged by the chart rule, as a bucket batch is; on a GL batch these
+    # synthetic codes are off Dirk's list (test_coa_gate_curated_item_4b).
+    cfg.pop("gl_entity_orgs")
     gate = _build_coa_gate(cfg, tmp_path)
     assert isinstance(gate, MultiEntityCoaGate)
     assert set(gate.gates) == {"Cloud Services", "Corporate Services"}
