@@ -11,7 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
-| 2026-09-24 | Recon Card Filter And Footnote | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Card%20Filter%20And%20Footnote/Mini-Checkpoint-1.md) |
+| 2026-09-24 | Recon In-Month Card Filter Scope Prompt | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20In-Month%20Card%20Filter%20Scope%20Prompt/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken P1 Item 3 GL Engine Swap | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20P1%20Item%203%20GL%20Engine%20Swap/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Recon Paid Through Asks For The Card Twice | client-dev | [→](docs/2026-09-24%20-%20Recon%20Paid%20Through%20Asks%20For%20The%20Card%20Twice/Checkpoint.md) |
 | 2026-09-24 | Recon Learning Leaks And 194 Leaf Taxonomy | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Learning%20Leaks%20And%20194%20Leaf%20Taxonomy/Mini-Checkpoint-1.md) |
