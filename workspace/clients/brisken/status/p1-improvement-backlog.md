@@ -9146,12 +9146,15 @@ opening every month in turn.
 `period_end`). The months page joins it to the rows it already renders, and
 `/cards` makes the same call, so one query entry serves both.
 
-Scope is the filter and nothing else. One judgement call inside it, flagged to
-the owner rather than assumed: selecting a card must also swap the row figures
-to that card's, because the month row's Receipts / Needs category / Set aside
-are the WHOLE month's, and showing "50 receipts" on the August row beside a
-1176 chip states something untrue about that card. Same class as the "From
-email" badge (item 174) and the doubled Private label.
+Scope is the filter and nothing else, and the first draft of the prompt broke
+that: it swapped the row figures to the selected card's, on the argument that
+month-wide numbers beside a card chip mislead. Corrected the same day. "50
+receipts" on the August row is a TRUE statement about August; it only misleads
+if read as a claim about the card, and one caption under the strip
+("Figures are each month's totals, not this card's") fixes that without
+touching a column. The card's own per-month figures already exist on `/cards`,
+one click away, so duplicating them here buys nothing and costs the scope the
+owner set.
 
 Written as `docs/lovable-months-card-filter-prompt.md`, NOT pasted.
 

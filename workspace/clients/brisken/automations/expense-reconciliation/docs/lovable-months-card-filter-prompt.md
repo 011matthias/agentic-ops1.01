@@ -32,18 +32,15 @@ Put the same card strip component the `/cards` page uses directly above the mont
 
 With a card selected, show only the months in that card's `months[]` array, in the order the page already sorts months. A card whose `months[]` is empty shows an empty table with one line: EN "No month has a charge or a statement on this card." / PT "Nenhum mês tem cobrança ou extrato neste cartão."
 
-## 3. Picking a card also changes the figures, because otherwise they lie
+## 3. The columns do not change, and one caption says so
 
-This is not extra scope, it is the filter being correct. The month row's numbers (Receipts, Needs category, Set aside) are the WHOLE month's. Showing "50 receipts" on the August row while the strip says 1176 would state something untrue about that card, which is the same class of defect as the old "From email" badge.
+The columns stay exactly as they are: Month, Receipts, Needs category, Set aside, Statement, Created. Those figures are the WHOLE month's and they remain the whole month's. Do NOT swap them for the selected card's numbers.
 
-So with a card selected, keep the **Month** and **Created** columns and replace the middle columns with that card's own figures, the same columns the `/cards` page table already uses:
+Add one muted caption line directly under the strip, shown ONLY while a card is selected: EN "Figures are each month's totals, not this card's. Open Cards for this card's own numbers." / PT "Os números são totais de cada mês, não deste cartão. Abra Cartões para os números deste cartão."
 
-| Month | Period | Charges | Matched | Needs review | No receipt | Statements | Still open | Created |
-|---|---|---|---|---|---|---|---|---|
+That is the whole of it. "50 receipts" on the August row is a true statement about August; the caption is what stops it being read as a statement about the card. The card's own per-month figures already exist one click away on `/cards`, so nothing here duplicates them.
 
-`Period` is the card's `period_start` to `period_end` in that month. `Still open` prints `unreconciled_by_ccy` as one line per currency, already formatted; print it, never re-format it. `Statements` lists the file names.
-
-With "All" selected the original columns come back unchanged.
+Make "Cards" in that caption a link to `/cards`.
 
 ## 4. The row still opens the month
 
@@ -58,11 +55,11 @@ The month sort order. The statement badge and the receipts-origin badge. The "ne
 | Key | EN | PT-BR |
 |---|---|---|
 | `months.cardFilter.empty` (new) | No month has a charge or a statement on this card. | Nenhum mês tem cobrança ou extrato neste cartão. |
-| `months.cardFilter.period` (new) | Period | Período |
+| `months.cardFilter.caption` (new) | Figures are each month's totals, not this card's. Open Cards for this card's own numbers. | Os números são totais de cada mês, não deste cartão. Abra Cartões para os números deste cartão. |
 
 Reuse the existing card-strip strings; do not duplicate them.
 
 ## How to check it worked
 
-Live numbers, read 2026-09-24. Selecting **1176** leaves exactly one month row, August 2026, reading 3 charges, 0 matched, 0 needs review, 1 no receipt, `20260804-statements-1176-.pdf`, still open USD 36.00. Selecting **3876** leaves August and July. Selecting **0340** leaves July and April. Selecting **2838** leaves August, July and April. Each of 9693, 0113, 6013 and 8311 sits behind the disclosure and leaves the table empty with the line from section 2. "All" restores the full list of seven months with today's columns.
+Live numbers, read 2026-09-24. Selecting **1176** leaves exactly one month row, August 2026, with August's own figures unchanged and the caption visible. Selecting **3876** leaves August and July. Selecting **0340** leaves July and April. Selecting **2838** leaves August, July and April. Each of 9693, 0113, 6013 and 8311 sits behind the disclosure and leaves the table empty with the line from section 2. "All" restores the full list of seven months, with no caption and every column exactly as it is today.
 ````
