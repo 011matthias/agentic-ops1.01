@@ -43,6 +43,36 @@ from pathlib import Path
 # matches the key a future consult computes from the same vendor string.
 from ..matching.deterministic import _normalize as normalize_vendor
 
+# Who stated the category on a review row (2026-09-24, owner ruling: only
+# CORRECTIONS may be memorized). The marker lives here rather than in the web
+# store because the learner is what it is for, and `learning` must never
+# import `web`.
+#
+#   human     - a person named this category. Teachable.
+#   inherited - the row carries the MODEL's own guess, because the edit was
+#               about something else: the note-#62 Confirm keeps the guess as
+#               it stands, and an account-only PUT re-stores the line's
+#               current category beside the account the person did name.
+#               The account is still a correction; the category is not.
+CATEGORY_SOURCE_HUMAN = "human"
+CATEGORY_SOURCE_INHERITED = "inherited"
+CATEGORY_SOURCES = (CATEGORY_SOURCE_HUMAN, CATEGORY_SOURCE_INHERITED)
+
+
+def category_is_human(override: dict | None) -> bool:
+    """Whether an override row's CATEGORY is a person's statement.
+
+    Absent provenance reads as human: every row written before the column
+    existed is an explicit pick far more often than not, and reading NULL as
+    "the model said it" would stop every already-reviewed month from teaching
+    anything it legitimately taught before."""
+    if not override:
+        return False
+    return (
+        override.get("category_source") or CATEGORY_SOURCE_HUMAN
+    ) == CATEGORY_SOURCE_HUMAN
+
+
 __all__ = [
     "LearningStore",
     "MerchantCategory",
@@ -51,6 +81,10 @@ __all__ = [
     "VendorAlias",
     "MerchantFx",
     "normalize_vendor",
+    "CATEGORY_SOURCE_HUMAN",
+    "CATEGORY_SOURCE_INHERITED",
+    "CATEGORY_SOURCES",
+    "category_is_human",
 ]
 
 
@@ -258,6 +292,7 @@ class LearningStore:
         source_run: str | None,
         *,
         keep_account: bool = False,
+        keep_category: bool = False,
     ) -> None:
         """Upsert a confirmed vendor -> category mapping. Latest-wins on the
         category/account; `decision_count` accumulates as the audit trail.
@@ -269,10 +304,23 @@ class LearningStore:
         silently wipe the learned posting account the COA gate and the
         direct-to-GL chain depend on. Writing NULL over a learned account is
         a decision to forget; an edit that simply did not mention the
-        account never made it."""
+        account never made it.
+
+        ``keep_category=True`` is the exact mirror, and closes the other half
+        of the same hole (2026-09-24): a reviewer who fixed only the posting
+        ACCOUNT corrected the account and said nothing about the category, so
+        the model's guess must not land here as her word. Her account still
+        does. On a vendor with no row yet this inserts one holding the account
+        and no category, which the recall path skips at every rung (it tests
+        `hit.category`) - inert rather than wrong, and exactly the row the
+        direct-to-GL chain wants once the account is the answer."""
         account_sql = (
             "merchant_category.zoho_account" if keep_account
             else "excluded.zoho_account"
+        )
+        category_sql = (
+            "merchant_category.category" if keep_category
+            else "excluded.category"
         )
         self.conn.execute(
             "INSERT INTO merchant_category (legal_entity_id, vendor_norm, "
@@ -284,19 +332,27 @@ class LearningStore:
             # unvalidated review queue resurfaces the row (a seed-zoho
             # re-run or a run's re-teach must never wear an old sign-off).
             "validated_at = CASE WHEN "
-            "merchant_category.category IS NOT excluded.category "
+            f"merchant_category.category IS NOT {category_sql} "
             f"OR merchant_category.zoho_account IS NOT {account_sql} "
             "THEN NULL ELSE merchant_category.validated_at END, "
             "validated_by = CASE WHEN "
-            "merchant_category.category IS NOT excluded.category "
+            f"merchant_category.category IS NOT {category_sql} "
             f"OR merchant_category.zoho_account IS NOT {account_sql} "
             "THEN NULL ELSE merchant_category.validated_by END, "
-            "category = excluded.category, "
+            f"category = {category_sql}, "
             f"zoho_account = {account_sql}, "
             "decision_count = merchant_category.decision_count + 1, "
             "last_confirmed_at = excluded.last_confirmed_at, "
             "source_run = excluded.source_run",
-            (legal_entity_id, vendor_norm, category, zoho_account, now_iso, source_run),
+            # A keep flag governs the UPDATE branch through the SQL above; on
+            # a fresh INSERT there is nothing to keep, so it has to bind NULL
+            # here too or "leave the category alone" would WRITE one the
+            # first time a vendor is seen. Both real callers pass None when
+            # they keep, so this only closes the trap in the primitive.
+            (legal_entity_id, vendor_norm,
+             None if keep_category else category,
+             None if keep_account else zoho_account,
+             now_iso, source_run),
         )
         self.conn.commit()
 

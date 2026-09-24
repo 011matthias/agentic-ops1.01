@@ -88,6 +88,7 @@ from ..cards import card_to_dict, effective_cards, normalize_cards_setting
 from ..cards_provision import card_by_key, load_cards
 from ..error_codes import Refusal, code_of, fields_of  # Refusal: item 104
 from ..ingest.expense_report_images import render_receipt_page
+from ..learning import CATEGORY_SOURCE_HUMAN, CATEGORY_SOURCE_INHERITED
 from ..receipt_render import (
     ReceiptRenderError,
     guess_media_type,
@@ -351,10 +352,24 @@ def _receipt_category_entries(
             old=_category_value(before_map.get(key)),
             new=_category_value(after_map.get(key)),
             who=who, at=at, trigger=trigger,
-            detail={"document_id": key[0], "line_index": key[1]},
+            detail={
+                "document_id": key[0], "line_index": key[1],
+                "old_category_source": _old_category_source(before_map.get(key)),
+            },
         )
         for key in sorted(keys, key=lambda k: k[1])
     ]
+
+
+def _old_category_source(override) -> str:
+    """Whose category an override row held before an edit replaced it.
+
+    Recorded in a history line's `detail` so an undo puts the provenance back
+    with the value. It cannot live in `_category_value`: the undo guard
+    compares that value for equality, and a row differing only in provenance
+    would read as superseded. A row with no provenance, and an absent row,
+    both read human, the same back-compat rule the column itself uses."""
+    return (override or {}).get("category_source") or CATEGORY_SOURCE_HUMAN
 
 
 def _category_value(override) -> dict | None:
@@ -457,6 +472,13 @@ def _apply_history_undo(store, run, entry_row, old, now):
         store.set_category_override(
             run_id, document_id, int(line_index),
             (old or {}).get("category"), (old or {}).get("zoho_account"), now,
+            # Restore the provenance the row had, not the provenance of the
+            # edit being undone. A line that was carrying the model's guess
+            # before an edit goes back to carrying it, and an undo can
+            # therefore never promote a guess to her statement.
+            category_source=(
+                detail.get("old_category_source") or CATEGORY_SOURCE_HUMAN
+            ),
         )
         return None, old
     return _HISTORY_UNDO_REFUSALS["history_not_undoable"], None
@@ -3875,7 +3897,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     category, zoho_account, overrides.get((document_id, i)), base
                 )
                 store.set_category_override(
-                    run_id, document_id, i, category, account, now
+                    run_id, document_id, i, category, account, now,
+                    # This route IS the category picker: the category in the
+                    # body is the one she chose.
+                    category_source=CATEGORY_SOURCE_HUMAN,
                 )
                 history.append(dh.make_entry(
                     run_id=run_id, row_key=document_id,
@@ -3885,7 +3910,18 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         {"category": category, "zoho_account": account}
                     ),
                     who=who, at=now, trigger=trigger,
-                    detail={"document_id": document_id, "line_index": i},
+                    detail={
+                        "document_id": document_id, "line_index": i,
+                        # Whose category the row held BEFORE this edit, so an
+                        # undo restores the provenance along with the value
+                        # instead of promoting a model guess to her word.
+                        # `_category_value` deliberately holds two keys only
+                        # (the undo guard compares it), so provenance travels
+                        # in `detail`.
+                        "old_category_source": _old_category_source(
+                            overrides.get((document_id, i))
+                        ),
+                    },
                 ))
             _append_history(store, history)
         return JSONResponse({"ok": True})
@@ -5342,6 +5378,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         # Item 70: a changed category drops the account
                         # chosen for the old one instead of keeping it.
                         account = category_edit_account(category, None, ov, base)
+                        source = CATEGORY_SOURCE_HUMAN
                     else:
                         account = value or None
                         # apply_overrides only fires on an override WITH a
@@ -5349,8 +5386,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         category = ov.get("category") or (
                             base.category if base else None
                         )
+                        # She fixed the ACCOUNT. The category above is only
+                        # carried so `apply_overrides` fires at all, and the
+                        # 2026-09-24 ruling is that it must not be taught as
+                        # hers; a category she had already picked keeps its
+                        # own provenance.
+                        source = (
+                            (ov.get("category_source") or CATEGORY_SOURCE_HUMAN)
+                            if ov.get("category")
+                            else CATEGORY_SOURCE_INHERITED
+                        )
                     store.set_category_override(
-                        run_id, document_id, i, category, account, _now_iso()
+                        run_id, document_id, i, category, account, _now_iso(),
+                        category_source=source,
                     )
                 # Item 104: the same differ the confirm above uses. `bulk`
                 # because one PUT rewrites every line of the expense.

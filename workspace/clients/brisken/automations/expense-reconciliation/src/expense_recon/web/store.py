@@ -27,6 +27,10 @@ from pathlib import Path
 
 # Note item T3: which statement upload printed a charge. Its own module,
 # not `service.py`, because the service imports this file.
+from ..learning.store import (
+    CATEGORY_SOURCE_HUMAN,
+    CATEGORY_SOURCES,
+)
 from .decision_history import ROW_CHARGE, ROW_RECEIPT
 from .statement_origin import origins_from_snapshot
 
@@ -402,6 +406,7 @@ class RunStore:
                 category     TEXT,
                 zoho_account TEXT,
                 updated_at   TEXT,
+                category_source TEXT,
                 PRIMARY KEY (run_id, document_id, line_index)
             );
             CREATE TABLE IF NOT EXISTS intakes (
@@ -687,6 +692,29 @@ class RunStore:
                     f"ALTER TABLE client_errors ADD COLUMN {column} "
                     "TEXT NOT NULL DEFAULT ''"
                 )
+
+        # category_overrides.category_source (the learning-leak marker,
+        # 2026-09-24): whether a PERSON stated this line's category, or the
+        # row merely carries the model's own guess because the edit was
+        # about something else. Two edits store a category nobody stated -
+        # the note-#62 Confirm (keep the guess as it is) and an
+        # account-only PUT - and sign-off then taught both as corrections.
+        # NULL reads as CATEGORY_SOURCE_HUMAN: every row written before this
+        # column existed is overwhelmingly an explicit pick, and defaulting
+        # the other way would stop every already-reviewed month teaching
+        # anything. The account half needs no marker: `category_edit_account`
+        # stores an explicit pick or an earlier override's account, never
+        # the model's.
+        override_cols = {
+            row["name"]
+            for row in self.conn.execute(
+                "PRAGMA table_info(category_overrides)"
+            ).fetchall()
+        }
+        if "category_source" not in override_cols:
+            self.conn.execute(
+                "ALTER TABLE category_overrides ADD COLUMN category_source TEXT"
+            )
 
     # -- where a charge was printed (note item T3) --------------------------
     #
@@ -1593,14 +1621,17 @@ class RunStore:
 
     def get_category_overrides(self, run_id: str) -> dict[tuple[str, int], dict]:
         rows = self.conn.execute(
-            "SELECT document_id, line_index, category, zoho_account "
-            "FROM category_overrides WHERE run_id = ?",
+            "SELECT document_id, line_index, category, zoho_account, "
+            "category_source FROM category_overrides WHERE run_id = ?",
             (run_id,),
         ).fetchall()
         return {
             (r["document_id"], r["line_index"]): {
                 "category": r["category"],
                 "zoho_account": r["zoho_account"],
+                # A row written before the column existed reads as a
+                # person's own pick; see the migration note above.
+                "category_source": r["category_source"] or CATEGORY_SOURCE_HUMAN,
             }
             for r in rows
         }
@@ -1613,15 +1644,32 @@ class RunStore:
         category: str | None,
         zoho_account: str | None,
         updated_at: str,
+        *,
+        category_source: str,
     ) -> None:
+        """Upsert one line's category / account pick.
+
+        `category_source` is REQUIRED and keyword-only on purpose: it is the
+        one fact the learning path cannot recover afterwards, and every
+        writer knows it at the moment it writes. A default here would let a
+        new caller teach the model its own guess by omission, which is the
+        leak this column closed."""
+        if category_source not in CATEGORY_SOURCES:
+            raise ValueError(
+                f"invalid category_source {category_source!r}; "
+                f"expected {CATEGORY_SOURCES}"
+            )
         self.conn.execute(
             "INSERT INTO category_overrides (run_id, document_id, line_index, "
-            "category, zoho_account, updated_at) VALUES (?, ?, ?, ?, ?, ?) "
+            "category, zoho_account, updated_at, category_source) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(run_id, document_id, line_index) DO UPDATE SET "
             "category = excluded.category, "
             "zoho_account = excluded.zoho_account, "
-            "updated_at = excluded.updated_at",
-            (run_id, document_id, line_index, category, zoho_account, updated_at),
+            "updated_at = excluded.updated_at, "
+            "category_source = excluded.category_source",
+            (run_id, document_id, line_index, category, zoho_account, updated_at,
+             category_source),
         )
         self.conn.commit()
 
