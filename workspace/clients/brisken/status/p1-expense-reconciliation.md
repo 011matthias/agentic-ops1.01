@@ -14,8 +14,11 @@ updated: 2026-09-24
 credits). Owner's pick: expenses needing a category, all months, each card its
 own (2838 without its subcards). Backend `n_needs_category` on
 `GET /api/cards/status`; SPA half `docs/lovable-strip-count-needs-category-prompt.md`,
-**NOT pasted**. Live values: 2838 3, 3645 1, 3876 10, 0340 3, 1176 2, 9693 3,
-No card 8 (30 = the months list's Needs category column summed).
+**published and driven** 2026-09-24: every chip read cold as 2838 3, 3645 1,
+3876 10, 0340 3, 1176 2, 9693 3, No card 8, and 3876's six months opened on its
+scope add up to 10 in their NEEDS CATEGORY boxes. The months table's own Needs
+category column stays whole-month, so beside a picked card it reads 24 across
+3876's months, not 10.
 
 **2026-09-24: the Phase 1 SPA prompt is written; the GL engine is already
 live.** The item 192 deploy (Fly `45d4c494`, 15:02 UTC) shipped all of main,
@@ -38,7 +41,9 @@ gate to inside the months". The roll-up now counts receipts per card
 receipt month `n_without_charge` + `statement`), from `expenses[].without_charge`
 stamped with the month tab's own verdict. Live: 3876 has 39 receipts without a
 charge, 32 in months with no statement for it; 9693 16 of 16; No card 62 of 72.
-The SPA half, `docs/lovable-cards-overview-prompt.md`, is **NOT pasted**.
+The SPA half, `docs/lovable-cards-overview-prompt.md`, is **published and
+driven** 2026-09-24, together with item 194: no strip, no door into a month,
+9693 in the table, the fold down to 0113 / 6013 / 8311.
 
 **2026-09-24: 2838's subcards nest behind it on the months strip** (backlog item
 191; PR #1310; Fly `fe8699ee`). Owner: the subcards' tabs should not sit next to
@@ -49,8 +54,8 @@ The SPA half, `docs/lovable-months-subcards-prompt.md`, is **published and
 driven** (2026-09-24): the three parents were entered the same day on the
 owner's yes ("in books there is only 2838 registered"), and every row of the
 prompt's check table matched cold. The same logic for the `/cards` overview
-table is item 194, `docs/lovable-cards-overview-subcards-prompt.md`, **not
-pasted**, no backend work. Cold drive after the deploy: the
+table is item 194, `docs/lovable-cards-overview-subcards-prompt.md`,
+**published and driven** 2026-09-24, no backend work. Cold drive after the deploy: the
 published strip is unchanged chip for chip and still filters (3645 five months,
 2838 six, 0340 two).
 
