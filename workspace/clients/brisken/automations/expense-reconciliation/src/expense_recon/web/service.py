@@ -9108,6 +9108,237 @@ def build_expense_report(
     return pdf
 
 
+def build_card_status(store: RunStore) -> dict:
+    """The cross-month card roll-up (item 185, owner 2026-09-24): "the same
+    per card filter system inside the months should be outside of the
+    months".
+
+    Inside a month, the card strip answers "what is open on this card, this
+    month". Every question note #86 asks is the same one asked of the
+    estate instead: which cards are missing, which charges have no receipt,
+    which receipts have no charge, and above all WHICH MONTH a thing is on,
+    which is exactly what a per-month surface cannot say.
+
+    The numbers are `month_coverage`'s, per month, summed. Not a second
+    derivation: a card row here and the same card's row on its month page
+    are the same arithmetic over the same charge states, which is the rule
+    that stops two screens reporting one card at two stages of done (the
+    `n_categorized` failure of 2026-08-22).
+
+    Every expense batch counts, trips included, because a card does not
+    stop being spent on when the spending happens on a trip. Each month
+    entry carries its own `batch_type`, so a page can separate them; a
+    roll-up that quietly left trips out would report a card as never used
+    while a trip had used it.
+
+    Two identities for one card are folded, in one direction only: an
+    UNKNOWN row (digits nobody has defined) folds into a KNOWN row with
+    exactly the same digits. That is the card defined after a month was
+    already created, which otherwise appears twice, once under `3645` and
+    once under `card-3645`. Nothing folds two known cards, and an unknown
+    row with no defined twin keeps its own line: April's `digits:4700` is a
+    real card the registry is still missing (item 26) and burying it would
+    hide the gap.
+
+    A run whose snapshot cannot be read is named in `unreadable` and
+    skipped, never fatal: an unreadable month is a reason to report fewer
+    months, not none.
+    """
+    from ..output._pdf_common import _add_money
+
+    months: list[dict] = []
+    per_card: dict[str, dict] = {}
+    unreadable: list[str] = []
+
+    def _slot(row: dict) -> dict:
+        slot = per_card.get(row["key"])
+        if slot is None:
+            slot = per_card[row["key"]] = {
+                "key": row["key"],
+                "card_key": row.get("card_key") or "",
+                "label": row.get("label") or "",
+                "digits": list(row.get("digits") or []),
+                "entity": row.get("entity") or "",
+                "known": bool(row.get("known")),
+                "n_transactions": 0,
+                "n_reconciled": 0,
+                "n_review": 0,
+                "n_unmatched_tx": 0,
+                "n_refunds": 0,
+                "statements": [],
+                "period_start": None,
+                "period_end": None,
+                "months": [],
+                "_ccy": [],
+            }
+        # The entity is the registry's and only a known row carries one;
+        # keep the first non-empty rather than letting a later blank win.
+        if not slot["entity"] and row.get("entity"):
+            slot["entity"] = row["entity"]
+        return slot
+
+    for run in store.list_runs():
+        if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        snapshot = run.snapshot or {}
+        try:
+            transactions, receipts, outcome, _cfg = snapshot_from_dict(snapshot)
+        except Exception:  # noqa: BLE001 - one bad month must not blank the page
+            unreadable.append(run.run_id)
+            continue
+        decisions = store.get_decisions(run.run_id)
+        effective = apply_decisions(outcome, transactions, receipts, decisions)
+        states = charge_states(transactions, effective, decisions)
+        coverage, _keys = month_coverage(run, transactions, states)
+        month = {
+            "run_id": run.run_id,
+            "label": run.label or run.run_id,
+            "batch_type": batch_type(run),
+            "created_at": run.created_at,
+            "n_transactions": sum(
+                int(c.get("n_transactions") or 0) for c in coverage
+            ),
+            "n_cards": sum(
+                1 for c in coverage
+                if c.get("n_transactions") or c.get("statements")
+            ),
+            # The month's own span, from its charges. Not `created_at`:
+            # two months created inside one second tie on it, and the
+            # order of the months a card is on then depends on nothing.
+            # Not the label either, which is free text.
+            "period_start": min(
+                (c["period_start"] for c in coverage if c.get("period_start")),
+                default=None,
+            ),
+            "period_end": max(
+                (c["period_end"] for c in coverage if c.get("period_end")),
+                default=None,
+            ),
+        }
+        months.append(month)
+        for row in coverage:
+            slot = _slot(row)
+            for field in (
+                "n_transactions", "n_reconciled", "n_review",
+                "n_unmatched_tx", "n_refunds",
+            ):
+                slot[field] += int(row.get(field) or 0)
+            files = [str(f) for f in (row.get("statements") or []) if str(f)]
+            for file in files:
+                slot["statements"].append({
+                    "file": file,
+                    "run_id": run.run_id,
+                    "month": month["label"],
+                })
+            for field, better in (
+                ("period_start", min), ("period_end", max),
+            ):
+                iso = row.get(field)
+                if iso:
+                    slot[field] = (
+                        iso if slot[field] is None
+                        else better(slot[field], iso)
+                    )
+            slot["_ccy"].append(row.get("unreconciled_by_ccy") or {})
+            slot["months"].append({
+                "run_id": run.run_id,
+                "label": month["label"],
+                "batch_type": month["batch_type"],
+                "n_transactions": int(row.get("n_transactions") or 0),
+                "n_reconciled": int(row.get("n_reconciled") or 0),
+                "n_review": int(row.get("n_review") or 0),
+                "n_unmatched_tx": int(row.get("n_unmatched_tx") or 0),
+                "n_refunds": int(row.get("n_refunds") or 0),
+                "statements": files,
+                "period_start": row.get("period_start"),
+                "period_end": row.get("period_end"),
+                "unreconciled_by_ccy": dict(row.get("unreconciled_by_ccy") or {}),
+            })
+
+    _fold_unknown_cards(per_card)
+
+    cards = []
+    for slot in per_card.values():
+        slot["unreconciled_by_ccy"] = _add_money(slot.pop("_ccy"))
+        slot["n_statements"] = len(slot["statements"])
+        # The months this card is actually ON, which is the question note
+        # #86 opens with. A month that merely listed the card in its
+        # registry with nothing in it is not one of them.
+        slot["months"] = [
+            m for m in slot["months"]
+            if m["n_transactions"] or m["statements"]
+        ]
+        slot["n_months"] = len(slot["months"])
+        # "Which cards are missing": no charge and no statement anywhere,
+        # which today is only answerable by querying every month by hand.
+        slot["never_loaded"] = not (
+            slot["n_transactions"] or slot["n_statements"]
+        )
+        cards.append(slot)
+
+    months.sort(
+        key=lambda m: (
+            m["period_start"] or "", m["created_at"] or "", m["run_id"],
+        ),
+        reverse=True,
+    )
+    order = {m["run_id"]: i for i, m in enumerate(months)}
+    for card in cards:
+        card["months"].sort(key=lambda m: order.get(m["run_id"], 1 << 30))
+        card["statements"].sort(key=lambda s: order.get(s["run_id"], 1 << 30))
+    # The month strip's own order: the busiest card first, the ones with
+    # nothing in them last, alphabetical inside each.
+    cards.sort(key=lambda c: (
+        -c["n_transactions"], -c["n_statements"], c["label"].lower(), c["key"],
+    ))
+    return {
+        "cards": cards,
+        "months": months,
+        "unreadable": unreadable,
+        "note": (
+            "Per card, across every expense batch. The figures are each "
+            "month's own card coverage, summed; a card with no charge and "
+            "no statement anywhere reads never_loaded."
+        ),
+    }
+
+
+def _fold_unknown_cards(per_card: dict[str, dict]) -> None:
+    """Fold an UNKNOWN card row into the KNOWN row with the same digits.
+
+    One direction only. A card defined after a month was created appears
+    under its digit token in the old month and its registry key in the new
+    one, and reporting that as two cards is worse than useless on a surface
+    whose whole purpose is one line per card. An unknown row with no
+    defined twin keeps its own line, because it is a card the registry is
+    missing rather than a duplicate."""
+    known = {}
+    for slot in per_card.values():
+        if slot["known"] and slot["digits"]:
+            known.setdefault(tuple(sorted(slot["digits"])), slot)
+    for key, slot in list(per_card.items()):
+        if slot["known"] or not slot["digits"]:
+            continue
+        target = known.get(tuple(sorted(slot["digits"])))
+        if target is None:
+            continue
+        for field in (
+            "n_transactions", "n_reconciled", "n_review",
+            "n_unmatched_tx", "n_refunds",
+        ):
+            target[field] += slot[field]
+        target["statements"].extend(slot["statements"])
+        target["months"].extend(slot["months"])
+        target["_ccy"].extend(slot["_ccy"])
+        for field, better in (("period_start", min), ("period_end", max)):
+            if slot[field]:
+                target[field] = (
+                    slot[field] if target[field] is None
+                    else better(target[field], slot[field])
+                )
+        del per_card[key]
+
+
 def build_cost_center_totals(
     store: RunStore,
     *,
