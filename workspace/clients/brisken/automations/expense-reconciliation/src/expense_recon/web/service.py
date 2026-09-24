@@ -6618,6 +6618,7 @@ def resolve_batch_row_cards(
     matching.
     """
     from ..cards import (
+        carries_no_payment_info,
         masked_short_ending,
         names_registry_card_type,
         resolve_hinted_card_ex,
@@ -6732,10 +6733,13 @@ def resolve_batch_row_cards(
             # registry's own cards have ("VISA CREDIT") is no evidence a
             # non-Brisken card paid. The row falls to the ordinary company /
             # person question and the private option stays open.
+            # Case 6 (same day): a wallet or vague word ("Link", "saved
+            # payment method", "OUTRO") is read like no payment method.
             "suggested_private": bool(
                 hint and card is None and not ambiguous and not private
                 and not not_a_card
                 and not names_registry_card_type(hint, cards)
+                and not carries_no_payment_info(hint)
             ),
             "can_mark_private": (
                 not private

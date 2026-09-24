@@ -136,6 +136,14 @@ GENERIC_TENDER_WORDS = frozenset({
     # DE
     "kreditkarte", "karte", "ec", "bar", "lastschrift", "girokarte",
     "uberweisung", "ueberweisung", "zahlung", "kredit",
+    # Case 6 (owner ruling 2026-09-24): wording the live months print that
+    # names a tender and no card. "VENDA CREDITO VISA" (a sale on a Visa
+    # credit), "Kartenzahlung erhalten" (card payment received),
+    # "girocardOLV" (OLV / ELV: the girocard direct-debit schemes), and the
+    # wallet or vague words of NO_PAYMENT_INFO_WORDS below.
+    "venda", "kartenzahlung", "erhalten", "olv", "elv",
+    "link", "saved", "stored", "payment", "method", "outro", "outros",
+    "outra", "other",
 })
 
 
@@ -146,27 +154,44 @@ def is_generic_tender(text: str | None) -> bool:
     (< _DIGIT_MIN, e.g. the "30" of "cartao credito 30 dias"). Diacritics
     fold first ("Cartão de crédito" -> "cartao de credito"): `_normalize`
     is ASCII-alnum and would split accented letters."""
-    if not text or not text.strip():
-        return False
-    if _card_keys(text) or masked_short_ending(text):
-        return False
-    words = _folded_words(text)
-    return (
-        any(w in GENERIC_TENDER_WORDS for w in words)
-        and all(
-            w in GENERIC_TENDER_WORDS
-            or (w.isdigit() and len(w) < _DIGIT_MIN)
-            for w in words
-        )
+    return _generic_words(text) is not None
+
+
+def _all_tender_words(words: list[str]) -> bool:
+    return any(w in GENERIC_TENDER_WORDS for w in words) and all(
+        w in GENERIC_TENDER_WORDS or (w.isdigit() and len(w) < _DIGIT_MIN)
+        for w in words
     )
+
+
+def _generic_words(text: str | None) -> list[str] | None:
+    """The words a generic tender hint is made of, or None when the hint is
+    not generic. A run-together hint is read both whole and split at its
+    case changes, whichever is all tender vocabulary: "CreditCard" and
+    "girocardOLV" (case 6) only read as words split, "PayPal" only whole."""
+    if not text or not text.strip():
+        return None
+    if _card_keys(text) or masked_short_ending(text):
+        return None
+    words = _folded_words(text)
+    if _all_tender_words(words):
+        return words
+    split = _folded_words(_CASE_CHANGE.sub(" ", _fold(text)))
+    return split if split != words and _all_tender_words(split) else None
+
+
+_CASE_CHANGE = re.compile(r"(?<=[a-z])(?=[A-Z])")
+
+
+def _fold(text: str) -> str:
+    folded = unicodedata.normalize("NFKD", text)
+    return "".join(ch for ch in folded if not unicodedata.combining(ch))
 
 
 def _folded_words(text: str) -> list[str]:
     """Lower-case ASCII words with diacritics folded first ("Cartão de
     crédito" -> cartao, de, credito)."""
-    folded = unicodedata.normalize("NFKD", text)
-    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
-    return _normalize(folded).split()
+    return _normalize(_fold(text)).split()
 
 
 # Owner ruling 2026-09-24 (card-attribution case 5): a generic tender hint
@@ -196,7 +221,18 @@ CARD_KIND_WORDS = {
     "credit": "credit", "credito": "credit", "kredit": "credit",
     "kreditkarte": "credit",
     "debit": "debit", "debito": "debit", "lastschrift": "debit",
+    "olv": "debit", "elv": "debit",
 }
+# Case 6 (owner ruling 2026-09-24: "no suggestion and should default to
+# alternative logic for cases of expenses with no payment info"). A wallet or
+# a vague word ("Link", "saved payment method", "OUTRO") says nothing about
+# which card paid, so a hint made only of these is read like an expense that
+# printed no payment method: no private suggestion, whatever the registry
+# holds, and the card waits for the statement to name it.
+NO_PAYMENT_INFO_WORDS = frozenset({
+    "link", "saved", "stored", "payment", "method", "outro", "outros",
+    "outra", "other",
+})
 NON_CARD_TENDER_WORDS = frozenset({
     "cash", "bar", "dinheiro", "check", "cheque", "paypal", "pix", "wire",
     "transfer", "bank", "boleto", "transferencia", "uberweisung",
@@ -240,12 +276,13 @@ def names_registry_card_type(
     labels without either word) yields False for every hint, which is the
     behaviour before this rule. Never selects a card: the type is shared by
     every card that carries it (owner ruling 2026-08-21)."""
-    if not is_generic_tender(hint):
+    words = _generic_words(hint)
+    if words is None:
         return False
     networks, kinds = registry_card_types(cards)
     if not networks and not kinds:
         return False
-    for word in _folded_words(hint or ""):
+    for word in words:
         if word in NON_CARD_TENDER_WORDS:
             return False
         if word in CARD_NETWORK_WORDS and CARD_NETWORK_WORDS[word] not in networks:
@@ -253,6 +290,18 @@ def names_registry_card_type(
         if word in CARD_KIND_WORDS and CARD_KIND_WORDS[word] not in kinds:
             return False
     return True
+
+
+def carries_no_payment_info(hint: str | None) -> bool:
+    """True when a generic tender hint is made only of wallet / vague words
+    (NO_PAYMENT_INFO_WORDS, plus short numbers): "Link", "saved payment
+    method", "OUTRO". Such a hint suggests no private expense, exactly like
+    a receipt that printed no payment method (case 6, owner ruling
+    2026-09-24). Like every generic hint it selects no card."""
+    words = _generic_words(hint)
+    return words is not None and all(
+        w in NO_PAYMENT_INFO_WORDS or w.isdigit() for w in words
+    )
 
 
 # Note #60 (owner, 2026-09-17): some receipts print only the last TWO

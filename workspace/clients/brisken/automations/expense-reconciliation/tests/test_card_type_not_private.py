@@ -38,6 +38,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from expense_recon.cards import (  # noqa: E402
     cards_from_setting,
+    carries_no_payment_info,
+    is_generic_tender,
     names_registry_card_type,
     registry_card_types,
 )
@@ -263,10 +265,68 @@ def test_the_registry_types_come_from_label_and_account_wording():
 def test_only_generic_hints_are_in_scope():
     cards = cards_from_setting(LIVE_CARDS)
     for hint in ("Visa ...3645", "Mastercard xxxx.xxxx.xxxx.78",
-                 "VENDA CREDITO VISA", "CreditCard", "Link",
-                 "saved payment method", "girocardOLV", "", None):
+                 "Paid via Corp Services card", "girocardOLV", "", None):
         assert names_registry_card_type(hint, cards) is False, hint
     for hint in BRISKEN_TYPES:
         assert names_registry_card_type(hint, cards) is True, hint
     for hint in NOT_BRISKEN + ("Visa Debit", "cash", "PayPal", "Wire Transfer"):
         assert names_registry_card_type(hint, cards) is False, hint
+
+
+# ── case 6: wording the live months print (owner ruling 2026-09-24) ──
+#
+# "no suggestion and should default to alternative logic for cases of
+# expenses with no payment info". The type phrases join the rule above once
+# they read as tender words; the wallet / vague words are read like a receipt
+# that printed no payment method at all.
+
+CASE6_TYPE = ("VENDA CREDITO VISA", "CreditCard", "Kartenzahlung erhalten")
+CASE6_NO_INFO = ("Link", "saved payment method", "OUTRO")
+
+
+def test_case6_wording_is_not_suggested_private(client, monkeypatch):
+    batch = _batch(client, monkeypatch,
+                   CASE6_TYPE + CASE6_NO_INFO + ("girocardOLV", "PayPal"),
+                   cards=LIVE_CARDS)
+    grid = _grid(client, batch)
+    rows = _by_hint(grid)
+
+    for hint in CASE6_TYPE + CASE6_NO_INFO:
+        row = rows[hint]
+        assert row["suggested_private"] is False, hint
+        assert row["can_mark_private"] is True, hint
+        assert row["card"] is None and row["card_source"] == "none", hint
+        assert row["review"]["reason_code"] == "needs_entity", hint
+    # girocard with its direct-debit suffix, and a wallet Brisken has no
+    # card in, are still evidence of money that did not come off a card.
+    assert rows["girocardOLV"]["suggested_private"] is True
+    assert rows["PayPal"]["suggested_private"] is True
+    assert grid["summary"]["n_suggested_private"] == 2
+    strip = {e["hint"]: e for e in grid["card_review"]["unresolved_hints"]}
+    assert strip["Link"]["generic"] is True
+    assert strip["CreditCard"]["generic"] is True
+
+
+def test_no_payment_info_does_not_depend_on_the_registry(client, monkeypatch):
+    """An expense with no payment method never suggests private, registry or
+    not; the no-info words follow it. The type rule, by contrast, falls back
+    to the old behaviour on an empty registry."""
+    batch = _batch(client, monkeypatch, CASE6_NO_INFO + ("VISA CREDIT", ""))
+    rows = _by_hint(_grid(client, batch))
+    for hint in CASE6_NO_INFO + ("",):
+        assert rows[hint]["suggested_private"] is False, hint
+    assert rows["VISA CREDIT"]["suggested_private"] is True
+
+
+def test_case6_vocabulary():
+    for hint in ("CreditCard", "girocardOLV", "PayPal", "ApplePay",
+                 "VENDA CREDITO VISA", "Kartenzahlung erhalten", "Link",
+                 "saved payment method", "OUTRO"):
+        assert is_generic_tender(hint), hint
+    for hint in ("CorpServ", "PayPalCorpServ", "Compra Loja Central",
+                 "Link ...3645"):
+        assert not is_generic_tender(hint), hint
+    for hint in CASE6_NO_INFO + ("Stored payment method", "OUTROS 2"):
+        assert carries_no_payment_info(hint), hint
+    for hint in ("Link Visa", "payment card", "PayPal", "", None, "CorpServ"):
+        assert not carries_no_payment_info(hint), hint
