@@ -5,7 +5,7 @@ Do not edit by hand. Regenerate with:
     uv run tools/compile-brisken-gl-taxonomy.py --workbook <sheet> \\
         --revision <the sheet's save date> --expected-counts <org=n,...>
 
-Source: CoA-expense-relevant-BCS-BTS-260923.xlsx, marked `Expense Relevant` by Dirk, saved 2026-09-23.
+Source: CoA-expense-relevant-BCS-BTS-260924.xlsx, marked `Expense Relevant` by Dirk, saved 2026-09-24.
 
 LEAVES maps an account CODE to (branch, {org_id: (account_id, name,
 postable, reason)}). The code is the identity because it is stable across
@@ -17,9 +17,9 @@ to a default. Non-postable rows are present WITH a reason so a refusal can
 say which of four facts it hit rather than `unknown reference`.
 """
 
-CURATED_REVISION = '2026-09-23'
-SOURCE_WORKBOOK = 'CoA-expense-relevant-BCS-BTS-260923.xlsx'
-SOURCE_SHA256 = '30956252ad68e8a05bdb5d726a2f720ba97b532f86870def82dbe28f6d6b1ce1'
+CURATED_REVISION = '2026-09-24'
+SOURCE_WORKBOOK = 'CoA-expense-relevant-BCS-BTS-260924.xlsx'
+SOURCE_SHA256 = '800c088738f67c546d1510e109c47513d3947d59a27480aaf24030c5cc1a5a63'
 
 # Also the rollout and rollback lever: an org absent here is simply not
 # covered, and the chain refuses for it instead of guessing.
@@ -36,8 +36,8 @@ ORG_TABS = {
 }
 
 POSTABLE_COUNTS = {
-    '697686691': 67,
-    '808232536': 64,
+    '697686691': 64,
+    '808232536': 62,
     '822741658': 68,
 }
 
@@ -594,7 +594,7 @@ LEAVES = {
     'E000010': (
         (),
         {
-            '697686691': ('2031056000033061222', 'R&D', True, ''),
+            '697686691': ('2031056000033061222', 'R&D', False, 'not_expense_relevant'),
         },
     ),
     'E000010-91': (
@@ -652,9 +652,9 @@ LEAVES = {
         },
     ),
     'E100010-11': (
-        ('Travel Expense',),
+        (),
         {
-            '697686691': ('2031056000000101696', 'Travel Expense: Per diem', True, ''),
+            '697686691': ('2031056000000101696', 'Travel Expense: Per diem', False, 'not_expense_relevant'),
             '808232536': ('4036956000000076131', 'Travel Expense: Per diem', False, 'not_expense_relevant'),
             '822741658': ('4373186000000078143', 'Travel Expense: Per diem', False, 'not_expense_relevant'),
         },
@@ -1414,9 +1414,9 @@ LEAVES = {
         },
     ),
     'E700030-22': (
-        ('COGS - Consulting Services',),
+        (),
         {
-            '808232536': ('4036956000000260852', 'COGS - CONS - Travel Expense (Third Party Reimbursement)', True, ''),
+            '808232536': ('4036956000000260852', 'COGS - CONS - Travel Expense (Third Party Reimbursement)', False, 'not_expense_relevant'),
         },
     ),
     'E700030-23': (
@@ -1855,8 +1855,8 @@ LEAVES = {
     'E900020': (
         (),
         {
-            '697686691': ('2031056000018043283', 'Tax Management Services - Holding', True, ''),
-            '808232536': ('4036956000001157094', 'Tax Management Services - Holding', True, ''),
+            '697686691': ('2031056000018043283', 'Tax Management Services - Holding', False, 'not_expense_relevant'),
+            '808232536': ('4036956000001157094', 'Tax Management Services - Holding', False, 'not_expense_relevant'),
         },
     ),
     'I600000': (
