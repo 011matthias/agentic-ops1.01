@@ -40,7 +40,9 @@ here returns an account, and recognizing a code does not make it postable.
 """
 from __future__ import annotations
 
-from .coa_provision import entity_from_settings
+import os
+
+from .coa_provision import PROVISION_ENV, entity_org_ids, load_provisioning
 from .matching.types import EXPENSE_CATEGORIES
 from .zoho import curated_leaves
 
@@ -108,8 +110,32 @@ def gl_revision() -> str:
         return ""
 
 
-def gl_account_options(settings: dict | None) -> dict[str, list[dict]]:
+def _current_entity_orgs(settings: dict | None) -> dict[str, str]:
+    """The entity -> org map a batch created NOW would carry: the settings
+    registry first, the /data provisioning file second, per label, exactly
+    as `coa_provision.apply_to_config` builds it. Fail-open to settings only:
+    an unreadable file must not take down a render."""
+    try:
+        prov_path = os.environ.get(PROVISION_ENV)
+        provisioning = load_provisioning(prov_path) if prov_path else None
+    except Exception:  # noqa: BLE001 - presentation, never a reason to 500
+        provisioning = None
+    return entity_org_ids(settings, provisioning)
+
+
+def gl_account_options(
+    settings: dict | None, entity_orgs: dict[str, str] | None = None,
+) -> dict[str, list[dict]]:
     """Per legal entity, the curated leaves that entity may actually post to.
+
+    Keyed by the SAME entity -> org map the engine categorized with, so a
+    row's `legal_entity_id` finds its list. A month on the GL engine passes
+    its own frozen `gl_entity_orgs`; anything else gets the map a batch
+    created now would carry. Reading the settings registry alone missed the
+    labels only the provisioning file names, and live those are exactly the
+    labels receipts carry (`Corporate Services`, `Cloud Services`,
+    `Consulting`; the registry holds `Brisken Corp Services, LLC` and the
+    like), so every GL row would have looked uncovered.
 
     Served BESIDE `categories` / `category_options`, never in place of them
     (`cost_centers.py:104`: never repurpose a name, add beside it). The
@@ -120,8 +146,8 @@ def gl_account_options(settings: dict | None) -> dict[str, list[dict]]:
     `legal_entity_id`, a settings `entities` key), because the org id it
     maps to is an implementation detail of the chart.
 
-    An entity whose settings entry names no `org_id`, or names an org
-    outside the curated set, gets NO entry at all rather than an empty list.
+    An entity the map gives no org, or an org outside the curated set, gets
+    NO entry at all rather than an empty list.
     Absent says "this entity is not covered by the curated chart"; an empty
     list would say "covered, and there is nothing here to post to". Those
     send different people to look, which is the distinction
@@ -132,16 +158,14 @@ def gl_account_options(settings: dict | None) -> dict[str, list[dict]]:
     is deliberately not a key: the same code is named differently across
     entities.
     """
-    entities = (settings or {}).get("entities")
-    if not isinstance(entities, dict):
-        return {}
+    if entity_orgs is None:
+        entity_orgs = _current_entity_orgs(settings)
     out: dict[str, list[dict]] = {}
-    for label in entities:
+    for label, org in (entity_orgs or {}).items():
         name = str(label or "").strip()
+        org_id = str(org or "").strip()
         if not name:
             continue
-        entry = entity_from_settings(settings, name)
-        org_id = str((entry or {}).get("org_id") or "").strip()
         try:
             if not curated_leaves.covers_org(org_id):
                 continue

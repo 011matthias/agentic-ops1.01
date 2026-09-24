@@ -80,8 +80,16 @@ JPG = b"\xff\xd8\xff\xe0fake-jpeg-bytes"
 # view means editing this table, `docs/api-contract.md`, and the SPA in the
 # same change. That is the point: the edit is the reminder.
 
+# Maps whose keys are DATA rather than field names: the probe collapses each
+# key to `*`, so a new entity is not a new field.
+DATA_KEYED_MAPS = {"gl_accounts"}
+
 EXPENSE_BATCH_CONTRACT = {
     "account_options[]": "string",
+    # Phase 1: per entity label (the row's `legal_entity_id`), the curated
+    # leaves `{code, name, category}` that entity may post to. The SPA picks
+    # this picker only when `category_vocabulary` is "gl".
+    "gl_accounts.*[]": "object",
     "card_review.resolved[]": "object",
     "card_review.resolved[].hints[]": "string",
     "card_review.unresolved_hints[]": "object",
@@ -163,6 +171,10 @@ EXPENSE_BATCH_CONTRACT = {
 
 RUN_CONTRACT = {
     "assignable_receipts[]": "object",
+    # `gl_accounts` is served here too, with the expense batch view's shape,
+    # but this view's fixtures are CLI runs with no entities, so the map is
+    # always empty here and a pin could never be observed. The expense
+    # batch table above is where its element shape is held.
     # Item 138: same list as on the expense batch view, without the two
     # Expenses-page figures.
     "card_sections[]": "object",
@@ -252,6 +264,7 @@ EXPENSE_BATCH_MUST_COVER = {
     "card_sections[].statements[]",
     "coverage[].statement_ids[]",
     "expenses[].uncategorized_lines[]",
+    "gl_accounts.*[]",
 }
 
 RUN_MUST_COVER = {
@@ -309,6 +322,8 @@ def _walk(node, path: str, out: dict[str, set[str]]) -> None:
     """
     if isinstance(node, dict):
         for key, value in node.items():
+            if path in DATA_KEYED_MAPS:
+                key = "*"  # the key is data (an entity label), not a field
             _walk(value, f"{path}.{key}" if path else key, out)
         return
     if not isinstance(node, list):

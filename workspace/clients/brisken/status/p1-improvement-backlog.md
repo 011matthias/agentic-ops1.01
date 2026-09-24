@@ -5494,6 +5494,36 @@ unreadable here; the 9693 activity workbook opens. 0113 is Dirk's to export
 (Apple Card statements come from Wallet / card.apple.com). Loading any of these
 is a write to Criss's months, so it is put to the owner, not done.
 
+**2026-09-24 (evening): owner ordered the load; it is blocked on OpenAI
+credits.** Owner: "insert any bank statements you need". Plan, by the cycle
+convention August already follows (1176's `20260804` sits in August):
+`20260804-statements-9693-.pdf` into August (21 charges, Jul 05 to Aug 04, no
+9693 receipt among them) and `20260904-statements-9693-.pdf` into September (32
+charges, Aug 05 to Sep 04; pairs the Sep 1-4 receipts and borrows August's two
+OpenAI receipts, dated Aug 20 and 21, which fall in that window). Form as the
+published dialog sent for 1176: `account_id=card-9693`,
+`account_card_currency=USD`. Fly volume snapshot `vs_kKOxkR0mZ9lIKY3vmJ845D9`
+taken first. The August attach job (`99d3f5629717`) failed at stage `judging`:
+OpenAI 429 `credit_balance_exhausted`. August re-read identical to its
+baseline (114 rows, same two statements, no summary change), so the attach is
+atomic. September not attempted. Retry both, in that order, once the key has
+credit. 8311 and 6013 deliberately not loaded (fee-only cycles, no receipts).
+
+Three facts found on the way, from the code (read-only trace):
+- **A statement's charges are never filtered to the month.** Every charge in
+  the file joins, and the month's period is min..max of its charges. There is
+  no cross-month check: the same file attached to two months doubles its
+  charges, and there is no route to detach one (only whole-month delete). Each
+  file goes to exactly one month.
+- **`statements/reread` would re-stamp PDF charges with entity `"card"`.** A
+  PDF entry records `account_id ""`, and the re-read falls back to
+  `config.statement.account_id`, which a PDF upload never sets. August's 1176
+  charges carry this exposure today. Do not run a re-read on a month holding a
+  PDF until that is fixed.
+- **An exhausted LLM key blocks a statement attach outright** instead of
+  degrading to deterministic matching, and parks every inbound mail as
+  `held_body_only` (first seen 2026-09-24 16:21 UTC).
+
 **Audit rank 15 of 40; severity high as merged; verification: checked by hand against live August coverage; no reviewer pass.** All 223 live charges belong to Corporate Services because the only workbook ever attached is the Chase export for account 2838. Receipts paid with the Cloud card 9693 and the Consulting card 1176 arrive monthly and park as 'card statement not loaded' (August: OpenAI 80.12 and 80.04; Anthropic 100; Lovable 50); 0113, 6013 and 8311 have no statement either. The backend accepts one workbook per card, but the Lovable page offers one 'Attach bank statement' dialog and one download, so Criss cannot add a second. Nothing checks that the card typed in the dialog matches the card printed in the file, so a workbook with no card column uploaded under the default would book to Corporate Services.
 
 **Evidence:** Live August coverage[]: card-0113, card-6013, card-8311, card-1176, card-9693 statements [] n_transactions 0; rows legal_entity_id Corporate Services 111/111 (July 112/112); unmatched_receipts reason card_statement_not_loaded 4 (0001/0003 OpenAI on 9693, 0015 Anthropic and 0025 Lovable on 1176); statements[] one file per month, account_id card-2838, card_key ''. web/service.py:7810-7850 (advisory only for same card_key under two ids), :220 (account_id defaults to 'card'); item 59 record (2514-2554). Backlog 2742 and 3182 ('owner's call to load them'); item 53 (2032-2047).

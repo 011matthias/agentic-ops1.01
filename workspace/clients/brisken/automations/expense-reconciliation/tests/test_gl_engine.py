@@ -502,3 +502,117 @@ def test_the_category_route_clears_on_empty_and_ignores_the_unknown(
         _, ov = _stored_line(web, batch_id, doc)
         assert ov["category"] is None and ov["zoho_account"] is None, clear
         assert ov["category_source"] == "human"
+
+
+# ── what the SPA maps by hand: which picker, and why a row was refused ──
+#
+# The category route takes both vocabularies on any batch, and every entity a
+# bucket-era month names is covered by `gl_accounts`, so the SPA cannot infer
+# the picker from the route or the entity. `category_vocabulary` is the batch
+# telling it. The two literals below are what the SPA localizes; a new value
+# goes red here until the pin, `docs/api-contract.md` and the prompt move
+# together (the item 128 rule).
+
+CATEGORY_VOCABULARY_PIN = {"gl", "buckets"}
+REFUSAL_CODES_PIN = {
+    "entity_missing", "org_not_curated", "no_such_code_in_org",
+    "not_expense_relevant", "account_unresolved",
+    # Tier 2 is ruled out and unreachable (no caller passes a cost center);
+    # its text exists so the ruling is visible, and the SPA falls back to the
+    # English `reason` for it like any code it does not map.
+    "trip_purpose_inheritance_deferred",
+}
+
+
+def test_a_gl_batch_says_so_on_both_month_views(web, monkeypatch):
+    code = _postable_in(CORP_ORG)
+    label = next(lbl for lbl in curated_leaves.llm_leaf_labels(CORP_ORG)
+                 if lbl.startswith(code + " "))
+    # The live shape: the settings registry names the long legal name, and
+    # only the provisioning file names the short label receipts carry.
+    web.put("/api/settings", json={
+        "entities": {"Brisken Corp Services, LLC": {"org_id": CORP_ORG}}})
+    batch_id, expense = _batch_with_one_receipt(web, monkeypatch, CORP, label)
+    assert expense["legal_entity_id"] == CORP
+    for url in (f"/api/expense-batches/{batch_id}", f"/api/runs/{batch_id}"):
+        body = web.get(url).json()
+        assert body["category_vocabulary"] == "gl", url
+        # The SPA looks the row's own label up; it has to be there.
+        leaves = body["gl_accounts"][expense["legal_entity_id"]]
+        assert code in [leaf["code"] for leaf in leaves], url
+    assert web.get("/api/settings").json()["gl_accounts"][CORP]
+
+    # A company defined after the month was created is one this month's
+    # engine never knew (it re-categorizes from the frozen map), so its
+    # picker must not offer it either; Settings, which shows today, does.
+    web.put("/api/settings", json={"entities": {
+        "Brisken Corp Services, LLC": {"org_id": CORP_ORG},
+        "Late Entity": {"org_id": CLOUD_ORG}}})
+    assert "Late Entity" in web.get("/api/settings").json()["gl_accounts"]
+    for url in (f"/api/expense-batches/{batch_id}", f"/api/runs/{batch_id}"):
+        assert "Late Entity" not in web.get(url).json()["gl_accounts"], url
+
+
+def test_a_bucket_era_batch_says_buckets(tmp_path, monkeypatch):
+    """No provisioning, so the batch is created without `gl_entity_orgs`:
+    the month keeps the eight and must say so, whatever `gl_accounts` holds."""
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("EXPENSE_RECON_CARDS", raising=False)
+    monkeypatch.delenv("EXPENSE_RECON_COA_PROVISION", raising=False)
+    with TestClient(create_app(tmp_path)) as client:
+        batch_id, _ = _batch_with_one_receipt(
+            client, monkeypatch, CORP, "Office Supplies & Consumables")
+        for url in (f"/api/expense-batches/{batch_id}", f"/api/runs/{batch_id}"):
+            body = client.get(url).json()
+            assert body["category_vocabulary"] == "buckets", url
+            assert body["category_vocabulary"] in CATEGORY_VOCABULARY_PIN
+
+
+def test_a_statement_month_says_its_vocabulary_on_the_run_view(tmp_path):
+    """The Matching page reads `build_view`, not the expense view: a
+    statement month created on the GL engine says "gl" there and serves the
+    leaves for the labels its own frozen map names; one without says
+    "buckets"."""
+    from expense_recon.matching.types import MatchOutcome
+    from expense_recon.web.serialize import snapshot_to_dict
+    from expense_recon.web.store import RunStore
+
+    snapshot = snapshot_to_dict([], [], MatchOutcome(
+        matches=[], unmatched_transactions=[], unmatched_receipts=[],
+        ambiguous=[]), [])
+    store = RunStore(tmp_path / "recon-web.sqlite")
+    for run_id, config in (
+        ("gl-month", {"gl_entity_orgs": {CORP: CORP_ORG}}),
+        ("bucket-month", {}),
+    ):
+        store.create_run(
+            run_id=run_id, created_at="2026-09-24T00:00:00", label=run_id,
+            operator=None, summary={}, snapshot=snapshot, config=config,
+            work_dir=str(tmp_path), llm_enabled=False, has_coa=False)
+    store.close()
+    with TestClient(create_app(tmp_path)) as client:
+        gl = client.get("/api/runs/gl-month").json()
+        assert gl["category_vocabulary"] == "gl"
+        assert _postable_in(CORP_ORG) in [
+            leaf["code"] for leaf in gl["gl_accounts"][CORP]]
+        bucket = client.get("/api/runs/bucket-month").json()
+        assert bucket["category_vocabulary"] == "buckets"
+
+
+def test_refusal_codes_are_pinned():
+    from expense_recon.zoho import _curated_leaves_data as data
+    from expense_recon.zoho.posting_resolution import _REFUSAL_TEXT
+
+    assert set(_REFUSAL_TEXT) == REFUSAL_CODES_PIN, set(_REFUSAL_TEXT) ^ REFUSAL_CODES_PIN
+    assert curated_leaves.NOT_COVERED in REFUSAL_CODES_PIN
+    assert curated_leaves.NO_SUCH_CODE in REFUSAL_CODES_PIN
+    # A non-postable leaf refuses with ITS reason, so every reason the
+    # compiled chart carries must be one the SPA can name.
+    reasons = {
+        binding[3]
+        for _branch, bindings in data.LEAVES.values()
+        for binding in bindings.values()
+        if not binding[2]
+    }
+    assert reasons <= REFUSAL_CODES_PIN, reasons - REFUSAL_CODES_PIN

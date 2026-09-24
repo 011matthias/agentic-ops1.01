@@ -58,6 +58,7 @@ receives after `jsonable_encoder`.
 | `cost_center_options[]` | object `{name, kind, note}` (item 47: OBJECTS, unlike its three sibling option lists) |
 | `card_sections[]` | object (item 138, the Expenses page's card tabs) |
 | `card_sections[].digits[]` · `card_sections[].statements[]` | string |
+| `gl_accounts.*[]` | object `{code, name, category}`; `*` is an entity label (see "GL vocabulary" below) |
 
 ### Run
 
@@ -85,6 +86,34 @@ receives after `jsonable_encoder`.
 | `card_sections[]` | object (item 138, the Matching page's card tabs) |
 | `card_sections[].digits[]` · `card_sections[].statements[]` | string |
 | `rows[].fills[]` | object `{column, index, hex, family}` (item 162: the row's coloured cells, named not interpreted; ABSENT when the row has no readable fill) |
+
+## GL vocabulary (Phase 1)
+
+A month is categorized in exactly one vocabulary. Both month views
+(`GET /api/expense-batches/{id}`, `GET /api/runs/{id}`) say which:
+
+| Field | Shape | Meaning |
+|---|---|---|
+| `category_vocabulary` | `"gl"` or `"buckets"` | `"gl"` when the batch was created on the GL engine (its config carries `gl_entity_orgs`). A line's `category` is then a curated leaf CODE (`E100010-31`) and the picker is `gl_accounts[entity]`. `"buckets"` for every earlier month: the eight names and `category_options`, unchanged. |
+| `gl_accounts` | object, entity label -> `[{code, name, category}]` | The curated leaves each entity may post to, keyed by the same labels a row's `legal_entity_id` carries (the batch's own frozen map on a GL month; settings + provisioning otherwise). `name` is that entity's wording and is presentation only; `category` is the branch to group under. An entity ABSENT from the map is not covered by the curated chart, which is a different fact from an empty list. |
+| `gl_revision` | string | The compiled taxonomy's revision (`2026-09-24`), so a stale client is diagnosable. |
+
+`GET /api/settings` and the settings save reply carry `gl_accounts` and
+`gl_revision` too, built from today's map.
+
+The category write routes take either vocabulary on any batch: a bucket name
+stays itself, a leaf code stays itself, a `"CODE name"` label is stored as the
+code, `""` / `null` clears, and anything else is dropped and named under
+`ignored`. Because both are accepted, the SPA must choose the picker from
+`category_vocabulary`, never from the entity.
+
+A refused line: the row's `review` reads `state: "pick"`,
+`reason_code: "category_refused"`, and carries `refusal`, one of
+`entity_missing`, `org_not_curated`, `no_such_code_in_org`,
+`not_expense_relevant`, `account_unresolved` (plus the unreachable
+`trip_purpose_inheritance_deferred`). `reason` holds the English sentence.
+Pinned by `tests/test_gl_engine.py` (`REFUSAL_CODES_PIN`,
+`CATEGORY_VOCABULARY_PIN`).
 
 ## `parse_issues` specifically
 
