@@ -1,6 +1,7 @@
 # Lovable prompt: the card filter leaves the month, the selection carries in (item 190)
 
-**NOT PASTED.** Owner, 2026-09-24: *"i think the logical next step is removing
+**PASTED, NOT PUBLISHED** (Lovable repo `c27c7fd`, 2026-09-24 13:14Z; the
+live bundle still serves the old build). Owner, 2026-09-24: *"i think the logical next step is removing
 the card filter from inside the months since its outside now."* and *"when
 using this filter, and a month is clicked on by user he should then only see
 data from the card that he selected in the filter. that is part of extracting

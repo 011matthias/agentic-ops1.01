@@ -9220,7 +9220,7 @@ collapse it behind "Override account" once resolved, unchanged where an
 override is already set. `docs/lovable-paid-through-follows-card-prompt.md`,
 NOT pasted.
 
-### 190. The card filter leaves the month, and the selection carries in (owner 2026-09-24) (BACKEND SHIPPED; SPA prompt NOT pasted)
+### 190. The card filter leaves the month, and the selection carries in (owner 2026-09-24) (BACKEND SHIPPED; SPA prompt pasted, NOT published)
 
 **Owner:** *"i think the logical next step is removing the card filter from
 inside the months since its outside now."* Then: *"when using this filter, and
@@ -9270,6 +9270,17 @@ tabs; the per-card statement line and "Add another statement for this card"
 move under it; `cardTabs.*` splits into `cardStrip.*` (the chips `/months` and
 `/cards` share) and `cardScope.*` (the line), and `under`, `subcards` and
 `wb.filter.card.empty` are dropped.
+
+**Pasted, not published (read 2026-09-24).** The Lovable repo's `main`
+(`011matthias/brisken-expense-review` `c27c7fd`, 13:14Z) carries it:
+`src/components/CardScope.tsx`, `src/lib/card-scope.ts`, `receipt_months` and
+`no_card` read in `MonthsHome.tsx`, zero `cardTabs.` references, the EN and PT
+keys as the prompt's §5 table, and a plain `URLSearchParams` search serializer
+in `src/router.tsx` so `3876` and `digits:4700` are never JSON-quoted (every
+route's `validateSearch` reads strings, so the app-wide swap is safe). The
+published bundle is still the old build: `lovable-bundle-audit.py` with all
+five controls found reports every item-190 signature ABSENT and `cardTabs.` at
+88 occurrences. Publish is the only step left before the §7 drive.
 
 ## Shipped (loop history)
 
