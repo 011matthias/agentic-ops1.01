@@ -9,11 +9,10 @@ viewer clicks on 2838. maintain their filter function"*.
 the strip can nest without hard-coding which card is the account. Parallel
 fields only: every figure stays the card's own.
 
-**Live data gate.** On 2026-09-24 the live registry has `parent` empty on all
-nine cards: the tree the owner named on 2026-09-18 (3645, 3876 and 0340 under
-2838, backlog item 147) was never entered. Until someone sets those three in
-Settings, Cards (the existing "Account" picker on each card), the payload
-nests nothing and this prompt changes nothing on screen, by design (§5).
+**Live data gate: cleared 2026-09-24.** The three parents are entered (owner
+yes), so the live payload nests 3645, 3876 and 0340 under 2838 and the §
+"How to check" table applies from the moment this is published. Its "BEFORE
+the parents are set" line is history now; skip it.
 
 ````markdown
 On the months list (`/months`) only, the card strip nests a card's subcards under the card they belong to: they leave the top row and appear in a second row once the viewer clicks their account. Filtering does not change. Do NOT add Supabase or any database; the app calls the FastAPI backend at `https://api.expenses.brisken.com` with the existing `Authorization: Bearer <token>`.
@@ -33,7 +32,7 @@ Add both to the `CardStatus` interface in `src/lib/api.ts` as optional (`parent?
 
 ## 1. The top row
 
-In `CardStrip` (`src/components/CardsStatusScreen.tsx`), add an optional prop `nestSubcards?: boolean`, default `false`. Only `MonthsHome` passes it: `<CardStrip cards={cards} active={cardKey} onChange={setCardKey} showNoCard nestSubcards />`. The `/cards` page does not pass it and stays exactly as it is.
+In `CardStrip` (`src/components/CardsStatusScreen.tsx`), add an optional prop `nestSubcards?: boolean`, default `false`. Only `MonthsHome` passes it: `<CardStrip cards={cards} active={cardKey} onChange={setCardKey} showNoCard nestSubcards />`. The `/cards` page does not pass it and stays exactly as it is (if `/cards` no longer shows a strip at all, there is nothing there to change; keep `CardStrip` exported for `/months` either way).
 
 With `nestSubcards` on, a card with a non-empty `parent` is left out of the top row: out of the loaded chips AND out of the never-loaded disclosure, and the "Show {n} cards with nothing loaded" count counts only top-row cards. Everything else on the top row is unchanged: "All" first, the loaded cards in payload order, "No card", the disclosure.
 
@@ -93,5 +92,5 @@ Then in Settings, Cards, set "Account" = "Credit Card - 2838" on 3645, 3876 and 
 | Click **2838** again | second row stays; months back to 2838's own six |
 | Click **1176** | second row gone; September and August |
 | Click **All** | full seven months; no second row |
-| Open `/cards` | its strip still flat: 3645, 3876 and 0340 beside 2838 on the one row, as before |
+| Open `/cards` | nothing on it changed by this prompt: no second row, no chevron |
 ````
