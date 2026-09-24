@@ -9816,6 +9816,50 @@ through `POST /api/runs/{id}/publish` that goes red when it is put back.
 later evidence, to be decided before the first close. The scratch replay that
 produced the table is not kept; the method above rebuilds it.
 
+### 201. On a GL month, an account picked by hand exports as "(account unmapped - assign)" (found 2026-09-24 in the GL prompt drive)
+
+The GL picker sends only the leaf code (`{field: "category", value: "E100010-31"}`,
+and per line `category` with NO `zoho_account`, as the prompt specifies). The
+server stores no account with it: `category_edit_account` keeps an account only
+when the category did not change, and at read time `override_base_account`
+drops the line's own account for a changed category. Both rules were written for
+the eight buckets, where no category maps to one account (item 70). On a GL month
+the code IS the account, and its name sits in the row company's curated chart
+(`gl_accounts[entity]`). The export's debit account is `cat.zoho_account`, and
+an empty one is written as `(account unmapped - assign)` (`posting_common.py`
+`_debit_account_and_note`).
+
+Seen live on the TEST batch before it was purged: after the hand pick,
+`posting_category` read `{"category": "E100010-31", "zoho_account": "",
+"source": "override"}`, while the engine's own pick on the other row carried
+`"zoho_account": "Travel Expense | Food"`. The export itself was not produced
+(the batch had no statement); the path from an empty account to the placeholder
+is code-traced. No live month is affected yet: the only GL batch so far was the
+TEST one, so October 2026 will be the first real GL month.
+
+**Proposed fix:** on a run whose `category_vocabulary` is `gl`, a category edit
+with no explicit account resolves the code through the row company's curated
+chart and stores that name. A code the company does not hold stays blank and
+shows `gl.code.notInList`, as it already does. Tests through the edit route AND
+the export, and a regress proof on the resolving call.
+
+### 202. A US-format receipt date can be read day-first, landing the receipt in a month after its own arrival (found 2026-09-24 in the GL prompt drive)
+
+Two synthetic US restaurant receipts, uploaded together, printed "Date:
+09/10/2026" and "Date: 09/11/2026". The first read as 2026-09-10, the second as
+**2026-11-09**, which is later than the upload itself (2026-09-24). The same
+format was read month-first once and day-first once, in the same upload. This
+matches item 77's finding that the model transcribes some slashed dates
+day-first, which is right for Criss's Brazilian slips and wrong for US vendors.
+On a real drop or mail, the second receipt would route to November 2026 and
+could create that month.
+
+Evidence is one pair of synthetic receipts, so treat it as a lead, not a rate.
+**Cheapest guard:** a receipt date later than its arrival is impossible. When
+day and month are both 12 or under and swapping them lands on or before the
+arrival, take the swap and flag the row. Measure first over the stored receipts
+(item 77's A/B harness) before choosing between that guard and a prompt change.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
