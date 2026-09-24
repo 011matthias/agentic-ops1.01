@@ -10260,6 +10260,31 @@ reported no coverage anywhere; the valid read is `card_key` / `statements` /
 `period_start` / `period_end` / `n_transactions`, and a receipts-only month
 returns `[]` by design.
 
+**Build 2 (step 6), 2026-09-25:** the D5 guard shipped (PR TBD, Shipped row
+TBD). `MatchingConfig.no_card_vendor_guard` (default on, mirrored into
+`config/match-tuning.json`): the CHOSEN pair of a receipt with `card_evidence`
+receipt `none` and `_vendor_score` below 0.5 keeps its assignment (still the
+top candidate, one click to confirm) but goes to `judgment_required` with
+`review_code` `no_card_vendor_disagrees`, so it sits in review and lends no
+card through `settled_charge_cards`. One thing the plan did not see: every
+re-match runs `cli._apply_judgment` over `judgment_required`, which rebuilt
+each entry as an LLM FX verdict (code and reason lost, `match_type`
+`fx_judgment`) and unbinds a pair the model rejects, so the three right CNPJ
+pairs could have lost their one click. Owner ruled 2026-09-25 (asked in
+session): the model judges FX pairs only, and a non-FX entry passes through
+untouched. Measured on a fresh DB copy (July `50622baec444`, August
+`074a7b8905d7`, their labels): four receipts move to review, none leaves a
+right booking; August `0025` Lovable on BASE44 50.00 wrong to review
+(wrong 1 to 0), July `0034` Erste Fracht on HOTEL AM TIERGARTEN and `0066`
+Mega Center on BEATRYZ (both labelled excluded) and August `0033` E A
+LOCACOES (unlabelled) go to review. Clean right 26 / 6 unchanged. The April
+MARIA BETAN pair is outside the two replayed months. Six bundles unchanged
+(70/95, 0 wrong, SCORE 76.0; every bundle receipt carries a Zoho payment
+mode), CI fixtures unchanged, so `expected.json` and the deploy baseline did
+not move. Rows move at each month's next natural re-match. Lovable prompt
+`docs/lovable-no-card-vendor-guard-prompt.md` (not pasted). Tests
+`tests/test_no_card_vendor_guard_c9.py`.
+
 ### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (BUILT 2026-09-25, same PR as item 201)
 
 Owner, 2026-09-25: "i need july, august and september recategorized with this

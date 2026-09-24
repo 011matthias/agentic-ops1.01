@@ -9,6 +9,17 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: case 9 build 2 (step 6, owner D5) shipped: a receipt with no
+card evidence is not booked to a charge whose merchant words disagree.** The
+pair keeps its place as the charge's top candidate but waits in review
+(`review_code` `no_card_vendor_disagrees`) and lends no card. The LLM FX
+judge now leaves non-FX review pairs untouched (owner ruling in session).
+Measured on live July and August: August's Lovable invoice on BASE44 50.00
+(the one wrong booking) goes to review, and so do three pairs the labels
+call excluded or leave unlabelled; clean right bookings and the six bundles
+(70/95) are unchanged. Rows move at each month's next natural re-match. The
+Lovable prompt (`docs/lovable-no-card-vendor-guard-prompt.md`) is not pasted.
+
 **2026-09-25: case 9 ("no payment info") is planned, not built** (backlog
 item 204, PR #1346). Live: 34 receipts print nothing, 12 only a Brisken card
 type, 7 an unrecognised phrase. Six steps, in order of rows resolved per unit

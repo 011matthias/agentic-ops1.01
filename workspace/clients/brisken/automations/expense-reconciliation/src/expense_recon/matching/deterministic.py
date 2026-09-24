@@ -297,6 +297,7 @@ _TUNABLE_BOOL = frozenset({
     "card_scoping", "fx_self_derived_rates", "fx_self_derived_review",
     "uniqueness_spoken_for",
     "vendor_ignore_reference_tokens", "no_card_rival_review",
+    "no_card_vendor_guard",
 })
 
 
@@ -567,6 +568,20 @@ class MatchingConfig:
     # turns the clause off; the fallback itself (match across every card)
     # is not a knob.
     no_card_rival_review: bool = True
+    # `no_card_vendor_guard` (item 204 step 6, owner D5 2026-09-25): a pair
+    # whose receipt names no card (`card_evidence` "none") and whose merchant
+    # words disagree (`_vendor_score` below `NO_CARD_VENDOR_FLOOR`) is not
+    # booked. It keeps its assignment, so it is still the charge's top
+    # candidate and a person confirms it in one click, but it goes to
+    # `judgment_required` with `NO_CARD_VENDOR_REVIEW` instead of `matches`,
+    # so it never sits in the reconciled bucket or lends its card. A blank
+    # prompts Criss to look; a wrong card silently books the receipt to the
+    # wrong entity and person. Measured 2026-09-25 on live July and August:
+    # the two labelled-wrong no-card pairs (August BASE44 50.00 holding a
+    # Lovable invoice, 40%; July HOTEL AM TIERGARTEN holding Erste Fracht,
+    # 47%) leave reconciled, and three right pairs whose charge prints a
+    # CNPJ descriptor go to review with them. False restores booking.
+    no_card_vendor_guard: bool = True
 
     @classmethod
     def from_dict(cls, data: Mapping) -> "MatchingConfig":
@@ -1798,6 +1813,11 @@ RECEIPT_CARD_EVIDENCE = ("override", "hint", "learned", "printed", "none")
 CHARGE_CARD_EVIDENCE = ("row", "account", "none")
 # `Match.review_code` when the no-card fallback's review clause fired.
 NO_CARD_RIVAL_REVIEW = "no_card_rival_on_other_card"
+# `Match.review_code` when `no_card_vendor_guard` sent a no-card pair to
+# review because the merchant words disagree (below `NO_CARD_VENDOR_FLOOR`,
+# the same 0.5 the API shows as `vendor_pct` 50).
+NO_CARD_VENDOR_REVIEW = "no_card_vendor_disagrees"
+NO_CARD_VENDOR_FLOOR = 0.5
 
 
 def card_evidence(tx: Transaction, receipt: Receipt) -> tuple[str, str]:
@@ -1826,6 +1846,28 @@ def _no_card_rival_note(rival: Transaction, rival_keys: set[str]) -> str:
         f"the receipt names no card and a charge on another card also fits "
         f"({rival.vendor_from_statement} {rival.amount} {rival.transaction_currency} "
         f"on {'/'.join(sorted(rival_keys))})"
+    )
+
+
+def no_card_vendor_disagrees(
+    tx: Transaction, receipt: Receipt, match: Match, cfg: MatchingConfig
+) -> bool:
+    """True when `no_card_vendor_guard` holds a deterministic pair back from
+    booking: the receipt carries no card evidence and the merchant words do
+    not agree. Public so the attribution tool reads the matcher's rule."""
+    return (
+        cfg.no_card_vendor_guard
+        and match.match_type is not MatchType.FX_JUDGMENT
+        and match.vendor_score < NO_CARD_VENDOR_FLOOR
+        and card_evidence(tx, receipt)[0] == "none"
+    )
+
+
+def _no_card_vendor_note(match: Match) -> str:
+    return (
+        f"the receipt names no card and the charge's merchant words do not "
+        f"match its vendor ({round(match.vendor_score * 100)}%), so the pair "
+        f"is not booked until someone confirms it"
     )
 
 
@@ -2327,7 +2369,23 @@ def match_month(
             continue
         if c.match.document_id in held_by_tie:
             continue
-        if c.is_determ:
+        # Item 204 step 6 (owner D5): the chosen pair of a receipt with no
+        # card evidence whose merchant words disagree keeps its assignment
+        # (the charge and the receipt are consumed exactly as before, so it
+        # stays the top candidate) but lands in review, not reconciled.
+        guarded = c.is_determ and no_card_vendor_disagrees(
+            tx_by_id[c.match.transaction_id], rec_by_id[c.match.document_id],
+            c.match, cfg,
+        )
+        if guarded:
+            outcome.judgment_required.append(replace(
+                c.match,
+                requires_review=True,
+                review_code=c.match.review_code or NO_CARD_VENDOR_REVIEW,
+                reason=c.match.reason.rstrip(".")
+                + f". Review: {_no_card_vendor_note(c.match)}.",
+            ))
+        elif c.is_determ:
             outcome.matches.append(c.match)
         else:
             outcome.judgment_required.append(c.match)
