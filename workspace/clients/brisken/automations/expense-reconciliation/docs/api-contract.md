@@ -5977,11 +5977,15 @@ At publish, beside the category/alias upsert (item 116's whole-entry rule),
 `registry_card_upserts_from_expense_run` folds the month's resolved cards
 into the registry:
 
-* every receipt whose card came from `override`, `hint`, `settled_charge` or
-  `learned` adds that card to its merchant's `cards_seen`. A row carried by
-  `merchant` adds nothing, on purpose: a card the registry lent is not
-  evidence about the merchant, and feeding it back would let one observation
-  harden into a fact.
+* every receipt whose card came from `override`, `hint` or `settled_charge`
+  adds that card to its merchant's `cards_seen`. A row carried by `merchant`
+  adds nothing, on purpose: a card the registry lent is not evidence about
+  the merchant, and feeding it back would let one observation harden into a
+  fact. Nor does a row carried by `learned` (removed 2026-09-25, the side
+  finding of item 200): a remembered card is the tool's own memory, and
+  counting it let a remembered card confirm itself into `cards_seen` and a
+  learned `card_key` at sign-off, against the 2026-09-24 ruling that only
+  corrections may be memorized.
 * `card_key` is written only while `cards_seen` holds exactly ONE card and
   the entry has no key yet, and is marked `card_key_learned: true`.
 * a second card DROPS a learned key in the same pass. Two cards are a fact

@@ -4917,9 +4917,12 @@ def registry_upserts_from_expense_run(
 # Note item M2 (2026-09-18): the card sources that count as an OBSERVATION of
 # where a merchant's spend actually lands. `merchant` is deliberately absent —
 # a card the registry itself lent must never teach itself back — and so is
-# `none`. `learned` is in: a card remembered per receipt is still a card the
-# tool resolved for this merchant this month.
-_CARD_OBSERVATION_SOURCES = frozenset({"override", "hint", "settled_charge", "learned"})
+# `none`. `learned` is out too (owner 2026-09-25, the side finding of item
+# 200): a card remembered per receipt is the tool's own memory, not an
+# observation, and counting it let a remembered card confirm itself into
+# `cards_seen` and a learned `card_key` at sign-off, against the 2026-09-24
+# ruling that only corrections may be memorized.
+_CARD_OBSERVATION_SOURCES = frozenset({"override", "hint", "settled_charge"})
 
 
 def registry_card_upserts_from_expense_run(
