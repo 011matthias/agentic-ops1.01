@@ -3455,6 +3455,28 @@ card's number: `42463153XXXXXX38` groups as `38`, not `42463153`.
 
 Tests: `tests/test_card_short_ending.py` (unit + the batch route).
 
+**More wordings (item 198, 2026-09-24).** The ending words are now a list of
+explicit lead phrases (`cards._ENDING_LEADS`), matched case-insensitively on
+diacritic-folded text:
+
+| Language | Leads |
+|---|---|
+| EN | `ending` (`in` / `with`, `the digits`), `ends in` / `ends with`, `(the) last two digits` / `last 2 digits`, `last digits` |
+| PT | `final` (so `com final`), `terminado em` / `terminada em`, `terminação` (`em`), `(os) últimos dois dígitos` / `últimos 2 dígitos` |
+| DE | `endet auf`, `endend auf`, `(mit) Endung`, `Endziffern`, `letzte(n) zwei Ziffern` / `Stellen` (or `2`) |
+| FR | `(se) terminant par`, `finissant par`, `(les) deux derniers chiffres` / `2 derniers chiffres`, `derniers chiffres` |
+| ES | `termina en` / `terminada en`, `(los) últimos dos dígitos` / `últimos 2 dígitos` |
+
+A lead is followed only by separators (`:`, `.`, `…`, spaces) and the two
+digits, never by other words, so `ending balance 38` and `final total 38`
+name nothing. Two digits followed by a decimal separator and a digit are an
+amount (`valor final 38,00`, `Total final: 38.50`), never an ending, and a
+number after a list word counts as a second ending, so `last two digits: 38
+and 49` names nothing. Live case: September's GoDaddy (446.99 EUR) printed
+`We have billed your Visa card ending with the last two digits: 38` and now
+reads `card-2838`, `card_ending: "38"`, Corporate Services, not suggested
+private. No field changes shape.
+
 ## A receipt arriving into an existing month reads today's card list (note #54, audit item 108, 2026-09-17)
 
 Owner, note #54: a receipt that reaches an existing month by the Receipts

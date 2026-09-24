@@ -171,23 +171,75 @@ def is_generic_tender(text: str | None) -> bool:
 # them: they are the card's own tail, not a quantity. A bare two-digit
 # number ("Cartao Credito 30 Dias", "$15.00") is not, so it never counts.
 # A single "x" is not a mask here ("3x" is an instalment count); "xx" is.
+_ENDING_MASKS = r"[Xx]{2,}|[*#•●]+|\.{2,}|…"
+# Item 198 (owner, 2026-09-24): the ending words, one EXPLICIT phrase per
+# entry, matched on diacritic-folded text. September's GoDaddy printed "card
+# ending with the last two digits: 38", which the old two-word list missed.
+# A lead is followed only by separators and the two digits, never by other
+# words: allowing words in between is what would read "ending balance 38" or
+# "final total 38" as a card. A new wording is one line here.
+_ENDING_LEADS = (
+    # EN ("card no. ending" is covered by "ending")
+    r"ending(?:\s+(?:in|with))?(?:\s+the\s+digits)?",
+    r"ends\s+(?:in|with)",
+    r"(?:the\s+)?last\s+(?:two|2)\s+digits",
+    r"last\s+digits",
+    # PT ("com final" is covered by "final")
+    r"final",
+    r"terminad[oa]\s+em",
+    r"terminacao(?:\s+em)?",
+    r"(?:os\s+)?ultimos\s+(?:dois|2)\s+digitos",
+    # DE
+    r"endet\s+auf",
+    r"endend\s+auf",
+    r"(?:mit\s+)?endung",
+    r"endziffern",
+    r"letzten?\s+(?:zwei|2)\s+(?:ziffern|stellen)",
+    # FR
+    r"(?:se\s+)?terminant\s+par",
+    r"finissant\s+par",
+    r"(?:les\s+)?(?:deux|2)\s+derniers\s+chiffres",
+    r"derniers\s+chiffres",
+    # ES
+    r"termina(?:da)?\s+en",
+    r"(?:los\s+)?ultimos\s+(?:dos|2)\s+digitos",
+)
+# Two digits followed by a decimal separator and a digit are an amount
+# ("valor final 38,00"), never an ending: the `(?![.,]\d)` guard.
+_ENDING_DIGITS = r"(?<!\d)(\d{2})(?!\d)(?![.,]\d)"
 _SHORT_ENDING = re.compile(
-    r"(?:[Xx]{2,}|[*#\u2022\u25cf]+|\.{2,}|\u2026|\bending(?:\s+(?:in|with))?|\bfinal)"
-    r"\s*[:.\u2026]*\s*(?<!\d)(\d{2})(?!\d)",
+    rf"(?:{_ENDING_MASKS}|\b(?:{'|'.join(_ENDING_LEADS)}))"
+    rf"\s*[:.…]*\s*{_ENDING_DIGITS}",
+    re.IGNORECASE,
+)
+# "last two digits: 38 and 49" prints two endings, which name nothing: the
+# number after a list word counts as a second ending.
+_SECOND_ENDING = re.compile(
+    rf"\s*(?:[,;/&]|\s(?:and|or|e|ou|und|oder|et|y|o)\s)\s*{_ENDING_DIGITS}",
     re.IGNORECASE,
 )
 
 
 def masked_short_ending(text: str | None) -> str | None:
     """The two-digit card ending a hint prints behind a mask or an ending
-    word ("XXXXXX38", "**38", "••38", "ending in 38", "final 38"), or None.
+    phrase ("XXXXXX38", "**38", "••38", "ending in 38", "final 38", "last
+    two digits: 38", "endet auf 38"), or None.
 
     Only consulted for a hint that carries NO card number the matcher can
     use (`_card_keys` empty): a printed last-4 always outranks two digits.
-    Two different endings in one hint ("xx38; xx49") name nothing."""
+    Two different endings in one hint ("xx38; xx49", "last two digits: 38
+    and 49") name nothing. Diacritics fold first, so "últimos dígitos" and
+    "terminação" match their ASCII leads."""
     if not text or _card_keys(text):
         return None
-    endings = {m.group(1) for m in _SHORT_ENDING.finditer(text)}
+    folded = unicodedata.normalize("NFKD", text)
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    endings: set[str] = set()
+    for m in _SHORT_ENDING.finditer(folded):
+        endings.add(m.group(1))
+        second = _SECOND_ENDING.match(folded, m.end())
+        if second:
+            endings.add(second.group(1))
     return endings.pop() if len(endings) == 1 else None
 
 
