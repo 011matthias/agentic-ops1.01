@@ -28,8 +28,8 @@ beside the module either: the image's Dockerfile copies only `pyproject.toml`,
 `uv.lock` and `src`, and the wheel target is `packages = ["src/expense_recon"]`,
 so a data file would be the first non-.py file under `src/` and would put "did
 hatchling carry it" on every deploy's critical path. A .py literal reaches Fly
-with zero packaging change, and there is a precedent two files away in
-`zoho/category_accounts.py`.
+with zero packaging change, the way the retired `zoho/category_accounts.py`
+table shipped before it.
 
 THE SHEET IS THE SOURCE; THE PULL IS A CROSS-CHECK
 `zoho-books-coa.json` was short for Cloud Services: 199 accounts, zero

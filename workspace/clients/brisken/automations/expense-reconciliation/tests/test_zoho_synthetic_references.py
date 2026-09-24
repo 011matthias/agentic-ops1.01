@@ -45,7 +45,7 @@ def _row(ref, **over):
     row.update(
         {
             "Expense Date": "2026-08-20",
-            "Expense Account": "Software & Subscriptions",
+            "Expense Account": "IT: Cloud Subscriptions-Others",
             "Expense Amount": "80.04",
             "Currency Code": "USD",
             "Reference#": ref,

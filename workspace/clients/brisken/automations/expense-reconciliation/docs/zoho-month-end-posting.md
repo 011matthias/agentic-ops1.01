@@ -122,10 +122,17 @@ change rather than reading blind.
 
 Every org's chart carries `account_id`, so resolution is mechanical. It is
 per-org: each legal entity is a separate Zoho organization with its own
-chart, so a charge routes to an org first and an account second. The
-existing COA gate already refuses an account that is inactive, non-leaf,
-out of scope or marked "DO NOT USE", and posting reuses it rather than
-growing a second opinion.
+chart, so a charge routes to an org first and an account second.
+
+`zoho.accounts.resolve_account_id` refuses an account that is inactive,
+marked "DO NOT USE", or not postable in the target org (2026-09-24, item
+4). Postable is the org's curated `Expense Relevant` marking where one
+exists (Cloud Services, Consulting, Corporate Services), and the chart's
+parent/leaf shape everywhere else (the sandbox). The two differ on
+purpose: the marking approves 35 chart parents, and Zoho does take
+postings on a parent (Brisken's books hold 8 over two years). Until then
+the resolver checked neither leaf-ness nor scope, and the only thing
+keeping a roll-up out was a hand-audited category table, now deleted.
 
 ## Sandbox rehearsal in TEST-BTS
 
@@ -330,6 +337,15 @@ name-only comparison fails in the dangerous direction, since it would have
 sent someone renaming categories that were already fine.
 
 ## 2026-09-23, later: closing Gap 1 with a per-org category map
+
+**Retired 2026-09-24 (item 4).** `zoho/category_accounts.py` is deleted:
+under direct-to-GL categorization a category is no longer an account's
+stand-in, and a bucket label in the account column now refuses as
+`not_in_chart` in every org, the sandbox included. Rehearsing a bucket-era
+month in TEST-BTS therefore refuses the category-labelled rows again. The
+"leaf rule" below was also wrong about Zoho, which does accept postings on
+a parent; see Account resolution. The section stays as the record of the
+July rehearsal.
 
 Gap 1 above turned out to have a more precise cause than "the categories
 are not in the chart", and the precise version is what made it fixable.

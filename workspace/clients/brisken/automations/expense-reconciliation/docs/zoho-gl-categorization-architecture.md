@@ -138,19 +138,32 @@ The sheet remains the source for the compiled asset and the pull remains a
 cross-check; what changed is that the pull is now complete enough for the COA
 gate, which reads it and answers UNKNOWN for anything absent.
 
-**`resolve_account_id` does not check leaf-ness or scope.** A reference naming a
-parent or roll-up resolves and posts today (`zoho/accounts.py:121-218`, no
-`NON_LEAF` branch). The only thing holding that line is that
-`category_accounts._TEST_BTS` was hand-audited for leafness. Deleting the table
-without lifting `coa_gate.classify_account`'s `NON_LEAF` and `OUT_OF_SCOPE` into
-the resolver removes the audit and keeps the hole, in a change that then hands an
-LLM a list of accounts to name.
+**`resolve_account_id` did not check leaf-ness or scope.** A reference naming a
+parent or roll-up resolved and posted, and the only thing holding that line was
+that `category_accounts._TEST_BTS` had been hand-audited for leafness. Closed
+2026-09-24 in the change that deleted the table (item 4), but not by lifting
+`coa_gate.classify_account` as written, because that rule contradicts the
+curation: 35 of the 194 postable accounts are chart parents (`Travel Expense`,
+`IT: Computer and Internet Expenses`, `Professional Fees` ...), and Zoho does
+accept a posting on a parent (Brisken's books hold 8 over 2024-09..2026-09, and
+the 2026-09-22 silent default was itself a parent). So in a curated org the
+resolver asks the curation, which already makes COGS roll-ups N and payroll N;
+an org nobody curated keeps the chart's parent rule. A chart whose id for a code
+differs from the curated id for the target org also refuses, since codes are
+shared across the three orgs.
+
+**The export COA gate still disagrees with the curation.** Measured against the
+live provisioning `scope_groups`, `coa_gate.classify_account` diverts 56 of the
+194 postable accounts (23 of 64 Cloud Services, 11 of 62 Consulting, 22 of 68
+Corporate Services), `COGS - DEV Infrastructure` among them, and passes some
+accounts marked N. On a GL batch the export would blank those accounts before
+the resolver sees them. Queue item 4b.
 
 ## The chain
 
 ```
 (entity, vendor) rule in the per-entity learning store
-  -> [Tier 2: deferred, refuses]
+  -> [Tier 2: ruled out, refuses]
   -> direct LLM match against that entity's curated leaves
   -> refuse: account_unresolved
 ```
@@ -175,7 +188,11 @@ question and overrides nothing. And `PostingResolution` rejects a non-numeric
 `account_id` at construction, which is the assertion the 2026-09-22 mis-post
 went through unchallenged.
 
-## Tier 2 is deferred, and not for scheduling reasons
+## Tier 2 is ruled out
+
+The owner ruled 2026-09-24 that it will not be built: "trip does not define
+category because during a trip there can be expenses from multiple categories."
+The reasons below predate the ruling and agree with it.
 
 Trip-purpose inheritance is not built, and it is deliberately not built.
 `cost_centers.py:44`: *"Category is not one either; co-varying the two dimensions
@@ -200,8 +217,8 @@ leaves `Travel & Transport` unmapped because its July rows split between gasolin
 and vehicle rental: *"A default that is wrong half the time is worse than a
 refusal that names the row."*
 
-Until Dirk rules, travel and dining that no vendor rule resolves refuses to
-`(assign)`. Do not wire `cost_center` to an account in the meantime.
+Travel and dining that no vendor rule resolves refuses to
+`(assign)`. Do not wire `cost_center` to an account.
 
 ## What breaks, and in what order it is safe
 
@@ -264,7 +281,6 @@ Order:
   Dirk's.
 - Card 3645's registry entry holds another card's label in its `zoho_account`
   field (backlog item 172). The real chart account has to come from Dirk.
-- Tier 2, above. Owner's.
 - `registry_upserts_from_expense_run` fires automatically on Publish, not on a
   deliberate reviewer save, and its conflict detection compares category only,
   never `zoho_account`: two rows agreeing on category and naming different

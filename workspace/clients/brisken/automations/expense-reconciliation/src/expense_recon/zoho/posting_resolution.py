@@ -69,17 +69,17 @@ SOURCE_REFUSED = "refused"
 # every reason `curated_leaves` can give for a leaf it DOES know about.
 ACCOUNT_UNRESOLVED = "account_unresolved"
 
-# Trip-purpose inheritance is deferred, and this branch exists so the
-# deferral is visible in the code rather than implied by its absence. It
-# refuses instead of falling through because a purpose cannot pick a leaf:
-# Conferences, CRM and general Travel each split into Transportation,
-# Accommodation and Food, so `conference -> ...| Food` silently chooses one
-# of three. `cost_centers.py:44` already ruled that co-varying the two
-# dimensions destroys the point of cutting the money a second way, and
-# `category_accounts.py:102-107` already refused this exact shortcut for
-# `Travel & Transport`: a default that is wrong half the time is worse than
-# a refusal that names the row. Item 38 holds the trip design pending the
-# owner's brainstorm; when Dirk rules, the implementation goes HERE.
+# Trip-purpose inheritance is RULED OUT by the owner (2026-09-24): "trip does
+# not define category because during a trip there can be expenses from
+# multiple categories." This branch stays so the ruling is visible in the code
+# rather than implied by its absence, and it keeps refusing. A purpose cannot
+# pick a leaf: Conferences, CRM and general Travel each split into
+# Transportation, Accommodation and Food, so `conference -> ...| Food` silently
+# chooses one of three. `cost_centers.py:44` already ruled that co-varying the
+# two dimensions destroys the point of cutting the money a second way, and the
+# retired category table refused this exact shortcut for `Travel & Transport`:
+# a default that is wrong half the time is worse than a refusal that names the
+# row. Do not wire `cost_center` to an account.
 TIER2_DEFERRED = "trip_purpose_inheritance_deferred"
 
 
