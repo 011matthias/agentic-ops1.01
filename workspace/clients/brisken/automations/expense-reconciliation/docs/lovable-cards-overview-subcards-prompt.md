@@ -1,4 +1,4 @@
-# Lovable prompt: the Cards overview nests a card's subcards under it (item 193)
+# Lovable prompt: the Cards overview nests a card's subcards under it (item 194)
 
 **NOT PASTED.** Owner, 2026-09-24, on the published `/cards` overview (item
 192): apply the same subcard logic as the months strip (item 191), adapted to
