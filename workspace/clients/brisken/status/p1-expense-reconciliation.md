@@ -42,10 +42,30 @@ a silent mis-post is not. Reversible when Dirk rules. `COGS - Support BRISKEN
 Tech / JB` stays N with its reason corrected from "intercompany" to contractor
 cost (205,996.20 USD over 24 monthly bills from Juliano Carlo Brugnago Ltda).
 
-**Next slice is the engine swap, and it is bigger than the brief implies:**
-`zoho/posting_resolution.py::resolve_posting_account` is fully built and tested
-but has ZERO production callers — the live path is still
-`zoho/category_accounts.py::category_account_code` via `zoho/accounts.py:42`.
+**2026-09-24: the engine categorizes into GL leaves (queue item 3)** (PR
+#1281, merge `267588dc`, NOT deployed; the SPA renders buckets and does not
+localize `category_refused`). `resolve_posting_account` now has production
+callers: a batch whose config carries `gl_entity_orgs` (injected by
+`coa_provision.apply_to_config` on every hosted batch created from now on,
+settings registry first, then `/data/coa-provision.json`) judges each receipt
+and receiptless charge against ITS entity's leaves, by org id, never by name.
+`category` is the leaf code or None; a refusal carries
+`Categorization.refusal` (`entity_missing`, `org_not_curated`,
+`not_expense_relevant`, `no_such_code_in_org`, `account_unresolved`) up to the
+row review as `category_refused`. `POST /api/runs/{id}/categories` clears on
+""/null and drops unknown strings under `ignored` (3c). Batches without the key
+keep buckets. The ER-report account posting path (`zoho/accounts.py` via
+`category_accounts.py`) is untouched until item 4.
+
+**Found live, read-only, NOT fixed (owner data):** the settings registry keys
+entities by the long legal names, and `Brisken Corp Services, LLC` reads org
+`8227416528` (the real one is `822741658`). Live receipts carry short names
+(`Corporate Services` 146, `Cloud Services` 17, `Consulting` 9, blank 129),
+which resolve through the `/data` file, and `Consulting` has no org id
+anywhere, so its receipts refuse. The categorization is fixed at ingest: an
+expense whose company is set later keeps `entity_missing` until something
+re-categorizes it. That needs deciding before deploy.
+
 Queue after it: delete `category_accounts.py` + lift `NON_LEAF`/`OUT_OF_SCOPE`
 into `resolve_account_id` (same change), the three copies of the category leak
 (`output/posting_common.py:137`, `sheet_writeback.py:143` and `:186`), then
