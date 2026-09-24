@@ -9,6 +9,19 @@ updated: 2026-09-24
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-24: the card filter leaves the month** (backlog item 190; PRs #1293,
+#1294; Fly `93c69551`). The owner moved the card filter out of the month onto
+`/months` and asked that a month opened from it show only that card. The roll-up
+behind `/months` (`GET /api/cards/status`) knew only charges and statements, so
+it could never offer a month holding just receipts on a card (all of September,
+May and June, which have no statement yet, and 9693 in August) nor receipts on no
+card (72 over six months). The owner chose backend first: `cards[].receipt_months`
+and `no_card` are live, counted over the Expenses page's own payload, and `/cards`
+reads nothing new. The SPA half,
+`docs/lovable-card-scope-carries-into-month-prompt.md`, is **NOT pasted**; until
+it is, every month keeps its own strip. A month is two routes (Expenses
+`/expenses/{id}`, Matching `/runs/{id}`), and the prompt carries `?card=` on both.
+
 **2026-09-24: only corrections teach, and the taxonomy is 194 leaves** (PR
 #1277, merge `bb2ba8f5`, NOT deployed — the brief gates a deploy on the owner
 publishing the SPA). The owner's ruling that publish-time learning may keep
