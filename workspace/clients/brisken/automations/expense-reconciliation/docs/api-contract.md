@@ -4219,6 +4219,11 @@ Parallel to item 185's charge figures and item 190's `receipt_months` /
   figure here; an account does not add its subcards'.
 - `no_card` adds `n_without_charge`; its months carry `n_without_charge` and
   no `statement` (no card has none to hold).
+- Item 193: `n_needs_category` on each `receipt_months[]` entry, each card
+  (its own) and `no_card` (and its months): the expenses in the NEEDS
+  CATEGORY box (`"uncategorized"` in `expenses[].boxes`), so per month the
+  cards plus No card equal `summary.n_uncategorized`. It is the number the
+  months strip shows beside each card.
 
 `never_loaded` keeps its meaning (no charge and no statement anywhere), which
 the months strip's disclosure uses. The overview folds away only a card that

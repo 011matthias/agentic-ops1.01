@@ -126,7 +126,12 @@ def test_a_month_with_only_receipts_on_a_card_is_named(client):
     payload = _status(client)
     card = {c["key"]: c for c in payload["cards"]}["card-9693"]
     month = next(m for m in payload["months"] if m["run_id"] == september)
-    assert card["receipt_months"] == [{
+    # Item 193's `n_needs_category` depends on how the receipt categorizes;
+    # its own tests hold it to the month's NEEDS CATEGORY box.
+    assert [
+        {k: v for k, v in m.items() if k != "n_needs_category"}
+        for m in card["receipt_months"]
+    ] == [{
         "run_id": september,
         "label": "September 2026",
         "batch_type": month["batch_type"],
@@ -186,4 +191,5 @@ def test_a_month_the_receipt_count_fails_on_keeps_its_charges(client):
     assert [m["run_id"] for m in payload["months"]] == [september]
     assert payload["no_card"] == {
         "months": [], "n_expenses": 0, "n_without_charge": 0,
+        "n_needs_category": 0,
     }
