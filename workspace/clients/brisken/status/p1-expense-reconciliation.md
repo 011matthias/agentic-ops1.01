@@ -135,8 +135,18 @@ gate now judges a curated org by Dirk's marking, as the engine and the API
 poster do: `cli._build_coa_gate` sets `curated_org` when the config carries
 `gl_entity_orgs`. Measured on the real chart and provisioning: 56 of 194 Y
 accounts diverted and 105 N passed before, 0 and 0 after; bucket batches keep
-56 / 105 (pinned). Queue items 3 to 6 and 4b are all on main; the deploy
-waits only on the owner's SPA bundle (leaf codes + `category_refused`).
+56 / 105 (pinned). Queue items 3 to 6 and 4b are all on main.
+
+**The SPA half of Phase 1 has no prompt yet (found 2026-09-24).** Every note
+since item 3 said the deploy "waits on the owner publishing an SPA bundle",
+but no session wrote the Lovable prompt: the Lovable repo and the live bundle
+carry 0 hits for `category_refused`, `gl_accounts` and `gl_revision`. Writing
+`docs/lovable-gl-accounts-prompt.md` is ours; the deploy follows its publish.
+**Dirk confirmed all six SPOT-CHECK accounts stay N** (2026-09-24, via the
+owner, on a highlighted review copy of the pinned workbook), so the 194-leaf
+taxonomy is final for them. Item 190's SPA half is applied and live (live
+bundle carries `cardScope.`, `receipt_months`, `no_card`); its cold drive
+(step 4) is still to do.
 
 **2026-09-24: a payment reminder is no longer a purchase** (backlog item 186,
 PR #1268, merge `0726b428`, DEPLOYED and cold-driven; `/healthz` commit
