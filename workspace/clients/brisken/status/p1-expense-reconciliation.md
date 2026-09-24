@@ -9,6 +9,14 @@ updated: 2026-09-24
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-24: the strip's chip number means "needs category"** (backlog item
+193). It was `n_transactions` with no label (1176's "3" = one charge, two
+credits). Owner's pick: expenses needing a category, all months, each card its
+own (2838 without its subcards). Backend `n_needs_category` on
+`GET /api/cards/status`; SPA half `docs/lovable-strip-count-needs-category-prompt.md`,
+**NOT pasted**. Live values: 2838 3, 3645 1, 3876 10, 0340 3, 1176 2, 9693 3,
+No card 8 (30 = the months list's Needs category column summed).
+
 **2026-09-24: /cards becomes an overview** (backlog item 192; PR #1312, Fly
 `45d4c494`). Owner: the Cards page "should just be an overview and not another
 gate to inside the months". The roll-up now counts receipts per card

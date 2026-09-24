@@ -9176,16 +9176,25 @@ def receipt_card_counts(view: dict) -> dict[str, dict[str, int]]:
 
     Each key carries `n_expenses` and `n_without_charge` (item 192): of those
     rows, the ones `expenses[].without_charge` marks, so the overview's
-    "without a charge" is the month's own verdict and never a second one."""
+    "without a charge" is the month's own verdict and never a second one.
+
+    And `n_needs_category` (item 193): the rows in the NEEDS CATEGORY box
+    (`"uncategorized"` in `expenses[].boxes`), the set `summary.n_uncategorized`
+    counts, so a month's cards plus its no-card section add up to the months
+    list's Needs category column."""
     counts: dict[str, dict[str, int]] = {}
     for expense in view.get("expenses") or []:
         if expense.get("counts_in_total") is False:
             continue
         key = str(expense.get("card_section") or "")
-        entry = counts.setdefault(key, {"n_expenses": 0, "n_without_charge": 0})
+        entry = counts.setdefault(
+            key, {"n_expenses": 0, "n_without_charge": 0, "n_needs_category": 0},
+        )
         entry["n_expenses"] += 1
         if expense.get("without_charge"):
             entry["n_without_charge"] += 1
+        if "uncategorized" in (expense.get("boxes") or []):
+            entry["n_needs_category"] += 1
     return counts
 
 
@@ -9262,6 +9271,13 @@ def build_card_status(
     months where the card has no statement: waiting for one, not
     unmatched). `no_card` adds `n_without_charge`. Parallel fields again;
     nothing above changes.
+
+    Item 193 (owner 2026-09-24: the number beside each card on the months
+    strip "ha[s] to be consistent in [its] meaning"; it was `n_transactions`,
+    statement lines with credits, on no label) picks one meaning: expenses
+    needing a category, all months. `n_needs_category` on each receipt month,
+    each card (its own, not its subcards': picking 2838 shows 2838's rows) and
+    `no_card`.
     """
     from ..output._pdf_common import _add_money
 
@@ -9397,6 +9413,7 @@ def build_card_status(
                 "batch_type": month["batch_type"],
                 "n_expenses": int(figures.get("n_expenses") or 0),
                 "n_without_charge": int(figures.get("n_without_charge") or 0),
+                "n_needs_category": int(figures.get("n_needs_category") or 0),
             }
             if key:
                 entry["statement"] = key in stated
@@ -9431,6 +9448,10 @@ def build_card_status(
         )
         slot["n_receipts_no_statement"] = sum(
             m["n_expenses"] for m in receipt_months if not m["statement"]
+        )
+        # Item 193: the months strip's chip number, each card's own.
+        slot["n_needs_category"] = sum(
+            m["n_needs_category"] for m in receipt_months
         )
         cards.append(slot)
 
@@ -9471,6 +9492,9 @@ def build_card_status(
             "n_expenses": sum(m["n_expenses"] for m in no_card_months),
             "n_without_charge": sum(
                 m["n_without_charge"] for m in no_card_months
+            ),
+            "n_needs_category": sum(
+                m["n_needs_category"] for m in no_card_months
             ),
         },
         "unreadable": unreadable,

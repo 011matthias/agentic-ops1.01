@@ -9468,6 +9468,28 @@ n_receipts_without_charge`, a currency-free stand-in for "Still open, largest
 first"); the fold holds only cards with no receipt either, so 9693 joins the
 table.
 
+### 193. The months strip's chip number means one thing: needs category (owner 2026-09-24) (BACKEND SHIPPED; SPA prompt written, NOT pasted)
+
+**Owner, on the `/months` strip:** *"these numbers next to the card ending
+numbers have to be consistent in their meaning, for 1176 it supposedly depicts
+how many expenses were set aside and in the other cards(and subcards) there is
+no clearly identifiable meaning or representation behind it."* Read first: the
+number was `n_transactions`, statement lines across all months with credits
+included and no label (1176's "3" is one charge and two credits in August), and
+on the nested 2838 chip it was 2838's own while an account tab inside a month
+shows its group. Asked with a recommendation (open items); the owner picked
+**all "needs category" items**, and **2838 counts only itself**.
+
+**Shipped (backend):** `receipt_card_counts` counts the NEEDS CATEGORY box's
+own set (`"uncategorized"` in `expenses[].boxes`, what `summary.n_uncategorized`
+counts), and the roll-up carries `n_needs_category` per receipt month, per card
+(its own) and on `no_card`. Tests
+`tests/test_card_status_needs_category_item_193.py` (3: a month's cards plus No
+card equal its `summary.n_uncategorized` through the routes; the per-card total;
+a helper differential with mixed boxes and a decided copy). `regress_check` red
+on both wiring points: the roll-up entry (route test) and the box predicate
+(helper test only, because every fixture row needs a category).
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
