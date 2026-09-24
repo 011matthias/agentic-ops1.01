@@ -1493,6 +1493,27 @@ unrecognised phrases ("VENDA CREDITO VISA", "CreditCard", "Link") are out
 of scope. Read-time: every month moves on deploy with no re-match. Pinned
 route-level in `tests/test_card_type_not_private.py`.
 
+**Case 6, same day.** Owner: "no suggestion and should default to
+alternative logic for cases of expenses with no payment info". Two changes,
+both in `cards.py`, no new field:
+
+- The tender vocabulary reads the phrases the live months print: "VENDA
+  CREDITO VISA" (venda), "Kartenzahlung erhalten", the OLV / ELV girocard
+  direct-debit suffix (a debit KIND), and a run-together hint split at its
+  case changes when that is what makes it tender words ("CreditCard",
+  "girocardOLV"; "PayPal" still reads whole). They then fall under the rule
+  above: "VENDA CREDITO VISA" and "CreditCard" stop suggesting,
+  "girocardOLV" keeps it.
+- A generic hint made only of wallet / vague words (`NO_PAYMENT_INFO_WORDS`:
+  link, saved, stored, payment, method, outro(s)/outra, other, plus short
+  numbers; `cards.carries_no_payment_info`) is read like an expense that
+  printed no payment method: `suggested_private` false whatever the
+  registry holds, `can_mark_private` true, no card selected, the card left
+  to the statement charge.
+
+These hints are now generic, so the strip reports `generic: true` for them
+and none of them can be learned as a card alias (owner ruling 2026-08-21).
+
 ## Cost centers: which project or purpose the money belongs to (added 2026-09-10)
 
 Backlog item 47, owner directive 2026-09-08. A cost-center DIMENSION on the

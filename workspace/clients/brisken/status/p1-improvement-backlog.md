@@ -9781,10 +9781,36 @@ through `POST /api/runs/{id}/publish` that goes red when it is put back.
 later evidence, to be decided before the first close. The scratch replay that
 produced the table is not kept; the method above rebuilds it.
 
+### 203. Case 6: wallet and vague payment wording is read as no payment info (owner ruling 2026-09-24) (SHIPPED 2026-09-25)
+
+Item 198's named follow-up. Owner, asked whether "Link", "saved payment
+method" and "OUTRO" should still suggest a private expense: "no suggestion and
+should default to alternative logic for cases of expenses with no payment
+info".
+
+Built in `cards.py`: the tender vocabulary gains the phrases the live months
+print ("VENDA CREDITO VISA", "Kartenzahlung erhalten", the OLV / ELV girocard
+suffix as a debit kind) and reads a run-together hint split at its case changes
+("CreditCard", "girocardOLV"; "PayPal" still whole), so item 198's rule decides
+them; `carries_no_payment_info` reads a hint made only of wallet / vague words
+like an empty payment method, whatever the registry holds. Wired beside item
+198 in `service.resolve_batch_row_cards`. Contract: `docs/api-contract.md`,
+"Case 6, same day".
+
+Predicted from the live census after item 198 (read-only): 6 counted rows stop
+suggesting (April O REI DO ARRUMADINHO "VENDA CREDITO VISA"; May Anthropic
+"Link" x2 and GOLDEN GATE "OUTRO"; June Namecheap "CreditCard"; September
+OpenAI "saved payment method"), plus two Lovable "Link" decided copies (May,
+July) whose flag flips without a count. "girocardOLV" keeps it. No live alias
+uses any new word (Corp, Cloud, Personal, Consulting).
+
+Still out: "Bar" in the cash wording; two-digit endings are item 199.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 119 | Case 6: "Link", "saved payment method" and "OUTRO" are read like an expense with no payment method (no private suggestion, registry or not), and "VENDA CREDITO VISA", "CreditCard", "Kartenzahlung erhalten" and "girocardOLV" read as tender words so item 198's card-type rule decides them | Backlog item 203 (owner ruling 2026-09-24: "no suggestion and should default to alternative logic for cases of expenses with no payment info"). SaaS bills paid on Brisken cards through a wallet were asking Criss who to reimburse | 2026-09-25; `tests/test_card_type_not_private.py` (3 more); regress_check: both wiring points RED |
 | 117 | A Brisken card type on a receipt stops suggesting a private expense: `cards.names_registry_card_type` reads the networks and kinds the batch's active cards carry from their own label and account wording, and a generic tender hint naming only those ("VISA CREDIT", "Cartão de Crédito", "TEF", "credit card") no longer raises `suggested_private`. Non-card tenders and types Brisken lacks (girocard, EC-Karte, DEBIT, cash) still do; `can_mark_private` and the card chain are untouched | Backlog item 198 (owner ruling 2026-09-24, case 5). Twelve counted rows across April, May, June, July and September were asking Criss who to reimburse for purchases Brisken's own Visa credit cards made | 2026-09-24; `tests/test_card_type_not_private.py` (route-level through the batch payload); regress_check: 5 caller tests RED with the wiring disabled |
 | 116 | Typing an FX rate in Settings is gone: the settings key retired (read drops it, write ignores it, the stored row is migrated), the matcher's `configured` rung and `MatchingConfig.fx_reference_rates` removed, `apply_master_data` stops writing rates into a run config, item 132's drift advisory deleted, and `rematch_month` tops up a month's ECB table so no month is left without a rate. The retired key stays parseable and is dropped, so every existing month and the scorer asset still load | Backlog item 168 (owner: "no more typing them in settings you can remove that function entirely"). Measured in-container first: July 2026 carried the typed rates and NO ECB table, so removing the rung alone would have blanked its 18 cross-currency pairs | 2026-09-23 |
 | 115 | Daily FX reference rates polled from OpenTickers: a boot + 24 h poll thread, a one-time backfill of the live months (the key is a paid tier), the `fx_daily_rates` store table (units per EUR by day, ECB record preferred), the matcher's `opentickers_day` rung on the charge's own day (nearest day within four, earlier on a tie) between the self-derived rates and the ECB monthly average with the 2% band, the table refreshed into every month on each re-match, `GET /api/settings.fx_daily_rates` and `POST /api/fx/poll`. Typed Settings rates still win, so July and August did not move | Backlog item 167 (feedback note #79, Dirk, anchored on Settings > FX reference rates: "fx rates should be polled daily via open tickers API"). regress_check proved the re-match wiring bites (4 route tests red unwired) | 2026-09-23 |
