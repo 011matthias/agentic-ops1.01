@@ -396,6 +396,9 @@ def _registry_month(client, monkeypatch, *, attach: bool):
     return batch_id
 
 
+UNMAPPED = "(account unmapped - assign)"
+
+
 def _csv_accounts(client, batch_id):
     resp = client.get(f"/runs/{batch_id}/expenses.csv")
     assert resp.status_code == 200, resp.text
@@ -407,8 +410,8 @@ def test_reclassify_without_an_account_drops_the_old_categorys_account(
 ):
     """The iCloud row: category changed, account stayed. No deterministic
     category -> account map exists, so the export books the row to what it
-    derives for a category with no account (the category label when no chart
-    is wired; the unmapped placeholder with one), never the stale account."""
+    derives for a category with no account (the unmapped placeholder, with or
+    without a chart since item 5), never the stale account."""
     batch_id = _registry_month(client, monkeypatch, attach=True)
     assert _csv_accounts(client, batch_id) == [OFFICE_ACCOUNT]
 
@@ -417,7 +420,7 @@ def test_reclassify_without_an_account_drops_the_old_categorys_account(
     })
     assert resp.status_code == 200, resp.text
 
-    assert _csv_accounts(client, batch_id) == [SOFTWARE]
+    assert _csv_accounts(client, batch_id) == [UNMAPPED]
     posting = _row(client, batch_id, "STAPLES")["posting_category"]
     assert posting["category"] == SOFTWARE
     assert posting["zoho_account"] == ""
@@ -447,7 +450,7 @@ def test_the_grid_category_edit_follows_the_same_account_rule(
 ):
     batch_id = _registry_month(client, monkeypatch, attach=False)
     assert _put(client, batch_id, "category", SOFTWARE).status_code == 200
-    assert _csv_accounts(client, batch_id) == [SOFTWARE]
+    assert _csv_accounts(client, batch_id) == [UNMAPPED]
 
 
 def test_a_picked_account_does_not_survive_a_category_change_in_the_grid(
@@ -461,7 +464,7 @@ def test_a_picked_account_does_not_survive_a_category_change_in_the_grid(
     assert _csv_accounts(client, batch_id) == ["6150 Stationery"]
 
     assert _put(client, batch_id, "category", SOFTWARE).status_code == 200
-    assert _csv_accounts(client, batch_id) == [SOFTWARE]
+    assert _csv_accounts(client, batch_id) == [UNMAPPED]
 
 
 def _multi_line_month(client):

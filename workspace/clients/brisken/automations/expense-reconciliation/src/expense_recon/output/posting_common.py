@@ -128,13 +128,22 @@ def _debit_account_and_note(
     REVIEW / no-category lines stay flagged. With a chart, the picked
     `zoho_account` is resolved to a real account; an unresolvable pick
     is flagged `(account unmapped - assign)` rather than guessed.
+
+    A line with no account is flagged the same way with or without a
+    chart. The account column never carries the CATEGORY: a bucket label
+    is no account in any org, and under the GL engine a category is a leaf
+    code, so either one there reads as an account nobody picked. It used
+    to, whenever no chart loaded, which is every entity-less batch (its
+    multi-entity gate has no single chart) and every uncharted CLI run.
     """
     if cat is None or cat.source is ClassificationSource.REVIEW or not cat.category:
         return _UNCATEGORIZED, "needs category"
     note = f"{cat.source.value} conf={cat.confidence:.2f}"
+    if not cat.zoho_account:
+        return _UNMAPPED, f"{cat.category} (no account match), assign"
     if coa is None:
-        # Legacy: no chart to resolve against — pass the label through.
-        return (cat.zoho_account or cat.category), note
+        # No chart to resolve against: the pick passes through as written.
+        return cat.zoho_account, note
     resolved = _resolve_account(cat.zoho_account, coa)
     if resolved is None:
         return _UNMAPPED, f"{cat.category} (no account match), assign"

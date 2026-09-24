@@ -157,7 +157,8 @@ def test_a_many_company_month_gates_the_screen_the_way_it_gates_the_csv(
 ):
     """A month that names no company carries one gate per company (the live
     July / August shape, no chart on the gate). The rejected account is
-    cleared and the line books as its CATEGORY, on both surfaces."""
+    cleared and the line books as `(account unmapped - assign)`, on both
+    surfaces. It booked as its CATEGORY until item 5 (owner: everywhere)."""
     _provision_charts(client._data_root, monkeypatch)
     batch_id, doc = _batch_with_one_receipt(client, monkeypatch, "")
     _categorize(client, batch_id, doc, PHANTOM)
@@ -168,7 +169,7 @@ def test_a_many_company_month_gates_the_screen_the_way_it_gates_the_csv(
     ]
 
     _assign_entity(client, batch_id, doc, "Corporate Services")
-    assert _csv_rows(client, batch_id) == [("Travel & Transport", "100.00")]
+    assert _csv_rows(client, batch_id) == [(UNMAPPED, "100.00")]
     assert _books_as(client, batch_id) == _csv_rows(client, batch_id)
 
 

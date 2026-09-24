@@ -268,7 +268,11 @@ Order:
    truthiness gate flips silently.
 5. In the same PR as 4, remove both copies of the leak and every gate that would
    flip. Grepping `_debit_account_and_note` finds one of the two leaks; the other
-   is inline in `sheet_writeback.py`.
+   is inline in `sheet_writeback.py`. Done 2026-09-24 as its own PR after 4: all
+   three sites (the writeback has two) write `(account unmapped - assign)` for a
+   categorized line with no account, the value a charted batch already wrote,
+   and the category moves to the journal note. The `cat.category` gates are
+   unchanged: a refused GL line (`None`, REVIEW) still reads uncategorized.
 6. Relabel `categorization_gate.py` and regress-check it. Left alone it keeps
    measuring the retired vocabulary through the keyword stubs and reports green
    over a path that no longer runs.
