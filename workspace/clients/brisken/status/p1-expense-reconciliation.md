@@ -128,6 +128,40 @@ missing from the INGEST stamp, so which month was created first decided
 whether the owner's ruling applied; the rule now lives once, on
 `MerchantRegistry.vouches_one_card`, and `drop_unvouched_remembered_cards`
 clears an unvouched stamp in all three `ExpenseMemory.apply` callers (#1252).
+
+**2026-09-24, the statement a card could not see, and the card axis** (backlog
+items 108 and 185; PRs #1267, #1273, #1274; Fly `e28a6087`).
+
+August held `20260804-statements-1176-.pdf` while `card-1176`'s coverage row
+read `statements: []` and the "No card on the charge" row held the file, so
+the screen said the month was missing a statement it already had. The join was
+blind, not the filing: the plain attach form types no card, and the charge
+voice read `statement_anchors`, the writeback's row map, which is empty by
+construction for a PDF. It reads `statement_origins` now, the record that does
+hold a PDF's charges. That alone does not move a month recorded before the
+origins existed, which live August is, so the file's own NAME is a last resort
+under one narrow rule: only a digit run resolving to a DEFINED card counts, so
+`1176` lands and the cycle date `20260804` is dropped. Blast radius is one
+file, measured: every other statement in the estate already attaches through
+its charges. Verified cold on `expenses.brisken.com`, August, Matching, 1176:
+"Statement 20260804-statements-1176-.pdf · Jul 06 to Aug 04 · 3 charges · 0
+matched · still open USD 36.00". **Item 108's remaining half is genuinely
+absent data**: 9693, 0113, 6013 and 8311 have no statement in any month, which
+is Dirk's to supply, not a defect.
+
+Item 185 came from note #86 and was raised as a quote-separately new surface;
+the owner answered with a directive instead: *"the same per card filter system
+inside the months should be outside of the months..."* `GET /api/cards/status`
+is the data half. It runs `month_coverage` per month and sums it, so a card's
+line and its row on each month page are the same arithmetic rather than a
+second derivation. Trips count, each month entry carrying its `batch_type`. An
+unknown card folds into a known one with the same digits, one way only, so a
+card defined mid-estate is one line and April's `digits:4700` keeps its own.
+`never_loaded` is the "which cards are missing" answer, and live it is exactly
+those four cards. The regress pass, not the first green run, found that months
+were ordered by `created_at`, which ties inside one second; they order by their
+own span now. **Left: the SPA page**, written as
+`docs/lovable-card-status-prompt.md` and NOT pasted.
 Three existing tests were relying on that ungated stamp and went red, which is
 the defect demonstrated rather than argued. Item 172's answer also shipped as
 a record (#1244): card `3645`'s `zoho_account` should read
