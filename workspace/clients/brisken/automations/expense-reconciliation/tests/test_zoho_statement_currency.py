@@ -60,7 +60,7 @@ def _row(**over):
     row.update(
         {
             "Expense Date": "2026-07-14",
-            "Expense Account": "Software & Subscriptions",
+            "Expense Account": "IT: Cloud Subscriptions-Others",
             "Expense Amount": "100.00",
             "Currency Code": "EUR",
             "Exchange Rate": "1.162275",

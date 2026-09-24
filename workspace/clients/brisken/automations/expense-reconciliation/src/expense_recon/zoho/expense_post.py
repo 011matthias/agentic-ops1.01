@@ -605,8 +605,9 @@ def build_expense_payload(
 ) -> "dict | PostRefusal":
     """The Zoho POST body for one purchase, or a refusal naming why not.
 
-    `org_id` is passed to account resolution so this org's category
-    fallback applies; without it, a category label refuses as before.
+    `org_id` is passed to account resolution so each account is judged
+    postable by this org's own rules (`zoho.accounts`): its curated list
+    where one exists, its chart's parent/leaf shape otherwise.
 
     Foreign currency has three policies, checked in this order:
 

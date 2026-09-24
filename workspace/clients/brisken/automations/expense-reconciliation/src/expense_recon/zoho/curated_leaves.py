@@ -1,9 +1,9 @@
 """Read side of Dirk's curated per-entity Zoho expense accounts.
 
 The data is the generated `_curated_leaves_data` module; this file is the only
-thing that reads it. Together they replace the category-to-account translation
-table (`category_accounts.py`), whose middle step is where both known silent
-mis-posts happened.
+thing that reads it. Together they replace the retired category-to-account
+translation table, whose middle step is where both known silent mis-posts
+happened.
 
 THREE PROPERTIES THIS MODULE EXISTS TO HOLD
 
