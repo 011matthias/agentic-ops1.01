@@ -9700,7 +9700,7 @@ guard turned "Total final: 38.50" red.
 Out of scope, still open: settling a shared ending (76: 3876/1176; 13:
 0113/6013) from the vendor's history.
 
-### 200. A vendor's card from its own receipts, continuously (gap 1 of the card-attribution map, owner 2026-09-24) (MEASURED 2026-09-24: Phase 1 gate FAILED at N = 2 and at N = 3, not built; the threshold is the owner's call)
+### 200. A vendor's card from its own receipts, continuously (gap 1 of the card-attribution map, owner 2026-09-24) (MEASURED 2026-09-24: Phase 1 gate FAILED at N = 2 and at N = 3; CLOSED, NOT BUILT: deliberately, on the failed usefulness test, owner 2026-09-25; no decision pending)
 
 Numbered 200 because two sibling branches both claim 198 (card type, card
 endings) and one of them will take 199.
@@ -9793,8 +9793,10 @@ settled-outside rows left out): 14 are OpenAI, Anthropic or Lovable (owner
 hold), 2 have no evidence in any month, 2 have one receipt, and 2 (Network
 Solutions) would pin.
 
-**Owner decision needed (not re-raised by the agent).** Recommendation: do not
-build. The link reaches 4 to 6 subscription rows. Checked against known
+**Closed, not built (owner 2026-09-25).** It was deliberately not built
+because it failed the usefulness test below; there is no threshold decision
+pending, so do not relay one. The case against building: the link reaches 4 to
+6 subscription rows. Checked against known
 answers, it gives the wrong person or company 3 times in 21 at N = 2 and once
 in 10 at N = 3, and a wrong card leaves Criss's to-do list silently (item 173
 ruling). If those subscription rows should resolve, a card typed on the
