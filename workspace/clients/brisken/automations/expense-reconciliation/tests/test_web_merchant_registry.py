@@ -230,7 +230,6 @@ def test_upsert_no_edits_is_noop():
     assert summary == {
         "aliases_added": 0, "categories_set": 0, "skipped_conflict": 0,
         "skipped_account_conflict": 0,
-        "skipped_account_conflict": 0,
     }
     assert new == seed
 
