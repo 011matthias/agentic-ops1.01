@@ -9,6 +9,8 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: case 9 build 1 shipped (item 204 step 2).** An invoice that prints no card now takes the card its own payment receipt prints whenever the grid shows the two as one document, under the old guards (one card only, a "Not a duplicate" ruling lends nothing, an operator hint on the invoice wins). PR #1362. Expected on September's next read: the Anthropic 184.35 and two Lovable 50.00 invoices read 9693 / 3645, `n_needs_entity` 26 -> 23. Builds 2 to 5 run in their own sessions.
+
 **2026-09-25: July, August and September are on the Zoho accounts** (owner
 directive; backlog items 201 and 205, PR #1356, Fly `071b19d7`, snapshot
 `vs_V9ka1J80opbTj8gxvqQ59X5` taken before). Owner's ruling on Criss's 35 bucket
