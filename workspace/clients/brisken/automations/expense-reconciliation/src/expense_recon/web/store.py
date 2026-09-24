@@ -2304,3 +2304,26 @@ class RunStore:
             (caller, float(since)),
         ).fetchone()
         return int(row["n"])
+
+
+def open_read_only(db_path: str | Path) -> RunStore | None:
+    """Case 9 build 3 (item 204): a `RunStore` over a READ-ONLY connection to
+    an existing database, or None when there is no such file.
+
+    For a reader that runs inside another request's view build: the month's
+    settled-cards map reads the claim a neighbour month holds on one of its
+    receipts, and the functions that build it are handed a run, not a store.
+    It skips `_init_schema` and `_migrate` on purpose. The request building
+    the view opened this database the normal way, so the schema is current;
+    a second connection issuing even no-op DDL could wait on that request's
+    own write lock. `mode=ro` cannot write, so it never takes the lock, and a
+    wrong path yields None rather than a fresh empty database.
+    """
+    path = Path(db_path)
+    if not path.is_file():
+        return None
+    store = RunStore.__new__(RunStore)
+    store.db_path = path
+    store.conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+    store.conn.row_factory = sqlite3.Row
+    return store

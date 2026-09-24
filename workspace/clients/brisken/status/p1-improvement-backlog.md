@@ -10260,6 +10260,31 @@ reported no coverage anywhere; the valid read is `card_key` / `statements` /
 `period_start` / `period_end` / `n_transactions`, and a receipts-only month
 returns `[]` by design.
 
+**Build 3 (step 3), 2026-09-25:** the card flows back. `settled_charge_cards`
+now also carries the claim another month holds on one of this month's
+receipts (`cards_settled_elsewhere`, end of `service.py`): the holder's charge
+is re-checked against its EFFECTIVE verdict (reconciled, still holding this
+document, borrowed from this run) and resolved through `_charge_card_identity`
+against THIS batch's registry, so the chain's existing `settled` link gives
+`card_source: "settled_charge"` while `settled_by` names the borrowing month.
+One map, so the grid, the CSV, the month PDF and the item-171 learner agree.
+The functions receive a run, not a store, so the reader opens the database
+read-only from the run's work dir (`store.open_read_only`, no schema pass; a
+wrong path or any SQLite error lends nothing). Live before the build, all
+seven batches: 2 rows carry `settled_by`, August's two OpenAI receipts
+borrowed by September, both already `hint` 9693, so 0 rows move today. July's
+one borrowed receipt is June's SUPERMERCADO FENIX 10.82 (06-30), held in
+July's REVIEW bucket, so it has no claim and correctly lends nothing. Open,
+not built here: (a) the borrow window is the borrower's min..max charge date
+(`statement_period_for_month`), so under D1's calendar-month exports a receipt
+printed the day BEFORE a charge that posts on the 1st (the 07-31 / 08-01
+Google shape) is outside the next month's window and is never borrowed; the
+flow-back reaches it only if the window changes, which this build left alone.
+(b) `settled_charge_amounts` (item 98, the FX twin) still reads this month's
+charges only, so a flowed-back row converts at the reference rate rather than
+at the neighbour charge's amount. Tests `tests/test_card_flows_back_c9.py` (8);
+`regress_check` on the wiring line in `settled_charge_cards` turned 6 red.
+
 ### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (BUILT 2026-09-25, same PR as item 201)
 
 Owner, 2026-09-25: "i need july, august and september recategorized with this
@@ -10304,6 +10329,7 @@ test through the card fix.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 123 | Item 204 build 3 (case 9 step 3): the card flows back to a receipt a neighbour month's statement settled. `settled_charge_cards` also reads the claim another month holds (`cards_settled_elsewhere`, re-checked against the holder's effective verdict, card resolved through `_charge_card_identity` in the receipt's own batch registry), so the row reads `card_source: "settled_charge"` with its company and person, and `settled_by` names the borrower | Charges post a day or three after the purchase, so a month-end receipt is settled by the next statement while its own month showed only `settled_by`: no card, company or person. Grid, CSV, month PDF and the learner read the one map. Live: 0 rows move today (the 2 borrowed receipts already print 9693; July's borrowed FENIX receipt sits in review) | PR TBD |
 | 122 | Items 196/197 leftovers from the 2026-09-24 LLM-key outage: an `ingested` intake-log row no longer presents the `error` of a failed first try, and a statement attach whose job fails before its commit removes the file it saved (`discard_unrecorded_upload`), never a file `statements[]` names | A surface showing `error` showed a 429 beside "Added" on the one recovered mail, and a dead attach kept its file's name, so the operator's retry was stored as `20260804-statements-9693--2.pdf` | 2026-09-25; `tests/test_attach_leftovers_196_197.py` (6: 3 red on origin/main, 3 controls: a held mail keeps its error, the archive keeps the record, a failure after the commit keeps the file); three wiring points proven RED under `tools/regress_check.py`; suite 3454 passed / 2 skipped |
 | 121 | Item 195: a statement PDF keeps its company through a re-read. A PDF entry records the account it was filed under (`statement_entry_account`); a re-read never lends a PDF `config.statement`'s account; a PDF filed under no account, or recorded before this, takes the registry entity every card it prints resolves to, blank on two companies or an unnamed card (`pdf_entity_from_printed_cards`), at the attach and the re-read alike. `statement_period_overlap` no longer calls two unrecorded accounts "the same account" (leftover 3 of items 196/197) | A PDF charge prints no `card_last4`, so item 59's match-time stamp never repairs it: its company is whatever the upload says. Both live August PDF entries recorded `account_id: ""` although the SPA sent a card key, so a re-read would have put the 1176 file's 3 charges and the 9693 file's 21 under the company "card", or under Corporate Services when the workbook was the last upload, and every pair on them would have left scope. Code-traced, never triggered live (nobody re-reads a month holding a PDF) | 2026-09-25; `tests/test_reread_pdf_entity_item_195.py` (9: 8 red on origin/main, 1 control green); four wiring points proven RED under `tools/regress_check.py` (the marker branch, the no-borrow fallback, the entry writer, the advisory guard); no live row moves on the deploy |
 | 120 | Item 200's side finding: `learned` leaves `service._CARD_OBSERVATION_SOURCES`, so the sign-off card learner no longer counts a remembered card as an observation of where a merchant's spend lands | A remembered card could confirm itself into `cards_seen` and write a learned `card_key` with no new evidence, against the 2026-09-24 ruling that only corrections may be memorized. The leak reaches months ingested after a correction (the card is stamped at ingest, item 173), not ones filled at read time (item 169) | PR TBD, 2026-09-25; `tests/test_remembered_card_read_time_item_169.py::test_signing_off_a_remembered_card_teaches_the_registry_nothing` (regress RED) |

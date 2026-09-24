@@ -6460,3 +6460,29 @@ same filter since item 112.
 
 Tests: `tests/test_trip_lifecycle_rematch.py` (12, route-level), eight
 wiring points proven red under `tools/regress_check.py`.
+
+## A receipt a neighbour month settled carries that charge's card (item 204, case 9 build 3)
+
+No new field. `card`, `card_source`, `legal_entity_id`, `person` and their
+`*_source` siblings on `GET /api/expense-batches/{id}` `expenses[]` now also
+answer for a receipt that ANOTHER month's charge settled, the one that already
+carries `settled_by: {run_id, label, transaction_id}` naming that month.
+
+| The receipt | `card_source` | `settled_by` |
+|---|---|---|
+| a charge of its own month settles it | `settled_charge` (item 111, unchanged) | absent |
+| a neighbour month's charge settles it (deterministic match or confirmed pick) | `settled_charge`, that charge's card | the neighbour month |
+| a neighbour month only PROPOSES it (review bucket) | unchanged (no claim exists) | absent |
+| the pairing was rejected, or the neighbour month was deleted | unchanged | absent |
+
+The link sits exactly where item 111's does in the card chain: below a card
+picked on the row, a card resolved from the printed payment method, a printed
+card number and a confirmed private expense; above a remembered card and the
+merchant registry. `can_mark_private` is false, as for any settled row.
+
+The card key is the neighbour charge's card resolved in the RECEIPT's batch
+registry, so a card that registry cannot name lends nothing. The same map
+feeds `GET /runs/{id}/expenses.csv`, `GET /runs/{id}/expense-report.pdf` and
+the sign-off learner (`merchants[].cards_seen`), so all four agree.
+
+Tests: `tests/test_card_flows_back_c9.py` (8, route-level).

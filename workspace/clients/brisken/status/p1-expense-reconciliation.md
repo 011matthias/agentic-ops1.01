@@ -9,6 +9,16 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: case 9 build 3 shipped, the card flows back** (item 204 step 3,
+Shipped row 123). A receipt a neighbour month's charge settled now shows that
+charge's card, company and person (`card_source: "settled_charge"`) with
+`settled_by` naming the borrower, on the grid, CSV, month PDF and in the
+learner. 0 live rows move today: the two borrowed receipts (August OpenAI,
+borrowed by September) already print 9693, and July's borrowed FENIX receipt
+is in review, so it has no claim. Open: under D1's calendar-month exports a
+receipt dated the day before its charge's 1st-of-month date falls outside the
+borrower's window and is never borrowed.
+
 **2026-09-25: case 9 ("no payment info") is planned, not built** (backlog
 item 204, PR #1346). Live: 34 receipts print nothing, 12 only a Brisken card
 type, 7 an unrecognised phrase. Six steps, in order of rows resolved per unit
