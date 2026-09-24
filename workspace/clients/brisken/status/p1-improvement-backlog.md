@@ -5401,7 +5401,7 @@ existing month, which is the honest answer for a period nothing recorded.
 
 **Shipped 2026-09-17 (pending PR).** `receipt_chase[]` on `GET /api/runs/{id}` groups the month's charges that need a receipt by CARD HOLDER (the registry's `person` on the card the coverage panel totals the charge under), each charge with its date, vendor, amount, currency, card and any portal hint a merchant entry now carries (`receipt_portal`, optional, unset everywhere today). Membership is item 99's own `charge_needs_receipt`, read off the payload's rows, so the groups sum to `summary.n_charges_need_receipt` and the list and the count cannot disagree. Two reviewer-set states ride the charge's own `decisions` row, so both survive a re-match and a statement re-read's id rekey: `receipt_requested_at` + `requested_to` (`POST .../receipt-requested`) records the ask and closes NOTHING, counted as `n_charges_receipt_requested`, a subset of the open charges; `no_receipt_expected` with its reason (`POST .../no-receipt-expected`, blank reason refused) is a verdict that closes the charge, counted as `n_charges_no_receipt_expected`, and moves that money out of `unreconciled_by_ccy` into `no_receipt_expected_by_ccy` beside it (item 102's shape), so the annual fee stops reading as unevidenced money. `month_complete` follows both. The request mail is COMPOSED AND NEVER SENT: `GET .../receipt-requests` returns one plain-text mail per holder, EN and PT-BR, from and reply-to the intake address so replies land in the tool, with `to: null` + `blocked: "no_address"` for a holder nobody has given an address; `POST .../receipt-requests/send` answers 403 `receipt_requests_disabled` with the new `settings.receipt_requests.enabled` flag off (the default and the live value) and 403 `receipt_send_not_wired` with it on, because `receipt_chase.py` imports no mail transport at all. The owner approves the first real send separately. Live read-only before the deploy: August would list 61 charges across the three names the registry's `person` field holds ("Nicolas Neumann" 36 on 3876 USD 1,011.15, "Dirk Neumann - Corp Services" 24 on card-2838 USD 6,361.53, "Brisken Consulting" 1 on card-1176 USD 36.00), July none, because every July charge without a receipt is gray-filled and already closed. Not built: the UI (prompt `docs/lovable-receipt-chasing-prompt.md`, Send described as disabled), a bulk mark-all-requested, and any sender.
 
-### 108. Cloud Services and Consulting card spend cannot close: 5 of 9 cards have never had a statement loaded, and the UI offers one statement (2026-09-17 audit draft #106, unranked; UI prompt for the owner to paste)
+### 108. Cloud Services and Consulting card spend cannot close: 5 of 9 cards have never had a statement loaded, and the UI offers one statement (2026-09-17 audit draft #106, unranked; UI prompt for the owner to paste) (1176 LINK SHIPPED 2026-09-24, PR #1267; 9693 / 0113 / 6013 / 8311 still open)
 
 **2026-09-20, owner: not a build, a matter of time.** "It is just a matter of
 time before Criss runs a complete reconciliation with multiple bank statements
@@ -5418,6 +5418,51 @@ reads `statements: 0`, and the same month carries an unattributed coverage row
 (`?`, `known: false`) holding `statements: 1`, so the statement landed without
 being linked to the card whose charges it produced; that link, not a missing
 file, is what is left for 1176.
+
+**2026-09-24 SHIPPED (the 1176 link).** The file was never mis-filed; the
+join that attributes it was blind. `_statement_card_identities` asks two
+questions of every upload and for this one both came back empty. The plain
+attach form types no card, so the `card_key` voice said nothing. The charge
+voice read `statement_anchors`, which is the WRITEBACK's row map and empty
+by construction for a PDF, whose charges have no tabular row.
+`statement_origins` (note item T3) is the record that DOES hold a PDF's
+charges, and it shipped 2026-09-18 without the coverage join ever being
+pointed at it. It is now, with the anchors kept as the fallback for a month
+written before the origins existed, which is the rule `origins_from_snapshot`
+already follows.
+
+That half alone does not move live August, and the measurement says why: its
+three `card-1176` charges read `statement_file: null`, `statement_id: null`,
+`source_page: null` on `GET /api/runs/074a7b8905d7`, so the month holds no
+origins entry for that upload and the anchors fallback is empty. Nothing
+inside the month names that file's card. The file's NAME does, so it is now
+the last resort, read narrowly: only a digit run that resolves to a card the
+registry DEFINES counts, so `1176` lands and the cycle date `20260804` is
+dropped rather than minting a card out of a date. Two defined cards in one
+name is ambiguity and stays silent, the ruling `resolve_card` already
+follows. It is tried before `account_id` because a run that resolves to a
+defined card names a card, while an account id can name a family of four
+(`chase-2838-family` spans 2838 / 3645 / 3876 / 0340).
+
+Blast radius is one file. The last resort runs only where both joins are
+silent, and on the live corpus every other statement already attaches
+through its charges: `August2026.xlsx` to three coverage rows, `July2026.xlsx`
+to four, `Chase2838_Activity20260401_20260430_20260716.CSV` to four. January,
+May, June and September hold no statement and no `coverage[]` at all, so they
+have nothing to move. Four statements across seven months, one of them
+unattributed, measured 2026-09-24.
+
+Two surfaces move on the one change, because `_pdf_common._section_statements`
+reads the same coverage row and returns nothing for the no-card section. So
+today the 1176 PDF is not merely mis-filed on the card sections page, it is
+absent from it; after this it sits under `card-1176` on both.
+
+Five route-level tests in `tests/test_statement_card_link_item_108.py`, all
+through `GET /api/runs/{id}`, including the two negatives that are the real
+contract: a cycle date never becomes a card, and a file whose charges are
+known is never re-attributed by its name. Both wires regress-checked
+(green to red to green): swapping `printed` back to the anchors fails the
+PDF test, and disabling the name resort fails the legacy-month test.
 
 Card 9693 is unchanged and is the real half of this item: `n_tx: 0`,
 `statements: 0` in every month that has coverage, so no 9693 charge has ever

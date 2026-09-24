@@ -11247,7 +11247,7 @@ def charge_entity_source(tx, cards: dict) -> str:
 
 def _statement_card_identities(
     entry: dict,
-    anchors: dict,
+    printed: dict,
     charge_identity: dict[str, _CardIdentity],
     cards: dict,
 ) -> list[_CardIdentity]:
@@ -11262,36 +11262,100 @@ def _statement_card_identities(
       statement for this card, got no charges out of it" is worth seeing.
       Blind when the upload named no preset, which is every upload made
       through the plain form.
-    * the charges the file actually printed, via its `statement_anchors` row
-      map. Blind for a PDF statement, whose charges have no tabular row and
-      therefore no anchors, and for every upload that predates PR 2b-2b-2.
+    * the charges the file actually printed, via `statement_origins`
+      (note item T3), which records every charge an upload printed, PDF and
+      workbook alike. It used to read `statement_anchors` instead, and the
+      anchors are the WRITEBACK's map: empty by construction for a PDF,
+      whose charges have no tabular row. That emptiness read as "this file
+      printed nothing" and parked every PDF statement in the no-card row.
+      `_printed_by_upload` keeps the anchors as the fallback for a month
+      recorded before the origins existed, which is the same rule
+      `origins_from_snapshot` follows, so a workbook of that vintage still
+      resolves and a PDF of that vintage still cannot.
 
-    `account_id` is the LAST resort, used only when both joins came back
-    empty, and deliberately not a third voice beside them. It names an
-    ACCOUNT, not a card: on the real corpserv export every row carries
-    `chase-2838-family` while the rows themselves span 2838 / 3645 / 3876 /
-    0340, so treating it as a card identity would invent a coverage row for
-    a card that does not exist and park the file in it. Where it IS the card
-    (the Chase statement PDF, whose account id is the cycle marker, and
-    every single-card CSV with no Card column) the other two joins are
-    silent and it is the only thing that can answer.
+    Two LAST resorts, reached only when both joins came back empty, in this
+    order:
 
-    Nothing here picks a winner between the joins: this surface reports
+    * the digit runs the FILE NAME carries, kept only where a run resolves
+      to a card the registry DEFINES. `20260804-statements-1176-.pdf` names
+      one such card and one date that is no card at all, and an unknown run
+      never mints a `digits:` row here: a date is not a card, and inventing
+      a coverage row out of one would be worse than the no-card row this
+      replaces. Two different defined cards in one name is ambiguity, which
+      stays silent per the house ruling.
+    * `account_id`, and deliberately not a voice beside the two joins. It
+      names an ACCOUNT, not a card: on the real corpserv export every row
+      carries `chase-2838-family` while the rows themselves span 2838 /
+      3645 / 3876 / 0340, so treating it as a card identity would invent a
+      coverage row for a card that does not exist and park the file in it.
+      It goes after the file name because a run that resolves to a defined
+      card names a card, while an account id can name a family of four.
+      Where it IS the card (the Chase statement PDF, whose account id is
+      the cycle marker, and every single-card CSV with no Card column) it
+      is still the only thing that can answer.
+
+    Nothing here picks a winner between the two joins: this surface reports
     coverage, it does not adjudicate what an operator meant.
     """
     out: dict[str, _CardIdentity] = {}
     identity = _identity_from_observed(entry.get("card_key"), cards)
     if identity.key:
         out[identity.key] = identity
-    for tx_id in (anchors.get(entry.get("file")) or {}):
+    for tx_id in (printed.get(entry.get("file")) or {}):
         identity = charge_identity.get(tx_id)
         if identity is not None:
+            out[identity.key] = identity
+    if not out:
+        for identity in _identities_from_file_name(entry, cards):
             out[identity.key] = identity
     if not out:
         identity = _identity_from_observed(entry.get("account_id"), cards)
         if identity.key:
             out[identity.key] = identity
     return list(out.values()) or [_NO_CARD]
+
+
+def _printed_by_upload(run: RunRow) -> dict[str, dict]:
+    """`{statement file: {transaction_id: where}}` for every upload the
+    month holds: which charges each file printed.
+
+    `statement_origins` (note item T3) is the record; `statement_anchors`
+    is the fallback for a month written before it existed, where a workbook
+    still has a row per charge it printed and a PDF has nothing. A file
+    whose origins entry is recorded and EMPTY keeps that emptiness rather
+    than falling back, because "this upload printed no charge we kept" is
+    an answer and the anchors would only repeat it.
+    """
+    snapshot = run.snapshot or {}
+    origins = snapshot.get(STATEMENT_ORIGINS_KEY) or {}
+    anchors = snapshot.get(STATEMENT_ANCHORS_KEY) or {}
+    out: dict[str, dict] = {}
+    for file in set(origins) | set(anchors):
+        found = origins.get(file)
+        if found is None:
+            found = anchors.get(file) or {}
+        out[str(file)] = found if isinstance(found, dict) else {}
+    return out
+
+
+def _identities_from_file_name(entry: dict, cards: dict) -> list[_CardIdentity]:
+    """The one DEFINED card a statement's own file name names, or nothing.
+
+    Read from the stored name and the name Criss sent, unioned, because a
+    collision suffix or a per-card export sharing the bank's filename makes
+    the two differ. Only a digit run that resolves through the registry
+    counts: `20260804-statements-1176-.pdf` yields card 1176 and drops the
+    cycle date, and a name that resolves to nothing stays silent rather
+    than minting a card out of a number. Two different defined cards in one
+    name is ambiguity and also stays silent.
+    """
+    seen: dict[str, _CardIdentity] = {}
+    for name in (entry.get("file"), entry.get("upload_name")):
+        for run_of_digits in _printed_digits(Path(str(name or "")).stem):
+            identity = _identity_from_observed(run_of_digits, cards)
+            if identity.card_key:
+                seen[identity.key] = identity
+    return list(seen.values()) if len(seen) == 1 else []
 
 
 def _printed_digits(observed: str) -> list[str]:
@@ -11407,7 +11471,7 @@ def month_coverage(
         return [], {}
 
     cards = _batch_cards(run.config)
-    anchors = (run.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}
+    printed = _printed_by_upload(run)
     entries: dict[str, dict] = {}
 
     def row(identity: _CardIdentity) -> dict:
@@ -11483,7 +11547,7 @@ def month_coverage(
         if not name:
             continue
         for identity in _statement_card_identities(
-            stmt, anchors, charge_identity, cards
+            stmt, printed, charge_identity, cards
         ):
             target = row(identity)
             if name not in target["statements"]:
