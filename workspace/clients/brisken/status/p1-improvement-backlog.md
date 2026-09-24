@@ -10277,8 +10277,11 @@ untouched. Measured on a fresh DB copy (July `50622baec444`, August
 right booking; August `0025` Lovable on BASE44 50.00 wrong to review
 (wrong 1 to 0), July `0034` Erste Fracht on HOTEL AM TIERGARTEN and `0066`
 Mega Center on BEATRYZ (both labelled excluded) and August `0033` E A
-LOCACOES (unlabelled) go to review. Clean right 26 / 6 unchanged. The April
-MARIA BETAN pair is outside the two replayed months. Six bundles unchanged
+LOCACOES (unlabelled) go to review. Clean right 26 / 6 unchanged. A live
+read of every month (GET only) finds exactly the five predicted rows, all
+still pending in reconciled: the four above plus April 46.412.470 MARIA
+BETAN 24.59 (2838, `vendor_pct` 17); September and the receipts-only months
+hold none. Six bundles unchanged
 (70/95, 0 wrong, SCORE 76.0; every bundle receipt carries a Zoho payment
 mode), CI fixtures unchanged, so `expected.json` and the deploy baseline did
 not move. Rows move at each month's next natural re-match. Lovable prompt
