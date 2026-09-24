@@ -275,7 +275,13 @@ Order:
    unchanged: a refused GL line (`None`, REVIEW) still reads uncategorized.
 6. Relabel `categorization_gate.py` and regress-check it. Left alone it keeps
    measuring the retired vocabulary through the keyword stubs and reports green
-   over a path that no longer runs.
+   over a path that no longer runs. Done 2026-09-24 (queue item 6): it is now
+   the BUCKET-path gate by name, in its report ("GL path (batches with
+   gl_entity_orgs): NOT measured by this gate") and in calibrate's JSON
+   (`path: bucket`, `gl_path_measured: false`). A test pins that it routes
+   through `_categorize_one` and never reaches `_categorize_one_gl`, and
+   breaking the GL chain's refusal leaves it green, which is the point of the
+   label: no deterministic gate measures the GL chain today.
 
 ## Open, and whose it is
 
@@ -292,9 +298,11 @@ Order:
   where the account is the answer, that is a nearest-plausible default sitting
   inside the writer of durable memory. Needs fixing before the chain writes
   through it.
-- `paid_through_account_id` (`zoho/expense_post.py:596-597`) is a raw numeric id
-  that passes through no resolution and no validity check: the same class as the
-  bug this change removes, on the card side.
+- ~~`paid_through_account_id` is a raw numeric id that passes through no
+  resolution and no validity check.~~ Closed 2026-09-24 (backlog item 184):
+  `zoho.accounts.resolve_paid_through`, called from `build_expense_payload`.
+  Which card each production entity pays from is still master data, and Dirk's
+  (item 172).
 
 ## Why the July and August dry runs are not in Phase 1
 

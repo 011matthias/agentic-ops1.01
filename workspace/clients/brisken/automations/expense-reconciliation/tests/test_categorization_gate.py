@@ -62,6 +62,38 @@ def test_a_taught_row_wins_the_same_line_read_and_says_so():
     assert cat.decision == "learned_over_line"
 
 
+def test_the_gate_runs_the_bucket_path_and_never_the_gl_chain(monkeypatch):
+    """Item 6: the label is a tested fact. The gate routes every fixture
+    receipt through the bucket categorizer and none through the GL chain, so
+    repointing it at GL without relabelling it turns this red."""
+    from expense_recon import categorize
+
+    seen: list[str] = []
+    real = categorize._categorize_one
+
+    def spy(receipt, *a, **kw):
+        seen.append(receipt.document_id)
+        return real(receipt, *a, **kw)
+
+    def refuse(*_a, **_kw):
+        raise AssertionError("the bucket-path gate reached the GL chain")
+
+    monkeypatch.setattr(categorize, "_categorize_one", spy)
+    monkeypatch.setattr(categorize, "_categorize_one_gl", refuse)
+    m = g.run_gate()
+    assert sorted(seen) == sorted(r.document_id for r, _ in g.LABELED)
+    assert m["path"] == "bucket"
+    assert m["gl_path_measured"] is False
+
+
+def test_the_report_says_which_path_it_measured(capsys):
+    g.print_report(g.run_gate())
+    out = capsys.readouterr().out
+    assert "BUCKET PATH" in out
+    assert "GL path (batches with gl_entity_orgs): NOT measured" in out
+    assert "Gate (bucket path): OK" in out
+
+
 def test_guard_fixture_mappings_actually_conflict():
     learned = {normalize_vendor(v): c for _le, v, c, _s in g.MEMORY_FIXTURE}
     for doc in ("guard", "taught"):

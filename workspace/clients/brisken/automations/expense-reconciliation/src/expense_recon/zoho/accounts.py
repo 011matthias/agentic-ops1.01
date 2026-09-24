@@ -39,6 +39,13 @@ only its chart, so there a parent refuses, the rule
 The category-to-account fallback table that lived beside this module is
 retired: a category label is not an account, and every reference now has
 to name one.
+
+**The card side goes through here too (backlog item 184).** The account an
+expense is paid FROM used to reach Zoho as a raw id that nothing looked
+at, the same class as the name-for-id mis-post above, one field over.
+`resolve_paid_through` holds it to the same standard: numeric, present in
+the chart pulled for the org being posted to, active, not DO NOT USE, a
+card account, and (when the caller names one) the card the run says it is.
 """
 from __future__ import annotations
 
@@ -70,12 +77,17 @@ __all__ = [
     "REASON_NOT_EXPENSE_RELEVANT",
     "REASON_NO_ACCOUNT_ID",
     "REASON_OUT_OF_SCOPE",
+    "REASON_PAID_THROUGH_NAME_MISMATCH",
+    "REASON_PAID_THROUGH_NOT_A_CARD",
+    "REASON_PAID_THROUGH_NOT_NUMERIC",
     "REASON_PLACEHOLDER",
     "REASON_UNKNOWN",
+    "PAID_THROUGH_TYPES",
     "AccountRefusal",
     "ResolvedAccount",
     "resolve_account_id",
     "resolve_all",
+    "resolve_paid_through",
 ]
 
 REASON_EMPTY = "empty_reference"
@@ -98,6 +110,20 @@ REASON_OUT_OF_SCOPE = "account_outside_curated_list"
 # three orgs, so a chart loaded for one org and posted under another
 # passes every other check here and would send another company's ids.
 REASON_CHART_ORG_MISMATCH = "chart_disagrees_with_org"
+
+# The card side (item 184). The payload wants an id, so anything else is
+# the 2026-09-22 name-for-id class on the paid-through field.
+REASON_PAID_THROUGH_NOT_NUMERIC = "paid_through_not_numeric"
+# Every card Brisken pays with is a `credit_card` account in its org's
+# chart (Cloud Services 3, Consulting 1, Corporate Services 2, the sandbox
+# 1, read 2026-09-24). A bank, cash or liability account there would book a
+# card charge as money leaving somewhere it did not.
+REASON_PAID_THROUGH_NOT_A_CARD = "paid_through_not_a_card"
+PAID_THROUGH_TYPES = frozenset({"credit_card"})
+# The run matches its occupancy guard on the card NAME and posts on the
+# card ID, so an id and name naming two different cards would check one
+# card's month and post onto the other's.
+REASON_PAID_THROUGH_NAME_MISMATCH = "paid_through_name_mismatch"
 
 # The export layer's visible gaps. Each one means a human still has to
 # decide something, so each one is a hard stop rather than an input:
@@ -268,6 +294,89 @@ def _postability_refusal(
             ),
         )
     return None
+
+
+def resolve_paid_through(
+    account_id: str | None,
+    coa: "ChartOfAccounts",
+    *,
+    expected_name: str | None = None,
+) -> ResolvedAccount | AccountRefusal:
+    """The card an expense is paid from, checked, or a refusal (item 184).
+
+    `coa` must be the chart pulled for the org being posted to: an id is
+    looked up in it, so a card from another org's chart refuses as
+    `not_in_chart`. Nothing ties a supplied chart to an org id here (card
+    accounts are not on Dirk's sheet, so there is no curated id to compare
+    against, unlike `chart_disagrees_with_org` on the expense side); the
+    month runner satisfies that by pulling the chart from the org's own
+    client. `expected_name`, when given, must match the chart's name for
+    the id, case and surrounding space aside.
+    """
+    text = str(account_id or "").strip()
+    if not text:
+        return AccountRefusal(
+            ref="",
+            reason=REASON_EMPTY,
+            detail="no paid-through account id; name the card this run pays from",
+        )
+    if not text.isdigit():
+        return AccountRefusal(
+            ref=text,
+            reason=REASON_PAID_THROUGH_NOT_NUMERIC,
+            detail=(
+                f"paid-through {text!r} is not a numeric Zoho account id. Zoho "
+                "answers a name with its own default account and a 201, which "
+                "is the 2026-09-22 mis-post; configure the card's account_id"
+            ),
+        )
+    acct = coa.by_account_id(text)
+    if acct is None:
+        return AccountRefusal(
+            ref=text,
+            reason=REASON_UNKNOWN,
+            detail=(
+                f"paid-through id {text} is in no account of the chart pulled "
+                "for this org; it is another org's card or the chart is stale"
+            ),
+        )
+    if not acct.is_active:
+        return AccountRefusal(
+            ref=text,
+            reason=REASON_INACTIVE,
+            detail=f"paid-through {acct.name!r} is inactive in this org",
+        )
+    if acct.is_do_not_use:
+        return AccountRefusal(
+            ref=text,
+            reason=REASON_DO_NOT_USE,
+            detail=f"paid-through {acct.name!r} is marked DO NOT USE in this org's chart",
+        )
+    if acct.account_type.strip().lower() not in PAID_THROUGH_TYPES:
+        return AccountRefusal(
+            ref=text,
+            reason=REASON_PAID_THROUGH_NOT_A_CARD,
+            detail=(
+                f"paid-through {acct.name!r} is a {acct.account_type or 'untyped'} "
+                "account, not a card; a card charge booked from it would show "
+                "money leaving an account it never left"
+            ),
+        )
+    wanted = (expected_name or "").strip()
+    if wanted and wanted.casefold() != acct.name.strip().casefold():
+        return AccountRefusal(
+            ref=text,
+            reason=REASON_PAID_THROUGH_NAME_MISMATCH,
+            detail=(
+                f"paid-through id {text} is {acct.name!r} in this org, but the "
+                f"run names the card {wanted!r}; the occupancy check reads the "
+                "name and the post uses the id, so they must be one card"
+            ),
+        )
+    assert acct.account_id is not None  # found by it
+    return ResolvedAccount(
+        ref=text, account_id=acct.account_id, name=acct.name, code=acct.code
+    )
 
 
 def resolve_all(

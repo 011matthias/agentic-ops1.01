@@ -36,16 +36,19 @@ from expense_recon.zoho.orgs import SANDBOX_ORG_ID
 CLOUD = "697686691"  # Cloud Services, curated (BCS tab)
 CORP = "822741658"  # Corporate Services, curated (CorpServ tab)
 CARD_ID = "4369050000000320002"
+# Cloud Services' own card: a chart only carries its own org's cards, and
+# since item 184 the paid-through id must be in the chart posted against.
+CLOUD_CARD_ID = "2031056000017742154"
 
 IT_PARENT = "IT: Computer and Internet Expenses"
 
 
-def _acct(account_id, name, code, parent=None):
+def _acct(account_id, name, code, parent=None, account_type="expense"):
     return {
         "account_id": account_id,
         "account_name": name,
         "account_code": code,
-        "account_type": "expense",
+        "account_type": account_type,
         "is_active": True,
         "parent_account_name": parent,
     }
@@ -64,6 +67,8 @@ CLOUD_CHART = ChartOfAccounts.from_api(
         _acct("2031056000000104265", "Travel Expense | Food", "E100010-31"),
         _acct("2031056000000403080", "Payroll Taxes: Medicare", "E300000-10"),
         _acct("2031056000099999999", "Unlisted Expense", "E999990"),
+        _acct(CLOUD_CARD_ID, "Chase Visa | 9693 | Cloud Expenses", "9693",
+              account_type="credit_card"),
     ]
 )
 
@@ -73,6 +78,8 @@ SANDBOX_CHART = ChartOfAccounts.from_api(
         _acct("4369050000000078183", IT_PARENT, "E500010"),
         _acct("4369050000000078239", "IT: Cloud Subscriptions-Others",
               "E500010-30", IT_PARENT),
+        _acct(CARD_ID, "Visa dummy card Matthias", "",
+              account_type="credit_card"),
     ]
 )
 
@@ -100,7 +107,9 @@ def _plan(groups, coa, *, org_id, tmp_path):
             coa,
             ledger,
             org_id=org_id,
-            paid_through_account_id=CARD_ID,
+            paid_through_account_id=(
+                CLOUD_CARD_ID if coa is CLOUD_CHART else CARD_ID
+            ),
             base_currency="USD",
         )
     finally:

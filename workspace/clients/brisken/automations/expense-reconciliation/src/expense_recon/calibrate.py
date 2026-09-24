@@ -247,6 +247,8 @@ def main(argv: list[str] | None = None) -> int:
     # Categorization-accuracy gate (PR 2b): a labeled-fixture regression
     # check on the Sort pass, segmented so a drop in the memory-auto-applied
     # population trips on its own. Independent of --config (bundled fixture).
+    # BUCKET PATH ONLY (item 6): it never runs the GL chain a batch with
+    # `gl_entity_orgs` takes, and its report and JSON say so.
     from .categorization_gate import print_report as print_cat_report, run_gate
 
     cat = run_gate()

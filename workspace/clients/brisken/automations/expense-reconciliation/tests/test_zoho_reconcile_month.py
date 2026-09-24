@@ -74,6 +74,14 @@ CHART = [
         "account_type": "expense",
         "is_active": True,
     },
+    # The profile's card, as the sandbox chart carries it (item 184).
+    {
+        "account_id": CARD,
+        "account_name": CARD_NAME,
+        "account_code": "",
+        "account_type": "credit_card",
+        "is_active": True,
+    },
 ]
 
 

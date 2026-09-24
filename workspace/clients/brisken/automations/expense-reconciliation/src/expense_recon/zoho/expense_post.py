@@ -39,6 +39,10 @@ cleanly is worse than one that fails:
   usable rate, because Zoho would then apply one nobody chose.
 * a purchase whose `Paid Through` or `Legal Entity` cell still holds the
   export's assign-me placeholder
+* a paid-through card that is not a numeric id, is not in the chart pulled
+  for the target org, is inactive or DO NOT USE, is not a card account, or
+  (when the caller names the card) is a different card (item 184,
+  `zoho.accounts.resolve_paid_through`)
 * a reference whose own rows disagree on the date by more than two days,
   because a vendor reusing one invoice number across separate documents
   is not the split this grouping assumes
@@ -68,7 +72,12 @@ from ..output.zoho_expense_export import (
     EXPENSE_COLUMNS,
     PAID_THROUGH_PLACEHOLDER,
 )
-from .accounts import AccountRefusal, ResolvedAccount, resolve_account_id
+from .accounts import (
+    AccountRefusal,
+    ResolvedAccount,
+    resolve_account_id,
+    resolve_paid_through,
+)
 from .idempotent import PostedConflictError, PostLedger
 from .occupancy import month_bounds
 
@@ -87,6 +96,7 @@ __all__ = [
     "REFUSAL_CURRENCY_UNDEFINED",
     "REFUSAL_EXCHANGE_RATE",
     "REFUSAL_LEDGER",
+    "REFUSAL_PAID_THROUGH",
     "REFUSAL_STALE_DATE",
     "REFUSAL_UNASSIGNED",
     "ExpenseGroup",
@@ -107,6 +117,9 @@ __all__ = [
 ]
 
 REFUSAL_ACCOUNT = "account_unresolved"
+# The card the purchase is paid from did not check out (item 184); the
+# detail carries `resolve_paid_through`'s reason and remedy.
+REFUSAL_PAID_THROUGH = "paid_through_unresolved"
 REFUSAL_AMOUNT = "amount_unreadable"
 REFUSAL_CURRENCY = "foreign_currency_unresolvable"
 REFUSAL_LEDGER = "already_in_ledger"
@@ -602,12 +615,18 @@ def build_expense_payload(
     convert_foreign_to_base: bool = False,
     period: str | None = None,
     stale_days: int = DEFAULT_STALE_DAYS,
+    paid_through_name: str | None = None,
 ) -> "dict | PostRefusal":
     """The Zoho POST body for one purchase, or a refusal naming why not.
 
     `org_id` is passed to account resolution so each account is judged
     postable by this org's own rules (`zoho.accounts`): its curated list
     where one exists, its chart's parent/leaf shape otherwise.
+
+    `paid_through_account_id` is checked against `coa` like every expense
+    account (item 184, `resolve_paid_through`), and the payload carries the
+    id the chart resolved, never the raw argument. `paid_through_name`,
+    when given, must be that card's name in the chart.
 
     Foreign currency has three policies, checked in this order:
 
@@ -720,6 +739,17 @@ def build_expense_payload(
             ),
         )
 
+    # The card, before any amount or account: a run pointed at the wrong
+    # card would post every purchase in the batch onto it, so it is named
+    # on each one rather than discovered after the first posts.
+    card = resolve_paid_through(paid_through_account_id, coa, expected_name=paid_through_name)
+    if isinstance(card, AccountRefusal):
+        return PostRefusal(
+            reference=group.reference,
+            reason=REFUSAL_PAID_THROUGH,
+            detail=f"{card.reason}: {card.detail}",
+        )
+
     currency = (group.cell("Currency Code") or base_currency).upper()
     base = base_currency.upper()
     fx: dict[str, object] = {}
@@ -825,7 +855,7 @@ def build_expense_payload(
 
     payload: dict = {
         "date": when_text,
-        "paid_through_account_id": paid_through_account_id,
+        "paid_through_account_id": card.account_id,
         "reference_number": group.reference,
         "description": audit_note(group, source=source, original=original),
         "currency_code": currency,
@@ -890,6 +920,7 @@ def plan_expense_post(
     convert_foreign_to_base: bool = False,
     period: str | None = None,
     stale_days: int = DEFAULT_STALE_DAYS,
+    paid_through_name: str | None = None,
 ) -> ExpensePlan:
     """Resolve every group and cross-reference the ledger. Pure apart
     from ledger READS; posts nothing.
@@ -932,6 +963,7 @@ def plan_expense_post(
             convert_foreign_to_base=convert_foreign_to_base,
             period=period,
             stale_days=stale_days,
+            paid_through_name=paid_through_name,
         )
         if isinstance(built, PostRefusal):
             refusals.append(built)
