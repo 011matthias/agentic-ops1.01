@@ -96,6 +96,7 @@ from .categorize import (
 )
 from .cards import cards_from_setting, stamp_card_entities
 from .categorize_charges import categorize_charges, derive_subscription_status
+from .correspondence import CORRESPONDENCE, quarantine_correspondence
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
 from .ingest.expense_csv import parse_expense_csv_tolerant
@@ -893,6 +894,10 @@ NON_RECEIPT_LABELS: dict[str, str] = {
     "statement": "a bank/card statement page",
     "report_summary": "an expense-report summary page",
     "other": "not an expense document",
+    # 2026-09-24: a payment reminder / past-due notice ABOUT another
+    # document. Written only by `correspondence.quarantine_correspondence`,
+    # never by the extractor, so the extraction cache is untouched.
+    CORRESPONDENCE: "a payment reminder or account notice",
 }
 
 
@@ -911,6 +916,10 @@ def split_non_receipt_documents(
     extraction: the web layer records them in the snapshot's set-aside list
     so the reviewer can see WHY each file was set aside and restore one
     without a fresh vision call.
+
+    The correspondence rung (2026-09-24) rides the same partition: a payment
+    reminder the reader called a receipt. It reads `Receipt.ocr_text`, so a
+    source that keeps no text layer is untouched.
     """
     kept: list[Receipt] = []
     excluded: list[Receipt] = []
@@ -920,6 +929,7 @@ def split_non_receipt_documents(
         if invoice is not None:
             kept.append(invoice)
             continue
+        r = quarantine_correspondence(r) or r  # 2026-09-24
         label = NON_RECEIPT_LABELS.get(r.document_type)
         if label is None:
             kept.append(r)
