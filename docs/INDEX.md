@@ -12,6 +12,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-25 | Recon Card Ending Wordings | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Recon%20Card%20Ending%20Wordings/Mini-Checkpoint-1.md) |
+| 2026-09-25 | Brisken Recon Card Type Not Private | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Card%20Type%20Not%20Private/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken P1 Private Needs Evidence | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20Private%20Needs%20Evidence/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken P1 GL Prompt Applied And Items 201 196 Picked | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20GL%20Prompt%20Applied%20And%20Items%20201%20196%20Picked/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Recon Vendor Card History Gate | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Vendor%20Card%20History%20Gate/Mini-Checkpoint-1.md) |
