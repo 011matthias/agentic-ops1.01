@@ -1,6 +1,7 @@
 # Lovable prompt: the months strip nests a card's subcards under it (item 191)
 
-**NOT PASTED.** Owner, 2026-09-24: *"adjust the subcards' tabs in the filter
+**APPLIED** (published 2026-09-24, check table driven cold; evidence in
+`PROMPT-STATUS.md` → Applied). Owner, 2026-09-24: *"adjust the subcards' tabs in the filter
 in months menu to not be next to the 2838 tab but rather only appear once
 viewer clicks on 2838. maintain their filter function"*.
 

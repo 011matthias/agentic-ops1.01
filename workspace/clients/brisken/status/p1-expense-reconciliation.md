@@ -23,10 +23,12 @@ The SPA half, `docs/lovable-cards-overview-prompt.md`, is **NOT pasted**.
 2838 but appear once it is clicked, each keeping its filter. `GET
 /api/cards/status` now carries `cards[].parent` and `cards[].subcards` from the
 LIVE registry (a month keeps its own snapshot); figures stay each card's own.
-The SPA half, `docs/lovable-months-subcards-prompt.md`, is **not pasted**, and
-it is the only gate left: the three parents were entered the same day on the
-owner's yes ("in books there is only 2838 registered"), so the live payload
-already nests 3645, 3876 and 0340 under 2838. Cold drive after the deploy: the
+The SPA half, `docs/lovable-months-subcards-prompt.md`, is **published and
+driven** (2026-09-24): the three parents were entered the same day on the
+owner's yes ("in books there is only 2838 registered"), and every row of the
+prompt's check table matched cold. The same logic for the `/cards` overview
+table is item 193, `docs/lovable-cards-overview-subcards-prompt.md`, **not
+pasted**, no backend work. Cold drive after the deploy: the
 published strip is unchanged chip for chip and still filters (3645 five months,
 2838 six, 0340 two).
 
