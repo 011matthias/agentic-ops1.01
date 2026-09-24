@@ -109,9 +109,13 @@ shipped with it: the paid-through card is resolved against the org's chart
 (numeric, present, active, a `credit_card` account, and the card the run
 names) before any payload is built.
 
-Queue: **4b** the export COA gate contradicts the curation (diverts 56 of 194
-postable accounts on a GL batch, `COGS - DEV Infrastructure` among them; key a
-curated gate on `gl_entity_orgs`, bucket batches unchanged).
+**Item 4b (2026-09-24, NOT deployed).** On a GL batch the export's chart
+gate now judges a curated org by Dirk's marking, as the engine and the API
+poster do: `cli._build_coa_gate` sets `curated_org` when the config carries
+`gl_entity_orgs`. Measured on the real chart and provisioning: 56 of 194 Y
+accounts diverted and 105 N passed before, 0 and 0 after; bucket batches keep
+56 / 105 (pinned). Queue items 3 to 6 and 4b are all on main; the deploy
+waits only on the owner's SPA bundle (leaf codes + `category_refused`).
 
 **2026-09-24: a payment reminder is no longer a purchase** (backlog item 186,
 PR #1268, merge `0726b428`, DEPLOYED and cold-driven; `/healthz` commit

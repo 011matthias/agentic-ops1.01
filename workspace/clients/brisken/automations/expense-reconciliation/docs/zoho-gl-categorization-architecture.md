@@ -152,12 +152,21 @@ an org nobody curated keeps the chart's parent rule. A chart whose id for a code
 differs from the curated id for the target org also refuses, since codes are
 shared across the three orgs.
 
-**The export COA gate still disagrees with the curation.** Measured against the
-live provisioning `scope_groups`, `coa_gate.classify_account` diverts 56 of the
-194 postable accounts (23 of 64 Cloud Services, 11 of 62 Consulting, 22 of 68
-Corporate Services), `COGS - DEV Infrastructure` among them, and passes some
-accounts marked N. On a GL batch the export would blank those accounts before
-the resolver sees them. Queue item 4b.
+**The export COA gate disagreed with the curation; closed on GL batches
+2026-09-24 (queue item 4b).** Measured against the provisioning
+`scope_groups`, `coa_gate.classify_account` diverted 56 of the 194 postable
+accounts (23 of 64 Cloud Services, 11 of 62 Consulting, 22 of 68 Corporate
+Services), `COGS - DEV Infrastructure` among them, and passed 105 accounts
+marked N (87 in Consulting, whose provisioning carries no `scope_groups`). On
+a GL batch the export would have blanked those accounts before the resolver
+saw them. Now `cli._build_coa_gate` sets `curated_org` on every gate of a
+batch whose config carries `gl_entity_orgs` (the engine's own test) for an org
+Dirk curated, and the gate then judges by his marking in the resolver's order:
+N is `NOT_EXPENSE_RELEVANT`, off the list is `OUTSIDE_CURATED_LIST`, the
+chart's id not his is `CHART_ORG_MISMATCH`. Re-measured: 0 of 194 diverted, 0
+N passed. Bucket batches are untouched (still 56 and 105, pinned against a
+gate built the pre-4b way), and a test holds the gate and
+`resolve_account_id` to the same verdict on every account on the sheet.
 
 ## The chain
 

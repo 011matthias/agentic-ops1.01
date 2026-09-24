@@ -1885,6 +1885,11 @@ def _build_coa_gate(cfg: dict, config_dir: Path):
     The Books COA JSON has the shape
     `{ "<org_id>": { "org": {...}, "accounts": [...] }, ... }`; it is
     sensitive client data and is never committed to this repo.
+
+    A GL batch (`cfg` carries `gl_entity_orgs`, the engine's own test) gets
+    `curated_org` on every gate whose org Dirk curated, so the export judges
+    postable by his marking, as the engine and the API poster do (item 4b).
+    A bucket batch builds exactly the gate it always did.
     """
     block = cfg.get("coa_validation")
     if not isinstance(block, dict) or not block.get("enabled", True):
@@ -1892,6 +1897,9 @@ def _build_coa_gate(cfg: dict, config_dir: Path):
 
     from .coa_gate import CoaGate, gate_for_entities, load_entity_chart
     from .ingest.chart_of_accounts import EXPENSE_ACCOUNT_TYPES
+    from .zoho import curated_leaves
+
+    gl_batch = cfg.get(GL_ENTITY_ORGS_KEY) is not None
 
     # Cards R4: a batch that mixes legal entities carries one entry per
     # entity, and each row is gated against the chart of the entity that
@@ -1904,8 +1912,11 @@ def _build_coa_gate(cfg: dict, config_dir: Path):
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
+            sub_cfg = {"coa_validation": entry}
+            if gl_batch:
+                sub_cfg[GL_ENTITY_ORGS_KEY] = cfg[GL_ENTITY_ORGS_KEY]
             try:
-                gate = _build_coa_gate({"coa_validation": entry}, config_dir)
+                gate = _build_coa_gate(sub_cfg, config_dir)
             except ConfigError:
                 continue
             if gate is not None and isinstance(gate, CoaGate):
@@ -1931,11 +1942,13 @@ def _build_coa_gate(cfg: dict, config_dir: Path):
     scope_groups = block.get("scope_groups")
     types = block.get("types") or EXPENSE_ACCOUNT_TYPES
     entity = block.get("entity_label") or str(org_id)
+    org = str(org_id).strip()
     return CoaGate(
         chart=chart,
         scope_groups=tuple(scope_groups) if scope_groups else None,
         types=tuple(types),
         entity=entity,
+        curated_org=org if gl_batch and curated_leaves.covers_org(org) else None,
     )
 
 

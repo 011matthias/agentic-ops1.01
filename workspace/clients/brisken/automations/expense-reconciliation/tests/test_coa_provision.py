@@ -202,6 +202,10 @@ def test_injected_block_builds_a_gate_that_diverts_bad_accounts(tmp_path):
     DO-NOT-USE / wrong-entity / out-of-scope account before export."""
     prov = _write_provision(tmp_path)
     cfg = apply_to_config({"receipts": {}}, "Corporate Services", path=prov)
+    # The chart rule, as a bucket batch (one created before `gl_entity_orgs`
+    # existed) gets it. A GL batch is judged by Dirk's marking instead, and
+    # these synthetic codes are not on it: test_coa_gate_curated_item_4b.
+    cfg.pop(GL_ENTITY_ORGS_KEY)
     gate = _build_coa_gate(cfg, tmp_path)  # chart_path is absolute -> tmp_path ignored
     assert gate is not None
 
