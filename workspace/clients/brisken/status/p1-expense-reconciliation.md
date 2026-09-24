@@ -73,7 +73,8 @@ and the fix costs nothing now.
 Y→N; the cross-reference could not settle them (bills in the 24-month pull
 carry no account field, and ~90% of postable accounts show zero over 24
 months), so the call is blast radius: under direct-to-GL a refusal is cheap and
-a silent mis-post is not. Reversible when Dirk rules. `COGS - Support BRISKEN
+a silent mis-post is not. Dirk ruled the same day: all six SPOT-CHECK rows stay
+N, so the taxonomy is final for them. `COGS - Support BRISKEN
 Tech / JB` stays N with its reason corrected from "intercompany" to contractor
 cost (205,996.20 USD over 24 monthly bills from Juliano Carlo Brugnago Ltda).
 
@@ -275,8 +276,12 @@ file, measured: every other statement in the estate already attaches through
 its charges. Verified cold on `expenses.brisken.com`, August, Matching, 1176:
 "Statement 20260804-statements-1176-.pdf · Jul 06 to Aug 04 · 3 charges · 0
 matched · still open USD 36.00". **Item 108's remaining half is genuinely
-absent data**: 9693, 0113, 6013 and 8311 have no statement in any month, which
-is Dirk's to supply, not a defect.
+absent data**: 9693, 0113, 6013 and 8311 have no statement in any month.
+Found 2026-09-24 on the ADMIN CLOUD SERVICES LLC SharePoint site (Graph
+app-only, read): 9693 has every 2026 statement through 0904; 8311 and 6013 are
+dormant (fee-only cycles, no receipts); 0113 exists nowhere in SharePoint and is
+Dirk's to export. Loading 9693 into the months is the owner's call (backlog
+item 108).
 
 Item 185 came from note #86 and was raised as a quote-separately new surface;
 the owner answered with a directive instead: *"the same per card filter system
@@ -361,8 +366,8 @@ Item 184 (`paid_through_account_id` unvalidated, the same bug class on the
 card side) was filed with it and is still open. Item 182 shipped 2026-09-24;
 see above, including why its stated cause turned out to be wrong.
 
-Still Dirk's: the six `SPOT-CHECK` accounts, card 3645's real chart account
-(item 172), and whether Tier 2 trip-purpose inheritance should exist at all
+Still Dirk's: card 3645's real chart account (item 172; the six `SPOT-CHECK`
+accounts are settled, all N, Dirk 2026-09-24), and whether Tier 2 trip-purpose inheritance should exist at all
 (also behind item 38's hold). July and August dry runs remain BLOCKED and
 not by anything we can code around: `reconcile_month.assert_org` permits
 only the sandbox `822116290`, and Dirk's three curated orgs are in neither
