@@ -9043,7 +9043,7 @@ assert it is numeric and postable-from, refuse rather than default.
 **Bounded and ours**, though the correct value per card is master data and
 overlaps item 172 (card 3645's account, which is Dirk's).
 
-### 185. A card-first status view, across months (note #86, owner 2026-09-24)
+### 185. A card-first status view, across months (note #86, owner 2026-09-24) (BACKEND SHIPPED 2026-09-24; the SPA page is a Lovable prompt, not pasted)
 
 **Owner:** *"I'm looking for a feature where I'm able to sort and find a
 status for a single card. For example if I want an overview of: which cards
@@ -9083,11 +9083,44 @@ every month that has coverage and carry zero expense rows anywhere. Either
 they are dormant or they have never been fed a statement; the view is how
 that question stops needing a probe to answer.
 
-Scope note: this is a new surface, not a defect fix, so it is a quote-separately
-candidate under the licence's defect-class scope rather than covered work.
-Recommended shape when it is built: one backend route that aggregates the
-existing `coverage[]` across batches keyed by `card_key`, then an SPA page;
-no new per-card arithmetic.
+Scope note: this is a new surface, not a defect fix, so it was raised as a
+quote-separately candidate under the licence's defect-class scope. Put to the
+owner 2026-09-24; the answer was a directive, not a commercial one:
+*"the same per card filter system inside the months should be outside of the
+months..."* Built on that reading.
+
+**2026-09-24 BACKEND SHIPPED: `GET /api/cards/status`.** One line per card
+over every expense batch, each carrying the months it is on.
+`build_card_status` runs `month_coverage` per month, which is the SAME
+arithmetic the month page's card strip shows, and sums it; not a second
+derivation, so a card cannot read one thing here and another on its month.
+Card order is the strip's own: busiest first, cards with nothing last.
+
+Four decisions worth keeping:
+
+- **Trips count.** Every expense batch, months and trips alike, each month
+  entry carrying its `batch_type`. A roll-up that quietly dropped trips would
+  report a card as never used while a trip had used it.
+- **`never_loaded`** is the "which cards are missing" answer: no charge and
+  no statement in any month. Today that fact needs a script against seven
+  months.
+- **An unknown card folds into a known one with the same digits, one way
+  only.** A card defined after a month was created otherwise appears twice,
+  once as `3645` and once as `card-3645`. Nothing folds two known cards, and
+  an unknown row with no defined twin keeps its line: April's `digits:4700`
+  is a card the registry is still missing (item 26) and folding it would hide
+  the gap.
+- **Months order by their own span, not `created_at`.** Two batches created
+  inside one second tie on the timestamp, which made the order of a card's
+  months depend on nothing. Found by the regress pass, not by the first green
+  run, which had passed on the tie.
+
+Five route-level tests in `tests/test_card_status_across_months_item_185.py`,
+including the one that pins the sums to each month page's own coverage row.
+Both wires regress-checked, green to red to green.
+
+Left: the SPA page. Written as a Lovable prompt at
+`docs/lovable-card-status-prompt.md`, NOT pasted.
 
 ## Shipped (loop history)
 

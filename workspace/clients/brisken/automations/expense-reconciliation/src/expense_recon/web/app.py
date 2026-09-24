@@ -117,6 +117,7 @@ from .service import (
     available_entities,
     baseline_receipts,
     batch_list_summary,
+    build_card_status,
     build_cost_center_totals,
     build_expense_report,
     build_reconciliation_report,
@@ -4509,6 +4510,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 and not is_trip_batch(r)
             ]
         return JSONResponse({"batches": batches})
+
+    @app.get("/api/cards/status")
+    def api_card_status():
+        """The cross-month card roll-up (item 185): one line per card over
+        every expense batch, each with the months it is on. The per-card
+        filter the month page already has, outside the months."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            return JSONResponse(build_card_status(store))
 
     @app.get("/api/cost-centers/totals")
     def cost_center_totals(
