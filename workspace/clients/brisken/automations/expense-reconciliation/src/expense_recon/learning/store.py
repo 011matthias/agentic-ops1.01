@@ -256,9 +256,24 @@ class LearningStore:
         zoho_account: str | None,
         now_iso: str,
         source_run: str | None,
+        *,
+        keep_account: bool = False,
     ) -> None:
         """Upsert a confirmed vendor -> category mapping. Latest-wins on the
-        category/account; `decision_count` accumulates as the audit trail."""
+        category/account; `decision_count` accumulates as the audit trail.
+
+        ``keep_account=True`` leaves the stored zoho_account untouched. This
+        is the same guard `set_merchant_category_manual` has carried since
+        it was written, and it is here for the same reason (item 183): a
+        month whose reviewer picked a category and named no account must not
+        silently wipe the learned posting account the COA gate and the
+        direct-to-GL chain depend on. Writing NULL over a learned account is
+        a decision to forget; an edit that simply did not mention the
+        account never made it."""
+        account_sql = (
+            "merchant_category.zoho_account" if keep_account
+            else "excluded.zoho_account"
+        )
         self.conn.execute(
             "INSERT INTO merchant_category (legal_entity_id, vendor_norm, "
             "category, zoho_account, decision_count, last_confirmed_at, source_run) "
@@ -270,14 +285,14 @@ class LearningStore:
             # re-run or a run's re-teach must never wear an old sign-off).
             "validated_at = CASE WHEN "
             "merchant_category.category IS NOT excluded.category "
-            "OR merchant_category.zoho_account IS NOT excluded.zoho_account "
+            f"OR merchant_category.zoho_account IS NOT {account_sql} "
             "THEN NULL ELSE merchant_category.validated_at END, "
             "validated_by = CASE WHEN "
             "merchant_category.category IS NOT excluded.category "
-            "OR merchant_category.zoho_account IS NOT excluded.zoho_account "
+            f"OR merchant_category.zoho_account IS NOT {account_sql} "
             "THEN NULL ELSE merchant_category.validated_by END, "
             "category = excluded.category, "
-            "zoho_account = excluded.zoho_account, "
+            f"zoho_account = {account_sql}, "
             "decision_count = merchant_category.decision_count + 1, "
             "last_confirmed_at = excluded.last_confirmed_at, "
             "source_run = excluded.source_run",

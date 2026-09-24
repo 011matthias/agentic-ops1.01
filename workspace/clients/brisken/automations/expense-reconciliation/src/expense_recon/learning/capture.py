@@ -338,7 +338,13 @@ def _learn_categories(
     now_iso: str,
 ) -> tuple[int, int]:
     """Collapse per-line reclassifications to one (legal_entity, vendor) ->
-    category mapping each, skipping vendors whose overrides disagree."""
+    category mapping each, skipping vendors whose overrides disagree.
+
+    Disagreement is on the category OR on the posting account (item 183):
+    under the direct-to-GL design the account is the answer, so two rows
+    naming different accounts are as much a conflict as two naming different
+    categories, and both skip the vendor rather than letting the first row
+    win. A row that names NO account is silent rather than dissenting."""
     # (legal_entity_id, vendor_norm) -> {"category","zoho_account","conflict"}
     pending: dict[tuple[str, str], dict] = {}
 
@@ -353,15 +359,29 @@ def _learn_categories(
         if not vnorm:
             continue
         key = (r.legal_entity_id, vnorm)
+        account = ov.get("zoho_account")
         prior = pending.get(key)
         if prior is None:
             pending[key] = {
                 "category": category,
-                "zoho_account": ov.get("zoho_account"),
+                "zoho_account": account,
                 "conflict": False,
             }
-        elif prior["category"] != category:
+            continue
+        if prior["category"] != category:
             prior["conflict"] = True
+        # Item 183, the half that matters most: this table IS Tier 1 of the
+        # direct-to-GL chain, consulted before the model. Two rows agreeing
+        # on the category and naming different accounts used to agree, and
+        # the first account won silently. Absence is not disagreement: a row
+        # naming no account is silent, so the first account NAMED wins over
+        # rows that name none, and only two named, different accounts
+        # conflict.
+        if account:
+            if not prior["zoho_account"]:
+                prior["zoho_account"] = account
+            elif account != prior["zoho_account"]:
+                prior["conflict"] = True
 
     n_category = n_skipped = 0
     for (legal_entity_id, vnorm), val in pending.items():
@@ -375,6 +395,10 @@ def _learn_categories(
             val["zoho_account"],
             now_iso,
             source_run,
+            # Item 183: no account named by any of this vendor's edits means
+            # the reviewer said nothing about where it posts, which must not
+            # read as "forget what you learned".
+            keep_account=not val["zoho_account"],
         )
         n_category += 1
 
