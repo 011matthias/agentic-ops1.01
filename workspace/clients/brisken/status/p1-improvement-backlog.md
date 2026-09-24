@@ -9569,7 +9569,7 @@ Two leftovers from the same outage, both small:
   `20260804-statements-9693--2.pdf`. The name is cosmetic; a dead job leaving
   a file behind is the thing to fix.
 
-### 197. One printed FX line from another card and another month becomes the rate for every pair in the month (found live 2026-09-24, on the ordered 9693 load)
+### 197. One printed FX line from another card and another month becomes the rate for every pair in the month (found live 2026-09-24, on the ordered 9693 load) (FIXED 2026-09-24: the charge-day rate outranks the statement median)
 
 `derive_fx_reference_rates` takes the median of a month's printed statement FX
 lines (`Transaction.fx_rate`) and `_reference_rate_for` ranks it above the
@@ -9607,12 +9607,25 @@ three FX lines (Host Europe Aug 6, 1.155723905; SAP Aug 12, 1.155197777 and
 1.155193236), so its median would price every EUR pair in September at the
 Aug 12 rate, including the 2838 workbook Criss has not attached yet.
 
-**Recommended fix:** a charge that printed its own `fx_rate` uses it (that is
-the rate the bank charged); every other pair keeps the charge-day rate, so
-the statement median stops pre-empting `opentickers_day`. The two August rows
-return at the month's next natural re-match. Proof before merge: replay
-August's 135-row set old vs new and show exactly the two Anthropic rows move
-back, then `regress_check.py` on the rung order.
+**Fix (owner pick 2026-09-24, "fix item 197 first"): the charge-day rate now
+outranks the self-derived medians.** Rung order `opentickers_day` ->
+`statement` -> `receipts` -> `ecb_month`, one change in `_reference_rate_for`,
+so the matcher, the item-81 reference block and the rejected-pair rule all
+move together. The "charge's own printed rate" half needed no code: a charge
+that printed its original amount is already compared to the receipt directly
+(`match_one`, the exact-FX path), with no rate involved. Blast radius: a month
+with no daily table (every CLI bundle) keeps the median above the ECB average
+as before; hosted months carry no receipt-median rates; so the only behaviour
+that moves is a hosted month holding a PDF with printed FX lines, i.e. August
+since today's attach. Proof: `tests/test_fx_rung_item_197.py` rebuilds the
+live rows through `match_month` (the SAP line at 1.146292906, both Anthropic
+charges, both EUR receipts, a fixture day rate) and asserts both pairs settle
+clean on the daily rate. Putting the old order back by hand turned it red,
+along with the rewritten rung test, and the file was restored to its exact
+sha. The August replay the item first proposed was not run: production reads
+were refused by the session's permission classifier. The two August rows
+return at the month's next natural re-match; no agent re-match is planned
+(Criss's month).
 
 Also seen on this load: the overlap warning says the 1176 file "already covers
 2026-07-06 to 2026-08-04 on the same account" for what are two different

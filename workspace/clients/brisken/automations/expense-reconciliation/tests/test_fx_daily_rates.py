@@ -564,7 +564,7 @@ def test_a_day_with_no_fix_reads_the_nearest_inside_the_window_earlier_on_a_tie(
     assert _cfg(fx_daily_rate_max_gap_days=1).daily_rate("EUR", "USD", date(2026, 7, 5)) is None
 
 
-def test_the_rung_order_is_derived_then_daily_then_ecb():
+def test_the_rung_order_is_daily_then_derived_then_ecb():
     cfg = MatchingConfig.from_dict({
         "fx_reference_rates": {"EUR:USD": "1.162275"},
         "fx_daily_rates": {"2026-07-02": {"USD": "1.1430", "BRL": "5.8450"}},
@@ -574,7 +574,10 @@ def test_the_rung_order_is_derived_then_daily_then_ecb():
     # The typed rate is in the config and is ignored: the daily rate answers.
     assert _reference_rate_for(cfg, "EUR", "USD", None, on=on) == (Decimal("1.143"), "opentickers_day", 0)
     derived = {("BRL", "USD"): (Decimal("0.19"), "statement", 3)}
-    assert _reference_rate_for(cfg, "BRL", "USD", derived, on=on) == (Decimal("0.19"), "statement", 3)
+    # Item 197: the charge-day rate outranks the month's derived median...
+    assert _reference_rate_for(cfg, "BRL", "USD", derived, on=on) == (Decimal("0.195552"), "opentickers_day", 0)
+    # ...and the median still outranks the ECB average when no day answers.
+    assert _reference_rate_for(cfg, "BRL", "USD", derived, on=date(2026, 7, 20)) == (Decimal("0.19"), "statement", 3)
     assert _reference_rate_for(cfg, "BRL", "USD", None, on=on) == (Decimal("0.195552"), "opentickers_day", 0)
     # outside the daily window the month average answers
     assert _reference_rate_for(cfg, "BRL", "USD", None, on=date(2026, 7, 20)) == (
