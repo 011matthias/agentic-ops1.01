@@ -9665,7 +9665,7 @@ Out of scope, next: case 6 vocabulary ("VENDA CREDITO VISA", "CreditCard",
 "Link", "saved payment method", "Kartenzahlung erhalten", "girocardOLV");
 "Bar" as a cash word; GoDaddy's "ending with the last two digits: 38".
 
-### 199. A two-digit card ending printed in other words names no card (case 3 of the card-attribution map, owner 2026-09-24) (FIXED 2026-09-24: explicit lead phrases in five languages)
+### 199. A two-digit card ending printed in other words names no card (case 3 of the card-attribution map, owner 2026-09-24) (FIXED and LIVE 2026-09-25: PR #1335, Fly v224 `a8c1fafb`; GoDaddy on card-2838, payload diffed and SPA driven)
 
 Note #60's rule read two digits as a card ending only behind a mask or
 directly after `ending` / `ending in` / `ending with` / `final`. September's
