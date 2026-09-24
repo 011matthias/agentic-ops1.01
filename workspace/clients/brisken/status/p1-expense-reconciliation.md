@@ -18,8 +18,9 @@ May and June, which have no statement yet, and 9693 in August) nor receipts on n
 card (72 over six months). The owner chose backend first: `cards[].receipt_months`
 and `no_card` are live, counted over the Expenses page's own payload, and `/cards`
 reads nothing new. The SPA half,
-`docs/lovable-card-scope-carries-into-month-prompt.md`, is **NOT pasted**; until
-it is, every month keeps its own strip. A month is two routes (Expenses
+`docs/lovable-card-scope-carries-into-month-prompt.md`, is **pasted but NOT
+published** (Lovable repo `c27c7fd` has it, the live bundle does not); until
+Publish, every month keeps its own strip. A month is two routes (Expenses
 `/expenses/{id}`, Matching `/runs/{id}`), and the prompt carries `?card=` on both.
 
 **2026-09-24: only corrections teach, and the taxonomy is 194 leaves** (PR
