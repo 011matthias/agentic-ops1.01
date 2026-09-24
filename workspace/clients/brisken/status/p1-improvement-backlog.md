@@ -9860,10 +9860,73 @@ day and month are both 12 or under and swapping them lands on or before the
 arrival, take the swap and flag the row. Measure first over the stored receipts
 (item 77's A/B harness) before choosing between that guard and a prompt change.
 
+### 203. Private is suggested only on positive evidence; every other payment text waits (owner ruling 2026-09-24, card-attribution case 6) (SHIPPED 2026-09-25)
+
+Owner, asked whether unrecognised payment phrases belong with the receipts
+that wait for the statement and vendor memory: "yes very good, that is
+excellent". **This SUPERSEDES item 41's trigger** ("payment methods that have
+not been defined in the system must be suggested as private", 2026-09-06):
+"not defined" became "positively not Brisken's". The rest of item 41 stands
+(suggested never stamped, `reimburse_to`, the reimbursements section).
+
+Built: `cards.positive_non_brisken_evidence(hint, cards) -> reason | None`,
+wired at the one place the suggestion is decided (the `suggested_private`
+term in `service.resolve_batch_row_cards`, where item 198's
+`names_registry_card_type` sat; that function is folded in and removed).
+Evidence: a 3+ digit number naming no active card (a number outranks words),
+a masked two-digit ending no card ends in, a cash word, a network / kind /
+issuer the batch's active cards do not carry (read from their label +
+account wording, never stored). Conflict means wait ("credit or debit card",
+"Chase or Nubank", "Visa ou Dinheiro"). POS acquirers and wallets are
+neutral. One tokenizer, `cards.payment_words`, reads glued words
+("CreditCard", "girocardOLV") for every hint classifier; seventeen "a card
+was used" words joined `GENERIC_TENDER_WORDS`, so "Link" or "saved payment
+method" assign month-only and are never learned as an alias while "CorpServ"
+still is. Contract: `docs/api-contract.md`, "Private needs positive
+evidence".
+
+**The private-card-list item was NOT merged on 2026-09-25**, so this is the
+standalone function the brief allowed. That session must fold it into its
+`cards.classify_payment_evidence` order: its step 4 becomes this evidence
+list, its step 7 ("a phrase no rule recognises") becomes WAIT.
+
+Live census, read-only, every hinted row of every month (254 rows), old rule
+(item 198 on main) against new: **no row gains a suggestion**, nine lose it:
+
+| Month | Row | Hint |
+|---|---|---|
+| April | O REI DO ARRUMADINHO | VENDA CREDITO VISA |
+| May | Lovable Labs | Link |
+| May | Anthropic x2 | Link |
+| May | GOLDEN GATE | OUTRO |
+| June | Namecheap | CreditCard |
+| July | Lovable Labs | Link |
+| September | OpenAI | saved payment method |
+| September | GoDaddy | ending with the last two digits: 38 |
+
+The brief predicted seven; the two Lovable "Link" rows are the same class.
+Item 199 merged the same night, so GoDaddy's sentence resolves to card-2838
+(source `hint`) rather than waiting; re-measured with both in place, the
+same nine rows lose the suggestion and none gains. The two Lovable rows are
+decided copies (`boxes: []`), so they move no count: predicted summary
+`n_suggested_private` April 5 -> 4, May 3 -> 0, June 3 -> 2, September
+6 -> 4, July / August / January unchanged. Fifteen rows keep the suggestion with a named reason: the
+printed non-Brisken numbers (2598, 1340, 4167, 3976, 3076, 3281, ...2544,
+0501-1462-9129), "Mastercard xxxx.xxxx.xxxx.78" (ending), DINHEIRO and Bar
+(cash), girocard, girocardOLV and EC-Karte (network), DEBIT (kind).
+September's Luigi Buchholz "Kartenzahlung erhalten" stays private because
+Criss confirmed it. No stored registry alias is built from the new words
+(live aliases: Corp, Cloud, Personal, Consulting).
+
+Named, not built: PayPal, PIX, boleto and cheque are no private evidence now
+(none carries a live suggestion); "caixa" on the issuer list is also the
+Portuguese word for a till, which no live hint prints.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 119 | Item 203: a private expense is suggested only on positive evidence (`cards.positive_non_brisken_evidence`: a number or ending no Brisken card has, cash, a network / kind / issuer the registry does not carry; conflict waits; acquirers neutral), glued words read (`cards.payment_words`), and seventeen "a card was used" words made generic so they never become aliases. Supersedes item 41's trigger | Unrecognised phrases ("Link", "saved payment method", "OUTRO") read as private money when the statement would have named the card; nine live rows stop suggesting private and none starts | PR TBD, 2026-09-25; `tests/test_private_needs_evidence.py` |
 | 118 | Item 199: a two-digit card ending printed in other words names its card. `cards._ENDING_LEADS`, explicit lead phrases in EN/PT/DE/FR/ES on diacritic-folded text, with an amount guard (`38,00` is money) and a second-ending rule (`38 and 49` names nothing) | September's GoDaddy, 446.99 EUR, printed "ending with the last two digits: 38" and sat card-less and suggested private; census over 88 live hints moved that one and nothing else | 2026-09-24 |
 | 117 | A Brisken card type on a receipt stops suggesting a private expense: `cards.names_registry_card_type` reads the networks and kinds the batch's active cards carry from their own label and account wording, and a generic tender hint naming only those ("VISA CREDIT", "Cartão de Crédito", "TEF", "credit card") no longer raises `suggested_private`. Non-card tenders and types Brisken lacks (girocard, EC-Karte, DEBIT, cash) still do; `can_mark_private` and the card chain are untouched | Backlog item 198 (owner ruling 2026-09-24, case 5). Twelve counted rows across April, May, June, July and September were asking Criss who to reimburse for purchases Brisken's own Visa credit cards made | 2026-09-24; `tests/test_card_type_not_private.py` (route-level through the batch payload); regress_check: 5 caller tests RED with the wiring disabled |
 | 116 | Typing an FX rate in Settings is gone: the settings key retired (read drops it, write ignores it, the stored row is migrated), the matcher's `configured` rung and `MatchingConfig.fx_reference_rates` removed, `apply_master_data` stops writing rates into a run config, item 132's drift advisory deleted, and `rematch_month` tops up a month's ECB table so no month is left without a rate. The retired key stays parseable and is dropped, so every existing month and the scorer asset still load | Backlog item 168 (owner: "no more typing them in settings you can remove that function entirely"). Measured in-container first: July 2026 carried the typed rates and NO ECB table, so removing the rung alone would have blanked its 18 cross-currency pairs | 2026-09-23 |

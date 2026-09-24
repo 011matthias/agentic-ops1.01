@@ -6553,12 +6553,15 @@ def resolve_batch_row_cards(
     the suggestion (owner 2026-09-17): the entity says which company the
     expense books to, not how it was paid, and the old exemption left an
     "EC-Karte" restaurant bill in August on needs_person, pointing at a
-    Settings card that does not exist. A generic tender hint that names only
-    a card type the batch's own cards carry ("VISA CREDIT", "Cartão de
-    Crédito", "TEF"; `cards.names_registry_card_type`) suggests nothing
-    (owner ruling 2026-09-24, superseding item 41's "Cartao de Credito"
-    example): Brisken's cards ARE Visa credit cards. It still selects no
-    card, and `can_mark_private` is untouched.
+    Settings card that does not exist. Since the owner ruling of 2026-09-24
+    (card-attribution cases 5 and 6, superseding item 41's trigger) the
+    suggestion needs POSITIVE evidence the payment did not come from
+    Brisken (`cards.positive_non_brisken_evidence`: a number or two-digit
+    ending no Brisken card has, cash, a network / kind / issuer the batch's
+    own cards do not carry). Every other hint ("VISA CREDIT", "Link",
+    "saved payment method", a phrase nobody has seen) waits for the card
+    chain below and Criss's assignment. It still selects no card, and
+    `can_mark_private` is untouched.
 
     `can_mark_private` (owner 2026-09-17: "expenses on cards that are not
     defined in settings ... the option of defining as an expense that went
@@ -6619,7 +6622,7 @@ def resolve_batch_row_cards(
     """
     from ..cards import (
         masked_short_ending,
-        names_registry_card_type,
+        positive_non_brisken_evidence,
         resolve_hinted_card_ex,
     )
     from ..matching.deterministic import _card_keys
@@ -6728,14 +6731,14 @@ def resolve_batch_row_cards(
             "person_source": person_source,
             "private": private,
             "reimburse_to": reimburse_to if private else "",
-            # Owner ruling 2026-09-24: a tender word naming a card type the
-            # registry's own cards have ("VISA CREDIT") is no evidence a
-            # non-Brisken card paid. The row falls to the ordinary company /
-            # person question and the private option stays open.
+            # Owner ruling 2026-09-24 (case 6): suggested only on positive
+            # evidence the payment was not Brisken's. Anything else falls to
+            # the ordinary company / person question and the private option
+            # stays open.
             "suggested_private": bool(
                 hint and card is None and not ambiguous and not private
                 and not not_a_card
-                and not names_registry_card_type(hint, cards)
+                and positive_non_brisken_evidence(hint, cards) is not None
             ),
             "can_mark_private": (
                 not private
