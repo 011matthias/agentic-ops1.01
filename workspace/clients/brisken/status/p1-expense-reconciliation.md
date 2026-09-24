@@ -9,6 +9,18 @@ updated: 2026-09-24
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-24: 2838's subcards nest behind it on the months strip** (backlog item
+191; PR #1310; Fly `fe8699ee`). Owner: the subcards' tabs should not sit next to
+2838 but appear once it is clicked, each keeping its filter. `GET
+/api/cards/status` now carries `cards[].parent` and `cards[].subcards` from the
+LIVE registry (a month keeps its own snapshot); figures stay each card's own.
+The SPA half, `docs/lovable-months-subcards-prompt.md`, is **not pasted**. Two
+gates before anything nests on screen: the prompt published, and the three
+parents entered, because the live registry has `parent` empty on all nine cards
+(item 147's picker has never been used). Cold drive after the deploy: the
+published strip is unchanged chip for chip and still filters (3645 five months,
+2838 six, 0340 two).
+
 **2026-09-24: the card filter leaves the month** (backlog item 190; PRs #1293,
 #1294; Fly `93c69551`). The owner moved the card filter out of the month onto
 `/months` and asked that a month opened from it show only that card. The roll-up
