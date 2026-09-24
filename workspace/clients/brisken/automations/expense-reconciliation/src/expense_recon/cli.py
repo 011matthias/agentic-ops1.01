@@ -96,6 +96,7 @@ from .categorize import (
 )
 from .cards import cards_from_setting, stamp_card_entities
 from .categorize_charges import categorize_charges, derive_subscription_status
+from .correspondence import CORRESPONDENCE, quarantine_correspondence
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
 from .ingest.expense_csv import parse_expense_csv_tolerant
@@ -108,7 +109,7 @@ from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from .llm.client import LLMClient, OpenAIClient
 from .llm.cost import CostTracker
 from .llm.extraction_cache import ExtractionCache
-from .merchant_registry import MerchantRegistry
+from .merchant_registry import MerchantRegistry, drop_unvouched_remembered_cards
 from .matching.deterministic import MatchingConfig, match_month
 from .matching.judgment import judge_ambiguous, judge_fx_match, judge_unmatched
 from .matching.types import Categorization, Match, MatchOutcome, Receipt, Transaction
@@ -893,6 +894,10 @@ NON_RECEIPT_LABELS: dict[str, str] = {
     "statement": "a bank/card statement page",
     "report_summary": "an expense-report summary page",
     "other": "not an expense document",
+    # 2026-09-24: a payment reminder / past-due notice ABOUT another
+    # document. Written only by `correspondence.quarantine_correspondence`,
+    # never by the extractor, so the extraction cache is untouched.
+    CORRESPONDENCE: "a payment reminder or account notice",
 }
 
 
@@ -911,6 +916,10 @@ def split_non_receipt_documents(
     extraction: the web layer records them in the snapshot's set-aside list
     so the reviewer can see WHY each file was set aside and restore one
     without a fresh vision call.
+
+    The correspondence rung (2026-09-24) rides the same partition: a payment
+    reminder the reader called a receipt. It reads `Receipt.ocr_text`, so a
+    source that keeps no text layer is untouched.
     """
     kept: list[Receipt] = []
     excluded: list[Receipt] = []
@@ -920,6 +929,7 @@ def split_non_receipt_documents(
         if invoice is not None:
             kept.append(invoice)
             continue
+        r = quarantine_correspondence(r) or r  # 2026-09-24
         label = NON_RECEIPT_LABELS.get(r.document_type)
         if label is None:
             kept.append(r)
@@ -1047,6 +1057,16 @@ def generate_expenses(
     # downstream. Provenance lands on data_quality_note (grid-visible).
     if expense_memory is not None:
         receipts = expense_memory.apply(receipts)
+        # Item 173, second half: the remembered CARD only for a brand the
+        # registry vouches is paid on one card. The read-time twin of this
+        # gate shipped in `fill_remembered_cards`, and this stamp did not, so
+        # a month ingested after a multi-card brand was corrected still took
+        # the minority card -- the same 8-to-1 OpenAI memory, arriving by the
+        # other door. Run AFTER the pass rather than inside it, so the vouch
+        # resolves against the same corrected vendor the grid will resolve
+        # against; a gate keyed on the pre-correction name would answer a
+        # different question than its twin.
+        receipts = drop_unvouched_remembered_cards(receipts, registry)
 
     # Cards R3: each receipt's paying card resolves its legal entity (the
     # card registry snapshotted into this run's config + the batch's

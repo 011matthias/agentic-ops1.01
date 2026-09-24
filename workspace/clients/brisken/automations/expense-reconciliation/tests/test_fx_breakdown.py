@@ -124,6 +124,24 @@ REFERENCE_KEYS = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _ecb(monkeypatch):
+    """The two rates the live months used (EUR:USD 1.162275, BRL:USD 0.192448).
+
+    Units per ONE EUR, the ECB's own shape: a pair X:USD is
+    units["USD"] / units["X"], and EUR itself is 1. Every month answers the
+    same rates, so no test has to know which month its charges fall in.
+    Typed Settings rates were retired 2026-09-23; a rate now reaches a
+    month only by being fetched."""
+    from expense_recon.web import ecb_rates
+
+    def _fetch(start, end, **kw):
+        months = ["2026-%02d" % m for m in range(1, 13)]
+        return {m: {"USD": "1.162275", "BRL": "6.039423636515"} for m in months if start <= m <= end}
+
+    monkeypatch.setattr(ecb_rates, "fetch_monthly", _fetch)
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
@@ -205,7 +223,9 @@ def _july(client, monkeypatch) -> str:
                 "entity": "Corporate Services", "currency": "USD",
             },
         },
-        "fx_reference_rates": {"EUR:USD": "1.162275", "BRL:USD": "0.192448"},
+        # The same two rates the live months used, from the ECB table
+        # instead of Settings (typed rates retired 2026-09-23). Units per
+        # EUR: EUR:USD is units["USD"]; BRL:USD is units["USD"]/units["BRL"].
     })
     assert resp.status_code == 200, resp.text
     resp = client.post(
@@ -248,12 +268,12 @@ def _chosen(row: dict) -> dict:
     return next(c for c in row["candidates"] if c["is_chosen"])
 
 
-def test_route_amazon_shows_the_receipt_converted_at_the_settings_rate(
+def test_route_amazon_shows_the_receipt_converted_at_the_fetched_rate(
     client, monkeypatch
 ):
     """The note's pair, with the live numbers: 276.08 EUR x 1.162275 =
     320.88 USD, the charge 315.56 is 5.32 under it, -1.66% of the converted
-    amount, inside the 3% match band. The rate the pairing needs and the
+    amount, inside the clean band. The rate the pairing needs and the
     zoho_* keys stay exactly as they were."""
     batch_id = _july(client, monkeypatch)
     view = client.get(f"/api/runs/{batch_id}").json()
@@ -262,7 +282,7 @@ def test_route_amazon_shows_the_receipt_converted_at_the_settings_rate(
     assert chosen["match_type"] == "fx_reference", chosen
     fx = chosen["fx"]
     assert fx["reference_rate"] == "1.162275"
-    assert fx["reference_rate_source"] == "settings"
+    assert fx["reference_rate_source"] == "ecb_month"
     assert fx["reference_converted"] == "320.88"
     assert fx["reference_gap"] == "-5.32"
     assert fx["reference_gap_pct"] == -1.66
@@ -277,14 +297,24 @@ def test_route_amazon_shows_the_receipt_converted_at_the_settings_rate(
     assert (fx["zoho_rate"], fx["zoho_converted"], fx["converted_gap"]) == ("", "", "")
     assert fx["converted_gap_pct"] is None
 
-    # July SUPERMEC SAO JOSE: +2.93% sits just inside the 3% band, decided on
-    # the unrounded deviation (2.9309%).
-    fx = _chosen(_row(view, "SUPERMEC"))["fx"]
+    # July SUPERMEC SAO JOSE: +2.93% (unrounded 2.9309%). It used to sit
+    # just inside the 3% band a TYPED rate carried. A central-bank rate
+    # carries the tighter 2% band (`fx_ecb_match_pct`, item 90), so the
+    # same pair is now outside the clean band and defers to judgment
+    # instead of auto-pairing. The arithmetic the block prints is
+    # unchanged; only the verdict moved, which is the trade item 90
+    # measured and the owner took when the typed rates were retired.
+    row = _row(view, "SUPERMEC")
+    cands = [c for c in row["candidates"]
+             if (c["fx"] or {}).get("receipt_currency") == "BRL"]
+    assert len(cands) == 1, row["candidates"]
+    fx = cands[0]["fx"]
     assert fx["reference_rate"] == "0.192448"
     assert fx["reference_converted"] == "8.05"
     assert fx["reference_gap"] == "+0.24"
     assert fx["reference_gap_pct"] == 2.93
-    assert fx["reference_gap_band"] == "match"
+    assert fx["reference_gap_band"] == "review"
+    assert not any(c["is_chosen"] for c in row["candidates"]), row
 
 
 def test_route_a_pair_with_no_reference_rate_carries_no_reference_keys(
@@ -331,7 +361,7 @@ def test_route_a_hand_match_shows_the_conversion_too(client, monkeypatch):
     assert chosen["match_type"] == "manual", chosen
     fx = chosen["fx"]
     assert fx["reference_rate"] == "1.162275"
-    assert fx["reference_rate_source"] == "settings"
+    assert fx["reference_rate_source"] == "ecb_month"
     assert fx["reference_converted"] == "23.25"
     assert fx["reference_gap"] == "+26.75"
     assert fx["reference_gap_pct"] == 115.10
@@ -443,4 +473,4 @@ def test_every_fx_reference_reason_carries_the_rate_the_block_shows(
                 assert fx["reference_rate"] in c["reason"], (fx, c["reason"])
                 seen_sources.add(fx["reference_rate_source"])
         assert n, [r["candidates"] for r in view["rows"]]
-    assert seen_sources == {"settings", "statement", "receipts"}, seen_sources
+    assert seen_sources == {"ecb_month", "statement", "receipts"}, seen_sources

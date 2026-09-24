@@ -573,9 +573,551 @@ contacts**, and July names 33 distinct vendors, so there is nothing to
 resolve against: filling it means CREATING 33 contacts, which is a write
 of a different kind and was not in scope here.
 
+## 2026-09-23: statement currency clears the batch, 41 of 46 posted
+
+Owner call: adopt the house rule `posting_common` already states for the
+journal. The bank statement is what the company actually paid, so a EUR
+receipt on a USD card posts as `amount x rate` USD. That is both the
+right answer for the books and the way past the FREE plan, which refuses
+any expense in a non-base currency.
+
+### What posted
+
+| | count | |
+|---|---|---|
+| USD, posted 2026-09-23 earlier | 13 | $30,864.42 |
+| EUR, converted | 10 | |
+| BRL, converted | 18 | |
+| converted subtotal | 28 | $25,476.02 |
+| **total in TEST-BTS** | **41** | **$56,340.44** |
+
+**Readback: 41 of 41 clean, tie-out exact.** Every line's `account_id`
+matches, splits preserved, `paid_through` correct on all 41, the audit
+envelope present on all 41, and every converted row carries its
+`Original:` tag naming the source currency.
+
+Refused, correctly: 3 `account_unresolved` and 2
+`date_precedes_period_window`.
+
+### Conversion details worth keeping
+
+`_convert_lines` converts the TOTAL once and lands the residual on the
+largest line, rather than rounding each line independently. Two lines of
+10.005 round to 10.01 each (20.02) while the total rounds to 20.01, and
+an expense that disagrees with its own line items by a cent is the kind
+of wrong that survives review. Same allocation rule
+`posting_common._posting_amounts` already uses.
+
+`audit_note` gained `Original: {currency} {amount} @ {rate}`, so the
+conversion is auditable from the record itself; without it the books show
+a USD figure with no trace of the EUR or BRL receipt behind it. Rates are
+the reviewed CSV's own, never fetched at post time.
+
+`convert_foreign_to_base` defaults to False, so nothing converts unless a
+caller opts in.
+
+### The stale-date guard caught two, and the second was a surprise
+
+`period` + `stale_days` (default 45) refuses a purchase dated more than
+45 days before the period's first day. For 2026-07 the cutoff is
+2026-05-17, which clears July's three legitimate June-dated rows and
+refuses:
+
+* **`360172592`**, dated **2026-03-30** (360Crossmedia, EUR 900). The
+  outlier that prompted the guard.
+* **`00000031010`**, whose `Expense Date` cell is **empty**. Not what the
+  guard was built for, and the more interesting catch: without it that
+  row would have posted with `date=""`. A date that cannot be verified is
+  not posted.
+
+### A defect this session introduced, caught by Zoho
+
+Adding `Vendor:` and `Original:` to the envelope pushed two descriptions
+over a limit nobody knew about:
+
+> `Please ensure that the "Description" has less than 500 characters.`
+
+Two Brazilian grocery receipts, whose itemisation runs 370 and 459
+characters, came to 523 and 630. `audit_note` now caps at
+`MAX_DESCRIPTION_CHARS = 499` by trimming **the receipt's own prose and
+never the envelope**, with a `... (+N chars)` marker so the cut is
+visible. The envelope is the audit trail; the prose is a line-item list
+whose tail is the least load-bearing text in the record. Only 2 of 46
+July purchases were ever over the cap, so no already-posted row drifted.
+
+The rejection was clean again: both intents released, nothing written,
+the batch reported both rather than aborting, and a re-run posted them.
+
+### Two guards earned their keep this session
+
+* The **tie-out assertion** refused a follow-up run because the expected
+  total was typed from memory (125.42) instead of read from the plan
+  (97.40). It posted nothing and named the difference.
+* The **ledger** released every intent behind all 13 rejections across
+  the two failures, so every retry was possible without manual repair.
+
+## The runner: one command for the month end (2026-09-23)
+
+`zoho/reconcile_month.py` composes the proven pieces into a single run.
+Nothing in it re-derives resolution order, conversion math, the envelope
+or a guard; each stage calls the function the sections above describe.
+
+```
+uv run python -m expense_recon.zoho.reconcile_month \
+    --month 2026-08 --csv <reviewed export CSV> \
+    --ledger workspace/clients/brisken/context/zoho-post-ledger-testbts.sqlite \
+    --env-file workspace/clients/brisken/context/.env \
+    [--org 822116290] [--card ID --card-name NAME] [--dry-run]
+```
+
+Run it from the app directory. `--csv` is the REVIEWED export (post the
+reviewed artifact, never a rebuild). `--ledger` is the durable ledger and
+is part of the guard: a fresh one would plan an already-posted month as
+new. `--env-file` loads the gitignored credentials without overriding
+anything already in the environment. Live posting also needs
+`EXPENSE_RECON_ZOHO_POST=1`, the same deployment switch `zoho-post` uses;
+without it the live path refuses before reading anything.
+
+Stages, in order: ingest and group (`read_expense_csv`,
+`group_by_reference`); occupancy (`check_month_occupancy` by card NAME);
+chart pulled live (`ChartOfAccounts.from_api`, a CSV chart carries no
+ids); plan (`plan_expense_post` with `convert_foreign_to_base=True` and
+`period=<month>`, so the stale-date, ledger, account and rate checks all
+run there); plan assertion; post (`execute_expense_post`, unchanged);
+readback by id against `build_expense_payload` with the same flags;
+summary. The planning flags are set in one place (`_plan_kwargs`) so the
+plan, the send plan and the readback rebuild cannot disagree.
+
+**Org.** Only `822116290` is accepted. A production id is refused by
+name, any other id by not being the sandbox, before a client exists. Card
+id `4369050000000320002`, card name `Visa dummy card Matthias` and
+statement currency USD are the sandbox's profile in `ORG_PROFILES`; a
+future org needs its own row, after Brisken signs off its mapping.
+
+**The resume rule.** `ALREADY_OCCUPIED` is not fatal on its own. If the
+ledger holds at least one of this batch's references as `posted` for the
+org, the occupied month is at least partly ours: the runner reports the
+occupancy and continues, and `already_in_ledger` refuses per reference.
+If the ledger holds none of them, the rows are somebody else's
+hand-entered month (Criss's, in production) and the run aborts before
+the chart is pulled. `UNVERIFIABLE` and `LOCKED_PERIOD` always abort.
+
+**Plan assertion, send-by-id.** The full plan is printed, every postable
+row and every refusal grouped by reason. Then only the postable
+references are re-planned on their own, and the runner asserts that plan
+carries zero refusals, exactly those references, and the same tie-out
+total as the full plan. The total the poster is held to is read from
+that plan, never typed (a from-memory total already refused one run at
+125.42 against the real 97.40). A postable row with a blank reference is
+refused at the runner (`reference_blank`): it cannot be selected by id.
+
+**Readback.** Expense ids are snapshotted before the post. Each posted id
+is read back with `GET /expenses/{id}` and compared field by field
+against a rebuild through `build_expense_payload`, not
+`plan_expense_post` (which would refuse every row as `already_in_ledger`
+by then): total, date, reference, `currency_code` USD, paid-through id,
+per-line account and amount, envelope present, `Original:` on every
+converted row, description under 500, id absent from the snapshot. The
+exit code is non-zero on any mismatch, rejection, ambiguity or abort.
+
+**Dry run.** `--dry-run` runs the first four stages and prints
+`readback: SKIPPED (dry run)`. The post stage is a separate function
+reached only from the live branch, so the dry-run path cannot call
+`execute_expense_post` at all; the ledger is only read.
+
+**Acceptance numbers, live TEST-BTS, 2026-09-23.** The July export
+(batch `50622baec444`, 56 rows, 46 purchases) dry-run against the durable
+ledger must report exactly **0 postable / 46 refused = 41
+`already_in_ledger` + 3 `account_unresolved` + 2
+`date_precedes_period_window`**, occupancy `ALREADY_OCCUPIED` (38 July
+rows on the card) reported and not fatal because the ledger holds all
+41, exit 0. Different numbers mean the composition is wrong; diagnose,
+never adjust the expectation.
+
+Tests run through `run_month` and `main` with an injected fake client
+(`tests/test_zoho_reconcile_month.py`). Three `regress_check` bites on
+the runner: unthreading `period=`, unthreading
+`convert_foreign_to_base=`, and disabling the resume rule each turn
+runner-level tests red and green again on restore.
+
+## 2026-09-23: synthetic references collided across months
+
+August's first dry run refused its OpenAI purchase as `already_in_ledger`
+against a row July had posted. Both are real, different purchases, and
+both are called `0003__rendered-body.pdf`.
+
+The export writes `ref = detected_reference or document_id`
+(`output/zoho_expense_export.py`), so a receipt whose invoice number was
+never read falls back to its archive filename, and a mail-rendered
+receipt's filename is `NNNN__rendered-body.pdf` where NNNN is only its
+index within that batch. Those indexes restart every month. The app
+already knew (`web/service.py: adjacent_pool_for_month`, "July and August
+share four ids today"); what had never met it was the ledger, whose key
+is `(org, reference)`.
+
+`period_scoped_reference` now prefixes ONLY the filename fallback with
+its month, so July's is `2026-07_0003__rendered-body.pdf` and August's is
+`2026-08_...`. A real issuer reference is left untouched: it is already
+unique across months, and rewriting one would break the tie back to the
+vendor's own document. The detector needs both the `NNNN__` prefix and a
+document extension; the negative cases in
+`tests/test_zoho_synthetic_references.py` are the contract, and every one
+of them is a real July or August reference.
+
+### A read-time fallback cannot do this, and that was the first attempt
+
+The first cut kept a fallback: when the scoped key missed, look up the
+bare one. It passed its tests and failed on live data, because from
+August that fallback finds JULY's row. The bare key carries no month, so
+nothing at read time can tell which month's purchase it names. The test
+that should have caught it seeded the ledger with the SCOPED July key,
+which is not the shape the real ledger had.
+
+So the ledger is migrated instead, by
+`migrate_legacy_synthetic_references`, and the month is confirmed against
+Zoho rather than assumed from the export being processed: the stored
+expense is read back and its `date` must equal the group's own
+`Expense Date`. Run from August against July's row, that comparison
+refuses and the row is left alone. Date equality is exact here because
+the payload's date is the CSV cell verbatim, and unlike a period-window
+test it does not trip over July's three legitimate June-dated rows.
+
+Applied to the durable ledger 2026-09-23 (backup first): one row,
+`0003__rendered-body.pdf` to `2026-07_0003__rendered-body.pdf`, 41 rows
+before and after. July's known-answer dry run is unchanged at 0 postable
+/ 41 + 3 + 2, and August's false ledger refusal is gone.
+
+### The sandbox reset can now take a subset
+
+TEST-BTS holds months the durable ledger records as `posted`, so a full
+reset would silently desynchronise the ledger from Zoho and destroy the
+July rehearsal. `plan_reset(only_ids=[...])` deletes named rows and
+keeps the rest; `ResetReport.ok` compares against
+`expected_remaining` rather than demanding an empty org, and an id the
+org does not hold aborts the whole plan instead of being skipped.
+
+## 2026-09-23: August posted through the unified runner, 19 of 19
+
+The first month run end to end by `reconcile_month` rather than by hand.
+The stray trial row (`4369050000000330001`, Microsoft 365, USD 156.00)
+was deleted first through `plan_reset(only_ids=...)`, which took the org
+from 51 expenses to 50 and left August empty.
+
+| stage | result |
+|---|---|
+| occupancy 2026-08 | `CLEAR` |
+| ingest | 20 rows, 20 purchases, 4 synthetic references scoped |
+| postable | 19, tie-out USD 2,758.91 read from the plan |
+| posted | 19, 0 rejected, 0 ambiguous |
+| readback | 19 of 19 clean, stored total USD 2,758.91, MATCH |
+| refused | 1, `account_unresolved` on `H0LHY2WQ-0032` |
+
+**Card delta measured, not assumed.** A census of the dummy card before
+and after: 60,482.18 to 63,241.09 USD, a delta of exactly 2,758.91. The
+whole card now reconciles to the cent:
+
+```
+  4,297.74   the 2026-09-22 trial (9 rows)
+   -156.00   the stray August row, deleted
+ +56,340.44  July batch (41 rows: 3 June-dated + 38 July-dated)
+  +2,758.91  August batch (19 rows)
+ ----------
+  63,241.09  measured on the card, 68 expenses
+```
+
+**Both duplicate defenses re-armed** on a re-run: occupancy went `CLEAR`
+to `ALREADY_OCCUPIED`, and the ledger refuses all 19 as
+`already_in_ledger` (60 posted rows now, 41 + 19). 0 postable.
+
+### The batch page's 25 against the export's 20 is not a discrepancy
+
+Worth recording because it reads like missing money and is not. The page
+lists 25 DOCUMENTS; the export writes one row per CHARGE. Five documents
+carry `counts_in_total: False`, and each is a second copy of a purchase
+already in the export, at an identical amount:
+
+| kept | withheld | vendor | amount |
+|---|---|---|---|
+| `0004__rendered-body.pdf` | `0005__rendered-body.pdf` | Obsidian | 96.00 |
+| `0008__Invoice-HMVWDWIL-0029` | `0009__Receipt-2247-1655-6392` | Lovable | 15.00 |
+| `0015__Invoice-DZ9BH3VA-0037` | `0016__Receipt-2428-2412-7739` | Anthropic | 100.00 |
+| `0000__rendered-body.pdf` | `0018__billet-16530.pdf` | the Nice tourist train | 32.00 |
+| `0023__Invoice-DZ9BH3VA-0034` | `0024__Receipt-2248-4597-2811` | Anthropic | 52.59 |
+
+Three are an invoice and a receipt for one charge; two are the same mail
+rendered twice. 25 documents, 20 charges, nothing dropped.
+
+## 2026-09-23: the card and entity columns become load-bearing
+
+`(paid-through - assign)` and `(entity - assign)` in the `Paid Through` and
+`Legal Entity` cells are now a hard refusal, `card_or_entity_unassigned`,
+as hard as `account_unresolved` and reported apart from it.
+
+**This fixes no mis-post today, and that is the reason to do it now.**
+Both columns are cosmetic in the payload: the card comes from
+`paid_through_account_id` (the runner's `ORG_PROFILES` or `--card`) and
+never from the `Paid Through` cell, and `Legal Entity` only rides along
+inside `audit_note`. Per-org multi-card routing is the next thing to
+build, and it is the moment an unassigned cell stops being cosmetic and
+starts meaning "post it to whichever card the profile happened to name".
+A guard added after that routing ships is a guard added after the
+wrong-card post.
+
+The two strings are now imported from `output/zoho_expense_export.py`,
+the module that writes them, rather than re-spelled a fourth time;
+`accounts.py` lost its own copy in the same change, and a test pins
+`NEVER_MAPPED` to the imported values so the remaining restatement cannot
+drift.
+
+### Two ordering calls, both deliberate, both tested
+
+**The ledger is now read BEFORE the payload is built.** A purchase this
+tool has already posted is history: what its cells say now cannot change
+what went to Zoho, so `already_in_ledger` is the true answer, and a
+build-time refusal on the same row would be noise that also MOVED the
+known-answer refusal mix of both rehearsed months. The cost, taken
+deliberately: a data defect on an already-recorded row stops being
+reported by the plan. For a `posted` row that is moot; for an unresolved
+one, "unresolved from an earlier run" is the more urgent message anyway.
+
+**Within the build, the stale-date guard still runs first.** "Dated four
+months before the period" is the more alarming fact about a row that
+carries both defects, and it is the one that should be named. Both July
+rows that carry a placeholder AND a bad date (`360172592`,
+`00000031010`) therefore keep reading `date_precedes_period_window`.
+
+Each order is a test that bites: disable the ledger-first move and
+`test_an_already_posted_row_refuses_as_ledger_not_unassigned` goes red;
+put the placeholder check above the date guard and
+`test_a_stale_date_outranks_an_unassigned_card` does. Both were run
+through `tools/regress_check.py`, not assumed.
+
+### Measured, not guessed: both months are unchanged
+
+Re-running the two rehearsed months against the durable ledger gives a
+refusal mix byte-identical to before the change:
+
+| | July 2026-07 | August 2026-08 |
+|---|---|---|
+| purchases | 46 | 20 |
+| `already_in_ledger` | 41 | 19 |
+| `account_unresolved` | 3 | 1 |
+| `date_precedes_period_window` | 2 | 0 |
+| `card_or_entity_unassigned` | 0 | 0 |
+
+Zero, because every purchase carrying a placeholder is already posted and
+the ledger answers first. The guard is therefore unexercised on live
+data, which is exactly why the number below matters more.
+
+### What it would catch on a fresh month, which is the production case
+
+Planned through `plan_expense_post` with an EMPTY ledger and the live
+chart, which is what a production month sees:
+
+| | July | August |
+|---|---|---|
+| postable before | 41 | 19 |
+| postable after | **30** | **17** |
+| held by `card_or_entity_unassigned` | **11** | **2** |
+
+Those 11 July purchases carry **USD 54,235.71 of the month's 56,340.44**,
+96% of its value: Konsultancy Finance (EUR 15,972.00), Rodrigo Tanure
+(BRL 27,203.34), Redis (USD 12,000.00) and AWS (USD 3,352.59) are all
+unassigned. So card assignment is not a tidy-up before the production
+run, it is the gate on it.
+
+### The scan reads every row, and July proves why
+
+The check runs over EVERY row of a purchase, not the header row alone.
+`H_46243348` is why: its two rows disagree, the first naming
+`CHASE VISA - 2838 - TRAVEL` and `Corporate Services`, the second reading
+both placeholders. A header-only check would have passed it. Both columns
+are per-expense, so a purchase cannot legitimately disagree with itself,
+and a disagreement is itself worth stopping on.
+
+## 2026-09-23: the two USD 576.00 Zoho charges are ONE charge
+
+Answered read-only, nothing written to either month.
+
+**The statement is the arbiter and it is unambiguous.** `August2026.xlsx`
+(card 2838, 2026-07-31 to 2026-08-31, 111 rows) carries exactly ONE line
+at 576.00: `ZOHOCORP`, 2026-08-30, source row 7, transaction
+`515905d5b715db56`. There is no second one.
+
+The two documents are the payment confirmation and the invoice it
+announces:
+
+| | `0006__rendered-body.pdf` | `0007__50102456463.pdf` |
+|---|---|---|
+| what it is | Zoho Store mail, "Your subscription is renewed" | the invoice |
+| its number | Payment ID `RPS2004132748584` | Invoice# `50102456463` |
+| says | "your renewal payment has been processed successfully and you will receive the invoice in a separate e-mail shortly" | "Payment Made (-) 576.00", "Balance Due US$0.00", "charged from the credit card ending with 2838" |
+| plan | Professional, AutoScan 50, Yearly, next renewal 2027-08-30 | Professional, AutoScan 50, Yearly, 30 Aug 2026 to 29 Aug 2027 |
+| statement line | none, it is in `unmatched_receipts` | matched at score 95 |
+
+Same company (BRISKEN, LLC), same payment date, same card, same plan,
+same amount. The mail says the invoice is coming separately; the invoice
+is document 0007.
+
+**So TEST-BTS is overstated by USD 576.00**, and the August batch's 20
+charges are really 19.
+
+**Why the app did not flag it.** Duplicate suppression demonstrably works
+in this batch: it set aside 5 copies, on bases `reference`,
+`printed_reference` and `vendor_date`. Neither basis can fire here. The
+printed references are genuinely different (a payment id against an
+invoice number, no shared substring), and the vendor strings are
+"Zoho Books" against "ZOHO Corporation", so the vendor-and-date basis
+does not group them either. This is a real gap rather than a misfire: a
+payment confirmation and its invoice carry different issuer numbers by
+design.
+
+**Deciding is the owner's.** If Brisken wants it corrected, the repair is
+to set `0006__rendered-body.pdf` aside as a copy in the batch and re-run
+August. The ledger already holds `RPS2004132748584` as posted, so a
+re-run would refuse it as `already_in_ledger` and would NOT unpost the
+existing expense: the sandbox expense `4369050000000367035` has to be
+deleted explicitly and its ledger row removed. No production month is
+affected, because none has been posted.
+
+### A second, larger one in July: Hostinger `H_46243348`
+
+Found while measuring the guard, same shape, bigger amount.
+
+Two Hostinger receipts share the printed reference `H_46243348` at USD
+172.61 each, dated 2026-07-03 and 2026-07-28. `group_by_reference` merged
+them into ONE expense of **USD 345.22** dated 2026-07-03, posted as two
+identical lines to the same account.
+
+July's statement (`July2026.xlsx`, 2026-06-30 to 2026-07-31, 112 rows)
+carries exactly one Hostinger charge at 172.61, on 2026-07-03, matched to
+`0000__rendered-body.pdf`. Its other Hostinger line is 161.89 on
+2026-07-20, a different amount. August's statement carries neither. So
+`0002__rendered-body.pdf` (172.61, dated 2026-07-28) corresponds to no
+charge on any loaded statement, and July looks overstated by 172.61 as
+well.
+
+**The structural half is worth more than the 172.61.** Grouping on a
+shared `Reference#` assumes a reference names ONE purchase, split across
+accounts. Hostinger reuses its invoice number, so the assumption merged
+two documents 25 days apart into a single expense and stamped it with the
+earlier date. Even had both been real charges, that posting would have
+been wrong. That structural half is now closed by
+`conflicting_reference_dates` (next section); the 172.61 itself is still
+the owner's call, because only the statement can say how many charges
+there really were.
+
+## 2026-09-23: a reference whose rows disagree on the date is refused
+
+The Hostinger case above is now a refusal,
+`conflicting_reference_dates`, fired from `build_expense_payload` when
+the rows of one group carry `Expense Date` values more than
+`MAX_REFERENCE_DATE_SPREAD_DAYS` (2) apart.
+
+### Why a refusal and not compound keying
+
+Keying the group on reference AND date, so Hostinger's two documents
+become two purchases, was the obvious alternative and was rejected:
+
+1. It would POST BOTH, and one of the two is known to have no statement
+   line. A silent duplicate is not an improvement on a silent merge.
+2. It changes the ledger key shape for every reference, which is the
+   migration pain the synthetic-reference section above documents.
+3. Nothing in the code can tell "two real charges on one invoice number"
+   from "one charge documented twice". Only a human holding the statement
+   can, and the refusal is how they get asked.
+
+The tolerance is 2 days rather than 0 because a genuine split is one
+receipt, so its rows share a date exactly; 2 absorbs a
+statement-vs-transaction-date nuance if the export ever starts writing
+per-row dates. Hostinger's spread is 25.
+
+Rows whose date cell is empty or unparseable are not this refusal's
+business: the spread is computed over readable dates only, and a group
+with fewer than two of them falls through to
+`date_precedes_period_window`, which names that problem better. July's
+`00000031010` (empty date cell) keeps its existing reason.
+
+### Placed first inside the build, and ungated by period
+
+Ahead of the stale-date guard, because that guard reads
+`group.cell("Expense Date")`, which is row[0] only. While the rows
+disagree, WHICH date it judges is an accident of CSV order, so "is this
+row inside the period" is not yet a meaningful question. Unlike the
+stale-date guard it is not gated on `period`: a reference whose rows span
+a month is not one purchase regardless of which month is being posted.
+
+Both orderings are pinned by tests through `run_month`:
+`test_conflicting_dates_outrank_a_stale_date` (the new guard is first
+inside the build) and `test_an_already_posted_conflicting_group_refuses_as_ledger`
+(the ledger still answers before the build at all, per the #1211 order).
+Each was verified by regression, not assertion: moving the guard below
+the stale check reddens the first test and nothing else; replacing the
+spread with `None` reddens four caller-level tests.
+
+### Measured on the durable ledger: both months byte-identical
+
+| | July 2026-07 | August 2026-08 |
+|---|---|---|
+| rows / purchases | 56 / 46 | 20 / 20 |
+| `already_in_ledger` | 41 | 19 |
+| `account_unresolved` | 3 | 1 |
+| `date_precedes_period_window` | 2 | 0 |
+| `conflicting_reference_dates` | 0 | 0 |
+| postable | 0 | 0 |
+
+Zero, and correctly so: `H_46243348` is already posted, so the ledger
+answers first and the build never runs on it. A move here would have
+meant the ledger-first ordering had broken.
+
+### On a fresh ledger the count did NOT move, and that was a surprise
+
+The prediction going in was July 30 postable to 29. Measured through
+`plan_expense_post` with a throwaway sqlite and the live chart:
+
+| | before the guard | after |
+|---|---|---|
+| July postable | 30 (USD 2,104.73) | **30 (USD 2,104.73)** |
+| July `card_or_entity_unassigned` | 11 | **10** |
+| July `conflicting_reference_dates` | 0 | **1** |
+| August postable | 17 (USD 2,452.87) | 17 (USD 2,452.87) |
+
+`H_46243348` moved between two refusal buckets rather than out of
+postable, because it ALSO carries an unassigned card and the
+`card_or_entity_unassigned` guard was already holding it back. Confirmed
+by differential probe, not inferred: disabling the guard on the same
+source and re-planning puts `H_46243348` back at the head of the
+`card_or_entity_unassigned` list.
+
+So the guard buys the reviewer the right question, "were there really two
+charges here?", in place of the wrong one, "which card paid for this?".
+It becomes count-changing the moment somebody assigns that card, which is
+precisely when a wrong post would otherwise have gone out.
+
 ## Still open
 
-- The scope grant above, which blocks every write.
+- The scope grant above, which blocks every write in the production orgs.
+- **Five rows held back across the two months, all for a human.** August:
+  `H0LHY2WQ-0032` (Lovable, USD 50.00) still reads
+  `(uncategorized - assign)`. July: three `account_unresolved`
+  (`G173514057`, `052155`, `000598540`) and two
+  `date_precedes_period_window` (`360172592` dated 2026-03-30;
+  `00000031010` with an empty date cell).
+- **Two double-counted purchases, both answered and neither corrected**
+  (owner's call, section above): August's 576.00 Zoho pair is one charge,
+  and July's Hostinger `H_46243348` at 345.22 is backed by one 172.61
+  statement line. TEST-BTS is overstated by 748.61 in total. Correcting
+  either means deleting the sandbox expense and its ledger row, not just
+  re-running.
+- **Card and entity assignment is the gate on the production run.** With
+  an empty ledger the new `card_or_entity_unassigned` refusal holds back
+  11 of July's 46 purchases, carrying 96% of the month's value, and 2 of
+  August's 20.
+- Per-org routing for the 5 cards across separate organizations. Both
+  rehearsed months were posted to one sandbox card; the August export
+  alone names 5 paid-through cards and 5 legal entities. The two columns
+  the routing will read are now refused when unassigned, so the routing
+  can be built on top of a guard rather than behind one.
 - Per-org routing for the 5 cards across separate organizations, and the
   BRL/EUR/USD cases. The trial was one card, nine rows, one currency.
 - Wiring the two new guards into the posting CLI's pre-flight, and the

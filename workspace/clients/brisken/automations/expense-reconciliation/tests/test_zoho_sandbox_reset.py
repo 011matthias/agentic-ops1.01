@@ -169,3 +169,85 @@ def test_an_unverifiable_re_list_is_not_ok():
     report = execute_reset(client, plan, go=True)
     assert report.remaining is None
     assert not report.ok
+
+
+# ── targeted reset: pull one stray row, keep the rehearsal ──────────
+#
+# The sandbox now holds months the durable ledger records as `posted`, so
+# a full reset would silently desynchronise the ledger from Zoho. Pulling
+# ONE row is the operation actually wanted, and the rows left standing
+# are the point rather than collateral.
+
+
+def test_a_targeted_reset_deletes_only_the_named_row():
+    client = FakeClient()
+    plan = plan_reset(
+        client, org_id=SANDBOX_ORG_ID, only_ids=["4369050000000321001"]
+    )
+    assert plan.expense_ids == ("4369050000000321001",)
+    assert plan.total_in_org == 2 and plan.expected_remaining == 1
+
+    report = execute_reset(client, plan, go=True)
+    assert client.deleted == ["4369050000000321001"]
+    assert report.ok and report.remaining == 1
+
+
+def test_ok_means_the_plan_happened_not_that_the_org_is_empty():
+    """A targeted delete legitimately leaves rows standing. If that read
+    as failure, `ok` would always be False here and stop being read."""
+    client = FakeClient()
+    plan = plan_reset(
+        client, org_id=SANDBOX_ORG_ID, only_ids=["4369050000000277033"]
+    )
+    report = execute_reset(client, plan, go=True)
+    assert report.ok and report.remaining == 1 and report.expected_remaining == 1
+
+
+def test_a_full_reset_still_demands_an_empty_org():
+    """The stricter original contract must survive the addition."""
+    client = FakeClient()
+    plan = plan_reset(client, org_id=SANDBOX_ORG_ID)
+    assert plan.expected_remaining == 0
+    report = execute_reset(client, plan, go=True)
+    assert report.ok and report.remaining == 0
+
+
+def test_an_id_the_org_does_not_hold_aborts():
+    """A delete-by-id that skips a miss reports success for a row that is
+    still standing. Refuse the whole plan instead."""
+    client = FakeClient()
+    with pytest.raises(SandboxGuardError, match="not in it"):
+        plan_reset(
+            client,
+            org_id=SANDBOX_ORG_ID,
+            only_ids=["4369050000000321001", "9999999999999999999"],
+        )
+    assert client.deleted == []
+
+
+def test_an_empty_only_ids_never_widens_into_a_full_reset():
+    """The dangerous default: an empty selection must not fall through to
+    deleting everything in a cloned production org."""
+    client = FakeClient()
+    for empty in ([], ["", "  "]):
+        with pytest.raises(SandboxGuardError, match="refusing to fall back"):
+            plan_reset(client, org_id=SANDBOX_ORG_ID, only_ids=empty)
+    assert client.deleted == []
+
+
+@pytest.mark.parametrize("org", sorted(PRODUCTION_ORG_IDS))
+def test_a_targeted_reset_still_refuses_production(org):
+    client = FakeClient()
+    with pytest.raises(SandboxGuardError):
+        plan_reset(client, org_id=org, only_ids=["4369050000000321001"])
+    assert client.deleted == []
+
+
+def test_a_targeted_plan_still_needs_go():
+    client = FakeClient()
+    plan = plan_reset(
+        client, org_id=SANDBOX_ORG_ID, only_ids=["4369050000000321001"]
+    )
+    with pytest.raises(SandboxGuardError):
+        execute_reset(client, plan)
+    assert client.deleted == []

@@ -272,7 +272,37 @@ def test_field_edit_validation(client, monkeypatch):
     assert put({"field": "total", "value": "abc"}).status_code == 400
     assert put({"field": "currency", "value": "EURO"}).status_code == 400
     assert put({"field": "nonsense", "value": "x"}).status_code == 400
-    assert put({"field": "category", "value": "Not A Category"}).status_code == 400
+    # A category from neither live vocabulary is dropped, not refused: it
+    # comes back 200 with the value named under `ignored`, and nothing is
+    # written. Every other validation above still refuses.
+    bad = put({"field": "category", "value": "Not A Category"})
+    assert bad.status_code == 200, bad.text
+    assert bad.json()["ignored"] == {"category": "Not A Category"}
+    kept = _grid(client, batch_id)["expenses"][0]
+    assert (kept.get("posting_category") or {}).get("source") != "override"
+
+
+def test_the_month_view_serves_both_vocabularies(client, monkeypatch):
+    """`gl_accounts` arrives BESIDE `category_options`, never instead.
+
+    The published SPA renders `category_options`; it keeps working until the
+    owner publishes a bundle that reads the curated leaves. An entity the
+    curated chart does not cover is absent from the map rather than served
+    an empty list, which would read as "covered, nothing to post to".
+    """
+    from expense_recon.zoho import curated_leaves
+
+    _patch_ocr(monkeypatch, _extraction())
+    batch_id = _create_batch(client, legal_entity="Consulting LLC")
+    client.put("/api/settings", json={
+        "entities": {"Consulting LLC": {"org_id": "808232536"}},
+    })
+    grid = _grid(client, batch_id)
+
+    assert grid["category_options"], "the eight are still served"
+    assert grid["gl_revision"] == curated_leaves.curated_revision()
+    codes = [r["code"] for r in grid["gl_accounts"]["Consulting LLC"]]
+    assert codes == sorted(curated_leaves.postable_codes("808232536"))
 
 
 def test_category_edit_folds_into_overrides(client, monkeypatch):
@@ -349,9 +379,17 @@ def test_manual_add_validation(client, monkeypatch):
     assert post({"vendor": "X"}).status_code == 400  # no total
     assert post({"total": "5.00"}).status_code == 400  # no vendor
     assert post({"vendor": "X", "total": "abc"}).status_code == 400
-    assert post(
-        {"vendor": "X", "total": "5.00", "category": "Nope"}
-    ).status_code == 400
+    # The add still lands; only the unrecognised category is dropped. The
+    # vendor and total are what the add is FOR, and refusing the whole row
+    # over one field would lose them.
+    added = post({"vendor": "X", "total": "5.00", "category": "Nope"})
+    assert added.status_code == 200, added.text
+    assert added.json()["ignored"] == {"category": "Nope"}
+    row = next(
+        e for e in _grid(client, batch_id)["expenses"]
+        if e["document_id"] == added.json()["document_id"]
+    )
+    assert (row.get("posting_category") or {}).get("source") != "override"
 
 
 def test_delete_ocr_expense_soft_hides_it(client, monkeypatch):

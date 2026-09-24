@@ -11,6 +11,26 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-24 | Recon Correspondence Not An Expense | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Correspondence%20Not%20An%20Expense/Mini-Checkpoint-1.md) |
+| 2026-09-24 | Recon Learning Rules And Spotcheck Ruling | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Learning%20Rules%20And%20Spotcheck%20Ruling/Mini-Checkpoint-1.md) |
+| 2026-09-24 | Brisken Recon Card Attribution Item 176 | client-dev | [→](docs/2026-09-24%20-%20Brisken%20Recon%20Card%20Attribution%20Item%20176/Checkpoint.md) |
+| 2026-09-24 | Zoho GL Item 183 Half B | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Zoho%20GL%20Item%20183%20Half%20B/Mini-Checkpoint-1.md) |
+| 2026-09-24 | Brisken Recon Private Control And Paid Through | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20Recon%20Private%20Control%20And%20Paid%20Through/Mini-Checkpoint-1.md) |
+| 2026-09-24 | Card Attribution Learners | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Card%20Attribution%20Learners/Mini-Checkpoint-1.md) |
+| 2026-09-24 | Recon Feedback Triage And Receipt Viewer | client-dev | [→](docs/2026-09-24%20-%20Recon%20Feedback%20Triage%20And%20Receipt%20Viewer/Checkpoint.md) |
+| 2026-09-24 | Zoho GL Chart Pull And Registry Reads | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Zoho%20GL%20Chart%20Pull%20And%20Registry%20Reads/Mini-Checkpoint-1.md) |
+| 2026-09-24 | Single Card Gate And The Zoho Account Answer | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Single%20Card%20Gate%20And%20The%20Zoho%20Account%20Answer/Mini-Checkpoint-1.md) |
+| 2026-09-23 | Zoho GL Vocabulary And Precedence Chain | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Zoho%20GL%20Vocabulary%20And%20Precedence%20Chain/Mini-Checkpoint-1.md) |
+| 2026-09-23 | Zoho GL Categorization Phase 1 | client-dev | [→](docs/2026-09-23%20-%20Zoho%20GL%20Categorization%20Phase%201/Checkpoint.md) |
+| 2026-09-23 | Recon Zoho Refuses Conflicting Reference Dates | client-dev | [→](docs/2026-09-23%20-%20Recon%20Zoho%20Refuses%20Conflicting%20Reference%20Dates/Checkpoint.md) |
+| 2026-09-23 | Attribution Instrument And The Card Memory That Never Arrived | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Attribution%20Instrument%20And%20The%20Card%20Memory%20That%20Never%20Arrived/Mini-Checkpoint-1.md) |
+| 2026-09-23 | Recon Attribution Grounding And The Live Write Recovery | client-dev | [→](docs/2026-09-23%20-%20Recon%20Attribution%20Grounding%20And%20The%20Live%20Write%20Recovery/Checkpoint.md) |
+| 2026-09-23 | FX Consumer Gate Closed | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20FX%20Consumer%20Gate%20Closed/Mini-Checkpoint-1.md) |
+| 2026-09-23 | Attribution Measured Card Entity Person And Category | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Attribution%20Measured%20Card%20Entity%20Person%20And%20Category/Mini-Checkpoint-1.md) |
+| 2026-09-23 | Zoho Posting Refuses Unassigned Cards | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Zoho%20Posting%20Refuses%20Unassigned%20Cards/Mini-Checkpoint-1.md) |
+| 2026-09-23 | Typing An FX Rate In Settings Is Gone | client-dev | [→](docs/2026-09-23%20-%20Typing%20An%20FX%20Rate%20In%20Settings%20Is%20Gone/Checkpoint.md) |
+| 2026-09-23 | August Posted Through The Unified Runner | client-dev | [→](docs/2026-09-23%20-%20August%20Posted%20Through%20The%20Unified%20Runner/Checkpoint.md) |
+| 2026-09-23 | FX Rates Polled Daily From OpenTickers | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20FX%20Rates%20Polled%20Daily%20From%20OpenTickers/Mini-Checkpoint-1.md) |
 | 2026-09-23 | Recon Learning Loop Save Previews And Undoes | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Recon%20Learning%20Loop%20Save%20Previews%20And%20Undoes/Mini-Checkpoint-1.md) |
 | 2026-09-23 | Zoho July Rehearsal Posted | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Zoho%20July%20Rehearsal%20Posted/Mini-Checkpoint-1.md) |
 | 2026-09-22 | Zoho Sandbox Posting Guards | client-dev | [Mini-Checkpoint-1](docs/2026-09-22%20-%20Zoho%20Sandbox%20Posting%20Guards/Mini-Checkpoint-1.md) |

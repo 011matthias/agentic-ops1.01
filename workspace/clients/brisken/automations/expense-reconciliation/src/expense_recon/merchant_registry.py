@@ -25,7 +25,7 @@ Shape:
     settings["merchants"] = {
         "<canonical name>": {
             "aliases": ["raw pattern", ...],   # extra strings to match on
-            "category": "<one of EXPENSE_CATEGORIES>" | None,
+            "category": "<a bucket, or a curated GL leaf code>" | None,
             "zoho_account": "<chart label>" | None,
             "multi_category": True,            # optional (2026-08-19)
             "cost_center": "<defined name>" | None,   # optional (item 47)
@@ -96,13 +96,13 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from rapidfuzz import fuzz
 
 from .matching.deterministic import _normalize as normalize_vendor
+from .category_vocabulary import recognize as recognize_category
 from .error_codes import CodedValueError
-from .matching.types import EXPENSE_CATEGORIES
 from .vendor_names import _LEGAL_SUFFIXES, clean_vendor_name
 
 # token_set_ratio (0-100) at or above this counts as a confident brand
@@ -264,6 +264,41 @@ def _fuzzy_score(
     return score * covered / total
 
 
+def drop_unvouched_remembered_cards(receipts: list, registry) -> list:
+    """Item 173, second half: clear the remembered card off any receipt whose
+    brand the registry does not vouch is paid on ONE card.
+
+    `Receipt.card_key` is by its own contract the card remembered from a
+    reviewer's per-row fix on an earlier month, never anything read off the
+    document, so at ingest every value in it came from `ExpenseMemory.apply`
+    and clearing an unvouched one takes nothing else with it.
+
+    An absent or empty registry vouches for NOTHING, so every remembered card
+    is cleared. That is not over-reach, it is the same answer the read-time
+    twin already gives: `merchant_vouches_one_card` returns False without a
+    registry, so on a registry-free run the grid declines to lend a
+    remembered card anyway. Letting the ingest stamp survive there would put
+    the card back by the other door, which is the whole defect.
+    """
+    out = []
+    for r in receipts:
+        if not (getattr(r, "card_key", "") or "").strip():
+            out.append(r)
+            continue
+        vouched = registry is not None and registry.vouches_one_card(
+            getattr(r, "vendor_clean", None), getattr(r, "detected_vendor", None)
+        )
+        out.append(r if vouched else replace(r, card_key=None))
+    return out
+
+
+def _cards_seen(entry: dict) -> tuple[str, ...]:
+    """The merchant's `cards_seen` as a clean tuple; () when it has none."""
+    return tuple(
+        s for s in (str(c or "").strip() for c in (entry.get("cards_seen") or [])) if s
+    )
+
+
 @dataclass(frozen=True)
 class MerchantMatch:
     """A registry hit for one receipt's merchant."""
@@ -290,6 +325,13 @@ class MerchantMatch:
     # `cost_center` is: a vendor can book to several categories and still be
     # paid from one card.
     card_key: str | None = None
+    # Item 173: every card this merchant's receipts have actually resolved
+    # to, the machine's own record. Carried on the match so the single-card
+    # question can be asked of the REGISTRY rather than of a raw settings
+    # dict the asker happens to hold. `card_key` answers "which card", this
+    # answers "may anything lend one at all", and the second question has
+    # two askers in two layers (ingest and the grid) that must agree.
+    cards_seen: tuple[str, ...] = ()
     # Note item M4: the merchant's free-prose profile, when it carries one.
     # Context for the categorizer's prompts and nothing else; never a
     # resolver. Carried on a `multi_category` merchant too, where it is worth
@@ -407,6 +449,40 @@ class MerchantRegistry:
             return self._match(best_canonical, best_original, best_score, "fuzzy")
         return None
 
+    def vouches_one_card(
+        self, vendor_clean: str | None, vendor_raw: str | None
+    ) -> bool:
+        """Item 173: does the registry vouch that this brand is paid on
+        exactly ONE card, so a card REMEMBERED from an earlier correction may
+        lend itself to a receipt of it?
+
+        The registry's own card learner already works this way: note item M2
+        sets a merchant's `card_key` only while `cards_seen` holds exactly one
+        card, precisely so a brand seen on two never lends either. The
+        remembered correction did not inherit that rule, and the live data
+        says it needed it. Criss's single OpenAI fix taught card 3645, while
+        the hard evidence (printed numbers, her own picks, the statement) puts
+        OpenAI on card-9693 eight times and 3645 once. The memory was the
+        minority card, 8 to 1, on 12 live September rows.
+
+        Owner ruling 2026-09-23, given that split: gate it. A blank prompts a
+        human to look; a confidently wrong card silently books the receipt to
+        the wrong entity AND the wrong person, because both ride the card.
+
+        Deliberately conservative about the unknown case: a vendor the
+        registry cannot resolve at all is NOT vouched, because "no evidence of
+        a second card" is not evidence of one card. OpenAI is exactly that
+        vendor (adding it is the owner's call and he has said he raises it),
+        which is what makes this ruling bite today.
+
+        It lives on the registry rather than beside one caller because two
+        layers ask it: `ExpenseMemory`'s stamp at INGEST and
+        `fill_remembered_cards` at read time. A gate held in one and not the
+        other is the shape of the bug item 173 was split in half by.
+        """
+        match = self.resolve(vendor_clean, vendor_raw)
+        return match is not None and len(match.cards_seen) <= 1
+
     def _match(
         self, canonical: str, original: str, score: float, kind: str
     ) -> MerchantMatch:
@@ -427,18 +503,28 @@ class MerchantRegistry:
                 cost_center=(entry.get("cost_center") or None),
                 multi_category=True,
                 card_key=(entry.get("card_key") or None),
+                cards_seen=_cards_seen(entry),
                 profile=(entry.get("profile") or None),
             )
         category = (entry.get("category") or None)
         return MerchantMatch(
             canonical_name=canonical,
-            category=category if category in EXPENSE_CATEGORIES else None,
+            # Re-validate our OWN store against the vocabulary that store is
+            # allowed to hold. `normalize_merchants_setting` has accepted
+            # curated leaf codes since #1236 (:532), so filtering here on the
+            # eight buckets threw away exactly what the write path had just
+            # saved: the rule went inert, the receipt fell through to the LLM
+            # at full cost, and nothing errored or logged. That is the shape
+            # this whole change set exists to remove, so it may not sit in the
+            # reader of the registry.
+            category=recognize_category(category),
             zoho_account=(entry.get("zoho_account") or None),
             matched_alias=original,
             score=float(score),
             kind=kind,
             cost_center=(entry.get("cost_center") or None),
             card_key=(entry.get("card_key") or None),
+            cards_seen=_cards_seen(entry),
             profile=(entry.get("profile") or None),
         )
 
@@ -450,14 +536,23 @@ class MerchantRegistry:
         return cls(merchants, threshold=threshold)
 
 
-def normalize_merchants_setting(raw: object, *, stored: object = None) -> dict:
+def normalize_merchants_setting(
+    raw: object, *, stored: object = None,
+    dropped: list[tuple[str, str]] | None = None,
+) -> dict:
     """Validate + clean a `merchants` settings payload into the stored shape.
 
     Raises ValueError on a malformed structure (the settings PUT surfaces it
     as HTTP 400). Mirrors the `entities` map contract: the whole map replaces
     the stored one, a blank canonical name is dropped, and each entry must be
     a dict. Aliases are trimmed + de-duplicated on their normalized key; a
-    category, when given, must be one of the fixed expense categories.
+    category, when given, must be one the tool still knows (either of the two
+    live vocabularies) and is otherwise dropped rather than refused.
+
+    ``dropped``, when given, receives one ``(merchant, category)`` pair per
+    dropped category so the caller can name the loss in its reply. Callers
+    that pass nothing drop silently, which is what the internal callers
+    (memory at sign-off, the seed) want.
 
     ``stored`` (item 117) is the merchant map already saved, passed by the
     settings PUT only. When given, an alias made only of generic words
@@ -512,13 +607,17 @@ def normalize_merchants_setting(raw: object, *, stored: object = None) -> dict:
                 seen.add(key)
                 aliases.append(s)
         category = str(entry.get("category") or "").strip() or None
-        if category is not None and category not in EXPENSE_CATEGORIES:
-            raise CodedValueError(
-                f"merchant {canonical!r} category {category!r} is not one of the "
-                "expense categories",
-                code="merchant_category_invalid",
-                merchant=canonical, category=category,
-            )
+        if category is not None:
+            # Two vocabularies are live at once (`category_vocabulary`), and
+            # a value from neither is DROPPED, not refused. A settings save
+            # replaces the whole map, so one merchant holding a string the
+            # server no longer knows would have 400'd the entire save, the
+            # cards and entities tabs included, for an edit that never
+            # touched it. `dropped` carries the loss out to the reply.
+            recognized = recognize_category(category)
+            if recognized is None and dropped is not None:
+                dropped.append((canonical, category))
+            category = recognized
         zoho_account = str(entry.get("zoho_account") or "").strip() or None
         cleaned: dict = {
             "aliases": aliases,

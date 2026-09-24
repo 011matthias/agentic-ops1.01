@@ -34,6 +34,14 @@ from .types import Match, MatchOutcome, MatchType, Receipt, Transaction
 
 # A month key in `fx_ecb_monthly_rates` (item 82): the ECB's TIME_PERIOD.
 _MONTH_KEY = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
+# A day key in `fx_daily_rates` (note #79): the provider's effectiveDate.
+_DAY_KEY = re.compile(r"\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])")
+# Tuning keys a stored config may still carry that the matcher no longer
+# reads. `from_dict` accepts and drops them so an old run config and the
+# shipped scorer asset both keep loading. `fx_reference_rates` (a rate
+# typed in Settings) retired 2026-09-23: the rates come from the daily
+# OpenTickers poll and the ECB monthly average now, never from typing.
+_RETIRED_TUNABLES = frozenset({"fx_reference_rates"})
 
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
@@ -275,7 +283,7 @@ _TUNABLE_DECIMAL = frozenset({
 })
 _TUNABLE_INT = frozenset({
     "date_exact_window_days", "date_probable_window_days",
-    "fx_date_window_days",
+    "fx_date_window_days", "fx_daily_rate_max_gap_days",
     "fx_self_derived_min_statement_rates", "fx_self_derived_min_receipts",
 })
 _TUNABLE_FLOAT = frozenset({
@@ -330,23 +338,17 @@ class MatchingConfig:
     )
 
     # ── Deterministic reference-rate FX (3.15 / 3.7 upgrade) ───────────
-    # Monthly reference rates per (receipt_ccy, tx_ccy), e.g.
-    # ("BRL","USD") -> 0.185. When a rate is configured for the pair, a
-    # cross-currency candidate that survives the date gate is resolved
+    # A cross-currency candidate that survives the date gate is resolved
     # DETERMINISTICALLY before the band/LLM path: expected charge =
-    # receipt total x rate; deviation <= fx_reference_match_pct is a
-    # match, <= fx_reference_review_pct a match flagged for review,
-    # beyond that it falls through to the implied-rate band / FX_JUDGMENT
-    # exactly as before. Deviations reflect DCC markup + tip, which only
-    # push the charge UP, but the check is symmetric for simplicity —
-    # the band's asymmetry still guards the fall-through path. Unconfigured
-    # pairs are byte-for-byte the old behaviour. Rates come from
-    # config/match-tuning.json ("fx_reference_rates": {"BRL:USD": 0.185});
-    # they are month-scoped operator input, never derived from Zoho's
-    # per-line rate (measured wrong by up to 12.8%, LD-5).
-    fx_reference_rates: Mapping[tuple[str, str], Decimal] = field(
-        default_factory=dict
-    )
+    # receipt total x rate; deviation <= the band for the rate's source is
+    # a match, <= fx_reference_review_pct a match flagged for review,
+    # beyond that it falls through to the implied-rate band / FX_JUDGMENT.
+    # Deviations reflect DCC markup + tip, which only push the charge UP,
+    # but the check is symmetric for simplicity — the band's asymmetry
+    # still guards the fall-through path. A pair with no rate on any rung
+    # is byte-for-byte the old behaviour. See `_reference_rate_for` for the
+    # rungs; `fx_reference_rates` (a rate typed in Settings) was RETIRED on
+    # 2026-09-23 by owner directive and is no longer read from any config.
     # Item 82 (owner ruling 2026-09-16): the ECB's monthly average reference
     # rates, as the ECB publishes them, keyed by month:
     # {"2026-07": {"USD": Decimal("1.1417478"), "BRL": Decimal("5.8448957")}},
@@ -359,6 +361,23 @@ class MatchingConfig:
     fx_ecb_monthly_rates: Mapping[str, Mapping[str, Decimal]] = field(
         default_factory=dict
     )
+    # Feedback note #79 (owner 2026-09-23: "fx rates should be polled daily
+    # via open tickers API"): the daily reference rates the app polls from
+    # OpenTickers, the same shape as the ECB table but keyed by DAY:
+    # {"2026-09-22": {"USD": Decimal("1.1463"), "BRL": Decimal("5.8726")}},
+    # units per ONE EUR. A pair's rate is the cross through EUR on the
+    # CHARGE's own date, or the nearest polled day within
+    # `fx_daily_rate_max_gap_days` (a weekend or holiday has no fix; four
+    # days spans Good Friday to Easter Monday), earlier winning a tie. Sits
+    # one rung ABOVE the monthly average (a day is the grain the card locked
+    # the rate at) and below a typed rate and the self-derived rates. The
+    # hosted surface refreshes the table from its store on every re-match
+    # (`service.apply_fx_daily_rates`); empty keeps every pair on the rungs
+    # around it, byte for byte. See `daily_rate`.
+    fx_daily_rates: Mapping[str, Mapping[str, Decimal]] = field(
+        default_factory=dict
+    )
+    fx_daily_rate_max_gap_days: int = 4
     fx_reference_match_pct: Decimal = Decimal("0.03")
     fx_reference_review_pct: Decimal = Decimal("0.13")
     # Item 90 / 132 (owner ruling 2026-09-17: tighten the band first, then
@@ -581,16 +600,14 @@ class MatchingConfig:
                         Decimal(str(lo)), Decimal(str(hi))
                     )
                 kwargs[key] = bands
-            elif key == "fx_reference_rates":
-                rates: dict[tuple[str, str], Decimal] = {}
-                for pair, rate in value.items():
-                    from_ccy, _, to_ccy = pair.partition(":")
-                    if not from_ccy or not to_ccy:
-                        raise ValueError(
-                            f"fx_reference_rates key {pair!r} must be 'FROM:TO'"
-                        )
-                    rates[(from_ccy, to_ccy)] = Decimal(str(rate))
-                kwargs[key] = rates
+            elif key in _RETIRED_TUNABLES:
+                # Accepted and DROPPED, never a ValueError: the shipped
+                # scorer asset still carries `fx_reference_rates` (empty),
+                # and July's and August's frozen run configs carry the two
+                # rates the owner retired on 2026-09-23. Refusing the key
+                # would make both unloadable; ignoring it is what makes the
+                # stored copies inert without rewriting client data.
+                continue
             elif key == "fx_ecb_monthly_rates":
                 table: dict[str, dict[str, Decimal]] = {}
                 for month, per_eur in value.items():
@@ -603,10 +620,22 @@ class MatchingConfig:
                         for ccy, units in (per_eur or {}).items()
                     }
                 kwargs[key] = table
+            elif key == "fx_daily_rates":
+                daily: dict[str, dict[str, Decimal]] = {}
+                for day, per_eur in value.items():
+                    if not _DAY_KEY.fullmatch(str(day)):
+                        raise ValueError(
+                            f"fx_daily_rates key {day!r} must be 'YYYY-MM-DD'"
+                        )
+                    daily[str(day)] = {
+                        str(ccy).upper(): Decimal(str(units))
+                        for ccy, units in (per_eur or {}).items()
+                    }
+                kwargs[key] = daily
             else:
                 raise ValueError(
                     f"unknown matching-tuning key {key!r} "
-                    f"(tunables: {sorted(_TUNABLE_DECIMAL | _TUNABLE_INT | _TUNABLE_FLOAT | _TUNABLE_BOOL | {'fx_rate_bands', 'fx_reference_rates', 'fx_ecb_monthly_rates'})})"
+                    f"(tunables: {sorted(_TUNABLE_DECIMAL | _TUNABLE_INT | _TUNABLE_FLOAT | _TUNABLE_BOOL | {'fx_rate_bands', 'fx_ecb_monthly_rates', 'fx_daily_rates'})})"
                 )
         return cls(**kwargs)
 
@@ -627,21 +656,72 @@ class MatchingConfig:
         or None if the pair is unprofiled."""
         return self.fx_rate_bands.get((from_ccy, to_ccy))
 
-    def fx_reference_rate(self, from_ccy: str, to_ccy: str) -> Decimal | None:
-        """Monthly reference rate for receipt->transaction currency, or
-        None when the pair has no configured rate (then the band/LLM path
-        applies unchanged)."""
-        return self.fx_reference_rates.get((from_ccy, to_ccy))
-
     def reference_match_pct(self, source: str | None) -> Decimal:
         """The clean band for a reference-rate pair, by where its rate came
         from (`_reference_rate_for`'s source): `fx_ecb_match_pct` for
-        `ecb_month`, `fx_reference_match_pct` for every other source. The
-        matcher, the band a reviewer sees (item 81) and the judgment layer's
-        rejected-pair rule (item 131) all read it here."""
-        if source == "ecb_month":
+        `ecb_month` and for `opentickers_day` (both are central-bank
+        reference rates, and the daily one is closer to the rate the card
+        locked, never further), `fx_reference_match_pct` for the rates a
+        run derives from its own statement and receipts. The matcher, the band a reviewer sees (item 81) and the
+        judgment layer's rejected-pair rule (item 131) all read it here."""
+        if source in ("ecb_month", "opentickers_day"):
             return self.fx_ecb_match_pct
         return self.fx_reference_match_pct
+
+    def daily_rate(
+        self, from_ccy: str, to_ccy: str, on: "date | str | None"
+    ) -> tuple[Decimal, str] | None:
+        """Note #79: the polled daily reference rate for receipt->charge
+        currency on the day of `on` (a date or 'YYYY-MM-DD'), as (rate, day
+        used).
+
+        The day itself when the table holds it with both currencies, else
+        the nearest day that does within `fx_daily_rate_max_gap_days`
+        (earlier wins a tie: a Saturday purchase reads Friday's fix). Cross
+        rate through EUR (EUR is 1 unit per EUR), to six decimals, the
+        precision a rate typed in Settings carries. None when `on` is
+        missing or not a full date, the table is empty, or no day inside the
+        window carries the pair; the caller then falls through to the
+        monthly average."""
+        if not self.fx_daily_rates or on is None:
+            return None
+        src, dst = (from_ccy or "").upper(), (to_ccy or "").upper()
+        if not src or not dst or src == dst:
+            return None
+        from datetime import date as _date
+
+        want = on if isinstance(on, str) else on.isoformat()
+        if not _DAY_KEY.fullmatch(want):
+            return None
+        target = _date.fromisoformat(want)
+
+        def _units(table: Mapping[str, Decimal], ccy: str) -> Decimal | None:
+            if ccy == "EUR":
+                return Decimal(1)
+            units = table.get(ccy)
+            return units if units is not None and units > 0 else None
+
+        best: tuple[tuple[int, _date], str, Mapping[str, Decimal]] | None = None
+        for day, table in self.fx_daily_rates.items():
+            if _units(table, src) is None or _units(table, dst) is None:
+                continue
+            try:
+                d = _date.fromisoformat(day)
+            except ValueError:
+                continue
+            gap = abs((d - target).days)
+            if gap > self.fx_daily_rate_max_gap_days:
+                continue
+            key = (gap, d)
+            if best is None or key < best[0]:
+                best = (key, day, table)
+        if best is None:
+            return None
+        _key, day, table = best
+        rate = (_units(table, dst) / _units(table, src)).quantize(
+            Decimal("0.000001")
+        )
+        return (rate, day) if rate > 0 else None
 
     def ecb_monthly_rate(
         self, from_ccy: str, to_ccy: str, on: "date | str | None"
@@ -916,7 +996,7 @@ def derive_fx_reference_rates(
 
     A derived rate outside the static fx band for its pair is discarded
     (poisoned-median clamp: one mis-parsed total cannot drag the month's
-    rate somewhere implausible). Configured `fx_reference_rates` are NOT
+    rate somewhere implausible). The rungs below this one are NOT
     consulted here — the caller overlays them, so operator input always
     wins. `fx_self_derived_rates=false` disables the whole derivation.
     """
@@ -977,11 +1057,19 @@ def _reference_rate_for(
     derived: "Mapping[tuple[str, str], tuple[Decimal, str, int]] | None",
     on: "date | str | None" = None,
 ) -> tuple[Decimal, str, int] | None:
-    """The best reference rate for a pair: configured (operator intent)
-    wins, else this run's self-derived rate, else the ECB monthly average
-    for the month of `on` (the charge date, item 82). Returns (rate, source,
-    n) with source in {"configured", "statement", "receipts", "ecb_month"},
-    or None.
+    """The best reference rate for a pair: this run's self-derived rate
+    (read off its own statement or receipts) wins, else the polled daily
+    rate for the day of `on` (the charge date, note #79), else the ECB
+    monthly average for its month (item 82). Returns (rate, source, n) with
+    source in {"statement", "receipts", "opentickers_day", "ecb_month"}, or
+    None.
+
+    A rate typed in Settings used to outrank all of these. The owner
+    retired that on 2026-09-23 ("no more typing them in settings ... we
+    will only rely on these daily rates API"), so every rate the matcher
+    uses is now either read off the client's own documents or fetched from
+    a central bank. A stored config that still carries the typed rates is
+    ignored, not obeyed (`_RETIRED_TUNABLES`).
 
     The ECB rung sits BELOW the self-derived rates on the evidence: a
     statement's printed FX lines are the rate the card actually charged,
@@ -990,13 +1078,13 @@ def _reference_rate_for(
     hosted month has neither (the Chase export prints no FX columns and no
     mailed receipt carries a booked rate), so there the ECB rate is what
     fires whenever Settings holds none."""
-    configured = cfg.fx_reference_rate(from_ccy, to_ccy)
-    if configured is not None and configured > 0:
-        return configured, "configured", 0
     if derived:
         hit = derived.get(((from_ccy or "").upper(), (to_ccy or "").upper()))
         if hit is not None:
             return hit
+    daily = cfg.daily_rate(from_ccy, to_ccy, on)
+    if daily is not None:
+        return daily[0], "opentickers_day", 0
     ecb = cfg.ecb_monthly_rate(from_ccy, to_ccy, on)
     if ecb is not None:
         return ecb[0], "ecb_month", 0
@@ -1207,8 +1295,12 @@ def match_one(
 
         def _rate_phrase() -> str:
             rate, source, n = ref
-            if source == "configured":
-                return f"monthly reference rate {rate}"
+            if source == "opentickers_day":
+                _rate, day = cfg.daily_rate(
+                    receipt.detected_currency, tx.transaction_currency,
+                    tx.transaction_date,
+                )
+                return f"OpenTickers daily reference rate {rate} ({day})"
             if source == "ecb_month":
                 _rate, month = cfg.ecb_monthly_rate(
                     receipt.detected_currency, tx.transaction_currency,
@@ -1349,7 +1441,7 @@ def match_one(
                 tx.legal_entity_id, receipt.detected_vendor,
                 receipt.detected_currency, tx.transaction_currency,
             )
-            if ref is not None and ref[1] in ("configured", "ecb_month"):
+            if ref is not None and ref[1] in ("opentickers_day", "ecb_month"):
                 score_rate = ref[0]
                 score_src = _rate_phrase()
             elif learned_mean is not None and lo <= learned_mean <= hi:

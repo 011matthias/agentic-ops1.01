@@ -45,6 +45,7 @@ from ..cli import (  # item 105
 )
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import entity_from_settings
+from ..correspondence import quarantine_correspondence
 from ..error_codes import Refusal, code_of, detail_of, fields_of
 from ..duplicates import (
     STATE_OPEN,
@@ -101,7 +102,12 @@ from ..cost_centers import (
     UNRESOLVED_SILENT as UNRESOLVED_COST_CENTER,
 )
 from ..cost_centers import CostCenterRegistry, CostCenterResolution
-from ..merchant_registry import MerchantRegistry, normalize_merchants_setting
+from ..category_vocabulary import gl_account_options, gl_revision
+from ..merchant_registry import (
+    MerchantRegistry,
+    drop_unvouched_remembered_cards,
+    normalize_merchants_setting,
+)
 # Note item M1: the registry's bare provenance sentence (a line whose
 # account came from a company's rule says more) and the seed marker the
 # Memory page flags a Zoho-history row with.
@@ -534,37 +540,29 @@ def resolve_entity(form: RunForm, settings: dict | None) -> str:
 def apply_master_data(
     cfg: dict, form: RunForm, settings: dict | None
 ) -> dict:
-    """Return `cfg` with the stored master data folded in: the month's FX
-    reference rates as an inline `matching` block, and the card's Zoho bank
-    account as the `zoho.card_accounts` entry the journal's balancing credit
-    resolves against.
+    """Return `cfg` with the stored master data folded in: the card's Zoho
+    bank account as the `zoho.card_accounts` entry the journal's balancing
+    credit resolves against.
 
-    The rates are inlined rather than written as a `matching.tuning_path`
-    because they are per-run master data, not a file on the machine — this
-    also carries them into `run.local.json`, so pulling a run off the volume
-    reproduces the hosted match exactly. Empty settings => `cfg` unchanged.
+    It used to fold in the month's typed FX reference rates as well. The
+    owner retired that on 2026-09-23 ("no more typing them in settings"), so
+    a month's rates now come from the daily OpenTickers poll
+    (`apply_fx_daily_rates`, refreshed on every re-match) and the ECB
+    monthly average (`apply_ecb_rates`, fetched at creation and attach).
+    Empty settings => `cfg` unchanged.
     """
     from ..cards import effective_cards, zoho_account_for
 
     settings = settings or {}
-    rates = {
-        str(k).strip(): str(v).strip()
-        for k, v in (settings.get("fx_reference_rates") or {}).items()
-        if str(k).strip() and str(v).strip()
-    }
     # Card -> Zoho account resolution reads the composed card registry
     # (settings `cards` + legacy `card_accounts`, `cards.effective_cards`)
     # since 2026-08-21; same digit-token matching as before.
     cards = effective_cards(settings)
     have_accounts = any(c.zoho_account for c in cards.values() if c.active)
-    if not rates and not have_accounts:
+    if not have_accounts:
         return cfg
 
     out = dict(cfg)
-    if rates:
-        matching = dict(out.get("matching") or {})
-        matching.setdefault("fx_reference_rates", rates)
-        out["matching"] = matching
     account_id = (form.account_id or "").strip()
     if have_accounts and account_id:
         resolved = zoho_account_for(account_id, cards)
@@ -653,10 +651,7 @@ def _setup_advisories(
 
     # Cross-currency receipts with no reference rate for their pair: the
     # single cause of the 0-of-94 April run.
-    configured = {
-        str(k).split(":")[0].upper()
-        for k in ((cfg.get("matching") or {}).get("fx_reference_rates") or {})
-    }
+    configured: set[str] = set()
     card_ccy = (
         transactions[0].account_card_currency if transactions else "USD"
     ).upper()
@@ -669,6 +664,13 @@ def _setup_advisories(
     }
     if ecb_table and card_ccy in ecb_ccys:
         configured |= ecb_ccys
+    # Note #79: likewise a currency the polled daily table covers.
+    daily_table = (cfg.get("matching") or {}).get("fx_daily_rates") or {}
+    daily_ccys = {"EUR"} | {
+        str(c).upper() for per_eur in daily_table.values() for c in (per_eur or {})
+    }
+    if daily_table and card_ccy in daily_ccys:
+        configured |= daily_ccys
     missing: dict[str, int] = {}
     for r in receipts:
         ccy = (r.detected_currency or "").upper()
@@ -683,9 +685,9 @@ def _setup_advisories(
             "n_receipts": count,
             "message": (
                 f"{count} receipt(s) are in {ccy} but no {ccy}:{card_ccy} "
-                f"reference rate is available (the ECB publishes none for "
-                f"this month and none is set in Settings), so they cannot "
-                f"match deterministically."
+                f"reference rate is available (no daily rate has been polled "
+                f"for it and the ECB publishes no monthly average for this "
+                f"month), so they cannot match deterministically."
             ),
         })
 
@@ -730,102 +732,6 @@ def _setup_advisories(
                 "(optional: only the data export uses it). Export "
                 "entries balance to a visible 'Card: ...' placeholder until "
                 "one is set in Settings > Cards."
-            ),
-        })
-    out.extend(_fx_rate_drift_advisories(cfg, transactions, receipts, card_ccy))
-    return out
-
-
-def _fx_rate_drift_advisories(
-    cfg: dict, transactions: list, receipts: list, card_ccy: str
-) -> list[dict]:
-    """Item 132: a rate typed in Settings that has drifted from the ECB.
-
-    A Settings rate wins over the month's ECB average (item 82's ruling), so
-    once it drifts, every month keeps matching at it and nothing says so.
-    One advisory per typed pair this month's receipts use, when the month's
-    ECB table holds that pair and the gap is wider than the two bands leave
-    room for: a receipt the ECB rate pairs within `fx_ecb_match_pct` stays
-    inside the Settings rate's `fx_reference_match_pct` band only while the
-    two rates are no further apart than the difference of the bands (3% -
-    2% = 1%). `code` and the numbers ride beside the English `message`, so
-    the screen can say it in the reviewer's language (item 130)."""
-    from collections import Counter
-    from decimal import ROUND_HALF_UP
-
-    from ..matching.deterministic import MatchingConfig
-
-    matching = cfg.get("matching") or {}
-    typed = matching.get("fx_reference_rates") or {}
-    ecb_table = matching.get("fx_ecb_monthly_rates") or {}
-    if not typed or not ecb_table:
-        return []
-    try:
-        # The matcher's own parse and lookup, so the advisory speaks only
-        # for a pair the matcher really reads from Settings (its keys are
-        # case-sensitive: a stored "eur:usd" is not a EUR:USD rate).
-        mc = MatchingConfig.from_dict({
-            k: matching[k]
-            for k in (
-                "fx_reference_rates", "fx_ecb_monthly_rates",
-                "fx_reference_match_pct", "fx_ecb_match_pct",
-            )
-            if k in matching
-        })
-    except (ValueError, ArithmeticError, AttributeError, TypeError):
-        return []
-    limit = mc.fx_reference_match_pct - mc.fx_ecb_match_pct
-    if limit <= 0:
-        return []
-    dated = [t.transaction_date for t in transactions if getattr(t, "transaction_date", None)]
-    if not dated:
-        dated = [r.detected_date for r in receipts if getattr(r, "detected_date", None)]
-    if not dated:
-        return []
-    month = Counter(d.strftime("%Y-%m") for d in dated).most_common(1)[0][0]
-    counts = Counter(
-        (r.detected_currency or "").upper() for r in receipts
-        if (r.detected_currency or "").upper() not in ("", card_ccy)
-    )
-    out: list[dict] = []
-    dst = card_ccy
-    for src in sorted(counts):
-        settings_rate = mc.fx_reference_rate(src, dst)
-        if settings_rate is None or settings_rate <= 0:
-            continue
-        ecb = mc.ecb_monthly_rate(src, dst, month)
-        if ecb is None:
-            continue
-        ecb_rate, ecb_month = ecb
-        try:
-            gap = (settings_rate - ecb_rate) / ecb_rate
-            if abs(gap) <= limit:
-                continue
-            gap_pct = float((gap * 100).quantize(Decimal("0.1"), ROUND_HALF_UP))
-        except ArithmeticError:
-            # A rate Settings accepted but no month can use ("1e30"): the
-            # advisory never fails the month it describes.
-            continue
-        side = "above" if gap > 0 else "below"
-        n = counts[src]
-        out.append({
-            "setting": "fx_reference_rates",
-            "code": "fx_rate_drift",
-            "pair": f"{src}:{dst}",
-            "settings_rate": _fmt_rate(settings_rate),
-            "ecb_rate": _fmt_rate(ecb_rate),
-            "ecb_month": ecb_month,
-            "gap_pct": gap_pct,
-            "limit_pct": float(limit * 100),
-            "n_receipts": n,
-            "message": (
-                f"The {src}:{dst} rate set in Settings ({_fmt_rate(settings_rate)}) "
-                f"is {abs(gap_pct):.1f}% {side} the ECB's {ecb_month} average "
-                f"({_fmt_rate(ecb_rate)}). A Settings rate wins over the ECB for "
-                f"this month's {n} {src} receipt(s); more than "
-                f"{float(limit * 100):g}% away, a receipt the ECB rate pairs "
-                f"cleanly can fall outside the clean band. Removing the rate in "
-                f"Settings lets the ECB average apply."
             ),
         })
     return out
@@ -2454,7 +2360,11 @@ def _fx_breakdown(
 # says it. `configured` is Settings to anyone reading the screen; every other
 # source passes through unchanged, so a source the matcher gains later (item
 # 82's `ecb_month`) reaches the payload without a change here.
-_FX_REFERENCE_SOURCE_NAMES = {"configured": "settings"}
+# Rename map for `fx.reference_rate_source`. Empty since 2026-09-23: its
+# one entry renamed the retired `configured` rung to "settings". Kept as
+# the seam the payload builder already reads, so a future rename needs no
+# change at the call site.
+_FX_REFERENCE_SOURCE_NAMES: dict[str, str] = {}
 
 
 @dataclass(frozen=True)
@@ -2469,7 +2379,9 @@ class FxReference:
     review_pct: Decimal
     # Item 82: the month whose ECB average the rate is ('2026-07'), only
     # for `ecb_month`; it can differ from the charge's month when that
-    # month's average was not in the table.
+    # month's average was not in the table. Note #79: the DAY the polled
+    # rate is for ('2026-09-22'), only for `opentickers_day`; it differs
+    # from the charge's date when that day had no fix (weekend, holiday).
     period: str | None = None
 
 
@@ -2484,6 +2396,14 @@ def fx_reference_lookup(run: "RunRow", transactions: list, receipts: list):
     rate the screen shows that the matcher did not use would be the drift
     item 81 exists to prevent. Because it reads the stored config and
     snapshot, it answers for a month matched before this code shipped.
+
+    One consequence of retiring the typed rates (2026-09-23) is visible
+    here: a month matched BEFORE the retirement was paired at its typed
+    rate, and this function now answers with the rung below it, so the FX
+    panel prints the fetched rate while the stored pairing still reflects
+    the typed one. The two converge at that month's next natural re-match
+    (a receipt arriving, a reviewer's edit). Nothing is re-matched on the
+    reviewer's behalf.
 
     Charges go in with credits removed, the matcher's own first filter.
     Receipts are the month's current pool, so a rate DERIVED from receipt
@@ -2525,6 +2445,12 @@ def fx_reference_lookup(run: "RunRow", transactions: list, receipts: list):
                 tx.transaction_date,
             )
             period = ecb[1] if ecb is not None else None
+        elif source == "opentickers_day":
+            daily = cfg.daily_rate(
+                receipt.detected_currency, tx.transaction_currency,
+                tx.transaction_date,
+            )
+            period = daily[1] if daily is not None else None
         return FxReference(
             rate=rate,
             source=source,
@@ -4323,6 +4249,14 @@ def build_view(
         "duplicate_receipts": duplicate_receipts,
         "duplicate_groups": duplicate_groups,
         "category_options": list(EXPENSE_CATEGORIES),
+        # The curated GL leaves this batch may post to, per entity,
+        # served BESIDE the eight rather than replacing them: a
+        # published SPA keeps rendering category_options until a
+        # bundle that reads these is published. Absent entity = not
+        # covered by the curated chart, which is not the same fact
+        # as an entity with nothing to post to.
+        "gl_accounts": gl_account_options(settings),
+        "gl_revision": gl_revision(),
         "parse_errors": parse_errors,
         # Severity-tagged view of the same issues, so the UI can separate a
         # real error from an advisory note (2026-07-22). `parse_errors`
@@ -4779,6 +4713,7 @@ def registry_upserts_from_expense_run(
         return entry
 
     n_skipped = 0
+    n_account_skipped = 0
 
     # 1) Vendor edits -> canonical + alias.
     for document_id, fields in (field_overrides or {}).items():
@@ -4814,15 +4749,49 @@ def registry_upserts_from_expense_run(
         if not canonical:
             continue
         prior = pending.get(canonical)
-        cell = {"category": category, "zoho_account": (ov or {}).get("zoho_account")}
+        account = (ov or {}).get("zoho_account")
         if prior is None:
-            pending[canonical] = {**cell, "conflict": False}
-        elif prior["category"] != category:
+            pending[canonical] = {
+                "category": category,
+                "zoho_account": account,
+                "conflict": False,
+                "account_conflict": False,
+            }
+            continue
+        if prior["category"] != category:
             prior["conflict"] = True
+        # Item 183: two rows agreeing on the category and naming DIFFERENT
+        # accounts used to agree. The per-row `cell` was discarded from the
+        # second row on, so only the first account ever survived and the
+        # disagreement was invisible. Under a design where the account IS
+        # the answer rather than a detail hanging off the category, that is
+        # a nearest-plausible default sitting inside the writer of durable
+        # memory, which later runs consult ahead of the model.
+        #
+        # Absence is not disagreement. A row that names no account is
+        # silent, not a second opinion, so the first account NAMED wins over
+        # rows that name none; only two rows naming different accounts
+        # conflict.
+        if account:
+            if not prior["zoho_account"]:
+                prior["zoho_account"] = account
+            elif account != prior["zoho_account"]:
+                prior["account_conflict"] = True
 
     for canonical, val in pending.items():
         if val["conflict"]:
             n_skipped += 1
+            continue
+        if val["account_conflict"]:
+            # Item 183: the rows agree on the category and disagree on where
+            # the money posts. Teach nothing for this merchant rather than
+            # letting the first row's account win, and leave whatever is
+            # already stored exactly where it is: the registry carries no
+            # provenance on `zoho_account` (unlike `card_key_learned`), so a
+            # clear here could not tell a value Dirk typed on the Settings
+            # screen from one a run learned. The count is what keeps that
+            # choice from being silent.
+            n_account_skipped += 1
             continue
         entry = _ensure(canonical)
         before = (entry.get("category"), entry.get("zoho_account"))
@@ -4857,6 +4826,7 @@ def registry_upserts_from_expense_run(
         "aliases_added": n_alias,
         "categories_set": n_category,
         "skipped_conflict": n_skipped,
+        "skipped_account_conflict": n_account_skipped,
     }
     return new_merchants, summary
 
@@ -5083,6 +5053,8 @@ def commit_to_memory(
     field_overrides: dict[str, dict[str, str]] | None = None,
     edits: list[dict] | None = None,
     settings_store=None,
+    store_factory=None,
+    persist: bool = True,
 ) -> dict:
     """Harvest this run's confirmed decisions into the durable learning
     store (Phase 2 capture). This is the explicit finalize gate: only
@@ -5094,7 +5066,17 @@ def commit_to_memory(
     overrides teach merchant -> entity, header edits teach per-merchant
     field corrections (keyed on the ORIGINAL extracted vendor), category
     reclassifications teach merchant -> category. `field_overrides` /
-    `edits` are the expense-mode overlays; ignored in statement mode."""
+    `edits` are the expense-mode overlays; ignored in statement mode.
+
+    Item 163 (feedback note #81): `store_factory` and `persist` are the one
+    seam a DRY RUN needs. `plan_month_memory` passes
+    `learning.RecordingStore`, which accepts the same `record_*` calls and
+    keeps them instead of writing, and `persist=False`, which computes the
+    registry half without saving it and returns the map it would have saved
+    as `merchants_after`. So the preview and the save are the same code
+    reading the same inputs, rather than two implementations kept in step
+    by hand."""
+    store_factory = store_factory or LearningStore
     if run_mode(run) == MODE_EXPENSE_GENERATION:
         # The baseline, because this path keys what it learns on the ORIGINAL
         # extracted vendor: harvesting a baked pool would teach the
@@ -5111,7 +5093,7 @@ def commit_to_memory(
         manual_payloads = {
             e["document_id"]: e["payload"] for e in edits if e["op"] == "add"
         }
-        with LearningStore(learning_db_path) as store:
+        with store_factory(learning_db_path) as store:
             summary = learn_from_expense_run(
                 store,
                 receipts=receipts,
@@ -5176,11 +5158,40 @@ def commit_to_memory(
             # Resolved WITHOUT the registry on purpose — a card the registry
             # lent this month is not evidence about the merchant, and feeding
             # it back would let one observation harden into a fact.
+            # Item 171: WITH the statement's own answer, though. A receipt a
+            # charge of this month settles was paid by that charge's card,
+            # and the bank naming it is the hardest evidence this tool ever
+            # gets about which plastic a merchant is on.
+            # `_CARD_OBSERVATION_SOURCES` has listed `settled_charge` since
+            # item 111, but this resolution was the one caller that never
+            # passed `settled_cards`, so the branch was unreachable and the
+            # learner could not see it. Empty for a month with no statement,
+            # which is every month before its first one.
+            #
+            # The map is the EFFECTIVE reconciled bucket, not the narrower
+            # set of pairs the reviewer confirmed by hand, and that is
+            # deliberate. Measured over the live months 2026-09-24: confining
+            # it to confirmed pairs leaves August teaching `Anthropic -> 3645`
+            # and July teaching nothing, so Anthropic would enter `cards_seen`
+            # as a SINGLE-card merchant -- the exact false singleton item 173
+            # gates against, on one of the three vendors item 154 forbids
+            # guessing. The full bucket sees Anthropic on both cards and the
+            # upsert then refuses to pin either, which is the safe direction.
+            # Under-observing this learner invents facts; over-observing it
+            # only makes it say nothing. A reconciled pair is also exactly as
+            # trustworthy as what already ships: it is the pairing the grid
+            # shows, the CSV exports and the month report prints.
+            #
+            # No item-173 vouch is needed on this side. The upsert already
+            # IS that rule for the write direction: `cards_seen` accumulates,
+            # `card_key` is written only while it holds exactly one card, and
+            # a second card drops a learned key in the same pass.
             new_merchants, card_summary = registry_card_upserts_from_expense_run(
                 new_merchants,
                 effective_receipts=effective,
                 card_res=resolve_batch_row_cards(
-                    effective, run.config, field_overrides or {}
+                    effective, run.config, field_overrides or {},
+                    settled_cards=export_settled_cards(run, decisions),
                 ),
             )
             reg_summary.update(card_summary)
@@ -5195,8 +5206,14 @@ def commit_to_memory(
                 cost_centers=settings.get("cost_centers") or {},
             )
             reg_summary.update(cc_summary)
-            if new_merchants != (settings.get("merchants") or {}):
-                settings_store.set_settings({"merchants": new_merchants}, now_iso)
+            if persist:
+                if new_merchants != (settings.get("merchants") or {}):
+                    settings_store.set_settings({"merchants": new_merchants}, now_iso)
+            else:
+                # Item 163: the dry run hands the map back instead of
+                # storing it, so the caller can diff it against the live one
+                # and show which merchants a save would change.
+                result["merchants_after"] = new_merchants
             result["registry"] = reg_summary
         return result
 
@@ -5205,7 +5222,7 @@ def commit_to_memory(
     confirmed_tx_ids = {
         tx_id for tx_id, d in decisions.items() if d.status == STATUS_CONFIRMED
     }
-    with LearningStore(learning_db_path) as store:
+    with store_factory(learning_db_path) as store:
         summary = learn_from_run(
             store,
             transactions=transactions,
@@ -6333,6 +6350,85 @@ def settled_off_card(entry: object) -> bool:
     return bool(isinstance(entry, dict) and entry.get("how"))
 
 
+def merchant_vouches_one_card(merchants: dict | None, registry, r) -> bool:
+    """Item 173, read-time half: may a REMEMBERED card lend itself to this
+    receipt? The rule itself is `MerchantRegistry.vouches_one_card` and its
+    reasoning lives there, because the ingest stamp asks the same question
+    (item 173's second half) and a gate held in one layer and not the other
+    is the bug this was split in half by.
+
+    `merchants` stays in the signature as the caller's own "is there a
+    registry at all" evidence; the cards themselves now come off the match.
+    """
+    if not merchants or registry is None:
+        return False
+    return registry.vouches_one_card(r.vendor_clean, r.detected_vendor)
+
+
+def fill_remembered_cards(
+    receipts: "list[Receipt]",
+    learning_db_path: "Path | None",
+    merchants: dict | None = None,
+) -> "list[Receipt]":
+    """Item 169: read the remembered card LIVE, the way every link beside it
+    is read.
+
+    `resolve_batch_row_cards` takes its `learned` candidate off
+    `Receipt.card_key`, and the only thing that ever writes that field is
+    `ExpenseMemory.apply` during `generate_expenses`. So a card correction is
+    frozen at the moment a month was ingested: it reaches the months ingested
+    after it and can never reach the ones ingested before, which is not a rule
+    anybody chose. Every other link in the same chain resolves against current
+    state -- the reviewer's pick, the batch's hint assignments, the settled
+    charge, and (note item M2, in as many words) the merchant registry, "read
+    LIVE like the cost-center registry rather than from the batch snapshot, so
+    the day a merchant gains a card the existing months resolve without a
+    refresh pass". This closes the one exception.
+
+    Measured on the live store 2026-09-23, before anything was changed:
+    September held 26 receipts with no card, 25 with no legal entity and 25
+    with no person; the correction `('', 'openai') -> 3645` had been saved
+    that morning, names a card the batch holds, and matched 12 of those rows
+    on a key that already lined up. It reached none of them. Filling the field
+    here moves all three columns by 12, because every entity-less and
+    person-less row in all three live months is a card-less row.
+
+    Only rows carrying no card key are filled, so a value the batch already
+    holds is never overwritten, and the chain's own precedence is untouched:
+    the remembered card still loses to a reviewer's pick, a printed card
+    number and the settled charge. An absent or unreadable learning store
+    leaves every receipt exactly as it was.
+    """
+    if learning_db_path is None or not Path(learning_db_path).exists():
+        return receipts
+    from ..learning.consult import FieldCorrectionLookup
+    from ..learning.store import LearningStore
+
+    with LearningStore(Path(learning_db_path)) as store:
+        lookup = FieldCorrectionLookup.from_store(store)
+    if not lookup:
+        return receipts
+    registry = None
+    if merchants:
+        from ..merchant_registry import MerchantRegistry
+
+        registry = MerchantRegistry.from_settings({"merchants": merchants}) or None
+    out: list[Receipt] = []
+    for r in receipts:
+        if not (r.card_key or "").strip():
+            remembered = lookup.get(
+                (r.legal_entity_id or "").strip(), r.detected_vendor
+            ).get("card_key")
+            # Item 173: only for a brand the registry vouches is paid on one
+            # card. Without that gate this fires hardest exactly where it is
+            # least safe, because the vendors a human bothers to correct are
+            # the multi-card ones.
+            if remembered and merchant_vouches_one_card(merchants, registry, r):
+                r = replace(r, card_key=remembered)
+        out.append(r)
+    return out
+
+
 def resolve_batch_row_cards(
     receipts: "list[Receipt]",
     cfg: dict | None,
@@ -6387,10 +6483,13 @@ def resolve_batch_row_cards(
     row at all. True when no defined company card paid it (no card, not a
     two-card contest) or when the card is only REMEMBERED from an earlier
     month (memory is not a decision on this row, and the reviewer has no
-    way to take it off), and always on a confirmed private row so it can be
-    undone. A company card from the printed number, a strip assignment or
-    this row's own card pick means the company paid: nothing to reimburse.
-    A confirmed private row never picks up a remembered card.
+    way to take it off). False once the row IS private (item 176, operator
+    2026-09-23: "no need to set this as private again, if user has already
+    set as private") -- the control that belongs on a confirmed private row
+    is undo, which the screen keys on `private` itself, never on this flag.
+    A company card from the printed number, a strip assignment or this row's
+    own card pick means the company paid: nothing to reimburse. A confirmed
+    private row never picks up a remembered card.
 
     `settled_cards` (item 111, `settled_charge_cards`): `{document_id: card
     key}` of the charge in this month that settles the receipt. Only the
@@ -6546,8 +6645,9 @@ def resolve_batch_row_cards(
                 hint and card is None and not ambiguous and not private
                 and not not_a_card
             ),
-            "can_mark_private": private or (
-                not settled_off
+            "can_mark_private": (
+                not private
+                and not settled_off
                 and not ambiguous
                 and (card is None or card_source in ("learned", "merchant"))
             ),
@@ -7224,6 +7324,7 @@ def build_expense_view(
     settled_elsewhere: dict[str, dict] | None = None,
     edited_at: str | None = None,
     month_batch=None,
+    learning_db_path: "Path | None" = None,
 ) -> dict:
     """Compose the receipt-spine render model for an expense batch: one row
     per expense with the reviewer's edits applied, review-by-exception
@@ -7271,6 +7372,12 @@ def build_expense_view(
     # and an operator-assigned hint word is never overwritten (grid).
     grid_hints = _batch_card_hints(run.config)
     receipts = inherit_card_from_copies(receipts, resolutions, grid_hints)  # grid
+    # Item 169: and the card a correction remembers, read live rather than
+    # off the stamp ingest left, so a fix taught after this month was
+    # ingested reaches it. Silent without a learning store.
+    receipts = fill_remembered_cards(
+        receipts, learning_db_path, (settings or {}).get("merchants")
+    )  # grid
     receipts_dir = Path(run.work_dir) / "receipts"
     intake_provenance = (run.snapshot or {}).get("intake_provenance") or {}
     # Override-applied twins for the `books_as` fan-out (backlog item 2):
@@ -8026,6 +8133,14 @@ def build_expense_view(
         "set_aside": set_aside,
         "duplicate_groups": duplicate_groups,
         "category_options": list(EXPENSE_CATEGORIES),
+        # The curated GL leaves this batch may post to, per entity,
+        # served BESIDE the eight rather than replacing them: a
+        # published SPA keeps rendering category_options until a
+        # bundle that reads these is published. Absent entity = not
+        # covered by the curated chart, which is not the same fact
+        # as an entity with nothing to post to.
+        "gl_accounts": gl_account_options(settings),
+        "gl_revision": gl_revision(),
         "account_options": _expense_account_options(run),
         "entity_options": entity_options,
         # Item 47: the row picker's list, active entries only, name-sorted,
@@ -8074,6 +8189,7 @@ def _expense_export_inputs(
     dup_resolutions: dict[str, str] | None = None,
     settled_cards: dict[str, str] | None = None,
     merchants: dict | None = None,
+    learning_db_path: "Path | None" = None,
 ) -> tuple[list, dict]:
     """`(receipts, kwargs)` for the expense export — the overlay order the
     view uses (`apply_expense_edits` then `apply_overrides`) plus the card /
@@ -8107,6 +8223,12 @@ def _expense_export_inputs(
     # together on a copy that borrowed its card.
     export_hints = _batch_card_hints(run.config)
     receipts = inherit_card_from_copies(receipts, dup_resolutions, export_hints)  # export
+    # Item 169: the grid's live read of a remembered card, so the file a
+    # reviewer downloads files a receipt under the card the screen showed it
+    # on. Cards R3 is the whole reason this sits on both paths.
+    receipts = fill_remembered_cards(
+        receipts, learning_db_path, merchants
+    )  # export
     receipts = apply_overrides(receipts, overrides)
     coa_gate = _coa_gate_from_config(run.config, run.work_dir)
     chart = getattr(coa_gate, "chart", None) if coa_gate is not None else None
@@ -8166,6 +8288,7 @@ def regenerate_expense_export(
     dup_resolutions: dict[str, str] | None = None,
     charge_decisions: dict | None = None,
     merchants: dict | None = None,
+    learning_db_path: "Path | None" = None,
 ) -> Path:
     """Write the expense CSV for a batch with every reviewer edit applied.
     Returns the path.
@@ -8179,6 +8302,7 @@ def regenerate_expense_export(
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits, dup_resolutions,
         settled_cards=csv_settled, merchants=merchants,
+        learning_db_path=learning_db_path,
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
@@ -8312,6 +8436,7 @@ def build_expense_report(
     render_outcomes: dict | None = None,
     dup_resolutions: dict[str, str] | None = None,
     charge_decisions: dict | None = None,
+    learning_db_path: "Path | None" = None,
 ) -> bytes:
     """The month's report PDF: the listing, then every receipt (owner
     directive 2026-08-23 — nothing imports the output any more, so the
@@ -8395,6 +8520,7 @@ def build_expense_report(
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits, dup_resolutions,
         settled_cards=report_settled, merchants=report_merchants,
+        learning_db_path=learning_db_path,
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
@@ -10871,10 +10997,16 @@ def settled_charge_cards(
 
 
 def export_settled_cards(run: RunRow, charge_decisions: dict | None) -> dict[str, str]:
-    """`settled_charge_cards` for the CSV and the month report, from the same
-    snapshot read and verdicts the Expenses payload uses (`decisions or {}`),
-    so a document resolves a row exactly as the screen does. Empty for a
-    month with no statement."""
+    """`settled_charge_cards` for the CSV, the month report and (item 171)
+    the sign-off card learner, from the same snapshot read and verdicts the
+    Expenses payload uses (`decisions or {}`), so a document resolves a row
+    exactly as the screen does. Empty for a month with no statement.
+
+    The name is older than the third caller and now undersells it: every
+    consumer OUTSIDE the grid's own payload reads its settled cards here,
+    which is the point. A learner deriving "which charge settled this
+    receipt" its own way would eventually teach a card the screen never
+    showed."""
     charges, states = month_charge_states(run, charge_decisions or {})
     return settled_charge_cards(run, charges, states)
 
@@ -10982,6 +11114,9 @@ def usd_reference_rate(run: RunRow):
         if source == "ecb_month":
             ecb = cfg.ecb_monthly_rate(currency, BASE_CURRENCY, when)
             month = ecb[1] if ecb else ""
+        elif source == "opentickers_day":
+            daily = cfg.daily_rate(currency, BASE_CURRENCY, when)
+            month = daily[1] if daily else ""
         return rate, source, month
 
     return lookup
@@ -11113,7 +11248,7 @@ def charge_entity_source(tx, cards: dict) -> str:
 
 def _statement_card_identities(
     entry: dict,
-    anchors: dict,
+    printed: dict,
     charge_identity: dict[str, _CardIdentity],
     cards: dict,
 ) -> list[_CardIdentity]:
@@ -11128,36 +11263,100 @@ def _statement_card_identities(
       statement for this card, got no charges out of it" is worth seeing.
       Blind when the upload named no preset, which is every upload made
       through the plain form.
-    * the charges the file actually printed, via its `statement_anchors` row
-      map. Blind for a PDF statement, whose charges have no tabular row and
-      therefore no anchors, and for every upload that predates PR 2b-2b-2.
+    * the charges the file actually printed, via `statement_origins`
+      (note item T3), which records every charge an upload printed, PDF and
+      workbook alike. It used to read `statement_anchors` instead, and the
+      anchors are the WRITEBACK's map: empty by construction for a PDF,
+      whose charges have no tabular row. That emptiness read as "this file
+      printed nothing" and parked every PDF statement in the no-card row.
+      `_printed_by_upload` keeps the anchors as the fallback for a month
+      recorded before the origins existed, which is the same rule
+      `origins_from_snapshot` follows, so a workbook of that vintage still
+      resolves and a PDF of that vintage still cannot.
 
-    `account_id` is the LAST resort, used only when both joins came back
-    empty, and deliberately not a third voice beside them. It names an
-    ACCOUNT, not a card: on the real corpserv export every row carries
-    `chase-2838-family` while the rows themselves span 2838 / 3645 / 3876 /
-    0340, so treating it as a card identity would invent a coverage row for
-    a card that does not exist and park the file in it. Where it IS the card
-    (the Chase statement PDF, whose account id is the cycle marker, and
-    every single-card CSV with no Card column) the other two joins are
-    silent and it is the only thing that can answer.
+    Two LAST resorts, reached only when both joins came back empty, in this
+    order:
 
-    Nothing here picks a winner between the joins: this surface reports
+    * the digit runs the FILE NAME carries, kept only where a run resolves
+      to a card the registry DEFINES. `20260804-statements-1176-.pdf` names
+      one such card and one date that is no card at all, and an unknown run
+      never mints a `digits:` row here: a date is not a card, and inventing
+      a coverage row out of one would be worse than the no-card row this
+      replaces. Two different defined cards in one name is ambiguity, which
+      stays silent per the house ruling.
+    * `account_id`, and deliberately not a voice beside the two joins. It
+      names an ACCOUNT, not a card: on the real corpserv export every row
+      carries `chase-2838-family` while the rows themselves span 2838 /
+      3645 / 3876 / 0340, so treating it as a card identity would invent a
+      coverage row for a card that does not exist and park the file in it.
+      It goes after the file name because a run that resolves to a defined
+      card names a card, while an account id can name a family of four.
+      Where it IS the card (the Chase statement PDF, whose account id is
+      the cycle marker, and every single-card CSV with no Card column) it
+      is still the only thing that can answer.
+
+    Nothing here picks a winner between the two joins: this surface reports
     coverage, it does not adjudicate what an operator meant.
     """
     out: dict[str, _CardIdentity] = {}
     identity = _identity_from_observed(entry.get("card_key"), cards)
     if identity.key:
         out[identity.key] = identity
-    for tx_id in (anchors.get(entry.get("file")) or {}):
+    for tx_id in (printed.get(entry.get("file")) or {}):
         identity = charge_identity.get(tx_id)
         if identity is not None:
+            out[identity.key] = identity
+    if not out:
+        for identity in _identities_from_file_name(entry, cards):
             out[identity.key] = identity
     if not out:
         identity = _identity_from_observed(entry.get("account_id"), cards)
         if identity.key:
             out[identity.key] = identity
     return list(out.values()) or [_NO_CARD]
+
+
+def _printed_by_upload(run: RunRow) -> dict[str, dict]:
+    """`{statement file: {transaction_id: where}}` for every upload the
+    month holds: which charges each file printed.
+
+    `statement_origins` (note item T3) is the record; `statement_anchors`
+    is the fallback for a month written before it existed, where a workbook
+    still has a row per charge it printed and a PDF has nothing. A file
+    whose origins entry is recorded and EMPTY keeps that emptiness rather
+    than falling back, because "this upload printed no charge we kept" is
+    an answer and the anchors would only repeat it.
+    """
+    snapshot = run.snapshot or {}
+    origins = snapshot.get(STATEMENT_ORIGINS_KEY) or {}
+    anchors = snapshot.get(STATEMENT_ANCHORS_KEY) or {}
+    out: dict[str, dict] = {}
+    for file in set(origins) | set(anchors):
+        found = origins.get(file)
+        if found is None:
+            found = anchors.get(file) or {}
+        out[str(file)] = found if isinstance(found, dict) else {}
+    return out
+
+
+def _identities_from_file_name(entry: dict, cards: dict) -> list[_CardIdentity]:
+    """The one DEFINED card a statement's own file name names, or nothing.
+
+    Read from the stored name and the name Criss sent, unioned, because a
+    collision suffix or a per-card export sharing the bank's filename makes
+    the two differ. Only a digit run that resolves through the registry
+    counts: `20260804-statements-1176-.pdf` yields card 1176 and drops the
+    cycle date, and a name that resolves to nothing stays silent rather
+    than minting a card out of a number. Two different defined cards in one
+    name is ambiguity and also stays silent.
+    """
+    seen: dict[str, _CardIdentity] = {}
+    for name in (entry.get("file"), entry.get("upload_name")):
+        for run_of_digits in _printed_digits(Path(str(name or "")).stem):
+            identity = _identity_from_observed(run_of_digits, cards)
+            if identity.card_key:
+                seen[identity.key] = identity
+    return list(seen.values()) if len(seen) == 1 else []
 
 
 def _printed_digits(observed: str) -> list[str]:
@@ -11273,7 +11472,7 @@ def month_coverage(
         return [], {}
 
     cards = _batch_cards(run.config)
-    anchors = (run.snapshot or {}).get(STATEMENT_ANCHORS_KEY) or {}
+    printed = _printed_by_upload(run)
     entries: dict[str, dict] = {}
 
     def row(identity: _CardIdentity) -> dict:
@@ -11349,7 +11548,7 @@ def month_coverage(
         if not name:
             continue
         for identity in _statement_card_identities(
-            stmt, anchors, charge_identity, cards
+            stmt, printed, charge_identity, cards
         ):
             target = row(identity)
             if name not in target["statements"]:
@@ -11692,14 +11891,17 @@ def _restore_set_aside_locked(
     # registry, categorization. The quarantine skipped all of it.
     from ..cards import stamp_card_entities as _stamp
 
+    registry = MerchantRegistry.from_settings(store.get_settings())
     memory = ExpenseMemory.from_db_path(learning_db_path)
     batch = memory.apply([restored])
+    # Item 173, second half: same card gate as the full ingest and the add
+    # job, and before the entity stamping for the same reason.
+    batch = drop_unvouched_remembered_cards(batch, registry)
     batch = _stamp(batch, _batch_cards(cfg), _batch_card_hints(cfg))
     learned = (
         MerchantCategoryLookup.from_db_path(learning_db_path)
         if learning_db_path is not None else None
     )
-    registry = MerchantRegistry.from_settings(store.get_settings())
     llm_client, _tracker, _src = _batch_llm_client(cfg)
     try:
         _, account_labels, _scope = _resolve_categorizer_chart(
@@ -11773,6 +11975,7 @@ def add_receipts_to_expense_batch(
     learning_db_path: Path | None = None,
     on_stage=None,
     provenance_by_digest: dict[str, dict] | None = None,
+    text_by_digest: dict[str, str] | None = None,
 ) -> dict:
     """Add receipts to an EXISTING expense batch (they arrive gradually all
     month). Only the new files are OCR'd (never a re-read of the pool),
@@ -11780,7 +11983,13 @@ def add_receipts_to_expense_batch(
     creation, and they append to the snapshot's receipt pool. Identical
     bytes (within this upload or vs an already-stored file) are skipped.
     Refused once a statement is attached — the pool is then the
-    reconciliation's provenance and must not shift under it."""
+    reconciliation's provenance and must not shift under it.
+
+    `text_by_digest` (sha1[:16] -> the document's own text) supplies text for
+    a file the extractor cannot read one from. A mail body renders to an
+    IMAGE pdf, so `ocr_text` would otherwise be the model's notes rather than
+    the body; the correspondence rung needs the real words. Only ever applied
+    when the extraction produced no text of its own."""
 
     def _stage(name: str) -> None:
         if on_stage is not None:
@@ -11832,6 +12041,7 @@ def add_receipts_to_expense_batch(
             learning_db_path=learning_db_path,
             on_stage=on_stage,
             provenance_by_digest=provenance_by_digest,
+            text_by_digest=text_by_digest,
             _stage=_stage,
             rematch_owed=bool(refresh.get("changes")),
         )
@@ -11906,6 +12116,7 @@ def _add_receipts_locked(
     learning_db_path: Path | None,
     on_stage,
     provenance_by_digest: dict[str, dict] | None,
+    text_by_digest: dict[str, str] | None = None,
     _stage,
     rematch_owed: bool = False,
 ) -> dict:
@@ -12056,7 +12267,21 @@ def _add_receipts_locked(
         # (which survives later adds and carries the restore path); the
         # stored file stays on disk (its hash also keeps a re-upload from
         # costing another OCR call).
+        # A mail body renders to an image PDF, so the extractor keeps the
+        # model's notes as `ocr_text` rather than the body's words. Carry the
+        # real text in, and only where the extraction found none of its own.
+        if text_by_digest and not (receipt.ocr_text or "").strip():
+            carried = text_by_digest.get(digest)
+            if carried:
+                receipt = replace(receipt, ocr_text=carried)
         receipt = keep_invoice_read_as_statement(receipt) or receipt  # item 105
+        # Correspondence rung (2026-09-24): a payment reminder / past-due
+        # notice about ANOTHER document is not a purchase. Read the STORED
+        # file's own text, never the mail that carried it — a "Reminder
+        # Invoice" mail legitimately attaches the real invoice, and judging
+        # the mail would set the invoice aside with it. This is the path a
+        # mailed receipt actually takes, so it is the one that matters.
+        receipt = quarantine_correspondence(receipt) or receipt
         label = NON_RECEIPT_LABELS.get(receipt.document_type)
         if label is not None:
             issues.append(
@@ -12075,8 +12300,17 @@ def _add_receipts_locked(
 
     if new_receipts:
         _stage("categorizing")
+        # Hoisted above the memory pass (item 173): the card gate below needs
+        # it, and the categorizer further down reads the same one.
+        registry = MerchantRegistry.from_settings(store.get_settings())
         memory = ExpenseMemory.from_db_path(learning_db_path)
         new_receipts = memory.apply(new_receipts)
+        # Item 173, second half: the remembered CARD only for a brand the
+        # registry vouches is paid on one card, the same gate the full
+        # ingest and the grid hold. Before the entity stamping below, not
+        # after: the card resolves the company and the person, so a card
+        # nobody vouched for must not be allowed to answer either.
+        new_receipts = drop_unvouched_remembered_cards(new_receipts, registry)
         # Cards R3: same post-OCR entity stamping as generate_expenses —
         # the paying card (batch config snapshot + explicit assignments)
         # resolves each added receipt's entity before categorization, so
@@ -12090,7 +12324,6 @@ def _add_receipts_locked(
             MerchantCategoryLookup.from_db_path(learning_db_path)
             if learning_db_path is not None else None
         )
-        registry = MerchantRegistry.from_settings(store.get_settings())
         try:
             _, account_labels, _scope = _resolve_categorizer_chart(
                 cfg, work_dir, None, {}
@@ -13088,6 +13321,19 @@ def rematch_month(
 
     work_dir = Path(run.work_dir)
     batch_entity = (cfg.get("expense") or {}).get("legal_entity_id", "")
+    # Note #79: the daily reference rates the app polls, read from the
+    # store on EVERY re-match so a month sees the days polled since its
+    # last one, and committed with the run's config below, so the screen's
+    # FX block and a pulled-down replay read the table the matcher did.
+    cfg = apply_fx_daily_rates(cfg, store, run.label, transactions)
+    # 2026-09-23: and the ECB monthly averages, for any month this re-match
+    # can reach that the stored table does not already hold. Until now they
+    # were fetched at creation and statement attach only, so July 2026 --
+    # created 2026-09-07, before item 82 shipped, and never re-attached --
+    # carried no ECB table at all and leaned entirely on the typed Settings
+    # rates. Retiring those without this top-up would leave its
+    # cross-currency pairs with no rate on any rung.
+    cfg = top_up_ecb_rates(cfg, run.label, transactions)
 
     # Bake the reviewer's truth into the receipt pool the matcher sees.
     _, receipts0, _, parse_errors = snapshot_from_dict(run.snapshot)
@@ -15498,12 +15744,225 @@ def commit_month_memory(
         last = store.get_memory_commit(run.run_id)
         if last is not None and last["digest"] == digest:
             return {"saved": False, "reason": "unchanged"}
+    # Item 163: what this save is ABOUT to write, and what each of those
+    # rows holds right now. Read before the write, so the journal's
+    # pre-image is the state a later undo has to put back. A plan that
+    # fails to compute must not silently disarm the undo, so it is not
+    # wrapped: the save fails with it, which is the safe direction.
+    plan = plan_month_memory(
+        store, run, learning_db_path,
+        decisions=decisions, overrides=overrides,
+        field_overrides=field_overrides, edits=edits, now_iso=now_iso,
+    )
+    before_rows = _memory_pre_image(learning_db_path, plan["writes"])
+    merchants_before = copy.deepcopy((store.get_settings() or {}).get("merchants") or {})
     learned = commit_to_memory(
         run, decisions, overrides, learning_db_path, now_iso,
         field_overrides=field_overrides, edits=edits, settings_store=store,
     )
     store.set_memory_commit(run.run_id, digest, now_iso, trigger)
-    return {"saved": True, "learned": learned}
+    merchants_after = (store.get_settings() or {}).get("merchants") or {}
+    journal_id = store.add_memory_journal(
+        run_id=run.run_id,
+        label=run.label,
+        committed_at=now_iso,
+        trigger=trigger,
+        rows=before_rows,
+        merchants_before=merchants_before,
+        merchants_after=copy.deepcopy(merchants_after),
+        learned=learned,
+    )
+    return {"saved": True, "learned": learned, "journal_id": journal_id}
+
+
+# --------------------------------------------------------------------------
+# Item 163: the memory-save plan, its journal, and the undo
+#
+# Feedback note #81 (2026-09-23) on "Save corrections to memory": "based on
+# what? this should be reversible for now, and state explicitly where these
+# are saved so user can manage this". So a save answers all three: the plan
+# says what it would write and from which row of the month, the journal says
+# where it went and keeps the pre-image, and the undo puts that pre-image
+# back.
+# --------------------------------------------------------------------------
+
+# Which surface a reader manages each learning table on. Named here rather
+# than in the SPA so the answer to "where is this saved" cannot drift from
+# the code that saves it.
+MEMORY_TABLE_SURFACE: dict[str, str] = {
+    "merchant_category": "memory",
+    "merchant_entity": "memory",
+    "field_correction": "memory",
+    "vendor_alias": "memory",
+    "merchant_fx": "memory",
+}
+
+
+def plan_month_memory(
+    store,
+    run: RunRow,
+    learning_db_path: Path,
+    *,
+    decisions=None,
+    overrides=None,
+    field_overrides=None,
+    edits=None,
+    now_iso: str,
+) -> dict:
+    """What saving this month's corrections WOULD write, writing nothing.
+
+    Returns `{"writes": [...], "counts": {...}, "registry": {...},
+    "learned": {...}}`. Each write names its table, its primary key, the
+    surface that manages it, and the value it would set. The registry half
+    is a per-merchant before/after diff.
+
+    Computed by running the real learners against `RecordingStore`, so the
+    preview cannot disagree with the save."""
+    from ..learning import RecordingStore, distinct_keys, registry_diff
+
+    decisions = store.get_decisions(run.run_id) if decisions is None else decisions
+    overrides = (
+        store.get_category_overrides(run.run_id) if overrides is None else overrides
+    )
+    field_overrides = (
+        store.get_expense_field_overrides(run.run_id)
+        if field_overrides is None else field_overrides
+    )
+    edits = store.get_expense_edits(run.run_id) if edits is None else edits
+
+    recorder: dict = {}
+
+    def factory(_path):
+        rec = RecordingStore()
+        recorder["store"] = rec
+        return rec
+
+    learned = commit_to_memory(
+        run, decisions, overrides, learning_db_path, now_iso,
+        field_overrides=field_overrides, edits=edits, settings_store=store,
+        store_factory=factory, persist=False,
+    )
+    merchants_after = learned.pop("merchants_after", None)
+    rec = recorder.get("store")
+    writes = list(rec.writes) if rec is not None else []
+    counts: dict[str, int] = {}
+    for table, _key in distinct_keys(writes):
+        counts[table] = counts.get(table, 0) + 1
+    return {
+        "writes": [_planned_write_view(w) for w in writes],
+        "keys": [
+            {"table": t, "key": list(k), "surface": MEMORY_TABLE_SURFACE.get(t, "")}
+            for t, k in distinct_keys(writes)
+        ],
+        "counts": counts,
+        "registry": registry_diff(
+            (store.get_settings() or {}).get("merchants") or {}, merchants_after
+        ) if merchants_after is not None else {},
+        "learned": learned,
+    }
+
+
+def _planned_write_view(w) -> dict:
+    """One planned write, as the screen reads it: which table, which key,
+    where it is managed, and the value it sets. `value` is the column the
+    row is ABOUT (the category, the entity, the corrected value); an FX
+    sample and an alias carry their own shape, so those read as the key
+    they add."""
+    from ..learning import TABLE_KEYS
+
+    value = ""
+    if w.table == "merchant_category":
+        value = str(w.args[2] or "")
+    elif w.table == "merchant_entity":
+        value = str(w.args[1] or "")
+    elif w.table == "field_correction":
+        value = str(w.args[3] or "")
+    elif w.table == "merchant_fx":
+        value = str(w.args[4])
+    elif w.table == "vendor_alias":
+        value = str(w.args[2] or "")
+    return {
+        "table": w.table,
+        "key": dict(zip(TABLE_KEYS[w.table], w.key)),
+        "surface": MEMORY_TABLE_SURFACE.get(w.table, ""),
+        "value": value,
+    }
+
+
+def _memory_pre_image(learning_db_path: Path, writes: list[dict]) -> list[dict]:
+    """The rows behind a plan's keys as they stand BEFORE it runs:
+    `[{table, key, row|None}]`. `row: None` records a key that does not
+    exist yet, which is what an undo deletes rather than restores."""
+    out: list[dict] = []
+    seen: set[tuple] = set()
+    if not writes:
+        return out
+    with LearningStore(learning_db_path) as s:
+        for w in writes:
+            ident = (w["table"], tuple(sorted(w["key"].items())))
+            if ident in seen:
+                continue
+            seen.add(ident)
+            out.append({
+                "table": w["table"],
+                "key": w["key"],
+                "row": s.read_row(w["table"], w["key"]),
+            })
+    return out
+
+
+def undo_memory_commit(
+    store, journal_id: int, learning_db_path: Path, now_iso: str
+) -> dict:
+    """Put one recorded save back the way it was (item 163).
+
+    Every learning row the save touched is restored to its pre-image (a row
+    that did not exist is deleted), the merchant registry is restored to the
+    map that preceded the save, and the run's `memory_commits` digest is
+    cleared so the next publish teaches those corrections again rather than
+    reporting "unchanged" over a memory that no longer holds them.
+
+    Refuses (`Refusal`) an unknown entry, one already reverted, and one that
+    is not the LATEST save: saves stack on the same rows, so putting an
+    older pre-image back would silently discard a newer save's values."""
+    entry = store.get_memory_journal(journal_id)
+    if entry is None:
+        return Refusal(
+            "no such memory save", code="memory_journal_not_found",
+        )
+    if entry["reverted_at"]:
+        return Refusal(
+            "this memory save was already undone",
+            code="memory_journal_already_reverted",
+            reverted_at=entry["reverted_at"],
+        )
+    latest = store.latest_memory_journal()
+    if latest is not None and latest["id"] != journal_id:
+        return Refusal(
+            "only the most recent memory save can be undone; undo "
+            f"save {latest['id']} first",
+            code="memory_journal_not_latest",
+            latest_id=latest["id"],
+        )
+    restored = 0
+    if entry["rows"]:
+        with LearningStore(learning_db_path) as s:
+            for r in entry["rows"]:
+                s.restore_row(r["table"], r["key"], r["row"])
+                restored += 1
+    registry_restored = False
+    if entry["merchants_before"] != entry["merchants_after"]:
+        store.set_settings({"merchants": entry["merchants_before"]}, now_iso)
+        registry_restored = True
+    store.clear_memory_commit(entry["run_id"])
+    store.set_memory_journal_reverted(journal_id, now_iso)
+    return {
+        "undone": True,
+        "journal_id": journal_id,
+        "rows_restored": restored,
+        "registry_restored": registry_restored,
+        "run_id": entry["run_id"],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -15534,8 +15993,7 @@ def apply_ecb_rates(cfg: dict, months) -> dict:
 
     A fetched month replaces the stored one (a published average is final,
     so this only ever adds what the ECB has published since); months the
-    fetch did not return stay as they were. Settings' `fx_reference_rates`
-    are not touched: a rate the operator typed still wins in the matcher.
+    fetch did not return stay as they were.
     Fail-open: when the ECB returns nothing, `cfg` comes back unchanged, key
     for key, so a month created offline is the month created before this
     item shipped."""
@@ -15554,6 +16012,87 @@ def apply_ecb_rates(cfg: dict, months) -> dict:
     matching["fx_ecb_monthly_rates"] = dict(sorted(table.items()))
     out["matching"] = matching
     return out
+
+
+# ---------------------------------------------------------------------------
+# Note #79: the polled daily FX rates in the run config
+# ---------------------------------------------------------------------------
+
+
+def fx_days_for(label: str | None, transactions=()) -> tuple[str, str] | None:
+    """The span of days a month's matching can reach, as (first, last) ISO
+    days: the same months `ecb_months_for` names (the labelled month, one
+    neighbour either side, every charge's month), whole. None when nothing
+    names a month (a trip with no charges)."""
+    import calendar
+
+    months = ecb_months_for(label, transactions)
+    if not months:
+        return None
+    y, m = int(months[-1][:4]), int(months[-1][5:7])
+    return f"{months[0]}-01", f"{months[-1]}-{calendar.monthrange(y, m)[1]:02d}"
+
+
+def apply_fx_daily_rates(cfg: dict, store, label: str | None, transactions=()) -> dict:
+    """Return `cfg` with the store's polled daily rates for the span
+    `fx_days_for` names as `matching.fx_daily_rates` (units per EUR by day,
+    the provider's digits as text). The store is the truth, so the table is
+    REPLACED, not merged: a re-match reads what has been polled by now. A
+    store with nothing for the span leaves `cfg` unchanged, key for key, so
+    a month matched before the poll ever ran keeps its rungs as they were."""
+    span = fx_days_for(label, transactions)
+    if span is None:
+        return cfg
+    try:
+        table = store.fx_daily_rates(span[0], span[1])
+    except Exception:  # noqa: BLE001 - a rate table never blocks a re-match
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "daily FX rates unreadable for %s..%s", *span, exc_info=True,
+        )
+        return cfg
+    if not table:
+        return cfg
+    out = dict(cfg)
+    matching = dict(out.get("matching") or {})
+    matching["fx_daily_rates"] = {
+        day: dict(per_eur) for day, per_eur in sorted(table.items())
+    }
+    out["matching"] = matching
+    return out
+
+
+def top_up_ecb_rates(cfg: dict, label: str | None, transactions=()) -> dict:
+    """`cfg` with any ECB monthly average this month can reach that its
+    stored table does not already carry (2026-09-23).
+
+    `apply_ecb_rates` fetches; this decides whether a fetch is needed at
+    all, so an ordinary re-match of a month whose table is already complete
+    costs no request. A published monthly average never changes, so a month
+    already present is never re-fetched. Fail-open rides on
+    `apply_ecb_rates`: no network, no change.
+
+    Months the ECB cannot have published yet (the current month and later)
+    are not counted as missing -- `ecb_rates.rates_for_months` drops them
+    before asking, so treating them as missing would fetch on every single
+    re-match for the whole of the running month."""
+    from datetime import date
+
+    from . import ecb_rates
+
+    wanted = ecb_months_for(label, transactions)
+    if not wanted:
+        return cfg
+    now = date.today().strftime("%Y-%m")
+    publishable = [
+        m for m in wanted
+        if ecb_rates.month_index(m) <= ecb_rates.month_index(now)
+    ]
+    have = set((cfg.get("matching") or {}).get("fx_ecb_monthly_rates") or {})
+    if not [m for m in publishable if m not in have]:
+        return cfg
+    return apply_ecb_rates(cfg, publishable)
 
 
 def _fills_view(tx) -> list[dict]:

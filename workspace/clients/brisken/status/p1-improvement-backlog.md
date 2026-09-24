@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-21
+updated: 2026-09-23
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -20,6 +20,41 @@ that stop the tool from learning beat cosmetics, and anything Criss would
 have to hand-fix every month beats a one-off.
 
 ## Open
+
+### Feedback notes #73-#85 (2026-09-20 to 09-23): new since the backlog's #72
+
+Read off `GET /feedback.jsonl` on 2026-09-23, **re-read the same evening at
+85 notes** (the backlog stopped at #72). Two sessions itemized that
+afternoon: #79 is item 167, and PR #1202 took #81 as item 163, #76 as 164,
+#78 as 165 and #80 as 166. **Every remaining note now has an item: #73, #74,
+#75, #77, #82, #83, #84, #85 became items 174-181**, filed the same evening.
+Listed verbatim so they do not sit unread again. Times UTC, read raw off
+`ts`.
+
+| # | When | Who | Where | Comment (verbatim) |
+|---|---|---|---|---|
+| 73 | 09-20 21:57 | matthias | September, expenses table, "From email" cell | why does it say this even though there has been no statement sent for this month |
+| 74 | 09-23 12:21 | operator | September, row 0033 (Invoice-HMVWDWIL-0032.pdf), card picker | No privado, deve haver quem deve reembolsar a despesa |
+| 75 | 09-23 12:24 | operator | September, row 0046, "Private (Dirk Neumann)" | no need to set this as private again, if user has already set as private |
+| 76 | 09-23 12:30 | operator | September, "Needs a look · 27" | from manual input from user create a system to derive a higher standard of logic that is applicable universally f... (truncated in the store) |
+| 77 | 09-23 12:32 | operator | Settings > Merchants, "Add merchant / Save merchants" | to maintain overseeability save merchant should be merchant specific so tha... (truncated in the store) |
+| 78 | 09-23 12:33 | operator | September, "Needs a look · 27" | when learning from manual input from user, you must be able to edit vendor lists etc |
+| 79 | 09-23 12:34 | operator | Settings > FX reference rates | fx rates should be polled daily via open tickers API |
+| 80 | 09-23 12:37 | operator | September, menu bar | categorization needs a good mechanism to be corrected and categorization norms or standards that are applied universally acroos multiple ve... (truncated in the store) |
+| 81 | 09-23 12:38 | operator | September, "Save corrections to memory" | based on what? this should be reversible for now, and state explicitly where these are saved so user can manage t... (truncated in the store) |
+| 82 | 09-23 12:40 | operator | September, row 0024 (processed-0EDA78B9...jpeg), receipt cell | Se possivel ter uma lupa para ampliar a foto do recibo. |
+| 83 | 09-23 15:48 | matthias | May 2026 (`86929f2a909a`) | available categories should be zoho chart of accounts that brisken uses in zoho expense |
+| 84 | 09-23 16:07 | matthias | Settings > Merchants, "Zoho GL account (optional)" | This should not be applied automatically to new months because some merchants can have more than one GL account. Manual editing by the user should adjust the merchant's registry. Per entity expense account relevant zoho accounts |
+| 85 | 09-23 16:09 | matthias | Settings > Merchants, same field | dont forget the accounts criss would match for cloud expenses |
+
+All eight are now items 174-181, at the bottom of Open. #77 stays inside the
+learning theme items 163-166 cover; the rest are their own.
+
+**#83, #84 and #85 were left about an hour BEFORE the direction that closed
+item 170** ("no working on expense category definition anymore", commit
+`2cb42e7b`, 19:02 CEST against 17:48-18:09 CEST). They are filed as record,
+not queued. Whether that direction was meant to reach them is the owner's
+call and not an inference to make here.
 
 ### The 2026-08-21 feedback wave (14 notes, sequencing decided)
 
@@ -5366,13 +5401,73 @@ existing month, which is the honest answer for a period nothing recorded.
 
 **Shipped 2026-09-17 (pending PR).** `receipt_chase[]` on `GET /api/runs/{id}` groups the month's charges that need a receipt by CARD HOLDER (the registry's `person` on the card the coverage panel totals the charge under), each charge with its date, vendor, amount, currency, card and any portal hint a merchant entry now carries (`receipt_portal`, optional, unset everywhere today). Membership is item 99's own `charge_needs_receipt`, read off the payload's rows, so the groups sum to `summary.n_charges_need_receipt` and the list and the count cannot disagree. Two reviewer-set states ride the charge's own `decisions` row, so both survive a re-match and a statement re-read's id rekey: `receipt_requested_at` + `requested_to` (`POST .../receipt-requested`) records the ask and closes NOTHING, counted as `n_charges_receipt_requested`, a subset of the open charges; `no_receipt_expected` with its reason (`POST .../no-receipt-expected`, blank reason refused) is a verdict that closes the charge, counted as `n_charges_no_receipt_expected`, and moves that money out of `unreconciled_by_ccy` into `no_receipt_expected_by_ccy` beside it (item 102's shape), so the annual fee stops reading as unevidenced money. `month_complete` follows both. The request mail is COMPOSED AND NEVER SENT: `GET .../receipt-requests` returns one plain-text mail per holder, EN and PT-BR, from and reply-to the intake address so replies land in the tool, with `to: null` + `blocked: "no_address"` for a holder nobody has given an address; `POST .../receipt-requests/send` answers 403 `receipt_requests_disabled` with the new `settings.receipt_requests.enabled` flag off (the default and the live value) and 403 `receipt_send_not_wired` with it on, because `receipt_chase.py` imports no mail transport at all. The owner approves the first real send separately. Live read-only before the deploy: August would list 61 charges across the three names the registry's `person` field holds ("Nicolas Neumann" 36 on 3876 USD 1,011.15, "Dirk Neumann - Corp Services" 24 on card-2838 USD 6,361.53, "Brisken Consulting" 1 on card-1176 USD 36.00), July none, because every July charge without a receipt is gray-filled and already closed. Not built: the UI (prompt `docs/lovable-receipt-chasing-prompt.md`, Send described as disabled), a bulk mark-all-requested, and any sender.
 
-### 108. Cloud Services and Consulting card spend cannot close: 5 of 9 cards have never had a statement loaded, and the UI offers one statement (2026-09-17 audit draft #106, unranked; UI prompt for the owner to paste)
+### 108. Cloud Services and Consulting card spend cannot close: 5 of 9 cards have never had a statement loaded, and the UI offers one statement (2026-09-17 audit draft #106, unranked; UI prompt for the owner to paste) (1176 LINK SHIPPED 2026-09-24, PR #1267; 9693 / 0113 / 6013 / 8311 still open)
 
 **2026-09-20, owner: not a build, a matter of time.** "It is just a matter of
 time before Criss runs a complete reconciliation with multiple bank statements
 originating from separate banks." The multi-statement path this needs is already
 shipped (item 29's PR 2b-2b-2 made `POST .../statement` append-capable and
 repeatable), so this item is waiting on a month being worked, not on code.
+
+**2026-09-24: card 1176 now HAS a statement, so do not ask the client for it.**
+Read-only pass over `coverage[]` in all three months that carry any (April,
+July, August). August's `statements` list holds
+`20260804-statements-1176-.pdf`, and `card-1176` reads `n_tx: 3`,
+`n_unmatched_tx: 1`, period 2026-07-06 to 2026-08-04. Its coverage row still
+reads `statements: 0`, and the same month carries an unattributed coverage row
+(`?`, `known: false`) holding `statements: 1`, so the statement landed without
+being linked to the card whose charges it produced; that link, not a missing
+file, is what is left for 1176.
+
+**2026-09-24 SHIPPED (the 1176 link).** The file was never mis-filed; the
+join that attributes it was blind. `_statement_card_identities` asks two
+questions of every upload and for this one both came back empty. The plain
+attach form types no card, so the `card_key` voice said nothing. The charge
+voice read `statement_anchors`, which is the WRITEBACK's row map and empty
+by construction for a PDF, whose charges have no tabular row.
+`statement_origins` (note item T3) is the record that DOES hold a PDF's
+charges, and it shipped 2026-09-18 without the coverage join ever being
+pointed at it. It is now, with the anchors kept as the fallback for a month
+written before the origins existed, which is the rule `origins_from_snapshot`
+already follows.
+
+That half alone does not move live August, and the measurement says why: its
+three `card-1176` charges read `statement_file: null`, `statement_id: null`,
+`source_page: null` on `GET /api/runs/074a7b8905d7`, so the month holds no
+origins entry for that upload and the anchors fallback is empty. Nothing
+inside the month names that file's card. The file's NAME does, so it is now
+the last resort, read narrowly: only a digit run that resolves to a card the
+registry DEFINES counts, so `1176` lands and the cycle date `20260804` is
+dropped rather than minting a card out of a date. Two defined cards in one
+name is ambiguity and stays silent, the ruling `resolve_card` already
+follows. It is tried before `account_id` because a run that resolves to a
+defined card names a card, while an account id can name a family of four
+(`chase-2838-family` spans 2838 / 3645 / 3876 / 0340).
+
+Blast radius is one file. The last resort runs only where both joins are
+silent, and on the live corpus every other statement already attaches
+through its charges: `August2026.xlsx` to three coverage rows, `July2026.xlsx`
+to four, `Chase2838_Activity20260401_20260430_20260716.CSV` to four. January,
+May, June and September hold no statement and no `coverage[]` at all, so they
+have nothing to move. Four statements across seven months, one of them
+unattributed, measured 2026-09-24.
+
+Two surfaces move on the one change, because `_pdf_common._section_statements`
+reads the same coverage row and returns nothing for the no-card section. So
+today the 1176 PDF is not merely mis-filed on the card sections page, it is
+absent from it; after this it sits under `card-1176` on both.
+
+Five route-level tests in `tests/test_statement_card_link_item_108.py`, all
+through `GET /api/runs/{id}`, including the two negatives that are the real
+contract: a cycle date never becomes a card, and a file whose charges are
+known is never re-attributed by its name. Both wires regress-checked
+(green to red to green): swapping `printed` back to the anchors fails the
+PDF test, and disabling the name resort fails the legacy-month test.
+
+Card 9693 is unchanged and is the real half of this item: `n_tx: 0`,
+`statements: 0` in every month that has coverage, so no 9693 charge has ever
+existed. `card-0113`, `card-6013` and `card-8311` read the same. Item 185 is
+the view that would make this readable without a probe.
 
 **Audit rank 15 of 40; severity high as merged; verification: checked by hand against live August coverage; no reviewer pass.** All 223 live charges belong to Corporate Services because the only workbook ever attached is the Chase export for account 2838. Receipts paid with the Cloud card 9693 and the Consulting card 1176 arrive monthly and park as 'card statement not loaded' (August: OpenAI 80.12 and 80.04; Anthropic 100; Lovable 50); 0113, 6013 and 8311 have no statement either. The backend accepts one workbook per card, but the Lovable page offers one 'Attach bank statement' dialog and one download, so Criss cannot add a second. Nothing checks that the card typed in the dialog matches the card printed in the file, so a workbook with no card column uploaded under the default would book to Corporate Services.
 
@@ -7670,10 +7765,1336 @@ SPA half: `docs/lovable-statement-colour-prompt.md` (Not applied). The
 render is swatches beside the existing chip, deliberately not a row tint:
 tinting would re-attach the meaning the directive removes.
 
+## The learning loop (the 2026-09-23 feedback wave, notes #76 / #78 / #80 / #81)
+
+Four notes the owner left in one twenty-minute pass on September, all about
+the same thing and none about a single row: a correction the reviewer makes
+should become a rule that holds beyond the row it was made on, that rule
+should be inspectable and editable, and saving it should say what it did and
+be reversible. They are grouped here because they are one mechanism seen
+from four sides, and because the tool's matching processes already learn on
+five separate axes with no shared account of what was learned:
+category / account (`merchant_category`), legal entity
+(`merchant_entity`), vendor spelling and card (`field_correction`),
+statement-to-receipt vendor equivalence (`vendor_alias`) and per-merchant FX
+(`merchant_fx`), plus the settings-backed merchant registry beside them.
+
+**Measured live before any of it (read-only, 2026-09-23).** July, August and
+September hold **153 expense rows over 62 distinct vendors**; 22 of those
+vendors appear more than once, and **88 of the 113 rows on a repeat vendor
+still carry a model guess or no category at all**. Across all three months
+exactly **one row reads `learned`**. Learning memory holds 108 category
+rules (102 of them still the 2026-08-06 Zoho seed, 0 validated), 1 merchant
+entity, 2 field corrections, 0 aliases and 0 FX rates. So the loop is wired
+end to end and almost nothing flows through it: the recall side has been
+fixed twice (items 115, 149) while the teach side still depends on a person
+pressing a button whose effects they cannot see beforehand and cannot
+reverse afterwards. That is what note #81 is about, and it is why it ranks
+first of the four.
+
+An instrument note for whoever re-measures: `GET /api/runs/{id}` returns
+**zero** expenses for July and August and 74 for September, because the
+first two are read through `GET /api/expense-batches/{id}`. A count taken
+from the runs endpoint alone reports a third of the estate and looks like a
+finding.
+
+### 163. A memory save says nothing about what it will do, where it goes, or how to take it back (note #81, owner 2026-09-23) (SHIPPED 2026-09-23, pending PR)
+
+**Owner, on the "Save corrections to memory" button:** *"based on what? this
+should be reversible for now, and state explicitly where these are saved so
+user can manage this."*
+
+Three asks. Before this, pressing the button wrote to five SQLite tables and
+rewrote the merchant registry with no preview, no record of which month
+taught what, and no undo beyond per-merchant Forget on the Memory page,
+which cannot distinguish a rule this save wrote from one that was there
+before.
+
+**Built.** One mechanism serves all three: the writes a save would make are
+computed as a list before anything is written.
+
+* `learning/commits.py` — `RecordingStore` accepts the five `record_*` calls
+  the learners make and keeps them as `PlannedWrite`s instead of writing.
+  The learners only ever call; they read nothing back, which is what makes a
+  dry run exact rather than approximate.
+* `GET /api/runs/{id}/memory-plan` — what the save would write, per table,
+  per key, with the value and the surface that manages it, plus the
+  per-merchant registry diff. It runs the real learners, so the preview
+  cannot describe a different save from the one that happens.
+* `GET /api/memory/commits` — the ledger. One entry per save: which month,
+  when, which trigger, what it learned, every row it touched, whether it has
+  been undone.
+* `POST /api/memory/commits/{id}/undo` — every learning row back to the
+  pre-image the journal recorded (a row the save CREATED is deleted), the
+  registry back to the map that preceded the save, and the month's
+  `memory_commits` digest cleared so the next publish teaches those
+  corrections again rather than answering `unchanged` over a memory that no
+  longer holds them.
+
+Two calls worth not re-deriving. **Only the most recent un-undone save can
+be undone** (`memory_journal_not_latest`, carrying `latest_id`): saves stack
+on the same rows, so restoring an older pre-image would silently discard a
+newer save's values, which is the shape of a wrong-money bug rather than a
+wrong-text one. And **the plan is computed inside the save**, not beside it:
+the pre-image the journal stores is read from the plan the save is about to
+apply, so a journal entry can never describe a different set of rows from
+the one the save touched.
+
+**Tests.** `tests/test_memory_journal_item_163.py` (10, route-level
+throughout: the plan writes nothing, the plan and the save agree key for
+key, the save is recorded, the undo restores a changed row, deletes a
+created row, restores the registry, re-arms the next publish, and the two
+refusals plus the 404). Six wiring points proven RED under
+`tools/regress_check.py`, each watched green → red → green: the journal
+write, the row restore, the registry restore, the digest clear, the
+latest-only guard, and the recorder seam itself.
+
+**Not built, deliberately.** No automatic undo window, no undo of a save
+that a later save has written over (refused instead), and no SPA half yet:
+the prompt is `docs/lovable-memory-journal-prompt.md` for the owner to
+paste.
+
+### 164. A correction teaches one vendor when the reviewer meant a rule (note #76, owner 2026-09-23)
+
+**Owner, on September's "Needs a look · 27":** *"from manual input from user
+create a system to derive a higher standard of logic that is applicable
+universally for the specific vendors/expenses that were interacted with."*
+
+Today every teach is keyed on one normalized vendor string (plus a company,
+for the category and account). Correcting DB Fernverkehr teaches DB
+Fernverkehr. Nothing generalizes: not to the merchant's other spellings
+beyond the registry's alias list, not to the class of expense, and not to
+the pattern the reviewer was actually applying when she made three similar
+corrections in a row.
+
+**What a build would have to settle first, and has not.** Which
+generalizations are safe is an empirical question, not a design one, and the
+estate above says the sample is thin: 22 repeat vendors, one live `learned`
+row. The honest first step is to measure what a rule derived from one
+month's corrections would have done to the next month's rows, the way item
+115 was measured (replay both months' stored readings through the candidate
+code and count the lines that move), before any rule generalizes anything.
+A generalization that fires on a month nobody has labelled is the failure
+mode item 117 already produced once, when one-word aliases acted as
+wildcards and filed unrelated vendors under the wrong merchant.
+
+Ranked below 163 because 163 is what makes this safe to attempt: a rule that
+generalizes is exactly the kind you want to be able to preview and take
+back.
+
+### 165. What the tool learned cannot be edited where it was taught (note #78, owner 2026-09-23)
+
+**Owner:** *"when learning from manual input from user, you must be able to
+edit vendor lists etc."*
+
+Partly true today and worth splitting. Learned CATEGORIES are editable on
+the Memory page (PUT / DELETE per row, validate, per-merchant Forget) and
+merchant aliases in the Merchants editor. What has no editor at all:
+`merchant_entity`, `field_correction`, `vendor_alias` and `merchant_fx` are
+read-only on the Memory page, so a wrong vendor spelling or a wrong learned
+card can only be removed by forgetting the whole vendor. Item 163's ledger
+now at least says which save wrote them.
+
+### 166. Categorization norms are per vendor, and the owner wants them per rule (note #80, owner 2026-09-23)
+
+**Owner:** *"categorization needs a good mechanism to be corrected and
+categorization norms or standards that are applied universally across
+multiple vendors or expenses should be flexible in that same sense."*
+
+The sibling of 164 on the category axis specifically. The registry binds one
+merchant to one category (note item M1) and the learned rules bind
+(company, vendor) to an account; there is no object anywhere that says
+"anything from a cloud-infrastructure vendor books here" or "this class of
+expense is always Travel". The eight categories in settings are a closed
+vocabulary with no structure between them.
+
+Gated on the same thing item 156 is gated on: the 52-row Zoho account to
+category table nobody has ruled on. A norm that spans vendors needs a
+vocabulary that spans them first.
+### 167. FX rates polled daily from OpenTickers (feedback note #79, owner 2026-09-23) (SHIPPED 2026-09-23, PR #1203; Shipped row 115)
+
+**The note, verbatim**, anchored on Settings > FX reference rates: *"fx
+rates should be polled daily via open tickers API"*, with the OpenTickers
+API key and dashboard login sent over Teams the same afternoon (key in
+`context/.env` `OPENTICKERS_API_KEY` + the Fly secret; login in the vault as
+"OpenTickers Brisken").
+
+**What the provider is.** `api.opentickers.com/api/public/exchange_rates`,
+Bearer auth. `/latest` answers one record per SOURCE for a pair (BCCR, BDI,
+BPT, ECB on 2026-09-22 for EUR->USD, the ECB one 1.1463 = `D.USD.EUR.SP00.A`),
+units of the quote currency per one base. The public page says free keys get
+`/latest` only; this key answered `/historical` with 200 (ECB daily rates for
+September) and the response header reads `X-RateLimit-Limit: 50000`, so it is
+a paid tier and a one-time backfill of the live months was possible.
+
+**Built (`web/fx_daily_rates.py` + store + matcher + routes).** A daemon
+thread polls at boot and every 24 h: EUR->{USD, BRL} by default, plus every
+currency a typed pair or a card names and every month's statement currency;
+the ECB record wins, else the median of the other sources' `mid` values;
+scaled, non-positive or malformed records are skipped. The first round
+backfills from the month before the earliest labelled month (December 2025
+for the live estate, January being the earliest month) to today, once; a 403
+on history is remembered and the round keeps to `/latest`. Rows land in the
+new `fx_daily_rates` table as units per EUR by day, the provider's digits as
+text. `rematch_month` copies the days a month can reach into
+`matching.fx_daily_rates` from the store on EVERY re-match and commits them
+with the run, so the FX block, the single-currency document and a
+pulled-down replay read the table the matcher did. `MatchingConfig.daily_rate`
+crosses through EUR on the CHARGE's own date, or the nearest day within four
+(earlier on a tie, so a Saturday purchase reads Friday's fix). New rung
+`opentickers_day` between the self-derived rates and `ecb_month` (a day is the
+grain the card locked the rate at; the bundle evidence of item 82 keeps the
+receipts' booked rates above it), clean band `fx_ecb_match_pct` (2%),
+`reference_rate_period` = the day. `GET /api/settings` gains the derived
+`fx_daily_rates` block (state + newest day as units per EUR and as every
+pair, six decimals); `POST /api/fx/poll` runs a round now (409
+`fx_poll_disabled` without a key). The setup advisory is quiet for a currency
+the daily table crosses.
+
+**Fail-open by contract.** A provider outage or a refused endpoint leaves the
+table as it was; no month creation, attach or re-match waits on it. Off
+without `OPENTICKERS_API_KEY` or with `EXPENSE_RECON_FX_POLL=0`.
+
+**What did not move.** The two typed Settings rates (EUR:USD 1.162275,
+BRL:USD 0.192448) still win for every month (owner rulings 2026-09-16 and
+09-17, the second one declining to remove them), so July and August keep
+every FX block as it was and the daily rate fires only for a pair Settings
+does not hold. The screen shows the polled rates beside the typed ones once
+the SPA prompt is applied. **Open owner decision, re-raised because Dirk asked
+for the poll himself:** clear the two typed rates (one `PUT /api/settings`),
+after which every month reads the daily rate for its purchase days on its
+next re-match; July's and August's frozen copies stay until their own
+re-match. Not written in this session.
+
+**Tests:** `tests/test_fx_daily_rates.py` (20: three routes on the item-82
+July, the nearest-day tie, typed-rate-wins, a pre-poll month picking the
+table up on re-read, backfill-once + settings block + PUT-ignored, ECB-vs-
+median rows, outage, refused history, no-key 409 + no thread, the boot
+thread, rung order, day window, band, malformed key, `pick`, currencies,
+backfill start, store). `regress_check` on the `rematch_month` wiring: 4 route
+tests red with it unwired, green restored. SPA half:
+`docs/lovable-fx-daily-rates-prompt.md` (FX tab card + "Poll now", the
+`daily rate, {day}` label; pending). Contract: `docs/api-contract.md`,
+"FX rates polled daily from OpenTickers".
+
+### 168. Typing an FX rate in Settings is gone (owner directive 2026-09-23, follows 167) (SHIPPED 2026-09-23, PR #1210, DEPLOYED Fly `cf54561a`; Shipped row 116)
+
+**Owner, on reading item 167 shipped:** *"no more typing them in settings
+you can remove that function entirely, we will only rely on these daily
+rates API stuff."* This is the step 4 of item 90 the owner declined on
+09-17, now asked for outright and gone further: not just clearing the two
+rates, removing the function.
+
+**What went.** The settings key (`GET` drops it, `PUT` accepts-and-ignores
+it, `RunStore` deletes it from the stored row on open), the matcher's
+`configured` rung and `MatchingConfig.fx_reference_rates`, the per-rate
+validation in the PUT, `apply_master_data`'s rate copying, item 132's
+`fx_rate_drift` advisory and its four tests, and the `"your rate"` /
+`settings` labels. The rung order is now `statement` -> `receipts` ->
+`opentickers_day` -> `ecb_month`: every rate is either read off the
+client's own documents or fetched from a central bank.
+
+**Two quieter reads went with it**, both found by grepping the key after the
+first suite rather than by reading the diff. `fx_daily_rates.needed_currencies`
+widened the poll's own currency list from the typed pairs; with the key
+stripped from the stored settings that read can never fire, so the poll now
+follows the cards and the months alone, which is what it really tracked.
+And `test_fx_ladder`'s band-scoring proof (item 69's fix: a pair agreeing with
+the rate must outscore one sitting at the band midpoint) pinned its rate
+through the typed rung, so it now pins the same proof through the daily rung,
+where a fetched rate reads its band off `fx_ecb_match_pct`.
+
+**The key stays parseable on purpose.** Every month created before today
+has the typed rates frozen in its config, and the shipped scorer asset
+carries the key too; refusing it would make both unloadable. It is dropped
+at load (`_RETIRED_TUNABLES`), so the stored copies are inert and no client
+data was rewritten.
+
+**The trap this nearly walked into, measured in-container before building.**
+`apply_ecb_rates` only ran at month creation and statement attach. July 2026
+(`50622baec444`) was created 2026-09-07, before item 82 shipped, and never
+re-attached, so its stored config held `fx_reference_rates` and **no ECB
+table at all** -- while August (`074a7b8905d7`) and April hold both, and
+January/May/June/September hold neither. Removing the typed rung alone would
+have left July's 18 cross-currency pairs with no rate on any rung, blanking
+the FX panel and the month report's USD figures. So `rematch_month` now also
+calls `top_up_ecb_rates`, which fetches only the months the stored table is
+missing (nothing published for the running month, so an ordinary re-match
+costs no request).
+
+**The band moves with the rate, and that is the real cost.** A typed rate
+carried the 3% clean band; a central-bank rate carries 2%
+(`fx_ecb_match_pct`, item 90). A pair between the two bands that used to
+auto-reconcile now defers to judgment. The shipped example: July's SUPERMEC
+SAO JOSE at +2.93%, pinned in `test_fx_breakdown.py`. Item 90 measured this
+trade and the owner took it: at 2% under fetched rates July scored 32 right
+against 30.
+
+**Live effect, MEASURED read-only before and after the deploy** (census at
+`131fd5d2` then at `cf54561a`). July's 18 and August's 2 FX blocks all read
+`settings` beforehand. Afterwards August's 2 read `ecb_month` off its own
+stored table and July's 18 carry no reference rate at all, exactly as
+predicted; match rates unchanged at 27.7 and 7.9, review counts unchanged at
+7 and 1, because nothing re-matched. `GET /api/settings` no longer carries
+`fx_reference_rates`. July gains a table at its next natural re-match, from
+`top_up_ecb_rates`. Nothing was re-matched on Criss's behalf
+([[feedback_recon_no_live_writes_criss_acts]]).
+
+**Not changed:** the self-derived `statement` / `receipts` rungs (read off
+the client's documents, never typed) stay, and stay above the fetched rates
+on item 82's bundle evidence. Whether a daily rate should outrank a
+receipts-derived median is unmeasured -- no labelled bundle carries daily
+rates -- and stays open.
+
+**Both load-bearing wires had to be caught by the bite check, not the
+suite.** `top_up_ecb_rates` was tested as a helper only, so cutting its call
+in `rematch_month` left all 3043 tests green -- the exact shape B2's
+fix-bites-the-caller clause exists for. It now runs through a caller that
+fetches nothing of its own (adding a receipt to a month that already has its
+statement; creation and the statement read each fetch for themselves), with
+the ECB down for both the creation and the attach, which is July's shape.
+The stored-row migration was invisible for a subtler reason: the route's GET
+strips the key whether or not the row still holds it, so an API-driven test
+reports success on an unwired migration. That difference is the whole point
+of the migration -- gone rather than hidden -- so it is asserted against
+`RunStore.get_settings`, which reads the row as stored. Both now go green ->
+red -> green under `tools/regress_check.py`.
+
+**Tests:** the retirement pinned in `test_ecb_band_item_132.py`
+(`test_a_rate_typed_in_settings_is_no_longer_read_from_a_stored_config`),
+`test_settings_put_contract.py`
+(`test_a_retired_key_is_accepted_and_ignored_never_refused`),
+`test_master_data_settings.py`, and the inverted route tests in
+`test_ecb_month_rates.py` / `test_fx_daily_rates.py`. Accuracy gate
+unchanged (the asset's `fx_reference_rates` was already empty). SPA half:
+`docs/lovable-fx-daily-rates-prompt.md`, rewritten as one prompt that
+removes the editor and adds the read-only fetched-rates panel.
+## Attribution and categorization, measured before the next round (2026-09-23)
+
+Owner direction, end of the learning-loop session: improve the matching and
+fallback logic in the two areas that work least well, **which card (and
+through it which legal entity and which person) paid a receipt**, and **which
+category an expense gets**. Read-only measurement first, because every
+generalization this project shipped without one came back (item 117's
+one-word aliases, item 133's merchant floor, item 156's Zoho taxonomy).
+
+**The live estate, read through `GET /api/expense-batches/{id}` and
+`GET /api/runs/{id}` on 2026-09-23** (July `50622baec444`, August
+`074a7b8905d7`, September `51a22ad72864`; 154 receipts, 226 charges, September
+has no statement):
+
+| | July | Aug | Sep | total |
+|---|---|---|---|---|
+| receipts | 54 | 25 | 75 | 154 |
+| card from a printed hint | 19 | 12 | 46 | 77 |
+| card from the settled charge (item 111) | 19 | 2 | 0 | 21 |
+| card picked by hand | 1 | 9 | 1 | 11 |
+| card from the merchant registry (item 154) | 0 | 0 | 2 | 2 |
+| card from memory (`learned`) | 0 | 0 | 0 | 0 |
+| **no card at all** | 15 | 2 | 26 | **43** |
+| no legal entity | 14 | 1 | 25 | 40 |
+| no person | 14 | 2 | 25 | 41 |
+
+**The card is the root.** Every entity-less and person-less row is a card-less
+row, in all three months (July 14 of 14, August 1 of 1, September 25 of 25).
+Of the 43 card-less receipts, **25 print no payment method at all** (12 of
+them September OpenAI) and **18 print something the registry cannot resolve**:
+`DEBIT`, `VISA`, `EC-Karte`, `girocard`, `Bar`, `Cash`, `Link`,
+`Wire Transfer`, `saved payment method`, and digits that name no registered
+card (`...2544`, `0501-1462-9129`, `***** 3281`). One of those 18 is a
+GoDaddy receipt reading *"We have billed your Visa card ending with the last
+two digits: 38"*, where exactly one registry card ends in 38: the note-#60
+two-digit rule (`cards.py:166-199`) does not match that phrasing.
+
+22 of the 43 have a carded sibling of the same vendor elsewhere, but the
+vendors that fail are the multi-card ones, so a merchant-to-card guess cannot
+decide them: `openai` resolves to card-9693 eight times and 3645 once,
+`lovable labs incorporated` to four cards, `anthropic, pbc` to four. That is
+the same set item 154 measured, and the registry withholds `card_key` on
+`cards_seen > 1` by design. `expenses[].customer` (bill-to) is empty on
+154 of 154 receipts, so no company signal survives the missing card.
+
+**Categorization, same read.** Of 154 receipts: 94 rest on the model
+(`LINE` or `VENDOR`), 33 carry a reviewer override, 8 come from the registry,
+**1 reads `learned`**, 15 have no category at all. 21 of the 33 overrides sit
+on a vendor that appears in another row or month, so the correction had a
+second row to reach and did not. Of 174 receiptless charges, **138 are a
+model guess off the bank descriptor** (88 distinct descriptions). Memory
+holds 108 category rules, 102 of them still the 2026-08-06 Zoho seed and
+**0 validated**; `vendor_alias` and `merchant_fx` are empty.
+
+**The live registry has moved since M1 and the record had not caught up.**
+`GET /api/settings` now returns **33** merchants (M1 measured 28), including
+`Anthropic`, `Lovable Labs`, `Lovable Labs Incorporated`, `Brave Software,
+Inc.` and `ZOHO Corp.`, each with category Software & Subscriptions and
+**`aliases: []`**. So M1's registry default never fires for them: three
+September rows spelled `anthropic, pbc @anthropic` read Utilities &
+Premises off the line text *"Auto-recharge credits"*, and September produced
+0 registry-sourced lines. The gap is the alias list, not the entry. Still
+absent: an `OpenAI` merchant, and Dirk's 3x3 account table (memory holds one
+account cell, Corporate Services / anthropic).
+
+### Item 169 — the card chain's fallbacks, where the evidence exists and is refused
+
+**SHIPPED 2026-09-23** (the instrument, and the one fact that was worth rows).
+Four code facts were named here before anything was built. `tools/recon-attribution-replay.py`
+now replays a month through `build_expense_view` itself and scores card, entity,
+person and category by link, against the statement's own `Card` column on every
+confirmed pair and against the reviewer's own fixes held out. It was proven
+before it was trusted: a fabricated hint rule for a hint exactly one row prints
+moved the card-less count by exactly one, in all three coupled columns.
+
+What the instrument then said about the four facts, which is not what the facts
+predicted:
+
+* **Fact 1 measures ZERO.** Narrowing `_card_keys` to digits the batch can
+  resolve moves no row in any of the seven batches, 198 receipts. The three
+  July rows it would unblock (`...2544`, `0501-1462-9129`, `Cartao Credito 30
+  Dias`) have no matched charge and no remembered card, so there is nothing
+  behind the guard to give them; September has no statement at all. The guard's
+  reasoning is still wrong for a number naming no card, and fixing it today
+  buys nothing. Not built.
+* **Fact 2 confirmed, 24 rows, still latent.** Now item 171 below.
+* **Fact 3 was the wrong diagnosis, and the real cause sat beside it.** The
+  lookup key was never the problem: September's batch entity is `''`, every
+  card-less row carries `''`, and the correction saved that morning is keyed
+  `('', 'openai')`, so `lookup('', 'OPENAI')` returns `{'card_key': '3645'}`
+  and the batch holds a card under exactly that key. It reached none of the 12
+  rows because **`resolve_batch_row_cards` reads the remembered card off
+  `Receipt.card_key`, and the only writer of that field is
+  `ExpenseMemory.apply` inside `generate_expenses`**. A correction is frozen at
+  the moment a month was ingested: it reaches months ingested after it and can
+  never reach the ones ingested before. Every link beside it is read live, and
+  note item M2 says so in as many words about the merchant registry.
+  **Fixed**: `service.fill_remembered_cards`, wired into the grid and the CSV
+  export (Cards R3: the two surfaces that must name one card for one receipt),
+  and through the export into the month report. Measured on the live snapshot,
+  September card-less **26 -> 14**, no legal entity **25 -> 13**, no person
+  **25 -> 13**, 12 rows now sourced `learned`; July and August do not move.
+  Precedence untouched: a printed card number, a reviewer pick and the settled
+  charge all still win. Tests `test_remembered_card_read_time_item_169.py`,
+  route-level; both wiring points regress-checked green -> red -> green.
+* **Fact 4 is exactly one row.** `0051__rendered-body.pdf`, GoDaddy, "We have
+  billed your Visa card ending with the last two digits: 38"; the two receipts
+  printing "ending with ...2838" both resolve. Not built.
+
+Deliberately NOT wired: `rematch_month` and the pool builders. `learned` is in
+`CARD_SCOPE_SOURCES`, so feeding the live memory there would let a remembered
+card newly SCOPE the matcher, which is a separate decision with its own risk.
+
+**A risk to name rather than bury**: the live rule came from one reviewer pick,
+and OpenAI is one of the three multi-card vendors item 154 refuses to guess
+for. The fix does not change what is learned or its rank; it makes an existing
+rule reach consistently instead of by accident of ingest order, and that rule
+was already going to be applied to every month ingested from now on. The
+statement always outranks it. If the owner wants remembered cards gated on
+single-card vendors the way the merchant registry is, that is its own item.
+
+**Read the pointers below by symbol, not by offset.** They were taken at
+commit `5710a675`, and `service.py` shifted 196 lines by `f3ecd6bc` the same
+afternoon, so every number here is stale as an offset while still correct as
+a location. The symbols are `resolve_batch_row_cards`,
+`_CARD_OBSERVATION_SOURCES`, `registry_card_upserts_from_expense_run`,
+`FieldCorrectionLookup.get`, `categorize_receipts_with_registry` and
+`_registry_account`.
+
+**Still open here** (both measured, neither worth building today):
+
+
+1. **A printed number that resolves nothing blocks every fallback.**
+   `service.py:6533` guards the settled-charge, learned and merchant steps
+   with `not _card_keys(hint)`, so a receipt printing `...2544` or a masked
+   `***** 3281` is refused the card of the charge it actually settles. The
+   guard's reason ("memory never overrides a number the document shows") is
+   right for a number that NAMES a card and wrong for one that names none.
+2. **The card learner cannot see the settled-charge evidence it is allowed to
+   learn from.** `_CARD_OBSERVATION_SOURCES` (`service.py:4885`) includes
+   `settled_charge`, but the `card_res` handed to
+   `registry_card_upserts_from_expense_run` (`:5207-5212`) is resolved without
+   `settled_cards`, so those 21 rows teach nothing. Latent until a month is
+   published, which has never happened (item 126).
+3. **The learned `card_key` is keyed on a company the failing row does not
+   have.** `consult.py:209-226` looks up `(legal_entity_id, vendor_norm)` with
+   no company-less fallback, while the rows needing a card are exactly the
+   rows with no entity. Categories got that fallback in item 115 (rule 2);
+   field corrections did not.
+4. **The matcher bake and the learner resolve a different chain from the
+   grid** (`service.py:13170` and `:5210-5212` pass neither `settled_cards`
+   nor `merchants`), so one receipt reads `settled_charge` on the grid and
+   `card_evidence.receipt: none` in the matcher on the same month.
+
+Not code, and larger than all four: cards 9693 and 1176 have never had a
+statement loaded (item 108), which is why September's OpenAI receipts cannot
+attribute at all. Coverage, not matching.
+
+### Item 172 — card 3645 posts to another card's name (master data, owner's)
+
+Found 2026-09-23 by the post-deploy consumer drive of item 169, which is what
+that drive is for: the twelve September OpenAI rows that newly resolved to
+card **3645** render "Paid through: **Credit Card - 2838**". The account is
+read from the card's own `zoho_account`, and card 3645's registry entry holds
+the string `Credit Card - 2838`, which is another CARD's LABEL sitting in an
+account field. Not a code defect and not caused by the change: it predates it,
+and giving those rows a card is only what made it visible.
+
+The whole registry, read live 2026-09-23:
+
+| card | label | `zoho_account` |
+|---|---|---|
+| `3645` | Credit Card Chase Visa - 3645 | **`Credit Card - 2838`** |
+| `3876` | Credit Card Chase Visa - 3876 | `CHASE VISA - 2838 - TRAVEL` |
+| `card-0340` | Credit Card Chase Visa - 0340 | `CHASE VISA - 2838 - TRAVEL` |
+| `card-2838` | Credit Card - 2838 | `CHASE VISA - 2838 - TRAVEL` |
+| `card-0113` | Apple Credit Card - 0113 | `GSBANK Apple Master Card 0113 \| Dirk Neumann` |
+| `card-1176` | Credit Card Chase Visa - 1176 | `Chase Visa 1176 \| Travel Expenses \| Dirk Neumann` |
+| `card-6013` | Credit Card - 6013 | `VISA 6013 TRAVEL EXPENSE active since 230601` |
+| `card-8311` | Credit Card - 8311 | `Chase United Visa 8311 \| business expenses \| Dirk Neumann` |
+| `card-9693` | Credit Card Chase Visa - 9693 | `Chase Visa \| 9693 \| Cloud Expenses` |
+
+Two separate questions, and only the first is clearly wrong: `3645` holds a
+card label rather than a Zoho account name, which no other row does. Whether
+`3876` and `card-0340` genuinely post to card-2838's TRAVEL account is a
+bookkeeping fact this side cannot judge; they may well be correct.
+
+**ANSWERED 2026-09-23 from Zoho's own chart** (owner: "you can look it up and
+find out for yourself"). Read-only pull of `chartofaccounts`, which the Books
+token's `ZohoBooks.accountants.READ` scope covers:
+
+| org | credit-card accounts that exist |
+|---|---|
+| Corporate Services `822741658` (177 accounts) | `CHASE VISA - 2838 - TRAVEL`, `GSBANK Apple Master Card 0113 \| Dirk Neumann` |
+| Cloud Services `697686691` (199 accounts) | `Chase Visa \| 9693 \| Cloud Expenses`, `Chase United Visa 8311 \| business expenses \| Dirk Neumann`, `VISA 6013 TRAVEL EXPENSE active since 230601` |
+
+**There is no Zoho account for card 3645, and there does not need to be.**
+Corporate Services has exactly ONE Chase Visa credit-card account, and cards
+`3876` and `card-0340` already point at it. So this is a typo of the right
+idea, not a missing account: whoever filled 3645 in typed the CARD's label
+(`Credit Card - 2838`) where the ACCOUNT's name belongs.
+
+**The fix, exact:** card `3645`'s `zoho_account` becomes
+`CHASE VISA - 2838 - TRAVEL`, byte-identical to what `3876`, `card-0340` and
+`card-2838` already carry. No other field changes.
+
+**Still not written.** It is a `PUT /api/settings` on Criss's live master data
+([[feedback_recon_no_live_writes_criss_acts]]), so she makes it in the Cards
+editor, or the owner says to. The value is now a fact read from Zoho rather
+than a guess, so nobody has to work it out again. No live rows point at it
+right now: item 173 took the 12 September rows back to blank.
+
+**One loose thread, unrelated:** `card-1176` carries
+`Chase Visa 1176 | Travel Expenses | Dirk Neumann` under entity Consulting,
+and that account exists in NEITHER org checked. It may live in one of the
+other six Books orgs; not chased, and nothing currently resolves to that card.
+
+**Also noticed, not acted on:** the Books token's scope now reads
+`ZohoBooks.expenses.CREATE ZohoBooks.expenses.READ ZohoBooks.contacts.READ
+ZohoBooks.accountants.READ`. `expenses.CREATE` is granted, which
+[[project_brisken_zoho_books]] still records as the missing grant blocking any
+post, and `settings.READ` is gone (so `/organizations` now 401s and org ids
+have to come from the repo). Posting stays OFF and invasive regardless.
+
+### Item 173 — a remembered card only for a brand seen on ONE card — SHIPPED 2026-09-24 (both halves)
+
+**SHIPPED 2026-09-23, owner ruling the same day.** Item 169 made a remembered
+card reach months ingested before the correction, and the first thing the
+instrument said afterwards is that reaching further is not the same as being
+right.
+
+The read that settled it, live and read-only across all seven batches: every
+one of the 12 rows sitting on a remembered card was OpenAI, and OpenAI's HARD
+evidence -- a printed card number, a reviewer's own pick, or the statement --
+is **card-9693 eight times against 3645 once**. Criss's single correction had
+taught 3645, so the memory was the minority card by 8 to 1, on 12 live rows.
+And it is not one vendor: ten vendors carry hard evidence on more than one
+card (`Anthropic, PBC` on four, `Lovable Labs Incorporated` on four,
+`MARTINO SUPERMERCADO` on three), so the problem grows with the memory.
+
+The deeper reason it fires where it is least safe: the vendors a human bothers
+to correct are disproportionately the multi-card ones.
+
+**Owner's call, put to him with the 8-to-1 split**: gate it. "A blank prompts
+Criss to look; a wrong card silently books the receipt to the wrong entity AND
+the wrong person", because both ride the card.
+
+`service.merchant_vouches_one_card` mirrors the rule note item M2 already
+applies to the registry's own card learner, which sets a merchant's `card_key`
+only while `cards_seen` holds exactly one card. Deliberately conservative on
+the unknown case: a vendor the registry cannot resolve is NOT vouched, because
+no evidence of a second card is not evidence of one card. OpenAI is exactly
+that vendor, which is what makes the ruling bite today.
+
+Live effect, measured: September's 12 `learned` rows go back to blank (card-less
+26, no entity 25, no person 25 -- the pre-169 numbers). Item 169's structural
+fix stands and is unaffected: a correction is no longer frozen at ingest, so
+the day a single-card brand is corrected, every existing month takes it.
+
+Tests in `test_remembered_card_read_time_item_169.py` (8, route-level;
+the gate regress-checked green -> red -> green).
+
+**Second half BUILT 2026-09-24.** `ExpenseMemory.apply` stamped a remembered
+card at INGEST with no gate, so which month was created first decided whether
+the ruling applied: a month ingested AFTER a multi-card brand was corrected
+carried the minority card in `Receipt.card_key`, where
+`resolve_batch_row_cards` reads it as the `learned` candidate and the entity
+and the person ride it. Not a rule anybody chose.
+
+The rule now lives in ONE place, `MerchantRegistry.vouches_one_card`, reached
+off a new `MerchantMatch.cards_seen` rather than a raw settings dict the asker
+happens to hold; `service.merchant_vouches_one_card` delegates to it.
+`merchant_registry.drop_unvouched_remembered_cards` clears an unvouched stamp,
+and **three** ingest paths call it, all before the entity stamping (the card
+resolves the company and the person, so a card nobody vouched for must not
+answer either):
+
+| path | where |
+|---|---|
+| full ingest | `cli.generate_expenses` |
+| the add job / mail intake | `service.add_receipts_to_expense_batch` |
+| restore from quarantine | `service` restore path |
+
+An absent or empty registry vouches for nothing, so every remembered card is
+cleared there too. That is the same answer the read-time twin already gives
+(`merchant_vouches_one_card` returns False without a registry); letting the
+stamp survive would put the card back by the other door.
+
+**Three existing tests were relying on the ungated stamp** and went red:
+`test_card_fix_per_row.py::test_publishing_remembers_the_fix_and_next_month_takes_it`,
+`test_entity_from_settled_charge_item_111.py::test_the_settled_charge_outranks_a_card_remembered_from_an_earlier_month`,
+and `test_private_expense.py::test_a_remembered_card_does_not_block_the_private_card`.
+All three set up cards and no registry, so the card reached the next month
+through the ingest door with the read-time gate already shipped. That is the
+defect, demonstrated by the suite rather than argued: each now puts its brand
+in the registry (a bare entry is the vouch) and asserts the same thing it
+always did.
+
+Tests: `test_remembered_card_ingest_gate_item_173.py` (9 -- four route-level
+through the add job, three through `generate_expenses` itself, two on the rule).
+Both wiring points regress-checked green -> red -> green. The restore path has
+no biting test; it shares the helper and the two others cover it.
+
+Live effect today: none. No month has been ingested since the correction was
+taught, and September's rows were already blank after the read-time half.
+
+### Item 171 — the sign-off card learner cannot see the statement's own answer — SHIPPED 2026-09-24
+
+Split out of item 169 fact 2, measured 2026-09-23, **built 2026-09-24**.
+`_CARD_OBSERVATION_SOURCES` has listed `settled_charge` since item 111, so the
+sign-off learner was always meant to learn the card the STATEMENT named for a
+settled pair. It cannot: the `card_res` handed to
+`registry_card_upserts_from_expense_run` in `commit_to_memory` is resolved
+without `settled_cards`, which is the only input that can produce that source,
+so the branch is unreachable. 24 rows across the seven live batches carry it
+today, and they would teach pairs like MARTINO SUPERMERCADO -> 3876 (5 rows),
+Hostinger -> card-2838, Typora -> card-2838. Anthropic appears on two cards
+(2838 five times, 3645 once), which is exactly the case the upsert already
+refuses to pin, so the guard that matters is in place.
+
+Live effect today is **zero**: no month has ever been signed off. It was
+written and reverted in the item-169 PR for one reason: this is the writer of
+DURABLE memory, and a change there with no regress-checked bite test is the
+wrong kind of cheap.
+
+**Built 2026-09-24.** `commit_to_memory` now passes
+`settled_cards=export_settled_cards(run, decisions)` into the resolution it
+hands the card learner, so the statement's own answer reaches `cards_seen`.
+Six route-level tests in `tests/test_settled_charge_learner_item_171.py`, all
+through `POST /api/runs/{id}/publish`; regress-checked (disabling the wiring
+turns three of them red, restoring turns them green).
+
+**The one design call, and it went the opposite way from the obvious.** The
+settled map is the EFFECTIVE reconciled bucket, which includes a pair the
+matcher proposed and nobody has confirmed by hand. Every other learner in
+`commit_to_memory` is confirmed-only, so narrowing this one to match looked
+like the disciplined choice. Measured against the live months first
+(read-only replay of both statement batches, 2026-09-24):
+
+| settled map | July teaches | August teaches |
+|---|---|---|
+| reconciled bucket (shipped) | MARTINO SUPERMERCADO -> 3876, Supermercado Fenix -> 3876, Anthropic -> card-2838, Lovable Labs -> card-2838 (19 rows) | Anthropic -> 3645, Lovable Labs -> 3645 (3 rows) |
+| confirmed pairs only | nothing (its 1 row is Amazon, not in the registry) | **Anthropic -> 3645** (1 row) |
+
+Confirming pairs by hand is something Criss has barely done, so the narrow
+map does not teach less of the same thing: it teaches a DIFFERENT, wrong
+thing. Anthropic would enter `cards_seen` as a single-card merchant on 3645,
+which is the false singleton item 173 gates against, on one of the three
+vendors item 154 forbids guessing. The full bucket sees Anthropic on both
+cards and the upsert pins neither.
+
+The asymmetry generalises and is worth keeping: under-observing this learner
+INVENTS facts, over-observing it only makes it say nothing. A reconciled pair
+is also exactly as trustworthy as what already ships, being the pairing the
+grid shows, the CSV exports and the month report prints. No item-173 vouch is
+needed on the write side either, because the upsert already is that rule:
+`cards_seen` accumulates, `card_key` is written only while it holds exactly
+one card, and a second card drops a learned key in the same pass.
+
+### Item 170 — a correction that reaches the vendor's other spellings
+
+> **CLOSED 2026-09-23 by owner direction: "no working on expense category
+> definition anymore."** Not paused and not deferred. Everything below is the
+> measurement taken before the direction landed, kept because it is the
+> record of what was found, not a plan. Do not pick it up, and do not send the
+> prepared alias `PUT /api/settings` diff. The CARD half of the attribution
+> work (items 169, 171, 172) is unaffected and continues.
+>
+> **Scope of the direction, reconciled 2026-09-23 evening (operator, on the
+> Phase 1 GL brief).** It closes work on the EIGHT-BUCKET vocabulary: refining
+> what a bucket means, teaching a bucket across a vendor's spellings, sending
+> the alias diff. It does NOT close the work that DELETES that vocabulary.
+> Dirk hand-marked `Expense Relevant` on his own chart of accounts the same
+> afternoon and revised it at 18:56, six minutes before this closure merged,
+> and feedback notes #83-85 ask for exactly that replacement. Two sessions ran
+> in parallel and neither saw the other: the card session took the direction,
+> the CoA session wrote the brief. The direct-to-Zoho-GL work (items 173-175)
+> is IN scope and subsumes this item's goal by removing the layer it corrects.
+
+
+Memory recalls and captures on the raw normalized `detected_vendor`
+(`categorize.py:571-573`, `capture.py:350-355`), never on the registry's
+canonical name, which `registry_upserts_from_expense_run` already computes
+(`service.py:4824-4829`). So three spellings of Anthropic hold three
+independent rules and a correction on one teaches none of the others. This is
+note #80's "norms applied universally across multiple vendors" in the only
+form the record supports: the registry's curated alias graph, **not** a fuzzy
+key, which item 117 measured as 8 wrong canonicals out of 8 probes.
+
+**MEASURED 2026-09-23, not built.** The instrument this was gated on now
+exists (`tools/recon-attribution-replay.py`, item 169). What it says:
+
+**Canonical keying is worth 7 live rows.** Four stored rules resolve to a
+canonical whose OTHER spellings appear in the live months: `antropic` ->
+Anthropic (1 row), `lovable labs` -> Lovable Labs (1), `zoho` -> ZOHO Corp.
+(3), `zoho corp` -> ZOHO Corp. (2). Real, correct, and small.
+
+It is small for a reason worth more than the fix: **the registry resolves
+almost none of the vendors that matter.** `OpenAI` (21 rows), `Anthropic, PBC`
+(18), `Anthropic, PBC @anthropic` (6) and `Anthropic, PBC (@anthropic)` (5)
+resolve to nothing at all, 50 rows between them, because `Anthropic` is in the
+registry with `aliases: []` and OpenAI is not in it. Keying memory on a
+canonical the registry cannot produce changes nothing for those rows.
+
+**And filling the alias lists would move 0 rows on the existing months.** This
+started as a suspicious zero and was proven: a control that rewrote EVERY
+merchant's category to one value also moved 0 rows. The probe is blind by
+construction, and what it is blind to is the finding.
+`categorize_receipts_with_registry` is called only from `_add_receipts_locked`
+and `_restore_set_aside_locked` (plus the CLI and the charge path) -- when
+receipts are ADDED. It is never called at view time, so the registry CATEGORY
+is stamped at ingest and frozen, exactly as the remembered card was before
+item 169. The registry is half-live: note item M2 made the merchant's CARD
+resolve live on every payload, and its CATEGORY did not come with it.
+
+So the alias write is worth doing and is worth less than it looks: it fixes
+October onward and leaves July, August and September where they are until
+those rows are re-categorized. The exact diff is prepared below and NOT sent;
+a settings write on Criss's live data is the owner's.
+
+```json
+{
+ "Anthropic": ["Anthropic, PBC", "Anthropic, PBC @anthropic",
+               "Anthropic, PBC (@anthropic)"],
+ "ZOHO Corp.": ["ZOHO Corporation"],
+ "Lovable Labs": ["Lovable Labs Incorporated (@lovable)"]
+}
+```
+
+(`PUT /api/settings`, merged into the live 33-entry `merchants` map, aliases
+only, no category or account touched. OpenAI is deliberately absent: adding
+that merchant is the owner's call and he has said he raises it.)
+
+The multi-card refusal is visible and working, incidentally: `Anthropic`
+carries `cards_seen: ['card-1176', 'card-9693']` and `Lovable Labs` carries
+`['3645', '3876', 'card-1176']`, so neither lends a card.
+
+**Where the category chain actually stands** (held out against the reviewer's
+own 35 corrections, all three live months): 14 right, 6 wrong, 15 silent.
+Every one of the 15 silents is `REVIEW` -- the chain declines rather than
+guessing wrong -- and `REGISTRY` is right wherever it fires (2 of 2). The
+honest read is that the category chain's problem is coverage, not accuracy:
+it is silent on 43% of the rows a human went on to correct.
+
+## The notes that had no item (2026-09-23 evening, notes #73 / #74 / #75 / #77 / #82 / #83 / #84 / #85)
+
+Filed the evening of 2026-09-23 against a live read of the store (85 notes),
+the September month (`51a22ad72864`, 75 expenses) and `GET /api/settings` (33
+merchants). Numbering starts at **174** because
+`client/brisken/p1-item-173-single-card-gate` holds 173.
+
+Nothing below is built. Each item says what was measured, so whoever picks it
+up starts from the payload rather than from the note.
+
+**Checked and NOT filed: note #35** (2026-09-14, *"Qdo entro na categoria e eu
+coloco a categoria certa, nao acontece nada... permanece sem categoria mesmo
+dando refresh"*, a flat report that setting a category does nothing). It is
+cited nowhere in this backlog, so it was audited against live July rather than
+assumed either way: both Google LLC rows now read
+`posting_category.source: "override"`, which is a stored user edit. The
+symptom is gone, most likely via the recall fixes in items 115 / 149 / 160.
+Recorded here so the next reader does not re-file a resolved bug, and does not
+read "uncited" as "ignored".
+
+**Caveat on any such audit.** This backlog cites some notes by number and
+whole waves by prose ("the operator walked the whole tool on 2026-08-21 and
+left 14 notes"), so a grep for `note #N` cannot tell an unaddressed note from
+one answered inside a wave. Do not publish a count of ignored notes off that
+grep. It is also why #73-#82 could sit as a verbatim table for three days: a
+note is only findable if someone gave it a number.
+
+### 174. "From email" on a month that was never sent a statement (note #73, owner 2026-09-20) — DIAGNOSED 2026-09-24 (`months.origin.intake` on the months list; SPA copy + placement, no backend change)
+
+**Owner:** *"why does it say this even though there has been no statement sent
+for this month"*
+
+**The premise is correct and the month is innocent.** September reads
+`has_statement: false`, `statements: []` and `coverage: []` while holding 75
+expenses, so whatever that cell says, it is not reading a statement.
+
+The string "From email" appears in **no field of the payload**, so it is SPA
+copy over an enum. The candidate is `card_source`, which on September reads
+`hint` 46, `none` 14, `learned` 12, `merchant` 2, `override` 1. On that
+reading the cell is naming where the CARD came from (the receipt mail) and the
+reviewer read it as a claim that a statement arrived; the fix is then a label,
+not a pipeline bug.
+
+**CONCLUDED 2026-09-24 from the published bundle; `card_source` is refuted and
+no drive is needed.** The string is the i18n key `months.origin.intake`, and
+it lives on the MONTHS LIST, not on a row. `assets/chunk-months-D64oN5EB.js`
+renders it as a plain outline badge when `month.created_by === "intake"` (its
+sibling `months.origin.drop` covers `"drop"`), off
+`GET /api/expense-batches`'s `created_by`, which `app.py` ~4505 lifts from the
+run summary. `card_source` never produces it: that field appears once in the
+grid chunk and nowhere near this string, and "From email" appears exactly once
+in the whole bundle.
+
+So the badge is correct as written and the month is innocent twice over. What
+makes it misread is placement: the badge sits in the same table cell as, and
+immediately before, `months.state.matchedStatement`. A reader scanning that
+cell sees an origin label next to a statement-state label and takes both as
+statements about the statement.
+
+The fix is copy plus separation, SPA-side, no backend change: say what the
+badge means about receipts ("Receipts by email" / "Receipts uploaded") and
+keep it out of the statement badge's cell. Worth folding into the item-175
+Lovable prompt rather than pasting on its own.
+
+### 175. A private expense asks which card paid, not who owes the money back (note #74, operator 2026-09-23) — SCOPED 2026-09-24, SPA-only (`docs/lovable-private-reimburse-prompt.md`, not pasted)
+
+**Operator (PT):** *"No privado, deve haver quem deve reembolsar a despesa"*
+("on a private one, there must be someone who has to reimburse the expense").
+
+Left on row 0033's card picker, whose two options are "Leave blank (resolve
+from card)" and "Pick the card that paid". On a private expense that is the
+wrong question: the company did not pay it, so no card is the answer, and the
+one that matters is who gets paid back.
+
+**The field already exists.** September's single private row carries
+`reimburse_to: "Dirk Neumann"` and `reimburse_to_prefill: "Dirk Neumann"`, and
+`person_source` reads `private` for exactly that row. `reimbursable` is
+`null` on it. So this is a UI-shape item, not a data-model one: when `private`
+is set, the row should be asking for `reimburse_to` and offering the card
+picker second, or not at all.
+
+Scale today: `private` 1, `suggested_private` 5, `can_mark_private` 28 of 75.
+
+**2026-09-24, read off the published bundle: there is a harder half than the
+ordering, and it is a dead end in the UI.** The dialog that holds the
+`reimburse_to` input is rendered INSIDE the card picker, and the card picker
+opens with `if (row.private) return null`. So the field is reachable exactly
+once, on the way in. Once a row is confirmed private there is no way in the
+SPA to correct who gets reimbursed: the only path is undo the private mark and
+set it again, discarding the decision to change one word in it. That is much
+closer to what the operator actually wrote ("there must be someone who has to
+reimburse the expense") than the option ordering is.
+
+The backend already takes the correction (`POST .../private` with
+`{private: true, reimburse_to: <new>}`), but only since item 176 shipped the
+same day: before it that call was refused, with the company-card wording, on a
+row no company card paid. So 176 was a precondition for this and not merely
+adjacent.
+
+Prompt written, not pasted: `docs/lovable-private-reimburse-prompt.md`, which
+also carries item 174's copy change. No backend work is left on this item.
+
+### 176. The private control is offered again on a row already marked private (note #75, operator 2026-09-23) — SHIPPED 2026-09-24 (backend, live); the doubled label is the Paid Through cell and is SPA-side
+
+**Operator:** *"no need to set this as private again, if user has already set
+as private"*
+
+**REPRODUCES, in `can_mark_private`.** The first filing of this item said it
+did not, on the strength of `private` and `suggested_private` never being
+true together. That was the wrong pair of fields: the tool is not
+re-SUGGESTING private, it is re-OFFERING the control.
+
+Read on the exact row the note names, September row 0046
+(`processed-D61F3B74-...jpeg`, Luigi Buchholz, 11.80 EUR): `private: true`,
+`person_source: "private"`, `reimburse_to: "Dirk Neumann"` **and**
+`can_mark_private: true`. So the payload is still telling the screen this row
+can be marked private after it already is, which is what renders the label
+the note captured twice ("Private (Dirk Neumann)Private (Dirk Neumann)").
+
+**Estate-wide, 2 of 2.** Every private row in the store carries
+`can_mark_private: true`: September's one and July's one. August, April,
+January, June and May hold no private row. The flag is not simply always on
+either, which is what makes this a finding rather than a tautology: 47 of
+September's 75 rows read false.
+
+The fix is one predicate, backend-side: `can_mark_private` is false once
+`private` is true. Leave the un-mark path alone, it is a different control.
+
+**SHIPPED 2026-09-24 (backend).** `can_mark_private` is now `not private and
+...` in `build_expense_view`'s card resolution, and `_paid_by_conflict` skips
+its company-card refusal on a row that is already private. That second half is
+not cosmetic: the private route reads the same flag before it writes, so
+without it a correction of who gets reimbursed would have been refused with
+the wording "this expense was paid with the company card", about a row no
+company card paid. Five route-level tests in
+`tests/test_private_not_reoffered_item_176.py`; both wires regress-checked.
+
+**The read of the PUBLISHED bundle, which changes what this item claims.**
+The item said the flag "is what renders the label the note captured twice".
+That is not supported. The live SPA reads `can_mark_private` in exactly one
+place, the grid chunk `assets/chunk-expenses._batchId-7cO7KDYP.js`, through
+one helper:
+
+```js
+Zt(row) = typeof row.can_mark_private === "boolean" ? row.can_mark_private
+                                                    : row.card == null
+```
+
+and `Zt` has two callers, both of which a confirmed private row already
+escapes for another reason:
+
+* the "Suggested private expense" chip renders on `Zt(row) && row.suggested_private`, and a private row reads `suggested_private: false`;
+* the card picker computes `Zt(row)` but opens with `if (row.private) return null`.
+
+The private row's own render is the badge `expx.private.badge` ("Private card:
+reimburse {name}") plus the button `expx.reimburse.undo`, and neither is gated
+on this flag. So the flip is **safe** (it removes no control the reviewer has)
+and **invisible today** (it changes nothing on screen).
+
+**The duplicate is found, and it is in the Paid Through column.** Cold drive
+of September row 0046 after the deploy, 2026-09-24: the row renders the badge
+"Private card: reimburse Dirk Neumann", the button "Undo private card" (so the
+flip removed nothing, which was this change's one real risk), and then
+`Private (Dirk Neumann)` twice. Both copies sit in cell index 7, the Paid
+Through column, and they are different elements rendering the same value: a
+plain `div.px-1.text-sm.text-foreground` inside the cell's
+`flex flex-col gap-1` wrapper, and the `span` inside the account select's
+`role="combobox"` trigger. On an ordinary row those two carry different text
+or the static line is absent; on a private row both resolve to
+`Private ({person})` and collide. Of 80 rows on the page exactly ONE doubles,
+and it is the private one, so this is one collision to remove and not a Paid
+Through redesign. Fix is §5 of `docs/lovable-private-reimburse-prompt.md`:
+drop the static line when it equals the select's current value.
+
+So the note had two halves and they live in different places. The flag saying
+"you may mark this private" on a row already private is this item and is
+shipped; the doubled label is the Paid Through cell and is SPA-side, pending
+that prompt.
+
+Shipping the predicate anyway is not bookkeeping: `Zt` is the screen's whole
+answer to "may I offer the private control here", it answers *yes* on a row
+that is already private, and item 175's work adds a private control to exactly
+that area. Fixing the contract before building on it is the cheap order.
+
+**Instrument note (a confident negative that was wrong for 20 minutes).** The
+first bundle scan reported `can_mark_private` absent from every chunk, on a
+probe that had validated itself against `suggested_private` and `reimburse_to`
+and found them. The probe was fine; the file list was not. Chunk names were
+harvested with `chunk-[A-Za-z0-9_-]*\.js`, which cannot match
+`chunk-expenses._batchId-7cO7KDYP.js` because of the dot, so the one chunk
+that holds the grid was never downloaded. A validated probe over an
+incomplete corpus still returns a confident absence. Harvest asset names with
+a pattern that allows dots, and sanity-check the corpus by requiring a field
+you know the page must read (`document_id` sat in one unrelated chunk, which
+was the tell).
+
+### 177. Settings saves all 33 merchants at once, so nothing ever folds away (note #77, operator 2026-09-23)
+
+**Operator:** *"to maintain overseeability save merchant should be merchant
+specific so that merchants fold away once confirmed by user"*
+
+`GET /api/settings` returns `merchants` as ONE object of 33 entries and the
+write side takes it whole, so "Save merchants" is a single all-or-nothing
+write over the registry and no entry has a confirmed state of its own to fold
+on. The ask is per-merchant save plus a confirmed flag, in that order: without
+the flag there is nothing for the fold to key on.
+
+Belongs to the learning theme items 163-166 cover, and is the one note of that
+wave still open. Item 163's memory ledger is the precedent for the write half:
+a save that says what it did, per row.
+
+### 178. A receipt you cannot read (notes #3 / #32 / #82, 2026-07-16 to 09-23) (BACKEND SHIPPED 2026-09-24, pending PR; SPA half `docs/lovable-receipt-viewer-prompt.md`, not pasted)
+
+**Operator (PT):** *"Se possivel ter uma lupa para ampliar a foto do recibo"*
+("if possible, a magnifier to enlarge the receipt photo").
+
+**This is the third time the same person has asked, over 69 days.** A scan of
+all 85 notes for the receipt image returns exactly three, all Portuguese, all
+the same underlying need, and nothing else:
+
+| Note | Date | Comment | Reads as |
+|---|---|---|---|
+| #3 | 2026-07-16 | *Precisa ser baixado a foto do recibo para ser usada.* | the photo has to be downloaded before it is usable |
+| #32 | 2026-09-08 | *recibo nao estar abrindo* | the receipt is not opening |
+| #82 | 2026-09-23 | *Se possivel ter uma lupa para ampliar a foto do recibo.* | if possible, a magnifier |
+
+Read the escalation in the phrasing rather than the content: a flat statement
+in July, a fault report in September, and "if possible" three weeks later.
+That last register is what someone writes after asking twice. #32 was itemized
+and #3 never was.
+
+Pure SPA, and the bytes are already there: 73 of September's 75 rows read
+`has_receipt_image: true` and all 75 read `receipt_image_available: true`.
+`receipt_url` is empty on every row, so the SPA builds the path itself; a
+viewer reuses whatever it already fetches for the thumbnail.
+
+The smallest thing that answers it is click-to-open at full size with zoom and
+pan. She is reading amounts and dates off phone photos of paper receipts, so
+magnification IS the feature; a lightbox that fits the image to the window
+answers none of the three notes.
+
+**Rank it against the wave it arrived in, not against its size.** Nine of the
+thirteen notes in the #73-#85 range are system architecture. This one is
+somebody unable to read a receipt while reconciling it, for the third time
+since July.
+
+**The cause was the payload, not the viewer (found 2026-09-24).** `/image`
+served the stored file with its own media type, and **70 of September's 75
+receipts are PDFs**. A PDF cannot go in an `<img>`, so the only thing a
+browser-side viewer could do with one is download it, which is note #3 word
+for word. Item 52 had already driven the live SPA for #32 and found its "View
+receipt" button dead; this is the half underneath that button. Confirmed by
+reading the published bundles: the SPA fetches the receipt as a blob and its
+ONLY `createObjectURL` is the download helper, so downloading is not a
+workaround anyone chose, it is the only thing the payload allowed.
+
+**BACKEND SHIPPED.** `?as=png` on the existing route renders the stored file
+to a raster whatever it was: a PDF page comes back `image/png`, a photo comes
+back untouched (re-encoding a JPEG would only cost quality). `?page=N` is
+0-based and clamped so a viewer asking past the end gets the last page rather
+than an error, `X-Receipt-Pages` carries the count, and a PDF that will not
+rasterize falls back to the stored bytes with `X-Receipt-Render: failed`
+rather than 404, because a receipt the reviewer can download beats one the
+tool says does not exist. **Without the parameter the response is byte-for-byte
+what it was**, which is the negative case the tests pin: a change that only
+proved the new path works would let every existing caller rot silently.
+New module `src/expense_recon/receipt_render.py`; tests
+`tests/test_receipt_render_178.py` (13), red-proven with `regress_check.py`
+(disabling the wiring reddens 3 caller-level tests, not just the helper's).
+
+**The SPA half is the actual fix for Criss** and is not pasted:
+`docs/lovable-receipt-viewer-prompt.md`. It carries the measurement that
+decides the design, which is why the prompt insists on zoom over a lightbox:
+the row note #82 was left on is a **444 x 2573** JPEG, 5.8 times taller than
+wide. Fit-to-window puts that at roughly a third of full size on a 913px
+viewport and the text is gone. A bigger thumbnail answers none of the three
+notes.
+
+### 179. The pickable categories are eight strings, not Brisken's Zoho chart (note #83, owner 2026-09-23)
+
+**Owner:** *"available categories should be zoho chart of accounts that
+brisken uses in zoho expense"*
+
+`settings.categories` is a closed list of exactly eight: Travel & Transport,
+Meals & Entertainment, Software & Subscriptions, Office Supplies &
+Consumables, Equipment & Hardware, Marketing & Advertising, Professional
+Services, Utilities & Premises. None of them is a Zoho account, and the
+account a row actually posts to is resolved separately (the merchant's
+`zoho_account`, else the company rule, else the chart).
+
+So the reviewer picks from one vocabulary and the export posts from another,
+which is the same gap item 156 named as the 52-row Zoho-account-to-category
+table nobody has ruled on.
+
+**FILED AS RECORD, NOT QUEUED.** This is expense category definition, and the
+direction closing item 170 landed 53 minutes after the note. Do not start it
+on the strength of the note alone.
+
+### 180. One merchant holds one GL account, and it is applied forward (note #84, owner 2026-09-23)
+
+**Owner:** *"This should not be applied automatically to new months because
+some merchants can have more than one GL account. Manual editing by the user
+should adjust the merchant's registry. Per entity expense account relevant
+zoho accounts"*
+
+The field is real and it is single-valued: each registry entry carries one
+`zoho_account` string, labelled in Settings as overriding the chart-derived
+account. 28 of the 33 merchants have one set. The owner is naming three
+separate things and they should not be merged into one build:
+
+1. **One value cannot hold two accounts.** A merchant that legitimately books
+   to more than one account has no way to say so, and the single value wins
+   over the chart every time.
+2. **It carries forward silently.** A registry value applies to every month
+   that matches the merchant afterwards, which is what "not applied
+   automatically to new months" objects to.
+3. **The relevant account is per legal entity**, and `zoho_account` has no
+   entity dimension at all.
+
+**Measured, and it already misfires**: the registry holds only **3 distinct
+accounts** across 28 merchants, all in the travel tree, and both Professional
+Services merchants (MEGA CENTER, MEGA CENTRE, two spellings of one merchant)
+carry `E100010 - Travel Expense`. A professional-services charge is sitting on
+a travel account today because one registry value was applied forward.
+
+That misfire is worth surfacing to the owner on its own, and does not need the
+category work to move.
+
+**FILED AS RECORD, NOT QUEUED**, same reason as 179.
+
+### 181. Every cloud vendor in the registry has no account at all (note #85, owner 2026-09-23)
+
+**Owner:** *"dont forget the accounts criss would match for cloud expenses"*
+
+Measured, and it is the sharpest of the three: **all five Software &
+Subscriptions merchants carry no `zoho_account`** (Brave Software, Lovable
+Labs, Lovable Labs Incorporated, ZOHO Corp., Anthropic). Every other populated
+category has one. So cloud spend is the one class of expense the registry
+answers with nothing, and it falls through to the company rule or the chart.
+
+Two of those names are one vendor spelled twice, which is item 170's canonical
+problem showing up again in a different column.
+
+**It is already posting, and the account is not an account.** Measured on live
+July while checking something else: both Google LLC rows (2026-06-30, 71.64)
+read `posting_category.zoho_account: "Software & Subscriptions"`. That is the
+category name standing in for an account, which is the documented fallback
+(`posting_common._debit_account_and_note` passes `cat.zoho_account or
+cat.category` through when no chart is loaded, the same branch that caused the
+July export's Gap 1). So an absent registry account does not surface as a
+refusal; it surfaces as a plausible-looking string that Zoho has no account
+for.
+
+That moves this out of tidiness. Every cloud charge is one chart-load away
+from posting to a name that does not exist, and cloud is the category with
+zero coverage.
+
+This is the concrete, bounded half of 179 and 180: it needs an account per
+cloud vendor from the owner, not a vocabulary redesign. **FILED AS RECORD**,
+but of the three it is the one that could ship the moment the owner gives the
+five accounts, and the one with a live consequence if he does not.
+
+### Feedback notes: none. Items 182-184 come from the GL categorization build (2026-09-23)
+
+Found while building the direct-to-Zoho-GL chain (PRs #1232, #1234, #1236,
+#1238) and recorded in `docs/zoho-gl-categorization-architecture.md` under
+"Open, and whose it is". None of the three is a vocabulary question; all
+three are places where something plausible is accepted with nothing checking
+it.
+
+### 182. The chart pull is silently truncated, and 19 of Dirk's accounts are missing from it (SHIPPED 2026-09-24, `tools/pull-brisken-zoho-coa.py`)
+
+`zoho-books-coa.json` held exactly 199 accounts for Cloud Services
+(697686691), with zero `cost_of_goods_sold` and zero `other_expense`, while
+Consulting carried 25 and 5 and Corporate Services 11 and 4. Nineteen
+accounts Dirk marked expense-relevant were absent, including
+`2031056000014161139 COGS - DEV Infrastructure (SAP Apps & others)`, the
+account Anthropic posts to under Cloud Services.
+
+**The stated cause was wrong, and the fix it implied does not work.** 199
+sits one below a 200-row page boundary, so this was filed as a pull that
+stopped paginating, with "re-pull following pagination plus a count
+assertion so a short page fails loudly" as the remedy. The puller in
+`.scratch/zoho_coa_refresh.py` already followed `has_more_page`, and
+returned the same 199. Measured against the live API on 2026-09-24, walking
+pagination to exhaustion each time:
+
+| params | per_page | rows | pages | `has_more_page` |
+|---|---|---|---|---|
+| default | 200 | 199 | 1 | false |
+| default | 100 | 89 | 1 | false |
+| default | 50 | 47 | 1 | false |
+| showbalance | 200 | 247 | 2 | false at the end |
+| showbalance | 100 | 86 | 1 | false |
+
+A smaller page returns fewer total rows and the server reports completion
+every time, so there is no page size at which this endpoint is trustworthy
+for this org, and a short-page assertion would fire on every call while
+proving nothing. The two listings are not nested either: 7 accounts appear
+only under the default params, 55 only under `showbalance` (whose documented
+spelling `show_balance` is accepted and silently ignored), and their union of
+254 still omits `2031056000023745007 E600010-30-10 Marketing Expenses -
+people`, which `GET /chartofaccounts/{id}` returns as active and typed
+`expense`.
+
+**Shipped:** `tools/pull-brisken-zoho-coa.py` merges both listing
+parameterizations, then tops up by id against the compiled curated taxonomy
+as an outside answer key, and asserts that every account_id Dirk marked
+postable is present per org. That assertion has independent ground truth,
+which "we saw N rows" never did. Live 2026-09-24: Cloud Services 199 -> 255
+(+56, -0), Holding 189 -> 193, sandbox 195 -> 196, every other org unchanged
+and every merge a strict superset; 67 / 64 / 68 curated postable accounts all
+present, one recovered by id. Tests `tools/tests/test_pull_brisken_zoho_coa.py`
+(18, CI-run); three regress proofs red first at the caller (the by-id top-up
+call, the `showbalance` plan, the org-name carry-forward).
+
+**Also found, not part of this item:** the Zoho token is no longer read-only.
+Its granted scope on 2026-09-24 reads `ZohoBooks.expenses.CREATE
+ZohoBooks.expenses.READ ZohoBooks.contacts.READ ZohoBooks.accountants.READ`,
+read off the token response. `settings.READ` is gone with it, which is why
+`GET /organizations` now 401s with code 57 and why the puller does not route
+through the org directory.
+
+### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account (HALF B SHIPPED 2026-09-24; half A is an owner decision, see below)
+
+**Half B shipped 2026-09-24.** A disagreeing account is now a conflict in BOTH
+learners, and a category-only teach no longer wipes a learned account. What
+landed, and why it is wider than this item's wording:
+
+- The settings registry (`registry_upserts_from_expense_run`) records an
+  account disagreement separately and refuses the merchant, counted as the new
+  `skipped_account_conflict`. Absence is not disagreement: a row naming no
+  account is silent, so the first account NAMED wins over rows naming none.
+- **The same defect was in `_learn_categories`** (`learning/capture.py`), which
+  this item did not name and which matters more: it writes
+  `learning/store.merchant_category`, Tier 1 of the direct-to-GL chain,
+  consulted AHEAD of the settings registry. Fixing only the registry would
+  have left the nearest-plausible default in the layer that outranks it, so
+  item 183 would not actually have been a completed prerequisite.
+- `record_merchant_category` overwrote `zoho_account` unconditionally while its
+  operator twin has carried a `keep_account` guard for exactly this. A month
+  whose reviewer picked a category and named no account was nulling the learned
+  posting account the COA gate depends on. It now takes the same guard.
+- `PlannedWrite` carries kwargs and `apply_plan` replays them. Without that the
+  memory-plan preview would promise the account was kept and the applied write
+  would wipe it.
+
+An already-stored account is deliberately LEFT STANDING when this month's rows
+disagree. The registry carries no provenance on `zoho_account` (unlike
+`card_key_learned`), so a clear could not tell a value Dirk typed on the
+Settings screen from one a run learned. The new count is what keeps that choice
+from being silent.
+
+Five wiring points proven RED under `tools/regress_check.py`; suite 3171 ->
+3177 passed / 2 skipped. Tests:
+`tests/test_registry_account_conflict_item_183.py`.
+
+**Half A ("the upsert on a deliberate save") was NOT done, and needs an owner
+ruling rather than an agent's.** It would partially reverse the owner ruling of
+2026-09-16 recorded verbatim at `web/service.py:15555-15562`, which moved the
+write ONTO Publish precisely because the deliberate-save button had been
+pressed zero times and the live store held 0 learned entities and 0 field
+corrections. This item's premise that "nobody chose to teach anything" is not
+accurate: someone did, on the record. Since item 163 the Publish-path save is
+also previewed, journalled with a pre-image, and undoable, so the remaining gap
+is that Publish does not SHOW the plan first, not that the write is
+unrecoverable.
+
+If the owner does want it, the machinery already exists and the change is
+small: `POST /api/runs/{id}/commit-memory` already runs this code with
+`trigger=MEMORY_TRIGGER_BUTTON`, `GET /api/runs/{id}/memory-plan` already
+returns the per-merchant before/after diff, and the trigger enum already
+distinguishes them. It is threading the trigger down and gating ONLY the
+category/account fold, leaving aliases, cards and cost centres teaching at
+Publish (gating the whole registry block would force the single
+`settings_store.set_settings` write to be split, against a `PUT /api/settings`
+the SPA sends wholesale). The risk to weigh is starvation: if nobody presses
+Save, the registry's category half stops growing silently. It is bounded,
+because Tier 1 keeps teaching at Publish.
+
+Two smaller questions surfaced and are deliberately deferred: whether a
+single-row recategorization that names no account should clear the account
+stored for the OLD category (not a conflict, so outside this item's wording,
+and it changes what an ordinary one-receipt edit does every month), and whether
+the written `zoho_account` should be validated against the curated per-entity
+leaf list (belongs to the conversion, where that list becomes the vocabulary).
+
+---
+
+Original filing:
+
+`registry_upserts_from_expense_run` fires automatically on Publish, not on a
+deliberate reviewer save. Two things follow from that, and the second is the
+one that matters under the new design.
+
+Its conflict detection compares the **category only, never `zoho_account`**.
+So two rows that agree on the category and name different accounts do not
+conflict, and the first account wins silently. Under a design where the
+account IS the answer rather than a detail hanging off the category, that is
+a nearest-plausible default sitting inside the writer of durable memory: the
+thing later runs consult ahead of the model.
+
+That the write rides on Publish rather than on an explicit save compounds
+it. Nobody chose to teach anything; a month was published and the registry
+changed.
+
+Wanted: the upsert on a deliberate save, and conflict detection that treats
+a disagreeing account as a conflict rather than as agreement. **Needs fixing
+before the chain writes through it**, which makes it a prerequisite for the
+step that converts the engine, not a later tidy-up.
+
+### 184. `paid_through_account_id` is a raw id that passes through no resolution and no check
+
+`zoho/expense_post.py:596-597` sends `paid_through_account_id` to Zoho as a
+numeric id that nothing resolved and nothing validated: not against the
+entity's chart, not for leaf-ness, not for being active, not for belonging
+to this org at all.
+
+This is the same class as the bug the GL change removes, on the card side
+rather than the expense side. The expense account now goes through
+`curated_leaves.account_id_for(org_id, code)`, which refuses anything this
+entity cannot post to; the account the money is paid FROM goes through
+nothing. A wrong id here posts to a real account in the wrong place exactly
+as quietly as the category-to-account table did.
+
+Wanted: the same treatment the debit side just got. Resolve it per entity,
+assert it is numeric and postable-from, refuse rather than default.
+**Bounded and ours**, though the correct value per card is master data and
+overlaps item 172 (card 3645's account, which is Dirk's).
+
+### 185. A card-first status view, across months (note #86, owner 2026-09-24)
+
+**Owner:** *"I'm looking for a feature where I'm able to sort and find a
+status for a single card. For example if I want an overview of: which cards
+are missing / which receipts are missing or don't have a corresponding
+statement / which statements don't have a corresponding receipt. I don't know
+which month it is on or I don't really just want a grand overview of what's
+open on the card. There is no feature for that right now. Somehow being able
+to select which card I'm trying to find and then see what the status is on
+that card would be pretty useful."*
+
+Left on `/months` at 00:05 UTC, so it is about the month list being the only
+entry point: everything the tool knows is filed by month, and the owner's
+question is filed by card.
+
+**Most of the arithmetic already exists; it is the axis that does not.**
+`coverage[]` on a batch already carries, per card:
+`card_key`, `label`, `known`, `digits`, `entity`, `n_transactions`,
+`n_reconciled`, `n_unmatched_tx`, `n_review`, `n_refunds`, `period_start`,
+`period_end`, `statements`, `statement_ids`, `unreconciled_by_ccy`. So "which
+statements have no receipt" is `n_unmatched_tx` and "what is open on this
+card" is `n_review` + `unreconciled_by_ccy`, both already computed per card
+per month. What is missing is a route that pivots them: card first, months
+underneath.
+
+**Measured across all 7 batches, 2026-09-24 (read-only):** 9 cards defined in
+Settings, and only 3 batches carry `coverage[]` at all (April 10 entries,
+August 10, July 9). September, June, May and January have ZERO coverage and
+zero statements, so a card-first view would show four of seven months as
+blank, and that blankness IS the answer to "which cards are missing" for
+those months. Two coverage rows are not cards at all (`digits:4700` and `?`,
+both `known=False`), which is the tool naming a card it saw on a statement
+and cannot resolve; those belong in the view, since an unrecognised card is
+exactly what the owner wants surfaced.
+
+Three cards (`card-0113`, `card-6013`, `card-8311`) read `n_tx=0, stmts=0` in
+every month that has coverage and carry zero expense rows anywhere. Either
+they are dormant or they have never been fed a statement; the view is how
+that question stops needing a probe to answer.
+
+Scope note: this is a new surface, not a defect fix, so it is a quote-separately
+candidate under the licence's defect-class scope rather than covered work.
+Recommended shape when it is built: one backend route that aggregates the
+existing `coverage[]` across batches keyed by `card_key`, then an SPA page;
+no new per-card arithmetic.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 116 | Typing an FX rate in Settings is gone: the settings key retired (read drops it, write ignores it, the stored row is migrated), the matcher's `configured` rung and `MatchingConfig.fx_reference_rates` removed, `apply_master_data` stops writing rates into a run config, item 132's drift advisory deleted, and `rematch_month` tops up a month's ECB table so no month is left without a rate. The retired key stays parseable and is dropped, so every existing month and the scorer asset still load | Backlog item 168 (owner: "no more typing them in settings you can remove that function entirely"). Measured in-container first: July 2026 carried the typed rates and NO ECB table, so removing the rung alone would have blanked its 18 cross-currency pairs | 2026-09-23 |
+| 115 | Daily FX reference rates polled from OpenTickers: a boot + 24 h poll thread, a one-time backfill of the live months (the key is a paid tier), the `fx_daily_rates` store table (units per EUR by day, ECB record preferred), the matcher's `opentickers_day` rung on the charge's own day (nearest day within four, earlier on a tie) between the self-derived rates and the ECB monthly average with the 2% band, the table refreshed into every month on each re-match, `GET /api/settings.fx_daily_rates` and `POST /api/fx/poll`. Typed Settings rates still win, so July and August did not move | Backlog item 167 (feedback note #79, Dirk, anchored on Settings > FX reference rates: "fx rates should be polled daily via open tickers API"). regress_check proved the re-match wiring bites (4 route tests red unwired) | 2026-09-23 |
 | 114 | R4.1, the trip lifecycle owes its months a re-match. Four entrances now stamp `rematch_pending(trigger="trip")` INSIDE their own `_BATCH_ADD_LOCK` span and pay it outside: a receipt joining a trip, a date edit (the UNION of the months the old range covered and the new one does), a trip-batch delete (the borrowing months chosen BEFORE the delete) and a trip-receipt delete. The paying loop gained the per-month try/except `rematch_neighbour_months` has always had, the candidate filter gained the expense-generation check, `learning_db_path` is threaded through both trip entrances, a rename carries onto the batch label and onto every borrowing month's stored `settled_by` label, and the trip-batch create slot is released on ANY failure rather than only on `RunInputError` | Owner ruling 2026-09-21 on the R4.0 findings: "must be done because later on if expenses and items in statement dont line up we will have a problem." Measured on a copy of the live store the day before: moving a trip's dates off July, and deleting its batch, each left July reporting **33 charges reconciled where 31 was true**, with `settled_by` badges naming a run that no longer existed. Nothing corrupted (claims released correctly, and July's next re-match healed it completely) and nothing scheduled that next re-match, so a month stayed wrong until something unrelated happened to touch it. The adversarial catch during the build was the repo's own item-18 guard: `put_trip` and `delete_expense` are `async def`, and the first draft blocked the EVENT LOOP on a lock an OCR ingest holds for minutes; both locked spans now go through `run_in_threadpool` | 2026-09-21, this round; `tests/test_trip_lifecycle_rematch.py` (12, route-level, self-contained fixtures); suite 2714 -> 2726 passed / 2 skipped; ruff clean. Eight wiring points proven RED under `tools/regress_check.py`, the date gate in BOTH directions (forced off reddens the move-off test, forced on reddens the roster-edit test that asserts a non-date edit owes nothing): `--replace` literals recorded in the PR. The first draft's durability test did NOT bite (it drove create-with-receipt while the mutated wire was the gradual-add path); caught by `regress_check` and closed with two add-path tests |
 | 113 | Item 38's SPA half: the four Lovable prompts for R3 and R4 published and bundle-verified applied on the same day the backend landed (`lovable-trips-prompt.md`, `lovable-r4-settled-by-prompt.md`, and the two cost-center prompts that followed) | Recorded retroactively 2026-09-21. All four were audited by bundle only; none had ever been driven in a browser, because no trip and no cost center existed live to render. The 2026-09-21 cold drive against a local copy closed that: the Trips screen, the trip batch page and July's "Settled by trip ..." badge all render. The one field that does NOT render is `roster_mismatch` / `n_roster_mismatch`, emitted and documented since R3 and carried by no prompt | PR #698, 2026-09-07 |
 | 112 | R4a, the cross-batch guarantee: the `receipt_claims` registry, `(receipt_run_id, document_id)` as the global one-receipt-one-charge key, advisory exclusion before matching, the authoritative re-check inside `_BATCH_ADD_LOCK` at commit, and the reviewer verdicts that keep it current (release on reject, move on re-pick, 409 `receipt_settled_elsewhere` / `receipt_just_settled` on a pick that would steal another run's receipt) | Recorded retroactively 2026-09-21. Without the registry a receipt sitting in a trip could settle a charge in July AND in August; the claims table is what makes the spanning pool safe rather than double-counting | PR #685, commit `fc75c8a9`, 2026-09-07; `tests/test_receipt_claims.py` |

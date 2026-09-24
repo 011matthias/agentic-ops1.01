@@ -53,9 +53,16 @@ class ResetPlan:
     org_id: str
     expense_ids: tuple[str, ...]
     lines: tuple[str, ...]
+    total_in_org: int = 0
 
     def __len__(self) -> int:
         return len(self.expense_ids)
+
+    @property
+    def expected_remaining(self) -> int:
+        """What a clean run must leave behind. Zero for a full reset, the
+        untouched rows for a targeted one."""
+        return max(0, self.total_in_org - len(self.expense_ids))
 
 
 @dataclass(frozen=True)
@@ -64,13 +71,19 @@ class ResetReport:
     deleted: tuple[str, ...] = field(default_factory=tuple)
     failed: tuple[tuple[str, str], ...] = field(default_factory=tuple)
     remaining: int | None = None
+    expected_remaining: int = 0
 
     @property
     def ok(self) -> bool:
         """Clean only when every delete succeeded AND a re-list confirms
-        the org is empty. `remaining is None` means the verification did
-        not run, which is not the same as passing."""
-        return not self.failed and self.remaining == 0
+        exactly the expected rows survive. `remaining is None` means the
+        verification did not run, which is not the same as passing.
+
+        The expectation is carried rather than hardcoded to zero: a
+        targeted delete legitimately leaves the rest of the org standing,
+        and a report that called that a failure would train the reader to
+        ignore `ok`."""
+        return not self.failed and self.remaining == self.expected_remaining
 
 
 def _assert_sandbox(org_id: str) -> None:
@@ -88,23 +101,65 @@ def _assert_sandbox(org_id: str) -> None:
         )
 
 
-def plan_reset(client: "ZohoClient", *, org_id: str) -> ResetPlan:
-    """Enumerate the sandbox's expenses. Read-only; deletes nothing."""
+def plan_reset(
+    client: "ZohoClient",
+    *,
+    org_id: str,
+    only_ids: "tuple[str, ...] | list[str] | None" = None,
+) -> ResetPlan:
+    """Enumerate the sandbox's expenses. Read-only; deletes nothing.
+
+    `only_ids` narrows the plan to named rows, for pulling one stray
+    record without destroying a rehearsal that is still in use. Because
+    the sandbox now holds months the ledger claims are posted, a full
+    reset would silently desynchronise the ledger from Zoho, so the
+    targeted form is the safer default for anything short of a true
+    reset.
+
+    A requested id that the org does not hold ABORTS rather than being
+    skipped. A delete-by-id that quietly ignores a miss lets you believe
+    you removed a row that is still there, which is exactly the belief
+    this whole module exists to make impossible.
+    """
     _assert_sandbox(org_id)
     rows = client.list_expenses()
-    ids: list[str] = []
+    present = {
+        str(r.get("expense_id") or "").strip(): r
+        for r in rows
+        if str(r.get("expense_id") or "").strip()
+    }
+    if only_ids is None:
+        wanted = list(present)
+    else:
+        wanted = [str(i).strip() for i in only_ids if str(i).strip()]
+        if not wanted:
+            raise SandboxGuardError(
+                "only_ids was given but names no expense; refusing to fall "
+                "back to deleting everything"
+            )
+        missing = [i for i in wanted if i not in present]
+        if missing:
+            raise SandboxGuardError(
+                f"refusing to reset org {org_id}: {len(missing)} requested "
+                f"expense(s) are not in it: {', '.join(missing)}. A delete "
+                "that skips a miss would report success for a row still "
+                "standing"
+            )
+
     lines: list[str] = []
-    for r in rows:
-        eid = str(r.get("expense_id") or "").strip()
-        if not eid:
-            continue
-        ids.append(eid)
+    for eid in wanted:
+        r = present[eid]
         lines.append(
             f"{eid}  {r.get('date')}  {r.get('total')}  "
             f"{r.get('paid_through_account_name') or '(no card)'}  "
             f"{(r.get('reference_number') or r.get('description') or '')[:32]}"
         )
-    return ResetPlan(org_id=org_id, expense_ids=tuple(ids), lines=tuple(lines))
+    return ResetPlan(
+        org_id=org_id,
+        expense_ids=tuple(wanted),
+        lines=tuple(lines),
+        total_in_org=len(present),
+    )
 
 
 def execute_reset(
@@ -133,8 +188,8 @@ def execute_reset(
         else:
             deleted.append(eid)
 
-    # A 200 per call says each was accepted. Only a re-list says the org
-    # is actually empty, which is the claim a rehearsal depends on.
+    # A 200 per call says each was accepted. Only a re-list says the rows
+    # are actually gone, which is the claim a rehearsal depends on.
     try:
         remaining: int | None = len(client.list_expenses())
     except Exception:  # noqa: BLE001 - unverified is not verified
@@ -145,4 +200,5 @@ def execute_reset(
         deleted=tuple(deleted),
         failed=tuple(failed),
         remaining=remaining,
+        expected_remaining=plan.expected_remaining,
     )

@@ -64,11 +64,15 @@ EXPENSE_COLUMNS = (
     "Receipt URL",
 )
 
-_PAID_THROUGH_PLACEHOLDER = "(paid-through - assign)"
+# Public because the API posting path REFUSES on them: `zoho/accounts.py`
+# and `zoho/expense_post.py` import these two rather than re-spelling the
+# strings, so the column the export writes and the refusal that reads it
+# cannot drift apart.
+PAID_THROUGH_PLACEHOLDER = "(paid-through - assign)"
 # Cards R3: an unresolved legal entity NEVER blocks an export (owner
 # ruling 2026-08-21) — the row ships with a visible placeholder, the
 # reviewer assigns the card/entity later, and a re-export folds it in.
-_ENTITY_PLACEHOLDER = "(entity - assign)"
+ENTITY_PLACEHOLDER = "(entity - assign)"
 
 
 def _card_last4(payment_mode: str | None) -> str | None:
@@ -183,18 +187,18 @@ def resolve_paid_through(
             "reimbursable",
         )
     if override:
-        return _resolve_or(override, coa, _PAID_THROUGH_PLACEHOLDER), "override"
+        return _resolve_or(override, coa, PAID_THROUGH_PLACEHOLDER), "override"
     if receipt.paid_through:
-        return _resolve_or(receipt.paid_through, coa, _PAID_THROUGH_PLACEHOLDER), "receipt"
+        return _resolve_or(receipt.paid_through, coa, PAID_THROUGH_PLACEHOLDER), "receipt"
     card = card_hint_account or (
         None if card_map_blocked
         else _card_account(receipt.payment_mode, card_accounts)
     )
     if card:
-        return _resolve_or(card, coa, _PAID_THROUGH_PLACEHOLDER), "card"
+        return _resolve_or(card, coa, PAID_THROUGH_PLACEHOLDER), "card"
     if default:
-        return _resolve_or(default, coa, _PAID_THROUGH_PLACEHOLDER), "default"
-    return _PAID_THROUGH_PLACEHOLDER, "unassigned"
+        return _resolve_or(default, coa, PAID_THROUGH_PLACEHOLDER), "default"
+    return PAID_THROUGH_PLACEHOLDER, "unassigned"
 
 
 def _paid_through(
@@ -347,7 +351,7 @@ def build_expense_row_groups(
         entity = (
             (entity_by_doc or {}).get(r.document_id)
             or r.legal_entity_id
-            or _ENTITY_PLACEHOLDER
+            or ENTITY_PLACEHOLDER
         )
         customer = (customer_by_doc or {}).get(r.document_id, "")
         url = (

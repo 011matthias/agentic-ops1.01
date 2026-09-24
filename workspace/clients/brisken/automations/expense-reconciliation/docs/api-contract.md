@@ -3170,6 +3170,147 @@ Route-level in `tests/test_ecb_month_rates.py`; the shape in
 (`test_fx_reference_rate_period_rides_only_on_the_ecb_source`). Renders in
 `docs/lovable-ecb-rates-prompt.md`.
 
+## FX rates polled daily from OpenTickers: `opentickers_day`, `fx_daily_rates`, `POST /api/fx/poll` (feedback note #79, 2026-09-23)
+
+Owner directive 2026-09-23, anchored on Settings > FX reference rates: "fx
+rates should be polled daily via open tickers API". The two rulings of item
+82 and item 90 stand: a rate typed in Settings still wins, for every month.
+
+**Where the rates live.** The store table `fx_daily_rates` holds one row per
+(day, currency): units of the currency per one EUR, the provider's digits as
+text, and the source (`ECB` when OpenTickers carries the ECB record for the
+day, else `median:<sources>`). The run config carries the days a month can
+reach as `matching.fx_daily_rates`, the same shape as the ECB table keyed by
+DAY, refreshed from the store on EVERY re-match (`service.apply_fx_daily_rates`,
+called first thing in `rematch_month`) and committed with the run, so the FX
+block, the single-currency document and a pulled-down `run.local.json` read
+the table the matcher did:
+
+```json
+"matching": {
+  "fx_reference_rates": {"EUR:USD": "1.162275"},
+  "fx_ecb_monthly_rates": {"2026-07": {"USD": "1.1417478260869562", "...": "..."}},
+  "fx_daily_rates": {
+    "2026-07-01": {"USD": "1.144", "BRL": "5.86"},
+    "2026-07-02": {"USD": "1.143", "BRL": "5.845"}
+  }
+}
+```
+
+**The poll.** One daemon thread (`web/fx_daily_rates.py`, the backup
+scheduler's shape) runs a round at boot and every 24 h: once, a backfill from
+the month before the earliest labelled month to today through
+`/exchange_rates/historical` (the account's plan allows it, checked
+2026-09-23; a 403 is remembered and the round keeps to `/latest`), then
+`/exchange_rates/latest` for every currency the estate needs
+(`needed_currencies`: USD and BRL by default, plus every currency a typed
+pair or a card names and every month's statement currency). Fail-open: a
+failed fetch leaves the table as it was and the next round tries again;
+nothing waits on the provider. OFF unless `OPENTICKERS_API_KEY` is set
+(`EXPENSE_RECON_FX_POLL=0` also switches it off).
+
+**How the matcher reads them.** `MatchingConfig.daily_rate`: the cross
+through EUR on the CHARGE's `transaction_date`, or the nearest day inside
+`fx_daily_rate_max_gap_days` (4; earlier wins a tie, so a Saturday purchase
+reads Friday's fix), six decimals. The rungs, in order: `configured`,
+`statement`, `receipts`, `opentickers_day`, then `ecb_month`. The daily rate
+sits above the monthly average because a day is the grain the card locked
+the rate at (Visa and Mastercard fix it at authorization), and below the
+self-derived rates on item 82's bundle evidence. Its clean band is
+`fx_ecb_match_pct` (2%), shared with `ecb_month`. The reason reads
+`OpenTickers daily reference rate 1.143 (2026-07-02)`.
+
+**`fx.reference_rate_source`** gains `opentickers_day`.
+
+**`fx.reference_rate_period`** is present for `opentickers_day` too, as a
+DAY, `YYYY-MM-DD` (the day whose rate was used, which differs from the
+charge's date when that day had no fix); for `ecb_month` it stays
+`YYYY-MM`; absent on every other source, never null.
+
+**`GET /api/settings`** gains the derived, read-only key `fx_daily_rates`
+(`SETTINGS_DERIVED_KEYS`; a PUT carrying it answers `ignored`):
+`{provider: "opentickers", enabled, poll_interval_hours: 24,
+last_fetched_at, last_error, backfilled_from, history_refused, n_days,
+first_day, last_day, currencies[], latest: {day, per_eur{}, pairs{}}}`.
+`latest.pairs` uses the typed rates' `FROM:TO` keys (every ordered pair
+among the polled currencies and EUR, six decimals) so the screen can set
+the two side by side; `latest` is `{}` until the first successful round.
+
+**`POST /api/fx/poll`**, new: runs one round now and answers its summary
+`{ok, n_stored, currencies, backfilled_from, errors[], fetched_at, n_days,
+first_day, last_day}`; `ok: false` with `errors[]` when the provider
+failed; `409 {"error", "code": "fx_poll_disabled"}` when no key is set.
+
+**Setup advisory.** `fx_rate_missing` is quiet for a currency the month's
+daily table crosses into the card currency; its message now names all three
+sources it looked at.
+
+**What it did not change live.** July `50622baec444` and August
+`074a7b8905d7` carry the typed Settings rates, which win, so their matching
+and every FX block are unchanged by this deploy. A month whose config holds
+no typed rate for a pair reads the daily rate on its next re-match.
+
+Route-level in `tests/test_fx_daily_rates.py` (the provider stub answers the
+live record shape of 2026-09-23); the rung order and the day window at unit
+level in the same file; `regress_check` proved the re-match wiring bites.
+Renders in `docs/lovable-fx-daily-rates-prompt.md`.
+
+## Typed FX rates retired: `fx_reference_rates` is gone (owner 2026-09-23)
+
+Owner directive, the afternoon note #79 shipped: "no more typing them in
+settings you can remove that function entirely, we will only rely on these
+daily rates API stuff."
+
+**The settings key is retired.** `GET /api/settings` no longer returns
+`fx_reference_rates`; `PUT` accepts it, reports it in `ignored` and stores
+nothing (a 400 would break the published SPA, which keeps sending the key
+on every FX-tab save until its removal prompt is applied); and `RunStore`
+deletes it from the stored row on open, so the two rates the live estate
+carried (EUR:USD 1.162275, BRL:USD 0.192448) are gone rather than hidden.
+`store.RETIRED_SETTINGS_KEYS` is the list; `SETTINGS_WRITABLE_KEYS` and
+`SETTINGS_MAP_KEYS` no longer name it.
+
+**The matcher rung is retired.** `_reference_rate_for` runs
+`statement` -> `receipts` -> `opentickers_day` -> `ecb_month`; the
+`configured` source can no longer occur and `fx.reference_rate_source`
+can no longer read `settings`. `MatchingConfig` has no
+`fx_reference_rates` field and no `fx_reference_rate()`. The key stays
+PARSEABLE and is dropped (`_RETIRED_TUNABLES`), because every month
+created before today has it frozen in its stored config and the shipped
+scorer asset still carries it: refusing it would make both unloadable.
+A stored copy is therefore inert, not obeyed, and no client data was
+rewritten.
+
+**`apply_master_data` no longer writes rates into a run config.** A
+month's rates are fetched: `apply_fx_daily_rates` on every re-match, and
+`apply_ecb_rates` at creation, at statement attach, and now also
+`top_up_ecb_rates` on every re-match for any month the stored table does
+not already cover. That top-up is what keeps the retirement safe: July
+2026 was created before item 82 shipped, so its config carried the typed
+rates and NO ECB table, and without it the month would have been left
+with no rate on any rung.
+
+**Item 132's `fx_rate_drift` advisory is gone**, along with its code: it
+existed to say a typed rate had drifted from the ECB's. `fx_rate_missing`
+stays, and its message now names the two fetched sources that came up
+empty instead of telling the operator to set a rate. Its `setting` field
+still reads `fx_reference_rates`, kept as the stable identifier the SPA
+already maps; it is a label, not a live settings key.
+
+**What it did not change:** the self-derived rungs (`statement`,
+`receipts`) read the client's own documents and were never typed, so they
+stay, and stay above the fetched rates on item 82's bundle evidence. The
+labelled-bundle accuracy gate is unchanged (the shipped asset carries
+`"fx_reference_rates": {}`, so no bundle ever matched through the rung).
+
+Route and unit level in `tests/test_ecb_band_item_132.py`
+(`test_a_rate_typed_in_settings_is_no_longer_read_from_a_stored_config`),
+`tests/test_settings_put_contract.py`
+(`test_a_retired_key_is_accepted_and_ignored_never_refused`),
+`tests/test_ecb_month_rates.py`, `tests/test_fx_daily_rates.py`,
+`tests/test_master_data_settings.py`. Renders in
+`docs/lovable-fx-daily-rates-prompt.md`.
+
 ## What a settings save wrote: `applied` + `ignored` (item 91, 2026-09-17)
 
 The settings screen saves ONE group per request and always has: the page
@@ -4214,6 +4355,58 @@ every live mail would carry `blocked: "no_address"` today. Route-level in
 `tests/test_receipt_chasing_item_107.py`; pins in `tests/test_view_contract.py`
 and `tests/test_settings_put_contract.py`. SPA half:
 `docs/lovable-receipt-chasing-prompt.md`.
+## A memory save is a plan, a journal and an undo (item 163, 2026-09-23)
+
+Feedback note #81, on the "Save corrections to memory" button: *"based on
+what? this should be reversible for now, and state explicitly where these
+are saved so user can manage this"*. Three routes answer the three asks, and
+one mechanism backs all of them: the writes a save would make are computed
+as a list BEFORE anything is written.
+
+**`GET /api/runs/{id}/memory-plan`** says what pressing save would do, and
+writes nothing. The plan is produced by running the real learners against
+`learning.RecordingStore`, which accepts the same `record_*` calls and keeps
+them, so the preview cannot describe a different save from the one that
+happens. `writes[]` carries `{table, key, value, surface}` per write,
+`keys[]` the distinct rows, `counts` per table, and `registry` the
+per-merchant `{before, after}` of the same save.
+
+```json
+{"writes": [{"table": "field_correction",
+             "key": {"legal_entity_id": "Corporate Services",
+                     "vendor_norm": "staples", "field": "paid_through"},
+             "value": "1010 Chase", "surface": "memory"}],
+ "counts": {"field_correction": 1}, "registry": {}, "learned": {...}}
+```
+
+**`GET /api/memory/commits`** is the ledger: one entry per save, newest
+first, with the month that taught it, the trigger (`button` / `publish`),
+what it learned, every row it touched with the surface that manages it, and
+`reverted_at` once it has been undone. `surface` is named in
+`service.MEMORY_TABLE_SURFACE` rather than in the SPA, so the answer to
+"where is this saved" cannot drift from the code that saves it.
+
+**`POST /api/memory/commits/{id}/undo`** puts one save back. Every learning
+row returns to the pre-image the journal recorded (a row the save CREATED is
+deleted), the merchant registry returns to the map that preceded the save,
+and the month's `memory_commits` digest is cleared so the next publish
+teaches those corrections again instead of answering `unchanged` over a
+memory that no longer holds them.
+
+Two limits, stated because neither is enforceable in code here. The undo
+restores the pre-image, so a rule EDITED BY HAND on the Memory page after
+the save is overwritten by the undo rather than kept. And the learning store
+and the run store are two SQLite files, so a failure between applying a save
+and journalling it leaves writes that no entry describes; the publish path
+catches it and names it in `memory.error` rather than failing the publish.
+
+Both write paths now return `journal_id` (`POST .../commit-memory`, and
+`memory.journal_id` on publish), so a caller undoes exactly the save it
+made. Refusals: `memory_journal_not_found` (404),
+`memory_journal_already_reverted` (409), and `memory_journal_not_latest`
+(409, carrying `latest_id`) -- saves stack on the same rows, so restoring an
+older pre-image would silently discard a newer save's values.
+
 ## A corrected category comes back next month: what memory decides now (item 115, 2026-09-17)
 
 The sign-off promise is that a category Criss fixes arrives pre-filled the
@@ -4478,6 +4671,9 @@ already started, not a refusal of a request, and nothing keyed off it.
 | `memory_rows_required` | 400 | a bulk validate with no rows | rows must be a non-empty list of {legal_entity_id, vendor} | |
 | `memory_rows_invalid` | 400 | a bulk validate whose rows all failed normalization | no valid rows in the list | |
 | `comment_required` | 400 | a feedback note with no comment | comment is required | |
+| `memory_journal_not_found` | 404 | undoing a save that is not there | no such memory save | |
+| `memory_journal_already_reverted` | 409 | undoing a save that was already undone | this memory save was already undone | `reverted_at` |
+| `memory_journal_not_latest` | 409 | undoing a save a later save has written over | only the most recent memory save can be undone; undo save N first | `latest_id` |
 
 ### Mail intake
 

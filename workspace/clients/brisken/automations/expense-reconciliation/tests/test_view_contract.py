@@ -1123,7 +1123,7 @@ def fx_payload(tmp_path_factory):
     from expense_recon.matching.deterministic import MatchingConfig, match_month
 
     data_root = tmp_path_factory.mktemp("contract-fx")
-    config = {"matching": {"fx_reference_rates": {"EUR:USD": "1.10"}}}
+    config = {"matching": {"fx_ecb_monthly_rates": {"2026-03": {"USD": "1.10"}, "2026-04": {"USD": "1.10"}, "2026-05": {"USD": "1.10"}, "2026-06": {"USD": "1.10"}, "2026-07": {"USD": "1.10"}, "2026-08": {"USD": "1.10"}, "2026-09": {"USD": "1.10"}, "2026-10": {"USD": "1.10"}}}}
 
     def charge(tx_id, day, amount):
         return Transaction(

@@ -106,7 +106,7 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 # operator input the pipeline needs, so three capabilities were dead on
 # every hosted run while working locally from a config file:
 #
-#   fx_reference_rates  {"BRL:USD": "0.192448"} — the month's reference
+#   fx_reference_rates  RETIRED 2026-09-23 (rates come from the daily
 #     rate per currency pair. Without one, a cross-currency receipt can
 #     only reach the implied-rate band / LLM judgment: the real April run
 #     matched 0 of 94 while the same two files matched 29/36 locally with
@@ -151,7 +151,6 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 #     card entry exists (no write migration).
 SETTINGS_DEFAULTS: dict = {
     "export_approved_only": False,
-    "fx_reference_rates": {},
     "card_entities": {},
     "card_accounts": {},
     "entities": {},
@@ -173,7 +172,7 @@ SETTINGS_DEFAULTS: dict = {
 
 # Settings keys holding a {str: str} map. Values are kept as STRINGS: a
 # Decimal FX rate keeps full precision as text, a json float does not.
-SETTINGS_MAP_KEYS = ("fx_reference_rates", "card_entities", "card_accounts")
+SETTINGS_MAP_KEYS = ("card_entities", "card_accounts")
 
 # Every top-level key `PUT /api/settings` actually writes. The settings
 # screen saves ONE group per request (the tabbed page sends {"cards": ...}
@@ -199,10 +198,17 @@ SETTINGS_WRITABLE_KEYS = (
 # are the PUT response's own fields, listed here for the same reason.
 SETTINGS_DERIVED_KEYS = (
     "categories",
+    # The curated GL leaves, per entity, and the taxonomy revision they came
+    # from. Derived beside `categories` rather than replacing it, so a
+    # client that reads the payload and sends the whole object back does not
+    # trip `unknown_settings_keys` on them (2026-09-23).
+    "gl_accounts",
+    "gl_revision",
     "entity_options",
     "cards_effective",
     "merchants_inert",
     "cost_center_options",
+    "fx_daily_rates",
     "applied",
     "ignored",
 )
@@ -214,6 +220,25 @@ SETTINGS_DERIVED_KEYS = (
 # its prompt lands) and the settings payload never serves a value stored
 # before the removal.
 RETIRED_ENTITY_KEYS = frozenset({"account_picks"})
+
+# Whole settings keys the app no longer stores. `GET` never serves them,
+# `PUT` drops them silently (a 400 would break the published SPA, which
+# keeps sending the key until its removal prompt is applied), and
+# `_migrate` deletes them from the stored row once.
+#
+# `fx_reference_rates` retired 2026-09-23, owner directive: "no more typing
+# them in settings you can remove that function entirely, we will only rely
+# on these daily rates API stuff". The live row held EUR:USD 1.162275 and
+# BRL:USD 0.192448, which outranked every fetched rate for every month.
+RETIRED_SETTINGS_KEYS = frozenset({"fx_reference_rates"})
+
+
+def without_retired_settings_keys(settings: dict) -> dict:
+    """`settings` with every retired top-level key removed. A shallow copy:
+    the stored row is never touched (the migration does that once)."""
+    if not any(k in settings for k in RETIRED_SETTINGS_KEYS):
+        return settings
+    return {k: v for k, v in settings.items() if k not in RETIRED_SETTINGS_KEYS}
 
 
 def without_retired_entity_keys(settings: dict) -> dict:
@@ -486,6 +511,36 @@ class RunStore:
                 committed_at TEXT NOT NULL,
                 trigger      TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS fx_daily_rates (
+                day        TEXT NOT NULL,
+                ccy        TEXT NOT NULL,
+                per_eur    TEXT NOT NULL,
+                source     TEXT NOT NULL,
+                fetched_at TEXT NOT NULL,
+                PRIMARY KEY (day, ccy)
+            );
+            CREATE TABLE IF NOT EXISTS fx_daily_rates_meta (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+            -- Item 163: one row per memory SAVE, carrying the pre-image of
+            -- every learning row it touched and of the merchant registry,
+            -- so a save can be read back ("where did this go") and put back
+            -- ("this should be reversible"). Its own table beside
+            -- memory_commits, which holds only the last digest per run and
+            -- is overwritten by the next save.
+            CREATE TABLE IF NOT EXISTS memory_journal (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id           TEXT NOT NULL,
+                label            TEXT NOT NULL DEFAULT '',
+                committed_at     TEXT NOT NULL,
+                trigger          TEXT NOT NULL,
+                rows_json        TEXT NOT NULL,
+                merchants_before TEXT NOT NULL,
+                merchants_after  TEXT NOT NULL,
+                learned_json     TEXT NOT NULL,
+                reverted_at      TEXT
+            );
             CREATE TABLE IF NOT EXISTS decision_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_id TEXT NOT NULL,
@@ -517,7 +572,12 @@ class RunStore:
     def _migrate(self) -> None:
         """Idempotent column adds for databases created before testing mode.
         Existing runs stay published=0 (operator-visible only) until an
-        operator publishes them explicitly."""
+        operator publishes them explicitly.
+
+        Also drops any `RETIRED_SETTINGS_KEYS` still in the stored settings
+        row, so retiring a settings function actually removes its data
+        instead of merely hiding it behind the read path."""
+        self._drop_retired_settings()
         existing = {
             row["name"]
             for row in self.conn.execute("PRAGMA table_info(runs)").fetchall()
@@ -1693,6 +1753,89 @@ class RunStore:
         ).fetchone()
         return dict(row) if row else None
 
+    def clear_memory_commit(self, run_id: str) -> None:
+        """Forget that this run's corrections were saved (item 163's undo).
+        The next publish then teaches them again instead of answering
+        "unchanged" over a memory that no longer holds them."""
+        self.conn.execute("DELETE FROM memory_commits WHERE run_id = ?", (run_id,))
+        self.conn.commit()
+
+    # -- memory_journal (item 163) ------------------------------------------
+
+    def add_memory_journal(
+        self,
+        *,
+        run_id: str,
+        label: str,
+        committed_at: str,
+        trigger: str,
+        rows: list[dict],
+        merchants_before: dict,
+        merchants_after: dict,
+        learned: dict,
+    ) -> int:
+        """Record one memory save with everything an undo needs, and return
+        its id."""
+        cur = self.conn.execute(
+            "INSERT INTO memory_journal (run_id, label, committed_at, trigger, "
+            "rows_json, merchants_before, merchants_after, learned_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                run_id, label or "", committed_at, trigger,
+                json.dumps(rows, default=str),
+                json.dumps(merchants_before or {}, default=str),
+                json.dumps(merchants_after or {}, default=str),
+                json.dumps(learned or {}, default=str),
+            ),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    @staticmethod
+    def _memory_journal_row(row) -> dict:
+        return {
+            "id": int(row["id"]),
+            "run_id": row["run_id"],
+            "label": row["label"] or "",
+            "committed_at": row["committed_at"],
+            "trigger": row["trigger"],
+            "rows": json.loads(row["rows_json"]),
+            "merchants_before": json.loads(row["merchants_before"]),
+            "merchants_after": json.loads(row["merchants_after"]),
+            "learned": json.loads(row["learned_json"]),
+            "reverted_at": row["reverted_at"] or "",
+        }
+
+    def get_memory_journal(self, journal_id: int) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM memory_journal WHERE id = ?", (journal_id,)
+        ).fetchone()
+        return self._memory_journal_row(row) if row else None
+
+    def list_memory_journal(self, limit: int = 50) -> list[dict]:
+        """The saves, newest first."""
+        rows = self.conn.execute(
+            "SELECT * FROM memory_journal ORDER BY id DESC LIMIT ?", (int(limit),)
+        ).fetchall()
+        return [self._memory_journal_row(r) for r in rows]
+
+    def latest_memory_journal(self) -> dict | None:
+        """The newest save that has not been undone; None when every save
+        has been. Saves stack on the same rows, so this is the only one an
+        undo can put back without discarding a later one."""
+        row = self.conn.execute(
+            "SELECT * FROM memory_journal WHERE reverted_at IS NULL "
+            "ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return self._memory_journal_row(row) if row else None
+
+    def set_memory_journal_reverted(self, journal_id: int, at: str) -> None:
+        self.conn.execute(
+            "UPDATE memory_journal SET reverted_at = ? WHERE id = ?",
+            (at, journal_id),
+        )
+        self.conn.commit()
+
     def set_memory_commit(
         self, run_id: str, digest: str, committed_at: str, trigger: str
     ) -> None:
@@ -1708,7 +1851,105 @@ class RunStore:
         )
         self.conn.commit()
 
+    # -- daily FX rates (note #79; polled from OpenTickers) ------------------
+
+    def upsert_fx_daily_rates(self, rows, fetched_at: str) -> int:
+        """Store `(day, currency, units per EUR, source)` rows, replacing a
+        (day, currency) already held: a provider revision for the same day
+        wins. Values are kept as the text they arrived as (a Decimal rate
+        keeps its digits, a float does not). Returns the row count."""
+        rows = [
+            (str(day), str(ccy).upper(), str(per_eur), str(source), fetched_at)
+            for day, ccy, per_eur, source in rows
+        ]
+        self.conn.executemany(
+            "INSERT INTO fx_daily_rates (day, ccy, per_eur, source, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?) ON CONFLICT(day, ccy) DO UPDATE SET "
+            "per_eur = excluded.per_eur, source = excluded.source, "
+            "fetched_at = excluded.fetched_at",
+            rows,
+        )
+        self.conn.commit()
+        return len(rows)
+
+    def fx_daily_rates(
+        self, start: str | None = None, end: str | None = None
+    ) -> dict[str, dict[str, str]]:
+        """`{day: {currency: units per EUR}}` for start..end inclusive
+        (ISO days; either bound optional), days ascending."""
+        query = "SELECT day, ccy, per_eur FROM fx_daily_rates"
+        clauses, params = [], []
+        if start:
+            clauses.append("day >= ?")
+            params.append(str(start))
+        if end:
+            clauses.append("day <= ?")
+            params.append(str(end))
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY day, ccy"
+        out: dict[str, dict[str, str]] = {}
+        for row in self.conn.execute(query, params).fetchall():
+            out.setdefault(row["day"], {})[row["ccy"]] = row["per_eur"]
+        return out
+
+    def fx_daily_rates_status(self) -> dict:
+        """How far the table reaches: `{n_days, first_day, last_day,
+        currencies}`; zeros / None / [] when empty."""
+        row = self.conn.execute(
+            "SELECT COUNT(DISTINCT day) AS n, MIN(day) AS first, MAX(day) AS last "
+            "FROM fx_daily_rates"
+        ).fetchone()
+        ccys = [
+            r["ccy"] for r in self.conn.execute(
+                "SELECT DISTINCT ccy FROM fx_daily_rates ORDER BY ccy"
+            ).fetchall()
+        ]
+        return {
+            "n_days": int(row["n"] or 0),
+            "first_day": row["first"],
+            "last_day": row["last"],
+            "currencies": ccys,
+        }
+
+    def get_fx_meta(self, key: str) -> str | None:
+        row = self.conn.execute(
+            "SELECT value FROM fx_daily_rates_meta WHERE key = ?", (key,)
+        ).fetchone()
+        return row["value"] if row else None
+
+    def set_fx_meta(self, key: str, value: str) -> None:
+        self.conn.execute(
+            "INSERT INTO fx_daily_rates_meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, str(value)),
+        )
+        self.conn.commit()
+
     # -- settings (§16 export policy; one row, id=1) -----------------------
+
+    def _drop_retired_settings(self) -> None:
+        """Delete every retired key from the stored settings row, once.
+        Runs on every open and is a no-op when none is present, so it needs
+        no version stamp and a rollback simply stops dropping."""
+        row = self.conn.execute(
+            "SELECT data FROM settings WHERE id = 1"
+        ).fetchone()
+        if row is None:
+            return
+        try:
+            data = json.loads(row["data"])
+        except (TypeError, ValueError):
+            return
+        if not isinstance(data, dict):
+            return
+        keep = {k: v for k, v in data.items() if k not in RETIRED_SETTINGS_KEYS}
+        if len(keep) != len(data):
+            self.conn.execute(
+                "UPDATE settings SET data = ? WHERE id = 1",
+                (json.dumps(keep),),
+            )
+            self.conn.commit()
 
     def get_settings(self) -> dict:
         """The current settings, with defaults applied. No row yet => the

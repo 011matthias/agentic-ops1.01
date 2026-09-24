@@ -24,6 +24,7 @@ reached parity. This app serves JSON plus file downloads only:
     PUT  /api/runs/{id}/charges/{tx}/category   a category on a CHARGE row
                                    (no receipt needed; item 109)
     GET/PUT /api/settings          §16 export policy
+    POST /api/fx/poll              poll the daily FX rates now (note #79)
     GET  /api/compare              across-runs bucket deltas
     GET  /api/memory               learned facts; POST /api/memory/forget,
                                    POST /api/memory/reset to correct them
@@ -52,7 +53,6 @@ from __future__ import annotations
 
 import json
 import logging
-import mimetypes
 import os
 import re
 import shutil
@@ -60,7 +60,6 @@ import threading
 import time
 import uuid
 from datetime import date, datetime, timezone
-from decimal import Decimal
 from pathlib import Path
 
 from fastapi import (
@@ -89,7 +88,15 @@ from ..cards import card_to_dict, effective_cards, normalize_cards_setting
 from ..cards_provision import card_by_key, load_cards
 from ..error_codes import Refusal, code_of, fields_of  # Refusal: item 104
 from ..ingest.expense_report_images import render_receipt_page
+from ..receipt_render import (
+    ReceiptRenderError,
+    guess_media_type,
+    is_pdf,
+    page_count,
+    render_page_png,
+)
 from .serialize import receipt_from_dict
+from . import fx_daily_rates
 from .service import (
     BATCH_TYPE_COMPANY,
     BATCH_TYPE_TRIP,
@@ -173,6 +180,11 @@ from .service import (  # item 88
     MEMORY_TRIGGER_PUBLISH,
     commit_month_memory,
 )
+from .service import (  # item 163
+    MEMORY_TABLE_SURFACE,
+    plan_month_memory,
+    undo_memory_commit,
+)
 from .service import confirm_expense_category  # note #62
 from .service import set_charge_category  # item 109
 from .service import attach_expense_card_tabs, attach_run_card_tabs  # item 138
@@ -183,6 +195,11 @@ from .month_readiness import (  # items 99 + 100
     PUBLISH_NOT_A_MONTH,
     not_complete_detail,
     readiness_of,
+)
+from ..category_vocabulary import (
+    gl_account_options,
+    gl_revision,
+    recognize as recognize_category,
 )
 from ..matching.types import EXPENSE_CATEGORIES
 from ..cost_centers import (
@@ -196,6 +213,7 @@ from .store import (
     INTAKE_RECEIVED,
     JOB_DONE,
     JOB_ERROR,
+    RETIRED_SETTINGS_KEYS,
     SETTINGS_DERIVED_KEYS,
     SETTINGS_MAP_KEYS,
     SETTINGS_WRITABLE_KEYS,
@@ -206,6 +224,7 @@ from .store import (
     VALID_STATUSES,
     RunStore,
     without_retired_entity_keys,
+    without_retired_settings_keys,
 )
 from . import auth, machine, ratelimit
 from . import decision_history as dh  # item 104
@@ -1198,6 +1217,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     except Exception:  # noqa: BLE001 - a backup never blocks startup
         app.state.backup = None
         log.warning("backup scheduler could not start", exc_info=True)
+
+    # Feedback note #79 (owner 2026-09-23): the daily FX reference rates,
+    # polled from OpenTickers at boot and every 24 h. OFF unless
+    # OPENTICKERS_API_KEY is set (a Fly secret); `start_poll_thread` answers
+    # None in that case and the attribute says so. The first round also
+    # backfills the days the live months span (once; the plan allows it).
+    try:
+        app.state.fx_poll = fx_daily_rates.start_poll_thread(db_path)
+    except Exception:  # noqa: BLE001 - a rate poll never blocks startup
+        app.state.fx_poll = None
+        log.warning("fx poll could not start", exc_info=True)
 
     def open_store() -> RunStore:
         return RunStore(db_path)
@@ -2607,6 +2637,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # Item 77: which batch a move offer would join. Called only for
             # rows that carry an offer, so a month with none pays nothing.
             month_batch=lambda month: _month_batch_id(store, month),
+            # Item 169: the remembered card, read live rather than off the
+            # stamp ingest left, so a correction taught after this month was
+            # ingested still names its card.
+            learning_db_path=app.state.learning_db_path,
         )
 
     def _expense_page_view(store: RunStore, run) -> dict:
@@ -2998,8 +3032,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             settings = store.get_settings()
             return JSONResponse({
-                **without_retired_entity_keys(settings),
+                **without_retired_settings_keys(
+                    without_retired_entity_keys(settings)
+                ),
                 "categories": list(EXPENSE_CATEGORIES),
+                # The new vocabulary, served BESIDE the eight rather than
+                # instead of them: the published SPA keeps rendering
+                # `categories` until the owner publishes a bundle that
+                # reads these. `gl_revision` makes a stale one diagnosable.
+                "gl_accounts": gl_account_options(settings),
+                "gl_revision": gl_revision(),
                 "entity_options": available_entities(settings),
                 "cards_effective": [
                     card_to_dict(c)
@@ -3020,7 +3062,32 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 "cost_center_options": CostCenterRegistry.from_settings(
                     settings
                 ).options(),
+                # Note #79: the poll's state and the newest polled day's
+                # rates (units per EUR + every pair), so the FX tab can
+                # show what the app fetched. Derived and read-only; PUT
+                # ignores it. Since the typed rates were retired (item
+                # 168) these and the ECB monthly average are the only
+                # reference rates the matcher has, besides the ones a run
+                # derives from its own statement and receipts.
+                "fx_daily_rates": fx_daily_rates.settings_view(store),
             })
+
+    @app.post("/api/fx/poll")
+    def api_fx_poll():
+        """Poll the daily FX rates now (note #79): the same round the
+        24-hour thread runs, synchronously, so the screen's "Poll now" and
+        a deploy check see the result. 409 `fx_poll_disabled` when no
+        provider key is configured; otherwise 200 with the round's summary,
+        `ok: false` + `errors[]` when the provider failed (nothing is lost:
+        the table keeps what it had)."""
+        with open_store() as store:
+            result = fx_daily_rates.poll_once(store)
+        if result.get("code") == "fx_poll_disabled":
+            return JSONResponse(
+                {"error": result.get("reason"), "code": "fx_poll_disabled"},
+                status_code=409,
+            )
+        return JSONResponse(result)
 
     @app.get("/api/cards")
     def api_get_cards():
@@ -3061,7 +3128,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         unknown = sorted(
             k
             for k in body
-            if k not in SETTINGS_WRITABLE_KEYS and k not in SETTINGS_DERIVED_KEYS
+            if k not in SETTINGS_WRITABLE_KEYS
+            and k not in SETTINGS_DERIVED_KEYS
+            and k not in RETIRED_SETTINGS_KEYS
         )
         if unknown:
             return JSONResponse(
@@ -3070,6 +3139,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 status_code=400,
             )
         patch: dict = {}
+        # Per-merchant categories the save carried that the server no longer
+        # knows. Collected rather than refused (see `category_vocabulary`)
+        # and reported as dotted paths in `ignored` below, so the caller is
+        # told exactly which merchant lost its category.
+        dropped_categories: list[tuple[str, str]] = []
         if "export_approved_only" in body:
             patch["export_approved_only"] = bool(body["export_approved_only"])
         # Master-data maps (FX reference rates, card -> legal entity, card
@@ -3094,27 +3168,6 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 value = str(v).strip()
                 if not name or not value:
                     continue
-                if key == "fx_reference_rates":
-                    from_ccy, _, to_ccy = name.partition(":")
-                    if not from_ccy.strip() or not to_ccy.strip():
-                        return JSONResponse(
-                            {"error": f"rate key {name!r} must be 'FROM:TO'",
-                             "code": "fx_rate_key_invalid",
-                             "setting": "fx_reference_rates",
-                             "rate_key": name},
-                            status_code=400,
-                        )
-                    try:
-                        if Decimal(value) <= 0:
-                            raise ValueError(value)
-                    except (ArithmeticError, ValueError):
-                        return JSONResponse(
-                            {"error": f"rate {name} must be a positive number",
-                             "code": "fx_rate_not_positive",
-                             "setting": "fx_reference_rates",
-                             "rate_key": name},
-                            status_code=400,
-                        )
                 cleaned[name] = value
             patch[key] = cleaned
         # Legal-entity registry (Phase 5): {label: {org_id, chart_path,
@@ -3198,7 +3251,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 )
             try:
                 patch["merchants"] = normalize_merchants_setting(
-                    body["merchants"], stored=stored_merchants
+                    body["merchants"], stored=stored_merchants,
+                    dropped=dropped_categories,
                 )
             except ValueError as exc:
                 return JSONResponse({
@@ -3267,11 +3321,29 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({
             **without_retired_entity_keys(settings),
             "categories": list(EXPENSE_CATEGORIES),
+            # Both vocabularies on the save reply too, so an editor that
+            # just added an entity sees its leaves without a second GET.
+            "gl_accounts": gl_account_options(settings),
+            "gl_revision": gl_revision(),
             # What this request wrote, and what it carried that the server
             # derives. A caller shows "saved" on its own key appearing in
             # `applied`, never on the 200 alone.
             "applied": sorted(patch),
-            "ignored": sorted(k for k in body if k in SETTINGS_DERIVED_KEYS),
+            # A derived key is read-only; a RETIRED key no longer exists
+            # at all. Both are accepted and reported rather than refused,
+            # so the published SPA can keep sending `fx_reference_rates`
+            # until its removal prompt is applied.
+            # A dropped merchant category joins this list as the dotted path
+            # `merchants.<name>.category`. Still a list of strings, so a
+            # caller testing for a key it sent is unaffected; the path says
+            # which merchant to re-pick rather than just that something went.
+            "ignored": sorted(
+                [
+                    k for k in body
+                    if k in SETTINGS_DERIVED_KEYS or k in RETIRED_SETTINGS_KEYS
+                ]
+                + [f"merchants.{name}.category" for name, _ in dropped_categories]
+            ),
         })
 
     @app.get("/api/compare")
@@ -3335,7 +3407,6 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         write is count-preserving (an operator correction is not another
         independent confirmation)."""
         from ..learning import LearningStore
-        from ..matching.types import EXPENSE_CATEGORIES
 
         try:
             body = await request.json()
@@ -3356,24 +3427,35 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 {"error": "legal_entity_id and a non-empty vendor are "
                           "required", "code": "memory_row_key_required"},
                 status_code=400)
-        if category not in EXPENSE_CATEGORIES:
+        if not category:
             return JSONResponse(
-                {"error": f"category must be one of the tool's "
-                          f"{len(EXPENSE_CATEGORIES)} categories",
-                 "code": "category_not_allowed",
-                 "categories": sorted(EXPENSE_CATEGORIES)},
+                {"error": "category is required",
+                 "code": "category_required"},
                 status_code=400)
+        # Two vocabularies are live at once, so this accepts both and
+        # refuses neither (`category_vocabulary`). A value from neither is
+        # DROPPED and named under `ignored`, never written: this row is
+        # durable memory consulted ahead of the model on every later run,
+        # and a string the tool cannot match would sit in it looking like a
+        # decision somebody made. The stored row is left exactly as it was.
+        stored_category = recognize_category(category)
         with LearningStore(app.state.learning_db_path) as s:
-            s.set_merchant_category_manual(
-                legal_entity_id, vendor_norm, category, zoho_account,
-                _now_iso(), keep_account=keep_account,
-            )
+            if stored_category is not None:
+                s.set_merchant_category_manual(
+                    legal_entity_id, vendor_norm, stored_category,
+                    zoho_account, _now_iso(), keep_account=keep_account,
+                )
             row = s.get_merchant_category(legal_entity_id, vendor_norm)
-        return JSONResponse({
+        reply = {
             "ok": True, "entity": legal_entity_id, "vendor": vendor_norm,
-            "category": row.category, "zoho_account": row.zoho_account or "",
-            "count": row.decision_count, "source_run": row.source_run,
-        })
+            "category": row.category if row else "",
+            "zoho_account": (row.zoho_account or "") if row else "",
+            "count": row.decision_count if row else 0,
+            "source_run": row.source_run if row else "",
+        }
+        if stored_category is None:
+            reply["ignored"] = {"category": category}
+        return JSONResponse(reply)
 
     @app.delete("/api/memory/categories")
     async def api_memory_delete_category(request: Request):
@@ -3824,17 +3906,26 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         raw = (body or {}).get("category")
         category = "" if raw is None else str(raw).strip()
         zoho_account = str((body or {}).get("zoho_account") or "").strip()
-        if category and category not in EXPENSE_CATEGORIES:
-            return JSONResponse(
-                {"error": f"category must be one of {sorted(EXPENSE_CATEGORIES)}",
-                 "code": "unknown_category",
-                 "categories": sorted(EXPENSE_CATEGORIES)},
-                status_code=400,
-            )
+        # Both vocabularies are accepted; a value from neither is dropped and
+        # named under `ignored` rather than refused. Dropped means the stored
+        # pick is LEFT ALONE, not cleared: clearing on an unrecognised string
+        # would destroy a reviewer's earlier choice to honour a client bug.
+        stored_category = recognize_category(category) if category else ""
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
+            if stored_category is None:
+                view = build_view(
+                    run, store.get_decisions(run_id),
+                    store.get_category_overrides(run_id),
+                    store.get_duplicate_resolutions(run_id),
+                )
+                return JSONResponse({
+                    "ok": True, "summary": view["summary"],
+                    "ignored": {"category": category},
+                })
+            category = stored_category
             # Item 104: the override this write replaces, read first.
             charge_key = charge_category_key(transaction_id)
             before_cat = _category_value(
@@ -4012,18 +4103,65 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({"ok": True, "job_id": job_id, "n_files": saved})
 
     @app.get("/api/runs/{run_id}/receipts/{document_id:path}/image")
-    def receipt_image(run_id: str, document_id: str):
+    def receipt_image(
+        run_id: str,
+        document_id: str,
+        as_: str | None = Query(default=None, alias="as"),
+        page: int = Query(default=0, ge=0),
+    ):
         # Receipt preview (owner directive 2026-07-25): a reviewer working
         # the needs-review queue gets a quick look at the actual receipt.
         # Serves the vision-mapped page of the uploaded ER PDF (rendered to
         # PNG) or an operator-uploaded manual receipt file, straight from
         # the run's work dir. 404 whenever no image is attributable — the
         # SPA keys its preview control off `receipt_image_available`.
+        #
+        # `?as=png` (backlog item 178) renders the stored file to a raster
+        # instead of handing back its own bytes, because 70 of September's
+        # 75 receipts are PDFs and a PDF cannot go in an <img>. Without it
+        # the only thing a viewer can do with a receipt is download it,
+        # which is feedback note #3 word for word. `?page=N` picks the page
+        # and `X-Receipt-Pages` says how many there are. No param means the
+        # old behaviour exactly, so nothing that works today changes.
         with open_store() as store:
             run = store.get_run(run_id)
         if run is None:
             return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
         work_dir = Path(run.work_dir)
+
+        want_png = (as_ or "").lower() == "png"
+
+        def serve(target: Path) -> Response:
+            """The one place a receipt file becomes an HTTP response."""
+            pages = page_count(target) if want_png else 1
+            headers = {"X-Receipt-Pages": str(pages)}
+            if want_png and is_pdf(target):
+                try:
+                    png = render_page_png(target, page)
+                except ReceiptRenderError as exc:
+                    log.warning(
+                        "receipt render failed for %s page %s: %s",
+                        target.name, page, exc,
+                    )
+                    # Fall back to the stored bytes rather than 404: a
+                    # reviewer who can download the receipt is better off
+                    # than one told it does not exist.
+                    return FileResponse(
+                        target,
+                        media_type=guess_media_type(target),
+                        headers={"X-Receipt-Render": "failed"},
+                    )
+                return Response(
+                    png,
+                    media_type="image/png",
+                    headers={
+                        **headers,
+                        "Cache-Control": "private, max-age=86400",
+                    },
+                )
+            return FileResponse(
+                target, media_type=guess_media_type(target), headers=headers
+            )
 
         if document_id.startswith("manual:"):
             tx_part = document_id[len("manual:"):]
@@ -4034,11 +4172,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return JSONResponse(
                     {"error": "no receipt image", "code": "receipt_image_not_found"}, status_code=404
                 )
-            media = (
-                mimetypes.guess_type(hits[0].name)[0]
-                or "application/octet-stream"
-            )
-            return FileResponse(hits[0], media_type=media)
+            return serve(hits[0])
 
         if document_id.startswith("folder:"):
             # Bulk folder receipt (2026-07-27): the file is stored under
@@ -4052,11 +4186,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return JSONResponse(
                     {"error": "no receipt image", "code": "receipt_image_not_found"}, status_code=404
                 )
-            media = (
-                mimetypes.guess_type(hits[0].name)[0]
-                or "application/octet-stream"
-            )
-            return FileResponse(hits[0], media_type=media)
+            return serve(hits[0])
 
         if run_mode(run) == MODE_EXPENSE_GENERATION:
             # Expense batch (receipt-first): document ids ARE filenames
@@ -4066,11 +4196,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             try:
                 target = (exp_dir / document_id).resolve()
                 if exp_dir in target.parents and target.is_file():
-                    media = (
-                        mimetypes.guess_type(target.name)[0]
-                        or "application/octet-stream"
-                    )
-                    return FileResponse(target, media_type=media)
+                    return serve(target)
             except (OSError, ValueError):
                 pass
             return JSONResponse({"error": "no receipt image", "code": "receipt_image_not_found"}, status_code=404)
@@ -4126,7 +4252,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         private card, never both, so nobody is reimbursed for money a company
         card already paid. Marking private is refused on a row a defined
         company card paid; a company-card pick is refused on a confirmed
-        private row. Reads the row from the grid's own view, so the refusal
+        private row. A row that is ALREADY private is not refused (item
+        176): since `can_mark_private` went false on it, this check would
+        otherwise answer a correction of who gets reimbursed with the
+        company-card wording, about a row no company card paid.
+        Reads the row from the grid's own view, so the refusal
         and `expenses[].can_mark_private` cannot disagree. A document the
         view does not list keeps the old behavior (no check)."""
         view = _expense_view(store, run)
@@ -4136,7 +4266,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
         if row is None:
             return None
-        if marking_private and not row.get("can_mark_private", True):
+        if (
+            marking_private
+            and not row.get("private")
+            and not row.get("can_mark_private", True)
+        ):
             card = row.get("card") or {}
             label = card.get("label") or card.get("key") or "a company card"
             return JSONResponse(
@@ -5083,14 +5217,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 status_code=400
             )
         if value:
-            if field == "category" and value not in EXPENSE_CATEGORIES:
-                return JSONResponse(
-                    {"error": f"category must be one of "
-                              f"{sorted(EXPENSE_CATEGORIES)}",
-                     "code": "category_not_allowed",
-                     "categories": sorted(EXPENSE_CATEGORIES)},
-                    status_code=400,
-                )
+            if field == "category":
+                # Both vocabularies accepted; neither refused. A value from
+                # neither is dropped and named under `ignored`, leaving the
+                # stored pick untouched (an empty value is the clear).
+                stored_category = recognize_category(value)
+                if stored_category is None:
+                    return await _expense_edit_reply(
+                        run_id, False, {"ignored": {"category": value}}
+                    )
+                value = stored_category
             err_msg = validate_expense_field(field, value)
             if err_msg:
                 return _refused(err_msg)
@@ -5266,14 +5402,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                  "code": "vendor_and_total_required"},
                 status_code=400
             )
-        if payload.get("category") and payload["category"] not in EXPENSE_CATEGORIES:
-            return JSONResponse(
-                {"error": f"category must be one of "
-                          f"{sorted(EXPENSE_CATEGORIES)}",
-                 "code": "category_not_allowed",
-                 "categories": sorted(EXPENSE_CATEGORIES)},
-                status_code=400,
-            )
+        # Both vocabularies accepted; neither refused. A category from
+        # neither is dropped from the payload and named under `ignored`, and
+        # the expense is still added: the vendor and total are what the add
+        # is for, and refusing the whole row over one field would lose them.
+        dropped_category = ""
+        if payload.get("category"):
+            stored_category = recognize_category(payload["category"])
+            if stored_category is None:
+                dropped_category = payload.pop("category")
+            else:
+                payload["category"] = stored_category
         for f in ("date", "total", "currency", "tax"):
             if payload.get(f):
                 err_msg = validate_expense_field(f, payload[f])
@@ -5288,9 +5427,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             store.set_expense_edit(run_id, document_id, "add", payload, _now_iso())
             # Item 70: the add joins the matcher's pool on a reconciling month.
             rematch_needed = has_statement(run)
-        return await _expense_edit_reply(
-            run_id, rematch_needed, {"document_id": document_id}
-        )
+        extra: dict = {"document_id": document_id}
+        if dropped_category:
+            extra["ignored"] = {"category": dropped_category}
+        return await _expense_edit_reply(run_id, rematch_needed, extra)
 
     @app.delete("/api/runs/{run_id}/expenses/{document_id:path}")
     async def delete_expense(run_id: str, document_id: str):
@@ -5438,6 +5578,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run, overrides, field_overrides, edits, dup_resolutions,
             charge_decisions=charge_decisions,
             merchants=csv_merchants,
+            learning_db_path=app.state.learning_db_path,
         )
         return FileResponse(
             path,
@@ -5513,6 +5654,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             render_outcomes=outcomes,
             dup_resolutions=dup_resolutions,
             charge_decisions=charge_decisions,
+            learning_db_path=app.state.learning_db_path,
         )
         # Item 67: building the report is the only moment renderability is
         # known, so it is the moment the answer gets recorded. The grid reads
@@ -5553,6 +5695,71 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
         return JSONResponse({"ok": True, "forgotten": forgotten})
 
+    @app.get("/api/runs/{run_id}/memory-plan")
+    def get_memory_plan(run_id: str):
+        """Item 163 (note #81): what "Save corrections to memory" would
+        write, before it is pressed. Read-only: every row is computed by
+        running the real learners against a recording stand-in, so the
+        preview and the save cannot disagree. `writes[]` names the table,
+        the key, the value and the surface that manages it; `registry` is
+        the per-merchant before/after of the same save."""
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return _not_found("Run not found", "run_not_found")
+            plan = plan_month_memory(
+                store, run, app.state.learning_db_path, now_iso=_now_iso()
+            )
+        return JSONResponse(jsonable_encoder(plan))
+
+    @app.get("/api/memory/commits")
+    def get_memory_commits(limit: int = 50):
+        """Item 163: the saves themselves, newest first — which month, when,
+        by which trigger, what it taught, and whether it has been undone.
+        This is the "where are these saved" answer: each entry lists the
+        keys it wrote and the surface each one is managed on."""
+        with open_store() as store:
+            entries = store.list_memory_journal(limit=limit)
+        out = []
+        for e in entries:
+            out.append({
+                "id": e["id"],
+                "run_id": e["run_id"],
+                "label": e["label"],
+                "committed_at": e["committed_at"],
+                "trigger": e["trigger"],
+                "learned": e["learned"],
+                "reverted_at": e["reverted_at"],
+                "n_rows": len(e["rows"]),
+                "rows": [
+                    {"table": r["table"], "key": r["key"],
+                     "surface": MEMORY_TABLE_SURFACE.get(r["table"], ""),
+                     "existed": r["row"] is not None}
+                    for r in e["rows"]
+                ],
+                "n_merchants_changed": sum(
+                    1 for name in set(e["merchants_before"]) | set(e["merchants_after"])
+                    if e["merchants_before"].get(name) != e["merchants_after"].get(name)
+                ),
+            })
+        return JSONResponse(jsonable_encoder({"commits": out}))
+
+    @app.post("/api/memory/commits/{journal_id}/undo")
+    def post_memory_commit_undo(journal_id: int):
+        """Item 163: put one save back. Every learning row it touched
+        returns to its pre-image (a row it created is deleted), the merchant
+        registry returns to the map that preceded it, and the month's saved
+        digest is cleared so the next publish teaches the corrections
+        again. Only the most recent un-undone save can be undone."""
+        with open_store() as store:
+            result = undo_memory_commit(
+                store, journal_id, app.state.learning_db_path, _now_iso()
+            )
+        if isinstance(result, Refusal):
+            status = 404 if code_of(result, "") == "memory_journal_not_found" else 409
+            return _refused(result, status=status)
+        return JSONResponse(jsonable_encoder(result))
+
     @app.post("/api/runs/{run_id}/commit-memory")
     def post_commit_memory(run_id: str):
         # Explicit finalize: fold THIS run's confirmed decisions into the
@@ -5568,11 +5775,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # self-improving registry) in the same transaction context. Item
             # 88: the same helper Publish uses, which records the save so a
             # Publish right after it does not teach the same corrections twice.
-            learned = commit_month_memory(
+            saved = commit_month_memory(
                 store, run, app.state.learning_db_path, _now_iso(),
                 trigger=MEMORY_TRIGGER_BUTTON, only_if_changed=False,
-            )["learned"]
-        return JSONResponse({"ok": True, "learned": learned})
+            )
+        # Item 163: the id of the journal entry this save wrote, so the
+        # caller can undo exactly this save rather than "the last one".
+        return JSONResponse({
+            "ok": True, "learned": saved["learned"],
+            "journal_id": saved.get("journal_id"),
+        })
 
     @app.get("/runs/{run_id}/report.xlsx")
     def download_report(run_id: str):
