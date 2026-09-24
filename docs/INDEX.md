@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-24 | Recon Duplicates Deletable From Either Copy | client-dev | [→](docs/2026-09-24%20-%20Recon%20Duplicates%20Deletable%20From%20Either%20Copy/Checkpoint.md) |
 | 2026-09-24 | Recon Card Filter Leaves The Month | client-dev | [→](docs/2026-09-24%20-%20Recon%20Card%20Filter%20Leaves%20The%20Month/Checkpoint.md) |
 | 2026-09-24 | Brisken P1 Item 5 Category Leak Killed | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20P1%20Item%205%20Category%20Leak%20Killed/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken P1 Item 4 Category Table Retired | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20P1%20Item%204%20Category%20Table%20Retired/Mini-Checkpoint-1.md) |
