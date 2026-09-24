@@ -9697,8 +9697,9 @@ digits: 76" receipt card-less, not private, strip group `ambiguous`). Putting
 the old two-word lead back turned the route test red; dropping the amount
 guard turned "Total final: 38.50" red.
 
-Out of scope, still open: settling a shared ending (76: 3876/1176; 13:
-0113/6013) from the vendor's history.
+A shared ending (76: 3876/1176; 13: 0113/6013) stays a contest for review.
+Settling it from the vendor's history would have used item 200, closed not
+built on the failed usefulness test (owner 2026-09-25).
 
 ### 200. A vendor's card from its own receipts, continuously (gap 1 of the card-attribution map, owner 2026-09-24) (MEASURED 2026-09-24: Phase 1 gate FAILED at N = 2 and at N = 3; CLOSED, NOT BUILT: deliberately, on the failed usefulness test, owner 2026-09-25; no decision pending)
 
