@@ -275,3 +275,28 @@ def test_an_undefined_card_with_no_twin_keeps_its_own_line(client):
     assert stray["n_transactions"] == 1
     assert stray["label"] == "4700"
     assert [m["label"] for m in stray["months"]] == ["April 2026"]
+
+
+# ── 4. the note is prose, because the page prints it ────────────────────
+
+
+def test_the_note_names_no_payload_field(client):
+    """`note` is rendered verbatim as the page's footnote. The first
+    version read "a card with no charge and no statement anywhere reads
+    never_loaded", and that identifier went onto Criss's screen: a string
+    written for whoever reads the JSON, shipped to whoever reads the app.
+    Nothing here is a field name, and the payload's own keys are the list
+    to check against so a later edit cannot reintroduce one."""
+    _cards(client, **CORP)
+    payload = _status(client)
+    note = payload["note"]
+
+    keys = set(payload) | {"unreconciled_by_ccy", "batch_type"}
+    for card in payload["cards"]:
+        keys |= set(card)
+        for month in card["months"]:
+            keys |= set(month)
+    leaked = sorted(k for k in keys if "_" in k and k in note)
+    assert not leaked, f"payload field names in the footnote: {leaked}"
+    assert "never_loaded" not in note
+    assert note.endswith("."), note

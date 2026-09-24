@@ -9120,7 +9120,40 @@ including the one that pins the sums to each month page's own coverage row.
 Both wires regress-checked, green to red to green.
 
 Left: the SPA page. Written as a Lovable prompt at
-`docs/lovable-card-status-prompt.md`, NOT pasted.
+`docs/lovable-card-status-prompt.md`. **PASTED and LIVE**, confirmed by a cold
+Chrome drive 2026-09-24: `/cards` is in the nav after Months, the strip reads
+`All · 2838 111 · 3645 85 · 3876 85 · 0340 34 · 1176 3 · 4700 2` with "Show 4
+cards with nothing loaded", and picking 1176 gives August 2026, 3 charges, 1
+without a receipt, `20260804-statements-1176-.pdf`, USD 36.00.
+
+One defect shipped with it and is fixed in the same breath: the page renders
+the payload's `note` verbatim as its footnote, and that string named the field
+`never_loaded` in prose, so a payload identifier reached Criss's screen. The
+note is prose now, and `test_the_note_names_no_payload_field` checks it
+against the payload's own keys so a later edit cannot put one back.
+
+### 187. The months list cannot be filtered by card (owner 2026-09-24)
+
+Directly after `/cards` went live, the owner: the months list itself should
+filter by card, *"but just that"*. `/cards` answers "pick a card, which months
+is it on"; `/months` cannot be asked at all, so finding a card there means
+opening every month in turn.
+
+**No backend work.** `GET /api/cards/status` already carries the strip
+(`cards[]`) and the per-month figures keyed by `run_id`
+(`cards[].months[]`: `n_transactions`, `n_reconciled`, `n_review`,
+`n_unmatched_tx`, `statements`, `unreconciled_by_ccy`, `period_start`,
+`period_end`). The months page joins it to the rows it already renders, and
+`/cards` makes the same call, so one query entry serves both.
+
+Scope is the filter and nothing else. One judgement call inside it, flagged to
+the owner rather than assumed: selecting a card must also swap the row figures
+to that card's, because the month row's Receipts / Needs category / Set aside
+are the WHOLE month's, and showing "50 receipts" on the August row beside a
+1176 chip states something untrue about that card. Same class as the "From
+email" badge (item 174) and the doubled Private label.
+
+Written as `docs/lovable-months-card-filter-prompt.md`, NOT pasted.
 
 ## Shipped (loop history)
 
