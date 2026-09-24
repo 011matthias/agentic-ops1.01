@@ -45,11 +45,7 @@ from ..cli import (  # item 105
     keep_invoice_read_as_statement,
 )
 from ..coa_provision import apply_to_config as apply_coa_provisioning
-from ..coa_provision import (
-    GL_ENTITY_ORGS_KEY,
-    entity_from_settings,
-    org_id_for_entity,
-)
+from ..coa_provision import GL_ENTITY_ORGS_KEY, entity_from_settings
 from ..correspondence import quarantine_correspondence
 from ..error_codes import Refusal, code_of, detail_of, fields_of
 from ..duplicates import (
@@ -109,8 +105,11 @@ from ..cost_centers import (
     UNRESOLVED_SILENT as UNRESOLVED_COST_CENTER,
 )
 from ..cost_centers import CostCenterRegistry, CostCenterResolution
-from ..category_vocabulary import gl_account_options, gl_revision
-from ..zoho import curated_leaves
+from ..category_vocabulary import (
+    gl_account_options,
+    gl_leaf_account_name,
+    gl_revision,
+)
 from ..merchant_registry import (
     MerchantRegistry,
     drop_unvouched_remembered_cards,
@@ -15248,32 +15247,6 @@ def resolved_entities(card_res: dict[str, dict]) -> dict[str, str]:
     """document_id -> the company `resolve_batch_row_cards` resolved for the
     row, the one the grid shows and the export writes; blanks left out."""
     return {doc: res["entity"] for doc, res in card_res.items() if res.get("entity")}
-
-
-def gl_leaf_account_name(
-    code: str | None, entity: str | None, entity_orgs: dict | None
-) -> str | None:
-    """Item 201: the account a curated leaf CODE names in this row's company.
-
-    On a GL month the category IS the account: a hand pick stores only the
-    code (`E100010-31`), and the name the export needs sits in the company's
-    curated chart. Resolved at READ time from the row's company as it stands
-    now, never stored at save time, so a company change afterwards reads the
-    new company's wording (`CorpServ | Travel Expense | Food` against
-    `Travel Expense | Food` for the same code).
-
-    Returns the same name the engine stamps for its own pick
-    (`categorize._gl_categorization`). None on a bucket month (no map), for a
-    blank or uncurated company, and for a code this company cannot post to:
-    the row then keeps its visible "(account unmapped - assign)".
-    """
-    if not entity_orgs or not code:
-        return None
-    org_id = org_id_for_entity(entity, entity_orgs)
-    if not curated_leaves.is_postable(org_id, code):
-        return None
-    binding = curated_leaves.binding(code, org_id)
-    return binding.name if binding is not None else None
 
 
 def override_base_account(

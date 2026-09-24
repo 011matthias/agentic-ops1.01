@@ -42,12 +42,18 @@ from __future__ import annotations
 
 import os
 
-from .coa_provision import PROVISION_ENV, entity_org_ids, load_provisioning
+from .coa_provision import (
+    PROVISION_ENV,
+    entity_org_ids,
+    load_provisioning,
+    org_id_for_entity,
+)
 from .matching.types import EXPENSE_CATEGORIES
 from .zoho import curated_leaves
 
 __all__ = [
     "gl_account_options",
+    "gl_leaf_account_name",
     "gl_revision",
     "is_recognized",
     "recognize",
@@ -182,3 +188,29 @@ def gl_account_options(
             # not take down a render. It surfaces at the posting path.
             return {}
     return out
+
+
+def gl_leaf_account_name(
+    code: str | None, entity: str | None, entity_orgs: dict | None
+) -> str | None:
+    """Item 201: the account a curated leaf CODE names in this row's company.
+
+    On a GL month the category IS the account: a hand pick stores only the
+    code (`E100010-31`), and the name the export needs sits in the company's
+    curated chart. Resolved at READ time from the row's company as it stands
+    now, never stored at save time, so a company change afterwards reads the
+    new company's wording (`CorpServ | Travel Expense | Food` against
+    `Travel Expense | Food` for the same code).
+
+    Returns the same name the engine stamps for its own pick
+    (`categorize._gl_categorization`). None on a bucket month (no map), for a
+    blank or uncurated company, and for a code this company cannot post to:
+    the row then keeps its visible "(account unmapped - assign)".
+    """
+    if not entity_orgs or not code:
+        return None
+    org_id = org_id_for_entity(entity, entity_orgs)
+    if not curated_leaves.is_postable(org_id, code):
+        return None
+    binding = curated_leaves.binding(code, org_id)
+    return binding.name if binding is not None else None
