@@ -9252,7 +9252,7 @@ collapse it behind "Override account" once resolved, unchanged where an
 override is already set. `docs/lovable-paid-through-follows-card-prompt.md`,
 NOT pasted.
 
-### 190. The card filter leaves the month, and the selection carries in (owner 2026-09-24) (BACKEND SHIPPED; SPA prompt pasted, NOT published)
+### 190. The card filter leaves the month, and the selection carries in (owner 2026-09-24) (APPLIED: backend + SPA published and driven 2026-09-24)
 
 **Owner:** *"i think the logical next step is removing the card filter from
 inside the months since its outside now."* Then: *"when using this filter, and
@@ -9313,6 +9313,15 @@ route's `validateSearch` reads strings, so the app-wide swap is safe). The
 published bundle is still the old build: `lovable-bundle-audit.py` with all
 five controls found reports every item-190 signature ABSENT and `cardTabs.` at
 88 occurrences. Publish is the only step left before the §7 drive.
+
+**Applied (2026-09-24).** The owner published the same day. Bundle re-read,
+controls found: every signature present, `cardTabs.` 0. All eleven rows of the
+prompt's §7 table driven cold in real Chrome on both tabs and matched, and the
+old `brisken.month.cardTab.v1` key was proven deleted by seeding it first (a
+fresh session having none proves nothing). Evidence row in
+`docs/PROMPT-STATUS.md` → Applied. One cosmetic residual, not re-prompted: the
+"Nothing on card {card} in {month}" state still shows the tabs and an all-zero
+Reconciliation line above its one line.
 
 ## Shipped (loop history)
 
