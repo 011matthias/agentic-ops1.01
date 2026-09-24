@@ -9849,7 +9849,7 @@ through `POST /api/runs/{id}/publish` that goes red when it is put back.
 later evidence, to be decided before the first close. The scratch replay that
 produced the table is not kept; the method above rebuilds it.
 
-### 201. On a GL month, an account picked by hand exports as "(account unmapped - assign)" (found 2026-09-24 in the GL prompt drive)
+### 201. On a GL month, an account picked by hand exports as "(account unmapped - assign)" (found 2026-09-24 in the GL prompt drive) (FIXED 2026-09-25, owner: fix now; same PR as item 205)
 
 The GL picker sends only the leaf code (`{field: "category", value: "E100010-31"}`,
 and per line `category` with NO `zoho_account`, as the prompt specifies). The
@@ -9875,6 +9875,8 @@ with no explicit account resolves the code through the row company's curated
 chart and stores that name. A code the company does not hold stays blank and
 shows `gl.code.notInList`, as it already does. Tests through the edit route AND
 the export, and a regress proof on the resolving call.
+
+**Fixed 2026-09-25.** Resolved at read time as proposed, in the company the row SHOWS (the card chain on the grid and in the CSV, the charge's company for a receiptless charge), because most live rows carry no company stamp of their own. The lookup is `category_vocabulary.gl_leaf_account_name` (the web layer may not import the zoho package, `test_zoho_posting_is_gated`). Tests: `tests/test_gl_hand_pick_account_item_201.py` (6, route-level: category edit, grid, CSV, company change, card-resolved company, receiptless charge); every wiring point regress-checked.
 
 ### 202. A US-format receipt date can be read day-first, landing the receipt in a month after its own arrival (found 2026-09-24 in the GL prompt drive)
 
@@ -10246,6 +10248,46 @@ for steps 3, 4 and 6. A first probe read `coverage[]` under wrong keys and
 reported no coverage anywhere; the valid read is `card_key` / `statements` /
 `period_start` / `period_end` / `n_transactions`, and a receipts-only month
 returns `[]` by design.
+
+### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (BUILT 2026-09-25, same PR as item 201)
+
+Owner, 2026-09-25: "i need july, august and september recategorized with this
+new zoho logic". The three months were created on 2026-09-07, before the GL
+engine, so they held bucket categories and 33 receipts carried a bucket
+Criss picked by hand (19 July, 8 August, 6 September). No bucket maps to one
+account. Owner's ruling on those picks (AskUserQuestion, 2026-09-25): ignore
+them, the engine decides every row.
+
+`POST /api/runs/{id}/convert-to-gl` (operator only, typed confirm, background
+job; `web/gl_conversion.py`) gives the month the `gl_entity_orgs` map and the
+export gate a month created today gets, re-categorizes every receipt line for
+the company the row SHOWS (the grid's card chain, passed in from the Expenses
+payload, because most live rows carry no company stamp of their own) and every
+receiptless charge for its own company, and removes the bucket picks after
+copying them, with every previous categorization, under the snapshot's
+`gl_conversion` key. It refuses an already-GL, published or trip month, a
+month with no provisioned company and a run with no model client; a model
+failure (an exhausted key) or a month that changed mid-run writes nothing.
+Tests: `tests/test_gl_conversion.py` (7, through the route, the job, the grid,
+the CSV and a receiptless charge); six wiring points regress-checked.
+
+### 206. Assigning a card that gives a row its company does not re-run the engine (found 2026-09-25, code-traced)
+
+The owner's 2026-09-24 decision ("assigning the company must categorize it")
+is wired to the `legal_entity` edit only (`app.py`, the field route's
+`recategorize` trigger, and `PUT .../entity`). A per-row card fix
+(`card_key`), a card hint, or a statement charge settling the receipt all give
+the row its company through the card chain at read time, and none of them
+re-runs the engine, so on a GL month such a row keeps its `entity_missing`
+refusal while the grid names a company. `recategorize_after_entity_change`
+also reads only the field override or the stamp, never the card chain. The
+month switch (item 205) is not affected: it categorizes for the company the
+grid shows at the moment it runs. Every GL month from October is.
+
+**Proposed fix:** after any edit that can move a row's company (card_key, a
+card hint, the company itself), compare the row's resolved company before and
+after, and re-run the engine for the resolved one when it changed. Route-level
+test through the card fix.
 
 ## Shipped (loop history)
 
