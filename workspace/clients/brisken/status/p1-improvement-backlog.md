@@ -9323,7 +9323,7 @@ fresh session having none proves nothing). Evidence row in
 "Nothing on card {card} in {month}" state still shows the tabs and an all-zero
 Reconciliation line above its one line.
 
-### 191. The months strip nests 2838's subcards under it (owner 2026-09-24) (BACKEND SHIPPED; the SPA half is a Lovable prompt, not pasted)
+### 191. The months strip nests 2838's subcards under it (owner 2026-09-24) (APPLIED: backend + SPA published and driven 2026-09-24)
 
 **Owner:** *"adjust the subcards' tabs in the filter in months menu to not be
 next to the 2838 tab but rather only appear once viewer clicks on 2838.
@@ -9371,8 +9371,33 @@ exactly three field changes, all `parent`; `/api/cards/status` reads
 `card-2838.subcards = ["3645", "3876", "card-0340"]`. Existing months do not read
 the live registry (their snapshot is fixed until a refresh-master-data pass,
 which is Criss's), so the write reaches this strip and months created from now
-on, and nothing else. Undo: clear the three Account fields. The prompt's
-publish is the one step left.
+on, and nothing else. Undo: clear the three Account fields.
+
+**Applied (2026-09-24).** The owner pasted (Lovable repo `41dc0f4`) and
+published. Bundle carries every signature with all five controls found, and
+every row of the prompt's check table matched in a cold headless-Chrome drive;
+evidence row in `docs/PROMPT-STATUS.md` → Applied.
+
+### 193. The Cards overview nests 2838's subcards under it (owner 2026-09-24) (SPA prompt written, NOT pasted; no backend work)
+
+**Owner, on the published `/cards` overview (item 192):** apply the same
+subcard logic as item 191, "adapted to the corresponding structure" of the
+overview. A strip has tabs and a table has rows, so the adaptation collapses a
+subcard's ROW under its account's row: 3645, 3876 and 0340 leave the main list
+and open directly under 2838 when its row is clicked (chevron + "3 cards on
+this account"), in the table's own open-work order, indented on a light
+background, every figure their own. The account keeps its own figures and its
+own sorted place; the "nothing loaded" fold never holds a subcard; every
+account starts collapsed on each load; non-account rows stay unclickable, as
+item 192 made them.
+
+**No backend work.** `parent` / `subcards` have been on `/api/cards/status`
+since item 191 and the three parents are live. Read 2026-09-24: top level
+after nesting is 2838 (open work 96), 9693 (16), 1176 (9), 4700 (2), No card;
+under 2838: 3645 (83), 3876 (77), 0340 (24); the fold 0113, 6013, 8311.
+
+**SPA half:** `docs/lovable-cards-overview-subcards-prompt.md`, one new key
+(`cardsPage.subcards.count`), the chevron reusing `cardStrip.subcards.aria`.
 
 ### 192. /cards becomes an overview, not a door into the months (owner 2026-09-24) (BACKEND LIVE; SPA prompt written, NOT pasted)
 
