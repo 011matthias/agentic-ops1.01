@@ -12,6 +12,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-24 | Recon Correspondence Not An Expense | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Correspondence%20Not%20An%20Expense/Mini-Checkpoint-1.md) |
+| 2026-09-24 | Recon Learning Rules And Spotcheck Ruling | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Learning%20Rules%20And%20Spotcheck%20Ruling/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken Recon Card Attribution Item 176 | client-dev | [→](docs/2026-09-24%20-%20Brisken%20Recon%20Card%20Attribution%20Item%20176/Checkpoint.md) |
 | 2026-09-24 | Zoho GL Item 183 Half B | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Zoho%20GL%20Item%20183%20Half%20B/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken Recon Private Control And Paid Through | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20Recon%20Private%20Control%20And%20Paid%20Through/Mini-Checkpoint-1.md) |
