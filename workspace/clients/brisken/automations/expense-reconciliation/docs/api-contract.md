@@ -115,6 +115,33 @@ A refused line: the row's `review` reads `state: "pick"`,
 Pinned by `tests/test_gl_engine.py` (`REFUSAL_CODES_PIN`,
 `CATEGORY_VOCABULARY_PIN`).
 
+A hand-picked code carries no stored account; every view and export reads the
+code's account name from the curated chart of the company the row shows (item
+201). A code that company cannot post to stays `(account unmapped - assign)`.
+
+### Switching a bucket-era month (operator only, owner directive 2026-09-25)
+
+`POST /api/runs/{id}/convert-to-gl`, body `{"confirm": "<month label or run
+id>"}`, answers `{"ok": true, "job_id"}`; poll `GET /jobs/{id}`. On `done`,
+`result` holds `n_receipts`, `n_lines`, `n_lines_categorized`,
+`line_refusals`, `n_borrowed`, `n_charges`, `n_charges_categorized`,
+`charge_refusals`, `n_overrides_retired` and `llm_cost_usd`. The month then
+reads `category_vocabulary: "gl"`: every receipt line and receiptless charge
+is re-categorized by the engine for the company the row shows, the reviewer's
+bucket picks are removed (kept under the snapshot's `gl_conversion` with the
+previous categorizations), and the config gains `gl_entity_orgs` plus the
+export gate a new month gets. Nothing is written when it fails. The SPA offers
+no control for it.
+
+| Code | Status | When |
+|---|---|---|
+| `convert_confirm_required` | 400 | no `confirm` |
+| `convert_confirm_mismatch` | 400 | `confirm` is not the label or run id |
+| `month_already_gl` | 409 | the month already uses the Zoho accounts |
+| `month_published` | 409 | the month is published |
+| `trip_not_convertible` | 409 | a trip batch |
+| `gl_not_provisioned`, `llm_unavailable`, `month_changed_during_conversion` | job error, prefixed to `error` | no company has a Zoho org; no model client; the month changed while the model ran (run it again) |
+
 ## `parse_issues` specifically
 
 ```json

@@ -654,6 +654,43 @@ def _run_folder_job(
         shutil.rmtree(staging_dir, ignore_errors=True)
 
 
+def _run_gl_conversion_job(
+    db_path: Path, learning_db_path: Path | None, job_id: str, run_id: str,
+    entity_by_doc: dict[str, str],
+) -> None:
+    """Switch one bucket-era month onto the Zoho accounts off the request
+    (`gl_conversion`): a model call per receipt and per receiptless charge
+    is minutes of work. The job's `result` carries what changed; a refusal
+    lands as the job's error, with its code first, and writes nothing."""
+    from .gl_conversion import convert_month_to_gl
+
+    def _stage(name: str) -> None:
+        with RunStore(db_path) as store:
+            store.set_job_stage(job_id, name, _now_iso())
+
+    try:
+        result = convert_month_to_gl(
+            db_path, learning_db_path, run_id, _now_iso(),
+            entity_by_doc=entity_by_doc, on_stage=_stage,
+        )
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_DONE, run_id=run_id, result=json.dumps(result),
+                updated_at=_now_iso(),
+            )
+    except RunInputError as exc:
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_ERROR, error=f"{exc.code}: {exc.message}",
+                updated_at=_now_iso(),
+            )
+    except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
+            )
+
+
 def _claim_pooled_quietly(
     db_path: Path, learning_db_path: Path | None, data_root: Path,
 ) -> None:
@@ -2019,6 +2056,60 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             "ok": True, "run_id": run_id, "label": label,
             "month": f"{month[0]:04d}-{month[1]:02d}" if month else None,
         })
+
+    @app.post("/api/runs/{run_id}/convert-to-gl")
+    def convert_run_to_gl(
+        run_id: str, background: BackgroundTasks,
+        payload: dict | None = Body(None),
+    ):
+        """Owner directive 2026-09-25: switch a month created before the GL
+        engine onto Brisken's curated Zoho accounts (`gl_conversion`). The
+        caller repeats the month's label (or the run id) in `confirm`, as
+        for a delete: the switch replaces every category on the month and
+        removes the reviewer's bucket picks (kept in the snapshot). Operator
+        only; the SPA offers no control for it. Answers a job id to poll."""
+        from .gl_conversion import conversion_refusal
+
+        confirm = (
+            str(payload.get("confirm", "")).strip()
+            if isinstance(payload, dict) else ""
+        )
+        with open_store() as store:
+            run = store.get_run(run_id)
+            refused = conversion_refusal(run)
+            if refused is not None:
+                return JSONResponse(
+                    {"error": refused.message, "code": refused.code},
+                    status_code=404 if refused.code == "run_not_found" else 409,
+                )
+            if not confirm:
+                return JSONResponse(
+                    {"error": "confirm is required: repeat the month label "
+                              "(or run id) to switch it to the Zoho accounts",
+                     "code": "convert_confirm_required"},
+                    status_code=400,
+                )
+            if confirm not in {(run.label or "").strip(), run.run_id}:
+                return JSONResponse(
+                    {"error": "confirm label mismatch",
+                     "code": "convert_confirm_mismatch"},
+                    status_code=400,
+                )
+            # Each row is categorized for the company the grid SHOWS: the
+            # card chain resolves it at read time, and the stored stamp can
+            # be blank where the screen names a company.
+            entity_by_doc = {
+                e["document_id"]: e["legal_entity_id"]
+                for e in _expense_view(store, run)["expenses"]
+                if e.get("legal_entity_id")
+            }
+            job_id = uuid.uuid4().hex[:12]
+            store.create_job(job_id, None, _now_iso())
+        background.add_task(
+            _run_gl_conversion_job, app.state.db_path,
+            app.state.learning_db_path, job_id, run_id, entity_by_doc,
+        )
+        return JSONResponse({"ok": True, "job_id": job_id})
 
     @app.post("/api/runs/{run_id}/delete")
     def delete_run(run_id: str, payload: dict | None = Body(None)):
