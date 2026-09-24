@@ -9,6 +9,18 @@ updated: 2026-09-24
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-24 night: the GL accounts prompt is APPLIED** (published by the
+owner, bundle-verified, driven cold in EN and PT on July and on a
+`TEST - GL drive` batch that was purged the same session; evidence in the
+module's `docs/PROMPT-STATUS.md`). July is unchanged. On a GL month the pickers
+show each company's own accounts, search by name or code, and persist a pick.
+Two findings are recorded as backlog items 201 and 202. Item 201 must land
+before October 2026, the first real GL month: an account picked by hand stores
+no account name, so the export would print "(account unmapped - assign)".
+Item 202 (a US date read day-first) is a lead to measure. The prompt's check
+for the "no company" review sentence cannot pass by design: `needs_entity`
+outranks it.
+
 **2026-09-24 evening: 9693 loaded into August and September; item 197 fixed
 and live (Fly `69de469b`, PR #1329).** The OpenAI key is funded again (a body-only mail ingested through
 vision at 18:02 UTC), so the one mail the outage held (16:21 UTC, OpenAI

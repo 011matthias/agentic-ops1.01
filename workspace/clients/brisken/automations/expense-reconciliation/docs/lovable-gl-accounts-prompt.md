@@ -1,6 +1,7 @@
 # Lovable prompt: categories become Zoho accounts (Phase 1)
 
-**NOT PASTED.** The GL engine is live since Fly `45d4c494` (2026-09-24 15:02
+**APPLIED 2026-09-24** (published and driven; evidence and the two checks the
+backend cannot reach are in `PROMPT-STATUS.md`). The GL engine is live since Fly `45d4c494` (2026-09-24 15:02
 UTC): every month created from then on categorizes each line straight into one
 of Dirk's curated Zoho accounts (194 postable leaves, revision `2026-09-24`)
 instead of the eight buckets, and refuses on purpose when it cannot place one.
