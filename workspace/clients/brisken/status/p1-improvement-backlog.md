@@ -9403,7 +9403,7 @@ published. Bundle carries every signature with all five controls found, and
 every row of the prompt's check table matched in a cold headless-Chrome drive;
 evidence row in `docs/PROMPT-STATUS.md` → Applied.
 
-### 192. /cards becomes an overview, not a door into the months (owner 2026-09-24) (BACKEND LIVE; SPA prompt written, NOT pasted)
+### 192. /cards becomes an overview, not a door into the months (owner 2026-09-24) (APPLIED: backend + SPA published and driven 2026-09-24, evidence in PROMPT-STATUS)
 
 **Owner, on the Cards page:** *"this should just be an overview and not
 another gate to inside the months. we can insert more relevant data though."*
@@ -9447,7 +9447,7 @@ n_receipts_without_charge`, a currency-free stand-in for "Still open, largest
 first"); the fold holds only cards with no receipt either, so 9693 joins the
 table.
 
-### 193. The months strip's chip number means one thing: needs category (owner 2026-09-24) (BACKEND SHIPPED; SPA prompt written, NOT pasted)
+### 193. The months strip's chip number means one thing: needs category (owner 2026-09-24) (APPLIED: backend + SPA published and driven 2026-09-24, evidence in PROMPT-STATUS)
 
 **Owner, on the `/months` strip:** *"these numbers next to the card ending
 numbers have to be consistent in their meaning, for 1176 it supposedly depicts
@@ -9469,7 +9469,7 @@ a helper differential with mixed boxes and a decided copy). `regress_check` red
 on both wiring points: the roll-up entry (route test) and the box predicate
 (helper test only, because every fixture row needs a category).
 
-### 194. The Cards overview nests 2838's subcards under it (owner 2026-09-24) (SPA prompt written, NOT pasted; no backend work)
+### 194. The Cards overview nests 2838's subcards under it (owner 2026-09-24) (APPLIED: SPA published and driven 2026-09-24 together with item 192, evidence in PROMPT-STATUS; no backend work)
 
 **Owner, on the published `/cards` overview (item 192):** apply the same
 subcard logic as item 191, "adapted to the corresponding structure" of the
