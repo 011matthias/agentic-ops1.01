@@ -9,6 +9,15 @@ updated: 2026-09-24
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-24: /cards becomes an overview** (backlog item 192; PR #1312, Fly
+`45d4c494`). Owner: the Cards page "should just be an overview and not another
+gate to inside the months". The roll-up now counts receipts per card
+(`n_receipts`, `n_receipts_without_charge`, `n_receipts_no_statement`, per
+receipt month `n_without_charge` + `statement`), from `expenses[].without_charge`
+stamped with the month tab's own verdict. Live: 3876 has 39 receipts without a
+charge, 32 in months with no statement for it; 9693 16 of 16; No card 62 of 72.
+The SPA half, `docs/lovable-cards-overview-prompt.md`, is **NOT pasted**.
+
 **2026-09-24: 2838's subcards nest behind it on the months strip** (backlog item
 191; PR #1310; Fly `fe8699ee`). Owner: the subcards' tabs should not sit next to
 2838 but appear once it is clicked, each keeping its filter. `GET
