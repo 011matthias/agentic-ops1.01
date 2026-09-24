@@ -9,8 +9,8 @@ updated: 2026-09-24
 
 # Brisken / Expense Reconciliation (p1)
 
-**2026-09-24 evening: 9693 loaded into August only; September HELD on backlog
-item 197.** The OpenAI key is funded again (a body-only mail ingested through
+**2026-09-24 evening: 9693 loaded into August and September; item 197 fixed
+and live (Fly `69de469b`, PR #1329).** The OpenAI key is funded again (a body-only mail ingested through
 vision at 18:02 UTC), so the one mail the outage held (16:21 UTC, OpenAI
 USD 10.00 on 9693) was rendered into September via
 `POST /api/inbound/{archive}/render-ingest`; the brief named `re-ingest`, which
@@ -23,11 +23,22 @@ warning. It also moved two 2838 rows: ANTHROPIC* CLAUDE SUB 104.95 (Aug 28) and
 108.53 (Aug 29) went reconciled -> review, because the file's one printed FX
 line (SAP, Jul 16, 1.146292906) became August's rate for every EUR pair
 (item 197). Neither row carried a person's decision. The September file prints
-three FX lines, so it waits for item 197. The owner picked the fix the same
-evening: the charge-day rate now outranks the statement median (see item 197);
-September attaches after that deploy. The GL
-prompt is still unpasted (repo and live bundle both lack all five markers), so
-the GL drive did not run.
+three FX lines, so it was held until the owner-picked fix (the charge-day rate
+now outranks the statement median) was deployed. Then, after snapshot
+`vs_eg81MkJmYKvuxK8NKNzPkk`, `20260904-statements-9693-.pdf` attached to
+September: +32 rows, all 9693, all Cloud Services, Aug 5 to Sep 4, no
+advisory, receipts unchanged. Five pairs, each predicted from the file before
+the attach: SendGrid 89.95, Anthropic 204.09, Afi 66.00, and August's OpenAI
+80.04 / 80.12 via the adjacent-month borrow. August moved only by those two
+receipts (`n_receipts_need_charge` 12 -> 10). Brave 3.73 and Anthropic 187.15
+(Sep 1-4) have no 9693 charge and stay open. Cold SPA drive: each month shows
+"Brisken Cloud Services · Credit Card Chase Visa - 9693" as its own collapsed
+card section, August "19 charges USD 6,340.60", September "25 charges USD
+8,178.79", both equal to the API's open 9693 rows to the cent; the only
+non-GET was the login. August's two Anthropic rows return to reconciled at
+the month's next natural re-match (no agent re-match). The GL prompt is still
+unpasted (repo and live bundle both lack all five markers), so the GL drive
+did not run.
 
 **2026-09-24: the strip's chip number means "needs category"** (backlog item
 193). It was `n_transactions` with no label (1176's "3" = one charge, two
@@ -339,8 +350,8 @@ absent data**: 9693, 0113, 6013 and 8311 have no statement in any month.
 Found 2026-09-24 on the ADMIN CLOUD SERVICES LLC SharePoint site (Graph
 app-only, read): 9693 has every 2026 statement through 0904; 8311 and 6013 are
 dormant (fee-only cycles, no receipts); 0113 exists nowhere in SharePoint and is
-Dirk's to export. The owner ordered the 9693 load the same day; August holds
-its cycle, September's waits on item 197 (see the top of this file).
+Dirk's to export. The owner ordered the 9693 load the same day; August and
+September now hold their cycles (see the top of this file).
 
 Item 185 came from note #86 and was raised as a quote-separately new surface;
 the owner answered with a directive instead: *"the same per card filter system

@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-24 | Brisken P1 9693 Load And Item 197 FX Rung | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20P1%209693%20Load%20And%20Item%20197%20FX%20Rung/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Recon 9693 Statements And GL Prompt | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%209693%20Statements%20And%20GL%20Prompt/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken Recon Items 192-194 Applied | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20Recon%20Items%20192-194%20Applied/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken Recon Subcards Months and Cards | client-dev | [→](docs/2026-09-24%20-%20Brisken%20Recon%20Subcards%20Months%20and%20Cards/Checkpoint.md) |
@@ -418,6 +419,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-24 | BAfoeG Antrag und Nachzahlung | misc | [→](docs/2026-09-24%20-%20BAfoeG%20Antrag%20und%20Nachzahlung/Checkpoint.md) |
+| 2026-09-24 | KIT Radar und tmbstud-l Austragung | misc | [→](docs/2026-09-24%20-%20KIT%20Radar%20und%20tmbstud-l%20Austragung/Checkpoint.md) |
 | 2026-09-21 | Friction Register Voids Closed | system-infra | [→](docs/2026-09-21%20-%20Friction%20Register%20Voids%20Closed/Checkpoint.md) |
 | 2026-09-17 | Friction Fix Program Complete | system-infra | [→](docs/2026-09-17%20-%20Friction%20Fix%20Program%20Complete/Checkpoint.md) |
 | 2026-09-17 | Friction Fix Program Close-Out | system-infra | [→](docs/2026-09-17%20-%20Friction%20Fix%20Program%20Close-Out/Checkpoint.md) |
