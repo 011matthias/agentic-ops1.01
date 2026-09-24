@@ -103,7 +103,6 @@ WAITS = [
     # live 2026-09-24: the rows that lose the suggestion
     "VENDA CREDITO VISA", "Link", "OUTRO", "CreditCard",
     "saved payment method",
-    "We have billed your Visa card ending with the last two digits: 38",
     "Kartenzahlung erhalten",
     # case 5, unchanged: a Brisken card type
     "VISA CREDIT", "Cartão de Crédito", "CARTAO TEF", "TEF", "VISA",
@@ -134,6 +133,19 @@ def test_positive_evidence_suggests_private(hint, reason):
 @pytest.mark.parametrize("hint", WAITS)
 def test_everything_else_waits(hint):
     assert positive_non_brisken_evidence(hint, CARDS) is None, hint
+
+
+def test_a_worded_two_digit_ending_is_decided_by_the_registry():
+    """GoDaddy's sentence (live, September) names ending 38 in words (item
+    199). With the live 2838 card it names a Brisken card, so it is no
+    evidence; with no card ending in 38 it is a card Brisken does not have."""
+    godaddy = "We have billed your Visa card ending with the last two digits: 38"
+    with_2838 = cards_from_setting({**LIVE_CARDS, "card-2838": {
+        "label": "Credit Card - 2838", "digits": ["2838"],
+        "entity": "Corporate Services",
+        "zoho_account": "CHASE VISA - 2838 - TRAVEL"}})
+    assert positive_non_brisken_evidence(godaddy, with_2838) is None
+    assert positive_non_brisken_evidence(godaddy, CARDS) == "ending"
 
 
 def test_brisken_issuers_come_from_the_registry_wording():
