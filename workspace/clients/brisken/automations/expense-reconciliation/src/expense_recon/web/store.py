@@ -1619,6 +1619,17 @@ class RunStore:
 
     # -- category overrides ----------------------------------------------
 
+    def delete_category_overrides(self, run_id: str) -> int:
+        """Remove every category / account pick on a run; returns how many.
+
+        Only the GL switch calls this (`gl_conversion`), after it has copied
+        the rows into the run's snapshot: a bucket pick cannot stand on a
+        month whose categories are account codes."""
+        cur = self.conn.execute(
+            "DELETE FROM category_overrides WHERE run_id = ?", (run_id,))
+        self.conn.commit()
+        return cur.rowcount
+
     def get_category_overrides(self, run_id: str) -> dict[tuple[str, int], dict]:
         rows = self.conn.execute(
             "SELECT document_id, line_index, category, zoho_account, "
