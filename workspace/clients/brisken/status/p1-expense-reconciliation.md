@@ -9,6 +9,20 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: case 9 ("no payment info") is planned, not built** (backlog
+item 204, PR #1346). Live: 34 receipts print nothing, 12 only a Brisken card
+type, 7 an unrecognised phrase. Six steps, in order of rows resolved per unit
+of risk: statements as calendar-month activity exports pulled weekly (owner
+D1), invoice and receipt twins share the card, the card flows back from a
+neighbour month's statement, a card from the billing account's own history
+(owner D4; replaces item 200's vendor-name rule: 34 right / 0 wrong against 3
+wrong of 21), an honest waiting status with evidence-backed suggestions and
+apply-to-vendor, and a matcher guard sending no-card pairs whose vendor
+disagrees to review (owner D5). Owner D6: Criss's OpenAI pick stays on its
+row only. Five build prompts are in the 2026-09-25 case-9 checkpoint. D2
+(Criss pulls weekly, needs view access to 9693 / 1176) and D3 (load the 9693
+and April-June history) wait on the owner and Criss.
+
 **2026-09-24 night: the GL accounts prompt is APPLIED** (published by the
 owner, bundle-verified, driven cold in EN and PT on July and on a
 `TEST - GL drive` batch that was purged the same session; evidence in the
