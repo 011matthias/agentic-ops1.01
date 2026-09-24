@@ -9569,7 +9569,7 @@ Two leftovers from the same outage, both small:
   `20260804-statements-9693--2.pdf`. The name is cosmetic; a dead job leaving
   a file behind is the thing to fix.
 
-### 197. One printed FX line from another card and another month becomes the rate for every pair in the month (found live 2026-09-24, on the ordered 9693 load) (FIXED 2026-09-24: the charge-day rate outranks the statement median)
+### 197. One printed FX line from another card and another month becomes the rate for every pair in the month (found live 2026-09-24, on the ordered 9693 load) (FIXED and LIVE 2026-09-24: PR #1329, Fly `69de469b`; September's 9693 cycle attached after it)
 
 `derive_fx_reference_rates` takes the median of a month's printed statement FX
 lines (`Transaction.fx_rate`) and `_reference_rate_for` ranks it above the
