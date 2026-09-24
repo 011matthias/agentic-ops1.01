@@ -167,6 +167,12 @@ EXPENSE_BATCH_CONTRACT = {
     # Item 160: the receipt lines with no category yet -- the exact set
     # the `partial_uncategorized` review reason is about.
     "expenses[].uncategorized_lines[]": "object",
+    # Item 204, case 9: the card labels a card-less row waits for (on the row
+    # and on its `waits_for_statement` review). `card_suggestion.evidence[]`
+    # is typed by `test_case9_row_fields_are_absent_or_well_formed`: these
+    # fixtures load no recurring charge, so a pin here could never be seen.
+    "expenses[].waits_for_statements[]": "string",
+    "expenses[].review.waits_for_statements[]": "string",
 }
 
 RUN_CONTRACT = {
@@ -265,6 +271,9 @@ EXPENSE_BATCH_MUST_COVER = {
     "coverage[].statement_ids[]",
     "expenses[].uncategorized_lines[]",
     "gl_accounts.*[]",
+    # Item 204: the fixtures' months hold card-less rows no statement covers.
+    "expenses[].waits_for_statements[]",
+    "expenses[].review.waits_for_statements[]",
 }
 
 RUN_MUST_COVER = {
@@ -1606,6 +1615,8 @@ REVIEW_REASON_CODES_PIN = {
     "missing_fields", "date_outside_period", "suggested_private",
     "needs_entity", "needs_entity_settled_outside", "untrusted_instructions",
     "invoice_read_as_statement", "needs_person", "needs_cost_center",
+    # item 204, case 9: a card-less row waiting for statements
+    "waits_for_statement",
 }
 
 UNMATCHED_RECEIPT_REASON_CODES_PIN = (
