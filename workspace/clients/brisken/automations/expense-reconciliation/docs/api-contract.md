@@ -4199,6 +4199,31 @@ present, also when `card_sections` is empty:
 The receipts the Matching page shows as settled outside come from the expense
 payload, so they read `expenses[].card_section`.
 
+**`without_charge`** (bool, item 192, 2026-09-24), on every element of the
+expense payload's `expenses[]`: no charge holds this receipt. It is the set
+the card tab's `n_receipts_without_charge` counts (the report view's
+`unmatched_receipts`), stamped per row because a month with fewer than two
+cards has no sections to carry it.
+
+### The card overview's receipt figures: `GET /api/cards/status` (item 192)
+
+Parallel to item 185's charge figures and item 190's `receipt_months` /
+`no_card`, nothing existing changes:
+
+- `cards[].receipt_months[]` adds `n_without_charge` (of that month's
+  `n_expenses` on the card, the rows `expenses[].without_charge` marks) and
+  `statement` (bool: the card has a statement in that month).
+- `cards[]` adds `n_receipts`, `n_receipts_without_charge` and
+  `n_receipts_no_statement` (receipts in months where the card has no
+  statement: waiting for one, not unmatched). Each card's own, like every
+  figure here; an account does not add its subcards'.
+- `no_card` adds `n_without_charge`; its months carry `n_without_charge` and
+  no `statement` (no card has none to hold).
+
+`never_loaded` keeps its meaning (no charge and no statement anywhere), which
+the months strip's disclosure uses. The overview folds away only a card that
+is `never_loaded` with `n_receipts` 0, and the footnote (`note`) says so.
+
 Which pool each page files by: the Matching page by the receipts its view was
 built on (the snapshot's, the chain `cards_differ` reads), the Expenses page by
 the month report's pool (`_expense_export_inputs`, where a copy may borrow its

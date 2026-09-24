@@ -131,6 +131,9 @@ def test_a_month_with_only_receipts_on_a_card_is_named(client):
         "label": "September 2026",
         "batch_type": month["batch_type"],
         "n_expenses": 1,
+        # Item 192's parallel fields: no statement yet, so no charge either.
+        "n_without_charge": 1,
+        "statement": False,
     }]
     assert card["months"] == [], "the charge side is unchanged"
     assert card["never_loaded"] is True, (
@@ -181,4 +184,6 @@ def test_a_month_the_receipt_count_fails_on_keeps_its_charges(client):
         payload = build_card_status(store, receipt_cards=broken)
     assert payload["unreadable"] == [september]
     assert [m["run_id"] for m in payload["months"]] == [september]
-    assert payload["no_card"] == {"months": [], "n_expenses": 0}
+    assert payload["no_card"] == {
+        "months": [], "n_expenses": 0, "n_without_charge": 0,
+    }

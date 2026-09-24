@@ -9364,6 +9364,38 @@ registry on the live app; existing months do not read it (their snapshot is
 fixed until a refresh-master-data pass, which is Criss's), so it changes this
 strip and any month created afterwards, and nothing else.
 
+### 192. /cards becomes an overview, not a door into the months (owner 2026-09-24) (BACKEND SHIPPED; SPA prompt to follow)
+
+**Owner, on the Cards page:** *"this should just be an overview and not
+another gate to inside the months. we can insert more relevant data though."*
+Then, on the proposal (chip strip and per-card months panel removed, rows not
+clickable, receipt coverage per card, file names demoted, sorted by what is
+open): *"alright then do the backend work and hand me the lovable prompt"*.
+
+**Read live before building (2026-09-24).** `GET /api/cards/status` already
+carried statement coverage, refunds and item 190's `receipt_months`, but no
+receipt FIGURE: how many of a card's receipts found no charge, and which
+receipt months have no statement for that card. Live: 3876 holds receipts in
+January, May, June and September with no statement for it, 9693 has receipts
+and no statement ever, 1176 has September's. The month's own "{n} without a
+charge" is `month_card_tabs` over the report view's `unmatched_receipts`, and
+a month with fewer than two cards drops its sections, so summing
+`card_sections` would miss January (last checkpoint's dead end).
+
+**Shipped (backend):** `expenses[].without_charge` stamped on every Expenses
+row from that same set; `receipt_card_counts` returns `n_expenses` +
+`n_without_charge` per card; `build_card_status` adds per receipt month
+`n_without_charge` + `statement`, per card `n_receipts`,
+`n_receipts_without_charge`, `n_receipts_no_statement`, and
+`no_card.n_without_charge`. The footnote now says the fold holds cards with
+no charge, no statement AND no receipt (the overview will show 9693, which
+has receipts, in the table; the months strip's disclosure keeps
+`never_loaded`'s statement meaning, per item 190). Tests
+`tests/test_card_status_receipt_figures_item_192.py` (4, route-level, one
+holding the row stamp, the tab's own count and the roll-up equal);
+`tools/regress_check.py` red on both wiring points (the row stamp, the
+per-month statement flag); item 190's exact-shape assertions extended.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
