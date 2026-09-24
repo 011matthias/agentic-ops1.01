@@ -9369,7 +9369,7 @@ registry on the live app; existing months do not read it (their snapshot is
 fixed until a refresh-master-data pass, which is Criss's), so it changes this
 strip and any month created afterwards, and nothing else.
 
-### 192. /cards becomes an overview, not a door into the months (owner 2026-09-24) (BACKEND SHIPPED; SPA prompt to follow)
+### 192. /cards becomes an overview, not a door into the months (owner 2026-09-24) (BACKEND LIVE; SPA prompt written, NOT pasted)
 
 **Owner, on the Cards page:** *"this should just be an overview and not
 another gate to inside the months. we can insert more relevant data though."*
@@ -9400,6 +9400,18 @@ has receipts, in the table; the months strip's disclosure keeps
 holding the row stamp, the tab's own count and the roll-up equal);
 `tools/regress_check.py` red on both wiring points (the row stamp, the
 per-month statement flag); item 190's exact-shape assertions extended.
+Deployed Fly `45d4c494`; live read: 2838 41 receipts / 12 without a charge /
+5 waiting for a statement, 3876 95 / 39 / 32, 9693 16 / 16 / 16, 1176 8 / 8 /
+7, No card 72 / 62; August's row stamps equal each card tab's own count.
+Published `/cards` driven cold: still renders, new footnote shown.
+
+**SPA half:** `docs/lovable-cards-overview-prompt.md`. Strip, card panel and
+row clicks go; one table with Statements cover (plus "No statement for:
+{months}"), Receipts, Without a charge, Credits, Statements as a count; a No
+card row last; sorted by open work (`n_unmatched_tx + n_review +
+n_receipts_without_charge`, a currency-free stand-in for "Still open, largest
+first"); the fold holds only cards with no receipt either, so 9693 joins the
+table.
 
 ## Shipped (loop history)
 
