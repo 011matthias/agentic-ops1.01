@@ -160,6 +160,9 @@ from .store import (
     RunStore,
     TripRow,
 )
+# Item 204 step 4: the request's billing-account card index, passed by every
+# surface that resolves the card chain with live settings.
+from ..billing_account import request_account_cards
 
 # The documented Zoho Expense export header map (run.with-expense-csv
 # example). Prefilled in the form so the common Path-A case needs no
@@ -6565,6 +6568,7 @@ def resolve_batch_row_cards(
     settled_cards: dict[str, str] | None = None,
     settled_outside: dict[str, dict] | None = None,
     merchants: dict | None = None,
+    account_cards=None,
 ) -> dict[str, dict]:
     """Per-document card + entity resolution for an expense batch:
     ``{document_id: {hint, card: Card|None, entity, entity_source}}``.
@@ -6669,6 +6673,16 @@ def resolve_batch_row_cards(
     matcher's re-match) -- and the matcher is deliberate: `merchant` is not
     in `CARD_SCOPE_SOURCES`, so a card the registry lends never scopes
     matching.
+
+    `account_cards` (item 204 step 4, owner D4, 2026-09-25) is the request's
+    billing-account index (`billing_account.request_account_cards()`). It
+    adds ONE link between the settled charge and the remembered card, under
+    the same guard, source `account`: the card the receipt's Stripe customer
+    prefix has been paid with on at least two other purchases and on no
+    other card. Entity and person ride the card; `can_mark_private` stays
+    true (memory about the account, not a decision about the row); not in
+    `CARD_SCOPE_SOURCES`. Passed only by the surfaces that hold live
+    settings, never by the matcher's bake or the sign-off learner.
     """
     from ..cards import (
         masked_short_ending,
@@ -6743,6 +6757,17 @@ def resolve_batch_row_cards(
             remembered = _batch_row_card(cards, r.card_key)
             if settled is not None:
                 card, card_source = settled, "settled_charge"
+            elif (
+                # Item 204 step 4 (owner D4): the card this receipt's billing
+                # account has always been paid with, derived on every read
+                # from the other purchases of the account (`billing_account`).
+                # Memory about the account, not a decision about this row.
+                from_account := _batch_row_card(
+                    cards,
+                    account_cards.card_for(r) if account_cards is not None else None,
+                )
+            ) is not None:
+                card, card_source = from_account, "account"
             elif remembered is not None:
                 card, card_source = remembered, "learned"
             elif merchant_registry is not None:
@@ -6794,7 +6819,7 @@ def resolve_batch_row_cards(
                 not private
                 and not settled_off
                 and not ambiguous
-                and (card is None or card_source in ("learned", "merchant"))
+                and (card is None or card_source in ("learned", "merchant", "account"))
             ),
             "ambiguous": ambiguous,
             # A reviewer's (or remembered) pick settles the ambiguity the
@@ -7583,6 +7608,7 @@ def build_expense_view(
         settled_cards=settled_charge_cards(run, charges, charge_state_map),
         settled_outside=grid_settled_outside,
         merchants=(settings or {}).get("merchants"),
+        account_cards=request_account_cards(),
     )
     # Item 201: on a GL month a picked leaf code reads its account name in
     # the company the row SHOWS (the card chain's answer above), which can be
@@ -8398,6 +8424,9 @@ def _expense_export_inputs(
     card_res = resolve_batch_row_cards(
         receipts, run.config, field_overrides, settled_cards=settled_cards,
         merchants=merchants,
+        # Item 204: the CSV and the month report (they pass settled cards);
+        # never the matcher's neighbour and trip pools, which pass none.
+        account_cards=request_account_cards() if settled_cards is not None else None,
     )
     # After the card pass (which reads no category) so item 201's account
     # name resolves in the company this row exports under, as on the grid.
@@ -8723,6 +8752,7 @@ def build_expense_report(
     card_res_report = resolve_batch_row_cards(
         company, run.config, field_overrides, settled_cards=report_settled,
         merchants=report_merchants,
+        account_cards=request_account_cards(),
     )
     if is_trip_batch(run):
         def _person_of(r) -> str:
@@ -9734,6 +9764,7 @@ def build_cost_center_totals(
         card_res = resolve_batch_row_cards(
             company, run.config, field_overrides,
             merchants=(settings or {}).get("merchants"),
+            account_cards=request_account_cards(),
         )
         cost_res = resolve_batch_row_cost_centers(
             company, field_overrides, settings=settings, trip=trip,
@@ -9839,7 +9870,8 @@ def report_receipt_cards(
     `bake_card_scope` hands the matcher (item 137), so a document files a
     receipt under the card it was matched on."""
     res = resolve_batch_row_cards(
-        receipts, cfg, field_overrides or {}, merchants=merchants
+        receipts, cfg, field_overrides or {}, merchants=merchants,
+        account_cards=request_account_cards(),
     )
     out: dict[str, tuple[str, str]] = {}
     for r in receipts:
@@ -10678,10 +10710,12 @@ def _refresh_batch_master_data_locked(
             fo = store.get_expense_field_overrides(run.run_id)
             reg_merchants = (settings or {}).get("merchants")
             before = resolve_batch_row_cards(
-                receipts, run.config, fo, merchants=reg_merchants
+                receipts, run.config, fo, merchants=reg_merchants,
+                account_cards=request_account_cards(),
             )
             after = resolve_batch_row_cards(
-                receipts, cfg, fo, merchants=reg_merchants
+                receipts, cfg, fo, merchants=reg_merchants,
+                account_cards=request_account_cards(),
             )
             n_moved = sum(
                 1

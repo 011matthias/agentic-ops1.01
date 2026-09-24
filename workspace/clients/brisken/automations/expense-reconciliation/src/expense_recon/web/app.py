@@ -239,6 +239,8 @@ from .store import (
 from . import auth, machine, ratelimit
 from . import decision_history as dh  # item 104
 from .service import charge_category_key  # item 104
+from ..billing_account import build_account_index  # item 204 step 4
+from ..billing_account import request_scope as account_request_scope
 
 log = logging.getLogger("expense_recon.web")
 
@@ -1380,6 +1382,20 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         allow_headers=["*"],
         allow_credentials=False,
     )
+
+    # Item 204 step 4: one lazy billing-account card index per request.
+    # Nothing is read unless a card-less row with an account key reaches the
+    # card chain's account link, and then the store is read once for every
+    # month and every surface of this request (`/api/cards/status` builds all
+    # of them).
+    def _account_index():
+        with open_store() as store:
+            return build_account_index(store)
+
+    @app.middleware("http")
+    async def billing_account_scope(request: Request, call_next):
+        with account_request_scope(_account_index):
+            return await call_next(request)
 
     @app.post("/api/login")
     async def api_login(request: Request):

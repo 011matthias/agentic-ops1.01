@@ -6460,3 +6460,70 @@ same filter since item 112.
 
 Tests: `tests/test_trip_lifecycle_rematch.py` (12, route-level), eight
 wiring points proven red under `tools/regress_check.py`.
+
+## A receipt with no card takes its billing account's card: `card_source: "account"` (backlog item 204 step 4, owner decision D4, 2026-09-25)
+
+A subscription invoice prints a Stripe-shaped number, an 8-character customer
+prefix and a counter (`WWT1PNYP-0016`). The prefix is the billing ACCOUNT: one
+login, paying with one card at a time. Keyed on it, a card memory scored 34
+right, 0 wrong, 30 silent over 64 checkable receipts (leave-one-out); keyed on
+the vendor NAME (item 200, not built) it gave the wrong person 3 times in 21.
+
+### The rule (`src/expense_recon/billing_account.py`)
+
+| Part | Rule |
+|---|---|
+| Key | `invoice_number`, else the receipt's reference (`expenses[].reference`), matching `^[A-Z0-9]{8}[- ]?\d{4}$` with a prefix that is not all digits. A Stripe receipt number (`2642-9215-3921`) is never a key; a POS or grocery receipt has none |
+| Purchase | the prefix plus the counter, so an invoice and its receipt are ONE purchase, whichever month each landed in; a decided copy (`counts_in_total: false`) never counts |
+| Counts | a printed Brisken card number (`card_source: hint`, digits of the card, not a hint word the batch assigned, not a two-digit ending), the settling charge (`settled_charge`), a reviewer's pick (`override`) |
+| Only contradicts | a two-digit ending (`card_ending`), a hint word assigned to a card |
+| Never evidence | `learned`, `merchant`, `account` itself, a confirmed private row, a row settled outside the card system |
+| Decision | at least 2 OTHER purchases of the account on one card and none naming any other card, across every expense batch (test batches named `TEST` / `UTIL` left out); derived on every read, never stored |
+
+The purchase being judged never votes for itself (leave-one-out). A reviewer's
+pick stays on its own row (D6): one pick is one purchase of evidence, which
+decides nothing, so September's OpenAI rows beside Criss's pick stay blank.
+
+### Where it sits in the row's card chain
+
+`resolve_batch_row_cards` gains a trailing `account_cards=` and ONE link:
+
+1. `override`; 2. `hint`; 3. `settled_charge`; 4. **`account`** (NEW);
+5. `learned`; 6. `merchant`; 7. `none`.
+
+Links 3-6 share the item-87 guard: the receipt prints no card number, names no
+hint the batch resolves and is not confirmed private. The card's `entity` and
+`person` ride it (`entity_source: "card"`, `person_source: "card"`).
+`can_mark_private` stays **true**, as on `learned` and `merchant`: the rule is
+memory about the account, not a decision about this row. `account` is not in
+`CARD_SCOPE_SOURCES`, so it never scopes matching.
+
+`expenses[].card_source` gains `account` as a value, a rule-5 change: the pin
+in `tests/test_view_contract.py` moves with it, and the SPA label needs
+`docs/lovable-account-card-prompt.md`. No other field changes.
+
+### Which surfaces resolve it
+
+Every surface that resolves the chain with live settings: the Expenses grid,
+the Zoho CSV and the month PDF (their shared export pass, only when the caller
+passes the month's settled cards, so the matcher's neighbour and trip pools
+never see it), the month PDF's card pass and card sections, the Expenses card
+tabs (`expenses[].card_section`), the cost-center roll-up, the
+refresh-master-data preview, and through the tabs `GET /api/cards/status`. Not
+the matcher's bake, not the run workbench's own card pass, and not the
+sign-off learner: `_CARD_OBSERVATION_SOURCES` is `{override, hint,
+settled_charge}` (`learned` left it in #1353), so an account-carded row never
+teaches `cards_seen` or a learned `card_key`.
+
+**One index per request.** The app enters a lazy scope per request
+(`billing_account.request_scope`); nothing is read until a card-less row that
+carries an account key reaches the link, and then the store is read once for
+the whole request, however many months and surfaces it resolves. Outside a
+request (a CLI caller, a unit test calling the service directly) the link is
+silent. A batch whose evidence cannot be read is skipped; an index that cannot
+be built leaves the link silent, never the page failing.
+
+Tests: `tests/test_account_card_c9.py` (16; 14 route-level through
+`GET /api/expense-batches/{id}`, the CSV, `/api/cards/status` and
+`POST /api/runs/{id}/publish`); seven wiring and rule points proven red under
+`tools/regress_check.py`.

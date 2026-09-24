@@ -10260,6 +10260,35 @@ reported no coverage anywhere; the valid read is `card_key` / `statements` /
 `period_start` / `period_end` / `n_transactions`, and a receipts-only month
 returns `[]` by design.
 
+**Build 4 (step 4), 2026-09-25:** the billing-account card, BUILT (Shipped
+row 123). `src/expense_recon/billing_account.py` keys a receipt on the Stripe
+prefix (`invoice_number`, else `reference`, `^[A-Z0-9]{8}[- ]?\d{4}$`, prefix
+not all digits), collapses copies to one purchase (prefix + counter, across
+months; decided copies out), counts a printed number, the settling charge and
+a pick, lets a two-digit ending or an assigned hint word only contradict, and
+decides at >=2 other purchases on one card and none on another, leave-one-out,
+derived per request. New link `card_source: "account"` in
+`resolve_batch_row_cards` between the settled charge and the remembered card;
+entity and person ride it; `can_mark_private` true; not a scope source. The
+`learned` half of the circularity fix had already shipped (#1353,
+`_CARD_OBSERVATION_SOURCES = {override, hint, settled_charge}`), so no change
+there; the learner never receives the index. Deviation from the round's
+ownership list, one append each: the index needs the store, and the grid, the
+export and the report builders hold none, so `web/app.py` gained one
+middleware that opens a lazy per-request scope (built only when a keyed
+card-less row reaches the link, once per request, so `/api/cards/status` pays
+once for all its months), and service.py one import line; the export pass
+takes the index only when its caller passes settled cards, so the matcher's
+neighbour and trip pools never see it. Live before (Fly `5bbb0ac2`, read-only,
+copies collapsed): exactly the ten predicted rows decide (May WWT1PNYP 0012 /
+0013 / 0014, HQXED19R 0004 / 0005, HYWGENV2 0003; June WWT1PNYP 0015, HQXED19R
+0006, HYWGENV2 0004, all 3876; September 890D70BF 0034 on card-9693, reading
+`none` before build 1); DZ9BH3VA, HMVWDWIL, H0LHY2WQ and OpenAI 58596F4C (one
+pick) stay silent. `/api/cards/status` 1.39 s before. Tests
+`tests/test_account_card_c9.py`; regress red at the chain link, the app
+middleware, the export site, the purchase collapse, the evidence
+classification, the threshold and the contradiction rule.
+
 ### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (BUILT 2026-09-25, same PR as item 201)
 
 Owner, 2026-09-25: "i need july, august and september recategorized with this
@@ -10304,6 +10333,7 @@ test through the card fix.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 123 | Item 204 step 4 (case 9, build 4 of 5; owner D4): a receipt that prints no card takes the card its Stripe billing account (`WWT1PNYP-0016` -> `WWT1PNYP`) was paid with on at least two other purchases and on no other card, `card_source: "account"`, company and person riding it. New `billing_account.py`; one link in `resolve_batch_row_cards` between the settled charge and the remembered card; a lazy per-request index (one app middleware) passed by the grid, CSV, month PDF, card tabs, cost-center roll-up, refresh preview and so `/api/cards/status`; never the matcher or the sign-off learner. Lovable prompt `lovable-account-card-prompt.md` pending | Keyed on the vendor name the same memory gave the wrong person 3 times in 21; keyed on the account it scored 34 right, 0 wrong. Ten live May, June and September rows stop asking Criss for a company and a person; the multi-card accounts (Lovable, Dirk's Anthropic) and OpenAI's single pick (D6) stay blank on purpose | PR (this) |
 | 122 | Items 196/197 leftovers from the 2026-09-24 LLM-key outage: an `ingested` intake-log row no longer presents the `error` of a failed first try, and a statement attach whose job fails before its commit removes the file it saved (`discard_unrecorded_upload`), never a file `statements[]` names | A surface showing `error` showed a 429 beside "Added" on the one recovered mail, and a dead attach kept its file's name, so the operator's retry was stored as `20260804-statements-9693--2.pdf` | 2026-09-25; `tests/test_attach_leftovers_196_197.py` (6: 3 red on origin/main, 3 controls: a held mail keeps its error, the archive keeps the record, a failure after the commit keeps the file); three wiring points proven RED under `tools/regress_check.py`; suite 3454 passed / 2 skipped |
 | 121 | Item 195: a statement PDF keeps its company through a re-read. A PDF entry records the account it was filed under (`statement_entry_account`); a re-read never lends a PDF `config.statement`'s account; a PDF filed under no account, or recorded before this, takes the registry entity every card it prints resolves to, blank on two companies or an unnamed card (`pdf_entity_from_printed_cards`), at the attach and the re-read alike. `statement_period_overlap` no longer calls two unrecorded accounts "the same account" (leftover 3 of items 196/197) | A PDF charge prints no `card_last4`, so item 59's match-time stamp never repairs it: its company is whatever the upload says. Both live August PDF entries recorded `account_id: ""` although the SPA sent a card key, so a re-read would have put the 1176 file's 3 charges and the 9693 file's 21 under the company "card", or under Corporate Services when the workbook was the last upload, and every pair on them would have left scope. Code-traced, never triggered live (nobody re-reads a month holding a PDF) | 2026-09-25; `tests/test_reread_pdf_entity_item_195.py` (9: 8 red on origin/main, 1 control green); four wiring points proven RED under `tools/regress_check.py` (the marker branch, the no-borrow fallback, the entry writer, the advisory guard); no live row moves on the deploy |
 | 120 | Item 200's side finding: `learned` leaves `service._CARD_OBSERVATION_SOURCES`, so the sign-off card learner no longer counts a remembered card as an observation of where a merchant's spend lands | A remembered card could confirm itself into `cards_seen` and write a learned `card_key` with no new evidence, against the 2026-09-24 ruling that only corrections may be memorized. The leak reaches months ingested after a correction (the card is stamped at ingest, item 173), not ones filled at read time (item 169) | PR TBD, 2026-09-25; `tests/test_remembered_card_read_time_item_169.py::test_signing_off_a_remembered_card_teaches_the_registry_nothing` (regress RED) |
