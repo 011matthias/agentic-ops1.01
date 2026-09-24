@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -9154,6 +9154,49 @@ are the WHOLE month's, and showing "50 receipts" on the August row beside a
 email" badge (item 174) and the doubled Private label.
 
 Written as `docs/lovable-months-card-filter-prompt.md`, NOT pasted.
+
+### 188. A duplicate can only be deleted from its second copy, and the duplicates filter does not look like one (owner 2026-09-24)
+
+**Owner**, on the September Fireflies.ai Corp pair (2026-09-15, both from
+cristiane.cavalcanti@): *"Duplicate should be able to be deleted from original
+and copy. also there should be a filter to see all the duplicates."*
+
+The delete button renders only where `duplicate.is_extra` is true, and
+`is_extra` means "every member after the first" (`duplicates.py`,
+`"is_extra": i > 1`), where first is only the group's listing order. So when
+the second copy is the one worth keeping (the cleaner scan, the better file
+name), the reviewer's only route is "Not a copy" followed by a manual delete,
+which also records a false ruling on the group.
+
+**Backend already correct, now pinned.** Deleting the first copy leaves the
+other as an ordinary row (`duplicate: null`, counted in `n_expenses` and
+`totals_by_ccy`), and on a statement month the delete's re-match hands the
+released charge to it (`n_receipts_matched` 1, `n_unmatched_tx` 0,
+`copies_set_aside` empty). Two tests in `tests/test_duplicate_rows.py`.
+
+**The filter exists and is invisible.** The published bundle already filters to
+`row.duplicate` rows when the amber "{n} copies set aside" text is clicked,
+with "Show all rows" to clear. Nothing marks that text as a control.
+
+SPA-only: `docs/lovable-duplicates-either-copy-prompt.md`, NOT pasted.
+
+### 189. The Expenses row appears to ask which card paid twice (owner 2026-09-24)
+
+**Owner:** *"why does the user in expense recon tool have to insert twice which
+card the payment was done with"*. On a row with no card the company column asks
+"Pick the card that paid" and the Paid Through cell beside it shows
+`(paid-through - assign)`, a "needs a card" badge and its own account dropdown.
+The card pick already resolves Paid Through (`api-contract.md`, the per-row pick
+chain); the dropdown is the pre-card-resolution manual override (checkpoint
+2026-07-28), which changes the posting account only, never the company, and
+outranks the card afterwards (Criss's August row 0004, note #63).
+So a reviewer who answers the second question instead of the first gets a row
+that looks finished and is half resolved.
+
+SPA-only: hide the override while there is no card and nothing to override,
+collapse it behind "Override account" once resolved, unchanged where an
+override is already set. `docs/lovable-paid-through-follows-card-prompt.md`,
+NOT pasted.
 
 ## Shipped (loop history)
 

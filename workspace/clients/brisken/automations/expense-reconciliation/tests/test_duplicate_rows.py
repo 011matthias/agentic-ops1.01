@@ -301,6 +301,76 @@ def test_deleting_the_extra_copy_settles_the_flag(client, monkeypatch):
     assert [e["duplicate"] for e in after["expenses"]] == [None]
 
 
+def test_deleting_the_original_copy_keeps_the_other_one_in_the_total(
+    client, monkeypatch
+):
+    """Owner, 2026-09-24: a duplicate has to be deletable from the original
+    as well as the copy, because "first" is only the group's listing order,
+    not the better scan. Deleting the original must leave the other copy as
+    an ordinary row that counts: a group of one is not a duplicate, so the
+    survivor cannot stay set aside as a copy of a row that is gone, which
+    would drop the purchase from the month altogether."""
+    _wire(monkeypatch)
+    batch_id = _batch(client)
+    view = _grid(client, batch_id)
+    assert view["summary"]["totals_by_ccy"] == {"USD": "135.00"}
+    original = next(
+        e for e in view["expenses"] if not e["duplicate"]["is_extra"]
+    )
+    extra = next(e for e in view["expenses"] if e["duplicate"]["is_extra"])
+
+    resp = client.delete(
+        f"/api/runs/{batch_id}/expenses/{original['document_id']}"
+    )
+    assert resp.status_code == 200, resp.text
+
+    after = _grid(client, batch_id)
+    assert [e["document_id"] for e in after["expenses"]] == [
+        extra["document_id"]
+    ]
+    assert [e["duplicate"] for e in after["expenses"]] == [None]
+    assert "counts_in_total" not in after["expenses"][0]
+    assert after["summary"]["n_expenses"] == 1
+    assert after["summary"]["totals_by_ccy"] == {"USD": "135.00"}
+    assert after["summary"]["n_duplicate_copies"] == 0
+    assert after["summary"]["n_duplicate_groups"] == 0
+
+
+def test_deleting_the_matched_original_hands_its_charge_to_the_other_copy(
+    client, monkeypatch
+):
+    """On a reconciling month the original is usually the copy the charge
+    paired with. Deleting it releases that charge, and the re-match the
+    delete triggers has to pair the charge with the surviving copy rather
+    than leave it unmatched beside a receipt that settles it."""
+    _wire(monkeypatch)
+    batch_id = _batch(client)
+    _upload(client, batch_id, _csv(("2026-04-15", "135.00", "PRESSMASTER FZCO")))
+    before = client.get(f"/api/runs/{batch_id}").json()["summary"]
+    assert before["n_unmatched_tx"] == 0, before
+    assert before["n_receipts_matched"] == 1, before
+
+    view = _grid(client, batch_id)
+    original = next(
+        e for e in view["expenses"] if not e["duplicate"]["is_extra"]
+    )
+    extra = next(e for e in view["expenses"] if e["duplicate"]["is_extra"])
+    resp = client.delete(
+        f"/api/runs/{batch_id}/expenses/{original['document_id']}"
+    )
+    assert resp.status_code == 200, resp.text
+
+    run = client.get(f"/api/runs/{batch_id}").json()
+    assert run["summary"]["n_receipts_matched"] == 1, run["summary"]
+    assert run["summary"]["n_unmatched_tx"] == 0, run["summary"]
+    assert run["copies_set_aside"] == []
+    after = _grid(client, batch_id)
+    assert [e["document_id"] for e in after["expenses"]] == [
+        extra["document_id"]
+    ]
+    assert after["summary"]["totals_by_ccy"] == {"USD": "135.00"}
+
+
 # ── 3. the workbench ────────────────────────────────────────────────────
 
 
