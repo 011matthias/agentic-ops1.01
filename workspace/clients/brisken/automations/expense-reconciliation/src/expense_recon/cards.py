@@ -122,6 +122,11 @@ SOURCE_PRESET = "preset"
 # extractor's floor, identifies nothing, and does not block genericity
 # (backlog item 35, 2026-08-28: three real April tender phrases rendered
 # as assignable cards because of vocabulary gaps + the "30").
+# The last group (owner ruling 2026-09-24, card-attribution case 6) holds
+# the neutral "a card was used" words real receipts print ("saved payment
+# method", "Link", "VENDA CREDITO VISA", "OUTRO", "Kartenzahlung
+# erhalten"), so "Remember for future months" can never turn one of those
+# phrases into a card alias.
 GENERIC_TENDER_WORDS = frozenset({
     # networks
     "visa", "mastercard", "master", "amex", "american", "express", "elo",
@@ -136,6 +141,10 @@ GENERIC_TENDER_WORDS = frozenset({
     # DE
     "kreditkarte", "karte", "ec", "bar", "lastschrift", "girokarte",
     "uberweisung", "ueberweisung", "zahlung", "kredit",
+    # "a card was used" (case 6)
+    "saved", "payment", "method", "link", "venda", "outro", "outros",
+    "kartenzahlung", "erhalten", "olv", "stored", "wallet", "pagamento",
+    "recebido", "forma", "paid", "received",
 })
 
 
@@ -150,7 +159,7 @@ def is_generic_tender(text: str | None) -> bool:
         return False
     if _card_keys(text) or masked_short_ending(text):
         return False
-    words = _folded_words(text)
+    words = payment_words(text)
     return (
         any(w in GENERIC_TENDER_WORDS for w in words)
         and all(
@@ -161,27 +170,57 @@ def is_generic_tender(text: str | None) -> bool:
     )
 
 
-def _folded_words(text: str) -> list[str]:
-    """Lower-case ASCII words with diacritics folded first ("Cartão de
-    crédito" -> cartao, de, credito)."""
-    folded = unicodedata.normalize("NFKD", text)
+# Card-attribution case 6 (owner ruling 2026-09-24): receipts glue words
+# together. "CreditCard" is "credit card" and "girocardOLV" is a girocard
+# (OLV, the German signature variant), so every payment-hint classifier here
+# reads the same split words. A token splits at a lower-to-upper case
+# boundary, and a known network or kind word of 5+ letters splits off the
+# FRONT of a longer token ("CREDITCARD"). Shorter words (bar, ec, pay, de,
+# elo, visa) never prefix-split, or "Barbecue" would read as cash and
+# "Visagem" as a Visa; a remainder under 3 letters keeps the token whole, so
+# "creditos" and "creditor" stay single words.
+_CASE_BOUNDARY = re.compile(r"(?<=[a-z])(?=[A-Z])")
+_PREFIX_WORDS = (
+    "mastercard", "girocard", "maestro", "credito", "debito", "credit",
+    "kredit", "cartao", "debit",
+)
+_PREFIX_REST_MIN = 3
+
+
+def payment_words(text: str) -> list[str]:
+    """Lower-case ASCII words of a payment hint: diacritics folded ("Cartão
+    de crédito" -> cartao, de, credito), glued words split ("CreditCard" ->
+    credit, card; "girocardOLV" -> girocard, olv). A token that is itself a
+    known word stays whole ("PayPal", "PagSeguro", "Kreditkarte")."""
+    folded = unicodedata.normalize("NFKD", text or "")
     folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
-    return _normalize(folded).split()
+    words: list[str] = []
+    for raw in re.split(r"[^A-Za-z0-9]+", folded):
+        if not raw:
+            continue
+        if raw.lower() in _WHOLE_WORDS:
+            words.append(raw.lower())
+            continue
+        for part in _CASE_BOUNDARY.split(raw):
+            words.extend(_split_prefix(part.lower()))
+    return words
 
 
-# Owner ruling 2026-09-24 (card-attribution case 5): a generic tender hint
-# suggests a private expense only when it gives positive evidence of a
-# payment method Brisken does NOT have. Brisken's own cards are Visa credit
-# cards, so "VISA CREDIT" on a receipt is no such evidence; item 111
-# measured it, 15 rows July's statement settled had been suggested private
-# on words like VISA CREDIT, VISA and TEF. Supersedes the digit-less
-# "Cartao de Credito" example of item 41 (2026-09-06); everything else in
-# item 41 holds. The words split three ways: a NETWORK or a KIND is
-# evidence only when no active card in the registry carries it, a NON-CARD
-# tender (cash, a wire, PayPal) is always evidence, and every other word of
-# GENERIC_TENDER_WORDS ("card", "cartao", "tef", "compra", a short number)
-# is neutral. "express" and "club" count toward amex / diners so a lone
-# fragment of those names stays conservative.
+def _split_prefix(token: str) -> list[str]:
+    if token in _WHOLE_WORDS:
+        return [token]
+    for word in _PREFIX_WORDS:
+        if token.startswith(word) and len(token) - len(word) >= _PREFIX_REST_MIN:
+            return [word, *_split_prefix(token[len(word):])]
+    return [token]
+
+
+# The card networks and kinds, read two ways. `registry_card_types` reads
+# Brisken's own from the registry's wording (case 5, 2026-09-24: "VISA
+# CREDIT" on a receipt is no evidence against a Visa credit card), and
+# `positive_non_brisken_evidence` reads a hint's against them. "express" and
+# "club" count toward amex / diners in the registry's controlled wording
+# only; anywhere in a receipt's free text they are ordinary words.
 CARD_NETWORK_WORDS = {
     "visa": "visa",
     "mastercard": "mastercard", "master": "mastercard",
@@ -197,11 +236,50 @@ CARD_KIND_WORDS = {
     "kreditkarte": "credit",
     "debit": "debit", "debito": "debit", "lastschrift": "debit",
 }
-NON_CARD_TENDER_WORDS = frozenset({
-    "cash", "bar", "dinheiro", "check", "cheque", "paypal", "pix", "wire",
-    "transfer", "bank", "boleto", "transferencia", "uberweisung",
-    "ueberweisung",
+# The words a hint must carry for its network to count, anywhere in it:
+# CARD_NETWORK_WORDS without the fragments, plus the full amex name.
+_HINT_NETWORK_WORDS = {
+    w: n for w, n in CARD_NETWORK_WORDS.items()
+    if w not in ("american", "express", "club")
+}
+_HINT_NETWORK_PHRASES = {"american express": "amex"}
+# Today's cash words: the settled-outside chip's cash tender
+# (`web.service._TENDER_PATTERNS`, pinned equal by test) plus "bar" as a
+# whole word. Not widened here (out of scope of case 6).
+CASH_WORDS = frozenset({
+    "cash", "dinheiro", "especes", "contanti", "bargeld", "bar",
 })
+_CASH_PHRASES = {"em especie": "cash"}
+# Card issuers and banks that are NOT Brisken's: a conservative starting
+# list (owner ruling 2026-09-24). A name counts as evidence only while no
+# active card's label or account names it. Whole words only; "db" and
+# "deutsche bank" are deliberately absent, because DB on these receipts is
+# Deutsche Bahn.
+NON_BRISKEN_ISSUERS = (
+    "nubank", "revolut", "n26", "wise", "sparkasse", "volksbank",
+    "raiffeisen", "commerzbank", "dkb", "comdirect", "ing", "itau",
+    "bradesco", "santander", "caixa", "banco do brasil", "banco inter",
+    "c6 bank", "picpay", "mercado pago",
+)
+# The issuer names Brisken's registry is read for (live 2026-09-24: Chase,
+# GSBANK / Goldman Sachs for the Apple card, the United co-brand). Brisken's
+# issuers are whatever of these, or of NON_BRISKEN_ISSUERS, an active card's
+# wording names; this list only teaches the reader the names.
+_ISSUER_IDS = {
+    "chase": "chase", "gsbank": "goldman", "goldman sachs": "goldman",
+    "apple": "apple", "united": "united",
+    **{name: name for name in NON_BRISKEN_ISSUERS},
+}
+# POS acquirers and wallets print the terminal operator or the wallet, never
+# the card behind it, so they are NEUTRAL: never evidence either way. Taken
+# out of a hint before issuers are read ("Apple Pay" is not the Apple card).
+NEUTRAL_PAYMENT_NAMES = (
+    "cielo", "rede", "stone", "getnet", "pagseguro", "sumup", "adyen",
+    "worldline", "stripe", "square", "apple pay", "google pay",
+)
+_WHOLE_WORDS = GENERIC_TENDER_WORDS | frozenset(
+    name for name in (*_ISSUER_IDS, *NEUTRAL_PAYMENT_NAMES) if " " not in name
+)
 
 
 def registry_card_types(
@@ -217,7 +295,7 @@ def registry_card_types(
     for card in (cards or {}).values():
         if not card.active:
             continue
-        for word in _folded_words(f"{card.label} {card.zoho_account or ''}"):
+        for word in payment_words(f"{card.label} {card.zoho_account or ''}"):
             if word in CARD_NETWORK_WORDS:
                 networks.add(CARD_NETWORK_WORDS[word])
             if word in CARD_KIND_WORDS:
@@ -225,34 +303,111 @@ def registry_card_types(
     return frozenset(networks), frozenset(kinds)
 
 
-def names_registry_card_type(
-    hint: str | None, cards: "dict[str, Card]"
-) -> bool:
-    """True when a generic tender hint names nothing but a card type the
-    registry's own cards have ("VISA CREDIT", "Cartão de Crédito", "CARTAO
-    TEF", "credit card"), so it is no evidence that a non-Brisken card paid.
+def registry_issuers(cards: "dict[str, Card]") -> frozenset[str]:
+    """The issuers the ACTIVE cards come from, read from each card's `label`
+    and `zoho_account` wording like `registry_card_types` ("Chase United
+    Visa 8311" -> chase, united; "GSBANK Apple Master Card" -> goldman,
+    apple). Derived, never stored, for the same reason."""
+    found: set[str] = set()
+    for card in (cards or {}).values():
+        if card.active:
+            words = payment_words(f"{card.label} {card.zoho_account or ''}")
+            found |= _phrases_in(words, _ISSUER_IDS)
+    return frozenset(found)
 
-    Only ever True for a hint `is_generic_tender` calls generic: a printed
-    number, a two-digit ending or an unrecognised phrase keeps its own path.
-    False when the hint holds a non-card tender word, or a network / kind no
-    active card carries (girocard, EC-Karte, DEBIT on a credit-only
-    registry). A registry that yields no network and no kind (empty, or
-    labels without either word) yields False for every hint, which is the
-    behaviour before this rule. Never selects a card: the type is shared by
-    every card that carries it (owner ruling 2026-08-21)."""
-    if not is_generic_tender(hint):
-        return False
+
+def _phrases_in(words: list[str], names: "dict[str, str]") -> set[str]:
+    """The ids of every name in `names` (one or more words) that `words`
+    holds as consecutive whole words."""
+    found: set[str] = set()
+    for name, ident in names.items():
+        parts = name.split()
+        n = len(parts)
+        if any(words[i:i + n] == parts for i in range(len(words) - n + 1)):
+            found.add(ident)
+    return found
+
+
+def _without_phrases(words: list[str], names: "tuple[str, ...]") -> list[str]:
+    """`words` with every occurrence of the given names cut out."""
+    out = list(words)
+    for name in sorted(names, key=len, reverse=True):
+        parts = name.split()
+        n = len(parts)
+        i = 0
+        while i <= len(out) - n:
+            if out[i:i + n] == parts:
+                del out[i:i + n]
+            else:
+                i += 1
+    return out
+
+
+def positive_non_brisken_evidence(
+    hint: str | None, cards: "dict[str, Card]"
+) -> str | None:
+    """What in a payment hint proves the payment did NOT come from Brisken,
+    or None when nothing does (owner ruling 2026-09-24, card-attribution
+    case 6). A private expense is SUGGESTED only on such evidence; every
+    other payment text waits for the statement charge, the remembered card,
+    the merchant's card and Criss's own assignment, including phrases nobody
+    has seen yet. Supersedes item 41's trigger ("not defined in the system"
+    became "positively not Brisken's").
+
+    The reasons, first match wins:
+
+    * ``"number"``: a 3+ digit card number naming no active Brisken card
+      (a number always outranks words: "DEBIT-MASTERCARD 3281" is decided
+      by 3281). A number or alias that does name a Brisken card, or two of
+      them, is None.
+    * ``"ending"``: a masked two-digit ending no active card ends in.
+    * ``"cash"``: a cash word (`CASH_WORDS`).
+    * ``"network"`` / ``"kind"``: a network (girocard, EC, maestro, amex,
+      elo, diners, discover) or a kind (debit) no active card carries, read
+      anywhere in the hint ("Visa Debit" is a debit card, not Brisken's).
+    * ``"issuer"``: an issuer from `NON_BRISKEN_ISSUERS` no active card
+      names.
+
+    Conflict means wait: a hint naming, within networks, kinds or issuers,
+    one that is Brisken's AND one that is not ("credit or debit card", a
+    checkout's list of options), or a cash word beside anything Brisken's,
+    is None. Acquirers and wallets (`NEUTRAL_PAYMENT_NAMES`) say nothing.
+    Pure: the registry is the batch's own snapshot, and nothing is stored.
+    """
+    text = (hint or "").strip()
+    if not text:
+        return None
+    card, ambiguous = resolve_hinted_card_ex(text, cards)
+    if card is not None or ambiguous:
+        return None
+    if _card_keys(text):
+        return "number"
+    ending = masked_short_ending(text)
+    if ending:
+        return None if cards_ending_in(ending, cards) else "ending"
+    words = _without_phrases(payment_words(text), NEUTRAL_PAYMENT_NAMES)
     networks, kinds = registry_card_types(cards)
-    if not networks and not kinds:
-        return False
-    for word in _folded_words(hint or ""):
-        if word in NON_CARD_TENDER_WORDS:
-            return False
-        if word in CARD_NETWORK_WORDS and CARD_NETWORK_WORDS[word] not in networks:
-            return False
-        if word in CARD_KIND_WORDS and CARD_KIND_WORDS[word] not in kinds:
-            return False
-    return True
+    named = {
+        "network": {_HINT_NETWORK_WORDS[w] for w in words
+                    if w in _HINT_NETWORK_WORDS}
+        | _phrases_in(words, _HINT_NETWORK_PHRASES),
+        "kind": {CARD_KIND_WORDS[w] for w in words if w in CARD_KIND_WORDS},
+        "issuer": _phrases_in(words, _ISSUER_IDS),
+    }
+    brisken = {
+        "network": networks, "kind": kinds, "issuer": registry_issuers(cards),
+    }
+    ours = {dim: named[dim] & brisken[dim] for dim in named}
+    theirs = {dim: named[dim] - brisken[dim] for dim in named}
+    theirs["issuer"] &= set(NON_BRISKEN_ISSUERS)
+    if any(ours[dim] and theirs[dim] for dim in named):
+        return None
+    if any(w in CASH_WORDS for w in words) or _phrases_in(words, _CASH_PHRASES):
+        return None if any(ours.values()) else "cash"
+    for dim in ("network", "kind", "issuer"):
+        if theirs[dim]:
+            return dim
+    return None
 
 
 # Note #60 (owner, 2026-09-17): some receipts print only the last TWO
