@@ -2826,6 +2826,22 @@ def _review(state: str, reason: str | None = None, code: str | None = None) -> d
     return {"state": state, "reason": reason, "reason_code": code}
 
 
+def category_vocabulary(run) -> str:
+    """Which vocabulary this month's categories are written in.
+
+    "gl" when the batch was created on the GL engine (its config carries
+    `gl_entity_orgs`), so a line's category is a curated leaf CODE and the
+    picker offers `gl_accounts[entity]`. "buckets" for every month made
+    before that, which keeps the eight names and `category_options`. The
+    category route accepts both vocabularies on any batch, and every entity
+    a bucket-era month names is covered by `gl_accounts` too, so neither the
+    route nor the entity can tell the SPA which picker to show. The batch
+    can, and a month is never categorized in two vocabularies
+    (`coa_provision.GL_ENTITY_ORGS_KEY`).
+    """
+    return "gl" if GL_ENTITY_ORGS_KEY in ((run.config or {}) if run else {}) else "buckets"
+
+
 def _refusal_review(cats) -> dict | None:
     """A `pick` verdict that says WHY the engine refused, or None.
 
@@ -4320,8 +4336,10 @@ def build_view(
         # bundle that reads these is published. Absent entity = not
         # covered by the curated chart, which is not the same fact
         # as an entity with nothing to post to.
-        "gl_accounts": gl_account_options(settings),
+        "gl_accounts": gl_account_options(
+            settings, (run.config or {}).get(GL_ENTITY_ORGS_KEY)),
         "gl_revision": gl_revision(),
+        "category_vocabulary": category_vocabulary(run),
         "parse_errors": parse_errors,
         # Severity-tagged view of the same issues, so the UI can separate a
         # real error from an advisory note (2026-07-22). `parse_errors`
@@ -8199,8 +8217,10 @@ def build_expense_view(
         # bundle that reads these is published. Absent entity = not
         # covered by the curated chart, which is not the same fact
         # as an entity with nothing to post to.
-        "gl_accounts": gl_account_options(settings),
+        "gl_accounts": gl_account_options(
+            settings, (run.config or {}).get(GL_ENTITY_ORGS_KEY)),
         "gl_revision": gl_revision(),
+        "category_vocabulary": category_vocabulary(run),
         "account_options": _expense_account_options(run),
         "entity_options": entity_options,
         # Item 47: the row picker's list, active entries only, name-sorted,

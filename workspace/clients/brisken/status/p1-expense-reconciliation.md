@@ -20,6 +20,20 @@ scope add up to 10 in their NEEDS CATEGORY boxes. The months table's own Needs
 category column stays whole-month, so beside a picked card it reads 24 across
 3876's months, not 10.
 
+**2026-09-24: the Phase 1 SPA prompt is written; the GL engine is already
+live.** The item 192 deploy (Fly `45d4c494`, 15:02 UTC) shipped all of main,
+Phase 1 included, so every month created from then on categorizes into Dirk's
+curated accounts. Writing the prompt against the live API found the backend
+half of the SPA's job missing: `gl_accounts` was keyed by the settings
+registry's long names (`Brisken Corp Services, LLC`) while rows carry the
+provisioning labels (`Corporate Services`), so no row could find its list, and
+nothing told the SPA which months are GL (the category route accepts both
+vocabularies). Fixed in the prompt's PR: `gl_accounts` is built from the same
+entity map the engine uses (the batch's frozen `gl_entity_orgs` on a GL
+month), and both month views carry `category_vocabulary` (`gl` / `buckets`).
+`docs/lovable-gl-accounts-prompt.md` is **NOT pasted**, and it is urgent: the
+published SPA shows a GL month's categories blank and offers the eight buckets.
+
 **2026-09-24: /cards becomes an overview** (backlog item 192; PR #1312, Fly
 `45d4c494`). Owner: the Cards page "should just be an overview and not another
 gate to inside the months". The roll-up now counts receipts per card
