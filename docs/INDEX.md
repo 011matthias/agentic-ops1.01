@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-25 | Brisken Recon Card Type Not Private | client-dev | [→](docs/2026-09-25%20-%20Brisken%20Recon%20Card%20Type%20Not%20Private/Checkpoint.md) |
 | 2026-09-25 | Brisken P1 Private Needs Evidence | client-dev | [→](docs/2026-09-25%20-%20Brisken%20P1%20Private%20Needs%20Evidence/Checkpoint.md) |
 | 2026-09-25 | Recon Card Ending Wordings | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Recon%20Card%20Ending%20Wordings/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Card Type Not Private | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Card%20Type%20Not%20Private/Mini-Checkpoint-1.md) |

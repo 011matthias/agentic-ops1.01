@@ -9945,7 +9945,9 @@ GoDaddy's "last two digits: 38" now reads card-2838, source `hint`), item 203
 (private only on positive evidence, #1340: every unrecognised phrase now
 waits). Item 200 (vendor history by NAME) is measured and not built (#1336);
 D4 below replaces it. The private-card-list prompt is not merged. PR #1343
-(case 6 vocabulary) is a parallel build also numbered 203, open.
+(case 6 vocabulary) was a parallel build also numbered 203; CLOSED unmerged
+2026-09-25 on owner order, superseded by #1340, which already carries its
+vocabulary.
 
 #### 1. Population
 
