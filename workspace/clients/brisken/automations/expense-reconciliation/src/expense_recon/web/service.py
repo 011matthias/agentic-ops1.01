@@ -9310,10 +9310,13 @@ def build_card_status(store: RunStore) -> dict:
         "cards": cards,
         "months": months,
         "unreadable": unreadable,
+        # Rendered verbatim as the page's footnote, so it is prose for
+        # Criss, not a field guide: the first version named the payload key
+        # `never_loaded` and shipped that identifier onto the screen.
         "note": (
-            "Per card, across every expense batch. The figures are each "
-            "month's own card coverage, summed; a card with no charge and "
-            "no statement anywhere reads never_loaded."
+            "Per card, across every month and trip. Each figure is that "
+            "month's own card total, added up; the cards listed as having "
+            "nothing loaded carry no charge and no statement anywhere."
         ),
     }
 
