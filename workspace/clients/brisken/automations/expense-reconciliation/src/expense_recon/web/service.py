@@ -13105,6 +13105,28 @@ def prepare_statement_attach(
     return stmt_name, _resolve_statement_map(stmt_path, form)
 
 
+def discard_unrecorded_upload(run: RunRow | None, stmt_name: str) -> bool:
+    """Remove a statement file the month never recorded, after its attach
+    job died. True when a file was removed.
+
+    `prepare_statement_attach` saves the upload before the job runs, and the
+    attach is atomic, so a job that fails before its commit leaves a file no
+    `statements[]` entry names. Nothing reads it, but it keeps its name, and
+    the operator's retry of the same file was stored as `-2` (2026-09-24,
+    `20260804-statements-9693--2.pdf`). A file the month DID record stays:
+    a failure after the commit leaves charges that point into it.
+    """
+    if run is None or not stmt_name:
+        return False
+    if stmt_name in {str(e.get("file") or "") for e in month_statements(run)}:
+        return False
+    path = Path(run.work_dir) / stmt_name
+    if path.parent != Path(run.work_dir) or not path.is_file():
+        return False
+    path.unlink()
+    return True
+
+
 def execute_statement_attach(
     store: RunStore,
     run: RunRow,

@@ -832,6 +832,24 @@ Both are absent on older rows, and a consumer must read them defensively:
 they exist so the day budget can re-seed what strangers have spent today
 after a restart, not as a new part of the row's meaning.
 
+**An `ingested` row carries no `entries[].error` (2026-09-25, leftover of
+item 196).** A mail whose first try failed (the 2026-09-24 429 on a render)
+and that was ingested afterwards used to keep the failure's text on its row,
+so a surface showing `error` showed a failure beside "Added". The archive
+meta and the acceptance row logged at the time still hold the text; the
+overlay stops presenting it once the status is `ingested`. Every other
+status keeps its `error`, which is the only thing saying why a held mail is
+held. Live, one row of 146 changed: `20260924T162158-0f4f64aa`.
+
+**A statement attach whose job fails leaves no file behind (same date,
+same item).** `POST /api/expense-batches/{id}/statement` saves the upload
+before the job runs. A job that fails before its commit now removes that
+file, so the operator's retry keeps the file's name (the dead 2026-09-24
+attempt made August's retry `20260804-statements-9693--2.pdf`). A file the
+month's `statements[]` names is never removed: a failure after the commit
+leaves charges pointing into it. No field changes. A server restart in the
+middle of an attach still leaves its file; nothing sweeps that case.
+
 ### The travel pool (item 38, added 2026-09-06)
 
 Mail addressed to the TRAVEL alias (settings `intake.travel_alias`, unset
