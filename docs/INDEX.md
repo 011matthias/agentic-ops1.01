@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-25 | Recon Card Ending Wordings | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Recon%20Card%20Ending%20Wordings/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Recon Vendor Card History Gate | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Vendor%20Card%20History%20Gate/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken Recon Card Attribution Case Map | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20Recon%20Card%20Attribution%20Case%20Map/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken P1 9693 Load And Item 197 FX Rung | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20P1%209693%20Load%20And%20Item%20197%20FX%20Rung/Mini-Checkpoint-1.md) |
