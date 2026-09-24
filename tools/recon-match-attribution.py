@@ -503,10 +503,10 @@ def _usd(r, tx_ccy: str, cfg, derived) -> Decimal | None:
         return r.base_amount
     if not ccy or ccy == tx_ccy:
         return r.detected_total
-    rate = cfg.fx_reference_rate(ccy, tx_ccy)
-    if rate is None:
-        hit = derived.get((ccy, tx_ccy))
-        rate = hit[0] if hit else None
+    # Item 168 retired the typed Settings rates (the matcher's `configured`
+    # rung and `MatchingConfig.fx_reference_rate`), so the derived rate leads.
+    hit = derived.get((ccy, tx_ccy))
+    rate = hit[0] if hit else None
     if rate is None:
         band = cfg.fx_band(ccy, tx_ccy)
         rate = (band[0] + band[1]) / 2 if band else None
