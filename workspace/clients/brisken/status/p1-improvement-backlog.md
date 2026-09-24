@@ -5401,7 +5401,7 @@ existing month, which is the honest answer for a period nothing recorded.
 
 **Shipped 2026-09-17 (pending PR).** `receipt_chase[]` on `GET /api/runs/{id}` groups the month's charges that need a receipt by CARD HOLDER (the registry's `person` on the card the coverage panel totals the charge under), each charge with its date, vendor, amount, currency, card and any portal hint a merchant entry now carries (`receipt_portal`, optional, unset everywhere today). Membership is item 99's own `charge_needs_receipt`, read off the payload's rows, so the groups sum to `summary.n_charges_need_receipt` and the list and the count cannot disagree. Two reviewer-set states ride the charge's own `decisions` row, so both survive a re-match and a statement re-read's id rekey: `receipt_requested_at` + `requested_to` (`POST .../receipt-requested`) records the ask and closes NOTHING, counted as `n_charges_receipt_requested`, a subset of the open charges; `no_receipt_expected` with its reason (`POST .../no-receipt-expected`, blank reason refused) is a verdict that closes the charge, counted as `n_charges_no_receipt_expected`, and moves that money out of `unreconciled_by_ccy` into `no_receipt_expected_by_ccy` beside it (item 102's shape), so the annual fee stops reading as unevidenced money. `month_complete` follows both. The request mail is COMPOSED AND NEVER SENT: `GET .../receipt-requests` returns one plain-text mail per holder, EN and PT-BR, from and reply-to the intake address so replies land in the tool, with `to: null` + `blocked: "no_address"` for a holder nobody has given an address; `POST .../receipt-requests/send` answers 403 `receipt_requests_disabled` with the new `settings.receipt_requests.enabled` flag off (the default and the live value) and 403 `receipt_send_not_wired` with it on, because `receipt_chase.py` imports no mail transport at all. The owner approves the first real send separately. Live read-only before the deploy: August would list 61 charges across the three names the registry's `person` field holds ("Nicolas Neumann" 36 on 3876 USD 1,011.15, "Dirk Neumann - Corp Services" 24 on card-2838 USD 6,361.53, "Brisken Consulting" 1 on card-1176 USD 36.00), July none, because every July charge without a receipt is gray-filled and already closed. Not built: the UI (prompt `docs/lovable-receipt-chasing-prompt.md`, Send described as disabled), a bulk mark-all-requested, and any sender.
 
-### 108. Cloud Services and Consulting card spend cannot close: 5 of 9 cards have never had a statement loaded, and the UI offers one statement (2026-09-17 audit draft #106, unranked; UI prompt for the owner to paste) (1176 LINK SHIPPED 2026-09-24, PR #1267; 9693 / 0113 / 6013 / 8311 still open)
+### 108. Cloud Services and Consulting card spend cannot close: 5 of 9 cards have never had a statement loaded, and the UI offers one statement (2026-09-17 audit draft #106, unranked; UI prompt for the owner to paste) (1176 LINK SHIPPED 2026-09-24, PR #1267; 9693 statements FOUND in SharePoint 2026-09-24, loading them is the owner's call; 6013 / 8311 dormant; 0113 not in SharePoint)
 
 **2026-09-20, owner: not a build, a matter of time.** "It is just a matter of
 time before Criss runs a complete reconciliation with multiple bank statements
@@ -5468,6 +5468,31 @@ Card 9693 is unchanged and is the real half of this item: `n_tx: 0`,
 `statements: 0` in every month that has coverage, so no 9693 charge has ever
 existed. `card-0113`, `card-6013` and `card-8311` read the same. Item 185 is
 the view that would make this readable without a probe.
+
+**2026-09-24 (later): the statements exist, read app-only from SharePoint.**
+The owner pointed at "admin bcs/bts etc > finance > banks > chase". Graph
+app-only resolves the ADMIN sites; the credential lists real folders there, so
+the walk can be trusted. The tenant-wide search found `20260804-statements-9693-`
+and `20260704-statements-8311-` by name, so the instrument sees statements.
+
+| Card | Where | 2026 statements (Chase closing date) | What they hold (module parser) |
+|---|---|---|---|
+| 9693 | ADMIN CLOUD SERVICES LLC `10_Finance/10_BANKING/CHASE Brisken/CHASE_VISA_9693/2026` | every month, 0104 to 0904 (plus 2025 complete) | 18 to 32 charges each, 0 parse issues |
+| 8311 | same, `CHASE_VISA_DN_8311_6268/2026` | 0504, 0604, 0704 only | $0 activity in May and June; July is a $150 annual fee and nothing else |
+| 6013 | same, `CHASE_VISA_UNITED_6013_BRISKEN/2026` | 0204, 0304 only | a $150 annual fee, credited back the next cycle |
+| 0113 | nowhere | none | no Apple Card / Goldman Sachs statement in any site or OneDrive the app can search |
+
+So 8311 and 6013 are dormant rather than missing (Chase issues no statement for a
+zero-balance cycle), and neither carries a receipt in any month. 9693 is the
+real half: live `/api/cards/status` shows 16 receipts on it (August 2, September
+14), all waiting for a statement, and `20260804` + `20260904` cover Jul 05 to
+Sep 04. The 8311 July PDF parses its fee line with no trailing card marker and
+books it to `UNKNOWN`, which only matters if a fee-only statement is ever loaded.
+Local copies (gitignored): `context/expense-reconciliation/statements/`. The
+two "ALL Activity" workbooks for 8311 and 6013 are password-encrypted and
+unreadable here; the 9693 activity workbook opens. 0113 is Dirk's to export
+(Apple Card statements come from Wallet / card.apple.com). Loading any of these
+is a write to Criss's months, so it is put to the owner, not done.
 
 **Audit rank 15 of 40; severity high as merged; verification: checked by hand against live August coverage; no reviewer pass.** All 223 live charges belong to Corporate Services because the only workbook ever attached is the Chase export for account 2838. Receipts paid with the Cloud card 9693 and the Consulting card 1176 arrive monthly and park as 'card statement not loaded' (August: OpenAI 80.12 and 80.04; Anthropic 100; Lovable 50); 0113, 6013 and 8311 have no statement either. The backend accepts one workbook per card, but the Lovable page offers one 'Attach bank statement' dialog and one download, so Criss cannot add a second. Nothing checks that the card typed in the dialog matches the card printed in the file, so a workbook with no card column uploaded under the default would book to Corporate Services.
 

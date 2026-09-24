@@ -294,10 +294,12 @@ Order:
 
 ## Open, and whose it is
 
-- The six accounts flagged `SPOT-CHECK` in the workbook are judgement calls, not
-  rule applications: per diem, Tax Management Services - Holding in both orgs,
-  R&D, COGS - Support BRISKEN Tech / JB, and third-party-reimbursement travel.
-  Dirk's.
+- ~~The six accounts flagged `SPOT-CHECK` in the workbook are judgement calls,
+  not rule applications: per diem, Tax Management Services - Holding in both
+  orgs, R&D, COGS - Support BRISKEN Tech / JB, and third-party-reimbursement
+  travel. Dirk's.~~ Closed 2026-09-24: Dirk reviewed the highlighted copy and
+  confirmed all six stay N (relayed by the owner: "N stays the way it is in the
+  excel spreadsheet"). The 194-leaf taxonomy stands as shipped; no code change.
 - Card 3645's registry entry holds another card's label in its `zoho_account`
   field (backlog item 172). The real chart account has to come from Dirk.
 - `registry_upserts_from_expense_run` fires automatically on Publish, not on a
