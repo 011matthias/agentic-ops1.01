@@ -38,7 +38,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from expense_recon.cards import (  # noqa: E402
     cards_from_setting,
-    names_registry_card_type,
+    positive_non_brisken_evidence,
     registry_card_types,
 )
 from expense_recon.llm.client import ExtractedReceipt, MockLLMClient  # noqa: E402
@@ -187,18 +187,20 @@ def test_the_private_option_still_works_on_a_card_type_row(client, monkeypatch):
     assert row["person"] == "Dirk" and row["person_source"] == "private"
 
 
-def test_an_empty_registry_keeps_the_old_behaviour(client, monkeypatch):
+def test_an_empty_registry_has_no_visa(client, monkeypatch):
+    """With no cards, Brisken carries no network, so VISA CREDIT is a card
+    Brisken does not have. CARTAO TEF names no network, kind or issuer at
+    all and waits (case 6, positive evidence only)."""
     batch = _batch(client, monkeypatch, ("VISA CREDIT", "CARTAO TEF"))
     rows = _by_hint(_grid(client, batch))
     assert rows["VISA CREDIT"]["suggested_private"] is True
-    assert rows["CARTAO TEF"]["suggested_private"] is True
+    assert rows["CARTAO TEF"]["suggested_private"] is False
 
 
-def test_a_registry_that_names_no_card_type_keeps_the_old_behaviour(
-    client, monkeypatch
-):
+def test_a_registry_that_names_no_card_type(client, monkeypatch):
     """Cards exist, but no label or account says Visa, Mastercard, credit or
-    debit: nothing to compare the receipt's wording against."""
+    debit: the registry carries no Visa, so VISA CREDIT still suggests, and a
+    bare "card" is no evidence at all (case 6) and waits."""
     batch = _batch(client, monkeypatch, ("VISA CREDIT", "card"), cards={
         "corp-1672": {"label": "Corporate card (Chase)", "digits": ["1672"],
                       "entity": "Corporate Services",
@@ -206,7 +208,7 @@ def test_a_registry_that_names_no_card_type_keeps_the_old_behaviour(
     })
     rows = _by_hint(_grid(client, batch))
     assert rows["VISA CREDIT"]["suggested_private"] is True
-    assert rows["card"]["suggested_private"] is True
+    assert rows["card"]["suggested_private"] is False
 
 
 def test_mastercard_follows_the_registry(client, monkeypatch):
@@ -260,13 +262,11 @@ def test_the_registry_types_come_from_label_and_account_wording():
     ), "an inactive card carries nothing"
 
 
-def test_only_generic_hints_are_in_scope():
+def test_a_brisken_card_type_is_no_evidence():
+    """Case 5 inside case 6's classifier (the full table is pinned in
+    test_private_needs_evidence)."""
     cards = cards_from_setting(LIVE_CARDS)
-    for hint in ("Visa ...3645", "Mastercard xxxx.xxxx.xxxx.78",
-                 "VENDA CREDITO VISA", "CreditCard", "Link",
-                 "saved payment method", "girocardOLV", "", None):
-        assert names_registry_card_type(hint, cards) is False, hint
     for hint in BRISKEN_TYPES:
-        assert names_registry_card_type(hint, cards) is True, hint
-    for hint in NOT_BRISKEN + ("Visa Debit", "cash", "PayPal", "Wire Transfer"):
-        assert names_registry_card_type(hint, cards) is False, hint
+        assert positive_non_brisken_evidence(hint, cards) is None, hint
+    for hint in NOT_BRISKEN + ("Visa Debit", "cash"):
+        assert positive_non_brisken_evidence(hint, cards) is not None, hint

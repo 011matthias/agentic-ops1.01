@@ -135,8 +135,11 @@ def test_a_card_tender_no_company_card_matches_still_suggests_private(
     Brazilian cupom fiscal (July's Fenix groceries receipt prints TEF and
     settles a card charge), whatever the settled-outside chip makes of the
     word. This harness has NO card registry: once the registry's cards are
-    Visa credit cards, VISA CREDIT and TEF stop suggesting (owner ruling
-    2026-09-24, pinned in test_card_type_not_private)."""
+    Visa credit cards, VISA CREDIT stops suggesting (owner ruling
+    2026-09-24, pinned in test_card_type_not_private). TEF names no network,
+    kind or issuer at all, so since case 6 (positive evidence only) it waits
+    even here, and is not swallowed by the wire rule either: the private
+    option stays open on it."""
     batch = _batch(
         client, monkeypatch,
         _extraction(vendor="Aposto Karlsruhe", payment_hint="VISA CREDIT"),
@@ -145,10 +148,13 @@ def test_a_card_tender_no_company_card_matches_still_suggests_private(
     )
     rows = _rows(client, batch)
 
-    for vendor in ("Aposto Karlsruhe", "Bezerra LTDA", "Supermercado Fenix"):
+    for vendor in ("Aposto Karlsruhe", "Bezerra LTDA"):
         assert rows[vendor]["suggested_private"] is True, vendor
         assert rows[vendor]["review"]["reason_code"] == "suggested_private", vendor
-    assert _grid(client, batch)["summary"]["n_suggested_private"] == 3
+    tef = rows["Supermercado Fenix"]
+    assert tef["suggested_private"] is False
+    assert tef["can_mark_private"] is True
+    assert _grid(client, batch)["summary"]["n_suggested_private"] == 2
 
 
 def test_a_receipt_settled_outside_the_card_suggests_no_private_card(

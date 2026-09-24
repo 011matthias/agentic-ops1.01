@@ -1357,11 +1357,19 @@ private expenses that will require reimbursement to the person who
 expensed." SUGGESTED, never stamped; nothing auto-books. All fields are
 PARALLEL (rule 1).
 
+**The trigger is superseded (owner ruling 2026-09-24, card-attribution
+case 6):** "not defined in the system" became "positively not Brisken's".
+A hint the registry does not know now suggests private only on positive
+evidence (a number or ending no Brisken card has, cash, a network / kind /
+issuer Brisken's cards do not carry); everything else waits. See "Private
+needs positive evidence" below. The rest of this section stands: suggested
+never stamped, `reimburse_to`, the reimbursements section.
+
 **Expense rows** gain:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17); a bank-transfer tender and a receipt settled outside the card never raise it (residual R3, see "A wire is not a card") |
+| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed) AND, since 2026-09-24, carries positive evidence the payment was not Brisken's ("Private needs positive evidence"), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17); a bank-transfer tender and a receipt settled outside the card never raise it (residual R3, see "A wire is not a card") |
 | `expenses[].can_mark_private` | boolean | whether the private-card option applies to the row (2026-09-17): true when no defined company card paid it (no card and not a two-card contest, or a card only remembered from an earlier month) and on every confirmed private row. False when a company card paid, and (item 144) when the reviewer settled the row outside the card system, where a private card is as untrue as a company one; the write routes refuse to mark either private. Absent on older builds: treat as `card == null \|\| private` |
 | `expenses[].private` | boolean | the operator confirmed it: a reimbursement row |
 | `expenses[].reimburse_to` | string | who gets reimbursed; `""` unless confirmed |
@@ -1465,7 +1473,9 @@ Crédito", "TEF", "credit card") is not evidence of a non-Brisken card, so
 it is no longer suggested private. This supersedes the digit-less "Cartao de
 Credito" example of item 41; the rest of item 41 stands. No new field.
 
-The rule (`cards.names_registry_card_type`, decided once in
+The rule (since case 6 the Brisken-type half of
+`cards.positive_non_brisken_evidence`, which replaced
+`names_registry_card_type` the same day; decided once in
 `resolve_batch_row_cards`): a hint `is_generic_tender` calls generic
 suggests private only when it holds a non-card tender word (cash, bar,
 dinheiro, check, cheque, paypal, pix, wire, transfer, bank, boleto,
@@ -1491,7 +1501,95 @@ settled statement charge, a remembered card, the merchant registry, an
 assigned hint) runs as before. Printed numbers, two-digit endings and
 unrecognised phrases ("VENDA CREDITO VISA", "CreditCard", "Link") are out
 of scope. Read-time: every month moves on deploy with no re-match. Pinned
-route-level in `tests/test_card_type_not_private.py`.
+route-level in `tests/test_card_type_not_private.py`. Case 6 (next section)
+narrows two statements here the same day: of the non-card tenders only
+cash is evidence now, and an empty or type-less registry is not special (it
+carries no Visa, so "VISA CREDIT" still suggests while a bare "card" or
+"TEF" waits).
+
+## Private needs positive evidence (added 2026-09-24)
+
+Owner ruling 2026-09-24 (card-attribution case 6), answering whether
+unrecognised payment phrases belong with the receipts that wait for the
+statement and vendor memory: "yes very good, that is excellent". It flips
+the default of item 41: a private expense is SUGGESTED only on positive
+evidence that the payment did not come from Brisken. "Not defined in the
+system" became "positively not Brisken's". Item 41 otherwise stands
+(suggested never stamped, `reimburse_to`, the reimbursements section). No
+new field, no SPA change: the chip already hides when the flag is false.
+
+**The rule** (`cards.positive_non_brisken_evidence(hint, cards) -> reason |
+None`, pure, decided once in `resolve_batch_row_cards` as the last term of
+`suggested_private`). Evidence, first match wins:
+
+| Reason | What the hint carries |
+|---|---|
+| `number` | a 3+ digit card number naming no active card in the batch's registry snapshot. A number always outranks words ("DEBIT-MASTERCARD 3281" is decided by 3281); a number or alias that names a Brisken card, or two of them, is no evidence |
+| `ending` | a masked two-digit ending (`masked_short_ending`) no active card ends in |
+| `cash` | a cash word: cash, dinheiro, bargeld, espèces, contanti, em espécie (the settled-outside chip's cash tender, pinned equal by test) and "bar" as a whole word |
+| `network` | girocard/girokarte/ec, maestro, amex/"american express", elo, diners, discover, or visa / mastercard, when no active card carries it, read ANYWHERE in the hint ("Zahlung mit girocard"). Live, Brisken carries visa and mastercard |
+| `kind` | debit/debito/lastschrift (or credit), when no active card carries it. Live, Brisken's cards are credit only, so "Visa Debit" is a debit card and suggests |
+| `issuer` | a name from `NON_BRISKEN_ISSUERS` (nubank, revolut, n26, wise, sparkasse, volksbank, raiffeisen, commerzbank, dkb, comdirect, ing, itau, bradesco, santander, caixa, banco do brasil, banco inter, c6 bank, picpay, mercado pago) that no active card's wording names, as whole words. "db" and "deutsche bank" are never matched: DB on these receipts is Deutsche Bahn |
+
+Brisken's networks, kinds and issuers are READ from each active card's
+`label` + `zoho_account`, never stored (`registry_card_types`,
+`registry_issuers`); live the issuers are Chase, GSBANK / Goldman Sachs,
+Apple and the United co-brand.
+
+**Conflict means wait.** A hint naming, within networks, kinds or issuers,
+one that is Brisken's and one that is not ("credit or debit card", a
+checkout's list of options, "Chase or Nubank"), or a cash word beside
+anything Brisken's ("Visa ou Dinheiro"), is no evidence. Networks and kinds
+are different dimensions of one card, so "Visa Debit" is not a conflict.
+
+**Neutral, never evidence:** POS acquirers and wallets print the terminal
+operator, not the card: cielo, rede, stone, getnet, pagseguro, sumup,
+adyen, worldline, stripe, square, apple pay, google pay
+(`NEUTRAL_PAYMENT_NAMES`, taken out of the hint before issuers are read).
+
+**Everything else waits.** "saved payment method", "Link", "VENDA CREDITO
+VISA", "OUTRO", "CreditCard", a Brisken card type, and a phrase nobody has
+seen yet: `suggested_private` false, `can_mark_private` still true, and the
+card chain runs exactly as for a receipt that printed nothing (the settled
+statement charge, the remembered card, the merchant's card, Criss's
+assignment in the unknown-cards panel). Unchanged: a bank transfer and a
+receipt settled outside the card never suggest (`bank_transfer_tender`,
+settled-outside); PayPal, PIX, boleto and cheque keep their settled-outside
+chip and are no private evidence.
+
+**Glued words are read** (`cards.payment_words`, used by
+`is_generic_tender`, `registry_card_types` and the evidence rule):
+diacritics fold, a token splits at a lower-to-upper case boundary
+("CreditCard" -> credit card, "girocardOLV" -> girocard olv), and girocard,
+mastercard, maestro, credit, debit, kredit, cartao, credito, debito split
+off the front of a longer token when 3+ letters remain ("CREDITCARD").
+Shorter words (bar, ec, pay, de, elo, visa) never prefix-split, so
+"Barbecue", "Caspari", "Paypalito", "Visagem" and "Decathlon" stay single
+words. A token that is itself a known word stays whole ("PayPal",
+"PagSeguro").
+
+**Vocabulary.** `GENERIC_TENDER_WORDS` gains the "a card was used" words:
+saved, payment, method, link, venda, outro, outros, kartenzahlung,
+erhalten, olv, stored, wallet, pagamento, recebido, forma, paid, received.
+So "saved payment method", "Link", "VENDA CREDITO VISA", "OUTRO",
+"Kartenzahlung erhalten", "CreditCard" and "girocardOLV" read `generic:
+true` in the strip (listed under "No card number on the receipt"), assign
+month-only, and "Remember for future months" refuses them as aliases
+(owner ruling 2026-08-21). An unknown identifying word ("CorpServ") is still
+learned. A stored registry alias built only from these words would go
+silent at read time and 400 `card_alias_generic` on the next Settings save;
+live on 2026-09-24 the aliases are Corp, Cloud, Personal and Consulting, so
+none is.
+
+**When the private-card list ships** (a separate item, not merged on
+2026-09-24): its `cards.classify_payment_evidence` order folds this rule in
+(its step 4 becomes the full evidence list here, its step 7, "a phrase no
+rule recognises", becomes WAIT), and a number on that list is private
+outright rather than suggested.
+
+Read-time: every month moves on deploy with no re-match. Pinned in
+`tests/test_private_needs_evidence.py` (the classification table is the
+contract) and route-level through the batch payload and the cards route.
 
 ## Cost centers: which project or purpose the money belongs to (added 2026-09-10)
 
