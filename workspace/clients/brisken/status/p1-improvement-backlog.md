@@ -9697,8 +9697,9 @@ digits: 76" receipt card-less, not private, strip group `ambiguous`). Putting
 the old two-word lead back turned the route test red; dropping the amount
 guard turned "Total final: 38.50" red.
 
-Out of scope, still open: settling a shared ending (76: 3876/1176; 13:
-0113/6013) from the vendor's history.
+A shared ending (76: 3876/1176; 13: 0113/6013) stays a contest for review.
+Settling it from the vendor's history would have used item 200, closed not
+built on the failed usefulness test (owner 2026-09-25).
 
 ### 200. A vendor's card from its own receipts, continuously (gap 1 of the card-attribution map, owner 2026-09-24) (MEASURED 2026-09-24: Phase 1 gate FAILED at N = 2 and at N = 3; CLOSED, NOT BUILT: deliberately, on the failed usefulness test, owner 2026-09-25; no decision pending)
 
@@ -9944,7 +9945,9 @@ GoDaddy's "last two digits: 38" now reads card-2838, source `hint`), item 203
 (private only on positive evidence, #1340: every unrecognised phrase now
 waits). Item 200 (vendor history by NAME) is measured and not built (#1336);
 D4 below replaces it. The private-card-list prompt is not merged. PR #1343
-(case 6 vocabulary) is a parallel build also numbered 203, open.
+(case 6 vocabulary) was a parallel build also numbered 203; CLOSED unmerged
+2026-09-25 on owner order, superseded by #1340, which already carries its
+vocabulary.
 
 #### 1. Population
 

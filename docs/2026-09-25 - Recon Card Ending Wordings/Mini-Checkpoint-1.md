@@ -31,8 +31,7 @@ Item 199 is live and verified. `card_ending: ""` on the rendered OpenAI bodies (
 ## Next Steps
 1. Item 195: write the red test first (PDF attached with no account id, reread, assert entity).
 2. Leftovers from 196/197: sticky `error` on rendered entries, a dead attach job leaving `--2.pdf`, the overlap advisory saying "same account" for two cards.
-3. Held by the GL session, do not double-build: item 201 (owner: fix now), item 196 (owner: land the sure rows), item 202 (measure over the stored receipts before choosing a guard), per `docs/2026-09-25 - Brisken P1 GL Prompt Applied And Items 201 196 Picked/Mini-Checkpoint-1.md`.
-4. Owner side: item 200's threshold (vendor history failed its gate at N=2 and N=3); the private-card-list and case-9 planning prompts from the case-map session (positive evidence ran as item 203, #1340); Dirk's 0113 statement export.
+3. Waits on Dirk: the 0113 (Apple Card) statement export. Nothing waits on the owner: item 200 is closed not built (failed usefulness test, owner 2026-09-25) and item 204's decisions are taken.
 
 ## Files to Read First
 - `workspace/clients/brisken/status/p1-improvement-backlog.md` (items 195, 196, 199-202)
@@ -49,13 +48,14 @@ Item 199 is live and verified. `card_ending: ""` on the rendered OpenAI bodies (
 - SHIPPED this session: item 199, a two-digit card ending printed in other words names its card (PR #1335, Fly v224, commit a8c1fafb; the squash subject says "item 198" because #1334 took 198 while CI ran, the files say 199). `cards._ENDING_LEADS` holds explicit lead phrases in EN/PT/DE/FR/ES; a new wording is one line there. September's GoDaddy now reads card-2838, verified in the payload and by a cold browser drive.
 - Also fixed: `tools/recon-match-attribution.py` crashed on every bundle (it called the retired `MatchingConfig.fx_reference_rate`); it runs again.
 - Not a bug, do not chase: `card_ending: ""` on the OpenAI bodies that print "credit card ending in 9693". `card_ending` is set only when two digits named the card, never for a last-4 (docs/api-contract.md, "Two printed card digits name a card").
-- In flight elsewhere: the GL session's continuation prompt owns items 201 (owner: fix now), 196 (owner: land the sure rows) and 202 (measure over the stored receipts first), per `docs/2026-09-25 - Brisken P1 GL Prompt Applied And Items 201 196 Picked/Mini-Checkpoint-1.md`. Do not build them here unless their backlog headers still show no fix and that prompt has not run. Item 203 (private only on positive evidence, #1340) also shipped the same night.
-- Waits on the owner: item 200's threshold (vendor card history failed its Phase 1 gate at N=2 and N=3, not built); the private-card-list and case-9 planning prompts from the case-map session (full text in transcript 3cf8ea47-51eb-4a36-b73a-ddc79ed98f39.jsonl, search "Continuation prompt for Claude Code"); Dirk's 0113 statement export.
+- Sibling-owned, not this loop's, do not build: items 201, 196 and 202 (the GL session) and the private-card-list fold into `cards.classify_payment_evidence`. Also shipped the same night: item 203 (private only on positive evidence, #1340); item 204 (the case-9 backbone) is planned with its owner decisions taken.
+- Closed, do not reopen: item 200 (vendor card history), not built on the failed usefulness test (owner 2026-09-25). A shared two-digit ending (76, 13) therefore stays a contest for review.
+- Waits on Dirk: the 0113 (Apple Card) statement export. Nothing waits on the owner.
 - Waits on Criss: nothing new. No writes to her months, and do not offer any.
 
 ## Queue, in order
 1. Item 195: a statement re-read can re-stamp a PDF's charges with the entity "card" (code-traced, no live case). Red test first: PDF attached with no account id, reread, assert entity.
-2. Leftovers from items 196/197: the sticky `error` on rendered entries, a dead attach job leaving its file (`--2.pdf`), the overlap advisory saying "same account" for two different cards (1176 vs 9693 files). Coordinate with the item-196 build, which touches the attach path.
+2. Leftovers from items 196/197: the sticky `error` on rendered entries, a dead attach job leaving its file (`--2.pdf`), the overlap advisory saying "same account" for two different cards (1176 vs 9693 files). The item-196 build touches the attach path: merge main first and re-read these three before starting.
 
 ## How to work
 
