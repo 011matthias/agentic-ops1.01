@@ -278,3 +278,41 @@ def test_a_month_with_no_correction_for_its_vendor_is_untouched(client, monkeypa
 
     row = _rows(client, september, "Hostinger")[0]
     assert row["card"] is None and row["card_source"] == "none"
+
+
+# ── a remembered card is not an observation (owner 2026-09-25) ─────────
+
+
+def test_signing_off_a_remembered_card_teaches_the_registry_nothing(
+    client, monkeypatch
+):
+    """Item 200's side finding: at sign-off the card learner counted rows
+    whose card came from MEMORY (`card_source: learned`) as observations, so
+    a remembered card could confirm itself into `cards_seen` and write a
+    learned `card_key` with no new evidence. Only corrections may be
+    memorized (owner ruling 2026-09-24); a remembered card is neither.
+
+    The month arrives AFTER the correction, so the remembered card is
+    stamped on its receipts at ingest (item 173's gate), which is what the
+    sign-off learner reads; a card filled in only at read time (item 169)
+    never reached it."""
+    client.put("/api/settings", json={"cards": CARDS, "merchants": ONE_CARD_MERCHANT})
+    _teach_openai_card(client, monkeypatch)
+    # The teaching sign-off was a real correction and may write the key; put
+    # the entry back to "seen on one card, no key" so September's own
+    # sign-off is the only thing that could write one.
+    client.put("/api/settings", json={"merchants": ONE_CARD_MERCHANT})
+    september = _create_batch(
+        client, monkeypatch,
+        _extraction(total="80.04", date="2026-09-10"),
+        _extraction(total="82.15", date="2026-09-22"),
+    )
+    rows = _rows(client, september, "OpenAI")
+    assert [r["card_source"] for r in rows] == ["learned", "learned"]
+
+    learned = _publish(client, september)["learned"]
+    assert learned["registry"]["cards_seen"] == 0
+    assert learned["registry"]["card_keys_learned"] == 0
+    entry = client.get("/api/settings").json()["merchants"]["OpenAI"]
+    assert entry["cards_seen"] == ["corp-1672"]
+    assert "card_key" not in entry and "card_key_learned" not in entry

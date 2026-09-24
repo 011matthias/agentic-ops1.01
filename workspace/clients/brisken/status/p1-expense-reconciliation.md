@@ -9,6 +9,20 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: case 9 ("no payment info") is planned, not built** (backlog
+item 204, PR #1346). Live: 34 receipts print nothing, 12 only a Brisken card
+type, 7 an unrecognised phrase. Six steps, in order of rows resolved per unit
+of risk: statements as calendar-month activity exports pulled weekly (owner
+D1), invoice and receipt twins share the card, the card flows back from a
+neighbour month's statement, a card from the billing account's own history
+(owner D4; replaces item 200's vendor-name rule: 34 right / 0 wrong against 3
+wrong of 21), an honest waiting status with evidence-backed suggestions and
+apply-to-vendor, and a matcher guard sending no-card pairs whose vendor
+disagrees to review (owner D5). Owner D6: Criss's OpenAI pick stays on its
+row only. Five build prompts are in the 2026-09-25 case-9 checkpoint. D2
+(Criss pulls weekly, needs view access to 9693 / 1176) and D3 (load the 9693
+and April-June history) wait on the owner and Criss.
+
 **2026-09-24 night: the GL accounts prompt is APPLIED** (published by the
 owner, bundle-verified, driven cold in EN and PT on July and on a
 `TEST - GL drive` batch that was purged the same session; evidence in the
@@ -919,7 +933,8 @@ this table is the index, not a second record.
 | The reader sees every colour, and infers nothing from the new ones (backlog item 162, owner directive 2026-09-20) | **shipped 2026-09-20** (pending PR; SPA swatches `docs/lovable-statement-colour-prompt.md`, NOT pasted) | `colour_family` is total over the RGB cube and returns one of twelve stable names from HSV hue bands, replacing the ad-hoc RGB inequalities; `_FAMILY_ENTRY_STATUS` maps only yellow and gray to the two existing verdicts, so a newly named family is recorded and votes on nothing. `rows[].fills[]` carries `{column, index, hex, family}` per coloured cell, over every column rather than only the mapped ones. Measured live first: 174 of 452 filled cells across July and August were invisible (88 blue, 85 orange, 1 green), all in a THIRD annotation channel in the `Card` column beside the yellow `Amount` and gray `Description`. **0 of 452 cells change verdict**, proven by running both classifiers over both stored workbooks. A statement is parsed at upload, so July and August carry no `fills` until Criss next has them read; the deploy is verified in-machine, not on the live payloads. The 1-1 tie-break (41 of July's 112 rows read `posted` from a tie) is untouched and is an owner decision |
 | Private needs positive evidence (backlog item 203, owner ruling 2026-09-24, card-attribution case 6; supersedes item 41's trigger) | **shipped 2026-09-25** (no SPA change: the chip hides on `suggested_private: false`) | `cards.positive_non_brisken_evidence`: a private expense is suggested only on a number or ending no Brisken card has, cash, or a network / kind / issuer the registry does not carry; every other hint waits for the statement, vendor memory and Criss's assignment. Glued words read (`payment_words`), "a card was used" words made generic (never learned as aliases). Live census: 9 rows lose the suggestion, 0 gain. Private-card-list session must fold it into its order. `docs/api-contract.md` "Private needs positive evidence" |
 | A Brisken card type is not a private-expense signal (backlog item 198, owner ruling 2026-09-24) | **shipped 2026-09-24** (PR #1334, Fly v223; no SPA change: the chip hides on `suggested_private: false`) | A generic tender hint naming only a network / kind the batch's active cards carry (read from label + account wording: visa, mastercard, credit) no longer suggests private; non-card tenders and types Brisken lacks still do. Read-time: live `n_suggested_private` April 8->5, May 4->3, June 5->3, July 8->3, August 1, September 7->6, exactly the prediction. Since superseded in wiring by item 203's positive-evidence rule (#1340, v225), which keeps these rows unsuggested |
-| A two-digit card ending printed in other words names its card (backlog item 199, case 3 of the card-attribution map, owner 2026-09-24) | **shipped 2026-09-24** | `cards._ENDING_LEADS`: explicit lead phrases in EN/PT/DE/FR/ES on diacritic-folded text, an amount guard and a second-ending rule. September's GoDaddy (446.99 EUR, "ending with the last two digits: 38") now reads card-2838; the census over 88 live hints moved that one hint only. Still open: a shared ending (76, 13) settled from vendor history |
+| A two-digit card ending printed in other words names its card (backlog item 199, case 3 of the card-attribution map, owner 2026-09-24) | **shipped 2026-09-24** (PR #1335, Fly v224, live-verified) | `cards._ENDING_LEADS`: explicit lead phrases in EN/PT/DE/FR/ES on diacritic-folded text, an amount guard and a second-ending rule. September's GoDaddy (446.99 EUR, "ending with the last two digits: 38") now reads card-2838; the census over 88 live hints moved that one hint only. A shared ending (76, 13) stays a contest for review (vendor history, item 200, closed not built) |
+| A statement PDF keeps its company through a re-read (backlog item 195 + leftover 3 of items 196/197) | **shipped 2026-09-25** (no SPA change) | A PDF entry records the account it was filed under; a re-read never lends a PDF `config.statement`'s account; with no account, a PDF takes the company its printed cards resolve to (blank on two companies or an unnamed card), never the literal "card". The overlap advisory no longer calls two unrecorded accounts "the same account". Live August's two PDF entries (1176, 9693) still read `account_id: ""` and the 9693 advisory stays until the month's next re-read; no row moves on the deploy |
 
 ## Open decisions / gates
 

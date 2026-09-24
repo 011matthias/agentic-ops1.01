@@ -9520,7 +9520,7 @@ under 2838: 3645 (83), 3876 (77), 0340 (24); the fold 0113, 6013, 8311.
 **SPA half:** `docs/lovable-cards-overview-subcards-prompt.md`, one new key
 (`cardsPage.subcards.count`), the chevron reusing `cardStrip.subcards.aria`.
 
-### 195. A statement re-read can re-stamp a PDF's charges with the entity "card" (found 2026-09-24, code-traced, no live case yet)
+### 195. A statement re-read can re-stamp a PDF's charges with the entity "card" (found 2026-09-24, code-traced, no live case yet) (FIXED 2026-09-25)
 
 `POST /api/expense-batches/{id}/statements/reread` rebuilds each upload's form
 with `account_legal_entities={}` and the account id from the stored entry,
@@ -9539,6 +9539,35 @@ Whether `stamp_charge_entities` repairs it at match time for charges that
 print a card is unverified. **First step:** a test that attaches a PDF with no
 account id, re-reads, and asserts the charges' entity. Only after that
 assertion runs red is there a fix to write.
+
+**FIXED 2026-09-25 (Shipped row 121).** Red first, as asked: 8 of 9 new
+tests failed on origin/main, reading `'card'`, an entry account of `''`, and,
+the worse shape, `'Corporate Services'` for a 1176 PDF re-read after a
+workbook. Three corrections to the premise above, found on the way:
+
+- **The PDFs were not attached without an account id.** The SPA always sends
+  one (`AttachStatementDialog.tsx`: the chosen card's key), and the attach
+  resolved the right company from it: live August holds the 1176 file's 3
+  charges on Consulting and the 9693 file's 21 on Cloud Services. What was
+  lost was the RECORD: a PDF's config block has no `account_id` key, so both
+  entries hold `account_id: ""`, and a re-read resolved from nothing.
+- **`stamp_charge_entities` cannot repair it.** A PDF charge prints no
+  `card_last4` (its card is its `account_id`, the cycle marker), and the stamp
+  keys on `card_last4` only.
+- **"card" was the mild outcome.** A PDF entry with no account borrowed
+  `config.statement.account_id`, which describes whichever upload arrived
+  LAST; a PDF under a later workbook re-read under the workbook's company.
+
+What changed (`web/service.py`): a PDF entry records the account it was filed
+under (`statement_entry_account`); a re-read never lends a PDF the config's
+account; and a PDF filed under no account, or recorded before this, takes
+the registry entity every card it prints resolves to, blank when they name
+two companies or any names none (`pdf_entity_from_printed_cards`), at the
+attach as well as the re-read. Leftover 3 of items 196/197 had the same
+cause and is fixed with it: `statement_period_overlap` no longer calls two
+unrecorded accounts "the same account". No live row moves on the deploy;
+August's two PDF entries gain their accounts, and the 9693 entry loses its
+advisory, at the month's next re-read.
 
 ### 196. Statement attach and mail intake fail closed on an exhausted LLM key (outage 2026-09-24)
 
@@ -9665,7 +9694,7 @@ Out of scope, next: case 6 vocabulary ("VENDA CREDITO VISA", "CreditCard",
 "Link", "saved payment method", "Kartenzahlung erhalten", "girocardOLV");
 "Bar" as a cash word; GoDaddy's "ending with the last two digits: 38".
 
-### 199. A two-digit card ending printed in other words names no card (case 3 of the card-attribution map, owner 2026-09-24) (FIXED 2026-09-24: explicit lead phrases in five languages)
+### 199. A two-digit card ending printed in other words names no card (case 3 of the card-attribution map, owner 2026-09-24) (FIXED and LIVE 2026-09-25: PR #1335, Fly v224 `a8c1fafb`; GoDaddy on card-2838, payload diffed and SPA driven)
 
 Note #60's rule read two digits as a card ending only behind a mask or
 directly after `ending` / `ending in` / `ending with` / `final`. September's
@@ -9697,10 +9726,11 @@ digits: 76" receipt card-less, not private, strip group `ambiguous`). Putting
 the old two-word lead back turned the route test red; dropping the amount
 guard turned "Total final: 38.50" red.
 
-Out of scope, still open: settling a shared ending (76: 3876/1176; 13:
-0113/6013) from the vendor's history.
+A shared ending (76: 3876/1176; 13: 0113/6013) stays a contest for review.
+Settling it from the vendor's history would have used item 200, closed not
+built on the failed usefulness test (owner 2026-09-25).
 
-### 200. A vendor's card from its own receipts, continuously (gap 1 of the card-attribution map, owner 2026-09-24) (MEASURED 2026-09-24: Phase 1 gate FAILED at N = 2 and at N = 3, not built; the threshold is the owner's call)
+### 200. A vendor's card from its own receipts, continuously (gap 1 of the card-attribution map, owner 2026-09-24) (MEASURED 2026-09-24: Phase 1 gate FAILED at N = 2 and at N = 3; CLOSED, NOT BUILT: deliberately, on the failed usefulness test, owner 2026-09-25; no decision pending)
 
 Numbered 200 because two sibling branches both claim 198 (card type, card
 endings) and one of them will take 199.
@@ -9793,15 +9823,18 @@ settled-outside rows left out): 14 are OpenAI, Anthropic or Lovable (owner
 hold), 2 have no evidence in any month, 2 have one receipt, and 2 (Network
 Solutions) would pin.
 
-**Owner decision needed (not re-raised by the agent).** Recommendation: do not
-build. The link reaches 4 to 6 subscription rows. Checked against known
+**Closed, not built (owner 2026-09-25).** It was deliberately not built
+because it failed the usefulness test below; there is no threshold decision
+pending, so do not relay one. The case against building: the link reaches 4 to
+6 subscription rows. Checked against known
 answers, it gives the wrong person or company 3 times in 21 at N = 2 and once
 in 10 at N = 3, and a wrong card leaves Criss's to-do list silently (item 173
 ruling). If those subscription rows should resolve, a card typed on the
 merchant in the Merchants editor does it with no wrong-card risk; adding
 merchants was outside this item's scope.
 
-**Found on the way, not built (it was part of the gated build).** The
+**Found on the way; FIXED 2026-09-25 on the owner's order (Shipped row
+120), separately from the closed item.** The
 sign-off card learner (`registry_card_upserts_from_expense_run`, filter
 `service._CARD_OBSERVATION_SOURCES = {"override", "hint", "settled_charge",
 "learned"}`) folds rows carried by a REMEMBERED card into the registry's
@@ -9922,10 +9955,304 @@ Named, not built: PayPal, PIX, boleto and cheque are no private evidence now
 (none carries a live suggestion); "caixa" on the issuer list is also the
 Portuguese word for a till, which no live hint prints.
 
+### 204. The "no payment info" backbone: a receipt that names no card, planned end to end (case 9 of the card-attribution map; owner direction 2026-09-24; PLANNED 2026-09-25, no code; owner decisions D1, D4, D5, D6 taken)
+
+Owner, 2026-09-24: case 9 is "the backbone of the entire system's matching
+logic"; if it works well, most manual work disappears, so "we will put in
+extra effort to come up with a good strategy". This item is the technical
+appendix of that plan. The plain-language relay went to the owner in chat the
+same night; the build prompts follow, one per approved step. Everything below
+was measured read-only on 2026-09-24 ~23:50 UTC over the seven company months
+(305 receipts; the `TEST - GL drive` batch excluded), against four kinds of
+ground truth: a printed Brisken card number, the statement's own card on a
+settled pair, Criss's per-row picks, and the human label bundles for the live
+July and August months. No write to the app, its months, master data,
+SharePoint or any mailbox.
+
+**Sibling state, re-read 2026-09-25 before relaying.** Merged and live at Fly
+`f744680b`: item 198 (card type, #1334), item 199 (two-digit wordings, #1335;
+GoDaddy's "last two digits: 38" now reads card-2838, source `hint`), item 203
+(private only on positive evidence, #1340: every unrecognised phrase now
+waits). Item 200 (vendor history by NAME) is measured and not built (#1336);
+D4 below replaces it. The private-card-list prompt is not merged. PR #1343
+(case 6 vocabulary) was a parallel build also numbered 203; CLOSED unmerged
+2026-09-25 on owner order, superseded by #1340, which already carries its
+vocabulary.
+
+#### 1. Population
+
+Card-less originals (`card_source: none`, not confirmed private, decided copies
+excluded) whose payment text names no digits, of 267 counted receipts
+(re-read 2026-09-25 against Fly `f744680b`): **59**, of which 53 are case 9.
+
+| printed text | rows | months |
+|---|---|---|
+| nothing (`payment_hint == ""`) | **34** | Sep 20, Jul 5, May 5, Jun 3, Aug 1 |
+| a Brisken card type (VISA, VISA CREDIT, TEF, Cartão de Crédito, "30 dias", credit card; item 198) | 12 | Apr 3, May 1, Jun 2, Jul 5, Sep 1 |
+| an unrecognised phrase (Link, OUTRO, CreditCard, VENDA CREDITO VISA, saved payment method, girocardOLV) | 7 | Apr 1, May 3, Jun 1, Sep 2 (GoDaddy left the set when item 199 went live) |
+| a non-Brisken tender (DINHEIRO, DEBIT, EC-Karte, Bar, girocard, Wire Transfer) | 6 | private or settled outside; not case 9 |
+
+Three more card-less rows are decided copies (May Lovable 200, Jul Aposto 80,
+Jul Lovable 200). Seventeen empty-text receipts already resolve: statement
+charge 10, Criss's pick 5, registry card 2. `card_review.n_no_hint` per month
+is the cross-check for the "nothing" row (September 20; it counts copies).
+
+The 34 by what will resolve them: September OpenAI 11 (account `58596F4C`,
+evidence conflicts, see D6), Anthropic 1 + Lovable 2 (twin receipts print the
+card), Network Solutions 2 + Proton 1 (recurring charge on one card), AT&T 1
++ DB AG 2 (no evidence anywhere yet); July AWS 3,352.59 (its charge sits in the
+unloaded 20260704 9693 cycle), Konsultancy 15,972 EUR + Redis 13,200 (x2) +
+360Crossmedia 900 EUR (labelled bank transfer: item 144's settled-outside
+exit, not a card); May Anthropic 3 + Fireflies 2 + Wispr 1 and June Anthropic
+1 + Fireflies 1 + Wispr 1 (billing accounts seen only on 3876); August
+Perplexity 1 (no charge on any loaded card, possibly 0113).
+
+The 12 card-type rows: April Martino 996.11, RMA, Fenix (April's CSV carries no
+3876 charges and 0340 only to Apr 22); May Fenix, June Fenix + Mega Center (no
+May/June statement at all); July Martino x3 + Fenix (human-labelled CONFIRMED
+against 3876 charges present on the loaded sheet, 2.2 to 2.9% off the month
+rate, so a near-miss the 2% band leaves silent, not a coverage gap); September
+Contabilizei (no September sheet yet).
+
+#### 2. Statement coverage, read off `coverage[]` (keys `card_key`, `statements`, `period_start`, `period_end`, `n_transactions`; a receipts-only month returns `[]`)
+
+| card | loaded | convention |
+|---|---|---|
+| 2838 family (2838, 3645, 3876, 0340) | Apr 1-30 (Chase activity CSV; 3876 absent; 0340 to Apr 22), Jul 1-31 and Aug 1-31 (Criss's monthly xlsx; 0340 has ONE July charge, no August) | calendar month |
+| 9693 | Jul 3-Aug 4 (filed in August), Aug 5-Sep 4 (filed in September) | Chase cycle PDF, closes the 4th, filed in the cycle-end month |
+| 1176 | Jul 6-Aug 4 (August) | cycle PDF |
+| 0113, 6013, 8311 | never | 0113 not in SharePoint (Apple Card; Dirk exports); 6013 / 8311 dormant, fee-only cycles |
+| January, May, June | none | |
+
+Every 9693 cycle 2025-12 to 2026-09 plus the 6013 / 8311 fee cycles are on disk
+(`context/expense-reconciliation/statements/`, gitignored, from item 108's
+SharePoint read). Parsed locally with `parse_statement_pdf_tolerant(path,
+legal_entity_id=...)`: 20260504 20 charges (Apr 4-May 4), 20260604 28 (May
+5-Jun 4), 20260704 18 (Jun 9-Jul 1), and 20260704 prints `3352.59` on Jul 1,
+July's open AWS receipt to the cent. The other May-July open rows have no 9693
+charge (they are 3876 / 0340 money).
+
+The app has no notion of a card cycle: an upload's period is min..max of its
+charge dates (`build_statement_entry` / `_statement_period`), a month's period
+is min..max across all its charges (`statement_period_for_month`), and the
+PDF's `Opening/Closing Date` is parsed for the year only and discarded
+(`statement_pdf._parse_period`). Chase lets the account holder export activity
+for any date range as CSV / QFX / QBO ("Since last statement" is a preset;
+posted charges only; one file carries every subcard of the 2838 account with a
+`Card` column): the live `Chase2838_Activity20260401_20260430_20260716.CSV` IS
+such an export, a calendar month downloaded on Jul 16. The app merges a partial
+export with the later full one without double counting (`merge_transactions`,
+identity without post date; `statement_period_overlap` fires only when every
+row of the new upload is new). No mail route and no automatic pull exist for
+statements (`intake_mail` refuses CSV / XLSX and sets a mailed statement PDF
+aside as a statement page).
+
+#### 3. What the code does with a no-card receipt today (symbols; offsets drift)
+
+- Chain, `service.resolve_batch_row_cards`: hint (`resolve_hinted_card_ex`) →
+  reviewer override → guard `card is None and not _card_keys(hint) and not
+  private` → settled charge of THIS month (`settled_cards`) → remembered
+  (`Receipt.card_key`, `learned`; `fill_remembered_cards` gates it on
+  `merchant_vouches_one_card`) → registry `merchant` card → none. A printed
+  3+ digit run that names no card blocks every fallback (item 169 fact 1,
+  measured zero). `suggested_private` needs a hint; `can_mark_private` is true
+  on none / learned / merchant.
+- Settled cards, `settled_charge_cards` / `export_settled_cards` /
+  `month_charge_states`: reconciled bucket only (confirmed or already-posted
+  picks plus pending deterministic matches whose receipt is free); a pair
+  flagged `requires_review` that still won the assignment lends its card.
+  **Borrowed docs are skipped** (`RECEIPT_SOURCES_KEY`), and only this run's
+  own charges are read.
+- Cross-month, `adjacent_months` (label ±1), `adjacent_pool_for_month`
+  (receipts only, both neighbours, inside the borrowing month's charge span,
+  not confirmed private, not claimed elsewhere; borrowed receipts get no card
+  scope), `rematch_month(trigger="statement")` on attach re-matches only the
+  attaching month; the lender row gets `settled_by` + reason
+  `charge_in_neighbouring_period` and **no card, entity or person**.
+  `rematch_neighbour_months` pays marks written on receipt add and month move,
+  never on statement attach.
+- Matcher, `deterministic.py`: `CARD_SCOPE_SOURCES = {picked, hint, learned}`
+  (settled_charge and merchant never scope); `receipt_card_scope` restricts
+  candidates only for an override pick or printed digits; a no-card receipt is
+  compared against every card's charges in the month (entity scope aside),
+  `_card_score` 0.5 everywhere; `NO_CARD_RIVAL_REVIEW` fires only with a
+  competing deterministic candidate on another card (0 live firings);
+  `uniqueness_verdicts` applies to rate-derived pairs; merchant precedence
+  (item 133) yields only to a rival whose vendor agrees, so an exact-amount
+  stranger with no rival wins.
+- Twins, `duplicates.inherit_card_from_copies`: walks
+  `find_duplicate_receipts_by_reference` groups only (identical reference key
+  + total + currency). A Stripe invoice (`HMVWDWIL-0032`) and its receipt
+  (`2811-8284-7349`) carry different references, land in a
+  `find_duplicate_receipts` (vendor / date / total) group, and never lend.
+- Learner, `_CARD_OBSERVATION_SOURCES = {override, hint, settled_charge,
+  learned}` in `registry_card_upserts_from_expense_run`, reached only from
+  `commit_to_memory` (publish or the commit-memory button): `learned` confirms
+  itself into `cards_seen` (the circularity item 200 named).
+- Status, `unmatched_reasons.receipt_reason_code`: `card_statement_not_loaded`
+  needs printed digits, so a no-card row can only read
+  `charge_in_neighbouring_period` (≤31 days past the loaded span),
+  `not_a_card_charge` or `no_charge_on_any_loaded_statement`; on the Expenses
+  row `_expense_review` says `needs_entity` ("No legal entity yet. Assign this
+  expense's paying card..."). `build_card_status` puts card-less rows under
+  `no_card`, which has no statement concept. `assign_batch_cards` assigns by
+  exact hint string and refuses an empty hint; there is no bulk-by-vendor
+  route. No cycle close day exists anywhere (`Card` has no such field).
+- Extraction, `llm.client.ExtractedReceipt`: `invoice_number`,
+  `receipt_number`, `reference`, `card_last4`, `payment_hint`; no bill-to,
+  customer or account e-mail is asked for (`expenses[].customer` is
+  reviewer-typed only). Rendered mail bodies have no PDF text layer; the body
+  is served by `GET /api/inbound/{archive}/body`, the file by
+  `GET /api/runs/{run_id}/receipts/{document_id}/image` (both read-only).
+  Item 40 holds: `submitted_by` never becomes attribution (pinned by
+  `test_submitted_by_never_becomes_the_person`).
+
+#### 4. What the receipts and mails print (lever D, read from 10 live files)
+
+Anthropic invoices print `Bill to` + an account e-mail (`BRISKEN, LLC /
+cristiane.cavalcanti@brisken.com` on the 9693 API account; `BRISKEN
+CONSULTING, LLC / dirk.neumann@brisken.com` on 1176; `BRISKEN, LLC /
+neumanic2@gmail.com` on Nicolas's 3876 subscription). "BRISKEN, LLC" alone
+does not name a company, and item 40 forbids company without a card, so the
+bill-to text is NOT a lever. Lovable prints `Bill to dirk@neumanns.org`. OpenAI
+reload mails print `Workspace: BRISKEN`, "charged to your saved payment
+method" and `Invoice number: 58596F4C-00NN`; the 9693-printing OpenAI receipts
+are a different template ("credit card ending in ...9693") with no invoice
+number. What every subscription invoice DOES carry is a Stripe-shaped invoice
+number: an 8-character customer prefix plus a counter. That prefix is the
+billing account, and it is what splits the multi-card vendors.
+
+| account | vendor | hard evidence (printed / settled / pick), chronological |
+|---|---|---|
+| `WWT1PNYP` | Anthropic (Nicolas's subscription) | 3876 x5, Jul-Aug; May/June rows open |
+| `890D70BF` | Anthropic API (Criss's login) | card-9693 x8, September |
+| `DZ9BH3VA` | Anthropic (Dirk's subscription) | 3645 x5 to Aug 4, then card-1176 x4 from Aug 21 (switched) |
+| `ENLLLY23` | Anthropic (Dirk, EUR) | card-2838 x3 |
+| `HMVWDWIL` | Lovable (dirk@neumanns.org) | card-2838 x3, 3876 x4, 3645 x4, mixed within September |
+| `H0LHY2WQ` | Lovable (ap@brisken.com) | card-2838 → 3645 → card-1176 |
+| `HQXED19R` / `HYWGENV2` / `K9H3XEAQ` | Fireflies / Wispr / Vercel | 3876 only (4 / 3 / 2) |
+| `58596F4C` | OpenAI workspace BRISKEN | one pick (3645, Sep 18); statement: ~80 USD reloads on 3645 to Aug 13, on 9693 from Aug 16; August's two receipts of the series printed "BCS Chase Visa ...9693" |
+
+92 of 305 receipts carry such a number (18 accounts); POS, grocery and
+restaurant receipts carry none, which is exactly the population where item
+200's vendor-name rule gave the wrong person.
+
+#### 5. Lever scores (leave-one-out against receipts with a hard card)
+
+| lever | rule | n checkable | right / wrong / silent | open rows now |
+|---|---|---|---|---|
+| C as written (item 200: vendor key, ≥2 on one card, none elsewhere) | PR #1336 | 143 | 18 / 3 / 122 | 6 (the 3 wrong give the wrong PERSON across the 2838 subcards) |
+| C'' same month, same vendor, amount ±3%, ≥2 siblings on one card | this item | 227 | 34 / 0 / 193 | 2 |
+| **billing-account key, all hard evidence agrees, ≥2** | this item | 64 | **34 / 0 / 30** | **8** (May 4, Jun 3, Sep 1); OpenAI silent |
+| account key, most recent evidence wins | this item | 64 | 56 / 4 / 4 | REJECTED (accounts switch cards) |
+| account key, last 45 days agree | this item | 64 | 35 / 1 / 28 | REJECTED (H0LHY2WQ Aug 50: 2838 from July, truth 3645) |
+| E recurring charge (vendor token + amount ±3%, ±45 d, unique card) | this item | 229 | 44 / 8 / 177 | 3 as a SUGGESTION only (Network Solutions 2.76 and 173.98 on 3645, Proton 9.99 on 3876); wrong ones are Lovable / Anthropic / ElevenLabs whose second card's statement is not loaded |
+| E, closest charge wins | this item | 229 | 47 / 10 / 172 | REJECTED |
+| B pairing, live no-card reconciled pairs | July / August labels | 30 | 28 right, **2 wrong** (Lovable 50 → BASE44 50.00 on 3645, Aug 22; Erste Fracht 21 EUR → HOTEL AM TIERGARTEN on 2838): true charge absent, vendor words disagree (`vendor_pct` 40 / 47); 3 right pairs also below 50 (CNPJ descriptors) | |
+| A load what exists | local parse | | statement = truth | 1 now (AWS), ~10 April-June rows once the sheets are in, all 20 September rows once the next 9693 export is in |
+| twin inheritance across vendor/date groups | live rows `0029/0030`, `0008/0009`, `0033/0034` | same document | 0 risk | 3 now, every Anthropic / Lovable pair from now on |
+
+Rejected on the numbers, do not re-run: the vendor-name key at N=2 and N=3
+(item 200); "most recent" and "recent-agree" account rules; recurring charge
+as an automatic assignment (8 wrong of 52); company from the bill-to text
+(item 40); widening the FX band (S1 refuted `fx_base_amount_match_pct`
+0.005 and friends); sender / mailbox as attribution (item 40).
+
+#### 6. The strategy (order = receipts resolved per unit of risk)
+
+1. **Statements, right cadence, right month, all cards.** D1 DECIDED: the
+   cycle cards 9693 and 1176 move to calendar-month Chase activity exports,
+   filed like the 2838 family; Criss pulls "Since last statement" weekly (D2,
+   recommendation; needs view access to the 9693 / 1176 accounts, Chase Access
+   & Security Manager). Load the history on disk (9693 cycles Dec-Jul) and
+   Criss's April / May / June 3876 / 0340 sheets (D3, recommendation; a live
+   write to her months, hers or on the owner's order). Code: a statement
+   upload suggests the month that holds most of its days (the receipt-side
+   `period_suggestion` shape), and `receipt_reason_code` learns "no loaded
+   statement covers this date" for a no-card row. Zero wrong-card risk.
+2. **Twin inheritance for Stripe pairs.** `inherit_card_from_copies` also
+   walks `find_duplicate_receipts` groups under the existing guards (all
+   card-bearing copies name ONE card; an `ignore` ruling lends nothing; an
+   operator hint keeps). 3 rows now; structural.
+3. **The card flows back across months.** `settled_charge_cards` and the
+   grid / export / report callers read the claim a neighbour holds on this
+   receipt (`receipt_claims` → the borrowing run's charge →
+   `_charge_card_identity`), so a receipt paired by next month's export
+   carries card, entity and person, not only the badge. Safety net for the
+   posting lag and for history loaded as cycle PDFs.
+4. **Billing-account memory, derived, replacing the held vendor-history
+   prompt (D4 DECIDED).** Key = the Stripe prefix from `invoice_number` /
+   `reference` (`^[A-Z0-9]{8}-?\d{4}$`, prefix not all digits); evidence =
+   printed Brisken number, statement charge, reviewer pick; ≥2 pieces, all on
+   one card, none on another; derived on every read, never memorized (the
+   2026-09-24 "only corrections" ruling holds); a printed number, a pick and
+   the statement all outrank it; a reviewer's pick stays on its own row and
+   is never spread by the tool (D6); `learned` leaves
+   `_CARD_OBSERVATION_SOURCES`. Card, entity and person ride it the way
+   `learned` rides today (`card_source: "account"`, `can_mark_private` true).
+   Measured 34 / 0 / 30; 8 rows now.
+5. **Honest status and a cheap manual step.** The row says which loaded
+   statements do not cover its date instead of "no legal entity yet"; when
+   lever E has a unique recurring charge, a one-click suggestion with its
+   evidence, never auto-applied; a card picked on a row offers "apply to the
+   N other card-less rows of this vendor in this month" as an explicit click.
+   A cycle close day per card (D7) is optional and mostly moot under D1.
+6. **Matcher guard (D5 DECIDED).** A pair whose receipt carries no card
+   evidence and whose vendor words disagree (`vendor_pct` < 50) goes to
+   review, not reconciled: catches the 2 live wrong pairs, demotes 3 right
+   CNPJ pairs to a click. The 4 July FX near-misses (2.2 to 2.9% off) are
+   shown on the receipt row as a suggestion, never auto-paired.
+
+Fallback order after the plan: printed number → reviewer pick → statement
+charge, this month or a neighbour's (1, 3) → twin's card (2) → billing-account
+card (4) → registry card (item 154) → blank with an honest status and, where
+one exists, an evidence-backed suggestion (5).
+
+Stays manual (~10 rows a month): bank-transfer invoices (settled outside),
+non-Brisken tenders (confirm private), accounts that switch cards (Lovable
+`HMVWDWIL`), unknown-card rows until 0113 arrives (AT&T, Perplexity),
+confirming suggestions, and OpenAI's September ten until the next 9693 export.
+
+#### 7. Owner decisions (2026-09-25)
+
+| # | decision | answer |
+|---|---|---|
+| D1 | 9693 / 1176 statements | calendar-month activity exports, filed like the 2838 family |
+| D2 | who pulls, how often | recommendation stands: Criss, weekly "Since last statement" |
+| D3 | load the history now | recommendation stands: yes, by Criss in the app |
+| D4 | the held vendor-history prompt | change its key to the billing account (accepted after a plain-language explanation with the Anthropic accounts drawn out) |
+| D5 | matcher guard for vendor-disagreeing no-card pairs | yes |
+| D6 | OpenAI September | Criss's pick stays on that one row; the other ten follow the case-9 logic (blank until the statement; the account rule is silent on one piece of evidence) |
+| D7 | close day per card | not ruled; optional, mostly moot under D1 |
+
+Company-without-card is proposed nowhere. The three AI vendors are not written
+into the registry (owner hold 2026-09-18).
+
+#### 8. Instruments used (rebuild from the API alone; scripts not kept)
+
+`GET /api/expense-batches/{id}` for receipts (`payment_hint`, `card` /
+`card_source`, `duplicate`, `counts_in_total`, `submitted_by.archive`,
+`reference`, `invoice_number`, `base_amount`), `GET /api/runs/{id}` for charges
+(`rows[]`, `candidates[].card_evidence` / `vendor_pct`, `unmatched_receipts[].
+reason_code`, `summary.n_adjacent_borrowed`), `GET /api/cards/status`,
+`GET /api/settings` (`cards`, `merchants.cards_seen`), `GET /api/inbound/log
+?detail=1&limit=500`; the local label bundles `context/expense-reconciliation/
+expense-reports/csv/by-month/{July,August}-2026_live_*/labels.csv`; the local
+9693 PDFs via `parse_statement_pdf_tolerant`. `tools/recon-attribution-replay.
+py` and `tools/recon-match-attribution.py` need a DB copy (on-machine
+`sqlite3.backup` via `flyctl ssh console --pty=false`, `flyctl ssh sftp get`
+with a Windows-form path, delete after) and are the before / after instruments
+for steps 3, 4 and 6. A first probe read `coverage[]` under wrong keys and
+reported no coverage anywhere; the valid read is `card_key` / `statements` /
+`period_start` / `period_end` / `n_transactions`, and a receipts-only month
+returns `[]` by design.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 121 | Item 195: a statement PDF keeps its company through a re-read. A PDF entry records the account it was filed under (`statement_entry_account`); a re-read never lends a PDF `config.statement`'s account; a PDF filed under no account, or recorded before this, takes the registry entity every card it prints resolves to, blank on two companies or an unnamed card (`pdf_entity_from_printed_cards`), at the attach and the re-read alike. `statement_period_overlap` no longer calls two unrecorded accounts "the same account" (leftover 3 of items 196/197) | A PDF charge prints no `card_last4`, so item 59's match-time stamp never repairs it: its company is whatever the upload says. Both live August PDF entries recorded `account_id: ""` although the SPA sent a card key, so a re-read would have put the 1176 file's 3 charges and the 9693 file's 21 under the company "card", or under Corporate Services when the workbook was the last upload, and every pair on them would have left scope. Code-traced, never triggered live (nobody re-reads a month holding a PDF) | 2026-09-25; `tests/test_reread_pdf_entity_item_195.py` (9: 8 red on origin/main, 1 control green); four wiring points proven RED under `tools/regress_check.py` (the marker branch, the no-borrow fallback, the entry writer, the advisory guard); no live row moves on the deploy |
+| 120 | Item 200's side finding: `learned` leaves `service._CARD_OBSERVATION_SOURCES`, so the sign-off card learner no longer counts a remembered card as an observation of where a merchant's spend lands | A remembered card could confirm itself into `cards_seen` and write a learned `card_key` with no new evidence, against the 2026-09-24 ruling that only corrections may be memorized. The leak reaches months ingested after a correction (the card is stamped at ingest, item 173), not ones filled at read time (item 169) | PR TBD, 2026-09-25; `tests/test_remembered_card_read_time_item_169.py::test_signing_off_a_remembered_card_teaches_the_registry_nothing` (regress RED) |
 | 119 | Item 203: a private expense is suggested only on positive evidence (`cards.positive_non_brisken_evidence`: a number or ending no Brisken card has, cash, a network / kind / issuer the registry does not carry; conflict waits; acquirers neutral), glued words read (`cards.payment_words`), and seventeen "a card was used" words made generic so they never become aliases. Supersedes item 41's trigger | Unrecognised phrases ("Link", "saved payment method", "OUTRO") read as private money when the statement would have named the card; nine live rows stop suggesting private and none starts | PR TBD, 2026-09-25; `tests/test_private_needs_evidence.py` |
 | 118 | Item 199: a two-digit card ending printed in other words names its card. `cards._ENDING_LEADS`, explicit lead phrases in EN/PT/DE/FR/ES on diacritic-folded text, with an amount guard (`38,00` is money) and a second-ending rule (`38 and 49` names nothing) | September's GoDaddy, 446.99 EUR, printed "ending with the last two digits: 38" and sat card-less and suggested private; census over 88 live hints moved that one and nothing else | 2026-09-24 |
 | 117 | A Brisken card type on a receipt stops suggesting a private expense: `cards.names_registry_card_type` reads the networks and kinds the batch's active cards carry from their own label and account wording, and a generic tender hint naming only those ("VISA CREDIT", "Cartão de Crédito", "TEF", "credit card") no longer raises `suggested_private`. Non-card tenders and types Brisken lacks (girocard, EC-Karte, DEBIT, cash) still do; `can_mark_private` and the card chain are untouched | Backlog item 198 (owner ruling 2026-09-24, case 5). Twelve counted rows across April, May, June, July and September were asking Criss who to reimburse for purchases Brisken's own Visa credit cards made | 2026-09-24, PR #1334 (merge `59354b9b`), Fly v223; `tests/test_card_type_not_private.py` (route-level through the batch payload); regress_check: 5 caller tests RED with the wiring disabled. Live after deploy: 13 row flags true -> false (12 counted + July's Aposto copy), 0 the other way, cold scripted drive passed. The wiring was then generalized by item 203 (#1340, `positive_non_brisken_evidence`), which reuses `registry_card_types` |

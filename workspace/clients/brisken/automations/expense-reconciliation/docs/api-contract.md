@@ -1995,6 +1995,36 @@ entries: the config's map for the upload it still describes, then a fresh
 guess. A re-read re-records both on the entries it rebuilds, so a month
 repairs its own record the first time it is re-read.
 
+### A PDF entry's `account_id`, and the company its charges carry (added 2026-09-25, item 195)
+
+No new key. `statements[].account_id` on a PDF upload now holds the account
+the upload was filed under (what the attach dialog sends as `account_id`,
+the chosen card's key). Until now every PDF entry recorded `""`: a PDF's
+config block has no account key, because its parser reads the cards off the
+page. A workbook entry is unchanged.
+
+A Chase PDF's charges take ONE company from the upload, and they print no
+`card_last4`, so the match-time stamp (item 59) never touches them. Where
+that company comes from:
+
+| The upload | Its charges' `legal_entity_id` |
+|---|---|
+| filed under an account (the SPA always sends one) | the registry entity of that account, at the attach and at every re-read |
+| filed under no account, or recorded before this shipped | the registry entity every card the file prints resolves to; blank when they resolve to two companies or any card resolves to none |
+
+Before this, the second row read the literal `"card"`, a company no receipt
+carries, and a re-read of a PDF recorded with no account borrowed
+`config.statement`'s account, which describes whichever file arrived last:
+a PDF re-read after August's workbook would have taken Corporate Services.
+Blank is counted in `summary.n_charges_no_entity` like any charge without a
+company.
+
+The `statement_period_overlap` advisory no longer treats two uploads with no
+recorded account as the same account. The live August entry for
+`20260804-statements-9693--2.pdf` still carries the old sentence ("on the
+same account" as the 1176 file); an advisory is written when its entry is,
+so it clears at the month's next re-read.
+
 ### A Type label the parser does not recognise (item 64)
 
 `parse_issues[]` grows a third `severity`, `"info"`, carried by one entry per
@@ -6004,11 +6034,15 @@ At publish, beside the category/alias upsert (item 116's whole-entry rule),
 `registry_card_upserts_from_expense_run` folds the month's resolved cards
 into the registry:
 
-* every receipt whose card came from `override`, `hint`, `settled_charge` or
-  `learned` adds that card to its merchant's `cards_seen`. A row carried by
-  `merchant` adds nothing, on purpose: a card the registry lent is not
-  evidence about the merchant, and feeding it back would let one observation
-  harden into a fact.
+* every receipt whose card came from `override`, `hint` or `settled_charge`
+  adds that card to its merchant's `cards_seen`. A row carried by `merchant`
+  adds nothing, on purpose: a card the registry lent is not evidence about
+  the merchant, and feeding it back would let one observation harden into a
+  fact. Nor does a row carried by `learned` (removed 2026-09-25, the side
+  finding of item 200): a remembered card is the tool's own memory, and
+  counting it let a remembered card confirm itself into `cards_seen` and a
+  learned `card_key` at sign-off, against the 2026-09-24 ruling that only
+  corrections may be memorized.
 * `card_key` is written only while `cards_seen` holds exactly ONE card and
   the entry has no key yet, and is marked `card_key_learned: true`.
 * a second card DROPS a learned key in the same pass. Two cards are a fact

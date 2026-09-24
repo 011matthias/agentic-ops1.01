@@ -4964,9 +4964,12 @@ def registry_upserts_from_expense_run(
 # Note item M2 (2026-09-18): the card sources that count as an OBSERVATION of
 # where a merchant's spend actually lands. `merchant` is deliberately absent —
 # a card the registry itself lent must never teach itself back — and so is
-# `none`. `learned` is in: a card remembered per receipt is still a card the
-# tool resolved for this merchant this month.
-_CARD_OBSERVATION_SOURCES = frozenset({"override", "hint", "settled_charge", "learned"})
+# `none`. `learned` is out too (owner 2026-09-25, the side finding of item
+# 200): a card remembered per receipt is the tool's own memory, not an
+# observation, and counting it let a remembered card confirm itself into
+# `cards_seen` and a learned `card_key` at sign-off, against the 2026-09-24
+# ruling that only corrections may be memorized.
+_CARD_OBSERVATION_SOURCES = frozenset({"override", "hint", "settled_charge"})
 
 
 def registry_card_upserts_from_expense_run(
@@ -11305,8 +11308,11 @@ def statement_advisory(prior: list[dict], entry: dict) -> str | None:
     n_rows, n_new = entry.get("n_rows") or 0, entry.get("n_new") or 0
     if n_rows and n_new == n_rows:
         for other in prior:
+            # An account recorded on neither side is unknown, not shared:
+            # two card PDFs whose entries predate item 195 both hold "".
             if (
-                (other.get("account_id") or "").strip() == account
+                account
+                and (other.get("account_id") or "").strip() == account
                 and _periods_overlap(other, entry)
             ):
                 return Refusal(
@@ -13178,7 +13184,7 @@ def execute_statement_attach(
         statement_entry=build_statement_entry(
             stored_name=stmt_name,
             upload_name=upload_name or stmt_name,
-            account_id=(new_cfg.get("statement") or {}).get("account_id", ""),
+            account_id=statement_entry_account(new_cfg, form),
             card_key=form.card_key,
             sheet_name=(new_cfg.get("statement") or {}).get("sheet_name"),
             transactions=transactions,
@@ -13195,6 +13201,42 @@ def execute_statement_attach(
         ),
         trigger="statement",
     )
+
+
+def pdf_entity_from_printed_cards(transactions: list, settings: dict | None) -> str:
+    """Item 195: the company a statement PDF filed under no account belongs
+    to, read off the cards it prints.
+
+    A PDF charge's `account_id` IS its card (the cycle marker, not an
+    operator's typing), and one statement is one company. So the company is
+    the registry entity every printed card resolves to, or blank when the
+    cards resolve to two companies, or any card resolves to none: a visible
+    gap beats a guessed posting (item 59's rule, here on the upload side).
+    """
+    from ..cards import effective_cards, entity_for
+
+    cards = effective_cards(settings)
+    entities = {
+        entity_for(str(tx.account_id or ""), cards) or ""
+        for tx in transactions
+    }
+    return entities.pop() if len(entities) == 1 else ""
+
+
+def statement_entry_account(cfg: dict, form: RunForm) -> str:
+    """The account id a `statements[]` entry records for one upload.
+
+    A tabular upload records what its parser was handed (the config block's
+    `account_id`). A PDF's block has no such key, because its parser reads
+    the cards off the page, so before item 195 every PDF entry recorded
+    `""`, and the account its entity was resolved from was lost to the
+    re-read and to the overlap advisory. A PDF records the account the
+    upload was filed under instead.
+    """
+    block = cfg.get("statement") or {}
+    if "account_id" in block:
+        return str(block.get("account_id") or "")
+    return (form.account_id or "").strip()
 
 
 def read_statement_upload(
@@ -13248,6 +13290,21 @@ def read_statement_upload(
         raise RunInputError(
             str(exc), code="statement_unreadable"
         ) from exc
+    if column_map is None and not (form.account_id or "").strip():
+        # Item 195: a PDF filed under no account. `resolve_entity` had
+        # nothing to resolve and fell back to the literal "card", a named
+        # company no receipt carries. The file's own cycle markers name its
+        # cards, so they name its company.
+        entity = pdf_entity_from_printed_cards(transactions, settings)
+        transactions = [
+            replace(tx, legal_entity_id=entity)
+            if tx.legal_entity_id != entity else tx
+            for tx in transactions
+        ]
+        new_cfg = {
+            **new_cfg,
+            "statement": {**new_cfg["statement"], "legal_entity_id": entity},
+        }
     # Item 82: refresh the ECB monthly averages for every month this
     # statement's charges fall in (and the month's own neighbours), so a
     # month created before its average was published reads it from here.
@@ -13327,8 +13384,16 @@ def reread_statements(
                 code="statement_file_missing",
                 file=stored or "",
             )
+        is_pdf = stmt_path.suffix.lower() == ".pdf"
+        # Item 195: a PDF never borrows `config.statement`'s account. That
+        # block describes the LATEST upload, so a PDF recorded with no
+        # account re-read under whatever workbook arrived after it, and that
+        # workbook's company. With nothing recorded, the PDF's own printed
+        # cards decide (`read_statement_upload`).
         account_id = str(
-            entry.get("account_id") or stmt_cfg.get("account_id") or ""
+            entry.get("account_id")
+            or ("" if is_pdf else stmt_cfg.get("account_id"))
+            or ""
         )
         form = RunForm(
             account_id=account_id,
@@ -13352,7 +13417,7 @@ def reread_statements(
             card_key=str(entry.get("card_key") or ""),
         )
         column_map: dict | None
-        if stmt_path.suffix.lower() == ".pdf":
+        if is_pdf:
             column_map = None
         elif entry.get("column_map"):
             # The map this upload was actually read with (item 64), which
@@ -13394,9 +13459,7 @@ def reread_statements(
             build_statement_entry(
                 stored_name=stored,
                 upload_name=str(entry.get("upload_name") or stored),
-                account_id=(new_cfg.get("statement") or {}).get(
-                    "account_id", ""
-                ),
+                account_id=statement_entry_account(new_cfg, form),
                 card_key=form.card_key,
                 sheet_name=(new_cfg.get("statement") or {}).get("sheet_name"),
                 transactions=txs,
