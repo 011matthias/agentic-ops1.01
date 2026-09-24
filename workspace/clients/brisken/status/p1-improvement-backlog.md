@@ -9520,7 +9520,7 @@ under 2838: 3645 (83), 3876 (77), 0340 (24); the fold 0113, 6013, 8311.
 **SPA half:** `docs/lovable-cards-overview-subcards-prompt.md`, one new key
 (`cardsPage.subcards.count`), the chevron reusing `cardStrip.subcards.aria`.
 
-### 195. A statement re-read can re-stamp a PDF's charges with the entity "card" (found 2026-09-24, code-traced, no live case yet)
+### 195. A statement re-read can re-stamp a PDF's charges with the entity "card" (found 2026-09-24, code-traced, no live case yet) (FIXED 2026-09-25)
 
 `POST /api/expense-batches/{id}/statements/reread` rebuilds each upload's form
 with `account_legal_entities={}` and the account id from the stored entry,
@@ -9539,6 +9539,35 @@ Whether `stamp_charge_entities` repairs it at match time for charges that
 print a card is unverified. **First step:** a test that attaches a PDF with no
 account id, re-reads, and asserts the charges' entity. Only after that
 assertion runs red is there a fix to write.
+
+**FIXED 2026-09-25 (Shipped row 121).** Red first, as asked: 8 of 9 new
+tests failed on origin/main, reading `'card'`, an entry account of `''`, and,
+the worse shape, `'Corporate Services'` for a 1176 PDF re-read after a
+workbook. Three corrections to the premise above, found on the way:
+
+- **The PDFs were not attached without an account id.** The SPA always sends
+  one (`AttachStatementDialog.tsx`: the chosen card's key), and the attach
+  resolved the right company from it: live August holds the 1176 file's 3
+  charges on Consulting and the 9693 file's 21 on Cloud Services. What was
+  lost was the RECORD: a PDF's config block has no `account_id` key, so both
+  entries hold `account_id: ""`, and a re-read resolved from nothing.
+- **`stamp_charge_entities` cannot repair it.** A PDF charge prints no
+  `card_last4` (its card is its `account_id`, the cycle marker), and the stamp
+  keys on `card_last4` only.
+- **"card" was the mild outcome.** A PDF entry with no account borrowed
+  `config.statement.account_id`, which describes whichever upload arrived
+  LAST; a PDF under a later workbook re-read under the workbook's company.
+
+What changed (`web/service.py`): a PDF entry records the account it was filed
+under (`statement_entry_account`); a re-read never lends a PDF the config's
+account; and a PDF filed under no account, or recorded before this, takes
+the registry entity every card it prints resolves to, blank when they name
+two companies or any names none (`pdf_entity_from_printed_cards`), at the
+attach as well as the re-read. Leftover 3 of items 196/197 had the same
+cause and is fixed with it: `statement_period_overlap` no longer calls two
+unrecorded accounts "the same account". No live row moves on the deploy;
+August's two PDF entries gain their accounts, and the 9693 entry loses its
+advisory, at the month's next re-read.
 
 ### 196. Statement attach and mail intake fail closed on an exhausted LLM key (outage 2026-09-24)
 
@@ -10222,6 +10251,7 @@ returns `[]` by design.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 121 | Item 195: a statement PDF keeps its company through a re-read. A PDF entry records the account it was filed under (`statement_entry_account`); a re-read never lends a PDF `config.statement`'s account; a PDF filed under no account, or recorded before this, takes the registry entity every card it prints resolves to, blank on two companies or an unnamed card (`pdf_entity_from_printed_cards`), at the attach and the re-read alike. `statement_period_overlap` no longer calls two unrecorded accounts "the same account" (leftover 3 of items 196/197) | A PDF charge prints no `card_last4`, so item 59's match-time stamp never repairs it: its company is whatever the upload says. Both live August PDF entries recorded `account_id: ""` although the SPA sent a card key, so a re-read would have put the 1176 file's 3 charges and the 9693 file's 21 under the company "card", or under Corporate Services when the workbook was the last upload, and every pair on them would have left scope. Code-traced, never triggered live (nobody re-reads a month holding a PDF) | 2026-09-25; `tests/test_reread_pdf_entity_item_195.py` (9: 8 red on origin/main, 1 control green); four wiring points proven RED under `tools/regress_check.py` (the marker branch, the no-borrow fallback, the entry writer, the advisory guard); no live row moves on the deploy |
 | 120 | Item 200's side finding: `learned` leaves `service._CARD_OBSERVATION_SOURCES`, so the sign-off card learner no longer counts a remembered card as an observation of where a merchant's spend lands | A remembered card could confirm itself into `cards_seen` and write a learned `card_key` with no new evidence, against the 2026-09-24 ruling that only corrections may be memorized. The leak reaches months ingested after a correction (the card is stamped at ingest, item 173), not ones filled at read time (item 169) | PR TBD, 2026-09-25; `tests/test_remembered_card_read_time_item_169.py::test_signing_off_a_remembered_card_teaches_the_registry_nothing` (regress RED) |
 | 119 | Item 203: a private expense is suggested only on positive evidence (`cards.positive_non_brisken_evidence`: a number or ending no Brisken card has, cash, a network / kind / issuer the registry does not carry; conflict waits; acquirers neutral), glued words read (`cards.payment_words`), and seventeen "a card was used" words made generic so they never become aliases. Supersedes item 41's trigger | Unrecognised phrases ("Link", "saved payment method", "OUTRO") read as private money when the statement would have named the card; nine live rows stop suggesting private and none starts | PR TBD, 2026-09-25; `tests/test_private_needs_evidence.py` |
 | 118 | Item 199: a two-digit card ending printed in other words names its card. `cards._ENDING_LEADS`, explicit lead phrases in EN/PT/DE/FR/ES on diacritic-folded text, with an amount guard (`38,00` is money) and a second-ending rule (`38 and 49` names nothing) | September's GoDaddy, 446.99 EUR, printed "ending with the last two digits: 38" and sat card-less and suggested private; census over 88 live hints moved that one and nothing else | 2026-09-24 |
