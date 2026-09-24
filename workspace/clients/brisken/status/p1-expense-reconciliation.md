@@ -9,6 +9,39 @@ updated: 2026-09-24
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-24: a payment reminder is no longer a purchase** (backlog item 186,
+PR #1268, merge `0726b428`, DEPLOYED and cold-driven; `/healthz` commit
+matches). Asked to improve duplicate recognition on the premise that two
+invoices never share an ID, the measurement found the class the premise cannot
+cover: a document that QUOTES an invoice's identity. A dunning notice prints
+the number, the date and the amount, which is the triple every duplicate key
+matches on, so it is a flawless duplicate by construction. `correspondence.py`
+quarantines it instead, requiring BOTH a dunning marker and no itemization; a
+marker alone would set aside a real invoice with a past-due footer, and no
+itemization alone is every taxi slip in the estate. Markers calibrated over
+103 readable mail bodies of 143 archives: fires on 2, both Redis, nothing
+else. 29 tests, three wiring points red-proven, suite 3205 / 2, accuracy gate
+unchanged.
+
+**Two live rows are wrong and are Criss's to correct.** July holds Redis
+IUS25300 at USD 13,200.00 TWICE: `0004__invoice-IUS25300.pdf` is the real
+invoice and `0070__rendered-body.pdf` is the 2026-09-12 past-due notice about
+it, roughly 42% of July's USD total. The Hostinger pair `H_46243348` at 172.61
+USD is the mirror image: one invoice forwarded on Jul 3 and Jul 28, whose copy
+verdict a reviewer overrode to "not a copy". The code change stops the next
+one; it rewrites nothing.
+
+**The duplicate identity-set work is NOT built** and is the next slice now
+that correspondence is out of the way: `reference` + `invoice_number` +
+`receipt_number` + caption-stripped aliases, matched on INTERSECTION and
+strictly additive. Measured warning: naive caption stripping collapses the 23
+working reference keys to 7 and invents a false family of seven OpenAI
+receipts carrying seven different amounts. Labelled numbers cover only 20% of
+rows and twin NOTHING on their own, because an invoice and its receipt for one
+purchase carry two different numbers; their value is as a TYPE signal (all
+five `NQTJA4FE` rows have both labelled fields empty, which is the model
+correctly declining to call an account id an invoice number).
+
 **2026-09-24: a row that is private is no longer offered the private control**
 (backlog item 176, operator note #75). `can_mark_private` read
 `private or (...)`, so both private rows in the estate told the screen they
