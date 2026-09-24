@@ -9156,7 +9156,23 @@ touching a column. The card's own per-month figures already exist on `/cards`,
 one click away, so duplicating them here buys nothing and costs the scope the
 owner set.
 
-Written as `docs/lovable-months-card-filter-prompt.md`, NOT pasted.
+Written as `docs/lovable-months-card-filter-prompt.md`. **PASTED, APPLIED and
+DRIVEN 2026-09-24.** Cold Chrome on `expenses.brisken.com/months`, every check
+in the prompt, all passing:
+
+| selection | months left | caption |
+|---|---|---|
+| All | September, August, July, June, May, April, January | absent |
+| 1176 | August only | shown |
+| 3876 | August, July | shown |
+| 0340 | July, April | shown |
+| 2838 | August, July, April | shown |
+| 9693 (behind the disclosure) | none, "No month has a charge or a statement on this card" | shown |
+
+Columns are byte-identical in every state, `Month / Receipts / Needs category /
+Set aside / Statement / Created`, which is the scope holding. The caption reads
+"Figures are each month's totals, not this card's. Open Cards for this card's
+own numbers." and is absent under All.
 
 ### 188. A duplicate can only be deleted from its second copy, and the duplicates filter does not look like one (owner 2026-09-24)
 
