@@ -9520,6 +9520,105 @@ under 2838: 3645 (83), 3876 (77), 0340 (24); the fold 0113, 6013, 8311.
 **SPA half:** `docs/lovable-cards-overview-subcards-prompt.md`, one new key
 (`cardsPage.subcards.count`), the chevron reusing `cardStrip.subcards.aria`.
 
+### 195. A statement re-read can re-stamp a PDF's charges with the entity "card" (found 2026-09-24, code-traced, no live case yet)
+
+`POST /api/expense-batches/{id}/statements/reread` rebuilds each upload's form
+with `account_legal_entities={}` and the account id from the stored entry,
+falling back to the config's `statement.account_id`. The attach writes that
+field as `form.account_id or "card"` (`read_statement_upload`), so an upload
+attached with no account id re-reads as account `"card"`. `resolve_entity`
+finds no card for `"card"` in the registry and falls through to
+`RunForm.resolve_legal_entity()`, which returns the raw id. A PDF takes its
+charges' `legal_entity_id` from the caller, so those charges re-read under the
+entity `"card"`.
+
+Not reproduced live: the only affected shape is a month holding a PDF attached
+without an account id (August's `20260804-statements-1176-.pdf` is one), and
+no one re-reads a month that holds a PDF (standing hazard in the loop brief).
+Whether `stamp_charge_entities` repairs it at match time for charges that
+print a card is unverified. **First step:** a test that attaches a PDF with no
+account id, re-reads, and asserts the charges' entity. Only after that
+assertion runs red is there a fix to write.
+
+### 196. Statement attach and mail intake fail closed on an exhausted LLM key (outage 2026-09-24)
+
+OpenAI answered `429 credit_balance_exhausted` for part of 2026-09-24. Two
+paths stopped, and they stopped differently:
+
+- **Attach** (job `99d3f5629717`, 9693 into August) died at the `judging`
+  stage. The attach is atomic, so August did not change, but the operator got
+  a failed job for a statement the deterministic matcher could have placed on
+  its own. Judgment only decides FX and ambiguous pairs; the other rows never
+  needed the model.
+- **Intake** held one body-only mail (`held_body_only`, 16:21 UTC). That is
+  recoverable (it rendered cleanly once the key was funded), but it sat as
+  "Needs one click to read" with nothing saying the cause was the key rather
+  than the mail.
+
+Decision needed before code: should an attach land its deterministic rows and
+leave the judgment pairs in review when the model is unavailable, or keep
+failing whole? The first needs little new code: with no client,
+`matching.judgment.judge_fx_match` already returns a `requires_review` stub
+instead of calling the model.
+
+Two leftovers from the same outage, both small:
+- A rendered entry keeps its old `error` (the 429 text) after it reads
+  `ingested` / "Added". Any surface that shows `error` shows a failure on a
+  success.
+- The dead attach left its file on disk, so the retry was stored as
+  `20260804-statements-9693--2.pdf`. The name is cosmetic; a dead job leaving
+  a file behind is the thing to fix.
+
+### 197. One printed FX line from another card and another month becomes the rate for every pair in the month (found live 2026-09-24, on the ordered 9693 load)
+
+`derive_fx_reference_rates` takes the median of a month's printed statement FX
+lines (`Transaction.fx_rate`) and `_reference_rate_for` ranks it above the
+charge-day rate (`statement` -> `receipts` -> `opentickers_day` ->
+`ecb_month`) for EVERY pair in the month, whatever the card or date. It also
+carries the wider self-derived band (`fx_reference_match_pct`, 3%) where the
+day and ECB rates get 2%. The docstring's premise, "a hosted month has
+neither (the Chase export prints no FX columns...)", held only until a Chase
+PDF was attached to a hosted month.
+
+**What it did to August.** `20260804-statements-9693-.pdf` prints one FX
+line: SAP SE WALLDORF, 2026-07-16, EUR 437.00 billed USD 500.93 at
+1.146292906. After the attach every EUR -> USD pair in August reads "derived
+rate 1.146292906 (median of 1 statement FX lines)". Two 2838 rows moved from
+reconciled to review:
+
+| charge | receipt | implied rate | gap at 1.146292906 |
+|---|---|---|---|
+| ANTHROPIC* CLAUDE SUB USD 104.95, Aug 28 | EUR 90.00 (its own receipt before) | 1.1661 | +1.73% |
+| same charge | EUR 93.07 | 1.1276 | -1.63% |
+| ANTHROPIC* CLAUDE SUB USD 108.53, Aug 29 | EUR 93.07 (its own receipt before) | 1.1661 | +1.73% |
+| same charge | EUR 90.00 | 1.2059 | +5.20%, outside |
+
+Inside a 3% band, charge 104.95 now agrees with both receipts and receipt
+93.07 with both charges, so the uniqueness gate sends both to judgment, and
+the model answered p=0.40 on each ("likely NOT the same purchase"). Which rung
+paired them before the attach was not captured (the baseline recorded bucket
+and chosen receipt, not candidates); both implied rates sit 1.7% above the
+statement median, which is the shift that made them ambiguous. Neither row carried a person's decision
+(`turn: decide` before and after), so no one's work was undone, but both now
+sit in Criss's review queue for pairs the tool used to settle.
+
+**Why September was not attached.** `20260904-statements-9693-.pdf` prints
+three FX lines (Host Europe Aug 6, 1.155723905; SAP Aug 12, 1.155197777 and
+1.155193236), so its median would price every EUR pair in September at the
+Aug 12 rate, including the 2838 workbook Criss has not attached yet.
+
+**Recommended fix:** a charge that printed its own `fx_rate` uses it (that is
+the rate the bank charged); every other pair keeps the charge-day rate, so
+the statement median stops pre-empting `opentickers_day`. The two August rows
+return at the month's next natural re-match. Proof before merge: replay
+August's 135-row set old vs new and show exactly the two Anthropic rows move
+back, then `regress_check.py` on the rung order.
+
+Also seen on this load: the overlap warning says the 1176 file "already covers
+2026-07-06 to 2026-08-04 on the same account" for what are two different
+cards; and the OpenAI funding receipts rendered from mail carry
+`card_ending: ""` although each body prints "credit card ending in 9693".
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
