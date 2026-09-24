@@ -422,6 +422,53 @@ def test_a_web_batch_for_an_unprovisioned_company_refuses_and_says_so(
     assert expense["review"]["reason_code"] == "category_refused"
 
 
+def test_setting_the_company_recategorizes_a_receipt_that_had_none(
+    web, monkeypatch,
+):
+    """Owner decision 2026-09-24: a receipt that arrived with no company
+    halts `entity_missing`; assigning the company re-runs the engine against
+    THAT company's leaves, through both assignment routes."""
+    code = _postable_in(CORP_ORG)
+    label = next(lbl for lbl in curated_leaves.llm_leaf_labels(CORP_ORG)
+                 if lbl.startswith(code + " "))
+    for route in ("entity", "field"):
+        batch_id, expense = _batch_with_one_receipt(web, monkeypatch, "", label)
+        doc = expense["document_id"]
+        cat, _ = _stored_line(web, batch_id, doc)
+        assert cat["refusal"] == ENTITY_MISSING, cat
+
+        # The model answer the ingest never asked for, now that it can.
+        mock = MockLLMClient(
+            responses=[ClassificationResult(label, None, 0.9, "mock")])
+        monkeypatch.setattr(
+            "expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
+        if route == "entity":
+            r = web.put(f"/api/runs/{batch_id}/expenses/{doc}/entity",
+                        json={"legal_entity": CORP})
+        else:
+            r = web.put(f"/api/runs/{batch_id}/expenses/{doc}",
+                        json={"field": "legal_entity", "value": CORP})
+        assert r.status_code == 200, r.text
+        assert r.json()["recategorized"]["refusals"] == [], r.json()
+
+        cat, _ = _stored_line(web, batch_id, doc)
+        assert cat["category"] == code, (route, cat)
+        assert "refusal" not in cat
+        (row,) = web.get(f"/api/expense-batches/{batch_id}").json()["expenses"]
+        assert row["review"].get("reason_code") != "category_refused"
+
+
+def test_setting_the_same_company_again_does_not_recategorize(
+    web, monkeypatch,
+):
+    batch_id, expense = _batch_with_one_receipt(
+        web, monkeypatch, CORP, "Office party balloons")
+    doc = expense["document_id"]
+    url = f"/api/runs/{batch_id}/expenses/{doc}/entity"
+    assert "recategorized" in web.put(url, json={"legal_entity": "Consulting"}).json()
+    assert "recategorized" not in web.put(url, json={"legal_entity": "Consulting"}).json()
+
+
 def test_the_category_route_clears_on_empty_and_ignores_the_unknown(
     web, monkeypatch,
 ):
