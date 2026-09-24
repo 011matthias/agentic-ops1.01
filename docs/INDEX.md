@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-24 | Recon 9693 Statements And GL Prompt | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%209693%20Statements%20And%20GL%20Prompt/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken Recon Items 192-194 Applied | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20Recon%20Items%20192-194%20Applied/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken Recon Subcards Months and Cards | client-dev | [→](docs/2026-09-24%20-%20Brisken%20Recon%20Subcards%20Months%20and%20Cards/Checkpoint.md) |
 | 2026-09-24 | Recon Strip Count Needs Category | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Strip%20Count%20Needs%20Category/Mini-Checkpoint-1.md) |
