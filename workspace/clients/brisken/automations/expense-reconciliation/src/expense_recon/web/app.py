@@ -3864,6 +3864,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             or (line_index is not None and not isinstance(line_index, int))
         ):
             return JSONResponse({"error": "bad request", "code": "invalid_body"}, status_code=400)
+        # The same three-way reading the charge and expense-field routes
+        # use. An explicit clear ("" or null) clears BOTH stored values, so
+        # the tool's own answer shows again; it is still her act, so it is
+        # written as human. A value from neither vocabulary is dropped and
+        # named under `ignored`, and the stored pick is left alone: this
+        # route used to store any string it was sent, which a later run's
+        # learning would then read as a category somebody chose.
+        category_text = "" if category is None else str(category).strip()
+        if category_text:
+            category = recognize_category(category_text)
+            if category is None:
+                return JSONResponse(
+                    {"ok": True, "ignored": {"category": category_text}})
+        else:
+            category = None
+            zoho_account = None
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:

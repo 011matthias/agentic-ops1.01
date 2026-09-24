@@ -44,7 +44,7 @@ from ..cli import (  # item 105
     keep_invoice_read_as_statement,
 )
 from ..coa_provision import apply_to_config as apply_coa_provisioning
-from ..coa_provision import entity_from_settings
+from ..coa_provision import GL_ENTITY_ORGS_KEY, entity_from_settings
 from ..correspondence import quarantine_correspondence
 from ..error_codes import Refusal, code_of, detail_of, fields_of
 from ..duplicates import (
@@ -2825,6 +2825,34 @@ def _review(state: str, reason: str | None = None, code: str | None = None) -> d
     return {"state": state, "reason": reason, "reason_code": code}
 
 
+def _refusal_review(cats) -> dict | None:
+    """A `pick` verdict that says WHY the engine refused, or None.
+
+    The GL engine refuses on purpose (no curated chart for the company, a
+    remembered account the company cannot post to, nothing it could place)
+    and a refused line has no category, exactly like a line nobody looked at.
+    "No category yet" over it reads as "the tool has not looked", so the
+    verdict carries the refusal's own sentence and its code instead. None when
+    any line lacks a refusal: a line from the bucket path, or one with no
+    categorization at all, keeps the generic sentence."""
+    codes = []
+    for cat in cats:
+        code = getattr(cat, "refusal", None) if cat is not None else None
+        if not code:
+            return None
+        codes.append(code)
+    if not codes:
+        return None
+    # Through the engine, not `zoho.*`: the web layer imports nothing from
+    # the posting package (`test_zoho_posting_is_gated`).
+    from ..categorize import refusal_text
+
+    return {
+        **_review("pick", refusal_text(codes[0]), "category_refused"),
+        "refusal": codes[0],
+    }
+
+
 def uncategorized_line_indexes(rec: "Receipt | None", overrides: dict) -> list[int]:
     """The indexes of the line items that carry no category (item 160).
 
@@ -2886,6 +2914,12 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
         # some are not (partial). The hint and code differ so the SPA can say
         # "assign a category" vs "one line still needs a category".
         if not srcs:
+            refused = _refusal_review(
+                rec.line_items[i].categorization
+                for i in uncategorized_line_indexes(rec, overrides)
+            )
+            if refused is not None:
+                return refused
             return _review("pick", "No category yet. Assign one before this charge can post.", "uncategorized")
         return _review("pick", "One or more receipt lines still need a category before this can post.", "partial_uncategorized")
     if any(d in _ADJ_DISAGREE for d in decs):
@@ -3039,6 +3073,7 @@ def set_charge_category(
 def resolve_review(
     *, is_posted: bool, effective_bucket: str, status: str,
     matched_rec: "Receipt | None", overrides: dict, charge_category: dict | None,
+    charge_categorization: "Categorization | None" = None,
 ) -> dict:
     """The review-state a workbench row needs, so the SPA can review by
     exception instead of reading every row (2026-07-27).
@@ -3079,6 +3114,14 @@ def resolve_review(
         if charge_category.get("source") == ClassificationSource.EDITED.value:
             return _review("none")
         return _review("check", "No receipt is attached, so the tool guessed this category from the bank's description. Pick the right one on the row, or attach the receipt, before it posts.", "receiptless_suggested")
+    # A charge the GL engine refused is a question with a named reason, not
+    # a plain no-receipt row with no signal (`charge_categorization` is the
+    # raw categorization `charge_category` is the view of; None on the view
+    # means there is no category to show).
+    if charge_categorization is not None:
+        refused = _refusal_review([charge_categorization])
+        if refused is not None:
+            return refused
     return _review("none")
 
 
@@ -3639,6 +3682,7 @@ def build_view(
             matched_rec=matched_rec,
             overrides=overrides,
             charge_category=charge_cat_view,
+            charge_categorization=charge_cats.get(tx_id),
         )
         cards_flag: dict = {}
         scoped_rec = card_scope_view.get(held_doc) if held_doc else None
@@ -12161,6 +12205,7 @@ def _restore_set_aside_locked(
         client=llm_client,
         chart_of_accounts=account_labels,
         learned=learned,
+        entity_orgs=cfg.get(GL_ENTITY_ORGS_KEY),
     )
     restored = batch[0]
 
@@ -12582,6 +12627,9 @@ def _add_receipts_locked(
             client=llm_client,
             chart_of_accounts=account_labels,
             learned=learned,
+            # A batch created before the GL engine carries no map and keeps
+            # its bucket vocabulary for every receipt added later.
+            entity_orgs=cfg.get(GL_ENTITY_ORGS_KEY),
         )
 
     _stage("saving")
@@ -13777,6 +13825,7 @@ def rematch_month(
         # Note item M1: a receiptless charge takes its merchant's default
         # category from the same registry the month's receipts consult.
         registry=MerchantRegistry.from_settings(store.get_settings()),
+        entity_orgs=cfg.get(GL_ENTITY_ORGS_KEY),
     )
 
     _stage("saving")

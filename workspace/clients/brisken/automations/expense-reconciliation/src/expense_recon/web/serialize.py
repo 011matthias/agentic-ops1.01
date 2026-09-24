@@ -60,6 +60,9 @@ def categorization_to_dict(c: Categorization | None) -> dict | None:
         "source": c.source.value,
         "reasoning": c.reasoning,
         "decision": c.decision,
+        # Only a refusal carries one; omitted otherwise so every snapshot the
+        # bucket path writes stays byte-identical.
+        **({"refusal": c.refusal} if c.refusal else {}),
     }
 
 
@@ -81,6 +84,7 @@ def categorization_from_dict(d: dict | None) -> Categorization | None:
         reasoning=d.get("reasoning", ""),
         # .get keeps pre-WS2 snapshots loadable (no decision key).
         decision=d.get("decision"),
+        refusal=d.get("refusal"),
     )
 
 
