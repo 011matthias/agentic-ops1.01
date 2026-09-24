@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-24 | Brisken P1 Item 5 Category Leak Killed | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20P1%20Item%205%20Category%20Leak%20Killed/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken P1 Item 4 Category Table Retired | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20P1%20Item%204%20Category%20Table%20Retired/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken P1 Item 3 Follow-ups | client-dev | [→](docs/2026-09-24%20-%20Brisken%20P1%20Item%203%20Follow-ups/Checkpoint.md) |
 | 2026-09-24 | Recon In-Month Card Filter Scope Prompt | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20In-Month%20Card%20Filter%20Scope%20Prompt/Mini-Checkpoint-1.md) |
