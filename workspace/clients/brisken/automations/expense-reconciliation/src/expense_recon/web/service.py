@@ -12260,6 +12260,103 @@ def batch_write_lock() -> threading.Lock:
     return _BATCH_ADD_LOCK
 
 
+def recategorize_after_entity_change(
+    db_path, learning_db_path, run_id: str, document_id: str,
+) -> dict | None:
+    """Re-run the GL engine for ONE receipt after its company was set.
+
+    Owner decision 2026-09-24: a receipt that arrived with no company halts
+    with `entity_missing`, and assigning the company must categorize it
+    against THAT company's leaves, or every such receipt becomes a manual
+    pick. Also right when the company CHANGES: a leaf chosen for one entity
+    need not be postable in another.
+
+    Only a batch on the GL engine (its config carries `gl_entity_orgs`) is
+    touched; a bucket-era batch returns None and keeps its vocabulary. The
+    reviewer's own category overrides are separate rows and are never
+    touched here: this rewrites the TOOL's answer only, in both the current
+    receipts and the extraction baseline (the views and every re-match read
+    the baseline). The model call runs outside the batch lock; the write
+    re-reads the row inside it, like the add job. Returns what changed, or
+    None when there was nothing to do.
+    """
+    from ..categorize import categorize_receipts_with_registry
+
+    with RunStore(db_path) as store:
+        run = store.get_run(run_id)
+        if run is None:
+            return None
+        cfg = run.config or {}
+        entity_orgs = cfg.get(GL_ENTITY_ORGS_KEY)
+        if entity_orgs is None:
+            return None
+        base = next(
+            (r for r in baseline_receipts(run) if r.document_id == document_id),
+            None,
+        )
+        if base is None:
+            return None  # a manual add or a borrowed receipt: nothing extracted
+        default_entity = (cfg.get("expense") or {}).get("legal_entity_id", "")
+        entity = (
+            (store.get_expense_field_overrides(run_id).get(document_id) or {})
+            .get("legal_entity")
+            or base.legal_entity_id
+            or default_entity
+        )
+        registry = MerchantRegistry.from_settings(store.get_settings())
+    learned = (
+        MerchantCategoryLookup.from_db_path(learning_db_path)
+        if learning_db_path is not None else None
+    )
+    llm_client, _tracker, _src = _batch_llm_client(cfg)
+    (new,), _ = categorize_receipts_with_registry(
+        [replace(base, legal_entity_id=entity)],
+        registry=registry,
+        client=llm_client,
+        learned=learned,
+        entity_orgs=entity_orgs,
+    )
+
+    def _swap(d: dict) -> dict:
+        old = receipt_from_dict(d)
+        if len(old.line_items) == len(new.line_items):
+            items = tuple(
+                replace(li, categorization=n.categorization)
+                for li, n in zip(old.line_items, new.line_items)
+            )
+        else:
+            items = new.line_items
+        return receipt_to_dict(replace(old, line_items=items))
+
+    with _BATCH_ADD_LOCK:
+        with RunStore(db_path) as store:
+            fresh = store.get_run(run_id)
+            if fresh is None:
+                return None
+            snapshot = dict(fresh.snapshot or {})
+            touched = False
+            for key in ("receipts", EXTRACTED_RECEIPTS_KEY):
+                rows = snapshot.get(key)
+                if not isinstance(rows, list):
+                    continue
+                out = []
+                for d in rows:
+                    if isinstance(d, dict) and d.get("document_id") == document_id:
+                        d = _swap(d)
+                        touched = True
+                    out.append(d)
+                snapshot[key] = out
+            if not touched:
+                return None
+            store.update_run_snapshot(run_id, snapshot)
+    refusals = sorted({
+        li.categorization.refusal
+        for li in new.line_items
+        if li.categorization is not None and li.categorization.refusal
+    })
+    return {"document_id": document_id, "entity": entity, "refusals": refusals}
+
+
 def add_receipts_to_expense_batch(
     store: RunStore,
     run: RunRow,

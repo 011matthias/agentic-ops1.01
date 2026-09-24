@@ -176,6 +176,7 @@ from .service import (  # item 70
     EXPENSE_MATCH_FIELDS,
     category_edit_account,
     category_edit_receipt,
+    recategorize_after_entity_change,
 )
 from .service import (  # item 88
     MEMORY_TRIGGER_BUTTON,
@@ -4346,7 +4347,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return None
 
     async def _expense_edit_reply(
-        run_id: str, rematch_needed: bool, extra: dict | None = None
+        run_id: str, rematch_needed: bool, extra: dict | None = None,
+        *, recategorize: str | None = None,
     ) -> JSONResponse:
         """The reply every expense-edit route gives (item 70).
 
@@ -4358,7 +4360,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         re-match. Off the event loop, because `rematch_after_change` takes
         the batch lock and can call the model; after the edit is committed;
         its result or error under `rematch`, absent when nothing re-matched.
-        The summary is read AFTER it, so it describes the re-matched month."""
+        The summary is read AFTER it, so it describes the re-matched month.
+
+        `recategorize` names a receipt whose company just changed: on a GL
+        batch it is categorized again against the new company's leaves
+        (owner decision 2026-09-24), BEFORE the re-match reads the pool. A
+        failure rides back under `recategorized` like the re-match's does."""
+        recategorized = None
+        if recategorize:
+            try:
+                recategorized = await run_in_threadpool(
+                    recategorize_after_entity_change,
+                    app.state.db_path, app.state.learning_db_path, run_id,
+                    recategorize,
+                )
+            except Exception as exc:  # noqa: BLE001 - the edit is already written
+                recategorized = {"error": str(exc)}
         rematch = None
         if rematch_needed:
             rematch = await run_in_threadpool(
@@ -4373,6 +4390,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         out = {"ok": True, **(extra or {}), "summary": view["summary"]}
         if rematch is not None:
             out["rematch"] = rematch
+        if recategorized is not None:
+            out["recategorized"] = recategorized
         return JSONResponse(jsonable_encoder(out))
 
     @app.post("/api/expense-batches")
@@ -5178,7 +5197,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             )
             # Matching is entity-scoped, so a changed entity can move a pair.
             rematch_needed = has_statement(run) and before != entity
-        return await _expense_edit_reply(run_id, rematch_needed)
+        return await _expense_edit_reply(
+            run_id, rematch_needed,
+            recategorize=document_id if before != entity else None,
+        )
 
     @app.post("/api/runs/{run_id}/expenses/{document_id:path}/private")
     async def post_expense_private(run_id: str, document_id: str, request: Request):
@@ -5323,6 +5345,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if err is not None:
                 return err
             rematch_needed = False
+            recategorize = None
             # Item 41: a private confirmation is the PAIR (flag + who
             # gets reimbursed). This one-field-at-a-time route cannot
             # set both, so the flag alone is refused unless reimburse_to
@@ -5450,7 +5473,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     and field in EXPENSE_MATCH_FIELDS
                     and before != value
                 )
-        return await _expense_edit_reply(run_id, rematch_needed)
+                # Owner decision 2026-09-24: a company set (or changed) here
+                # re-categorizes the receipt against that company's leaves.
+                if field == "legal_entity" and before != value:
+                    recategorize = document_id
+        return await _expense_edit_reply(
+            run_id, rematch_needed, recategorize=recategorize)
 
     @app.post("/api/runs/{run_id}/expenses")
     async def post_expense_add(run_id: str, request: Request):
