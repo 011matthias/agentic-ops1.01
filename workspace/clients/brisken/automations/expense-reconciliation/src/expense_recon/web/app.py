@@ -138,6 +138,7 @@ from .service import (
     create_expense_batch,
     create_intake,
     delete_trip_entity,
+    discard_unrecorded_upload,
     execute_expense_batch,
     execute_run,
     execute_statement_attach,
@@ -971,6 +972,12 @@ def _run_attach_statement_job(
             store.set_job_status(
                 job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
             )
+            try:
+                # Leftover of item 196: a dead attach took its file's name
+                # with it, and the retry was stored as `-2`.
+                discard_unrecorded_upload(store.get_run(run_id), stmt_name)
+            except Exception:  # noqa: BLE001 - cleanup is best-effort
+                log.warning("could not remove the failed upload %s", stmt_name)
 
 
 # Item 114: a drop's files are on the volume (/data/drops/<job>) before its

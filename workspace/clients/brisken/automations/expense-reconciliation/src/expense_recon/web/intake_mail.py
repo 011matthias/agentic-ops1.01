@@ -1050,6 +1050,12 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
                 row["not_added"] = meta["not_added"]
             if meta.get("error"):
                 row["error"] = meta["error"]
+            if row.get("status") == STATUS_INGESTED:
+                # An ingested mail has no current error. A failed first try
+                # (the 2026-09-24 429 on a render) leaves its text on the
+                # archive and on the row logged at the time, and both stay
+                # there as the record; the row just stops presenting it.
+                row.pop("error", None)
             # Month-pool stamps (2026-08-24): which month this mail's
             # receipts belong to, and how that month was decided.
             if meta.get("receipt_month"):
