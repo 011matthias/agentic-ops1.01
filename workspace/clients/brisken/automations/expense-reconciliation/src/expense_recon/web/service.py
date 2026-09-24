@@ -45,7 +45,11 @@ from ..cli import (  # item 105
     keep_invoice_read_as_statement,
 )
 from ..coa_provision import apply_to_config as apply_coa_provisioning
-from ..coa_provision import GL_ENTITY_ORGS_KEY, entity_from_settings
+from ..coa_provision import (
+    GL_ENTITY_ORGS_KEY,
+    entity_from_settings,
+    org_id_for_entity,
+)
 from ..correspondence import quarantine_correspondence
 from ..error_codes import Refusal, code_of, detail_of, fields_of
 from ..duplicates import (
@@ -106,6 +110,7 @@ from ..cost_centers import (
 )
 from ..cost_centers import CostCenterRegistry, CostCenterResolution
 from ..category_vocabulary import gl_account_options, gl_revision
+from ..zoho import curated_leaves
 from ..merchant_registry import (
     MerchantRegistry,
     drop_unvouched_remembered_cards,
@@ -1290,11 +1295,19 @@ def _candidates_by_tx(outcome: MatchOutcome) -> dict[str, list[Match]]:
 
 
 def apply_overrides(
-    receipts: list[Receipt], overrides: dict[tuple[str, int], dict]
+    receipts: list[Receipt],
+    overrides: dict[tuple[str, int], dict],
+    *,
+    entity_orgs: dict | None = None,
+    entity_by_doc: dict[str, str] | None = None,
 ) -> list[Receipt]:
     """Return receipts with reviewer category reclassifications applied to
     the named line items. Frozen dataclasses, so each change is a
-    `replace`, not a mutation."""
+    `replace`, not a mutation. `entity_orgs` is the month's GL map
+    (`gl_run_entity_orgs`); on a GL month a picked code reads its account
+    name in the receipt's company (item 201): `entity_by_doc[doc]` when the
+    caller resolved the row's company (`resolved_entities`), else the
+    receipt's own stamp."""
     if not overrides:
         return receipts
     out: list[Receipt] = []
@@ -1313,7 +1326,12 @@ def apply_overrides(
                             # Item 70: the line's own account only survives
                             # an override that keeps its category.
                             zoho_account=ov.get("zoho_account")
-                            or override_base_account(ov["category"], base),
+                            or override_base_account(
+                                ov["category"], base,
+                                entity=(entity_by_doc or {}).get(r.document_id)
+                                or r.legal_entity_id,
+                                entity_orgs=entity_orgs,
+                            ),
                             confidence=1.0,
                             source=ClassificationSource.LINE,
                             reasoning="reclassified by reviewer",
@@ -2650,7 +2668,12 @@ def charge_category_key(transaction_id: str) -> tuple[str, int]:
 
 
 def apply_charge_category_overrides(
-    charge_cats: dict, overrides: dict, charge_ids
+    charge_cats: dict,
+    overrides: dict,
+    charge_ids,
+    *,
+    entity_orgs: dict | None = None,
+    charge_entities: dict | None = None,
 ) -> dict:
     """The receiptless-charge categorization map with the reviewer's own
     picks laid over the tool's guesses (item 109).
@@ -2664,7 +2687,10 @@ def apply_charge_category_overrides(
     A reviewer's pick reads `source=EDITED` and keeps the account she named,
     or the guess's own account when she re-picked the guess's category
     (`override_base_account`, the rule the receipt lines use). Clearing the
-    pick (a stored NULL category) leaves the tool's guess showing."""
+    pick (a stored NULL category) leaves the tool's guess showing.
+
+    On a GL month (`entity_orgs`), a picked code reads its account name in
+    the charge's own company, `charge_entities[tx_id]` (item 201)."""
     from ..categorize_charges import CHARGE_DOC_PREFIX
 
     allowed = set(charge_ids)
@@ -2685,7 +2711,11 @@ def apply_charge_category_overrides(
             category=category,
             zoho_account=(
                 (ov or {}).get("zoho_account")
-                or override_base_account(category, base)
+                or override_base_account(
+                    category, base,
+                    entity=(charge_entities or {}).get(tx_id),
+                    entity_orgs=entity_orgs,
+                )
             ),
             confidence=1.0,
             source=ClassificationSource.EDITED,
@@ -2698,6 +2728,9 @@ def _row_posting_category(
     matched_receipt: "Receipt | None",
     overrides: dict[tuple[str, int], dict],
     charge_cat_view: dict | None,
+    *,
+    entity_orgs: dict | None = None,
+    entity: str | None = None,
 ) -> dict | None:
     """The category + Zoho account a charge will post to, resolved onto the
     workbench row (2026-07-27).
@@ -2728,7 +2761,11 @@ def _row_posting_category(
                 category = ov["category"]
                 # Item 70: same rule as `apply_overrides` -- a reclassified
                 # line never keeps the account chosen for its old category.
-                account = ov.get("zoho_account") or override_base_account(category, base)
+                account = ov.get("zoho_account") or override_base_account(
+                    category, base,
+                    entity=entity or matched_receipt.legal_entity_id,
+                    entity_orgs=entity_orgs,
+                )
                 src = "EDITED"
             elif base is not None:
                 category = base.category
@@ -3319,6 +3356,8 @@ def build_view(
         },
         overrides,
         outcome.unmatched_transactions,
+        entity_orgs=gl_run_entity_orgs(run),
+        charge_entities={t.transaction_id: t.legal_entity_id for t in transactions},
     )
 
     # PR C — line items the cross-run memory auto-filled (Tier-1 LEARNED),
@@ -3680,7 +3719,8 @@ def build_view(
         # once here so the SPA groups + bulk-confirms with no logic of its own.
         charge_cat_view = _charge_category_view(charge_cats.get(tx_id))
         posting_category = _row_posting_category(
-            matched_rec, overrides, charge_cat_view
+            matched_rec, overrides, charge_cat_view,
+            entity_orgs=gl_run_entity_orgs(run),
         )
         # Item 70: a needs-review row holds no receipt until confirmed, so a
         # category set on its candidate saved and never showed. Show the one
@@ -3688,7 +3728,9 @@ def build_view(
         # readiness below still reads `matched_rec`, which stays None.
         proposed_flag: dict = {}
         if matched_rec is None and effective_bucket == "review":
-            proposed = proposed_posting_category(cands, rec_by_id, overrides)
+            proposed = proposed_posting_category(
+                cands, rec_by_id, overrides, entity_orgs=gl_run_entity_orgs(run)
+            )
             if proposed is not None:
                 posting_category = proposed
                 proposed_flag = {"posting_category_proposed": True}
@@ -4416,6 +4458,12 @@ def _charge_cats(run: RunRow, overrides: dict, charge_ids) -> dict:
         },
         overrides,
         charge_ids,
+        entity_orgs=gl_run_entity_orgs(run),
+        charge_entities={
+            d.get("transaction_id"): d.get("legal_entity_id")
+            for d in (run.snapshot or {}).get("transactions") or []
+            if isinstance(d, dict)
+        },
     )
 
 
@@ -4425,7 +4473,7 @@ def regenerate_report(
     """Write the xlsx report for a run with the reviewer's decisions +
     category overrides applied. Returns the path."""
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
-    receipts = apply_overrides(receipts, overrides)
+    receipts = apply_overrides(receipts, overrides, entity_orgs=gl_run_entity_orgs(run))
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     out_path = Path(run.work_dir) / "report.xlsx"
     write_report(
@@ -4485,7 +4533,7 @@ def regenerate_zoho(
     the web export gets the same protection as the CLI path.
     """
     transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
-    receipts = apply_overrides(receipts, overrides)
+    receipts = apply_overrides(receipts, overrides, entity_orgs=gl_run_entity_orgs(run))
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     # PR-E: a reviewer-marked already_posted charge never reaches the
     # journal (the fill-color "posted" path is excluded inside the writer;
@@ -4552,7 +4600,7 @@ def regenerate_reconciled(
     fields populate the reference columns.
     """
     transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
-    receipts = apply_overrides(receipts, overrides)
+    receipts = apply_overrides(receipts, overrides, entity_orgs=gl_run_entity_orgs(run))
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     out_path = Path(run.work_dir) / "reconciled.csv"
     write_reconciled_csv(
@@ -4636,7 +4684,7 @@ def regenerate_writeback(
         return None
 
     transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
-    receipts = apply_overrides(receipts, overrides)
+    receipts = apply_overrides(receipts, overrides, entity_orgs=gl_run_entity_orgs(run))
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     stmt_cfg = run.config.get("statement", {})
     # The sheet this workbook was read from. `config.statement` describes the
@@ -7391,7 +7439,7 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
         # categorized pair counts the same expenses `n_expenses` does.
         counted = [r for r in receipts if r.document_id not in copies]
         n_categorized, n_uncategorized = categorized_counts(
-            apply_overrides(counted, overrides)
+            apply_overrides(counted, overrides, entity_orgs=gl_run_entity_orgs(run))
         )
     except (KeyError, TypeError, ValueError):
         # A malformed snapshot hides ONE batch's counts (it keeps the stored
@@ -7484,7 +7532,6 @@ def build_expense_view(
     # account here and as its category in the CSV for the same purchase.
     grid_gate = _coa_gate_from_config(run.config, run.work_dir)
     grid_chart = getattr(grid_gate, "chart", None) if grid_gate is not None else None
-    ov_by_doc = {x.document_id: x for x in gated_for_posting(apply_overrides(receipts, overrides), grid_gate)}
 
     n_learned_lines = 0
     for r in receipts:
@@ -7535,6 +7582,13 @@ def build_expense_view(
         settled_outside=grid_settled_outside,
         merchants=(settings or {}).get("merchants"),
     )
+    # Item 201: on a GL month a picked leaf code reads its account name in
+    # the company the row SHOWS (the card chain's answer above), which can be
+    # set where the receipt's own stamp is blank. The export does the same.
+    ov_by_doc = {x.document_id: x for x in gated_for_posting(apply_overrides(
+        receipts, overrides, entity_orgs=gl_run_entity_orgs(run),
+        entity_by_doc=resolved_entities(card_res),
+    ), grid_gate)}
     # Item 47: the cost-center chain, over the same pass's cards. Silent
     # for every row while the owner has defined no cost centers.
     cost_res = resolve_batch_row_cost_centers(
@@ -7655,7 +7709,10 @@ def build_expense_view(
                 or r.document_id.startswith("manual:")
             ),
         )
-        posting = _row_posting_category(r, overrides, None)
+        posting = _row_posting_category(
+            r, overrides, None, entity_orgs=gl_run_entity_orgs(run),
+            entity=res["entity"],
+        )
         # Expense grid shows WHY the category is what it is in the reviewer's
         # coarse vocabulary (registry | learned | llm | override); the fine
         # tiers stay on each line item and on the reconcile workbench.
@@ -8326,7 +8383,6 @@ def _expense_export_inputs(
     receipts = fill_remembered_cards(
         receipts, learning_db_path, merchants
     )  # export
-    receipts = apply_overrides(receipts, overrides)
     coa_gate = _coa_gate_from_config(run.config, run.work_dir)
     chart = getattr(coa_gate, "chart", None) if coa_gate is not None else None
     customer_by_doc = {
@@ -8340,6 +8396,12 @@ def _expense_export_inputs(
     card_res = resolve_batch_row_cards(
         receipts, run.config, field_overrides, settled_cards=settled_cards,
         merchants=merchants,
+    )
+    # After the card pass (which reads no category) so item 201's account
+    # name resolves in the company this row exports under, as on the grid.
+    receipts = apply_overrides(
+        receipts, overrides, entity_orgs=gl_run_entity_orgs(run),
+        entity_by_doc=resolved_entities(card_res),
     )
     # Item 41: a confirmed private expense was paid out of somebody's
     # pocket. In the one-file export it stays a row (mixed-entity ruling:
@@ -13936,7 +13998,7 @@ def rematch_month(
         bake_input, field_overrides, edits,
         category_overrides=overrides, default_entity=batch_entity,
     )
-    receipts = apply_overrides(receipts, overrides)
+    receipts = apply_overrides(receipts, overrides, entity_orgs=gl_run_entity_orgs(run))
     # Item 69 round A: the kept copy of a document inherits the card its
     # copies name, BEFORE the card chain below, so the chain derives the
     # entity from the inherited card and an invoice copy whose receipt copy
@@ -15177,10 +15239,55 @@ EXPENSE_MATCH_FIELDS = frozenset({
 })
 
 
-def override_base_account(override_category: str | None, base) -> str | None:
+def gl_run_entity_orgs(run) -> dict | None:
+    """The month's frozen entity -> Zoho org map, or None on a bucket month."""
+    return ((run.config or {}) if run is not None else {}).get(GL_ENTITY_ORGS_KEY)
+
+
+def resolved_entities(card_res: dict[str, dict]) -> dict[str, str]:
+    """document_id -> the company `resolve_batch_row_cards` resolved for the
+    row, the one the grid shows and the export writes; blanks left out."""
+    return {doc: res["entity"] for doc, res in card_res.items() if res.get("entity")}
+
+
+def gl_leaf_account_name(
+    code: str | None, entity: str | None, entity_orgs: dict | None
+) -> str | None:
+    """Item 201: the account a curated leaf CODE names in this row's company.
+
+    On a GL month the category IS the account: a hand pick stores only the
+    code (`E100010-31`), and the name the export needs sits in the company's
+    curated chart. Resolved at READ time from the row's company as it stands
+    now, never stored at save time, so a company change afterwards reads the
+    new company's wording (`CorpServ | Travel Expense | Food` against
+    `Travel Expense | Food` for the same code).
+
+    Returns the same name the engine stamps for its own pick
+    (`categorize._gl_categorization`). None on a bucket month (no map), for a
+    blank or uncurated company, and for a code this company cannot post to:
+    the row then keeps its visible "(account unmapped - assign)".
+    """
+    if not entity_orgs or not code:
+        return None
+    org_id = org_id_for_entity(entity, entity_orgs)
+    if not curated_leaves.is_postable(org_id, code):
+        return None
+    binding = curated_leaves.binding(code, org_id)
+    return binding.name if binding is not None else None
+
+
+def override_base_account(
+    override_category: str | None,
+    base,
+    *,
+    entity: str | None = None,
+    entity_orgs: dict | None = None,
+) -> str | None:
     """The account a category override inherits from the line's own
     categorization: the line's account when the override KEEPS the line's
-    category, None when it changes it.
+    category, None when it changes it. On a GL month (`entity_orgs` given) a
+    changed category is a leaf code, and the account is that code's name in
+    the row's company (item 201, `gl_leaf_account_name`).
 
     An account is chosen for a category (the categorizer's pick from the
     chart, the report's account, a merchant default). Reclassifying the line
@@ -15192,11 +15299,11 @@ def override_base_account(override_category: str | None, base) -> str | None:
     no account: the export shows its visible "(account unmapped - assign)"
     placeholder when a chart is wired and the category label when none is,
     never a guessed account."""
-    if base is None or not override_category:
+    if not override_category:
         return None
-    if base.category != override_category:
-        return None
-    return base.zoho_account
+    if base is not None and base.category == override_category and base.zoho_account:
+        return base.zoho_account
+    return gl_leaf_account_name(override_category, entity, entity_orgs)
 
 
 def category_edit_account(
@@ -15253,6 +15360,8 @@ def proposed_posting_category(
     candidates: list[dict],
     rec_by_id: dict,
     overrides: dict,
+    *,
+    entity_orgs: dict | None = None,
 ) -> dict | None:
     """The posting category a needs-review row will book to once confirmed.
 
@@ -15273,7 +15382,9 @@ def proposed_posting_category(
         rec = rec_by_id.get(doc)
         if rec is None:
             continue
-        hit = _row_posting_category(rec, overrides, None)
+        hit = _row_posting_category(
+            rec, overrides, None, entity_orgs=entity_orgs
+        )
         if hit is not None:
             return hit
     return None
