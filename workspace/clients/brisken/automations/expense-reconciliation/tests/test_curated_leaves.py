@@ -146,16 +146,28 @@ def test_a_code_absent_from_one_org_is_distinguishable_from_a_bad_code():
 
 
 def test_the_postable_counts_are_dirks_own():
-    """Guards a silent partial load. 68/67/64 are his marks, not ours."""
+    """Guards a silent partial load.
+
+    CorpServ's 68 are Dirk's own marks. BCS and BTS were derived by us under
+    his scheme and stood at 67 / 64 until the owner ruled on 2026-09-24 that
+    the five SPOT-CHECK rows we had derived as Y become N: `Travel Expense:
+    Per diem` (BCS), `Tax Management Services - Holding` (BCS and BTS, code
+    E900020), `R&D` (BCS), `COGS - CONS - Travel Expense (Third Party
+    Reimbursement)` (BTS). Each showed zero card usage across 24 months, and
+    under direct-to-GL a refusal is cheap where a silent mis-post is not. So
+    64 / 62, and 194 postable in total. Reversible when Dirk rules."""
     assert len(cl.postable_codes(CORPSERV)) == 68
-    assert len(cl.postable_codes(CLOUD)) == 67
-    assert len(cl.postable_codes(CONSULTING)) == 64
+    assert len(cl.postable_codes(CLOUD)) == 64
+    assert len(cl.postable_codes(CONSULTING)) == 62
+    assert sum(
+        len(cl.postable_codes(org)) for org in (CORPSERV, CLOUD, CONSULTING)
+    ) == 194
 
 
 def test_the_asset_records_which_sheet_it_came_from():
     """Two runs are only comparable if the chart behind them is identified."""
-    assert cl.curated_revision() == "2026-09-23"
-    assert len(cl.source_sha256()) == 64
+    assert cl.curated_revision() == "2026-09-24"
+    assert len(cl.source_sha256()) == 64  # a sha256 hex digest, not a count
 
 
 def test_every_postable_leaf_carries_a_display_category():

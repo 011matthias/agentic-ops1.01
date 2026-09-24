@@ -31,7 +31,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..matching.types import ClassificationSource, MatchOutcome, Receipt, Transaction
-from .store import LearningStore, normalize_vendor
+from .store import LearningStore, category_is_human, normalize_vendor
 
 # Line-item category sources we treat as a real, learnable category. After
 # an override, web.service rewrites the line as source=LINE with reasoning
@@ -344,13 +344,27 @@ def _learn_categories(
     under the direct-to-GL design the account is the answer, so two rows
     naming different accounts are as much a conflict as two naming different
     categories, and both skip the vendor rather than letting the first row
-    win. A row that names NO account is silent rather than dissenting."""
+    win. A row that names NO account is silent rather than dissenting.
+
+    **Only a person's own category is teachable (2026-09-24 owner ruling:
+    only corrections are memorized).** An override row stores a category in
+    two cases where nobody stated one - the note-#62 Confirm, which keeps the
+    model's guess as it stands, and an account-only PUT, which re-stores the
+    line's current category beside the account she did name - and both used
+    to arrive here indistinguishable from a reclassification. They now read
+    `category_source=inherited` and their CATEGORY is dropped: it is not hers
+    to teach, and it does not get a vote in the conflict test either (a
+    machine guess disagreeing with a human statement is not a disagreement).
+    Her ACCOUNT still teaches, because that is the correction she made, and
+    dropping it would lose the one fact the direct-to-GL chain most needs.
+    Absence of provenance reads as human, per `category_is_human`."""
     # (legal_entity_id, vendor_norm) -> {"category","zoho_account","conflict"}
     pending: dict[tuple[str, str], dict] = {}
 
     for (document_id, _line_index), ov in category_overrides.items():
-        category = ov.get("category")
-        if not category:
+        category = ov.get("category") if category_is_human(ov) else None
+        account = ov.get("zoho_account")
+        if not category and not account:
             continue
         r = rec_by_id.get(document_id)
         if r is None or not r.detected_vendor:
@@ -359,7 +373,6 @@ def _learn_categories(
         if not vnorm:
             continue
         key = (r.legal_entity_id, vnorm)
-        account = ov.get("zoho_account")
         prior = pending.get(key)
         if prior is None:
             pending[key] = {
@@ -368,15 +381,20 @@ def _learn_categories(
                 "conflict": False,
             }
             continue
-        if prior["category"] != category:
-            prior["conflict"] = True
+        # Absence is not disagreement, now on BOTH halves. A row whose
+        # category is the model's carries none here, so the first row that
+        # NAMES a category wins over rows that name none, and only two
+        # named, different categories conflict. This is the rule item 183
+        # gave the account, applied to the category for the same reason.
+        if category:
+            if not prior["category"]:
+                prior["category"] = category
+            elif prior["category"] != category:
+                prior["conflict"] = True
         # Item 183, the half that matters most: this table IS Tier 1 of the
         # direct-to-GL chain, consulted before the model. Two rows agreeing
         # on the category and naming different accounts used to agree, and
-        # the first account won silently. Absence is not disagreement: a row
-        # naming no account is silent, so the first account NAMED wins over
-        # rows that name none, and only two named, different accounts
-        # conflict.
+        # the first account won silently.
         if account:
             if not prior["zoho_account"]:
                 prior["zoho_account"] = account
@@ -399,6 +417,10 @@ def _learn_categories(
             # the reviewer said nothing about where it posts, which must not
             # read as "forget what you learned".
             keep_account=not val["zoho_account"],
+            # The mirror: no category of HERS among this vendor's edits means
+            # she said nothing about the category, so a stored one survives
+            # and the model's guess never replaces it.
+            keep_category=not val["category"],
         )
         n_category += 1
 

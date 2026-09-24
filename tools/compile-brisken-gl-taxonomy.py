@@ -9,9 +9,14 @@ Run by hand, by a human who has the workbook, when Dirk re-issues the sheet.
 Never at runtime. The output is committed and reviewed as a diff.
 
     uv run tools/compile-brisken-gl-taxonomy.py \\
-        --workbook "<gitignored>/CoA-expense-relevant-BCS-BTS-260923.xlsx" \\
-        --revision 2026-09-23 \\
-        --expected-counts 697686691=67,808232536=64,822741658=68
+        --workbook "<gitignored>/CoA-expense-relevant-BCS-BTS-260924.xlsx" \\
+        --revision 2026-09-24 \\
+        --expected-counts 697686691=64,808232536=62,822741658=68
+
+The workbook itself is produced by `context/expense-reconciliation/
+derive_expense_relevant.py` from Dirk's own sheet; re-run that first when he
+re-issues one. The counts above are the post-2026-09-24 figures (the owner's
+SPOT-CHECK flip took BCS 67 -> 64 and BTS 64 -> 62, 194 postable in total).
 
 `--check` recompiles to memory and byte-compares against the committed asset,
 exiting non-zero on drift, so a hand-edited asset is caught.

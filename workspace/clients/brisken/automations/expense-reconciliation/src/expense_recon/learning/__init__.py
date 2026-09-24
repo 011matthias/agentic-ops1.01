@@ -32,12 +32,16 @@ from .consult import (
     MerchantEntityLookup,
 )
 from .store import (
+    CATEGORY_SOURCE_HUMAN,
+    CATEGORY_SOURCE_INHERITED,
+    CATEGORY_SOURCES,
     FieldCorrection,
     LearningStore,
     MerchantCategory,
     MerchantEntity,
     MerchantFx,
     VendorAlias,
+    category_is_human,
     normalize_vendor,
 )
 
@@ -55,6 +59,10 @@ __all__ = [
     "VendorAlias",
     "MerchantFx",
     "normalize_vendor",
+    "CATEGORY_SOURCE_HUMAN",
+    "CATEGORY_SOURCE_INHERITED",
+    "CATEGORY_SOURCES",
+    "category_is_human",
     "LearnSummary",
     "ExpenseLearnSummary",
     "learn_confirmed_pairs",

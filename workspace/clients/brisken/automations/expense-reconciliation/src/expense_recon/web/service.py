@@ -70,6 +70,8 @@ from ..matching.types import (
     Transaction,
 )
 from ..learning import (
+    CATEGORY_SOURCE_HUMAN,
+    CATEGORY_SOURCE_INHERITED,
     ExpenseMemory,
     LearningStore,
     MatchMemory,
@@ -2942,8 +2944,16 @@ def confirm_expense_category(
     #62). Writes one category override per line holding that line's current
     category and account, so a multi-line receipt keeps each line's own
     category (the generic category PUT sets every line to one value). The
-    row then reads `EDITED` provenance: ready on the category, and taught
-    at sign-off like any other correction. Returns an error, or None."""
+    row then reads `EDITED` provenance: ready on the category, so it stops
+    asking her to look.
+
+    It is NOT taught at sign-off (2026-09-24 owner ruling: only corrections
+    are memorized). Keeping a guess as it stands says the row needs no more
+    of her attention; it is not her stating the category, and the line this
+    writes says so with `category_source=inherited`. A line that already held
+    a category of HERS keeps its own provenance instead of being downgraded
+    by the confirm, which is reachable on the item-105 kept invoice where
+    only some lines are hers. Returns an error, or None."""
     rec = category_edit_receipt(store, run, document_id)
     if rec is None:
         return Refusal("unknown expense", code="expense_not_found")
@@ -2957,12 +2967,18 @@ def confirm_expense_category(
     for i, li in enumerate(rec.line_items):
         ov = overrides.get((document_id, i)) or {}
         base = li.categorization
-        category = ov.get("category") or (base.category if base else None)
+        if ov.get("category"):
+            category = ov["category"]
+            source = ov.get("category_source") or CATEGORY_SOURCE_HUMAN
+        else:
+            category = base.category if base else None
+            source = CATEGORY_SOURCE_INHERITED
         # The same account rule as the category PUT re-sending the current
         # category: a picked account stays, else the line's own is inherited.
         account = category_edit_account(category, None, ov, base)
         store.set_category_override(
-            run.run_id, document_id, i, category, account, now_iso
+            run.run_id, document_id, i, category, account, now_iso,
+            category_source=source,
         )
     return None
 
@@ -3011,7 +3027,11 @@ def set_charge_category(
         category, zoho_account, overrides.get((document_id, line_index)), base
     )
     store.set_category_override(
-        run.run_id, document_id, line_index, category or None, account, now_iso
+        run.run_id, document_id, line_index, category or None, account, now_iso,
+        # Item 109's control is a category picker: whatever arrives here is
+        # the category she chose for this charge (or a clear), never a guess
+        # carried along.
+        category_source=CATEGORY_SOURCE_HUMAN,
     )
     return None
 
@@ -5130,10 +5150,7 @@ def commit_to_memory(
                     transactions=txs,
                     receipts=pool,
                     outcome=apply_decisions(pool_outcome, txs, pool, decisions),
-                    confirmed_tx_ids={
-                        tx_id for tx_id, d in (decisions or {}).items()
-                        if d.status == STATUS_CONFIRMED
-                    },
+                    confirmed_tx_ids=reviewer_confirmed_tx_ids(decisions),
                     source_run=run.run_id,
                     now_iso=now_iso,
                 )
@@ -5219,9 +5236,7 @@ def commit_to_memory(
 
     transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
     effective = apply_decisions(outcome, transactions, receipts, decisions)
-    confirmed_tx_ids = {
-        tx_id for tx_id, d in decisions.items() if d.status == STATUS_CONFIRMED
-    }
+    confirmed_tx_ids = reviewer_confirmed_tx_ids(decisions)
     with store_factory(learning_db_path) as store:
         summary = learn_from_run(
             store,
@@ -15217,6 +15232,12 @@ def move_expense_to_month(
                 store.set_category_override(
                     target.run_id, new_doc, line,
                     ov.get("category"), ov.get("zoho_account"), now_iso,
+                    # Moving a receipt between months copies her decisions
+                    # verbatim; whose category it was does not change with
+                    # the month it sits in.
+                    category_source=(
+                        ov.get("category_source") or CATEGORY_SOURCE_HUMAN
+                    ),
                 )
         store.set_expense_edit(
             source.run_id, document_id, "delete",
@@ -15559,6 +15580,28 @@ TURN_NONE = "none"
 
 DECIDED_BY_TOOL = "tool"
 DECIDED_BY_REVIEWER = "reviewer"
+
+
+def reviewer_confirmed_tx_ids(decisions: dict | None) -> set[str]:
+    """The charges a PERSON confirmed, which is what the alias and per-merchant
+    FX learners may learn from (2026-09-24 owner ruling: only corrections are
+    memorized).
+
+    `apply_self_confirmations` writes STATUS_CONFIRMED with
+    `decided_by = tool` after every re-match commit, and most matches in a
+    real month are tool-confirmed. Both learning paths used to filter on the
+    status alone, so pairings nobody had looked at taught durable vendor
+    aliases and FX rates, which is the opposite of "confirming a match is
+    Chris asserting this charge IS this receipt" that `learn_confirmed_pairs`
+    justifies itself with.
+
+    A NULL `decided_by` counts as a person: every such row predates the
+    column and was written by one (or by a disposition seed that left the
+    status pending, which this filter excludes anyway on status)."""
+    return {
+        tx_id for tx_id, d in (decisions or {}).items()
+        if d.status == STATUS_CONFIRMED and d.decided_by != DECIDED_BY_TOOL
+    }
 
 SELF_CONFIRM_RULE = "exact_vendor_75"
 SELF_CONFIRM_VENDOR_FLOOR = 75

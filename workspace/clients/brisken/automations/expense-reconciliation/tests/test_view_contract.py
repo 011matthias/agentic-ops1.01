@@ -55,6 +55,7 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from expense_recon.learning import CATEGORY_SOURCE_HUMAN  # noqa: E402
 from expense_recon.llm.client import ExtractedReceipt, MockLLMClient  # noqa: E402
 from expense_recon.matching.types import (  # noqa: E402
     CellFill,
@@ -897,7 +898,7 @@ def test_posting_category_proposed_is_absent_or_true_never_false(
         store = RunStore(tmp_path / "recon-web.sqlite")
         store.set_category_override(
             "contract-synth", "d2", 0, "Office Supplies & Consumables", None,
-            "2026-09-15T00:00:00",
+            "2026-09-15T00:00:00", category_source=CATEGORY_SOURCE_HUMAN,
         )
         store.close()
         after = client.get("/api/runs/contract-synth").json()
