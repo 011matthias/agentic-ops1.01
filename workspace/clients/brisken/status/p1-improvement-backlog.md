@@ -9348,7 +9348,12 @@ the list, so a subcard never nests under a tab the strip does not show.
 Figures untouched: the account's count stays its own. Tests
 `tests/test_card_status_subcards_item_191.py` (5, route-level);
 `tools/regress_check.py` red on both wiring points (the route's `parents=`
-argument, and the per-row stamp).
+argument, and the per-row stamp). PR #1310, merge `fe8699ee`, deployed; live
+`/healthz` commit `fe8699ee`, all ten cards carry both fields, none nested.
+Cold Chrome drive of `/months` after the deploy: the published strip reads
+`All | 2838 111 | 3645 85 | 3876 85 | 0340 34 | 1176 3 | 4700 2 | No card`, one
+tablist, and picks give 3645 September/August/July/June/April, 2838 six months,
+0340 July/April, which is the prompt's check table.
 
 **SPA half:** `docs/lovable-months-subcards-prompt.md`. `CardStrip` gains a
 `nestSubcards` prop that only `/months` passes; subcards leave the top row and
