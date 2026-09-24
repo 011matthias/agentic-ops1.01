@@ -21,8 +21,8 @@ into tiers, feeding the precision-LinkedIn cohort. List-building is autonomous
 other workstream reads this one: the campaigns moved onto the Lead Desk, whose
 critical path is Dirk's September review packet (memory
 `project_brisken_campaigns_fully_on_lead_desk`). The rows below are the July state,
-not work in flight. The one live instruction is Dirk's 07-22 reply on the Nestle
-list (row below), which is still unfulfilled.
+not work in flight. The one live instruction was Dirk's 07-22 reply on the Nestle
+list (row below): the filing half is done, the Zoho rename is not.
 
 ## Elements
 
@@ -33,7 +33,7 @@ list (row below), which is still unfulfilled.
 | Weekly sweep runbook | done | Cadence runbook written | Run on go-live | Green-light to contact | `context/lead-generation/targeting/weekly-sweep-runbook.md` |
 | Named accounts (Colgate, Corteva) | in-progress | Colgate/Corteva tagged A1 | Build the MDH teardown + ABM 1-pager (named logos cleared) | none | `context/lead-generation/accounts/account-colgate.md` |
 | Co-sell + vendor matrix (enabler pack) | in-progress | Parts 1-2 ready | Hand to Dirk as the parallel workstream | Dirk vendor relationships | `context/lead-generation/accounts/dirk-enabler-pack.md` |
-| Nestle StratiFy list (S/4 hypercare) | parked by Dirk | 214 recipients, tiered, sent to Dirk 07-22. **His answer the same day** (Graph read 2026-09-24, Matthias's inbox): "maybe not a high value activity right now", file the list under the lists in SharePoint with a comment on where it came from and the analysis, change "Ortega" to "Dorta" in Zoho, and move on. So the LinkedIn enrichment is off. Not yet done: a SharePoint search of the MARKETING site for StratiFy/Nestle list files finds none (control query found the MDH decks), and the Zoho rename is unverified | File the list + analysis where Dirk keeps lists; rename the Zoho contact | Both are writes to Brisken's live systems: owner yes per action | `context/lead-generation/nestle-stratifi-analysis.md` + `nestle-stratifi-contacts.csv` |
+| Nestle StratiFy list (S/4 hypercare) | parked by Dirk | 214 recipients, tiered, sent to Dirk 07-22. **His answer the same day** (Graph read 2026-09-24, Matthias's inbox): "maybe not a high value activity right now", file the list under the lists in SharePoint with a comment on where it came from and the analysis, change "Ortega" to "Dorta" in Zoho, and move on. So the LinkedIn enrichment is off. **Filed 2026-09-24** (owner yes): `MARKETING/60_Campaigns/05 - Lists/NESTLE STRATIFY LIST 2026-07/` holds the exact xlsx Dirk was sent (pulled from the 07-22 Sent Items attachment; downloaded back and cell-identical on all 3 tabs, 59/216/20 rows) plus a README on source, method and his ruling. **Zoho rename NOT done:** the contact still reads "Daniel Ortega" (id 1343217000029348091, @es.nestle.com, no account linked; no "Dorta" exists), and the CRM token carries only `contacts.READ` + `accounts.READ`, so the API cannot write it | Rename Ortega to Dorta in the Zoho UI (and link the contact to the Nestle account) | LIMITATION: read-only CRM token; Dirk's same reply says Matthias's Zoho CRM access still needs fixing | `context/lead-generation/nestle-stratifi-analysis.md` + `nestle-stratifi-contacts.csv` |
 
 ## Open decisions / gates
 
