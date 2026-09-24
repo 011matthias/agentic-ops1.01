@@ -57,14 +57,19 @@ row review as `category_refused`. `POST /api/runs/{id}/categories` clears on
 keep buckets. The ER-report account posting path (`zoho/accounts.py` via
 `category_accounts.py`) is untouched until item 4.
 
-**Found live, read-only, NOT fixed (owner data):** the settings registry keys
-entities by the long legal names, and `Brisken Corp Services, LLC` reads org
-`8227416528` (the real one is `822741658`). Live receipts carry short names
-(`Corporate Services` 146, `Cloud Services` 17, `Consulting` 9, blank 129),
-which resolve through the `/data` file, and `Consulting` has no org id
-anywhere, so its receipts refuse. The categorization is fixed at ingest: an
-expense whose company is set later keeps `entity_missing` until something
-re-categorizes it. That needs deciding before deploy.
+**Owner decisions 2026-09-24, all three DONE.** (1) Settings
+`Brisken Corp Services, LLC` org_id corrected `8227416528` -> `822741658`
+(operator API, pre-edit snapshot, re-read diff: only that entity plus the
+derived `gl_accounts` moved; its `scope_groups` are Cloud's, left alone,
+undecided). (2) `/data/coa-provision.json` maps `Consulting` -> `808232536`
+(backup `.bak-20260924`; the deployed code resolves all three short names).
+(3) PR #1286 (`f6f11dcc`, NOT deployed): setting or changing a receipt's
+company via `PUT .../entity` or the field PUT re-runs the GL engine for that
+receipt (`recategorize_after_entity_change`), before the re-match; a company
+changed through a later card assignment is not covered. All 7 live months
+(Jan, Apr-Sep) are bucket-era and stay so: 129 snapshot-blank receipts there
+are not migrated (standing no-live-writes ruling); the first GL month is the
+first batch created after deploy.
 
 Queue after it: delete `category_accounts.py` + lift `NON_LEAF`/`OUT_OF_SCOPE`
 into `resolve_account_id` (same change), the three copies of the category leak
