@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-24 | Recon Duplicate Premise And Correspondence | client-dev | [→](docs/2026-09-24%20-%20Recon%20Duplicate%20Premise%20And%20Correspondence/Checkpoint.md) |
 | 2026-09-24 | Recon Correspondence Not An Expense | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Correspondence%20Not%20An%20Expense/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Recon Learning Rules And Spotcheck Ruling | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Learning%20Rules%20And%20Spotcheck%20Ruling/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken Recon Card Attribution Item 176 | client-dev | [→](docs/2026-09-24%20-%20Brisken%20Recon%20Card%20Attribution%20Item%20176/Checkpoint.md) |
