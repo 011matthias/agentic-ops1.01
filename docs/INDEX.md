@@ -12,6 +12,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-25 | Brisken P1 Learner Remembered Card | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20Learner%20Remembered%20Card/Mini-Checkpoint-1.md) |
+| 2026-09-25 | Brisken Recon Case 9 No Payment Info Plan | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Case%209%20No%20Payment%20Info%20Plan/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Card Type Not Private | client-dev | [→](docs/2026-09-25%20-%20Brisken%20Recon%20Card%20Type%20Not%20Private/Checkpoint.md) |
 | 2026-09-25 | Brisken P1 Private Needs Evidence | client-dev | [→](docs/2026-09-25%20-%20Brisken%20P1%20Private%20Needs%20Evidence/Checkpoint.md) |
 | 2026-09-25 | Recon Card Ending Wordings | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Recon%20Card%20Ending%20Wordings/Mini-Checkpoint-1.md) |
