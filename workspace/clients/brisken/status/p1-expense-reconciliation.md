@@ -9,6 +9,48 @@ updated: 2026-09-24
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-24: only corrections teach, and the taxonomy is 194 leaves** (PR
+#1277, merge `bb2ba8f5`, NOT deployed — the brief gates a deploy on the owner
+publishing the SPA). The owner's ruling that publish-time learning may keep
+teaching *provided only human corrections are memorized* was not met by three
+of the five learners. Two shared one cause: an override row recorded a category
+with no record of who put it there, so the note-#62 Confirm (which stores the
+model's own guess) and an account-only PUT (which re-stores the line's current
+category beside the account she did name) both reached sign-off looking exactly
+like a reclassification. `category_overrides.category_source`
+(`human` | `inherited`) now carries it, required and keyword-only at the store
+so a new writer cannot teach by omission; NULL reads as human so reviewed
+months keep teaching. An inherited category is dropped at capture and gets no
+vote in the item-183 conflict test; her ACCOUNT still teaches via a new
+`keep_category` mirroring `keep_account`. The third leak ran the other way:
+`apply_self_confirmations` writes `decided_by=tool` and BOTH alias/FX learners
+filtered on status alone, so unreviewed pairings taught durable aliases and FX
+rates — now `reviewer_confirmed_tx_ids`, used at both call sites.
+
+**Measured live (read-only, `immutable=1`):** across 7 runs the confirmed
+decisions are 6 `tool` / 2 `reviewer` / 1 NULL, so alias+FX learning input
+drops 9 pairs to 3. Live `vendor_alias` and `merchant_fx` are BOTH 0 today
+(`merchant_category` 108), so the leak has taught zero durable alias/FX rows
+and the fix costs nothing now.
+
+**Taxonomy: 194 postable leaves** (BCS 64 / BTS 62 / CorpServ 68, revision
+2026-09-24, workbook sha `800c0887`). The owner's five SPOT-CHECK rows flipped
+Y→N; the cross-reference could not settle them (bills in the 24-month pull
+carry no account field, and ~90% of postable accounts show zero over 24
+months), so the call is blast radius: under direct-to-GL a refusal is cheap and
+a silent mis-post is not. Reversible when Dirk rules. `COGS - Support BRISKEN
+Tech / JB` stays N with its reason corrected from "intercompany" to contractor
+cost (205,996.20 USD over 24 monthly bills from Juliano Carlo Brugnago Ltda).
+
+**Next slice is the engine swap, and it is bigger than the brief implies:**
+`zoho/posting_resolution.py::resolve_posting_account` is fully built and tested
+but has ZERO production callers — the live path is still
+`zoho/category_accounts.py::category_account_code` via `zoho/accounts.py:42`.
+Queue after it: delete `category_accounts.py` + lift `NON_LEAF`/`OUT_OF_SCOPE`
+into `resolve_account_id` (same change), the three copies of the category leak
+(`output/posting_common.py:137`, `sheet_writeback.py:143` and `:186`), then
+relabel `categorization_gate.py` and validate item 184.
+
 **2026-09-24: a payment reminder is no longer a purchase** (backlog item 186,
 PR #1268, merge `0726b428`, DEPLOYED and cold-driven; `/healthz` commit
 matches). Asked to improve duplicate recognition on the premise that two
