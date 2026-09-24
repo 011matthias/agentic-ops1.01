@@ -271,6 +271,8 @@ def _plan_kwargs(org: OrgProfile, period: str) -> dict:
     return {
         "org_id": org.org_id,
         "paid_through_account_id": org.card_account_id,
+        # Item 184: the id must be the card occupancy checks by name.
+        "paid_through_name": org.card_name,
         "base_currency": org.base_currency,
         "convert_foreign_to_base": True,
         "period": period,

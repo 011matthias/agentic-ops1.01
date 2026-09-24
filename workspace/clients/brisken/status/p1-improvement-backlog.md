@@ -9024,7 +9024,39 @@ a disagreeing account as a conflict rather than as agreement. **Needs fixing
 before the chain writes through it**, which makes it a prerequisite for the
 step that converts the engine, not a later tidy-up.
 
-### 184. `paid_through_account_id` is a raw id that passes through no resolution and no check
+### 184. `paid_through_account_id` is a raw id that passes through no resolution and no check (SHIPPED 2026-09-24, queue item 6)
+
+**Shipped.** `zoho.accounts.resolve_paid_through`, called by
+`build_expense_payload` before any amount or account, so every caller
+(the planner, the runner's send plan, its readback rebuild) goes through
+it. It refuses, as `paid_through_unresolved` with the reason in the
+detail: an id that is not numeric (a name, the 2026-09-22 class), one in
+no account of the chart pulled for the target org (another org's card, or
+a stale chart), an inactive or DO NOT USE account, and any account that is
+not typed `credit_card`. Every Brisken card is `credit_card` in its org's
+chart (read off `zoho-books-coa.json` 2026-09-24: Cloud Services 3,
+Consulting 1, Corporate Services 2, sandbox 1), while the sandbox's
+`Undeposited Funds` is `cash` and Zoho would take it as a paid-through.
+The payload now carries the id the chart resolved, never the raw argument.
+
+One addition beyond the filing: the runner's occupancy guard matches the
+card by NAME and the post uses its ID, and nothing checked that the two
+named one card. `reconcile_month._plan_kwargs` now passes the profile's
+`card_name`, and a mismatch refuses `paid_through_name_mismatch`.
+
+Not done, by design: nothing ties a supplied chart to an org id on the card
+side (cards are not on Dirk's sheet, so there is no curated id to compare,
+unlike `chart_disagrees_with_org`); the runner meets it by pulling the
+chart from the org's own client. And which card each production entity
+pays from remains master data (item 172, Dirk's).
+
+Tests `tests/test_paid_through_item_184.py` (11: three through
+`run_month`, one of them a differential with the card present and absent
+in one batch, eight through `plan_expense_post`); the fixture charts in
+five test modules gained the card they post from. Three wiring points proven RED under `tools/regress_check.py`:
+the builder's call, the runner's name kwarg, the planner's pass-through.
+
+Original filing:
 
 `zoho/expense_post.py:596-597` sends `paid_through_account_id` to Zoho as a
 numeric id that nothing resolved and nothing validated: not against the

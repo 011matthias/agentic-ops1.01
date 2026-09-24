@@ -120,6 +120,33 @@ def test_calibrate_main_json(tmp_path, capsys):
     assert data["invariant_ok"] is True
 
 
+def test_calibrate_says_its_categorization_gate_is_bucket_path_only(tmp_path, capsys):
+    """Item 6, through the caller: calibrate's verdict must not read as
+    covering the GL chain, in the text report or in the JSON."""
+    main(["--config", str(_write_config(tmp_path))])
+    out = capsys.readouterr().out
+    assert "CATEGORIZATION ACCURACY, BUCKET PATH" in out
+    assert "GL path (batches with gl_entity_orgs): NOT measured" in out
+    main(["--config", str(_write_config(tmp_path)), "--json"])
+    cat = json.loads(capsys.readouterr().out)["categorization"]
+    assert cat["path"] == "bucket"
+    assert cat["gl_path_measured"] is False
+
+
+def test_calibrate_fails_when_the_categorization_gate_fails(tmp_path, capsys, monkeypatch):
+    """The gate is load-bearing in the exit code: with memory switched off
+    the changed subset drops below its floor, and calibrate exits 1 over a
+    reconciliation that is otherwise clean."""
+    from expense_recon import categorization_gate
+
+    monkeypatch.setattr(categorization_gate, "memory_lookup", lambda: None)
+    rc = main(["--config", str(_write_config(tmp_path))])
+    out = capsys.readouterr().out
+    assert "Reconciliation invariant: OK" in out
+    assert "Gate (bucket path): FAIL" in out
+    assert rc == 1
+
+
 def test_calibrate_missing_config_exits_two(tmp_path, capsys):
     rc = main(["--config", str(tmp_path / "nope.json")])
     assert rc == 2

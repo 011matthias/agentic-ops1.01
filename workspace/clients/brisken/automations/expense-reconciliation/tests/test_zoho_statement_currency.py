@@ -51,6 +51,13 @@ _COA = ChartOfAccounts.from_api(
             "account_type": "expense",
             "is_active": True,
         },
+        {
+            "account_id": CARD,
+            "account_name": "Visa dummy card Matthias",
+            "account_code": "",
+            "account_type": "credit_card",
+            "is_active": True,
+        },
     ]
 )
 

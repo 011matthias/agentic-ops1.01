@@ -100,10 +100,18 @@ multi-entity gate has no single chart; charted batches already showed the
 marker), and a multi-category receipt without accounts books as one flagged
 part instead of one per category.
 
+**Item 6 (2026-09-24, NOT deployed).** `categorization_gate.py` is the
+BUCKET-path gate by name: its report prints "GL path (batches with
+gl_entity_orgs): NOT measured by this gate" and calibrate's JSON carries
+`path: bucket` / `gl_path_measured: false`, so its green no longer reads as
+covering GL batches (no deterministic gate measures the GL chain). Item 184
+shipped with it: the paid-through card is resolved against the org's chart
+(numeric, present, active, a `credit_card` account, and the card the run
+names) before any payload is built.
+
 Queue: **4b** the export COA gate contradicts the curation (diverts 56 of 194
 postable accounts on a GL batch, `COGS - DEV Infrastructure` among them; key a
-curated gate on `gl_entity_orgs`, bucket batches unchanged), then relabel
-`categorization_gate.py` and validate item 184 (item 6).
+curated gate on `gl_entity_orgs`, bucket batches unchanged).
 
 **2026-09-24: a payment reminder is no longer a purchase** (backlog item 186,
 PR #1268, merge `0726b428`, DEPLOYED and cold-driven; `/healthz` commit
