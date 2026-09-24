@@ -679,8 +679,13 @@ def test_graduation_bakes_card_resolved_entities(client, monkeypatch):
     )
     batch = _create_batch(client, legal_entity="")
     row = _grid(client, batch)["expenses"][0]
-    # item 41: an unresolved payment method reads suggested_private now
-    assert row["review"]["reason_code"] == "suggested_private"
+    # Owner ruling 2026-09-24: "Visa" names a card type the registry's own
+    # card carries ("CHASE VISA"), so it is no private-expense evidence; the
+    # row asks the ordinary company question instead (was item 41's
+    # suggested_private), and the private option stays open.
+    assert row["review"]["reason_code"] == "needs_entity"
+    assert row["suggested_private"] is False
+    assert row["can_mark_private"] is True
     resp = client.post(
         f"/api/expense-batches/{batch}/cards",
         json={"assignments": [{"hint": "Visa", "card": "corp-2838"}]},

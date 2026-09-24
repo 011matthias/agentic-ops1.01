@@ -134,7 +134,9 @@ def test_a_card_tender_no_company_card_matches_still_suggests_private(
     are money someone may have paid out of pocket; TEF is a card payment on a
     Brazilian cupom fiscal (July's Fenix groceries receipt prints TEF and
     settles a card charge), whatever the settled-outside chip makes of the
-    word."""
+    word. This harness has NO card registry: once the registry's cards are
+    Visa credit cards, VISA CREDIT and TEF stop suggesting (owner ruling
+    2026-09-24, pinned in test_card_type_not_private)."""
     batch = _batch(
         client, monkeypatch,
         _extraction(vendor="Aposto Karlsruhe", payment_hint="VISA CREDIT"),
