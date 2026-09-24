@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-24 | Recon Cards Overview Backend | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Cards%20Overview%20Backend/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Recon Card Scope Applied | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Card%20Scope%20Applied/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken P1 Item 4b Curated Export Gate | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20P1%20Item%204b%20Curated%20Export%20Gate/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken P2 Dormant Workstreams Brought To Live State | client-dev | [→](docs/2026-09-24%20-%20Brisken%20P2%20Dormant%20Workstreams%20Brought%20To%20Live%20State/Checkpoint.md) |
