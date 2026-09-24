@@ -206,8 +206,17 @@ def test_the_answer_key_is_per_org_because_one_code_is_many_accounts():
 
 
 def test_the_real_compiled_taxonomy_yields_dirks_counts():
-    """67 / 64 / 68 is Dirk's own marking, and it is the only number in this
-    tool that did not come from a pull."""
+    """The answer key's counts are the only numbers in this tool that did not
+    come from a pull.
+
+    CorpServ's 68 are Dirk's own marks. BCS and BTS were derived by us under
+    his scheme and stood at 67 / 64 until the owner ruled on 2026-09-24 that
+    the five SPOT-CHECK rows we had derived as Y become N (per diem, Tax
+    Management Services - Holding in both orgs, R&D, and the third-party
+    reimbursement travel COGS leaf), taking them to 64 / 62 and the postable
+    total to 194. Do not confuse these with the 199 elsewhere in this module:
+    that is how many rows the Zoho listing returns for BCS, an unrelated
+    fact."""
     sys.path.insert(
         0,
         str(
@@ -220,10 +229,11 @@ def test_the_real_compiled_taxonomy_yields_dirks_counts():
     want = pull.curated_answer_key(curated.LEAVES)
 
     assert {k: len(v) for k, v in sorted(want.items())} == {
-        "697686691": 67,
-        "808232536": 64,
+        "697686691": 64,
+        "808232536": 62,
         "822741658": 68,
     }
+    assert sum(len(v) for v in want.values()) == 194
 
 
 # ── the whole loop, through main() ────────────────────────────────────────
