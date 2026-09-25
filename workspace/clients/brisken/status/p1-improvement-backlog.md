@@ -11764,7 +11764,6 @@ payment); waiting counts 7 / 0 / 46. Read-time only, no re-match.
    `entity_missing` (Jul Brauhaus, Sep DB Fernverkehr).
 Owner decisions pending: item 211 (widen the borrow at the start edge),
 statement_expected on the three dormant cards, the five-name picker.
-
 ### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
 
 Source: the verified gap map of 2026-09-25 (`.scratch/recon-matching-gaps-2026-09-25.md`,
@@ -11895,10 +11894,60 @@ verdict lifting a pair: NO, the click stays (not built).
 first on July + August + the six bundles, shipped only if 0 labelled-right
 pairs move). SPA half: `docs/lovable-review-cause-prompt.md`, not pasted.
 
+### 223. Copies and double counting: one number read two ways, the mail body, and the rest of the copies front (gap map 2026-09-25, front 4) (STEPS 1-3 SHIPPED 2026-09-25; steps 4-7 open)
+
+The verified gap map's "Copies and duplicates" section and its CRITIC block
+("which part of a mail is the receipt"). Seven steps were set; three are done.
+
+**Step 1, the BENCH files (read-only, answered).** July holds 27 and August
+23 files named `CARD-nnn_date_USD-amount_MERCHANT__BENCH-nnn.pdf`, and
+August/September carry 11 more ending `__EXP-YYYYMM-nnn`. They did NOT come
+by mail: no inbound archive exists at their time and `submitted_by` is empty
+on all 50. They are two web uploads through the app, July at
+2026-09-23T23:56:27Z (28 files) and August at 23:58:38Z (30 files), made
+with an operator code; the upload route records no operator label, so who
+made them cannot be read from the app, and no agent transcript on this box
+names them before 2026-09-24T20:05Z. The PDFs were produced by FPDF 1.7 and
+MuPDF on 2026-08-30 and 2026-09-01, and the names encode the statement line
+each belongs to, so whoever made them had already paired every receipt with
+its charge. They are real receipts, not a synthetic load: 16 of July's 27
+embed the byte-identical photo of one of Criss's own uploads, and 12 July
+plus 19 August BENCH rows are the ONLY receipt a charge holds. Deleting them
+would unmatch 31 charges, so the deletion is not recommended; the double
+counting they cause is seven July pairs, which steps 2-3 set aside.
+
+**Steps 2 + 3 (SHIPPED, PR TBD).** New rungs `reference_digits` /
+`misread_digit` and a `body_twin` key (see `docs/api-contract.md`, "Three
+more duplicate rungs"). Predicted per row on the frozen payloads before
+building: July 5 of the 6 tool `distinct_reference` groups become copies
+(24 Horas, Fenix 310527, Marinho 246836 / 270745 / 271025-271825), the
+Marinho 246600 pair stays distinct (its copy prints only the authorisation
+protocol), and the E A Locações pair is nominated for the first time; August
+1 (Zoho Books 576.00 body); September 4 bodies; the three September OpenAI
+80.12 invoices stay three. Attribution replay (labels, both live months + the six bundles, old vs new tree): no labelled-right pair moved, July gained 4 clean pairs (0053, 0057, 0058, 0068), bundles 70/95 both; it caught `misread_digit` merging ER-00181 #016/#017 (7-ELEVEN 446525 / 446528, two purchases), so a difference in the last two digits no longer counts.
+
+**Open, in order:**
+4. Kind from the document itself: `document_kind` (invoice / receipt /
+   reminder / statement / other) in the extraction response SCHEMA only, A/B
+   twice old vs twice new over the stored receipts before shipping;
+   `kept_member` reads it before the file name; a `reminder` gets a
+   read-time review note (item 186 extended), never a deletion.
+5. Cross-month reference guard: a reference seen in another month of the
+   same company with the SAME total is a billing-account key (Railway
+   `77H7ITO0` 5.00 Jul + Sep, Rize `5ZK1BCDG` 12.99 Jul + Aug); cross-month
+   vendor/date/amount/currency pairs as an advisory (0 live).
+6. Intake decides once: an Invoice-*.pdf and Receipt-*.pdf naming one
+   invoice number in one mail are recorded at arrival
+   (`intake_provenance.twin_of`).
+7. `POST /api/runs/{id}/duplicates/reapply` (operator, typed confirm): runs
+   the ladder, commits group membership + kept order, re-matches. Build and
+   test it; run it on nothing.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 143 | Item 223 steps 2-3 (front 4): duplicate rungs `reference_digits` (a shared digit core of reference / invoice_number / receipt_number, merchant identity + amount + date within a day) and `misread_digit` (one digit apart, same day), and a `body_twin` key (a rendered mail body beside the one document it repeats; the body is never kept unless a charge holds it) | One purchase counted twice: July's five slip pairs read two ways (BRL 437.77) plus the E A Locações pair at its next re-match, August's Zoho Books body (USD 576.00), September's four bodies (USD 260.00) | 2026-09-25, PR TBD |
 | 142 | Item 222 steps 1-5 (front 5): the FX judge is handed the tool's rate, card verdict and merchant agreement (prompt v2, cache keyed on it, look-alike pairs with clean evidence skip the model); `review.cause` / `cause_detail`; booked charges not judged and out of `n_review`; PDF payoffs read `payment`; `reverses_transaction_id` | 13 live verdicts guessed their own rate (one tenfold off); every review row read one generic sentence; July counted 13 booked rows as in review; six payoffs read refund | 2026-09-25 |
 | 141 | Item 221 (front 1): charges with nothing behind them say what they are. Charge `reason_code` + `closed_recurring` / `no_receipt_expected`, `already_booked` reads the reviewer verdict, `reason_label` on every charge element; `n_already_posted` counts booked purchases only; `summary.n_cards_uncovered` / `cards_uncovered[]` and the Publish refusal sentence; `receipt_chase` `date_range` / `charge_month` and the mail grouped by charge month; ask age + `overdue_days` + per-holder mark-all; `python -m expense_recon.zoho.booked_report` (read-only, one-cent control) | July's 24 and August's 40 gray charges read "no receipt found" while the gate called them closed; 3 / 4 / 7 cards had nothing loaded behind "0 need a receipt"; 33 chased charges were filed under the wrong month; Zoho already held 11 + 11 open charges | PR #1468 |
 | 140 | Item 220 steps 1 + 2 (front 2): an unmatched receipt's reason reads the card before the date edge; `statement_not_loaded_for_date` + `unmatched_receipts[].waits_for_statements`; German cash/girocard words are not card payments; `summary.n_receipts_waiting_statement` / `receipts_waiting_cards` and a refusal that splits "wait for a statement" from "no charge on any loaded statement". | September told 40 receipts to look in the previous or next month while their statements simply were not loaded yet, and the sign-off refusal pointed Criss at the wrong fix. | PR #1466 (merge `88465d42`), deployed 2026-09-25; prediction held row for row (Jul 5 / Aug 0 / Sep 49; waiting 7 / 0 / 46); SPA prompt `lovable-receipt-waits-prompt.md` not pasted |
