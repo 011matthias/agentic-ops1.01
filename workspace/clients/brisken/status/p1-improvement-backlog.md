@@ -8284,7 +8284,7 @@ attribute at all. Coverage, not matching.
 
 ### Item 172 — card 3645 posts to another card's name (master data, owner's)
 
-**CHECK BUILT 2026-09-25 (no card edited; the value stays Dirk's).**
+**CHECK LIVE 2026-09-25 (PR #1401, Fly `904b3f34`; no card edited, the value stays Dirk's). Live read the same hour: 8 of 9 cards `ok`, card `3645` `not_in_chart` with `closest` = `CHASE VISA - 2838 - TRAVEL`, chart verified current.**
 `GET /api/settings` `cards_effective[].account_check`: `{status, detail,
 closest, account_id, company_org, chart_modified, chart_verified}`, status
 `ok` / `not_in_chart` / `wrong_type` / `inactive` / `no_account` /
@@ -9053,7 +9053,7 @@ read off the token response. `settings.READ` is gone with it, which is why
 `GET /organizations` now 401s with code 57 and why the puller does not route
 through the org directory.
 
-### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account (HALF B SHIPPED 2026-09-24; HALF A BUILT 2026-09-25, SPA prompt not pasted)
+### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account (HALF B SHIPPED 2026-09-24; HALF A LIVE 2026-09-25: PR #1396, Fly `b360333c`; SPA prompt not pasted)
 
 **Half A built 2026-09-25 (owner decisions 2026-09-25: corrections start
 ticked, conflicts unticked; an unticked lesson is dropped and offered again,
