@@ -281,10 +281,16 @@ def suggest_card(receipt, vendor: str, evidence: StatementEvidence | None) -> di
     }
 
 
-def case9_row_fields(receipt, res: dict, vendor: str, source, settled_outside: bool) -> dict:
+def case9_row_fields(
+    receipt, res: dict, vendor: str, source, settled_outside: bool,
+    *, copy: bool = False,
+) -> dict:
     """The parallel fields an expense row gains (absent, never null):
     `waits_for_statements` when an open card-less row's date is not covered,
-    `card_suggestion` when its recurring charge names one card."""
+    `card_suggestion` when its recurring charge names one card. A decided
+    copy (out of the totals) keeps its waiting status but is never offered a
+    card: a click there would write an override on a row that counts for
+    nothing, and the row it repeats carries the same suggestion."""
     if source is None or not is_open_cardless(res, settled_outside):
         return {}
     evidence = source.get()
@@ -294,6 +300,8 @@ def case9_row_fields(receipt, res: dict, vendor: str, source, settled_outside: b
     waits = evidence.waits_for(receipt.detected_date)
     if waits:
         out["waits_for_statements"] = waits
+    if copy:
+        return out
     suggestion = suggest_card(receipt, vendor, evidence)
     if suggestion is not None:
         out["card_suggestion"] = suggestion

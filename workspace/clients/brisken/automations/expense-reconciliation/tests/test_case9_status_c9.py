@@ -257,6 +257,29 @@ def test_charges_on_two_cards_suggest_nothing(tmp_path, monkeypatch):
         assert "card_suggestion" not in _rows(client, august)["Network Solutions"]
 
 
+def test_a_decided_copy_gets_no_suggestion(tmp_path, monkeypatch):
+    # Live 2026-09-25: two of six suggestions sat on copies (May 86929f2a909a,
+    # July 50622baec444), where a click writes an override on a row that
+    # counts for nothing. The row the copy repeats carries the suggestion.
+    with _client(tmp_path, monkeypatch, [
+        _receipt("2026-07-01", "42.50", "Staples"),
+        _receipt("2026-08-05", "2.76", "Network Solutions", reference="INV-7"),
+        _receipt("2026-08-05", "2.76", "Network Solutions", reference="INV-7"),
+    ]) as client:
+        assert client.put("/api/settings", json={"cards": FAMILY}).status_code == 200
+        july = _month(client, "July 2026", 1)
+        _done(client, _statement(client, july, JULY_EXPORT))
+        august = _month(client, "August 2026", 2)
+        expenses = client.get(f"/api/expense-batches/{august}").json()["expenses"]
+        counting = [e for e in expenses if e.get("counts_in_total", True)]
+        copies = [e for e in expenses if e.get("counts_in_total") is False]
+        assert len(counting) == 1 and len(copies) == 1, "one original, one copy"
+        assert counting[0]["card_suggestion"]["card_key"] == "3645"
+        assert "card_suggestion" not in copies[0]
+        # The copy's review stays honest: it keeps no card either way.
+        assert copies[0]["card"] is None
+
+
 # ── 3. apply to this vendor ─────────────────────────────────────────────
 
 

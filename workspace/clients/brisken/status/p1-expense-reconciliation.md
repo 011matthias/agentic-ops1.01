@@ -9,6 +9,8 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: a decided copy is no longer offered a card** (backlog item 204, build 5 follow-up; Shipped row 130). A row set aside as a copy keeps its waiting status but loses `card_suggestion`, since a click there wrote an override on a row that counts for nothing and the original carries the same suggestion. Live before: 2 of 6 suggestions sat on copies (May and July Lovable 200.00).
+
 **2026-09-25: case 9 step 4 shipped, the billing account's card** (backlog
 item 204, build 4; Shipped row 129). A receipt that prints no card and carries
 a Stripe invoice number takes the card its billing account was paid with on at
