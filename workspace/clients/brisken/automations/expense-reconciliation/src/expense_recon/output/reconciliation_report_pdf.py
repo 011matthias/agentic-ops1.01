@@ -100,6 +100,12 @@ def _status_label(row: dict) -> str:
         # away as already booked. Only the reviewer's verdict reached this
         # word before, so 48 July rows printed "no receipt" as if still open.
         return "already posted"
+    # Front 1: the two other verdicts that close a charge with no receipt
+    # (`unmatched_reasons`), so paper and screen agree nothing is owed.
+    if row.get("reason_code") == "closed_recurring":
+        return "booked as recurring"
+    if row.get("reason_code") == "no_receipt_expected":
+        return "no receipt expected"
     if bucket in ("unmatched", ""):
         return "no receipt"
     if bucket == "refund":

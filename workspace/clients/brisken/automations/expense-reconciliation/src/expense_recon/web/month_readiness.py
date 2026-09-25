@@ -286,6 +286,7 @@ def not_complete_detail(summary: dict) -> str:
     blockers = "; ".join(parts) or "it is not complete"
     return (
         f"This month cannot be published yet: {blockers}. "
+        f"{cards_uncovered_sentence(summary)}"
         "Publish with override to sign it off anyway."
     )
 
@@ -301,6 +302,7 @@ READINESS_KEYS = (
     "n_charges_receipt_requested",
     "n_charges_no_receipt_expected",
     "n_receipts_waiting_statement",
+    "n_cards_uncovered",
 )
 
 
@@ -310,3 +312,41 @@ def readiness_of(summary: dict) -> dict:
     out = {k: summary.get(k) for k in READINESS_KEYS}
     out["month_health_state"] = (summary.get("month_health") or {}).get("state")
     return out
+
+
+def cards_uncovered(coverage: list[dict]) -> list[str]:
+    """Front 1 step 2: the active registry cards this month has NOTHING
+    loaded for, by label (`coverage[]` entries with a registry `card_key`,
+    no statement and no charge).
+
+    Completeness is a sum over the charges the month holds, so a card whose
+    statement is not loaded contributes no open charge: September 2026 read
+    "28 charges need a receipt" with 7 of its 9 cards absent. Advisory only
+    (whether Publish should refuse on it is the owner's decision); a card
+    with charges but no recorded upload arrived under another card's file
+    and is not counted. A dormant card (fee-only, or one that exists
+    nowhere) is counted too: nothing here can tell dormant from missing,
+    which is why the sentence names them."""
+    return sorted(
+        str(c.get("label") or c.get("key") or "")
+        for c in coverage or []
+        if c.get("card_key")
+        and not c.get("statements")
+        and not c.get("n_transactions")
+    )
+
+
+def cards_uncovered_sentence(summary: dict) -> str:
+    """The refusal's coverage sentence, or "" when every active card has a
+    statement: "0 charges need a receipt" must not read as "nothing owed"
+    while a card is missing."""
+    n = summary.get("n_cards_uncovered") or 0
+    if not n:
+        return ""
+    names = ", ".join(summary.get("cards_uncovered") or [])
+    verb = "has" if n == 1 else "have"
+    return (
+        f"{_plural(n, 'active card', 'active cards')} {verb} no statement "
+        f"loaded for this month ({names}), so none of their charges is "
+        "counted above. "
+    )

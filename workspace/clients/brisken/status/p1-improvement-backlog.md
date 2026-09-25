@@ -11765,10 +11765,88 @@ payment); waiting counts 7 / 0 / 46. Read-time only, no re-match.
 Owner decisions pending: item 211 (widen the borrow at the start edge),
 statement_expected on the three dormant cards, the five-name picker.
 
+### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
+
+Source: the verified gap map of 2026-09-25 (`.scratch/recon-matching-gaps-2026-09-25.md`,
+sections "Charges with nothing behind them" and "Recurring charges and charges
+already booked in Zoho"). Every count below was re-measured on fresh GETs of
+July `50622baec444`, August `074a7b8905d7` and September `51a22ad72864` at
+16:47 UTC, before any code, and each reproduced the map.
+
+**Measured before (Jul / Aug / Sep).**
+
+- Gray-closed purchases reading `no_receipt_found` on the unmatched list: 24 /
+  40 / 0 (August's 41st gray row is the fee, `not_a_purchase`). The gate counted
+  all of them closed (`n_charges_closed_recurring` 24 / 41 / 0).
+- `n_already_posted` 93 / 1 / 1, of which card payments 3 / 1 / 0. Reviewer
+  already-posted verdicts 0 / 0 / 0, no-receipt-expected marks 0 / 0 / 0.
+- Active cards with no statement and no charge: 3 / 4 / 7 (0113, 6013, 8311;
+  +0340; +2838, 3645, 3876). July's 9693 is "covered" by a two-day export (6
+  charges, 07-01).
+- Chased charges dated outside the run's month: 0 / 14 of 57 / 19 of 28.
+- Asks: 0 marks ever written; every holder address null.
+- Inbound mail resting outside any month (held / pooled / failed): **0** of 146
+  log entries (127 ingested, 19 dismissed; the 19 are TEST drills and one
+  Hostinger forward that matches no open charge). The map's "a receipt can be
+  in the mailbox and the charge still reads needs a receipt" does not
+  reproduce live, so the planned `inbound_hint` (step 6) was **not built**; it
+  reopens when a held or pooled mail names an open charge's vendor and amount.
+- Zoho (read-only pull, 193 expenses across the three orgs, same company +
+  currency + cent + 3 days, one Zoho expense per charge, one-cent control 0 in
+  every month): open charges Zoho already holds 0 / 11 / 11 (the map's 15 for
+  September was an earlier state; every looser variant reads 11 today, 8 of
+  them August-dated cycle charges); gray receiptless charges Zoho holds 24 of 24
+  / 0 of 40 / none; yellow receiptless not in Zoho 3 of 39 / none / 1 of 1
+  (SAP SE 481.07).
+
+**Shipped.**
+
+1. Charge `reason_code` grows `closed_recurring` (the gray fill, never a
+   derived mark) and `no_receipt_expected` (the reviewer's mark);
+   `already_booked` also reads the reviewer's already-posted verdict; every
+   charge element carrying a code carries `reason_label` (rule 5). Reasons and
+   the month gate now name the same charges. PDF Status reads "booked as
+   recurring" / "no receipt expected". `n_already_posted` counts booked
+   PURCHASES from either source.
+2. `summary.n_cards_uncovered` + `cards_uncovered[]`, the Publish refusal's
+   sentence naming them, and `readiness.n_cards_uncovered`. Advisory only.
+3. `receipt_chase[].date_range`, `charges[].charge_month`; the composed mail's
+   subject and opening line name the dates, and a holder whose charges span two
+   months gets one header per month.
+4. `charges[].days_since_requested` / `overdue`, `receipt_chase[].n_overdue`,
+   `settings.receipt_requests.overdue_days` (1..365, default 14) and
+   `POST /api/runs/{id}/receipt-requests/mark-all` `{holder, to?, reask?}`.
+5. `python -m expense_recon.zoho.booked_report` (CLI, read-only): the two
+   lists above as text and CSV, with the one-cent control and exit 3 when the
+   join cannot discriminate.
+
+**Predicted after deploy (read-time only, no re-match needed):** July 24 rows
+`no_receipt_found` -> `closed_recurring`, August 40, September 0, no other row
+moves; `n_already_posted` 90 / 0 / 1; `n_cards_uncovered` 3 / 4 / 7;
+`receipt_chase` groups carry `date_range` (August Cloud Services 2026-07-03 ..
+2026-08-04, 13 July charges; September Cloud Services 2026-08-05 .. 2026-09-09,
+19 August charges); no `days_since_requested` anywhere (nobody has asked).
+
+**Not built, by design or decision:** the sender and holder addresses (item
+107's separate approval; addresses are data the owner supplies), portal hints
+(registry writes are owner-gated), reading Zoho from `web/` (contract), a
+Publish gate on coverage, and writing "already booked" verdicts from the Zoho
+report (a live write on Criss's months). The three owner decisions are put
+with the round's final reply.
+
+**Owner decisions 2026-09-25 (AskUserQuestion, this session):** (1) Publish warns only on uncovered cards, revisit once the weekly Chase exports are routine; (2) YES, write a reviewer "already booked" verdict on each open charge the Zoho report matched (August 11, September 11), after a read-only readiness check; (3) fill `receipt_requests.holders` from the intake's known senders (Dirk's three card spellings -> dirk.neumann@brisken.com, Nicolas Neumann -> neumann.nicolas@outlook.com); Criss (0340) and the two company-named cards (9693, 1176) stay unmapped. The chase stays disabled and unsendable (item 107).
+
+Tests: `tests/test_front1_chase_honesty.py` (7, route-level),
+`tests/test_zoho_booked_report.py` (4, through `main()`), two re-pinned
+subjects in `tests/test_receipt_chasing_item_107.py`, the charge-code pin in
+`tests/test_view_contract.py`. Regress: each of the six wiring points mutated
+and the caller-level test went red (see the PR).
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 141 | Item 221 (front 1): charges with nothing behind them say what they are. Charge `reason_code` + `closed_recurring` / `no_receipt_expected`, `already_booked` reads the reviewer verdict, `reason_label` on every charge element; `n_already_posted` counts booked purchases only; `summary.n_cards_uncovered` / `cards_uncovered[]` and the Publish refusal sentence; `receipt_chase` `date_range` / `charge_month` and the mail grouped by charge month; ask age + `overdue_days` + per-holder mark-all; `python -m expense_recon.zoho.booked_report` (read-only, one-cent control) | July's 24 and August's 40 gray charges read "no receipt found" while the gate called them closed; 3 / 4 / 7 cards had nothing loaded behind "0 need a receipt"; 33 chased charges were filed under the wrong month; Zoho already held 11 + 11 open charges | PR #1468 |
 | 140 | Item 220 steps 1 + 2 (front 2): an unmatched receipt's reason reads the card before the date edge; `statement_not_loaded_for_date` + `unmatched_receipts[].waits_for_statements`; German cash/girocard words are not card payments; `summary.n_receipts_waiting_statement` / `receipts_waiting_cards` and a refusal that splits "wait for a statement" from "no charge on any loaded statement". | September told 40 receipts to look in the previous or next month while their statements simply were not loaded yet, and the sign-off refusal pointed Criss at the wrong fix. | PR pending |
 | 139 | Item 216 Build 2 step 3: `summary.categories_by_origin` (`{person, rule, suggestion, none}`) on both payloads, read off each row's own `posting_category` / `suggested_category`; sums to `rows[]` (run) and `n_expenses` (grid). `n_charges_category_guessed` keeps its meaning (the guesses that block the month) | Item 216 read the blocker's 0 / 0 / 1 as "the tool reports no guesses" while 164 receiptless charges carried one; all 164 sit on booked, gray or receipt-owing charges, so the blocker was right and the who-answered count was missing. Run view 68 / 109 / 43 suggestions, grid 27 / 27 / 31 (03:05 backup). Tests: `tests/test_counts_by_origin_item_216_build2_step3.py` (2, route-level) + the contract partition test; five `regress_check` proofs bit | this PR |
 | 138 | Item 216 Build 2 step 2: the model suggests, a rule or a person decides. On a GL month the model's answer moves from `posting_category` to `suggested_category` on both views, reads `check` / `model_suggestion` (one-click confirmable, stored `inherited`), and every file prints `suggested: <account>`, which the poster and the journal check refuse. `is_suggestion_only` + `SUGGESTED_PREFIX` are the one predicate and the one cell; `_TRUSTED_SOURCE` / `_COARSE_SOURCE` retired for `answer_origin`; a person's pick reads EDITED in the export (it read LINE) | Owner ruling 2026-09-25. 85 model-only expenses no longer post as accounts (27 / 27 / 31), the 32 `ready` ones stop being ratified by "Confirm all Ready", and one Confirm restores a posting (measured on the 03:05 backup) | PR #1451 |
