@@ -370,3 +370,141 @@ def test_cli_writes_json_and_markdown_with_the_constants(payload, tmp_path, caps
 
 def test_cli_missing_payload_exits_2(tmp_path):
     assert rcs.main(["--payload-dir", str(tmp_path / "nope"), "--zoho", str(tmp_path / "z.json")]) == 2
+
+
+# ---- the model's suggestion, who answered, and when Criss booked ---------------------------------
+
+def _extend(payload, rows, postings):
+    """The base payload plus July charge rows and Corporate Services postings."""
+    d, zoho = payload
+    run = json.loads((d / "run_jul001.json").read_text(encoding="utf-8"))
+    run["rows"] = run["rows"] + rows
+    _write(d / "run_jul001.json", run)
+    pull = json.loads(zoho.read_text(encoding="utf-8"))
+    pull["orgs"][CORP]["expenses"] += postings
+    _write(zoho, pull)
+    return d, zoho
+
+
+def suggested(tx, vendor, day, amount, code, source="VENDOR"):
+    r = row(tx, vendor, day, amount)
+    r["suggested_category"] = {"category": code, "source": source, "zoho_account": None, "origin": "suggestion"}
+    return r
+
+
+def booked(day, total, desc, account, created, modified=None):
+    e = zoho_expense(day, total, desc, account)
+    e["created_time"], e["last_modified_time"] = created, modified or created
+    return e
+
+
+def test_a_model_suggestion_is_the_tools_answer(payload):
+    it_code = rcs.curated_leaves().code_of(CORP_IT, CORP)
+    base_line = _report(payload)["accuracy"]["loose"]["by_source"]["LINE"]["answered"]
+    ext = _extend(payload,
+                  [suggested("S1", "NOTION", "2026-07-27", "33.00", it_code),
+                   suggested("S2", "CANVA", "2026-07-28", "44.00", "E100010-31", source="LINE")],
+                  [booked("2026-07-28", "33.00", "NOTION", CORP_IT, "2026-09-08T09:00:00-0500"),
+                   booked("2026-07-29", "44.00", "CANVA", CORP_IT, "2026-09-08T09:00:00-0500")])
+    loose = rcs.build_report(*ext)["accuracy"]["loose"]
+    s = {r["tx"]: r for r in loose["rows"] if r["tx"] in ("S1", "S2")}
+    assert s["S1"]["verdict"] == "agree" and s["S1"]["origin"] == "suggestion" and s["S1"]["source"] == "VENDOR"
+    assert s["S2"]["verdict"] == "disagree" and s["S2"]["source"] == "LINE"
+    assert loose["by_origin"]["suggestion"] == {"answered": 2, "right": 1}
+    assert loose["by_source"]["LINE"]["answered"] == base_line + 1
+
+
+def test_timing_separates_postings_criss_touched_after_the_switch(payload):
+    ext = _extend(payload,
+                  [suggested("T1", "NOTION", "2026-07-27", "33.00", "E100010-31"),
+                   suggested("T2", "CANVA", "2026-07-28", "44.00", "E100010-31"),
+                   suggested("T3", "FIGMA", "2026-07-29", "55.00", "E100010-31")],
+                  [booked("2026-07-28", "33.00", "NOTION", FOOD, "2026-09-24T18:16:59-0500"),
+                   booked("2026-07-29", "44.00", "CANVA", FOOD, "2026-09-08T09:00:00-0500",
+                          modified="2026-09-24T18:17:00-0500"),      # re-categorized at 23:17 UTC
+                   booked("2026-07-30", "55.00", "FIGMA", FOOD, "2026-09-26T10:00:00-0500")])
+    rep = rcs.build_report(*ext)
+    rows = {r["tx"]: r["timing"] for r in rep["accuracy"]["loose"]["rows"]}
+    assert (rows["T1"], rows["T2"], rows["T3"]) == ("independent", "after_tool", "after_tool")
+    assert rows["R1"] == "unknown"                              # the base pull carries no times
+    by_t = rep["accuracy"]["loose"]["by_timing"]
+    assert by_t["independent"]["by_origin"]["suggestion"] == {"answered": 1, "right": 1}
+    assert by_t["after_tool"]["by_origin"]["suggestion"] == {"answered": 2, "right": 2}
+    md = rcs.render_markdown(rep)
+    assert "| suggestion | 3/3 | 1/1 | 2/2 |" in md
+
+
+def test_a_charge_booked_in_another_company_is_named(payload):
+    cross = _report(payload)["other_company"]
+    assert [(c["tx"], c["tool_company"], c["zoho_company"]) for c in cross] == [
+        ("R8", "Corporate Services", "Cloud Services")]
+    assert "## Booked in another company" in rcs.render_markdown(_report(payload))
+
+
+# ---- pulling Criss's postings -------------------------------------------------------------------
+
+class _FakeBooks:
+    def __init__(self, org, log, fail=False):
+        self.org, self.log, self.fail = org, log, fail
+
+    def list_expenses(self, *, date_start=None, date_end=None):
+        self.log.append((self.org, date_start, date_end))
+        if self.fail:
+            raise RuntimeError("token refresh failed (status 400): invalid_code")
+        return [zoho_expense("2026-07-11", "100.00", f"from {self.org}", COGS_INFRA)]
+
+
+def test_pull_window_is_the_gl_months_plus_a_week(payload):
+    d, _zoho = payload
+    assert rcs.pull_window(rcs.load_payloads(d)["months"]) == ("2026-06-24", "2026-09-07")
+
+
+def test_pull_zoho_writes_the_24mo_shape_per_org(tmp_path):
+    calls = []
+    out = tmp_path / "z.json"
+    rcs.pull_zoho(out, [CORP, CLOUD], "2026-06-24", "2026-09-07",
+                  client_for=lambda org: _FakeBooks(org, calls), log=lambda *_: None)
+    pulled = json.loads(out.read_text(encoding="utf-8"))
+    assert calls == [(CORP, "2026-06-24", "2026-09-07"), (CLOUD, "2026-06-24", "2026-09-07")]
+    assert pulled["date_from"] == "2026-06-24" and pulled["date_to"] == "2026-09-07" and pulled["pulled_at"]
+    assert pulled["orgs"][CLOUD]["expenses"][0]["description"] == f"from {CLOUD}"
+
+
+def test_pull_zoho_turns_a_client_error_into_exit_2(tmp_path):
+    with pytest.raises(rcs.InputError, match="Zoho pull failed for org"):
+        rcs.pull_zoho(tmp_path / "z.json", [CORP], "a", "b",
+                      client_for=lambda org: _FakeBooks(org, [], fail=True), log=lambda *_: None)
+
+
+def _env_file(tmp_path, monkeypatch, **values):
+    for k in (*rcs.BOOKS_ENV, "ZOHO_DC"):
+        monkeypatch.delenv(k, raising=False)
+    f = tmp_path / ".env"
+    f.write_text("".join(f"{k}={v}\n" for k, v in values.items()), encoding="utf-8")
+    return f
+
+
+def test_books_credentials_come_from_the_env_file_and_name_what_is_missing(tmp_path, monkeypatch):
+    full = _env_file(tmp_path, monkeypatch, ZOHO_CLIENT_ID="id", ZOHO_CLIENT_SECRET="sec",
+                     ZOHO_BOOKS_REFRESH_TOKEN="rt", ZOHO_DC="com")
+    creds = rcs.books_credentials(full)
+    assert (creds["ZOHO_BOOKS_REFRESH_TOKEN"], creds["ZOHO_DC"]) == ("rt", "com")
+    partial = _env_file(tmp_path, monkeypatch, ZOHO_CLIENT_ID="id", ZOHO_CLIENT_SECRET="sec")
+    with pytest.raises(rcs.InputError, match="ZOHO_BOOKS_REFRESH_TOKEN") as err:
+        rcs.books_credentials(partial)
+    assert "sec" not in str(err.value)
+
+
+def test_cli_pull_zoho_scores_against_the_fresh_pull(payload, tmp_path, monkeypatch, capsys):
+    d, _zoho = payload
+    env = _env_file(tmp_path, monkeypatch, ZOHO_CLIENT_ID="id", ZOHO_CLIENT_SECRET="sec",
+                    ZOHO_BOOKS_REFRESH_TOKEN="rt-secret")
+    calls = []
+    monkeypatch.setattr(rcs, "_books_client", lambda creds, org, module: _FakeBooks(org, calls))
+    assert rcs.main(["--payload-dir", str(d), "--pull-zoho", "--env-file", str(env)]) == 0
+    fresh = d / rcs.ZOHO_OUT
+    assert sorted(org for org, *_ in calls) == [CLOUD, CORP]
+    rep = json.loads((d / "categorization-score.json").read_text(encoding="utf-8"))
+    assert rep["inputs"]["zoho_pull"] == str(fresh)
+    assert "rt-secret" not in fresh.read_text(encoding="utf-8")
+    assert "rt-secret" not in capsys.readouterr().out
