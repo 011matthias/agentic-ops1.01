@@ -10472,27 +10472,7 @@ Not covered, by design: a workbench accept or reject, and a duplicate ruling on
 a month with no statement, move a company without a re-match. The sweep
 catches the `entity_missing` half of those at the row's next edit or re-match.
 
-### 210. The export gate checks a row against its stamped company, not the one it shows (found 2026-09-25, building item 206)
-
-`coa_gate` splits a month's receipts by the receipt's stored
-`legal_entity_id` (`coa_gate.py`, the per-entity split), while the grid, the
-engine (item 206) and the export's Entity column use the company the card
-chain resolves. Two consequences, both reproduced:
-
-- A row whose company came from a card and whose stamp is blank is never
-  chart-checked (`UNGATED`): its account goes out as-is. Most live rows are
-  like this.
-- A row stamped with one company at ingest (a printed card) and moved to
-  another by a card fix is checked against the OLD company's chart. In the
-  item 206 test a Cloud-only account on a row now showing Cloud Services
-  exports as `(account unmapped - assign)`.
-
-Fix shape: give the gate the shown company (`resolved_entities(card_res)`, as
-item 201 gave `apply_overrides`). That changes export verdicts on live months,
-most visibly by gating rows that today pass unchecked. **Owner, 2026-09-25:
-record only, decide later.** Not built.
-
-### 207. The live export gate blanks an account Dirk marked postable (found 2026-09-25 on the switched September)
+### 207. The live export gate blanks an account Dirk marked postable (found 2026-09-25 on the switched September) (FIXED LIVE 2026-09-25: chart file replaced on the volume, owner yes; `/healthz` coverage check added)
 
 September's SendGrid receipt (Cloud Services, USD 89.95) is filed by a
 learned rule to `E700030-30` "COGS - Other Infra and IT Costs for Cloud
@@ -10506,6 +10486,52 @@ holds another id for it. One row of 209 across the three exports. Not read on
 production (a volume read was refused earlier in the session); the next step
 is a read of the live chart file's entry for that code, then a refresh of the
 file if it is stale.
+
+**Cause, confirmed 2026-09-25.** Ruled out from code first:
+- September's gate maps each company to the right org and chart. Its
+  curated verdict decides, not the old `scope_groups`, because the month
+  carries `gl_entity_orgs`.
+- Name resolution is exact code or exact name, so the "(INTER COMPANY)"
+  near-namesake (E700040-30) cannot catch it.
+- A learned rule on a GL month stores the binding's name, never its own
+  bucket-era string.
+
+A read-only production read (owner yes) then showed the chart file the gate
+reads, `/data/zoho-books-coa.json`, was the **2026-07-01 pull** (sha256
+`e4055931...`, 199 Cloud Services accounts, no `E700030-30`), never replaced
+since the first deploy. It lacked 18 of the 64 accounts Dirk marks postable
+for Cloud Services: seven COGS leaves, Marketing (3), Management Services
+(3), Utilities, IT equipment, Repairs, Interest, Tax Paid. Corporate Services
+and Consulting were complete. September stores SendGrid under Cloud Services
+with the right account name, so only the file blanked it.
+
+**Fixed live 2026-09-25 (owner yes, after the problem was explained).**
+Volume snapshot `vs_V9ka1J80opbTj5qDJOpy9Gg` first. Then the 2026-09-24 pull
+(Zoho READ, `tools/pull-brisken-zoho-coa.py`, 442,136 bytes, sha256
+`aa855aea...`, 255 Cloud Services accounts) was written beside the old file,
+checked by size and sha on the server, and moved into place. The July file is
+kept as `/data/zoho-books-coa.2026-07-01.json`. The new file only adds
+accounts against the old one (56 Cloud Services, 4 Holding, 1 sandbox; none
+dropped or renamed in any of the 8 orgs), so no row that exported correctly
+could change. Read back through `GET /runs/{id}/expenses.csv`: SendGrid
+exports `COGS - Other Infra and IT Costs for Cloud Business`, USD 89.95,
+Chase Visa 9693, and "(account unmapped - assign)" is on 0 rows in July,
+August and September. No deploy, no row edit, no Zoho write.
+
+Upload recipe (worked, no sftp):
+- `cat <file> | flyctl ssh console -C "sh -c 'cat > /data/<name>.new'"`
+  (Windows flyctl prints "The handle is invalid" and the write still lands);
+- check `wc -c` and `sha256sum` on the server;
+- `cp -p` the old file aside, then `mv` the new one in.
+
+**Structural half (no SPA change).** `/healthz` now carries `coa_chart`: the
+chart file's path, date and size, and per curated company the postable codes
+it lacks (`category_vocabulary.chart_coverage`, cached on the file's mtime
+and size, since the probe runs every 30 s). `ok: false` while any are
+missing, so a stale file is visible where the operator already looks, not
+first as a blanked row. Tests: `tests/test_chart_coverage_item_207.py` (5,
+through `GET /healthz`), with three wiring points proven red under
+`tools/regress_check.py`.
 
 ### 208. The private-card list: a personal card is confirmed private once, not every month (owner direction 2026-09-24, cases 2 + 4 of the card-attribution map) (SHIPPED 2026-09-25)
 
@@ -10599,6 +10625,25 @@ card scope would show them half, which defeats the grouping.
 
 SPA-only: `docs/lovable-duplicate-groups-prompt.md`, NOT pasted.
 
+### 210. The export gate checks a row against its stamped company, not the one it shows (found 2026-09-25, building item 206)
+
+`coa_gate` splits a month's receipts by the receipt's stored
+`legal_entity_id` (`coa_gate.py`, the per-entity split), while the grid, the
+engine (item 206) and the export's Entity column use the company the card
+chain resolves. Two consequences, both reproduced:
+
+- A row whose company came from a card and whose stamp is blank is never
+  chart-checked (`UNGATED`): its account goes out as-is. Most live rows are
+  like this.
+- A row stamped with one company at ingest (a printed card) and moved to
+  another by a card fix is checked against the OLD company's chart. In the
+  item 206 test a Cloud-only account on a row now showing Cloud Services
+  exports as `(account unmapped - assign)`.
+
+Fix shape: give the gate the shown company (`resolved_entities(card_res)`, as
+item 201 gave `apply_overrides`). That changes export verdicts on live months,
+most visibly by gating rows that today pass unchecked. **Owner, 2026-09-25:
+record only, decide later.** Not built.
 
 ## Shipped (loop history)
 
