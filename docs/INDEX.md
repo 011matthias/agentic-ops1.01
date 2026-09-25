@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-25 | Expense-Recon CPU Throttle Outage and Guarded Deploy | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Expense-Recon%20CPU%20Throttle%20Outage%20and%20Guarded%20Deploy/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Review Lines Item 213 | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Review%20Lines%20Item%20213/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Duplicates Bound Together | client-dev | [→](docs/2026-09-25%20-%20Brisken%20Recon%20Duplicates%20Bound%20Together/Checkpoint.md) |
 | 2026-09-25 | Brisken Recon Copy Suggestion And Account Index Speed | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Copy%20Suggestion%20And%20Account%20Index%20Speed/Mini-Checkpoint-1.md) |
