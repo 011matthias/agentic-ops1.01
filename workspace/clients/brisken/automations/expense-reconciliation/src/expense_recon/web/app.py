@@ -1491,13 +1491,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         percent, the floor the intake refuses below, and whether it is
         refusing right now. Until this existed the only sign of a full
         disk was Dirk's receipts bouncing mid-close.
+
+        The `coa_chart` block (item 207) names the chart file the export
+        check reads, its date, and per curated company which of Dirk's
+        postable accounts it lacks. A stale file blanked a postable account
+        to "(account unmapped - assign)" silently; `ok: false` says so.
+        Null when nothing is provisioned. Never fails the probe.
         """
+        from ..category_vocabulary import chart_coverage
         from .intake_mail import disk_snapshot
 
+        try:
+            coa_chart = chart_coverage()
+        except Exception as exc:  # noqa: BLE001 - liveness must answer
+            coa_chart = {"error": f"{type(exc).__name__}: {exc}"}
         return JSONResponse({
             "status": "ok",
             "server": machine.snapshot(),
             "disk": disk_snapshot(data_root_path),
+            "coa_chart": coa_chart,
         })
 
     # ── The client-failure probe (backlog item 50) ──────────────────────

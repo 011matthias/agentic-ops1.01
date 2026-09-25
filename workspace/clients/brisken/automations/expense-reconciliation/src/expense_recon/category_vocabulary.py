@@ -40,7 +40,9 @@ here returns an account, and recognizing a code does not make it postable.
 """
 from __future__ import annotations
 
+import json
 import os
+from datetime import datetime, timezone
 
 from .coa_provision import (
     PROVISION_ENV,
@@ -52,6 +54,7 @@ from .matching.types import EXPENSE_CATEGORIES
 from .zoho import curated_leaves
 
 __all__ = [
+    "chart_coverage",
     "gl_account_options",
     "gl_leaf_account_name",
     "gl_revision",
@@ -214,3 +217,72 @@ def gl_leaf_account_name(
         return None
     binding = curated_leaves.binding(code, org_id)
     return binding.name if binding is not None else None
+
+
+_COVERAGE_CACHE: dict[tuple, dict] = {}
+
+
+def chart_coverage(provisioning_path: str | None = None) -> dict | None:
+    """Item 207: which of Dirk's postable accounts the export check's chart
+    file does not hold, per curated company.
+
+    The export gate checks every account against the chart file the
+    provisioning names (`chart_path`), on the server's disk. On 2026-09-25
+    that file was the 1 July pull, which predates 18 of the 64 accounts Dirk
+    marks postable for Cloud Services, and the gate blanked each one to
+    "(account unmapped - assign)" with nothing to say why. This names the
+    gap: `missing` lists the leaf codes whose account id the file lacks.
+
+    Read from the provisioning file (default: `EXPENSE_RECON_COA_PROVISION`)
+    and cached on the chart file's mtime and size, because `/healthz` asks
+    every 30 seconds. None when nothing is provisioned; an unreadable chart
+    answers with `error` rather than raising.
+    """
+    path = provisioning_path or os.environ.get(PROVISION_ENV)
+    prov = load_provisioning(path) if path else None
+    if not prov:
+        return None
+    chart_path = str(prov.get("chart_path") or "")
+    try:
+        st = os.stat(chart_path)
+    except OSError as exc:
+        return {"chart_path": chart_path, "error": f"{type(exc).__name__}: {exc}"}
+    key = (chart_path, st.st_mtime_ns, st.st_size, repr(prov.get("entities")))
+    if key in _COVERAGE_CACHE:
+        return _COVERAGE_CACHE[key]
+    try:
+        with open(chart_path, encoding="utf-8") as f:
+            chart = json.load(f)
+    except (OSError, ValueError) as exc:
+        return {"chart_path": chart_path, "error": f"{type(exc).__name__}: {exc}"}
+    companies = []
+    for label, spec in sorted((prov.get("entities") or {}).items()):
+        org_id = str((spec or {}).get("org_id") or "")
+        if not curated_leaves.covers_org(org_id):
+            continue
+        held = {
+            str(a.get("account_id"))
+            for a in ((chart.get(org_id) or {}).get("accounts") or [])
+            if isinstance(a, dict)
+        }
+        codes = sorted(curated_leaves.postable_codes(org_id))
+        companies.append({
+            "company": label,
+            "org_id": org_id,
+            "n_postable": len(codes),
+            "missing": [
+                c for c in codes
+                if curated_leaves.account_id_for(org_id, c) not in held
+            ],
+        })
+    out = {
+        "chart_path": chart_path,
+        "chart_modified": datetime.fromtimestamp(st.st_mtime, timezone.utc)
+        .isoformat(timespec="seconds"),
+        "chart_bytes": st.st_size,
+        "companies": companies,
+        "ok": not any(c["missing"] for c in companies),
+    }
+    _COVERAGE_CACHE.clear()
+    _COVERAGE_CACHE[key] = out
+    return out
