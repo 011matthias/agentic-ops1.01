@@ -11,6 +11,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-25 | Brisken Recon Categorization Score | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Categorization%20Score/Mini-Checkpoint-1.md) |
+| 2026-09-25 | Brisken Recon Categorization Analysis | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Categorization%20Analysis/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Recon Card Strip Speed | client-dev | [→](docs/2026-09-25%20-%20Recon%20Card%20Strip%20Speed/Checkpoint.md) |
 | 2026-09-25 | Brisken Recon Categorization Analysis | client-dev | [→](docs/2026-09-25%20-%20Brisken%20Recon%20Categorization%20Analysis/Checkpoint.md) |
 | 2026-09-25 | Brisken Recon Case 9 Checks And Item 212 | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Case%209%20Checks%20And%20Item%20212/Mini-Checkpoint-1.md) |
