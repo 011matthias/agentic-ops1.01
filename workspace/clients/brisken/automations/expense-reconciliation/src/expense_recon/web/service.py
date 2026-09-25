@@ -7010,6 +7010,12 @@ def resolve_batch_row_cards(
             # (the strip's assignment for this month), "private_card_list"
             # (the listed card), "" when it is not private. Parallel field.
             "private_source": private_source,
+            # Item 214: the private-list number the receipt PRINTS, whoever
+            # made the row private ("" when it prints none, or the row opted
+            # out of the list). The card strip reads it: a printed number
+            # that resolves has no card question left to ask. Internal, not
+            # on `expenses[]`.
+            "listed_private": listed.digits if listed is not None else "",
             # Owner ruling 2026-09-24 (case 6): suggested only on positive
             # evidence the payment was not Brisken's. Anything else falls to
             # the ordinary company / person question and the private option
@@ -7188,6 +7194,7 @@ def resolve_batch_row_cost_centers(
 
 def build_card_review(
     resolution: dict[str, dict], *, copy_docs: "set[str] | None" = None,
+    private_cards: object = None,
 ) -> dict:
     """The batch's card-review strip, grouped server-side (the SPA renders,
     never judges): unresolved hints (with the rows they cover, generic
@@ -7230,16 +7237,50 @@ def build_card_review(
     the strip. None of them has a `summary` twin, so none of them can
     disagree with anything. A caller that passes no `copy_docs` counts
     every row, which is right for a caller outside the Expenses payload:
-    only that payload knows the month's copy decisions."""
-    from ..cards import hint_digit_run, is_generic_tender
+    only that payload knows the month's copy decisions.
 
+    Item 214 (owner ruling 2026-09-25: "it should show assign to card, if
+    the payment info is not in the receipt. dropdown should only consist of
+    cards"). A private row whose card question is already answered leaves
+    `unresolved_hints` and is counted in `n_private_rows` instead: its
+    printed number is on the private-card list (`listed_private`, whoever
+    made the row private), or the strip itself assigned its hint for the
+    month (`private_source` "month"). A row Criss made private by hand
+    whose receipt prints no listed number stays: which card paid is still
+    unanswered. `private_cards` (the live `settings["private_cards"]`) feeds
+    the dropdown: `private_cards[]` lists the ACTIVE entries, and each
+    group's `private_card_options[]` names the ones the strip route would
+    accept for it (`cards.private_card_fits_hint`), so the SPA filters
+    nothing itself."""
+    from ..cards import (
+        PRIVATE_SOURCE_MONTH,
+        hint_digit_run,
+        is_generic_tender,
+        private_card_fits_hint,
+        private_cards_from_setting,
+    )
+
+    listed = {
+        digits: entry
+        for digits, entry in sorted(
+            private_cards_from_setting(private_cards).items(),
+            key=lambda kv: (kv[1].person.casefold(), kv[0]),
+        )
+        if entry.active
+    }
     unresolved: dict[str, dict] = {}
     spelling_rows: dict[str, dict[str, int]] = {}
     resolved: dict[str, dict] = {}
     n_no_hint = 0
+    n_private_rows = 0
     for doc, res in resolution.items():
         hint, card = res["hint"], res["card"]
-        if card is not None:
+        if card is None and hint and res.get("private") and (
+            res.get("listed_private")
+            or res.get("private_source") == PRIVATE_SOURCE_MONTH
+        ):
+            n_private_rows += 1
+        elif card is not None:
             entry = resolved.setdefault(card.key, {
                 "card": {
                     "key": card.key,
@@ -7303,6 +7344,14 @@ def build_card_review(
             if len(re.findall(r"\d{3,8}", s)) == 1
         ]
         entry["hint"] = (healing or entry["spellings"])[0]
+        # Item 214: the listed private cards this group may be assigned to.
+        # Every one on a group printing no number; on a numbered group only
+        # the card that number is, which in practice is none (a listed
+        # number resolves and leaves the strip), so the SPA says to list it.
+        entry["private_card_options"] = [
+            digits for digits in listed
+            if private_card_fits_hint(entry["hint"], digits)
+        ]
     # Item 146: the rows the four box-twin counters below read. The
     # grouping above read every row, decided copies included, by design.
     counted = [
@@ -7322,6 +7371,20 @@ def build_card_review(
         "n_resolved_rows": sum(e["n_rows"] for e in resolved.values()),
         "n_unresolved_rows": sum(e["n_rows"] for e in unresolved.values()),
         "n_no_hint": n_no_hint,
+        # Item 214: hinted rows off the strip because they are private and
+        # their card is known (listed number, or the strip's own month
+        # assignment). With the three counts above it adds up to every row.
+        "n_private_rows": n_private_rows,
+        # Item 214: the dropdown's private half, active entries only, in
+        # the order the SPA lists them (person, then number).
+        "private_cards": [
+            {
+                "digits": digits,
+                "person": entry.person,
+                "label": f"{digits} · {entry.person} (private)",
+            }
+            for digits, entry in listed.items()
+        ],
         # A confirmed private row needs NO entity by design (item 41).
         #
         # Item 146: this one DOES take the decided-copy exemption, even
@@ -8623,7 +8686,10 @@ def build_expense_view(
         # Item 146: the month's decided copies, so the strip's four
         # box-twin counters answer `summary` exactly. `grid_copies` is the
         # same set every listing surface reads.
-        "card_review": build_card_review(card_res, copy_docs=set(grid_copies)),
+        "card_review": build_card_review(
+            card_res, copy_docs=set(grid_copies),
+            private_cards=(settings or {}).get("private_cards"),
+        ),
         # The set-aside strip (backlog item 1): what the quarantine
         # excluded, why, and whether the reviewer restored it.
         "set_aside": set_aside,
@@ -10745,6 +10811,7 @@ def _assign_batch_cards_locked(
         normalize_cards_setting,
         normalize_private_cards_setting,
         private_card_digits,
+        private_card_fits_hint,
         private_cards_from_setting,
     )
     from ..cards_provision import load_cards
@@ -10794,7 +10861,8 @@ def _assign_batch_cards_locked(
     )
 
     parsed: list[tuple[str, str]] = []
-    parsed_private: list[tuple[str, str]] = []
+    # (hint, person, the listed card's digits when picked from the list)
+    parsed_private: list[tuple[str, str, str]] = []
     seen_hints: set[str] = set()
     for a in assignments:
         if not isinstance(a, dict):
@@ -10804,17 +10872,20 @@ def _assign_batch_cards_locked(
         hint = str(a.get("hint") or "").strip()
         card_key = str(a.get("card") or "").strip()
         private_to = str(a.get("private_to") or "").strip()
-        if card_key and private_to:
+        # Item 214: a card from the private-card list, by its digits.
+        private_card = str(a.get("private_card") or "").strip()
+        if sum(map(bool, (card_key, private_to, private_card))) > 1:
             raise RunInputError(
                 f"hint {hint!r} names both a card and a private person; "
                 "an assignment is one or the other",
                 code="assignment_two_targets",
                 hint=hint,
             )
-        if not hint or not (card_key or private_to):
+        if not hint or not (card_key or private_to or private_card):
             raise RunInputError(
-                "each assignment needs a hint and a card key, or a hint "
-                "and the person to reimburse (private_to)",
+                "each assignment needs a hint and a card key, a hint and a "
+                "private card (private_card), or a hint and the person to "
+                "reimburse (private_to)",
                 code="assignment_incomplete",
             )
         if hint in seen_hints:
@@ -10833,6 +10904,33 @@ def _assign_batch_cards_locked(
                 code="hint_not_in_batch",
                 hint=hint,
             )
+        if private_card:
+            # Item 214: the dropdown's private half. The card must be on the
+            # list and switched on, and a receipt that prints a number is
+            # answered by that number alone. Stored as the month's private
+            # hint for the card's person; nothing is learned (the card is
+            # listed already, and a number-less hint has nothing to list).
+            digits = private_card_digits(private_card)
+            entry = listed_private.get(digits or "")
+            if entry is None or not entry.active:
+                raise RunInputError(
+                    f"card {private_card!r} is not on the private card list; "
+                    "add it in Settings > Private cards",
+                    code="private_card_not_listed",
+                    hint=hint,
+                    private_card=private_card,
+                )
+            if not private_card_fits_hint(hint, entry.digits):
+                raise RunInputError(
+                    f"hint {hint!r} prints a different card number than "
+                    f"{entry.digits}; add that number in Settings > Private "
+                    "cards",
+                    code="private_card_number_mismatch",
+                    hint=hint,
+                    private_card=entry.digits,
+                )
+            parsed_private.append((hint, entry.person, entry.digits))
+            continue
         if private_to:
             # "Private card of ...": this month's rows carrying the hint are
             # private, reimbursed to `private_to`. Learning (the remember
@@ -10852,7 +10950,7 @@ def _assign_batch_cards_locked(
                     composed_live,
                     {digits: PrivateCard(digits=digits, person=private_to)},
                 )
-            parsed_private.append((hint, private_to))
+            parsed_private.append((hint, private_to, ""))
             continue
         if card_key not in cards_map:
             # Materialize the batch-config entry from the live registry the
@@ -10944,10 +11042,10 @@ def _assign_batch_cards_locked(
     # instruction writes the list (owner ruling 2026-09-24, only corrections
     # are memorized).
     private_settings_dirty = False
-    for hint, person in parsed_private:
+    for hint, person, picked in parsed_private:
         private_hints_map[hint] = person
         hints_map.pop(hint, None)
-        digits = private_card_digits(hint) if learn else None
+        digits = private_card_digits(hint) if learn and not picked else None
         if digits is not None:
             prior = settings_private.get(digits) or {}
             settings_private[digits] = {
@@ -10964,6 +11062,8 @@ def _assign_batch_cards_locked(
             ),
             "learned": digits is not None,
             "digits": digits or "",
+            # Item 214: the listed card the pick named, on a pick only.
+            **({"private_card": picked} if picked else {}),
         })
     if private_settings_dirty:
         try:

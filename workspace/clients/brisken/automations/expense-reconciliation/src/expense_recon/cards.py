@@ -593,6 +593,22 @@ def private_card_for(
     return None
 
 
+def private_card_fits_hint(hint: str | None, digits: str) -> bool:
+    """Whether the card strip may assign `hint` to the listed private card
+    `digits` (item 214, owner ruling 2026-09-25: the dropdown holds cards
+    only). A hint printing no number fits every card: the receipt says
+    nothing about which card paid, so the reviewer's pick decides. A hint
+    printing a number fits only the card that number is: its last 4, or for
+    a shorter ending ("xx78") a card ending in it. A printed number outranks
+    a pick, so "3281" never answers a receipt that prints 2598; that number
+    goes on the list in Settings > Private cards."""
+    run = hint_digit_run(hint)
+    if not run:
+        return True
+    tail = run[-4:]
+    return digits == tail if len(tail) == 4 else digits.endswith(tail)
+
+
 def classify_payment_evidence(
     hint: str | None,
     cards: "dict[str, Card]",

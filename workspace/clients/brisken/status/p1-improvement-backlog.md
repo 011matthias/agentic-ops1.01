@@ -10950,7 +10950,7 @@ longer waits at all: the 01:4x statement attach took it to `vendor_guess`
 Tests: `tests/test_reason_copy_item_213.py` (6; two route-level); the wiring
 proven red with `tools/regress_check.py`; suite 3620 passed / 2 skipped.
 
-### 214. The card strip asks only where the receipt carries no payment info, and its dropdown lists cards only (owner ruling 2026-09-25; found listing 3281) (RULED, not built)
+### 214. The card strip asks only where the receipt carries no payment info, and its dropdown lists cards only (owner ruling 2026-09-25; found listing 3281) (BACKEND BUILT 2026-09-25; SPA prompt `docs/lovable-card-strip-cards-only-prompt.md` not pasted)
 
 **Found.** After 3281 was listed (item 208), September's DB Fernverkehr row
 reads private / `private_card_list` / Dirk Neumann, yet `card_review` still
@@ -11001,6 +11001,28 @@ offers before adding a route). SPA prompt: the dropdown's items from
 filter with its "Not private" control. The published "Private card of..."
 option (Follow-up 1) stays harmless until then; `private_to` stays accepted
 so nothing already sent breaks.
+
+**Built 2026-09-25 (backend).** Rule 1 as read, with the `month` question
+settled the way the company half already works: a hint the strip itself
+assigned for the month is answered, exactly as a hint assigned to a company
+card moves to `resolved[]`, so it leaves too; a row Criss marked private by
+hand stays unless its receipt prints a listed number. `card_review` drops
+those rows into the new `n_private_rows`, sends `private_cards[]` (active
+list entries with the label "3281 · Dirk Neumann (private)") and, per group,
+`private_card_options[]`. The route takes `{"hint", "private_card": "3281"}`
+(month record for the card's person, never a list write) and refuses
+`private_card_not_listed` and `private_card_number_mismatch`: a receipt that
+prints 2598 is answered by 2598 alone, so "3281" is never offered or accepted
+there and the SPA points at Settings > Private cards instead. "Not private"
+needs no route: it is a screen toggle, and the company card picked after it
+is the ordinary assignment. Rule 4 ("private card registry") is not acted
+on: the Settings tab keeps its "Private cards" label until the owner
+confirms a rename. Live census before the change (GET only, 7 months): 31
+strip groups, 14 suggested private, 8 of those printing a number no list
+holds (April 1340 / 78 / 2598 / 4167, June 3976, July 2544 / 9129 / 3076),
+6 with no number (June DINHEIRO, July DEBIT, August EC-Karte, September Bar
+/ girocard / girocardOLV). Tests `tests/test_card_strip_private_item_214.py`;
+four wires proven RED.
 
 ### 215. A statement attach keeps only the month's own charges (owner decision 2026-09-25, D2 going forward) (RECORDED, not built)
 
