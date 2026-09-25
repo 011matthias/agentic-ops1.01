@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-25 | Brisken Recon Duplicates Real Expense Item 217 | client-dev | [→](docs/2026-09-25%20-%20Brisken%20Recon%20Duplicates%20Real%20Expense%20Item%20217/Checkpoint.md) |
 | 2026-09-25 | Brisken Recon Categorization Analysis | client-dev | [Mini-Checkpoint-2](docs/2026-09-25%20-%20Brisken%20Recon%20Categorization%20Analysis/Mini-Checkpoint-2.md) |
 | 2026-09-25 | Brisken Recon Account Map | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Account%20Map/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Merchant Identity | client-dev | [→](docs/2026-09-25%20-%20Brisken%20Recon%20Merchant%20Identity/Checkpoint.md) |
