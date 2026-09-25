@@ -66,27 +66,30 @@ CARDS = {
 }
 
 CARD_HEADERS = ("Card", "Date", "Description", "Type", "Amount")
+# The live case was Lovable and Anthropic. Since item 183 half A those two
+# (and OpenAI) are owner-gated in the merchant list, so Publish writes no
+# card for them; the fixture uses ungated vendors in the same shape.
 CARD_ROWS = [
-    ("2838", datetime(2026, 8, 31), "LOVABLE", "Sale", -15.00),
+    ("2838", datetime(2026, 8, 31), "CANVA", "Sale", -15.00),
     ("3645", datetime(2026, 8, 30), "OBSIDIAN", "Sale", -96.00),
-    ("2838", datetime(2026, 8, 20), "ANTHROPIC", "Sale", -20.00),
-    ("3645", datetime(2026, 8, 18), "ANTHROPIC", "Sale", -30.00),
+    ("2838", datetime(2026, 8, 20), "FIGMA", "Sale", -20.00),
+    ("3645", datetime(2026, 8, 18), "FIGMA", "Sale", -30.00),
 ]
 
 # (file name, vendor, total, date)
 RECEIPTS = [
-    ("lovable.jpg", "Lovable Labs", "15.00", "2026-08-31"),
+    ("canva.jpg", "Canva Pty", "15.00", "2026-08-31"),
     ("obsidian.jpg", "Obsidian", "96.00", "2026-08-30"),
-    ("anthropic-corp.jpg", "Anthropic", "20.00", "2026-08-20"),
-    ("anthropic-cloud.jpg", "Anthropic", "30.00", "2026-08-18"),
+    ("figma-corp.jpg", "Figma", "20.00", "2026-08-20"),
+    ("figma-cloud.jpg", "Figma", "30.00", "2026-08-18"),
     ("notion.jpg", "Notion", "8.00", "2026-08-10"),
 ]
 
 PAIRED = {
-    "lovable.jpg": "corp-2838",
+    "canva.jpg": "corp-2838",
     "obsidian.jpg": "cloud-3645",
-    "anthropic-corp.jpg": "corp-2838",
-    "anthropic-cloud.jpg": "cloud-3645",
+    "figma-corp.jpg": "corp-2838",
+    "figma-cloud.jpg": "cloud-3645",
 }
 
 
@@ -97,9 +100,9 @@ def _entry(*aliases: str, **extra) -> dict:
 
 
 MERCHANTS = {
-    "Lovable Labs": _entry("Lovable Labs", "Lovable"),
+    "Canva Pty": _entry("Canva Pty", "Canva"),
     "Obsidian": _entry("Obsidian"),
-    "Anthropic": _entry("Anthropic"),
+    "Figma": _entry("Figma"),
     "Notion": _entry("Notion"),
 }
 
@@ -254,9 +257,9 @@ def test_publishing_learns_the_card_the_statement_named(client, monkeypatch):
     _publish(client, batch)
 
     after = _merchants(client)
-    assert after["Lovable Labs"]["cards_seen"] == ["corp-2838"]
-    assert after["Lovable Labs"]["card_key"] == "corp-2838"
-    assert after["Lovable Labs"]["card_key_learned"] is True
+    assert after["Canva Pty"]["cards_seen"] == ["corp-2838"]
+    assert after["Canva Pty"]["card_key"] == "corp-2838"
+    assert after["Canva Pty"]["card_key_learned"] is True
     assert after["Obsidian"]["cards_seen"] == ["cloud-3645"]
     assert after["Obsidian"]["card_key"] == "cloud-3645"
 
@@ -264,13 +267,13 @@ def test_publishing_learns_the_card_the_statement_named(client, monkeypatch):
 def test_a_merchant_the_month_settles_on_two_cards_is_left_unpinned(
     client, monkeypatch
 ):
-    """Anthropic's two receipts settle charges on both cards. The learner
+    """Figma's two receipts (the live case is Anthropic's) settle charges on both cards. The learner
     records both and pins neither -- the live-measured reason the settled map
     is the full reconciled bucket rather than the confirmed-only subset."""
     batch = _august(client, monkeypatch)
     _publish(client, batch)
 
-    anthropic = _merchants(client)["Anthropic"]
+    anthropic = _merchants(client)["Figma"]
     assert anthropic["cards_seen"] == ["cloud-3645", "corp-2838"]
     assert "card_key" not in anthropic
     assert "card_key_learned" not in anthropic
@@ -278,13 +281,13 @@ def test_a_merchant_the_month_settles_on_two_cards_is_left_unpinned(
 
 def test_a_rejected_pair_teaches_no_card(client, monkeypatch):
     batch = _august(client, monkeypatch)
-    lovable = _charge(client, batch, "LOVABLE", "15")
+    lovable = _charge(client, batch, "CANVA", "15")
     _decide(client, batch, lovable["transaction_id"], "rejected")
-    assert _rows(client, batch)["lovable.jpg"]["card"] is None
+    assert _rows(client, batch)["canva.jpg"]["card"] is None
 
     _publish(client, batch)
 
-    assert not _merchants(client)["Lovable Labs"].get("cards_seen")
+    assert not _merchants(client)["Canva Pty"].get("cards_seen")
 
 
 def test_a_receipt_with_no_pairing_teaches_no_card(client, monkeypatch):

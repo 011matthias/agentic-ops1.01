@@ -9036,7 +9036,57 @@ read off the token response. `settings.READ` is gone with it, which is why
 `GET /organizations` now 401s with code 57 and why the puller does not route
 through the org directory.
 
-### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account (HALF B SHIPPED 2026-09-24; half A is an owner decision, see below)
+### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account (HALF B SHIPPED 2026-09-24; HALF A BUILT 2026-09-25, SPA prompt not pasted)
+
+**Half A built 2026-09-25 (owner decisions 2026-09-25: corrections start
+ticked, conflicts unticked; an unticked lesson is dropped and offered again,
+no declined store; Publish with nothing ticked still publishes).**
+
+- `GET /api/runs/{id}/memory-plan` gains `lessons[]`: `{id, kind, table, key,
+  description, sources, default_keep, owner_gated, conflict_group}`. One
+  lesson per learning row (`merchant_category:<entity>|<vendor>`,
+  `field_correction:<entity>|<vendor>|<field>`, ...) and one per merchant-list
+  entry (`registry:<merchant>`). Sources name the corrected rows; for the
+  entity and field tables they are found by running the real learner over one
+  row at a time (`web/memory_lessons.py`).
+- Conflicts: every key half B's learners refuse is offered as one UNTICKED
+  lesson per candidate value (`conflict:<group>:<category>|<account>`). A
+  ticked candidate is written by re-running the real learner over that
+  candidate's rows (`learning.learn_category_candidate`, and the registry
+  learner over the subset). Two candidates of one group kept together
+  conflict again and teach nothing (`unresolved_conflicts`).
+- `POST /api/runs/{id}/publish` takes `keep` (the ticked ids) or `skip`.
+  Neither = defaults. The save now APPLIES the plan's recorded writes,
+  filtered (`apply_plan`), and writes only the kept merchant entries, so the
+  checklist and the write cannot differ; the journal holds exactly the kept
+  rows and `learned.lessons` names kept / skipped / refused. Learner counts in
+  `learned` are counted from what was written, so the toast no longer counts
+  a skipped lesson. A republish with unchanged corrections still writes a
+  lesson ticked now that no earlier save kept (offered again, ticked later).
+- OpenAI, Anthropic and Lovable: their `registry:` lesson reads
+  `owner_gated: true`, is never ticked and is refused if sent
+  (`refused_owner_gated`). Their memory rows stay ordinary lessons. The
+  whole merchant-list write is refused, so the M2 / item-171 card learner
+  no longer records `cards_seen` for them either (it only ever updated an
+  existing entry, and live none of the three exists).
+  `test_settled_charge_learner_item_171.py` used them as fixture vendors and
+  now uses ungated ones in the same shape.
+- Step 4, item 180's map: on a GL month a kept account correction (her leaf
+  code, postable in the company the row SHOWS) writes
+  `merchants[].accounts[<account_companies label>]`, code only, never the
+  single `zoho_account` and never the merchant-wide `category`. Per-company
+  disagreement skips that company only (`skipped_account_conflict`); new
+  count `accounts_set`.
+- **Leak closed on the way:** `registry_upserts_from_expense_run` read
+  `ov["category"]` raw, so a Confirm or an account-only fix taught the model's
+  category into the merchant list after the memory learner had stopped doing
+  so (2026-09-24 ruling). Both learners now read one helper,
+  `learning.taught_value`.
+- Tests: `tests/test_publish_checklist_item_183a.py` (10, route-level through
+  `memory-plan` -> `publish`). Six wires proven RED under
+  `tools/regress_check.py`: the keep filter (7 red), the GL context (1), the
+  owner gate (1), the candidate re-learn (1), offered-again (2), the registry
+  human-only read (1). SPA half: `docs/lovable-publish-checklist-prompt.md`.
 
 **Half B shipped 2026-09-24.** A disagreeing account is now a conflict in BOTH
 learners, and a category-only teach no longer wipes a learned account. What

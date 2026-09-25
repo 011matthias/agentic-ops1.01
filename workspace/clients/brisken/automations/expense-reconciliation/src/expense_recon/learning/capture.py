@@ -316,7 +316,7 @@ def learn_from_expense_run(
     # set are learned here beside the receipt ones.
     n_category, n_skipped = _learn_categories(
         store,
-        {**eff_by_id, **charge_pseudo_receipts(transactions)},
+        expense_category_sources(effective_receipts, transactions),
         category_overrides,
         source_run,
         now_iso,
@@ -328,6 +328,78 @@ def learn_from_expense_run(
         merchant_entities=n_entity,
         field_corrections=n_field,
     )
+
+
+def expense_category_sources(
+    effective_receipts: list[Receipt], transactions=None,
+) -> dict[str, Receipt]:
+    """The rows an expense month's category overrides are keyed against:
+    its effective receipts, and each charge as its pseudo-receipt (item 109).
+    One builder, so the learner and item 183's checklist read the same map."""
+    return {
+        **{r.document_id: r for r in effective_receipts},
+        **charge_pseudo_receipts(transactions),
+    }
+
+
+def taught_value(ov: dict | None) -> tuple[str | None, str | None]:
+    """What one override row teaches: `(category, account)`. The category
+    only when it is hers (`category_is_human`, the 2026-09-24 ruling); the
+    account always, because naming it is the correction she made."""
+    ov = ov or {}
+    category = ov.get("category") if category_is_human(ov) else None
+    return (category or None), (ov.get("zoho_account") or None)
+
+
+def category_key(r: Receipt | None) -> tuple[str, str] | None:
+    """The `(legal_entity_id, vendor_norm)` a row's category lesson is
+    stored under, or None when the row names no vendor."""
+    if r is None or not r.detected_vendor:
+        return None
+    vnorm = normalize_vendor(r.detected_vendor)
+    if not vnorm:
+        return None
+    return (r.legal_entity_id, vnorm)
+
+
+def merge_taught(values) -> tuple[str | None, str | None, bool]:
+    """Fold several rows' `(category, account)` into one, with the conflict
+    flag. Absence is not disagreement: the first NAMED value wins over rows
+    naming none, and only two named, different values conflict (item 183)."""
+    category = account = None
+    conflict = False
+    for cat, acct in values:
+        if cat:
+            if not category:
+                category = cat
+            elif category != cat:
+                conflict = True
+        if acct:
+            if not account:
+                account = acct
+            elif account != acct:
+                conflict = True
+    return category, account, conflict
+
+
+def category_groups(
+    rec_by_id: dict[str, Receipt],
+    category_overrides: dict[tuple[str, int], dict],
+) -> dict[tuple[str, str], list[tuple[tuple[str, int], tuple]]]:
+    """Every override row that teaches something, grouped by the key it
+    teaches: `{(entity, vendor_norm): [((doc, line), (category, account))]}`.
+    `_learn_categories` writes one row per group; item 183's checklist names
+    each group's rows and splits a conflicting group into its candidates."""
+    groups: dict[tuple[str, str], list] = {}
+    for (document_id, line_index), ov in category_overrides.items():
+        value = taught_value(ov)
+        if not any(value):
+            continue
+        key = category_key(rec_by_id.get(document_id))
+        if key is None:
+            continue
+        groups.setdefault(key, []).append(((document_id, line_index), value))
+    return groups
 
 
 def _learn_categories(
@@ -357,71 +429,56 @@ def _learn_categories(
     machine guess disagreeing with a human statement is not a disagreement).
     Her ACCOUNT still teaches, because that is the correction she made, and
     dropping it would lose the one fact the direct-to-GL chain most needs.
-    Absence of provenance reads as human, per `category_is_human`."""
-    # (legal_entity_id, vendor_norm) -> {"category","zoho_account","conflict"}
-    pending: dict[tuple[str, str], dict] = {}
+    Absence of provenance reads as human, per `category_is_human`.
 
-    for (document_id, _line_index), ov in category_overrides.items():
-        category = ov.get("category") if category_is_human(ov) else None
-        account = ov.get("zoho_account")
-        if not category and not account:
-            continue
-        r = rec_by_id.get(document_id)
-        if r is None or not r.detected_vendor:
-            continue
-        vnorm = normalize_vendor(r.detected_vendor)
-        if not vnorm:
-            continue
-        key = (r.legal_entity_id, vnorm)
-        prior = pending.get(key)
-        if prior is None:
-            pending[key] = {
-                "category": category,
-                "zoho_account": account,
-                "conflict": False,
-            }
-            continue
-        # Absence is not disagreement, now on BOTH halves. A row whose
-        # category is the model's carries none here, so the first row that
-        # NAMES a category wins over rows that name none, and only two
-        # named, different categories conflict. This is the rule item 183
-        # gave the account, applied to the category for the same reason.
-        if category:
-            if not prior["category"]:
-                prior["category"] = category
-            elif prior["category"] != category:
-                prior["conflict"] = True
-        # Item 183, the half that matters most: this table IS Tier 1 of the
-        # direct-to-GL chain, consulted before the model. Two rows agreeing
-        # on the category and naming different accounts used to agree, and
-        # the first account won silently.
-        if account:
-            if not prior["zoho_account"]:
-                prior["zoho_account"] = account
-            elif account != prior["zoho_account"]:
-                prior["conflict"] = True
-
+    Item 183, the half that matters most: this table IS Tier 1 of the
+    direct-to-GL chain, consulted before the model, so two rows agreeing on
+    the category and naming different accounts conflict too (`merge_taught`)
+    rather than letting the first account win silently."""
     n_category = n_skipped = 0
-    for (legal_entity_id, vnorm), val in pending.items():
-        if val["conflict"]:
+    for (legal_entity_id, vnorm), rows in category_groups(
+        rec_by_id, category_overrides
+    ).items():
+        category, account, conflict = merge_taught(v for _row, v in rows)
+        if conflict:
             n_skipped += 1
             continue
         store.record_merchant_category(
             legal_entity_id,
             vnorm,
-            val["category"],
-            val["zoho_account"],
+            category,
+            account,
             now_iso,
             source_run,
             # Item 183: no account named by any of this vendor's edits means
             # the reviewer said nothing about where it posts, which must not
             # read as "forget what you learned".
-            keep_account=not val["zoho_account"],
+            keep_account=not account,
             # The mirror: no category of HERS among this vendor's edits means
             # she said nothing about the category, so a stored one survives
             # and the model's guess never replaces it.
-            keep_category=not val["category"],
+            keep_category=not category,
         )
         n_category += 1
 
     return n_category, n_skipped
+
+
+def learn_category_candidate(
+    store: LearningStore,
+    rec_by_id: dict[str, Receipt],
+    category_overrides: dict[tuple[str, int], dict],
+    rows: list[tuple[str, int]],
+    source_run: str,
+    now_iso: str,
+) -> tuple[int, int]:
+    """Item 183: the learner run over ONE conflict candidate's rows only.
+
+    A conflicting vendor teaches nothing at sign-off. When the reviewer picks
+    one of its candidates on the Publish checklist, the write comes from the
+    same `_learn_categories` over exactly those rows, never from a call built
+    by hand, so what a candidate would teach and what it does teach are one
+    code path. Two candidates of one vendor kept together conflict again and
+    teach nothing, which is the learner's own answer."""
+    subset = {k: category_overrides[k] for k in rows if k in category_overrides}
+    return _learn_categories(store, rec_by_id, subset, source_run, now_iso)
