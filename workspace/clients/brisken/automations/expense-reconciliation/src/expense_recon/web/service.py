@@ -3398,8 +3398,20 @@ def build_view(
     # account (a rule's answer, never the model's). Only the GET route passes
     # settings; every other caller reads the rows as stored.
     live_registry = MerchantRegistry.from_settings(settings) if settings else None
+    # A receipt whose own company is blank takes the company of the charge
+    # holding it (the grid reads it off the card chain; without this the
+    # reconcile row kept the stored suggestion the grid had replaced).
+    tx_company = {t.transaction_id: t.legal_entity_id for t in transactions}
+    live_entity_by_doc = {
+        m.document_id: tx_company.get(m.transaction_id, "")
+        for m in (*outcome.matches, *outcome.judgment_required, *outcome.ambiguous)
+    }
     receipts, live_receipts_stamped = live_registry_accounts(
         receipts, live_registry, entity_orgs=gl_run_entity_orgs(run),
+        entity_by_doc={
+            r.document_id: live_entity_by_doc.get(r.document_id, "")
+            for r in receipts if not str(r.legal_entity_id or "").strip()
+        },
     )
     rec_by_id = {r.document_id: r for r in receipts}
     # Note item T3: which upload printed each charge, and where. Read once
@@ -3416,11 +3428,25 @@ def build_view(
     # snapshot as copies; fold them into the lookup so a cross-batch
     # pairing renders its receipt. They are NOT part of `receipts`: the
     # month's own pool, counts, and export never absorb them.
+    borrowed = []
     for bd in (run.snapshot or {}).get(BORROWED_RECEIPTS_KEY) or []:
         try:
             br = receipt_from_dict(bd)
         except (KeyError, TypeError, ValueError):
             continue
+        if br.document_id not in rec_by_id:
+            borrowed.append(br)
+    # Front 3 step 1: a borrowed receipt reads the list as it is now too, or
+    # the charge holding it here disagrees with its own month's grid.
+    borrowed, borrowed_stamped = live_registry_accounts(
+        borrowed, live_registry, entity_orgs=gl_run_entity_orgs(run),
+        entity_by_doc={
+            br.document_id: live_entity_by_doc.get(br.document_id, "")
+            for br in borrowed if not str(br.legal_entity_id or "").strip()
+        },
+    )
+    live_receipts_stamped.update(borrowed_stamped)
+    for br in borrowed:
         rec_by_id.setdefault(br.document_id, br)
     # Where each borrowed receipt lives. Read once here because both the
     # candidate rows below and the settled-row badge further down name it,

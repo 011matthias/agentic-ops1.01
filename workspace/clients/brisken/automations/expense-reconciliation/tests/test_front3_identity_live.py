@@ -259,3 +259,60 @@ def test_a_bank_line_the_close_spelling_tier_misses_names_its_merchant_and_accou
     assert after["merchant"] == {"name": "Google Workspace", "match": "descriptor"}
     assert (after["posting_category"]["category"], after["posting_category"]["origin"]) == (
         LISTED_LEAF, "rule"), after["posting_category"]
+
+# ── Steps 4 and 5: the model's answer re-read against today's refusals ──
+
+ZOHO_ERP = "E500010-10"
+PARENT = "E500010"
+
+
+def _one_receipt(web, monkeypatch, vendor: str, answer: str) -> tuple[str, dict]:
+    mock = MockLLMClient(
+        extraction_responses=[ExtractedReceipt(
+            date="2026-08-01", total="40.00", currency="USD", vendor=vendor,
+            reference="", confidence=0.9, notes="",
+            line_items=(ExtractedLineItem("Workspace seat, August", "40.00"),))],
+        responses=[ClassificationResult(_label(answer), None, 0.9, "mock")],
+    )
+    monkeypatch.setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
+    resp = web.post("/api/expense-batches", data={"legal_entity": CORP})
+    batch = resp.json()["batch_id"]
+    _done(web, web.post(
+        f"/api/expense-batches/{batch}/receipts",
+        files=[("files", ("r.jpg", JPG, "application/octet-stream"))]))
+    (row,) = web.get(f"/api/expense-batches/{batch}").json()["expenses"]
+    return batch, row
+
+
+def test_the_model_may_not_land_on_zoho_erp_for_a_vendor_that_is_not_zoho(
+    web, monkeypatch,
+):
+    # The read-time re-read off, so the grid shows what ingest STORED.
+    monkeypatch.setattr("expense_recon.categorize._stale_suggestion", lambda *a: None)
+    _batch, row = _one_receipt(web, monkeypatch, "Acme Cloud", ZOHO_ERP)
+    assert "suggested_category" not in row, row.get("suggested_category")
+    assert row["posting_category"] is None
+    assert row["review"]["refusal"] == "account_vendor_specific", row["review"]
+    _batch, zoho = _one_receipt(web, monkeypatch, "Zoho Corporation", ZOHO_ERP)
+    assert zoho["suggested_category"]["category"] == ZOHO_ERP, "Zoho's own account stands"
+
+
+@pytest.mark.parametrize("answer, vendor, refusal", [
+    (ZOHO_ERP, "Acme Cloud", "account_vendor_specific"),
+    (PARENT, "Acme Cloud", "model_picked_parent"),
+])
+def test_a_suggestion_stored_before_the_rule_reads_as_its_refusal(
+    web, monkeypatch, answer, vendor, refusal,
+):
+    """Stored before the guards existed (both switched off for the ingest
+    only), read after: the grid and the file refuse it, nothing stored moved."""
+    with monkeypatch.context() as m:
+        m.setattr("expense_recon.categorize.vendor_may_post", lambda *a: True)
+        m.setattr("expense_recon.categorize.curated_leaves.has_postable_children",
+                  lambda *a: False)
+        batch_id, _stored = _one_receipt(web, monkeypatch, vendor, answer)
+    (row,) = web.get(f"/api/expense-batches/{batch_id}").json()["expenses"]
+    assert "suggested_category" not in row, row.get("suggested_category")
+    assert row["review"]["refusal"] == refusal, row["review"]
+    assert row["line_items"][0]["category"] is None
+    assert _csv_accounts(web, batch_id) != [f"suggested: {_name(answer)}"]
