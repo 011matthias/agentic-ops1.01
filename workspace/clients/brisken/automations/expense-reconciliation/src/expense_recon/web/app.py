@@ -2905,10 +2905,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return JSONResponse({"error": "unknown job", "code": "job_not_found"}, status_code=404)
         return JSONResponse(job)
 
-    def _expense_view(store: RunStore, run) -> dict:
+    def _expense_view(
+        store: RunStore, run, *, evidence: EvidenceSource | None = None
+    ) -> dict:
         """The receipt-spine render model for an expense batch, with every
         stored edit overlay loaded. Shared by the run dispatch, the batch
-        GET, and the edit endpoints' summary replies."""
+        GET, and the edit endpoints' summary replies.
+
+        `evidence` lets a caller that builds several months in one request
+        hand them one statement read; left None, this view reads its own."""
         overrides = store.get_category_overrides(run.run_id)
         field_overrides = store.get_expense_field_overrides(run.run_id)
         edits = store.get_expense_edits(run.run_id)
@@ -2958,15 +2963,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             learning_db_path=app.state.learning_db_path,
             # Item 204: every month's loaded statements, read once and only
             # when a card-less row asks (waits_for_statements, card_suggestion).
-            statement_evidence=EvidenceSource(store),
+            statement_evidence=(
+                evidence if evidence is not None else EvidenceSource(store)
+            ),
         )
 
-    def _expense_page_view(store: RunStore, run) -> dict:
+    def _expense_page_view(
+        store: RunStore, run, *, evidence: EvidenceSource | None = None
+    ) -> dict:
         """The Expenses page's payload: `_expense_view` plus its card tabs
         (item 138). Only the page GETs build the tabs; the edit routes that
         reply with `_expense_view`'s summary skip the extra view build."""
         return attach_expense_card_tabs(
-            _expense_view(store, run), run,
+            _expense_view(store, run, evidence=evidence), run,
             overrides=store.get_category_overrides(run.run_id),
             field_overrides=store.get_expense_field_overrides(run.run_id),
             edits=store.get_expense_edits(run.run_id),
@@ -5008,10 +5017,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not _receipt_first_on():
             return _flag_off()
         with open_store() as store:
+            # Every month's view asks the same all-months statement read, so
+            # the request reads it once (2026-09-25: it was read once per
+            # month, ~0.5 s of this route on seven months).
+            evidence = EvidenceSource(store)
             return JSONResponse(build_card_status(
                 store,
                 receipt_cards=lambda run: receipt_card_counts(
-                    _expense_page_view(store, run)
+                    _expense_page_view(store, run, evidence=evidence)
                 ),
                 # The live registry's tree, so the months strip can nest a
                 # subcard under its account (item 191).
