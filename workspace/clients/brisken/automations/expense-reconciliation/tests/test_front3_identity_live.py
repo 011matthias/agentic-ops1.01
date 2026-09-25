@@ -186,9 +186,7 @@ def test_a_persons_pick_still_wins_over_the_listed_account(web, monkeypatch):
     assert _csv_accounts(web, batch) == [_name(MODEL_LEAF)]
 
 
-def test_a_receiptless_charge_takes_the_listed_account_on_the_run_payload(
-    web, monkeypatch,
-):
+def _statement_month(web, monkeypatch, descriptor: str) -> str:
     mock = MockLLMClient(
         responses=[ClassificationResult(_label(MODEL_LEAF), None, 0.9, "mock")] * 8)
     monkeypatch.setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
@@ -198,7 +196,7 @@ def test_a_receiptless_charge_takes_the_listed_account_on_the_run_payload(
     wb = Workbook()
     ws = wb.active
     ws.append(["Date", "Description", "Type", "Amount"])
-    ws.append([datetime(2026, 8, 12), "ACME ANALYTICS", "Sale", -41.00])
+    ws.append([datetime(2026, 8, 12), descriptor, "Sale", -41.00])
     ws.append([datetime(2026, 8, 4), "Payment Thank You-Mobile", "Payment", 41.00])
     buf = io.BytesIO()
     wb.save(buf)
@@ -211,11 +209,22 @@ def test_a_receiptless_charge_takes_the_listed_account_on_the_run_payload(
               "account_legal_entities": json.dumps({"card-2838": CORP}),
               "account_card_currency": "USD"},
     ))
+    return batch
+
+
+def _charge_row(web, batch: str, descriptor: str) -> dict:
+    view = web.get(f"/api/runs/{batch}").json()
+    assert view["category_vocabulary"] == "gl", "precondition: a GL month"
+    return next(r for r in view["rows"] if r["vendor"] == descriptor)
+
+
+def test_a_receiptless_charge_takes_the_listed_account_on_the_run_payload(
+    web, monkeypatch,
+):
+    batch = _statement_month(web, monkeypatch, "ACME ANALYTICS")
 
     def row():
-        view = web.get(f"/api/runs/{batch}").json()
-        assert view["category_vocabulary"] == "gl", "precondition: a GL month"
-        return next(r for r in view["rows"] if r["vendor"] == "ACME ANALYTICS")
+        return _charge_row(web, batch, "ACME ANALYTICS")
 
     before = row()
     assert before["suggested_category"]["category"] == MODEL_LEAF, "precondition"
@@ -234,3 +243,19 @@ def test_a_receiptless_charge_takes_the_listed_account_on_the_run_payload(
         MODEL_LEAF, "suggestion"), posting
     assert "suggested_category" not in after
     assert after["charge_category"]["origin"] == "rule"
+
+
+def test_a_bank_line_the_close_spelling_tier_misses_names_its_merchant_and_account(
+    web, monkeypatch,
+):
+    """Step 2 through the caller: the descriptor tier puts a Chase-cut line
+    on its listed merchant, so the per-company account reaches the charge."""
+    batch = _statement_month(web, monkeypatch, "GOOGLE *Workspace_bris")
+    assert "merchant" not in _charge_row(web, batch, "GOOGLE *Workspace_bris")
+    r = web.put("/api/settings", json={"merchants": {"Google Workspace": {
+        "aliases": [], "category": None, "accounts": {CORP: LISTED_LEAF}}}})
+    assert r.status_code == 200, r.text
+    after = _charge_row(web, batch, "GOOGLE *Workspace_bris")
+    assert after["merchant"] == {"name": "Google Workspace", "match": "descriptor"}
+    assert (after["posting_category"]["category"], after["posting_category"]["origin"]) == (
+        LISTED_LEAF, "rule"), after["posting_category"]

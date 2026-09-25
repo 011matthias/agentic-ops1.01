@@ -2125,3 +2125,45 @@ def test_front5_row_fields_are_absent_or_well_formed(payloads):
                 assert isinstance(rev, str) and rev in ids
                 assert rev != row["transaction_id"]
                 assert row["row_type"] == "refund"
+
+MERCHANT_MATCH_KINDS = {"exact", "fuzzy", "descriptor"}
+
+
+def test_live_merchant_fields_are_absent_or_well_formed(payloads):
+    """Front 3 step 1 (2026-09-25). `merchant` on a run row and on a grid
+    expense is ABSENT (never null) or `{name, match}`, `match` one of exact /
+    fuzzy / descriptor. On the grid, `vendor.stamped` is absent or `{display,
+    source}` and never equals the live `{display, source}` beside it; on both
+    payloads `posting_category.stamped` is absent or the category shape
+    (`category`, `zoho_account`, `source`, `origin`) and only rides on a
+    posting a rule decided. A type guard; the route-level proofs are
+    `tests/test_front3_identity_live.py`."""
+    def check_merchant(row):
+        if "merchant" not in row:
+            return
+        m = row["merchant"]
+        assert set(m) == {"name", "match"}, m
+        assert isinstance(m["name"], str) and m["name"], m
+        assert m["match"] in MERCHANT_MATCH_KINDS, m
+
+    def check_stamped(row):
+        posting = row.get("posting_category")
+        if not posting or "stamped" not in posting:
+            return
+        was = posting["stamped"]
+        assert {"category", "zoho_account", "source", "origin"} <= set(was), was
+        assert posting["origin"] == "rule", posting
+
+    for view in payloads["run"]:
+        for row in view.get("rows") or []:
+            check_merchant(row)
+            check_stamped(row)
+    for view in payloads["expense_batch"]:
+        for expense in view.get("expenses") or []:
+            check_merchant(expense)
+            check_stamped(expense)
+            vendor = expense["vendor"]
+            if "stamped" in vendor:
+                assert set(vendor["stamped"]) == {"display", "source"}, vendor
+                assert (vendor["stamped"]["display"], vendor["stamped"]["source"]) != (
+                    vendor["display"], vendor["source"]), vendor
