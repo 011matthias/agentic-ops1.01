@@ -15215,7 +15215,7 @@ def rematch_month(
     # document number, a page printing the other's number, two numbers, two
     # cards, vendor + date), and only a `copy` verdict collapses.
     pool_before_collapse = pool
-    # Item 216: the copy a charge already holds stays the kept one, so a
+    # Item 217: the copy a charge already holds stays the kept one, so a
     # confirmed decision never ends up naming a set-aside copy.
     pool, collapsed, dup_decisions = duplicate_pool(
         run, pool, dup_resolutions, held=held_documents(store, run)
@@ -16950,7 +16950,7 @@ RECEIPT_DIGESTS_KEY = "receipt_digests"
 # Snapshot key: the group ids the last re-match's statement check (rung 7)
 # restored as two purchases. Rewritten by every re-match, never accumulated.
 DUPLICATE_STATEMENT_KEY = "duplicate_statement_restored"
-# Snapshot key (item 216): group id -> the document the last re-match kept
+# Snapshot key (item 217): group id -> the document the last re-match kept
 # as the real expense (`duplicates.kept_member`). Rewritten by every
 # re-match, read by every view, so a page and the match agree on which copy
 # is set aside until the month next re-matches.
@@ -17055,7 +17055,7 @@ def duplicate_decisions(
     )
     if not with_statement_check:
         return decisions  # a re-match chooses the kept copy itself
-    # Item 216: a view keeps the copy the last re-match kept. A month with no
+    # Item 217: a view keeps the copy the last re-match kept. A month with no
     # statement is never matched, so nothing can hold a copy and the rule
     # applies as the page is read; a statement month waits for its next
     # re-match, because its matches were made against the old kept copy.
@@ -17194,7 +17194,7 @@ def duplicate_pool(
     Shared by `rematch_month` and `tools/recon-match-attribution.py`, so the
     replay cannot assemble a different pool than the app.
 
-    Item 216: each group's kept copy is chosen here (`choose_kept`): the one a
+    Item 217: each group's kept copy is chosen here (`choose_kept`): the one a
     charge already holds (`held`), else the payment receipt over its
     invoice, else the first. The returned decisions carry it first."""
     decisions = duplicate_decisions(

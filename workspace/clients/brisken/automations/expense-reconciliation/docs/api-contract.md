@@ -3192,7 +3192,7 @@ Pinned by `tests/test_view_contract.py`
 the index alignment). SPA half: `docs/lovable-duplicates-decided-prompt.md`,
 folded into item 79's month page.
 
-## Which copy is the real expense: the kept copy (item 216, 2026-09-25)
+## Which copy is the real expense: the kept copy (item 217, 2026-09-25)
 
 No new field. What changed is WHICH member of a duplicate group is
 `members[0]`, i.e. the copy every existing field treats as kept:

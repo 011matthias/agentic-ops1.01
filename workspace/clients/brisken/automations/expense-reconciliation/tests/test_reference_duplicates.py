@@ -240,7 +240,7 @@ def test_a_copy_that_borrows_its_card_does_not_take_a_strangers_charge(
     # And the export (the Zoho CSV, the month PDF and report.xlsx all build
     # from `_expense_export_inputs`): the kept copy ships as Consulting, not
     # with the batch's Corporate Services or the entity placeholder. Since
-    # item 216 (notes #89/#90) the kept copy is the RECEIPT, the proof of
+    # item 217 (notes #89/#90) the kept copy is the RECEIPT, the proof of
     # payment, and the invoice is the one set aside.
     by_ref = _csv_rows_by_reference(client, batch_id)
     assert by_ref["H0LHY2WQ0032"]["Legal Entity"] == "Consulting"
@@ -817,7 +817,7 @@ def test_an_operator_assignment_on_the_tender_word_beats_the_twins_card(
         assert invoice["card"]["key"] == "corp-2838"
         assert invoice["legal_entity_id"] == "Corporate Services"
         assert invoice["entity_source"] == "card"
-    # Item 216: the receipt is the kept copy (a month with no statement
+    # Item 217: the receipt is the kept copy (a month with no statement
     # applies the rule as it is read), so the export ships the receipt on the
     # card it printed, and the invoice, with its assignment, writes no row.
     by_ref = _csv_rows_by_reference(client, batch_id)
@@ -867,7 +867,7 @@ def test_a_collecting_batch_grid_and_export_apply_the_inheritance(
     (group,) = grid["duplicate_groups"]
     assert group["basis"] == "reference"
 
-    # Item 216: the receipt is the kept copy, so it ships; the invoice copy
+    # Item 217: the receipt is the kept copy, so it ships; the invoice copy
     # writes no row and its grid row carries the borrowed card.
     by_ref = _csv_rows_by_reference(client, batch_id)
     assert by_ref["890D70BF0032"]["Legal Entity"] == "Cloud Services"

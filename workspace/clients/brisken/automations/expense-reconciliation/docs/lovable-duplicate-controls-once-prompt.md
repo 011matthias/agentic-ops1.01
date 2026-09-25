@@ -1,10 +1,10 @@
-# Lovable prompt: one set of duplicate controls per unit, and say which copy is the real expense (item 216)
+# Lovable prompt: one set of duplicate controls per unit, and say which copy is the real expense (item 217)
 
 > **NOT PASTED.** SPA delta on top of item 209 (published 2026-09-25, the
 > "Suggested duplicate" units). Answers the owner's notes #89 and #90, left on
 > September's Pressmaster pair on 2026-09-25 at 03:45 and 03:47 UTC.
 >
-> **Backend half ships separately (item 216, no SPA dependency):** a re-match
+> **Backend half ships separately (item 217, no SPA dependency):** a re-match
 > now keeps the payment RECEIPT as the real expense and sets its INVOICE aside,
 > except where a charge already holds a copy. The page needs no new field for
 > that: the main row is still the member with `duplicate.is_extra !== true`.

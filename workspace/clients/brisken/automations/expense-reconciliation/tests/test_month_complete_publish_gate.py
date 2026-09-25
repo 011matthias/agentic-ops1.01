@@ -305,7 +305,7 @@ def test_a_decided_copy_needs_no_charge_until_ruled_not_a_copy(client, monkeypat
     assert view["copies_set_aside"] == []
     # Two purchases now and one charge: one of the two documents waits for a
     # charge again. Which one the charge keeps is the matcher's pick between
-    # two exact candidates (since item 216 the set-aside copy was the invoice).
+    # two exact candidates (since item 217 the set-aside copy was the invoice).
     waiting = {r["document_id"] for r in view["unmatched_receipts"]}
     assert len(waiting) == 1
     assert waiting <= {copy["document_id"], copy["duplicate"]["of"]}

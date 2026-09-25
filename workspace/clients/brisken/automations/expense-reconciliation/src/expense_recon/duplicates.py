@@ -741,7 +741,7 @@ def decide_receipt_groups(
     return out
 
 
-# ── Item 216: which copy is the real expense ─────────────────────────
+# ── Item 217: which copy is the real expense ─────────────────────────
 #
 # Notes #89 / #90 (owner, 2026-09-25, on September's Pressmaster pair): "the
 # real expense should be big and duplicate should be small so they should

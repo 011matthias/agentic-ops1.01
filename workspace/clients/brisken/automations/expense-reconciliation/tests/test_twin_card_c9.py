@@ -223,7 +223,7 @@ def test_an_invoice_reads_the_card_entity_and_person_its_receipt_prints(
     assert invoice["entity_source"] == "card"
     assert invoice["person"] == person
     assert invoice["person_source"] == "card"
-    # Item 216: the RECEIPT is the kept copy (the real expense) and the
+    # Item 217: the RECEIPT is the kept copy (the real expense) and the
     # invoice the set-aside one; the invoice still reads its twin's card.
     assert invoice["duplicate"]["is_extra"] is True
     receipt = _expense(grid, "Receipt-")

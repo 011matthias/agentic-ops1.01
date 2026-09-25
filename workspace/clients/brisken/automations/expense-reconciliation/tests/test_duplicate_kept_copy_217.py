@@ -1,4 +1,4 @@
-"""Which copy of a duplicate is the real expense (backlog item 216, notes
+"""Which copy of a duplicate is the real expense (backlog item 217, notes
 #89 / #90, owner 2026-09-25).
 
 On September's Pressmaster pair the owner wrote: "the real expense should be
