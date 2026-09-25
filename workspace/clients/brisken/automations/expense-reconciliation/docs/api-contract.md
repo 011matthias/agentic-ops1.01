@@ -142,6 +142,43 @@ no control for it.
 | `trip_not_convertible` | 409 | a trip batch |
 | `gl_not_provisioned`, `llm_unavailable`, `month_changed_during_conversion` | job error, prefixed to `error` | no company has a Zoho org; no model client; the month changed while the model ran (run it again) |
 
+### A merchant's account per company (items 180/181, 2026-09-25)
+
+`settings.merchants[name].accounts` is optional: `{company label: leaf code}`,
+codes only. On a GL month the receipt's own company's entry decides the
+account first (matched on the company's Zoho org, so either spelling of a
+company works), before the company's learned rule, the merchant's single
+`zoho_account` and its default category; a code that company cannot post to
+refuses with its reason, and the model is never asked. A merchant with no
+default category still books by its map. A bucket month never reads it, and a
+`multi_category` merchant ignores it.
+
+`PUT /api/settings`: a value that is not a leaf code (a bucket, a name) is
+dropped and named in `ignored` as `merchants.<name>.accounts.<company>`; a
+`"CODE name"` label is stored as its code; keys are stored under the company's
+picker spelling (`account_companies[].label`). **An entry that omits
+`accounts` keeps the stored map**; `{}` or `null` clears it.
+
+`GET /api/settings` (and the PUT reply) adds three derived, read-only keys:
+
+| Key | Shape |
+|---|---|
+| `account_companies` | `[{label, org_id, labels}]`, one per company the curated chart covers; `label` is the one spelling to show and save under |
+| `merchant_accounts` | `{merchant: [{company, label, org_id, code, name, postable, reason}]}` for every merchant with a map; `name` is that company's wording |
+| `needs_account` | `[{merchant, company, org_id, n_rows, months}]`: registry merchants booked (receipt rows as the grid shows them, and receiptless charges) to a company on a GL month with no account for it; up to 120 s old per month, filtered against the current map on every read |
+
+`POST /api/runs/{id}/recategorize-refused`, body `{"confirm": "<month label or
+run id>"}`, re-runs the engine on a GL month's REFUSED receipt lines and
+refused receiptless charges only, for the company each row shows; a line a
+person picked is left alone. Answers `{"ok": true, "job_id"}`; the job's
+`result` holds `n_lines_refused`, `n_lines_resolved`, `n_charges_refused`,
+`n_charges_resolved`, `line_refusals_after`, `charge_refusals_after`,
+`llm_cost_usd`; each run is logged under the snapshot's `gl_reruns` with the
+refusals it replaced. Codes: `rerun_confirm_required` / `rerun_confirm_mismatch`
+(400), `month_not_gl`, `month_published`, `trip_not_convertible` (409),
+`month_changed_during_conversion` (job error). Operator only; a write on the
+month, so it runs on an owner order.
+
 ## `parse_issues` specifically
 
 ```json

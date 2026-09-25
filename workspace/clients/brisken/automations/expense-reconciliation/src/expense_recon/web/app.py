@@ -208,6 +208,7 @@ from .month_readiness import (  # items 99 + 100
 )
 from ..category_vocabulary import (
     gl_account_options,
+    gl_companies,
     gl_revision,
     recognize as recognize_category,
 )
@@ -657,20 +658,22 @@ def _run_folder_job(
 
 def _run_gl_conversion_job(
     db_path: Path, learning_db_path: Path | None, job_id: str, run_id: str,
-    entity_by_doc: dict[str, str],
+    entity_by_doc: dict[str, str], *, rerun_refused: bool = False,
 ) -> None:
     """Switch one bucket-era month onto the Zoho accounts off the request
     (`gl_conversion`): a model call per receipt and per receiptless charge
-    is minutes of work. The job's `result` carries what changed; a refusal
-    lands as the job's error, with its code first, and writes nothing."""
-    from .gl_conversion import convert_month_to_gl
+    is minutes of work. With `rerun_refused` (items 180/181) it re-runs the
+    engine on a GL month's refused rows instead. The job's `result` carries
+    what changed; a refusal lands as the job's error, with its code first,
+    and writes nothing."""
+    from .gl_conversion import convert_month_to_gl, rerun_refused_on_gl
 
     def _stage(name: str) -> None:
         with RunStore(db_path) as store:
             store.set_job_stage(job_id, name, _now_iso())
 
     try:
-        result = convert_month_to_gl(
+        result = (rerun_refused_on_gl if rerun_refused else convert_month_to_gl)(
             db_path, learning_db_path, run_id, _now_iso(),
             entity_by_doc=entity_by_doc, on_stage=_stage,
         )
@@ -2118,6 +2121,59 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
         return JSONResponse({"ok": True, "job_id": job_id})
 
+    @app.post("/api/runs/{run_id}/recategorize-refused")
+    def recategorize_refused(
+        run_id: str, background: BackgroundTasks,
+        payload: dict | None = Body(None),
+    ):
+        """Items 180/181: re-run the engine on a GL month's REFUSED rows
+        (`gl_conversion.rerun_refused_on_gl`), so merchant accounts added
+        since the month was categorized reach it. Lines and charges that
+        already carry an account, and lines a person picked, are left alone.
+        A write on the month, so the caller repeats its label (or run id) in
+        `confirm`. Operator only; the SPA offers no control for it. Answers a
+        job id to poll."""
+        from .gl_conversion import rerun_refusal
+
+        confirm = (
+            str(payload.get("confirm", "")).strip()
+            if isinstance(payload, dict) else ""
+        )
+        with open_store() as store:
+            run = store.get_run(run_id)
+            refused = rerun_refusal(run)
+            if refused is not None:
+                return JSONResponse(
+                    {"error": refused.message, "code": refused.code},
+                    status_code=404 if refused.code == "run_not_found" else 409,
+                )
+            if not confirm:
+                return JSONResponse(
+                    {"error": "confirm is required: repeat the month label "
+                              "(or run id) to re-run its refused rows",
+                     "code": "rerun_confirm_required"},
+                    status_code=400,
+                )
+            if confirm not in {(run.label or "").strip(), run.run_id}:
+                return JSONResponse(
+                    {"error": "confirm label mismatch",
+                     "code": "rerun_confirm_mismatch"},
+                    status_code=400,
+                )
+            entity_by_doc = {
+                e["document_id"]: e["legal_entity_id"]
+                for e in _expense_view(store, run)["expenses"]
+                if e.get("legal_entity_id")
+            }
+            job_id = uuid.uuid4().hex[:12]
+            store.create_job(job_id, None, _now_iso())
+        background.add_task(
+            _run_gl_conversion_job, app.state.db_path,
+            app.state.learning_db_path, job_id, run_id, entity_by_doc,
+            rerun_refused=True,
+        )
+        return JSONResponse({"ok": True, "job_id": job_id})
+
     @app.post("/api/runs/{run_id}/delete")
     def delete_run(run_id: str, payload: dict | None = Body(None)):
         # Sync on purpose: this handler blocks on the batch writer lock,
@@ -3138,6 +3194,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             out["rematch"] = rematch
         return JSONResponse(jsonable_encoder(out))
 
+    def _settings_account_fields(store: RunStore, settings: dict) -> dict:
+        """Items 180/181: `account_companies`, `merchant_accounts` and
+        `needs_account`, the last read off the GL months' own grids."""
+        from .merchant_accounts import collect_gl_bookings, settings_account_fields
+
+        bookings = collect_gl_bookings(
+            store.list_runs(), lambda run: _expense_view(store, run), settings,
+            cache_key=str(app.state.db_path),
+        )
+        return settings_account_fields(settings, bookings)
+
     # §16 export policy. The policy is snapshotted into each new run's
     # config at creation, so changing it affects future runs, never
     # re-writes a run already produced.
@@ -3159,10 +3226,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # screen shows the hint instead of a silently dead field.
         with open_store() as store:
             settings = store.get_settings()
+            account_fields = _settings_account_fields(store, settings)
             return JSONResponse({
                 **without_retired_settings_keys(
                     without_retired_entity_keys(settings)
                 ),
+                **account_fields,
                 "categories": list(EXPENSE_CATEGORIES),
                 # The new vocabulary, served BESIDE the eight rather than
                 # instead of them: the published SPA keeps rendering
@@ -3272,6 +3341,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # and reported as dotted paths in `ignored` below, so the caller is
         # told exactly which merchant lost its category.
         dropped_categories: list[tuple[str, str]] = []
+        dropped_accounts: list[tuple[str, str]] = []
         if "export_approved_only" in body:
             patch["export_approved_only"] = bool(body["export_approved_only"])
         # Master-data maps (FX reference rates, card -> legal entity, card
@@ -3374,13 +3444,18 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # Item 117: the stored map lets the registry refuse a NEW
             # generic-word alias while accepting what is already saved.
             with open_store() as store:
-                stored_merchants = (
-                    (store.get_settings() or {}).get("merchants") or {}
-                )
+                stored_settings = store.get_settings() or {}
+            stored_merchants = stored_settings.get("merchants") or {}
             try:
-                patch["merchants"] = normalize_merchants_setting(
-                    body["merchants"], stored=stored_merchants,
-                    dropped=dropped_categories,
+                from .merchant_accounts import canonical_account_labels
+
+                patch["merchants"] = canonical_account_labels(
+                    normalize_merchants_setting(
+                        body["merchants"], stored=stored_merchants,
+                        dropped=dropped_categories,
+                        dropped_accounts=dropped_accounts,
+                    ),
+                    gl_companies({**stored_settings, **patch}),
                 )
             except ValueError as exc:
                 return JSONResponse({
@@ -3446,8 +3521,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 }, status_code=400)
         with open_store() as store:
             settings = store.set_settings(patch, _now_iso())
+            account_fields = _settings_account_fields(store, settings)
         return JSONResponse({
             **without_retired_entity_keys(settings),
+            **account_fields,
             "categories": list(EXPENSE_CATEGORIES),
             # Both vocabularies on the save reply too, so an editor that
             # just added an entity sees its leaves without a second GET.
@@ -3471,6 +3548,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     if k in SETTINGS_DERIVED_KEYS or k in RETIRED_SETTINGS_KEYS
                 ]
                 + [f"merchants.{name}.category" for name, _ in dropped_categories]
+                + [
+                    f"merchants.{name}.accounts.{company}"
+                    for name, company in dropped_accounts
+                ]
             ),
         })
 

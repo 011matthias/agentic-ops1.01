@@ -43,6 +43,7 @@ from .llm.client import (
     LLMClient,
 )
 from .category_vocabulary import recognize as recognize_category
+from .merchant_registry import company_account
 from .matching.types import (
     EXPENSE_CATEGORIES,
     Categorization,
@@ -414,11 +415,18 @@ def categorize_receipts_with_registry(
     gl_stamped: dict[str, Receipt] = {}
     if gl:
         for r in receipts:
-            if r.document_id not in cat_docs:
+            m = registry_matches.get(r.document_id)
+            if m is None:
+                continue
+            org_id = org_id_for_entity(r.legal_entity_id, entity_orgs)
+            # Items 180/181: a merchant with no default category still
+            # decides the account for a company its map names.
+            if r.document_id not in cat_docs and company_account(
+                getattr(m, "accounts", ()), org_id, entity_orgs
+            ) is None:
                 continue
             stamped = _registry_gl(
-                r, registry_matches[r.document_id], learned,
-                org_id_for_entity(r.legal_entity_id, entity_orgs),
+                r, m, learned, org_id, entity_orgs=entity_orgs,
             )
             if stamped is not None:
                 gl_stamped[r.document_id] = stamped
@@ -957,17 +965,40 @@ def _categorize_one_gl(
 
 def _registry_gl(
     receipt: Receipt, match, learned: "MerchantCategoryLookup | None",
-    org_id: str | None,
+    org_id: str | None, *, entity_orgs: "Mapping[str, str] | None" = None,
 ) -> Receipt | None:
     """The registry tier on the GL engine, or None to hand the receipt to it.
 
-    The account the M1 order picks (`_registry_account`: the company's rule,
-    else the registry's own) is tried first, then the default category
-    itself, each resolved within THIS org. The first that names a leaf
-    decides: postable stamps it, anything else refuses. A default naming no
-    leaf, and an uncovered org, return None; the engine then answers (and an
-    uncovered org refuses there, without a model call)."""
+    Items 180/181: the merchant's own account for THIS company (its
+    per-company map, matched on the org) decides first. A person set it for
+    exactly this merchant and this company, which is more specific than
+    anything below. A code this org cannot post to refuses with its reason
+    rather than falling through, as a taught rule does: the model must not
+    overrule a person.
+
+    Otherwise the account the M1 order picks (`_registry_account`: the
+    company's rule, else the registry's own) is tried, then the default
+    category itself, each resolved within THIS org. The first that names a
+    leaf decides: postable stamps it, anything else refuses. A default naming
+    no leaf, and an uncovered org, return None; the engine then answers (and
+    an uncovered org refuses there, without a model call)."""
     if not curated_leaves.covers_org(org_id):
+        return None
+    mapped = company_account(getattr(match, "accounts", ()), org_id, entity_orgs)
+    if mapped is not None:
+        label, code = mapped
+        reasoning = f"merchant registry account for {label}"
+        if not curated_leaves.is_postable(org_id, code):
+            return _stamp_lines(receipt, _refused_cat(
+                curated_leaves.refusal_reason(org_id, code),
+                detail=f"{reasoning}: {code}"))
+        res = resolve_posting_account(
+            org_id=org_id, legal_entity_id=None, vendor=None, llm_leaf=code)
+        return _stamp_lines(receipt, _gl_categorization(
+            res, org_id, source=ClassificationSource.REGISTRY,
+            confidence=1.0, reasoning=reasoning,
+        ))
+    if not match.category:
         return None
     account, reasoning = _registry_account(receipt, match, learned)
     for ref in (account, match.category):

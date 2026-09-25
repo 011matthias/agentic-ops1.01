@@ -33,9 +33,21 @@ Shape:
             "card_key_learned": True,          # optional, machine-set
             "cards_seen": ["<card key>", ...], # optional, machine-kept
             "profile": "<free prose>",         # optional (note item M4)
+            "accounts": {"<company>": "<leaf code>"},  # optional (item 180)
         },
         ...
     }
+
+``accounts`` (items 180/181, owner 2026-09-23/25) is the merchant's GL
+account PER COMPANY, one curated leaf code for each company it books to.
+Codes only, never names: a name is one company's wording of an account and
+the same code reads differently across the three charts. The key is a company
+label as the app holds it (either spelling of a company works, because the
+engine matches on the label's Zoho org, not on the text). On a GL month the
+receipt's own company's entry decides the account before anything else the
+registry knows (`categorize._registry_gl`); a bucket month never reads it.
+A `multi_category` merchant ignores it for the same reason it ignores its
+category.
 
 A `multi_category` merchant (backlog item 8) decouples the registry's two
 facts: the canonical NAME still resolves (spelling stability), but no
@@ -103,6 +115,7 @@ from rapidfuzz import fuzz
 from .matching.deterministic import _normalize as normalize_vendor
 from .category_vocabulary import recognize as recognize_category
 from .error_codes import CodedValueError
+from .matching.types import EXPENSE_CATEGORIES
 from .vendor_names import _LEGAL_SUFFIXES, clean_vendor_name
 
 # token_set_ratio (0-100) at or above this counts as a confident brand
@@ -338,6 +351,49 @@ class MerchantMatch:
     # the most: a vendor that books to several categories is exactly the one
     # whose receipts need the background a field cannot hold.
     profile: str | None = None
+    # Items 180/181: the merchant's account per company, `(label, code)`
+    # pairs in label order (a tuple so the match stays hashable). Empty on a
+    # merchant with no map and on a `multi_category` one.
+    accounts: tuple[tuple[str, str], ...] = ()
+
+
+def _accounts_pairs(entry: dict) -> tuple[tuple[str, str], ...]:
+    raw = entry.get("accounts")
+    if not isinstance(raw, dict):
+        return ()
+    return tuple(sorted(
+        (str(k).strip(), str(v).strip())
+        for k, v in raw.items()
+        if str(k or "").strip() and str(v or "").strip()
+    ))
+
+
+def company_account(
+    accounts, org_id: str | None, entity_orgs: dict | None,
+) -> tuple[str, str] | None:
+    """The `(label, code)` a merchant's per-company map names for the
+    company whose Zoho org is `org_id`, or None (items 180/181).
+
+    Matched on the ORG, not the label text: the app holds two spellings of
+    every company ("Corporate Services" on receipts, "Brisken Corp Services,
+    LLC" in the settings registry) and both map to one org. Two labels of
+    one org naming two different codes is a contradiction nobody can
+    resolve by guessing, so it answers None and the receipt goes to the
+    engine as if the map were silent."""
+    if not org_id or not accounts:
+        return None
+    from .coa_provision import org_id_for_entity
+
+    pairs = accounts.items() if isinstance(accounts, dict) else accounts
+    hits = {
+        (str(label), str(code))
+        for label, code in pairs
+        if str(code or "").strip()
+        and org_id_for_entity(label, entity_orgs) == org_id
+    }
+    if len({code for _label, code in hits}) != 1:
+        return None
+    return sorted(hits)[0]
 
 
 class MerchantRegistry:
@@ -526,6 +582,7 @@ class MerchantRegistry:
             card_key=(entry.get("card_key") or None),
             cards_seen=_cards_seen(entry),
             profile=(entry.get("profile") or None),
+            accounts=_accounts_pairs(entry),
         )
 
     @classmethod
@@ -536,9 +593,46 @@ class MerchantRegistry:
         return cls(merchants, threshold=threshold)
 
 
+def _normalize_accounts(
+    canonical: str, raw: object, dropped: list[tuple[str, str]] | None,
+) -> dict[str, str]:
+    """Items 180/181: `{company label: leaf code}`, codes only.
+
+    Each value goes through `category_vocabulary.recognize`, so a `"CODE
+    name"` label an editor echoes back is stored as its code. A bucket, a
+    name, or a string from neither vocabulary is DROPPED and named, never
+    refused, for the reason `category` is: a settings save replaces the whole
+    map, and one bad value must not 400 the cards and entities with it.
+    Whether the code is postable in that company is decided where it posts
+    (`categorize._registry_gl`), not here: companies and merchants are edited
+    independently, so the edit order must not matter."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise CodedValueError(
+            f"merchant {canonical!r} accounts must be an object of "
+            "{company: account code}",
+            code="invalid_body", merchant=canonical,
+        )
+    out: dict[str, str] = {}
+    for label, value in raw.items():
+        company = str(label or "").strip()
+        text = str(value or "").strip()
+        if not company or not text:
+            continue
+        code = recognize_category(text)
+        if code is None or code in EXPENSE_CATEGORIES:
+            if dropped is not None:
+                dropped.append((canonical, company))
+            continue
+        out[company] = code
+    return dict(sorted(out.items()))
+
+
 def normalize_merchants_setting(
     raw: object, *, stored: object = None,
     dropped: list[tuple[str, str]] | None = None,
+    dropped_accounts: list[tuple[str, str]] | None = None,
 ) -> dict:
     """Validate + clean a `merchants` settings payload into the stored shape.
 
@@ -561,7 +655,11 @@ def normalize_merchants_setting(
     stay accepted, anywhere in the map, so an editor that sends the whole
     map back (or renames a merchant) never fails on data it did not add.
     Internal callers (memory at sign-off, the seed) pass nothing and are
-    unchanged."""
+    unchanged.
+
+    ``dropped_accounts`` receives one ``(merchant, company)`` pair per
+    per-company account value that was not a curated leaf code (items
+    180/181), for the same reply."""
     if raw is None:
         return {}
     if not isinstance(raw, dict):
@@ -673,6 +771,23 @@ def normalize_merchants_setting(
         profile = _clean_profile(entry.get("profile"))
         if profile:
             cleaned["profile"] = profile
+        # Items 180/181: the per-company account map. On the settings PUT
+        # (`stored` given) an entry that does not carry the key keeps the
+        # map already saved: an editor rebuilding merchants from the fields
+        # it knows would otherwise wipe every company's account on an
+        # unrelated save. Only an explicit `{}` or null clears it. The
+        # internal callers pass no `stored` and always carry the key they
+        # read, so for them absent is simply absent.
+        if "accounts" in entry:
+            accounts = _normalize_accounts(
+                canonical, entry.get("accounts"), dropped_accounts)
+        elif isinstance(stored, dict) and isinstance(stored.get(canonical), dict):
+            accounts = _normalize_accounts(
+                canonical, stored[canonical].get("accounts"), None)
+        else:
+            accounts = {}
+        if accounts:
+            cleaned["accounts"] = accounts
         out[canonical] = cleaned
     return out
 

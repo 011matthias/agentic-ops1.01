@@ -8866,7 +8866,36 @@ table nobody has ruled on.
 direction closing item 170 landed 53 minutes after the note. Do not start it
 on the strength of the note alone.
 
-### 180. One merchant holds one GL account, and it is applied forward (note #84, owner 2026-09-23)
+### 180. One merchant holds one GL account, and it is applied forward (note #84, owner 2026-09-23) (BACKEND SHIPPED 2026-09-25 with item 181; SPA prompt `docs/lovable-merchant-accounts-per-company-prompt.md` not pasted)
+
+**Shipped 2026-09-25 (owner order: implement).** A merchant entry carries an
+optional `accounts: {company: leaf code}` map, codes only. On a GL month the
+receipt's own company's entry decides first in `categorize._registry_gl`
+(matched on the company's Zoho org, so "Cloud Services" and "Brisken Cloud
+Services, LLC" are one key), ahead of the learned company rule, the single
+`zoho_account` and the default category; a code the company cannot post to
+refuses with its reason and never reaches the model; a merchant with no
+default category still books by its map; receiptless charges take the same
+path through `categorize_charges`; bucket months never read it. That answers
+parts 1 and 3 of the note (two accounts, per company). Part 2, "not applied
+automatically to new months", is answered by the map being what a person set
+per company rather than a single value carried everywhere; nothing is learned
+into it until item 183's Publish checklist keeps a correction.
+
+The published Settings editor carries unknown merchant keys through a save
+(`Vi()` collects them into `extra`, `Hi()` spreads them back; read off the
+live bundle 2026-09-25), and the backend additionally keeps a stored map when
+a save omits the key (only `{}` / null clears), so the wholesale save (item
+177) cannot wipe it. `GET /api/settings` gains `account_companies`,
+`merchant_accounts` (each code with each company's name for it) and
+`needs_account` (registry merchants booked to a company on a GL month with no
+account for it). `POST /api/runs/{id}/recategorize-refused` (typed confirm,
+job) re-runs the engine on a GL month's refused rows only; it is how accounts
+set later reach July to September, and it runs only on an owner order.
+Tests `tests/test_merchant_accounts_item_180.py` (10, route-level, a model
+client that fails if called); nine wiring points proven RED under
+`tools/regress_check.py`. The suggested accounts per vendor and company went
+to the owner for Dirk; none are written to live settings.
 
 **Owner:** *"This should not be applied automatically to new months because
 some merchants can have more than one GL account. Manual editing by the user
@@ -8898,7 +8927,7 @@ category work to move.
 
 **FILED AS RECORD, NOT QUEUED**, same reason as 179.
 
-### 181. Every cloud vendor in the registry has no account at all (note #85, owner 2026-09-23)
+### 181. Every cloud vendor in the registry has no account at all (note #85, owner 2026-09-23) (the per-company slot SHIPPED 2026-09-25 with item 180; the accounts themselves are Dirk's, suggestions handed to the owner)
 
 **Owner:** *"dont forget the accounts criss would match for cloud expenses"*
 
@@ -10349,6 +10378,7 @@ file if it is stale.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 124 | Items 180/181: a merchant's GL account per company. `merchants[].accounts` `{company: leaf code}` decides first on a GL month (matched on the company's org), refuses a code the company cannot post to, works for a merchant with no default category and for receiptless charges; a save omitting the key keeps it; `GET /api/settings` names each code per company and lists `needs_account`; `POST /api/runs/{id}/recategorize-refused` (typed confirm) re-runs a GL month's refused rows | The 126 "model unsure" lines on July to September are mostly AI vendors on Corporate Services, where several accounts fit and the registry had no per-company answer to give | 2026-09-25; `tests/test_merchant_accounts_item_180.py` (10, route-level, a client that fails if the model is asked); nine wiring points proven RED under `tools/regress_check.py`; SPA prompt `docs/lovable-merchant-accounts-per-company-prompt.md` not pasted |
 | 123 | Item 204 step 2 (case 9, build 1): an invoice takes the card its own payment receipt prints. `duplicates.lending_groups` lends across every duplicate group the app shows (printed-reference and vendor/date twins, not only one document number), same guards, plus: a copy two groups would lend two cards gets none | September 2026 held three Stripe invoices (Anthropic 184.35, Lovable 50.00 twice) reading "No legal entity yet" beside a receipt the grid already marked as their copy and that prints the card; the kept invoice copy is also the one the matcher sees, so it now stays in its card's scope | PR #1362, 2026-09-25; `tests/test_twin_card_c9.py` (9, route-level); four wiring points proven RED under `tools/regress_check.py`; suite 3485 passed / 2 skipped |
 | 122 | Items 196/197 leftovers from the 2026-09-24 LLM-key outage: an `ingested` intake-log row no longer presents the `error` of a failed first try, and a statement attach whose job fails before its commit removes the file it saved (`discard_unrecorded_upload`), never a file `statements[]` names | A surface showing `error` showed a 429 beside "Added" on the one recovered mail, and a dead attach kept its file's name, so the operator's retry was stored as `20260804-statements-9693--2.pdf` | 2026-09-25; `tests/test_attach_leftovers_196_197.py` (6: 3 red on origin/main, 3 controls: a held mail keeps its error, the archive keeps the record, a failure after the commit keeps the file); three wiring points proven RED under `tools/regress_check.py`; suite 3454 passed / 2 skipped |
 | 121 | Item 195: a statement PDF keeps its company through a re-read. A PDF entry records the account it was filed under (`statement_entry_account`); a re-read never lends a PDF `config.statement`'s account; a PDF filed under no account, or recorded before this, takes the registry entity every card it prints resolves to, blank on two companies or an unnamed card (`pdf_entity_from_printed_cards`), at the attach and the re-read alike. `statement_period_overlap` no longer calls two unrecorded accounts "the same account" (leftover 3 of items 196/197) | A PDF charge prints no `card_last4`, so item 59's match-time stamp never repairs it: its company is whatever the upload says. Both live August PDF entries recorded `account_id: ""` although the SPA sent a card key, so a re-read would have put the 1176 file's 3 charges and the 9693 file's 21 under the company "card", or under Corporate Services when the workbook was the last upload, and every pair on them would have left scope. Code-traced, never triggered live (nobody re-reads a month holding a PDF) | 2026-09-25; `tests/test_reread_pdf_entity_item_195.py` (9: 8 red on origin/main, 1 control green); four wiring points proven RED under `tools/regress_check.py` (the marker branch, the no-borrow fallback, the entry writer, the advisory guard); no live row moves on the deploy |

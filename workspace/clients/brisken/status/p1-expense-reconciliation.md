@@ -9,6 +9,8 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: a merchant can hold one Zoho account per company (backlog items 180/181).** On a Zoho-account month, a receipt or card charge from that merchant books to its company's account with no AI call; Settings lists which merchants still need one (`needs_account`). No live merchant has an account yet: the per-vendor suggestions are with the owner for Dirk. July to September pick them up only through the new refused-rows re-run, on an owner order. The Settings screen half is a Lovable prompt, not pasted.
+
 **2026-09-25: case 9 build 1 shipped (item 204 step 2).** An invoice that prints no card now takes the card its own payment receipt prints whenever the grid shows the two as one document, under the old guards (one card only, a "Not a duplicate" ruling lends nothing, an operator hint on the invoice wins). PR #1362. Expected on September's next read: the Anthropic 184.35 and two Lovable 50.00 invoices read 9693 / 3645, `n_needs_entity` 26 -> 23. Builds 2 to 5 run in their own sessions.
 
 **2026-09-25: July, August and September are on the Zoho accounts** (owner
