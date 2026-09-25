@@ -96,6 +96,7 @@ from ..cards import (
     private_company_collision,
 )
 from ..cards_provision import card_by_key, load_cards
+from ..card_suggestion import EvidenceSource  # item 204, case 9 steps 1 and 5
 from ..error_codes import Refusal, code_of, fields_of  # Refusal: item 104
 from ..ingest.expense_report_images import render_receipt_page
 from ..learning import CATEGORY_SOURCE_HUMAN, CATEGORY_SOURCE_INHERITED
@@ -2791,6 +2792,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # stamp ingest left, so a correction taught after this month was
             # ingested still names its card.
             learning_db_path=app.state.learning_db_path,
+            # Item 204: every month's loaded statements, read once and only
+            # when a card-less row asks (waits_for_statements, card_suggestion).
+            statement_evidence=EvidenceSource(store),
         )
 
     def _expense_page_view(store: RunStore, run) -> dict:
@@ -2857,6 +2861,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # portal hints, for `receipt_chase[]`. The list itself, and
             # every count, come off the rows and do not depend on this.
             settings=store.get_settings(),
+            # Item 204: a no-card receipt no loaded statement covers reads
+            # card_statement_not_loaded; read only when one is unmatched.
+            statement_evidence=EvidenceSource(store),
         )
 
     def _run_view(store: RunStore, run) -> dict:
@@ -6305,5 +6312,84 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 raise RunInputError("This batch no longer exists.", code="batch_deleted")
             view = _run_view(store, run)
         return {**out, "summary": jsonable_encoder(view["summary"])}
+
+    @app.post("/api/expense-batches/{run_id}/cards/by-vendor")
+    async def post_cards_by_vendor(run_id: str, request: Request):
+        """Item 204, case 9 step 5: after a card is picked on one row, "apply
+        to the N other rows of this vendor". Body `{vendor, card_key}`.
+
+        Writes the row PUT's own override (`field=card_key`) to every
+        card-less, non-private, counting row of that display vendor in this
+        month and replies `{ok, vendor, card_key, documents, n_changed,
+        summary[, rematch]}`. Printed, picked, learned, statement, private,
+        settled-outside and copy rows are left alone, so a repeat changes
+        nothing. An explicit click only (D6): nothing else calls it."""
+        from .service import apply_card_by_vendor
+
+        if not _receipt_first_on():
+            return _flag_off()
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict):
+            return JSONResponse(
+                {"error": "invalid payload", "code": "invalid_body"}, status_code=400
+            )
+        vendor = str(body.get("vendor") or "").strip()
+        card_key = str(body.get("card_key") or "").strip()
+        if not vendor or not card_key:
+            return JSONResponse(
+                {"error": "vendor and card_key are required",
+                 "code": "vendor_and_card_required"},
+                status_code=400,
+            )
+        if body.get("dry_run") is True:
+            # The SPA's "apply to the N other rows" count: the same selection,
+            # nothing written (not even the card's snapshot copy).
+            from ..card_suggestion import card_by_vendor_targets
+
+            with open_store() as store:
+                run, err = _expense_run_or_error(store, run_id)
+                if err is not None:
+                    return err
+                would = card_by_vendor_targets(
+                    _expense_view(store, run)["expenses"], vendor
+                )
+            return JSONResponse({
+                "ok": True, "dry_run": True, "vendor": vendor,
+                "card_key": card_key, "documents": would, "n_changed": 0,
+            })
+
+        def _prep_card():
+            # The PUT's own validation + snapshot copy (item 87), off the
+            # event loop because it takes the batch writer lock.
+            with open_store() as store:
+                _run, err = _expense_run_or_error(store, run_id)
+                if err is not None:
+                    return err
+                msg = prepare_row_card_fix(store, run_id, card_key)
+                return _refused(msg) if msg else None
+
+        card_err = await run_in_threadpool(_prep_card)
+        if card_err is not None:
+            return card_err
+        with open_store() as store:
+            run, err = _expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            changed = apply_card_by_vendor(
+                store, run_id, _expense_view(store, run)["expenses"],
+                vendor, card_key, _now_iso(),
+            )
+            # The card decides the row's entity and the matcher's scope
+            # (EXPENSE_MATCH_FIELDS), so a changed row on a statement month
+            # re-matches exactly as the row PUT does.
+            rematch_needed = bool(changed) and has_statement(run)
+        return await _expense_edit_reply(
+            run_id, rematch_needed,
+            {"vendor": vendor, "card_key": card_key,
+             "documents": changed, "n_changed": len(changed)},
+        )
 
     return app

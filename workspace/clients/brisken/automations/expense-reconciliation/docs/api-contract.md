@@ -6708,6 +6708,87 @@ re-match; no agent re-match.
 Tests: `tests/test_no_card_vendor_guard_c9.py` (matcher, judgment layer and
 route-level), wiring proven red under `tools/regress_check.py`.
 
+## A receipt a neighbour month settled carries that charge's card (item 204, case 9 build 3)
+
+No new field. `card`, `card_source`, `legal_entity_id`, `person` and their
+`*_source` siblings on `GET /api/expense-batches/{id}` `expenses[]` now also
+answer for a receipt that ANOTHER month's charge settled, the one that already
+carries `settled_by: {run_id, label, transaction_id}` naming that month.
+
+| The receipt | `card_source` | `settled_by` |
+|---|---|---|
+| a charge of its own month settles it | `settled_charge` (item 111, unchanged) | absent |
+| a neighbour month's charge settles it (deterministic match or confirmed pick) | `settled_charge`, that charge's card | the neighbour month |
+| a neighbour month only PROPOSES it (review bucket) | unchanged (no claim exists) | absent |
+| the pairing was rejected, or the neighbour month was deleted | unchanged | absent |
+
+The link sits exactly where item 111's does in the card chain: below a card
+picked on the row, a card resolved from the printed payment method, a printed
+card number and a confirmed private expense; above a remembered card and the
+merchant registry. `can_mark_private` is false, as for any settled row.
+
+The card key is the neighbour charge's card resolved in the RECEIPT's batch
+registry, so a card that registry cannot name lends nothing. The same map
+feeds `GET /runs/{id}/expenses.csv`, `GET /runs/{id}/expense-report.pdf` and
+the sign-off learner (`merchants[].cards_seen`), so all four agree.
+
+Tests: `tests/test_card_flows_back_c9.py` (8, route-level).
+
+## A receipt that names no card: `waits_for_statements`, `card_suggestion`, apply-to-vendor, `month_suggestion` (backlog item 204, case 9 build 5, 2026-09-25)
+
+All additive, all absent (never null or `[]`) when they do not apply.
+Logic in `card_suggestion.py`; the view builders read one lazily loaded
+`EvidenceSource` per request (every expense batch's `statements[]`, their
+printed charges and the live registry's active cards), so a month with no
+card-less row reads nothing extra.
+
+**Coverage by date.** A card's statement covers a day when an upload that
+printed that card spans it (`statements[].period_start..period_end`), in ANY
+month. An upload that printed one card of a family (`Card.parent`) covers the
+whole family for its span, because one Chase activity export carries every
+subcard of the account.
+
+- `expenses[].waits_for_statements: [card label]` (sorted): on a row with no
+  card, not private or suggested private, no printed card digits, not settled
+  outside, the active cards whose loaded statements do not cover its date.
+- `expenses[].review.reason_code: "waits_for_statement"` with
+  `review.waits_for_statements`: ranked directly before `needs_entity` and in
+  its place (entity empty only). When every active card covers the date,
+  `needs_entity` stands.
+- `unmatched_receipts[].reason_code`: a receipt that printed no card and whose
+  date some active card does not cover reads `card_statement_not_loaded`
+  (before: only with printed digits). No new code value.
+
+**Suggestion.** `expenses[].card_suggestion: {card_key, label, evidence:
+[{month, date, amount, currency, description}]}` on the same rows, when every
+loaded charge within 45 days whose description carries the vendor's first
+word (3+ characters) and whose amount in the receipt's currency is within 3%
+lies on ONE registry card. Never sets `card`; measured 44 right / 8 wrong as
+an automatic rule, so it is a suggestion only (items 173, D6).
+
+**Apply to this vendor.** `POST /api/expense-batches/{run_id}/cards/by-vendor
+{vendor, card_key[, dry_run]}` writes the row PUT's own override
+(`field=card_key`, after the same `prepare_row_card_fix`) to every row of that
+display vendor (trimmed, case-insensitive) with no card, not private or
+suggested private, no printed digits, not settled outside, and counting (a
+decided copy does not). Reply `{ok, vendor, card_key, documents, n_changed,
+summary[, rematch]}`; re-matches a statement month when anything changed.
+`dry_run: true` writes nothing and names the rows it would change. Refusals:
+`vendor_and_card_required`, `card_not_defined`, `card_inactive`,
+`invalid_body`, `run_not_found`, `not_an_expense_batch`. Idempotent.
+
+**Statement month.** `statements[].month_suggestion: {month, label_month,
+n_dates, n_in_month}` (the receipt side's `period_suggestion` shape): the month
+holding most of the file's dated charges; absent when none or on a tie;
+`label_month` null on a trip. When the two differ, the entry's `advisory`
+reads `statement_month_differs` (`advisory_detail` fields `month`,
+`label_month`, `n_in_month`, `n_dates`), ranked after the two doubling
+advisories. Nothing is moved or refused.
+
+Tests: `tests/test_case9_status_c9.py` (route-level, all four rules and their
+negatives), `tests/test_view_contract.py`
+(`test_case9_row_fields_are_absent_or_well_formed`).
+
 ## A receipt with no card takes its billing account's card: `card_source: "account"` (backlog item 204 step 4, owner decision D4, 2026-09-25)
 
 A subscription invoice prints a Stripe-shaped number, an 8-character customer

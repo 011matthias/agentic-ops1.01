@@ -10,13 +10,23 @@ updated: 2026-09-25
 # Brisken / Expense Reconciliation (p1)
 
 **2026-09-25: case 9 step 4 shipped, the billing account's card** (backlog
-item 204, build 4; Shipped row 126). A receipt that prints no card and carries
+item 204, build 4; Shipped row 128). A receipt that prints no card and carries
 a Stripe invoice number takes the card its billing account was paid with on at
 least two other purchases and on no other card (`card_source: "account"`,
 company and person with it). Derived on every read, never memorized; a pick, a
 printed number and the statement outrank it; one pick decides nothing (D6).
 Predicted live: ten May / June / September rows gain a card. The SPA's source
 line waits on `docs/lovable-account-card-prompt.md`.
+
+**2026-09-25: case 9 build 3 shipped, the card flows back** (item 204 step 3,
+Shipped row 126). A receipt a neighbour month's charge settled now shows that
+charge's card, company and person (`card_source: "settled_charge"`) with
+`settled_by` naming the borrower, on the grid, CSV, month PDF and in the
+learner. 0 live rows move today: the two borrowed receipts (August OpenAI,
+borrowed by September) already print 9693, and July's borrowed FENIX receipt
+is in review, so it has no claim. Open: under D1's calendar-month exports a
+receipt dated the day before its charge's 1st-of-month date falls outside the
+borrower's window and is never borrowed.
 
 **2026-09-25: case 9 build 2 (step 6, owner D5) shipped: a receipt with no
 card evidence is not booked to a charge whose merchant words disagree.** The
@@ -45,6 +55,15 @@ who owns 3281), so the deploy moves no row; the SPA half
 
 **2026-09-25: case 9 build 1 shipped (item 204 step 2).** An invoice that prints no card now takes the card its own payment receipt prints whenever the grid shows the two as one document, under the old guards (one card only, a "Not a duplicate" ruling lends nothing, an operator hint on the invoice wins). PR #1362. Expected on September's next read: the Anthropic 184.35 and two Lovable 50.00 invoices read 9693 / 3645, `n_needs_entity` 26 -> 23. Builds 2 to 5 run in their own sessions.
 
+**2026-09-25: case 9 build 5 (item 204 steps 1 and 5) shipped.** A receipt
+that names no card now says which cards' statements it is waiting for
+(`waits_for_statement`, read across every month) instead of asking for a
+company, carries a recurring-charge `card_suggestion` with its evidence
+(never applied), and one picked card can be applied to the same vendor's
+other card-less rows with an explicit click (`POST .../cards/by-vendor`). A
+statement upload names its majority month and advises when it is filed in
+another. SPA half `docs/lovable-case9-status-prompt.md` waits on the owner's
+paste. Builds 1 to 4 run in sibling sessions.
 **2026-09-25: July, August and September are on the Zoho accounts** (owner
 directive; backlog items 201 and 205, PR #1356, Fly `071b19d7`, snapshot
 `vs_V9ka1J80opbTj8gxvqQ59X5` taken before). Owner's ruling on Criss's 35 bucket
