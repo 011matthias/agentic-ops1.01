@@ -10343,6 +10343,28 @@ production (a volume read was refused earlier in the session); the next step
 is a read of the live chart file's entry for that code, then a refresh of the
 file if it is stale.
 
+### 208. The duplicates filter keeps the flagged rows but not their groups (owner 2026-09-25) (PROMPT WRITTEN 2026-09-25, not pasted)
+
+**Owner:** *"add a duplicate filter inside each month so the user can see all
+the expenses that were flagged as duplicated grouped together"*.
+
+Item 188's "Show duplicates (N)" button is live and keeps only rows whose
+`duplicate` is set, but `ExpensesReviewGrid` still sorts the survivors into the
+three review-state tables. A pair whose copies are in different states lands in
+two tables; within one table other rows can sit between the copies. Measured
+read-only on every live month 2026-09-25: July 10 of 11 pairs not side by side
+(2 split across tables, 8 with rows between), September 3 of 19, August 3 of
+5, June 2 of 2, May 0 of 1. Every live group is a pair and every member is an
+`expenses[]` row, so no backend field is missing.
+
+Call made in the prompt: a group shows whole when any member passes the other
+filters, so under a card scope the partner copy renders too, badged "Not on
+this card". Several live pairs hold one copy with no card and one naming it
+(July Aposto Karlsruhe 80.00 EUR, September Lovable 50.00 USD), and a strict
+card scope would show them half, which defeats the grouping.
+
+SPA-only: `docs/lovable-duplicate-groups-prompt.md`, NOT pasted.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
