@@ -128,3 +128,32 @@ No em-dashes anywhere, in either language.
 6. PT-BR: every string above in Portuguese, including the badge suffix and the two error messages.
 7. No request other than the ones named above is sent by these screens; the Cards tab's save payload is unchanged.
 ````
+
+## Follow-up 1 (2026-09-25, after the first publish): the strip option never renders
+
+Audit of the published bundle (`chunk-expenses._batchId-BsXUzwCy.js`): the
+group renderer computes `o = !!t.allowPrivate && !e.ambiguous` and shows
+"Private card of..." only when `o` is true, but every section calls it as
+`O(e, {})`, so the option renders on no group. The Settings tab and the badge
+are live and were driven; the strings, the person input and the `private_to`
+mutation are in the bundle. One wiring line is missing.
+
+Paste into Lovable:
+
+````markdown
+The app calls the FastAPI backend at `https://api.expenses.brisken.com`. No backend change; one wiring fix in the unknown-card strip on the expenses page.
+
+## What is wrong
+
+The strip's group renderer takes an options object and shows the "Private card of..." select option only when `allowPrivate` is true (`o = !!t.allowPrivate && !e.ambiguous`). Every section calls it with an empty object (`ie.map(e => O(e, {}))` for "Cards by number", and the same for the other two), so the option never renders anywhere. On the published build the "Card ending 3281" group's Assign select on September 2026 lists the nine cards and "New card..." and nothing else, while the strings and the `private_to` mutation are already in the bundle.
+
+## The fix
+
+Pass `{ allowPrivate: true }` from the "Cards by number" section only. The other two sections keep `{}`. Change nothing else: the "Reimburse to" input, its pre-fill from `reimburse_to_prefill`, the `private_to` payload and the "Remember for future months" switch are already wired.
+
+## Checks
+
+1. September 2026, open the strip (Review), the "Card ending 3281" group: the Assign select ends with "Private card of..." after "New card...". Choosing it shows the "Reimburse to" input. Do not press Assign.
+2. The groups under "No card number on the receipt" still have no such option.
+3. PT: "Cartão particular de..." in the same place.
+````

@@ -68,9 +68,13 @@ subscriptions on Corporate Services, which need Dirk's account per item 181). A
 hand-picked account now exports under its name (item 201). Item 206 fixed
 2026-09-25: a card fix, a hint assignment, a settling statement charge or a
 re-match that gives a row its company now re-runs the engine for it. Item 210
-(found building it, owner's call): the export gate still checks a row against
-its stamped company, not the one it shows. Item 207 (the live export gate
-blanks one postable account) is open.
+(found building it; owner: record only): the export gate still checks a row
+against its stamped company, not the one it shows. Item 207 fixed live
+2026-09-25: the export check's chart file on the volume was the 1 July pull,
+missing 18 of Dirk's 64 postable Cloud Services accounts. It was replaced with
+the 24 September pull (owner yes, snapshot first), and September's SendGrid
+row now exports its account. `/healthz` `coa_chart` now names any postable
+account the file lacks.
 
 **2026-09-25: case 9 ("no payment info") is planned, not built** (backlog
 item 204, PR #1346). Live: 34 receipts print nothing, 12 only a Brisken card
