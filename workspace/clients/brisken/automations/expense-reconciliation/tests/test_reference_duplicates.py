@@ -554,15 +554,18 @@ def test_entity_is_lent_only_when_exactly_one_is_named():
     assert inherit_card_from_copies([own, b])[0].legal_entity_id == "Cloud Services"
 
 
-def test_inheritance_needs_a_reference_group_not_a_vendor_date_group():
-    """Two receipts with no usable reference are a vendor/date pair and
-    nothing lends: without a document number the two are the same
-    purchase by circumstance, not by identity."""
+def test_a_vendor_date_copy_the_ladder_shows_lends_its_card_too():
+    """Two receipts with no usable reference are a vendor/date pair. Until
+    item 204 (2026-09-25) nothing lent across one ("the same purchase by
+    circumstance, not by identity"), while the grid already marked the pair
+    one document and set a copy aside. The ladder decides it one copy (rung
+    6), so the card one prints reaches the other: see
+    `test_twin_card_c9.py` for the route-level contract."""
     a = _receipt("a", "4563", payment_mode=None)
     b = _receipt("b", "4563", payment_mode="Visa ...2838")
     assert find_duplicate_receipts([a, b]) == [["a", "b"]]
     out = inherit_card_from_copies([a, b])
-    assert out is not None and out[0].payment_mode is None
+    assert out is not None and out[0].payment_mode == "Visa ...2838"
 
 
 # ── unit: a reference shared across totals is an account id (review F1) ──

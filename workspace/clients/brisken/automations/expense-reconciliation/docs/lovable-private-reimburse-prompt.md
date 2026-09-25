@@ -1,6 +1,9 @@
 # Lovable prompt: a private expense asks who gets reimbursed (item 175), and the months list says what "From email" means (item 174)
 
-> **NOT PASTED.** Backend for both is already live: item 175 needs no new
+> **APPLIED by bundle, 2026-09-24; not driven** (PROMPT-STATUS row: transitive
+> crawl of the published SPA found `expx.reimburse.edit`,
+> `expx.private.editTitle` and "Receipts by email" present, "From email"
+> absent). Backend for both was already live: item 175 needs no new
 > field (`reimburse_to`, `reimburse_to_prefill` and `private` are all on the
 > row today), and item 174 needs none either (`created_by` is already on the
 > month). Item 176 shipped 2026-09-24 and is a precondition for section 1:
