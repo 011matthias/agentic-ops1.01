@@ -11277,7 +11277,7 @@ GitHub). Every pick from now on prints as hers. The journal's receiptless rows
 are off on every live month (`zoho.export_receiptless_learned` unset), so that
 surface changes nothing she downloads today.
 
-**Cause 3, built 2026-09-25 (merchant identity).** One resolver,
+**Cause 3, built and deployed 2026-09-25 (merchant identity; PR #1441, Fly `8102be21`).** One resolver,
 `merchant_identity.MerchantIdentityResolver`, now decides which merchant a name
 is, for memory recall, memory capture, the registry match and the per-company
 account map: the registry's canonical names and aliases first, otherwise the
