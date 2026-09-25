@@ -133,6 +133,8 @@ from ..merchant_registry import (
 # account came from a company's rule says more) and the seed marker the
 # Memory page flags a Zoho-history row with.
 from ..categorize import REGISTRY_DEFAULT_REASONING
+# Front 3 step 1: a merchant's per-company account read at view time.
+from ..categorize import live_registry_accounts, live_registry_charge_accounts
 from ..learning.consult import ZOHO_SEED_PREFIX
 from .month_health import (
     HEALTH_OK,
@@ -3391,6 +3393,14 @@ def build_view(
     chase list is still built (it is derived from the rows) with no address
     and no hint on it: the groups and their counts never depend on it."""
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
+    # Front 3 step 1: the merchant list as it reads NOW names each row's
+    # merchant and, where it carries an account for the row's company, the
+    # account (a rule's answer, never the model's). Only the GET route passes
+    # settings; every other caller reads the rows as stored.
+    live_registry = MerchantRegistry.from_settings(settings) if settings else None
+    receipts, live_receipts_stamped = live_registry_accounts(
+        receipts, live_registry, entity_orgs=gl_run_entity_orgs(run),
+    )
     rec_by_id = {r.document_id: r for r in receipts}
     # Note item T3: which upload printed each charge, and where. Read once
     # per payload (it walks `statements[]` and one map per upload) and put
@@ -3454,11 +3464,16 @@ def build_view(
     # Slice 10: receiptless-charge categorizations (extra snapshot key;
     # absent on pre-Slice-10 runs => empty map, rows render as before).
     # Item 109: the reviewer's own picks lie over the tool's guesses.
-    charge_cats = apply_charge_category_overrides(
+    stored_charge_cats, live_charges_stamped = live_registry_charge_accounts(
         {
             tx_id: categorization_from_dict(d)
             for tx_id, d in (run.snapshot.get("charge_categorizations") or {}).items()
         },
+        transactions, outcome.unmatched_transactions, live_registry,
+        entity_orgs=gl_run_entity_orgs(run),
+    )
+    charge_cats = apply_charge_category_overrides(
+        stored_charge_cats,
         overrides,
         outcome.unmatched_transactions,
         entity_orgs=gl_run_entity_orgs(run),
@@ -3845,6 +3860,15 @@ def build_view(
             if proposed is not None:
                 posting_category, suggested_category = proposed
                 proposed_flag = {"posting_category_proposed": True}
+        # Front 3 step 1: a posting the live merchant list decided carries
+        # what the row read before, as stored. ABSENT everywhere else.
+        if posting_category is not None:
+            _was = live_stamped_category(
+                tx_id, held_doc, live_charges_stamped, live_receipts_stamped,
+                overrides, gl_run_entity_orgs(run),
+            )
+            if _was is not None:
+                posting_category = {**posting_category, "stamped": _was}
         review = resolve_review(
             is_posted=is_posted,
             effective_bucket=effective_bucket,
@@ -3877,6 +3901,10 @@ def build_view(
                 "transaction_id": tx_id,
                 "date": tx.transaction_date.isoformat() if tx.transaction_date else "",
                 "vendor": tx.vendor_from_statement,
+                # Front 3 step 1: the listed merchant the bank's description
+                # names, resolved against the list as it reads now. ABSENT
+                # when the list names none.
+                **charge_merchant_field(live_registry, tx),
                 "amount": _fmt_amount(tx.amount),
                 "currency": tx.transaction_currency,
                 "account_id": tx.account_id,
@@ -8195,6 +8223,14 @@ def build_expense_view(
         settings=settings, decisions=decisions,
         learning_db_path=learning_db_path,
     )
+    # Front 3 step 1: the merchant list as it reads NOW, for each row's
+    # merchant, its display name and, where the merchant carries an account
+    # for the company the row shows, the account. Stored rows are untouched.
+    live_registry = MerchantRegistry.from_settings(settings) if settings else None
+    receipts, live_stamped = live_registry_accounts(
+        receipts, live_registry, entity_orgs=gl_run_entity_orgs(run),
+        entity_by_doc=resolved_entities(card_res),
+    )
     # Keep the pre-edit receipts so the vendor object can always show the
     # ORIGINAL extracted name as `raw`, even after a reviewer vendor edit
     # folded a new spelling into `detected_vendor`.
@@ -8402,6 +8438,16 @@ def build_expense_view(
             suggested = {
                 **suggested, "source": _coarse_source_join(suggested.get("source"))
             }
+        if posting is not None and r.document_id in live_stamped:
+            _was_p, _was_s = _row_categories(
+                live_stamped[r.document_id], overrides, None,
+                entity_orgs=gl_run_entity_orgs(run), entity=res["entity"],
+            )
+            _was = _was_s or _was_p
+            if _was is not None:
+                posting = {**posting, "stamped": {
+                    **_was, "source": _coarse_source_join(_was.get("source")),
+                }}
         pt_account, pt_source = resolve_paid_through(
             r,
             field_overrides.get(r.document_id, {}).get("paid_through") or None,
@@ -8535,10 +8581,13 @@ def build_expense_view(
             # so the grid shows the canonical name AND why it differs. This is
             # an expense-grid-only shape; the reconcile workbench keeps the
             # string (_receipt_view is unchanged there).
-            "vendor": _expense_vendor_view(
+            # Front 3 step 1: `display` and `source` read the merchant list as
+            # it is NOW; `stamped` keeps what ingest stored when that differs.
+            "vendor": expense_vendor_view_live(
                 r, orig_by_id.get(r.document_id),
-                field_overrides.get(r.document_id, {}),
+                field_overrides.get(r.document_id, {}), live_registry,
             ),
+            **receipt_merchant_field(live_registry, r),
             # Receipt-first fields _receipt_view does not carry (build_view
             # consumers are unchanged; these are expense-row additions).
             "tax": _fmt_amount(r.detected_tax),
@@ -9110,6 +9159,7 @@ def _expense_export_inputs(
     merchants: dict | None = None,
     learning_db_path: "Path | None" = None,
     private_cards: dict | None = None,
+    live_accounts: bool = False,
 ) -> tuple[list, dict]:
     """`(receipts, kwargs)` for the expense export — the overlay order the
     view uses (`apply_expense_edits` then `apply_overrides`) plus the card /
@@ -9172,6 +9222,16 @@ def _expense_export_inputs(
         # never the matcher's neighbour and trip pools, which pass none.
         account_cards=request_account_cards() if settled_cards is not None else None,
     )
+    # Front 3 step 1: the files a reviewer downloads (`live_accounts`: the
+    # CSV, the month report, bills.csv) carry the merchant list's account
+    # for the row's company exactly as the grid shows it. The matcher's trip
+    # and neighbour pools leave it off: they read receipts, never accounts.
+    if live_accounts:
+        receipts, _stamped = live_registry_accounts(
+            receipts, MerchantRegistry.from_settings({"merchants": merchants}),
+            entity_orgs=gl_run_entity_orgs(run),
+            entity_by_doc=resolved_entities(card_res),
+        )
     # After the card pass (which reads no category) so item 201's account
     # name resolves in the company this row exports under, as on the grid.
     receipts = apply_overrides(
@@ -9240,6 +9300,7 @@ def regenerate_expense_export(
         run, overrides, field_overrides, edits, dup_resolutions,
         settled_cards=csv_settled, merchants=merchants,
         learning_db_path=learning_db_path, private_cards=private_cards,
+        live_accounts=True,
     )
     kwargs.pop("private_by_doc")  # the CSV reads it through paid_through_by_doc
     copies = decided_copies(
@@ -9467,7 +9528,7 @@ def build_expense_report(
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits, dup_resolutions,
         settled_cards=report_settled, merchants=report_merchants,
-        learning_db_path=learning_db_path,
+        learning_db_path=learning_db_path, live_accounts=True,
         private_cards=(settings or {}).get("private_cards"),
     )
     copies = decided_copies(
@@ -17016,7 +17077,7 @@ def regenerate_bills_export(
         run, overrides, field_overrides, edits, dup_resolutions,
         settled_cards=export_settled_cards(run, charge_decisions),
         merchants=merchants, learning_db_path=learning_db_path,
-        private_cards=private_cards,
+        private_cards=private_cards, live_accounts=True,
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
@@ -19223,3 +19284,89 @@ def fx_pair_confirmable(row: dict, cand: dict) -> bool:
     if cand.get("card_pct") not in (100, 50) or row.get("cards_differ"):
         return False
     return True
+
+
+# ── Front 3 step 1 (2026-09-25): merchant identity read live ───────────
+#
+# A receipt's merchant was stamped when it arrived (`canonical_vendor`,
+# `vendor_source`) and never re-read, so a merchant added to the list later
+# reached no row already in a month: 64 receipts and 52 charges on July to
+# September read the raw spelling or the model's guess while Settings'
+# `needs_account` (which resolves live) already named them. These helpers
+# read the list as it is now. Nothing here writes.
+
+
+def _merchant_field(match) -> dict:
+    """`{"merchant": {name, match}}` for a registry hit, `{}` otherwise
+    (absent, never null). `match` is how the list matched: exact, fuzzy or
+    descriptor."""
+    if match is None:
+        return {}
+    return {"merchant": {"name": match.canonical_name, "match": match.kind}}
+
+
+def receipt_merchant_field(registry, receipt: Receipt) -> dict:
+    """The grid row's `merchant`, resolved as the engine resolves a receipt
+    (the extracted brand, then the printed name)."""
+    if not registry:
+        return {}
+    return _merchant_field(
+        registry.resolve(receipt.vendor_clean, receipt.detected_vendor)
+    )
+
+
+def charge_merchant_field(registry, tx) -> dict:
+    """The run row's `merchant`, resolved from the bank's description the way
+    `categorize_charges` resolves a receiptless charge."""
+    if not registry:
+        return {}
+    from ..categorize_charges import build_charge_pseudo_receipt
+
+    pseudo = build_charge_pseudo_receipt(tx)
+    return _merchant_field(
+        registry.resolve(pseudo.vendor_clean, pseudo.detected_vendor)
+    )
+
+
+def expense_vendor_view_live(
+    eff: Receipt, orig: "Receipt | None", field_ov: dict, registry,
+) -> dict:
+    """`_expense_vendor_view` with the registry read now instead of from the
+    ingest stamp. A person's vendor edit still wins; a merchant the list
+    names today reads its canonical name with source `registry`; a stamped
+    canonical the list no longer names falls back to the extracted (or
+    learned) spelling. `stamped` (`{display, source}`) keeps the stored view
+    when it differs; ABSENT otherwise."""
+    stored = _expense_vendor_view(eff, orig, field_ov)
+    if registry is None or stored["source"] == "override":
+        return stored
+    match = registry.resolve(eff.vendor_clean, eff.detected_vendor)
+    if match is not None:
+        live = {"display": match.canonical_name, "raw": stored["raw"],
+                "source": "registry"}
+    else:
+        live = _expense_vendor_view(
+            replace(eff, canonical_vendor=None), orig, field_ov)
+    if (live["display"], live["source"]) != (stored["display"], stored["source"]):
+        live["stamped"] = {"display": stored["display"], "source": stored["source"]}
+    return live
+
+
+def live_stamped_category(
+    tx_id: str, held_doc: str | None, charges_stamped: dict,
+    receipts_stamped: dict, overrides: dict, entity_orgs: dict | None,
+) -> dict | None:
+    """What a run row's category read before the live registry rule decided
+    it: the held receipt's stored suggestion (else its stored posting), or a
+    receiptless charge's stored categorization. None when the rule did not
+    touch the row, or the row carried nothing before."""
+    if held_doc:
+        if held_doc not in receipts_stamped:
+            return None
+        was_p, was_s = _row_categories(
+            receipts_stamped[held_doc], overrides, None, entity_orgs=entity_orgs,
+        )
+        return was_s or was_p
+    if tx_id in charges_stamped:
+        return _charge_category_view(charges_stamped[tx_id])
+    return None

@@ -1014,18 +1014,7 @@ def _registry_gl(
         return None
     mapped = company_account(getattr(match, "accounts", ()), org_id, entity_orgs)
     if mapped is not None:
-        label, code = mapped
-        reasoning = f"merchant registry account for {label}"
-        if not curated_leaves.is_postable(org_id, code):
-            return _stamp_lines(receipt, _refused_cat(
-                curated_leaves.refusal_reason(org_id, code),
-                detail=f"{reasoning}: {code}"))
-        res = resolve_posting_account(
-            org_id=org_id, legal_entity_id=None, vendor=None, llm_leaf=code)
-        return _stamp_lines(receipt, _gl_categorization(
-            res, org_id, source=ClassificationSource.REGISTRY,
-            confidence=1.0, reasoning=reasoning,
-        ))
+        return _stamp_lines(receipt, registry_mapped_categorization(org_id, *mapped))
     if not match.category:
         return None
     account, reasoning = _registry_account(receipt, match, learned)
@@ -1040,6 +1029,142 @@ def _registry_gl(
             confidence=1.0, reasoning=reasoning,
         ))
     return None
+
+
+def registry_mapped_categorization(
+    org_id: str, label: str, code: str,
+) -> Categorization:
+    """The merchant's own account for one company (items 180/181), as a
+    line's categorization: the leaf, or the refusal naming why this org
+    cannot post to it. The one place both the ingest tier (`_registry_gl`)
+    and the read-time rule (`live_registry_accounts`) build it, so a row
+    reads the same before and after its month is re-categorized."""
+    reasoning = f"merchant registry account for {label}"
+    if not curated_leaves.is_postable(org_id, code):
+        return _refused_cat(
+            curated_leaves.refusal_reason(org_id, code),
+            detail=f"{reasoning}: {code}")
+    res = resolve_posting_account(
+        org_id=org_id, legal_entity_id=None, vendor=None, llm_leaf=code)
+    return _gl_categorization(
+        res, org_id, source=ClassificationSource.REGISTRY,
+        confidence=1.0, reasoning=reasoning,
+    )
+
+
+def _live_mapped(
+    registry, vendor_clean, vendor_raw, entity, entity_orgs,
+) -> Categorization | None:
+    """The per-company registry answer for one row as the list reads NOW,
+    or None when the merchant is unlisted, multi-category, or names no
+    account for this company."""
+    org_id = org_id_for_entity(entity, entity_orgs)
+    if not org_id or not curated_leaves.covers_org(org_id):
+        return None
+    match = registry.resolve(vendor_clean, vendor_raw)
+    if match is None:
+        return None
+    mapped = company_account(match.accounts, org_id, entity_orgs)
+    if mapped is None:
+        return None
+    return registry_mapped_categorization(org_id, *mapped)
+
+
+def _decided_by_person(cat: Categorization | None) -> bool:
+    return cat is not None and cat.source is ClassificationSource.EDITED
+
+
+def live_registry_accounts(
+    receipts: list[Receipt],
+    registry,
+    *,
+    entity_orgs: "Mapping[str, str] | None",
+    entity_by_doc: "Mapping[str, str] | None" = None,
+) -> tuple[list[Receipt], dict[str, Receipt]]:
+    """Front 3 step 1 (2026-09-25): a merchant's per-company account read at
+    VIEW time, not only when the receipt was categorized.
+
+    A receipt is categorized once, when it arrives, so an account the owner
+    set for a merchant afterwards (OpenAI and Anthropic, item 219) reached no
+    row already in a month until that month was re-run. This applies the
+    ingest tier's first rule (`_registry_gl`: the merchant's account for the
+    row's company decides before memory and the model) to the stored rows
+    as the list reads now, and changes nothing stored.
+
+    The company is the one the row shows (`entity_by_doc`, the card chain's
+    answer), else the receipt's own. A line a person set keeps its value (a
+    reviewer's pick is an override on top of this anyway); every other line
+    takes the merchant's account, as a re-categorization would give it. The
+    model's answer therefore never stays the posting and never becomes it:
+    it is replaced by a rule.
+
+    Returns `(receipts, stamped)`: the receipts with the rule applied and,
+    for each one it changed, the receipt as it was stored, so a view can say
+    what the row read before. A bucket month (`entity_orgs` None) and an
+    empty registry return the input unchanged."""
+    if entity_orgs is None or not registry:
+        return receipts, {}
+    out: list[Receipt] = []
+    stamped: dict[str, Receipt] = {}
+    for r in receipts:
+        entity = (entity_by_doc or {}).get(r.document_id) or r.legal_entity_id
+        cat = _live_mapped(
+            registry, r.vendor_clean, r.detected_vendor, entity, entity_orgs)
+        if cat is None:
+            out.append(r)
+            continue
+        items = r.line_items or (_synthesize_total_line(r),)
+        lines = tuple(
+            li if _decided_by_person(li.categorization)
+            else replace(li, categorization=cat)
+            for li in items
+        )
+        if lines == tuple(r.line_items):
+            out.append(r)
+            continue
+        stamped[r.document_id] = r
+        out.append(replace(r, line_items=lines))
+    return out, stamped
+
+
+def live_registry_charge_accounts(
+    charge_cats: "Mapping[str, Categorization]",
+    transactions,
+    charge_ids,
+    registry,
+    *,
+    entity_orgs: "Mapping[str, str] | None",
+) -> tuple[dict, dict]:
+    """`live_registry_accounts` for a month's receiptless charges: the
+    bank's description resolved the way `categorize_charges` resolves it,
+    against the charge's own company. `charge_cats` maps transaction id to
+    the stored categorization; `charge_ids` is the unmatched set it was
+    built over (`outcome.unmatched_transactions`), so a charge that has
+    since been paired never gains one. Returns `(charge_cats, stamped)`,
+    `stamped` holding each replaced categorization (None where the charge
+    had none)."""
+    if entity_orgs is None or not registry:
+        return dict(charge_cats), {}
+    from .categorize_charges import build_charge_pseudo_receipt
+
+    by_id = {t.transaction_id: t for t in transactions}
+    out = dict(charge_cats)
+    stamped: dict = {}
+    for tx_id in charge_ids:
+        old = charge_cats.get(tx_id)
+        tx = by_id.get(tx_id)
+        if tx is None or _decided_by_person(old):
+            continue
+        pseudo = build_charge_pseudo_receipt(tx)
+        cat = _live_mapped(
+            registry, pseudo.vendor_clean, pseudo.detected_vendor,
+            tx.legal_entity_id, entity_orgs,
+        )
+        if cat is None or cat == old:
+            continue
+        stamped[tx_id] = old
+        out[tx_id] = cat
+    return out, stamped
 
 
 # ── LLM-path implementations (slice 2) ──────────────────────────────
