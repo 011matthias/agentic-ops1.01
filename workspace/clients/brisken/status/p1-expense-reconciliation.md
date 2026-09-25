@@ -11,8 +11,52 @@ updated: 2026-09-25
 
 **2026-09-25: a merchant can hold one Zoho account per company (backlog items 180/181).** On a Zoho-account month, a receipt or card charge from that merchant books to its company's account with no AI call; Settings lists which merchants still need one (`needs_account`). No live merchant has an account yet: the per-vendor suggestions are with the owner for Dirk. July to September pick them up only through the new refused-rows re-run, on an owner order. The Settings screen half is a Lovable prompt, not pasted.
 
+**2026-09-25: case 9 build 3 shipped, the card flows back** (item 204 step 3,
+Shipped row 126). A receipt a neighbour month's charge settled now shows that
+charge's card, company and person (`card_source: "settled_charge"`) with
+`settled_by` naming the borrower, on the grid, CSV, month PDF and in the
+learner. 0 live rows move today: the two borrowed receipts (August OpenAI,
+borrowed by September) already print 9693, and July's borrowed FENIX receipt
+is in review, so it has no claim. Open: under D1's calendar-month exports a
+receipt dated the day before its charge's 1st-of-month date falls outside the
+borrower's window and is never borrowed.
+
+**2026-09-25: case 9 build 2 (step 6, owner D5) shipped: a receipt with no
+card evidence is not booked to a charge whose merchant words disagree.** The
+pair keeps its place as the charge's top candidate but waits in review
+(`review_code` `no_card_vendor_disagrees`) and lends no card. The LLM FX
+judge now leaves non-FX review pairs untouched (owner ruling in session).
+Measured on live July and August: August's Lovable invoice on BASE44 50.00
+(the one wrong booking) goes to review, and so do three pairs the labels
+call excluded or leave unlabelled; clean right bookings and the six bundles
+(70/95) are unchanged. Rows move at each month's next natural re-match. The
+Lovable prompt (`docs/lovable-no-card-vendor-guard-prompt.md`) is not pasted.
+
+**2026-09-25: the private-card list, a personal card confirmed private once**
+(backlog item 208, owner direction 2026-09-24 fusing cases 2 + 4 of the
+card-attribution map). `settings["private_cards"]` is its own key, read live
+by every month; a printed number on it makes the row private, reimbursed to
+the listed person, on every surface a row Criss confirmed reaches (report,
+CSV, counts, boxes), through ONE decision order (`cards.classify_payment_evidence`:
+Brisken number or type, listed number, case 6's evidence, wait) and a new
+`expenses[].private_source`. Two ways on: the Settings panel and the strip's
+"Private card of..." (month-only, or remembered with the switch); never a
+single row's confirm. Two ways off a row: undo stores an opt-out, a card pick
+wins. The list starts EMPTY and the tool never seeds it (nobody here knows
+who owns 3281), so the deploy moves no row; the SPA half
+(`docs/lovable-private-card-list-prompt.md`) is what lets anyone add one.
+
 **2026-09-25: case 9 build 1 shipped (item 204 step 2).** An invoice that prints no card now takes the card its own payment receipt prints whenever the grid shows the two as one document, under the old guards (one card only, a "Not a duplicate" ruling lends nothing, an operator hint on the invoice wins). PR #1362. Expected on September's next read: the Anthropic 184.35 and two Lovable 50.00 invoices read 9693 / 3645, `n_needs_entity` 26 -> 23. Builds 2 to 5 run in their own sessions.
 
+**2026-09-25: case 9 build 5 (item 204 steps 1 and 5) shipped.** A receipt
+that names no card now says which cards' statements it is waiting for
+(`waits_for_statement`, read across every month) instead of asking for a
+company, carries a recurring-charge `card_suggestion` with its evidence
+(never applied), and one picked card can be applied to the same vendor's
+other card-less rows with an explicit click (`POST .../cards/by-vendor`). A
+statement upload names its majority month and advises when it is filed in
+another. SPA half `docs/lovable-case9-status-prompt.md` waits on the owner's
+paste. Builds 1 to 4 run in sibling sessions.
 **2026-09-25: July, August and September are on the Zoho accounts** (owner
 directive; backlog items 201 and 205, PR #1356, Fly `071b19d7`, snapshot
 `vs_V9ka1J80opbTj8gxvqQ59X5` taken before). Owner's ruling on Criss's 35 bucket

@@ -8632,7 +8632,7 @@ badge means about receipts ("Receipts by email" / "Receipts uploaded") and
 keep it out of the statement badge's cell. Worth folding into the item-175
 Lovable prompt rather than pasting on its own.
 
-### 175. A private expense asks which card paid, not who owes the money back (note #74, operator 2026-09-23) — SCOPED 2026-09-24, SPA-only (`docs/lovable-private-reimburse-prompt.md`, not pasted)
+### 175. A private expense asks which card paid, not who owes the money back (note #74, operator 2026-09-23) — SCOPED 2026-09-24, SPA-only (`docs/lovable-private-reimburse-prompt.md`, applied by bundle 2026-09-24, not driven)
 
 **Operator (PT):** *"No privado, deve haver quem deve reembolsar a despesa"*
 ("on a private one, there must be someone who has to reimburse the expense").
@@ -10291,6 +10291,83 @@ returns `[]` by design.
 
 **Build 1 (step 2), 2026-09-25:** invoice and receipt twins share the card, shipped in PR #1362. `duplicates.lending_groups` gives `inherit_card_from_copies` the reference groups plus every group the app SHOWS as one document (the groups behind `expenses[].duplicate`: not `ignore`, not `distinct`), and the grid, export and re-match bake lines pass their evidence-backed `duplicate_decisions`, because the Stripe pairs carry two numbers and only rung 3 (the receipt printing the invoice's number) joins them. Guards unchanged; one added: a copy two shown groups would lend two different cards or entities gets neither. `test_reference_duplicates.py`'s unit test pinning "a vendor/date pair lends nothing" is flipped to the new rule. Live before the build (Fly `5bbb0ac2`, read-only): September `n_needs_entity` 26 (27 at planning); `0008`, `0029`, `0033` card-less beside twins `0009` (3645), `0030` (9693), `0034` (3645), all three pairs already marked copies; the three OpenAI 80.12 of 16 Sep carry no marker. Predicted on the next read: those three rows take 3645 / 9693 / 3645, `n_needs_entity` 26 -> 23. One planning prediction does not hold: July's Supermercado Fenix 803.11 copy 2 prints `CARTAO: xxxxxxxxxxxx3076`, which `_card_keys` reads as card 3076, so the pair names two cards and lends nothing (the guard this build keeps); July Aposto (`VISA CREDIT`), July Lovable 200 (`Link`) and May Lovable 200 (neither prints a card) do not move either. Instruments: `recon-match-attribution.py` on the six bundles plus the July/August live bundles shows 0 class moves and 0 row differences, and is blind to this build: every bundle receipt carries `payment_mode` None, so nothing can lend there before or after; `recon_accuracy_check.py ci` reports no differences (its scorer calls `match_month` directly), `expected.json` unchanged. Tests: `tests/test_twin_card_c9.py` (9); four wiring points proven red under `tools/regress_check.py`; suite 3485 passed / 2 skipped.
 
+**Build 2 (step 6), 2026-09-25:** the D5 guard shipped (PR #1367, Shipped row
+125). `MatchingConfig.no_card_vendor_guard` (default on, mirrored into
+`config/match-tuning.json`): the CHOSEN pair of a receipt with `card_evidence`
+receipt `none` and `_vendor_score` below 0.5 keeps its assignment (still the
+top candidate, one click to confirm) but goes to `judgment_required` with
+`review_code` `no_card_vendor_disagrees`, so it sits in review and lends no
+card through `settled_charge_cards`. One thing the plan did not see: every
+re-match runs `cli._apply_judgment` over `judgment_required`, which rebuilt
+each entry as an LLM FX verdict (code and reason lost, `match_type`
+`fx_judgment`) and unbinds a pair the model rejects, so the three right CNPJ
+pairs could have lost their one click. Owner ruled 2026-09-25 (asked in
+session): the model judges FX pairs only, and a non-FX entry passes through
+untouched. Measured on a fresh DB copy (July `50622baec444`, August
+`074a7b8905d7`, their labels): four receipts move to review, none leaves a
+right booking; August `0025` Lovable on BASE44 50.00 wrong to review
+(wrong 1 to 0), July `0034` Erste Fracht on HOTEL AM TIERGARTEN and `0066`
+Mega Center on BEATRYZ (both labelled excluded) and August `0033` E A
+LOCACOES (unlabelled) go to review. Clean right 26 / 6 unchanged. A live
+read of every month (GET only) finds exactly the five predicted rows, all
+still pending in reconciled: the four above plus April 46.412.470 MARIA
+BETAN 24.59 (2838, `vendor_pct` 17); September and the receipts-only months
+hold none. Six bundles unchanged
+(70/95, 0 wrong, SCORE 76.0; every bundle receipt carries a Zoho payment
+mode), CI fixtures unchanged, so `expected.json` and the deploy baseline did
+not move. Rows move at each month's next natural re-match. Lovable prompt
+`docs/lovable-no-card-vendor-guard-prompt.md` (not pasted). Tests
+`tests/test_no_card_vendor_guard_c9.py`.
+
+**Build 3 (step 3), 2026-09-25:** the card flows back. `settled_charge_cards`
+now also carries the claim another month holds on one of this month's
+receipts (`cards_settled_elsewhere`, end of `service.py`): the holder's charge
+is re-checked against its EFFECTIVE verdict (reconciled, still holding this
+document, borrowed from this run) and resolved through `_charge_card_identity`
+against THIS batch's registry, so the chain's existing `settled` link gives
+`card_source: "settled_charge"` while `settled_by` names the borrowing month.
+One map, so the grid, the CSV, the month PDF and the item-171 learner agree.
+The functions receive a run, not a store, so the reader opens the database
+read-only from the run's work dir (`store.open_read_only`, no schema pass; a
+wrong path or any SQLite error lends nothing). Live before the build, all
+seven batches: 2 rows carry `settled_by`, August's two OpenAI receipts
+borrowed by September, both already `hint` 9693, so 0 rows move today. July's
+one borrowed receipt is June's SUPERMERCADO FENIX 10.82 (06-30), held in
+July's REVIEW bucket, so it has no claim and correctly lends nothing. Open,
+not built here: (a) the borrow window is the borrower's min..max charge date
+(`statement_period_for_month`), so under D1's calendar-month exports a receipt
+printed the day BEFORE a charge that posts on the 1st (the 07-31 / 08-01
+Google shape) is outside the next month's window and is never borrowed; the
+flow-back reaches it only if the window changes, which this build left alone.
+(b) `settled_charge_amounts` (item 98, the FX twin) still reads this month's
+charges only, so a flowed-back row converts at the reference rate rather than
+at the neighbour charge's amount. Tests `tests/test_card_flows_back_c9.py` (8);
+`regress_check` on the wiring line in `settled_charge_cards` turned 6 red.
+
+**Build 5 (steps 1 and 5), 2026-09-25:** built in `card_suggestion.py`.
+A statement covers a card's day when an upload that printed the card spans it,
+in any month; one printed card covers its whole `parent` family (a Chase
+export carries every subcard, so August's 2838 export covers 0340 though 0340
+spent nothing). An open card-less row (no card, not private or suggested
+private, no printed digits, not settled outside) with some active card
+uncovered reads `waits_for_statement` in `needs_entity`'s place with
+`waits_for_statements: [labels]`; `unmatched_receipts[].reason_code` reads
+`card_statement_not_loaded` for the same receipt. `card_suggestion` = lever E
+exactly as measured (first vendor word of 3+ characters, amount within 3% in
+the receipt's currency, 45 days, all on one named card), never applied.
+`POST /api/expense-batches/{id}/cards/by-vendor {vendor, card_key[, dry_run]}`
+writes the row PUT's own override to the vendor's open, counting rows and
+re-matches a statement month; `dry_run` gives the SPA its N. `statements[]
+.month_suggestion` + advisory `statement_month_differs`, ranked after the two
+doubling advisories. The view builders have no store, so each gained one
+trailing kwarg (`statement_evidence`, an `EvidenceSource` read once per
+request and only when a card-less row asks) passed from its `app.py` call,
+and `build_statement_entry` an `attached_month` passed at its two calls: the
+only lines outside the round's "You own" list. Three older tests widened to
+the new code (`needs_entity` or `waits_for_statement`; no DOUBLING advisory
+on two July cycles filed in August). Live counts after deploy: see the
+Shipped row. SPA half `docs/lovable-case9-status-prompt.md`, not pasted.
+
 ### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (APPLIED 2026-09-25: PR #1356, Fly `071b19d7`, all three months switched live)
 
 Owner, 2026-09-25: "i need july, august and september recategorized with this
@@ -10374,11 +10451,108 @@ production (a volume read was refused earlier in the session); the next step
 is a read of the live chart file's entry for that code, then a refresh of the
 file if it is stale.
 
+### 208. The private-card list: a personal card is confirmed private once, not every month (owner direction 2026-09-24, cases 2 + 4 of the card-attribution map) (SHIPPED 2026-09-25)
+
+Owner, 2026-09-24, verbatim: *"fuze items 2 and 4 together, fix a) by setting
+up private card memory/registry and b) any credit card types or numbers that
+dont belong to brisken will then be suggested as private expenses - making
+item 2 the alternative to item 1 (after the changes in the prompt above)"*.
+Half (b) shipped as case 6 (item 203). This is half (a), gap (a) of the case
+map: a personal card that recurs (3281 on the DB Fernverkehr receipts) had to
+be confirmed private by hand every month, because nothing recorded "3281 is
+somebody's private card".
+
+**Built.** `settings["private_cards"]`, `{last4: {person, note, active}}`, a
+SEPARATE key from `cards` (every company-card consumer iterates `cards`, and
+the Cards editor replaces that map whole; `store.set_settings` merges keys
+shallowly, so a `cards` save keeps the list, pinned). Validated by
+`cards.normalize_private_cards_setting` (the full last 4 required, a leading
+zero kept, person required, duplicates refused, and `private_card_is_company_card`
+from EITHER side: the list refuses a number an active company card carries,
+a `cards` save and the strip's card learning refuse a listed number). Read
+LIVE at view time like the remembered card (169) and the merchant registry
+(M2); never snapshotted into a batch, so an entry reaches every month at once.
+
+One decision order, one entry point: `cards.classify_payment_evidence(hint,
+cards, private_cards, hints)` returns the listed private card (step 3) or
+case 6's evidence reason (step 4), and `service.resolve_batch_row_cards`
+reaches both through it. Row-level decisions outrank it exactly as before (a
+per-row card pick, a row Criss confirmed, a settled-outside disposition), then
+the month's own hint assignments. New parallel field `expenses[].private_source`
+(`"row"` | `"month"` | `"private_card_list"` | `""`), pinned in
+`tests/test_view_contract.py`. A list-derived row reads exactly like a row
+Criss confirmed on every surface: the reimbursements section of the month
+report, the CSV's `(private expense)` / `Private ({person})`, `n_private`,
+the boxes, the strip. Every consumer of `private` / `reimburse_to` now reads
+the resolution: `_private_reimbursements` takes the card resolution instead
+of `field_overrides`, which moved the month report, the CSV, the readiness
+count (`completeness_counts`) and the two neighbouring-month pools with it
+(they read the overrides directly before). Nothing under `matching/` reads
+either field.
+
+Two row exits: undo (`POST .../private {private: false}`) on a list-derived
+row stores an explicit opt-out (`private: "0"`), so the list no longer
+applies to that row and case 6's suggestion returns; a per-row `card_key`
+wins over a listed number and is NOT refused with `private_card` (that
+refusal stays for rows Criss confirmed herself). The printed-number guard is
+pinned: a listed number never takes the merchant card. Two ways onto the
+list, both explicit: the Settings panel (SPA, prompt below) and the
+unknown-card strip's `{"hint", "private_to"}` assignment (month-only record
+in `expense.private_hints`; with the remember switch also the list;
+refuses a hint with no number and a company card's number). Confirming
+private on a single row does NOT write the list (owner ruling 2026-09-24:
+only corrections are memorized, and a per-row confirmation is a decision
+about that row). **Supersession recorded:** the 2026-08-22 ruling "personal
+tenders are never learned" was about tender WORDS and stands; a card NUMBER
+on the list is an explicit owner-directed registry under this direction.
+
+**Live effect on deploy: zero rows move** (the list starts empty; nobody
+here knows who owns 3281, and the tool never seeds it). Before/after census
+over all seven months in the PR. New on the wire: `private_source` on every
+row, `private_cards: {}` in settings. June's Fenix `3976` is probably an OCR
+slip of 3876 and Google's two numbers may not be cards at all: nothing built
+for either, and neither is a stand-in for a real private card.
+
+**SPA half:** `docs/lovable-private-card-list-prompt.md` (Not applied): a
+"Private cards" Settings panel, "Private card of..." on the strip's Assign
+dropdown, and "(from the private card list)" on the badge. Until it is
+pasted nobody can add an entry, so the backend alone moves nothing.
+
+Contract: `docs/api-contract.md`, "Whose money paid: the decision order, and
+the private-card list". Tests: `tests/test_private_card_list.py`.
+
+### 209. The duplicates filter keeps the flagged rows but not their groups (owner 2026-09-25) (PROMPT WRITTEN 2026-09-25, not pasted)
+
+**Owner:** *"add a duplicate filter inside each month so the user can see all
+the expenses that were flagged as duplicated grouped together"*.
+
+Item 188's "Show duplicates (N)" button is live and keeps only rows whose
+`duplicate` is set, but `ExpensesReviewGrid` still sorts the survivors into the
+three review-state tables. A pair whose copies are in different states lands in
+two tables; within one table other rows can sit between the copies. Measured
+read-only on every live month 2026-09-25: July 10 of 11 pairs not side by side
+(2 split across tables, 8 with rows between), September 3 of 19, August 3 of
+5, June 2 of 2, May 0 of 1. Every live group is a pair and every member is an
+`expenses[]` row, so no backend field is missing.
+
+Call made in the prompt: a group shows whole when any member passes the other
+filters, so under a card scope the partner copy renders too, badged "Not on
+this card". Several live pairs hold one copy with no card and one naming it
+(July Aposto Karlsruhe 80.00 EUR, September Lovable 50.00 USD), and a strict
+card scope would show them half, which defeats the grouping.
+
+SPA-only: `docs/lovable-duplicate-groups-prompt.md`, NOT pasted.
+
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-| 124 | Items 180/181: a merchant's GL account per company. `merchants[].accounts` `{company: leaf code}` decides first on a GL month (matched on the company's org), refuses a code the company cannot post to, works for a merchant with no default category and for receiptless charges; a save omitting the key keeps it; `GET /api/settings` names each code per company and lists `needs_account`; `POST /api/runs/{id}/recategorize-refused` (typed confirm) re-runs a GL month's refused rows | The 126 "model unsure" lines on July to September are mostly AI vendors on Corporate Services, where several accounts fit and the registry had no per-company answer to give | 2026-09-25; `tests/test_merchant_accounts_item_180.py` (10, route-level, a client that fails if the model is asked); nine wiring points proven RED under `tools/regress_check.py`; SPA prompt `docs/lovable-merchant-accounts-per-company-prompt.md` not pasted |
+| 128 | Items 180/181: a merchant's GL account per company. `merchants[].accounts` `{company: leaf code}` decides first on a GL month (matched on the company's org), refuses a code the company cannot post to, works for a merchant with no default category and for receiptless charges; a save omitting the key keeps it; `GET /api/settings` names each code per company and lists `needs_account`; `POST /api/runs/{id}/recategorize-refused` (typed confirm) re-runs a GL month's refused rows | The 126 "model unsure" lines on July to September are mostly AI vendors on Corporate Services, where several accounts fit and the registry had no per-company answer to give | 2026-09-25; `tests/test_merchant_accounts_item_180.py` (10, route-level, a client that fails if the model is asked); nine wiring points proven RED under `tools/regress_check.py`; SPA prompt `docs/lovable-merchant-accounts-per-company-prompt.md` not pasted |
+| 127 | Item 204 build 5 (case 9 steps 1 and 5): `expenses[].waits_for_statements` + review `waits_for_statement` in `needs_entity`'s place (coverage by date across every month, one printed card covering its `parent` family), `unmatched_receipts[].reason_code` `card_statement_not_loaded` for the same no-card receipt, `card_suggestion` (lever E, never applied), `POST /api/expense-batches/{id}/cards/by-vendor` (+ `dry_run`), `statements[].month_suggestion` + advisory `statement_month_differs` | Every card-less receipt asked Criss for a company while the statement that would name its card was simply not loaded yet; the row now says which statements it waits for, one pick reaches the vendor's other rows only on her click, and a cycle PDF filed in the wrong month is named | 2026-09-25; `tests/test_case9_status_c9.py` (11, route-level) + contract pins; six wiring points proven RED under `tools/regress_check.py`; suite 3482 passed / 2 skipped before the merge (6 failures fixed: 3 older tests widened, 2 contract pins, 1 wall-clock test under load); live counts in the PR |
+| 126 | Item 204 build 3 (case 9 step 3): the card flows back to a receipt a neighbour month's statement settled. `settled_charge_cards` also reads the claim another month holds (`cards_settled_elsewhere`, re-checked against the holder's effective verdict, card resolved through `_charge_card_identity` in the receipt's own batch registry), so the row reads `card_source: "settled_charge"` with its company and person, and `settled_by` names the borrower | Charges post a day or three after the purchase, so a month-end receipt is settled by the next statement while its own month showed only `settled_by`: no card, company or person. Grid, CSV, month PDF and the learner read the one map. Live: 0 rows move today (the 2 borrowed receipts already print 9693; July's borrowed FENIX receipt sits in review) | PR #1364 |
+| 125 | Item 204 step 6 (case-9 build 2, owner D5): a receipt with no card evidence whose chosen charge's merchant words disagree (`_vendor_score` < 0.5) keeps its assignment but goes to review with `review_code` `no_card_vendor_disagrees` (knob `no_card_vendor_guard`); the FX judgment layer now judges FX pairs only, so it no longer rewrites or unbinds such a pair (owner ruling in session) | A no-card receipt booked to another merchant's same-amount charge took that charge's card, company and person silently: live August's Lovable invoice on BASE44 50.00 (3645). Measured: wrong bookings 1 to 0, clean right 26 / 6 unchanged, bundles 70/95 unchanged; five live rows (April, July x2, August x2) move to review at their next natural re-match | PR #1367 |
+| 124 | Item 208: the private-card list. `settings["private_cards"]` (`{last4: {person, note, active}}`, its own key, read live, never snapshotted, collision-refused from both sides), one decision order through `cards.classify_payment_evidence` (Brisken number or type, then a listed number = private, then case 6's evidence = suggested, then wait), `expenses[].private_source`, the strip's `private_to` (month-only, or remembered into the list), the undo opt-out and the card-pick exit; every consumer of `private` / `reimburse_to` reads the resolution | Owner direction 2026-09-24 (cases 2 + 4): a personal card that recurs had to be confirmed private by hand every month; now it is listed once, in Settings or from the strip, and every receipt printing it in any month is private with the person to reimburse | 2026-09-25; `tests/test_private_card_list.py` (54, route-level; case 6's golden rows pass through the one entry point unchanged); two wiring points proven RED under `tools/regress_check.py` (the resolver's list branch, the strip's `private_to`); zero live rows move (the list is empty) |
 | 123 | Item 204 step 2 (case 9, build 1): an invoice takes the card its own payment receipt prints. `duplicates.lending_groups` lends across every duplicate group the app shows (printed-reference and vendor/date twins, not only one document number), same guards, plus: a copy two groups would lend two cards gets none | September 2026 held three Stripe invoices (Anthropic 184.35, Lovable 50.00 twice) reading "No legal entity yet" beside a receipt the grid already marked as their copy and that prints the card; the kept invoice copy is also the one the matcher sees, so it now stays in its card's scope | PR #1362, 2026-09-25; `tests/test_twin_card_c9.py` (9, route-level); four wiring points proven RED under `tools/regress_check.py`; suite 3485 passed / 2 skipped |
 | 122 | Items 196/197 leftovers from the 2026-09-24 LLM-key outage: an `ingested` intake-log row no longer presents the `error` of a failed first try, and a statement attach whose job fails before its commit removes the file it saved (`discard_unrecorded_upload`), never a file `statements[]` names | A surface showing `error` showed a 429 beside "Added" on the one recovered mail, and a dead attach kept its file's name, so the operator's retry was stored as `20260804-statements-9693--2.pdf` | 2026-09-25; `tests/test_attach_leftovers_196_197.py` (6: 3 red on origin/main, 3 controls: a held mail keeps its error, the archive keeps the record, a failure after the commit keeps the file); three wiring points proven RED under `tools/regress_check.py`; suite 3454 passed / 2 skipped |
 | 121 | Item 195: a statement PDF keeps its company through a re-read. A PDF entry records the account it was filed under (`statement_entry_account`); a re-read never lends a PDF `config.statement`'s account; a PDF filed under no account, or recorded before this, takes the registry entity every card it prints resolves to, blank on two companies or an unnamed card (`pdf_entity_from_printed_cards`), at the attach and the re-read alike. `statement_period_overlap` no longer calls two unrecorded accounts "the same account" (leftover 3 of items 196/197) | A PDF charge prints no `card_last4`, so item 59's match-time stamp never repairs it: its company is whatever the upload says. Both live August PDF entries recorded `account_id: ""` although the SPA sent a card key, so a re-read would have put the 1176 file's 3 charges and the 9693 file's 21 under the company "card", or under Corporate Services when the workbook was the last upload, and every pair on them would have left scope. Code-traced, never triggered live (nobody re-reads a month holding a PDF) | 2026-09-25; `tests/test_reread_pdf_entity_item_195.py` (9: 8 red on origin/main, 1 control green); four wiring points proven RED under `tools/regress_check.py` (the marker branch, the no-borrow fallback, the entry writer, the advisory guard); no live row moves on the deploy |

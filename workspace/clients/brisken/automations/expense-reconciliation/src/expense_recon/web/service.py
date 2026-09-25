@@ -46,6 +46,7 @@ from ..cli import (  # item 105
 )
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import GL_ENTITY_ORGS_KEY, entity_from_settings
+from .. import card_suggestion as _c9  # item 204, case 9 steps 1 and 5
 from ..correspondence import quarantine_correspondence
 from ..error_codes import Refusal, code_of, detail_of, fields_of
 from ..duplicates import (
@@ -3267,6 +3268,7 @@ def build_view(
     edited_at: str | None = None,
     field_overrides: dict[str, dict[str, str]] | None = None,
     settings: dict | None = None,
+    statement_evidence=None,
 ) -> dict:
     """Compose the render model: per-transaction rows with candidates and
     the reviewer's effective verdict, plus the unmatched-receipt list and
@@ -3424,7 +3426,10 @@ def build_view(
     # proposal.
     from ..matching.deterministic import _tx_card_keys, card_evidence, cards_differ
 
-    card_res_view = resolve_batch_row_cards(receipts, run.config, field_overrides or {})
+    card_res_view = resolve_batch_row_cards(
+        receipts, run.config, field_overrides or {},
+        private_cards=(settings or {}).get("private_cards"),
+    )
     card_scope_view = {
         r.document_id: r for r in bake_card_scope(receipts, card_res_view)
     }
@@ -4123,6 +4128,11 @@ def build_view(
             loaded_cards=reason_cards,
             period=reason_period,
             settled_elsewhere="settled_by" in rec,
+            # Item 204 step 1: a no-card receipt whose date no loaded
+            # statement covers (any month) reads card_statement_not_loaded.
+            uncovered_cards=_c9.uncovered_for_receipt(
+                rec_by_id[rec["document_id"]], statement_evidence
+            ),
         )
     charge_reasons: dict[str, str] = {}
     for row in rows:
@@ -4146,7 +4156,7 @@ def build_view(
     # private receipt as needing a charge.
     completeness = completeness_counts(
         rows, [*unmatched_receipts, *copies_set_aside],
-        private_docs=frozenset(_private_reimbursements(field_overrides or {})),
+        private_docs=frozenset(_private_reimbursements(card_res_view)),
         copy_docs=frozenset(set_aside_copy_ids),
     )
     ready_to_post = n_undecided == 0 and health["state"] == HEALTH_OK
@@ -5823,9 +5833,13 @@ def validate_expense_field(field: str, value: str) -> str | None:
                 "legal_entity cannot be blank", code="legal_entity_required"
             )
     elif field == "private":
-        if value != "1":
+        # "0" is the row's explicit opt-out from the month's private-hint
+        # assignment and the private-card list (2026-09-24); a plain clear
+        # is the empty value, as before.
+        if value not in ("1", "0"):
             return Refusal(
-                'private must be "1" (or empty to clear)',
+                'private must be "1", "0" (opt out of the private-card '
+                'list) or empty to clear',
                 code="invalid_private_value",
             )
     return None
@@ -6443,6 +6457,38 @@ def _batch_card_hints(cfg: dict | None) -> dict[str, str]:
     }
 
 
+def _batch_private_hints(cfg: dict | None) -> dict[str, str]:
+    """The batch's operator-confirmed hint -> reimbursed-person assignments
+    (`expense.private_hints`, the strip's "Private card of..." with the
+    remember switch off): this month only, beside `expense.card_hints`."""
+    raw = ((cfg or {}).get("expense") or {}).get("private_hints")
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        str(k).strip(): str(v).strip()
+        for k, v in raw.items()
+        if str(k).strip() and str(v).strip()
+    }
+
+
+def private_opt_out_needed(cfg: dict | None, settings: dict | None, hint: str) -> bool:
+    """Whether clearing a row's private mark must be stored as an explicit
+    opt-out (`private: "0"`) rather than a plain clear: true when the month's
+    hint assignment or the private-card list would make the row private
+    again the moment the row's own mark is gone. A plain clear on such a row
+    would be undone by the list immediately (the undo exit of the private
+    card list)."""
+    from ..cards import private_card_for, private_cards_from_setting
+
+    text = (hint or "").strip()
+    if not text:
+        return False
+    if text in _batch_private_hints(cfg):
+        return True
+    listed = private_cards_from_setting((settings or {}).get("private_cards"))
+    return private_card_for(text, listed) is not None
+
+
 def bank_transfer_tender(hint: str | None) -> bool:
     """Whether a payment method reads as a bank transfer and names no card.
 
@@ -6565,9 +6611,29 @@ def resolve_batch_row_cards(
     settled_cards: dict[str, str] | None = None,
     settled_outside: dict[str, dict] | None = None,
     merchants: dict | None = None,
+    private_cards: dict | None = None,
 ) -> dict[str, dict]:
     """Per-document card + entity resolution for an expense batch:
     ``{document_id: {hint, card: Card|None, entity, entity_source}}``.
+
+    `private_cards` (owner direction 2026-09-24, cases 2 + 4 of the
+    card-attribution map) is `settings["private_cards"]`, read LIVE like
+    `merchants`, never from the batch snapshot. Whose money paid is decided
+    in ONE order, row-level decisions first (a per-row card pick, a row
+    Criss confirmed private, a settled-outside disposition, a per-row
+    opt-out), then the month's own hint assignments (`expense.card_hints`
+    to a card, `expense.private_hints` to a person), then
+    `cards.classify_payment_evidence`: a Brisken number or type is never
+    private, a number on the private-card list IS private (reimburse the
+    listed person), positive evidence of a non-Brisken card is SUGGESTED
+    private (case 6), everything else waits. `private_source` says which:
+    "row", "month", "private_card_list", or "" on a row that is not
+    private. A list-derived row reads exactly like a row Criss confirmed
+    (`private`, `reimburse_to`, `person_source` "private",
+    `can_mark_private` false) on every surface that reads this map, which
+    is every surface. A caller that passes nothing gets the order without
+    step 3, which is what the matcher's bake wants: a listed number names
+    no Brisken card, so the card the matcher scopes on is None either way.
 
     `receipts` are the POST-overlay pool (edits applied), so the entity
     fallback step reads what the reviewer sees; the override step reads
@@ -6671,14 +6737,20 @@ def resolve_batch_row_cards(
     matching.
     """
     from ..cards import (
+        PRIVATE_SOURCE_LIST,
+        PRIVATE_SOURCE_MONTH,
+        PRIVATE_SOURCE_ROW,
+        classify_payment_evidence,
         masked_short_ending,
-        positive_non_brisken_evidence,
+        private_cards_from_setting,
         resolve_hinted_card_ex,
     )
     from ..matching.deterministic import _card_keys
 
     cards = _batch_cards(cfg)
     hints_map = _batch_card_hints(cfg)
+    private_hints = _batch_private_hints(cfg)
+    listed_cards = private_cards_from_setting(private_cards)
     # Note item M2: built once, and only when a merchant map was passed. The
     # per-row lookup is a fuzzy sweep, so it runs lazily inside the loop for
     # the rows that reach the last link -- the ones with no card at all.
@@ -6719,6 +6791,7 @@ def resolve_batch_row_cards(
         # or an inactive card, decides nothing.
         fields = field_overrides.get(r.document_id) or {}
         reimburse_to = str(fields.get("reimburse_to") or "").strip()
+        private_flag = str(fields.get("private") or "").strip()
         # A confirmation IS the pair: the flag AND who gets reimbursed.
         # A `private` flag without a person (reachable through the
         # generic field PUT's one-field-at-a-time writes) is NOT a
@@ -6726,11 +6799,30 @@ def resolve_batch_row_cards(
         # MISSING ENTITY and reach the report (adversarial review,
         # 2026-09-06). Such a row stays suggested until both halves
         # exist.
-        private = (
-            str(fields.get("private") or "").strip() == "1"
-            and bool(reimburse_to)
-        )
+        row_private = private_flag == "1" and bool(reimburse_to)
+        # "0" is the row's explicit opt-out: Criss undid a private mark the
+        # month's assignment or the list gave the row, so neither applies
+        # to it again (a plain clear would be undone at the next read).
+        opted_out = private_flag == "0"
         fixed = _batch_row_card(cards, fields.get("card_key"))
+        # Steps 1-4 of the decision order through ONE entry point: the
+        # listed private card (step 3) and the case-6 evidence (step 4).
+        # Row-level decisions outrank both: a per-row card pick means a
+        # company card paid, an opt-out means the list does not apply here,
+        # a settled-outside disposition means no card paid at all.
+        listed, evidence = classify_payment_evidence(
+            hint, cards, {} if opted_out else listed_cards, hints_map,
+        )
+        month_person = private_hints.get(hint, "")
+        private_source = ""
+        if row_private:
+            private_source = PRIVATE_SOURCE_ROW
+        elif fixed is None and not opted_out and not settled_off:
+            if month_person:
+                private_source, reimburse_to = PRIVATE_SOURCE_MONTH, month_person
+            elif listed is not None:
+                private_source, reimburse_to = PRIVATE_SOURCE_LIST, listed.person
+        private = bool(private_source)
         if fixed is not None:
             card, card_source = fixed, "override"
             card_ending = ""
@@ -6781,14 +6873,19 @@ def resolve_batch_row_cards(
             "person_source": person_source,
             "private": private,
             "reimburse_to": reimburse_to if private else "",
+            # Who made the row private: "row" (Criss, on the row), "month"
+            # (the strip's assignment for this month), "private_card_list"
+            # (the listed card), "" when it is not private. Parallel field.
+            "private_source": private_source,
             # Owner ruling 2026-09-24 (case 6): suggested only on positive
             # evidence the payment was not Brisken's. Anything else falls to
             # the ordinary company / person question and the private option
-            # stays open.
+            # stays open. A number on the private-card list is decided
+            # (step 3), never suggested.
             "suggested_private": bool(
                 hint and card is None and not ambiguous and not private
                 and not not_a_card
-                and positive_non_brisken_evidence(hint, cards) is not None
+                and evidence is not None
             ),
             "can_mark_private": (
                 not private
@@ -7163,6 +7260,7 @@ def _expense_review(
     suggested_private: bool = False,
     needs_cost_center: bool = False,
     settled_outside: bool = False,
+    waits_for_statements: list | tuple = (),
 ) -> dict:
     """Review-by-exception for one expense (receipt-spine). Missing core
     fields first (an expense cannot export cleanly without date / amount /
@@ -7260,6 +7358,28 @@ def _expense_review(
             "or assign or register the company card if there is one.",
             "suggested_private",
         )
+    if (
+        waits_for_statements
+        and entity is not None and not entity
+        and not private and not settled_outside
+    ):
+        # Item 204, case 9 step 5: a card-less row whose date some active
+        # card's loaded statements do not cover is waiting for them, not for
+        # a person. `waits_for_statements` (card_suggestion.waits_for_row)
+        # names those cards; when every card covers the date the list is
+        # empty and needs_entity below stands, because then a human has to
+        # look. Replaces needs_entity only: an entity set by hand ends it.
+        return {
+            **_review(
+                "check",
+                "No card on this receipt, and no loaded statement covers its "
+                "date for: " + ", ".join(waits_for_statements) + ". The "
+                "paying card shows once those statements are loaded; assign "
+                "it now if you already know it.",
+                "waits_for_statement",
+            ),
+            "waits_for_statements": list(waits_for_statements),
+        }
     if entity is not None and not entity and not private:
         if settled_outside:
             # Item 144. Same question, an answerable instruction. The
@@ -7470,6 +7590,7 @@ def build_expense_view(
     edited_at: str | None = None,
     month_batch=None,
     learning_db_path: "Path | None" = None,
+    statement_evidence=None,
 ) -> dict:
     """Compose the receipt-spine render model for an expense batch: one row
     per expense with the reviewer's edits applied, review-by-exception
@@ -7583,6 +7704,7 @@ def build_expense_view(
         settled_cards=settled_charge_cards(run, charges, charge_state_map),
         settled_outside=grid_settled_outside,
         merchants=(settings or {}).get("merchants"),
+        private_cards=(settings or {}).get("private_cards"),
     )
     # Item 201: on a GL month a picked leaf code reads its account name in
     # the company the row SHOWS (the card chain's answer above), which can be
@@ -7680,6 +7802,7 @@ def build_expense_view(
             "hint": "", "card": None, "entity": r.legal_entity_id or "",
             "entity_source": "batch", "person": "", "person_source": "none",
             "private": False, "reimburse_to": "", "suggested_private": False,
+            "private_source": "",
             "can_mark_private": True,
             "ambiguous": False, "card_map_blocked": False,
             # The card pass sees every receipt, so this branch is defensive
@@ -7709,6 +7832,11 @@ def build_expense_view(
             date_is_human=(
                 "date" in field_overrides.get(r.document_id, {})
                 or r.document_id.startswith("manual:")
+            ),
+            # Item 204 step 5: the cards whose loaded statements (any month)
+            # do not cover this card-less row's date. [] without evidence.
+            waits_for_statements=_c9.waits_for_row(
+                r, res, statement_evidence, row_settled_outside
             ),
         )
         posting = _row_posting_category(
@@ -7805,6 +7933,11 @@ def build_expense_view(
             # and never resolved into `person` without operator confirm.
             "private": res["private"],
             "reimburse_to": res["reimburse_to"],
+            # 2026-09-24: who made the row private ("row" | "month" |
+            # "private_card_list"), "" when it is not. Parallel field; the
+            # SPA says "(from the private card list)" on the badge and the
+            # card-pick route lets a per-row pick win over a listed number.
+            "private_source": res.get("private_source", ""),
             "suggested_private": res["suggested_private"],
             # Owner 2026-09-17: the private-card option applies only where
             # no company card paid (see resolve_batch_row_cards). The two
@@ -7872,6 +8005,17 @@ def build_expense_view(
             # Agent-directed text found in this receipt or its mail
             # (rule_untrusted_inbound): shown for a human, acted on by nothing.
             "untrusted_instructions": _row_untrusted(r, intake_provenance),
+            # Item 204 steps 1 and 5 (case 9): `waits_for_statements` and the
+            # recurring-charge `card_suggestion`, on an open card-less row
+            # only, both absent otherwise. The suggestion never sets `card`.
+            **_c9.case9_row_fields(
+                r, res,
+                str(_expense_vendor_view(
+                    r, orig_by_id.get(r.document_id),
+                    field_overrides.get(r.document_id, {}),
+                ).get("display") or ""),
+                statement_evidence, row_settled_outside,
+            ),
         })
         if roster is not None:
             # Trip batches only (the key is absent on company months).
@@ -8319,21 +8463,19 @@ def build_expense_view(
     }
 
 
-def _private_reimbursements(
-    field_overrides: dict[str, dict[str, str]],
-) -> dict[str, str]:
-    """The batch's operator-CONFIRMED private expenses (backlog item 41):
-    ``{document_id: reimburse_to}``. Confirmation lives in the same
-    field-override store as every other per-expense decision, so it
-    survives re-ingest and clears with `private: false`. A `private`
-    flag WITHOUT a reimburse_to is not a confirmation (same rule as
-    `resolve_batch_row_cards`): a report must never state a
-    reimbursement owed to nobody."""
+def _private_reimbursements(card_res: dict[str, dict]) -> dict[str, str]:
+    """The batch's private expenses (backlog item 41): ``{document_id:
+    reimburse_to}``, read off the card resolution (`resolve_batch_row_cards`)
+    and not off `field_overrides`, so a row the private-card list or the
+    month's strip assignment made private (2026-09-24) reaches the report's
+    reimbursements section, the CSV, the readiness count and the
+    neighbouring-month pools exactly as a row Criss confirmed does. The
+    resolution already refuses a `private` flag with no person (a report must
+    never state a reimbursement owed to nobody)."""
     return {
-        doc: str(fields.get("reimburse_to") or "").strip()
-        for doc, fields in field_overrides.items()
-        if str(fields.get("private") or "").strip() == "1"
-        and str(fields.get("reimburse_to") or "").strip()
+        doc: str(res.get("reimburse_to") or "").strip()
+        for doc, res in card_res.items()
+        if res.get("private") and str(res.get("reimburse_to") or "").strip()
     }
 
 
@@ -8346,10 +8488,17 @@ def _expense_export_inputs(
     settled_cards: dict[str, str] | None = None,
     merchants: dict | None = None,
     learning_db_path: "Path | None" = None,
+    private_cards: dict | None = None,
 ) -> tuple[list, dict]:
     """`(receipts, kwargs)` for the expense export — the overlay order the
     view uses (`apply_expense_edits` then `apply_overrides`) plus the card /
     entity / chart resolution the rows need.
+
+    `kwargs` also carries `private_by_doc` (`{document_id: reimburse_to}`,
+    the rows the card pass resolved private, list-derived ones included);
+    the two callers that spread `kwargs` into a writer pop it first, the
+    pool and roll-up callers read it by name. `private_cards` is the live
+    private-card list, passed by every caller with settings in hand.
 
     Extracted so the CSV and the month's PDF report are built from ONE setup:
     the report quotes the export's rows, and a change to how a row resolves
@@ -8397,7 +8546,7 @@ def _expense_export_inputs(
     # file carries it — exports are regenerable, never stale by design).
     card_res = resolve_batch_row_cards(
         receipts, run.config, field_overrides, settled_cards=settled_cards,
-        merchants=merchants,
+        merchants=merchants, private_cards=private_cards,
     )
     # After the card pass (which reads no category) so item 201's account
     # name resolves in the company this row exports under, as on the grid.
@@ -8408,8 +8557,9 @@ def _expense_export_inputs(
     # Item 41: a confirmed private expense was paid out of somebody's
     # pocket. In the one-file export it stays a row (mixed-entity ruling:
     # one file, entity as a column) with both columns saying so — the
-    # same strings the grid renders, so the two cannot disagree.
-    private_by_doc = _private_reimbursements(field_overrides)
+    # same strings the grid renders, so the two cannot disagree. Read off
+    # the resolution, so a list-derived private row (2026-09-24) is one.
+    private_by_doc = _private_reimbursements(card_res)
     entity_by_doc = {
         doc: res["entity"] for doc, res in card_res.items() if res["entity"]
     }
@@ -8437,6 +8587,7 @@ def _expense_export_inputs(
         card_map_blocked_docs={
             doc for doc, res in card_res.items() if res["card_map_blocked"]
         },
+        private_by_doc=private_by_doc,
     )
     return receipts, kwargs
 
@@ -8450,6 +8601,7 @@ def regenerate_expense_export(
     charge_decisions: dict | None = None,
     merchants: dict | None = None,
     learning_db_path: "Path | None" = None,
+    private_cards: dict | None = None,
 ) -> Path:
     """Write the expense CSV for a batch with every reviewer edit applied.
     Returns the path.
@@ -8463,8 +8615,9 @@ def regenerate_expense_export(
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits, dup_resolutions,
         settled_cards=csv_settled, merchants=merchants,
-        learning_db_path=learning_db_path,
+        learning_db_path=learning_db_path, private_cards=private_cards,
     )
+    kwargs.pop("private_by_doc")  # the CSV reads it through paid_through_by_doc
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
     )
@@ -8682,11 +8835,14 @@ def build_expense_report(
         run, overrides, field_overrides, edits, dup_resolutions,
         settled_cards=report_settled, merchants=report_merchants,
         learning_db_path=learning_db_path,
+        private_cards=(settings or {}).get("private_cards"),
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
     )
-    private_by_doc = _private_reimbursements(field_overrides)
+    # The rows the card pass resolved private, list-derived ones included,
+    # so the reimbursements section lists them like a row Criss confirmed.
+    private_by_doc = kwargs.pop("private_by_doc")
     company = [
         r for r in receipts
         if r.document_id not in private_by_doc and r.document_id not in copies
@@ -9722,6 +9878,7 @@ def build_cost_center_totals(
         resolutions = store.get_duplicate_resolutions(run.run_id)
         receipts, _kwargs = _expense_export_inputs(
             run, overrides, field_overrides, edits, resolutions,
+            private_cards=(settings or {}).get("private_cards"),
         )
         # Item 94: the month report's own copies, left out of every bucket
         # and counted on their own line.
@@ -9729,7 +9886,7 @@ def build_cost_center_totals(
             run, receipts, resolutions,
             charge_decisions=store.get_decisions(run.run_id),
         )
-        private_by_doc = _private_reimbursements(field_overrides)
+        private_by_doc = _kwargs["private_by_doc"]
         company = [r for r in receipts if r.document_id not in private_by_doc]
         card_res = resolve_batch_row_cards(
             company, run.config, field_overrides,
@@ -10348,6 +10505,23 @@ def assign_batch_cards(
     return out
 
 
+def _refuse_private_collision(company_cards: dict, listed_private: dict) -> None:
+    """Raise the `private_card_is_company_card` refusal when an ACTIVE
+    company card and an ACTIVE private-card entry carry one number (the
+    same code `PUT /api/settings` answers from either side)."""
+    from ..cards import private_company_collision
+
+    hit = private_company_collision(company_cards, listed_private)
+    if hit is not None:
+        digits, card_key = hit
+        raise RunInputError(
+            f"private card {digits} is the company card {card_key!r}; a "
+            "card is Brisken's or private, never both",
+            code="private_card_is_company_card",
+            private_card=digits, card=card_key,
+        )
+
+
 def _assign_batch_cards_locked(
     store: RunStore,
     run: RunRow,
@@ -10358,12 +10532,16 @@ def _assign_batch_cards_locked(
     now_iso: str,
 ) -> dict:
     from ..cards import (
+        PrivateCard,
         cards_from_setting,
         cards_to_setting,
         effective_cards,
         learnable_hint_tokens,
         legacy_card_accounts,
         normalize_cards_setting,
+        normalize_private_cards_setting,
+        private_card_digits,
+        private_cards_from_setting,
     )
     from ..cards_provision import load_cards
 
@@ -10378,9 +10556,15 @@ def _assign_batch_cards_locked(
     exp = dict(cfg.get("expense") or {})
     cards_map = dict(exp.get("cards") or {})
     hints_map = dict(exp.get("card_hints") or {})
+    # 2026-09-24: the month's hint -> reimbursed-person assignments, beside
+    # the card ones; and the live private-card list, which the card half
+    # below must not collide with (a card is Brisken's OR private).
+    private_hints_map = _batch_private_hints(cfg)
 
     settings = store.get_settings()
     composed_live = effective_cards(settings, load_cards())
+    settings_private = dict(settings.get("private_cards") or {})
+    listed_private = private_cards_from_setting(settings_private)
 
     # A new card must actually be NEW: silently replacing an existing
     # entry through this endpoint would overwrite money-path master data
@@ -10399,8 +10583,14 @@ def _assign_batch_cards_locked(
             )
     for slug, entry in new_cards_clean.items():
         cards_map[slug] = dict(entry)
+    # A new company card may not carry a number the private-card list
+    # holds: the same refusal the settings PUT gives, from either side.
+    _refuse_private_collision(
+        cards_from_setting(new_cards_clean), listed_private
+    )
 
     parsed: list[tuple[str, str]] = []
+    parsed_private: list[tuple[str, str]] = []
     seen_hints: set[str] = set()
     for a in assignments:
         if not isinstance(a, dict):
@@ -10409,9 +10599,18 @@ def _assign_batch_cards_locked(
             )
         hint = str(a.get("hint") or "").strip()
         card_key = str(a.get("card") or "").strip()
-        if not hint or not card_key:
+        private_to = str(a.get("private_to") or "").strip()
+        if card_key and private_to:
             raise RunInputError(
-                "each assignment needs a hint and a card key",
+                f"hint {hint!r} names both a card and a private person; "
+                "an assignment is one or the other",
+                code="assignment_two_targets",
+                hint=hint,
+            )
+        if not hint or not (card_key or private_to):
+            raise RunInputError(
+                "each assignment needs a hint and a card key, or a hint "
+                "and the person to reimburse (private_to)",
                 code="assignment_incomplete",
             )
         if hint in seen_hints:
@@ -10430,6 +10629,27 @@ def _assign_batch_cards_locked(
                 code="hint_not_in_batch",
                 hint=hint,
             )
+        if private_to:
+            # "Private card of ...": this month's rows carrying the hint are
+            # private, reimbursed to `private_to`. Learning (the remember
+            # switch) needs a card NUMBER to list: a generic word names no
+            # card, and a number a company card carries is not private.
+            if learn:
+                digits = private_card_digits(hint)
+                if digits is None:
+                    raise RunInputError(
+                        f"hint {hint!r} prints no card number, so it cannot "
+                        "be remembered as a private card; it applies to "
+                        "this month only",
+                        code="private_card_needs_digits",
+                        hint=hint,
+                    )
+                _refuse_private_collision(
+                    composed_live,
+                    {digits: PrivateCard(digits=digits, person=private_to)},
+                )
+            parsed_private.append((hint, private_to))
+            continue
         if card_key not in cards_map:
             # Materialize the batch-config entry from the live registry the
             # assignment UI offered (GET /api/cards). Unknown = typo, 400.
@@ -10473,7 +10693,17 @@ def _assign_batch_cards_locked(
 
     for hint, card_key in parsed:
         hints_map[hint] = card_key
+        # A hint assigned to a company card is no longer this month's
+        # private hint: the newer decision wins.
+        private_hints_map.pop(hint, None)
         digit, alias, refusal = learnable_hint_tokens(hint)
+        if digit:
+            # The number this assignment would fold into a company card
+            # must not be on the private-card list (either side refuses).
+            _refuse_private_collision(
+                cards_from_setting({card_key: _fold_tokens({}, digit, None)}),
+                listed_private,
+            )
         cards_map[card_key] = _fold_tokens(cards_map[card_key], digit, alias)
         learned = False
         if learn and refusal is None:
@@ -10500,6 +10730,49 @@ def _assign_batch_cards_locked(
             "learned": learned,
             **({"note": refusal} if refusal else {}),
         })
+
+    # 2026-09-24: the private assignments. The month record is written
+    # whatever `learn` says (as `card_hints` is for a card); the remember
+    # switch ALSO lists the hint's last 4 under the person, so every other
+    # month reads it at once. A number already listed is re-pointed to the
+    # person Criss just named (her instruction is the newer fact); its note
+    # is kept. Never on a single row's confirm: only this explicit
+    # instruction writes the list (owner ruling 2026-09-24, only corrections
+    # are memorized).
+    private_settings_dirty = False
+    for hint, person in parsed_private:
+        private_hints_map[hint] = person
+        hints_map.pop(hint, None)
+        digits = private_card_digits(hint) if learn else None
+        if digits is not None:
+            prior = settings_private.get(digits) or {}
+            settings_private[digits] = {
+                "person": person,
+                "note": str(prior.get("note") or "").strip(),
+                "active": True,
+            }
+            private_settings_dirty = True
+        results.append({
+            "hint": hint,
+            "private_to": person,
+            "n_rows": sum(
+                1 for r in receipts if (r.payment_mode or "").strip() == hint
+            ),
+            "learned": digits is not None,
+            "digits": digits or "",
+        })
+    if private_settings_dirty:
+        try:
+            normalized_private = normalize_private_cards_setting(
+                settings_private, company_cards=composed_live
+            )
+        except ValueError as exc:  # defense in depth; collisions pre-checked
+            raise RunInputError(
+                str(exc),
+                code=code_of(exc, "private_card_invalid"),
+                **fields_of(exc),
+            ) from exc
+        store.set_settings({"private_cards": normalized_private}, now_iso)
 
     if settings_dirty:
         # Validate ONLY the entries this request touched, then merge over
@@ -10535,6 +10808,8 @@ def _assign_batch_cards_locked(
     merged_accounts = {**flat, **(exp.get("card_accounts") or {})}
     exp["cards"] = cards_map
     exp["card_hints"] = hints_map
+    if private_hints_map or "private_hints" in exp:
+        exp["private_hints"] = private_hints_map
     if merged_accounts:
         exp["card_accounts"] = merged_accounts
     cfg["expense"] = exp
@@ -11178,8 +11453,17 @@ def build_statement_entry(
     column_map: dict | None = None,
     card_currency: str = "",
     statement_id: str = "",
+    attached_month: str = "",
 ) -> dict:
     """One `statements[]` row: what this upload was and what it added.
+
+    `month_suggestion` (item 204, case 9 step 1): the month holding most of
+    this file's dated charges, in the receipt side's `period_suggestion`
+    shape, with `label_month` = `attached_month` (the month it is being
+    attached to, "YYYY-MM"; "" for a trip). Absent when the file dated
+    nothing or two months tie. `statement_advisory` says so when the two
+    differ, so a card-cycle PDF or a late export cannot land in the wrong
+    month silently.
 
     `statement_id` (note item T2, 2026-09-18) is the content-derived id of
     the stored file (`statement_content_id`). Parallel and ABSENT on every
@@ -11231,6 +11515,11 @@ def build_statement_entry(
         **({"card_currency": currency} if currency else {}),
         # What the bytes are (note item T2). Absent when not computed.
         **({"statement_id": statement_id} if statement_id else {}),
+        # Which month this file's charges belong to (item 204). Absent when
+        # there is no clear month.
+        **({"month_suggestion": _suggested} if (
+            _suggested := _c9.month_suggestion(transactions, attached_month)
+        ) else {}),
         # This file's own id-to-row map. Underscored and popped at commit
         # into `statement_anchors`, so it never reaches the SPA: it is a
         # per-row map the size of the statement, and nothing renders it.
@@ -11328,6 +11617,25 @@ def statement_advisory(prior: list[dict], entry: dict) -> str | None:
                     period_start=str(other["period_start"]),
                     period_end=str(other["period_end"]),
                 )
+    # Item 204, case 9 step 1: the file's charges mostly belong to another
+    # month than the one it is being attached to. Ranked last: a doubled
+    # month is the worse surprise. Nothing is moved or refused.
+    suggestion = entry.get("month_suggestion") or {}
+    month, label_month = suggestion.get("month"), suggestion.get("label_month")
+    if month and label_month and month != label_month:
+        from .intake_mail import _month_human
+
+        return Refusal(
+            f"{suggestion.get('n_in_month')} of this file's "
+            f"{suggestion.get('n_dates')} charges are dated {_month_human(month)}, "
+            f"but it was added to {_month_human(label_month)}. If it belongs "
+            f"to {_month_human(month)}, add it to that month instead.",
+            code="statement_month_differs",
+            month=str(month),
+            label_month=str(label_month),
+            n_in_month=int(suggestion.get("n_in_month") or 0),
+            n_dates=int(suggestion.get("n_dates") or 0),
+        )
     return None
 
 
@@ -11529,23 +11837,32 @@ def settled_charge_cards(
     the same string the matcher's scoping reads), and a card the registry
     cannot name lends nothing. A borrowed receipt (`receipt_sources`) is
     another month's expense, and its id can equal one of this month's own,
-    so any held id in that map lends nothing here."""
+    so any held id in that map lends nothing here.
+
+    Case 9 build 3 (item 204): the other direction of that borrow. A receipt
+    of THIS month that a neighbour month's charge settled takes that
+    charge's card too (`cards_settled_elsewhere`), so the receipt's own
+    month is no longer the one screen that knows the pairing and not the
+    card. Read after this month's own charges, which win on the same id."""
     cards = _batch_cards(run.config)
-    if not cards or not states:
+    if not cards:
         return {}
-    borrowed = set((run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {})
-    tx_by_id = {t.transaction_id: t for t in charges}
     out: dict[str, str] = {}
-    for tx_id, state in states.items():
-        doc = state.get("held_doc")
-        tx = tx_by_id.get(tx_id)
-        if state.get("bucket") != "reconciled" or not doc or tx is None:
-            continue
-        if doc in borrowed:
-            continue
-        key = _charge_card_identity(tx, cards).card_key
-        if key:
-            out[doc] = key
+    if states:
+        borrowed = set((run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {})
+        tx_by_id = {t.transaction_id: t for t in charges}
+        for tx_id, state in states.items():
+            doc = state.get("held_doc")
+            tx = tx_by_id.get(tx_id)
+            if state.get("bucket") != "reconciled" or not doc or tx is None:
+                continue
+            if doc in borrowed:
+                continue
+            key = _charge_card_identity(tx, cards).card_key
+            if key:
+                out[doc] = key
+    for doc, key in cards_settled_elsewhere(run, cards).items():
+        out.setdefault(doc, key)
     return out
 
 
@@ -13220,6 +13537,8 @@ def execute_statement_attach(
                 "account_card_currency", ""
             ),
             statement_id=statement_content_id(Path(run.work_dir) / stmt_name),
+            # Item 204: the month it is being attached to, for its advisory.
+            attached_month=_c9.attached_month(run),
         ),
         trigger="statement",
     )
@@ -13495,6 +13814,8 @@ def reread_statements(
                 # restore keeps the id the attach recorded, and an entry
                 # written before the id existed gains one here.
                 statement_id=statement_content_id(stmt_path),
+                # Item 204: the month it is being attached to.
+                attached_month=_c9.attached_month(run),
             )
         )
 
@@ -13656,8 +13977,12 @@ def trip_pool_for_month(
             t_field,
             store.get_expense_edits(batch.run_id),
             store.get_duplicate_resolutions(batch.run_id),
+            private_cards=(store.get_settings() or {}).get("private_cards"),
         )
-        private = _private_reimbursements(t_field)
+        # A private receipt (Criss's mark, or a number on the private-card
+        # list) was never paid by a company card, so no charge here can hold
+        # it; read off the resolution, not the overrides.
+        private = t_kwargs["private_by_doc"]
         claims = store.get_claims_on_receipts(batch.run_id)
         entity_by_doc = t_kwargs.get("entity_by_doc") or {}
         for r in t_receipts:
@@ -14880,8 +15205,11 @@ def adjacent_pool_for_month(
             o_field,
             store.get_expense_edits(other.run_id),
             store.get_duplicate_resolutions(other.run_id),
+            private_cards=(store.get_settings() or {}).get("private_cards"),
         )
-        private = _private_reimbursements(o_field)
+        # Same rule as the trip pool: a private receipt, whoever marked it,
+        # is not company spend for a neighbouring month's charge to settle.
+        private = o_kwargs["private_by_doc"]
         claims = store.get_claims_on_receipts(other.run_id)
         entity_by_doc = o_kwargs.get("entity_by_doc") or {}
         for r in o_receipts:
@@ -16904,3 +17232,113 @@ def _fills_view(tx) -> list[dict]:
         }
         for f in tx.fills
     ]
+
+
+# Case 9 build 3 (item 204, step 3): the database `create_app` keeps beside
+# the `runs/` tree every run's work dir lives in (`data_root/runs/{run_id}`).
+_RUN_DB_NAME = "recon-web.sqlite"
+
+
+def cards_settled_elsewhere(run: RunRow, cards: dict) -> dict[str, str]:
+    """`{document_id: card key}` for every receipt of this month that ANOTHER
+    month's charge settles, keyed to that charge's card in THIS batch's
+    registry (the one the row resolves the key against).
+
+    A receipt printed on the 31st is paid by a charge that posts on the 1st,
+    so the next month's statement borrows it (`adjacent_pool_for_month`) and
+    records the pairing in `receipt_claims`. The receipt's own month showed
+    only `settled_by`: no card, no company, no person, while the statement
+    one tab over named all three.
+
+    The claim is the evidence, and it is already narrow: it is written only
+    for a deterministic match or a confirmed pick, never for a proposal in
+    review, and a reject, a deleted month or a re-match without the pairing
+    releases it (`sync_claim_for_decision`, `delete_run`,
+    `replace_claims_by_run`). It is re-checked against the holder's
+    EFFECTIVE verdict all the same (`month_charge_states`, the reconciled
+    bucket still holding this document, borrowed from this run), because a
+    claim that outlived its pairing must lend nothing rather than a card the
+    holder's own page no longer shows.
+
+    Read through a read-only store opened from the run's work dir, since the
+    four callers (grid, CSV, month PDF, the sign-off learner) hand over a run
+    and no store. A run whose work dir is not under a `runs/` tree, a missing
+    database, or any SQLite error lends nothing: the row then keeps asking
+    the question, which is what it did before.
+    """
+    import sqlite3
+
+    from .store import open_read_only
+
+    if not cards or not run.work_dir:
+        return {}
+    work = Path(run.work_dir)
+    if work.parent.name != "runs":
+        return {}
+    store = open_read_only(work.parent.parent / _RUN_DB_NAME)
+    if store is None:
+        return {}
+    out: dict[str, str] = {}
+    try:
+        held_by: dict[str, list[tuple[str, str]]] = {}
+        for doc, claim in store.get_claims_on_receipts(run.run_id).items():
+            holder = str(claim["claimed_by_run_id"])
+            if holder != run.run_id:
+                held_by.setdefault(holder, []).append(
+                    (doc, str(claim["transaction_id"]))
+                )
+        for holder in sorted(held_by):
+            other = store.get_run(holder)
+            if other is None:
+                continue
+            charges, states = month_charge_states(
+                other, store.get_decisions(holder)
+            )
+            tx_by_id = {t.transaction_id: t for t in charges}
+            for doc, tx_id in held_by[holder]:
+                state = states.get(tx_id) or {}
+                tx = tx_by_id.get(tx_id)
+                if tx is None or state.get("bucket") != "reconciled":
+                    continue
+                if state.get("held_doc") != doc:
+                    continue
+                if receipt_source_run(other, doc) != run.run_id:
+                    continue
+                key = _charge_card_identity(tx, cards).card_key
+                if key:
+                    out[doc] = key
+    except sqlite3.Error:
+        return {}
+    finally:
+        store.close()
+    return out
+
+
+def apply_card_by_vendor(
+    store: RunStore,
+    run_id: str,
+    expenses: list[dict],
+    vendor: str,
+    card_key: str,
+    now_iso: str,
+) -> list[str]:
+    """Item 204, case 9 step 5: "apply to the N other rows of this vendor".
+
+    Writes the same per-row override the row PUT (`field=card_key`) writes,
+    to every card-less, non-private, counting row of the display vendor
+    `vendor` in this month (`card_suggestion.card_by_vendor_targets`, read
+    off the RESOLVED rows in `expenses`), and returns the document ids it
+    changed. A row with a printed, picked, learned or statement card, a
+    private or suggested-private row, a row settled outside, and a decided
+    copy are left alone, so a second call changes nothing.
+
+    An explicit click only (D6, owner 2026-09-25: "keep criss's pick for the
+    specific expense"): nothing calls this except its route. The caller has
+    already run `prepare_row_card_fix`, so the card resolves on this batch.
+    """
+    changed = _c9.card_by_vendor_targets(expenses, vendor)
+    for document_id in changed:
+        store.set_expense_field_override(
+            run_id, document_id, "card_key", card_key, now_iso
+        )
+    return changed

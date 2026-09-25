@@ -132,9 +132,17 @@ def receipt_reason_code(
     loaded_cards: set[str],
     period: tuple[date, date] | None,
     settled_elsewhere: bool = False,
+    uncovered_cards: list | tuple | set = (),
 ) -> str:
     """The reason one unmatched receipt has no charge here (never
-    `duplicate_copy`: a set-aside copy is named by the list it sits in)."""
+    `duplicate_copy`: a set-aside copy is named by the list it sits in).
+
+    `uncovered_cards` (item 204, case 9 step 1): the active cards whose
+    loaded statements, in any month, do not cover this receipt's date
+    (`card_suggestion.uncovered_for_receipt`). A receipt that printed no
+    card is then waiting for a statement, the same fact the Expenses row
+    reads as `waits_for_statement`; before, `card_statement_not_loaded`
+    needed printed digits, so such a receipt read "no charge found"."""
     if settled_elsewhere:
         return CHARGE_IN_NEIGHBOURING_PERIOD
     keys = _card_keys(receipt.payment_mode)
@@ -143,6 +151,8 @@ def receipt_reason_code(
     if _near_edge(receipt.detected_date, period):
         return CHARGE_IN_NEIGHBOURING_PERIOD
     if keys and not (keys & loaded_cards):
+        return CARD_STATEMENT_NOT_LOADED
+    if not keys and uncovered_cards:
         return CARD_STATEMENT_NOT_LOADED
     return NO_CHARGE_ON_ANY_LOADED_STATEMENT
 

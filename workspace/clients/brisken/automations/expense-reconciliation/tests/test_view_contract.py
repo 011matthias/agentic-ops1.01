@@ -167,6 +167,12 @@ EXPENSE_BATCH_CONTRACT = {
     # Item 160: the receipt lines with no category yet -- the exact set
     # the `partial_uncategorized` review reason is about.
     "expenses[].uncategorized_lines[]": "object",
+    # Item 204, case 9: the card labels a card-less row waits for (on the row
+    # and on its `waits_for_statement` review). `card_suggestion.evidence[]`
+    # is typed by `test_case9_row_fields_are_absent_or_well_formed`: these
+    # fixtures load no recurring charge, so a pin here could never be seen.
+    "expenses[].waits_for_statements[]": "string",
+    "expenses[].review.waits_for_statements[]": "string",
 }
 
 RUN_CONTRACT = {
@@ -265,6 +271,9 @@ EXPENSE_BATCH_MUST_COVER = {
     "coverage[].statement_ids[]",
     "expenses[].uncategorized_lines[]",
     "gl_accounts.*[]",
+    # Item 204: the fixtures' months hold card-less rows no statement covers.
+    "expenses[].waits_for_statements[]",
+    "expenses[].review.waits_for_statements[]",
 }
 
 RUN_MUST_COVER = {
@@ -1606,6 +1615,8 @@ REVIEW_REASON_CODES_PIN = {
     "missing_fields", "date_outside_period", "suggested_private",
     "needs_entity", "needs_entity_settled_outside", "untrusted_instructions",
     "invoice_read_as_statement", "needs_person", "needs_cost_center",
+    # item 204, case 9: a card-less row waiting for statements
+    "waits_for_statement",
 }
 
 UNMATCHED_RECEIPT_REASON_CODES_PIN = (
@@ -1780,6 +1791,27 @@ def test_unmatched_reason_code_vocabulary_is_pinned():
     # every receipt code but the copy marker has the screen's words
     worded = set(UNMATCHED_RECEIPT_REASON_CODES_PIN) - {"duplicate_copy"}
     assert set(ur.RECEIPT_REASON_TEXT) == set(ur.RECEIPT_REASON_SHORT) == worded
+
+
+PRIVATE_SOURCES_PIN = ("row", "month", "private_card_list", "")
+
+
+def test_private_source_vocabulary_is_pinned(payloads):
+    """The private-card list (2026-09-24). `expenses[].private_source` is a
+    closed literal held against `cards.PRIVATE_SOURCES` (the source of
+    truth); every expense row carries it, "" on a row that is not private
+    and never "" on one that is. A new backend value goes red here until
+    this literal, `docs/api-contract.md` and the SPA label move together."""
+    from expense_recon.cards import PRIVATE_SOURCES
+
+    assert tuple(PRIVATE_SOURCES) == PRIVATE_SOURCES_PIN, PRIVATE_SOURCES
+    seen = 0
+    for view in payloads["expense_batch"]:
+        for expense in view["expenses"]:
+            seen += 1
+            assert expense["private_source"] in PRIVATE_SOURCES_PIN, expense
+            assert bool(expense["private_source"]) == bool(expense["private"]), expense
+    assert seen, "the contract fixtures carry no expense row"
 
 
 def test_month_health_vocabulary_is_pinned(payloads):
@@ -1976,3 +2008,33 @@ def test_uncategorized_lines_are_exactly_the_lines_without_a_category(payloads):
     # Not a vacuous pass: these fixtures really do build partly-uncategorized
     # rows, which is the state the owner's July row is in.
     assert seen, "no fixture row carried an uncategorized line"
+
+
+# Item 204, case 9 steps 1 and 5: the waiting status and the suggestion.
+def test_case9_row_fields_are_absent_or_well_formed(payloads):
+    """Two parallel fields on an expense row, ABSENT rather than [] or null.
+
+    `waits_for_statements` is a non-empty list of card labels, and it only
+    rides on a row that has no card and is not private. `card_suggestion` is
+    `{card_key, label, evidence: [{month, date, amount, currency,
+    description}]}` with at least one piece of evidence, and never sits on a
+    row whose `card` is set: it is a suggestion, not an assignment. A type
+    guard; the route-level proofs are `tests/test_case9_status_c9.py`.
+    """
+    for view in payloads["expense_batch"]:
+        for expense in view.get("expenses") or []:
+            if "waits_for_statements" in expense:
+                waits = expense["waits_for_statements"]
+                assert isinstance(waits, list) and waits, "absent, never empty"
+                assert all(isinstance(w, str) and w for w in waits), waits
+                assert expense["card"] is None and not expense["private"]
+            if "card_suggestion" in expense:
+                s = expense["card_suggestion"]
+                assert isinstance(s["card_key"], str) and s["card_key"], s
+                assert isinstance(s["label"], str), s
+                assert isinstance(s["evidence"], list) and s["evidence"], s
+                for ev in s["evidence"]:
+                    assert set(ev) == {
+                        "month", "date", "amount", "currency", "description"
+                    }, ev
+                assert expense["card"] is None, "a suggestion is never applied"
