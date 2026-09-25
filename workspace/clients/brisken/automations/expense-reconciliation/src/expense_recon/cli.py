@@ -114,6 +114,7 @@ from .merchant_registry import MerchantRegistry, drop_unvouched_remembered_cards
 from .matching.deterministic import MatchingConfig, match_month
 from .matching.judgment import judge_ambiguous, judge_fx_match, judge_unmatched
 from .matching.types import Categorization, Match, MatchOutcome, Receipt, Transaction
+from .matching.types import MatchType  # item 204 step 6: the judge reads FX only
 from .output.reconciled_csv import write_reconciled_csv
 from .output.report_xlsx import write_report
 from .output.sheet_writeback import write_sheet_writeback
@@ -384,6 +385,13 @@ def _apply_judgment(
         tx = tx_by_id.get(m.transaction_id)
         rec = rec_by_id.get(m.document_id)
         if tx is None or rec is None:
+            judged.append(m)
+            continue
+        # Item 204 step 6 (owner D5, 2026-09-25): the model judges FX pairs
+        # only. A deterministic pair the matcher itself sent to review (a
+        # no-card pair whose merchant words disagree) is kept as built: its
+        # review code, its reason, its place as the charge's top candidate.
+        if m.match_type is not MatchType.FX_JUDGMENT:
             judged.append(m)
             continue
         verdict = judge_fx_match(tx, rec, client=client)
