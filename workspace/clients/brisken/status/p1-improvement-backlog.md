@@ -11620,6 +11620,106 @@ sentence, the wrong words for a row no card paid (the SPA never offers that
 control on a bill row). A bill that is also a decided duplicate copy counts
 once, as a copy.
 
+### 219. OpenAI, Anthropic and Lovable get decided accounts that post and cannot drift (owner raised the gate 2026-09-25: "create and implement a sustainable solution for this case")
+
+The 2026-09-18 gate (`memory_lessons.OWNER_GATED_MERCHANTS`) protected these
+three vendors by never learning them, which left every row to Criss every
+month: 52 of the 164 charges the engine guesses on and 31 of the 55 unsure
+receipts (July to September), the largest single block. The categorizer
+itself had no gate: a merchant's per-company `accounts` map (items 180/181)
+already decides first on a GL month, for receipts and receiptless charges
+alike, stamps `REGISTRY`, and `answer_origin` reads that as `rule`, so it
+posts. What was missing was a way to hold such an account against the one
+learner that can re-point it (`registry_upserts_from_expense_run` step 4) and
+a signal when Criss books against it.
+
+**Owner decisions 2026-09-25 (all three recommendations):**
+
+1. A flag on the merchant entry, `accounts_locked: true`. No learner changes
+   a locked entry's `accounts`, `zoho_account` or `category`; only Settings,
+   an owner-approved write or the drift lesson do. A person's pick still wins
+   on her own row. For the three names every other learner write (new
+   spellings, cards seen) stays held as before, and without the flag the
+   names stay fully refused.
+2. Four decided cells: Anthropic Cloud Services `E700030-19` (5 of 5
+   postings), Anthropic Corporate Services `E700030-30` (44 of 44), OpenAI
+   Cloud Services `E700030-19` (10 of 10), OpenAI Corporate Services
+   `E700030-30` (the last 18 in a row since 2025-08-31; 5 older on
+   `E500010-30`). Lovable everywhere and every Consulting cell stay with
+   Criss until Dirk answers questions 1, 5 and 8.
+3. Drift: when a person books a locked merchant in a company to another
+   postable account, Publish shows one UNTICKED lesson per account, "Change
+   the default for <vendor> in <company> to <account>? N of this month's M
+   <vendor> rows there were booked to it; the decided account is <code>."
+   Ticking it is the only learner path that changes that company's account;
+   the memory rule the same rows would teach rides inside it and is never
+   written on its own.
+
+**Built 2026-09-25 (branch `client/brisken/p1-ai-vendor-accounts`).**
+`merchant_registry.ACCOUNTS_LOCKED` / `is_accounts_locked`; the settings PUT
+keeps a stored flag when a save omits it (the live editor carries unknown
+keys through `Xi` -> `extra` -> `Zi`, read off the bundle 2026-09-25, and the
+backend normalizer is the one place that could drop it), only an explicit
+`false` clears it. `registry_upserts_from_expense_run` skips a locked
+merchant's category and accounts (`skipped_locked`); aliases still land.
+`memory_lessons._drift_lessons` builds the drift lessons from the memory
+learner's own groups (so receiptless charges count, which the registry
+learner never sees) and folds the cell's memory lesson and its conflict
+candidates into them; `apply_selection` writes a ticked one. The SPA
+checklist renders any unticked lesson from its description, so no Lovable
+paste is needed for it to work. Tests
+`tests/test_decided_accounts_item_219.py` (11, route-level; a model client
+that fails if asked). `tools/regress_check.py` green to red to green on five
+wires: the normalizer keeping the flag, the learner's lock, the drift builder,
+the fold of the memory lesson, the ticked write.
+
+**Measured offline before the write (proof section of
+`derive_account_map.py`, no model, no memory, today's payloads).** With the
+proposed entries: 46 of the 52 gated charges decided (OpenAI 29, Anthropic
+17), 19 join Criss's Books postings and all 19 agree, against the baseline 15
+of 52; 20 of the 31 gated receipts (all Anthropic), against the baseline 23
+of 31, the 3 not reached being Lovable, held by decision 2. The receipt
+spellings already resolve since cause 3; four bank descriptors did not
+(`ANTHROPIC* CLAUDE SUB`, `OPENAI *CHATGPT SUBSCR` and its `.COM CA` tail,
+`OPENAI* CHATGPT CREDIT`) and are aliases in the write.
+
+**Shipped and written 2026-09-25: PR #1457 (squash `9d945667`), Fly
+deployed from a detached origin/main worktree (`/healthz` commit
+`9d945667`), suite 3870 passed.** The three months' memory plans read
+identical before and after the deploy. Settings write on the owner's yes to
+the shown diff (fresh GET, 33 entries carried, whole-map PUT, 200, nothing
+ignored, GET diff equal to the plan, 0 entries lost or changed besides the
+two): `Anthropic` gains the aliases, both accounts and the lock (the server
+folds `Anthropic, PBC (@anthropic)` into `Anthropic, PBC @anthropic`, one
+key); `OpenAI` is a new locked entry with the two descriptor aliases, no
+category and the same two accounts. Lovable untouched. After the write no
+month shows a drift lesson (no live booking disagrees with a decided cell);
+August and September gain one `registry:OpenAI` lesson (card observations),
+owner-gated and refused, as decided. The categorization score's map section
+now reads: 2 merchants carry a map, 32 rows answered on the loose join, 32
+agree with Criss, 0 right answers broken. Nothing re-matched: charges take
+the decided accounts at each month's next natural re-match, existing
+receipts only when re-categorized (a new ingest or the owner-ordered
+refused-rerun). Published SPA driven cold (login page to Settings >
+Merchants, read-only): both entries render E700030-19 for Cloud Services and
+E700030-30 for Corporate Services, Consulting unset.
+
+**A side effect the write caused, found by the post-write read and fixed the
+same minute (owner yes).** `MerchantRegistry.vouches_one_card` answers yes
+for a resolved merchant with `len(cards_seen) <= 1`, so a NEW entry with no
+observations vouches one card. The OpenAI entry made Criss's single
+remembered OpenAI card (3645, the minority card, 8 to 1 against card-9693)
+lend itself at read time to 6 September OpenAI receipts, which then showed
+card 3645 / Corporate Services and "no company yet" instead of "No card on
+this receipt". Nothing stored changed. A second write set
+`OpenAI.cards_seen = ["3645", "card-9693"]` (the cards September's own held
+lesson reports); all 22 September OpenAI receipts, and all 224 receipts on
+the three months, then read exactly as before the first write. **Open,
+not fixed:** any merchant added in Settings with no `cards_seen` vouches one
+card the same way; whether `<= 1` should be `== 1` is item 173's call to
+reopen, and it would stop remembered cards lending on the 28 seeded
+merchants that carry no observations, so it needs a measurement first.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
