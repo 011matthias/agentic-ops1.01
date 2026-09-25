@@ -20,6 +20,8 @@ printed number and the statement outrank it; one pick decides nothing (D6).
 Predicted live: ten May / June / September rows gain a card. The SPA's source
 line waits on `docs/lovable-account-card-prompt.md`.
 
+**2026-09-25: Publish shows what it will remember (backlog item 183 half A).** `memory-plan` lists one lesson per learning row or merchant-list entry, with an id, a plain description and the rows it came from; Publish takes the ticked ids (`keep` / `skip`) and writes only those, through the plan's own recorded writes. Corrections start ticked, disagreements are offered unticked one option each, OpenAI / Anthropic / Lovable never reach the merchant list, and on a Zoho-account month a kept account correction fills that company's `accounts` entry. Closed on the way: the merchant-list learner taught the model's category after a Confirm or an account-only fix. The checklist itself waits on `docs/lovable-publish-checklist-prompt.md`; until then Publish applies the defaults.
+
 **2026-09-25: a merchant can hold one Zoho account per company (backlog items 180/181).** On a Zoho-account month, a receipt or card charge from that merchant books to its company's account with no AI call; Settings lists which merchants still need one (`needs_account`). No live merchant has an account yet: the per-vendor suggestions are with the owner for Dirk. July to September pick them up only through the new refused-rows re-run, on an owner order. The Settings screen half is a Lovable prompt, not pasted.
 
 **2026-09-25: case 9 build 3 shipped, the card flows back** (item 204 step 3,

@@ -79,6 +79,7 @@ from ..learning import (
     LearningStore,
     MatchMemory,
     MerchantCategoryLookup,
+    apply_plan,
     learn_confirmed_pairs,
     learn_from_expense_run,
     learn_from_run,
@@ -4802,6 +4803,83 @@ def compare_runs(run_a: RunRow, run_b: RunRow) -> dict:
     return {"deltas": deltas, "rate": rate, "n_changed": len(changes), "changes": changes}
 
 
+def registry_canonical_for(
+    document_id: str, eff: Receipt | None, field_overrides: dict | None,
+) -> str:
+    """The registry merchant a row's category or account correction teaches:
+    the vendor she typed on the row, else the registry canonical, else the
+    effective vendor. One helper, so the learner and item 183's checklist
+    group rows under the same merchant."""
+    typed = str(
+        ((field_overrides or {}).get(document_id) or {}).get("vendor") or ""
+    ).strip()
+    if typed:
+        return typed
+    if eff is None:
+        return ""
+    return str(eff.canonical_vendor or eff.detected_vendor or "").strip()
+
+
+def registry_category_groups(
+    *,
+    effective_receipts: list[Receipt],
+    field_overrides: dict | None,
+    category_overrides: dict,
+    gl: dict | None = None,
+) -> dict[tuple[str, str], list[tuple[tuple[str, int], tuple]]]:
+    """Every override row the registry learns from, grouped by what it
+    teaches: `{(merchant, company): [((doc, line), (category, account))]}`.
+
+    `company` is "" for the merchant-wide half (its default category, and on
+    a bucket month its single `zoho_account`). On a GL month (`gl` given:
+    `{"entity_orgs", "labels", "entity_by_doc"}`, item 183 step 4) the
+    account is per company: a row's leaf code, resolved and postable in the
+    company the row SHOWS, groups under that company's picker label and is
+    written to `merchants[].accounts`, never to the single `zoho_account`
+    (which would hand one company's account to every company). Only a bucket
+    category is merchant-wide there; a leaf code IS the account.
+
+    Only her own category teaches (`taught_value`, the 2026-09-24 ruling):
+    the registry learner used to read `ov["category"]` raw, so a Confirm or
+    an account-only fix taught the model's category into the merchant list
+    even after the memory learner stopped doing so."""
+    from ..category_vocabulary import gl_postable_ref
+    from ..coa_provision import org_id_for_entity
+    from ..learning import taught_value
+
+    eff_by_id = {r.document_id: r for r in effective_receipts}
+    groups: dict[tuple[str, str], list] = {}
+    for (document_id, line_index), ov in (category_overrides or {}).items():
+        category, account = taught_value(ov)
+        if not category and not account:
+            continue
+        eff = eff_by_id.get(document_id)
+        if eff is None:
+            continue
+        canonical = registry_canonical_for(document_id, eff, field_overrides)
+        if not canonical:
+            continue
+        row = (document_id, line_index)
+        if not gl:
+            groups.setdefault((canonical, ""), []).append((row, (category, account)))
+            continue
+        bucket = category if category in EXPENSE_CATEGORIES else None
+        if bucket:
+            groups.setdefault((canonical, ""), []).append((row, (bucket, None)))
+        entity = (gl.get("entity_by_doc") or {}).get(document_id) or eff.legal_entity_id
+        org_id = org_id_for_entity(entity, gl.get("entity_orgs") or {})
+        label = (gl.get("labels") or {}).get(org_id or "")
+        if not label:
+            continue
+        code = next(
+            (c for c in (gl_postable_ref(ref, org_id) for ref in (category, account)) if c),
+            None,
+        )
+        if code:
+            groups.setdefault((canonical, label), []).append((row, (None, code)))
+    return groups
+
+
 def registry_upserts_from_expense_run(
     merchants: dict,
     *,
@@ -4809,6 +4887,7 @@ def registry_upserts_from_expense_run(
     effective_receipts: list[Receipt],
     field_overrides: dict[str, dict[str, str]],
     category_overrides: dict,
+    gl: dict | None = None,
 ) -> tuple[dict, dict]:
     """Fold reviewer vendor / category corrections into a COPY of the merchants
     registry (2026-07-29, the self-improving half). Returns
@@ -4832,9 +4911,13 @@ def registry_upserts_from_expense_run(
     account move; `multi_category`, `cost_center` and any other key stay as
     stored. A run whose edits change nothing returns a map equal to the one
     passed in, so the caller writes nothing, and the counts name exactly the
-    changes the returned map carries (a re-affirmed category is not counted)."""
+    changes the returned map carries (a re-affirmed category is not counted).
+
+    Item 183: `gl` (see `registry_category_groups`) makes a GL month's
+    account correction land in that company's `accounts` entry."""
+    from ..learning import merge_taught
+
     orig_by_id = {r.document_id: r for r in receipts}
-    eff_by_id = {r.document_id: r for r in effective_receipts}
     base: dict = merchants or {}
     # Merchants an edit reached, each a deep copy of its WHOLE stored entry
     # (or a fresh entry for a new canonical name). Untouched entries are never
@@ -4858,6 +4941,7 @@ def registry_upserts_from_expense_run(
 
     n_skipped = 0
     n_account_skipped = 0
+    n_accounts = 0
 
     # 1) Vendor edits -> canonical + alias.
     for document_id, fields in (field_overrides or {}).items():
@@ -4876,74 +4960,64 @@ def registry_upserts_from_expense_run(
             aliases_added[canonical] = aliases_added.get(canonical, 0) + 1
 
     # 2) Category reclassifications -> merchant default (conflict-skipped).
-    pending: dict[str, dict] = {}
-    for (document_id, _line), ov in (category_overrides or {}).items():
-        category = (ov or {}).get("category")
-        if not category:
+    #
+    # Item 183: two rows agreeing on the category and naming DIFFERENT
+    # accounts used to agree; only the first account survived and the
+    # disagreement was invisible. Under a design where the account IS the
+    # answer, that is a nearest-plausible default inside the writer of
+    # durable memory. Absence is not disagreement: a row naming no account
+    # is silent, so the first account NAMED wins over rows naming none.
+    #
+    # A conflicting merchant (or, on a GL month, one company of it) teaches
+    # nothing, and whatever is already stored stays: the registry carries no
+    # provenance on an account (unlike `card_key_learned`), so a clear could
+    # not tell a value Dirk typed on Settings from one a run learned. The
+    # counts keep that choice from being silent.
+    groups = registry_category_groups(
+        effective_receipts=effective_receipts,
+        field_overrides=field_overrides,
+        category_overrides=category_overrides,
+        gl=gl,
+    )
+    skipped_merchants: set[str] = set()
+    for (canonical, company), rows in groups.items():
+        if company:
             continue
-        eff = eff_by_id.get(document_id)
-        if eff is None:
-            continue
-        canonical = (
-            str((field_overrides or {}).get(document_id, {}).get("vendor") or "").strip()
-            or eff.canonical_vendor
-            or eff.detected_vendor
-            or ""
-        ).strip()
-        if not canonical:
-            continue
-        prior = pending.get(canonical)
-        account = (ov or {}).get("zoho_account")
-        if prior is None:
-            pending[canonical] = {
-                "category": category,
-                "zoho_account": account,
-                "conflict": False,
-                "account_conflict": False,
-            }
-            continue
-        if prior["category"] != category:
-            prior["conflict"] = True
-        # Item 183: two rows agreeing on the category and naming DIFFERENT
-        # accounts used to agree. The per-row `cell` was discarded from the
-        # second row on, so only the first account ever survived and the
-        # disagreement was invisible. Under a design where the account IS
-        # the answer rather than a detail hanging off the category, that is
-        # a nearest-plausible default sitting inside the writer of durable
-        # memory, which later runs consult ahead of the model.
-        #
-        # Absence is not disagreement. A row that names no account is
-        # silent, not a second opinion, so the first account NAMED wins over
-        # rows that name none; only two rows naming different accounts
-        # conflict.
-        if account:
-            if not prior["zoho_account"]:
-                prior["zoho_account"] = account
-            elif account != prior["zoho_account"]:
-                prior["account_conflict"] = True
-
-    for canonical, val in pending.items():
-        if val["conflict"]:
+        values = [v for _row, v in rows]
+        cat_conflict = merge_taught((c, None) for c, _a in values)[2]
+        acct_conflict = merge_taught((None, a) for _c, a in values)[2]
+        if cat_conflict:
             n_skipped += 1
+            skipped_merchants.add(canonical)
             continue
-        if val["account_conflict"]:
-            # Item 183: the rows agree on the category and disagree on where
-            # the money posts. Teach nothing for this merchant rather than
-            # letting the first row's account win, and leave whatever is
-            # already stored exactly where it is: the registry carries no
-            # provenance on `zoho_account` (unlike `card_key_learned`), so a
-            # clear here could not tell a value Dirk typed on the Settings
-            # screen from one a run learned. The count is what keeps that
-            # choice from being silent.
+        if acct_conflict:
+            n_account_skipped += 1
+            skipped_merchants.add(canonical)
+            continue
+        category, account, _ = merge_taught(values)
+        entry = _ensure(canonical)
+        before = (entry.get("category"), entry.get("zoho_account"))
+        if category:
+            entry["category"] = category
+        if account:
+            entry["zoho_account"] = account
+        if (entry.get("category"), entry.get("zoho_account")) != before:
+            category_changed.add(canonical)
+    # Item 183 step 4: a GL month's account correction, per company.
+    for (canonical, company), rows in groups.items():
+        if not company or canonical in skipped_merchants:
+            continue
+        _cat, code, conflict = merge_taught(v for _row, v in rows)
+        if conflict:
             n_account_skipped += 1
             continue
         entry = _ensure(canonical)
-        before = (entry.get("category"), entry.get("zoho_account"))
-        entry["category"] = val["category"]
-        if val["zoho_account"]:
-            entry["zoho_account"] = val["zoho_account"]
-        if (entry["category"], entry.get("zoho_account")) != before:
+        accounts = dict(entry.get("accounts") or {})
+        if accounts.get(company) != code:
+            accounts[company] = code
+            entry["accounts"] = dict(sorted(accounts.items()))
             category_changed.add(canonical)
+            n_accounts += 1
 
     # Fold only the merchants that actually changed back into a copy of the
     # stored map, validating each one (dedup aliases, confirm the category)
@@ -4971,6 +5045,7 @@ def registry_upserts_from_expense_run(
         "categories_set": n_category,
         "skipped_conflict": n_skipped,
         "skipped_account_conflict": n_account_skipped,
+        "accounts_set": n_accounts,
     }
     return new_merchants, summary
 
@@ -5190,6 +5265,48 @@ def registry_cost_center_upserts_from_expense_run(
     }
 
 
+def expense_learning_inputs(run, overrides, field_overrides, edits):
+    """`(receipts, effective, manual_payloads)` an expense month learns from.
+    The BASELINE receipts, because this path keys what it learns on the
+    ORIGINAL extracted vendor: harvesting a baked pool would teach the
+    correction against the corrected name and learn nothing. Shared by the
+    save and by item 183's checklist, so both read the same rows."""
+    receipts = baseline_receipts(run)
+    default_entity = (
+        ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+    )
+    edits = edits or []
+    effective = apply_expense_edits(
+        receipts, field_overrides or {}, edits,
+        category_overrides=overrides, default_entity=default_entity,
+    )
+    manual_payloads = {
+        e["document_id"]: e["payload"] for e in edits if e["op"] == "add"
+    }
+    return receipts, effective, manual_payloads
+
+
+def registry_gl_context(run, settings: dict | None, card_res: dict) -> dict | None:
+    """What the registry learner needs to write a GL month's account per
+    company (item 183 step 4), or None on a bucket month.
+
+    The row's org comes from the month's FROZEN entity map, as the engine
+    resolves it; the key it is stored under is the company's picker label
+    (`account_companies[].label`, from the CURRENT settings), the spelling
+    item 180 stores maps under so a key resolves in every month. The company
+    is the one the row SHOWS (the card chain), as item 201 reads it."""
+    entity_orgs = gl_run_entity_orgs(run)
+    if not entity_orgs:
+        return None
+    from ..category_vocabulary import gl_companies
+
+    return {
+        "entity_orgs": entity_orgs,
+        "labels": {c["org_id"]: c["label"] for c in gl_companies(settings)},
+        "entity_by_doc": resolved_entities(card_res),
+    }
+
+
 def commit_to_memory(
     run: RunRow,
     decisions: dict[str, Decision],
@@ -5225,21 +5342,9 @@ def commit_to_memory(
     by hand."""
     store_factory = store_factory or LearningStore
     if run_mode(run) == MODE_EXPENSE_GENERATION:
-        # The baseline, because this path keys what it learns on the ORIGINAL
-        # extracted vendor: harvesting a baked pool would teach the
-        # correction against the corrected name and learn nothing.
-        receipts = baseline_receipts(run)
-        default_entity = (
-            ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+        receipts, effective, manual_payloads = expense_learning_inputs(
+            run, overrides, field_overrides, edits,
         )
-        edits = edits or []
-        effective = apply_expense_edits(
-            receipts, field_overrides or {}, edits,
-            category_overrides=overrides, default_entity=default_entity,
-        )
-        manual_payloads = {
-            e["document_id"]: e["payload"] for e in edits if e["op"] == "add"
-        }
         with store_factory(learning_db_path) as store:
             summary = learn_from_expense_run(
                 store,
@@ -5291,12 +5396,17 @@ def commit_to_memory(
         # when the map actually changed; skip silently without a settings store.
         if settings_store is not None:
             settings = settings_store.get_settings()
+            card_res = resolve_batch_row_cards(
+                effective, run.config, field_overrides or {},
+                settled_cards=export_settled_cards(run, decisions),
+            )
             new_merchants, reg_summary = registry_upserts_from_expense_run(
                 settings.get("merchants") or {},
                 receipts=receipts,
                 effective_receipts=effective,
                 field_overrides=field_overrides or {},
                 category_overrides=overrides,
+                gl=registry_gl_context(run, settings, card_res),
             )
             # Note item M2: and the month's resolved cards per merchant.
             # Resolved WITHOUT the registry on purpose — a card the registry
@@ -5333,10 +5443,7 @@ def commit_to_memory(
             new_merchants, card_summary = registry_card_upserts_from_expense_run(
                 new_merchants,
                 effective_receipts=effective,
-                card_res=resolve_batch_row_cards(
-                    effective, run.config, field_overrides or {},
-                    settled_cards=export_settled_cards(run, decisions),
-                ),
+                card_res=card_res,
             )
             reg_summary.update(card_summary)
             # Item 118: and the month's explicit cost-center picks, so the
@@ -17085,6 +17192,8 @@ def commit_month_memory(
     *,
     trigger: str,
     only_if_changed: bool,
+    keep=None,
+    skip=None,
 ) -> dict:
     """Save one run's corrections to memory and record the save.
 
@@ -17092,32 +17201,52 @@ def commit_month_memory(
     `only_if_changed` (the publish path), `{"saved": False, "reason":
     "unchanged"}` when the run's corrections are exactly what was last saved,
     so publishing, unpublishing and publishing again does not count the same
-    corrections twice in the Memory page's counts. The button always saves."""
+    corrections twice in the Memory page's counts. The button always saves.
+
+    Item 183 half A: `keep` (the ticked lesson ids) or `skip` choose which of
+    the plan's lessons are written; neither means the defaults (corrections
+    kept, conflicts and owner-gated merchants not). The save APPLIES the
+    plan's recorded writes, filtered, so the checklist shown and the write
+    made cannot differ, and the journal holds exactly what was written. When
+    the corrections are unchanged since the last save, a lesson ticked now
+    that was not kept then is still written: an unticked lesson is offered
+    again, and ticking it later has to work."""
+    from . import memory_lessons as ml
+
     decisions = store.get_decisions(run.run_id)
     overrides = store.get_category_overrides(run.run_id)
     field_overrides = store.get_expense_field_overrides(run.run_id)
     edits = store.get_expense_edits(run.run_id)
     digest = memory_commit_digest(decisions, overrides, field_overrides, edits)
-    if only_if_changed:
-        last = store.get_memory_commit(run.run_id)
-        if last is not None and last["digest"] == digest:
-            return {"saved": False, "reason": "unchanged"}
-    # Item 163: what this save is ABOUT to write, and what each of those
-    # rows holds right now. Read before the write, so the journal's
-    # pre-image is the state a later undo has to put back. A plan that
-    # fails to compute must not silently disarm the undo, so it is not
-    # wrapped: the save fails with it, which is the safe direction.
-    plan = plan_month_memory(
+    # Item 163: what this save is ABOUT to write. A plan that fails to
+    # compute must not silently disarm the undo, so it is not wrapped: the
+    # save fails with it, which is the safe direction.
+    ctx, lessons, learned = _memory_plan(
         store, run, learning_db_path,
         decisions=decisions, overrides=overrides,
         field_overrides=field_overrides, edits=edits, now_iso=now_iso,
     )
-    before_rows = _memory_pre_image(learning_db_path, plan["writes"])
-    merchants_before = copy.deepcopy((store.get_settings() or {}).get("merchants") or {})
-    learned = commit_to_memory(
-        run, decisions, overrides, learning_db_path, now_iso,
-        field_overrides=field_overrides, edits=edits, settings_store=store,
-    )
+    chosen = ml.select(lessons, keep=keep, skip=skip)
+    kept = chosen["kept"]
+    if only_if_changed:
+        last = store.get_memory_commit(run.run_id)
+        if last is not None and last["digest"] == digest:
+            before = _last_kept_lessons(store, run.run_id)
+            kept = [lid for lid in kept if before is not None and lid not in before]
+            if not kept:
+                return {"saved": False, "reason": "unchanged"}
+    applied = ml.apply_selection(ctx, lessons, kept)
+    views = [_planned_write_view(w) for w in applied["writes"]]
+    # Read before the write, so the journal's pre-image is the state a
+    # later undo has to put back.
+    before_rows = _memory_pre_image(learning_db_path, views)
+    merchants_before = copy.deepcopy(ctx.merchants_before)
+    if applied["writes"]:
+        with LearningStore(learning_db_path) as s:
+            apply_plan(s, applied["writes"])
+    if applied["merchants"] != merchants_before:
+        store.set_settings({"merchants": applied["merchants"]}, now_iso)
+    learned = _learned_as_written(learned, applied, chosen, kept)
     store.set_memory_commit(run.run_id, digest, now_iso, trigger)
     merchants_after = (store.get_settings() or {}).get("merchants") or {}
     journal_id = store.add_memory_journal(
@@ -17130,7 +17259,59 @@ def commit_month_memory(
         merchants_after=copy.deepcopy(merchants_after),
         learned=learned,
     )
-    return {"saved": True, "learned": learned, "journal_id": journal_id}
+    return {
+        "saved": True, "learned": learned, "journal_id": journal_id,
+        "lessons": learned["lessons"],
+    }
+
+
+def _last_kept_lessons(store, run_id: str) -> set[str] | None:
+    """Every lesson id this run's un-undone saves wrote, or None when its
+    newest save predates item 183 (it recorded no ids, so nothing can be
+    told apart and the old "unchanged" answer stands). An undone save's ids
+    are not counted: the undo took them out of memory."""
+    out: set[str] | None = None
+    for entry in store.list_memory_journal(limit=500):
+        if entry["run_id"] != run_id or entry["reverted_at"]:
+            continue
+        lessons = (entry.get("learned") or {}).get("lessons")
+        if not isinstance(lessons, dict):
+            return out
+        out = (out or set()) | set(lessons.get("kept") or [])
+    return out
+
+
+# Learner summary keys that count `record_*` calls, per table.
+_LEARNED_CALL_COUNTS = {
+    "merchant_categories": "merchant_category",
+    "merchant_entities": "merchant_entity",
+    "field_corrections": "field_correction",
+    "vendor_aliases": "vendor_alias",
+    "merchant_fx": "merchant_fx",
+}
+
+
+def _learned_as_written(learned: dict, applied: dict, chosen: dict, kept) -> dict:
+    """The save's summary, counted from what was WRITTEN, not planned: a
+    skipped lesson must not appear in the Publish toast as taught. The
+    conflict counts stay as found, and `lessons` says which ids went where."""
+    out = dict(learned)
+    calls: dict[str, int] = {}
+    for w in applied["writes"]:
+        calls[w.table] = calls.get(w.table, 0) + 1
+    for summary_key, table in _LEARNED_CALL_COUNTS.items():
+        if summary_key in out:
+            out[summary_key] = calls.get(table, 0)
+    kept = list(kept)
+    out["lessons"] = {
+        "kept": kept,
+        "skipped": chosen["skipped"],
+        "already_saved": [lid for lid in chosen["kept"] if lid not in kept],
+        "refused_owner_gated": chosen["refused_owner_gated"],
+        "unknown": chosen["unknown"],
+        "unresolved_conflicts": applied["unresolved_conflicts"],
+    }
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -17175,8 +17356,46 @@ def plan_month_memory(
     is a per-merchant before/after diff.
 
     Computed by running the real learners against `RecordingStore`, so the
-    preview cannot disagree with the save."""
-    from ..learning import RecordingStore, distinct_keys, registry_diff
+    preview cannot disagree with the save.
+
+    Item 183 half A: `lessons[]` is the same plan cut into tickable lessons
+    (`memory_lessons`): `{id, kind, table, key, description, sources,
+    default_keep, owner_gated, conflict_group}`. Publish takes their ids."""
+    from ..learning import distinct_keys, registry_diff
+
+    ctx, lessons, learned = _memory_plan(
+        store, run, learning_db_path,
+        decisions=decisions, overrides=overrides,
+        field_overrides=field_overrides, edits=edits, now_iso=now_iso,
+    )
+    writes = ctx.writes
+    counts: dict[str, int] = {}
+    for table, _key in distinct_keys(writes):
+        counts[table] = counts.get(table, 0) + 1
+    return {
+        "writes": [_planned_write_view(w) for w in writes],
+        "keys": [
+            {"table": t, "key": list(k), "surface": MEMORY_TABLE_SURFACE.get(t, "")}
+            for t, k in distinct_keys(writes)
+        ],
+        "counts": counts,
+        "registry": registry_diff(
+            ctx.merchants_before, ctx.merchants_after
+        ) if ctx.merchants_after is not None else {},
+        "learned": learned,
+        "lessons": [lsn.view() for lsn in lessons],
+    }
+
+
+def _memory_plan(
+    store, run: RunRow, learning_db_path: Path, *,
+    decisions=None, overrides=None, field_overrides=None, edits=None,
+    now_iso: str,
+):
+    """`(LessonContext, lessons, learned)`: the real learners run against
+    `RecordingStore` (item 163), then cut into lessons (item 183)."""
+    from ..learning import RecordingStore, expense_category_sources
+    from . import memory_lessons as ml
 
     decisions = store.get_decisions(run.run_id) if decisions is None else decisions
     overrides = (
@@ -17185,8 +17404,10 @@ def plan_month_memory(
     field_overrides = (
         store.get_expense_field_overrides(run.run_id)
         if field_overrides is None else field_overrides
-    )
+    ) or {}
     edits = store.get_expense_edits(run.run_id) if edits is None else edits
+    settings = store.get_settings() or {}
+    merchants_before = copy.deepcopy(settings.get("merchants") or {})
 
     recorder: dict = {}
 
@@ -17203,21 +17424,32 @@ def plan_month_memory(
     merchants_after = learned.pop("merchants_after", None)
     rec = recorder.get("store")
     writes = list(rec.writes) if rec is not None else []
-    counts: dict[str, int] = {}
-    for table, _key in distinct_keys(writes):
-        counts[table] = counts.get(table, 0) + 1
-    return {
-        "writes": [_planned_write_view(w) for w in writes],
-        "keys": [
-            {"table": t, "key": list(k), "surface": MEMORY_TABLE_SURFACE.get(t, "")}
-            for t, k in distinct_keys(writes)
-        ],
-        "counts": counts,
-        "registry": registry_diff(
-            (store.get_settings() or {}).get("merchants") or {}, merchants_after
-        ) if merchants_after is not None else {},
-        "learned": learned,
-    }
+
+    receipts: list = []
+    effective: list = []
+    manual_payloads: dict = {}
+    rec_by_id: dict = {}
+    gl = None
+    if run_mode(run) == MODE_EXPENSE_GENERATION:
+        receipts, effective, manual_payloads = expense_learning_inputs(
+            run, overrides, field_overrides, edits,
+        )
+        rec_by_id = expense_category_sources(effective, [
+            transaction_from_dict(t)
+            for t in (run.snapshot or {}).get("transactions") or []
+        ])
+        gl = registry_gl_context(run, settings, resolve_batch_row_cards(
+            effective, run.config, field_overrides,
+            settled_cards=export_settled_cards(run, decisions),
+        ))
+    ctx = ml.LessonContext(
+        run=run, writes=writes, merchants_before=merchants_before,
+        merchants_after=merchants_after, overrides=overrides or {},
+        field_overrides=field_overrides, receipts=receipts,
+        effective=effective, manual_payloads=manual_payloads,
+        rec_by_id=rec_by_id, gl=gl, now_iso=now_iso,
+    )
+    return ctx, ml.build_lessons(ctx), learned
 
 
 def _planned_write_view(w) -> dict:
