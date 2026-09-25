@@ -832,6 +832,15 @@ reading an error string instead of the record behind it. `6018 "account is
 disabled"` is not evidence a user was disabled, and "no receipt mail in the
 two mailboxes we read" is not evidence the receipt is unreachable.
 
+**2026-09-25 late: four "not pasted" prompts are live, and note #87 is open
+(PR #1386).** The re-crawl of the private-card-list publish found
+merchant-profile (M4), chase-section-label (161), roster-mismatch (38) and
+fx-daily-rates (167 + 168) already in the bundle; PROMPT-STATUS now lists them
+Applied (the fx lines above that wait on the paste are therefore stale). Owner
+note #87 (01:12 UTC, September) is backlog item 213: the item-204
+`waits_for_statement` reason names all nine cards on 19 rows. Recorded, not
+built; the unpasted `lovable-case9-status-prompt.md` repeats it via `{cards}`.
+
 ## Elements (index)
 
 State at a glance only. Live slice-level status, next actions, and detail are in
