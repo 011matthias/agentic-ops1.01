@@ -9,6 +9,8 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: month pages are fast again** (backlog item 204 step 4 follow-up; Shipped row 131). The billing-account card re-read every month on every page (~28 s), which made the app fail its health check and the month page show "Failed to fetch". Each month's evidence is now reused until that month's own data changes.
+
 **2026-09-25: a decided copy is no longer offered a card** (backlog item 204, build 5 follow-up; Shipped row 130). A row set aside as a copy keeps its waiting status but loses `card_suggestion`, since a click there wrote an override on a row that counts for nothing and the original carries the same suggestion. Live before: 2 of 6 suggestions sat on copies (May and July Lovable 200.00).
 
 **2026-09-25: case 9 step 4 shipped, the billing account's card** (backlog

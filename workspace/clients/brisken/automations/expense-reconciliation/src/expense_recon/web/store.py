@@ -20,6 +20,7 @@ locking is sufficient.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -2045,6 +2046,29 @@ class RunStore:
             (run_id,),
         ).fetchall()
         return {r["group_id"]: r["resolution"] for r in rows}
+
+    # Item 204 step 4 follow-up: the tables a month's own derivations read.
+    RUN_INPUT_TABLES = (
+        "runs", "decisions", "duplicate_resolutions",
+        "expense_field_overrides", "expense_edits",
+    )
+
+    def run_inputs_digest(self, run_id: str) -> str:
+        """A digest of every row of this run in `RUN_INPUT_TABLES`: the run
+        row (snapshot, config, label) and its decisions, duplicate rulings,
+        field overrides and edits. Equal digests mean equal inputs, so a
+        caller may reuse what it derived from them; any write to one of
+        those rows changes the digest."""
+        h = hashlib.sha256()
+        for table in self.RUN_INPUT_TABLES:
+            h.update(f"\x00{table}\x00".encode())
+            rows = self.conn.execute(
+                f"SELECT * FROM {table} WHERE run_id = ?", (run_id,)
+            ).fetchall()
+            for text in sorted(repr(tuple(r)) for r in rows):
+                h.update(text.encode("utf-8"))
+                h.update(b"\x00")
+        return h.hexdigest()
 
     def set_duplicate_resolution(
         self, run_id: str, group_id: str, resolution: str, updated_at: str
