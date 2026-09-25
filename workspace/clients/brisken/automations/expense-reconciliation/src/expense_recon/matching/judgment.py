@@ -13,10 +13,14 @@ flagged for review.
 
 Two invariants hold regardless of the verdict:
 
-* **FX judgments always carry `requires_review=True`.** The FX rate is
-  an approximation (the authoritative rate source is §38-TBD) and the
-  call posture is "review everything for the first months"
-  (call-outcomes D2).
+* **FX judgments always carry `requires_review=True`.** The call posture
+  is "review everything for the first months" (call-outcomes D2), and
+  item 76 (owner 2026-09-16) keeps self-confirmation to exact pairs.
+
+Since front 5 (2026-09-25) the model is handed the tool's own reference
+conversion, card evidence and merchant agreement (`FxEvidence`) and told
+the rate is given, so it judges the tool's evidence instead of guessing a
+rate of its own.
 * **The reconciliation guarantee (v2 spec §25.5) is preserved.** The
   entry stays in `judgment_required` whatever the verdict; a rejected
   candidate is surfaced for Chris to reject, never silently dropped.
@@ -29,11 +33,16 @@ from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 
-from ..llm.client import AmbiguousCandidate, LLMClient
+from ..llm.client import AmbiguousCandidate, FxEvidence, LLMClient
 from .deterministic import (
     MatchingConfig,
     _blend_score,
     _card_score,
+    _reference_rate_for,
+    _tx_card_keys,
+    card_evidence,
+    cards_differ,
+    reference_gap,
     vendor_similarity,
 )
 from .types import Match, MatchType, Receipt, Transaction
@@ -45,11 +54,70 @@ STUB_REASON = (
 )
 
 
+def fx_evidence(
+    tx: Transaction,
+    receipt: Receipt,
+    cfg: MatchingConfig | None,
+    derived_rates=None,
+    vendor_score: float | None = None,
+) -> FxEvidence:
+    """The tool's own evidence on one cross-currency pair: the reference
+    conversion the matcher and the month page use (`_reference_rate_for` on
+    the charge date, `reference_gap` at that source's band), the card
+    evidence (`card_evidence`, `cards_differ` on the resolved card), and the
+    merchant agreement. Without `cfg` no rate can be read and the rate
+    fields stay None; the card evidence needs none."""
+    rec_src, chg_src = card_evidence(tx, receipt)
+    # The resolved card first (item 137); a receipt with no resolved scope
+    # falls back to the matcher's printed-card test (`_card_score`: 1.0 the
+    # printed digits name the charge's card, 0.0 another, 0.5 unknown).
+    differ = cards_differ(_tx_card_keys(tx), receipt)
+    if differ is None:
+        printed = _card_score(tx, receipt)
+        differ = False if printed >= 1.0 else True if printed <= 0.0 else None
+    base = FxEvidence(
+        receipt_card=rec_src,
+        charge_card=chg_src,
+        cards_differ=differ,
+        vendor_pct=None if vendor_score is None else round(vendor_score * 100),
+    )
+    rec_ccy = receipt.detected_currency
+    if (
+        cfg is None or not rec_ccy or receipt.detected_total is None
+        or rec_ccy == tx.transaction_currency
+    ):
+        return base
+    ref = _reference_rate_for(
+        cfg, rec_ccy, tx.transaction_currency, derived_rates,
+        on=tx.transaction_date,
+    )
+    if ref is None:
+        return base
+    rate, source, _n = ref
+    gap = reference_gap(
+        tx.amount, receipt.detected_total, rate,
+        cfg.reference_match_pct(source), cfg.fx_reference_review_pct,
+    )
+    if gap is None:
+        return base
+    converted, deviation, band = gap
+    cent = Decimal("0.01")
+    return replace(
+        base,
+        reference_rate=rate.quantize(Decimal("0.000001")),
+        reference_rate_source=source,
+        reference_converted=converted.quantize(cent),
+        reference_gap_pct=(deviation * 100).quantize(cent),
+        reference_gap_band=band,
+    )
+
+
 def judge_fx_match(
     tx: Transaction,
     receipt: Receipt,
     *,
     client: LLMClient | None = None,
+    evidence: FxEvidence | None = None,
 ) -> Match:
     """Score an FX-mismatch candidate pair (v2 spec §15.2).
 
@@ -76,11 +144,9 @@ def judge_fx_match(
         tx_currency=tx.transaction_currency,
         tx_date=tx.transaction_date.isoformat(),
         tx_vendor=tx.vendor_from_statement,
-        receipt_amount=(
-            receipt.detected_total
-            if receipt.detected_total is not None
-            else Decimal("0")
-        ),
+        # Front 5: a total that could not be read reaches the model as
+        # "(unknown)", never as a zero it would convert.
+        receipt_amount=receipt.detected_total,
         receipt_currency=receipt.detected_currency or "",
         receipt_date=(
             receipt.detected_date.isoformat() if receipt.detected_date else None
@@ -97,6 +163,10 @@ def judge_fx_match(
         # evidence rather than on vendor-name intuition.
         tx_card=tx.card_last4 or tx.account_id,
         receipt_payment_mode=receipt.payment_mode,
+        # Front 5: the tool's rate, card verdict and merchant agreement,
+        # passed only when there is some, so a call without evidence stays
+        # the one an older client implementation accepts.
+        **({"evidence": evidence} if evidence is not None else {}),
     )
 
     return Match(
@@ -104,19 +174,35 @@ def judge_fx_match(
         document_id=receipt.document_id,
         match_type=MatchType.FX_JUDGMENT,
         confidence=result.same_purchase_confidence,
-        reason=_fx_reason(tx, receipt, result),
+        reason=_fx_reason(tx, receipt, result, evidence),
         requires_review=True,
     )
 
 
-def _fx_reason(tx: Transaction, receipt: Receipt, result: Any) -> str:
-    """Human-readable judgment string for the review report."""
+def _fx_reason(
+    tx: Transaction, receipt: Receipt, result: Any,
+    evidence: FxEvidence | None = None,
+) -> str:
+    """Human-readable judgment string for the review report. With the tool's
+    rate in `evidence`, the conversion printed is the tool's, never the
+    model's approximation (live July / August 2026 printed a tenfold error
+    and three inverse rates from the model's own)."""
     verdict = "likely same purchase" if result.is_match else "likely NOT the same purchase"
     parts = [
         f"FX judgment: {verdict} "
         f"(p={result.same_purchase_confidence:.2f})."
     ]
-    if result.converted_amount is not None:
+    if evidence is not None and evidence.reference_converted is not None:
+        gap = (
+            f", {evidence.reference_gap_pct:+}% from the charge"
+            if evidence.reference_gap_pct is not None else ""
+        )
+        parts.append(
+            f"{receipt.detected_total} {receipt.detected_currency} = "
+            f"{evidence.reference_converted} {tx.transaction_currency} at the "
+            f"tool's rate {evidence.reference_rate}{gap}."
+        )
+    elif result.converted_amount is not None:
         rate = (
             f" at ~{result.implied_rate}"
             if result.implied_rate is not None
@@ -171,7 +257,9 @@ def judge_unmatched(
     )
     calls = 0
     for receipt in shortlist:
-        judged = judge_fx_match(tx, receipt, client=client)
+        judged = judge_fx_match(
+            tx, receipt, client=client, evidence=fx_evidence(tx, receipt, cfg)
+        )
         calls += 1
         if judged.confidence < min_confidence:
             continue

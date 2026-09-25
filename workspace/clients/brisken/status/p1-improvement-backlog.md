@@ -11841,11 +11841,61 @@ Tests: `tests/test_front1_chase_honesty.py` (7, route-level),
 subjects in `tests/test_receipt_chasing_item_107.py`, the charge-code pin in
 `tests/test_view_contract.py`. Regress: each of the six wiring points mutated
 and the caller-level test went red (see the PR).
+### 222. Pairs in Reconciled that still need a click: the FX judge, the review wording, posted charges, payoffs (front 5 of the 2026-09-25 parallel round; map `.scratch/recon-matching-gaps-2026-09-25.md`)
+
+On 2026-09-25 August held 29 pairs in Reconciled that still needed a click and
+September 18; July's 13 review rows were all already-posted charges the model
+had still judged (n_review 13). The FX judge was asked to estimate the rate
+itself: 13 live verdicts (July 10, August 3), 8 "likely NOT", one conversion
+off tenfold, three inverse rates, and "card numbers differ" on a card the
+tool read unknown. Every review row read one generic sentence. Six PDF card
+payoffs (USD 18,508.16) read "refund".
+
+**Shipped (steps 1-5, PR TBD):**
+
+1. The judge gets the tool's evidence (`FxEvidence`: reference rate, source,
+   converted amount, gap and band; the card verdict, resolved else the
+   printed-card test; vendor agreement), the prompt says the rate is given,
+   the raw card strings are no longer shown beside the verdict, a missing
+   total is "(unknown)", and the judgment-cache key carries
+   `FX_JUDGMENT_PROMPT_VERSION` (every month re-judges its FX pairs at its
+   next natural re-match; no live re-judge from this session). A look-alike
+   demotion names its rival and carries `review_code: uniqueness_rival`; with
+   card 100, vendor >= 75 and a clean band it is not sent to the model.
+   Offline replay of the 13 live verdicts (27 calls on the client key, about
+   USD 0.005): 4 skipped (both POSTO SANTOS twins, 24HBEBIDAS, the tenfold
+   FENIX 10.82), 9 re-judged; on the 4 labelled pairs among them right 2/4
+   -> 3/4 (a49abe83 and a9dedc36 now "same"; JoseliMariaDos x 0067,
+   labelled wrong, flips to "same", still review-only, never booked); the
+   other 5 are unlabelled BENCH files.
+2. `review.cause` / `review.cause_detail` (six causes) on pending review rows
+   and pending PROBABLE pairs in Reconciled; `reason_code` unchanged.
+   Predicted: July 0, August 6 (model_doubts 2, merchant_disagrees 2,
+   rival_agrees 1, probable_date_gap 1), September 3 (probable_date_gap).
+3. A booked charge (yellow, or `already_posted`) is not judged (FX, ambiguous,
+   second pass) and leaves `review` for `unmatched`: July n_review 13 -> 0,
+   n_unmatched_tx 63 -> 76, n_booked_no_receipt 39 -> 52 (+USD 233.84).
+4. `row_type_of` reads a payoff descriptor on a Type-less credit: August 4
+   rows (USD 13,848.16) and September 2 (USD 4,660.00) refund -> payment.
+5. `rows[].reverses_transaction_id` on a merchant refund (0 live).
+
+**Owner decisions 2026-09-25 (AskUserQuestion):** item 76 revisited, YES:
+`confirmable_pair` accepts an `fx_reference` pair on a central-bank rate
+(opentickers_day / ecb_month) within 1% of the charge, card agreeing or
+unknown, vendor >= 75, not review-flagged (shipped in the same PR; August 10
+of 20 qualify at its next natural re-match, all unlabelled; July 10 qualify,
+6 labelled right, 0 wrong, all booked so nothing moves). A p >= 0.85 model
+verdict lifting a pair: NO, the click stays (not built).
+
+**Open:** step 6 (candidate-level merchant floor for exact pairs, measured
+first on July + August + the six bundles, shipped only if 0 labelled-right
+pairs move). SPA half: `docs/lovable-review-cause-prompt.md`, not pasted.
 
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 142 | Item 222 steps 1-5 (front 5): the FX judge is handed the tool's rate, card verdict and merchant agreement (prompt v2, cache keyed on it, look-alike pairs with clean evidence skip the model); `review.cause` / `cause_detail`; booked charges not judged and out of `n_review`; PDF payoffs read `payment`; `reverses_transaction_id` | 13 live verdicts guessed their own rate (one tenfold off); every review row read one generic sentence; July counted 13 booked rows as in review; six payoffs read refund | 2026-09-25 |
 | 141 | Item 221 (front 1): charges with nothing behind them say what they are. Charge `reason_code` + `closed_recurring` / `no_receipt_expected`, `already_booked` reads the reviewer verdict, `reason_label` on every charge element; `n_already_posted` counts booked purchases only; `summary.n_cards_uncovered` / `cards_uncovered[]` and the Publish refusal sentence; `receipt_chase` `date_range` / `charge_month` and the mail grouped by charge month; ask age + `overdue_days` + per-holder mark-all; `python -m expense_recon.zoho.booked_report` (read-only, one-cent control) | July's 24 and August's 40 gray charges read "no receipt found" while the gate called them closed; 3 / 4 / 7 cards had nothing loaded behind "0 need a receipt"; 33 chased charges were filed under the wrong month; Zoho already held 11 + 11 open charges | PR #1468 |
 | 140 | Item 220 steps 1 + 2 (front 2): an unmatched receipt's reason reads the card before the date edge; `statement_not_loaded_for_date` + `unmatched_receipts[].waits_for_statements`; German cash/girocard words are not card payments; `summary.n_receipts_waiting_statement` / `receipts_waiting_cards` and a refusal that splits "wait for a statement" from "no charge on any loaded statement". | September told 40 receipts to look in the previous or next month while their statements simply were not loaded yet, and the sign-off refusal pointed Criss at the wrong fix. | PR pending |
 | 139 | Item 216 Build 2 step 3: `summary.categories_by_origin` (`{person, rule, suggestion, none}`) on both payloads, read off each row's own `posting_category` / `suggested_category`; sums to `rows[]` (run) and `n_expenses` (grid). `n_charges_category_guessed` keeps its meaning (the guesses that block the month) | Item 216 read the blocker's 0 / 0 / 1 as "the tool reports no guesses" while 164 receiptless charges carried one; all 164 sit on booked, gray or receipt-owing charges, so the blocker was right and the who-answered count was missing. Run view 68 / 109 / 43 suggestions, grid 27 / 27 / 31 (03:05 backup). Tests: `tests/test_counts_by_origin_item_216_build2_step3.py` (2, route-level) + the contract partition test; five `regress_check` proofs bit | this PR |

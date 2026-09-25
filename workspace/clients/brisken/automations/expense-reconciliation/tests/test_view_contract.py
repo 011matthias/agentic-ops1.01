@@ -2101,3 +2101,27 @@ def test_case9_row_fields_are_absent_or_well_formed(payloads):
                         "month", "date", "amount", "currency", "description"
                     }, ev
                 assert expense["card"] is None, "a suggestion is never applied"
+
+
+def test_front5_row_fields_are_absent_or_well_formed(payloads):
+    """Front 5: `review.cause` is one of `REVIEW_CAUSES` and rides with a
+    `review.cause_detail` object naming the candidate it is about; both are
+    ABSENT together, never null. `reverses_transaction_id` is absent or the
+    id of another row on the same page, on a refund row only. A type guard;
+    the route-level proofs are `tests/test_front5_clicks.py`."""
+    from expense_recon.web.service import REVIEW_CAUSES
+
+    for view in payloads["run"]:
+        ids = {r["transaction_id"] for r in view["rows"]}
+        for row in view["rows"]:
+            review = row["review"]
+            assert ("cause" in review) == ("cause_detail" in review), review
+            if "cause" in review:
+                assert review["cause"] in REVIEW_CAUSES, review
+                assert isinstance(review["cause_detail"], dict), review
+                assert review["cause_detail"].get("document_id"), review
+            if "reverses_transaction_id" in row:
+                rev = row["reverses_transaction_id"]
+                assert isinstance(rev, str) and rev in ids
+                assert rev != row["transaction_id"]
+                assert row["row_type"] == "refund"

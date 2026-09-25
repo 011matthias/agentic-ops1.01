@@ -7318,6 +7318,68 @@ PDFs, plus a no-signal month rendered with the path unwired to prove every
 old key unchanged) and `tests/test_payment_path_218.py` (the rules, negative
 cases as the contract). Renders in `docs/lovable-bills-path-prompt.md`.
 
+
+## Front 5 (2026-09-25): why a pair still needs a click
+
+Parallel fields on `GET /api/runs/{run_id}` rows, all ABSENT (never null)
+when they do not apply. Read-time: a stored month shows them after the
+deploy, with no re-match.
+
+### `rows[].review.cause` and `rows[].review.cause_detail`
+
+`review.reason_code` stays `uncertain_match` on a review row, and `reason`
+keeps its English sentence. Beside them, on a pending row the reviewer still
+has to act on (not posted, not decided):
+
+| `cause` | When | `cause_detail` keys (besides `document_id`) |
+|---|---|---|
+| `merchant_disagrees` | the receipt names no card and the merchant words disagree (item 204 D5) | `vendor_pct` |
+| `no_card_rival` | the receipt names no card and a charge on another card also fits | `rival` (text, as the reason printed it) |
+| `model_doubts` | the model answered "likely NOT the same purchase" | `model_p`, `model_reasoning` (the model's own sentence, English) |
+| `fx_review_zone` | the converted receipt is outside the clean band, or the pair has no rate to check | `gap_pct`, `rate_source` when there is a rate; `model_p` when judged |
+| `rival_agrees` | another charge or receipt fits just as cleanly (the uniqueness gate), or two identical receipts | `rival_charges` `[{transaction_id, vendor, amount, currency, date}]`, `rival_receipts` `[{document_id, vendor, total, currency, date}]` (up to 3 each, from the candidates on the page), `rival` (text the matcher printed, since this release), `model_p` when judged |
+| `probable_date_gap` | a same-currency pair up to 20% apart and 2-5 days off; set on a Reconciled row too, which is why it cannot confirm itself | `date_gap_days`, `amount_diff` (charge minus receipt, `+0.50`) |
+
+`document_id` is the candidate the cause is about. A key inside
+`cause_detail` is absent when the page has no value for it. First match wins,
+top to bottom.
+
+### `rows[].reverses_transaction_id`
+
+On a `row_type: "refund"` row (a merchant's credit, not the cardholder's
+`payment`): the `transaction_id` of the one earlier purchase on the page with
+the same currency and absolute amount, the merchant agreeing (vendor
+similarity 0.75) and dated up to 90 days before. Absent when there is none or
+more than one. Advisory: no bucket, count or decision reads it.
+
+### Changed readings (no new key)
+
+- `rows[].row_type`: a credit on a statement with no Type column (the Chase
+  PDF) whose description is a card payoff ("Payment Thank You", "Automatic
+  Payment", "Autopay") reads `payment`, not `refund`. `effective_bucket` stays
+  `refund`.
+- A charge already booked (`entry_status: "posted"`, or status
+  `already_posted`) that the matcher held for review now counts in
+  `effective_bucket: "unmatched"` (with the booked-no-receipt charges), not
+  `review`: `summary.n_review` no longer counts it. Its `candidates` stay.
+- `candidates[].review_code` gains `uniqueness_rival` (a clean rate-derived
+  pair demoted because a look-alike agrees just as cleanly); its `reason`
+  names the rival. Such a pair with card 100, vendor 75+ and a clean band is
+  not sent to the model.
+- A model verdict's `reason` prints the tool's conversion ("52.79 BRL = 10.31
+  USD at the tool's rate 0.195341, -0.80% from the charge"), not the model's
+  estimate; it re-judges at each month's next natural re-match (the cache key
+  carries the prompt version).
+- Self-confirm and "Confirm all matched" (`confirmable_pair`, owner
+  2026-09-25, item 76 revisited): an `fx_reference` pair on
+  `reference_rate_source` `opentickers_day` or `ecb_month`, within 1%
+  (`reference_gap_pct`), card agreeing or unknown (`card_pct` 100 / 50, no
+  `cards_differ`), vendor 75+ and not review-flagged now confirms like an
+  exact pair; `summary.n_confirm_matched` counts it.
+
+Tests: `tests/test_front5_clicks.py` (route-level), pinned in
+`tests/test_view_contract.py`. Renders in `docs/lovable-review-cause-prompt.md`.
+
 ## Receipts that wait for a statement (item 220, front 2)
 
 `GET /api/runs/{id}` only. Parallel fields; nothing existing is retyped.

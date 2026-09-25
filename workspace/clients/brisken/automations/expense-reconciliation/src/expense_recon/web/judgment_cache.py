@@ -65,17 +65,31 @@ def _plain(value: Any) -> Any:
     return repr(value)
 
 
+def _prompt_version(method: str) -> str:
+    """The prompt version a method's verdicts were bought under, "" for a
+    method whose prompt carries none yet. Front 5 (2026-09-25): the FX
+    judge's prompt changed from "estimate the rate" to "the rate is given",
+    and an old verdict must not answer the new question. A version is added
+    to the key only when present, so the judge_ambiguous keys (prompt
+    unchanged) stay the ones already stored."""
+    if method == _FX:
+        from ..llm.client import FX_JUDGMENT_PROMPT_VERSION
+
+        return FX_JUDGMENT_PROMPT_VERSION
+    return ""
+
+
 def call_key(method: str, kwargs: dict, model: str = "") -> str:
-    payload = json.dumps(
-        [
-            _SCHEMA,
-            method,
-            model,
-            {k: _plain(v) for k, v in sorted(kwargs.items())},
-        ],
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
+    parts: list = [
+        _SCHEMA,
+        method,
+        model,
+        {k: _plain(v) for k, v in sorted(kwargs.items())},
+    ]
+    version = _prompt_version(method)
+    if version:
+        parts.append({"prompt_version": version})
+    payload = json.dumps(parts, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:20]
 
 

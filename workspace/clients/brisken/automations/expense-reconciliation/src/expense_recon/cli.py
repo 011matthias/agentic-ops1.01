@@ -325,8 +325,15 @@ def _apply_vision_receipts(
 def _apply_judgment(
     outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None,
     *, suggest_floor: float = 0.0, cfg: MatchingConfig | None = None,
+    skip_tx_ids: "frozenset[str] | set[str]" = frozenset(),
 ) -> None:
     """Replace each judgment_required entry with the judgment verdict.
+
+    Front 5 (2026-09-25): a charge already booked (the workbook's yellow
+    `entry_status` "posted", or a reviewer's already-posted verdict named in
+    `skip_tx_ids`) is not judged. Live July 2026 paid for 13 verdicts on
+    charges the page treats as nothing to do; the pair stays as the matcher
+    built it, on the row for the audit.
 
     With an `LLMClient`, every FX case gets a real model judgment
     (D1b); without one, `judge_fx_match` returns the stub Match and the
@@ -367,9 +374,12 @@ def _apply_judgment(
         pair_reference_gap_band,
     )
 
+    from .matching.deterministic import UNIQUENESS_RIVAL_REVIEW
+    from .matching.judgment import fx_evidence
+
     derived: list = []
 
-    def _rate_band(tx, rec) -> str | None:
+    def _derived_rates():
         if cfg is None:
             return None
         if not derived:
@@ -377,7 +387,12 @@ def _apply_judgment(
                 [t for t in tx_by_id.values() if not t.is_credit],
                 list(rec_by_id.values()), cfg,
             ))
-        return pair_reference_gap_band(tx, rec, cfg, derived[0])
+        return derived[0]
+
+    def _rate_band(tx, rec) -> str | None:
+        if cfg is None:
+            return None
+        return pair_reference_gap_band(tx, rec, cfg, _derived_rates())
 
     judged: list = []
     suppressed: list = []
@@ -394,7 +409,28 @@ def _apply_judgment(
         if m.match_type is not MatchType.FX_JUDGMENT:
             judged.append(m)
             continue
-        verdict = judge_fx_match(tx, rec, client=client)
+        if _is_booked(tx, skip_tx_ids):
+            judged.append(m)
+            continue
+        # Front 5 (2026-09-25): a pair the uniqueness gate demoted although
+        # its own evidence is clean (the card agrees, the merchant agrees at
+        # 75+, the rate lands in the clean band) is not a question the model
+        # can answer: the question is WHICH of two look-alikes, and live July
+        # 2026 had the model answer 0.85 on both POSTO SANTOS 9.80 twins. It
+        # stays in review as the matcher built it, its reason naming the
+        # rival, and no call is spent.
+        if (
+            m.review_code == UNIQUENESS_RIVAL_REVIEW
+            and m.card_score >= 1.0
+            and m.vendor_score >= 0.75
+            and _rate_band(tx, rec) == "match"
+        ):
+            judged.append(m)
+            continue
+        verdict = judge_fx_match(
+            tx, rec, client=client,
+            evidence=fx_evidence(tx, rec, cfg, _derived_rates(), m.vendor_score),
+        )
         # The judgment layer builds a fresh Match around the model's
         # verdict, which dropped the deterministic sub-scores the matcher
         # had already computed. Carry them over: every FX row otherwise
@@ -409,6 +445,15 @@ def _apply_judgment(
             date_score=m.date_score,
             vendor_score=m.vendor_score,
             card_score=m.card_score,
+            # Front 5: why the matcher sent the pair here survives the
+            # verdict, so the month page can say it: the code, and for a
+            # look-alike the sentence naming the rival ahead of the verdict
+            # (the shape the at-floor rejection below already has).
+            review_code=m.review_code,
+            reason=(
+                m.reason.rstrip(".") + ". " + verdict.reason
+                if m.review_code == UNIQUENESS_RIVAL_REVIEW else verdict.reason
+            ),
         )
         # Only a REAL model verdict can be suppressed; the no-client stub
         # (confidence 0.5) always stays, so no-LLM runs are unaffected.
@@ -421,7 +466,7 @@ def _apply_judgment(
                 judged.append(replace(full, reason=(
                     m.reason.rstrip(".")
                     + ". Kept for review although the model disagrees: "
-                    + full.reason
+                    + verdict.reason
                 )))
                 continue
             suppressed.append(full)
@@ -460,8 +505,17 @@ def _apply_judgment(
                 claimed_rec.add(m.document_id)
 
 
+def _is_booked(tx, skip_tx_ids) -> bool:
+    """Front 5: a charge already booked is not judged (see `_apply_judgment`)."""
+    return (
+        getattr(tx, "entry_status", None) == "posted"
+        or tx.transaction_id in skip_tx_ids
+    )
+
+
 def _apply_ambiguous_judgment(
-    outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None
+    outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None,
+    *, skip_tx_ids: "frozenset[str] | set[str]" = frozenset(),
 ) -> None:
     """Ask the LLM to break each ambiguous tie (D-series, judge_ambiguous).
 
@@ -480,7 +534,10 @@ def _apply_ambiguous_judgment(
     rebuilt: list[Match] = []
     for tx_id, group in groups.items():
         tx = tx_by_id.get(tx_id)
-        pick = judge_ambiguous(tx, group, rec_by_id, client=client) if tx else None
+        pick = (
+            judge_ambiguous(tx, group, rec_by_id, client=client)
+            if tx and not _is_booked(tx, skip_tx_ids) else None
+        )
         if pick is None:
             rebuilt.extend(group)
             continue
@@ -516,6 +573,8 @@ def _apply_unmatched_judgment(
     client: LLMClient | None,
     match_cfg: MatchingConfig,
     cfg: dict,
+    *,
+    skip_tx_ids: "frozenset[str] | set[str]" = frozenset(),
 ) -> None:
     """Optional second-chance LLM pass over the leftovers (WS3).
 
@@ -556,7 +615,7 @@ def _apply_unmatched_judgment(
         if calls_used >= max_calls:
             break
         tx = tx_by_id.get(tx_id)
-        if tx is None:
+        if tx is None or _is_booked(tx, skip_tx_ids):
             continue
         available = [
             rec_by_id[doc]

@@ -4534,6 +4534,8 @@ def build_view(
     # Item 129: the last committed re-match and any owed one, off the
     # snapshot as stored, so the month page can say a re-match ran.
     visibility = rematch_visibility(run.snapshot)
+    attach_review_causes(rows)  # front 5: review.cause / cause_detail
+    attach_refund_reversals(rows)  # front 5: reverses_transaction_id
 
     return {
         "run_id": run.run_id,
@@ -12682,12 +12684,19 @@ def charge_states(
             bucket, held_doc = "refund", None
         else:
             bucket, held_doc = "unmatched", None
+        is_posted = tx.entry_status == "posted" or status == STATUS_ALREADY_POSTED
+        # Front 5 (2026-09-25): a booked charge is not a review question.
+        # Live July 2026 counted 13 yellow rows in `n_review` while the page
+        # showed each with nothing to do; the held pair was never confirmed,
+        # so the row counts where a booked row with no receipt counts
+        # (`unmatched`, item 102's booked-no-receipt). Its candidates stay on
+        # the row for the audit.
+        if is_posted and bucket == "review":
+            bucket = "unmatched"
         states[tx_id] = {
             "bucket": bucket,
             "held_doc": held_doc,
-            "is_posted": (
-                tx.entry_status == "posted" or status == STATUS_ALREADY_POSTED
-            ),
+            "is_posted": is_posted,
         }
     return states
 
@@ -15684,15 +15693,24 @@ def rematch_month(
     rec_by_id = {r.document_id: r for r in receipts}
     for _br in borrowed:
         rec_by_id.setdefault(_br.document_id, _br)
+    # Front 5: a charge the reviewer marked already posted is not judged
+    # (the workbook's yellow fill is read off the charge itself).
+    booked_ids = {
+        tx_id for tx_id, d in store.get_decisions(run.run_id).items()
+        if d.status == STATUS_ALREADY_POSTED
+    }
     _apply_judgment(
         outcome, tx_by_id, rec_by_id, llm_client,
         suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
         cfg=match_cfg or MatchingConfig(),  # item 131: the band a rejection keeps
+        skip_tx_ids=booked_ids,
     )
-    _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
+    _apply_ambiguous_judgment(
+        outcome, tx_by_id, rec_by_id, llm_client, skip_tx_ids=booked_ids,
+    )
     _apply_unmatched_judgment(
         outcome, transactions, match_input, llm_client,
-        match_cfg or MatchingConfig(), cfg,
+        match_cfg or MatchingConfig(), cfg, skip_tx_ids=booked_ids,
     )
     # Excluded receipts still belong to this month's pool and its totals;
     # they are unmatched HERE because they are settled elsewhere.
@@ -18018,7 +18036,15 @@ def confirmable_pair(row: dict) -> bool:
     if len(cands) != 1:
         return False
     c = cands[0]
-    if not c.get("is_chosen") or c.get("match_type") != MatchType.EXACT.value:
+    if not c.get("is_chosen"):
+        return False
+    if c.get("match_type") == MatchType.FX_REFERENCE.value:
+        # Item 222 / owner 2026-09-25 (item 76 revisited): a clean
+        # cross-currency pair confirms itself too, now that its rate is a
+        # central-bank one (items 82 / 167 postdate the item-76 ruling).
+        if not fx_pair_confirmable(row, c):
+            return False
+    elif c.get("match_type") != MatchType.EXACT.value:
         return False
     if c.get("requires_review"):
         return False
@@ -18928,3 +18954,272 @@ def apply_card_by_vendor(
             run_id, document_id, "card_key", card_key, now_iso
         )
     return changed
+
+
+# ── Front 5 (2026-09-25): why a pair still needs a click ──────────────────
+#
+# Every row in review read one sentence ("This match isn't certain. More than
+# one receipt could be this charge, or the best candidate scored low") while
+# its candidates carried the specific cause in `reason` / `review_code`: a
+# look-alike, the model's doubt, a no-card receipt whose merchant disagrees.
+# `review.cause` names that cause as a stable key the SPA localizes, and
+# `review.cause_detail` carries what the sentence needs (which rival, what
+# verdict, how far off). `reason_code` stays `uncertain_match`, the SPA's key.
+# A pending PROBABLE pair filed under Reconciled (amount up to 20% off, 2-5
+# days apart, flagged for review, never self-confirming) gets the cause too,
+# so a Reconciled row with a review flag says why. Parallel fields, ABSENT on
+# every row with no such cause. Read-time only: derived from the candidates
+# already served, so a stored month shows it without a re-match.
+REVIEW_CAUSES = (
+    "rival_agrees",
+    "model_doubts",
+    "merchant_disagrees",
+    "no_card_rival",
+    "fx_review_zone",
+    "probable_date_gap",
+)
+_CAUSE_MODEL = re.compile(
+    r"FX judgment: likely (NOT the same|same) purchase \(p=([0-9.]+)\)\.\s*"
+)
+_CAUSE_CONVERSION = re.compile(
+    r"^(?:~?[0-9.,]+ \w+ from .*?\(approx rate, review\)\.\s*"
+    r"|[0-9.,]+ \w+ = [0-9.,]+ \w+ at the tool's rate [0-9.]+"
+    r"(?:, [+-]?[0-9.]+% from the charge)?\.\s*)"
+)
+_CAUSE_NO_CARD_RIVAL = re.compile(r"a charge on another card also fits \((.+?)\)")
+_CAUSE_RIVAL_TEXT = "another charge or receipt agrees just as cleanly"
+# Since front 5 the demotion names its rival(s) after that clause.
+_CAUSE_RIVAL_NAMED = re.compile(r"agrees just as cleanly: (.+?)\)\.")
+
+
+def _cause_model_verdict(reason: str) -> tuple[str, float, str] | None:
+    """`("not" | "same", p, the model's own sentence)` off a judged reason."""
+    m = _CAUSE_MODEL.search(reason or "")
+    if m is None:
+        return None
+    rest = _CAUSE_CONVERSION.sub("", reason[m.end():], count=1).strip()
+    return ("not" if m.group(1).startswith("NOT") else "same"), float(m.group(2)), rest
+
+
+def _cause_rivals(row: dict, cand: dict, charges_by_doc: dict) -> dict:
+    """The charges that also hold this receipt as a candidate, and the other
+    receipts this charge was offered, at most three each."""
+    doc = cand.get("document_id")
+    charges = [
+        c for c in charges_by_doc.get(doc, [])
+        if c["transaction_id"] != row.get("transaction_id")
+    ][:3]
+    receipts = []
+    for other in row.get("candidates") or []:
+        if other.get("document_id") == doc:
+            continue
+        rec = other.get("receipt") or {}
+        receipts.append({
+            "document_id": other.get("document_id"),
+            "vendor": rec.get("vendor"),
+            "total": rec.get("total"),
+            "currency": rec.get("currency"),
+            "date": rec.get("date"),
+        })
+    out: dict = {}
+    if charges:
+        out["rival_charges"] = charges
+    if receipts[:3]:
+        out["rival_receipts"] = receipts[:3]
+    return out
+
+
+def review_cause_for_row(row: dict, charges_by_doc: dict) -> dict:
+    """`{"cause": ..., "cause_detail": {...}}` for one served row, or `{}`.
+
+    First match wins, most specific first: a no-card merchant disagreement
+    (item 204 D5), a no-card rival on another card (X1), the model's "likely
+    NOT", a rate outside the clean band, a look-alike (the uniqueness gate,
+    or two identical receipts), then a PROBABLE date gap. Only a pending row
+    the reviewer still has to act on gets one: posted rows are nothing to do
+    and a confirmed or rejected row is decided."""
+    if row.get("status") != STATUS_PENDING or row.get("entry_status") == "posted":
+        return {}
+    bucket = row.get("effective_bucket")
+    cands = row.get("candidates") or []
+    if bucket == "reconciled":
+        chosen = next((c for c in cands if c.get("is_chosen")), None)
+        if chosen is None or chosen.get("match_type") != "probable":
+            return {}
+        return {"cause": "probable_date_gap", "cause_detail": _probable_detail(row, chosen)}
+    if bucket != "review" or (row.get("review") or {}).get("state") != "check":
+        return {}
+    if not cands:
+        return {}
+    c = next((x for x in cands if x.get("requires_review")), cands[0])
+    detail: dict = {"document_id": c.get("document_id")}
+    code = c.get("review_code") or ""
+    reason = c.get("reason") or ""
+    fx = c.get("fx") or {}
+    verdict = _cause_model_verdict(reason)
+    if code == "no_card_vendor_disagrees":
+        detail["vendor_pct"] = c.get("vendor_pct")
+        return {"cause": "merchant_disagrees", "cause_detail": detail}
+    if code == "no_card_rival_on_other_card":
+        m = _CAUSE_NO_CARD_RIVAL.search(reason)
+        if m:
+            detail["rival"] = m.group(1)
+        return {"cause": "no_card_rival", "cause_detail": detail}
+    if verdict is not None and verdict[0] == "not":
+        detail["model_p"] = verdict[1]
+        if verdict[2]:
+            detail["model_reasoning"] = verdict[2]
+        return {"cause": "model_doubts", "cause_detail": detail}
+    band = fx.get("reference_gap_band")
+    if band in ("review", "outside"):
+        detail["gap_pct"] = fx.get("reference_gap_pct")
+        if fx.get("reference_rate_source"):
+            detail["rate_source"] = fx.get("reference_rate_source")
+        return {"cause": "fx_review_zone", "cause_detail": detail}
+    n_exact = sum(1 for x in cands if x.get("match_type") == "exact")
+    if verdict is not None:
+        detail["model_p"] = verdict[1]
+    if (
+        code == "uniqueness_rival"
+        or _CAUSE_RIVAL_TEXT in reason
+        or (c.get("match_type") == "fx_judgment" and band == "match")
+        or n_exact >= 2
+    ):
+        detail.update(_cause_rivals(row, c, charges_by_doc))
+        named = _CAUSE_RIVAL_NAMED.search(reason)
+        if named:
+            detail["rival"] = named.group(1)
+        return {"cause": "rival_agrees", "cause_detail": detail}
+    if c.get("match_type") == "fx_judgment":
+        # Judged with no look-alike behind it: the conversion itself could
+        # not be confirmed (no rate for the pair, or no clean band).
+        return {"cause": "fx_review_zone", "cause_detail": detail}
+    if c.get("match_type") == "probable":
+        return {"cause": "probable_date_gap", "cause_detail": _probable_detail(row, c)}
+    return {}
+
+
+def _probable_detail(row: dict, cand: dict) -> dict:
+    from decimal import InvalidOperation
+
+    detail: dict = {"document_id": cand.get("document_id")}
+    if cand.get("date_gap_days") is not None:
+        detail["date_gap_days"] = cand.get("date_gap_days")
+    try:
+        diff = Decimal(str(row.get("amount"))) - Decimal(
+            str((cand.get("receipt") or {}).get("total"))
+        )
+        detail["amount_diff"] = "0.00" if diff == 0 else f"{diff:+,.2f}"
+    except (InvalidOperation, TypeError, ValueError):
+        pass
+    return detail
+
+
+def attach_review_causes(rows: list[dict]) -> None:
+    """Front 5: add `review.cause` / `review.cause_detail` in place to every
+    row `review_cause_for_row` names a cause for. One index of which charges
+    hold each receipt as a candidate, built from the rows themselves, so the
+    rival named is the one the page shows under that charge."""
+    charges_by_doc: dict[str, list[dict]] = {}
+    for row in rows:
+        for c in row.get("candidates") or []:
+            doc = c.get("document_id")
+            if not doc:
+                continue
+            charges_by_doc.setdefault(doc, []).append({
+                "transaction_id": row.get("transaction_id"),
+                "vendor": row.get("vendor"),
+                "amount": row.get("amount"),
+                "currency": row.get("currency"),
+                "date": row.get("date"),
+            })
+    for row in rows:
+        cause = review_cause_for_row(row, charges_by_doc)
+        if cause and isinstance(row.get("review"), dict):
+            row["review"] = {**row["review"], **cause}
+
+
+# Front 5 (2026-09-25): a merchant refund names the purchase it reverses.
+# Every credit is split into the refunds bucket before matching and never
+# paired with anything; a credit from a merchant (row_type `refund`, not the
+# cardholder's `payment`) now names the one earlier purchase it plausibly
+# reverses: same currency, same absolute amount, the merchant agreeing, dated
+# up to `REFUND_REVERSAL_WINDOW_DAYS` before it. Exactly one candidate or
+# none: two identical purchases are a question, not an answer. Advisory
+# only: no bucket, count or decision reads it. Parallel field
+# `reverses_transaction_id`, ABSENT otherwise (live July to September 2026:
+# 0 merchant refunds, so absent on every row).
+REFUND_REVERSAL_WINDOW_DAYS = 90
+REFUND_REVERSAL_VENDOR_FLOOR = 0.75
+
+
+def attach_refund_reversals(rows: list[dict]) -> None:
+    from datetime import date as _date
+    from decimal import InvalidOperation
+
+    from ..matching.deterministic import vendor_similarity
+
+    def _amount(row: dict) -> Decimal | None:
+        try:
+            return abs(Decimal(str(row.get("amount") or "").replace(",", "")))
+        except (InvalidOperation, ValueError):
+            return None
+
+    def _day(row: dict) -> "_date | None":
+        try:
+            return _date.fromisoformat(str(row.get("date") or ""))
+        except ValueError:
+            return None
+
+    purchases = [r for r in rows if r.get("row_type") == "purchase"]
+    for row in rows:
+        if row.get("row_type") != "refund" or not (row.get("vendor") or "").strip():
+            continue
+        amount, day = _amount(row), _day(row)
+        if amount is None or day is None:
+            continue
+        hits = []
+        for p in purchases:
+            p_day = _day(p)
+            if (
+                p_day is None
+                or p.get("currency") != row.get("currency")
+                or _amount(p) != amount
+                or not (0 <= (day - p_day).days <= REFUND_REVERSAL_WINDOW_DAYS)
+            ):
+                continue
+            if vendor_similarity(p.get("vendor") or "", row.get("vendor") or "") < (
+                REFUND_REVERSAL_VENDOR_FLOOR
+            ):
+                continue
+            hits.append(p)
+        if len(hits) == 1:
+            row["reverses_transaction_id"] = hits[0].get("transaction_id")
+
+
+# Item 222 (front 5), owner decision 2026-09-25, item 76 revisited: the rate
+# sources a self-confirming cross-currency pair may ride (the day's reference
+# rate, else the ECB monthly average; never a rate read off the month's own
+# documents) and how close the converted receipt must land.
+FX_SELF_CONFIRM_SOURCES = frozenset({"opentickers_day", "ecb_month"})
+FX_SELF_CONFIRM_MAX_GAP_PCT = 1.0
+
+
+def fx_pair_confirmable(row: dict, cand: dict) -> bool:
+    """The FX half of `confirmable_pair`: the candidate rode a central-bank
+    rate, the converted receipt lands within 1% of the charge, the card
+    agrees or is unknown (never a pair whose cards differ), and the merchant
+    agrees at `SELF_CONFIRM_VENDOR_FLOOR` (checked by the caller, as for an
+    exact pair). An `fx_reference` candidate already passed the uniqueness
+    gate: a pair with a look-alike is `fx_judgment`. Measured 2026-09-25 on
+    the frozen payloads: August 10 of 20 pairs qualify (unlabelled), July 10
+    (6 labelled right, 0 wrong)."""
+    fx = cand.get("fx") or {}
+    if fx.get("reference_rate_source") not in FX_SELF_CONFIRM_SOURCES:
+        return False
+    gap = fx.get("reference_gap_pct")
+    if gap is None or abs(gap) > FX_SELF_CONFIRM_MAX_GAP_PCT:
+        return False
+    if cand.get("card_pct") not in (100, 50) or row.get("cards_differ"):
+        return False
+    return True
