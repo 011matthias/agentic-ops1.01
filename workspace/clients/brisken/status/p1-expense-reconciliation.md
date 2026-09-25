@@ -54,9 +54,12 @@ picks: ignore them; they are retired and kept in each month's snapshot
 receiptless charges. The rest wait for Criss: a receipt with no company yet (81
 lines), or a vendor the model would not place on its own (126 lines, mostly AI
 subscriptions on Corporate Services, which need Dirk's account per item 181). A
-hand-picked account now exports under its name (item 201). New leads: item 206
-(a card fix does not re-run the engine) and item 207 (the live export gate
-blanks one postable account).
+hand-picked account now exports under its name (item 201). Item 206 fixed
+2026-09-25: a card fix, a hint assignment, a settling statement charge or a
+re-match that gives a row its company now re-runs the engine for it. Item 210
+(found building it, owner's call): the export gate still checks a row against
+its stamped company, not the one it shows. Item 207 (the live export gate
+blanks one postable account) is open.
 
 **2026-09-25: case 9 ("no payment info") is planned, not built** (backlog
 item 204, PR #1346). Live: 34 receipts print nothing, 12 only a Brisken card
