@@ -7273,6 +7273,22 @@ def _row_untrusted(r: Receipt, intake_provenance: dict) -> list[dict]:
     return [out[k] for k in sorted(out)]
 
 
+# Item 213 (note #87): the waiting sentence names at most this many cards;
+# past it, a list of every card tells the reader nothing.
+WAITS_NAMED_MAX = 2
+
+
+def waits_for_statement_sentence(cards) -> str:
+    """The `waits_for_statement` review line for the cards a row waits on."""
+    cards = list(cards)
+    if 0 < len(cards) <= WAITS_NAMED_MAX:
+        return (
+            "No card on this receipt; waiting for the statement of "
+            + ", ".join(cards) + "."
+        )
+    return "No card on this receipt, and no statement is loaded for its date yet."
+
+
 def _expense_review(
     r: Receipt,
     overrides: dict,
@@ -7361,13 +7377,13 @@ def _expense_review(
     if not date_is_human and outside_period(r.detected_date, period):
         # `outside_period` is false for either None, so both are real here.
         seen, (start, end) = r.detected_date, period  # type: ignore[misc]
+        # Item 213 (note #87): one clause per instruction, no explanation.
         return {
             **_review(
                 "check",
-                f"Dated {seen.isoformat()}, outside this batch's "
-                "month. Receipts print the year in forms that are easy to "
-                "misread; check the receipt and correct the date, or leave "
-                "it if the receipt really is that old.",
+                f"Dated {seen.isoformat()}, outside this batch's month. Check "
+                "the receipt and correct the date, or leave it if it really "
+                "is that old.",
                 "date_outside_period",
             ),
             # Structured beside the prose so the SPA composes its own
@@ -7378,10 +7394,9 @@ def _expense_review(
     if suggested_private and not private:
         return _review(
             "check",
-            "No registered company card matches this payment method, so "
-            "this is suggested as a private expense someone paid out of "
-            "pocket. Confirm it as private (naming who gets reimbursed), "
-            "or assign or register the company card if there is one.",
+            "No company card matches this payment method, so it looks "
+            "private. Confirm it as private and name who gets reimbursed, "
+            "or assign or register the company card.",
             "suggested_private",
         )
     if (
@@ -7395,13 +7410,15 @@ def _expense_review(
         # names those cards; when every card covers the date the list is
         # empty and needs_entity below stands, because then a human has to
         # look. Replaces needs_entity only: an entity set by hand ends it.
+        #
+        # Item 213 (note #87): the sentence names the cards only while there
+        # are at most WAITS_NAMED_MAX of them. Every active card waiting (all
+        # nine on September) names nothing a reader can act on, and 19 rows
+        # of it filled the page. The full list stays on the structured field.
         return {
             **_review(
                 "check",
-                "No card on this receipt, and no loaded statement covers its "
-                "date for: " + ", ".join(waits_for_statements) + ". The "
-                "paying card shows once those statements are loaded; assign "
-                "it now if you already know it.",
+                waits_for_statement_sentence(waits_for_statements),
                 "waits_for_statement",
             ),
             "waits_for_statements": list(waits_for_statements),
@@ -7415,10 +7432,8 @@ def _expense_review(
             # screen told Criss to do was the one thing she could not.
             return _review(
                 "check",
-                "This expense was settled outside the card system, so no "
-                "card will name the company it belongs to. Set the legal "
-                "entity on the row; the export shows a placeholder until "
-                "then.",
+                "This was settled outside the card system, so no card names "
+                "the company. Set the legal entity on the row.",
                 "needs_entity_settled_outside",
             )
         return _review(
