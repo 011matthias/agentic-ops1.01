@@ -36,6 +36,11 @@ Auth stays the bearer token. No Supabase.
 A. Wherever the workbench renders an unmatched receipt's reason from
    `wb.reason.receipt.<code>` (the long line and the `.short` chip), add the
    new code with the keys below. Look it up exactly like the other five.
+   This includes the "Why:" breakdown under "Receipts without a charge"
+   (`wb.reason.breakdown`): today it skips a code with no key, so on
+   September it reads "Why: 1 next or previous month · 4 not a card
+   payment" for 51 receipts. With the key it must also count the new code
+   ("46 statement not loaded yet").
 
 B. On an unmatched receipt that carries `waits_for_statements`, append the
    cards to the long reason line: `{reason} Waiting for: {cards}.` using key
