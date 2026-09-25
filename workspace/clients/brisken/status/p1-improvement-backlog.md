@@ -10718,6 +10718,32 @@ reader item 204 step 3 added (`cards_settled_elsewhere` in `web/service.py`,
 extended to return the charge's amount and currency), so card and conversion
 describe the same charge. Small and self-contained. Not built.
 
+### 213. The "waits for statement" reason names every card on the account (note #87, owner 2026-09-25 01:12 UTC) (RECORDED, not built; follow-up to item 204 build 5)
+
+Note #87, September Expenses, anchored on row `0010__rendered-body.pdf`'s
+review line: "NO NEED FOR THIS MUCH VOLUME AI SLOP. TONE IT DOWN; COMPRESS
+WHATEVER, THIS LOOKS TREMENDOUSLY BAD".
+
+The line is item 204 build 5's `waits_for_statement` reason
+(`web/service.py` ~7401, PR #1372). It joins every active card whose loaded
+statements miss the row's date, then adds two more clauses. Measured live the
+same hour (GET only): all 19 such rows on September read the same 404
+characters naming all nine company cards; July has 10 at 229-291; August 1
+at 260. When the list is every card it tells the reader nothing, and 19 copies
+of it make the page.
+
+Fix shape: name the cards only when one or two are waiting ("No card on this
+receipt; waiting for the 9693 statement."); otherwise "No card on this
+receipt, and no statement is loaded for its date yet." Keep the full list on
+`review.waits_for_statements`, where it already is, for anything that wants
+it. Amend `docs/lovable-case9-status-prompt.md` (not pasted) in the same
+change: its `expx.review.reason.waits_for_statement` interpolates `{cards}`
+with the same full list, so pasting it as written brings the nine-card
+sentence back in both languages. "COMPRESS WHATEVER" reaches past this one
+line: the next-longest reasons on the same page are `suggested_private` (233
+characters, 4 rows) and, in July, `date_outside_period` (191) and
+`needs_entity_settled_outside` (173).
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
