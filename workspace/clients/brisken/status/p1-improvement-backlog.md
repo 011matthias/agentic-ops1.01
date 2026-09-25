@@ -10595,7 +10595,12 @@ row, `private_cards: {}` in settings. June's Fenix `3976` is probably an OCR
 slip of 3876 and Google's two numbers may not be cards at all: nothing built
 for either, and neither is a stand-in for a real private card.
 
-**SPA half:** `docs/lovable-private-card-list-prompt.md` (Not applied): a
+**SPA half, applied in part 2026-09-25** (owner published the same day; the
+Settings tab and the badge are live and were driven cold; the strip's
+"Private card of..." renders nowhere because the published renderer's
+`allowPrivate` flag is never passed, Follow-up 1 in the prompt file and on
+PROMPT-STATUS; until it lands the Settings tab is the only way onto the
+list). `docs/lovable-private-card-list-prompt.md`: a
 "Private cards" Settings panel, "Private card of..." on the strip's Assign
 dropdown, and "(from the private card list)" on the badge. Until it is
 pasted nobody can add an entry, so the backend alone moves nothing.
