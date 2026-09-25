@@ -28,7 +28,8 @@ learner. 0 live rows move today: the two borrowed receipts (August OpenAI,
 borrowed by September) already print 9693, and July's borrowed FENIX receipt
 is in review, so it has no claim. Open: under D1's calendar-month exports a
 receipt dated the day before its charge's 1st-of-month date falls outside the
-borrower's window and is never borrowed.
+borrower's window and is never borrowed (backlog item 211;
+the FX twin not following the claim is item 212).
 
 **2026-09-25: case 9 build 2 (step 6, owner D5) shipped: a receipt with no
 card evidence is not booked to a charge whose merchant words disagree.** The
