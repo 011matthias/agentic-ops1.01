@@ -34,6 +34,7 @@ Shape:
             "cards_seen": ["<card key>", ...], # optional, machine-kept
             "profile": "<free prose>",         # optional (note item M4)
             "accounts": {"<company>": "<leaf code>"},  # optional (item 180)
+            "accounts_locked": True,           # optional (item 219)
         },
         ...
     }
@@ -798,8 +799,32 @@ def normalize_merchants_setting(
             accounts = {}
         if accounts:
             cleaned["accounts"] = accounts
+        # Item 219: the decided-accounts lock. Stored only when set, and kept
+        # on a settings PUT that omits the key for the reason `accounts` is:
+        # an editor rebuilding merchants from the fields it knows must not
+        # unlock an entry on an unrelated save. Only an explicit false clears.
+        if ACCOUNTS_LOCKED in entry:
+            locked = entry.get(ACCOUNTS_LOCKED) is True
+        elif isinstance(stored, dict) and isinstance(stored.get(canonical), dict):
+            locked = is_accounts_locked(stored[canonical])
+        else:
+            locked = False
+        if locked:
+            cleaned[ACCOUNTS_LOCKED] = True
         out[canonical] = cleaned
     return out
+
+
+# Item 219 (owner 2026-09-25): a merchant whose per-company accounts are
+# DECIDED. No learner changes a locked entry's `accounts`, `zoho_account` or
+# `category`; only Settings, an owner-approved write, or the Publish drift
+# lesson a person ticks do. A person's pick on a row still wins on that row.
+ACCOUNTS_LOCKED = "accounts_locked"
+
+
+def is_accounts_locked(entry: object) -> bool:
+    """Whether a stored merchant entry carries the decided-accounts lock."""
+    return isinstance(entry, dict) and entry.get(ACCOUNTS_LOCKED) is True
 
 
 # A profile is prose, so the cap is generous: enough for the paragraph a

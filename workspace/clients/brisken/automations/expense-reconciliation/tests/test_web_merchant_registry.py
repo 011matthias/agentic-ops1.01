@@ -230,7 +230,7 @@ def test_upsert_no_edits_is_noop():
     assert summary == {
         "aliases_added": 0, "categories_set": 0, "skipped_conflict": 0,
         "skipped_account_conflict": 0,
-        "accounts_set": 0,
+        "accounts_set": 0, "skipped_locked": 0,
     }
     assert new == seed
 
@@ -280,7 +280,7 @@ def test_publishing_a_month_with_no_edits_leaves_the_registry_whole(client, monk
     assert memory["learned"]["registry"] == {
         "aliases_added": 0, "categories_set": 0, "skipped_conflict": 0,
         "skipped_account_conflict": 0,
-        "accounts_set": 0,
+        "accounts_set": 0, "skipped_locked": 0,
         # Note item M2: the same reply now also counts the card
         # observations of the month. No card resolves on this month, so
         # the registry keeps its exact stored shape either way.
@@ -310,7 +310,7 @@ def test_saving_corrections_changes_only_what_the_edits_touched(client, monkeypa
     assert resp.json()["learned"]["registry"] == {
         "aliases_added": 1, "categories_set": 1, "skipped_conflict": 0,
         "skipped_account_conflict": 0,
-        "accounts_set": 0,
+        "accounts_set": 0, "skipped_locked": 0,
         "cards_seen": 0, "card_keys_learned": 0, "card_keys_dropped": 0,
         "cost_centers_set": 0, "cost_centers_skipped_conflict": 0,
     }
@@ -331,7 +331,7 @@ def test_saving_corrections_changes_only_what_the_edits_touched(client, monkeypa
     assert resp.json()["learned"]["registry"] == {
         "aliases_added": 0, "categories_set": 0, "skipped_conflict": 0,
         "skipped_account_conflict": 0,
-        "accounts_set": 0,
+        "accounts_set": 0, "skipped_locked": 0,
         "cards_seen": 0, "card_keys_learned": 0, "card_keys_dropped": 0,
         "cost_centers_set": 0, "cost_centers_skipped_conflict": 0,
     }
