@@ -11765,6 +11765,81 @@ payment); waiting counts 7 / 0 / 46. Read-time only, no re-match.
 Owner decisions pending: item 211 (widen the borrow at the start edge),
 statement_expected on the three dormant cards, the five-name picker.
 
+### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #PRNUM; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
+
+Source: the verified gap map of 2026-09-25 (`.scratch/recon-matching-gaps-2026-09-25.md`,
+sections "Charges with nothing behind them" and "Recurring charges and charges
+already booked in Zoho"). Every count below was re-measured on fresh GETs of
+July `50622baec444`, August `074a7b8905d7` and September `51a22ad72864` at
+16:47 UTC, before any code, and each reproduced the map.
+
+**Measured before (Jul / Aug / Sep).**
+
+- Gray-closed purchases reading `no_receipt_found` on the unmatched list: 24 /
+  40 / 0 (August's 41st gray row is the fee, `not_a_purchase`). The gate counted
+  all of them closed (`n_charges_closed_recurring` 24 / 41 / 0).
+- `n_already_posted` 93 / 1 / 1, of which card payments 3 / 1 / 0. Reviewer
+  already-posted verdicts 0 / 0 / 0, no-receipt-expected marks 0 / 0 / 0.
+- Active cards with no statement and no charge: 3 / 4 / 7 (0113, 6013, 8311;
+  +0340; +2838, 3645, 3876). July's 9693 is "covered" by a two-day export (6
+  charges, 07-01).
+- Chased charges dated outside the run's month: 0 / 14 of 57 / 19 of 28.
+- Asks: 0 marks ever written; every holder address null.
+- Inbound mail resting outside any month (held / pooled / failed): **0** of 146
+  log entries (127 ingested, 19 dismissed; the 19 are TEST drills and one
+  Hostinger forward that matches no open charge). The map's "a receipt can be
+  in the mailbox and the charge still reads needs a receipt" does not
+  reproduce live, so the planned `inbound_hint` (step 6) was **not built**; it
+  reopens when a held or pooled mail names an open charge's vendor and amount.
+- Zoho (read-only pull, 193 expenses across the three orgs, same company +
+  currency + cent + 3 days, one Zoho expense per charge, one-cent control 0 in
+  every month): open charges Zoho already holds 0 / 11 / 11 (the map's 15 for
+  September was an earlier state; every looser variant reads 11 today, 8 of
+  them August-dated cycle charges); gray receiptless charges Zoho holds 24 of 24
+  / 0 of 40 / none; yellow receiptless not in Zoho 3 of 39 / none / 1 of 1
+  (SAP SE 481.07).
+
+**Shipped.**
+
+1. Charge `reason_code` grows `closed_recurring` (the gray fill, never a
+   derived mark) and `no_receipt_expected` (the reviewer's mark);
+   `already_booked` also reads the reviewer's already-posted verdict; every
+   charge element carrying a code carries `reason_label` (rule 5). Reasons and
+   the month gate now name the same charges. PDF Status reads "booked as
+   recurring" / "no receipt expected". `n_already_posted` counts booked
+   PURCHASES from either source.
+2. `summary.n_cards_uncovered` + `cards_uncovered[]`, the Publish refusal's
+   sentence naming them, and `readiness.n_cards_uncovered`. Advisory only.
+3. `receipt_chase[].date_range`, `charges[].charge_month`; the composed mail's
+   subject and opening line name the dates, and a holder whose charges span two
+   months gets one header per month.
+4. `charges[].days_since_requested` / `overdue`, `receipt_chase[].n_overdue`,
+   `settings.receipt_requests.overdue_days` (1..365, default 14) and
+   `POST /api/runs/{id}/receipt-requests/mark-all` `{holder, to?, reask?}`.
+5. `python -m expense_recon.zoho.booked_report` (CLI, read-only): the two
+   lists above as text and CSV, with the one-cent control and exit 3 when the
+   join cannot discriminate.
+
+**Predicted after deploy (read-time only, no re-match needed):** July 24 rows
+`no_receipt_found` -> `closed_recurring`, August 40, September 0, no other row
+moves; `n_already_posted` 90 / 0 / 1; `n_cards_uncovered` 3 / 4 / 7;
+`receipt_chase` groups carry `date_range` (August Cloud Services 2026-07-03 ..
+2026-08-04, 13 July charges; September Cloud Services 2026-08-05 .. 2026-09-09,
+19 August charges); no `days_since_requested` anywhere (nobody has asked).
+
+**Not built, by design or decision:** the sender and holder addresses (item
+107's separate approval; addresses are data the owner supplies), portal hints
+(registry writes are owner-gated), reading Zoho from `web/` (contract), a
+Publish gate on coverage, and writing "already booked" verdicts from the Zoho
+report (a live write on Criss's months). The three owner decisions are put
+with the round's final reply.
+
+Tests: `tests/test_front1_chase_honesty.py` (7, route-level),
+`tests/test_zoho_booked_report.py` (4, through `main()`), two re-pinned
+subjects in `tests/test_receipt_chasing_item_107.py`, the charge-code pin in
+`tests/test_view_contract.py`. Regress: each of the six wiring points mutated
+and the caller-level test went red (see the PR).
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
