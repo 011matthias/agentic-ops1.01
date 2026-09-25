@@ -11794,7 +11794,7 @@ building: July 5 of the 6 tool `distinct_reference` groups become copies
 Marinho 246600 pair stays distinct (its copy prints only the authorisation
 protocol), and the E A Locações pair is nominated for the first time; August
 1 (Zoho Books 576.00 body); September 4 bodies; the three September OpenAI
-80.12 invoices stay three.
+80.12 invoices stay three. Attribution replay (labels, both live months + the six bundles, old vs new tree): no labelled-right pair moved, July gained 4 clean pairs (0053, 0057, 0058, 0068), bundles 70/95 both; it caught `misread_digit` merging ER-00181 #016/#017 (7-ELEVEN 446525 / 446528, two purchases), so a difference in the last two digits no longer counts.
 
 **Open, in order:**
 4. Kind from the document itself: `document_kind` (invoice / receipt /

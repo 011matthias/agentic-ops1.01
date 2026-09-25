@@ -7377,7 +7377,7 @@ is unchanged.
 | `basis` | Verdict | When |
 |---|---|---|
 | `reference_digits` | copy | Between rungs 3 and 4. Two members print one number inside different words: the longest digit run (at least 6 digits, at least 5 once leading zeros go, not the receipt's own date or total) of `reference`, `invoice_number` or `receipt_number` is shared, merchant identity agrees (`merchant_identity.identity_key`, one key the start or end of the other), total and currency agree, dates at most one day apart. A run carried by receipts of different totals is an account id and never counts. Never over two members that name different cards |
-| `misread_digit` | copy | As above, but the two runs have one length and differ in exactly one position, and the dates are the SAME day (July's Marinho 271025 / 271825) |
+| `misread_digit` | copy | As above, but the two runs have one length and differ in exactly one position, not one of the last two (consecutive till numbers differ there: labelled bundle ER-00181, 7-ELEVEN 446525 / 446528, is two purchases), and the dates are the SAME day (July's Marinho 271025 / 271825 differs in the hundreds) |
 | `body_twin` | copy | A rendered mail body (`NNNN__rendered-body.pdf`) beside the ONE document it repeats: same total and currency, dates at most a day apart, merchant identity agrees. The partner is either a single document or a set an earlier group already calls one document (an invoice and its receipt); a body beside two real purchases makes no group |
 
 New nominations are appended after every older key's groups, so no existing
