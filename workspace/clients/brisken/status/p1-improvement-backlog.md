@@ -11241,6 +11241,66 @@ Books call needed; all 152 Jul-Sep account names resolve through
 a fake model client for the replays. Scripts, the six verdicts and the
 critic's report are in the 2026-09-25 checkpoint for this analysis.
 
+### 217. A duplicate shows its controls twice, and the tool keeps the invoice instead of the receipt (notes #89 + #90, owner 2026-09-25 03:45 / 03:47 UTC) (BACKEND BUILT 2026-09-25; SPA prompt `docs/lovable-duplicate-controls-once-prompt.md` not pasted)
+
+**Owner**, on September's Pressmaster FZCO unit (row `0078`, the invoice),
+right after item 209's bound units were published: *"now you have so many
+buttons on each duplicate that its going to confuse the user."* and *"compare
+copies should only appear once, as should the delete this copy/not a copy/
+compare copies button. the real expense should be big and duplicate should be
+small so they should effectively switch places and that should also be
+portrayed evidently to the user."* (Note #88, two minutes earlier, is on item
+213's review-line wording, not on duplicates.)
+
+**In plain words.** Each duplicate pair showed its three buttons twice, once on
+each copy. And for every Stripe vendor (Lovable, Anthropic, Pressmaster,
+Fireflies, Brave, ElevenLabs, Afi) the tool treated the INVOICE as the real
+expense and the RECEIPT, the proof of payment, as the duplicate, only because
+the invoice arrives first in the mail. Now the receipt is the real expense and
+the buttons appear once per pair.
+
+**Measured before building (read-only, every month once):** 38 duplicate
+groups across seven months. The published Expenses tab renders September's 19
+units with 38 Compare copies, 38 Not a copy, 19 Delete this copy and 19 Delete
+the extra. In all 19 September pairs the kept copy was the invoice. **19 of
+the 38 groups have a kept copy a charge already holds** (July 8, August 4,
+September 7), and a confirmed decision names the exact document it settled,
+so a blanket swap would leave the decision claiming the invoice while the
+receipt became a second counted expense. That fixed the rule's shape.
+
+**Backend (built):** `duplicates.kept_member` chooses the real expense at
+re-match time only: the copy a charge holds, else the payment receipt over its
+invoice (same total and currency; the extraction's `receipt_number` /
+`invoice_number`, else the Stripe file name), else the first by id. The choice
+is stored as the snapshot's `duplicate_kept` and every view reads it, so a
+page and the last match agree. A month with a statement and no stored choice
+keeps the old order until its next natural re-match; a month with no statement
+applies the rule as it is read (nothing can hold a copy there). No field
+added; the group id does not move, so every ruling keeps its group. Contract:
+api-contract "Which copy is the real expense". `tools/recon-match-attribution.py`
+replays with the same held set.
+
+**Predicted live effect, from the payloads (no write):** at September's next
+re-match 12 pairs swap to the receipt and the 7 held pairs stay; August's
+Lovable 15.00 and May's Lovable 200.00 swap the same way at theirs. Totals do
+not move (the two copies read the same amount). Real labelled months
+unchanged: composite 76.0, 70 right, 0 wrong.
+
+**SPA half:** `docs/lovable-duplicate-controls-once-prompt.md`. The unit's
+header band carries ONE Compare copies, ONE Delete the duplicate and ONE Not a
+copy; the full row says "Real expense", the folded line "Duplicate, not in the
+total"; the Compare dialog marks each column's role and offers Delete this copy
+under each column, so item 188's delete-either-copy survives. Proven on a
+scratch clone (build green, headless drive, every write aborted): 19 of each
+control instead of 38, EN and PT.
+
+Tests: `tests/test_duplicate_kept_copy_217.py` (13, three route-level through
+the statement attach, `manual-match` + `refresh-master-data`, and the stored
+choice); four older tests re-pinned to the receipt-kept contract
+(`test_reference_duplicates.py` x3, `test_twin_card_c9.py`,
+`test_month_complete_publish_gate.py`). Five wiring points red under a hand
+regress (held into the re-match, the pool's choice, the view's read, the
+persist, the no-statement read).
 
 ## Shipped (loop history)
 
