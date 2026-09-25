@@ -493,6 +493,43 @@ def test_the_settling_charge_outranks_the_account_card(client, monkeypatch):
     assert row["person"] == "Criss"
 
 
+def test_a_copy_of_a_settled_purchase_is_not_lent_another_card(client, monkeypatch):
+    """Live 2026-09-25 (July 50622baec444): the invoice was settled on 2838,
+    its receipt was ruled the copy, and the account's other purchases on
+    1176 lent the copy 1176. The purchase's own card vetoes the account's:
+    the copy is left blank, never given a card its twin's charge disputes."""
+    _july_on_3876(client, monkeypatch)
+    august = _month(
+        client, monkeypatch, "August 2026",
+        _ff("HQXED19R-0009", day="2026-08-12", reference="HQXED19R-0009"),
+        _ff("HQXED19R-0009", day="2026-08-12", reference="HQXED19R-0009"),
+    )
+    resp = client.post(
+        f"/api/expense-batches/{august}/statement",
+        files={"statement": (
+            "August2026.xlsx",
+            _xlsx([("9693", datetime(2026, 8, 12), "FIREFLIES.AI", "Sale", -18.00)]),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )},
+        data={
+            "account_id": "card-9693",
+            "account_legal_entities": '{"card-9693": "Cloud Services"}',
+            "account_card_currency": "USD",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+
+    rows = _rows(client, august)
+    kept = [e for e in rows if e.get("counts_in_total", True)]
+    copies = [e for e in rows if e.get("counts_in_total") is False]
+    assert len(kept) == 1 and len(copies) == 1, rows
+    assert kept[0]["card_source"] == "settled_charge"
+    assert kept[0]["card"]["key"] == "card-9693"
+    assert copies[0]["card_source"] != "account", copies[0]["card"]
+    _blank(copies[0])
+
+
 # ── memory stays memory ────────────────────────────────────────────────
 
 
