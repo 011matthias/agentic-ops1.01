@@ -9,7 +9,7 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
-**2026-09-25: a receipt another month's charge paid now converts at that charge** (backlog item 212; Shipped row 134). A foreign-currency receipt settled by the next month's statement already showed that charge's card; the CSV `Exchange Rate` and the month report now use that charge's amount too instead of the ECB rate. Nothing moves live today: the two receipts another month settled are both in USD.
+**2026-09-25: a receipt another month's charge paid now converts at that charge** (backlog item 212; Shipped row 134). A foreign-currency receipt settled by the next month's statement already showed that charge's card; the CSV `Exchange Rate` and the month report now use that charge's amount too instead of the ECB rate. Nothing moves live today: the three receipts another month settled are all in USD.
 
 **2026-09-25: a statement attach keeps only the month's own charges (backlog item 215, owner decision), backend live `418c3c6d` (PR #1412), SPA half NOT pasted.** Criss can upload her lifetime SharePoint card sheets into a month: a file that prints post dates keeps only the rows posted in that month, drops rows a neighbouring month (or another of its files) already holds under a different reading, and records what it left out on `statements[].month_filter` and the job reply; a file the month keeps nothing of is refused. Cycle PDFs (no post date) and her monthly workbooks fold whole as before. A restart-killed attach's upload is now discarded at boot. Live drill on two scratch TEST months, deleted after; no live month written. Prompt: `docs/lovable-attach-month-filter-prompt.md`.
 
