@@ -10662,6 +10662,15 @@ pasted nobody can add an entry, so the backend alone moves nothing.
 Contract: `docs/api-contract.md`, "Whose money paid: the decision order, and
 the private-card list". Tests: `tests/test_private_card_list.py`.
 
+**Live 2026-09-25 late:** Follow-up 1 published and driven (the strip offers
+"Private card of..."). First entry, owner order: **3281 -> Dirk Neumann, a
+PLACEHOLDER** (note "Placeholder set by the owner 2026-09-25; card owner not
+confirmed"), saved through Settings > Private cards. Change it there: edit the
+person, switch Active off, or remove the row. Effect, API-diffed over all 7
+months: only September's DB Fernverkehr row (`0024__`) moved, to private /
+`private_card_list` / Dirk Neumann. Open: Follow-up 2 (the strip's "Reimburse
+to" never pre-fills) and item 214 (a private receipt still waits on the strip).
+
 ### 209. A suggested duplicate stays bound together until someone releases it (owner 2026-09-25) (PROMPT REWRITTEN and design APPROVED on screenshots 2026-09-25, not pasted)
 
 **Owner:** *"add a duplicate filter inside each month so the user can see all
@@ -10810,6 +10819,24 @@ sentence back in both languages. "COMPRESS WHATEVER" reaches past this one
 line: the next-longest reasons on the same page are `suggested_private` (233
 characters, 4 rows) and, in July, `date_outside_period` (191) and
 `needs_entity_settled_outside` (173).
+
+### 214. A private receipt still waits on the card strip (found 2026-09-25, listing 3281) (RECORDED, not built; owner call)
+
+After 3281 was listed (item 208), September's DB Fernverkehr row reads
+private / `private_card_list` / Dirk Neumann, yet `card_review` still lists
+its hint under `unresolved_hints` and `n_unresolved_rows` stays 7, so the
+strip keeps offering "Assign to card..." (and "Private card of...") for a
+receipt whose payer is settled, in every month the card appears. That
+undercuts "confirmed once". The builder (`web/service.py`, the `card_review`
+function ~7130) groups every row with a hint and no company card and never
+reads `private`; row-confirmed private rows (July `0028__`, September
+`0046__`) sit there the same way, so the gap predates the list.
+
+Fix shape (recommended): a row the resolution marks private leaves
+`unresolved_hints` and `n_unresolved_rows` (it is already counted in
+`n_private`); the strip header then counts only receipts that still need an
+answer. Alternative: keep the group but mark it settled with no Assign (SPA
+change). Owner call because it changes what Criss sees on the strip.
 
 ## Shipped (loop history)
 
