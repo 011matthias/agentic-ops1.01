@@ -189,7 +189,12 @@ from .service import (  # item 70
     EXPENSE_MATCH_FIELDS,
     category_edit_account,
     category_edit_receipt,
-    recategorize_after_entity_change,
+)
+from .service import (  # item 206
+    COMPANY_CHAIN_FIELDS,
+    gl_shown_companies,
+    recategorize_moved_companies,
+    recategorize_moved_companies_or_error,
 )
 from .service import (  # item 88
     MEMORY_TRIGGER_BUTTON,
@@ -895,6 +900,35 @@ def _expense_edit_rematch(
         )
 
 
+def _shown_before_job(
+    db_path: Path, learning_db_path: Path | None, run_id: str,
+) -> dict[str, str] | None:
+    """Item 206: the company map a statement job diffs against after its
+    match (None on a bucket month). A failure here only skips the pass."""
+    try:
+        return gl_shown_companies(db_path, learning_db_path, run_id)
+    except Exception:  # noqa: BLE001 - the pass is additive, never a gate
+        log.exception("item 206: could not read the shown companies")
+        return None
+
+
+def _recategorize_after_job(
+    db_path: Path, learning_db_path: Path | None, run_id: str,
+    shown_before: dict[str, str] | None,
+) -> None:
+    """Item 206: after an attach or a re-read matched the month, re-run the
+    engine for every row the match moved to another company (a charge now
+    settles it and lends its card) and every row still refused
+    `entity_missing` while it shows one. Logged, never raised: the statement
+    is already attached."""
+    if shown_before is None:
+        return
+    moved = recategorize_moved_companies_or_error(
+        db_path, learning_db_path, run_id, shown_before)
+    if moved:
+        log.info("item 206: %s re-categorized after the match: %s", run_id, moved)
+
+
 def _run_reread_statements_job(
     db_path: Path, job_id: str, run_id: str, learning_db_path: Path,
 ) -> None:
@@ -911,12 +945,14 @@ def _run_reread_statements_job(
                 )
                 return
             settings = store.get_settings()
+            shown_before = _shown_before_job(db_path, learning_db_path, run_id)
             result = reread_statements(
                 store, run,
                 settings=settings, now_iso=_now_iso(),
                 learning_db_path=learning_db_path,
                 on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
             )
+            _recategorize_after_job(db_path, learning_db_path, run_id, shown_before)
             warnings = [
                 result[k] for k in ("entity_mismatch", "statement_advisory")
                 if result.get(k)
@@ -952,6 +988,7 @@ def _run_attach_statement_job(
                 )
                 return
             settings = store.get_settings()
+            shown_before = _shown_before_job(db_path, learning_db_path, run_id)
             result = execute_statement_attach(
                 store, run,
                 stmt_name=stmt_name, column_map=column_map, form=form,
@@ -960,6 +997,7 @@ def _run_attach_statement_job(
                 on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
                 upload_name=upload_name,
             )
+            _recategorize_after_job(db_path, learning_db_path, run_id, shown_before)
             # Warnings must survive the job round-trip: park them on the
             # job's stage-free error-less row via the stage field. Both are
             # about a month that reconciled successfully and still needs a
@@ -4533,9 +4571,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             )
         return None
 
+    async def _shown_before(run_id: str) -> dict[str, str] | None:
+        """Item 206: the company each row shows before an edit that can move
+        it, for the reply to diff against. None on a bucket month."""
+        return await run_in_threadpool(
+            gl_shown_companies,
+            app.state.db_path, app.state.learning_db_path, run_id,
+        )
+
     async def _expense_edit_reply(
         run_id: str, rematch_needed: bool, extra: dict | None = None,
-        *, recategorize: str | None = None,
+        *, document_id: str | None = None,
+        shown_before: dict[str, str] | None = None,
+        force_recategorize: bool = False,
     ) -> JSONResponse:
         """The reply every expense-edit route gives (item 70).
 
@@ -4549,17 +4597,29 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         its result or error under `rematch`, absent when nothing re-matched.
         The summary is read AFTER it, so it describes the re-matched month.
 
-        `recategorize` names a receipt whose company just changed: on a GL
-        batch it is categorized again against the new company's leaves
-        (owner decision 2026-09-24), BEFORE the re-match reads the pool. A
-        failure rides back under `recategorized` like the re-match's does."""
+        Item 206: on a GL month the engine answers for the company each row
+        SHOWS. `shown_before` is that map read before the edit; every row
+        whose company the edit moved (a card, a company, a vendor the
+        remembered card keys on) is categorized again for its new company,
+        and so is any row still refused `entity_missing` while it shows one.
+        `force_recategorize` re-runs `document_id` even when its company did
+        not move: the reviewer set the company herself (owner decision
+        2026-09-24). Both happen BEFORE the re-match reads the pool, and the
+        re-match does the same for what it moves. Every re-run row rides
+        back under `recategorized_rows`; `document_id`'s own result, or a
+        failure, under `recategorized`, as before."""
+        rows: list[dict] = []
         recategorized = None
-        if recategorize:
+        if shown_before is not None or force_recategorize:
             try:
-                recategorized = await run_in_threadpool(
-                    recategorize_after_entity_change,
+                rows, _after = await run_in_threadpool(
+                    recategorize_moved_companies,
                     app.state.db_path, app.state.learning_db_path, run_id,
-                    recategorize,
+                    shown_before,
+                    force=(
+                        frozenset({document_id})
+                        if force_recategorize and document_id else frozenset()
+                    ),
                 )
             except Exception as exc:  # noqa: BLE001 - the edit is already written
                 recategorized = {"error": str(exc)}
@@ -4569,6 +4629,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 _expense_edit_rematch,
                 app.state.db_path, app.state.learning_db_path, run_id,
             )
+            moved = (rematch or {}).get("recategorized")
+            if isinstance(moved, list):
+                rows = rows + moved
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
@@ -4577,8 +4640,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         out = {"ok": True, **(extra or {}), "summary": view["summary"]}
         if rematch is not None:
             out["rematch"] = rematch
+        if recategorized is None:
+            recategorized = next(
+                (r for r in reversed(rows) if r["document_id"] == document_id),
+                None,
+            )
         if recategorized is not None:
             out["recategorized"] = recategorized
+        if rows:
+            out["recategorized_rows"] = rows
         return JSONResponse(jsonable_encoder(out))
 
     @app.post("/api/expense-batches")
@@ -5182,6 +5252,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # Off the event loop, same reason as set-aside/restore above:
         # assign_batch_cards takes the batch writer lock.
         def _work():
+            # Item 206: an assigned hint gives every row printing it that
+            # card's company, so the engine is re-run for each row it moved.
+            shown_before = gl_shown_companies(
+                app.state.db_path, app.state.learning_db_path, run_id)
             with open_store() as store:
                 run, err = _expense_run_or_error(store, run_id)
                 if err is not None:
@@ -5196,11 +5270,35 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     )
                 except RunInputError as exc:
                     return _input_refused(exc)
-                run = store.get_run(run_id)
-                view = _expense_view(store, run)
-            return JSONResponse(jsonable_encoder({**result, "batch": view}))
+            return _batch_reply_after_company_moves(run_id, result, shown_before)
 
         return await run_in_threadpool(_work)
+
+    def _batch_reply_after_company_moves(
+        run_id: str, result: dict, shown_before: dict[str, str] | None,
+    ) -> JSONResponse:
+        """The card routes' reply: `result`, the refreshed batch view, and
+        (item 206) every row the change moved to another company,
+        re-categorized for it under `recategorized_rows` before the view is
+        read. Runs in the threadpool: the re-run can call the model."""
+        moved = (
+            recategorize_moved_companies_or_error(
+                app.state.db_path, app.state.learning_db_path, run_id,
+                shown_before,
+            )
+            if shown_before is not None else None
+        )
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse(
+                    {"error": "run not found", "code": "run_not_found"},
+                    status_code=404)
+            view = _expense_view(store, run)
+        out = {**result, "batch": view}
+        if moved:
+            out["recategorized_rows"] = moved
+        return JSONResponse(jsonable_encoder(out))
 
     @app.post("/api/expense-batches/{run_id}/refresh-master-data")
     def post_batch_refresh_master_data(run_id: str):
@@ -5210,6 +5308,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         Answers with the changes made and the refreshed batch view."""
         if not _receipt_first_on():
             return _flag_off()
+        # Item 206: refreshed cards can move companies, as an assignment can.
+        shown_before = gl_shown_companies(
+            app.state.db_path, app.state.learning_db_path, run_id)
         with open_store() as store:
             run, err = _expense_run_or_error(store, run_id)
             if err is not None:
@@ -5220,9 +5321,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 )
             except RunInputError as exc:
                 return _input_refused(exc)
-            run = store.get_run(run_id)
-            view = _expense_view(store, run)
-        return JSONResponse(jsonable_encoder({**result, "batch": view}))
+        return _batch_reply_after_company_moves(run_id, result, shown_before)
 
     @app.post("/api/expense-batches/{run_id}/statement")
     async def post_batch_statement(
@@ -5382,6 +5481,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 {"error": "legal_entity is required", "code": "legal_entity_required"},
                 status_code=400
             )
+        shown_before = await _shown_before(run_id)
         with open_store() as store:
             run, err = _expense_run_or_error(store, run_id)
             if err is not None:
@@ -5395,8 +5495,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # Matching is entity-scoped, so a changed entity can move a pair.
             rematch_needed = has_statement(run) and before != entity
         return await _expense_edit_reply(
-            run_id, rematch_needed,
-            recategorize=document_id if before != entity else None,
+            run_id, rematch_needed, document_id=document_id,
+            shown_before=shown_before, force_recategorize=before != entity,
         )
 
     @app.post("/api/runs/{run_id}/expenses/{document_id:path}/private")
@@ -5424,6 +5524,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                  "code": "reimburse_to_required"},
                 status_code=400,
             )
+        # Item 206: a confirmed private row never takes a remembered card, so
+        # confirming (or undoing) can move the company the row shows.
+        shown_before = await _shown_before(run_id)
         with open_store() as store:
             run, err = _expense_run_or_error(store, run_id)
             if err is not None:
@@ -5465,7 +5568,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             )
         # No re-match (item 70): the private flag and who is reimbursed never
         # reach the matcher; the card chain derives a row's entity without it.
-        return await _expense_edit_reply(run_id, False)
+        return await _expense_edit_reply(
+            run_id, False, document_id=document_id, shown_before=shown_before)
 
     @app.post("/api/runs/{run_id}/expenses/{document_id:path}/confirm-category")
     async def post_expense_confirm_category(
@@ -5534,6 +5638,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if err_msg:
                 return _refused(err_msg)
 
+        # Item 206: read before the card fix below, which can copy a card
+        # into the month and so move a company on its own.
+        shown_before = (
+            await _shown_before(run_id) if field in COMPANY_CHAIN_FIELDS else None
+        )
         if field == "card_key" and value:
             # Item 87: a per-row card fix names an active registry card, which
             # may be copied into the batch's card snapshot. That write takes
@@ -5563,7 +5672,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if err is not None:
                 return err
             rematch_needed = False
-            recategorize = None
+            force_recategorize = False
             # Item 41: a private confirmation is the PAIR (flag + who
             # gets reimbursed). This one-field-at-a-time route cannot
             # set both, so the flag alone is refused unless reimburse_to
@@ -5692,11 +5801,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     and before != value
                 )
                 # Owner decision 2026-09-24: a company set (or changed) here
-                # re-categorizes the receipt against that company's leaves.
-                if field == "legal_entity" and before != value:
-                    recategorize = document_id
+                # re-categorizes the receipt against that company's leaves,
+                # even when its card already showed that company.
+                force_recategorize = field == "legal_entity" and before != value
         return await _expense_edit_reply(
-            run_id, rematch_needed, recategorize=recategorize)
+            run_id, rematch_needed, document_id=document_id,
+            shown_before=shown_before, force_recategorize=force_recategorize,
+        )
 
     @app.post("/api/runs/{run_id}/expenses")
     async def post_expense_add(run_id: str, request: Request):

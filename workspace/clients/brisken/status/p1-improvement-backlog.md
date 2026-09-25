@@ -10418,7 +10418,7 @@ accounts), so the model answers 0.5 and the engine refuses rather than guess.
 That is item 181: those merchants need an account from Dirk in the registry,
 after which the registry tier decides them without the model.
 
-### 206. Assigning a card that gives a row its company does not re-run the engine (found 2026-09-25, code-traced)
+### 206. Assigning a card that gives a row its company does not re-run the engine (found 2026-09-25, code-traced) (FIXED 2026-09-25)
 
 The owner's 2026-09-24 decision ("assigning the company must categorize it")
 is wired to the `legal_entity` edit only (`app.py`, the field route's
@@ -10435,6 +10435,62 @@ grid shows at the moment it runs. Every GL month from October is.
 card hint, the company itself), compare the row's resolved company before and
 after, and re-run the engine for the resolved one when it changed. Route-level
 test through the card fix.
+
+**Fixed 2026-09-25.** The engine now answers for the company the row SHOWS,
+wherever that company can move. One resolver: the grid's card chain moved out
+of `build_expense_view` into `service.grid_card_chain`, and `shown_companies`
+reads the company off it (the conversion's `_expense_view` read gives the same
+answer through the same code). `recategorize_moved_companies` reads that map
+after a change and re-runs the engine, for the row's shown company, on every
+row whose company moved since the map taken before it, on a row the reviewer
+set the company on herself (the 2026-09-24 decision, even when the card
+already showed it), and on any row that shows a company while still refused
+`entity_missing` (the sweep). `recategorize_after_entity_change` is gone; its
+successor `recategorize_for_companies` takes the company from the caller and
+re-runs several rows in one model pass and one locked write. Wired at:
+
+- the field PUT for the five fields the card chain reads
+  (`COMPANY_CHAIN_FIELDS`: company, card, vendor, the private pair),
+  `PUT .../entity` and `POST .../private`;
+- `POST /api/expense-batches/{id}/cards` (hint assignment) and
+  `refresh-master-data`;
+- `rematch_after_change` (every edit, arrival, set-aside, trip and month-move
+  re-match; only where a learning store is passed, because the grid reads the
+  remembered card from it);
+- the statement attach and re-read jobs, which call `rematch_month` directly.
+
+A bucket month runs none of it. Failures are reported, never raised: the edit
+or the attach is already written. The edit reply keeps `recategorized` (the
+edited row) and adds `recategorized_rows` (every row re-run); neither is in
+the SPA contract. Tests: `tests/test_card_company_recategorizes_item_206.py`
+(8, route-level: card fix, card change Corporate to Cloud, a company set over
+the card's own, hint assignment, statement attach, a date fix that re-matches,
+a pre-fix row swept at its next edit, a bucket month untouched); seven wiring
+points proven RED under `tools/regress_check.py`.
+
+Not covered, by design: a workbench accept or reject, and a duplicate ruling on
+a month with no statement, move a company without a re-match. The sweep
+catches the `entity_missing` half of those at the row's next edit or re-match.
+
+### 210. The export gate checks a row against its stamped company, not the one it shows (found 2026-09-25, building item 206)
+
+`coa_gate` splits a month's receipts by the receipt's stored
+`legal_entity_id` (`coa_gate.py`, the per-entity split), while the grid, the
+engine (item 206) and the export's Entity column use the company the card
+chain resolves. Two consequences, both reproduced:
+
+- A row whose company came from a card and whose stamp is blank is never
+  chart-checked (`UNGATED`): its account goes out as-is. Most live rows are
+  like this.
+- A row stamped with one company at ingest (a printed card) and moved to
+  another by a card fix is checked against the OLD company's chart. In the
+  item 206 test a Cloud-only account on a row now showing Cloud Services
+  exports as `(account unmapped - assign)`.
+
+Fix shape: give the gate the shown company (`resolved_entities(card_res)`, as
+item 201 gave `apply_overrides`). That changes export verdicts on live months,
+most visibly by gating rows that today pass unchecked. **Owner, 2026-09-25:
+record only, decide later.** Not built.
 
 ### 207. The live export gate blanks an account Dirk marked postable (found 2026-09-25 on the switched September)
 
