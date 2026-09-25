@@ -7061,3 +7061,140 @@ beside the uploads.
 
 Tests: `tests/test_attach_month_guard_item_215.py` (13, route-level through
 the attach, job poll, re-read and a second `create_app` boot).
+
+## Bills path (item 218)
+
+Build 4, owner decisions 2026-09-25. An invoice no company card paid (a
+supplier bill paid by wire, SEPA, ACH, boleto or PIX) left the card queue only
+one click at a time (item 62) and otherwise sat there waiting for a statement
+that will never cover it. Each expense row now names the path it was paid
+through. A **bill** stays visible in its month, in a Bills section, and leaves
+the card side: the card counts and boxes, the card strip, `waits_for_statements`,
+the month's total, `expenses.csv`, the Zoho journal and the month report's
+listing. It goes out as its own `bills.csv` for Criss to book by hand in Zoho.
+Nothing posts anywhere. The rules live in `src/expense_recon/payment_path.py`
+(pure); the service reads them at view time, never by re-matching.
+
+### Row fields (Expenses payload)
+
+| Key | Type | Meaning |
+|---|---|---|
+| `expenses[].payment_path` | `"card"` \| `"bill"` | always present |
+| `expenses[].payment_path_source` | `"person"` \| `"settled_outside"` \| `"stated"` \| `"statement"` \| `""` | always present, parallel to `payment_path` |
+| `expenses[].bill_suggestion` | `{"evidence": str}` | absent unless offered (below) |
+
+A bill row also carries `counts_in_total: false` (item 94's key: the row stays,
+the money does not count), `boxes: []`, no `waits_for_statements`, no
+`card_suggestion`, `can_mark_private: false`, `card_section: ""` and
+`without_charge: false`, and `review` = `{"state": "none", "reason_code":
+"bill", "reason": "Paid by bank transfer, so no card statement will cover it.
+..."}`. `bill` is a new `review.reason_code`; per rule 5 the English `reason`
+is its human-readable label (pinned in `test_view_contract.py`). `none` is an
+existing state, so `n_review` never counts a bill.
+
+### Sources and precedence
+
+1. A charge of this month holds the receipt (the effective outcome does not
+   list it as unmatched): `card`, source `statement`. A statement charge is
+   proof a card paid it, item 62's "the match wins". Consulted only for a row
+   carrying a bill signal, so `statement` names a charge that overrode one; a
+   held row with no signal reads source `""`.
+2. A person's `payment_path` override: `card` or `bill`, source `person`.
+3. The item-62 disposition says `how: "bank_transfer"`: `bill`, source
+   `settled_outside`. `cash`, `paypal` and `other` do not make a bill.
+4. The document's stated payment method (`payment_mode`) reads as wire / bank
+   transfer / electronic funds transfer / transferência / Überweisung / SEPA /
+   ACH / virement / bonifico / boleto / PIX and names no card: `bill`, source
+   `stated`. A superset of `bank_transfer_tender`. Not a bill: a mode naming a
+   card ("Electronic Funds Transfer ...2838", "Visa", four digits in a row),
+   TEF (the Brazilian card terminal), and an invoice's payment OFFER ("Pay
+   $15.00 with a bank transfer"), which only suggests (the one live instance
+   posted to a card).
+5. Otherwise `card`, source `""`.
+
+There is no supplier list: SAP and Redis are also charged to Brisken cards
+every month.
+
+### The two settled-outside maps
+
+The stored item-62 map is unchanged. A person's move of a row to `card`
+overrules its `bank_transfer` disposition: `expenses[].settled_outside` stops
+displaying it and `summary.n_settled_outside` stops counting it (the stored
+entry is not deleted; clearing the move brings it back). Every reconciliation
+and exemption consumer reads the EFFECTIVE map: the displayed dispositions plus
+a derived `{"how": "bank_transfer", "note": "", "at": null, "derived": source}`
+for each bill without a stored one. The later explicit decision wins both
+ways: marking a row settled outside by bank transfer clears a person's earlier
+`card` move on it.
+
+### Summary (both payloads)
+
+| Key | Meaning |
+|---|---|
+| `summary.n_bills` | bill rows, a decided copy excluded |
+| `summary.bills_by_ccy` | their amounts per currency, formatted as `copies_set_aside_by_ccy` |
+
+Expenses payload: `n_expenses`, `totals_by_ccy`, every box count, the card
+strip (`card_review`, grouping and counters) and `n_amounts_unreadable` leave
+bills out, and `n_receipts == n_expenses + n_copies_set_aside + n_bills`. A
+decided copy that is also a bill counts once, as a copy; its row still reads
+`payment_path: "bill"`. `card_sections` never lists a bill. The months list
+(`GET /api/expense-batches`) carries the same `n_expenses` and `n_bills`.
+
+Matching payload (`GET /api/runs/{id}`): a bill leaves `unmatched_receipts`,
+month health's pair scan and the matchable pool, so `n_receipts_need_charge`
+and `month_complete` never wait on one. `n_settled_outside` keeps counting the
+displayed dispositions only.
+
+### Moving a row
+
+```
+PUT /api/runs/{run_id}/expenses/{document_id}
+    {"field": "payment_path", "value": "bill" | "card" | null}
+```
+
+The existing field edit, so the move lands in `edited_fields`. `null` or `""`
+clears it. Read at view time only: no re-match, no re-categorization.
+
+| Code | HTTP | When |
+|---|---|---|
+| `invalid_payment_path` | 400 | a value other than `bill`, `card` or empty |
+| `bill_held_by_charge` | 400 | `bill` on a receipt a charge of this month holds; reject that match first (`document_id` rides beside) |
+
+### The suggestion: `bill_suggestion`
+
+Offered on an open card row only: no card resolved, not private or suggested
+private, no settled-outside disposition, not moved back to the card by a
+person, not held by a charge, not a decided copy. The evidence is the first
+line (at most 120 characters) of `ocr_text` printing payment bank details (an
+IBAN label or IBAN-shaped string, SWIFT or BIC, ABA, a routing number,
+wire-transfer instructions, a bank account number, "Bankverbindung", "dados
+bancários"), else the payment mode when it is an invoice's bank-payment offer.
+"Remittance" alone never fires. Never applied: one click is the PUT above.
+
+### Exports
+
+- `GET /runs/{run_id}/bills.csv` (also served at `/api/runs/{run_id}/bills.csv`,
+  one handler), saved as `bills-{run_id}.csv`. Columns: `Date`, `Supplier`,
+  `Invoice number`, `Amount` (plain, `27203.34`), `Currency`, `Company` (the
+  company the grid shows), `How decided` ("The invoice states a bank payment" /
+  "Marked paid by bank transfer" / "Moved to Bills by hand"), `Evidence` (the
+  stated method, or the disposition's note), `Document` (the stored file's
+  name). One row per bill, decided copies excluded; a month with none writes
+  the header alone.
+- `expenses.csv` writes no bill row. The Zoho journal (`zoho.csv`) and
+  `reconciled.csv` are per statement line, and a bill holds none by the
+  precedence above, so neither can carry one.
+- The month report (`expense-report.pdf`) leaves bills out of the listing,
+  every card section and the month's total, and prints them in a "Bills (paid
+  by bank transfer)" section after the reimbursements with its own
+  per-currency total; numbering continues and each bill's pages stay in the
+  evidence, captioned "bill, paid by bank transfer".
+- The reconciliation report captions a bill "Paid by bank transfer" through
+  the effective map.
+
+Tests: `tests/test_bills_path_218.py` (route-level: the drop, the mail intake,
+both payloads, the PUT, the settled-outside route, the three CSVs and both
+PDFs, plus a no-signal month rendered with the path unwired to prove every
+old key unchanged) and `tests/test_payment_path_218.py` (the rules, negative
+cases as the contract). Renders in `docs/lovable-bills-path-prompt.md`.

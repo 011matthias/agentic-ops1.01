@@ -9,10 +9,12 @@ next, the escape hatch deliberately before any auto-consult.
 from __future__ import annotations
 
 from .capture import (
+    AliasCandidate,
     ExpenseLearnSummary,
     LearnSummary,
     category_groups,
     expense_category_sources,
+    identity_alias_candidates,
     learn_category_candidate,
     learn_confirmed_pairs,
     learn_from_expense_run,
@@ -71,6 +73,8 @@ __all__ = [
     "LearnSummary",
     "ExpenseLearnSummary",
     "learn_confirmed_pairs",
+    "AliasCandidate",
+    "identity_alias_candidates",
     "learn_from_run",
     "learn_from_expense_run",
     "category_groups",

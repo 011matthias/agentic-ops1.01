@@ -171,6 +171,8 @@ from .store import (
 # Item 204 step 4: the request's billing-account card index, passed by every
 # surface that resolves the card chain with live settings.
 from ..billing_account import request_account_cards
+# Build 4 / backlog item 218 (owner decisions 2026-09-25): card or bill.
+from .. import payment_path as _pp
 
 # The documented Zoho Expense export header map (run.with-expense-csv
 # example). Prefilled in the form so the common Path-A case needs no
@@ -3355,10 +3357,24 @@ def build_view(
     # RECONCILIATION side lets them go, starting here -- a receipt no card
     # will ever carry must not count as an exact pair the matcher "missed"
     # and so must never make a healthy month read broken.
-    settled_outside = settled_outside_map(run.snapshot or {})
+    # Build 4 / backlog item 218 (owner decisions 2026-09-25): a bill leaves
+    # the reconciliation side exactly as a settled-outside receipt does, so
+    # every read below takes the EFFECTIVE map (`view_off_card`: stored
+    # dispositions plus the bills). `settled_outside` becomes the DISPLAYED
+    # map, which `n_settled_outside` keeps counting. A charge that holds a
+    # receipt wins, read off the effective outcome, and only for a row that
+    # carries a bill signal.
+    view_paths = month_payment_paths(
+        run, receipts, field_overrides, decisions,
+        held=lambda: held_by_outcome(
+            receipts, apply_decisions(outcome, transactions, receipts, decisions)
+        ),
+    )
+    settled_outside = view_paths.displayed_settled
+    view_off_card = view_paths.effective_settled
     health_receipts = (
-        [r for r in receipts if r.document_id not in settled_outside]
-        if settled_outside else receipts
+        [r for r in receipts if r.document_id not in view_off_card]
+        if view_off_card else receipts
     )
     health = month_health(
         transactions, health_receipts, outcome,
@@ -3897,13 +3913,18 @@ def build_view(
         d for d in effective.unmatched_receipts
         if d in settled_outside and d in rec_by_id
     }
+    # Build 4 / item 218: what leaves the unmatched list, bills included.
+    off_card_ids = {
+        d for d in effective.unmatched_receipts
+        if d in view_off_card and d in rec_by_id
+    }
     unmatched_receipts = [
         _receipt_view(
             rec_by_id[d], overrides,
             work_dir=rv_work_dir, expense_mode=rv_expense_mode,
         )
         for d in effective.unmatched_receipts
-        if d in rec_by_id and d not in settled_outside_ids
+        if d in rec_by_id and d not in off_card_ids
     ]
     # The suggestion, never the disposition: a mode the scan read as a
     # tender no card statement carries. Parallel and ABSENT when there is
@@ -4182,8 +4203,9 @@ def build_view(
     n_tx = len(transactions)
     # Item 62: the pool a card statement can actually settle. Items 83 + 75:
     # a set-aside copy is not a second purchase for a card to settle either.
+    # Build 4 / item 218: nor is a bill (`off_card_ids` holds both).
     n_matchable_receipts = (
-        len(receipts) - len(settled_outside_ids) - len(copies_set_aside)
+        len(receipts) - len(off_card_ids) - len(copies_set_aside)
     )
     n_unknown_currency = sum(1 for r in receipts if r.detected_currency is None)
     # L4 noise guard: the missing-image badge renders only when this run's
@@ -4363,6 +4385,13 @@ def build_view(
             rows, dict(autopick_pairs(outcome, decisions))
         )),
     }
+    # Build 4 / item 218: the Expenses payload's names and meaning. A decided
+    # copy that is also a bill counts as a copy (item 94).
+    view_bill_docs = {
+        d for d in view_paths.bills if d not in set_aside_copy_ids
+    }
+    summary["n_bills"] = len(view_bill_docs)
+    summary["bills_by_ccy"] = bills_by_ccy(receipts, view_bill_docs)
     # Item 129: the last committed re-match and any owed one, off the
     # snapshot as stored, so the month page can say a re-match ran.
     visibility = rematch_visibility(run.snapshot)
@@ -4901,6 +4930,7 @@ def registry_upserts_from_expense_run(
     field_overrides: dict[str, dict[str, str]],
     category_overrides: dict,
     gl: dict | None = None,
+    alias_candidates=(),
 ) -> tuple[dict, dict]:
     """Fold reviewer vendor / category corrections into a COPY of the merchants
     registry (2026-07-29, the self-improving half). Returns
@@ -4909,6 +4939,11 @@ def registry_upserts_from_expense_run(
     - A VENDOR edit teaches canonicalization: the CHOSEN (edited) name is the
       canonical merchant; the ORIGINAL extracted string becomes one of its
       aliases (so next month's identical OCR output resolves to the canonical).
+    - A PAIRING a person confirmed teaches a spelling too (item 216 cause 3,
+      `learning.identity_alias_candidates`): the side the registry does not
+      resolve becomes an alias of the merchant the other side resolves to.
+      Only onto a merchant the registry already holds, because a new
+      merchant is a person's call, never a pairing's.
     - A CATEGORY reclassification teaches the merchant default: the chosen
       category (+ account) is set on the receipt's canonical merchant. The
       merchant is the edited vendor if one was given, else the registry
@@ -4971,6 +5006,17 @@ def registry_upserts_from_expense_run(
         if normalize_vendor(raw) not in have:
             entry["aliases"].append(raw)
             aliases_added[canonical] = aliases_added.get(canonical, 0) + 1
+
+    # 1b) Item 216 cause 3: spellings a person-confirmed pairing proves.
+    for cand in alias_candidates or ():
+        if not isinstance(base.get(cand.canonical), dict):
+            continue
+        entry = _ensure(cand.canonical)
+        have = {normalize_vendor(a) for a in entry["aliases"]}
+        have.add(normalize_vendor(cand.canonical))
+        if normalize_vendor(cand.alias) not in have:
+            entry["aliases"].append(cand.alias)
+            aliases_added[cand.canonical] = aliases_added.get(cand.canonical, 0) + 1
 
     # 2) Category reclassifications -> merchant default (conflict-skipped).
     #
@@ -5320,6 +5366,16 @@ def registry_gl_context(run, settings: dict | None, card_res: dict) -> dict | No
     }
 
 
+def memory_identity(settings: dict | None):
+    """Item 216 cause 3: the merchant resolver a memory save keys its lessons
+    with, built from the live registry exactly as recall builds it
+    (`MerchantRegistry.from_settings` on the ingest and re-categorize paths),
+    so a rule is stored under the key it will be asked for."""
+    from ..merchant_identity import MerchantIdentityResolver
+
+    return MerchantIdentityResolver(MerchantRegistry.from_settings(settings or {}))
+
+
 def commit_to_memory(
     run: RunRow,
     decisions: dict[str, Decision],
@@ -5352,8 +5408,18 @@ def commit_to_memory(
     registry half without saving it and returns the map it would have saved
     as `merchants_after`. So the preview and the save are the same code
     reading the same inputs, rather than two implementations kept in step
-    by hand."""
+    by hand.
+
+    Item 216 cause 3: every lesson is keyed on the registry-aware merchant
+    identity (`memory_identity`), and a month with a statement also offers
+    the spellings its person-confirmed pairings prove as registry aliases.
+    The dry run hands those pairings back as `alias_candidates` so the plan
+    can name the rows behind each new spelling."""
+    from ..learning import identity_alias_candidates
+
     store_factory = store_factory or LearningStore
+    settings = (settings_store.get_settings() or {}) if settings_store is not None else {}
+    identity = memory_identity(settings)
     if run_mode(run) == MODE_EXPENSE_GENERATION:
         receipts, effective, manual_payloads = expense_learning_inputs(
             run, overrides, field_overrides, edits,
@@ -5376,6 +5442,7 @@ def commit_to_memory(
                 ],
                 source_run=run.run_id,
                 now_iso=now_iso,
+                identity=identity,
             )
             # Item 115: a receipt-first month with a statement also RECONCILES,
             # and its confirmed pairs are the only proof of which truncated
@@ -5387,17 +5454,24 @@ def commit_to_memory(
             # snapshot's charges and baked receipt pool, the decisions applied,
             # and only pairs a verdict confirmed.
             pairs = alias = fx = 0
+            alias_candidates: list = []
             if has_statement(run):
                 txs, pool, pool_outcome, _ = snapshot_from_dict(run.snapshot)
                 pool = pool + borrowed_receipts(run)
+                pair_outcome = apply_decisions(pool_outcome, txs, pool, decisions)
+                person_confirmed = reviewer_confirmed_tx_ids(decisions)
                 pairs, alias, fx = learn_confirmed_pairs(
                     store,
                     transactions=txs,
                     receipts=pool,
-                    outcome=apply_decisions(pool_outcome, txs, pool, decisions),
-                    confirmed_tx_ids=reviewer_confirmed_tx_ids(decisions),
+                    outcome=pair_outcome,
+                    confirmed_tx_ids=person_confirmed,
                     source_run=run.run_id,
                     now_iso=now_iso,
+                )
+                alias_candidates, _alias_conflicts = identity_alias_candidates(
+                    transactions=txs, receipts=pool, outcome=pair_outcome,
+                    person_confirmed_tx_ids=person_confirmed, identity=identity,
                 )
         result = summary.as_dict()
         result["confirmed_pairs"] = pairs
@@ -5408,7 +5482,6 @@ def commit_to_memory(
         # human-editable, seeded registry grows from corrections. Persist only
         # when the map actually changed; skip silently without a settings store.
         if settings_store is not None:
-            settings = settings_store.get_settings()
             card_res = resolve_batch_row_cards(
                 effective, run.config, field_overrides or {},
                 settled_cards=export_settled_cards(run, decisions),
@@ -5420,6 +5493,7 @@ def commit_to_memory(
                 field_overrides=field_overrides or {},
                 category_overrides=overrides,
                 gl=registry_gl_context(run, settings, card_res),
+                alias_candidates=alias_candidates,
             )
             # Note item M2: and the month's resolved cards per merchant.
             # Resolved WITHOUT the registry on purpose — a card the registry
@@ -5478,6 +5552,7 @@ def commit_to_memory(
                 # storing it, so the caller can diff it against the live one
                 # and show which merchants a save would change.
                 result["merchants_after"] = new_merchants
+                result["alias_candidates"] = alias_candidates
             result["registry"] = reg_summary
         return result
 
@@ -5494,6 +5569,7 @@ def commit_to_memory(
             category_overrides=overrides,
             source_run=run.run_id,
             now_iso=now_iso,
+            identity=identity,
         )
     return summary.as_dict()
 
@@ -5924,6 +6000,11 @@ EXPENSE_HEADER_FIELDS = frozenset({
     # one. Validated against the live registry in the route; publishing
     # the month remembers it for the vendor (item 88).
     "card_key",
+    # Build 4 / item 218: a person's move between the card queue and Bills,
+    # "bill" | "card" ("" clears). Read at view time only: not a match field
+    # and not a company-chain field, so it re-matches and re-categorizes
+    # nothing. The route refuses "bill" on a receipt a charge holds.
+    _pp.OVERRIDE_FIELD,
 })
 EXPENSE_CATEGORY_FIELDS = frozenset({"category", "zoho_account"})
 
@@ -5965,6 +6046,13 @@ def validate_expense_field(field: str, value: str) -> str | None:
                 'private must be "1", "0" (opt out of the private-card '
                 'list) or empty to clear',
                 code="invalid_private_value",
+            )
+    elif field == _pp.OVERRIDE_FIELD:
+        # Build 4 / item 218: the two paths, or empty to clear the move.
+        if value not in _pp.PATHS:
+            return Refusal(
+                'payment_path must be "bill", "card" or empty to clear',
+                code="invalid_payment_path",
             )
     return None
 
@@ -7773,17 +7861,32 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
         # it leaves out the same decided copies (the grid's card inheritance
         # first, exactly as the batch page decides them).
         resolutions = store.get_duplicate_resolutions(run.run_id)
+        inherited = inherit_card_from_copies(
+            receipts, resolutions, _batch_card_hints(run.config)
+        )
         copies = decided_copies(
             run,
-            inherit_card_from_copies(
-                receipts, resolutions, _batch_card_hints(run.config)
-            ),
+            inherited,
             resolutions,
             charge_decisions=store.get_decisions(run.run_id),
         )
+        # Build 4 / item 218: and the bills, which the batch page leaves out
+        # of `n_expenses` and every box, read over the same inherited pool
+        # (a copy lent its twin's card is no bill); a copy that is a bill
+        # counts as a copy there too.
+        bills = {
+            d for d in month_payment_paths(
+                run, inherited, store.get_expense_field_overrides(run.run_id),
+                store.get_decisions(run.run_id),
+            ).bills
+            if d not in copies
+        }
         # A copy is in no box on the batch page (`expense_boxes`), so the
         # categorized pair counts the same expenses `n_expenses` does.
-        counted = [r for r in receipts if r.document_id not in copies]
+        counted = [
+            r for r in receipts
+            if r.document_id not in copies and r.document_id not in bills
+        ]
         n_categorized, n_uncategorized = categorized_counts(
             apply_overrides(counted, overrides, entity_orgs=gl_run_entity_orgs(run))
         )
@@ -7793,9 +7896,10 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
         # a blind `except Exception` here swallowed a closed-store bug in
         # this very function and served stale numbers that looked fine.
         return summary
-    summary["n_expenses"] = len(receipts) - len(copies)
+    summary["n_expenses"] = len(receipts) - len(copies) - len(bills)
     summary["n_receipts"] = len(receipts)
     summary["n_copies_set_aside"] = len(copies)
+    summary["n_bills"] = len(bills)  # Build 4 / item 218
     summary["n_categorized"] = n_categorized
     summary["n_uncategorized"] = n_uncategorized
     return summary
@@ -7866,15 +7970,26 @@ def grid_card_chain(
     # settles takes that charge's card when it names none of its own.
     # Residual R3: and a receipt settled outside the card suggests no
     # private card (the reviewer already said no card paid it).
-    settled_outside = settled_outside_map(run.snapshot or {})
+    # Build 4 / backlog item 218 (owner decisions 2026-09-25): a bill row
+    # reaches the card pass through the EFFECTIVE settled-outside map, so it
+    # takes item 144's settled-off-the-card answers (no private option, no
+    # person ask, no waits-for-statement) from the one place they are decided.
+    # `settled_outside` below becomes the DISPLAYED map (stored dispositions a
+    # person has not overruled): what a row shows and `n_settled_outside`
+    # counts, unchanged in meaning.
+    grid_paths = month_payment_paths(run, receipts, field_overrides, decisions)
+    settled_outside = grid_paths.displayed_settled
     card_res = resolve_batch_row_cards(
         receipts, run.config, field_overrides,
         settled_cards=settled_charge_cards(run, charges, charge_state_map),
-        settled_outside=settled_outside,
+        settled_outside=grid_paths.effective_settled,
         merchants=(settings or {}).get("merchants"),
         private_cards=(settings or {}).get("private_cards"),
         account_cards=request_account_cards(),
     )
+    # Each row's `payment_path`, its source and any `bill_suggestion`, on the
+    # resolution every surface of the payload already reads.
+    _pp.stamp_card_resolution(card_res, receipts, grid_paths)
     return GridCardChain(
         orig_receipts, receipts, charges, charge_state_map, settled_outside,
         card_res,
@@ -8111,6 +8226,11 @@ def build_expense_view(
                 r, res, statement_evidence, row_settled_outside
             ),
         )
+        # Build 4 / item 218: a bill asks nothing of the card side, so its
+        # review is out of `n_review` whatever the card checks would say.
+        row_bill = res.get("payment_path") == _pp.PATH_BILL
+        if row_bill:
+            review = _bill_review()
         posting = _row_posting_category(
             r, overrides, None, entity_orgs=gl_run_entity_orgs(run),
             entity=res["entity"],
@@ -8179,7 +8299,10 @@ def build_expense_view(
             )
         ]
         ccy = r.detected_currency or "?"
-        if r.detected_total is not None and r.document_id not in grid_copies:
+        if (
+            r.detected_total is not None and r.document_id not in grid_copies
+            and not row_bill  # Build 4 / item 218: bills_by_ccy carries it
+        ):
             totals[ccy] = totals.get(ccy, Decimal("0")) + r.detected_total
         expenses.append({
             **rv,
@@ -8333,6 +8456,20 @@ def build_expense_view(
             # every row that counts, which is every row an older backend
             # served, so absent keeps reading "counts".
             expenses[-1]["counts_in_total"] = False
+        # Build 4 / item 218: which way the row was paid, and why. Both always
+        # present (parallel fields). A bill stays on screen and leaves the
+        # month's total, item 94's `counts_in_total: false`, so every surface
+        # that already skips a copy's money skips a bill's too.
+        expenses[-1]["payment_path"] = res.get("payment_path", _pp.PATH_CARD)
+        expenses[-1]["payment_path_source"] = res.get(
+            "payment_path_source", _pp.SOURCE_NONE
+        )
+        if row_bill:
+            expenses[-1]["counts_in_total"] = False
+        elif res.get("bill_suggestion") and r.document_id not in grid_copies:
+            # Printed bank details on an open card row: a one-click offer,
+            # never a move. Absent otherwise. A copy's original carries it.
+            expenses[-1]["bill_suggestion"] = dict(res["bill_suggestion"])
         # Item 77: a reviewer-typed date that puts this receipt in another
         # month offers the move (POST .../expenses/{id}/move). A `manual:` id
         # that is not a typed-in add is a receipt attached to a charge by
@@ -8474,8 +8611,12 @@ def build_expense_view(
             ),
             render_failed=e.get("receipt_render") == "failed",
             # Item 94: a decided copy is in no box, so every box count
-            # below leaves it out the way `n_expenses` does.
-            copy=e["document_id"] in grid_copies,
+            # below leaves it out the way `n_expenses` does. Build 4 / item
+            # 218: so is a bill, for the same reason.
+            copy=(
+                e["document_id"] in grid_copies
+                or e["payment_path"] == _pp.PATH_BILL
+            ),
             # Item 144: a row settled off the card system is in no
             # `needs_person` box; the same fact the review sentence read.
             settled_outside=row_settled_outside,
@@ -8594,6 +8735,16 @@ def build_expense_view(
         # this month itself; null on operator-created batches (parallel).
         "created_by": run.summary.get("created_by"),
     }
+    # Build 4 / item 218: the bills, out of `n_expenses` as out of the total.
+    # A decided copy that is also a bill counts once, as a copy (item 94), so
+    # n_receipts == n_expenses + n_copies_set_aside + n_bills.
+    grid_bill_docs = {
+        e["document_id"] for e in expenses
+        if e["payment_path"] == _pp.PATH_BILL and e["document_id"] not in grid_copies
+    }
+    summary["n_expenses"] -= len(grid_bill_docs)
+    summary["n_bills"] = len(grid_bill_docs)
+    summary["bills_by_ccy"] = bills_by_ccy(receipts, grid_bill_docs)
     if roster is not None:
         # Trip batches only: how many rows a person OUTSIDE the roster
         # paid for. Absent on company months, like the row flag.
@@ -8633,6 +8784,7 @@ def build_expense_view(
     summary["n_amounts_unreadable"] = sum(
         1 for r in receipts
         if r.detected_total is None and r.document_id not in grid_copies
+        and r.document_id not in grid_bill_docs  # Build 4 / item 218
     )
     # Item 67: how many of this month's receipts produced no page in the
     # report. Present only once a report has been built, the same rule the
@@ -8699,8 +8851,14 @@ def build_expense_view(
         # Item 146: the month's decided copies, so the strip's four
         # box-twin counters answer `summary` exactly. `grid_copies` is the
         # same set every listing surface reads.
+        # Build 4 / item 218: a bill is on no card, so it is not on the
+        # card-assignment strip at all, grouping or counters.
         "card_review": build_card_review(
-            card_res, copy_docs=set(grid_copies),
+            {
+                doc: res for doc, res in card_res.items()
+                if res.get("payment_path") != _pp.PATH_BILL
+            },
+            copy_docs=set(grid_copies),
             private_cards=(settings or {}).get("private_cards"),
         ),
         # The set-aside strip (backlog item 1): what the quarantine
@@ -8901,9 +9059,18 @@ def regenerate_expense_export(
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
     )
+    # Build 4 / item 218: a bill writes no row either; it goes out as
+    # bills.csv (`regenerate_bills_export`), booked by hand.
+    bills = month_payment_paths(
+        run, receipts, field_overrides, charge_decisions
+    ).bills
     out_path = Path(run.work_dir) / "expenses.csv"
     write_zoho_expense_export(
-        [r for r in receipts if r.document_id not in copies], out_path,
+        [
+            r for r in receipts
+            if r.document_id not in copies and r.document_id not in bills
+        ],
+        out_path,
         footer=copies_set_aside_line(receipts, copies),
         single_currency=single_currency_for_export(run, charge_decisions),
         **kwargs,
@@ -9123,13 +9290,23 @@ def build_expense_report(
     # The rows the card pass resolved private, list-derived ones included,
     # so the reimbursements section lists them like a row Criss confirmed.
     private_by_doc = kwargs.pop("private_by_doc")
+    # Build 4 / item 218: bills leave the listing (and so every card section
+    # and the month's total) for a section of their own below, the same
+    # partition item 41 makes for reimbursements. A decided copy that is also
+    # a bill stays a copy.
+    report_paths = month_payment_paths(
+        run, receipts, field_overrides, charge_decisions
+    )
+    report_bill_docs = {d for d in report_paths.bills if d not in copies}
     company = [
         r for r in receipts
         if r.document_id not in private_by_doc and r.document_id not in copies
+        and r.document_id not in report_bill_docs
     ]
     private = [
         r for r in receipts
         if r.document_id in private_by_doc and r.document_id not in copies
+        and r.document_id not in report_bill_docs
     ]
 
     sections: list[dict] | None = None
@@ -9512,7 +9689,9 @@ def build_expense_report(
     # STILL prints. It is real company spend whose evidence is the invoice,
     # and dropping it would hide the spend from the accountant; the caption
     # names the tender so the reader knows why no card line matches it.
-    report_settled_outside = settled_outside_map(run.snapshot or {})
+    # Build 4 / item 218: the displayed map, so a disposition a person has
+    # overruled by moving the row back to the card is not captioned.
+    report_settled_outside = report_paths.displayed_settled
     # Item 97: the listing numbers of the rows written for a receipt whose
     # total was never read. Their Amount cell is blank, which the total reads
     # as zero, so the report is told which rows those are.
@@ -9566,6 +9745,30 @@ def build_expense_report(
         }
         for g in sorted(reimb_groups.values(), key=lambda g: g["person"])
     ]
+
+    # Build 4 / item 218: the bills section. One numbered row per bill,
+    # numbering continuing the listing's and the reimbursements' so every
+    # receipt page still names a unique number, with its own per-currency
+    # total. The bills' pages are in the evidence: the row stays traceable.
+    bill_rows: list[dict] = []
+    for entry in bill_entries(
+        run, [r for r in receipts if r.document_id in report_bill_docs],
+        report_paths, copies, kwargs["entity_by_doc"],
+    ):
+        bill_rows.append({
+            "n": n,
+            "date": entry["Date"],
+            "vendor": entry["Supplier"] or "(no vendor)",
+            "amount": _fmt_amount(entry["total"]) or "",
+            "currency": entry["Currency"] or "?",
+            "company": entry["Company"],
+        })
+        evidence.append(_evidence_item(
+            next(r for r in receipts if r.document_id == entry["document_id"]),
+            [n], extra_detail="bill, paid by bank transfer",
+        ))
+        n += 1
+    report_bills_by_ccy = bills_by_ccy(receipts, report_bill_docs)
 
     # Item 94: each decided copy's pages follow the expense it repeats,
     # captioned with that expense's numbers, and the listing states the
@@ -9687,6 +9890,8 @@ def build_expense_report(
         copies_set_aside_totals=copies_totals,
         receipts_by_section=in_sections,
         amounts_unreadable=unreadable_numbers,
+        bills=bill_rows,  # Build 4 / item 218
+        bills_totals=report_bills_by_ccy,
     )
     # Item 67: `prepare_evidence` wrote each file's render outcome back onto
     # its evidence dict during the build. The builder returns one `bytes`, so
@@ -10456,8 +10661,21 @@ def attach_expense_card_tabs(
         run, receipts, snapshot_receipts, decisions or {}, overrides,
         resolutions, field_overrides=field_overrides,
     )
+    # Build 4 / item 218: a bill is on no card, so no card section lists it;
+    # its row reads `card_section: ""` and counts in no tab (it does not
+    # count in the total either, `counts_in_total: false`).
+    bill_docs = {
+        str(e.get("document_id") or "") for e in view.get("expenses") or []
+        if e.get("payment_path") == _pp.PATH_BILL
+    }
     sections, _by_tx, by_doc = month_card_tabs(
-        card_view, report_receipt_cards(receipts, run.config, field_overrides),
+        card_view,
+        {
+            doc: card for doc, card in report_receipt_cards(
+                receipts, run.config, field_overrides
+            ).items()
+            if doc not in bill_docs
+        },
         run.config,
     )
     if is_trip_batch(run):
@@ -10684,7 +10902,12 @@ def build_reconciliation_report(
         if path is not None:
             path_by_doc[r.document_id] = path
     captions = reconciliation_captions(
-        view, receipts, settled_outside_map(run.snapshot or {}),
+        # Build 4 / item 218: the effective map, so a bill reads "Paid by
+        # bank transfer" here as it does once the reviewer marks it.
+        view, receipts,
+        month_payment_paths(
+            run, receipts, field_overrides, decisions
+        ).effective_settled,
         {doc: _display_name(p.name) for doc, p in path_by_doc.items()},
     )
 
@@ -16389,6 +16612,17 @@ def set_receipt_settled_outside(
         entries[document_id] = {"how": how, "note": note, "at": now_iso}
         snapshot[SETTLED_OUTSIDE_KEY] = entries
         store.update_run_snapshot(run.run_id, snapshot)
+        # Build 4 / item 218: the later explicit decision wins. A person's
+        # earlier move of this row back to the card would otherwise hide the
+        # bank transfer just recorded (`displayed_settled_outside`), so the
+        # route would answer ok and the screen would show nothing.
+        if how == "bank_transfer" and _pp.normalize_override(
+            (store.get_expense_field_overrides(run.run_id).get(document_id) or {})
+            .get(_pp.OVERRIDE_FIELD)
+        ) == _pp.PATH_CARD:
+            store.set_expense_field_override(
+                run.run_id, document_id, _pp.OVERRIDE_FIELD, None, now_iso
+            )
     return {"ok": True, "document_id": document_id,
             "settled_outside": entries[document_id]}
 
@@ -16422,6 +16656,176 @@ def clear_receipt_settled_outside(
                 snapshot.pop(SETTLED_OUTSIDE_KEY, None)
             store.update_run_snapshot(run.run_id, snapshot)
     return {"ok": True, "document_id": document_id, "removed": removed}
+
+
+# ── Bills: invoices paid by bank transfer (Build 4 / backlog item 218) ────
+# Owner decisions 2026-09-25. A bill stays in its month, in a Bills section;
+# it leaves the card counts, the "waits for statement" count, the month's
+# total, expenses.csv and the Zoho journal, and goes out as bills.csv for
+# Criss to book by hand. The rules (which row is a bill, and why) live in
+# `payment_path`; these are the service's reads of them. Applied at view
+# time from the snapshot's item-62 map and the `payment_path` field
+# override, never by re-matching, exactly as item 62 is.
+
+
+def held_by_outcome(receipts: "list[Receipt]", effective: MatchOutcome) -> set[str]:
+    """The receipts a charge holds under the effective outcome: every one it
+    does not list as unmatched. The item-62 route's own test
+    (`_settled_outside_unmatched_ids`), so "a charge holds it" means one thing
+    on every surface."""
+    return {r.document_id for r in receipts} - set(effective.unmatched_receipts)
+
+
+def month_held_docs(run: RunRow, decisions: dict | None) -> set[str]:
+    """`held_by_outcome` for a caller that has not built the effective
+    outcome. Empty before the first statement (nothing can hold anything)."""
+    if not has_statement(run):
+        return set()
+    transactions, receipts, outcome, _pe = snapshot_from_dict(run.snapshot)
+    effective = apply_decisions(outcome, transactions, receipts, decisions or {})
+    return held_by_outcome(receipts, effective)
+
+
+def month_payment_paths(
+    run: RunRow,
+    receipts: "list[Receipt]",
+    field_overrides: dict[str, dict[str, str]] | None,
+    decisions: dict | None,
+    *,
+    held=None,
+) -> "_pp.MonthPaths":
+    """Every row's path for one month (`payment_path.month_paths`). The holds
+    are read lazily: a month whose rows carry no bill signal never parses its
+    snapshot for them. A caller that already holds the effective outcome
+    passes `held` instead."""
+    return _pp.month_paths(
+        receipts, field_overrides or {}, settled_outside_map(run.snapshot or {}),
+        held if held is not None else (lambda: month_held_docs(run, decisions)),
+    )
+
+
+def _bill_review() -> dict:
+    """The review object on a bill row. State `none`: nothing is asked of the
+    card side, so the row is out of `n_review`. The English sentence is the
+    human-readable label beside `reason_code: "bill"` (contract rule 5)."""
+    return _review(
+        "none",
+        "Paid by bank transfer, so no card statement will cover it. It is "
+        "listed under Bills and in bills.csv, to be booked by hand.",
+        "bill",
+    )
+
+
+def bill_move_refusal(
+    run: RunRow, document_id: str, decisions: dict | None,
+) -> "Refusal | None":
+    """Why a person may not move this receipt to Bills, or None. A charge of
+    this month holds it, which is proof a card paid it (the refusal item 62
+    gives for the same fact, `receipt_settled_by_charge`)."""
+    if document_id in month_held_docs(run, decisions):
+        return Refusal(
+            "That receipt is settled against a charge on the statement, so a "
+            "card paid it. Reject that match first, then move it to Bills.",
+            code="bill_held_by_charge",
+            document_id=document_id,
+        )
+    return None
+
+
+def _bill_document_name(run: RunRow, document_id: str) -> str:
+    """The display name of a bill's stored file, "" when it has none. The
+    grid's `source_file` resolution, so the CSV names the file the row
+    shows."""
+    receipts_dir = Path(run.work_dir) / "receipts"
+    hit = receipt_image_file(receipts_dir.parent, document_id, expense_mode=True)
+    if hit is None:
+        return ""
+    source = (
+        document_id if hit.parent == receipts_dir
+        else hit.name.split("__", 1)[-1]
+    )
+    return _display_name(source)
+
+
+def bill_entries(
+    run: RunRow,
+    receipts: "list[Receipt]",
+    paths: "_pp.MonthPaths",
+    copies: dict[str, str],
+    entity_by_doc: dict[str, str],
+) -> list[dict]:
+    """One entry per bill, in the month's order, keyed by
+    `bills_csv.BILL_COLUMNS` plus `document_id`, `total` and `source`.
+
+    A decided copy that is also a bill counts once, as a copy (item 94): it
+    writes no row here, as it writes none anywhere else."""
+    out: list[dict] = []
+    for r in receipts:
+        source = paths.bills.get(r.document_id)
+        if source is None or r.document_id in copies:
+            continue
+        out.append({
+            "document_id": r.document_id,
+            "total": r.detected_total,
+            "source": source,
+            "Date": str(r.detected_date or ""),
+            "Supplier": r.canonical_vendor or r.detected_vendor or "",
+            "Invoice number": r.invoice_number or r.detected_reference or "",
+            "Amount": f"{r.detected_total:.2f}" if r.detected_total is not None else "",
+            "Currency": r.detected_currency or "",
+            "Company": entity_by_doc.get(r.document_id) or r.legal_entity_id or "",
+            "How decided": _pp.HOW_DECIDED.get(source, ""),
+            "Evidence": _pp.bill_evidence(
+                r, source, paths.displayed_settled.get(r.document_id)
+            ),
+            "Document": _bill_document_name(run, r.document_id),
+        })
+    return out
+
+
+def bills_by_ccy(receipts: "list[Receipt]", bill_docs) -> dict[str, str]:
+    """Per-currency sums of the bills among `receipts`, summed and formatted
+    exactly as `copies_set_aside_by_ccy` is (the same helper over a different
+    set). A bill whose amount was never read is counted and in no sum."""
+    return {
+        ccy: f"{amt:,.2f}"
+        for ccy, amt in sorted(copies_set_aside_totals(receipts, bill_docs).items())
+    }
+
+
+def regenerate_bills_export(
+    run: RunRow,
+    overrides: dict,
+    field_overrides: dict[str, dict[str, str]],
+    edits: list[dict],
+    dup_resolutions: dict[str, str] | None = None,
+    charge_decisions: dict | None = None,
+    merchants: dict | None = None,
+    learning_db_path: "Path | None" = None,
+    private_cards: dict | None = None,
+) -> Path:
+    """Write `bills.csv` for a month and return its path: the rows
+    `expenses.csv` leaves out because no card paid them. Built from the
+    export's own pool and card chain (`_expense_export_inputs`), so the
+    company column is the one the grid shows."""
+    from ..output.bills_csv import write_bills_csv
+
+    receipts, kwargs = _expense_export_inputs(
+        run, overrides, field_overrides, edits, dup_resolutions,
+        settled_cards=export_settled_cards(run, charge_decisions),
+        merchants=merchants, learning_db_path=learning_db_path,
+        private_cards=private_cards,
+    )
+    copies = decided_copies(
+        run, receipts, dup_resolutions, charge_decisions=charge_decisions,
+    )
+    paths = month_payment_paths(run, receipts, field_overrides, charge_decisions)
+    out_path = Path(run.work_dir) / "bills.csv"
+    write_bills_csv(
+        bill_entries(run, receipts, paths, copies, kwargs["entity_by_doc"]),
+        out_path,
+    )
+    return out_path
 
 
 # ---------------------------------------------------------------------------
@@ -17914,6 +18318,11 @@ def _memory_plan(
         store_factory=factory, persist=False,
     )
     merchants_after = learned.pop("merchants_after", None)
+    alias_pairs: dict[str, list[tuple[str, str]]] = {}
+    for cand in learned.pop("alias_candidates", None) or ():
+        alias_pairs.setdefault(cand.canonical, []).append(
+            (cand.transaction_id, cand.document_id)
+        )
     rec = recorder.get("store")
     writes = list(rec.writes) if rec is not None else []
 
@@ -17940,6 +18349,7 @@ def _memory_plan(
         field_overrides=field_overrides, receipts=receipts,
         effective=effective, manual_payloads=manual_payloads,
         rec_by_id=rec_by_id, gl=gl, now_iso=now_iso,
+        identity=memory_identity(settings), alias_pairs=alias_pairs,
     )
     return ctx, ml.build_lessons(ctx), learned
 

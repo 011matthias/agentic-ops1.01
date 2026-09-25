@@ -386,6 +386,13 @@ def categorize_receipts_with_registry(
     names no leaf (one of the eight buckets) falls through to the engine
     rather than stamping a bucket, and no ER adjudication runs."""
     registry_matches: dict = {}
+    if registry and hasattr(learned, "with_identity"):
+        # Item 216 cause 3: memory recalls through the same merchant identity
+        # the registry resolves below, so the registry's aliases reach the
+        # rules stored under any of a merchant's spellings.
+        from .merchant_identity import MerchantIdentityResolver
+
+        learned = learned.with_identity(MerchantIdentityResolver(registry))
     if registry:
         for r in receipts:
             m = registry.resolve(r.vendor_clean, r.detected_vendor)
@@ -489,8 +496,12 @@ def _registry_account(
     Zoho Books posting history under ANOTHER category is how the books
     once posted, not an account for this category, so it is left alone.
     With no rule, or a rule that names no account, the registry's own
-    account stands, which may be nothing."""
-    recall = _recall_for(receipt, learned)
+    account stands, which may be nothing.
+
+    Item 216 cause 3: the rule is recalled for the MATCHED merchant, not for
+    the receipt's own spelling, so the account and the registry answer about
+    the same merchant even when only the extracted brand resolved it."""
+    recall = _recall_for(receipt, learned, match)
     if (
         recall is None
         or not recall.zoho_account
@@ -633,12 +644,18 @@ def _carry_zoho_account(
 
 
 def _recall_for(
-    receipt: Receipt, learned: "MerchantCategoryLookup | None"
+    receipt: Receipt, learned: "MerchantCategoryLookup | None", match=None,
 ) -> "LearnedRecall | None":
-    """What memory remembers for this receipt's merchant, or None."""
-    if learned is None or not receipt.detected_vendor:
+    """What memory remembers for this receipt's merchant, or None.
+
+    Memory keys on the merchant identity (item 216 cause 3,
+    `MerchantCategoryLookup`), so any spelling of the merchant reaches its
+    rule; with a registry `match` the matched canonical name is the one asked
+    about."""
+    vendor = getattr(match, "canonical_name", None) or receipt.detected_vendor
+    if learned is None or not vendor:
         return None
-    return learned.recall(receipt.legal_entity_id, receipt.detected_vendor)
+    return learned.recall(receipt.legal_entity_id, vendor)
 
 
 def _learned_categorization(recall: "LearnedRecall") -> Categorization:

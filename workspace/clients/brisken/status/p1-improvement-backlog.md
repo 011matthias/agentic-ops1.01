@@ -11277,6 +11277,56 @@ GitHub). Every pick from now on prints as hers. The journal's receiptless rows
 are off on every live month (`zoho.export_receiptless_learned` unset), so that
 surface changes nothing she downloads today.
 
+**Cause 3, built and deployed 2026-09-25 (merchant identity; PR #1441, Fly `8102be21`).** One resolver,
+`merchant_identity.MerchantIdentityResolver`, now decides which merchant a name
+is, for memory recall, memory capture, the registry match and the per-company
+account map: the registry's canonical names and aliases first, otherwise the
+name with its non-merchant parts taken off (legal forms, handles, the card
+network's location tail, web-address parts, phone and reference numbers).
+Measured on the live GL months before merging, read once and nothing written:
+
+- Registry reach on the 55 model-unsure receipts 13 -> 35, memory recall
+  14 -> 41.
+- The charge categorizer replayed over all 191 receiptless charges, base tree
+  against this build with a model that refuses: 7 -> 24 answered by a rule,
+  17 changed, none lost. Against Criss's Zoho postings the 17 are 11 right,
+  0 wrong, 6 not booked by 2026-09-18 (BASE44 x4, Wix, DigitalOcean/ServerPilot
+  September). Charges change at each month's next re-match; a receipt changes
+  only when it is re-categorized (a new ingest or the refused-rerun route).
+- Every merge the rules make was listed over 1,562 distinct strings (the three
+  months, memory keys, 24 months of Zoho descriptors and vendor names) and
+  checked against her Zoho vendor name. The first rule set folded
+  `GOOGLE *ADS9208169978` into Google LLC; a word glued to digits is now kept.
+  The four merges where her names differ are one merchant each (Antropic /
+  Anthropic, two OpenAI spellings, two Registro.br spellings, one Uber charge
+  she posted as DB).
+- Memory folds by identity at read time instead of being rekeyed: 108 rules,
+  107 identities, one fold (Corporate Services `anthropic` + `antropic`, the
+  person's row decides), no refusals.
+
+The alias learner is on the Publish checklist. A pairing a person confirmed
+(never one the tool confirmed itself) where one side resolves to a registry
+merchant and the other does not offers the other spelling as that merchant's
+alias: a "new spelling" lesson, ticked by default, naming the charge and the
+receipt behind it; for OpenAI, Anthropic and Lovable it is shown and refused.
+Two sides resolving to two different merchants teach nothing.
+
+Left as is: the registry's fuzzy tier scores a one-word name inside a longer
+merchant at 100, so `Google LLC` would read as a lone `Google Ads` entry and
+`Twilio Inc` as `Twilio SendGrid`. The same rule carries `LOVABLE` -> Lovable
+Labs on 65 live rows and all six fuzzy matches on live strings are right, so it
+waits for a wrong case.
+
+What only a person can add (counted, not proposed). Dirk, gated: the alias
+`ANTHROPIC* CLAUDE SUB`; an OpenAI entry (`OPENAI`, `OPENAI OPENAI.COM CA`,
+`OPENAI *CHATGPT SUBSCR`, `OPENAI* CHATGPT CREDIT`, 29 live rows); the Lovable
+merchant held twice (`Lovable Labs`, `Lovable Labs Incorporated`). Operator
+edits: SAP (`SAP SE`, `SAP SE WALLDORF`, `SAP IRELAND LIMITED DUBLIN 24`, 20
+rows), Zoho (`ZOHO* ZOHO-ONE`, `ZOHO_BOOKS`), AT&T (`AT&amp;T MOBILITY EPAY`,
+`ATT*BILL PAYMENT`), Amazon (`AMZ*Amazon.D*...`), and entries for Wispr Flow,
+Rize Labs, OpenRouter, Railway, Vercel and Pressmaster, which take the 55's
+reach from 35 to 47.
+
 **Build 2 step 1, built 2026-09-25 (Shipped row 137): the model is offered
 leaves only.** Owner ruling 2026-09-25: a model pick may not land on a parent
 with postable children; a person or a rule may. Parents are read from the
@@ -11299,7 +11349,11 @@ EUR 212.00, BRL 565.98), September 31 of 70 (USD 2,018.72, EUR 458.79). None
 holds a pick of Criss's (the store has 0 overrides since the conversion) and
 nothing was ever posted from the file (the poster is not wired to the app).
 32 of them read `ready` today (a LINE read, which "Confirm all Ready" would
-ratify); 48 are one-click confirmable today. Put to the owner before code.
+ratify); 48 are one-click confirmable today. Put to the owner before code;
+owner ruling 2026-09-25: a model-only line prints as a labelled suggestion
+(`suggested: <account>`) that the poster refuses, the 32 `ready` rows move to
+`check`, and one click on Confirm (stored `inherited`, never taught) turns a row
+back into a posting.
 
 ### 217. A duplicate shows its controls twice, and the tool keeps the invoice instead of the receipt (notes #89 + #90, owner 2026-09-25 03:45 / 03:47 UTC) (SHIPPED 2026-09-25: backend PR #1429, Fly `e47f2a8d`; SPA prompt `docs/lovable-duplicate-controls-once-prompt.md` PUBLISHED and driven the same morning)
 
@@ -11361,6 +11415,146 @@ choice); four older tests re-pinned to the receipt-kept contract
 `test_month_complete_publish_gate.py`). Five wiring points red under a hand
 regress (held into the re-match, the pool's choice, the view's read, the
 persist, the no-statement read).
+
+### 218. Invoices paid by bank transfer wait in the card queue for a statement that will never cover them (item 216 cause 4, Build 4; owner decisions 2026-09-25) (SHIPPED 2026-09-25, PR #1444, Fly deployed `a8a6809b`; SPA prompt `docs/lovable-bills-path-prompt.md` not pasted)
+
+**Live 2026-09-25 08:40 UTC (one read of each month, 15 s apart, no write).**
+Every predicted number held. July: `n_expenses` 71 to 70, BRL
+`totals_by_ccy` 30,425.80 to 3,222.46, `n_bills` 1 (BRL 27,203.34),
+`n_uncategorized` 38 to 37, `n_needs_entity` 14 to 13,
+`n_needs_company_or_person` 15 to 14, `n_review` 57 to 56, no other summary
+key moved; Tricarico reads `payment_path: bill`, source `settled_outside`;
+0004 and 0008 carry `bill_suggestion` (their bank-account and IBAN lines).
+The Matching payload reads `n_bills` 1, `n_receipts_need_charge` 14,
+`n_settled_outside` 1. August and September gained the two keys and nothing
+else. `GET /runs/50622baec444/bills.csv` lists Tricarico with the company
+blank. Cold drive of the published SPA (in through the access-code gate,
+July's payloads replayed from disk, 0 non-GET besides the login): the page
+reads EXPENSES 70, NEEDS CATEGORY 37, BRL 3,222.46, and 30,425.80 nowhere.
+Until the prompt is pasted the page lowers the BRL total with no line saying
+why, and Tricarico still lists among the card rows.
+
+**In plain words.** The tool assumes every receipt was paid by a company card
+and waits for that card's statement. Four July invoices were paid, or are
+payable, by bank transfer, so no statement will ever cover them. They sat in
+the card queue as "waits for statement" and inside the month's totals, and
+they are more open money than every categorization lever in item 216
+combined. They now leave the card queue for a Bills section in their month:
+still visible, out of the card counts and totals, out of `expenses.csv` and
+the journal, and listed in their own `bills.csv` for Criss to book by hand in
+Zoho. Nothing posts anywhere.
+
+**Measured first (read-only, 2026-09-25; one read of each month's payload, 15
+s apart, plus the five invoice files, 10 s apart).** Only July carries any.
+August and September hold no wire / boleto / PIX payment method, no large
+card-less invoice and no bill-only supplier.
+
+| Doc | Supplier | Amount | What the document says | Criss's Books (pull 2026-09-18) |
+|---|---|---|---|---|
+| 0003 | Konsultancy Finance | EUR 15,972.00 | a forwarded "Bill: July 2026 - New Contract, Status: Open" mail body; no payment words | Bill "July 2026 - New Contract" EUR 15,971.88, paid, Consulting LLC |
+| 0004 | Redis Inc., invoice IUS25300 | USD 13,200.00 | the supplier's remit-to bank details (SWIFT, ABA, ACH routing) as how to pay | not booked |
+| 0070 | Redis, IUS25300 again | USD 13,200.00 | Redis's past-due REMINDER of 2026-09-12 ("remains unpaid"), not a second invoice | n/a |
+| 0008 | 360Crossmedia, invoice 360172592 | EUR 900.00 | the supplier's IBAN as how to pay | an EXPENSE paid through `WISE EUR - 0179`, Corporate Services, not a Bill |
+| 0017 | Rodrigo Tanure Tricarico | BRL 27,203.34 | "Payment Method: Wire Transfer"; Criss had already settled it outside by bank transfer (item 144) | a July 2026 Bill of USD 5,364.00 for this supplier, paid; the pull cannot say whether it is this invoice converted |
+
+Three findings changed the build from the brief that opened it:
+
+1. **The payment-method field names a wire on one of the four** (0017). Redis
+   and Crossmedia print the supplier's bank details, which is a payment
+   OPTION that card-paid invoices print too (item 62's August Lovable caveat);
+   Konsultancy prints nothing about payment.
+2. **A supplier-name rule is unsafe.** SAP and Redis are charged to Brisken
+   cards every month (SAP on 9693 and 2838 from April to September, Redis
+   usage on 9693), and Criss books the card-paid SAP lines as Bills too. A
+   name rule would pull real card receipts out of the card queue. The Redis
+   April Bill `IUS24324` (USD 13,200) is the previous annual invoice, not a
+   copy of July's `IUS25300`, so item 216's "counted once more in Books" does
+   not hold.
+3. **The Redis pair did group.** `duplicates` grouped 0004 and 0070 on the
+   invoice number (`basis: reference`) and a reviewer ruled "Not a copy"
+   (`verdict: distinct`). The grouping key was never the defect. 0070 is
+   correspondence; the 2026-09-24 quarantine (`correspondence.py`) sets such
+   mail aside at ingest but does not reach a row ingested before it.
+
+Also found: a settled-outside row still went into `expenses.csv`, so
+Tricarico's wire invoice would have imported into Zoho Expenses beside the
+Bill Criss had already booked.
+
+**Owner decisions (2026-09-25, AskUserQuestion, all three on the recommended
+option).**
+
+* D1 destination: a Bills section inside the month (not a separate queue, not
+  mark-and-hide).
+* D2 trigger: a row moves by itself only when its stated payment method reads
+  wire / bank transfer / boleto / PIX and names no card, or when Criss's
+  settled-outside record says bank transfer. A row that only prints the
+  supplier's bank details gets a one-click suggestion. A person can move any
+  row either way.
+* D3 Redis 0070: the reviewer's "Not a copy" ruling stands; no code overrides
+  it. Criss deletes the reminder row herself (existing control); until then
+  July shows USD 13,200 twice.
+
+**Built (backend).** `payment_path.py` holds the rules, pure:
+`stated_bank_payment` (wire / bank transfer / EFT / transferência /
+Überweisung / SEPA / ACH / virement / bonifico / boleto / PIX, never when the
+method names a card, never on an invoice's "Pay ... with a bank transfer"
+offer), `printed_bank_details` (IBAN, SWIFT, BIC, ABA, routing number, bank
+account number, wire-transfer instructions; "remittance" alone is not one)
+and `resolve_payment_path`, in this order: a charge that holds the receipt
+(card, `statement`), a person's move (`person`), Criss's settled-outside
+bank-transfer record (`settled_outside`), the stated method (`stated`), else
+card. The service derives an EFFECTIVE settled-outside map (stored
+dispositions plus the bills), and every surface that already let a
+settled-outside receipt go reads it: month health and the unmatched list on
+the Matching payload, the card pass (no person ask, no private option, no
+waits-for-statement), the reconciliation report's caption. The displayed map
+and `n_settled_outside` keep their meaning. On top: every row carries
+`payment_path` and `payment_path_source`; a bill row is in no box, out of
+`n_expenses`, `n_review`, the card strip and `totals_by_ccy`
+(`counts_in_total: false`, review `state: none`, `reason_code: bill`); both
+summaries and the months list carry `n_bills` and `bills_by_ccy`; a card-less
+row no charge holds whose document prints bank details carries
+`bill_suggestion: {evidence}`. The move is the generic field PUT,
+`{field: "payment_path", value: "bill" | "card" | null}`, so `edited_fields`
+records it; refusals `bill_held_by_charge` and `invalid_payment_path`.
+`expenses.csv` and the month report's card sections leave bills out; the
+month report gains a "Bills (paid by bank transfer)" section with its own
+totals; `GET /runs/{id}/bills.csv` (also under `/api/`) lists them. Everything
+is decided at READ time: no re-match, no model call, no write.
+
+Checked on the real documents (the five files read once, offline):
+`printed_bank_details` fires on 0004 (its bank account line) and 0008 (its
+IBAN line), and on neither the Redis reminder nor the Konsultancy notice;
+"Electronic Funds Transfer ...2838" stays a card.
+
+**Predicted live effect at the next read of each month (no write needed):**
+July: Tricarico becomes a bill (source `settled_outside`, since Criss's
+record outranks the stated method); `n_expenses` 71 to 70; `totals_by_ccy`
+BRL 30,425.80 to 3,222.46; `n_bills` 1, `bills_by_ccy` BRL 27,203.34; its
+boxes leave `n_uncategorized`, `n_needs_entity` and
+`n_needs_company_or_person` (38, 14, 15 to 37, 13, 14). 0004 and 0008 carry
+`bill_suggestion` if the stored document text holds those lines (verified on
+the live read after deploy). August and September: `n_bills` 0, every other
+count unchanged. The Matching payload's lists do not move (Tricarico already
+left them in item 144).
+
+Tests: `tests/test_bills_path_218.py` (11, through the real routes: drop,
+mail intake, statement attached, month completeness, both PDFs, the move
+either way, the held refusal, bank transfer vs cash, the suggestion, a held
+row, a no-signal month unchanged key for key) and
+`tests/test_payment_path_218.py` (51, negative cases are the contract). Four
+existing tests re-pinned where the owner decision replaced what they asserted
+(item 144 and R3 now settle in cash; one `test_settled_outside` count).
+`regress_check` green to red to green on four wires: the card pass reading
+the displayed map (4 red), `build_view` reading stored only (3 red), the
+`expenses.csv` filter (1 red), the grid's per-row stamp (7 of 11 red). Suite
+3789 passed / 2 skipped. SPA half: `docs/lovable-bills-path-prompt.md`, not
+pasted.
+
+Left open: marking a bill row private is refused with the company-card
+sentence, the wrong words for a row no card paid (the SPA never offers that
+control on a bill row). A bill that is also a decided duplicate copy counts
+once, as a copy.
 
 ## Shipped (loop history)
 

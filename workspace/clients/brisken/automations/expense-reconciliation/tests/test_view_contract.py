@@ -1625,6 +1625,8 @@ REVIEW_REASON_CODES_PIN = {
     "invoice_read_as_statement", "needs_person", "needs_cost_center",
     # item 204, case 9: a card-less row waiting for statements
     "waits_for_statement",
+    # Build 4 / item 218: a bill paid by bank transfer (state `none`)
+    "bill",
 }
 
 UNMATCHED_RECEIPT_REASON_CODES_PIN = (

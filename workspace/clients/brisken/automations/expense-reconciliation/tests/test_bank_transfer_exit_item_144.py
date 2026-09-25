@@ -29,6 +29,13 @@ which company this is, and a card was never what was going to name it.
 The negative case below is the contract, and it is what keeps this narrow:
 an ordinary card-less row with no disposition is untouched.
 
+Build 4 / item 218 (owner decisions 2026-09-25) took the bank transfer
+itself further: a row the reviewer settled by bank transfer, or whose
+document states a wire, is now a BILL, in no box at all and listed in its
+own section (pinned in test_bills_path_218). The exits pinned here govern
+the dispositions that stay in the card queue (cash, PayPal, other), so the
+tests below settle in cash.
+
 Harness mirrors test_private_suggestion_not_a_card_r3 (fixtures copied,
 never imported: a shared fixture import is an F811 in CI).
 """
@@ -97,13 +104,14 @@ def _rows(client, batch_id) -> dict:
     return {e["vendor"]["display"]: e for e in _grid(client, batch_id)["expenses"]}
 
 
-def test_a_wire_settled_outside_the_card_has_an_answerable_exit(
+def test_a_row_settled_outside_the_card_has_an_answerable_exit(
     client, monkeypatch
 ):
-    """The live July row, through `GET /api/expense-batches/{id}`: no card,
-    no entity, settled outside by bank transfer."""
+    """The live July row's shape, through `GET /api/expense-batches/{id}`: no
+    card, no entity, settled outside the card (in cash since item 218; see
+    the module note)."""
     batch = _batch(
-        client, monkeypatch, _extraction(payment_hint="Wire Transfer"),
+        client, monkeypatch, _extraction(payment_hint=""),
     )
     (row,) = _grid(client, batch)["expenses"]
     assert row["card"] is None and row["legal_entity_id"] == "", "precondition"
@@ -111,12 +119,13 @@ def test_a_wire_settled_outside_the_card_has_an_answerable_exit(
 
     resp = client.post(
         f"/api/runs/{batch}/receipts/{doc}/settled-outside",
-        json={"how": "bank_transfer", "note": "Invoice prints Wire Transfer"},
+        json={"how": "cash", "note": "Paid at the office"},
     )
     assert resp.status_code == 200, resp.text
 
     (row,) = _grid(client, batch)["expenses"]
-    assert row["settled_outside"]["how"] == "bank_transfer"
+    assert row["settled_outside"]["how"] == "cash"
+    assert row["payment_path"] == "card", "cash stays in the card queue"
     assert [b for b in row["boxes"] if b in NEEDS] == [
         "needs_entity", "needs_company_or_person",
     ], "the company question stands; the card-only person question does not"
@@ -171,7 +180,9 @@ def test_the_two_person_counts_agree_on_every_row(client, monkeypatch):
     """
     batch = _batch(
         client, monkeypatch,
-        _extraction(payment_hint="Wire Transfer"),
+        # No stated wire and a cash disposition: both stay in the card queue
+        # (item 218 makes a stated wire or a bank transfer a bill).
+        _extraction(payment_hint=""),
         _extraction(vendor="Aposto Karlsruhe", total="42.50", currency="EUR"),
     )
 
@@ -186,7 +197,7 @@ def test_the_two_person_counts_agree_on_every_row(client, monkeypatch):
     doc = _rows(client, batch)["Tricarico Consultoria"]["document_id"]
     resp = client.post(
         f"/api/runs/{batch}/receipts/{doc}/settled-outside",
-        json={"how": "bank_transfer", "note": ""},
+        json={"how": "cash", "note": ""},
     )
     assert resp.status_code == 200, resp.text
 
