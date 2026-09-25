@@ -50,6 +50,7 @@ __all__ = [
     "curated_orgs",
     "curated_revision",
     "display_category_for",
+    "has_postable_children",
     "is_postable",
     "leaf",
     "llm_leaf_labels",
@@ -230,8 +231,51 @@ def postable_codes(org_id: str | None) -> frozenset[str]:
 
 
 @lru_cache(maxsize=8)
+def _parents_with_postable_children(org_id: str) -> frozenset[str]:
+    """This org's postable accounts that have a postable account under them.
+
+    Read from the branches, which name parents and never codes (the module
+    note: CRM travel's children are `E600010-10-20-*`, so a prefix test calls
+    `E600010-10-20 Conferences: Registration (Consulting)` a parent and misses
+    `E600010-20` itself). A branch can stop short of the root, since the
+    compile walks parent names only as far as its own tab resolves them, but
+    it always holds the row's own parent; so an account is a parent here when
+    one of its names, entity prefix stripped, appears in the branch of
+    another account this org can post to. Names from every org count,
+    because the branch was built from whichever tab first marked the child
+    postable (`Travel Expense` in Cloud Services is `Travel Expenses` in
+    Corporate Services).
+    """
+    codes = postable_codes(org_id)
+    leaves = _leaves()
+    out = set()
+    for code in codes:
+        names = {_strip_entity_prefix(b.name) for b in leaves[code].bindings.values()}
+        if any(names & set(leaves[other].branch)
+               for other in codes if other != code):
+            out.add(code)
+    return frozenset(out)
+
+
+def has_postable_children(org_id: str | None, code: str | None) -> bool:
+    """True for a roll-up this org could post to that has postable accounts
+    under it. Dirk's chart makes a parent postable outside COGS by design, and
+    a person or a rule may pick one; the model may not (owner, 2026-09-25)."""
+    if not code or not covers_org(org_id):
+        return False
+    return code in _parents_with_postable_children(org_id)
+
+
+@lru_cache(maxsize=8)
 def llm_leaf_labels(org_id: str | None) -> tuple[str, ...]:
-    """"CODE name" per postable leaf, this org's own wording, code order.
+    """"CODE name" per account the model may pick, this org's own wording,
+    code order.
+
+    Only accounts with no postable account under them: offered a parent, the
+    model took it 58 times in 164 where Criss took one once in 152 (item 216),
+    and a summary account is an answer nobody books to. A person picks from
+    the full list (`postable_codes`); `categorize._gl_model_result` refuses a
+    parent the model names anyway.
 
     Cached per org because the candidate list is built once per run and a
     per-receipt rebuild would walk the whole chart each time.
@@ -240,6 +284,8 @@ def llm_leaf_labels(org_id: str | None) -> tuple[str, ...]:
         return ()
     rows = []
     for code in sorted(postable_codes(org_id)):
+        if has_postable_children(org_id, code):
+            continue
         b = _leaves()[code].bindings[org_id]
         rows.append("%s %s" % (code, b.name))
     return tuple(rows)

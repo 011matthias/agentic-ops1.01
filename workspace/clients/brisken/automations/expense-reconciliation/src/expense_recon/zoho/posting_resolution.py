@@ -51,6 +51,7 @@ from . import curated_leaves
 __all__ = [
     "ACCOUNT_UNRESOLVED",
     "ENTITY_MISSING",
+    "MODEL_PICKED_PARENT",
     "NOT_EXPENSE_RELEVANT",
     "SOURCE_LEARNED_RULE",
     "SOURCE_LLM_LEAF",
@@ -91,6 +92,12 @@ NOT_EXPENSE_RELEVANT = "not_expense_relevant"
 # "provision the company".
 ENTITY_MISSING = "entity_missing"
 
+# The model named a summary account that has postable accounts under it
+# (owner, 2026-09-25: a model pick may not land on such a parent; a person or
+# a rule may). It is no longer offered one (`curated_leaves.llm_leaf_labels`),
+# so this is the backstop for a model that names one anyway.
+MODEL_PICKED_PARENT = "model_picked_parent"
+
 # What each refusal says to the person who has to act on it. One sentence per
 # code, naming what is missing and who fixes it, because "No category yet"
 # over a refused row reads as "the tool has not looked yet" when it looked and
@@ -118,6 +125,10 @@ _REFUSAL_TEXT = {
     ),
     TIER2_DEFERRED: (
         "A trip does not decide the account. Pick one by hand."
+    ),
+    MODEL_PICKED_PARENT: (
+        "The tool's reading named a summary account with more specific "
+        "accounts under it, so it was not used. Pick one by hand."
     ),
 }
 

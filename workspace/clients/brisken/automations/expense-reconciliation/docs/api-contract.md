@@ -112,8 +112,12 @@ code, `""` / `null` clears, and anything else is dropped and named under
 A refused line: the row's `review` reads `state: "pick"`,
 `reason_code: "category_refused"`, and carries `refusal`, one of
 `entity_missing`, `org_not_curated`, `no_such_code_in_org`,
-`not_expense_relevant`, `account_unresolved` (plus the unreachable
-`trip_purpose_inheritance_deferred`). `reason` holds the English sentence.
+`not_expense_relevant`, `account_unresolved`, `model_picked_parent` (plus
+the unreachable `trip_purpose_inheritance_deferred`). `reason` holds the
+English sentence. `model_picked_parent` (item 216 Build 2): the model named a
+summary account that has postable accounts under it in that company. The model
+is offered leaf accounts only, so this is a backstop; a person or the merchant
+list may still pick a parent, and the picker (`gl_accounts`) still lists them.
 Pinned by `tests/test_gl_engine.py` (`REFUSAL_CODES_PIN`,
 `CATEGORY_VOCABULARY_PIN`).
 

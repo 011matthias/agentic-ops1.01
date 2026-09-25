@@ -38,8 +38,10 @@ JPG = b"\xff\xd8\xff\xe0fake-jpeg-bytes"
 
 
 def _postable_here_not_there(here: str, there: str) -> str:
+    # A leaf the model is offered (never a parent, item 216 Build 2).
     codes = [c for c in sorted(curated_leaves.postable_codes(here))
-             if not curated_leaves.is_postable(there, c)]
+             if not curated_leaves.is_postable(there, c)
+             and not curated_leaves.has_postable_children(here, c)]
     assert codes, "fixture: every code is postable in both orgs"
     return codes[0]
 

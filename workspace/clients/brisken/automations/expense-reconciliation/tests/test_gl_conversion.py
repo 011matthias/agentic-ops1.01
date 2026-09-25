@@ -39,7 +39,9 @@ BUCKET, HER_PICK = "Office Supplies & Consumables", "Meals & Entertainment"
 
 
 def _code(org: str, i: int = 0) -> str:
-    return sorted(curated_leaves.postable_codes(org))[i]
+    """A leaf the model is offered (never a parent, item 216 Build 2)."""
+    return [c for c in sorted(curated_leaves.postable_codes(org))
+            if not curated_leaves.has_postable_children(org, c)][i]
 
 
 def _name(org: str, code: str) -> str:

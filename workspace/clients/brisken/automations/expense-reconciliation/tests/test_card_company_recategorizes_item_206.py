@@ -59,9 +59,11 @@ CARDS = {
 
 def _only_in(org: str, other: str) -> str:
     """A code `org` can post to and `other` cannot, so the pick names the
-    company the engine answered for."""
+    company the engine answered for. A leaf the model is offered, since it
+    is never offered a parent (item 216 Build 2)."""
     return next(c for c in sorted(curated_leaves.postable_codes(org))
-                if not curated_leaves.is_postable(other, c))
+                if not curated_leaves.is_postable(other, c)
+                and not curated_leaves.has_postable_children(org, c))
 
 
 CORP_CODE, CLOUD_CODE = _only_in(CORP_ORG, CLOUD_ORG), _only_in(CLOUD_ORG, CORP_ORG)

@@ -59,7 +59,10 @@ def _receipt(entity=CORP, *, vendor="Acme", lines=True, doc="r1") -> Receipt:
 
 
 def _postable_in(org: str) -> str:
-    return sorted(curated_leaves.postable_codes(org))[0]
+    """The first leaf the model is offered here (never a parent with postable
+    children, item 216 Build 2)."""
+    return next(c for c in sorted(curated_leaves.postable_codes(org))
+                if not curated_leaves.has_postable_children(org, c))
 
 
 def _postable_here_not_there(here: str, there: str) -> str:
@@ -68,6 +71,7 @@ def _postable_here_not_there(here: str, there: str) -> str:
     candidates = [
         c for c in sorted(curated_leaves.postable_codes(here))
         if not curated_leaves.is_postable(there, c)
+        and not curated_leaves.has_postable_children(here, c)
     ]
     assert candidates, "fixture: every code is postable in both orgs"
     marked = [c for c in candidates if curated_leaves.binding(c, there)]
@@ -521,6 +525,9 @@ REFUSAL_CODES_PIN = {
     # its text exists so the ruling is visible, and the SPA falls back to the
     # English `reason` for it like any code it does not map.
     "trip_purpose_inheritance_deferred",
+    # The model named a summary account with postable children (item 216
+    # Build 2); the SPA reads the English `reason` until it maps the code.
+    "model_picked_parent",
 }
 
 
