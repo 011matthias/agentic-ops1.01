@@ -69,8 +69,8 @@ UNSURE_55 = {
     "Anthropic, PBC (@anthropic)": 3, "OpenRouter, Inc": 2,
     "Railway Corporation": 2, "Anthropic, PBC @anthropic": 2, "Amazon.de": 1,
     "LIDL, Zeppelinstraße 76185 Karlsruhe": 1, "ATACADAO POPULAR-MARAIAL": 1,
-    "NATHALIA K. F. A. BEZERRA LTDA": 1, "Lovable Labs Incorporated (@lovable)": 1,
-    "CANTINHO ABENCOADO": 1, "Jose Claudio Cavalcanti": 1, "Vercel Inc.": 1,
+    "LOCAL SHOP B LTDA": 1, "Lovable Labs Incorporated (@lovable)": 1,
+    "CANTINHO ABENCOADO": 1, "Private payee A": 1, "Vercel Inc.": 1,
     "PETROCAL PETROLEO CAVALCANTI LTDA": 1, "Brave Software, Inc.": 1,
     "ZOHO Corp.": 1, "Pressmaster FZCO": 1, "Wi-Fi Onboard / LATAM": 1,
 }
@@ -173,8 +173,8 @@ def test_the_measured_reach_on_the_55_unsure_receipts():
     assert set(UNSURE_55) - reached == {
         "Wispr AI, Inc. (dba Wispr Flow)", "Rize Labs, Inc.", "OpenRouter, Inc",
         "Railway Corporation", "Amazon.de", "LIDL, Zeppelinstraße 76185 Karlsruhe",
-        "ATACADAO POPULAR-MARAIAL", "NATHALIA K. F. A. BEZERRA LTDA",
-        "CANTINHO ABENCOADO", "Jose Claudio Cavalcanti", "Vercel Inc.",
+        "ATACADAO POPULAR-MARAIAL", "LOCAL SHOP B LTDA",
+        "CANTINHO ABENCOADO", "Private payee A", "Vercel Inc.",
         "PETROCAL PETROLEO CAVALCANTI LTDA", "Pressmaster FZCO",
         "Wi-Fi Onboard / LATAM",
     }
