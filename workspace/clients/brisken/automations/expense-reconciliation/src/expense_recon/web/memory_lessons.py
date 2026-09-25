@@ -101,6 +101,12 @@ class LessonContext:
     rec_by_id: dict
     gl: dict | None
     now_iso: str
+    # Item 216 cause 3: the resolver the learners keyed this plan's rows
+    # with, so a lesson's rows and a conflict candidate's re-learn use the
+    # same key; and, per merchant, the person-confirmed pairings
+    # `(transaction_id, document_id)` behind a new spelling in its entry.
+    identity: Any = None
+    alias_pairs: dict = field(default_factory=dict)
 
 
 # ── describing ──────────────────────────────────────────────────────────
@@ -264,7 +270,7 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
     by_key: dict[tuple, list] = {}
     for w in ctx.writes:
         by_key.setdefault((w.table, w.key), []).append(w)
-    cat_groups = category_groups(ctx.rec_by_id, ctx.overrides)
+    cat_groups = category_groups(ctx.rec_by_id, ctx.overrides, ctx.identity)
     field_src = _field_sources(ctx) if ctx.field_overrides or ctx.manual_payloads else {}
     for (table, key), writes in by_key.items():
         if table == "merchant_category":
@@ -290,6 +296,8 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
             continue
         gated = is_owner_gated(merchant)
         sources = [_row_source(ctx, d, ln) for d, ln in _registry_rows(ctx, merchant)]
+        for tx_id, doc in ctx.alias_pairs.get(merchant, ()):
+            sources += [_row_source(ctx, f"charge:{tx_id}"), _row_source(ctx, doc)]
         held = " Held for the owner: never written from a checklist." if gated else ""
         lessons.append(Lesson(
             id=lesson_id(REGISTRY, (merchant,)),
@@ -316,6 +324,7 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
             rec = RecordingStore()
             learn_category_candidate(
                 rec, ctx.rec_by_id, ctx.overrides, rows, ctx.run.run_id, ctx.now_iso,
+                identity=ctx.identity,
             )
             sources = [_row_source(ctx, d, ln) for d, ln in rows]
             lessons.append(Lesson(
@@ -439,6 +448,7 @@ def apply_selection(ctx: LessonContext, lessons: list[Lesson], kept_ids) -> dict
         rec = RecordingStore()
         n_written, _n_conflict = learn_category_candidate(
             rec, ctx.rec_by_id, ctx.overrides, rows, ctx.run.run_id, ctx.now_iso,
+            identity=ctx.identity,
         )
         if not n_written:
             unresolved.append(group)

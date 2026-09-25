@@ -455,10 +455,20 @@ class MerchantRegistry:
         self, vendor_clean: str | None, vendor_raw: str | None
     ) -> list[tuple[str, str]]:
         """`_probes` with each probe's source string kept, so the coverage
-        rule can fold its diacritics before `normalize_vendor` splits them."""
+        rule can fold its diacritics before `normalize_vendor` splits them.
+
+        Item 216 cause 3: the merchant identity of each name comes LAST, so
+        "Anthropic, PBC (@anthropic)" reaches the canonical "Anthropic" while
+        every probe that matched before still matches first (exact wins in
+        probe order)."""
+        from .merchant_identity import identity_key
+
         seen: set[str] = set()
         out: list[tuple[str, str]] = []
-        for raw in (vendor_clean, clean_vendor_name(vendor_raw), vendor_raw):
+        for raw in (
+            vendor_clean, clean_vendor_name(vendor_raw), vendor_raw,
+            identity_key(vendor_clean), identity_key(vendor_raw),
+        ):
             norm = normalize_vendor(str(raw)) if raw else ""
             if norm and norm not in seen:
                 seen.add(norm)

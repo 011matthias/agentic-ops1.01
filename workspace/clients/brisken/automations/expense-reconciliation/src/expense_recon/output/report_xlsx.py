@@ -12,8 +12,9 @@ Tier 2 (VENDOR ⚠).
 
 Row coloring per LD-4:
 
+    decided → blue    (a person's pick, a merchant-list or remembered rule;
+                       item 216 cause 1, `answer_origin`)
     LINE    → green   (Tier 1, trusted)
-    LEARNED → blue    (Tier 1, recalled from a prior confirmed decision)
     VENDOR  → yellow  (Tier 2, confirm)
     REVIEW  → orange  (Tier 3, must touch)
     Unmatched tx / receipt → red-ish
@@ -31,6 +32,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from ..matching.types import (
+    DECIDED_ORIGINS,
     Categorization,
     ClassificationSource,
     Match,
@@ -38,6 +40,7 @@ from ..matching.types import (
     MatchType,
     Receipt,
     Transaction,
+    origin_of_source_value,
 )
 
 
@@ -98,10 +101,13 @@ class _Row:
 
 
 def _fill_for_source(source: ClassificationSource) -> PatternFill:
+    # Item 216 cause 1: a decided answer (a person's pick, a merchant-list or
+    # remembered rule) is blue. A person's pick and a merchant-list answer
+    # used to fall through to the needs-review orange.
+    if origin_of_source_value(source.value) in DECIDED_ORIGINS:
+        return FILL_LEARNED
     if source is ClassificationSource.LINE:
         return FILL_LINE
-    if source is ClassificationSource.LEARNED:
-        return FILL_LEARNED
     if source is ClassificationSource.VENDOR:
         return FILL_VENDOR
     return FILL_REVIEW

@@ -87,6 +87,7 @@ def learn_from_run(
     category_overrides: dict[tuple[str, int], dict],
     source_run: str,
     now_iso: str,
+    identity=None,
 ) -> LearnSummary:
     """Write the teachable facts from one finalized run. `outcome` is the
     decision-applied (effective) outcome; `confirmed_tx_ids` are the
@@ -109,6 +110,7 @@ def learn_from_run(
         category_overrides,
         source_run,
         now_iso,
+        identity=identity,
     )
 
     return LearnSummary(
@@ -197,6 +199,85 @@ def learn_confirmed_pairs(
 
 
 @dataclass(frozen=True)
+class AliasCandidate:
+    """A merchant spelling a person's pairing proves (item 216 cause 3): the
+    registry merchant one side of the pair resolves to, and the other side's
+    name, which the registry does not resolve yet."""
+
+    canonical: str
+    alias: str
+    transaction_id: str
+    document_id: str
+
+
+def identity_alias_candidates(
+    *,
+    transactions: list[Transaction],
+    receipts: list[Receipt],
+    outcome: MatchOutcome,
+    person_confirmed_tx_ids: set[str],
+    identity,
+) -> tuple[list[AliasCandidate], int]:
+    """The alias learner: what a month's person-confirmed pairs prove about
+    merchant IDENTITY. Returns `(candidates, conflicts)`.
+
+    A pair a person confirmed says "this charge IS this receipt", so when one
+    side resolves to a registry merchant and the other does not (the bank's
+    "ANTHROPIC* CLAUDE SUB" against a receipt from "Anthropic, PBC"), the
+    unresolved name is that merchant's spelling. That is identity, not a
+    category, so the owner's ruling that only corrections are memorized is
+    kept: nothing here says what the merchant is booked to.
+
+    Only a PERSON's confirmation counts (the 2026-09-24 leak-3 ruling): the
+    caller passes the ids `reviewer_confirmed_tx_ids` returns, which leaves
+    out every pairing the tool confirmed itself (`decided_by` tool).
+
+    Candidates are returned, never written: the caller puts them on the
+    memory plan as registry lessons, where Publish shows them and a person
+    keeps or drops each (item 183 half A). Both sides resolving to two
+    DIFFERENT registry merchants is counted as a conflict and teaches
+    nothing; neither side resolving teaches nothing either, because a new
+    merchant is a person's call, not a pairing's."""
+    from ..merchant_registry import is_generic_alias
+
+    tx_by_id = {t.transaction_id: t for t in transactions}
+    rec_by_id = {r.document_id: r for r in receipts}
+    out: list[AliasCandidate] = []
+    seen: set[tuple[str, str]] = set()
+    conflicts = 0
+    for m in outcome.matches:
+        if m.transaction_id not in person_confirmed_tx_ids:
+            continue
+        tx = tx_by_id.get(m.transaction_id)
+        r = rec_by_id.get(m.document_id)
+        if tx is None or r is None:
+            continue
+        rid = identity.resolve(getattr(r, "vendor_clean", None), r.detected_vendor)
+        tid = identity.resolve(None, tx.vendor_from_statement)
+        if rid is None or tid is None or rid.key == tid.key:
+            continue
+        r_reg, t_reg = rid.source == "registry", tid.source == "registry"
+        if r_reg and t_reg:
+            conflicts += 1
+            continue
+        if r_reg:
+            canonical, alias = rid.canonical, tx.vendor_from_statement
+        elif t_reg:
+            canonical, alias = tid.canonical, r.detected_vendor
+        else:
+            continue
+        alias = (alias or "").strip()
+        if not alias or is_generic_alias(alias):
+            continue
+        key = (canonical, normalize_vendor(alias))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(AliasCandidate(canonical, alias, m.transaction_id, m.document_id))
+    return out, conflicts
+
+
+@dataclass(frozen=True)
 class ExpenseLearnSummary:
     """What one finalized expense batch taught (receipt-first, Phase 6)."""
 
@@ -232,6 +313,7 @@ def learn_from_expense_run(
     transactions: list[Transaction] | None = None,
     source_run: str,
     now_iso: str,
+    identity=None,
 ) -> ExpenseLearnSummary:
     """Harvest one finalized expense batch (receipt-first, Phase 6).
 
@@ -320,6 +402,7 @@ def learn_from_expense_run(
         category_overrides,
         source_run,
         now_iso,
+        identity=identity,
     )
 
     return ExpenseLearnSummary(
@@ -351,12 +434,25 @@ def taught_value(ov: dict | None) -> tuple[str | None, str | None]:
     return (category or None), (ov.get("zoho_account") or None)
 
 
-def category_key(r: Receipt | None) -> tuple[str, str] | None:
-    """The `(legal_entity_id, vendor_norm)` a row's category lesson is
-    stored under, or None when the row names no vendor."""
+def category_key(r: Receipt | None, identity=None) -> tuple[str, str] | None:
+    """The `(legal_entity_id, merchant key)` a row's category lesson is
+    stored under, or None when the row names no vendor.
+
+    Item 216 cause 3: the key is the merchant IDENTITY
+    (`merchant_identity`), the same key recall asks under, so a correction on
+    "Anthropic, PBC" is stored as `anthropic` and two spellings of one
+    merchant in one month are one lesson (and one conflict test), not two.
+    `identity` carries the registry when the caller has one; without it the
+    name-only identity applies."""
     if r is None or not r.detected_vendor:
         return None
-    vnorm = normalize_vendor(r.detected_vendor)
+    if identity is None:
+        from ..merchant_identity import identity_key
+
+        vnorm = identity_key(r.detected_vendor)
+    else:
+        vnorm = identity.key(r.detected_vendor)
+    vnorm = vnorm or normalize_vendor(r.detected_vendor)
     if not vnorm:
         return None
     return (r.legal_entity_id, vnorm)
@@ -385,6 +481,7 @@ def merge_taught(values) -> tuple[str | None, str | None, bool]:
 def category_groups(
     rec_by_id: dict[str, Receipt],
     category_overrides: dict[tuple[str, int], dict],
+    identity=None,
 ) -> dict[tuple[str, str], list[tuple[tuple[str, int], tuple]]]:
     """Every override row that teaches something, grouped by the key it
     teaches: `{(entity, vendor_norm): [((doc, line), (category, account))]}`.
@@ -395,7 +492,7 @@ def category_groups(
         value = taught_value(ov)
         if not any(value):
             continue
-        key = category_key(rec_by_id.get(document_id))
+        key = category_key(rec_by_id.get(document_id), identity)
         if key is None:
             continue
         groups.setdefault(key, []).append(((document_id, line_index), value))
@@ -408,6 +505,7 @@ def _learn_categories(
     category_overrides: dict[tuple[str, int], dict],
     source_run: str,
     now_iso: str,
+    identity=None,
 ) -> tuple[int, int]:
     """Collapse per-line reclassifications to one (legal_entity, vendor) ->
     category mapping each, skipping vendors whose overrides disagree.
@@ -437,7 +535,7 @@ def _learn_categories(
     rather than letting the first account win silently."""
     n_category = n_skipped = 0
     for (legal_entity_id, vnorm), rows in category_groups(
-        rec_by_id, category_overrides
+        rec_by_id, category_overrides, identity
     ).items():
         category, account, conflict = merge_taught(v for _row, v in rows)
         if conflict:
@@ -471,6 +569,7 @@ def learn_category_candidate(
     rows: list[tuple[str, int]],
     source_run: str,
     now_iso: str,
+    identity=None,
 ) -> tuple[int, int]:
     """Item 183: the learner run over ONE conflict candidate's rows only.
 
@@ -481,4 +580,6 @@ def learn_category_candidate(
     code path. Two candidates of one vendor kept together conflict again and
     teach nothing, which is the learner's own answer."""
     subset = {k: category_overrides[k] for k in rows if k in category_overrides}
-    return _learn_categories(store, rec_by_id, subset, source_run, now_iso)
+    return _learn_categories(
+        store, rec_by_id, subset, source_run, now_iso, identity=identity,
+    )

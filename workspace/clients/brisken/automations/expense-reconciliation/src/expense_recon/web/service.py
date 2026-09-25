@@ -64,6 +64,7 @@ from ..duplicates import (
 )
 from ..ingest._common import merge_transactions
 from ..matching.types import (
+    DECIDED_ORIGINS,
     Categorization,
     ClassificationSource,
     EXPENSE_CATEGORIES,
@@ -73,6 +74,8 @@ from ..matching.types import (
     MatchType,
     Receipt,
     Transaction,
+    answer_origin,
+    origin_of_source_value,
 )
 from ..learning import (
     CATEGORY_SOURCE_HUMAN,
@@ -2650,6 +2653,9 @@ def _charge_category_view(cat) -> dict | None:
         "source": cat.source.value,
         "provenance": cat.reasoning or "",
         "is_learned": cat.source is ClassificationSource.LEARNED,
+        # Item 216 cause 1: who stands behind it (person | rule | suggestion), the
+        # one mapping the sheet, the journal and the row review read.
+        "origin": answer_origin(cat),
         # Item 109: a reviewer set this one by hand, so the SPA renders EDIT
         # where it renders EDIT on a receipt line, and the row stops asking
         # to be confirmed. ABSENT (not false) on every guessed category.
@@ -2794,6 +2800,9 @@ def _row_posting_category(
             "category": "; ".join(cats),
             "zoho_account": "; ".join(accts),
             "source": "; ".join(srcs),
+            # Item 216 cause 1: the weakest origin among the lines, since the row is
+            # only as decided as its least decided line.
+            "origin": origin_of_source_value("; ".join(srcs)),
         }
     return charge_cat_view
 
@@ -3173,8 +3182,10 @@ def resolve_review(
         # Item 109: a category the REVIEWER set on the charge is an answer,
         # not a question, so the row stops asking and drops out of
         # `n_charges_category_guessed` (which counts guesses, and this is
-        # no longer one).
-        if charge_category.get("source") == ClassificationSource.EDITED.value:
+        # no longer one). Item 216 cause 1: so is a merchant-list or remembered rule;
+        # this text used to call those "the tool guessed this category from
+        # the bank's description", which only the model's guess is.
+        if origin_of_source_value(charge_category.get("source")) in DECIDED_ORIGINS:
             return _review("none")
         return _review("check", "No receipt is attached, so the tool guessed this category from the bank's description. Pick the right one on the row, or attach the receipt, before it posts.", "receiptless_suggested")
     # A charge the GL engine refused is a question with a named reason, not
@@ -4919,6 +4930,7 @@ def registry_upserts_from_expense_run(
     field_overrides: dict[str, dict[str, str]],
     category_overrides: dict,
     gl: dict | None = None,
+    alias_candidates=(),
 ) -> tuple[dict, dict]:
     """Fold reviewer vendor / category corrections into a COPY of the merchants
     registry (2026-07-29, the self-improving half). Returns
@@ -4927,6 +4939,11 @@ def registry_upserts_from_expense_run(
     - A VENDOR edit teaches canonicalization: the CHOSEN (edited) name is the
       canonical merchant; the ORIGINAL extracted string becomes one of its
       aliases (so next month's identical OCR output resolves to the canonical).
+    - A PAIRING a person confirmed teaches a spelling too (item 216 cause 3,
+      `learning.identity_alias_candidates`): the side the registry does not
+      resolve becomes an alias of the merchant the other side resolves to.
+      Only onto a merchant the registry already holds, because a new
+      merchant is a person's call, never a pairing's.
     - A CATEGORY reclassification teaches the merchant default: the chosen
       category (+ account) is set on the receipt's canonical merchant. The
       merchant is the edited vendor if one was given, else the registry
@@ -4989,6 +5006,17 @@ def registry_upserts_from_expense_run(
         if normalize_vendor(raw) not in have:
             entry["aliases"].append(raw)
             aliases_added[canonical] = aliases_added.get(canonical, 0) + 1
+
+    # 1b) Item 216 cause 3: spellings a person-confirmed pairing proves.
+    for cand in alias_candidates or ():
+        if not isinstance(base.get(cand.canonical), dict):
+            continue
+        entry = _ensure(cand.canonical)
+        have = {normalize_vendor(a) for a in entry["aliases"]}
+        have.add(normalize_vendor(cand.canonical))
+        if normalize_vendor(cand.alias) not in have:
+            entry["aliases"].append(cand.alias)
+            aliases_added[cand.canonical] = aliases_added.get(cand.canonical, 0) + 1
 
     # 2) Category reclassifications -> merchant default (conflict-skipped).
     #
@@ -5338,6 +5366,16 @@ def registry_gl_context(run, settings: dict | None, card_res: dict) -> dict | No
     }
 
 
+def memory_identity(settings: dict | None):
+    """Item 216 cause 3: the merchant resolver a memory save keys its lessons
+    with, built from the live registry exactly as recall builds it
+    (`MerchantRegistry.from_settings` on the ingest and re-categorize paths),
+    so a rule is stored under the key it will be asked for."""
+    from ..merchant_identity import MerchantIdentityResolver
+
+    return MerchantIdentityResolver(MerchantRegistry.from_settings(settings or {}))
+
+
 def commit_to_memory(
     run: RunRow,
     decisions: dict[str, Decision],
@@ -5370,8 +5408,18 @@ def commit_to_memory(
     registry half without saving it and returns the map it would have saved
     as `merchants_after`. So the preview and the save are the same code
     reading the same inputs, rather than two implementations kept in step
-    by hand."""
+    by hand.
+
+    Item 216 cause 3: every lesson is keyed on the registry-aware merchant
+    identity (`memory_identity`), and a month with a statement also offers
+    the spellings its person-confirmed pairings prove as registry aliases.
+    The dry run hands those pairings back as `alias_candidates` so the plan
+    can name the rows behind each new spelling."""
+    from ..learning import identity_alias_candidates
+
     store_factory = store_factory or LearningStore
+    settings = (settings_store.get_settings() or {}) if settings_store is not None else {}
+    identity = memory_identity(settings)
     if run_mode(run) == MODE_EXPENSE_GENERATION:
         receipts, effective, manual_payloads = expense_learning_inputs(
             run, overrides, field_overrides, edits,
@@ -5394,6 +5442,7 @@ def commit_to_memory(
                 ],
                 source_run=run.run_id,
                 now_iso=now_iso,
+                identity=identity,
             )
             # Item 115: a receipt-first month with a statement also RECONCILES,
             # and its confirmed pairs are the only proof of which truncated
@@ -5405,17 +5454,24 @@ def commit_to_memory(
             # snapshot's charges and baked receipt pool, the decisions applied,
             # and only pairs a verdict confirmed.
             pairs = alias = fx = 0
+            alias_candidates: list = []
             if has_statement(run):
                 txs, pool, pool_outcome, _ = snapshot_from_dict(run.snapshot)
                 pool = pool + borrowed_receipts(run)
+                pair_outcome = apply_decisions(pool_outcome, txs, pool, decisions)
+                person_confirmed = reviewer_confirmed_tx_ids(decisions)
                 pairs, alias, fx = learn_confirmed_pairs(
                     store,
                     transactions=txs,
                     receipts=pool,
-                    outcome=apply_decisions(pool_outcome, txs, pool, decisions),
-                    confirmed_tx_ids=reviewer_confirmed_tx_ids(decisions),
+                    outcome=pair_outcome,
+                    confirmed_tx_ids=person_confirmed,
                     source_run=run.run_id,
                     now_iso=now_iso,
+                )
+                alias_candidates, _alias_conflicts = identity_alias_candidates(
+                    transactions=txs, receipts=pool, outcome=pair_outcome,
+                    person_confirmed_tx_ids=person_confirmed, identity=identity,
                 )
         result = summary.as_dict()
         result["confirmed_pairs"] = pairs
@@ -5426,7 +5482,6 @@ def commit_to_memory(
         # human-editable, seeded registry grows from corrections. Persist only
         # when the map actually changed; skip silently without a settings store.
         if settings_store is not None:
-            settings = settings_store.get_settings()
             card_res = resolve_batch_row_cards(
                 effective, run.config, field_overrides or {},
                 settled_cards=export_settled_cards(run, decisions),
@@ -5438,6 +5493,7 @@ def commit_to_memory(
                 field_overrides=field_overrides or {},
                 category_overrides=overrides,
                 gl=registry_gl_context(run, settings, card_res),
+                alias_candidates=alias_candidates,
             )
             # Note item M2: and the month's resolved cards per merchant.
             # Resolved WITHOUT the registry on purpose — a card the registry
@@ -5496,6 +5552,7 @@ def commit_to_memory(
                 # storing it, so the caller can diff it against the live one
                 # and show which merchants a save would change.
                 result["merchants_after"] = new_merchants
+                result["alias_candidates"] = alias_candidates
             result["registry"] = reg_summary
         return result
 
@@ -5512,6 +5569,7 @@ def commit_to_memory(
             category_overrides=overrides,
             source_run=run.run_id,
             now_iso=now_iso,
+            identity=identity,
         )
     return summary.as_dict()
 
@@ -18260,6 +18318,11 @@ def _memory_plan(
         store_factory=factory, persist=False,
     )
     merchants_after = learned.pop("merchants_after", None)
+    alias_pairs: dict[str, list[tuple[str, str]]] = {}
+    for cand in learned.pop("alias_candidates", None) or ():
+        alias_pairs.setdefault(cand.canonical, []).append(
+            (cand.transaction_id, cand.document_id)
+        )
     rec = recorder.get("store")
     writes = list(rec.writes) if rec is not None else []
 
@@ -18286,6 +18349,7 @@ def _memory_plan(
         field_overrides=field_overrides, receipts=receipts,
         effective=effective, manual_payloads=manual_payloads,
         rec_by_id=rec_by_id, gl=gl, now_iso=now_iso,
+        identity=memory_identity(settings), alias_pairs=alias_pairs,
     )
     return ctx, ml.build_lessons(ctx), learned
 
