@@ -219,6 +219,8 @@ from .month_readiness import (  # items 99 + 100
     readiness_of,
 )
 from ..category_vocabulary import (
+    card_account_check,
+    chart_coverage,
     gl_account_options,
     gl_companies,
     gl_revision,
@@ -3306,6 +3308,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             settings = store.get_settings()
             account_fields = _settings_account_fields(store, settings)
+            # Item 172: each card's paid-through account checked against its
+            # company's chart. Whether that chart is current (item 207) is
+            # read once and told to every check.
+            chart_ok = bool((chart_coverage() or {}).get("ok"))
             return JSONResponse({
                 **without_retired_settings_keys(
                     without_retired_entity_keys(settings)
@@ -3320,7 +3326,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 "gl_revision": gl_revision(),
                 "entity_options": available_entities(settings),
                 "cards_effective": [
-                    card_to_dict(c)
+                    {
+                        **card_to_dict(c),
+                        "account_check": card_account_check(
+                            c.zoho_account, c.entity, settings,
+                            digits=c.digits, chart_verified=chart_ok,
+                        ),
+                    }
                     for c in effective_cards(settings, load_cards()).values()
                 ],
                 "merchants_inert": sorted(
