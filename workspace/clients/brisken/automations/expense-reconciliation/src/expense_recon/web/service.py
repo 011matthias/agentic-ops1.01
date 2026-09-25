@@ -64,6 +64,7 @@ from ..duplicates import (
 )
 from ..ingest._common import merge_transactions
 from ..matching.types import (
+    DECIDED_ORIGINS,
     Categorization,
     ClassificationSource,
     EXPENSE_CATEGORIES,
@@ -73,6 +74,8 @@ from ..matching.types import (
     MatchType,
     Receipt,
     Transaction,
+    answer_origin,
+    origin_of_source_value,
 )
 from ..learning import (
     CATEGORY_SOURCE_HUMAN,
@@ -2648,6 +2651,9 @@ def _charge_category_view(cat) -> dict | None:
         "source": cat.source.value,
         "provenance": cat.reasoning or "",
         "is_learned": cat.source is ClassificationSource.LEARNED,
+        # Item 216 cause 1: who stands behind it (person | rule | suggestion), the
+        # one mapping the sheet, the journal and the row review read.
+        "origin": answer_origin(cat),
         # Item 109: a reviewer set this one by hand, so the SPA renders EDIT
         # where it renders EDIT on a receipt line, and the row stops asking
         # to be confirmed. ABSENT (not false) on every guessed category.
@@ -2792,6 +2798,9 @@ def _row_posting_category(
             "category": "; ".join(cats),
             "zoho_account": "; ".join(accts),
             "source": "; ".join(srcs),
+            # Item 216 cause 1: the weakest origin among the lines, since the row is
+            # only as decided as its least decided line.
+            "origin": origin_of_source_value("; ".join(srcs)),
         }
     return charge_cat_view
 
@@ -3171,8 +3180,10 @@ def resolve_review(
         # Item 109: a category the REVIEWER set on the charge is an answer,
         # not a question, so the row stops asking and drops out of
         # `n_charges_category_guessed` (which counts guesses, and this is
-        # no longer one).
-        if charge_category.get("source") == ClassificationSource.EDITED.value:
+        # no longer one). Item 216 cause 1: so is a merchant-list or remembered rule;
+        # this text used to call those "the tool guessed this category from
+        # the bank's description", which only the model's guess is.
+        if origin_of_source_value(charge_category.get("source")) in DECIDED_ORIGINS:
             return _review("none")
         return _review("check", "No receipt is attached, so the tool guessed this category from the bank's description. Pick the right one on the row, or attach the receipt, before it posts.", "receiptless_suggested")
     # A charge the GL engine refused is a question with a named reason, not
