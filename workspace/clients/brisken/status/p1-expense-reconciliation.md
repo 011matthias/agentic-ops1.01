@@ -9,7 +9,10 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: a copy is no longer lent a card its twin's charge disputes** (backlog item 204 step 4 follow-up; Shipped row 132). July's copy of the Lovable 200.00 purchase showed card 1176 from the account's later purchases although the purchase was settled on 2838; it now stays blank.
+
 **2026-09-25: card history loaded into April to September** (backlog item 204, D2 / D3; owner yes on the prediction, no code). From Criss's SharePoint sheets, only the charges no month held, cut by post month: 13 files, 9693 and 1176 across all six months plus the whole 2838 family for May and June. May and June are statement months now (121 and 165 charges; 16 and 17 receipts settled, 2 and 3 proposed). September settled 1 to 10 (the 9693 OpenAI / Anthropic rows through Sep 15). April, July and August gained one each. Needs-company: May 1, June 2, September 17. August's Lovable invoice `H0LHY2WQ-0032` moved from a 3645 BASE44 charge to 1176 LOVABLE (Consulting). The re-match also sent April SJCOROA and August E A LOCAÇÕES to review (current-code FX judgment and the D5 guard). Weekly loads wait on item 215, where the attach keeps only the month's own charges (owner decision).
+
 **2026-09-25: month pages are fast again** (backlog item 204 step 4 follow-up; Shipped row 131). The billing-account card re-read every month on every page (~28 s), which made the app fail its health check and the month page show "Failed to fetch". Each month's evidence is now reused until that month's own data changes.
 
 **2026-09-25: a decided copy is no longer offered a card** (backlog item 204, build 5 follow-up; Shipped row 130). A row set aside as a copy keeps its waiting status but loses `card_suggestion`, since a click there wrote an override on a row that counts for nothing and the original carries the same suggestion. Live before: 2 of 6 suggestions sat on copies (May and July Lovable 200.00).

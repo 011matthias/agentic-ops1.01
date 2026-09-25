@@ -129,17 +129,27 @@ def decide(purchases: Purchases | None, own_purchase: str) -> str | None:
     """The card an account's OTHER purchases agree on, or None.
 
     None unless every purchase except `own_purchase` that names a card names
-    the same one, and at least `MIN_PURCHASES` of them count for it."""
+    the same one, and at least `MIN_PURCHASES` of them count for it.
+
+    The judged purchase never votes for itself, but a card it already names
+    through another copy of it (the charge that settled its twin, a number
+    its twin printed) vetoes a different answer: live 2026-09-25 the decided
+    copy of July's Lovable purchase, settled on 2838, was lent 1176 by the
+    account's later purchases (50622baec444, row 0044)."""
     named: set[str] = set()
     support: Counter[str] = Counter()
+    own: frozenset[str] = frozenset()
     for purchase, (counts, names) in (purchases or {}).items():
         if purchase == own_purchase:
+            own = counts | names
             continue
         named |= counts | names
         support.update(counts)
     if len(named) != 1:
         return None
     (key,) = named
+    if own - {key}:
+        return None
     return key if support[key] >= MIN_PURCHASES else None
 
 
