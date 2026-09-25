@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-25 | Expense-Recon Item 215 Attach Month Guard | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Expense-Recon%20Item%20215%20Attach%20Month%20Guard/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Card Strip Cards Only | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Card%20Strip%20Cards%20Only/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Review Lines Item 213 | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Review%20Lines%20Item%20213/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Duplicates Bound Together | client-dev | [→](docs/2026-09-25%20-%20Brisken%20Recon%20Duplicates%20Bound%20Together/Checkpoint.md) |
