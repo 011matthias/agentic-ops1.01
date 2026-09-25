@@ -367,9 +367,12 @@ def _apply_judgment(
         pair_reference_gap_band,
     )
 
+    from .matching.deterministic import UNIQUENESS_RIVAL_REVIEW
+    from .matching.judgment import fx_evidence
+
     derived: list = []
 
-    def _rate_band(tx, rec) -> str | None:
+    def _derived_rates():
         if cfg is None:
             return None
         if not derived:
@@ -377,7 +380,12 @@ def _apply_judgment(
                 [t for t in tx_by_id.values() if not t.is_credit],
                 list(rec_by_id.values()), cfg,
             ))
-        return pair_reference_gap_band(tx, rec, cfg, derived[0])
+        return derived[0]
+
+    def _rate_band(tx, rec) -> str | None:
+        if cfg is None:
+            return None
+        return pair_reference_gap_band(tx, rec, cfg, _derived_rates())
 
     judged: list = []
     suppressed: list = []
@@ -394,7 +402,25 @@ def _apply_judgment(
         if m.match_type is not MatchType.FX_JUDGMENT:
             judged.append(m)
             continue
-        verdict = judge_fx_match(tx, rec, client=client)
+        # Front 5 (2026-09-25): a pair the uniqueness gate demoted although
+        # its own evidence is clean (the card agrees, the merchant agrees at
+        # 75+, the rate lands in the clean band) is not a question the model
+        # can answer: the question is WHICH of two look-alikes, and live July
+        # 2026 had the model answer 0.85 on both POSTO SANTOS 9.80 twins. It
+        # stays in review as the matcher built it, its reason naming the
+        # rival, and no call is spent.
+        if (
+            m.review_code == UNIQUENESS_RIVAL_REVIEW
+            and m.card_score >= 1.0
+            and m.vendor_score >= 0.75
+            and _rate_band(tx, rec) == "match"
+        ):
+            judged.append(m)
+            continue
+        verdict = judge_fx_match(
+            tx, rec, client=client,
+            evidence=fx_evidence(tx, rec, cfg, _derived_rates(), m.vendor_score),
+        )
         # The judgment layer builds a fresh Match around the model's
         # verdict, which dropped the deterministic sub-scores the matcher
         # had already computed. Carry them over: every FX row otherwise
@@ -409,6 +435,9 @@ def _apply_judgment(
             date_score=m.date_score,
             vendor_score=m.vendor_score,
             card_score=m.card_score,
+            # Front 5: why the matcher sent the pair here survives the
+            # verdict, so the month page can say it.
+            review_code=m.review_code,
         )
         # Only a REAL model verdict can be suppressed; the no-client stub
         # (confidence 0.5) always stays, so no-LLM runs are unaffected.
