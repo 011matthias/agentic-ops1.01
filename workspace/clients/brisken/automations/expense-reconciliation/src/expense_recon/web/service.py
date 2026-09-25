@@ -11837,23 +11837,32 @@ def settled_charge_cards(
     the same string the matcher's scoping reads), and a card the registry
     cannot name lends nothing. A borrowed receipt (`receipt_sources`) is
     another month's expense, and its id can equal one of this month's own,
-    so any held id in that map lends nothing here."""
+    so any held id in that map lends nothing here.
+
+    Case 9 build 3 (item 204): the other direction of that borrow. A receipt
+    of THIS month that a neighbour month's charge settled takes that
+    charge's card too (`cards_settled_elsewhere`), so the receipt's own
+    month is no longer the one screen that knows the pairing and not the
+    card. Read after this month's own charges, which win on the same id."""
     cards = _batch_cards(run.config)
-    if not cards or not states:
+    if not cards:
         return {}
-    borrowed = set((run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {})
-    tx_by_id = {t.transaction_id: t for t in charges}
     out: dict[str, str] = {}
-    for tx_id, state in states.items():
-        doc = state.get("held_doc")
-        tx = tx_by_id.get(tx_id)
-        if state.get("bucket") != "reconciled" or not doc or tx is None:
-            continue
-        if doc in borrowed:
-            continue
-        key = _charge_card_identity(tx, cards).card_key
-        if key:
-            out[doc] = key
+    if states:
+        borrowed = set((run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {})
+        tx_by_id = {t.transaction_id: t for t in charges}
+        for tx_id, state in states.items():
+            doc = state.get("held_doc")
+            tx = tx_by_id.get(tx_id)
+            if state.get("bucket") != "reconciled" or not doc or tx is None:
+                continue
+            if doc in borrowed:
+                continue
+            key = _charge_card_identity(tx, cards).card_key
+            if key:
+                out[doc] = key
+    for doc, key in cards_settled_elsewhere(run, cards).items():
+        out.setdefault(doc, key)
     return out
 
 
@@ -17223,6 +17232,86 @@ def _fills_view(tx) -> list[dict]:
         }
         for f in tx.fills
     ]
+
+
+# Case 9 build 3 (item 204, step 3): the database `create_app` keeps beside
+# the `runs/` tree every run's work dir lives in (`data_root/runs/{run_id}`).
+_RUN_DB_NAME = "recon-web.sqlite"
+
+
+def cards_settled_elsewhere(run: RunRow, cards: dict) -> dict[str, str]:
+    """`{document_id: card key}` for every receipt of this month that ANOTHER
+    month's charge settles, keyed to that charge's card in THIS batch's
+    registry (the one the row resolves the key against).
+
+    A receipt printed on the 31st is paid by a charge that posts on the 1st,
+    so the next month's statement borrows it (`adjacent_pool_for_month`) and
+    records the pairing in `receipt_claims`. The receipt's own month showed
+    only `settled_by`: no card, no company, no person, while the statement
+    one tab over named all three.
+
+    The claim is the evidence, and it is already narrow: it is written only
+    for a deterministic match or a confirmed pick, never for a proposal in
+    review, and a reject, a deleted month or a re-match without the pairing
+    releases it (`sync_claim_for_decision`, `delete_run`,
+    `replace_claims_by_run`). It is re-checked against the holder's
+    EFFECTIVE verdict all the same (`month_charge_states`, the reconciled
+    bucket still holding this document, borrowed from this run), because a
+    claim that outlived its pairing must lend nothing rather than a card the
+    holder's own page no longer shows.
+
+    Read through a read-only store opened from the run's work dir, since the
+    four callers (grid, CSV, month PDF, the sign-off learner) hand over a run
+    and no store. A run whose work dir is not under a `runs/` tree, a missing
+    database, or any SQLite error lends nothing: the row then keeps asking
+    the question, which is what it did before.
+    """
+    import sqlite3
+
+    from .store import open_read_only
+
+    if not cards or not run.work_dir:
+        return {}
+    work = Path(run.work_dir)
+    if work.parent.name != "runs":
+        return {}
+    store = open_read_only(work.parent.parent / _RUN_DB_NAME)
+    if store is None:
+        return {}
+    out: dict[str, str] = {}
+    try:
+        held_by: dict[str, list[tuple[str, str]]] = {}
+        for doc, claim in store.get_claims_on_receipts(run.run_id).items():
+            holder = str(claim["claimed_by_run_id"])
+            if holder != run.run_id:
+                held_by.setdefault(holder, []).append(
+                    (doc, str(claim["transaction_id"]))
+                )
+        for holder in sorted(held_by):
+            other = store.get_run(holder)
+            if other is None:
+                continue
+            charges, states = month_charge_states(
+                other, store.get_decisions(holder)
+            )
+            tx_by_id = {t.transaction_id: t for t in charges}
+            for doc, tx_id in held_by[holder]:
+                state = states.get(tx_id) or {}
+                tx = tx_by_id.get(tx_id)
+                if tx is None or state.get("bucket") != "reconciled":
+                    continue
+                if state.get("held_doc") != doc:
+                    continue
+                if receipt_source_run(other, doc) != run.run_id:
+                    continue
+                key = _charge_card_identity(tx, cards).card_key
+                if key:
+                    out[doc] = key
+    except sqlite3.Error:
+        return {}
+    finally:
+        store.close()
+    return out
 
 
 def apply_card_by_vendor(
