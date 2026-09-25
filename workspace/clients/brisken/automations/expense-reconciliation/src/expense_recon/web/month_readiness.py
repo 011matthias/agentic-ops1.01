@@ -149,7 +149,8 @@ def receipt_needs_charge(
     private expense (`private_docs`: the flag AND who is reimbursed,
     `service._private_reimbursements`): it was paid on someone's own card, so
     no company card charge will ever exist for it. Settled-outside receipts
-    never reach the lists."""
+    never reach the lists, and neither do bills paid by bank transfer (Build 4
+    / item 218: `build_view` drops both through its effective map)."""
     doc = receipt.get("document_id")
     return (
         "settled_by" not in receipt

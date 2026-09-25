@@ -378,6 +378,7 @@ def card_by_vendor_targets(expenses: list[dict], vendor: str) -> list[str]:
             or e.get("suggested_private")
             or _card_keys(e.get("payment_hint") or "")
             or "settled_outside" in e
+            or e.get("payment_path") == "bill"  # Build 4 / item 218: no card
             or e.get("counts_in_total") is False
         ):
             continue
