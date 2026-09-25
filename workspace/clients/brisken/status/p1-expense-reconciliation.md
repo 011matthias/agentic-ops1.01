@@ -17,8 +17,13 @@ a Stripe invoice number takes the card its billing account was paid with on at
 least two other purchases and on no other card (`card_source: "account"`,
 company and person with it). Derived on every read, never memorized; a pick, a
 printed number and the statement outrank it; one pick decides nothing (D6).
-Predicted live: ten May / June / September rows gain a card. The SPA's source
-line waits on `docs/lovable-account-card-prompt.md`.
+Live (v239, `3831e6cb`): the nine May / June rows all read 3876; seven now
+through their own statement charge (the April-June sheets landed 01:18-01:22
+UTC the same night) and two through the account (May Anthropic 99.95 and 90.00
+EUR); September's Anthropic 184.35 reads card-9693 through build 1's twin. v237
+had lent May's Lovable invoice 2838 (decided copies dropped from the evidence);
+fixed forward in #1389, and that row now reads its statement card 3645. The
+SPA's source line waits on `docs/lovable-account-card-prompt.md`.
 
 **2026-09-25: Publish shows what it will remember (backlog item 183 half A).** `memory-plan` lists one lesson per learning row or merchant-list entry, with an id, a plain description and the rows it came from; Publish takes the ticked ids (`keep` / `skip`) and writes only those, through the plan's own recorded writes. Corrections start ticked, disagreements are offered unticked one option each, OpenAI / Anthropic / Lovable never reach the merchant list, and on a Zoho-account month a kept account correction fills that company's `accounts` entry. Closed on the way: the merchant-list learner taught the model's category after a Confirm or an account-only fix. The checklist itself waits on `docs/lovable-publish-checklist-prompt.md`; until then Publish applies the defaults.
 
