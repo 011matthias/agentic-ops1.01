@@ -42,6 +42,7 @@ VALID_SAMPLE: dict[str, object] = {
         "enabled": False,
         "holders": {"Dirk Neumann": "dirk.neumann@brisken.com"},
     },
+    "private_cards": {"3281": {"person": "Dirk Neumann"}},
 }
 
 
