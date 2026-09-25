@@ -42,7 +42,15 @@ from ..categorize import (
     DECISION_KEPT_ER,
     DECISION_REVIEW_UNRESOLVED,
 )
-from ..matching.types import Categorization, Match, MatchOutcome, Receipt, Transaction
+from ..matching.types import (
+    Categorization,
+    Match,
+    MatchOutcome,
+    Receipt,
+    Transaction,
+    is_suggestion_only,
+)
+from .posting_common import suggested_cell
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -186,6 +194,16 @@ def _disposition(outcome: MatchOutcome) -> dict[str, tuple[str, Match | None]]:
     return disp
 
 
+def _account_label(cat: Categorization) -> str:
+    """An account cell: the account, or `suggested: <account>` for the
+    model's answer on a GL month (item 216 Build 2 step 2), the same cell
+    `expenses.csv` and the statement sheet write."""
+    account = cat.zoho_account or ""
+    if account and is_suggestion_only(cat):
+        return suggested_cell(account)
+    return account
+
+
 def _ai_category_cells(rec: "Receipt | None") -> tuple[str, str, str]:
     """The tool's OWN (category, posting account, tier) for a matched
     receipt, aggregated across its line items — distinct non-blank values
@@ -205,8 +223,9 @@ def _ai_category_cells(rec: "Receipt | None") -> tuple[str, str, str]:
         has_signal = bool(cat.category or cat.zoho_account)
         if cat.category and cat.category not in cats:
             cats.append(cat.category)
-        if cat.zoho_account and cat.zoho_account not in accts:
-            accts.append(cat.zoho_account)
+        account = _account_label(cat)
+        if account and account not in accts:
+            accts.append(account)
         if has_signal and cat.source is not None and cat.source.value not in srcs:
             srcs.append(cat.source.value)
     return ("; ".join(cats), "; ".join(accts), "; ".join(srcs))
@@ -326,7 +345,7 @@ def build_reconciled_rows(
             _reimbursable(rec.reimbursable) if rec is not None else "",
             # receiptless-charge categorization (Slice 10)
             _str(charge_cat.category) if charge_cat is not None else "",
-            _str(charge_cat.zoho_account) if charge_cat is not None else "",
+            _account_label(charge_cat) if charge_cat is not None else "",
             charge_cat.source.value if charge_cat is not None else "",
             # §17 disposition (default business)
             disp_map.get(tx.transaction_id) or "business",

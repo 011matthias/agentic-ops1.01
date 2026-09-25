@@ -1613,6 +1613,8 @@ REVIEW_REASON_CODES_PIN = {
     # the category judgment (`_matched_category_review`, both payloads)
     "uncategorized", "partial_uncategorized", "category_account_mismatch",
     "vendor_guess", "unknown_provenance",
+    # item 216 Build 2 step 2: the model's reading on a GL month, confirmable
+    "model_suggestion",
     # a GL-engine refusal (`_refusal_review`, receipt lines and receiptless
     # charges); carries `refusal` beside the code. The published SPA does not
     # localize it yet and shows the English `reason`.

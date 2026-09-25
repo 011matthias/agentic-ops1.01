@@ -102,6 +102,28 @@ def answer_origin(cat) -> str | None:
     return _ORIGIN_OF_SOURCE.get(source)
 
 
+def is_suggestion_only(cat) -> bool:
+    """Whether an answer is the model's on a month categorized in Zoho
+    accounts, so every surface shows it as a suggestion and nothing posts
+    it (item 216 Build 2 step 2, owner ruling 2026-09-25: "the model
+    suggests, a rule or a person decides"). A person's Confirm makes it
+    theirs (`inherited`), and it posts from then on.
+
+    The vocabulary is read off the answer: a month is categorized in exactly
+    one, and on a GL month the category is a curated leaf CODE
+    (`curated_leaves.leaf`). A bucket-era answer (one of the eight
+    `EXPENSE_CATEGORIES` names) is no code, so those months (April to June,
+    never converted by the owner's order) keep the reading they were booked
+    under."""
+    if answer_origin(cat) != ORIGIN_SUGGESTION:
+        return False
+    # Pure data (the compiled chart); imported here so this module stays at
+    # the bottom of the import graph.
+    from ..zoho import curated_leaves
+
+    return curated_leaves.leaf(cat.category) is not None
+
+
 def origin_of_source_value(value: str | None) -> str | None:
     """`answer_origin` for a view dict's `source` string. A joined value
     (`"LINE; EDITED"`, several lines of one receipt) answers the weakest

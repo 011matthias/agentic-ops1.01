@@ -153,9 +153,10 @@ def _csv_accounts(web, batch_id) -> list[str]:
 def test_a_hand_picked_code_books_and_exports_under_its_account_name(web, monkeypatch):
     engine_code, picked = _two_codes(CORP_ORG)
     batch_id, doc = _gl_batch(web, monkeypatch, CORP, engine_code)
-    # Control: the engine's own pick passes the export gate under its name.
-    assert _row(web, batch_id)["posting_category"]["zoho_account"] == _name(CORP_ORG, engine_code)
-    assert _csv_accounts(web, batch_id) == [_name(CORP_ORG, engine_code)]
+    # Control: the engine's own pick passes the export gate under its name,
+    # labelled as the model's suggestion (item 216 Build 2 step 2).
+    assert _row(web, batch_id)["suggested_category"]["zoho_account"] == _name(CORP_ORG, engine_code)
+    assert _csv_accounts(web, batch_id) == [f"suggested: {_name(CORP_ORG, engine_code)}"]
 
     _pick(web, batch_id, doc, picked)
 

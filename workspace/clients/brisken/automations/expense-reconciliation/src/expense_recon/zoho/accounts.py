@@ -57,6 +57,7 @@ from ..output.posting_common import (
     _REIMBURSABLE_PLACEHOLDER,
     _UNCATEGORIZED,
     _UNMAPPED,
+    is_suggested_cell,
     resolve_ref,
 )
 from ..output.zoho_expense_export import (
@@ -195,6 +196,17 @@ def resolve_account_id(
             detail=(
                 f"{text!r} is a placeholder the export writes when a human "
                 "still has to assign the account; assign it, then post"
+            ),
+        )
+    if is_suggested_cell(text):
+        # Item 216 Build 2 step 2: the model's suggestion, which a person
+        # confirms (or replaces) in the app before it is an account.
+        return AccountRefusal(
+            ref=text,
+            reason=REASON_PLACEHOLDER,
+            detail=(
+                f"{text!r} is the model's suggestion, not a decided account; "
+                "confirm it or pick one in the app, then post"
             ),
         )
 
