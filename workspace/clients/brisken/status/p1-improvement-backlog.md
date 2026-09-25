@@ -10411,7 +10411,15 @@ copies collapsed): exactly the ten predicted rows decide (May WWT1PNYP 0012 /
 pick) stay silent. `/api/cards/status` 1.39 s before. Tests
 `tests/test_account_card_c9.py`; regress red at the chain link, the app
 middleware, the export site, the purchase collapse, the evidence
-classification, the threshold and the contradiction rule.
+classification, the threshold and the contradiction rule. **Fix-forward the same
+night:** v237 (#1366) lent May's Lovable invoice `HMVWDWIL0023` card-2838, because
+the collector dropped decided copies and skipped the grid's twin inheritance,
+while live the Stripe RECEIPT (the decided copy) is the one printing the card, so
+September's 3876 / 3645 purchases vanished and only August's three 2838 picks
+remained. The collector now inherits like the grid, folds a copy's evidence into
+the purchase it repeats, and empties the whole index when any batch cannot be
+read. Test `test_a_card_printed_only_on_the_decided_copy_still_counts` is red on
+the v237 module and green with the fix; nothing was stored, the row reverts on read.
 
 ### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (APPLIED 2026-09-25: PR #1356, Fly `071b19d7`, all three months switched live)
 
