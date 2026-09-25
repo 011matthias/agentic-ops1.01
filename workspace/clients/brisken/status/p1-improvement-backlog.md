@@ -8284,7 +8284,7 @@ attribute at all. Coverage, not matching.
 
 ### Item 172 — card 3645 posts to another card's name (master data, owner's)
 
-**CHECK BUILT 2026-09-25 (no card edited; the value stays Dirk's).**
+**CHECK LIVE 2026-09-25 (PR #1401, Fly `904b3f34`; no card edited, the value stays Dirk's). Live read the same hour: 8 of 9 cards `ok`, card `3645` `not_in_chart` with `closest` = `CHASE VISA - 2838 - TRAVEL`, chart verified current.**
 `GET /api/settings` `cards_effective[].account_check`: `{status, detail,
 closest, account_id, company_org, chart_modified, chart_verified}`, status
 `ok` / `not_in_chart` / `wrong_type` / `inactive` / `no_account` /
@@ -9053,7 +9053,7 @@ read off the token response. `settings.READ` is gone with it, which is why
 `GET /organizations` now 401s with code 57 and why the puller does not route
 through the org directory.
 
-### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account (HALF B SHIPPED 2026-09-24; HALF A BUILT 2026-09-25, SPA prompt not pasted)
+### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account (HALF B SHIPPED 2026-09-24; HALF A LIVE 2026-09-25: PR #1396, Fly `b360333c`; SPA prompt not pasted)
 
 **Half A built 2026-09-25 (owner decisions 2026-09-25: corrections start
 ticked, conflicts unticked; an unticked lesson is dropped and offered again,
@@ -10489,6 +10489,7 @@ the purchase it repeats, and empties the whole index when any batch cannot be
 read. Test `test_a_card_printed_only_on_the_decided_copy_still_counts` is red on
 the v237 module and green with the fix; nothing was stored, the row reverts on read.
 2026-09-25, follow-up (Shipped row 131): the index cost ~28 s per request live (v239: May read 37 s against April's 9 s; the health check failed and the SPA's month page said "Failed to fetch"). A month's evidence is now reused per process while `RunStore.run_inputs_digest` (its rows in runs, decisions, duplicate rulings, overrides, edits) is unchanged, and re-derived after any write to it.
+2026-09-25, follow-up (Shipped row 132): the purchase's own card vetoes the account's. Once the index built live, July's decided copy `0044` (Lovable 200.00, 50622baec444) read `card-1176` via `account` while its twin `0043` is settled on `card-2838`; `decide` now returns None when the judged purchase already names a different card through another copy. It still never votes for itself.
 
 **D2 / D3 history loaded 2026-09-25 (owner yes on the per-month prediction; no
 code).** Read via Graph app-only: `Chase9693_Activity2024_Start.xlsx`
@@ -10896,7 +10897,7 @@ reader item 204 step 3 added (`cards_settled_elsewhere` in `web/service.py`,
 extended to return the charge's amount and currency), so card and conversion
 describe the same charge. Small and self-contained. Not built.
 
-### 213. The "waits for statement" reason names every card on the account (note #87, owner 2026-09-25 01:12 UTC) (RECORDED, not built; follow-up to item 204 build 5)
+### 213. The "waits for statement" reason names every card on the account (note #87, owner 2026-09-25 01:12 UTC) (SHIPPED 2026-09-25, PR #1393, live `c5a426aa`; SPA half pending paste)
 
 Note #87, September Expenses, anchored on row `0010__rendered-body.pdf`'s
 review line: "NO NEED FOR THIS MUCH VOLUME AI SLOP. TONE IT DOWN; COMPRESS
@@ -10921,6 +10922,33 @@ sentence back in both languages. "COMPRESS WHATEVER" reaches past this one
 line: the next-longest reasons on the same page are `suggested_private` (233
 characters, 4 rows) and, in July, `date_outside_period` (191) and
 `needs_entity_settled_outside` (173).
+
+**Shipped (PR #1393, merge `c5a426aa`, deployed 2026-09-25 ~02:00 UTC).** The
+backend line names the cards only when one or two wait
+(`service.WAITS_NAMED_MAX`), otherwise "No card on this receipt, and no
+statement is loaded for its date yet."; `review.waits_for_statements` is
+unchanged. `date_outside_period` (191 -> 123), `suggested_private` (233 ->
+157) and `needs_entity_settled_outside` (173 -> 104) keep each instruction
+and lose the explanation. Predicted from the GET payload and matched after
+the deploy on every row: 47 rows across seven months (31 waiting, 14
+suggested private, 1 date, 1 settled outside), 0 mismatches, every other
+reason count identical. Every live waiting row waits on 3 to 9 cards, so the
+named form has no live case yet.
+
+**What the owner sees has not changed yet, and why.** The case-9 status
+prompt was already published when this was built, and the SPA composes the
+waiting line itself from `review.waits_for_statements` (its own "Waiting for
+the statement of {cards}..." copy). A cold drive after the deploy read
+September's 13 waiting rows at 284-346 characters. The SPA half is
+`docs/lovable-short-review-lines-prompt.md` (two keys for the waiting line,
+shorter `needs_entity_settled_outside`); until it is pasted, only July's date
+line (no SPA key, so the backend prose renders) shows the change, driven in
+EN and PT. September row `0010__rendered-body.pdf`, the note's anchor, no
+longer waits at all: the 01:4x statement attach took it to `vendor_guess`
+(September's waiting rows fell from 19 to 13).
+
+Tests: `tests/test_reason_copy_item_213.py` (6; two route-level); the wiring
+proven red with `tools/regress_check.py`; suite 3620 passed / 2 skipped.
 
 ### 214. The card strip asks only where the receipt carries no payment info, and its dropdown lists cards only (owner ruling 2026-09-25; found listing 3281) (RULED, not built)
 
@@ -11003,6 +11031,8 @@ sweep could delete an upload no entry names.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 133 | Item 213 (note #87): review lines say one thing each. `waits_for_statement` names the cards only when one or two wait; `date_outside_period`, `suggested_private`, `needs_entity_settled_outside` keep the instruction and lose the explanation. SPA half `docs/lovable-short-review-lines-prompt.md` pending | 13 September rows read one 284-346 character sentence naming up to nine cards; the owner called it slop. 47 live rows change prose, 0 counts move | #1393 |
+| 132 | Item 204 step 4 follow-up: a card the judged purchase already names through another copy of it (its twin's settling charge or printed number) vetoes a different account card, so `billing_account.decide` leaves the row blank. | Live after the index stopped timing out (v242): July's decided copy of the Lovable 200.00 purchase read `card-1176` via `account` while its twin is settled on `card-2838`. A blank beats a wrong card. | #1404 |
 | 131 | Item 204 step 4 follow-up: the billing-account index re-derives a month only when that month's own rows change. `billing_account._month_rows` keeps (digest, evidence) per (db, run) and reuses it while `RunStore.run_inputs_digest` matches, caching only when the digest is the same before and after the read. | Live on v239 every page showing an account-keyed row re-derived all seven months (~28 s): May read 37 s, April 9 s, the health check failed under two concurrent pages and the SPA's May page read "Failed to fetch". | #1397 |
 | 130 | Item 204 build 5 follow-up: a decided copy (`counts_in_total: false`) is never offered a `card_suggestion`; `build_expense_view` passes `copy=r.document_id in grid_copies` into `case9_row_fields`, and the copy keeps `waits_for_statements` (no count moves). | 2 of the 6 live suggestions sat on copies (May Lovable 200.00 -> 3645, July Lovable 200.00 -> card-2838), where a click writes an override on a row that counts for nothing; the original already carries the same suggestion. | #1388 |
 | 129 | Item 204 step 4 (case 9, build 4 of 5; owner D4): a receipt that prints no card takes the card its Stripe billing account (`WWT1PNYP-0016` -> `WWT1PNYP`) was paid with on at least two other purchases and on no other card, `card_source: "account"`, company and person riding it. New `billing_account.py`; one link in `resolve_batch_row_cards` between the settled charge and the remembered card; a lazy per-request index (one app middleware) passed by the grid, CSV, month PDF, card tabs, cost-center roll-up, refresh preview and so `/api/cards/status`; never the matcher or the sign-off learner. Lovable prompt `lovable-account-card-prompt.md` pending | Keyed on the vendor name the same memory gave the wrong person 3 times in 21; keyed on the account it scored 34 right, 0 wrong. Ten live May, June and September rows stop asking Criss for a company and a person; the multi-card accounts (Lovable, Dirk's Anthropic) and OpenAI's single pick (D6) stay blank on purpose | PR (this) |
