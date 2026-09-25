@@ -280,6 +280,30 @@ def test_the_refused_rerun_refuses_a_bucket_month(tmp_path, monkeypatch):
     assert r.status_code == 409 and r.json()["code"] == "month_not_gl"
 
 
+def test_needs_account_finds_a_merchant_added_after_ingest_and_skips_a_covered_one(
+    web, monkeypatch,
+):
+    """The live shape of July to September: receipts ingested before their
+    merchant existed carry `vendor.source: extraction` for good, and the
+    food merchants book through a single `zoho_account`. The gap list must
+    find the first and leave the second out."""
+    label = next(lbl for lbl in curated_leaves.llm_leaf_labels(CORP_ORG)
+                 if lbl.startswith(CORP_CODE + " "))
+    for vendor in ("Anthropic Inc", "Martino Supermercado"):
+        _batch(web, monkeypatch, CORP, vendor, client_cls=MockLLMClient,
+               responses=[ClassificationResult(label, None, 0.9, "mock")])
+    _put_merchants(web, {
+        "Anthropic": {"aliases": [], "category": "Software & Subscriptions",
+                      "zoho_account": None},
+        "MARTINO SUPERMERCADO": {"aliases": [], "category": "Meals & Entertainment",
+                                 "zoho_account": f"{CORP_CODE} - some name"},
+    })
+    merchant_accounts._BOOKINGS_CACHE.clear()
+    gaps = [(g["merchant"], g["company"])
+            for g in web.get("/api/settings").json()["needs_account"]]
+    assert gaps == [("Anthropic", CORP)], gaps
+
+
 def test_settings_names_each_code_per_company_and_lists_the_gaps(web, monkeypatch):
     lovable = {"aliases": [], "category": "Software & Subscriptions",
                "zoho_account": None, "accounts": {CLOUD: CLOUD_CODE}}
