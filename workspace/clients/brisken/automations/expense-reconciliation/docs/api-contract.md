@@ -6655,6 +6655,59 @@ pinned "a vendor/date pair lends nothing" is flipped to the new rule. Four
 wiring points proven red under `tools/regress_check.py` (the group source
 in `inherit_card_from_copies`, and each of the three service call lines).
 
+## A no-card pair whose merchant disagrees waits in review: `review_code` `no_card_vendor_disagrees` (item 204 step 6, owner D5, 2026-09-25)
+
+A pair whose receipt carries no card evidence (`card_evidence.receipt` is
+`none`: nothing printed, picked, assigned or remembered) and whose merchant
+words disagree (`vendor_pct` below 50, `_vendor_score` below 0.5) is no
+longer booked. It keeps its assignment, so the charge and the receipt are
+consumed exactly as before and the pair is still the charge's top
+candidate, but it comes back in the review bucket instead of reconciled:
+
+- `rows[].effective_bucket` is `review` (was `reconciled`), `status` is
+  `pending`, and `candidates[0]` is the pair with `requires_review` `true`,
+  `review_code` `no_card_vendor_disagrees`, `match_type` unchanged (`exact`
+  or `probable`, never rewritten to `fx_judgment`), and `reason` ending
+  "Review: the receipt names no card and the charge's merchant words do not
+  match its vendor (40%), so the pair is not booked until someone confirms
+  it."
+- Because the row is not reconciled, the receipt is not settled by it: on
+  `GET /api/expense-batches/{id}` the expense keeps `card: null` and
+  `card_source` whatever the rest of the chain gives (`none` when nothing
+  else names a card), where it used to show the charge's card, company and
+  person (`settled_charge`).
+- One click confirms it, like any review row; `Confirm all matched` does not
+  (item 76 skips `requires_review`).
+
+A pair that already carries `no_card_rival_on_other_card` keeps that code
+and goes to review too. A receipt with a printed card number, a pick, a
+hint or a remembered card is never held back for this reason, whatever the
+merchant words say. The pair is kept exactly as the matcher built it: the
+LLM FX judgment layer judges FX pairs only (`cli._apply_judgment` passes a
+non-`fx_judgment` entry through untouched), so it neither re-words nor
+unbinds it.
+
+`review_code` stays ABSENT on every candidate the matcher did not flag. On
+`Match.review_code` in the snapshot the new value rides beside the old one.
+Knob `no_card_vendor_guard` (default true, mirrored in
+`config/match-tuning.json`); false restores booking. No threshold moved.
+
+Measured 2026-09-25 on replays of live July and August 2026 with their
+labels (`tools/recon-match-attribution.py`, no model call): four receipts
+move from matched to review, none leaves a right booking. August `0025`
+(Lovable invoice on BASE44 50.00, 3645, labelled no charge) goes from
+`wrong_exact_no_charge` to `review_no_charge`; July `0034` (Erste Fracht 21
+EUR on HOTEL AM TIERGARTEN 24.02) and `0066` (Mega Center 14.90 BRL on
+48.247.796 BEATRYZ) go from `matched_unverifiable` to `excluded_ambiguous`;
+August `0033` (E A LOCACOES 340 BRL on B91*E A LOCACOES 65.63, unlabelled)
+goes to review. Wrong bookings 1 to 0, clean right 26 / 6 unchanged. The six
+scorer bundles are unchanged (70/95, 0 wrong, SCORE 76.0): every bundle
+receipt carries a Zoho payment mode. Rows move at each month's next natural
+re-match; no agent re-match.
+
+Tests: `tests/test_no_card_vendor_guard_c9.py` (matcher, judgment layer and
+route-level), wiring proven red under `tools/regress_check.py`.
+
 ## A receipt with no card takes its billing account's card: `card_source: "account"` (backlog item 204 step 4, owner decision D4, 2026-09-25)
 
 A subscription invoice prints a Stripe-shaped number, an 8-character customer

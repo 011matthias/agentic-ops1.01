@@ -10,13 +10,24 @@ updated: 2026-09-25
 # Brisken / Expense Reconciliation (p1)
 
 **2026-09-25: case 9 step 4 shipped, the billing account's card** (backlog
-item 204, build 4; Shipped row 125). A receipt that prints no card and carries
+item 204, build 4; Shipped row 126). A receipt that prints no card and carries
 a Stripe invoice number takes the card its billing account was paid with on at
 least two other purchases and on no other card (`card_source: "account"`,
 company and person with it). Derived on every read, never memorized; a pick, a
 printed number and the statement outrank it; one pick decides nothing (D6).
 Predicted live: ten May / June / September rows gain a card. The SPA's source
 line waits on `docs/lovable-account-card-prompt.md`.
+
+**2026-09-25: case 9 build 2 (step 6, owner D5) shipped: a receipt with no
+card evidence is not booked to a charge whose merchant words disagree.** The
+pair keeps its place as the charge's top candidate but waits in review
+(`review_code` `no_card_vendor_disagrees`) and lends no card. The LLM FX
+judge now leaves non-FX review pairs untouched (owner ruling in session).
+Measured on live July and August: August's Lovable invoice on BASE44 50.00
+(the one wrong booking) goes to review, and so do three pairs the labels
+call excluded or leave unlabelled; clean right bookings and the six bundles
+(70/95) are unchanged. Rows move at each month's next natural re-match. The
+Lovable prompt (`docs/lovable-no-card-vendor-guard-prompt.md`) is not pasted.
 
 **2026-09-25: the private-card list, a personal card confirmed private once**
 (backlog item 208, owner direction 2026-09-24 fusing cases 2 + 4 of the
