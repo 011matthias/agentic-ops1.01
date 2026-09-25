@@ -1793,6 +1793,27 @@ def test_unmatched_reason_code_vocabulary_is_pinned():
     assert set(ur.RECEIPT_REASON_TEXT) == set(ur.RECEIPT_REASON_SHORT) == worded
 
 
+PRIVATE_SOURCES_PIN = ("row", "month", "private_card_list", "")
+
+
+def test_private_source_vocabulary_is_pinned(payloads):
+    """The private-card list (2026-09-24). `expenses[].private_source` is a
+    closed literal held against `cards.PRIVATE_SOURCES` (the source of
+    truth); every expense row carries it, "" on a row that is not private
+    and never "" on one that is. A new backend value goes red here until
+    this literal, `docs/api-contract.md` and the SPA label move together."""
+    from expense_recon.cards import PRIVATE_SOURCES
+
+    assert tuple(PRIVATE_SOURCES) == PRIVATE_SOURCES_PIN, PRIVATE_SOURCES
+    seen = 0
+    for view in payloads["expense_batch"]:
+        for expense in view["expenses"]:
+            seen += 1
+            assert expense["private_source"] in PRIVATE_SOURCES_PIN, expense
+            assert bool(expense["private_source"]) == bool(expense["private"]), expense
+    assert seen, "the contract fixtures carry no expense row"
+
+
 def test_month_health_vocabulary_is_pinned(payloads):
     """Item 128. `summary.month_health.state` is one of a closed literal
     set, held against every `HEALTH_*` constant in `web/month_health.py`
