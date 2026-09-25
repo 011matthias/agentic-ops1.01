@@ -85,10 +85,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..batch_period import month_from_label
 from ..cards import (
+    PRIVATE_SOURCE_ROW,
     card_parents,
     card_to_dict,
+    cards_from_setting,
     effective_cards,
     normalize_cards_setting,
+    normalize_private_cards_setting,
+    private_cards_from_setting,
+    private_company_collision,
 )
 from ..cards_provision import card_by_key, load_cards
 from ..error_codes import Refusal, code_of, fields_of  # Refusal: item 104
@@ -196,6 +201,7 @@ from .service import (  # item 163
     undo_memory_commit,
 )
 from .service import confirm_expense_category  # note #62
+from .service import private_opt_out_needed  # private-card list, 2026-09-24
 from .service import set_charge_category  # item 109
 from .service import attach_expense_card_tabs, attach_run_card_tabs  # item 138
 from .service import TURN_DECIDE, confirm_matched_pairs  # item 101
@@ -3401,6 +3407,52 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     "error": str(exc), "code": code_of(exc, "invalid_body"),
                     "setting": "cards", **fields_of(exc),
                 }, status_code=400)
+        # The private-card list (owner direction 2026-09-24, card-attribution
+        # cases 2 + 4): {last4: {person, note, active}}. Whole-map replace,
+        # same contract family as `cards`; a SEPARATE key so the Cards
+        # editor's whole-map save cannot erase it (`store.set_settings`
+        # merges top-level keys). A card is Brisken's OR private, never
+        # both: the list refuses a number an active company card carries,
+        # and a `cards` save refuses a number the active list holds, with
+        # ONE code either way. When both keys ride one request each is
+        # checked against the other as sent, else against what is stored.
+        if "cards" in patch or "private_cards" in body:
+            with open_store() as store:
+                stored_settings = store.get_settings() or {}
+            company_setting = (
+                patch["cards"] if "cards" in patch
+                else stored_settings.get("cards")
+            )
+        if "private_cards" in body:
+            try:
+                patch["private_cards"] = normalize_private_cards_setting(
+                    body["private_cards"],
+                    company_cards=effective_cards(
+                        {**stored_settings, "cards": company_setting or {}},
+                        load_cards(),
+                    ),
+                )
+            except ValueError as exc:
+                return JSONResponse({
+                    "error": str(exc), "code": code_of(exc, "invalid_body"),
+                    "setting": "private_cards", **fields_of(exc),
+                }, status_code=400)
+        if "cards" in patch:
+            hit = private_company_collision(
+                cards_from_setting(patch["cards"]),
+                private_cards_from_setting(
+                    patch.get("private_cards", stored_settings.get("private_cards"))
+                ),
+            )
+            if hit is not None:
+                digits, card_key = hit
+                return JSONResponse({
+                    "error": f"card {card_key!r} carries {digits}, which is "
+                             "on the private-card list; a card is Brisken's "
+                             "or private, never both",
+                    "code": "private_card_is_company_card",
+                    "setting": "cards", "private_card": digits, "card": card_key,
+                }, status_code=400)
         # Cost centers (item 47): {name: {kind, note, active}}. Whole-map
         # replace, same contract family as merchants / cards / entities.
         # Owner-authored ONLY — nothing else in the tool ever writes this
@@ -4440,7 +4492,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                  "card": {"key": card.get("key"), "label": card.get("label")}},
                 status_code=400,
             )
-        if not marking_private and row.get("private"):
+        # 2026-09-24: only a row Criss confirmed HERSELF keeps this refusal.
+        # A row the private-card list (or the month's strip assignment)
+        # made private takes a per-row company-card pick instead: the pick
+        # is the row-level decision that outranks both in the resolver.
+        if (
+            not marking_private
+            and row.get("private")
+            and row.get("private_source", PRIVATE_SOURCE_ROW) == PRIVATE_SOURCE_ROW
+        ):
             return JSONResponse(
                 {"error": "This expense is marked as paid with a private card "
                           f"(reimburse {row.get('reimburse_to') or 'someone'}). "
@@ -5351,9 +5411,30 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 )
                 if conflict is not None:
                     return conflict
+                flag = "1"
+            else:
+                # 2026-09-24: undoing a mark the private-card list (or the
+                # month's strip assignment) gave the row stores an explicit
+                # opt-out, "0", so the list stops applying to THIS row; a
+                # plain clear would be undone at the next read. A row only
+                # Criss marked clears as before, and the suggestion returns.
+                view = _expense_view(store, run)
+                row = next(
+                    (e for e in view["expenses"]
+                     if e.get("document_id") == document_id),
+                    None,
+                )
+                flag = (
+                    "0"
+                    if row is not None and private_opt_out_needed(
+                        run.config, store.get_settings(),
+                        row.get("payment_hint") or "",
+                    )
+                    else None
+                )
             now = _now_iso()
             store.set_expense_field_override(
-                run_id, document_id, "private", "1" if private else None, now
+                run_id, document_id, "private", flag, now
             )
             store.set_expense_field_override(
                 run_id, document_id, "reimburse_to",
@@ -5790,12 +5871,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # chain the grid does, merchant card included, so the two cannot
             # name different cards for one receipt. Read inside the store
             # block, like every other input on this route.
-            csv_merchants = (store.get_settings() or {}).get("merchants")
+            csv_settings = store.get_settings() or {}
+            csv_merchants = csv_settings.get("merchants")
         path = regenerate_expense_export(
             run, overrides, field_overrides, edits, dup_resolutions,
             charge_decisions=charge_decisions,
             merchants=csv_merchants,
             learning_db_path=app.state.learning_db_path,
+            # 2026-09-24: and the private-card list, so a listed number
+            # exports `(private expense)` like a row Criss confirmed.
+            private_cards=csv_settings.get("private_cards"),
         )
         return FileResponse(
             path,
