@@ -1424,6 +1424,9 @@ def test_expense_card_source_is_on_every_row_from_a_closed_set(payloads):
             assert e["card_source"] in {
                 "hint", "override", "learned", "settled_charge", "merchant",
                 "none",
+                # Item 204 step 4: the billing account's card
+                # (`tests/test_account_card_c9.py`).
+                "account",
             }, e
             assert (e["card_source"] == "none") == (e["card"] is None), e
             seen.add(e["card_source"])
