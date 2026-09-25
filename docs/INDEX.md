@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-25 | Brisken P1 Items 206 And 207 | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20Items%20206%20And%20207/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Expense-Recon Case 9 Build 1 | client-dev | [Mini-Checkpoint-2](docs/2026-09-25%20-%20Expense-Recon%20Case%209%20Build%201/Mini-Checkpoint-2.md) |
 | 2026-09-25 | Brisken P1 Private Card List Applied | client-dev | [→](docs/2026-09-25%20-%20Brisken%20P1%20Private%20Card%20List%20Applied/Checkpoint.md) |
 | 2026-09-25 | Expense-Recon Case 9 Build 5 | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Expense-Recon%20Case%209%20Build%205/Mini-Checkpoint-1.md) |
