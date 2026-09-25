@@ -393,6 +393,53 @@ def test_charge_states_moves_a_booked_review_row_out_of_review():
     assert states["p2"]["bucket"] == "review"
 
 
+# ── step 4: a card payoff on a Type-less statement is a payment ────────
+
+_TYPELESS_CSV = (
+    "Date,Description,Amount,Card Member\n"
+    "04/03/2026,DELANCEY TAVERN,57.50,MATTHIAS NEUMANN\n"
+    "04/04/2026,UBER * TRIP,22.30,MATTHIAS NEUMANN\n"
+    "04/04/2026,COFFEE SHOP NYC,5.75,MATTHIAS NEUMANN\n"
+    "04/07/2026,AMAZON.COM,200.00,MATTHIAS NEUMANN\n"
+    "04/09/2026,STAPLES,42.50,MATTHIAS NEUMANN\n"
+    "04/05/2026,Payment Thank You-Mobile,-7567.50,MATTHIAS NEUMANN\n"
+    "04/06/2026,AUTOMATIC PAYMENT - THANK YOU,-39.99,MATTHIAS NEUMANN\n"
+    "04/08/2026,DELANCEY TAVERN,-12.00,MATTHIAS NEUMANN\n"
+)
+
+
+def test_a_payoff_on_a_typeless_statement_reads_payment_on_the_page(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    import tests.test_rematch_judgment_cache as rj
+    from expense_recon.web.app import create_app
+
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    rj._wire(monkeypatch, MockLLMClient(extraction_responses=[rj._eur_receipt()]))
+    with TestClient(create_app(tmp_path)) as client:
+        batch_id = rj._create_batch(client)
+        resp = client.post(
+            f"/api/expense-batches/{batch_id}/statement",
+            files={"statement": ("typeless.csv", _TYPELESS_CSV.encode(), "text/csv")},
+            data={
+                "account_id": "amex-9001",
+                "account_legal_entities": '{"amex-9001": "Corporate Services"}',
+                "account_card_currency": "USD",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        view = client.get(f"/api/runs/{batch_id}").json()
+    by_vendor = {(r["vendor"], r["amount"]): r for r in view["rows"]}
+    assert by_vendor[("Payment Thank You-Mobile", "-7,567.50")]["row_type"] == "payment"
+    assert by_vendor[("AUTOMATIC PAYMENT - THANK YOU", "-39.99")]["row_type"] == "payment"
+    # A merchant's credit keeps reading as a refund; the bucket is untouched.
+    merchant = by_vendor[("DELANCEY TAVERN", "-12.00")]
+    assert merchant["row_type"] == "refund"
+    assert {r["effective_bucket"] for r in view["rows"] if r["amount"].startswith("-")} == {"refund"}
+
+
 # ── the cache key carries the prompt version (through the re-match) ────
 
 
