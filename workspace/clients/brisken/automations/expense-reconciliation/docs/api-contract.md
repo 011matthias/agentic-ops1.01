@@ -6910,3 +6910,67 @@ Prose only; every `reason_code`, structured field and count is unchanged.
   the card; set the entity on the row).
 
 Tests: `tests/test_reason_copy_item_213.py` (route-level for the waiting line).
+
+## A statement attach keeps only the month's own charges: `statements[].month_filter` (backlog item 215, owner decision 2026-09-25)
+
+`POST /api/expense-batches/{id}/statement` on a company month (a label naming
+a month, not a trip) with a file that prints post dates (every Chase activity
+export: the SharePoint lifetime sheets and Criss's monthly workbooks) now
+folds only the rows that are that month's own:
+
+- **Post date decides.** A row stays when its post date falls in the label's
+  calendar month; a row whose post-date cell is empty uses its own
+  transaction date. Criss's July and August workbooks post 112/112 and
+  111/111 rows in their month, so they still fold whole.
+- **A file that prints no post date folds whole**, as before: a Chase cycle
+  PDF spans two calendar months by design (August's 9693 PDF runs Jul 3 to
+  Aug 4), and cut by transaction date its July rows would land nowhere. Item
+  204's `month_suggestion` still advises on such a file.
+- **A charge already held under another reading is left out.** An in-month
+  row is dropped when the month (from another of its files) or a neighbouring
+  company month (previous or next, by label) already holds the same charge on
+  the same card with a different id. Sameness across readings is card
+  identity (the coverage key, so account `9693` from a cycle PDF and
+  `card-9693` from a SharePoint export are one card) + transaction date +
+  amount + currency, counted as a multiset (two identical coffees are two
+  charges). A row the month holds under the SAME reading (same id) is not
+  left out; it is the fold's ordinary re-supply and shows as `n_rows - n_new`.
+- **A label naming no month folds the whole file**, as before, and records no
+  `month_filter`.
+
+**On the entry.** `statements[].month_filter: {month, n_file_rows, n_kept,
+n_left_out, outside_month: {"YYYY-MM": n}, already_held: {"YYYY-MM": n}}`.
+`outside_month` is keyed by the month a left-out row belongs to,
+`already_held` by the month that holds it (the month's own key when another of
+its files does). Parallel and ABSENT on every entry attached before
+2026-09-25 and on a file without post dates. Where present it replaces
+`month_suggestion` (never both): every
+kept row is the month's own. `n_rows`, `period_start` / `period_end` and the
+anchors describe the KEPT rows; `n_file_rows` is what the file printed.
+
+**On the reply.** The attach job (`GET /jobs/{id}`) carries
+`result.month_filter` (same object) on `done`, and when anything was left out
+its `stage` carries the sentence the SPA already renders for warnings:
+`warning: Kept 3 of this file's 724 charges for April 2026: 700 belong to
+other months (February 2024 to August 2026); 21 are already in May 2026.`
+
+**Refusal.** A file the month keeps nothing of fails the job with
+`statement_outside_month` (sentence in `error`; `result: {code, month,
+n_file_rows, outside_month, already_held}`). The month is unchanged, no entry
+is written, and the upload is discarded (item 196's path).
+
+**Re-read.** `POST /api/expense-batches/{id}/statements/reread` applies the
+filter only to entries that carry `month_filter`, against the files re-read
+before them and today's neighbours, and records it again; an entry from
+before the guard re-reads whole.
+
+**A restart-killed attach.** The route writes
+`{work_dir}/.attach-pending/{job_id}.json` naming its upload; the job removes
+it when it ends either way. At boot, every marker left belongs to an attach a
+restart cut off: its upload is discarded when the month never recorded it,
+and the marker goes. The work dir cannot be swept by suffix, because
+`report.xlsx`, `zoho_journal.csv`, `reconciled.csv` and `expenses.csv` live
+beside the uploads.
+
+Tests: `tests/test_attach_month_guard_item_215.py` (13, route-level through
+the attach, job poll, re-read and a second `create_app` boot).
