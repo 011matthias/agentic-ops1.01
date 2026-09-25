@@ -99,6 +99,11 @@ EXPENSE_BATCH_CONTRACT = {
     # stale SPA renders one truthful row while an updated one shows the
     # group and submits every spelling on Assign.
     "card_review.unresolved_hints[].spellings[]": "string",
+    # Item 214: the strip dropdown's private half. `private_cards[]` are
+    # objects `{digits, person, label}` (active list entries only), and each
+    # group's `private_card_options[]` the digits strings the route accepts.
+    "card_review.private_cards[]": "object",
+    "card_review.unresolved_hints[].private_card_options[]": "string",
     # Item 138: the month page's card tabs. Objects in the PDFs' section
     # order, No card last; `digits[]` and `statements[]` are strings. Empty
     # on a month with fewer than two cards and on a trip.

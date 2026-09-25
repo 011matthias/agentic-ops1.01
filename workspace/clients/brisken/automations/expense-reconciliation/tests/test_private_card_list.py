@@ -191,10 +191,10 @@ def test_a_listed_number_makes_the_row_private_with_the_person(client, monkeypat
     assert grid["summary"]["n_needs_entity"] == 0
     strip = grid["card_review"]
     assert strip["n_private"] == 1 and strip["n_suggested_private"] == 0
-    # the strip still lists the number: the card is known now, but it is
-    # still not a company card anyone assigned
-    (entry,) = strip["unresolved_hints"]
-    assert entry["digits"] == "3281" and entry["suggested_private"] is False
+    # item 214 (owner ruling 2026-09-25): the printed number resolves, so the
+    # strip has no card question left; the row counts as a private strip row
+    assert strip["unresolved_hints"] == []
+    assert strip["n_private_rows"] == 1
 
     for doc in (row["document_id"], rows["Staples"]["document_id"]):
         _set_category(client, batch, doc)

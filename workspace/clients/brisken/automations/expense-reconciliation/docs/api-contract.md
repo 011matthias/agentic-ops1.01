@@ -52,6 +52,8 @@ receives after `jsonable_encoder`.
 | `card_review.unresolved_hints[].documents[]` | string |
 | `card_review.resolved[]` | object |
 | `card_review.resolved[].hints[]` | string |
+| `card_review.private_cards[]` | object `{digits, person, label}` (item 214) |
+| `card_review.unresolved_hints[].private_card_options[]` | string, a listed card's four digits (item 214) |
 | `summary.upload_issues[]` | string (English prose; unchanged by design) |
 | `summary.upload_issue_details[]` | object `{code, file, suffix, limit}` |
 | `account_options[]` · `category_options[]` · `entity_options[]` | string (`entity_options` follows the operator's `entity_order`; see PUT /api/settings) |
@@ -1752,9 +1754,9 @@ confirmed: `private: true`, `reimburse_to` the listed person,
 `Private ({person})`; the CSV writes `(private expense)` and
 `Private ({person})`; the month report lists it under "Reimbursements owed"
 with the per-person sum; `n_private` counts it and `n_suggested_private`
-does not; the card strip keeps its `unresolved_hints` group (the card is
-known now, but it is still not a company card anyone assigned) with
-`suggested_private: false` on the group. Every consumer of `private` and
+does not; the card strip drops the row from `unresolved_hints` and counts
+it in `n_private_rows` (item 214, owner ruling 2026-09-25, superseding the
+2026-09-24 "the strip keeps its group" line). Every consumer of `private` and
 `reimburse_to` reads the resolution: `service._private_reimbursements` now
 takes the card resolution rather than `field_overrides` (the month report,
 the CSV, `completeness_counts`' `private_docs` and the two pools that used
@@ -1821,6 +1823,56 @@ superseded by case 6.
 Pinned route-level in `tests/test_private_card_list.py`; the golden rows
 of `tests/test_private_needs_evidence.py` pass through
 `classify_payment_evidence` with an empty list unchanged.
+
+### The strip asks only without payment info; its dropdown holds cards (item 214, 2026-09-25)
+
+Owner ruling 2026-09-25, verbatim: "yes it should show assign to card, if
+the payment info is not in the receipt. dropdown should only consist of
+cards"; "expenses that are suggested a private have only private cards in
+drop down unless user clicks that its not private"; "New card..." removed.
+
+**Who leaves the strip.** A private row whose card question is already
+answered leaves `card_review.unresolved_hints` and is counted in the NEW
+`card_review.n_private_rows`: the receipt PRINTS a number on the private
+list (whoever made the row private), or the strip itself assigned its hint
+for the month (`private_source: "month"`). A row Criss made private by hand
+on a receipt that prints no listed number stays: which card paid is still
+open (July `0028__` "DEBIT MASTERCARD" and September `0046__`
+"Kartenzahlung erhalten" stay; September `0024__`, 3281, leaves). A company
+card still resolves into `resolved[]` as before. `n_private_rows +
+n_unresolved_rows + n_resolved_rows + n_no_hint` is every row.
+
+| Field (NEW, parallel) | Type | Meaning |
+|---|---|---|
+| `card_review.n_private_rows` | int | hinted rows off the strip because they are private and their card is known |
+| `card_review.private_cards[]` | object | the ACTIVE `settings.private_cards` entries, ordered by person then number: `{digits, person, label}`, `label` = `"3281 · Dirk Neumann (private)"`. `[]` with an empty list |
+| `card_review.unresolved_hints[].private_card_options[]` | string | the `digits` of the listed cards the route below accepts for this group (`cards.private_card_fits_hint`): every one on a group printing no number, only the matching one on a numbered group, which in practice is none (a listed number resolves and leaves), so the SPA points at Settings > Private cards there |
+
+**The pick.** `POST /api/expense-batches/{id}/cards` assignments also
+accept `{"hint": ..., "private_card": "3281"}` (the listed card's digits;
+any spelling `private_card_digits` normalizes). Exactly one of `card`,
+`private_card`, `private_to` (more is `assignment_two_targets`, none is
+`assignment_incomplete`). It writes the month record
+`expense.private_hints[hint] = <that card's person>` and nothing else:
+`learn` is ignored for it (the card is on the list already), so the reply's
+entry is `{hint, private_to: <person>, n_rows, learned: false, digits: "",
+private_card: "3281"}`. Refused with 400:
+`private_card_not_listed` (not on the list, or switched off) and
+`private_card_number_mismatch` (the receipt prints another number: a
+printed number outranks a pick; that number goes on the list in Settings).
+`private_to` stays accepted as before, so the published "Private card of..."
+keeps working until the SPA moves to the pick.
+
+**"Not private" needs no route.** On a group with `suggested_private: true`
+the SPA offers only `private_card_options` until the reviewer says it is not
+private; that toggle is screen state, and the company card she then picks
+is the ordinary `{"hint", "card"}` assignment, which resolves the group and
+clears the suggestion. Nothing is stored for the toggle alone, so an
+unfinished "Not private" leaves the question open, which is true.
+
+Pinned in `tests/test_card_strip_private_item_214.py` (route-level; four
+wires proven RED by `tools/regress_check.py`: the strip drop, the resolver's
+`listed_private`, the route's pick branch, the payload's `private_cards=`).
 
 ## Cost centers: which project or purpose the money belongs to (added 2026-09-10)
 
