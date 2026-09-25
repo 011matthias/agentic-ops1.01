@@ -57,8 +57,10 @@ PAYMENT = (datetime(2026, 8, 4), "Payment Thank You-Mobile", "Payment", 306.00)
 
 def _codes() -> tuple[str, str, str]:
     """Three distinct postable leaves of Corporate Services: the model's,
-    the merchant list's, and Criss's."""
-    codes = sorted(curated_leaves.postable_codes(CORP_ORG))
+    the merchant list's, and Criss's. Leaves the model is offered, since it
+    is never offered a parent (item 216 Build 2)."""
+    codes = [c for c in sorted(curated_leaves.postable_codes(CORP_ORG))
+             if not curated_leaves.has_postable_children(CORP_ORG, c)]
     return codes[0], codes[1], codes[2]
 
 

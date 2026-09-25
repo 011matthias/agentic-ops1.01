@@ -54,13 +54,17 @@ def _shared_code_named_differently() -> str:
     Services prefixes its own: `CorpServ | Travel Expense | Food`)."""
     for code in sorted(curated_leaves.postable_codes(CORP_ORG)):
         if (curated_leaves.is_postable(CLOUD_ORG, code)
-                and _name(CORP_ORG, code) != _name(CLOUD_ORG, code)):
+                and _name(CORP_ORG, code) != _name(CLOUD_ORG, code)
+                and not curated_leaves.has_postable_children(CORP_ORG, code)
+                and not curated_leaves.has_postable_children(CLOUD_ORG, code)):
             return code
     raise AssertionError("fixture: no shared code with two names")
 
 
 def _two_codes(org: str) -> tuple[str, str]:
-    a, b = sorted(curated_leaves.postable_codes(org))[:2]
+    """Two leaves the model is offered (never a parent, item 216 Build 2)."""
+    a, b = [c for c in sorted(curated_leaves.postable_codes(org))
+            if not curated_leaves.has_postable_children(org, c)][:2]
     return a, b
 
 

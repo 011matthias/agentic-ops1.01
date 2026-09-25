@@ -55,6 +55,7 @@ from .zoho import curated_leaves
 from .zoho.posting_resolution import (  # noqa: F401 (refusal_text re-exported)
     ACCOUNT_UNRESOLVED,
     ENTITY_MISSING,
+    MODEL_PICKED_PARENT,
     PostingResolution,
     refusal_text,
     resolve_posting_account,
@@ -827,7 +828,12 @@ def _gl_model_result(
 ) -> Categorization:
     """The model's pick as a leaf of THIS org, or a refusal. The reply is
     resolved only within `org_id` (`code_of`), so a leaf the model names from
-    another entity's wording refuses rather than posting."""
+    another entity's wording refuses rather than posting.
+
+    A summary account with postable accounts under it refuses too (owner,
+    2026-09-25). The model is no longer offered one (`llm_leaf_labels`); this
+    catches a reply that names one anyway. Only the model passes here: the
+    merchant list, a remembered rule and a person may still pick a parent."""
     if result.category is None or result.confidence < REVIEW_THRESHOLD:
         return _refused_cat(
             ACCOUNT_UNRESOLVED, confidence=result.confidence,
@@ -837,6 +843,11 @@ def _gl_model_result(
         org_id=org_id, legal_entity_id=None, vendor=None,
         llm_leaf=result.category or result.zoho_account,
     )
+    if res.resolved and curated_leaves.has_postable_children(org_id, res.code):
+        return _refused_cat(
+            MODEL_PICKED_PARENT, confidence=result.confidence,
+            detail=f"{res.code}; {result.reasoning or ''}".rstrip("; "),
+        )
     return _gl_categorization(
         res, org_id, source=source_on_hit, confidence=result.confidence,
         reasoning=result.reasoning,

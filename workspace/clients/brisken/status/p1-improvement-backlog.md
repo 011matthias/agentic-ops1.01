@@ -11327,6 +11327,34 @@ rows), Zoho (`ZOHO* ZOHO-ONE`, `ZOHO_BOOKS`), AT&T (`AT&amp;T MOBILITY EPAY`,
 Rize Labs, OpenRouter, Railway, Vercel and Pressmaster, which take the 55's
 reach from 35 to 47.
 
+**Build 2 step 1, built 2026-09-25 (Shipped row 137): the model is offered
+leaves only.** Owner ruling 2026-09-25: a model pick may not land on a parent
+with postable children; a person or a rule may. Parents are read from the
+chart's parent names, not the code prefix: Cloud Services and Consulting 11,
+Corporate Services 13 (its two roots `E100000` / `E500000` included), so the
+model is now offered 53 / 51 / 55 accounts. `_gl_model_result` refuses a parent
+the model names anyway with `model_picked_parent` (the SPA reads the English
+`reason` until it maps the code). What it changes on the live months, measured
+on the 03:05 backup: the stored model parent picks are 17 / 5 / 21 receipt lines
+and 23 / 34 / 1 receiptless charges (July / August / September). A re-match
+re-asks the model for every receiptless charge, so those charges take a leaf or
+a refusal at each month's next natural re-match; receipt lines are categorized
+at arrival and keep their parent until the row is re-categorized.
+
+**Build 2 step 2, measured before code (no change yet).** If a model answer
+stops being a posting, `expenses.csv` loses the account on every expense whose
+lines are all the model's (none is mixed with a rule or a person): July 27 of 77
+rows (USD 2,434.80, EUR 157.00, BRL 1,126.00), August 27 of 53 (USD 1,715.28,
+EUR 212.00, BRL 565.98), September 31 of 70 (USD 2,018.72, EUR 458.79). None
+holds a pick of Criss's (the store has 0 overrides since the conversion) and
+nothing was ever posted from the file (the poster is not wired to the app).
+32 of them read `ready` today (a LINE read, which "Confirm all Ready" would
+ratify); 48 are one-click confirmable today. Put to the owner before code;
+owner ruling 2026-09-25: a model-only line prints as a labelled suggestion
+(`suggested: <account>`) that the poster refuses, the 32 `ready` rows move to
+`check`, and one click on Confirm (stored `inherited`, never taught) turns a row
+back into a posting.
+
 ### 217. A duplicate shows its controls twice, and the tool keeps the invoice instead of the receipt (notes #89 + #90, owner 2026-09-25 03:45 / 03:47 UTC) (SHIPPED 2026-09-25: backend PR #1429, Fly `e47f2a8d`; SPA prompt `docs/lovable-duplicate-controls-once-prompt.md` PUBLISHED and driven the same morning)
 
 **Owner**, on September's Pressmaster FZCO unit (row `0078`, the invoice),
@@ -11532,6 +11560,7 @@ once, as a copy.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 137 | Item 216 Build 2 step 1: the model is offered leaf accounts only (`curated_leaves.llm_leaf_labels` drops every account with a postable account under it, read from the chart's parent names), and `_gl_model_result` refuses a parent the model names anyway (`model_picked_parent`); the merchant list, a remembered rule and a person may still pick one. | The model was handed 11 to 13 roll-ups per company and took one 58 times in 164 where Criss took one once in 152 (owner ruling 2026-09-25). The prefix test the sizing used got four accounts wrong per company (`E600010-10-20` is a leaf; `E600010-20` CRM travel and Corporate Services' `E100000` / `E500000` are parents). Tests: `tests/test_model_offered_leaves_item_216_build2.py` (4, two route-level: a receipt upload, and a GL month's charges with a merchant-list parent and Criss's parent pick kept); both wiring points bit under `regress_check`. | #1447 |
 | 136 | Item 216 cause 1: one mapping of who answered, `answer_origin` (person / rule / suggestion), read by the statement sheet, the Zoho journal's receiptless rows, the row review and the report colour, and served as `origin` on `charge_category` / `posting_category`. | Criss's own account on a charge printed in her statement sheet as `<account> (confirm)`, the tool asking her to confirm her own decision, because each surface derived trust from the raw source on its own. The premise "no correction ever landed" was wrong: 35 of her picks existed until the GL conversion retired them by ruling. Tests: `tests/test_answer_origin_item_216_cause1.py` (18, route-level through the charge route, the sheet download, `zoho.csv` and the run view); three `regress_check` proofs bit. | #1437 |
 | 135 | Item 216 cause 5: `tools/recon-categorization-score.py` scores the tool's accounts against Criss's own Zoho postings in one command, split by where each answer came from (merchant list, remembered rule, receipt line, bank-descriptor guess), with open rows, amounts, and the per-company account map once settings carry one; `--fetch` reads each month once, 15 s apart. | "Categorized" counted answers, not whether they were right, and the app's guess counter shows 0 / 0 / 1 for three months holding 164 guesses. On today's live months it reproduces item 216 exactly (135 joined, 21 of 97 right; strict 120, 19 of 87; 1 of 23 on the rows Criss still had to book), so the builds after it are judged by right answers, not fewer blanks. | #1435 |
 | 134 | Item 212: a receipt a neighbour month settled converts at that charge. `charges_settled_elsewhere` returns the settling charge, and both the card (`cards_settled_elsewhere`) and the money (`settled_charge_amounts`, which feeds the CSV `Exchange Rate` and the month report) come from it, also on a month with no statement. | Item 204 step 3 moved the card, company and person to the neighbour charge but not the money, so a foreign-currency receipt named one charge's card and converted at the ECB rate. Live: 0 rows move today (all three borrowed receipts are USD). | #1422 |
