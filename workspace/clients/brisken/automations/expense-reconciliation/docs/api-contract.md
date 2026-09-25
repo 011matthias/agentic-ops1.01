@@ -6892,3 +6892,21 @@ Tests: `tests/test_account_card_c9.py` (16; 14 route-level through
 `GET /api/expense-batches/{id}`, the CSV, `/api/cards/status` and
 `POST /api/runs/{id}/publish`); seven wiring and rule points proven red under
 `tools/regress_check.py`.
+
+## Shorter review lines (backlog item 213, owner note #87, 2026-09-25)
+
+Prose only; every `reason_code`, structured field and count is unchanged.
+
+- `waits_for_statement`: `review.reason` names the waiting cards only when
+  there are one or two (`service.WAITS_NAMED_MAX`): "No card on this receipt;
+  waiting for the statement of {cards}." Three or more read "No card on this
+  receipt, and no statement is loaded for its date yet." The full sorted list
+  stays on `review.waits_for_statements` and `expenses[].waits_for_statements`.
+  The SPA composes its own line from that list, so the same threshold is in
+  `docs/lovable-short-review-lines-prompt.md`.
+- `date_outside_period`, `suggested_private`, `needs_entity_settled_outside`:
+  the explanation clauses are gone, each instruction is kept (correct or keep
+  the date; confirm private and name who is reimbursed, or assign or register
+  the card; set the entity on the row).
+
+Tests: `tests/test_reason_copy_item_213.py` (route-level for the waiting line).

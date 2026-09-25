@@ -2023,6 +2023,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # sign-off, so the route itself refuses a month that is not complete
         # unless the caller overrides, and never publishes a classic run.
         override = isinstance(payload, dict) and payload.get("override") is True
+        # Item 183 half A: the Publish checklist. `keep` is the whole list of
+        # ticked lesson ids (from `GET .../memory-plan` `lessons[].id`);
+        # `skip` drops ids from the defaults instead. Neither keeps today's
+        # behaviour: corrections saved, conflicts and owner-gated merchants
+        # not. Zero ticked still publishes.
+        lesson_lists: dict = {}
+        for name in ("keep", "skip"):
+            raw = payload.get(name) if isinstance(payload, dict) else None
+            if raw is None:
+                continue
+            if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+                return JSONResponse({
+                    "error": f"{name} must be a list of lesson ids",
+                    "code": "invalid_body",
+                }, status_code=400)
+            lesson_lists[name] = raw
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
@@ -2073,6 +2089,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 memory = commit_month_memory(
                     store, run, app.state.learning_db_path, _now_iso(),
                     trigger=MEMORY_TRIGGER_PUBLISH, only_if_changed=True,
+                    **lesson_lists,
                 )
             except Exception as exc:  # noqa: BLE001 - publish must not fail on memory
                 log.exception("publish %s: saving corrections to memory failed", run_id)

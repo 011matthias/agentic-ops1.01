@@ -11,9 +11,14 @@ from __future__ import annotations
 from .capture import (
     ExpenseLearnSummary,
     LearnSummary,
+    category_groups,
+    expense_category_sources,
+    learn_category_candidate,
     learn_confirmed_pairs,
     learn_from_expense_run,
     learn_from_run,
+    merge_taught,
+    taught_value,
 )
 from .commits import (
     TABLE_KEYS,
@@ -68,6 +73,11 @@ __all__ = [
     "learn_confirmed_pairs",
     "learn_from_run",
     "learn_from_expense_run",
+    "category_groups",
+    "expense_category_sources",
+    "learn_category_candidate",
+    "merge_taught",
+    "taught_value",
     "LearnedRecall",
     "MerchantCategoryLookup",
     "MerchantEntityLookup",

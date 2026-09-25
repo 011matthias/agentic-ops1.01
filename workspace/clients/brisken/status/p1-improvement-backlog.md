@@ -9053,7 +9053,57 @@ read off the token response. `settings.READ` is gone with it, which is why
 `GET /organizations` now 401s with code 57 and why the puller does not route
 through the org directory.
 
-### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account (HALF B SHIPPED 2026-09-24; half A is an owner decision, see below)
+### 183. Publishing a month silently writes durable memory, and its conflict check cannot see an account (HALF B SHIPPED 2026-09-24; HALF A BUILT 2026-09-25, SPA prompt not pasted)
+
+**Half A built 2026-09-25 (owner decisions 2026-09-25: corrections start
+ticked, conflicts unticked; an unticked lesson is dropped and offered again,
+no declined store; Publish with nothing ticked still publishes).**
+
+- `GET /api/runs/{id}/memory-plan` gains `lessons[]`: `{id, kind, table, key,
+  description, sources, default_keep, owner_gated, conflict_group}`. One
+  lesson per learning row (`merchant_category:<entity>|<vendor>`,
+  `field_correction:<entity>|<vendor>|<field>`, ...) and one per merchant-list
+  entry (`registry:<merchant>`). Sources name the corrected rows; for the
+  entity and field tables they are found by running the real learner over one
+  row at a time (`web/memory_lessons.py`).
+- Conflicts: every key half B's learners refuse is offered as one UNTICKED
+  lesson per candidate value (`conflict:<group>:<category>|<account>`). A
+  ticked candidate is written by re-running the real learner over that
+  candidate's rows (`learning.learn_category_candidate`, and the registry
+  learner over the subset). Two candidates of one group kept together
+  conflict again and teach nothing (`unresolved_conflicts`).
+- `POST /api/runs/{id}/publish` takes `keep` (the ticked ids) or `skip`.
+  Neither = defaults. The save now APPLIES the plan's recorded writes,
+  filtered (`apply_plan`), and writes only the kept merchant entries, so the
+  checklist and the write cannot differ; the journal holds exactly the kept
+  rows and `learned.lessons` names kept / skipped / refused. Learner counts in
+  `learned` are counted from what was written, so the toast no longer counts
+  a skipped lesson. A republish with unchanged corrections still writes a
+  lesson ticked now that no earlier save kept (offered again, ticked later).
+- OpenAI, Anthropic and Lovable: their `registry:` lesson reads
+  `owner_gated: true`, is never ticked and is refused if sent
+  (`refused_owner_gated`). Their memory rows stay ordinary lessons. The
+  whole merchant-list write is refused, so the M2 / item-171 card learner
+  no longer records `cards_seen` for them either (it only ever updated an
+  existing entry, and live none of the three exists).
+  `test_settled_charge_learner_item_171.py` used them as fixture vendors and
+  now uses ungated ones in the same shape.
+- Step 4, item 180's map: on a GL month a kept account correction (her leaf
+  code, postable in the company the row SHOWS) writes
+  `merchants[].accounts[<account_companies label>]`, code only, never the
+  single `zoho_account` and never the merchant-wide `category`. Per-company
+  disagreement skips that company only (`skipped_account_conflict`); new
+  count `accounts_set`.
+- **Leak closed on the way:** `registry_upserts_from_expense_run` read
+  `ov["category"]` raw, so a Confirm or an account-only fix taught the model's
+  category into the merchant list after the memory learner had stopped doing
+  so (2026-09-24 ruling). Both learners now read one helper,
+  `learning.taught_value`.
+- Tests: `tests/test_publish_checklist_item_183a.py` (10, route-level through
+  `memory-plan` -> `publish`). Six wires proven RED under
+  `tools/regress_check.py`: the keep filter (7 red), the GL context (1), the
+  owner gate (1), the candidate re-learn (1), offered-again (2), the registry
+  human-only read (1). SPA half: `docs/lovable-publish-checklist-prompt.md`.
 
 **Half B shipped 2026-09-24.** A disagreeing account is now a conflict in BOTH
 learners, and a category-only teach no longer wipes a learned account. What
@@ -10679,10 +10729,38 @@ pasted nobody can add an entry, so the backend alone moves nothing.
 Contract: `docs/api-contract.md`, "Whose money paid: the decision order, and
 the private-card list". Tests: `tests/test_private_card_list.py`.
 
-### 209. The duplicates filter keeps the flagged rows but not their groups (owner 2026-09-25) (PROMPT WRITTEN 2026-09-25, not pasted)
+### 209. A suggested duplicate stays bound together until someone releases it (owner 2026-09-25) (PROMPT REWRITTEN and design APPROVED on screenshots 2026-09-25, not pasted)
 
 **Owner:** *"add a duplicate filter inside each month so the user can see all
-the expenses that were flagged as duplicated grouped together"*.
+the expenses that were flagged as duplicated grouped together"*. Widened the
+same day, after the first prompt: *"all suggested duplicates should live bound
+together inside the tool until released by a users click (delete/not a copy)"*,
+*"feel free to compress the copies under it, as they can be viewed with the
+compare button"*, and for Matching: *"the duplicate pair stay bound together
+until a user separates them, even if in matching. only presumed copies must be
+excluded from matching so only the real expense get matched. also if user
+choses 'not a copy' the expense should then be reincluded into matching
+automatically."*
+
+**Both matching rules were already live, read 2026-09-25:** no presumed copy
+(`duplicate.is_extra`) is chosen, offered as a candidate or assignable (0 of
+35 across July, August, September; all 35 sit in `copies_set_aside`), and the
+six receipts of July's three groups ruled "Not a copy" carry no marker, count
+in the total and are back in matching (1 matched, 1 candidate, 4 in the
+pool). After either release click the backend drops `duplicate` from the rows
+(item 188 pins the delete half), so the binding is a pure render of that
+field. The item is SPA-only.
+
+**What the rewritten prompt does.** Expenses: every suggested duplicate is one
+unit (amber binding strip, the main as a full row, each presumed copy folded to
+one line with its state and the existing Compare / Delete / Not a copy
+controls), placed in the section of its most urgent copy; the filter shows
+only units. Matching: each presumed copy renders as one line directly under the
+row showing its main (the charge holding it, else the charge proposing it, else
+its row in Receipts without a charge), and the set-aside list keeps only copies
+whose main is nowhere on the page. Where the mains sit, live July: 7 held by a
+matched charge, 2 proposed by a Needs-review charge, 2 unmatched; August 3 / 0
+/ 2; September 2 / 0 / 17.
 
 Item 188's "Show duplicates (N)" button is live and keeps only rows whose
 `duplicate` is set, but `ExpensesReviewGrid` still sorts the survivors into the
@@ -10699,7 +10777,8 @@ this card". Several live pairs hold one copy with no card and one naming it
 (July Aposto Karlsruhe 80.00 EUR, September Lovable 50.00 USD), and a strict
 card scope would show them half, which defeats the grouping.
 
-SPA-only: `docs/lovable-duplicate-groups-prompt.md`, NOT pasted.
+SPA-only: `docs/lovable-duplicate-groups-prompt.md` (rewritten; the first
+draft was never pasted), NOT pasted.
 
 ### 210. The export gate checks a row against its stamped company, not the one it shows (found 2026-09-25, building item 206)
 
