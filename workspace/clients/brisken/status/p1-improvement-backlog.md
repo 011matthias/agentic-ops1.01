@@ -11108,6 +11108,140 @@ the left-out count yet: `docs/lovable-attach-month-filter-prompt.md` (loaded
 line, attach toast, translated refusal; EN + PT), PROMPT-STATUS Not applied.
 No live month was written.
 
+### 216. Half the receipts on the GL months carry no account: measured against Criss's own bookings, levers ranked (analysis 2026-09-25; no code, no live write)
+
+**What Criss sees, and what it means.** On the three months that run on the
+Zoho accounts the tool leaves about half the receipts without an account:
+July 33 of 71, August 29 of 50, September 32 of 68 (duplicate copies excluded;
+the screen's own rule, every line needs an account; the screen's counts and
+this recount agree row for row). Of the 95 open receipts, the categorizer
+itself failed on 60 (55 where the model was unsure, 5 where one line of
+several is open); the other 35 never reached it: 24 wait for a statement
+nobody has loaded (11 for cards 0113 / 6013 / 8311, never loaded; 13 for a
+September 2838-family statement that does not exist yet), 6 are suggested
+private, 2 are confirmed private, 3 other. So the engine's own miss rate is
+32%, and the rest is intake. On the charge side 171 of 191 receiptless
+charges carry an account, 164 of them the model's guess from the bank
+descriptor.
+
+**How right the answers are.** Criss has booked July by hand in Zoho Books
+(Corporate Services 108 rows, Cloud Services 10, Consulting 2) and part of
+August (Cloud 16). Joining those postings to the tool's charge rows (same
+company, same amount, date within 3 days, one to one; 135 rows join, 112 of
+them July Corporate Services; a stricter join of 120 rows gives the same
+picture) is the first measurement of the GL engine's accuracy. "Right" means
+"the account Criss posted to"; where Dirk would post differently (the list
+below flags Google to Google Ads as a probable mis-posting) her booking still
+counts as the truth here.
+
+| The tool's answer came from | Right | Answered |
+|---|---|---|
+| the merchant list (a rule) | 9 | 9 (a tenth row carries a retired bucket label, not a code) |
+| a remembered rule | 2 | 2 |
+| the model reading the receipt's lines | 1 | 11 |
+| the model guessing from the bank descriptor, no receipt | 9 | 74 |
+| all answered rows | 21 | 97 |
+
+Two readings of that table, both true. 85 of the 135 joined rows were
+already booked before the tool ran (yellow), so July's 22% scores guesses
+against existing bookings; on the 23 rows Criss still had to book (August and
+September, all Cloud Services) the tool was right once. And the rules that
+fired were right, but the sample is narrow: the nine registry hits are three
+Brazilian grocery merchants on one food account, the two remembered rules are
+Supabase and SendGrid. Nothing here proves a merchant default would be right
+on SaaS across three companies; the history test in lever 1 does that.
+
+The model's misses are not random. Its favourite picks across the three
+months are `E500010-10 IT: Cloud Subscriptions-ZOHO ERP` (31 rows, 29 of
+them not Zoho: it reads the label as "cloud subscriptions"), the parent
+`E500010 IT: Computer and Internet Expenses` (27) and the parent `E100020
+CorpServ | Business Expenses` (21); it picks a parent 58 times in 164 where
+Criss did once in 152. Criss's side of the same rows is `E700030-19` /
+`E700030-30` (the COGS accounts for SaaS in Cloud and Corporate Services) and
+`E100020-10 CorpServ | IT Expenses`: a per-company house convention the
+vendor name alone cannot reveal, which is why a guard that refuses the wrong
+picks (lever 7) removes errors but produces no right answers.
+
+**Where the guess goes.** No import file carries a receiptless guess: the
+Zoho journal excludes VENDOR and REGISTRY charge categories on every path
+(`zoho_export.py`), `expenses.csv` is receipt-first and the API poster reads
+only that file. The guess does reach Criss: `statement-categorized.xlsx`
+prints it as `<account> (confirm)` on open and gray rows (the sheet she
+pictures as her output), `report.xlsx` and `reconciled.csv` print it labelled,
+the reconciliation PDF prints it with no label. The risk is a hand copy of a
+"(confirm)" cell, not an automatic posting. The app's own counter
+`n_charges_category_guessed` shows 0 / 0 / 1 for the three months because it
+excludes rows that still need a receipt and gray rows; 77 of the 164 guesses
+sit on open rows.
+
+**Money, not rows.** The 55 model-unsure receipts hold about USD 2.7k + EUR
+1.8k + BRL 0.6k. The open money sits elsewhere: four invoices paid by wire or
+outside any loaded card (Konsultancy Finance EUR 15,972; Redis USD 13,200,
+which appears twice as docs 0004 and 0070 and once more as an April bill in
+Books; Rodrigo Tanure BRL 27,203; one EUR 900) wait in the card queue for a
+statement that will never cover them. Routing those to Bills is worth more
+than any categorization lever.
+
+**Levers, ranked by right rows gained per unit of effort.** All measured
+offline on the saved payloads, through the module's own code where a code
+path exists; no model call. Each was re-derived by an independent skeptic
+before it was written here; the corrections are folded in.
+
+| # | Lever | What it moves | Right / wrong vs Criss | Who acts | Effort |
+|---|---|---|---|---|---|
+| 1 | Per-company merchant accounts derived from Criss's own 24-month history (the map items 180/181 built the slot for; the item-180 suggestion list is one transcription of it) | tested OUT of sample: a majority account per (company, descriptor) learned from postings before 2026-07-01 covers 132 of her 152 Jul-Sep bookings and agrees on 124 (94%; Cloud 28/28, Corporate 95/103); on the joined charge rows the list turns 61 wrong answers right and fills 18 empty ones | 81 / 3 on the joined rows (in sample); the 3 misses are Lovable and GoDaddy, where her own bookings split | Dirk confirms the map (7 questions in `context/expense-reconciliation/merchant-account-suggestions-260925.md`), the owner rules on the three gated vendors, then one settings write | data + one write |
+| 1a | of which OpenAI, Anthropic, Lovable, whose merchant-list write the owner gated | 25 of the 61 fixes, 11 of the 18 fills, 33 of the 47 receipts the list covers; the non-gated deliverable is 36 fixes, 7 fills, 14 receipts | included above | owner | decision; not to be re-raised by an agent |
+| 1b | Registry aliases for the names the OCR extracts (`Anthropic, PBC`, `Anthropic, PBC (@anthropic)`, `Wispr AI, Inc. (dba Wispr Flow)`, `Rize Labs, Inc.`, `OpenRouter, Inc`, `Railway Corporation`, `Vercel Inc.`, `Pressmaster FZCO`) | without them the map reaches 4 (live) to 17 of the 55 unsure receipts, because `_registry_gl` fires only on a registry match and memory recalls on the extracted vendor; with them about 35 of 55 | same map | Dirk (Anthropic and Lovable are gated); the rest an operator edit | data |
+| 2 | Make a correction land. Across all seven months there is not one human category or account correction in any payload (edited fields are card, company, paid-through, private, date only), and Criss reported twice that her picks do not stick (2026-09-14 July, 2026-09-17 August). The only memorization the owner allows is corrections; today its throughput is zero | every future month; the learning loop cannot run without it | n/a | code: reproduce her two reports offline against the confirm-category and PUT category routes, then fix | first thing to build |
+| 3 | A receiptless charge on a GL month takes an account only from a rule (registry, memory, a person); the model's descriptor guess becomes a labelled suggestion and leaves the statement sheet, the report and the PDF (or prints as a suggestion, never as `(confirm)`) | 164 printed guesses, 65 of 74 wrong where booked; the 7 rule answers stay | what remains: 11 / 12 | code | small |
+| 4 | Route invoices paid by wire or bank transfer out of the card queue to Bills (payment_mode is already on doc 0017) | the four invoices above, about EUR 17k + USD 13k + BRL 27k | n/a | code (a payment-mode rule) + owner call on the destination | small |
+| 5 | Load the statements Criss holds (D2 weekly exports, D3 sheets) and the never-loaded cards | up to 24 of the 35 no-company receipts get a company and an engine answer | n/a | Criss | clicks |
+| 6 | Let a Zoho-seeded memory rule answer when the model is unsure (today a seeded rule is skipped on any receipt with readable lines; only a person-validated one leads) | with the engine's exact recall key 4 receipts; with the aliases of 1b, more | 4 / 0 | code (fallback), or Criss validates the rules on the Memory page | small |
+| 7 | Guard the model: refuse `E500010-10 ZOHO ERP` unless the vendor text names Zoho (the only vendor-named leaf it misuses); refuse a roll-up parent where the org has postable children | on the joined rows 48 of the 65 wrong guesses become refusals, 0 right ones lost; on all 164 guesses 87 become refusals; 28 of the 31 parent picks were a different tree on Criss's side, so a refusal is a hand pick, not a right answer | removes errors, adds picks | owner: parents are postable in Dirk's chart by design, so "no parents" is a chart-policy call | small, after 1 |
+
+Not levers: the one taught memory row (`anthropic` / Corporate Services names
+`Other Infra and IT Costs for Cloud Business`, which is not an account name
+there; the real one is `COGS - Other Infra and IT Costs for Cloud Business`,
+E700030-30) cannot reach the receipts, because memory recalls on the extracted
+vendor `Anthropic, PBC` and never matches `anthropic`; fixing it changes 14 of
+15 receiptless Corporate Services ANTHROPIC charges through the registry tier
+and nothing else. All six taught rules carry the retired bucket vocabulary and
+five name no account, so memory contributes nothing on the GL path beyond the
+seeded rules. The eight-bucket months (April 82%, May 85%, June 96%) were not
+converted; the owner ordered July to September only.
+
+**Ceilings to state before promising a number.** Over 24 months, 22 of the 84
+vendors with two or more postings use more than one account and 12% of the
+postings under them are the minority booking (Lovable in Corporate Services
+37 IT / 15 Marketing, Microsoft 23 / 20 / 14 across three accounts, Network
+Solutions 18 / 8, NameCheap 10 / 7, OpenAI Corporate 19 / 5); no
+one-account-per-merchant rule reaches those, and Dirk decides them (list
+questions 1 to 3). Cloud Services' app months are statement cycles (the
+"August" run holds 14 July-dated charges), Criss books by calendar date, so
+any per-month figure shown to her needs the statement period beside it. The
+Zoho pull is dated 2026-09-18; anything she booked since reads as "not
+joined", never as wrong. Consulting has one joined row; every Consulting code
+in the list is a company convention with no booking evidence.
+
+**Owner rulings this respects.** Categories are Zoho leaf accounts per company
+(170); trip purpose never decides (2026-09-24); only corrections are
+memorized (183 half A, three leaks still open); a merchant holds one account
+per company and a hand pick is never copied (note #84, D6); the three-vendor
+registry write is the owner's to raise (counted above, not proposed); no
+live writes on Criss's months (the one prefetch read each month once, 15 s
+apart, and nothing was written).
+
+**Instruments.** `GET /api/expense-batches/{id}` (receipts; `GET /api/runs`
+is POST-only, `GET /api/runs/{id}` gives the charges), `/api/settings`,
+`/api/memory`, `/api/cards/status`; truth
+`context/expense-reconciliation/zoho-books-24mo.json` (pull 2026-09-18, no
+Books call needed; all 152 Jul-Sep account names resolve through
+`curated_leaves.code_of` and all are postable); the engine's own
+`MerchantRegistry.resolve` + `company_account` and `_categorize_one_gl` with
+a fake model client for the replays. Scripts, the six verdicts and the
+critic's report are in the 2026-09-25 checkpoint for this analysis.
+
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
