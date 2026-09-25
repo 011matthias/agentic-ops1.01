@@ -2835,6 +2835,37 @@ def _row_categories(
     return charge_cat_view, None
 
 
+# Item 216 Build 2 step 3: the summary's who-answered split. The three
+# `answer_origin` values plus the rows nobody answered, so the four always sum
+# to the rows counted.
+ORIGIN_NONE = "none"
+CATEGORY_ORIGIN_KEYS = (ORIGIN_PERSON, ORIGIN_RULE, ORIGIN_SUGGESTION, ORIGIN_NONE)
+
+
+def row_answer_origin(row: dict) -> str:
+    """Who answered a view row's category, read off the row's own
+    `posting_category` / `suggested_category` (`_row_categories` built both
+    from `answer_origin` and `is_suggestion_only`), so a count can never
+    disagree with the rows it counts. A row counts once, under its least
+    decided answer: one carrying a suggestion is a suggestion even where a
+    rule answered its other lines. `none` when nobody answered."""
+    if row.get("suggested_category"):
+        return ORIGIN_SUGGESTION
+    origin = (row.get("posting_category") or {}).get("origin")
+    return origin if origin in CATEGORY_ORIGIN_KEYS else ORIGIN_NONE
+
+
+def categories_by_origin(rows) -> dict[str, int]:
+    """`summary.categories_by_origin` on both payloads: `{person, rule,
+    suggestion, none}`, every key always present. It answers who answered
+    the month's categories; `n_charges_category_guessed` keeps answering the
+    other question, whether a guess still blocks the month."""
+    out = dict.fromkeys(CATEGORY_ORIGIN_KEYS, 0)
+    for row in rows:
+        out[row_answer_origin(row)] += 1
+    return out
+
+
 # Categorization.decision verdicts that mean "category and account may not
 # agree, glance before posting" (categorize.DECISION_AI_OVERRIDE_HEAVY /
 # _REVIEW_UNRESOLVED; kept_er / None do not need a look). Literal here to
@@ -4316,6 +4347,9 @@ def build_view(
             n_reconciled + n_review + n_unmatched_tx + n_refunds
         ) == n_tx,
         "n_parse_errors": count_parse_issues(parse_errors)["errors"],
+        # Item 216 Build 2 step 3: who answered each charge's category,
+        # read off the rows above; sums to `len(rows)`.
+        "categories_by_origin": categories_by_origin(rows),
         # Carried from the run's stored summary: both advisories are decided
         # at run time from the inputs. `statement_advisory` was written at
         # creation but never rebuilt here, so it had never actually reached
@@ -8818,6 +8852,14 @@ def build_expense_view(
     summary["n_expenses"] -= len(grid_bill_docs)
     summary["n_bills"] = len(grid_bill_docs)
     summary["bills_by_ccy"] = bills_by_ccy(receipts, grid_bill_docs)
+    # Item 216 Build 2 step 3: who answered each expense's category, over
+    # the rows `n_expenses` counts (a decided copy and a bill are in no box
+    # and in no split), so the four sum to `n_expenses`.
+    summary["categories_by_origin"] = categories_by_origin(
+        e for e in expenses
+        if e["document_id"] not in grid_copies
+        and e["document_id"] not in grid_bill_docs
+    )
     if roster is not None:
         # Trip batches only: how many rows a person OUTSIDE the roster
         # paid for. Absent on company months, like the row flag.

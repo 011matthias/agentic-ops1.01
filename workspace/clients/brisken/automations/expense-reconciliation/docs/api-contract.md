@@ -286,7 +286,8 @@ name answers the same one:
 | `n_charges_need_receipt` | run payload only: how many purchase charges hold no receipt and no verdict that closes them (item 99). Not `n_unmatched_tx`, which also counts booked charges and fee lines. A gray-filled charge is booked through recurring and does not count (owner ruling 2026-09-17) |
 | `n_charges_closed_recurring` | run payload only: how many charges holding no receipt the gray fill closed (owner ruling 2026-09-17): purchases it took out of `n_charges_need_receipt` and fee lines whose guessed category it took out of `n_charges_category_guessed`. Never blocks the month; it keeps the closure visible. A subscription mark the tool derived from history closes nothing and is not counted |
 | `n_receipts_need_charge` | run payload only: how many receipts no charge holds anywhere and nothing set aside (item 99): `n_unmatched_rec` minus the receipts another month's charge settled (`settled_by`) and the confirmed private expenses (flag AND `reimburse_to`) |
-| `n_charges_category_guessed` | run payload only: how many charges that need no receipt still carry the tool's guessed category (item 99). A charge that needs a receipt is counted under `n_charges_need_receipt` alone; a gray-filled charge is not counted, its category lives in the Zoho recurring entry |
+| `n_charges_category_guessed` | run payload only: how many charges that need no receipt still carry the tool's guessed category (item 99). A charge that needs a receipt is counted under `n_charges_need_receipt` alone; a gray-filled charge is not counted, its category lives in the Zoho recurring entry. It counts the guesses that BLOCK the month, not every guess: `categories_by_origin` counts who answered |
+| `categories_by_origin` | both payloads: `{person, rule, suggestion, none}`, who answered each row's category (item 216 Build 2 step 3). Sums to `rows[]` on the run payload and to `n_expenses` on the expense payload. See "Who answered: `categories_by_origin`" |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -7111,6 +7112,46 @@ Tests: `tests/test_model_suggests_item_216_build2_step2.py` (7, three
 route-level: a receipt upload + the confirm route, the category PUT, and a
 statement's receiptless guess through the run view, `reconciled.csv`,
 `report.xlsx`, the statement sheet and the PDF).
+
+### Who answered: `categories_by_origin` (item 216 Build 2 step 3)
+
+Both payloads carry `summary.categories_by_origin`, an object with exactly
+four int keys, every one always present:
+
+| Key | Rows counted |
+|---|---|
+| `person` | a reviewer answered every line (a pick, or a Confirm) |
+| `rule` | the merchant list or a remembered rule answered, and no line is the model's |
+| `suggestion` | the row carries `suggested_category`, or (on a bucket-era month) its `posting_category.origin` is `suggestion` |
+| `none` | no category at all |
+
+It is read off each row's own `posting_category` / `suggested_category`, so
+the count equals the rows. A row counts once, under its least decided answer:
+a receipt mixing a rule's line and a model line is a `suggestion`. Run
+payload: over `rows[]` (every charge, matched or not, a yellow or gray one
+included), so the four sum to `rows[].length`. Expense payload: over the rows
+`n_expenses` counts (a decided copy and a bill are in none), so the four sum
+to `n_expenses`. A route that replies with the run summary (the charge
+category PUT) carries it too.
+
+`n_charges_category_guessed` is not this count and keeps its meaning: the
+guesses that still block the month. Measured on the 2026-09-25 03:05 backup,
+the three GL months carry 164 receiptless guesses (July 45, August 89,
+September 30) while it reads 0 / 0 / 1, correctly: July's 45 sit on charges
+Criss already booked (25 yellow) or booked through recurring (20 gray), and
+the 76 open ones are counted under `n_charges_need_receipt`. The split reads:
+
+| Month | Run payload (person / rule / suggestion / none) | Expense payload |
+|---|---|---|
+| July | 0 / 11 / 68 / 41 | 0 / 9 / 27 / 34 |
+| August | 0 / 7 / 109 / 27 | 0 / 4 / 27 / 19 |
+| September | 0 / 1 / 43 / 7 | 0 / 1 / 31 / 36 |
+
+Tests: `tests/test_counts_by_origin_item_216_build2_step3.py` (2, route-level:
+a receipt upload with a decided copy, a move to Bills and a Confirm on the
+grid; a statement with an open, a ruled, a gray and a yellow charge plus the
+charge category PUT on the run view) and
+`test_view_contract.py::test_categories_by_origin_partitions_the_rows_each_payload_counts`.
 
 ## Bills path (item 218)
 

@@ -127,7 +127,12 @@ def charge_category_guessed(row: dict) -> bool:
     """A receiptless charge whose category is still the tool's guess, counted
     only where no receipt is due (a charge that needs one is counted there)
     and never on a gray-filled charge, whose category lives in the recurring
-    entry it was booked through."""
+    entry it was booked through.
+
+    It counts the guesses that BLOCK the month, not every guess: item 216
+    read its 0 / 0 / 1 as "the tool reports no guesses" while 164 charges
+    carried one. `summary.categories_by_origin` (item 216 Build 2 step 3)
+    counts who answered every row."""
     if charge_booked_recurring(row):
         return False
     review = row.get("review") or {}
