@@ -11803,11 +11803,17 @@ payoffs (USD 18,508.16) read "refund".
    rows (USD 13,848.16) and September 2 (USD 4,660.00) refund -> payment.
 5. `rows[].reverses_transaction_id` on a merchant refund (0 live).
 
+**Owner decisions 2026-09-25 (AskUserQuestion):** item 76 revisited, YES:
+`confirmable_pair` accepts an `fx_reference` pair on a central-bank rate
+(opentickers_day / ecb_month) within 1% of the charge, card agreeing or
+unknown, vendor >= 75, not review-flagged (shipped in the same PR; August 10
+of 20 qualify at its next natural re-match, all unlabelled; July 10 qualify,
+6 labelled right, 0 wrong, all booked so nothing moves). A p >= 0.85 model
+verdict lifting a pair: NO, the click stays (not built).
+
 **Open:** step 6 (candidate-level merchant floor for exact pairs, measured
 first on July + August + the six bundles, shipped only if 0 labelled-right
-pairs move) and the two owner decisions (item 76 revisit for fx_reference
-self-confirm; a p >= 0.85 verdict lifting a pair, recommended no). SPA half:
-`docs/lovable-review-cause-prompt.md`, not pasted.
+pairs move). SPA half: `docs/lovable-review-cause-prompt.md`, not pasted.
 
 ## Shipped (loop history)
 
