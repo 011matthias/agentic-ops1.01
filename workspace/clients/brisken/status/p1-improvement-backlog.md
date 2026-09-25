@@ -11241,6 +11241,42 @@ Books call needed; all 152 Jul-Sep account names resolve through
 a fake model client for the replays. Scripts, the six verdicts and the
 critic's report are in the 2026-09-25 checkpoint for this analysis.
 
+**Cause 1, corrected and built 2026-09-25 (Shipped row 136).** The premise
+"not one human correction in seven months" was wrong. The store held 35 of
+Criss's category picks on July (20), August (9) and September (6), every one
+`category_source: human`, until the GL conversion of 2026-09-24 23:17-23:23
+UTC deleted them by the owner's ruling (bucket names map to no account). They
+are archived under each month's `snapshot.gl_conversion.category_overrides`.
+The payload scan could not see them: a payload shows only live overrides. Her
+two reports were fixed by items 70 and 136, and the picks after those fixes
+stuck. Reproduced offline on a copy of July (backup 2026-09-25 03:05, the real
+app, no model): a receipt pick through the grid's field PUT and a charge pick
+through the workbench route both reach the grid, `expenses.csv` and
+`reconciled.csv`, and both survive a re-match and the refusal re-run. The three
+learner leaks of 2026-09-24 are closed in code (`category_source: inherited`
+on a confirmed guess and on an account-only edit, `reviewer_confirmed_tx_ids`
+for the alias and FX learners). The SPA grid is no longer locked on statement
+months.
+
+What was broken is the reading. `ClassificationSource` says how an answer was
+made, and each surface decided on its own who stood behind it. On July's copy
+Criss's own account on the OPENAI 80.04 charge printed in her statement sheet
+as `COGS - Other Infra and IT Costs for Cloud Business (confirm)`: the sheet
+trusted LEARNED only. The Zoho journal trusted LEARNED and EDITED, so a
+merchant-list answer never posted. The row review called every answer but hers
+"the tool guessed this from the bank's description". `report.xlsx` coloured her
+pick and every merchant-list answer as needs-review. The fix is one mapping,
+`answer_origin` (person, rule or suggestion, beside the enum), read by the
+sheet, the journal's receiptless rows, the row review and the report colour,
+and served as `origin` on `charge_category` and `posting_category`.
+
+On today's months this moves little, because the conversion cleared her picks:
+August's statement sheet loses one `(confirm)` (Supermercado Fenix, a
+merchant-list answer) and three August rows stop asking (Supabase, Fenix,
+GitHub). Every pick from now on prints as hers. The journal's receiptless rows
+are off on every live month (`zoho.export_receiptless_learned` unset), so that
+surface changes nothing she downloads today.
+
 ### 217. A duplicate shows its controls twice, and the tool keeps the invoice instead of the receipt (notes #89 + #90, owner 2026-09-25 03:45 / 03:47 UTC) (BACKEND BUILT 2026-09-25; SPA prompt `docs/lovable-duplicate-controls-once-prompt.md` not pasted)
 
 **Owner**, on September's Pressmaster FZCO unit (row `0078`, the invoice),
@@ -11306,6 +11342,8 @@ persist, the no-statement read).
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 136 | Item 216 cause 1: one mapping of who answered, `answer_origin` (person / rule / suggestion), read by the statement sheet, the Zoho journal's receiptless rows, the row review and the report colour, and served as `origin` on `charge_category` / `posting_category`. | Criss's own account on a charge printed in her statement sheet as `<account> (confirm)`, the tool asking her to confirm her own decision, because each surface derived trust from the raw source on its own. The premise "no correction ever landed" was wrong: 35 of her picks existed until the GL conversion retired them by ruling. Tests: `tests/test_answer_origin_item_216_cause1.py` (18, route-level through the charge route, the sheet download, `zoho.csv` and the run view); three `regress_check` proofs bit. | #1437 |
+| 135 | Item 216 cause 5: `tools/recon-categorization-score.py` scores the tool's accounts against Criss's own Zoho postings in one command, split by where each answer came from (merchant list, remembered rule, receipt line, bank-descriptor guess), with open rows, amounts, and the per-company account map once settings carry one; `--fetch` reads each month once, 15 s apart. | "Categorized" counted answers, not whether they were right, and the app's guess counter shows 0 / 0 / 1 for three months holding 164 guesses. On today's live months it reproduces item 216 exactly (135 joined, 21 of 97 right; strict 120, 19 of 87; 1 of 23 on the rows Criss still had to book), so the builds after it are judged by right answers, not fewer blanks. | #1435 |
 | 134 | Item 212: a receipt a neighbour month settled converts at that charge. `charges_settled_elsewhere` returns the settling charge, and both the card (`cards_settled_elsewhere`) and the money (`settled_charge_amounts`, which feeds the CSV `Exchange Rate` and the month report) come from it, also on a month with no statement. | Item 204 step 3 moved the card, company and person to the neighbour charge but not the money, so a foreign-currency receipt named one charge's card and converted at the ECB rate. Live: 0 rows move today (all three borrowed receipts are USD). | #1422 |
 | 133 | Item 213 (note #87): review lines say one thing each. `waits_for_statement` names the cards only when one or two wait; `date_outside_period`, `suggested_private`, `needs_entity_settled_outside` keep the instruction and lose the explanation. SPA half `docs/lovable-short-review-lines-prompt.md` pending | 13 September rows read one 284-346 character sentence naming up to nine cards; the owner called it slop. 47 live rows change prose, 0 counts move | #1393 |
 | 132 | Item 204 step 4 follow-up: a card the judged purchase already names through another copy of it (its twin's settling charge or printed number) vetoes a different account card, so `billing_account.decide` leaves the row blank. | Live after the index stopped timing out (v242): July's decided copy of the Lovable 200.00 purchase read `card-1176` via `account` while its twin is settled on `card-2838`. A blank beats a wrong card. | #1404 |

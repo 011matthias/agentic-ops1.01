@@ -44,12 +44,14 @@ from openpyxl import load_workbook
 from openpyxl.styles import Font
 
 from ..matching.types import (
+    DECIDED_ORIGINS,
     Categorization,
     ClassificationSource,
     Match,
     MatchOutcome,
     Receipt,
     Transaction,
+    answer_origin,
 )
 from .posting_common import _UNMAPPED, _resolve_account
 
@@ -172,9 +174,12 @@ def _cell_value(
     (a yellow already-in-Zoho row wins even when it also matched).
 
     Slice 10: an unmatched charge with a side-map categorization writes
-    its learned/guessed account instead of "(no receipt matched)" — a
-    LEARNED account verbatim, a VENDOR guess with a "(confirm)" marker
-    so the guess stays visible as a guess (LD-2)."""
+    its account instead of "(no receipt matched)": a decided answer (a
+    person's pick, a merchant-list or remembered rule) verbatim, the
+    model's guess with a "(confirm)" marker so it stays visible as a guess
+    (LD-2). Item 216 cause 1: which is which is `answer_origin`, the one mapping
+    every surface reads; this cell used to trust LEARNED alone, so Criss's
+    own pick on a charge printed "(confirm)"."""
     if tx.entry_status == "posted":
         return _ALREADY_POSTED
     match = match_by_tx.get(tx.transaction_id)
@@ -194,7 +199,7 @@ def _cell_value(
                 # and the category is not an account (see above).
                 return _UNMAPPED
             value = (_resolve_account(ref, coa) or ref) if coa is not None else ref
-            if cat.source is ClassificationSource.LEARNED:
+            if answer_origin(cat) in DECIDED_ORIGINS:
                 return value
             return f"{value} (confirm)"
         return _NO_RECEIPT
