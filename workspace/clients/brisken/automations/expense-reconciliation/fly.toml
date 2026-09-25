@@ -68,7 +68,12 @@ primary_region = "fra"
 
 # 1024 MB since 2026-09-11 (owner order, backlog item 50: the live machine
 # was raised to 1024 on 2026-09-11 and a deploy at 512 would shrink it).
+# 4 shared vCPUs since 2026-09-25 (owner order). One shared vCPU gets a
+# 6.25% baseline once its ~500 s burst balance is spent; on 2026-09-25 a
+# day of deploys, jobs and SPA traffic spent it, steal hit 92.7%, /healthz
+# took 2-27 s against the 5 s check, and the proxy refused every request.
+# A deploy at cpus = 1 would put the machine back on that quota.
 [[vm]]
   memory = "1024mb"
   cpu_kind = "shared"
-  cpus = 1
+  cpus = 4
